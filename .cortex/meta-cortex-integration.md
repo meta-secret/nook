@@ -13,14 +13,18 @@ If `.meta-cortex/` is missing:
 1. Install the `meta-cortex` command from the
    [official upstream repository](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex).
 2. Run `meta-cortex init` from the Nook repository root.
-   - In a non-interactive Codex session, run
-     `meta-cortex init --non-interactive --harness codex --instructions write`.
+   - Plain `init` is non-interactive by default. To connect Codex and update
+     managed instructions, run `meta-cortex init --harness codex --instructions write`.
 3. Verify that `.meta-cortex/AGENTS.md` and `.meta-cortex/meta-cortex.toml` now
    exist.
 
-If `.meta-cortex/` exists but either required file is missing, stop and report
-the missing path as a bootstrap blocker. Do not treat a partial installation as
-available or substitute copied framework files.
+If `.meta-cortex/` exists but a required framework entry is missing, or
+initialization reports `missing required framework entry`, stop and report the
+affected path. Follow the upstream replacement procedure before continuing:
+back up and move the existing `.meta-cortex/` directory out of the installation
+path, run `meta-cortex init --harness codex --instructions write` again, then
+review and reapply configuration changes. Do not treat a partial installation
+as available or substitute copied framework files.
 
 After both required files exist, read `.meta-cortex/CIRCUIT-BREAKER.md`, then
 `.meta-cortex/AGENTS.md`, and continue through the normal Nook entry sequence.
@@ -85,7 +89,7 @@ current task. It does not launch an integration agent or start GitHub delivery.
   with the selected language skill. They replace the former common coding skill.
 - Load shared [security requirements](../.meta-cortex/teams/security-team/docs/index.md)
   for product security work.
-- Resolve upstream skill rule maps through `index.md`. Version 0.6.0 replaces
+- Resolve upstream skill rule maps through `index.md`. Version 0.6.1 replaces
   the former skill-level `knowledge-graph.md` paths; Nook's own knowledge graphs
   retain their existing names.
 - Use the upstream SRE Docker, Kubernetes, and CI/CD roles with Nook's cache,
@@ -124,10 +128,12 @@ The Meta-Cortex command owns framework installation in `.meta-cortex/`. Keep
 that directory untracked. Do not replace initialization with a manually copied
 release directory.
 
-For an existing installation, follow the upstream project's documented upgrade
-procedure. Preserve any intentional configuration while replacing the installed
-framework, then review upstream path changes against the thin wrapper and
-catalog mappings in this document.
+For an existing installation, follow the upstream replacement procedure because
+upgrading the command does not replace the framework. Back up and move
+`.meta-cortex/` out of the installation path, run `meta-cortex init --harness
+codex --instructions write`, then review and reapply configuration changes and
+review upstream path changes against the thin wrapper and catalog mappings in
+this document.
 
 - **Prohibited:** update the command and assume the already installed framework
   changed with it, or overwrite a locally changed framework without reviewing
