@@ -27,6 +27,7 @@
     ExtensionSessionDeviceStateKind,
     type ExtensionSessionDeviceWire,
     type ExtensionSessionDeviceState,
+    type CompanionVaultSummaryArgs,
     extensionWasmRuntime,
   } from '../lib/nook-wasm'
   import {
@@ -122,12 +123,14 @@
     }
     secretCount = { kind: CompanionSecretCountKind.Loading }
     try {
-      const summary = await extensionWasmRuntime.extensionVaultSummary({
+      const summaryArgs: CompanionVaultSummaryArgs = {
         vaultStoreId,
         appId: device.deviceId,
         appPublicKey: device.devicePublicKey,
         appSigningPublicKey: device.deviceSigningPublicKey,
-      })
+      }
+      const summary =
+        await extensionWasmRuntime.extensionVaultSummary(summaryArgs)
       secretCount = {
         kind: CompanionSecretCountKind.Available,
         count: summary.secretCount,

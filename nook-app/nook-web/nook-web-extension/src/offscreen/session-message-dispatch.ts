@@ -116,6 +116,7 @@ function sessionMessagePriority(
     case ExtensionSessionMessageType.CreatePin:
     case ExtensionSessionMessageType.ImportVault:
     case ExtensionSessionMessageType.UpdateVault:
+    case ExtensionSessionMessageType.VaultSummary:
     case ExtensionSessionMessageType.ListPasskeys:
     case ExtensionSessionMessageType.AuthenticatorEnrollPreview:
     case ExtensionSessionMessageType.AuthenticatorEnrollCode:
