@@ -810,8 +810,9 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
       AuthenticationSelectorEntryDiagnosticBuilder["build"]
     >[0] = {
       origin: ((v) => (v ? v : ""))(
-        root.ownerDocument?.defaultView?.location.origin ??
-          (root.nodeType === 9 ? this.browser.location.origin : ""),
+        root.nodeType === 9
+          ? this.browser.location.origin
+          : root.ownerDocument?.defaultView?.location.origin,
       ),
       root,
       inputCount: selectorEntryInputCount,
