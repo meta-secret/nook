@@ -65,7 +65,7 @@ export class AuthenticationSelectorEntryDiagnosticBuilder {
       const frameWindow = root.defaultView;
       if (
         typeof frameWindow === "object" &&
-        frameWindow !== null &&
+        frameWindow &&
         "top" in frameWindow
       ) {
         return frameWindow === frameWindow.top
