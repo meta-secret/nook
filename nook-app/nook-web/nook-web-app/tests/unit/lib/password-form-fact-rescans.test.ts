@@ -285,6 +285,18 @@ describe('authentication fact rescans', () => {
     expect(
       observedAuthenticationWorkflow().summary.manualCheckpointPresent,
     ).toBe(true)
+    document
+      .querySelector('#gate')
+      ?.removeAttribute('data-nook-manual-checkpoint')
+    const explicitSvgCheckpoint = document.createElementNS(
+      'http://www.w3.org/2000/svg',
+      'svg',
+    )
+    explicitSvgCheckpoint.setAttribute('data-nook-manual-checkpoint', '')
+    document.querySelector('form')?.append(explicitSvgCheckpoint)
+    expect(
+      observedAuthenticationWorkflow().summary.manualCheckpointPresent,
+    ).toBe(true)
   })
 
   test('rescans a readonly username field after it becomes editable', () => {
