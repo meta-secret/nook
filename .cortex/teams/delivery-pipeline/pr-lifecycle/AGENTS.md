@@ -20,6 +20,10 @@ composition directly.
 - **Preferred:** publish the assigned feature PR into `main`, return its evidence,
   and stop at the authorized outcome.
 
+PR Lifecycle also owns the `task pr:validate` label mutation that requests
+label-triggered PR validation. CI/CD executes and observes the resulting
+workflow; it does not edit pull-request labels.
+
 ## CI execution boundary
 
 Report workflow dispatch, rerun, log investigation, and infrastructure repair

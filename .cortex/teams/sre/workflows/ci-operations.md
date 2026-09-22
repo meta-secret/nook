@@ -194,7 +194,7 @@ assume per-PR Cloudflare preview hosts can be covered by wildcards. See
    - UI-changing PRs must still add or update their focused headless demo specs.
    - PR and Main UI-demo execution is temporarily disabled.
    - New UI-demo artifacts are not published while execution is disabled.
-   - Main-fix validation uses `task pr:validate PR=<number> FULL_E2E=1` and runs the Main-equivalent deterministic browser suites before merge.
+   - PR Lifecycle requests Main-fix validation with `task pr:validate PR=<number> FULL_E2E=1`; CI/CD executes and observes the resulting label-triggered run, which contains the Main-equivalent deterministic browser suites before merge.
    - Main runs the same local-provider and extension **e2e**.
    - Reconcile every actionable unsuccessful Main run through the feature path.
      - Browser E2E failures are included.

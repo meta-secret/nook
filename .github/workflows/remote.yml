@@ -1,8 +1,8 @@
 # Focused, manually dispatched development tasks on the configured runner pool.
 #
 # This workflow executes named Task targets on the configured remote runner
-# pool. Complete merge validation remains in pr.yml and is explicitly
-# requested with task pr:validate.
+# pool. Complete merge validation remains in pr.yml. PR Lifecycle explicitly
+# requests it by applying the validation label with task pr:validate.
 
 name: Remote task
 run-name: Remote / ${{ inputs.tasks || inputs.task }} @ ${{ inputs.source_sha || github.sha }} / compile-cache=${{ inputs.publish_compile_cache && 'publish' || 'read-only' }} / ${{ inputs.dispatch_nonce || 'manual' }}
