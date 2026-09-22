@@ -15,6 +15,7 @@ export type SiteFixtureField = {
   placeholder?: string
   'aria-label'?: string
   'aria-hidden'?: string
+  tabindex?: string
   'data-qa'?: string
   'data-testid'?: string
 }
@@ -272,6 +273,9 @@ class SiteFixtureCatalogAdmission {
         'aria-hidden',
       )
     }
+    if ('tabindex' in value) {
+      field.tabindex = this.decodeString(value.tabindex, 'tabindex')
+    }
     if ('data-qa' in value) {
       field['data-qa'] = this.decodeString(value['data-qa'], 'data-qa')
     }
@@ -473,6 +477,7 @@ export function renderFixtureHtml(
         field['aria-hidden']
           ? `aria-hidden="${escapeAttr(field['aria-hidden'])}"`
           : '',
+        field.tabindex ? `tabindex="${escapeAttr(field.tabindex)}"` : '',
         field['data-qa'] ? `data-qa="${escapeAttr(field['data-qa'])}"` : '',
         field['data-testid']
           ? `data-testid="${escapeAttr(field['data-testid'])}"`

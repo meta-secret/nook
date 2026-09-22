@@ -213,6 +213,18 @@ test.describe('popular login fixture coverage', () => {
     }
   })
 
+  test('renders Booking hidden password focus exclusion', async ({ page }) => {
+    const mockAuth = await startMockAuthServer()
+    try {
+      await page.goto(`${mockAuth.origin}/template/booking`)
+      const hiddenPassword = page.locator('#hidden-password')
+      await expect(hiddenPassword).toHaveAttribute('aria-hidden', 'true')
+      await expect(hiddenPassword).toHaveAttribute('tabindex', '-1')
+    } finally {
+      await mockAuth.close()
+    }
+  })
+
   test('shows Pilot Continue with Nook on every eligible shell template', async ({
     browserName,
   }, testInfo) => {

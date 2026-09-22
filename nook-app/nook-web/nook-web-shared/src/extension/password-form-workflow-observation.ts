@@ -54,6 +54,7 @@ import {
   type PasswordFormScopeQuery,
   authenticationSubmissionControls,
 } from "./password-form-submission-controls";
+import { authenticationFactBounds } from "./authentication-fact-bounds";
 
 const passkeyControlAbsent =
   "absent" satisfies AuthenticationPasskeyControlObservation;
@@ -466,19 +467,12 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
       )
     )
       return [];
-    return authenticationSubmissionControls.authenticationFactStringsAreTransportable(
-      [
-        observation.sourceOrigin,
-        observation.formIdentity,
-        observation.label,
-        authenticationSubmissionControls.controlMachineIdentity(
-          request.control,
-        ),
-      ],
-    ) &&
-      authenticationSubmissionControls.authenticationDestinationFits(
-        observation.destinationIdentity,
-      )
+    return authenticationFactBounds.controlTextsFit([
+      observation.sourceOrigin,
+      observation.formIdentity,
+      observation.label,
+      authenticationSubmissionControls.controlMachineIdentity(request.control),
+    ])
       ? [observation]
       : [];
   }
@@ -611,9 +605,7 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
             const handler = field.getAttribute(attribute);
             if (typeof handler !== "string") return [];
             const signal = `${attribute}=${handler}`;
-            return authenticationSubmissionControls.authenticationPolicyTextFits(
-              signal,
-            )
+            return authenticationFactBounds.controlTextFits(signal)
               ? [signal]
               : [];
           }),

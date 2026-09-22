@@ -11,10 +11,8 @@ import {
   CompanionWasmRuntimeDeliveryKind,
   sendCompanionWasmRuntimeMessage,
 } from "./companion-wasm-runtime-transport";
-import {
-  MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
-  authenticationSubmissionControls,
-} from "./password-form-submission-controls";
+import { MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT } from "./password-form-submission-controls";
+import { authenticationFactBounds } from "./authentication-fact-bounds";
 import {
   PasswordFormScopeKind,
   type PasswordFormObservation,
@@ -70,15 +68,10 @@ export class AuthenticationWorkflowClassification {
       const authenticationContext = facts.ceremony.authenticationContext;
       const fields = facts.fields;
       return authenticationContext &&
-        authenticationSubmissionControls.authenticationFactStringsAreTransportable(
-          [
-            authenticationContext.sourceOrigin,
-            authenticationContext.formIdentity,
-          ],
-        ) &&
-        authenticationSubmissionControls.authenticationDestinationFits(
-          authenticationContext.destinationIdentity,
-        ) &&
+        authenticationFactBounds.controlTextsFit([
+          authenticationContext.sourceOrigin,
+          authenticationContext.formIdentity,
+        ]) &&
         [
           fields.usernameFieldCount,
           fields.currentPasswordFieldCount,

@@ -187,6 +187,7 @@
         placeholder={field.placeholder}
         aria-label={field['aria-label']}
         aria-hidden={field['aria-hidden']}
+        tabindex={field.tabindex}
         data-qa={field['data-qa']}
         data-testid={field['data-testid']}
       /></label
@@ -201,6 +202,7 @@
       placeholder={field.placeholder}
       aria-label={field['aria-label']}
       aria-hidden={field['aria-hidden']}
+      tabindex={field.tabindex}
       data-qa={field['data-qa']}
       data-testid={field['data-testid']}
     />

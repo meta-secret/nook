@@ -15,6 +15,7 @@ import {
   type PasswordFormObservation,
   passwordFormInteraction,
 } from '../../../../nook-web-shared/src/extension/password-forms'
+import { authentication_advance_control_is_safe } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 const wholeDocumentPasswordFormSubmission: Parameters<
   typeof passwordFormInteraction.submitLoginForm
@@ -89,7 +90,7 @@ describe('authentication observation bounds', () => {
     expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(false)
   })
 
-  test('rejects a destination above its dedicated transport bound', () => {
+  test('preserves an oversized destination for Rust admission and rejects actuation', () => {
     const query = `state=${'a'.repeat(4_100)}`
     document.body.innerHTML = `
       <form method="post" aria-label="Login" action="/login?${query}">
@@ -104,8 +105,17 @@ describe('authentication observation bounds', () => {
       authenticatorSetupHint: false,
       backupCodesHint: false,
     })
-    expect(facts.detailedAdvanceControl).toMatchObject({ kind: 'absent' })
-    expect(facts.ceremony.authenticationContext?.destinationIdentity).toBe('')
+    const detailed = facts.detailedAdvanceControl
+    if (!detailed || detailed.kind !== 'observed') {
+      throw new Error('expected the browser observation to reach Rust')
+    }
+    expect(detailed.observations).toHaveLength(1)
+    expect(
+      detailed.observations.every(authentication_advance_control_is_safe),
+    ).toBe(false)
+    expect(facts.ceremony.authenticationContext?.destinationIdentity).toContain(
+      query,
+    )
     expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(false)
   })
 

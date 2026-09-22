@@ -23,6 +23,7 @@ import {
   type PasswordFormScopeQuery,
   authenticationSubmissionControls,
 } from "./password-form-submission-controls";
+import { authenticationFactBounds } from "./authentication-fact-bounds";
 
 type RankableWorkflowSummary = {
   oneTimeCodeFieldCount: number;
@@ -363,17 +364,12 @@ export class PasskeyOnlyWorkflowSummary<Summary> {
           AuthenticationSubmissionDestination.source(control),
       };
       return (
-        authenticationSubmissionControls.authenticationFactStringsAreTransportable(
-          [
-            facts.sourceOrigin,
-            facts.formIdentity,
-            facts.label,
-            ((v) => (v ? v : ""))(facts.machineIdentity),
-          ],
-        ) &&
-        authenticationSubmissionControls.authenticationDestinationFits(
-          facts.destinationIdentity,
-        ) &&
+        authenticationFactBounds.controlTextsFit([
+          facts.sourceOrigin,
+          facts.formIdentity,
+          facts.label,
+          ((v) => (v ? v : ""))(facts.machineIdentity),
+        ]) &&
         (companionExtensionRuntimePresent()
           ? true
           : authentication_advance_control_is_safe(facts))
