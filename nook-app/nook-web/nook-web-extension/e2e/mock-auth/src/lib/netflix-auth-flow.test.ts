@@ -3,7 +3,6 @@ import { describe, expect, test } from 'vitest'
 import siteShells from '../../fixtures/site-shells.json'
 import netflixTemplate from '../../fixtures/templates/netflix.json'
 import {
-  NETFLIX_MOCK_PASSWORD,
   NETFLIX_MOCK_USERNAME,
   NetflixAuthMockScenario,
   NetflixAuthTransitionKind,
@@ -13,14 +12,14 @@ import {
 describe('Netflix authentication mock', () => {
   const continueSubmission: NetflixAuthSubmission = {
     username: NETFLIX_MOCK_USERNAME,
-    password: NETFLIX_MOCK_PASSWORD,
+    hiddenPassword: '',
     submittedControl: 'Continue',
     formMethod: 'post',
     formHasAction: false,
     auxiliaryActivationCount: 0,
   }
 
-  test('completes only through the captured credential form', () => {
+  test('completes only through the captured identifier form', () => {
     expect(NetflixAuthMockScenario.transition(continueSubmission)).toBe(
       NetflixAuthTransitionKind.Completed,
     )
@@ -28,7 +27,7 @@ describe('Netflix authentication mock', () => {
 
   test.each([
     ['a different username', { username: 'other@nook.test' }],
-    ['a different password', { password: 'different-password' }],
+    ['a populated hidden password', { hiddenPassword: 'unexpected' }],
     ['a different control', { submittedControl: 'Get Help' }],
     ['a GET method', { formMethod: 'get' }],
     ['an authored action', { formHasAction: true }],
@@ -50,7 +49,13 @@ describe('Netflix authentication mock', () => {
     })
     expect(netflixTemplate).toEqual({
       id: 'netflix',
-      quirks: ['post-form-without-action', 'password-autocomplete-token'],
+      quirks: [
+        'post-form-without-action',
+        'responsive-hidden-password',
+        'invisible-recaptcha',
+        'generated-react-id',
+        'data-uia-ownership',
+      ],
       steps: [
         {
           fields: [
@@ -58,13 +63,8 @@ describe('Netflix authentication mock', () => {
               type: 'text',
               name: 'userLoginId',
               autocomplete: 'email',
-              'aria-label': 'Email or mobile number',
-            },
-            {
-              type: 'password',
-              name: 'password',
-              autocomplete: 'password',
-              'aria-label': 'Password',
+              label: 'Email or mobile number',
+              'generated-id': true,
             },
           ],
           submit: { type: 'submit', label: 'Continue' },

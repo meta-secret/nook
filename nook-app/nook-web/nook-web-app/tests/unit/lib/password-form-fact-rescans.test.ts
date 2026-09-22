@@ -264,9 +264,14 @@ describe('authentication fact rescans', () => {
     ).toBe(false)
     document.querySelector('#email-label')?.setAttribute('for', 'contact')
     expect(observedAuthenticationWorkflow().summary.usernameFieldCount).toBe(1)
+    document.querySelector('#gate')?.setAttribute('style', 'visibility:hidden')
     document
       .querySelector('#gate')
       ?.setAttribute('src', 'about:blank#https://hcaptcha.test')
+    expect(
+      observedAuthenticationWorkflow().summary.manualCheckpointPresent,
+    ).toBe(false)
+    document.querySelector('#gate')?.removeAttribute('style')
     expect(
       observedAuthenticationWorkflow().summary.manualCheckpointPresent,
     ).toBe(true)

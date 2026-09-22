@@ -429,9 +429,13 @@ export abstract class PasswordFormUnownedScopeDiscovery extends AuthenticationIn
 
   pageHasManualCheckpoint(root: ParentNode): boolean {
     const doc = ((v) => (v ? v : this.browser.document))(root.ownerDocument);
+    const checkpointSelector =
+      'iframe[src*="recaptcha" i], iframe[src*="hcaptcha" i], iframe[src*="turnstile" i], iframe[title*="captcha" i], [data-nook-manual-checkpoint]';
     if (
-      doc.querySelector(
-        'iframe[src*="recaptcha" i], iframe[src*="hcaptcha" i], iframe[src*="turnstile" i], iframe[title*="captcha" i], [data-nook-manual-checkpoint]',
+      Array.from(doc.querySelectorAll(checkpointSelector)).some(
+        (checkpoint) =>
+          checkpoint instanceof HTMLElement &&
+          this.isRenderedElement(checkpoint),
       )
     ) {
       return true;

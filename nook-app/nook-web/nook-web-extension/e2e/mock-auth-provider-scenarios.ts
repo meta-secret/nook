@@ -314,7 +314,7 @@ export class MockAuthProviderScenarios {
   }
 
   private static registerNetflix(): void {
-    test('fills Netflix credentials and submits only Continue', async ({
+    test('fills Netflix identifier and submits only Continue', async ({
       browserName,
     }, testInfo) => {
       test.skip(
@@ -342,11 +342,13 @@ export class MockAuthProviderScenarios {
           )
           await route.fulfill({ response: localResponse })
         })
-        await page.goto('https://www.netflix.com/login')
+        await page.goto('https://www.netflix.com/login?serverState=fixture')
         expect(interceptedNetflixRequestCount).toBeGreaterThan(0)
-        await expect(page).toHaveURL('https://www.netflix.com/login')
+        await expect(page).toHaveURL(
+          'https://www.netflix.com/login?serverState=fixture',
+        )
         await expect(page.getByTestId('mock-auth-scenario')).toHaveText(
-          'netflix-combined',
+          'netflix-identifier',
         )
 
         const form = page.getByTestId('netflix-login-form')
@@ -360,22 +362,30 @@ export class MockAuthProviderScenarios {
         ).toEqual({
           actionAttributePresent: false,
           methodAttribute: 'post',
-          resolvedAction: 'https://www.netflix.com/login',
+          resolvedAction: 'https://www.netflix.com/login?serverState=fixture',
         })
         const username = form.locator('[name="userLoginId"]')
         const password = form.locator('[name="password"]')
         await expect(form.locator('input')).toHaveCount(2)
         await expect(username).toBeVisible()
-        await expect(password).toBeVisible()
+        await expect(
+          page.getByTestId('netflix-hidden-password-container'),
+        ).toHaveAttribute('style', /height:\s*0/u)
+        expect(
+          await page
+            .getByTestId('netflix-hidden-password-container')
+            .evaluate((element) => ({
+              height: element.getBoundingClientRect().height,
+              overflow: getComputedStyle(element).overflow,
+            })),
+        ).toEqual({ height: 0, overflow: 'hidden' })
+        await expect(password).toHaveValue('')
         await expect(username).toHaveAttribute('type', 'text')
         await expect(username).toHaveAttribute('autocomplete', 'email')
-        await expect(username).toHaveAttribute(
-          'aria-label',
-          'Email or mobile number',
-        )
+        await expect(username).toHaveAttribute('data-uia', 'field-userLoginId')
         await expect(password).toHaveAttribute('type', 'password')
         await expect(password).toHaveAttribute('autocomplete', 'password')
-        await expect(password).toHaveAttribute('aria-label', 'Password')
+        await expect(password).toHaveAttribute('data-uia', 'field-password')
         await expect(
           form.getByRole('button', { name: 'Continue' }),
         ).toHaveAttribute('type', 'submit')
@@ -393,6 +403,9 @@ export class MockAuthProviderScenarios {
         await expect(
           page.getByTestId('netflix-recaptcha-disclosure'),
         ).toBeVisible()
+        await expect(
+          page.getByTestId('netflix-invisible-recaptcha'),
+        ).toBeHidden()
         await expect(
           page.getByRole('link', { name: 'Questions? Contact us.' }),
         ).toBeVisible()
@@ -415,7 +428,8 @@ export class MockAuthProviderScenarios {
           .toBe(
             JSON.stringify({
               submittedControl: 'Continue',
-              credentialsMatched: true,
+              identifierMatched: true,
+              hiddenPasswordUntouched: true,
               postWithoutAction: true,
               auxiliaryControlsUntouched: true,
             }),

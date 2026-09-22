@@ -8,7 +8,7 @@ export enum NetflixAuthTransitionKind {
 
 export type NetflixAuthSubmission = {
   readonly username: string
-  readonly password: string
+  readonly hiddenPassword: string
   readonly submittedControl: string
   readonly formMethod: string
   readonly formHasAction: boolean
@@ -20,7 +20,7 @@ export class NetflixAuthMockScenario {
     submission: NetflixAuthSubmission,
   ): NetflixAuthTransitionKind {
     return submission.username === NETFLIX_MOCK_USERNAME &&
-      submission.password === NETFLIX_MOCK_PASSWORD &&
+      submission.hiddenPassword === '' &&
       submission.submittedControl === 'Continue' &&
       submission.formMethod === 'post' &&
       !submission.formHasAction &&
