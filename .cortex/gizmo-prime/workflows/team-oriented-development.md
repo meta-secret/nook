@@ -7,7 +7,7 @@ order, product constraints, and acceptance evidence.
 
 ## Procedure
 
-1. Apply the [upstream local feature workflow](../../../.meta-cortex/agents/teams/delivery-team/integration-agent/skills/local-feature/SKILL.md).
+1. Apply the [upstream local feature workflow](../../../.meta-cortex/teams/delivery-team/agents/integration-agent/skills/local-feature/SKILL.md).
 2. Route each functional scope through the single Team Gizmo with Nook context.
 3. After local completion, follow Nook's
    [pull-request delivery contract](../architecture/dev-delivery.md) only when

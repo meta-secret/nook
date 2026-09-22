@@ -437,7 +437,7 @@ const TEAM_AUTHORITY_MARKERS = [
   '## Mandatory context selection',
   '## Team worker contract',
   '../.meta-cortex/AGENTS.md',
-  '../.meta-cortex/agents/teams/delivery-team/integration-agent/AGENTS.md',
+  '../.meta-cortex/teams/delivery-team/agents/integration-agent/AGENTS.md',
   '../.meta-cortex/meta-cortex.toml',
   'Nook project root and shared Meta-Cortex library root',
   'selected base and feature branches',
@@ -448,7 +448,7 @@ const TEAM_AUTHORITY_MARKERS = [
 ] as const;
 
 const GIZMO_AUTHORITY_MARKERS = [
-  '../../.meta-cortex/agents/gizmo-prime/AGENTS.md',
+  '../../.meta-cortex/teams/gizmo-team/agents/gizmo-prime/AGENTS.md',
   'team-gizmo/AGENTS.md',
   'architecture/dev-delivery.md',
 ] as const;

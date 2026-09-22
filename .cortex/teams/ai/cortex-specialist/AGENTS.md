@@ -2,7 +2,7 @@
 
 ## Required actions
 
-Apply the [upstream role](../../../../.meta-cortex/agents/teams/ai-team/tech-writer/AGENTS.md) with the project context
+Apply the [upstream role](../../../../.meta-cortex/teams/ai-team/agents/tech-writer/AGENTS.md) with the project context
 and skill prerequisites supplied by Nook Team Gizmo.
 
 Nook scope: Nook instructions, specifications, skill integration, and knowledge graphs.

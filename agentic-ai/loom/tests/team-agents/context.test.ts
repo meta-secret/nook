@@ -38,7 +38,7 @@ const DELIVERY_PIPELINE_PR_LIFECYCLE_CONTEXT_PATHS = [
 describe('team task context', () => {
   test('selects vendored language skills for a Nook team context', () => {
     const skill =
-      '.meta-cortex/agents/teams/dev-team/typescript-dev/skills/ts-dev-skill/SKILL.md';
+      '.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/SKILL.md';
     const request: TeamTaskContextRequest = {
       repositoryRoot: REPO_ROOT,
       team: TeamKey.Sre,
@@ -59,7 +59,7 @@ describe('team task context', () => {
       readClaims: ['.cortex/**'],
       writeClaims: [],
       selectedSkillPaths: [
-        '.meta-cortex/agents/teams/dev-team/common/coding-skill/SKILL.md',
+        '.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/SKILL.md',
       ],
     };
 

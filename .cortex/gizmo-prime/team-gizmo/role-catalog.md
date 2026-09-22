@@ -10,7 +10,7 @@
   upstream TypeScript development with Nook browser or tooling context.
 - [Svelte specialization](../../teams/web-dev/svelte-specialist/AGENTS.md):
   the same TypeScript developer with Nook Svelte interaction scope.
-- [Web designer](../../../.meta-cortex/agents/teams/dev-team/web-designer/AGENTS.md):
+- [Web designer](../../../.meta-cortex/teams/dev-team/agents/web-designer/AGENTS.md):
   upstream design role with Nook's UI supplement supplied in the assignment.
 
 ## Documentation and tooling
@@ -29,17 +29,20 @@
 
 ## Local integration
 
-- [Local integration](../../../.meta-cortex/agents/teams/delivery-team/integration-agent/AGENTS.md):
+- [Local integration](../../../.meta-cortex/teams/delivery-team/agents/integration-agent/AGENTS.md):
   upstream feature and worker worktree setup, branch integration, validation,
   and local cleanup.
 
-## Project-only operations
+## Operations
 
-Upstream SRE is a placeholder. These Nook roles remain active until an upstream
-implementation covers their responsibilities.
+The upstream [SRE catalog](../../../.meta-cortex/teams/sre-team/AGENTS.md)
+owns generic Docker and Kubernetes expertise. Nook supplies operational context
+and retains provisioning and GitHub delivery roles.
 
 - [Provisioning](../../teams/sre/provisioning/AGENTS.md): infrastructure provisioning.
-- [Cloud native](../../teams/sre/cloud-native/AGENTS.md): cluster and deployment operations.
-- [Docker cache](../../teams/sre/docker-cache-specialist/AGENTS.md): cache-health work.
+- [Cloud native](../../teams/sre/cloud-native/AGENTS.md): upstream Kubernetes
+  specialist with Nook cluster and deployment context.
+- [Docker cache](../../teams/sre/docker-cache-specialist/AGENTS.md): upstream Docker
+  specialist with Nook cache-health requirements.
 - [PR Lifecycle](../../teams/delivery-pipeline/pr-lifecycle/AGENTS.md):
   authorized GitHub delivery mechanics.

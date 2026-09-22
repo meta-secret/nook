@@ -431,7 +431,7 @@ describe('canonical Cortex team authority', () => {
   test('rejects removal of the Meta-Cortex role bindings', async () => {
     const invariants = [
       '../.meta-cortex/AGENTS.md',
-      '../.meta-cortex/agents/teams/delivery-team/integration-agent/AGENTS.md',
+      '../.meta-cortex/teams/delivery-team/agents/integration-agent/AGENTS.md',
       '../.meta-cortex/meta-cortex.toml',
       'Nook project root and shared Meta-Cortex library root',
       'selected base and feature branches',

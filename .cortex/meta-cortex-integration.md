@@ -17,7 +17,7 @@ Resolve these Nook and upstream locations when loading the integration:
 
 - **Prime role:** `.cortex/gizmo-prime/AGENTS.md`.
 - **Team Gizmo role:** `.cortex/gizmo-prime/team-gizmo/AGENTS.md`.
-- **Upstream catalogs:** `.meta-cortex/agents/teams/`.
+- **Upstream catalogs:** `.meta-cortex/teams/`.
 - **Project catalog:** `.cortex/gizmo-prime/team-gizmo/role-catalog.md`.
 - **Configuration:** `.meta-cortex/meta-cortex.toml`.
 - **Project context:** the root contract and selected Nook team authorities.
@@ -26,11 +26,43 @@ These wrappers select the upstream role behavior and the Nook context. Keep
 Nook-specific mappings in the project catalog and generic mappings in upstream
 catalogs.
 
+### Session development mode
+
+Follow the upstream [development-mode workflow](../.meta-cortex/AGENTS.md#development-mode)
+and its [native user-input skill](../.meta-cortex/teams/gizmo-team/agents/gizmo/skills/user-input/SKILL.md).
+The upstream [form](../.meta-cortex/development.yaml) supplies the session choice.
+
+- In `single_agent` mode, the current agent loads the relevant roles and performs
+  the work. Nook's coordinator, worker, integration-agent, and PR Lifecycle routing
+  requirements apply only in `multi_agent` mode.
+- Preserve Nook's product boundaries, authorization, validation stages, and the
+  user's stopping point in both modes.
+- Carry the selected mode through the current conversation and assignments.
+  Keep session answers out of repository files and upstream configuration.
+
+For example, a single-agent migration updates local integration files in the
+current task. It does not launch an integration agent or start GitHub delivery.
+
+### Upstream layout
+
+- Resolve catalogs under `.meta-cortex/teams/` and roles under each team's
+  `agents/` directory. Prime and Team Gizmo belong to `gizmo-team`.
+- Load shared [programming requirements](../.meta-cortex/teams/dev-team/docs/index.md)
+  with the selected language skill. They replace the former common coding skill.
+- Load shared [security requirements](../.meta-cortex/teams/security-team/docs/index.md)
+  for product security work.
+- Use the upstream SRE Docker and Kubernetes roles with Nook's cache and
+  cloud-native contexts. Keep provisioning and GitHub delivery in Nook's catalog.
+
+For example, TypeScript assignments use the TypeScript agent's skill alongside
+the development team's programming documents.
+
 ### Pinned installation
 
 The ignored library is copied from `cortex/` in
 [meta-cortex](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex) at release
-`v0.3.0`. Its Apache-2.0 license is copied to `.meta-cortex/LICENSE`.
+`v0.4.0` (commit `22584b837a16b531b8206f8e9d2809ec7b36d0a6`).
+Its Apache-2.0 license is copied to `.meta-cortex/LICENSE`.
 
 The library is absent from Nook clones, task worktrees, and pull requests.
 Install this exact release in the repository root for local development and in

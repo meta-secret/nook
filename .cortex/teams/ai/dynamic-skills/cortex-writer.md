@@ -1,10 +1,10 @@
 # Nook Cortex Writer Integration
 
 Generic authoring rules are supplied by Meta-Cortex
-[Context Engineering](../../../../.meta-cortex/agents/teams/ai-team/tech-writer/skills/context-engineering/SKILL.md).
+[Context Engineering](../../../../.meta-cortex/teams/ai-team/agents/tech-writer/skills/context-engineering/SKILL.md).
 Programming and delivery examples use upstream
-[Code Practice Writing](../../../../.meta-cortex/agents/teams/ai-team/tech-writer/skills/code-practice-writing/SKILL.md)
-and [Delivery Writing](../../../../.meta-cortex/agents/teams/ai-team/tech-writer/skills/delivery-writing/SKILL.md).
+[Code Practice Writing](../../../../.meta-cortex/teams/ai-team/agents/tech-writer/skills/code-practice-writing/SKILL.md)
+and [Delivery Writing](../../../../.meta-cortex/teams/ai-team/agents/tech-writer/skills/delivery-writing/SKILL.md).
 This card owns Nook's density-lint integration. Loom continues to compose it
 with the article-audit and consistency-compiler cards for Cortex write scopes.
 

@@ -8,6 +8,11 @@ Then read [Meta-Cortex integration](meta-cortex-integration.md) and the
 Load the [upstream entry point](../.meta-cortex/AGENTS.md) with those project
 constraints. Explicit user instructions determine task scope and stopping point.
 
+Resolve the session's development mode through the upstream entry point before
+planning, editing, or launching agents. Apply the
+[Nook mode integration](meta-cortex-integration.md#session-development-mode)
+to the coordination requirements below and in linked Nook contexts.
+
 ## Canonical Cortex tree
 
 Meta-Cortex owns generic agents and skills. Nook retains six functional contexts:
@@ -64,7 +69,7 @@ schemas require an explicit migration decision and behavior-focused Rust coverag
 ## Team worker contract
 
 Follow the upstream Prime, Team Gizmo, and
-[integration agent](../.meta-cortex/agents/teams/delivery-team/integration-agent/AGENTS.md)
+[integration agent](../.meta-cortex/teams/delivery-team/agents/integration-agent/AGENTS.md)
 with Nook's functional scopes and acceptance evidence. Team-context Gizmo paths
 resolve to the single coordinator. Another active task remains read-only without
 an explicit handoff. Use the compact
@@ -141,7 +146,7 @@ prohibited. This is a universal P1 rule.
 
 ## Cortex authoring
 
-Load [upstream Context Engineering](../.meta-cortex/agents/teams/ai-team/tech-writer/skills/context-engineering/SKILL.md).
+Load [upstream Context Engineering](../.meta-cortex/teams/ai-team/agents/tech-writer/skills/context-engineering/SKILL.md).
 Use [self-improvement](teams/ai/dynamic-skills/self-improvement.md) for
 evidence-backed promotion of durable Cortex guidance.
 Nook's executable documentation tooling retains these project-specific cards:

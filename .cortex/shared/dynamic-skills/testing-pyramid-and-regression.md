@@ -1,7 +1,8 @@
 # Nook Test Surfaces and Coverage
 
-Meta-Cortex common coding owns the testing pyramid and regression-before-fix
-procedure. Nook supplies its product scenario mapping, existing harnesses, and
+Meta-Cortex [programming requirements](../../../.meta-cortex/teams/dev-team/docs/programming/testing-pyramid-and-regression.md)
+own the testing pyramid and regression-before-fix procedure.
+Nook supplies its product scenario mapping, existing harnesses, and
 coverage gate here. Execute checks only in the Nook-authorized delivery stage.
 
 ## Product evidence
@@ -66,5 +67,4 @@ The portable Rust crates (`nook-app-common`, `nook-authenticator-domain`,
 - Coverage below 90% fails the CI gate (`task rust:coverage:check`).
 - When under 90%, add Rust tests in the same task.
 - At or above 90%, do not chase marginal line coverage; focus on behavior and invariants.
-
 

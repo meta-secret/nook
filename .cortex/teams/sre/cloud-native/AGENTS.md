@@ -15,6 +15,8 @@ It handles only cloud-native work named in the SRE packet.
 
 ## Required actions
 
+- Apply the [upstream Kubernetes specialist](../../../../.meta-cortex/teams/sre-team/agents/kubernetes-specialist/AGENTS.md)
+  and its skills with Nook's SRE context and validation boundary.
 - Accept the packet from SRE Team Gizmo through the active harness.
 - Read only the parent authorities and task-specific evidence needed for the packet.
 - Write only the assigned cloud-native scope.

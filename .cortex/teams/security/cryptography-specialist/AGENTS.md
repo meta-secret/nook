@@ -2,7 +2,7 @@
 
 ## Required actions
 
-Apply the [upstream role](../../../../.meta-cortex/agents/teams/security-team/security-agent/AGENTS.md) with the project context
+Apply the [upstream role](../../../../.meta-cortex/teams/security-team/agents/security-agent/AGENTS.md) with the project context
 and skill prerequisites supplied by Nook Team Gizmo.
 
 Nook scope: Nook cryptographic architecture and policy. Rust implementation remains with the Rust developer.

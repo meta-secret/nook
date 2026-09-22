@@ -256,10 +256,8 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
     );
     let skills_typescript =
         root.read(".cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/tsconfig.json");
-    assert!(
-        skills_typescript
-            .contains("\"include\": [\"**/*.ts\", \"**/*.js\", \"**/*.mjs\", \"**/*.cjs\"]")
-    );
+    assert!(skills_typescript
+        .contains("\"include\": [\"**/*.ts\", \"**/*.js\", \"**/*.mjs\", \"**/*.cjs\"]"));
     let source_gate = root.read("agentic-ai/loom/tests/skill-application-source-boundary.test.ts");
     assert!(
         source_gate.contains("ExecutableSkillSource.analyze")
@@ -345,7 +343,7 @@ fn loom_workflow_audits_every_cortex_change() {
 fn preflight_installs_released_meta_cortex_without_configuration_override() {
     let dockerfile = RepositoryFixture::repository_root().read("preflight/Dockerfile");
     assert!(
-        dockerfile.contains("meta_cortex_release=v0.3.0"),
+        dockerfile.contains("meta_cortex_release=v0.4.0"),
         "Meta-Cortex installation must use the selected upstream release"
     );
     assert!(

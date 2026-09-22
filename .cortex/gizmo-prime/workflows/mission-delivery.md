@@ -6,7 +6,7 @@ throughout the delivery cycle. Treat every other active task as read-only.
 
 ## Ownership boundaries
 
-- Use the upstream [local feature workflow](../../../.meta-cortex/agents/teams/delivery-team/integration-agent/skills/local-feature/SKILL.md)
+- Use the upstream [local feature workflow](../../../.meta-cortex/teams/delivery-team/agents/integration-agent/skills/local-feature/SKILL.md)
   for workspace setup, worker completion, branch integration, and cleanup.
 - Keep Nook's functional ownership and product acceptance requirements with
   Team Gizmo.
