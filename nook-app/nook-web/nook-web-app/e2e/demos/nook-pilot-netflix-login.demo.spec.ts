@@ -6,9 +6,7 @@ import {
 } from './pilot-demo-helpers'
 import { demoDomainEnumArgs, installDemoChromeStub } from './static-chrome-stub'
 
-test('fill and submit the Netflix combined credential form', async ({
-  page,
-}) => {
+test('fill and submit the Netflix identifier-first form', async ({ page }) => {
   const messages = await loadPilotMessages()
   const stubArgs = {
     localizedMessages: messages,
@@ -16,18 +14,21 @@ test('fill and submit the Netflix combined credential form', async ({
     loginPilotFlow: true,
   }
   await page.addInitScript(installDemoChromeStub, stubArgs)
-  await page.goto('/login')
+  await page.route('https://www.netflix.com/**', async (route) =>
+    route.fulfill({ status: 200, contentType: 'text/html', body: '' }),
+  )
+  await page.goto('https://www.netflix.com/login?serverState=fixture')
   await page.setContent(`<!doctype html>
     <html><head><title>Netflix sign in simulation</title><style>:root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; } * { box-sizing: border-box; } body { margin: 0; min-height: 100vh; display: grid; grid-template-rows: 1fr auto; background: #111; color: #fff; } main { place-self: center; width: min(460px, calc(100vw - 48px)); padding: 40px; border-radius: 12px; background: #202020; box-shadow: 0 20px 70px #0009; } h1 { margin-top: 0; } form { display: grid; gap: 16px; } label { display: grid; gap: 7px; } input, button, select { min-height: 48px; padding: 11px 13px; border: 1px solid #777; border-radius: 6px; background: #171717; color: inherit; font: inherit; } [type="submit"] { background: #d71920; border-color: #d71920; font-weight: 750; } a { color: #d3d3d3; } footer { display: flex; gap: 18px; align-items: center; justify-content: center; flex-wrap: wrap; padding: 22px; color: #bbb; } #site-status { min-height: 24px; color: #91e6af; }</style></head>
-      <body><main><h1>Enter your info to sign in</h1>
-        <form method="post" data-testid="netflix-login-form">
-          <label>Email or mobile number<input name="userLoginId" type="text" autocomplete="email" aria-label="Email or mobile number"></label>
-          <label>Password<input name="password" type="password" autocomplete="password" aria-label="Password"></label>
-          <button type="submit">Continue</button><button type="button" data-auxiliary>Get Help</button>
-        </form><section><h2>Or get started with a new account.</h2><a href="/signup" data-auxiliary>Sign up</a></section>
+      <body><main><h1 data-uia="header">Enter your info to sign in</h1><h2 data-uia="subheader">Or get started with a new account.</h2>
+        <form method="post" data-uia="responsive-full-page-container-layout+container" data-testid="netflix-login-form">
+          <div data-uia="field-userLoginId+container" data-hcw-form-control-container="true"><label for=":R5akql6l9allbaldakkm:" data-uia="field-userLoginId+label">Email or mobile number</label><input id=":R5akql6l9allbaldakkm:" name="userLoginId" type="text" autocomplete="email" data-uia="field-userLoginId" data-hcw-form-control-element="true"></div>
+          <div style="height:0;overflow:hidden" data-testid="netflix-hidden-password-container"><div data-uia="field-password+container" data-hcw-form-control-container="true"><label for=":R59lal6l9allbaldakkm:" data-uia="field-password+label">Password</label><input id=":R59lal6l9allbaldakkm:" name="password" type="password" autocomplete="password" data-uia="field-password" data-hcw-form-control-element="true"></div></div>
+          <button type="submit" data-uia="continue-button">Continue</button><button type="button" data-uia="help-menu-toggle-expanded" data-auxiliary>Get Help</button>
+        </form><div class="grecaptcha-badge" style="visibility:hidden;overflow:hidden;height:60px" data-testid="netflix-invisible-recaptcha"><div class="grecaptcha-logo" style="visibility:hidden"><iframe title="reCAPTCHA" src="about:blank#recaptcha-enterprise-size-invisible" style="visibility:hidden;width:256px;height:60px"></iframe></div></div>
         <p data-testid="netflix-recaptcha-disclosure">This page is protected by reCAPTCHA to ensure you're not a bot.</p><p id="site-status" role="status"></p>
       </main><footer><a href="/help" data-auxiliary>Questions? Contact us.</a><a href="/terms" data-auxiliary>Terms of Use</a><a href="/privacy" data-auxiliary>Privacy</a><label>Language<select data-auxiliary><option>English</option></select></label></footer>
-      <script>let auxiliaryActivations = 0; document.querySelectorAll('[data-auxiliary]').forEach((control) => { control.addEventListener('click', (event) => { event.preventDefault(); auxiliaryActivations += 1; }); control.addEventListener('change', () => { auxiliaryActivations += 1; }); }); document.querySelector('[data-testid="netflix-login-form"]').addEventListener('submit', (event) => { event.preventDefault(); const form = event.currentTarget; const valid = event.submitter.textContent.trim() === 'Continue' && form.method === 'post' && !form.hasAttribute('action') && form.elements.userLoginId.value === 'pilot@example.test' && form.elements.password.value === 'demo-password-never-recorded' && auxiliaryActivations === 0; if (valid) document.querySelector('#site-status').textContent = 'Netflix authentication complete'; });</script>
+      <script>let auxiliaryActivations = 0; document.querySelectorAll('[data-auxiliary]').forEach((control) => { control.addEventListener('click', (event) => { event.preventDefault(); auxiliaryActivations += 1; }); control.addEventListener('change', () => { auxiliaryActivations += 1; }); }); document.querySelector('[data-testid="netflix-login-form"]').addEventListener('submit', (event) => { event.preventDefault(); const form = event.currentTarget; const valid = event.submitter.textContent.trim() === 'Continue' && form.method === 'post' && !form.hasAttribute('action') && form.elements.userLoginId.value === 'pilot@example.test' && form.elements.password.value === '' && auxiliaryActivations === 0; if (valid) document.querySelector('#site-status').textContent = 'Netflix authentication complete'; });</script>
       </body></html>`)
   await page.evaluate(installDemoChromeStub, stubArgs)
   await injectPilotAutofill(page)
@@ -40,6 +41,10 @@ test('fill and submit the Netflix combined credential form', async ({
   await expect(form).not.toHaveAttribute('action')
   await expect(username).toHaveAttribute('autocomplete', 'email')
   await expect(password).toHaveAttribute('autocomplete', 'password')
+  await expect(page.getByTestId('netflix-hidden-password-container')).toHaveCSS(
+    'height',
+    '0px',
+  )
   await expect(form.getByRole('button', { name: 'Get Help' })).toHaveAttribute(
     'type',
     'button',
@@ -50,11 +55,12 @@ test('fill and submit the Netflix combined credential form', async ({
   await widget.getByRole('button', { name: 'Continue with Nook' }).click()
 
   await expect(username).toHaveValue('pilot@example.test')
-  await expect(password).toHaveValue('demo-password-never-recorded')
+  await expect(password).toHaveValue('')
   await expect(page.getByRole('status')).toHaveText(
     'Netflix authentication complete',
   )
   await expect(page.getByTestId('netflix-recaptcha-disclosure')).toBeVisible()
+  await expect(page.getByTestId('netflix-invisible-recaptcha')).toBeHidden()
   await expect(page.getByLabel('Language')).toBeVisible()
   await demoBeat(page)
 })

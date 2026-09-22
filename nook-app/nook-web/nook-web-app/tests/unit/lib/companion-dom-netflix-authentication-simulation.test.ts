@@ -1,4 +1,4 @@
-// @vitest-environment-options { "url": "https://www.netflix.com/login" }
+// @vitest-environment-options { "url": "https://www.netflix.com/login?serverState=fixture" }
 
 import { afterEach, describe, expect, test } from 'vitest'
 
@@ -69,13 +69,26 @@ function netflixHtml({
   const primary = includePrimary
     ? `<button type="submit" data-testid="netflix-continue">${primaryLabel}</button>`
     : ''
-  return `<main><h1>Enter your info to sign in</h1>
-    <form method="${method}"${actionAttribute} data-testid="netflix-login-form">
-      <label>Email or mobile number<input name="userLoginId" type="text" autocomplete="email" aria-label="Email or mobile number"></label>
-      <label>Password<input name="password" type="password" autocomplete="password" aria-label="Password"></label>
-      ${primary}<button type="${helpControlKind}" data-testid="netflix-help">Get Help</button>
+  return `<main><h1 data-uia="header">Enter your info to sign in</h1>
+    <h2 data-uia="subheader">Or get started with a new account.</h2>
+    <form method="${method}"${actionAttribute} data-uia="responsive-full-page-container-layout+container" data-testid="netflix-login-form">
+      <div data-uia="field-userLoginId+container" data-hcw-form-control-container="true">
+        <label for=":R5akql6l9allbaldakkm:" data-uia="field-userLoginId+label">Email or mobile number</label>
+        <input id=":R5akql6l9allbaldakkm:" name="userLoginId" type="text" autocomplete="email" data-uia="field-userLoginId" data-hcw-form-control-element="true">
+      </div>
+      <div style="height:0;overflow:hidden" data-testid="netflix-hidden-password-container">
+        <div data-uia="field-password+container" data-hcw-form-control-container="true">
+          <label for=":R59lal6l9allbaldakkm:" data-uia="field-password+label">Password</label>
+          <input id=":R59lal6l9allbaldakkm:" name="password" type="password" autocomplete="password" data-uia="field-password" data-hcw-form-control-element="true">
+        </div>
+      </div>
+      ${primary}<button type="${helpControlKind}" data-uia="help-menu-toggle-expanded" data-testid="netflix-help">Get Help</button>
     </form>
-    <section><h2>Or get started with a new account.</h2><a href="/signup">Sign up</a></section>
+    <div class="grecaptcha-badge" style="visibility:hidden;overflow:hidden;height:60px" data-testid="netflix-invisible-recaptcha">
+      <div class="grecaptcha-logo" style="visibility:hidden">
+        <iframe title="reCAPTCHA" src="about:blank#recaptcha-enterprise-size-invisible" style="visibility:hidden;width:256px;height:60px"></iframe>
+      </div>
+    </div>
     <p data-testid="netflix-recaptcha-disclosure">This page is protected by reCAPTCHA to ensure you're not a bot.</p>
     <footer><a href="/help">Questions? Contact us.</a><a href="/terms">Terms of Use</a><a href="/privacy">Privacy</a>
       <label>Language<select><option>English</option></select></label></footer>
@@ -131,8 +144,10 @@ afterEach(() => {
 })
 
 describe('Netflix DOM-backed authentication simulation', () => {
-  test('fills both visible credentials and submits only Continue', () => {
-    expect(location.href).toBe('https://www.netflix.com/login')
+  test('fills the visible identifier, ignores the clipped password, and submits only Continue', () => {
+    expect(location.href).toBe(
+      'https://www.netflix.com/login?serverState=fixture',
+    )
     const html = netflixHtml()
     const result = simulate(html)
 
@@ -165,7 +180,9 @@ describe('Netflix DOM-backed authentication simulation', () => {
     }
     expect(form.method).toBe('post')
     expect(form.hasAttribute('action')).toBe(false)
-    expect(form.action).toBe('https://www.netflix.com/login')
+    expect(form.action).toBe(
+      'https://www.netflix.com/login?serverState=fixture',
+    )
     expect(username).toMatchObject({
       type: 'text',
       name: 'userLoginId',
@@ -175,12 +192,11 @@ describe('Netflix DOM-backed authentication simulation', () => {
     expect(password).toMatchObject({
       type: 'password',
       name: 'password',
-      autocomplete: 'password',
-      value: FAKE_CREDENTIALS.password,
     })
+    expect(password.value).toBe('')
     expect(help.type).toBe('button')
     const heading = document.querySelector('h1')
-    const newAccountHeading = document.querySelector('h2')
+    const newAccountHeading = document.querySelector('h2[data-uia="subheader"]')
     if (!heading || !newAccountHeading) {
       throw new Error('expected Netflix headings')
     }
@@ -209,19 +225,21 @@ describe('Netflix DOM-backed authentication simulation', () => {
     expect(facts.fields).toMatchObject({
       usernameFieldCount: 1,
       currentPasswordFieldCount: 0,
-      genericPasswordFieldCount: 1,
-      actionablePasswordFieldCount: 1,
+      genericPasswordFieldCount: 0,
+      actionablePasswordFieldCount: 0,
     })
     expect(observation.summary).toMatchObject({
-      passwordFieldCount: 1,
+      passwordFieldCount: 0,
       currentPasswordFieldCount: 0,
-      genericPasswordFieldCount: 1,
+      genericPasswordFieldCount: 0,
     })
-    expect(authentication_page_observation_facts_priority(facts)).toBe(3)
+    expect(authentication_page_observation_facts_priority(facts)).toBe(1)
     expect(facts.ceremony).toMatchObject({
+      manualCheckpoint: 'absent',
       authenticationContext: {
         sourceOrigin: 'https://www.netflix.com',
-        destinationIdentity: 'https://www.netflix.com/login',
+        destinationIdentity:
+          'https://www.netflix.com/login?serverState=fixture',
       },
       implicitSubmissionMethod: 'post',
     })

@@ -2,7 +2,6 @@
   import type { HTMLInputAttributes } from 'svelte/elements'
 
   import {
-    NETFLIX_MOCK_PASSWORD,
     NETFLIX_MOCK_USERNAME,
     NetflixAuthMockScenario,
     NetflixAuthTransitionKind,
@@ -13,6 +12,7 @@
   const PASSWORD_AUTOCOMPLETE: HTMLInputAttributes['autocomplete'] = 'password'
   let username = $state('')
   let password = $state('')
+  let hiddenPasswordField: HTMLInputElement
   let auxiliaryActivationCount = $state(0)
   let error = $state('')
 
@@ -32,7 +32,7 @@
     const completed =
       NetflixAuthMockScenario.transition({
         username,
-        password,
+        hiddenPassword: hiddenPasswordField.value,
         submittedControl,
         formMethod: form.method,
         formHasAction: form.hasAttribute('action'),
@@ -42,9 +42,8 @@
       EVIDENCE_KEY,
       JSON.stringify({
         submittedControl,
-        credentialsMatched:
-          username === NETFLIX_MOCK_USERNAME &&
-          password === NETFLIX_MOCK_PASSWORD,
+        identifierMatched: username === NETFLIX_MOCK_USERNAME,
+        hiddenPasswordUntouched: hiddenPasswordField.value === '',
         postWithoutAction:
           form.method === 'post' && !form.hasAttribute('action'),
         auxiliaryControlsUntouched: auxiliaryActivationCount === 0,
@@ -60,35 +59,73 @@
 
 <main>
   <h1>Enter your info to sign in</h1>
-  <p data-testid="mock-auth-scenario">netflix-combined</p>
+  <p data-testid="mock-auth-scenario">netflix-identifier</p>
   {#if error}<p role="alert">{error}</p>{/if}
-  <form method="post" data-testid="netflix-login-form" onsubmit={submit}>
-    <label
-      >Email or mobile number<input
+  <h2 data-uia="subheader">Or get started with a new account.</h2>
+  <form
+    method="post"
+    data-uia="responsive-full-page-container-layout+container"
+    data-testid="netflix-login-form"
+    onsubmit={submit}
+  >
+    <div
+      data-uia="field-userLoginId+container"
+      data-hcw-form-control-container="true"
+    >
+      <label for=":R5akql6l9allbaldakkm:" data-uia="field-userLoginId+label"
+        >Email or mobile number</label
+      ><input
+        id=":R5akql6l9allbaldakkm:"
         name="userLoginId"
         type="text"
         autocomplete="email"
-        aria-label="Email or mobile number"
+        data-uia="field-userLoginId"
+        data-hcw-form-control-element="true"
         bind:value={username}
-      /></label
+      />
+    </div>
+    <div
+      style="height: 0; overflow: hidden"
+      data-testid="netflix-hidden-password-container"
     >
-    <label
-      >Password<input
-        name="password"
-        type="password"
-        autocomplete={PASSWORD_AUTOCOMPLETE}
-        aria-label="Password"
-        bind:value={password}
-      /></label
+      <div
+        data-uia="field-password+container"
+        data-hcw-form-control-container="true"
+      >
+        <label for=":R59lal6l9allbaldakkm:" data-uia="field-password+label"
+          >Password</label
+        ><input
+          id=":R59lal6l9allbaldakkm:"
+          bind:this={hiddenPasswordField}
+          name="password"
+          type="password"
+          autocomplete={PASSWORD_AUTOCOMPLETE}
+          data-uia="field-password"
+          data-hcw-form-control-element="true"
+          bind:value={password}
+        />
+      </div>
+    </div>
+    <button type="submit" data-uia="continue-button">Continue</button>
+    <button
+      type="button"
+      data-uia="help-menu-toggle-expanded"
+      onclick={recordAuxiliary}>Get Help</button
     >
-    <button type="submit">Continue</button>
-    <button type="button" onclick={recordAuxiliary}>Get Help</button>
   </form>
-
-  <section aria-labelledby="netflix-new-account-heading">
-    <h2 id="netflix-new-account-heading">Or get started with a new account.</h2>
-    <a href="/signup" onclick={recordAuxiliary}>Sign up</a>
-  </section>
+  <div
+    class="grecaptcha-badge"
+    style="visibility: hidden; overflow: hidden; height: 60px"
+    data-testid="netflix-invisible-recaptcha"
+  >
+    <div class="grecaptcha-logo" style="visibility: hidden">
+      <iframe
+        title="reCAPTCHA"
+        src="about:blank#recaptcha-enterprise-size-invisible"
+        style="visibility: hidden; width: 256px; height: 60px"
+      ></iframe>
+    </div>
+  </div>
   <p data-testid="netflix-recaptcha-disclosure">
     This page is protected by reCAPTCHA to ensure you're not a bot.
   </p>
