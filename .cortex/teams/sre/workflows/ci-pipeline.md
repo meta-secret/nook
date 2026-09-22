@@ -58,8 +58,10 @@ and manual ecosystem execution in one Actions run named `CI`.
 - `nook-app/ci/pr.yml` and its Bake overlay define phases and internal concurrency.
 - Verification completes before test compilation; failure stops later phases.
 - Labels `ci:validate` and `ci:full-e2e` persist across commits.
-- Feature PRs and research changes request product validation automatically.
-- Policy-only PRs run tooling verification, preflight and Loom in the same job.
+- Product-path and research changes request product validation automatically.
+- Feature PRs with only policy paths require the authorized `ci:validate` or
+  `ci:full-e2e` label mutation to select product validation; without one they
+  run tooling verification, preflight, and Loom in the same job.
 - UI-demo execution remains disabled, with its focused-spec contract retained.
 - Pages preview uses a same-runner composite action; coverage remains inside
   the Docker/BuildKit solve.

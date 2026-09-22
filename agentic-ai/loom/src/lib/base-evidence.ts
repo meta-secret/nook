@@ -207,7 +207,7 @@ export class CanonicalWorkerBranchContract {
       /(?:^|-)(?:19|20)\d{2}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])(?:-|$)/u.test(
         segment,
       ) ||
-      /(?:^|-)\d{8}-\d{6}(?:-|$)/u.test(segment)
+      /(?:^|-)\d{8}-?\d{6}(?:-|$)/u.test(segment)
     );
   }
 

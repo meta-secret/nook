@@ -1,5 +1,12 @@
 import { realpathSync } from 'node:fs';
-import { isAbsolute, relative, resolve, sep } from 'node:path';
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  relative,
+  resolve,
+  sep,
+} from 'node:path';
 
 import {
   CanonicalFeatureBranchContract,
@@ -103,10 +110,20 @@ export class ModuleDeliveryBranchAssignmentValidation {
 
   private static canonicalWorktreePath(path: string): string {
     const resolved = resolve(path);
-    try {
-      return realpathSync.native(resolved);
-    } catch {
-      return resolved;
+    const missingSegments: string[] = [];
+    let existingParent = resolved;
+    while (true) {
+      try {
+        return resolve(
+          realpathSync.native(existingParent),
+          ...missingSegments.reverse(),
+        );
+      } catch {
+        const parent = dirname(existingParent);
+        if (parent === existingParent) return resolved;
+        missingSegments.push(basename(existingParent));
+        existingParent = parent;
+      }
     }
   }
 

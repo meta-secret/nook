@@ -222,6 +222,7 @@ describe('canonical worker branch identity', () => {
       'codex/child/sre/provisioning/agent-branching/123e4567-e89b-12d3-a456-426614174000',
       'codex/child/sre/provisioning/agent-branching/fix-cache-on-2026-09-22',
       'codex/child/sre/provisioning/agent-branching/fix-cache-20260922-021234',
+      'codex/child/sre/provisioning/agent-branching/fix-cache-20260922021234',
     ];
 
     for (const branch of invalidBranches) {

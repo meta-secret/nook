@@ -240,6 +240,58 @@ test('rejects trailing-separator and symlink aliases of one worktree', () => {
   }
 });
 
+test('rejects nested uncreated worktrees beneath a symlinked parent', () => {
+  const temporaryRoot = mkdtempSync(join(tmpdir(), 'nook-worktree-parent-'));
+  try {
+    const realParent = join(temporaryRoot, 'real');
+    const alias = join(temporaryRoot, 'alias');
+    mkdirSync(realParent);
+    symlinkSync(realParent, alias);
+    const first = ModuleDeliveryPlanValidationScenario.writeNode({
+      taskId: 'core-provider',
+      expert: 'core_expert',
+      moduleRoot: CORE_ROOT,
+      dependencies: [],
+      read: [`${CORE_ROOT}/**`],
+      write: [`${CORE_ROOT}/provider/**`],
+    });
+    const second = ModuleDeliveryPlanValidationScenario.writeNode({
+      taskId: 'core-consumer',
+      expert: 'core_expert',
+      moduleRoot: CORE_ROOT,
+      dependencies: [],
+      read: [`${CORE_ROOT}/**`],
+      write: [`${CORE_ROOT}/consumer/**`],
+    });
+    const result = ModuleDeliveryPlanValidationScenario.validate(
+      ModuleDeliveryPlanValidationScenario.plan({
+        nodes: [
+          {
+            ...first,
+            workspace: {
+              ...first.workspace,
+              worktreePath: join(realParent, 'outer'),
+            },
+          },
+          {
+            ...second,
+            workspace: {
+              ...second.workspace,
+              worktreePath: join(alias, 'outer', 'nested'),
+            },
+          },
+        ],
+        edgeContracts: [],
+      }),
+    );
+    expect(ModuleDeliveryPlanValidationScenario.codes(result)).toContain(
+      ModuleDeliveryIssueCode.InvalidField,
+    );
+  } finally {
+    rmSync(temporaryRoot, { recursive: true });
+  }
+});
+
 test('returns a typed rejection for a retired child feature ref', () => {
   const plan = ModuleDeliveryPlanValidationScenario.plan({
     nodes: [],

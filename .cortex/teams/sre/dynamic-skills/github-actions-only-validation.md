@@ -53,5 +53,5 @@ scoped rustfmt, and bounded inexpensive TS diagnostics or formatting.
 Capture source SHA, run, attempt, and result. Feature build success proves
 compilation only. Return evidence through Team Gizmo (Delivery Pipeline context) to the
 owning controller. The Feature Gizmo decides merge readiness; merge requires
-the feature PR required checks, review, and security acceptance for the
-published feature head.
+the feature PR required checks and any separately scoped security acceptance
+for the published feature head. Review and approval remain optional.
