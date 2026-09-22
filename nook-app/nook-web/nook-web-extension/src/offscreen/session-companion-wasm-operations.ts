@@ -17,6 +17,7 @@ import {
   AuthenticationWorkflowActivity,
   authentication_page_observation_facts_match_binding,
   authentication_page_observation_facts_priority,
+  authentication_page_observation_facts_is_admissible,
   authentication_advance_control_is_safe,
   authentication_control_transportable,
   authentication_passkey_control_candidate_is_safe,
@@ -219,6 +220,9 @@ export async function handleCompanionWasmMessage(
           ),
           pageFactsPriorities: message.payload.pageFacts.map((request) =>
             authentication_page_observation_facts_priority(request),
+          ),
+          pageFactsAdmissibility: message.payload.pageFacts.map((request) =>
+            authentication_page_observation_facts_is_admissible(request),
           ),
           implicitSubmissions: message.payload.implicitSubmissions.map(
             (request) => {

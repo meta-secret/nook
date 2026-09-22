@@ -445,7 +445,7 @@
     "template": "email-password"
   },
   "booking": {
-    "loginUrl": "https://account.booking.com/sign-in",
+    "loginUrl": "https://account.booking.com/sign-in?op_token=fixture",
     "source": "capture",
     "template": "booking"
   },

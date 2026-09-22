@@ -456,6 +456,7 @@ export class MockAuthProviderScenarios {
         vaultName: 'Mock Booking.com auth vault',
       })
       try {
+        const bookingSignInUrl = `https://account.booking.com/sign-in?op_token=${'a'.repeat(700)}`
         await saveVaultLogin(
           paired.vaultPage,
           'https://account.booking.com',
@@ -472,9 +473,9 @@ export class MockAuthProviderScenarios {
           )
           await route.fulfill({ response: localResponse })
         })
-        await page.goto('https://account.booking.com/sign-in')
+        await page.goto(bookingSignInUrl)
         expect(interceptedBookingRequestCount).toBeGreaterThan(0)
-        await expect(page).toHaveURL('https://account.booking.com/sign-in')
+        await expect(page).toHaveURL(bookingSignInUrl)
         await expect(page).toHaveTitle(
           'Sign in or create an account | Booking.com',
         )
@@ -491,12 +492,28 @@ export class MockAuthProviderScenarios {
         await expect(page.locator('form')).toHaveCount(1)
         await expect(form).not.toHaveAttribute('method')
         await expect(form).not.toHaveAttribute('action')
+        await expect(form).toHaveAttribute('class', 'nw-signin')
+        await expect(form).toHaveAttribute('novalidate', '')
         await expect(form).toHaveJSProperty('method', 'get')
-        await expect(form).toHaveJSProperty(
-          'action',
-          'https://account.booking.com/sign-in',
-        )
+        await expect(form).toHaveJSProperty('action', bookingSignInUrl)
+        await expect(form.locator('input')).toHaveCount(2)
         await expect(surface.locator('input')).toHaveCount(1)
+        const hiddenPassword = form.locator('#hidden-password')
+        await expect(hiddenPassword).toHaveAttribute('name', 'password')
+        await expect(hiddenPassword).toHaveAttribute('type', 'password')
+        await expect(hiddenPassword).toHaveAttribute(
+          'autocomplete',
+          'current-password',
+        )
+        await expect(hiddenPassword).toHaveAttribute('aria-hidden', 'true')
+        await expect(hiddenPassword).toHaveAttribute('tabindex', '-1')
+        await expect(
+          page.getByTestId('booking-hidden-password-container'),
+        ).toHaveCSS('height', '0px')
+        await expect(
+          page.getByTestId('booking-hidden-password-container'),
+        ).toHaveCSS('overflow', 'hidden')
+        await expect(email).toHaveAttribute('id', 'username')
         await expect(email).toHaveAttribute('name', 'username')
         await expect(email).toHaveAttribute('type', 'email')
         await expect(email).toHaveAttribute('autocomplete', 'username webauthn')
@@ -508,11 +525,20 @@ export class MockAuthProviderScenarios {
         await expect(primary).not.toHaveAttribute('formaction')
         await expect(form.locator('button[type="submit"]')).toHaveCount(1)
         await expect(email).toHaveValue('')
-        await expect(page.locator('input[type="password"]')).toHaveCount(0)
+        await expect(hiddenPassword).toHaveValue('')
         for (const [name, href] of [
-          ['Sign in with Google', '/social/consent/google'],
-          ['Sign in with Apple', '/social/consent/apple'],
-          ['Sign in with Facebook', '/social/consent/facebook'],
+          [
+            'Sign in with Google',
+            '/social/consent/google?op_token=fixture&as_token=fixture',
+          ],
+          [
+            'Sign in with Apple',
+            '/social/consent/apple?op_token=fixture&as_token=fixture',
+          ],
+          [
+            'Sign in with Facebook',
+            '/social/consent/facebook?op_token=fixture&as_token=fixture',
+          ],
         ] as const) {
           await expect(page.getByRole('link', { name })).toHaveAttribute(
             'href',
@@ -522,14 +548,11 @@ export class MockAuthProviderScenarios {
         }
         await expect(
           page.getByRole('link', { name: 'Recover your account' }),
-        ).toBeVisible()
+        ).toHaveAttribute('href', '/sign-in/recovery?op_token=fixture')
         await expect(
           form.getByRole('link', { name: 'Recover your account' }),
         ).toHaveCount(1)
         await expect(page.getByTestId('booking-disclosure')).toBeVisible()
-        await expect(
-          page.getByRole('link', { name: 'Help and support' }),
-        ).toBeVisible()
         await expect(
           page.getByRole('button', { name: 'Select your language' }),
         ).toBeVisible()
@@ -566,6 +589,7 @@ export class MockAuthProviderScenarios {
             value: JSON.stringify({
               submittedControl: BookingAuthControl.ContinueWithEmail,
               emailMatch: BookingAuthEmailMatch.Matched,
+              hiddenPasswordUntouched: true,
               primaryActivation: BookingAuthPrimaryActivationState.Activated,
               googleInteraction: BookingAuthInteractionState.Untouched,
               appleInteraction: BookingAuthInteractionState.Untouched,
@@ -573,7 +597,6 @@ export class MockAuthProviderScenarios {
               recoveryInteraction: BookingAuthInteractionState.Untouched,
               brandInteraction: BookingAuthInteractionState.Untouched,
               disclosureInteraction: BookingAuthInteractionState.Untouched,
-              helpInteraction: BookingAuthInteractionState.Untouched,
               languageInteraction: BookingAuthInteractionState.Untouched,
             }),
           })

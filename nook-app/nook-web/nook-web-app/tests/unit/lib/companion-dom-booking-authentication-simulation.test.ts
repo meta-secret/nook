@@ -17,6 +17,7 @@ import {
   passwordFormInteraction,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 import { authenticationSubmissionControls } from '../../../../nook-web-shared/src/extension/password-form-submission-controls'
+import { AuthenticationWorkflowClassification } from '../../../../nook-web-shared/src/extension/password-form-classified-observations'
 import {
   DomAuthenticationSimulationOutcomeKind,
   simulateDomAuthentication,
@@ -29,6 +30,7 @@ const BOOKING_FAKE_CREDENTIALS: FakeLoginCredentials = {
   username: 'pilot@nook.test',
   password: 'extension-fill-password',
 }
+const BOOKING_OAUTH_TOKEN = 'a'.repeat(700)
 
 enum BookingFixturePrimaryControl {
   ContinueWithEmail = 'Continue with email',
@@ -127,16 +129,16 @@ class BookingAuthenticationFixture {
       ownership === BookingFixtureFormOwnership.Unowned
         ? ' form="booking-unrelated-form"'
         : ''
-    const content = `<section data-testid="booking-email-surface"><label>Email address<input type="email" name="username" autocomplete="username webauthn" aria-label="Email address" placeholder="Enter your email address"></label><button type="submit"${primaryFormAttribute} data-testid="booking-primary">${primaryLabel}</button>${submitLayout === BookingFixtureSubmitLayout.Ambiguous ? '<button type="submit">Primary action</button>' : ''}</section>
-        <p>or use one of these options</p><nav aria-label="Alternative sign-in options"><a href="/social/consent/google">Sign in with Google</a><a href="/social/consent/apple">Sign in with Apple</a><a href="/social/consent/facebook">Sign in with Facebook</a></nav>
-        <p>Lost access to your email? <a href="/recover">Recover your account</a></p>`
+    const content = `<div class="hidden-password-input-container" style="width: 0; height: 0; overflow: hidden"><input id="hidden-password" type="password" name="password" autocomplete="current-password" aria-hidden="true" tabindex="-1"></div><section data-testid="booking-email-surface"><label for="username">Email address</label><input id="username" type="email" name="username" autocomplete="username webauthn" placeholder="Enter your email address"><button type="submit"${primaryFormAttribute} data-testid="booking-primary">${primaryLabel}</button>${submitLayout === BookingFixtureSubmitLayout.Ambiguous ? '<button type="submit">Primary action</button>' : ''}</section>
+        <p>or use one of these options</p><nav aria-label="Alternative sign-in options"><a href="/social/consent/google?op_token=fixture&as_token=fixture">Sign in with Google</a><a href="/social/consent/apple?op_token=fixture&as_token=fixture">Sign in with Apple</a><a href="/social/consent/facebook?op_token=fixture&as_token=fixture">Sign in with Facebook</a></nav>
+        <p>Lost access to your email? <a href="/sign-in/recovery?op_token=fixture">Recover your account</a></p>`
     const authenticationSurface =
       ownership === BookingFixtureFormOwnership.Owned
-        ? `<form${actionAttribute} data-testid="booking-auth-form">${content}</form>`
+        ? `<form class="nw-signin" novalidate${actionAttribute} data-testid="booking-auth-form">${content}</form>`
         : `<form id="booking-unrelated-form" data-testid="booking-unrelated-form"></form><section data-testid="booking-unowned-surface">${content}</section>`
-    return `<header><a href="/">Booking.com</a><button aria-label="Select your language">English</button><a href="/help" aria-label="Help and support">Help</a></header>
+    return `<header><a href="/">Booking.com</a><button aria-label="Select your language">English</button></header>
       <main><h1>Sign in or create an account</h1><p>You can sign in using your Booking.com account to access our services.</p>
-        ${authenticationSurface}<p data-testid="booking-disclosure">By signing in or creating an account, you agree with our <a href="/terms">Terms &amp; Conditions</a> and <a href="/privacy">Privacy Statement</a>.</p>
+        ${authenticationSurface}<p data-testid="booking-disclosure">By signing in or creating an account, you agree to our <a href="/terms">Terms and conditions</a> and <a href="/privacy">Privacy notice</a>.</p>
       </main>`
   }
 
@@ -148,9 +150,7 @@ class BookingAuthenticationFixture {
         ? '[data-testid="booking-auth-form"]'
         : '[data-testid="booking-unowned-surface"]',
     )
-    const email = root?.querySelector<HTMLInputElement>(
-      '[aria-label="Email address"]',
-    )
+    const email = root?.querySelector<HTMLInputElement>('#username')
     const primary = root?.querySelector<HTMLButtonElement>(
       '[data-testid="booking-primary"]',
     )
@@ -163,7 +163,7 @@ class BookingAuthenticationFixture {
       primary,
       alternatives: [
         ...document.querySelectorAll<HTMLElement>(
-          'header button, header a, nav a, a[href="/recover"], [data-testid="booking-disclosure"] a',
+          'header button, header a, nav a, a[href^="/sign-in/recovery"], [data-testid="booking-disclosure"] a',
         ),
       ],
     }
@@ -185,7 +185,10 @@ afterEach(() => {
 
 describe('Booking.com DOM-backed authentication simulation', () => {
   test('fills only email and activates only the local Continue with email control', () => {
-    expect(location.href).toBe('https://account.booking.com/sign-in')
+    history.replaceState({}, '', `/sign-in?op_token=${BOOKING_OAUTH_TOKEN}`)
+    expect(location.href).toBe(
+      `https://account.booking.com/sign-in?op_token=${BOOKING_OAUTH_TOKEN}`,
+    )
     const fixture = BookingAuthenticationFixture.stable().install()
     const observations =
       passwordFormInteraction.summarizeAuthenticationWorkflowForms()
@@ -205,7 +208,9 @@ describe('Booking.com DOM-backed authentication simulation', () => {
     expect(form.hasAttribute('method')).toBe(false)
     expect(form.method).toBe('get')
     expect(form.hasAttribute('action')).toBe(false)
-    expect(form.action).toBe('https://account.booking.com/sign-in')
+    expect(form.action).toBe(
+      `https://account.booking.com/sign-in?op_token=${BOOKING_OAUTH_TOKEN}`,
+    )
 
     const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation,
@@ -221,11 +226,18 @@ describe('Booking.com DOM-backed authentication simulation', () => {
     expect(facts.ceremony).toMatchObject({
       authenticationContext: {
         sourceOrigin: 'https://account.booking.com',
-        formIdentity: '',
-        destinationIdentity: 'https://account.booking.com/sign-in',
+        formIdentity: 'nw-signin',
+        destinationIdentity: `https://account.booking.com/sign-in?op_token=${BOOKING_OAUTH_TOKEN}`,
       },
       implicitSubmissionMethod: 'get',
     })
+    expect(
+      new AuthenticationWorkflowClassification({
+        workflowForms: observations,
+        authenticatorSetupHint: false,
+        backupCodesHint: false,
+      }).observations,
+    ).toHaveLength(1)
     const detailedAdvanceControl = facts.detailedAdvanceControl
     if (!detailedAdvanceControl || detailedAdvanceControl.kind !== 'observed') {
       throw new Error('expected typed Booking.com advance-control facts')
@@ -233,8 +245,8 @@ describe('Booking.com DOM-backed authentication simulation', () => {
     expect(detailedAdvanceControl.observations).toEqual([
       expect.objectContaining({
         authenticationUsername: 'explicit',
-        destinationIdentity: 'https://account.booking.com/sign-in',
-        formIdentity: '',
+        destinationIdentity: `https://account.booking.com/sign-in?op_token=${BOOKING_OAUTH_TOKEN}`,
+        formIdentity: 'nw-signin',
         label: BookingFixturePrimaryControl.ContinueWithEmail,
         ownership: 'owned-form',
         semanticSubmitControlCount: 1,
@@ -297,6 +309,9 @@ describe('Booking.com DOM-backed authentication simulation', () => {
     expect(primaryState).toBe(BookingFixtureControlState.Activated)
     expect(alternativeState).toBe(BookingFixtureControlState.Untouched)
     expect(fixture.email.value).toBe(BOOKING_FAKE_CREDENTIALS.username)
+    expect(
+      document.querySelector<HTMLInputElement>('#hidden-password')?.value,
+    ).toBe('')
     expect(document.querySelectorAll('form')).toHaveLength(1)
     expect(fixture.email).toMatchObject({
       name: 'username',
@@ -318,7 +333,7 @@ describe('Booking.com DOM-backed authentication simulation', () => {
       expect(alternative).toBeInstanceOf(HTMLAnchorElement)
       expect(alternative.closest('form')).toBe(form)
     }
-    expect(document.querySelectorAll('input[type="password"]')).toHaveLength(0)
+    expect(document.querySelectorAll('input[type="password"]')).toHaveLength(1)
   })
 
   test.each([

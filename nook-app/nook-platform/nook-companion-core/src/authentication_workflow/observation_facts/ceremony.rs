@@ -9,7 +9,8 @@ use crate::authentication_workflow::{
 use crate::page_field_classification::{
     AuthenticationAdvanceControlDecision, AuthenticationAdvanceControlObservation,
     AuthenticationUsernameEvidence, MAX_AUTHENTICATION_CONTROL_TEXT_BYTES,
-    OneTimeCodeRouteDecision, PageControlSubmissionMethod,
+    MAX_AUTHENTICATION_DESTINATION_TEXT_BYTES, OneTimeCodeRouteDecision,
+    PageControlSubmissionMethod,
 };
 use crate::{AuthenticationRouteEvidence, CredentialUpdateRouteEvidence, OneTimeCodeRouteEvidence};
 use serde::{Deserialize, Serialize};
@@ -98,13 +99,10 @@ impl AuthenticationCeremonyContextObservation {
     }
 
     fn is_bounded(&self) -> bool {
-        [
-            &self.source_origin,
-            &self.form_identity,
-            &self.destination_identity,
-        ]
-        .into_iter()
-        .all(|value| value.len() <= MAX_AUTHENTICATION_CONTROL_TEXT_BYTES)
+        [&self.source_origin, &self.form_identity]
+            .into_iter()
+            .all(|value| value.len() <= MAX_AUTHENTICATION_CONTROL_TEXT_BYTES)
+            && self.destination_identity.len() <= MAX_AUTHENTICATION_DESTINATION_TEXT_BYTES
     }
 
     pub(super) fn is_authenticated(&self, fields: AuthenticationFieldObservationFacts) -> bool {

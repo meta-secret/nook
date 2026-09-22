@@ -73,18 +73,30 @@ impl AuthenticationAdvanceControlObservation {
                         | AuthenticationUsernameEvidence::Explicit
                 ),
                 PageControlSubmissionDestinationSource::Omitted => {
-                    self.form_identity.is_empty()
-                        && matches!(
-                            self.authentication_username,
-                            AuthenticationUsernameEvidence::WebAuthnEmail
-                                | AuthenticationUsernameEvidence::Explicit
-                        )
+                    match self.authentication_username {
+                        AuthenticationUsernameEvidence::WebAuthnEmail => {
+                            self.form_identity.is_empty()
+                        }
+                        AuthenticationUsernameEvidence::Explicit => {
+                            self.form_identity.is_empty()
+                                || self.has_booking_identifier_form_identity()
+                        }
+                        AuthenticationUsernameEvidence::Absent
+                        | AuthenticationUsernameEvidence::Generic
+                        | AuthenticationUsernameEvidence::StandardsBasedEmail
+                        | AuthenticationUsernameEvidence::Strong
+                        | AuthenticationUsernameEvidence::MixedPhoneOrEmail => false,
+                    }
                 }
             }
             && self.password_field_count.is_zero()
             && self.new_password_field_count.is_zero()
             && self.one_time_code_field_count.is_zero()
             && self.semantic_submit_control_count.is_single()
+    }
+
+    pub(super) fn has_booking_identifier_form_identity(&self) -> bool {
+        AuthenticationControlText::new(&self.form_identity).expand_identity_text() == "nw signin"
     }
 
     fn is_mixed_phone_or_email_identifier_advance(&self) -> bool {
@@ -300,6 +312,7 @@ impl CheckedAuthenticationControl<'_> {
 #[cfg(test)]
 mod tests {
     use super::super::*;
+    use crate::MAX_AUTHENTICATION_DESTINATION_TEXT_BYTES;
 
     struct BookingDefaultGetScenario;
 
@@ -430,7 +443,7 @@ mod tests {
                 one_time_code_field_count: 0.into(),
                 semantic_submit_control_count: 1.into(),
                 source_origin: "https://account.booking.com".to_owned(),
-                form_identity: String::new(),
+                form_identity: "nw-signin".to_owned(),
                 destination_identity: "https://account.booking.com/sign-in".to_owned(),
                 label: "Continue with email".to_owned(),
                 machine_identity: String::new(),
@@ -493,6 +506,55 @@ mod tests {
     #[test]
     fn booking_owned_identifier_default_get_is_narrowly_admitted() {
         assert!(BookingDefaultGetScenario::observation().authentication_advance_control_is_safe());
+        for localized_label in [
+            "Continuar con el correo electrónico",
+            "Continuer avec l’adresse e-mail",
+            "Mit E-Mail-Adresse fortfahren",
+        ] {
+            let mut localized = BookingDefaultGetScenario::observation();
+            localized.label = localized_label.to_owned();
+            assert!(
+                localized.authentication_advance_control_is_safe(),
+                "{localized_label}"
+            );
+        }
+        let mut oauth_state = BookingDefaultGetScenario::observation();
+        oauth_state.destination_identity = format!(
+            "https://account.booking.com/sign-in?op_token={}",
+            "a".repeat(700)
+        );
+        assert!(oauth_state.authentication_advance_control_is_safe());
+
+        let mut oversized = BookingDefaultGetScenario::observation();
+        oversized.destination_identity = format!(
+            "https://account.booking.com/sign-in?op_token={}",
+            "a".repeat(MAX_AUTHENTICATION_DESTINATION_TEXT_BYTES)
+        );
+        assert!(!oversized.authentication_advance_control_is_safe());
+        for destination in [
+            format!("https://example.test/sign-in?op_token={}", "a".repeat(700)),
+            format!(
+                "https://account.booking.com/neutral?op_token={}",
+                "a".repeat(700)
+            ),
+            format!(
+                "https://account.booking.com/sign-in?state={}",
+                "a".repeat(700)
+            ),
+            format!(
+                "https://account.booking.com/sign-in?op_token={}&state=extra",
+                "a".repeat(700)
+            ),
+        ] {
+            let mut rejected = BookingDefaultGetScenario::observation();
+            rejected.destination_identity = destination;
+            assert!(!rejected.authentication_advance_control_is_safe());
+        }
+        let mut foreign_origin = BookingDefaultGetScenario::observation();
+        foreign_origin.source_origin = "https://example.test".to_owned();
+        foreign_origin.destination_identity =
+            format!("https://example.test/sign-in?op_token={}", "a".repeat(700));
+        assert!(!foreign_origin.authentication_advance_control_is_safe());
         BookingDefaultGetScenario::assert_hostile_variants_fail_closed();
     }
 

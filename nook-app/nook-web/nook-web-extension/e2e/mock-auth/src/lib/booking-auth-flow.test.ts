@@ -17,6 +17,7 @@ import {
 describe('Booking.com authentication mock', () => {
   const emailContinuation: BookingAuthSubmission = {
     email: BOOKING_MOCK_EMAIL,
+    hiddenPasswordUntouched: true,
     submittedControl: BookingAuthControl.ContinueWithEmail,
     primaryActivation: BookingAuthPrimaryActivationState.Activated,
     googleInteraction: BookingAuthInteractionState.Untouched,
@@ -25,7 +26,6 @@ describe('Booking.com authentication mock', () => {
     recoveryInteraction: BookingAuthInteractionState.Untouched,
     brandInteraction: BookingAuthInteractionState.Untouched,
     disclosureInteraction: BookingAuthInteractionState.Untouched,
-    helpInteraction: BookingAuthInteractionState.Untouched,
     languageInteraction: BookingAuthInteractionState.Untouched,
   }
 
@@ -37,6 +37,7 @@ describe('Booking.com authentication mock', () => {
 
   test.each([
     ['a different email', { email: 'other@nook.test' }],
+    ['a filled hidden password decoy', { hiddenPasswordUntouched: false }],
     ['Google', { submittedControl: BookingAuthControl.ContinueWithGoogle }],
     ['Apple', { submittedControl: BookingAuthControl.ContinueWithApple }],
     ['Facebook', { submittedControl: BookingAuthControl.ContinueWithFacebook }],
@@ -78,10 +79,6 @@ describe('Booking.com authentication mock', () => {
       { disclosureInteraction: BookingAuthInteractionState.Activated },
     ],
     [
-      'help activation',
-      { helpInteraction: BookingAuthInteractionState.Activated },
-    ],
-    [
       'language activation',
       { languageInteraction: BookingAuthInteractionState.Activated },
     ],
@@ -113,7 +110,7 @@ describe('Booking.com authentication mock', () => {
 
   test('promotes only the observed consumer route to the captured shell', () => {
     expect(siteShells.booking).toEqual({
-      loginUrl: 'https://account.booking.com/sign-in',
+      loginUrl: 'https://account.booking.com/sign-in?op_token=fixture',
       source: 'capture',
       template: 'booking',
     })
@@ -127,6 +124,9 @@ describe('Booking.com authentication mock', () => {
       quirks: [
         'form-method-omitted',
         'form-action-omitted',
+        'oauth-state-query',
+        'aria-hidden-password-decoy',
+        'zero-height-overflow-password-container',
         'provider-alternatives-inside-form',
         'account-recovery-inside-form',
       ],
@@ -134,11 +134,20 @@ describe('Booking.com authentication mock', () => {
         {
           fields: [
             {
+              id: 'hidden-password',
+              type: 'password',
+              name: 'password',
+              autocomplete: 'current-password',
+              'aria-hidden': 'true',
+              tabindex: '-1',
+            },
+            {
+              id: 'username',
               type: 'email',
               name: 'username',
               autocomplete: 'username webauthn',
               placeholder: 'Enter your email address',
-              'aria-label': 'Email address',
+              label: 'Email address',
             },
           ],
           submit: { type: 'submit', label: 'Continue with email' },

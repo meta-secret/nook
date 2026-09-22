@@ -186,7 +186,15 @@ export class LoginCredentialFillAction {
       // microtask. Cross the browser task boundary before rebuilding the
       // untrusted DOM facts and activating the approved submit control.
       await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
-      await passwordFormInteraction.prepareCompanionWorkflowPolicies()
+      const companionPoliciesRequest: Parameters<
+        typeof passwordFormInteraction.prepareCompanionWorkflowPolicies
+      >[0] = {
+        authenticatorSetupHint: false,
+        backupCodesHint: false,
+      }
+      await passwordFormInteraction.prepareCompanionWorkflowPolicies(
+        companionPoliciesRequest,
+      )
       const submissionRevalidationRequest: ConstructorParameters<
         typeof RevalidatedAuthenticationAction
       >[0] = {

@@ -15,6 +15,7 @@ export type SiteFixtureField = {
   placeholder?: string
   'aria-label'?: string
   'aria-hidden'?: string
+  tabindex?: string
   'data-qa'?: string
   'data-testid'?: string
 }
@@ -272,6 +273,9 @@ class SiteFixtureCatalogAdmission {
         'aria-hidden',
       )
     }
+    if ('tabindex' in value) {
+      field.tabindex = this.decodeString(value.tabindex, 'tabindex')
+    }
     if ('data-qa' in value) {
       field['data-qa'] = this.decodeString(value['data-qa'], 'data-qa')
     }
@@ -454,6 +458,9 @@ export function renderFixtureHtml(
   const [ariaHidden = fixture.quirks.includes('aria-hidden-ancestor')] = [
     options?.wrapAriaHidden,
   ]
+  const zeroHeightPasswordContainer = fixture.quirks.includes(
+    'zero-height-overflow-password-container',
+  )
   const fields = step.fields
     .map((field) => {
       const attrs = [
@@ -473,6 +480,7 @@ export function renderFixtureHtml(
         field['aria-hidden']
           ? `aria-hidden="${escapeAttr(field['aria-hidden'])}"`
           : '',
+        field.tabindex ? `tabindex="${escapeAttr(field.tabindex)}"` : '',
         field['data-qa'] ? `data-qa="${escapeAttr(field['data-qa'])}"` : '',
         field['data-testid']
           ? `data-testid="${escapeAttr(field['data-testid'])}"`
@@ -482,9 +490,12 @@ export function renderFixtureHtml(
         .join(' ')
       const input = `<input ${attrs} />`
       const labelFor = field.id ? ` for="${escapeAttr(field.id)}"` : ''
-      return field.label
+      const renderedField = field.label
         ? `<label${labelFor}>${escapeHtml(field.label)}${input}</label>`
         : input
+      return zeroHeightPasswordContainer && field.id === 'hidden-password'
+        ? `<div style="height: 0; overflow: hidden">${renderedField}</div>`
+        : renderedField
     })
     .join('\n')
   const submitType =
@@ -502,8 +513,18 @@ export function renderFixtureHtml(
   ]
     .filter(Boolean)
     .join(' ')
+  const omittedMethod = fixture.quirks.includes('form-method-omitted')
+  const omittedAction = fixture.quirks.includes('form-action-omitted')
+  const bookingForm = zeroHeightPasswordContainer
+  const formAttrs = [
+    bookingForm ? 'class="nw-signin"' : 'id="login_form"',
+    omittedMethod ? '' : 'method="post"',
+    omittedAction ? '' : 'action="/auth/login"',
+  ]
+    .filter(Boolean)
+    .join(' ')
   const inner = `
-    <form id="login_form">
+    <form ${formAttrs}>
       ${fields}
       <button ${submitAttrs}>${escapeHtml(step.submit.label)}</button>
     </form>`

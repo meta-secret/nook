@@ -1,12 +1,14 @@
+#[cfg(test)]
+use super::AuthenticationWorkflowMatch;
 use super::{
     AuthenticationAdvanceControlEvidence, AuthenticationFormObservationPriority,
-    AuthenticationManualCheckpoint, AuthenticationPageObservation, AuthenticationPageObservations,
-    AuthenticationWorkflowMatch,
+    AuthenticationManualCheckpoint, AuthenticationPageObservation,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
 mod authenticator;
+mod batch;
 mod ceremony;
 mod disclosure;
 mod fields;
@@ -17,6 +19,7 @@ pub use authenticator::{
     AuthenticationAuthenticatorObservationFacts, AuthenticationAuthenticatorSetupObservation,
     AuthenticationBackupCodesObservation, AuthenticationPasskeyAccountAvailability,
 };
+pub use batch::AuthenticationPageObservationFactsBatch;
 pub use ceremony::{
     AuthenticationCeremonyContextObservation, AuthenticationCeremonyObservationFacts,
     AuthenticationDetailedAdvanceControlObservation,
@@ -64,6 +67,12 @@ impl AuthenticationPageObservationFacts {
             && self.credential_submission.is_bounded()
     }
 
+    /// Whether one browser observation fits the Rust-owned transport envelope.
+    #[must_use]
+    pub fn authentication_page_observation_facts_is_admissible(&self) -> bool {
+        self.is_bounded()
+    }
+
     #[must_use]
     pub fn form_priority(self) -> AuthenticationFormObservationPriority {
         if self.is_bounded() && self.has_progression() {
@@ -100,53 +109,6 @@ impl AuthenticationPageObservationFacts {
     ) -> AuthenticationFormObservationPriority {
         let facts = self;
         facts.form_priority()
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
-pub struct AuthenticationPageObservationFactsBatch {
-    pub observations: Vec<AuthenticationPageObservationFacts>,
-}
-
-impl AuthenticationPageObservationFactsBatch {
-    pub(super) fn is_valid_binding(&self) -> bool {
-        !self.observations.is_empty()
-            && self.observations.len() <= crate::MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS
-            && self
-                .observations
-                .iter()
-                .all(AuthenticationPageObservationFacts::is_bounded)
-    }
-
-    #[must_use]
-    pub fn classify(&self) -> AuthenticationWorkflowMatch {
-        if self.observations.len() > crate::MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS
-            || self
-                .observations
-                .iter()
-                .any(|observation| !observation.is_bounded())
-        {
-            return AuthenticationWorkflowMatch::Rejected;
-        }
-        let observations = AuthenticationPageObservations {
-            observations: self
-                .observations
-                .iter()
-                .cloned()
-                .map(|observation| {
-                    if observation.has_progression() {
-                        AuthenticationPageObservation::from(observation)
-                    } else {
-                        AuthenticationPageObservation::default()
-                    }
-                })
-                .collect(),
-        };
-        AuthenticationWorkflowMatch::classify_authentication_workflow_candidates(
-            &observations.observations,
-        )
     }
 }
 
@@ -189,6 +151,25 @@ mod tests {
             ),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn per_observation_admission_rejects_an_oversized_destination() {
+        let mut facts = password_login();
+        assert!(facts.authentication_page_observation_facts_is_admissible());
+        let AuthenticationDetailedAdvanceControlObservation::Observed(controls) =
+            &mut facts.detailed_advance_control
+        else {
+            unreachable!();
+        };
+        let Some(control) = controls.first_mut() else {
+            unreachable!();
+        };
+        control.destination_identity = format!(
+            "https://example.test/login?state={}",
+            "a".repeat(crate::MAX_AUTHENTICATION_DESTINATION_TEXT_BYTES)
+        );
+        assert!(!facts.authentication_page_observation_facts_is_admissible());
     }
 
     #[test]

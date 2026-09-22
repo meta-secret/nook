@@ -3,7 +3,7 @@
 use percent_encoding::percent_decode_str;
 use url::Url;
 
-use super::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES;
+use super::{MAX_AUTHENTICATION_CONTROL_TEXT_BYTES, MAX_AUTHENTICATION_DESTINATION_TEXT_BYTES};
 
 /// A validated authentication-control destination bound to its source origin.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -189,7 +189,7 @@ impl CanonicalControlDestination {
             destination_identity,
         } = request;
         if source_origin.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
-            || destination_identity.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
+            || destination_identity.len() > MAX_AUTHENTICATION_DESTINATION_TEXT_BYTES
         {
             return Err(InvalidControlDestination);
         }
@@ -235,7 +235,7 @@ impl CanonicalControlDestination {
             route_identity.push('#');
             route_identity.push_str(&fragment);
         }
-        if route_identity.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES {
+        if route_identity.len() > MAX_AUTHENTICATION_DESTINATION_TEXT_BYTES {
             return Err(InvalidControlDestination);
         }
 
@@ -438,7 +438,7 @@ mod tests {
     fn rejects_oversized_canonical_route_evidence() {
         let destination = format!(
             "https://example.test/login?next={}",
-            "x".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES)
+            "x".repeat(MAX_AUTHENTICATION_DESTINATION_TEXT_BYTES)
         );
         assert!(
             CanonicalControlDestination::canonicalize_control_destination(
@@ -451,7 +451,7 @@ mod tests {
         );
         let fragment = format!(
             "https://example.test/login#{}",
-            "x".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES)
+            "x".repeat(MAX_AUTHENTICATION_DESTINATION_TEXT_BYTES)
         );
         assert!(
             CanonicalControlDestination::canonicalize_control_destination(

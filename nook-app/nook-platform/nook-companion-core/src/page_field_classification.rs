@@ -10,6 +10,7 @@ use form_identity::{
     OAuthAuthorization,
 };
 mod authentication_advance_control;
+mod authentication_route_evidence;
 mod control_identity;
 mod control_labels;
 mod control_text;
@@ -22,57 +23,21 @@ mod passkey;
 
 pub(crate) use input_role::AuthenticationInputRole;
 
-/// Maximum byte length for each DOM-controlled authentication identity string.
-pub const MAX_AUTHENTICATION_CONTROL_TEXT_BYTES: usize = 512;
-
 pub use authentication_advance_control::{
     AuthenticationAdvanceControlDecision, AuthenticationAdvanceControlObservation,
     PageControlActionability, PageControlOwnership, PageControlSemantics,
     PageControlSubmissionDestinationSource, PageControlSubmissionMethod,
 };
+pub(crate) use authentication_route_evidence::MAX_AUTHENTICATION_POLICY_DESTINATION_TEXT_BYTES;
+pub use authentication_route_evidence::{
+    AuthenticationRouteActuation, AuthenticationRouteEvidence, CredentialUpdateRouteEvidence,
+    MAX_AUTHENTICATION_CONTROL_TEXT_BYTES, MAX_AUTHENTICATION_DESTINATION_TEXT_BYTES,
+    OneTimeCodeRouteEvidence,
+};
 pub use destination_identity::{
     CanonicalControlDestination, ControlDestinationEvidence, InvalidControlDestination,
 };
 pub(super) use passkey::PASSKEY_OR_PLATFORM_AUTHENTICATOR_WORDS;
-
-/// Named values required by `AuthenticationAdvanceControlObservation::one_time_code_ceremony_context_is_authenticated`.
-#[derive(Clone, Copy)]
-pub struct OneTimeCodeRouteEvidence<'a> {
-    pub authentication_username: AuthenticationUsernameEvidence,
-    pub source_origin: &'a str,
-    pub form_identity: &'a str,
-    pub destination_identity: &'a str,
-}
-
-/// Named values required by `AuthenticationAdvanceControlObservation::has_safe_authentication_route_identity`.
-#[derive(Clone, Copy)]
-pub struct AuthenticationRouteEvidence<'a> {
-    pub source_origin: &'a str,
-    pub form_identity: &'a str,
-    pub destination_identity: &'a str,
-}
-
-/// Named values required by `AuthenticationAdvanceControlObservation::has_safe_credential_update_route_identity`.
-#[derive(Clone, Copy)]
-pub struct CredentialUpdateRouteEvidence<'a> {
-    pub source_origin: &'a str,
-    pub form_identity: &'a str,
-    pub destination_identity: &'a str,
-}
-
-/// Named values required by `AuthenticationAdvanceControlObservation::can_activate_authentication_route_control`.
-#[derive(Clone, Copy)]
-pub struct AuthenticationRouteActuation<'a> {
-    pub source_origin: &'a str,
-    pub form_identity: &'a str,
-    pub destination_identity: &'a str,
-    pub control_label: &'a str,
-    pub control_machine_identity: &'a str,
-    pub has_concrete_control: AuthenticationRouteControlPresence,
-    pub has_authentication_username: AuthenticationRouteUsernamePresence,
-    pub has_local_authentication_scope: AuthenticationRouteScope,
-    pub has_authentication_password: AuthenticationRoutePasswordPresence,
-}
 
 impl AuthenticationAdvanceControlObservation {
     #[must_use]
@@ -245,9 +210,10 @@ impl OneTimeCodeRouteEvidence<'_> {
             form_identity,
             destination_identity,
         } = self;
-        if [source_origin, form_identity, destination_identity]
+        if [source_origin, form_identity]
             .into_iter()
             .any(|value| value.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES)
+            || destination_identity.len() > MAX_AUTHENTICATION_POLICY_DESTINATION_TEXT_BYTES
         {
             return OneTimeCodeRouteDecision::Rejected;
         }
@@ -335,6 +301,8 @@ impl AuthenticationAdvanceControlObservation {
             && AuthenticationControlText::new(&label_identity)
                 .contains_any_word(&["device", "devices"]);
         if !observation.is_bounded()
+            || observation.destination_identity.len()
+                > MAX_AUTHENTICATION_POLICY_DESTINATION_TEXT_BYTES
             || !matches!(
                 observation.actionability,
                 PageControlActionability::Actionable
@@ -416,9 +384,10 @@ impl AuthenticationAdvanceControlObservation {
             form_identity,
             destination_identity,
         } = request;
-        if [source_origin, form_identity, destination_identity]
+        if [source_origin, form_identity]
             .into_iter()
             .any(|value| value.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES)
+            || destination_identity.len() > MAX_AUTHENTICATION_POLICY_DESTINATION_TEXT_BYTES
         {
             return false;
         }
@@ -459,9 +428,10 @@ impl AuthenticationAdvanceControlObservation {
             form_identity,
             destination_identity,
         } = request;
-        if [source_origin, form_identity, destination_identity]
+        if [source_origin, form_identity]
             .into_iter()
             .any(|value| value.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES)
+            || destination_identity.len() > MAX_AUTHENTICATION_POLICY_DESTINATION_TEXT_BYTES
         {
             return false;
         }

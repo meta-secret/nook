@@ -15,6 +15,7 @@ import {
   type PasswordFormObservation,
   passwordFormInteraction,
 } from '../../../../nook-web-shared/src/extension/password-forms'
+import { authentication_advance_control_is_safe } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 const wholeDocumentPasswordFormSubmission: Parameters<
   typeof passwordFormInteraction.submitLoginForm
@@ -65,7 +66,7 @@ afterEach(() => {
 })
 
 describe('authentication observation bounds', () => {
-  test('does not strip destructive query evidence from an oversized destination', () => {
+  test('preserves destructive query evidence within the destination bound', () => {
     const query = `action=delete-account&state=${'a'.repeat(600)}`
     document.body.innerHTML = `
       <form method="post" aria-label="Login" action="/login?${query}">
@@ -81,10 +82,69 @@ describe('authentication observation bounds', () => {
       backupCodesHint: false,
     })
     expect(facts.detailedAdvanceControl).toMatchObject({
-      kind: 'absent',
+      kind: 'observed',
     })
-    expect(facts.ceremony.authenticationContext?.destinationIdentity).toBe('')
+    expect(facts.ceremony.authenticationContext?.destinationIdentity).toContain(
+      'action=delete-account',
+    )
     expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(false)
+  })
+
+  test('preserves an oversized destination for Rust admission and rejects actuation', () => {
+    const query = `state=${'a'.repeat(4_100)}`
+    document.body.innerHTML = `
+      <form method="post" aria-label="Login" action="/login?${query}">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Continue</button>
+      </form>
+    `
+
+    const facts = passwordFormInteraction.authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    const detailed = facts.detailedAdvanceControl
+    if (!detailed || detailed.kind !== 'observed') {
+      throw new Error('expected the browser observation to reach Rust')
+    }
+    expect(detailed.observations).toHaveLength(1)
+    expect(
+      detailed.observations.every(authentication_advance_control_is_safe),
+    ).toBe(false)
+    expect(facts.ceremony.authenticationContext?.destinationIdentity).toContain(
+      query,
+    )
+    expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(false)
+  })
+
+  test('isolates an oversized destination without poisoning a valid sibling', () => {
+    const oversizedQuery = `state=${'a'.repeat(4_100)}`
+    document.body.innerHTML = `
+      <form id="oversized" method="post" aria-label="Login" action="/login?${oversizedQuery}">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Continue</button>
+      </form>
+      <form id="valid-login" method="post" aria-label="Login" action="/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Continue</button>
+      </form>
+    `
+
+    const classified = new AuthenticationWorkflowClassification({
+      workflowForms:
+        passwordFormInteraction.summarizeAuthenticationWorkflowForms(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    }).observations
+    expect(classified).toHaveLength(1)
+    const validObservation = classified.at(0)
+    if (!validObservation)
+      throw new Error('expected one valid login observation')
+    expect(ownedFormId(validObservation.observation)).toBe('valid-login')
   })
 
   test('isolates a candidate whose raw form identity exceeds the bound', () => {

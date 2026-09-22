@@ -215,6 +215,7 @@ export type CompanionWasmSessionResponse =
       readonly advanceControls: readonly boolean[];
       readonly passkeyCandidates: readonly boolean[];
       readonly pageFactsPriorities: readonly number[];
+      readonly pageFactsAdmissibility: readonly boolean[];
       readonly activityProgress: readonly AuthenticationDisplayProgress[];
       readonly implicitSubmissions: readonly boolean[];
     }

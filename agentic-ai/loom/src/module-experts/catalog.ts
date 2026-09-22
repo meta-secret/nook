@@ -215,6 +215,7 @@ const INTERNAL_API_EXPERT_AUTHORED_CONSUMER_SCOPE_PATHS = [
   'nook-app/nook-web/nook-web-extension/src/offscreen/session-vault-operations.ts',
   'nook-app/nook-web/nook-web-extension/src/offscreen/session-website-passkey-operations.ts',
   'nook-app/nook-web/nook-web-extension/src/offscreen/session.ts',
+  'nook-app/nook-web/nook-web-shared/src/extension/companion-authentication-policy-evaluation.ts',
   'nook-app/nook-web/nook-web-shared/src/extension/companion-ready.ts',
   'nook-app/nook-web/nook-web-shared/src/extension/companion-wasm-runtime-messages.ts',
   'nook-app/nook-web/nook-web-shared/src/extension/extension-pairing-vault-type.ts',

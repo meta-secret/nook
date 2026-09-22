@@ -6,6 +6,7 @@ import {
   type AirbnbLoginModalRouteRequest,
 } from "./airbnb-login-modal-route";
 import { AuthenticationControlSurface } from "./authentication-control-surface";
+import { authenticationFactBounds } from "./authentication-fact-bounds";
 import {
   authenticationAdvanceControlSelector,
   semanticSubmitControlSelector,
@@ -132,10 +133,6 @@ type ImplicitAuthenticationSubmitRequest = {
   alternativeActuationIsSafe: () => boolean;
 };
 
-type AuthenticationFactTexts = string[];
-
-export const MAX_AUTHENTICATION_CONTROL_TEXT_BYTES = 512;
-
 export const MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT = 100;
 
 export const MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS = 20;
@@ -171,24 +168,6 @@ type UnownedLocalScopeRequest = {
 class AuthenticationSubmissionControls extends AuthenticationControlSurface {
   private neverNextPreferred(): boolean {
     return false;
-  }
-
-  private utf8ByteLength(value: string): number {
-    return new TextEncoder().encode(value).length;
-  }
-
-  authenticationPolicyTextFits(value: string): boolean {
-    return this.utf8ByteLength(value) <= MAX_AUTHENTICATION_CONTROL_TEXT_BYTES;
-  }
-
-  authenticationFactStringsAreTransportable(
-    values: AuthenticationFactTexts,
-  ): boolean {
-    return values.every(this.authenticationPolicyTextFits.bind(this));
-  }
-
-  boundedAuthenticationDestination(identity: string): string {
-    return this.authenticationPolicyTextFits(identity) ? identity : "";
   }
 
   rawOwnedFormIdentity(form: HTMLFormElement): string {
@@ -227,7 +206,7 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
   observedFormDestination(formScope: PasswordFormScope): string {
     return formScope.kind === PasswordFormScopeKind.Owned
       ? this.ownedFormDestinationIdentity(formScope.owner)
-      : this.boundedAuthenticationDestination(this.browser.location.href);
+      : this.browser.location.href;
   }
 
   private rawFormDestinationIdentity(form: HTMLFormElement): string {
@@ -246,9 +225,7 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
   }
 
   ownedFormDestinationIdentity(form: HTMLFormElement): string {
-    return this.boundedAuthenticationDestination(
-      this.formDestinationIdentity(form),
-    );
+    return this.formDestinationIdentity(form);
   }
 
   controlDestinationIdentity({
@@ -574,13 +551,11 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
     hasAuthenticationUsername,
     hasAuthenticationPassword,
   }: ImplicitAuthenticationSubmitCapabilityRequest): boolean {
-    const transportableFacts: AuthenticationFactTexts = [
-      sourceOrigin,
-      this.rawOwnedFormIdentity(form),
-      destinationIdentity,
-    ];
     return (
-      this.authenticationFactStringsAreTransportable(transportableFacts) &&
+      authenticationFactBounds.controlTextsFit([
+        sourceOrigin,
+        this.rawOwnedFormIdentity(form),
+      ]) &&
       can_activate_authentication_route_control(
         sourceOrigin,
         this.ownedFormIdentity(form),
@@ -659,7 +634,7 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
       this.controlHasNativeSubmitSemantics(control) &&
       control.hasAttribute("formaction")
     ) {
-      return this.boundedAuthenticationDestination(control.formAction);
+      return control.formAction;
     }
     return this.ownedFormDestinationIdentity(form);
   }
@@ -669,8 +644,8 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
   ): string {
     const controlForm = this.associatedAuthenticationForm(control);
     if (controlForm.kind !== PasswordFormScopeKind.Owned) {
-      return this.boundedAuthenticationDestination(
-        ((v) => (v ? v : ""))(control.ownerDocument.defaultView?.location.href),
+      return ((v) => (v ? v : ""))(
+        control.ownerDocument.defaultView?.location.href,
       );
     }
     const request: AuthenticationRouteDestinationRequest = {
@@ -715,10 +690,9 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
     const machineIdentity = this.controlMachineIdentity(control);
     if (
       !destinationIdentity ||
-      !this.authenticationFactStringsAreTransportable([
+      !authenticationFactBounds.controlTextsFit([
         sourceOrigin,
         formIdentity,
-        destinationIdentity,
         controlLabel,
         machineIdentity,
       ])
@@ -908,10 +882,9 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
         submissionDestinationSource:
           AuthenticationSubmissionDestination.source(control),
       };
-      const transportable = this.authenticationFactStringsAreTransportable([
+      const transportable = authenticationFactBounds.controlTextsFit([
         observation.sourceOrigin,
         observation.formIdentity,
-        observation.destinationIdentity,
         observation.label,
         ((v) => (v ? v : ""))(observation.machineIdentity),
       ]);
@@ -979,8 +952,7 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
       return (
         this.formSubmissionMethod(form) ===
           this.controlSubmissionMethod(expectedSubmitter) &&
-        this.ownedFormDestinationIdentity(form) ===
-          this.boundedAuthenticationDestination(expectedDestination)
+        this.ownedFormDestinationIdentity(form) === expectedDestination
       );
     };
     const observation: AuthenticationSubmissionObservation = {
