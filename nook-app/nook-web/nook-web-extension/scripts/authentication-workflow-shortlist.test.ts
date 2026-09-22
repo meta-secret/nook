@@ -36,6 +36,7 @@ function installTestBrowserGlobals(): () => void {
   initSync(wasmInit)
   for (const [name, value] of [
     ['CSS', testWindow.CSS],
+    ['document', testWindow.document],
     ['Document', testWindow.Document],
     ['Element', testWindow.Element],
     ['HTMLElement', testWindow.HTMLElement],
@@ -53,6 +54,7 @@ function installTestBrowserGlobals(): () => void {
     ['location', testWindow.location],
     ['Node', testWindow.Node],
     ['Text', testWindow.Text],
+    ['window', testWindow],
   ] as const) {
     installBrowserGlobal(originals, name, value)
   }
@@ -83,7 +85,7 @@ describe('authentication workflow shortlist admission', () => {
   test('removes inadmissible destinations before they can crowd out a later login', () => {
     const restoreBrowserGlobals = installTestBrowserGlobals()
     try {
-      testWindow.document.body.replaceChildren()
+      document.body.replaceChildren()
       for (let index = 0; index < 40; index += 1) {
         appendLoginForm(
           `oversized-${index}`,
@@ -92,11 +94,11 @@ describe('authentication workflow shortlist admission', () => {
       }
       appendLoginForm('valid-login', 'https://example.test/login')
 
-      const summaryObservation = new PasswordFormSummaryObservation(testWindow)
+      const summaryObservation = new PasswordFormSummaryObservation(globalThis)
       let admissionCount = 0
       const dependencies: PasswordAuthenticationWorkflowFormSummaryDependencies =
         {
-          browser: testWindow,
+          browser: globalThis,
           summarizeRoot:
             summaryObservation.summarizeRoot.bind(summaryObservation),
           observationPriority: () => 0,
