@@ -432,7 +432,10 @@ export abstract class PasswordFormUnownedScopeDiscovery extends AuthenticationIn
   }
 
   pageHasManualCheckpoint(root: ParentNode): boolean {
-    const doc = ((v) => (v ? v : this.browser.document))(root.ownerDocument);
+    const doc =
+      root.nodeType === 9
+        ? root
+        : ((v) => (v ? v : this.browser.document))(root.ownerDocument);
     if (doc.querySelector("[data-nook-manual-checkpoint]")) return true;
     const checkpointSelector =
       'iframe[src*="recaptcha" i], iframe[src*="hcaptcha" i], iframe[src*="turnstile" i], iframe[title*="captcha" i]';

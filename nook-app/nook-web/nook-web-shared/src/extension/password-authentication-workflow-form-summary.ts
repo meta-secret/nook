@@ -146,6 +146,7 @@ export class PasswordAuthenticationWorkflowFormSummary {
     }
     const independentWorkflowsRequest: AppendIndependentPasskeyOnlyWorkflowsRequest<PasswordFormObservation> =
       {
+        document: root,
         fieldBearing: observations.filter(
           this.dependencies.observationIsAdmissible,
         ),

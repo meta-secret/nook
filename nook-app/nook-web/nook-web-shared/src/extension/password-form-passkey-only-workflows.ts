@@ -121,6 +121,7 @@ export type SummarizePasskeyOnlyWorkflowFormsRequest<Summary> = {
 export type AppendIndependentPasskeyOnlyWorkflowsRequest<
   Observation extends RankableWorkflowObservation,
 > = {
+  document: Document;
   fieldBearing: Observation[];
   passkeyOnly: Observation[];
   observationPriority: (observation: Observation) => number;
@@ -754,6 +755,7 @@ export class IndependentPasskeyWorkflows<
   ) {}
   get observations(): Observation[] {
     const {
+      document,
       fieldBearing,
       passkeyOnly,
       observationPriority,
