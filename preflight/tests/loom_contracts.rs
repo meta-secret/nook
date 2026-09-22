@@ -256,8 +256,10 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
     );
     let skills_typescript =
         root.read(".cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/tsconfig.json");
-    assert!(skills_typescript
-        .contains("\"include\": [\"**/*.ts\", \"**/*.js\", \"**/*.mjs\", \"**/*.cjs\"]"));
+    assert!(
+        skills_typescript
+            .contains("\"include\": [\"**/*.ts\", \"**/*.js\", \"**/*.mjs\", \"**/*.cjs\"]")
+    );
     let source_gate = root.read("agentic-ai/loom/tests/skill-application-source-boundary.test.ts");
     assert!(
         source_gate.contains("ExecutableSkillSource.analyze")
