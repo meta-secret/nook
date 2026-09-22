@@ -25,6 +25,22 @@ jobs:
           ref: ${{ inputs.source_sha || github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Install pinned Meta-Cortex library
+        uses: actions/checkout@v7
+        with:
+          repository: ai-ai-ai-ai-ai-ai-ai/meta-cortex
+          ref: 3a87a1e9a28ae43a18921dc7002d351ceb03ad76
+          path: .meta-cortex-source
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Stage pinned Meta-Cortex library
+        run: |
+          test "$(git -C .meta-cortex-source rev-parse HEAD)" = \
+            "3a87a1e9a28ae43a18921dc7002d351ceb03ad76"
+          mkdir .meta-cortex
+          cp -R .meta-cortex-source/cortex/. .meta-cortex/
+          cp .meta-cortex-source/LICENSE .meta-cortex/LICENSE
+          rm -rf .meta-cortex-source
       - uses: actions/setup-node@v6
         with:
           node-version: "24"
