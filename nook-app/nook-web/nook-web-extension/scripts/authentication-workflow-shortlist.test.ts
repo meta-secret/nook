@@ -25,6 +25,11 @@ function installBrowserGlobal<Value>(
 
 function installTestBrowserGlobals(): () => void {
   const originals = new Map<string, PropertyDescriptor | false>()
+  originals.set(
+    'chrome',
+    Object.getOwnPropertyDescriptor(globalThis, 'chrome') || false,
+  )
+  Reflect.deleteProperty(globalThis, 'chrome')
   const wasmInit: Parameters<typeof initSync>[0] = {
     module: readFileSync(
       new URL(
