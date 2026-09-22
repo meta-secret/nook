@@ -69,10 +69,12 @@ creation/update. Follow
 
 ## Runner and task reference
 
+### Execution boundary
+
 The testing selectors below belong to slow validation or separately authorized
 operations. Their existence never permits feature-stage test execution.
 
-Routing rules:
+### Routing rules
 
 Team Gizmo routes remote task execution through upstream CI/CD with Nook SRE
 context and the authorized canonical feature branch. The execution owner
@@ -86,11 +88,10 @@ Gizmo assigns PR Lifecycle under Feature Gizmo authorization. CI/CD returns run
 evidence through Team Gizmo for PR observation. Neither role decides product
 policy or readiness. Single-agent sessions perform these responsibilities locally.
 
-**Prohibited:** dispatch a second run solely because PR observation changed
-owners, or validate a requested selector against a local catalog.
-
-**Preferred:** reuse matching run evidence and dispatch an authorized selector
-directly when execution is needed. Report the runner's actual terminal result.
+- **Prohibited:** dispatch a second run solely because PR observation changed
+  owners, or validate a requested selector against a local catalog.
+- **Preferred:** reuse matching run evidence and dispatch an authorized selector
+  directly when execution is needed. Report the runner's actual terminal result.
 
 - Invoke Rust validation remotely with `task remote TASK_NAME=rust:ci`.
 - Invoke Loom verification remotely with `task remote TASK_NAME=loom:verify`.

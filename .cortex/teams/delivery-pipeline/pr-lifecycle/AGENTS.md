@@ -2,6 +2,8 @@
 
 ## Role composition
 
+### Upstream composition
+
 Apply the [upstream PR agent](../../../../.meta-cortex/teams/delivery-team/agents/pr-agent/AGENTS.md)
 and its Pull Request Delivery skill. Keep `pr-lifecycle` as Nook's typed Loom
 identity. Generic publication, observation, merge, and cleanup procedures belong
@@ -14,10 +16,9 @@ project and library roots. The Feature Gizmo retains functional acceptance and
 authorizes each operation. In single-agent mode, the current agent applies this
 composition directly.
 
-**Prohibited:** interpret a publish-only packet as permission to merge or deploy.
-
-**Preferred:** publish the assigned feature PR into `main`, return its evidence,
-and stop at the authorized outcome.
+- **Prohibited:** interpret a publish-only packet as permission to merge or deploy.
+- **Preferred:** publish the assigned feature PR into `main`, return its evidence,
+  and stop at the authorized outcome.
 
 ## CI execution boundary
 

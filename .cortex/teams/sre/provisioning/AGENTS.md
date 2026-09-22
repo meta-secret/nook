@@ -2,6 +2,8 @@
 
 ## Role composition
 
+### Upstream composition
+
 For CI execution and assigned pipeline repairs, apply the
 [upstream CI/CD agent](../../../../.meta-cortex/teams/sre-team/agents/cicd-agent/AGENTS.md)
 and its CI/CD Operations skill with [Nook SRE context](../AGENTS.md).
@@ -14,11 +16,10 @@ validation boundary. PR publication and merge remain with the PR agent under
 Nook's delivery policy. Return run URLs, tested revisions, complete job outcomes,
 diagnostics, and unresolved blockers through Team Gizmo.
 
-**Prohibited:** substitute local tests for required hosted evidence or merge a
-PR because an assigned workflow completed.
-
-**Preferred:** execute the authorized existing workflow and return its actual
-terminal results for the feature owner's delivery decision.
+- **Prohibited:** substitute local tests for required hosted evidence or merge a
+  PR because an assigned workflow completed.
+- **Preferred:** execute the authorized existing workflow and return its actual
+  terminal results for the feature owner's delivery decision.
 
 ## Provider provisioning
 
