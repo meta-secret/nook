@@ -60,23 +60,23 @@ afterAll(() => {
 })
 
 function appendLoginForm(id: string, action: string): void {
-  const form = document.createElement('form')
+  const form = testWindow.document.createElement('form')
   form.id = id
   form.setAttribute('action', action)
-  const username = document.createElement('input')
+  const username = testWindow.document.createElement('input')
   username.type = 'email'
   username.name = 'email'
   username.autocomplete = 'username'
-  const submit = document.createElement('button')
+  const submit = testWindow.document.createElement('button')
   submit.type = 'submit'
   submit.textContent = 'Sign in'
   form.append(username, submit)
-  document.body.append(form)
+  testWindow.document.body.append(form)
 }
 
 describe('authentication workflow shortlist admission', () => {
   test('removes inadmissible destinations before they can crowd out a later login', () => {
-    document.body.replaceChildren()
+    testWindow.document.body.replaceChildren()
     for (let index = 0; index < 40; index += 1) {
       appendLoginForm(
         `oversized-${index}`,
@@ -85,11 +85,13 @@ describe('authentication workflow shortlist admission', () => {
     }
     appendLoginForm('valid-login', 'https://example.test/login')
 
-    const summaryObservation = new PasswordFormSummaryObservation(globalThis)
+    const summaryObservation = new PasswordFormSummaryObservation(
+      testWindow as unknown as typeof globalThis,
+    )
     let admissionCount = 0
     const dependencies: PasswordAuthenticationWorkflowFormSummaryDependencies =
       {
-        browser: globalThis,
+        browser: testWindow,
         summarizeRoot:
           summaryObservation.summarizeRoot.bind(summaryObservation),
         observationPriority: () => 0,
