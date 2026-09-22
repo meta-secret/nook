@@ -26,6 +26,7 @@ import { LoginSetupKind } from '$lib/vault/state/provider.svelte'
 import type { NookSecretRecord } from '$lib/nook'
 import type { VaultState } from '$lib/vault.svelte'
 import { SentinelUnlockActions } from '$lib/vault/sentinel-unlock'
+import { VaultSessionUnlockOutcome } from '$lib/vault/session'
 import { ProviderSaveOutcome } from '$lib/vault/providers.svelte'
 import { unselectedVaultScope } from '$lib/auth/providers'
 import { RosterHydrationKind } from '$lib/vault/action-contexts'
@@ -84,7 +85,9 @@ class SentinelFinalizationFixture {
   readonly hydrateMultiDeviceState = vi.fn<
     VaultState['hydrateMultiDeviceState']
   >(async () => ok({ kind: RosterHydrationKind.Skipped }))
-  readonly markVaultUnlocked = vi.fn(() => ok())
+  readonly markVaultUnlocked = vi.fn(() =>
+    ok(VaultSessionUnlockOutcome.Unlocked),
+  )
   readonly showSuccess = vi.fn()
   readonly startIdleSessionTracking = vi.fn()
   readonly startVaultSync = vi.fn()

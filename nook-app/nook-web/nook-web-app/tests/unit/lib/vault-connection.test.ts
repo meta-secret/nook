@@ -19,6 +19,7 @@ import {
 import { VaultAccessStatus } from '$lib/nook'
 import type { VaultState } from '$lib/vault.svelte'
 import { VaultConnectionActions } from '$lib/vault/connection'
+import { VaultSessionUnlockOutcome } from '$lib/vault/session'
 import {
   OAuthRemoteReferenceSyncKind,
   ProviderSaveOutcome,
@@ -131,7 +132,7 @@ function connectionScenario(
   )
   state.markVaultUnlocked = vi.fn(() => {
     state.isAuthenticated = true
-    return ok()
+    return ok(VaultSessionUnlockOutcome.Unlocked)
   })
   state.syncFromStorage = vi.fn<VaultState['syncFromStorage']>(async () =>
     ok(ProviderSyncOutcome.Synced),
