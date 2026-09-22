@@ -465,9 +465,9 @@ Main-equivalent browser suites.
 Project-scoped module experts use stable semantic role names defined by the
 [Cortex registry](.cortex/teams/ai/architecture/module-experts.md). Universal
 worker behavior follows the [root Cortex contract](.cortex/AGENTS.md). The
-typed Loom catalog mirrors the roles for isolated read-only execution.
+typed Loom catalog mirrors their roles and bounded read-only context.
 Run **`task loom:module-experts:validate`** to verify complete production-module
-routing, runtime isolation, generated WASM binding contracts, the
+routing, generated WASM binding contracts, the
 `internal_api_expert` boundary, and research exclusions. Gizmo selects and
 invokes module experts through the active harness; Loom does not own an expert
 journal, replay, or completion-handoff path.

@@ -27,11 +27,12 @@ scoped rustfmt, and bounded inexpensive TS diagnostics or formatting.
     PR Lifecycle Agent for bounded execution.
   - The Feature Gizmo retains readiness policy authority, and
     `feature PR lifecycle` remains the sole pull-request creation/update path; Team
-    Gizmo and PR Lifecycle Agent do not create or update pull requests or
-    decide policy, readiness, or promotion verdicts.
+    Gizmo routes authorized mechanics and PR Lifecycle Agent creates or updates
+    the pull request without deciding policy, readiness, or promotion verdicts.
   - Run the full required PR checks on the captured feature head SHA.
   - Preserve e2e opt-ins and security-required focused browser checks.
-  - Use native non-cancelling concurrency with one active and latest pending.
+  - Use native PR concurrency that cancels stale-head validation when a newer
+    event supersedes it; separate pull requests remain independent.
   - Run complete checks without per-push path-filter reductions.
   - Route failures through feature compilation and feature pull-request delivery.
 - **Execution infrastructure**
@@ -44,7 +45,7 @@ scoped rustfmt, and bounded inexpensive TS diagnostics or formatting.
 - Do not run local tests, Docker work, product compilation, or coverage.
 - Do not treat `rust:ci`, `web:verify`, or `loom:verify` as build-only.
 - Do not add an automatic dev-push slow pipeline.
-- Do not cancel an active slow run or create a custom scheduler.
+- Do not create a custom scheduler or cancel runs outside native supersession.
 - Do not replace missing remote evidence with local execution.
 
 ## Evidence

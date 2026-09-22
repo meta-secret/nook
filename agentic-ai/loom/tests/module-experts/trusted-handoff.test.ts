@@ -18,6 +18,11 @@ const RETIRED_HANDOFF_SURFACES = [
   'src/agent-workflow/codex-runtime.ts',
   'src/module-experts/trusted-runtime.ts',
   'src/structural-experts/trusted-runtime.ts',
+  'src/module-experts/runtime-contract.ts',
+  'src/module-experts/runtime-environment-audit.ts',
+  'src/module-experts/read-context-mcp.ts',
+  'src/module-experts/read-context-rpc-codec.ts',
+  'src/module-experts/repository-snapshot.ts',
 ] as const;
 
 const REMOVED_INTERNAL_SECURITY_MODULES = [
@@ -31,13 +36,6 @@ test('keeps named-expert handoffs on the active harness', async () => {
   for (const relativePath of RETIRED_HANDOFF_SURFACES) {
     await expect(access(join(LOOM_ROOT, relativePath))).rejects.toThrow();
   }
-  const externalBoundary = await readFile(
-    join(LOOM_ROOT, 'src/module-experts/runtime-contract.ts'),
-    'utf8',
-  );
-  expect(externalBoundary).toContain("from 'node:crypto'");
-  expect(externalBoundary).toContain('timingSafeEqual');
-
   for (const relativePath of REMOVED_INTERNAL_SECURITY_MODULES) {
     await expect(access(join(LOOM_ROOT, relativePath))).rejects.toThrow();
   }

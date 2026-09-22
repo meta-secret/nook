@@ -33,18 +33,17 @@ journal, replay, or completion-handoff path.
 
 ## Module delivery worktrees
 
-Module expert snapshots and implementation worktrees are different surfaces.
+Module expert context and implementation worktrees are different surfaces.
 
-- **Read-only expert:** The expert runtime receives an immutable, catalog-scoped
-  snapshot of the exact source commit. It is not a writable implementation
-  workspace.
+- **Read-only expert:** The active harness supplies catalog-scoped context. It
+  is not a writable implementation workspace.
 - **Write-capable worker:** The implementation worker receives an isolated child
-  worktree based on the parent feature worktree's exact accepted commit.
-- **Exact handoff:** The worker returns the exact commit for its iteration and
-  focused evidence. The parent verifies that commit and integrates it into the
-  parent worktree.
+  worktree on its assigned worker branch from the canonical feature branch.
+- **Branch handoff:** The worker returns its assigned branch and focused
+  evidence. The upstream integration agent integrates that branch into the
+  feature branch.
 - **History access:** The worker may inspect committed parent history and
-  integrated peer commits for context. Its write scope remains limited to its
+  integrated peer branches for context. Its write scope remains limited to its
   child worktree and declared files.
 
 The active harness owns worker coordination. Loom documents and checks the
