@@ -77,6 +77,13 @@
     renderState.kind === DetectionFixtureRenderKind.Ready &&
       renderState.fixture.quirks.includes('form-action-omitted'),
   )
+  const fixtureFormAttributes = $derived({
+    ...(zeroHeightPasswordContainer
+      ? { class: 'nw-signin' }
+      : { id: 'login_form' }),
+    ...(omitFormMethod ? {} : { method: 'post' }),
+    ...(omitFormAction ? {} : { action: '/auth/login' }),
+  })
 
   function fieldSelector(field: SiteFixtureField): string {
     if (field.id) return `#${CSS.escape(field.id)}`
@@ -248,13 +255,7 @@
       {#if error}
         <p class="error" role="alert">{error}</p>
       {/if}
-      <form
-        id={zeroHeightPasswordContainer ? undefined : 'login_form'}
-        class={zeroHeightPasswordContainer ? 'nw-signin' : undefined}
-        method={omitFormMethod ? undefined : 'post'}
-        action={omitFormAction ? undefined : '/auth/login'}
-        {onsubmit}
-      >
+      <form {...fixtureFormAttributes} {onsubmit}>
         {#each step.fields as field, fieldIndex (`${stepIndex}:${fieldIndex}`)}
           {@render fixtureField(field)}
         {/each}
@@ -292,13 +293,7 @@
     {#if error}
       <p class="error" role="alert">{error}</p>
     {/if}
-    <form
-      id={zeroHeightPasswordContainer ? undefined : 'login_form'}
-      class={zeroHeightPasswordContainer ? 'nw-signin' : undefined}
-      method={omitFormMethod ? undefined : 'post'}
-      action={omitFormAction ? undefined : '/auth/login'}
-      {onsubmit}
-    >
+    <form {...fixtureFormAttributes} {onsubmit}>
       {#each step.fields as field, fieldIndex (`${stepIndex}:${fieldIndex}`)}
         {@render fixtureField(field)}
       {/each}
