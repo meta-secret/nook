@@ -1,3 +1,4 @@
+import type { Page } from '@playwright/test'
 import { expect, test } from '../fixtures'
 import {
   demoBeat,
@@ -27,6 +28,27 @@ function unavailableLoginPilotStubArgs(
     ...demoDomainEnumArgs,
     unavailableLoginPilotFlow: true,
   }
+}
+
+async function holdCompanionWasm({
+  page,
+  delayMs,
+}: {
+  page: Page
+  delayMs: number
+}): Promise<void> {
+  await page.evaluate((delay) => {
+    const instantiate = WebAssembly.instantiate
+    Object.defineProperty(WebAssembly, 'instantiate', {
+      configurable: true,
+      value: async (...args: Parameters<typeof instantiate>) => {
+        await new Promise<void>((resolve) => {
+          window.setTimeout(resolve, delay)
+        })
+        return instantiate(...args)
+      },
+    })
+  }, delayMs)
 }
 
 function totpPilotStubArgs(messages: Record<string, ChromeMessage>) {
@@ -130,6 +152,65 @@ function installConnectedDemoRuntimeOverrides(noMatching: boolean): void {
     },
   )
 }
+
+test('waits for companion WASM before the first Pilot scan', async ({
+  page,
+}) => {
+  const messages = await loadPilotMessages()
+  const stubArgs = loginPilotStubArgs(messages)
+
+  await page.goto('/')
+  await page.setContent(`<!doctype html>
+    <html>
+      <head>
+        <title>Delayed Pilot sign in</title>
+        <style>
+          :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+          * { box-sizing: border-box; }
+          body { min-height: 100vh; margin: 0; display: grid; place-items: center; background: #090a0f; color: #f7f7f8; }
+          main { width: min(440px, calc(100vw - 48px)); padding: 40px; border: 1px solid rgb(255 255 255 / 10%); border-radius: 20px; background: #181a23; }
+          h1 { margin: 0 0 24px; font-size: 30px; }
+          form { display: grid; gap: 16px; }
+          label { display: grid; gap: 8px; color: #aeb4c1; }
+          input, button { min-height: 48px; border-radius: 10px; font: inherit; }
+          input { padding: 12px 14px; border: 1px solid #3a3f50; background: #11131a; color: #fff; }
+          button { border: 0; background: #eef0f4; color: #171921; font-weight: 750; }
+        </style>
+      </head>
+      <body>
+        <main>
+          <h1>Welcome back</h1>
+          <form method="post">
+            <label>Email<input aria-label="Email" autocomplete="username" type="email" /></label>
+            <label>Password<input aria-label="Password" autocomplete="current-password" type="password" /></label>
+            <button type="submit">Sign in</button>
+          </form>
+        </main>
+      </body>
+    </html>`)
+  await page.evaluate(installDemoChromeStub, stubArgs)
+  await holdCompanionWasm({ page, delayMs: 2_000 })
+  await injectPilotAutofill(page)
+
+  await page.waitForTimeout(100)
+  const widget = page.locator('#nook-auth-widget')
+  await expect(widget).toHaveCount(0)
+  expect(
+    await page.evaluate(() => {
+      const messages = window.__nookDemoRuntimeMessageTypes
+      return Array.isArray(messages) ? messages : []
+    }),
+  ).toEqual([])
+
+  await expect(widget.getByText('Ready to sign in')).toBeVisible()
+  expect(
+    await page.evaluate(() => {
+      const messages = window.__nookDemoRuntimeMessageTypes
+      return Array.isArray(messages) ? messages : []
+    }),
+  ).toContain('nook:authentication-workflow-snapshot')
+  await demoBeat(page)
+})
 
 test('approve backup-code extraction only after a fresh Pilot decision', async ({
   page,

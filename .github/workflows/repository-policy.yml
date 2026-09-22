@@ -34,13 +34,8 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
       - name: Stage pinned Meta-Cortex library
-        run: |
-          test "$(git -C .meta-cortex-source rev-parse HEAD)" = \
-            "3a87a1e9a28ae43a18921dc7002d351ceb03ad76"
-          mkdir .meta-cortex
-          cp -R .meta-cortex-source/cortex/. .meta-cortex/
-          cp .meta-cortex-source/LICENSE .meta-cortex/LICENSE
-          rm -rf .meta-cortex-source
+        run: >-
+          .github/scripts/stage-pinned-meta-cortex.sh
       - uses: actions/setup-node@v6
         with:
           node-version: "24"
