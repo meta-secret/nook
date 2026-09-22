@@ -17,13 +17,17 @@ If `.meta-cortex/` is missing:
      `meta-cortex init --non-interactive --harness codex --instructions write`.
 3. Verify that `.meta-cortex/AGENTS.md` and `.meta-cortex/meta-cortex.toml` now
    exist.
-4. Read `.meta-cortex/AGENTS.md` and continue through the normal Nook entry
-   sequence.
 
-If the command cannot be installed, initialization fails, or either required
-file remains missing, stop all repository work. Report the exact failure as a
-blocker. Do not plan, edit, validate, launch agents, or substitute copied
-framework files.
+If `.meta-cortex/` exists but either required file is missing, stop and report
+the missing path as a bootstrap blocker. Do not treat a partial installation as
+available or substitute copied framework files.
+
+After both required files exist, read `.meta-cortex/CIRCUIT-BREAKER.md`, then
+`.meta-cortex/AGENTS.md`, and continue through the normal Nook entry sequence.
+
+If the command cannot be installed or initialization fails, stop all repository
+work. Report the exact failure as a blocker. Do not plan, edit, validate, launch
+agents, or substitute copied framework files.
 
 **Prohibited:** continue a product change after `meta-cortex init` fails, using
 only the Nook documents or a manually copied partial framework.

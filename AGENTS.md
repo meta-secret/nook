@@ -1,14 +1,12 @@
 # Nook Agent Entry Point
 
 Read [`.cortex/CIRCUIT-BREAKER.md`](.cortex/CIRCUIT-BREAKER.md) before every
-other Cortex document. Meta-Cortex is a required tool. If `.meta-cortex/` is
-missing, install the `meta-cortex` command from the
-[upstream repository](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex) and
-run `meta-cortex init` in the Nook repository root. Stop all repository work and
-report the blocker if installation or initialization does not succeed. Follow
-the canonical [bootstrap contract](.cortex/meta-cortex-integration.md#required-bootstrap).
+other Cortex document. Meta-Cortex is a required tool. Before normal repository
+work, follow the canonical [bootstrap contract](.cortex/meta-cortex-integration.md#required-bootstrap)
+to verify or initialize `.meta-cortex/`. Stop all repository work and report
+the exact blocker if the bootstrap does not succeed.
 
-After Meta-Cortex is available, read [`.cortex/AGENTS.md`](.cortex/AGENTS.md)
+After the bootstrap succeeds, read [`.cortex/AGENTS.md`](.cortex/AGENTS.md)
 and [`.cortex/knowledge-graph.md`](.cortex/knowledge-graph.md) before making
 changes in this repository. Nook context composes with
 [Meta-Cortex](.meta-cortex/AGENTS.md) through the
