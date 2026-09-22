@@ -8,6 +8,7 @@ import {
   authenticationFactObserverOptions,
   authenticationFactObserver,
 } from '../../../nook-web-shared/src/extension/authentication-fact-attributes'
+import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import { AuthenticationWorkflowSnapshotResponseKind } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { CompanionWasmSessionMessageType } from '../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 import { AuthenticationWorkflowClassification } from '../../../nook-web-shared/src/extension/password-form-classified-observations'
@@ -629,11 +630,10 @@ scanState.schedule = authenticationScanRenderLifecycle.schedule.bind(
   authenticationScanRenderLifecycle,
 )
 
-void (async () => {
+void companionWasmReady.then(async () => {
   if (await simpleVaultRuntime.isRuntimeNookVaultAppUrl(location.href)) {
     return
   }
-  void authenticationScanRenderLifecycle.scanAndRender()
   document.addEventListener(
     'submit',
     loginSaveInteraction.captureSubmittedLogin.bind(loginSaveInteraction),
@@ -650,6 +650,7 @@ void (async () => {
     },
     true,
   )
+  void authenticationScanRenderLifecycle.scanAndRender()
 
   const observer = new MutationObserver(
     authenticationScanRenderLifecycle.handleMutations.bind(
@@ -685,4 +686,4 @@ void (async () => {
     }
     window.addEventListener(eventName, handleViewportChange, options)
   }
-})()
+})
