@@ -68,7 +68,7 @@ test('rejects missing and invalid dev:land branch identity', () => {
     const malformed = DevCli.requiredDevLandPacket();
     expect(malformed.isErr()).toBe(true);
     if (malformed.isOk()) return;
-    expect(malformed.error.message).toContain('safe Git ref');
+    expect(malformed.error.message).toContain('malformed');
   } finally {
     for (const name of names) {
       const value = previous[name];

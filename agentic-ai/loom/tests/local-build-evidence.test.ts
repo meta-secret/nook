@@ -88,9 +88,16 @@ test('local evidence allowlist matches the repository-owned native Taskfile gate
     join(repositoryRoot, 'nook-app/nook-platform/Taskfile.yml'),
     'utf8',
   );
+  const devTaskfile = readFileSync(
+    join(repositoryRoot, '.task/dev.yml'),
+    'utf8',
+  );
+
   expect(LOCAL_BUILD_TASKS).toEqual(['build', 'rust:build']);
   expect(appTaskfile).toMatch(/\n {2}build:\n/u);
   expect(platformTaskfile).toMatch(/\n {2}rust:build:\n/u);
+  expect(devTaskfile).toContain('default "rust:build"');
+  expect(devTaskfile).not.toMatch(/app:build|platform:rust:build/u);
 });
 
 test('generator writes an exact-head proof from command success without secrets', () => {
