@@ -41,7 +41,7 @@ body {
 }
 
 body:has(.toolbar-menu) {
-  width: 320px;
+  width: 360px;
 }
 
 .device-setup,
@@ -55,51 +55,191 @@ body:has(.toolbar-menu) {
 }
 
 .toolbar-menu {
-  gap: 10px;
-  padding: 14px;
+  gap: 16px;
+  padding: 18px;
   border: 0;
 }
 
-.toolbar-menu-header {
+.companion-header {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  align-items: center;
   gap: 10px;
 }
 
-.toolbar-menu-summary {
+.companion-brand-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.companion-brand-copy {
+  display: grid;
+  flex: 1;
+  gap: 2px;
   min-width: 0;
 }
 
 .toolbar-menu .step-label {
-  color: var(--foreground);
-  font-size: 14px;
-  font-weight: 750;
-  letter-spacing: 0;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
   text-align: left;
-  text-transform: none;
+  text-transform: uppercase;
 }
 
-.toolbar-menu h1 {
-  margin: 2px 0 0;
+.companion-state {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
   overflow: hidden;
   color: var(--muted-foreground);
   font-size: 12px;
-  font-weight: 600;
-  text-align: left;
+  font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.companion-state span {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border: 1px solid var(--muted-foreground);
+  border-radius: 999px;
+}
+
+.companion-state.connected {
+  color: var(--foreground);
+}
+
+.companion-state.connected span {
+  border-color: var(--primary);
+  background: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 12%, transparent);
+}
+
 .toolbar-menu .menu-logo {
-  width: 34px;
-  height: 34px;
+  width: 38px;
+  height: 38px;
   margin: 0;
-  border-radius: 8px;
+  border-radius: 9px;
+}
+
+.toolbar-menu h1 {
+  margin: 4px 0 0;
+  font-size: 22px;
+  line-height: 1.18;
+  text-align: left;
+}
+
+.companion-description {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.secret-summary {
+  padding: 14px 15px;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 6px);
+  background: var(--card);
+}
+
+.secret-summary div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.secret-summary span {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.secret-summary strong {
+  color: var(--foreground);
+  font-size: 30px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 780;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.companion-relationship {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 30px minmax(0, 1fr);
+  align-items: stretch;
+  margin: 0;
+}
+
+.relationship-node {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 4px);
+  background: var(--card);
+}
+
+.relationship-node span,
+.relationship-node strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.relationship-node span {
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.relationship-node strong {
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.relationship-connector {
+  display: grid;
+  align-items: center;
+}
+
+.relationship-connector span {
+  height: 1px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--muted-foreground) 0 3px,
+    transparent 3px 6px
+  );
+  opacity: 0.5;
+}
+
+.companion-relationship.connected .relationship-connector span {
+  background: var(--primary);
+  opacity: 0.72;
+}
+
+.companion-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.companion-footer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
 }
 
 .menu-secondary-action {
-  justify-self: center;
+  min-height: 34px;
   border-color: transparent;
   background: transparent;
   color: var(--muted-foreground);
