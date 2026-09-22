@@ -118,6 +118,27 @@ describe('automatic vault sync', () => {
     expect(state.errorMsg).toBe(I18N_KEYS.AuthStorageSyncFailed)
   })
 
+  test('does not carry a join polling failure into the newly unlocked session', async () => {
+    const state = VaultStateTestFixture.create()
+    state.isAuthenticated = false
+    state.joinEnrollmentPrompt = JoinEnrollmentState.Pending
+    state.syncFromStorage = vi.fn(async () => {
+      state.sessionEpoch += 1
+      state.isAuthenticated = true
+      state.joinEnrollmentPrompt = JoinEnrollmentState.None
+      return err(
+        new VaultStorageFailure(VaultStorageFailureKind.OperationFailed),
+      )
+    })
+    state.scheduleSync = vi.fn(({ callback }) => callback())
+
+    new VaultSyncActions(state).startVaultSync()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(state.errorMsg).toBe('')
+  })
+
   test('keeps an actionable background failure visible while unlocked', async () => {
     const state = VaultStateTestFixture.create()
     state.isAuthenticated = true

@@ -94,6 +94,7 @@ export class VaultSessionActions {
     } catch (failure) {
       return storageErr(new NativeVaultStorageFailure(failure));
     }
+    state.sessionEpoch += 1;
     state.isAuthenticated = true;
     state.awaitingJoinApproval = false;
     state.sessionExpiredByIdle = false;
