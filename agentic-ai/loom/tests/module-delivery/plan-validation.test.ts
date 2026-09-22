@@ -36,7 +36,7 @@ import type {
   ModuleDeliveryEvidenceSynthesisNodeV2,
   ModuleDeliveryNodeV2,
   ModuleDeliveryPlan,
-  ModuleDeliveryPlanV5,
+  ModuleDeliveryPlanV6,
   ModuleDeliveryReadOnlyNodeV2,
   ModuleDeliveryWriteNodeV2,
 } from '../../src/module-delivery/index.ts';
@@ -234,6 +234,7 @@ describe('reviewed module delivery plan', () => {
           moduleRoot: 'infra',
           write: ['infra/**'],
         }).workspace,
+        workerRole: 'provisioning',
         workerBranch:
           'codex/child/sre/provisioning/module-delivery-test/core-provider-implementation-work',
       },
@@ -296,12 +297,12 @@ describe('reviewed module delivery plan', () => {
     }
   });
 
-  test('rejects every pre-branch plan version at the compatibility boundary', () => {
+  test('rejects every pre-v6 plan version at the compatibility boundary', () => {
     const canonical = ModuleDeliveryPlanValidationScenario.plan({
       nodes: [CORE_NODE],
       edgeContracts: [],
     });
-    for (const version of [1, 2, 3, 4]) {
+    for (const version of [1, 2, 3, 4, 5]) {
       const historical = {
         ...canonical,
         version,
@@ -487,7 +488,7 @@ describe('reviewed module delivery plan', () => {
         ],
       },
     };
-    const reversedNodePlan: ModuleDeliveryPlanV5 = {
+    const reversedNodePlan: ModuleDeliveryPlanV6 = {
       ...orderedPlan,
       nodes: [reversedNode],
     };
@@ -557,7 +558,7 @@ describe('reviewed module delivery plan', () => {
       edgeContracts: DEFAULT_EDGES,
     };
     const validPlan = ModuleDeliveryPlanValidationScenario.plan(fixture);
-    const invalidPlan: ModuleDeliveryPlanV5 = {
+    const invalidPlan: ModuleDeliveryPlanV6 = {
       ...validPlan,
       baseBranch: 'main',
       maxAgentDepth: 4,

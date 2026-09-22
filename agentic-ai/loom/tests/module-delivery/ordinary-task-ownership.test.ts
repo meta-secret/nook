@@ -17,7 +17,7 @@ import {
 } from '../../src/module-delivery/index.ts';
 
 import type {
-  ModuleDeliveryPlanV5,
+  ModuleDeliveryPlanV6,
   ModuleDeliveryWriteNodeV2,
 } from '../../src/module-delivery/index.ts';
 
@@ -70,6 +70,7 @@ export class ModuleDeliveryOrdinaryTaskOwnershipScenario {
       },
       workspace: {
         kind: ModuleDeliveryWorkspaceKind.WorkerWorktree,
+        workerRole: this.workerRole(request.team),
         workerBranch: `codex/child/${this.workerNamespace(request.team)}/module-delivery-test/ordinary-writer-implementation`,
         worktreePath: '/tmp/nook-module-delivery/ordinary-writer',
       },
@@ -93,8 +94,12 @@ export class ModuleDeliveryOrdinaryTaskOwnershipScenario {
     }
   }
 
+  private workerRole(team: TeamKey): string {
+    return this.workerNamespace(team).replace(/^[^/]+\//u, '');
+  }
+
   static accepted(node: ModuleDeliveryWriteNodeV2): boolean {
-    const plan: ModuleDeliveryPlanV5 = {
+    const plan: ModuleDeliveryPlanV6 = {
       version: MODULE_DELIVERY_PLAN_VERSION,
       baseBranch: 'origin/main',
       featureBranch: 'codex/module-delivery-test',

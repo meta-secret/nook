@@ -48,7 +48,7 @@ import { ModuleDeliveryBranchAssignmentValidation } from './branch-assignment-va
 import type {
   ModuleDeliveryIssue,
   ModuleDeliveryNodeV2,
-  ModuleDeliveryPlanV5,
+  ModuleDeliveryPlanV6,
   ModuleDeliveryPlanValidation,
   ModuleDeliveryExecutionPrecedence,
   RejectedModuleDeliveryPlan,
@@ -78,7 +78,7 @@ export class ModuleDeliveryPlanDecoder {
       const issue: ModuleDeliveryIssue = {
         code: ModuleDeliveryIssueCode.InvalidField,
         path: '$.version',
-        message: 'Canonical validation requires authored plan version 5.',
+        message: 'Canonical validation requires authored plan version 6.',
       };
       const rejection: RejectedModuleDeliveryPlan = {
         status: ModuleDeliveryValidationStatus.Rejected,
@@ -90,7 +90,7 @@ export class ModuleDeliveryPlanDecoder {
   }
 
   private validateDecodedModuleDeliveryPlan(
-    plan: ModuleDeliveryPlanV5,
+    plan: ModuleDeliveryPlanV6,
   ): ModuleDeliveryPlanValidation {
     const issues: ModuleDeliveryIssue[] = [];
     const nodesById = new Map<string, ModuleDeliveryNodeV2>();

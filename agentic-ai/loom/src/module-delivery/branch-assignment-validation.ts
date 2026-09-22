@@ -63,7 +63,7 @@ export class ModuleDeliveryBranchAssignmentValidation {
           state,
           path: `${workspacePath}.workerBranch`,
           message:
-            'workerBranch must match the assigned team, name the canonical feature segment, and be unique.',
+            'workerBranch must match the assigned team and role, name the canonical feature segment, and be unique.',
         });
       if (
         !isAbsolute(node.workspace.worktreePath) ||
