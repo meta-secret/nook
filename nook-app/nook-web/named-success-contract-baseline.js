@@ -26,8 +26,4 @@ export const namedSuccessContractBaseline = [
     file: "nook-web-shared/src/vault-app/lib/vault/provider-selection.svelte.ts",
     gitBlobSha1: "8ebb17c2f2be5123da7e1f86f38cae3199952d79",
   },
-  {
-    file: "nook-web-shared/src/vault-app/lib/vault/session.ts",
-    gitBlobSha1: "faa5b93548ff491e1e06063bd519bf47d7141e8d",
-  },
 ];

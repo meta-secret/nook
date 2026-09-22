@@ -78,6 +78,7 @@ export class VaultSessionState {
     DeviceProtectionStatus.Passkey,
   );
   isAuthenticated = $state(false);
+  sessionEpoch = $state(0);
   /** True when the login gate should explain that the last lock was due to idle timeout. */
   sessionExpiredByIdle = $state(false);
 

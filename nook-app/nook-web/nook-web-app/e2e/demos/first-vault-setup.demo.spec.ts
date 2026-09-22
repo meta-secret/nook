@@ -75,4 +75,9 @@ test('open a new local vault without an empty-device sync error', async ({
         entry.data?.includes('Vault crypto not initialized'),
     ),
   ).toBeFalsy()
+
+  await page.getByTestId('header-lock-vault-btn').click()
+  await expect(page.getByTestId('login-local-unlock-step')).toBeVisible()
+  await expect(page.getByTestId('vault-error')).toHaveCount(0)
+  await page.waitForTimeout(DEMO_BEAT_MS)
 })
