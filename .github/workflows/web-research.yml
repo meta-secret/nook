@@ -131,17 +131,18 @@ jobs:
       credentials:
         username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
         password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-    defaults:
-      run:
-        working-directory: /meta-secret/nook
     env:
       PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium
     steps:
       - name: Install dependencies
-        run: task web:research:install
+        run: |
+          cd /meta-secret/nook
+          task web:research:install
 
       - name: Check and build
-        run: task web:research:verify
+        run: |
+          cd /meta-secret/nook
+          task web:research:verify
 
       - name: Deploy to Cloudflare Pages
         id: deploy
@@ -150,11 +151,15 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           EVENT_NAME: ${{ github.event_name }}
-        run: task web:research:deploy
+        run: |
+          cd /meta-secret/nook
+          task web:research:deploy
 
       - name: Verify production custom domain
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: task web:research:verify-live
+        run: |
+          cd /meta-secret/nook
+          task web:research:verify-live
 
       - name: Comment preview URL on PR
         if: github.event_name == 'pull_request'

@@ -195,8 +195,9 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Preflight, check, build once, and e2e
-        working-directory: /meta-secret/nook
-        run: task _ci:main
+        run: |
+          cd /meta-secret/nook
+          task _ci:main
         env:
           CI: true
           GIT_COMMIT_ID: ${{ steps.release.outputs.sha }}
