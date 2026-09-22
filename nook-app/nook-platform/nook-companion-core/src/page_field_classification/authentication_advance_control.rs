@@ -19,6 +19,7 @@ use tsify::Tsify;
 mod envelope;
 mod policy;
 mod submission_destination_source;
+mod tesla;
 
 pub use submission_destination_source::PageControlSubmissionDestinationSource;
 

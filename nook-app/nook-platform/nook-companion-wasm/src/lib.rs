@@ -24,6 +24,7 @@ use nook_companion_core::BackupCodePageText;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 mod account_picker_authorization;
+mod authentication_control_actuation;
 mod authentication_observation_binding;
 mod authentication_workflow;
 mod authenticator_code_response;
@@ -38,6 +39,7 @@ mod response_decoding;
 mod vault_host_policy;
 
 pub use account_picker_authorization::*;
+pub use authentication_control_actuation::*;
 pub use authentication_observation_binding::*;
 pub use authentication_workflow::*;
 pub use authenticator_code_response::*;
