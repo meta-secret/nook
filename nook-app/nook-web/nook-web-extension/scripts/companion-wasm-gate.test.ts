@@ -1,3 +1,4 @@
+import { rejects } from 'node:assert/strict'
 import { describe, expect, test } from 'bun:test'
 
 import { runAfterCompanionWasmReady } from '../src/content/autofill/companion-wasm-gate'
@@ -53,7 +54,7 @@ describe('companion WASM startup gate', () => {
     })
 
     readiness.reject(failure)
-    await expect(startup).rejects.toBe(failure)
+    await rejects(startup, (error: unknown) => error === failure)
     expect(events).toEqual([])
   })
 })
