@@ -89,7 +89,7 @@ export class TeamAgentsAuditScenario {
     );
     await writeFile(
       join(cortexRoot, 'AGENTS.md'),
-      authority.replace(invariant, 'Autonomous mission invariant removed.'),
+      authority.replaceAll(invariant, 'Autonomous mission invariant removed.'),
       'utf8',
     );
     return fixtureRoot;
