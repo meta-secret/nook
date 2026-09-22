@@ -166,8 +166,11 @@ describe('canonical Cortex team authority', () => {
     const internalAgent = TEAM_INTERNAL_AGENT_CATALOG.find(
       (candidate) => candidate.key === TeamInternalAgentKey.PrLifecycle,
     );
+    const provisioningAgent = TEAM_INTERNAL_AGENT_CATALOG.find(
+      (candidate) => candidate.key === TeamInternalAgentKey.Provisioning,
+    );
     const deliveryPipelineAuthority = TEAM_AUTHORITY_CATALOG[5];
-    if (!teamGizmo || !internalAgent)
+    if (!teamGizmo || !internalAgent || !provisioningAgent)
       throw new Error('Delivery Pipeline profiles are incomplete.');
     if (!deliveryPipelineAuthority)
       throw new Error('Delivery Pipeline authority is incomplete.');
@@ -192,6 +195,28 @@ describe('canonical Cortex team authority', () => {
         '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md',
       ],
     });
+    expect(provisioningAgent).toMatchObject({
+      key: TeamInternalAgentKey.Provisioning,
+      team: TeamKey.Sre,
+      identity: 'Provisioning specialist',
+      description:
+        'Executes bounded CI/CD workflows, diagnostics, and infrastructure provisioning mechanics under SRE ownership.',
+      parent: TeamGizmoKey.Sre,
+      contextPaths: [
+        '.cortex/teams/sre/provisioning/AGENTS.md',
+        '.cortex/teams/sre/provisioning/knowledge-graph.md',
+      ],
+    });
+    expect(deliveryPipelineAuthority).toMatchObject({
+      description:
+        'Owns authorized pull-request lifecycle mechanics, including publication, check observation, squash merge, and remote feature-branch cleanup.',
+    });
+    expect(deliveryPipelineAuthority.description).not.toContain('CI');
+    expect(deliveryPipelineAuthority.description).not.toContain('workflow');
+    expect(deliveryPipelineAuthority.capabilityBoundary).not.toContain('CI');
+    expect(deliveryPipelineAuthority.capabilityBoundary).not.toContain(
+      'workflow execution',
+    );
     expect(
       TeamAuthorityCatalog.teamGizmoProfile(TeamGizmoKey.DeliveryPipeline),
     ).toEqual(teamGizmo);
@@ -209,6 +234,11 @@ describe('canonical Cortex team authority', () => {
     expect(
       TeamAuthorityCatalog.teamAgentProfile(TeamInternalAgentKey.PrLifecycle),
     ).toEqual(internalAgent);
+    expect(
+      TeamAuthorityCatalog.teamInternalAgentProfile(
+        TeamInternalAgentKey.Provisioning,
+      ),
+    ).toEqual(provisioningAgent);
   });
 
   test('rejects Team Gizmo and internal-agent contract, hierarchy, count, and path drift', () => {
