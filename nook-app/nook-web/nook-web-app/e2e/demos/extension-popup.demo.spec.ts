@@ -18,6 +18,7 @@ type PopupDemoSession = {
   authenticatorQueryMessageType: AuthenticatorPickerQueryMessageType
   firstStatus: DeviceProtectionStatus
   followingStatus: DeviceProtectionStatus
+  hasVaultConnection?: boolean
 }
 function installPopupDemoRuntime(session: PopupDemoSession): void {
   let statusReads = 0
@@ -77,7 +78,11 @@ function installPopupDemoRuntime(session: PopupDemoSession): void {
           callback({ ok: true })
           return
         case 'nook:extension-pairing-state-query':
-          callback({ ok: true, setup })
+          callback(
+            session.hasVaultConnection === false
+              ? { ok: false, reason: 'vault-not-connected' }
+              : { ok: true, setup },
+          )
           return
         case 'nook:extension-session-status':
           callback({
@@ -91,6 +96,9 @@ function installPopupDemoRuntime(session: PopupDemoSession): void {
           return
         case 'nook:extension-session-unlock-pin':
           callback({ ok: true, device })
+          return
+        case 'nook:extension-session-vault-summary':
+          callback({ ok: true, secretCount: 12 })
           return
         default:
           // Picker cancellation is a one-way message when the page closes.
@@ -124,11 +132,8 @@ test('keeps mixed session status safe and actionable', async ({ page }) => {
   }
   await page.addInitScript(installPopupDemoRuntime, session)
   await page.goto(`${extensionRoutePrefix}popup/index.html?state=mixed`)
-  await expect(
-    page.locator(
-      '[data-testid="stay-ready-btn"] + [data-testid="open-simple-vault-btn"]',
-    ),
-  ).toBeVisible()
+  await expect(page.getByTestId('open-simple-vault-btn')).toBeVisible()
+  await expect(page.getByTestId('companion-done-btn')).toHaveText('Done')
   await expect(page.getByTestId('connect-simple-vault-btn')).toBeHidden()
   await demoBeat(page)
 })
@@ -157,9 +162,53 @@ test('restores the paired companion home after a restart unlock', async ({
   await expect(page.getByTestId('companion-vault-status')).toContainText(
     'Personal vault',
   )
-  await expect(page.getByTestId('stay-ready-btn')).toBeVisible()
+  await expect(page.getByTestId('companion-title')).toHaveText(
+    'Ready for sign-ins',
+  )
+  await expect(page.getByTestId('companion-description')).toContainText(
+    'Personal vault',
+  )
+  await expect(page.getByTestId('companion-done-btn')).toBeVisible()
   await expect(page.getByTestId('open-simple-vault-btn')).toBeVisible()
   await expect(page.getByTestId('connect-simple-vault-btn')).toBeHidden()
+  await expect(page.getByTestId('companion-secret-count')).toHaveText('12')
+  await expect(page.getByTestId('companion-identity-status')).toHaveText(
+    'Linked',
+  )
+  await expect(page.getByTestId('companion-connection-status')).toHaveText(
+    'Connected',
+  )
+  await demoBeat(page)
+})
+
+test('explains the next step when the protected identity has no vault', async ({
+  page,
+}) => {
+  const session: PopupDemoSession = {
+    queryMessageType: LoginPickerQueryMessageType.NookLoginPickerQuery,
+    authenticatorQueryMessageType:
+      AuthenticatorPickerQueryMessageType.NookAuthenticatorPickerQuery,
+    firstStatus: DeviceProtectionStatus.Unlocked,
+    followingStatus: DeviceProtectionStatus.Unlocked,
+    hasVaultConnection: false,
+  }
+  await page.addInitScript(installPopupDemoRuntime, session)
+  await page.goto(`${extensionRoutePrefix}popup/index.html`)
+
+  await expect(page.getByTestId('companion-title')).toHaveText(
+    'Connect your vault',
+  )
+  await expect(page.getByTestId('companion-secret-count')).toHaveText(
+    'Unavailable',
+  )
+  await expect(page.getByTestId('companion-identity-status')).toHaveText(
+    'Protected',
+  )
+  await expect(page.getByTestId('companion-connection-status')).toHaveText(
+    'Vault not connected',
+  )
+  await expect(page.getByTestId('connect-simple-vault-btn')).toBeVisible()
+  await expect(page.getByTestId('open-simple-vault-btn')).toBeVisible()
   await demoBeat(page)
 })
 

@@ -12,6 +12,7 @@ import {
   DeviceMode,
   DeviceProtectionStatus,
   NookExternalEventLogRecords,
+  NookSecretTypeFilter,
   NookWebsiteLoginSaveDecision,
   NookVaultManager,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
@@ -35,6 +36,7 @@ import {
   importExtensionVault,
   type ImportExtensionVaultArgs,
   openPasskeyVault,
+  type ExtensionVaultGrant,
   ActivatedExtensionIdentityLifecycle,
 } from './session-vault-operations'
 import { PasskeyBrowserBytes } from './session-key-material'
@@ -107,6 +109,10 @@ type WebsitePasskeyAccountListResponse = {
     readonly userName: string
     readonly userDisplayName: string
   }>
+}
+type VaultSummaryResponse = {
+  readonly ok: true
+  readonly secretCount: number
 }
 type WebsiteLoginAccountListResponse = {
   readonly ok: true
@@ -517,6 +523,37 @@ export async function handleSessionMessage({
           operation,
         }
         return new ActivatedExtensionIdentityLifecycle(activationArgs).run()
+      }
+      case ExtensionSessionMessageType.VaultSummary: {
+        const payload = message.payload
+        const grant: ExtensionVaultGrant = {
+          vaultStoreId: payload.vaultStoreId,
+          deviceId: payload.appId,
+          devicePublicKey: payload.appPublicKey,
+          deviceSigningPublicKey: payload.appSigningPublicKey,
+        }
+        const activeManager = await getManager()
+        const openArgs: Parameters<typeof openPasskeyVault>[0] = {
+          activeManager,
+          grant,
+        }
+        const admission = await openPasskeyVault(openArgs)
+        if (admission.isErr()) return err(admission.error)
+        const page = activeManager.query_secret_page_js(
+          '',
+          NookSecretTypeFilter.All,
+          0,
+          1,
+        )
+        try {
+          const response: VaultSummaryResponse = {
+            ok: true,
+            secretCount: page.total,
+          }
+          return ok(response)
+        } finally {
+          page.free()
+        }
       }
       case ExtensionSessionMessageType.ListPasskeys: {
         const payload = message.payload
