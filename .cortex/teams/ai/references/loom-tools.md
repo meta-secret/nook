@@ -12,9 +12,8 @@ Full package docs: [`agentic-ai/loom/README.md`](../../../../agentic-ai/loom/REA
 
 ## Module delivery boundary
 
-- **Read-only experts:** The expert runtime uses an immutable, catalog-scoped
-  snapshot of the exact source commit. That snapshot is not an implementation
-  workspace.
+- **Read-only experts:** The active harness supplies catalog-scoped context.
+  That context is not an implementation workspace.
 - **Write-capable workers:** Team Gizmo assigns implementation and the upstream
   integration agent supplies its branch and worktree.
 - **Completion:** Workers finish their scoped changes on their branches and

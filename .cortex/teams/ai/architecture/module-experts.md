@@ -55,8 +55,7 @@ This Cortex registry is the semantic authority for role capability and context.
 The typed catalog is a deterministic implementation mirror.
 
 Every successful native-harness role completion returns equivalent semantic
-evidence fields. Optional compiled Loom runs use the dedicated
-`ModuleExpertEvidence` result kind. The continuation contains these non-empty
+evidence fields. The continuation contains these non-empty
 evidence lists:
 
 - `externalApi`;
@@ -101,10 +100,8 @@ It is not a native worker label or harness configuration key.
 Write-capable module tasks are separate implementation assignments governed by
 subagent delegation.
 
-Loom may still run reviewed read-only expert and audit workflows.
-Its JSONL streams, result files, and Markdown views are optional human or audit
-evidence for native harness delegation.
-They never gate dispatch, continuation, retry, join, or completion.
+Loom validates the expert catalogs and routing boundaries. The active harness
+owns expert dispatch, handoffs, continuation, retry, join, and completion.
 
 ## Portable Rust module experts
 
