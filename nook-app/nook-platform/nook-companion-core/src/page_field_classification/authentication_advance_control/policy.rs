@@ -531,6 +531,30 @@ mod tests {
             "a".repeat(MAX_AUTHENTICATION_DESTINATION_TEXT_BYTES)
         );
         assert!(!oversized.authentication_advance_control_is_safe());
+        for destination in [
+            format!("https://example.test/sign-in?op_token={}", "a".repeat(700)),
+            format!(
+                "https://account.booking.com/neutral?op_token={}",
+                "a".repeat(700)
+            ),
+            format!(
+                "https://account.booking.com/sign-in?state={}",
+                "a".repeat(700)
+            ),
+            format!(
+                "https://account.booking.com/sign-in?op_token={}&state=extra",
+                "a".repeat(700)
+            ),
+        ] {
+            let mut rejected = BookingDefaultGetScenario::observation();
+            rejected.destination_identity = destination;
+            assert!(!rejected.authentication_advance_control_is_safe());
+        }
+        let mut foreign_origin = BookingDefaultGetScenario::observation();
+        foreign_origin.source_origin = "https://example.test".to_owned();
+        foreign_origin.destination_identity =
+            format!("https://example.test/sign-in?op_token={}", "a".repeat(700));
+        assert!(!foreign_origin.authentication_advance_control_is_safe());
         BookingDefaultGetScenario::assert_hostile_variants_fail_closed();
     }
 

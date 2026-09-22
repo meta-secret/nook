@@ -26,11 +26,8 @@ import type {
   AuthenticationDisplayProgress,
   AuthenticationImplicitSubmitActuationObservation,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
-import { CompanionWasmSessionMessageType } from "./companion-wasm-runtime-messages";
-import {
-  CompanionWasmRuntimeDeliveryKind,
-  sendCompanionWasmRuntimeMessage,
-} from "./companion-wasm-runtime-transport";
+import { CompanionWasmRuntimeDeliveryKind } from "./companion-wasm-runtime-transport";
+import { evaluateCompanionAuthenticationPolicies } from "./companion-authentication-policy-evaluation";
 import {
   PasskeyControlLookupKind,
   PasswordFormScopeKind,
@@ -146,6 +143,8 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
     AuthenticationWorkflowActivity,
     AuthenticationDisplayProgress
   >();
+  private preparedWorkflowHints:
+    PrepareCompanionWorkflowPoliciesRequest | false = false;
 
   authenticationActivityProgress(
     activity: AuthenticationWorkflowActivity,
@@ -219,10 +218,11 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
       : authentication_implicit_submit_actuation_is_safe(request);
   }
 
-  async prepareCompanionWorkflowPolicies({
-    authenticatorSetupHint,
-    backupCodesHint,
-  }: PrepareCompanionWorkflowPoliciesRequest): Promise<void> {
+  async prepareCompanionWorkflowPolicies(
+    request: PrepareCompanionWorkflowPoliciesRequest,
+  ): Promise<void> {
+    const { authenticatorSetupHint, backupCodesHint } = request;
+    this.preparedWorkflowHints = request;
     const collection = {
       transportability: [] as AuthenticationControlTransportability[],
       advanceControls: [] as AuthenticationAdvanceControlObservation[],
@@ -240,11 +240,10 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
     } finally {
       this.collectingPolicies = false;
     }
-    const delivery = await sendCompanionWasmRuntimeMessage(this.browser, {
-      type: CompanionWasmSessionMessageType.EvaluateAuthenticationPolicies,
-      payload: collection,
-      origin: this.browser.location.origin,
-    });
+    const delivery = await evaluateCompanionAuthenticationPolicies(
+      this.browser,
+      collection,
+    );
     this.transportabilityPolicies.clear();
     this.advanceControlPolicies.clear();
     this.passkeyCandidatePolicies.clear();
@@ -327,18 +326,14 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
         };
       },
     );
-    const implicitDelivery = await sendCompanionWasmRuntimeMessage(
+    const implicitDelivery = await evaluateCompanionAuthenticationPolicies(
       this.browser,
       {
-        type: CompanionWasmSessionMessageType.EvaluateAuthenticationPolicies,
-        payload: {
-          transportability: [],
-          advanceControls: [],
-          passkeyCandidates: [],
-          pageFacts: settledPageFacts,
-          implicitSubmissions,
-        },
-        origin: this.browser.location.origin,
+        transportability: [],
+        advanceControls: [],
+        passkeyCandidates: [],
+        pageFacts: settledPageFacts,
+        implicitSubmissions,
       },
     );
     if (
@@ -373,13 +368,14 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
   }
 
   private passwordFormPriority(observation: PasswordFormObservation): number {
+    const preparedHints = this.collectingPolicies || this.preparedWorkflowHints;
     const factsRequest: AuthenticationObservationFactsRequest = {
       observation,
-      authenticatorSetupHint: this.collectingPolicies
-        ? this.collectingPolicies.authenticatorSetupHint
+      authenticatorSetupHint: preparedHints
+        ? preparedHints.authenticatorSetupHint
         : false,
       backupCodesCopy:
-        this.collectingPolicies && this.collectingPolicies.backupCodesHint
+        preparedHints && preparedHints.backupCodesHint
           ? "Save backup codes"
           : "",
     };
