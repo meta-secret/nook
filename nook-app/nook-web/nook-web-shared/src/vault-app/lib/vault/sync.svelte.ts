@@ -143,6 +143,21 @@ export type RosterHydrationResult = Result<
 export class VaultSyncActions {
   constructor(private readonly state: SyncActionsContext) {}
 
+  private automaticSyncFailureBelongsToCurrentSession(
+    sessionEpoch: number,
+  ): boolean {
+    const state = this.state;
+    return (
+      state.sessionEpoch === sessionEpoch &&
+      state.clientPolicy.vault_sync_timer_start_decision(
+        state.isAuthenticated,
+        state.deviceProtectionReady,
+        state.joinEnrollmentPrompt,
+        state.awaitingJoinApproval,
+      ) === VaultSyncTimerStartDecision.Start
+    );
+  }
+
   async hydrateMultiDeviceState(): Promise<RosterHydrationResult> {
     const state = this.state;
     if (!state.hasManager || !state.isAuthenticated) {
@@ -712,11 +727,18 @@ export class VaultSyncActions {
         : state.runtimeConfig.resolve_default_vault_sync_interval_ms();
     log.info("vault sync timer started");
     if (state.isAuthenticated) {
+      const sessionEpoch = state.sessionEpoch;
       void state
         .syncFromStorage(ProviderSyncFreshness.Scheduled)
         .then((synchronized) => {
-          if (synchronized.isErr())
-            state.errorMsg = state.t(synchronized.error.translationKey);
+          if (synchronized.isErr()) {
+            if (this.automaticSyncFailureBelongsToCurrentSession(sessionEpoch))
+              state.errorMsg = state.t(synchronized.error.translationKey);
+            else
+              log.warn(
+                `discarded late automatic sync failure: ${synchronized.error.kind}`,
+              );
+          }
         });
     }
     const scheduleSyncArgs: Parameters<typeof state.scheduleSync>[0] = {
@@ -734,11 +756,20 @@ export class VaultSyncActions {
         if (tickDecision !== VaultSyncTimerTickDecision.Sync) {
           return;
         }
+        const sessionEpoch = state.sessionEpoch;
         void state
           .syncFromStorage(ProviderSyncFreshness.Scheduled)
           .then((synchronized) => {
-            if (synchronized.isErr())
-              state.errorMsg = state.t(synchronized.error.translationKey);
+            if (synchronized.isErr()) {
+              if (
+                this.automaticSyncFailureBelongsToCurrentSession(sessionEpoch)
+              )
+                state.errorMsg = state.t(synchronized.error.translationKey);
+              else
+                log.warn(
+                  `discarded late automatic sync failure: ${synchronized.error.kind}`,
+                );
+            }
           });
       },
       intervalMs,

@@ -378,11 +378,18 @@ export class VaultConnectionActions {
       state.errorMsg = state.resolveErrorMessage(message);
     } finally {
       if (state.isAuthenticated) {
+        const sessionEpoch = state.sessionEpoch;
         const synchronized = await state.syncFromStorage(
           ProviderSyncFreshness.Forced,
         );
-        if (synchronized.isErr())
-          state.errorMsg = state.t(synchronized.error.translationKey);
+        if (synchronized.isErr()) {
+          if (state.isAuthenticated && state.sessionEpoch === sessionEpoch)
+            state.errorMsg = state.t(synchronized.error.translationKey);
+          else
+            log.warn(
+              `discarded late automatic sync failure: ${synchronized.error.kind}`,
+            );
+        }
         state.startIdleSessionTracking();
         state.startVaultSync();
       }

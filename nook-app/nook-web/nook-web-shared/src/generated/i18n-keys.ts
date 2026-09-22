@@ -707,6 +707,7 @@ export const I18N_KEYS = {
   ErrorsVaultPasswordRequired: 'errors.vault_password_required',
   ErrorsVaultRenameFailed: 'errors.vault_rename_failed',
   ErrorsVaultSelectionFailed: 'errors.vault_selection_failed',
+  ErrorsVaultUnlockMetadataUnavailable: 'errors.vault_unlock_metadata_unavailable',
   ErrorsWholeVaultConflictResolutionRetired: 'errors.whole_vault_conflict_resolution_retired',
   ExtensionAuthenticatorPickerDescription: 'extension.authenticator_picker.description',
   ExtensionAuthenticatorPickerDestination: 'extension.authenticator_picker.destination',

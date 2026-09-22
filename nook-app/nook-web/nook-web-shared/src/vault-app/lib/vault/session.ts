@@ -24,6 +24,14 @@ type UnlockedSessionClearRequest = {
   readonly resetManager: boolean;
 };
 
+enum VaultSessionResetOutcome {
+  Reset = "reset",
+}
+
+export enum VaultSessionUnlockOutcome {
+  Unlocked = "unlocked",
+}
+
 /** Owns browser orchestration for one session context. */
 export class VaultSessionActions {
   constructor(private readonly state: SessionActionsContext) {}
@@ -36,7 +44,8 @@ export class VaultSessionActions {
           const admittedManager = state.admitManager();
           if (admittedManager.isErr()) return storageErr(admittedManager.error);
           try {
-            return storageOk(admittedManager.value.reset_vault_session());
+            admittedManager.value.reset_vault_session();
+            return storageOk(VaultSessionResetOutcome.Reset);
           } catch (nativeFailure) {
             return storageErr(new NativeVaultStorageFailure(nativeFailure));
           }
@@ -94,6 +103,7 @@ export class VaultSessionActions {
     } catch (failure) {
       return storageErr(new NativeVaultStorageFailure(failure));
     }
+    state.sessionEpoch += 1;
     state.isAuthenticated = true;
     state.awaitingJoinApproval = false;
     state.sessionExpiredByIdle = false;
@@ -105,12 +115,13 @@ export class VaultSessionActions {
         );
       }
     });
-    return storageOk();
+    return storageOk(VaultSessionUnlockOutcome.Unlocked);
   }
 
   clearUnlockedSession({ resetManager }: UnlockedSessionClearRequest): void {
     const state = this.state;
     state.localLoginPreparation = LocalLoginPreparationState.Idle;
+    state.sessionEpoch += 1;
     state.secretPageGeneration += 1;
     state.stopIdleSessionTracking();
     state.stopVaultSync();

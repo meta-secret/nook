@@ -281,12 +281,20 @@ export class VaultLoginActions {
       state.clearLocalFolder();
       const passwordRefresh1 = await state.refreshPasswordEntriesList();
       if (passwordRefresh1.isErr()) {
-        state.errorMsg = state.t(passwordRefresh1.error.translationKey);
+        state.errorMsg = state.t(
+          new StorageOperationFailure(
+            StorageOperationFailureKind.UnlockMetadataUnavailable,
+          ).translationKey,
+        );
         return;
       }
       const presentation = await new LoginUnlockPresentation(state).refresh();
       if (presentation.isErr()) {
-        state.errorMsg = state.t(presentation.error.translationKey);
+        state.errorMsg = state.t(
+          new StorageOperationFailure(
+            StorageOperationFailureKind.UnlockMetadataUnavailable,
+          ).translationKey,
+        );
         return;
       }
       state.localLoginPreparation = LocalLoginPreparationState.Ready;

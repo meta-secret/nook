@@ -12,6 +12,7 @@ export enum VaultStorageFailureKind {
   LockFailed = "lock-failed",
   DeviceAuthorizationRequired = "device-authorization-required",
   LocalFolderUnavailable = "local-folder-unavailable",
+  UnlockMetadataUnavailable = "unlock-metadata-unavailable",
   ManagerUnavailable = "manager-unavailable",
   TimedOut = "timed-out",
   OperationFailed = "operation-failed",
@@ -75,6 +76,8 @@ export class VaultStorageFailure {
         return I18N_KEYS.ErrorsDeviceProtectionAuthorizationRequired;
       case VaultStorageFailureKind.LocalFolderUnavailable:
         return I18N_KEYS.ErrorsLocalBackupFolderRequired;
+      case VaultStorageFailureKind.UnlockMetadataUnavailable:
+        return I18N_KEYS.ErrorsVaultUnlockMetadataUnavailable;
       case VaultStorageFailureKind.ManagerUnavailable:
         return I18N_KEYS.ErrorsEngineUnavailable;
       case VaultStorageFailureKind.GenerationChanged:
