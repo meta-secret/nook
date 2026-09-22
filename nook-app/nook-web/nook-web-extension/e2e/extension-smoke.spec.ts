@@ -58,6 +58,9 @@ test('sets up the extension device first and sends its public keys to Simple Vau
 
   await context.route('**/*', (route) => {
     const url = route.request().url()
+    if (route.request().resourceType() !== 'document') {
+      return route.continue()
+    }
     if (belongs_to_simple_vault(simpleVaultBaseUrl, url)) {
       return route.fulfill({
         contentType: 'text/html',
