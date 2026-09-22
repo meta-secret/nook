@@ -28,8 +28,9 @@ ownership boundary.
 - [Nook Gizmo Prime](gizmo-prime/AGENTS.md) wraps upstream Prime.
 - [Nook Team Gizmo](gizmo-prime/team-gizmo/AGENTS.md) wraps the single upstream coordinator.
 - [Nook agent catalog](gizmo-prime/team-gizmo/role-catalog.md) maps project scopes to roles.
-- [Agent configuration rules](../.meta-cortex/teams/gizmo-team/docs/agent-configuration.md)
-  use `.meta-cortex/meta-cortex.toml` as the sole source of active launch settings.
+- [Agent configuration](../.meta-cortex/meta-cortex.toml) is the sole source of
+  active launch settings; pass each role's exact `model` and
+  `reasoning_effort` values.
 
 ## Mandatory context selection
 
