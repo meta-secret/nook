@@ -621,13 +621,14 @@ coverage solve and package floors in the verified Rust graph.
   job Pod from that immutable run tag on `nook-k0s-container`.
 - ARC image jobs keep the Actions runner workspace as the hook-level working
   directory. They enter the prepared image's `/meta-secret/nook` source inside
-  the shell command; Main browser jobs also copy that image's `.github` tree
-  into the workspace first. The hook can then synchronize repository-local
-  action definitions back to the runner after the step. The prepared source
-  path exists only in the job image; exposing it as the hook working directory
-  makes the runner-side synchronizer attempt to create that root-level path and
-  fail with `EACCES`, while leaving the workspace action tree absent makes its
-  post-step copy exhaust its retries after otherwise passing browser suites.
+  the shell command; Main browser jobs and the research deploy job copy that
+  image's `.github` tree into the workspace before running repository tasks.
+  The hook can then synchronize repository-local action definitions back to
+  the runner after the step. The prepared source path exists only in the job
+  image; exposing it as the hook working directory makes the runner-side
+  synchronizer attempt to create that root-level path and fail with `EACCES`,
+  while leaving the workspace action tree absent makes its post-step copy
+  exhaust its retries after otherwise passing browser suites.
 - Main publishes the verified WASM artifact, completes Node verification, and
   exports the cache from that producer's job-scoped graph. The export step may
   report its failure without failing the producer so verified artifact
