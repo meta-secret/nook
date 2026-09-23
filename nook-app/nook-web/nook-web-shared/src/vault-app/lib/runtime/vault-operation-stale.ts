@@ -8,9 +8,3 @@ export enum VaultOperationStaleKind {
 export class VaultOperationStale {
   constructor(readonly kind: VaultOperationStaleKind) {}
 }
-
-export function isVaultOperationStale(
-  value: unknown,
-): value is VaultOperationStale {
-  return value instanceof VaultOperationStale;
-}

@@ -620,7 +620,7 @@ export class VaultSecretActions {
       requestedOffset: state.secretPageRequestOffset,
     };
     const refreshed = await this.loadSecretPage(loadSecretPageArgs2);
-    if (refreshed.isErr()) return refreshed;
+    if (refreshed.isErr()) return storageErr(refreshed.error);
     if (refreshed.value instanceof VaultOperationStale) {
       const snapshot: SecretPageRefreshSnapshot = {
         displayedSecretCount: state.secrets.length,
@@ -630,7 +630,7 @@ export class VaultSecretActions {
       };
       return storageOk(snapshot);
     }
-    return refreshed;
+    return storageOk(refreshed.value);
   }
 
   async loadSecretPage({

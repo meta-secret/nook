@@ -18,6 +18,8 @@ import {
   VaultOperationStaleKind,
 } from "$lib/runtime/vault-operation-stale";
 
+type VaultArchitecturePermission = boolean | VaultOperationStale;
+
 type VaultArchitectureReplacement = {
   readonly architecture: VaultArchitecture;
 };
@@ -141,7 +143,10 @@ export class VaultArchitectureActions {
     const manager = state.admitManager();
     if (manager.isErr()) return err(manager.error);
     state.architectureSecretCreationAllowed = false;
-    const permission = await state.enqueueStorage(async () => {
+    const permission = await state.enqueueStorage<
+      VaultArchitecturePermission,
+      NativeVaultStorageFailure
+    >(async () => {
       const current = state.admitManager();
       if (current.isErr())
         return ok(

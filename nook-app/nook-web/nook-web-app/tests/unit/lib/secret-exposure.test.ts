@@ -75,11 +75,12 @@ describe('secret exposure lifecycle', () => {
     })
 
     expect(load).toHaveBeenCalledOnce()
-    expect(
-      records.isOk()
-        ? records.value['secret-1']?.primaryCredential
-        : records.error,
-    ).toBe('credential')
+    expect(records.isOk()).toBe(true)
+    if (records.isErr()) return
+    expect(records.value).not.toBeInstanceOf(VaultOperationStale)
+    if (records.value instanceof VaultOperationStale)
+      throw new Error('Reveal unexpectedly returned a stale outcome')
+    expect(records.value['secret-1']?.primaryCredential).toBe('credential')
   })
 
   test('hiding a revealed secret frees and removes plaintext', async () => {

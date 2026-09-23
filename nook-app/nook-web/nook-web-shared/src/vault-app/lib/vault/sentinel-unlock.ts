@@ -1,5 +1,5 @@
 import type { OAuthFailure } from "$lib/auth/oauth-failure";
-import { isVaultOperationStale } from "$lib/runtime/vault-operation-stale";
+import { VaultOperationStale } from "$lib/runtime/vault-operation-stale";
 import type { SentinelActionResult } from "./sentinel-genesis";
 import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
 import { err as storageErr, ok as storageOk, type Result } from "neverthrow";
@@ -43,6 +43,9 @@ export enum SentinelUnlockResponseAdditionOutcome {
 export enum SentinelUnlockFinalizationOutcome {
   Unlocked = "unlocked",
 }
+
+type SentinelUnlockFinalizationResult =
+  SentinelUnlockFinalizationOutcome | VaultOperationStale;
 
 const log = browserLogRuntime.createLogger("vault-sentinel");
 
@@ -436,7 +439,7 @@ export class SentinelUnlockActions {
   }
 
   async finalizeSentinelUnlock(): Promise<
-    SentinelActionResult<SentinelUnlockFinalizationOutcome>
+    SentinelActionResult<SentinelUnlockFinalizationResult>
   > {
     const state = this.state;
     if (
@@ -479,7 +482,8 @@ export class SentinelUnlockActions {
       if (secretRefresh1.isErr()) {
         return this.restoreFinalizationFailure(secretRefresh1.error);
       }
-      if (isVaultOperationStale(secretRefresh1.value)) return;
+      if (secretRefresh1.value instanceof VaultOperationStale)
+        return storageOk(secretRefresh1.value);
       state.sentinelCeremonyPrompt = false;
       state.sentinelUnlockRequest = "";
       const replaceUnlockSessionArgs3: Parameters<

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { VaultOperationStale } from '$lib/runtime/vault-operation-stale'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { SentinelVaultUnlockState } from '$app-wasm'
   import { Copy, KeyRound, RefreshCw, ShieldCheck, Users } from '@lucide/svelte'
@@ -82,6 +83,7 @@
         ).presentFinalizationFailure(finalized.error)
         return
       }
+      if (finalized.value instanceof VaultOperationStale) return
       if (vault.isAuthenticated) {
         await onUnlocked?.()
       }

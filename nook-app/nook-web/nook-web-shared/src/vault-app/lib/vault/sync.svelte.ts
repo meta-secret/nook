@@ -61,11 +61,13 @@ import {
   type EventOutboxTarget,
 } from "$lib/vault/sync-operation-state";
 import { AdminAccordionSection } from "$lib/vault/state/ui.svelte";
-import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
+import {
+  ActiveVaultKind,
+  type ActiveVault,
+} from "$lib/vault/state/provider.svelte";
 import { ExtensionSyncPublication } from "$lib/vault/sync-extension-bridge";
 import { ProviderSyncActions } from "$lib/vault/provider-sync.svelte";
 import {
-  isVaultOperationStale,
   VaultOperationStale,
   VaultOperationStaleKind,
 } from "$lib/runtime/vault-operation-stale";
@@ -88,6 +90,8 @@ export enum ProviderSyncMetadataUpdateOutcome {
 }
 
 const log = browserLogRuntime.createLogger("vault-sync");
+
+type StagedProviderRestoreOutcome = ActiveVault | VaultOperationStale;
 
 interface EventOutboxTargetSelection {
   readonly request: EventOutboxRequest;
@@ -652,7 +656,10 @@ export class VaultSyncActions {
       } catch (failure) {
         return storageErr(new NativeVaultStorageFailure(failure));
       }
-      const restored = await state.enqueueStorage(async () => {
+      const restored = await state.enqueueStorage<
+        StagedProviderRestoreOutcome,
+        NativeVaultStorageFailure
+      >(async () => {
         const current = state.admitManager();
         if (current.isErr())
           return storageOk(
@@ -686,7 +693,7 @@ export class VaultSyncActions {
           );
         return storageErr(restored.error);
       }
-      if (isVaultOperationStale(restored.value))
+      if (restored.value instanceof VaultOperationStale)
         return storageOk(restored.value);
       const current = state.admitManager();
       if (current.isErr())
@@ -850,7 +857,7 @@ export class VaultSyncActions {
     ) {
       const tokens = await state.ensureOAuthTokensFresh();
       if (tokens.isErr()) return storageErr(tokens.error);
-      if (isVaultOperationStale(tokens.value))
+      if (tokens.value instanceof VaultOperationStale)
         return storageOk(ProviderSyncOutcome.Skipped);
     }
     state.isSyncing = true;

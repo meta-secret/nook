@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest'
-import { ok, type Result } from 'neverthrow'
+import { err, ok, type Result } from 'neverthrow'
 import { NookSecretTypeFilter, NookVaultManager } from '$app-wasm'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { VaultSecretActions } from '$lib/vault/secrets'
