@@ -49,16 +49,31 @@ If `.meta-cortex/` is missing:
    REQUEST
    ```
 
-2. Review the generated `.meta-cortex/meta-cortex.toml` and reapply the
-   consuming project's required configuration values. Session answers do not
-   belong in this file.
-3. Verify that `.meta-cortex/AGENTS.md` and `.meta-cortex/meta-cortex.toml` now
+2. Verify that `.meta-cortex/AGENTS.md` and `.meta-cortex/meta-cortex.toml` now
    exist.
+
+### Canonical role configuration
+
+Every consuming worktree has its own ignored `.meta-cortex/` installation, but
+durable Nook role settings come from `.meta-cortex/meta-cortex.toml` in the
+already bootstrapped canonical Nook checkout identified by the assignment
+context. Read that canonical file and reapply its exact settings for
+`[gizmo-prime]`, `[team.gizmo]`, and `[team.agent]`, including each role's model
+and reasoning effort, to the consuming worktree's `.meta-cortex/meta-cortex.toml`.
+Do this after initialization or framework replacement and before launching any
+agent in that worktree.
+
+The assignment context must identify a readable canonical Nook checkout. If its
+path or `.meta-cortex/meta-cortex.toml` cannot be read, stop repository work and
+report the exact missing path or read failure to the coordinator. Do not use
+Meta-Cortex bundled defaults as a substitute. Session answers such as
+`development.mode` and `development.delivery` belong to the session workflow;
+do not persist them in `meta-cortex.toml`.
 
 For existing and newly initialized frameworks:
 
-1. Run the supported `Framework / Info` request with the same absolute worktree
-   path.
+1. After reapplying canonical role settings, run the supported
+   `Framework / Info` request with the consuming worktree's absolute path.
 
    ```sh
    meta-cortex run --request - <<'REQUEST'
@@ -76,14 +91,18 @@ For existing and newly initialized frameworks:
    match, and that the Codex integration reports `Connected` in the response.
    - If the versions differ, follow the replacement procedure below before
      normal repository work.
-3. If a required framework entry is missing, or initialization reports
+3. Compare the model and reasoning effort for `[gizmo-prime]`, `[team.gizmo]`,
+   and `[team.agent]` in the Info response with the canonical config. If any
+   value differs, correct the consuming worktree's config from that source and
+   rerun Info. Do not launch agents until all values match.
+4. If a required framework entry is missing, or initialization reports
    `missing required framework entry`, stop and report the affected path.
    - Back up and move the existing `.meta-cortex/` directory out of the
      installation path. Run the `Framework / Initialize` request again, then
-     review and reapply the consuming project's configuration values.
+     reapply the canonical role settings above.
    - Do not treat a partial installation as available or substitute copied
      framework files.
-4. After verification succeeds, read `.meta-cortex/CIRCUIT-BREAKER.md`, then
+5. After verification succeeds, read `.meta-cortex/CIRCUIT-BREAKER.md`, then
    `.meta-cortex/AGENTS.md`, and continue through the normal Nook entry sequence.
 
 - **Prohibited:** call the retired direct CLI operations.
@@ -120,7 +139,10 @@ Resolve these Nook and upstream locations when loading the integration:
 - **Team Gizmo role:** `.cortex/gizmo-prime/team-gizmo/AGENTS.md`.
 - **Upstream catalogs:** `.meta-cortex/teams/`.
 - **Project catalog:** `.cortex/gizmo-prime/team-gizmo/role-catalog.md`.
-- **Configuration:** `.meta-cortex/meta-cortex.toml`.
+- **Canonical role configuration:** `.meta-cortex/meta-cortex.toml` in the
+  canonical Nook checkout identified by assignment context.
+- **Consuming worktree configuration:** `.meta-cortex/meta-cortex.toml` in the
+  active worktree, with canonical role settings reapplied before launch.
 - **Project context:** the root contract and selected Nook team authorities.
 
 These wrappers select the upstream role behavior and the Nook context. Keep
@@ -129,7 +151,8 @@ catalogs.
 
 Loom's typed team catalog retains Nook role names, ownership, and context paths.
 It does not select launch models or reasoning effort. Read those settings from
-`.meta-cortex/meta-cortex.toml` when launching an agent.
+the canonical configuration source and apply them to the active worktree as
+described in [Required bootstrap](#required-bootstrap) before launching an agent.
 
 ### Session development mode
 
