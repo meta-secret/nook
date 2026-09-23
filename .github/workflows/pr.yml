@@ -152,8 +152,11 @@ jobs:
       - name: Report failed extension browser context
         if: failure() && inputs.full_e2e_requested
         run: |
-          find nook-app/nook-web/nook-web-extension/test-results \
-            -name error-context.md -type f -print -exec cat {} \; || true
+          shopt -s globstar nullglob
+          for context in nook-app/nook-web/nook-web-extension/test-results/**/error-context.md; do
+            printf '%s\n' "$context"
+            cat "$context"
+          done
       - name: Upload failed extension browser traces
         if: failure() && inputs.full_e2e_requested
         uses: actions/upload-artifact@v4
