@@ -258,7 +258,10 @@ export class ExtensionSessionDocumentOwner {
   private readiness: SessionReadiness = { kind: SessionReadinessKind.Idle }
 
   constructor() {
-    chrome.runtime.onMessage.addListener(this.readinessListener())
+    const runtimeMessages = chrome.runtime.onMessage
+    if (runtimeMessages) {
+      runtimeMessages.addListener(this.readinessListener())
+    }
   }
 
   private readinessListener(): ExtensionSessionDocumentReadinessListener {
