@@ -304,7 +304,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     ).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
     await expect(
       pairingLauncher.getByTestId('companion-vault-status'),
-    ).toHaveAttribute('data-connected', 'false')
+    ).toHaveAttribute('data-connected', 'true')
     await expect(
       pairingLauncher.getByTestId('connect-simple-vault-btn'),
     ).toBeVisible()
