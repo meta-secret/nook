@@ -174,8 +174,9 @@ formatting unless the user explicitly authorizes another command. Never report a
 unexecuted check as passing.
 
 Complete authorized delivery requires all required PR checks, actual squash merge
-into main, and remote feature-branch cleanup. A user-requested migration-only task
-ends with local migration edits and an honest statement of unrun checks.
+into main, and remote feature-branch cleanup. A migration follows those stages
+unless the user explicitly requests an earlier stopping point. Report unrun
+checks honestly at any requested intermediate stop.
 
 Codex scheduled tasks, heartbeats, and deferred repository automations remain
 prohibited. Use the active task and the repository's existing CI contracts.

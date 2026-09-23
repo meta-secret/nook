@@ -139,24 +139,19 @@ describe('canonical Cortex team authority', () => {
     expect(report.auditOk).toBe(true);
   });
 
-  test('models every Team Gizmo and internal-agent hierarchy', () => {
+  test('maps team contexts to one Team Gizmo and its workers', () => {
     expect(TEAM_AUTHORITY_CATALOG).toHaveLength(6);
     expect(TEAM_GIZMO_CATALOG).toHaveLength(6);
     expect(TEAM_INTERNAL_AGENT_CATALOG).toHaveLength(11);
 
     for (const gizmo of TEAM_GIZMO_CATALOG) {
-      expect(gizmo.model).toBe('gpt-5.6-sol');
-      expect(gizmo.reasoningEffort).toBe('low');
-      expect(gizmo.serviceTier).toBe('fast');
+      expect(gizmo.description).toContain('single feature Team Gizmo');
       expect(gizmo.parent).toBe('Gizmo Prime');
     }
     const teamGizmoByTeam = new Map(
       TEAM_GIZMO_CATALOG.map((gizmo) => [gizmo.team, gizmo.key]),
     );
     for (const agent of TEAM_INTERNAL_AGENT_CATALOG) {
-      expect(agent.model).toBe('gpt-5.6-luna');
-      expect(agent.reasoningEffort).toBe('xhigh');
-      expect(agent.serviceTier).toBe('fast');
       expect(teamGizmoByTeam.get(agent.team)).toBe(agent.parent);
     }
 
@@ -288,28 +283,14 @@ describe('canonical Cortex team authority', () => {
     );
   });
 
-  test('rejects production catalog model drift against independent expectations', () => {
-    const teamGizmo = TEAM_GIZMO_CATALOG[0];
-    if (!teamGizmo) throw new Error('AI Team Gizmo profile is incomplete.');
-    const originalModel = teamGizmo.model;
-    Object.defineProperty(teamGizmo, 'model', {
-      configurable: true,
-      value: 'gpt-5.5',
-    });
-    try {
-      const report = TeamAgentContract.auditTeamGizmos({
-        repoRoot: REPO_ROOT,
-        gizmos: TEAM_GIZMO_CATALOG,
-      });
-      expect(report.auditOk).toBe(false);
-      expect(report.findings.map((finding) => finding.code)).toContain(
-        'invalid-team-gizmo-contract',
-      );
-    } finally {
-      Object.defineProperty(teamGizmo, 'model', {
-        configurable: true,
-        value: originalModel,
-      });
+  test('leaves model selection to Meta-Cortex configuration', () => {
+    for (const profile of [
+      ...TEAM_GIZMO_CATALOG,
+      ...TEAM_INTERNAL_AGENT_CATALOG,
+    ]) {
+      expect(Object.hasOwn(profile, 'model')).toBe(false);
+      expect(Object.hasOwn(profile, 'reasoningEffort')).toBe(false);
+      expect(Object.hasOwn(profile, 'serviceTier')).toBe(false);
     }
   });
 

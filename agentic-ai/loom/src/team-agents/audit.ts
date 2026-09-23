@@ -75,9 +75,6 @@ export class TeamAgentContract {
         seenKeys.has(gizmo.key) ||
         seenIdentities.has(gizmo.identity) ||
         gizmo.description !== expected.description ||
-        gizmo.model !== expected.model ||
-        gizmo.reasoningEffort !== expected.reasoningEffort ||
-        gizmo.serviceTier !== expected.serviceTier ||
         gizmo.parent !== expected.parent ||
         gizmo.reportingBoundary !== expected.reportingBoundary ||
         gizmo.capabilityBoundary !== EXPECTED_TEAM_GIZMO_CAPABILITY_BOUNDARY ||
@@ -131,9 +128,6 @@ export class TeamAgentContract {
         seenKeys.has(agent.key) ||
         seenIdentities.has(agent.identity) ||
         agent.description !== expected.description ||
-        agent.model !== expected.model ||
-        agent.reasoningEffort !== expected.reasoningEffort ||
-        agent.serviceTier !== expected.serviceTier ||
         agent.parent !== expected.parent ||
         agent.reportingBoundary !== expected.reportingBoundary ||
         agent.capabilityBoundary !==
@@ -467,9 +461,6 @@ type ExpectedTeamGizmoProfile = Pick<
   | 'team'
   | 'identity'
   | 'description'
-  | 'model'
-  | 'reasoningEffort'
-  | 'serviceTier'
   | 'contextPaths'
   | 'parent'
   | 'reportingBoundary'
@@ -481,9 +472,6 @@ type ExpectedTeamInternalAgentProfile = Pick<
   | 'team'
   | 'identity'
   | 'description'
-  | 'model'
-  | 'reasoningEffort'
-  | 'serviceTier'
   | 'contextPaths'
   | 'parent'
   | 'reportingBoundary'
@@ -495,10 +483,7 @@ const EXPECTED_TEAM_GIZMO_PROFILES: readonly ExpectedTeamGizmoProfile[] = [
     team: TeamKey.Ai,
     identity: 'AI Team Gizmo',
     description:
-      'High-level internal orchestrator for AI packets, bounded internal dispatch, context synthesis, and reporting to Gizmo Prime.',
-    model: 'gpt-5.6-sol',
-    reasoningEffort: 'low',
-    serviceTier: 'fast',
+      'AI context for the single feature Team Gizmo: bounded routing, context synthesis, and reporting to Gizmo Prime.',
     contextPaths: [
       '.cortex/teams/ai/gizmo/AGENTS.md',
       '.cortex/teams/ai/gizmo/knowledge-graph.md',
@@ -512,10 +497,7 @@ const EXPECTED_TEAM_GIZMO_PROFILES: readonly ExpectedTeamGizmoProfile[] = [
     team: TeamKey.DevelopmentCore,
     identity: 'Development Core Team Gizmo',
     description:
-      'High-level internal orchestrator for Development Core packets, bounded internal dispatch, context synthesis, and reporting to Gizmo Prime.',
-    model: 'gpt-5.6-sol',
-    reasoningEffort: 'low',
-    serviceTier: 'fast',
+      'Development Core context for the single feature Team Gizmo: bounded routing, context synthesis, and reporting to Gizmo Prime.',
     contextPaths: [
       '.cortex/teams/dev-core/gizmo/AGENTS.md',
       '.cortex/teams/dev-core/gizmo/knowledge-graph.md',
@@ -529,10 +511,7 @@ const EXPECTED_TEAM_GIZMO_PROFILES: readonly ExpectedTeamGizmoProfile[] = [
     team: TeamKey.Security,
     identity: 'Security Team Gizmo',
     description:
-      'High-level internal orchestrator for Security packets, bounded internal dispatch, context synthesis, and reporting to Gizmo Prime.',
-    model: 'gpt-5.6-sol',
-    reasoningEffort: 'low',
-    serviceTier: 'fast',
+      'Security context for the single feature Team Gizmo: bounded routing, context synthesis, and reporting to Gizmo Prime.',
     contextPaths: [
       '.cortex/teams/security/gizmo/AGENTS.md',
       '.cortex/teams/security/gizmo/knowledge-graph.md',
@@ -546,10 +525,7 @@ const EXPECTED_TEAM_GIZMO_PROFILES: readonly ExpectedTeamGizmoProfile[] = [
     team: TeamKey.Sre,
     identity: 'SRE Team Gizmo',
     description:
-      'High-level internal orchestrator for SRE packets, bounded internal dispatch, context synthesis, and reporting to Gizmo Prime.',
-    model: 'gpt-5.6-sol',
-    reasoningEffort: 'low',
-    serviceTier: 'fast',
+      'SRE context for the single feature Team Gizmo: bounded routing, context synthesis, and reporting to Gizmo Prime.',
     contextPaths: [
       '.cortex/teams/sre/gizmo/AGENTS.md',
       '.cortex/teams/sre/gizmo/knowledge-graph.md',
@@ -563,10 +539,7 @@ const EXPECTED_TEAM_GIZMO_PROFILES: readonly ExpectedTeamGizmoProfile[] = [
     team: TeamKey.WebDevelopment,
     identity: 'Web Development Team Gizmo',
     description:
-      'High-level internal orchestrator for Web Development packets, bounded internal dispatch, context synthesis, and reporting to Gizmo Prime.',
-    model: 'gpt-5.6-sol',
-    reasoningEffort: 'low',
-    serviceTier: 'fast',
+      'Web Development context for the single feature Team Gizmo: bounded routing, context synthesis, and reporting to Gizmo Prime.',
     contextPaths: [
       '.cortex/teams/web-dev/gizmo/AGENTS.md',
       '.cortex/teams/web-dev/gizmo/knowledge-graph.md',
@@ -580,10 +553,7 @@ const EXPECTED_TEAM_GIZMO_PROFILES: readonly ExpectedTeamGizmoProfile[] = [
     team: TeamKey.DeliveryPipeline,
     identity: 'Delivery Pipeline Team Gizmo',
     description:
-      'High-level internal orchestrator for Delivery Pipeline packets, bounded mechanics, internal dispatch, evidence synthesis, and reporting to Gizmo Prime.',
-    model: 'gpt-5.6-sol',
-    reasoningEffort: 'low',
-    serviceTier: 'fast',
+      'Delivery Pipeline context for the single feature Team Gizmo: bounded mechanics, evidence synthesis, and reporting to Gizmo Prime.',
     contextPaths: [
       '.cortex/teams/delivery-pipeline/gizmo/AGENTS.md',
       '.cortex/teams/delivery-pipeline/gizmo/knowledge-graph.md',
@@ -602,9 +572,6 @@ const EXPECTED_TEAM_INTERNAL_AGENT_PROFILES: readonly ExpectedTeamInternalAgentP
       identity: 'Loom specialist',
       description:
         'Maintains Loom typed workflows, team-agent catalogs, context resolution, and deterministic AI tooling.',
-      model: 'gpt-5.6-luna',
-      reasoningEffort: 'xhigh',
-      serviceTier: 'fast',
       contextPaths: [
         '.cortex/teams/ai/loom-specialist/AGENTS.md',
         '.cortex/teams/ai/loom-specialist/knowledge-graph.md',
@@ -619,9 +586,6 @@ const EXPECTED_TEAM_INTERNAL_AGENT_PROFILES: readonly ExpectedTeamInternalAgentP
       identity: 'Cortex specialist',
       description:
         'Maintains Cortex routing, knowledge-graph consistency, context contracts, and agent-authority semantics.',
-      model: 'gpt-5.6-luna',
-      reasoningEffort: 'xhigh',
-      serviceTier: 'fast',
       contextPaths: [
         '.cortex/teams/ai/cortex-specialist/AGENTS.md',
         '.cortex/teams/ai/cortex-specialist/knowledge-graph.md',
@@ -636,9 +600,6 @@ const EXPECTED_TEAM_INTERNAL_AGENT_PROFILES: readonly ExpectedTeamInternalAgentP
       identity: 'Rust core developer',
       description:
         'Implements bounded portable Rust core behavior and its behavior-focused tests under Development Core ownership.',
-      model: 'gpt-5.6-luna',
-      reasoningEffort: 'xhigh',
-      serviceTier: 'fast',
       contextPaths: [
         '.cortex/teams/dev-core/rust-core-developer/AGENTS.md',
         '.cortex/teams/dev-core/rust-core-developer/knowledge-graph.md',
@@ -653,9 +614,6 @@ const EXPECTED_TEAM_INTERNAL_AGENT_PROFILES: readonly ExpectedTeamInternalAgentP
       identity: 'Rust auth2 developer',
       description:
         'Implements bounded Rust auth2 behavior and its behavior-focused tests under Development Core ownership.',
-      model: 'gpt-5.6-luna',
-      reasoningEffort: 'xhigh',
-      serviceTier: 'fast',
       contextPaths: [
         '.cortex/teams/dev-core/rust-auth2-developer/AGENTS.md',
         '.cortex/teams/dev-core/rust-auth2-developer/knowledge-graph.md',
@@ -670,9 +628,6 @@ const EXPECTED_TEAM_INTERNAL_AGENT_PROFILES: readonly ExpectedTeamInternalAgentP
       identity: 'Cryptography specialist',
       description:
         'Reviews cryptographic invariants, secret-handling boundaries, and security evidence within the assigned scope.',
-      model: 'gpt-5.6-luna',
-      reasoningEffort: 'xhigh',
-      serviceTier: 'fast',
       contextPaths: [
         '.cortex/teams/security/cryptography-specialist/AGENTS.md',
         '.cortex/teams/security/cryptography-specialist/knowledge-graph.md',
@@ -687,9 +642,6 @@ const EXPECTED_TEAM_INTERNAL_AGENT_PROFILES: readonly ExpectedTeamInternalAgentP
       identity: 'Security review specialist',
       description:
         'Performs bounded security review of trust boundaries, authorization, and release-impacting changes.',
-      model: 'gpt-5.6-luna',
-      reasoningEffort: 'xhigh',
-      serviceTier: 'fast',
       contextPaths: [
         '.cortex/teams/security/security-review-specialist/AGENTS.md',
         '.cortex/teams/security/security-review-specialist/knowledge-graph.md',
@@ -704,9 +656,6 @@ const EXPECTED_TEAM_INTERNAL_AGENT_PROFILES: readonly ExpectedTeamInternalAgentP
       identity: 'Provisioning specialist',
       description:
         'Executes bounded CI/CD workflows, diagnostics, and infrastructure provisioning mechanics under SRE ownership.',
-      model: 'gpt-5.6-luna',
-      reasoningEffort: 'xhigh',
-      serviceTier: 'fast',
       contextPaths: [
         '.cortex/teams/sre/provisioning/AGENTS.md',
         '.cortex/teams/sre/provisioning/knowledge-graph.md',
@@ -721,9 +670,6 @@ const EXPECTED_TEAM_INTERNAL_AGENT_PROFILES: readonly ExpectedTeamInternalAgentP
       identity: 'Cloud-native specialist',
       description:
         'Maintains bounded cloud-native deployment, container, cluster, and runner mechanics under SRE ownership.',
-      model: 'gpt-5.6-luna',
-      reasoningEffort: 'xhigh',
-      serviceTier: 'fast',
       contextPaths: [
         '.cortex/teams/sre/cloud-native/AGENTS.md',
         '.cortex/teams/sre/cloud-native/knowledge-graph.md',
@@ -738,9 +684,6 @@ const EXPECTED_TEAM_INTERNAL_AGENT_PROFILES: readonly ExpectedTeamInternalAgentP
       identity: 'TypeScript specialist',
       description:
         'Implements bounded TypeScript state, typed projections, and focused web behavior under Web Development ownership.',
-      model: 'gpt-5.6-luna',
-      reasoningEffort: 'xhigh',
-      serviceTier: 'fast',
       contextPaths: [
         '.cortex/teams/web-dev/typescript-specialist/AGENTS.md',
         '.cortex/teams/web-dev/typescript-specialist/knowledge-graph.md',
@@ -755,9 +698,6 @@ const EXPECTED_TEAM_INTERNAL_AGENT_PROFILES: readonly ExpectedTeamInternalAgentP
       identity: 'Svelte specialist',
       description:
         'Implements bounded Svelte presentation, browser interaction, and focused web-flow tests under Web Development ownership.',
-      model: 'gpt-5.6-luna',
-      reasoningEffort: 'xhigh',
-      serviceTier: 'fast',
       contextPaths: [
         '.cortex/teams/web-dev/svelte-specialist/AGENTS.md',
         '.cortex/teams/web-dev/svelte-specialist/knowledge-graph.md',
@@ -772,9 +712,6 @@ const EXPECTED_TEAM_INTERNAL_AGENT_PROFILES: readonly ExpectedTeamInternalAgentP
       identity: 'PR Lifecycle',
       description:
         'Executes explicitly authorized pull-request publication, required-check observation, squash merge, and remote feature-branch cleanup for Delivery Pipeline.',
-      model: 'gpt-5.6-luna',
-      reasoningEffort: 'xhigh',
-      serviceTier: 'fast',
       contextPaths: [
         '.cortex/teams/delivery-pipeline/pr-lifecycle/AGENTS.md',
         '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md',
@@ -786,7 +723,7 @@ const EXPECTED_TEAM_INTERNAL_AGENT_PROFILES: readonly ExpectedTeamInternalAgentP
   ] as const;
 
 const EXPECTED_TEAM_GIZMO_CAPABILITY_BOUNDARY =
-  'Team Gizmo coordinates only its team mechanics. It does not implement product code, choose functional ownership, decide readiness or promotion, or issue the final delivery verdict. It never creates or updates pull requests and never performs squash, rebase, or force-push operations.';
+  'The single feature Team Gizmo coordinates scoped team mechanics. It does not implement product code, choose functional ownership, decide readiness or promotion, or issue the final delivery verdict. It never creates or updates pull requests and never performs squash, rebase, or force-push operations.';
 
 const EXPECTED_TEAM_INTERNAL_AGENT_CAPABILITY_BOUNDARY =
   'Internal Team Agent operates only within its bounded team expertise. It never creates or updates pull requests, performs squash, rebase, or force-push operations, changes parent ownership, or issues the final delivery verdict.';

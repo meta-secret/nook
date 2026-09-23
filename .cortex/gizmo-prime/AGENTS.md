@@ -9,7 +9,9 @@ Supply its resolved location in the agent directory passed to Prime.
 
 Nook adds [feature delivery](architecture/dev-delivery.md) and
 [functional ownership](architecture/team-ownership.md). The user selects the
-terminal outcome. A migration-only request ends with the requested local edits.
+terminal outcome. A migration follows the feature-delivery contract unless the
+user explicitly requests a local stopping point. The kind of change alone does
+not limit delivery.
 Use upstream local feature ownership for branches, worktrees, worker completion,
 and integration. Supply Team Gizmo with Nook's functional owner, bounded scope,
 acceptance evidence, and delivery constraints. Apply
@@ -20,3 +22,8 @@ evidence reveals a durable Cortex lesson.
 
 Do not copy upstream coordination rules or select models here.
 Do not expand an explicit local-only task into publication or merge.
+
+**Prohibited:** stop a migration at local edits solely because it is a migration.
+
+**Preferred:** deliver its feature PR through required checks and merge when the
+user has not requested an earlier stopping point.
