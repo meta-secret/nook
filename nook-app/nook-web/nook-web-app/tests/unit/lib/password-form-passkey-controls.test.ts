@@ -37,15 +37,16 @@ describe('passkey control detection', () => {
     `
 
     const workflows = new PasswordFormWorkflowObservation(
-      foreignWindow as typeof globalThis,
+      foreignWindow,
     ).summarizeAuthenticationWorkflowForms()
     expect(
       workflows.some(
         ({ root, summary }) =>
           summary.passkeyControlPresent &&
           (root === foreignDocument ||
-            (root.nodeType === 1 &&
-              (root as Element).ownerDocument === foreignDocument)),
+            Array.from(foreignDocument.querySelectorAll('*')).some(
+              (element) => root === element,
+            )),
       ),
     ).toBe(true)
   })

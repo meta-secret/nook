@@ -13,9 +13,13 @@ import {
 } from '../lib/session-operation-queue'
 import { ExtensionSessionMessageType } from '../lib/extension-session-message-type'
 import {
+  BrowserRuntimeMessage,
+  BrowserRuntimeMessageAdmissionKind,
+  type BrowserRuntimeMessageValue,
+} from '../lib/browser-runtime-message'
+import {
   ExtensionSessionReadinessMessageType,
-  isExtensionSessionReadinessQuery,
-  isExtensionSessionReadyResponse,
+  ExtensionSessionReadyResponseDecoder,
   type ExtensionSessionReadyMessage,
   type ExtensionSessionReadyResponse,
 } from '../lib/extension-session-readiness'
@@ -181,6 +185,22 @@ type ExtensionSessionMessageDispatcherenqueueVaultImportArgs = {
   requestedExpiry: RequestedQueueExpiry
 }
 
+type SessionReadinessQueryListener = Parameters<
+  typeof chrome.runtime.onMessage.addListener
+>[0]
+
+type SessionReadinessQueryListenerArguments = [
+  message: BrowserRuntimeMessageValue,
+  sender: chrome.runtime.MessageSender,
+  sendResponse: Parameters<SessionReadinessQueryListener>[2],
+]
+
+type SessionReadinessQueryRequest = {
+  readonly message: BrowserRuntimeMessageValue
+  readonly sender: chrome.runtime.MessageSender
+  readonly sendResponse: Parameters<SessionReadinessQueryListener>[2]
+}
+
 export class ListeningExtensionSession<Response> {
   private readonly operations: ExtensionSessionMessageDispatcher<Response>
 
@@ -191,27 +211,46 @@ export class ListeningExtensionSession<Response> {
     const message: ExtensionSessionReadyMessage = {
       type: ExtensionSessionReadinessMessageType.Ready,
     }
-    void chrome.runtime.sendMessage(message).then((response: unknown) => {
-      if (!isExtensionSessionReadyResponse(response)) {
-        throw new Error('extension session readiness was not acknowledged')
-      }
-    })
+    void chrome.runtime
+      .sendMessage<BrowserRuntimeMessageValue>(message)
+      .then((response) => {
+        const decodedResponse = runConcreteDecoder(
+          ExtensionSessionReadyResponseDecoder.decode,
+          response,
+        )
+        if (decodedResponse.kind !== ConcreteDecoderResultKind.Decoded) {
+          throw new Error('extension session readiness was not acknowledged')
+        }
+      })
   }
 
-  private readinessQueryListener(): Parameters<
-    typeof chrome.runtime.onMessage.addListener
-  >[0] {
-    return (message, sender, sendResponse) => {
-      if (
-        !isExtensionSessionReadinessQuery(message) ||
-        sender.id !== chrome.runtime.id
-      ) {
-        return false
+  private readinessQueryListener(): SessionReadinessQueryListener {
+    return (
+      ...listenerArguments: SessionReadinessQueryListenerArguments
+    ) => {
+      const [message, sender, sendResponse] = listenerArguments
+      const request: SessionReadinessQueryRequest = {
+        message,
+        sender,
+        sendResponse,
       }
-      const response: ExtensionSessionReadyResponse = { ok: true }
-      sendResponse(response)
+      return this.handleReadinessQuery(request)
+    }
+  }
+
+  private handleReadinessQuery(request: SessionReadinessQueryRequest): false {
+    const { message, sender, sendResponse } = request
+    const admission = BrowserRuntimeMessage.from(message)
+    if (
+      admission.kind === BrowserRuntimeMessageAdmissionKind.Rejected ||
+      admission.message.type !== ExtensionSessionReadinessMessageType.Query ||
+      sender.id !== chrome.runtime.id
+    ) {
       return false
     }
+    const response: ExtensionSessionReadyResponse = { ok: true }
+    sendResponse(response)
+    return false
   }
   resetOperations(): void {
     this.operations.resetOperations()

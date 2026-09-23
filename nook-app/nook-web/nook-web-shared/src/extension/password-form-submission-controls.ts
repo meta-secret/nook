@@ -452,10 +452,7 @@ class AuthenticationSubmissionControls extends AuthenticationSubmissionSemantics
     const sourceOrigin = control.ownerDocument.defaultView?.location.origin;
     if (!sourceOrigin) return false;
 
-    const elementConstructor =
-      query.root.nodeType === 1
-        ? (query.root as Element).ownerDocument.defaultView?.Element
-        : false;
+    const elementConstructor = control.ownerDocument.defaultView?.Element;
     const identityContainer: Element | false = form
       ? form
       : query.kind === PasswordFormQueryKind.Scoped &&
@@ -672,30 +669,19 @@ class AuthenticationSubmissionControls extends AuthenticationSubmissionSemantics
     field,
     control,
   }: UnownedLocalScopeRequest): boolean {
-    const rootDocument =
-      root.nodeType === 9
-        ? (root as Document)
-        : root.nodeType === 1
-          ? (root as Element).ownerDocument
-          : false;
-    const rootView = rootDocument ? rootDocument.defaultView : false;
-    const elementConstructor = rootView ? rootView.Element : false;
-    const documentConstructor = rootView ? rootView.Document : false;
-    if (elementConstructor && root instanceof elementConstructor) {
+    const elementConstructor = field.ownerDocument.defaultView?.Element;
+    if (root.nodeType === 1) {
+      if (!elementConstructor || !(root instanceof elementConstructor))
+        return false;
       return root.contains(control) && root.contains(field);
     }
-    if (documentConstructor && !(root instanceof documentConstructor))
-      return false;
     const containerRequest: UnownedAuthContainerRequest = {
       field,
       root: field.ownerDocument,
     };
     const container =
       passwordFieldDiscovery.nearestUnownedAuthContainer(containerRequest);
-    const containerDocument =
-      container.nodeType === 9
-        ? (container as Document)
-        : container.ownerDocument;
+    const containerDocument = field.ownerDocument;
     const containerElement = containerDocument?.defaultView?.Element;
     return Boolean(
       containerElement &&

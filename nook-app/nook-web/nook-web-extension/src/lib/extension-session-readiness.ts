@@ -1,3 +1,6 @@
+import { Schema } from 'effect'
+import type { BrowserRuntimeMessageValue } from './browser-runtime-message'
+
 export const ExtensionSessionReadinessMessageType = {
   Ready: 'nook:extension-session-ready',
   Query: 'nook:extension-session-readiness-query',
@@ -13,35 +16,22 @@ export type ExtensionSessionReadinessQuery = {
 
 export type ExtensionSessionReadyResponse = { readonly ok: true }
 
-export function isExtensionSessionReadyMessage(
-  message: unknown,
-): message is ExtensionSessionReadyMessage {
-  return Boolean(
-    message &&
-    typeof message === 'object' &&
-    'type' in message &&
-    message.type === ExtensionSessionReadinessMessageType.Ready,
-  )
+type ExtensionSessionReadyResponseSchemaFields = {
+  readonly ok: Schema.Schema<ExtensionSessionReadyResponse['ok']>
 }
 
-export function isExtensionSessionReadinessQuery(
-  message: unknown,
-): message is ExtensionSessionReadinessQuery {
-  return Boolean(
-    message &&
-    typeof message === 'object' &&
-    'type' in message &&
-    message.type === ExtensionSessionReadinessMessageType.Query,
-  )
-}
+export class ExtensionSessionReadyResponseDecoder {
+  private static readonly schemaFields:
+    ExtensionSessionReadyResponseSchemaFields = {
+      ok: Schema.Literal(true),
+    }
+  private static readonly schema = Schema.Struct(
+    ExtensionSessionReadyResponseDecoder.schemaFields,
+  ) satisfies Schema.Schema<ExtensionSessionReadyResponse>
 
-export function isExtensionSessionReadyResponse(
-  response: unknown,
-): response is ExtensionSessionReadyResponse {
-  return Boolean(
-    response &&
-    typeof response === 'object' &&
-    'ok' in response &&
-    response.ok === true,
-  )
+  static decode(response: BrowserRuntimeMessageValue) {
+    return Schema.decodeUnknown(ExtensionSessionReadyResponseDecoder.schema)(
+      response,
+    )
+  }
 }

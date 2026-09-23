@@ -2,9 +2,17 @@ import { err, ok, type Result } from 'neverthrow'
 import type { ExtensionSessionTransportRequest } from '../../offscreen/session-request-adapter'
 import type { ExtensionSessionResponse } from '../../offscreen/session'
 import {
+  BrowserRuntimeMessage,
+  BrowserRuntimeMessageAdmissionKind,
+  type BrowserRuntimeMessageValue,
+} from '../../lib/browser-runtime-message'
+import {
+  ConcreteDecoderResultKind,
+  runConcreteDecoder,
+} from '../../lib/concrete-decoder'
+import {
   ExtensionSessionReadinessMessageType,
-  isExtensionSessionReadyMessage,
-  isExtensionSessionReadyResponse,
+  ExtensionSessionReadyResponseDecoder,
   type ExtensionSessionReadyResponse,
   type ExtensionSessionReadinessQuery,
 } from '../../lib/extension-session-readiness'
@@ -226,6 +234,22 @@ type SessionReadiness =
     }
   | { readonly kind: SessionReadinessKind.Ready }
 
+type ExtensionSessionDocumentReadinessListener = Parameters<
+  typeof chrome.runtime.onMessage.addListener
+>[0]
+
+type ExtensionSessionDocumentReadinessListenerArguments = [
+  message: BrowserRuntimeMessageValue,
+  sender: chrome.runtime.MessageSender,
+  sendResponse: Parameters<ExtensionSessionDocumentReadinessListener>[2],
+]
+
+type ExtensionSessionDocumentReadinessRequest = {
+  readonly message: BrowserRuntimeMessageValue
+  readonly sender: chrome.runtime.MessageSender
+  readonly sendResponse: Parameters<ExtensionSessionDocumentReadinessListener>[2]
+}
+
 /** Owns one browser document and serializes opening with acknowledged revocation. */
 export class ExtensionSessionDocumentOwner {
   private state: ExtensionSessionDocumentState = {
@@ -237,22 +261,37 @@ export class ExtensionSessionDocumentOwner {
     chrome.runtime.onMessage.addListener(this.readinessListener())
   }
 
-  private readinessListener(): Parameters<
-    typeof chrome.runtime.onMessage.addListener
-  >[0] {
-    return (message, sender, sendResponse) => {
-      if (
-        !isExtensionSessionReadyMessage(message) ||
-        sender.id !== chrome.runtime.id ||
-        sender.url !== chrome.runtime.getURL(extensionSessionDocument)
-      ) {
-        return false
+  private readinessListener(): ExtensionSessionDocumentReadinessListener {
+    return (
+      ...listenerArguments: ExtensionSessionDocumentReadinessListenerArguments
+    ) => {
+      const [message, sender, sendResponse] = listenerArguments
+      const request: ExtensionSessionDocumentReadinessRequest = {
+        message,
+        sender,
+        sendResponse,
       }
-      const response: ExtensionSessionReadyResponse = { ok: true }
-      sendResponse(response)
-      this.markReady()
+      return this.handleReadinessMessage(request)
+    }
+  }
+
+  private handleReadinessMessage(
+    request: ExtensionSessionDocumentReadinessRequest,
+  ): false {
+    const { message, sender, sendResponse } = request
+    const admission = BrowserRuntimeMessage.from(message)
+    if (
+      admission.kind === BrowserRuntimeMessageAdmissionKind.Rejected ||
+      admission.message.type !== ExtensionSessionReadinessMessageType.Ready ||
+      sender.id !== chrome.runtime.id ||
+      sender.url !== chrome.runtime.getURL(extensionSessionDocument)
+    ) {
       return false
     }
+    const response: ExtensionSessionReadyResponse = { ok: true }
+    sendResponse(response)
+    this.markReady()
+    return false
   }
 
   private markReady(): void {
@@ -291,17 +330,28 @@ export class ExtensionSessionDocumentOwner {
     }
     return new Promise((resolve) => {
       try {
-        chrome.runtime.sendMessage(readinessQuery, (response: unknown) => {
-          const deliveryFailure = chrome.runtime.lastError
-          if (deliveryFailure) {
-            resolve(ExtensionSessionTransportFailureKind.DeliveryFailed)
-          } else if (!isExtensionSessionReadyResponse(response)) {
-            resolve(ExtensionSessionTransportFailureKind.ResponseMissing)
-          } else {
-            this.markReady()
-            resolve(false)
-          }
-        })
+        chrome.runtime.sendMessage<BrowserRuntimeMessageValue>(
+          readinessQuery,
+          (response: BrowserRuntimeMessageValue) => {
+            const deliveryFailure = chrome.runtime.lastError
+            if (deliveryFailure) {
+              resolve(ExtensionSessionTransportFailureKind.DeliveryFailed)
+            } else {
+              const decodedResponse = runConcreteDecoder(
+                ExtensionSessionReadyResponseDecoder.decode,
+                response,
+              )
+              if (
+                decodedResponse.kind === ConcreteDecoderResultKind.Rejected
+              ) {
+                resolve(ExtensionSessionTransportFailureKind.ResponseMissing)
+              } else {
+                this.markReady()
+                resolve(false)
+              }
+            }
+          },
+        )
       } catch {
         resolve(ExtensionSessionTransportFailureKind.DeliveryFailed)
       }

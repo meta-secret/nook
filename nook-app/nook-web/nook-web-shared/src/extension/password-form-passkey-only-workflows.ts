@@ -26,23 +26,6 @@ import {
 } from "./password-form-submission-controls";
 import { authenticationFactBounds } from "./authentication-fact-bounds";
 
-function documentForParentNode(root: ParentNode): Document | false {
-  if (root.nodeType === 9) return root as Document;
-  if (root.nodeType === 1) return (root as Element).ownerDocument;
-  return false;
-}
-
-function isPasskeyButtonOrInput(
-  control: HTMLElement,
-): control is HTMLButtonElement | HTMLInputElement {
-  const view = control.ownerDocument.defaultView;
-  return Boolean(
-    view &&
-    (control instanceof view.HTMLButtonElement ||
-      control instanceof view.HTMLInputElement),
-  );
-}
-
 type RankableWorkflowSummary = {
   oneTimeCodeFieldCount: number;
   passwordFieldCount: number;
@@ -313,12 +296,9 @@ export class PasskeyOnlyWorkflowSummary<Summary> {
     observation: RankableWorkflowObservation,
   ): boolean {
     const { root, formScope, summary } = observation;
-    const document = documentForParentNode(root);
-    const view = document ? document.defaultView : false;
     if (
       formScope.kind !== PasswordFormScopeKind.Unowned ||
-      !view ||
-      !(root instanceof view.Document || root instanceof view.Element)
+      (root.nodeType !== 9 && root.nodeType !== 1)
     )
       return false;
     const controls = Array.from(
@@ -497,7 +477,13 @@ export class PasskeyOnlyWorkflowSummary<Summary> {
     const passkeyForms = [
       ...new Set(
         passkeyCandidates.flatMap(({ control }) => {
-          if (isPasskeyButtonOrInput(control) && control.form) {
+          const view = control.ownerDocument.defaultView;
+          if (
+            view &&
+            (control instanceof view.HTMLButtonElement ||
+              control instanceof view.HTMLInputElement) &&
+            control.form
+          ) {
             return [control.form];
           }
           const owner = control.closest("form");
@@ -521,7 +507,12 @@ export class PasskeyOnlyWorkflowSummary<Summary> {
       scopes.push(new PasskeyOnlyScope(ownedScope));
     }
     const formlessPasskeys = passkeyCandidates.filter(({ control }) => {
-      if (isPasskeyButtonOrInput(control)) {
+      const view = control.ownerDocument.defaultView;
+      if (
+        view &&
+        (control instanceof view.HTMLButtonElement ||
+          control instanceof view.HTMLInputElement)
+      ) {
         return !control.form;
       }
       const owner = control.closest("form");
