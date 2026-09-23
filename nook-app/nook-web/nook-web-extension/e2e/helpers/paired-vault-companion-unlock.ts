@@ -20,6 +20,11 @@ type CompanionPopupUnlock = {
 type CompanionPopupHandle = {
   readonly page: Page
   readonly closeAfterUse: boolean
+  readonly diagnostics: CompanionPopupDiagnostics
+}
+
+type CompanionPopupDiagnostics = {
+  readonly failures: string[]
 }
 
 enum CompanionPopupLookupKind {
@@ -50,6 +55,59 @@ function isOwnedCompanionPopup(page: Page, extensionId: string): boolean {
   )
 }
 
+function captureCompanionPopupDiagnostics(
+  page: Page,
+  extensionId: string,
+): CompanionPopupDiagnostics {
+  const diagnostics: CompanionPopupDiagnostics = { failures: [] }
+  const extensionOrigin = `chrome-extension://${extensionId}/`
+  page.on('console', (message) => {
+    if (message.type() === 'error') {
+      diagnostics.failures.push(`console: ${message.text()}`)
+    }
+  })
+  page.on('pageerror', (error) => {
+    diagnostics.failures.push(`page error: ${error.message}`)
+  })
+  page.on('requestfailed', (request) => {
+    if (request.url().startsWith(extensionOrigin)) {
+      diagnostics.failures.push(
+        `request failed: ${request.url()} ` +
+          `(${request.failure()?.errorText ?? 'unknown'})`,
+      )
+    }
+  })
+  page.on('response', (response) => {
+    if (
+      response.status() >= 400 &&
+      response.url().startsWith(extensionOrigin)
+    ) {
+      diagnostics.failures.push(
+        `HTTP ${response.status()}: ${response.url()}`,
+      )
+    }
+  })
+  return diagnostics
+}
+
+async function describeCompanionPopup(page: Page): Promise<string> {
+  const state = await page.evaluate(() => {
+    const target = document.getElementById('app')
+    const testIds = Array.from(document.querySelectorAll('[data-testid]'))
+      .map((element) => element.getAttribute('data-testid') ?? '')
+      .filter(Boolean)
+      .slice(0, 20)
+    return {
+      url: `${window.location.pathname}${window.location.search}`,
+      readyState: document.readyState,
+      title: document.title,
+      testIds,
+      appMounted: (target?.childElementCount ?? 0) > 0,
+    }
+  })
+  return JSON.stringify(state)
+}
+
 function findOwnedCompanionPopup(
   request: OwnedCompanionPopupOpen,
 ): CompanionPopupLookup {
@@ -70,12 +128,23 @@ async function openOwnedCompanionPopup(
 ): Promise<CompanionPopupHandle> {
   const existingPopup = findOwnedCompanionPopup(request)
   if (existingPopup.kind === CompanionPopupLookupKind.Found) {
-    return { page: existingPopup.page, closeAfterUse: false }
+    return {
+      page: existingPopup.page,
+      closeAfterUse: false,
+      diagnostics: captureCompanionPopupDiagnostics(
+        existingPopup.page,
+        request.extensionId,
+      ),
+    }
   }
 
   const popupPage = await request.context.newPage()
+  const diagnostics = captureCompanionPopupDiagnostics(
+    popupPage,
+    request.extensionId,
+  )
   await popupPage.goto(companionPopupUrl(request.extensionId))
-  return { page: popupPage, closeAfterUse: true }
+  return { page: popupPage, closeAfterUse: true, diagnostics }
 }
 
 async function waitForOwnedCompanionPopup(
@@ -83,7 +152,14 @@ async function waitForOwnedCompanionPopup(
 ): Promise<CompanionPopupHandle> {
   const existingPopup = findOwnedCompanionPopup(request)
   if (existingPopup.kind === CompanionPopupLookupKind.Found) {
-    return { page: existingPopup.page, closeAfterUse: true }
+    return {
+      page: existingPopup.page,
+      closeAfterUse: true,
+      diagnostics: captureCompanionPopupDiagnostics(
+        existingPopup.page,
+        request.extensionId,
+      ),
+    }
   }
 
   const popupPage = await request.context.waitForEvent('page', {
@@ -92,18 +168,42 @@ async function waitForOwnedCompanionPopup(
       !request.ignoredPages.includes(page) &&
       isOwnedCompanionPopup(page, request.extensionId),
   })
-  return { page: popupPage, closeAfterUse: true }
+  return {
+    page: popupPage,
+    closeAfterUse: true,
+    diagnostics: captureCompanionPopupDiagnostics(
+      popupPage,
+      request.extensionId,
+    ),
+  }
 }
 
 async function completeCompanionPopupUnlock(
-  request: CompanionPopupUnlock,
+  request: CompanionPopupUnlock & {
+    readonly diagnostics: CompanionPopupDiagnostics
+  },
 ): Promise<void> {
-  const { page } = request
+  const { page, diagnostics } = request
   const deviceSetup = page.getByTestId('extension-device-setup')
   const companionHome = page.getByTestId('extension-toolbar-menu')
-  await expect(deviceSetup.or(companionHome)).toBeVisible({
-    timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
-  })
+  try {
+    await expect(deviceSetup.or(companionHome)).toBeVisible({
+      timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+    })
+  } catch (error) {
+    const popupState = await describeCompanionPopup(page)
+    const failures = diagnostics.failures.slice(-10)
+    throw new Error(
+      [
+        `Companion popup did not mount its setup or toolbar view: ${popupState}`,
+        ...(failures.length > 0
+          ? [`Companion popup browser failures: ${failures.join(' | ')}`]
+          : ['Companion popup reported no page-scoped browser failures.']),
+        error instanceof Error ? error.message : 'Popup readiness timed out.',
+      ].join('\n'),
+      { cause: error },
+    )
+  }
   if (!(await deviceSetup.isVisible())) {
     return
   }
