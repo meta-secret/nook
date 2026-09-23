@@ -635,6 +635,10 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         .click()
       const websiteLoginPicker = await websiteLoginPickerPromise
       await websiteLoginPicker.close()
+      await websiteAfterUnlock.page.reload()
+      await expect(
+        websiteAfterUnlock.page.locator('#nook-auth-widget'),
+      ).toBeVisible()
       const websitePasskeyAssertion: WebsitePasskeyAssertionBrowserFlow = {
         page: websiteAfterUnlock.page,
         credentialId: websitePasskeyState.credentialId,
