@@ -221,7 +221,7 @@ export async function unlockExtensionThroughCompanion({
   const companionPopup = await openOwnedCompanionPopup({
     context,
     extensionId,
-    ignoredPages: [],
+    ignoredPages: context.pages(),
   })
   try {
     await completeCompanionPopupUnlock(companionPopup)

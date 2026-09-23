@@ -615,6 +615,9 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       websiteAfterUnlock.kind === WebsitePageStateKind.Opened &&
       websitePasskeyState.kind === WebsitePasskeyStateKind.Created
     ) {
+      console.log('[extension e2e] reopening companion for website assertion')
+      await unlockExtensionThroughCompanion({ context, extensionId })
+      console.log('[extension e2e] companion ready for website assertion')
       await websiteAfterUnlock.page.reload()
       await expect(
         websiteAfterUnlock.page.locator('#nook-auth-widget'),
@@ -641,6 +644,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       }
       await test.step('assert website passkey after companion unlock', () =>
         assertWebsitePasskeyThroughExtension(websitePasskeyAssertion))
+      console.log('[extension e2e] website assertion complete')
       await websiteAfterUnlock.page.close()
     }
     await withE2eDeadline(
