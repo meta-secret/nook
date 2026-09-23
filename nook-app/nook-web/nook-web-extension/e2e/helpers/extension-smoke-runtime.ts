@@ -204,6 +204,7 @@ export async function assertWebsitePasskeyThroughExtension({
     const readArrayBuffer = (value: unknown): AssertionBinary => {
       if (
         typeof value !== 'object' ||
+        !value ||
         Object.prototype.toString.call(value) !== '[object ArrayBuffer]' ||
         !('byteLength' in value) ||
         typeof value.byteLength !== 'number'

@@ -123,7 +123,15 @@ test('accepts WebAuthn binary values crossing an execution realm', async () => {
     configurable: true,
     value: foreignBytes,
   })
-  Object.defineProperty(request.publicKey.extensions?.prf?.eval, 'first', {
+  const publicKey = request.publicKey
+  if (!publicKey) {
+    throw new Error('The passkey request did not include public key options.')
+  }
+  const prfEvaluation = publicKey.extensions?.prf?.eval
+  if (!prfEvaluation) {
+    throw new Error('The passkey request did not include PRF evaluation.')
+  }
+  Object.defineProperty(prfEvaluation, 'first', {
     configurable: true,
     value: foreignBytes,
   })
