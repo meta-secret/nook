@@ -16,6 +16,8 @@ Initialize a new worktree when `.meta-cortex/` is absent. Treat an existing
 directory with either required file missing as a partial installation and use
 the replacement procedure below before repository work.
 
+#### Install and verify the CLI
+
 If the `meta-cortex` command is unavailable, install it with the official
 [v0.7.0 shell installer](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/download/v0.7.0/meta-cortex-installer.sh):
 
