@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm'
 import { afterEach, expect, test, vi } from 'vitest'
 import { installMockPasskeyRuntime } from '../../../e2e/passkey-mock'
 import { authenticationSubmissionBridge } from '../../../../nook-web-shared/src/extension/authentication-direct-submit-bridge'
@@ -103,4 +104,73 @@ test('allows credential prototype interception without corrupting form descripto
     Reflect.deleteProperty(prototype, 'get')
     if (originalGet) Object.defineProperty(prototype, 'get', originalGet)
   }
+})
+
+test('accepts WebAuthn binary values crossing an execution realm', async () => {
+  vi.stubGlobal('navigator', Object.create(navigator))
+  vi.stubGlobal('PublicKeyCredential', class {})
+  installMockPasskeyRuntime()
+
+  const foreignBytes: unknown = runInNewContext('new Uint8Array(32).fill(7)')
+  const localBytes = new Uint8Array(32)
+  const request: CredentialRequestOptions = {
+    publicKey: {
+      challenge: localBytes,
+      extensions: { prf: { eval: { first: localBytes } } },
+    },
+  }
+  Object.defineProperty(request.publicKey, 'challenge', {
+    configurable: true,
+    value: foreignBytes,
+  })
+  const publicKey = request.publicKey
+  if (!publicKey) {
+    throw new Error('The passkey request did not include public key options.')
+  }
+  const prfEvaluation = publicKey.extensions?.prf?.eval
+  if (!prfEvaluation) {
+    throw new Error('The passkey request did not include PRF evaluation.')
+  }
+  Object.defineProperty(prfEvaluation, 'first', {
+    configurable: true,
+    value: foreignBytes,
+  })
+  const credential = await navigator.credentials.get(request)
+  if (!(credential instanceof PublicKeyCredential)) {
+    throw new Error('The mock did not return a public key credential.')
+  }
+
+  expect(credential.type).toBe('public-key')
+  expect(credential.getClientExtensionResults().prf).toEqual(
+    expect.objectContaining({ enabled: true }),
+  )
+})
+
+test('allows website assertions that do not request PRF', async () => {
+  vi.stubGlobal('navigator', Object.create(navigator))
+  vi.stubGlobal('PublicKeyCredential', class {})
+  installMockPasskeyRuntime()
+
+  const request: CredentialRequestOptions = {
+    publicKey: { challenge: new Uint8Array(32) },
+  }
+  const credential = await navigator.credentials.get(request)
+  if (!(credential instanceof PublicKeyCredential)) {
+    throw new Error('The mock did not return a public key credential.')
+  }
+
+  expect(credential.getClientExtensionResults()).toEqual({})
+  if (!('response' in credential)) {
+    throw new Error('The mock did not return a credential response.')
+  }
+  const response = credential.response
+  if (
+    !response ||
+    typeof response !== 'object' ||
+    !('signature' in response) ||
+    !(response.signature instanceof ArrayBuffer)
+  ) {
+    throw new Error('The mock did not return native assertion material.')
+  }
+  expect(response.signature.byteLength).toBe(72)
 })

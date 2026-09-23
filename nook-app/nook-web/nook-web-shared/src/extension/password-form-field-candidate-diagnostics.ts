@@ -194,7 +194,9 @@ export class AuthenticationFieldCandidateDiagnosticBuilder {
       }
       if (current.hasAttribute("inert") || current.inert === true)
         return AuthenticationFieldCandidateRenderability.InertAncestor;
-      if (current instanceof HTMLDialogElement && !current.open)
+      const dialogElement =
+        current.ownerDocument.defaultView?.HTMLDialogElement;
+      if (dialogElement && current instanceof dialogElement && !current.open)
         return AuthenticationFieldCandidateRenderability.ClosedDialog;
       const style =
         current.ownerDocument.defaultView?.getComputedStyle(current);

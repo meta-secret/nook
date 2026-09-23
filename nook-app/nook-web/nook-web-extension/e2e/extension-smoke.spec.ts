@@ -58,6 +58,9 @@ test('sets up the extension device first and sends its public keys to Simple Vau
 
   await context.route('**/*', (route) => {
     const url = route.request().url()
+    if (route.request().resourceType() !== 'document') {
+      return route.continue()
+    }
     if (belongs_to_simple_vault(simpleVaultBaseUrl, url)) {
       return route.fulfill({
         contentType: 'text/html',
@@ -291,7 +294,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
       {
         path: '/login/',
         field:
-          '[data-testid="linkedin-active-surface"] [autocomplete="username"]',
+          '[data-testid="linkedin-active-surface"] [autocomplete~="username" i]',
       },
       { path: '/x', field: '[name="username_or_email"]' },
     ]

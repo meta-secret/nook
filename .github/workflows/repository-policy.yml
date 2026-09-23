@@ -25,15 +25,25 @@ jobs:
           ref: ${{ inputs.source_sha || github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Install pinned Meta-Cortex library
+        uses: actions/checkout@v7
+        with:
+          repository: ai-ai-ai-ai-ai-ai-ai/meta-cortex
+          ref: 3a87a1e9a28ae43a18921dc7002d351ceb03ad76
+          path: .meta-cortex-source
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: go-task/setup-task@v2
+        with:
+          version: "3.52.0"
+      - name: Stage pinned Meta-Cortex library
+        run: task ci:repository-policy:stage-pinned-meta-cortex
       - uses: actions/setup-node@v6
         with:
           node-version: "24"
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: "1.3.14"
-      - uses: go-task/setup-task@v2
-        with:
-          version: "3.52.0"
       - run: task loom:repository-policy:setup-native-toolchain
       - uses: actions-rust-lang/setup-rust-toolchain@v2
         with:

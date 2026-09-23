@@ -272,6 +272,11 @@ export class VaultLoginActions {
       state.localLoginPreparation !== LocalLoginPreparationState.Idle
     )
       return;
+    const preparationSessionEpoch = state.sessionEpoch;
+    const canPublishPreparationFailure = () =>
+      !state.isAuthenticated &&
+      !state.isVerifying &&
+      state.sessionEpoch === preparationSessionEpoch;
     state.localLoginPreparation = LocalLoginPreparationState.Preparing;
     log.debug("preparing local login gate");
     try {
@@ -281,20 +286,30 @@ export class VaultLoginActions {
       state.clearLocalFolder();
       const passwordRefresh1 = await state.refreshPasswordEntriesList();
       if (passwordRefresh1.isErr()) {
-        state.errorMsg = state.t(
-          new StorageOperationFailure(
-            StorageOperationFailureKind.UnlockMetadataUnavailable,
-          ).translationKey,
-        );
+        if (canPublishPreparationFailure())
+          state.errorMsg = state.t(
+            new StorageOperationFailure(
+              StorageOperationFailureKind.UnlockMetadataUnavailable,
+            ).translationKey,
+          );
+        else
+          log.warn(
+            `discarded local login metadata failure authenticated=${state.isAuthenticated} verifying=${state.isVerifying} epoch=${state.sessionEpoch}/${preparationSessionEpoch}`,
+          );
         return;
       }
       const presentation = await new LoginUnlockPresentation(state).refresh();
       if (presentation.isErr()) {
-        state.errorMsg = state.t(
-          new StorageOperationFailure(
-            StorageOperationFailureKind.UnlockMetadataUnavailable,
-          ).translationKey,
-        );
+        if (canPublishPreparationFailure())
+          state.errorMsg = state.t(
+            new StorageOperationFailure(
+              StorageOperationFailureKind.UnlockMetadataUnavailable,
+            ).translationKey,
+          );
+        else
+          log.warn(
+            `discarded local login presentation failure authenticated=${state.isAuthenticated} verifying=${state.isVerifying} epoch=${state.sessionEpoch}/${preparationSessionEpoch}`,
+          );
         return;
       }
       state.localLoginPreparation = LocalLoginPreparationState.Ready;

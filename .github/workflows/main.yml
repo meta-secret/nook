@@ -475,11 +475,12 @@ jobs:
     steps:
       - name: Headless UI demos
         id: record-ui-demo
-        working-directory: /meta-secret/nook
         env:
           NOOK_UI_DEMO_OUTPUT_DIR: ${{ github.workspace }}/ui-demo
           CI: true
-        run: task _web:test:ui-demo
+        run: |
+          cd /meta-secret/nook
+          task _web:test:ui-demo
 
       - name: Upload complete Main UI demo artifact
         if: always()

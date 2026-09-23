@@ -66,6 +66,9 @@ const continueWithNookTemplateIds = templateIds.filter((templateId) => {
     template.pilotExpectation === ShellTemplatePilotExpectation.ContinueWithNook
   )
 })
+const genericContinueWithNookTemplateIds = continueWithNookTemplateIds.filter(
+  (templateId) => !['airbnb', 'tesla'].includes(templateId),
+)
 const failClosedTemplateIds = templateIds.filter((templateId) => {
   const template = requiredShellTemplate(templateId)
   return (
@@ -78,7 +81,9 @@ const singleStepPasswordTemplates = continueWithNookTemplateIds.filter(
     const template = requiredShellTemplate(templateId)
     return (
       template.steps.length === 1 &&
-      template.steps[0]?.fields.some((field) => field.type === 'password')
+      template.steps[0]?.fields.some(
+        (field) => field.type === 'password' && field['aria-hidden'] !== 'true',
+      )
     )
   },
 )
@@ -176,8 +181,13 @@ test.describe('popular login fixture coverage', () => {
     expect(siteShellCount()).toBe(1000)
     expect(templateIds.length).toBeGreaterThan(0)
     expect(templateIds.length).toBeLessThan(100)
-    expect(continueWithNookTemplateIds).toHaveLength(templateIds.length - 1)
-    expect(failClosedTemplateIds).toEqual(['enterprise-sso-email'])
+    expect(continueWithNookTemplateIds).toHaveLength(
+      templateIds.length - failClosedTemplateIds.length,
+    )
+    expect(failClosedTemplateIds).toEqual([
+      'email-password-aria-hidden',
+      'enterprise-sso-email',
+    ])
     const catalogIds = new Set(catalog.map((site) => site.id))
     const mappedSiteIds = new Set(listSiteShellIds())
     for (const catalogEntry of catalog) {
@@ -240,7 +250,7 @@ test.describe('popular login fixture coverage', () => {
       vaultName: 'Popular login templates vault',
     })
     try {
-      for (const templateId of continueWithNookTemplateIds) {
+      for (const templateId of genericContinueWithNookTemplateIds) {
         const page = await paired.context.newPage()
         await page.goto(`${mockAuth.origin}/template/${templateId}`)
         const widget = page.locator('#nook-auth-widget')
@@ -279,12 +289,14 @@ test.describe('popular login fixture coverage', () => {
       for (const templateId of failClosedTemplateIds) {
         const page = await paired.context.newPage()
         await page.goto(`${mockAuth.origin}/template/${templateId}`)
-        const email = page.getByRole('textbox', { name: 'Work email' })
         const form = page.locator('#login_form')
-        await expect(email).toHaveValue('')
+        const inputs = form.locator('input')
+        for (let index = 0; index < (await inputs.count()); index += 1) {
+          await expect(inputs.nth(index)).toHaveValue('')
+        }
         await form.evaluate((element) => {
           if (!(element instanceof HTMLFormElement)) {
-            throw new Error('enterprise SSO fixture form is missing')
+            throw new Error('fail-closed fixture form is missing')
           }
           document.documentElement.dataset.nookPilotObservation =
             document.querySelector('#nook-auth-widget') instanceof HTMLElement
@@ -310,7 +322,9 @@ test.describe('popular login fixture coverage', () => {
         })
         await page.waitForTimeout(2_000)
         await expect(page.locator('#nook-auth-widget')).toHaveCount(0)
-        await expect(email).toHaveValue('')
+        for (let index = 0; index < (await inputs.count()); index += 1) {
+          await expect(inputs.nth(index)).toHaveValue('')
+        }
         await expect(page.locator('html')).toHaveAttribute(
           'data-nook-pilot-observation',
           'not-observed',

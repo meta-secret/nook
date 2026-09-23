@@ -55,16 +55,24 @@ export class AuthenticationSelectorEntryDiagnosticBuilder {
 
   private frameKind(root: ParentNode): AuthenticationFieldCandidateFrameKind {
     const ownerDocument = root.ownerDocument;
-    const frameWindow = ownerDocument
-      ? ownerDocument.defaultView
-      : root === document
-        ? window
-        : false;
-    if (!frameWindow) {
-      return AuthenticationFieldCandidateFrameKind.Unavailable;
+    if (ownerDocument?.defaultView) {
+      const frameWindow = ownerDocument.defaultView;
+      return frameWindow === frameWindow.top
+        ? AuthenticationFieldCandidateFrameKind.Top
+        : AuthenticationFieldCandidateFrameKind.Nested;
     }
-    return frameWindow === frameWindow.top
-      ? AuthenticationFieldCandidateFrameKind.Top
-      : AuthenticationFieldCandidateFrameKind.Nested;
+    if (root.nodeType === 9 && "defaultView" in root) {
+      const frameWindow = root.defaultView;
+      if (
+        typeof frameWindow === "object" &&
+        frameWindow &&
+        "top" in frameWindow
+      ) {
+        return frameWindow === frameWindow.top
+          ? AuthenticationFieldCandidateFrameKind.Top
+          : AuthenticationFieldCandidateFrameKind.Nested;
+      }
+    }
+    return AuthenticationFieldCandidateFrameKind.Unavailable;
   }
 }

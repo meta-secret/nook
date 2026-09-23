@@ -180,14 +180,21 @@ export async function handleCompanionWasmMessage(
             message.payload.facts,
           ),
         )
-      case CompanionWasmSessionMessageType.AuthenticationEnrollmentWorkflowMatch:
-        return ok(
-          authentication_enrollment_workflow_match(
-            message.payload.authenticatorSetupHint,
-            message.payload.backupCodesCopy,
-            message.payload.manualCheckpointPresent,
-          ),
+      case CompanionWasmSessionMessageType.AuthenticationEnrollmentWorkflowMatch: {
+        const match = authentication_enrollment_workflow_match(
+          message.payload.authenticatorSetupHint,
+          message.payload.backupCodesCopy,
+          message.payload.manualCheckpointPresent,
         )
+        if (match.kind !== 'matched') return ok(match)
+        return ok({
+          ...match,
+          pilotCapability:
+            authentication_workflow_pilot_presentation_capability(
+              match.snapshot,
+            ),
+        })
+      }
       case CompanionWasmSessionMessageType.HasLoginContext: {
         const observation = message.payload.observation
         const loginContext = new NookLoginContextObservation(

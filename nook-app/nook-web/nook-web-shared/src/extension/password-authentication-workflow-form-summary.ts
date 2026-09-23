@@ -23,6 +23,7 @@ import type {
   PasswordFormObservation,
   PasswordFormSummary,
 } from "./password-forms";
+import type { PasswordFormSummaryObservationBrowser } from "./password-form-summary-observation";
 
 type PasskeyControlSafetyRequest = {
   candidate: { control: HTMLElement; explicitlyMarked: boolean };
@@ -30,7 +31,7 @@ type PasskeyControlSafetyRequest = {
 };
 
 export type PasswordAuthenticationWorkflowFormSummaryDependencies = {
-  browser: Pick<typeof globalThis, "document">;
+  browser: Pick<PasswordFormSummaryObservationBrowser, "document">;
   summarizeRoot: (request: PasswordFormScopeQuery) => PasswordFormSummary;
   observationPriority: (observation: PasswordFormObservation) => number;
   observationIsAdmissible: (observation: PasswordFormObservation) => boolean;
@@ -146,6 +147,7 @@ export class PasswordAuthenticationWorkflowFormSummary {
     }
     const independentWorkflowsRequest: AppendIndependentPasskeyOnlyWorkflowsRequest<PasswordFormObservation> =
       {
+        document: root,
         fieldBearing: observations.filter(
           this.dependencies.observationIsAdmissible,
         ),

@@ -17,12 +17,14 @@ export class AuthenticationInputSurface {
     }
     let element = candidate;
     while (true) {
+      const dialogElement =
+        element.ownerDocument.defaultView?.HTMLDialogElement;
       if (
         element.hidden ||
         element.hasAttribute("inert") ||
         element.inert ||
         element.getAttribute("aria-disabled") === "true" ||
-        (element instanceof HTMLDialogElement && !element.open)
+        (dialogElement && element instanceof dialogElement && !element.open)
       ) {
         return false;
       }
@@ -55,11 +57,19 @@ export class AuthenticationInputSurface {
       ancestor;
       ancestor = ancestor.parentElement
     ) {
-      if (!(ancestor instanceof HTMLFieldSetElement) || !ancestor.disabled) {
+      const fieldSetElement =
+        ancestor.ownerDocument.defaultView?.HTMLFieldSetElement;
+      if (
+        !fieldSetElement ||
+        !(ancestor instanceof fieldSetElement) ||
+        !ancestor.disabled
+      ) {
         continue;
       }
+      const legendElement =
+        ancestor.ownerDocument.defaultView?.HTMLLegendElement;
       const firstLegend = Array.from(ancestor.children).flatMap((child) =>
-        child instanceof HTMLLegendElement ? [child] : [],
+        legendElement && child instanceof legendElement ? [child] : [],
       )[0];
       if (!firstLegend?.contains(field)) return true;
     }

@@ -28,7 +28,7 @@ import {
 
 export type DeviceProtectionAuthorizationObservation = {
   readonly overlayVisible: boolean
-  readonly unlockVisible: boolean
+  readonly unlockReady: boolean
   readonly pickerVisible: boolean
   readonly lockedAccessVisible: boolean
   readonly authorizeReady: boolean
@@ -48,6 +48,7 @@ export enum DeviceProtectionAuthorizationGateState {
 
 export type DeviceProtectionPostUnlockObservation = {
   readonly loginGateVisible: boolean
+  readonly vaultAuthenticated: boolean
   readonly overlayVisible: boolean
   readonly authorizeReady: boolean
   readonly unlockReady: boolean
@@ -61,7 +62,10 @@ export class DeviceProtectionPostUnlockGate {
   ) {}
 
   state(): DeviceProtectionAuthorizationGateState {
-    if (!this.observation.loginGateVisible) {
+    if (
+      this.observation.vaultAuthenticated ||
+      !this.observation.loginGateVisible
+    ) {
       return DeviceProtectionAuthorizationGateState.Unlocked
     }
     if (this.observation.overlayVisible) {
@@ -88,7 +92,7 @@ export class DeviceProtectionPostUnlockGate {
 
 export function deviceProtectionAuthorizationGateState({
   overlayVisible,
-  unlockVisible,
+  unlockReady,
   pickerVisible,
   lockedAccessVisible,
   authorizeReady,
@@ -99,7 +103,7 @@ export function deviceProtectionAuthorizationGateState({
     return DeviceProtectionAuthorizationGateState.Unlocked
   }
   if (overlayVisible) return DeviceProtectionAuthorizationGateState.Overlay
-  if (unlockVisible) return DeviceProtectionAuthorizationGateState.Unlock
+  if (unlockReady) return DeviceProtectionAuthorizationGateState.Unlock
   if (pickerVisible) return DeviceProtectionAuthorizationGateState.Picker
   if (lockedAccessVisible) {
     return DeviceProtectionAuthorizationGateState.LockedAccess
@@ -502,6 +506,16 @@ export async function authorizeDeviceProtection(
   page: Page,
   opts?: { storeId?: string },
 ) {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const vault = window.__nookVault
+          return Boolean(vault && !vault.isInitializing)
+        }),
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
+    .toBe(true)
   await keepVaultIdleLockDisabled(page)
   const overlay = page.getByTestId('passkey-auth-overlay')
   const loginGate = page.getByTestId('login-gate')
@@ -560,11 +574,13 @@ export async function authorizeDeviceProtection(
   const authorizationGateState = async () => {
     const observation: DeviceProtectionAuthorizationObservation = {
       overlayVisible: await overlay.isVisible(),
-      unlockVisible: await unlockVaultButton.isVisible(),
+      unlockReady: await unlockButtonReady(),
       pickerVisible: await vaultPicker.isVisible(),
       lockedAccessVisible: await lockedAccessDashboard.isVisible(),
       authorizeReady: await authorizeButtonReady(),
-      vaultAuthenticated: false,
+      vaultAuthenticated: await page.evaluate(() =>
+        Boolean(window.__nookVault?.isAuthenticated),
+      ),
       workspaceUnlocked: await isAuthenticatedWorkspace(),
     }
     return deviceProtectionAuthorizationGateState(observation)
@@ -657,22 +673,22 @@ export async function authorizeDeviceProtection(
     })
     await unlockVaultButton.click()
   }
-  // Clicking the login unlock action starts the device ceremony and then
-  // loads the vault. Wait on the access-gate transition itself so the helper
-  // does not race a reactive field snapshot while Svelte is remounting the
-  // authenticated shell. Keep the device action as a fallback for flows that
-  // expose the explicit authorization card after the login action.
-  let lastVaultAuthorizationError = ''
+  // The device ceremony sets VaultState.isAuthenticated before Svelte finishes
+  // remounting the authenticated shell. Read that current session state on
+  // each poll so an earlier visible load error cannot mask a completed unlock.
   try {
     await expect
       .poll(
         async () => {
           const errorVisible = await vaultError.isVisible()
-          if (errorVisible) {
-            lastVaultAuthorizationError = await vaultError.innerText()
-          }
+          const vaultAuthenticated = await page.evaluate(() => {
+            const vault = window.__nookVault
+            if (!vault) return false
+            return vault.isAuthenticated
+          })
           const state = new DeviceProtectionPostUnlockGate({
             loginGateVisible: await loginGate.isVisible(),
+            vaultAuthenticated,
             overlayVisible: await overlay.isVisible(),
             authorizeReady: await authorizeButtonReady(),
             unlockReady: await unlockButtonReady(),
@@ -702,10 +718,12 @@ export async function authorizeDeviceProtection(
       )
       .toBe(DeviceProtectionAuthorizationGateState.Unlocked)
   } catch (failure) {
-    const diagnostic = lastVaultAuthorizationError.trim()
+    const diagnostic = (await vaultError.isVisible())
+      ? (await vaultError.innerText()).trim()
+      : ''
     throw new Error(
       diagnostic
-        ? `Vault authorization did not settle. Last visible vault error: ${diagnostic}`
+        ? `Vault authorization did not settle. Current visible vault error: ${diagnostic}`
         : 'Vault authorization did not settle without a visible vault error.',
       { cause: failure },
     )

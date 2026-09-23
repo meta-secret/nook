@@ -13,8 +13,29 @@ import {
   storedZip,
 } from './helpers'
 
+declare global {
+  interface Window {
+    __nookClipboardRead: () => Promise<string>
+    __nookClipboardWrite: (value: string) => Promise<void>
+  }
+}
+
 test.describe('local vault', () => {
   test.beforeEach(async ({ page }) => {
+    let clipboardText = ''
+    await page.exposeFunction('__nookClipboardRead', () => clipboardText)
+    await page.exposeFunction('__nookClipboardWrite', (value: string) => {
+      clipboardText = value
+    })
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: {
+          readText: () => window.__nookClipboardRead(),
+          writeText: (value: string) => window.__nookClipboardWrite(value),
+        },
+      })
+    })
     await page.goto('/app/')
     await mockBip39Wordlist(page)
     await clearBrowserVault(page)
@@ -762,19 +783,6 @@ test.describe('local vault', () => {
     page,
   }) => {
     await disableVaultIdleLock(page)
-    await page.evaluate(() => {
-      let text = ''
-      Object.defineProperty(navigator, 'clipboard', {
-        configurable: true,
-        value: {
-          readText: () => Promise.resolve(text),
-          writeText: (value: string) => {
-            text = value
-            return Promise.resolve()
-          },
-        },
-      })
-    })
     const items = Array.from({ length: 55 }, (_, index) => ({
       type: 1,
       name: `Demand login ${index}`,

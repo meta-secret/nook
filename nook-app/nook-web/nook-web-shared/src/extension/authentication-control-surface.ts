@@ -24,17 +24,19 @@ export class AuthenticationControlSurface {
   protected isDisabledByAncestorFieldset(control: HTMLElement): boolean {
     let ancestor = control.parentElement;
     while (ancestor) {
+      const fieldSetElement =
+        ancestor.ownerDocument.defaultView?.HTMLFieldSetElement;
       if (
-        ancestor instanceof HTMLFieldSetElement &&
+        fieldSetElement &&
+        ancestor instanceof fieldSetElement &&
         ancestor.hasAttribute("disabled")
       ) {
+        const legendElement =
+          ancestor.ownerDocument.defaultView?.HTMLLegendElement;
         const firstLegend = [...ancestor.children].find(
-          (child) => child instanceof HTMLLegendElement,
+          (child) => legendElement && child instanceof legendElement,
         );
-        if (!(
-          firstLegend instanceof HTMLLegendElement &&
-          firstLegend.contains(control)
-        )) {
+        if (!(firstLegend && firstLegend.contains(control))) {
           return true;
         }
       }
@@ -46,17 +48,26 @@ export class AuthenticationControlSurface {
   protected decodeDisabledPropertyControl(
     control: HTMLElement,
   ): DisabledPropertyControlDecode {
-    return control instanceof HTMLButtonElement ||
-      control instanceof HTMLInputElement ||
-      control instanceof HTMLSelectElement ||
-      control instanceof HTMLTextAreaElement ||
-      control instanceof HTMLFieldSetElement ||
-      control instanceof HTMLOptionElement
-      ? {
-          kind: DisabledPropertyControlDecodeKind.Supported,
-          control,
-        }
-      : { kind: DisabledPropertyControlDecodeKind.Unsupported };
+    const view = control.ownerDocument.defaultView;
+    const buttonElement = view?.HTMLButtonElement;
+    if (buttonElement && control instanceof buttonElement)
+      return { kind: DisabledPropertyControlDecodeKind.Supported, control };
+    const inputElement = view?.HTMLInputElement;
+    if (inputElement && control instanceof inputElement)
+      return { kind: DisabledPropertyControlDecodeKind.Supported, control };
+    const selectElement = view?.HTMLSelectElement;
+    if (selectElement && control instanceof selectElement)
+      return { kind: DisabledPropertyControlDecodeKind.Supported, control };
+    const textAreaElement = view?.HTMLTextAreaElement;
+    if (textAreaElement && control instanceof textAreaElement)
+      return { kind: DisabledPropertyControlDecodeKind.Supported, control };
+    const fieldSetElement = view?.HTMLFieldSetElement;
+    if (fieldSetElement && control instanceof fieldSetElement)
+      return { kind: DisabledPropertyControlDecodeKind.Supported, control };
+    const optionElement = view?.HTMLOptionElement;
+    if (optionElement && control instanceof optionElement)
+      return { kind: DisabledPropertyControlDecodeKind.Supported, control };
+    return { kind: DisabledPropertyControlDecodeKind.Unsupported };
   }
 
   controlIsEffectivelyDisabled(control: HTMLElement): boolean {
@@ -101,13 +112,16 @@ export class AuthenticationControlSurface {
         element.hasAttribute("inert") ||
         element.inert ||
         element.getAttribute("aria-disabled") === "true" ||
-        (element instanceof HTMLDialogElement && !element.open) ||
+        (element.ownerDocument.defaultView?.HTMLDialogElement &&
+          element instanceof
+            element.ownerDocument.defaultView.HTMLDialogElement &&
+          !element.open) ||
         !rendered
       ) {
         return false;
       }
       const parent = element.parentElement;
-      if (!(parent instanceof HTMLElement)) return true;
+      if (!parent) return true;
       element = parent;
     }
   }

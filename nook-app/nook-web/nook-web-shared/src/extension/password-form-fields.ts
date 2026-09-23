@@ -78,11 +78,6 @@ type PageInputClassificationRequest = {
 
 type CompanionWasmFieldClassification = DirectFieldClassification;
 
-type AssociatedFormFieldSelectorRequest = {
-  selector: string;
-  formId: string;
-};
-
 export type LocalOwnedLoginObservationRootRequest = {
   owner: HTMLFormElement;
   passwordFields: readonly HTMLInputElement[];
@@ -264,8 +259,12 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
           ),
         ).filter(
           (control) =>
-            (control instanceof HTMLButtonElement ||
-              control instanceof HTMLInputElement) &&
+            ((control.ownerDocument.defaultView?.HTMLButtonElement &&
+              control instanceof
+                control.ownerDocument.defaultView.HTMLButtonElement) ||
+              (control.ownerDocument.defaultView?.HTMLInputElement &&
+                control instanceof
+                  control.ownerDocument.defaultView.HTMLInputElement)) &&
             control.form === form,
         )
       : this.formlessAuthenticationAdvanceControlCandidates(field);
@@ -443,16 +442,6 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
     );
   }
 
-  private associatedFormFieldSelector({
-    selector,
-    formId,
-  }: AssociatedFormFieldSelectorRequest): string {
-    return selector
-      .split(",")
-      .map((part) => `${part.trim()}[form="${CSS.escape(formId)}"]`)
-      .join(",");
-  }
-
   localOwnedLoginObservationRoot({
     owner,
     passwordFields,
@@ -562,27 +551,22 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
         if (
           field.form === owner &&
           (root === owner.ownerDocument ||
-            (root instanceof Node && root.contains(field)))
+            ("contains" in root && root.contains(field)))
         ) {
           seen.add(field);
           fields.push(field);
         }
       }
       if (owner.id) {
-        const associatedSelectorRequest: AssociatedFormFieldSelectorRequest = {
-          selector,
-          formId: owner.id,
-        };
         const associated =
-          owner.ownerDocument.querySelectorAll<HTMLInputElement>(
-            this.associatedFormFieldSelector(associatedSelectorRequest),
-          );
+          owner.ownerDocument.querySelectorAll<HTMLInputElement>("input[form]");
         for (const field of associated) {
           if (
+            field.matches(selector) &&
             !seen.has(field) &&
             field.form === owner &&
             (root === owner.ownerDocument ||
-              (root instanceof Node && root.contains(field)))
+              ("contains" in root && root.contains(field)))
           ) {
             seen.add(field);
             fields.push(field);
@@ -593,10 +577,7 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
         const left = pair[0];
         const right = pair[1];
         if (left === right) return 0;
-        return left.compareDocumentPosition(right) &
-          Node.DOCUMENT_POSITION_FOLLOWING
-          ? -1
-          : 1;
+        return left.compareDocumentPosition(right) & 4 ? -1 : 1;
       });
       return fields;
     }
@@ -807,7 +788,11 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
     const selectorEntryDiagnosticRequest: Parameters<
       AuthenticationSelectorEntryDiagnosticBuilder["build"]
     >[0] = {
-      origin: this.browser.location.origin,
+      origin: ((v) => (v ? v : ""))(
+        root.nodeType === 9
+          ? this.browser.location.origin
+          : root.ownerDocument?.defaultView?.location.origin,
+      ),
       root,
       inputCount: selectorEntryInputCount,
       identifierIdPresent: selectorEntryIdentifierIdPresent,
@@ -918,8 +903,11 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
         root.querySelectorAll?.<HTMLElement>(passkeyControlSelector),
       ),
     );
+    const htmlElement = globalThis.HTMLElement || false;
     const rooted =
-      root instanceof HTMLElement && root.matches(passkeyControlSelector)
+      htmlElement &&
+      root instanceof htmlElement &&
+      root.matches(passkeyControlSelector)
         ? [root]
         : [];
     const controls = [...rooted, ...descendants];

@@ -26,6 +26,7 @@ import {
 } from './helpers/extension-smoke-runtime'
 import {
   PairedVaultCompanionUnlockKind,
+  unlockExtensionThroughCompanion,
   unlockPairedVaultThroughCompanion,
   type PairedVaultCompanionUnlock,
 } from './helpers/paired-vault-companion-unlock'
@@ -304,7 +305,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     ).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
     await expect(
       pairingLauncher.getByTestId('companion-vault-status'),
-    ).toHaveAttribute('data-connected', 'false')
+    ).toHaveAttribute('data-connected', 'true')
     await expect(
       pairingLauncher.getByTestId('connect-simple-vault-btn'),
     ).toBeVisible()
@@ -409,6 +410,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       .toBe(2)
 
     await test.step('present empty authenticator picker', async () => {
+      await unlockExtensionThroughCompanion({ context, extensionId })
       const emptyOtpPage = await context.newPage()
       await emptyOtpPage.goto(`${loginServer.origin}/otp`)
       const emptyOtpWidget = emptyOtpPage.locator('#nook-auth-widget')
@@ -490,6 +492,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     })
 
     await test.step('fill website password through extension', async () => {
+      await unlockExtensionThroughCompanion({ context, extensionId })
       const fillLoginPage = await context.newPage()
       await fillLoginPage.goto(`${loginServer.origin}/login`)
       const fillWidget = fillLoginPage.locator('#nook-auth-widget')
@@ -555,6 +558,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     })
 
     await test.step('fill authenticator code through extension', async () => {
+      await unlockExtensionThroughCompanion({ context, extensionId })
       const otpPage = await context.newPage()
       await otpPage.goto(`${loginServer.origin}/otp`)
       const otpWidget = otpPage.locator('#nook-auth-widget')
@@ -623,6 +627,22 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       websiteAfterUnlock.kind === WebsitePageStateKind.Opened &&
       websitePasskeyState.kind === WebsitePasskeyStateKind.Created
     ) {
+      await unlockExtensionThroughCompanion({ context, extensionId })
+      await websiteAfterUnlock.page.reload()
+      await expect(
+        websiteAfterUnlock.page.locator('#nook-auth-widget'),
+      ).toBeVisible()
+      const websiteWidget = websiteAfterUnlock.page.locator('#nook-auth-widget')
+      const websiteLoginPickerPromise = context.waitForEvent('page')
+      await websiteWidget
+        .getByRole('button', { name: 'Continue with Nook' })
+        .click()
+      const websiteLoginPicker = await websiteLoginPickerPromise
+      await websiteLoginPicker.close()
+      await websiteAfterUnlock.page.reload()
+      await expect(
+        websiteAfterUnlock.page.locator('#nook-auth-widget'),
+      ).toBeVisible()
       const websitePasskeyAssertion: WebsitePasskeyAssertionBrowserFlow = {
         page: websiteAfterUnlock.page,
         credentialId: websitePasskeyState.credentialId,

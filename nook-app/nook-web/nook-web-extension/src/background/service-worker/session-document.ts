@@ -1,6 +1,21 @@
 import { err, ok, type Result } from 'neverthrow'
 import type { ExtensionSessionTransportRequest } from '../../offscreen/session-request-adapter'
 import type { ExtensionSessionResponse } from '../../offscreen/session'
+import {
+  BrowserRuntimeMessage,
+  BrowserRuntimeMessageAdmissionKind,
+  type BrowserRuntimeMessageValue,
+} from '../../lib/browser-runtime-message'
+import {
+  ConcreteDecoderResultKind,
+  runConcreteDecoder,
+} from '../../lib/concrete-decoder'
+import {
+  ExtensionSessionReadinessMessageType,
+  ExtensionSessionReadyResponseDecoder,
+  type ExtensionSessionReadyResponse,
+  type ExtensionSessionReadinessQuery,
+} from '../../lib/extension-session-readiness'
 
 export const extensionSessionDocument = 'offscreen/session.html'
 
@@ -204,10 +219,144 @@ type ExtensionSessionDocumentState =
       readonly failure: ExtensionSessionTransportFailure
     }
 
+enum SessionReadinessKind {
+  Idle = 'idle',
+  Waiting = 'waiting',
+  Ready = 'ready',
+}
+
+type SessionReadiness =
+  | { readonly kind: SessionReadinessKind.Idle }
+  | {
+      readonly kind: SessionReadinessKind.Waiting
+      readonly operation: Promise<void>
+      readonly resolve: () => void
+    }
+  | { readonly kind: SessionReadinessKind.Ready }
+
+type ExtensionSessionDocumentReadinessListener = Parameters<
+  typeof chrome.runtime.onMessage.addListener
+>[0]
+
+type ExtensionSessionDocumentReadinessListenerArguments = [
+  message: BrowserRuntimeMessageValue,
+  sender: chrome.runtime.MessageSender,
+  sendResponse: Parameters<ExtensionSessionDocumentReadinessListener>[2],
+]
+
+type ExtensionSessionDocumentReadinessRequest = {
+  readonly message: BrowserRuntimeMessageValue
+  readonly sender: chrome.runtime.MessageSender
+  readonly sendResponse: Parameters<ExtensionSessionDocumentReadinessListener>[2]
+}
+
 /** Owns one browser document and serializes opening with acknowledged revocation. */
 export class ExtensionSessionDocumentOwner {
   private state: ExtensionSessionDocumentState = {
     kind: ExtensionSessionDocumentStateKind.Unobserved,
+  }
+  private readiness: SessionReadiness = { kind: SessionReadinessKind.Idle }
+
+  constructor() {
+    const runtimeMessages = chrome.runtime.onMessage
+    if (runtimeMessages) {
+      runtimeMessages.addListener(this.readinessListener())
+    }
+  }
+
+  private readinessListener(): ExtensionSessionDocumentReadinessListener {
+    return (
+      ...listenerArguments: ExtensionSessionDocumentReadinessListenerArguments
+    ) => {
+      const [message, sender, sendResponse] = listenerArguments
+      const request: ExtensionSessionDocumentReadinessRequest = {
+        message,
+        sender,
+        sendResponse,
+      }
+      return this.handleReadinessMessage(request)
+    }
+  }
+
+  private handleReadinessMessage(
+    request: ExtensionSessionDocumentReadinessRequest,
+  ): false {
+    const { message, sender, sendResponse } = request
+    const admission = BrowserRuntimeMessage.from(message)
+    if (
+      admission.kind === BrowserRuntimeMessageAdmissionKind.Rejected ||
+      admission.message.type !== ExtensionSessionReadinessMessageType.Ready ||
+      sender.id !== chrome.runtime.id ||
+      sender.url !== chrome.runtime.getURL(extensionSessionDocument)
+    ) {
+      return false
+    }
+    const response: ExtensionSessionReadyResponse = { ok: true }
+    sendResponse(response)
+    this.markReady()
+    return false
+  }
+
+  private markReady(): void {
+    const readiness = this.readiness
+    if (readiness.kind === SessionReadinessKind.Waiting) {
+      readiness.resolve()
+    }
+    this.readiness = { kind: SessionReadinessKind.Ready }
+  }
+
+  private waitForReady(): Promise<void> {
+    const readiness = this.readiness
+    if (readiness.kind === SessionReadinessKind.Ready) {
+      return Promise.resolve()
+    }
+    if (readiness.kind === SessionReadinessKind.Waiting) {
+      return readiness.operation
+    }
+    let resolveReadiness: () => void = () => {}
+    const operation = new Promise<void>((resolve) => {
+      resolveReadiness = resolve
+    })
+    this.readiness = {
+      kind: SessionReadinessKind.Waiting,
+      operation,
+      resolve: resolveReadiness,
+    }
+    return operation
+  }
+
+  private requestExistingDocumentReadiness(): Promise<
+    ExtensionSessionTransportFailureKind | false
+  > {
+    const readinessQuery: ExtensionSessionReadinessQuery = {
+      type: ExtensionSessionReadinessMessageType.Query,
+    }
+    return new Promise((resolve) => {
+      try {
+        chrome.runtime.sendMessage<BrowserRuntimeMessageValue>(
+          readinessQuery,
+          (response: BrowserRuntimeMessageValue) => {
+            const deliveryFailure = chrome.runtime.lastError
+            if (deliveryFailure) {
+              resolve(ExtensionSessionTransportFailureKind.DeliveryFailed)
+            } else {
+              const decodedResponse = runConcreteDecoder(
+                ExtensionSessionReadyResponseDecoder.decode,
+                response,
+              )
+              if (decodedResponse.kind === ConcreteDecoderResultKind.Rejected) {
+                resolve(ExtensionSessionTransportFailureKind.ResponseMissing)
+              } else {
+                this.markReady()
+                resolve(false)
+              }
+            }
+          },
+        )
+      } catch {
+        resolve(ExtensionSessionTransportFailureKind.DeliveryFailed)
+      }
+    })
   }
 
   private async create(): Promise<
@@ -233,6 +382,7 @@ export class ExtensionSessionDocumentOwner {
         ),
       )
     }
+    await this.waitForReady()
     return ok(new OpenExtensionSessionDocument())
   }
 
@@ -261,7 +411,16 @@ export class ExtensionSessionDocumentOwner {
         context.contextType === chrome.runtime.ContextType.OFFSCREEN_DOCUMENT &&
         context.documentUrl === documentUrl,
     )
-    return inherited ? ok(new OpenExtensionSessionDocument()) : this.create()
+    if (inherited) {
+      if (this.readiness.kind !== SessionReadinessKind.Ready) {
+        const failureKind = await this.requestExistingDocumentReadiness()
+        if (failureKind) {
+          return err(new ExtensionSessionTransportFailure(failureKind))
+        }
+      }
+      return ok(new OpenExtensionSessionDocument())
+    }
+    return this.create()
   }
 
   async open(): Promise<
@@ -345,6 +504,9 @@ export class ExtensionSessionDocumentOwner {
           document,
           failure: closed.error,
         }
+    if (closed.isOk()) {
+      this.readiness = { kind: SessionReadinessKind.Idle }
+    }
     return closed
   }
 
@@ -366,6 +528,7 @@ export class ExtensionSessionDocumentOwner {
       )
       if (contexts.length === 0) {
         this.state = { kind: ExtensionSessionDocumentStateKind.Closed }
+        this.readiness = { kind: SessionReadinessKind.Idle }
         return ok(ExtensionSessionDocumentStateKind.Closed)
       }
     } catch {

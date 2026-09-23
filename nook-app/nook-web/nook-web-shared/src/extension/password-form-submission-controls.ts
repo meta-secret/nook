@@ -5,7 +5,6 @@ import {
   type AirbnbLoginModalContinueControlRequest,
   type AirbnbLoginModalRouteRequest,
 } from "./airbnb-login-modal-route";
-import { AuthenticationControlSurface } from "./authentication-control-surface";
 import { authenticationFactBounds } from "./authentication-fact-bounds";
 import {
   authenticationAdvanceControlSelector,
@@ -36,19 +35,18 @@ import {
   type UnownedAuthContainerRequest,
   passwordFieldDiscovery,
 } from "./password-form-fields";
+import {
+  AuthenticationSubmissionSemantics,
+  PageControlSubmissionMethod,
+} from "./authentication-submission-semantics";
+
+export { PageControlSubmissionMethod };
+export type PageControlSubmissionMethod = PageControlSubmissionMethodValue;
 
 export enum PasswordFormQueryKind {
   Root = "root",
   Scoped = "scoped",
 }
-
-export const PageControlSubmissionMethod = {
-  Absent: "absent",
-  Post: "post",
-  Get: "get",
-  Dialog: "dialog",
-} as const satisfies Record<string, PageControlSubmissionMethodValue>;
-export type PageControlSubmissionMethod = PageControlSubmissionMethodValue;
 
 export type PasswordFormScopeQuery =
   | { kind: PasswordFormQueryKind.Root; root: ParentNode }
@@ -95,11 +93,6 @@ type ControlDestinationIdentityRequest = {
   formScope: PasswordFormScope;
 };
 
-type HtmlSubmissionMethodRequest = {
-  element: Element;
-  name: string;
-};
-
 type AuthenticationControlPreference<AuthenticationControlObservation> = (
   candidate: AuthenticationControlObservation,
 ) => boolean;
@@ -110,12 +103,6 @@ type BoundedAuthenticationControlObservationsRequest<
   candidates: AuthenticationControlObservation[];
   isPreferred: AuthenticationControlPreference<AuthenticationControlObservation>;
   isNextPreferred?: AuthenticationControlPreference<AuthenticationControlObservation>;
-};
-
-type SelectedSubmitterDisclosureRequest = {
-  form: HTMLFormElement;
-  selectedSubmitter: LoginAdvanceControl | false;
-  scriptedGetPasswordDisclosureApproved: boolean;
 };
 
 type ImplicitAuthenticationSubmitCapabilityRequest = {
@@ -134,11 +121,10 @@ type ImplicitAuthenticationSubmitRequest = {
   alternativeActuationIsSafe: () => boolean;
 };
 
-export const MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT = 100;
+export const MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT =
+  AuthenticationSubmissionSemantics.MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT;
 
 export const MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS = 20;
-
-type SemanticSubmitControlList = HTMLElement[];
 
 export class AuthenticationSubmissionDestination {
   static source(control: HTMLElement): PageControlSubmissionDestinationSource {
@@ -166,7 +152,7 @@ type UnownedLocalScopeRequest = {
 };
 
 /** Owns this browser host’s resources and interaction lifecycle. */
-class AuthenticationSubmissionControls extends AuthenticationControlSurface {
+class AuthenticationSubmissionControls extends AuthenticationSubmissionSemantics {
   private neverNextPreferred(): boolean {
     return false;
   }
@@ -192,7 +178,8 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
   }: ObservedFormIdentityRequest): string {
     const owner =
       formScope.kind === PasswordFormScopeKind.Owned ? formScope.owner : root;
-    if (!(owner instanceof Element)) return "";
+    const element = owner.ownerDocument?.defaultView?.Element;
+    if (!element || !(owner instanceof element)) return "";
     return [
       owner.id,
       owner.className,
@@ -233,20 +220,29 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
     control,
     formScope,
   }: ControlDestinationIdentityRequest): string {
-    if (control instanceof HTMLAnchorElement) {
+    const anchorElement = control.ownerDocument.defaultView?.HTMLAnchorElement;
+    if (anchorElement && control instanceof anchorElement) {
       return control.href;
     }
     if (
-      (control instanceof HTMLButtonElement ||
-        control instanceof HTMLInputElement) &&
+      ((control.ownerDocument.defaultView?.HTMLButtonElement &&
+        control instanceof
+          control.ownerDocument.defaultView.HTMLButtonElement) ||
+        (control.ownerDocument.defaultView?.HTMLInputElement &&
+          control instanceof
+            control.ownerDocument.defaultView.HTMLInputElement)) &&
       this.controlHasNativeSubmitSemantics(control) &&
       control.hasAttribute("formaction")
     ) {
       return control.formAction;
     }
     if (
-      (control instanceof HTMLButtonElement ||
-        control instanceof HTMLInputElement) &&
+      ((control.ownerDocument.defaultView?.HTMLButtonElement &&
+        control instanceof
+          control.ownerDocument.defaultView.HTMLButtonElement) ||
+        (control.ownerDocument.defaultView?.HTMLInputElement &&
+          control instanceof
+            control.ownerDocument.defaultView.HTMLInputElement)) &&
       control.form
     ) {
       return this.formDestinationIdentity(control.form);
@@ -254,31 +250,6 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
     return formScope.kind === PasswordFormScopeKind.Owned
       ? this.formDestinationIdentity(formScope.owner)
       : this.browser.location.href;
-  }
-
-  associatedAuthenticationForm(control: HTMLElement): PasswordFormScope {
-    if (
-      (control instanceof HTMLButtonElement ||
-        control instanceof HTMLInputElement) &&
-      control.form
-    ) {
-      return { kind: PasswordFormScopeKind.Owned, owner: control.form };
-    }
-    const owner = control.closest("form");
-    return owner instanceof HTMLFormElement
-      ? { kind: PasswordFormScopeKind.Owned, owner }
-      : { kind: PasswordFormScopeKind.Unowned };
-  }
-
-  countedSemanticSubmitControls(controls: SemanticSubmitControlList): number {
-    return Math.min(
-      controls.filter(
-        (control) =>
-          control.matches(semanticSubmitControlSelector) &&
-          !this.controlIsInert(control),
-      ).length,
-      MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
-    );
   }
 
   boundAuthenticationControlObservations<AuthenticationControlObservation>({
@@ -299,62 +270,12 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
     );
   }
 
-  private htmlEnumeratedSubmissionMethod(
-    token: string,
-  ): PageControlSubmissionMethod {
-    const normalized = token.toLowerCase();
-    if (normalized === "post") return PageControlSubmissionMethod.Post;
-    if (normalized === "dialog") return PageControlSubmissionMethod.Dialog;
-    return PageControlSubmissionMethod.Get;
-  }
-
-  private presentHtmlSubmissionMethod({
-    element,
-    name,
-  }: HtmlSubmissionMethodRequest): PageControlSubmissionMethod | false {
-    if (!element.hasAttribute(name)) return false;
-    const token = element.getAttribute(name);
-    return this.htmlEnumeratedSubmissionMethod(token ? token : "");
-  }
-
-  controlHasNativeSubmitSemantics(control: HTMLElement): boolean {
-    if (control instanceof HTMLButtonElement) {
-      return control.type !== "button" && control.type !== "reset";
-    }
-    return (
-      control instanceof HTMLInputElement &&
-      (control.type === "submit" || control.type === "image")
-    );
-  }
-
-  controlSubmissionMethod(control: HTMLElement): PageControlSubmissionMethod {
-    if (!this.controlHasNativeSubmitSemantics(control)) {
-      return PageControlSubmissionMethod.Absent;
-    }
-    const formmethodRequest: HtmlSubmissionMethodRequest = {
-      element: control,
-      name: "formmethod",
-    };
-    const formmethod = this.presentHtmlSubmissionMethod(formmethodRequest);
-    if (formmethod !== false) return formmethod;
-    const owner = this.associatedAuthenticationForm(control);
-    if (owner.kind !== PasswordFormScopeKind.Owned) {
-      return PageControlSubmissionMethod.Absent;
-    }
-    const methodRequest: HtmlSubmissionMethodRequest = {
-      element: owner.owner,
-      name: "method",
-    };
-    const method = this.presentHtmlSubmissionMethod(methodRequest);
-    return method === false ? PageControlSubmissionMethod.Get : method;
-  }
-
   controlMachineIdentity(control: HTMLElement): string {
-    if (
-      (control instanceof HTMLButtonElement ||
-        control instanceof HTMLInputElement) &&
-      control.form
-    ) {
+    const buttonElement = control.ownerDocument.defaultView?.HTMLButtonElement;
+    const inputElement = control.ownerDocument.defaultView?.HTMLInputElement;
+    const isButton = buttonElement && control instanceof buttonElement;
+    const isInput = inputElement && control instanceof inputElement;
+    if ((isButton || isInput) && control.form) {
       const continueControlRequest: AirbnbLoginModalContinueControlRequest = {
         form: control.form,
         control,
@@ -364,9 +285,7 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
       }
     }
     const namedValue =
-      (control instanceof HTMLButtonElement ||
-        control instanceof HTMLInputElement) &&
-      (control.name || control.value)
+      (isButton || isInput) && (control.name || control.value)
         ? `${control.name}=${control.value}`
         : "";
     return [
@@ -379,6 +298,7 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
   }
 
   controlLabel(control: HTMLElement): string {
+    const inputElement = control.ownerDocument.defaultView?.HTMLInputElement;
     const labelledBy = ((v) => (v ? v : ""))(
       control.getAttribute("aria-labelledby"),
     )
@@ -396,7 +316,7 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
           ((v) => (v ? v : ""))(control.getAttribute("aria-label")),
           ((v) => (v ? v : ""))(control.getAttribute("title")),
           ((v) => (v ? v : ""))(control.getAttribute("alt")),
-          control instanceof HTMLInputElement
+          inputElement && control instanceof inputElement
             ? control.value || control.getAttribute("alt") || "submit"
             : "",
           labelledBy,
@@ -405,158 +325,6 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
           .filter(Boolean),
       ),
     ].join(" ");
-  }
-
-  formSubmissionMethod(form: HTMLFormElement): PageControlSubmissionMethod {
-    const methodRequest: HtmlSubmissionMethodRequest = {
-      element: form,
-      name: "method",
-    };
-    const method = this.presentHtmlSubmissionMethod(methodRequest);
-    return method === false ? PageControlSubmissionMethod.Get : method;
-  }
-
-  formUsesGetSubmission(form: HTMLFormElement): boolean {
-    return this.formSubmissionMethod(form) === PageControlSubmissionMethod.Get;
-  }
-
-  submissionMethodBlocksCredentialDisclosure(
-    method: PageControlSubmissionMethod,
-  ): boolean {
-    return (
-      method === PageControlSubmissionMethod.Get ||
-      method === PageControlSubmissionMethod.Dialog
-    );
-  }
-
-  formBlocksCredentialDisclosure(form: HTMLFormElement): boolean {
-    return this.submissionMethodBlocksCredentialDisclosure(
-      this.formSubmissionMethod(form),
-    );
-  }
-
-  private controlIsNativelyDisabledOrInert(control: HTMLElement): boolean {
-    if (
-      ((control instanceof HTMLButtonElement ||
-        control instanceof HTMLInputElement) &&
-        control.disabled) ||
-      this.isDisabledByAncestorFieldset(control)
-    ) {
-      return true;
-    }
-    let element: HTMLElement = control;
-    for (;;) {
-      if (element.hasAttribute("inert") || element.inert) return true;
-      const parent = element.parentElement;
-      if (!(parent instanceof HTMLElement)) return false;
-      element = parent;
-    }
-  }
-
-  formHasGetMethodSubmitter(form: HTMLFormElement): boolean {
-    return Array.from(
-      form.ownerDocument.querySelectorAll<HTMLElement>(
-        semanticSubmitControlSelector,
-      ),
-    ).some((control) => {
-      if (this.controlIsNativelyDisabledOrInert(control)) return false;
-      const owner = this.associatedAuthenticationForm(control);
-      return (
-        owner.kind === PasswordFormScopeKind.Owned &&
-        owner.owner === form &&
-        this.controlSubmissionMethod(control) ===
-          PageControlSubmissionMethod.Get
-      );
-    });
-  }
-
-  formHasPostMethodSubmitter(form: HTMLFormElement): boolean {
-    return Array.from(
-      form.ownerDocument.querySelectorAll<HTMLElement>(
-        semanticSubmitControlSelector,
-      ),
-    ).some((control) => {
-      if (this.controlIsInert(control)) return false;
-      const owner = this.associatedAuthenticationForm(control);
-      return (
-        owner.kind === PasswordFormScopeKind.Owned &&
-        owner.owner === form &&
-        this.controlSubmissionMethod(control) ===
-          PageControlSubmissionMethod.Post
-      );
-    });
-  }
-
-  formHasDialogSubmitter(form: HTMLFormElement): boolean {
-    return Array.from(
-      form.ownerDocument.querySelectorAll<HTMLElement>(
-        authenticationAdvanceControlSelector,
-      ),
-    ).some((control) => {
-      if (this.controlIsInert(control)) return false;
-      const owner = this.associatedAuthenticationForm(control);
-      return (
-        owner.kind === PasswordFormScopeKind.Owned &&
-        owner.owner === form &&
-        this.controlSubmissionMethod(control) ===
-          PageControlSubmissionMethod.Dialog
-      );
-    });
-  }
-
-  selectedSubmitterBlocksCredentialDisclosure({
-    form,
-    selectedSubmitter,
-    scriptedGetPasswordDisclosureApproved,
-  }: SelectedSubmitterDisclosureRequest): boolean {
-    if (
-      scriptedGetPasswordDisclosureApproved &&
-      selectedSubmitter &&
-      this.controlHasNativeSubmitSemantics(selectedSubmitter) &&
-      this.controlSubmissionMethod(selectedSubmitter) ===
-        PageControlSubmissionMethod.Get
-    ) {
-      return false;
-    }
-    if (selectedSubmitter) {
-      if (this.controlHasNativeSubmitSemantics(selectedSubmitter)) {
-        const formmethodRequest: HtmlSubmissionMethodRequest = {
-          element: selectedSubmitter,
-          name: "formmethod",
-        };
-        const formmethod = this.presentHtmlSubmissionMethod(formmethodRequest);
-        if (formmethod !== false) {
-          return (
-            this.submissionMethodBlocksCredentialDisclosure(formmethod) ||
-            this.formHasGetMethodSubmitter(form)
-          );
-        }
-        return (
-          this.formBlocksCredentialDisclosure(form) ||
-          this.formHasGetMethodSubmitter(form)
-        );
-      }
-      return (
-        this.formHasGetMethodSubmitter(form) ||
-        this.formBlocksCredentialDisclosure(form)
-      );
-    }
-    if (
-      this.formHasSemanticSubmitter(form) &&
-      this.formUsesGetSubmission(form) &&
-      !this.formHasPostMethodSubmitter(form)
-    ) {
-      return true;
-    }
-    if (
-      !this.formHasSemanticSubmitter(form) &&
-      this.formBlocksCredentialDisclosure(form)
-    ) {
-      return true;
-    }
-    return (
-      this.formHasGetMethodSubmitter(form) || this.formHasDialogSubmitter(form)
-    );
   }
 
   canRequestImplicitAuthenticationSubmit({
@@ -642,10 +410,12 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
     form,
     control,
   }: AuthenticationRouteDestinationRequest): string {
+    const buttonElement = control?.ownerDocument.defaultView?.HTMLButtonElement;
+    const inputElement = control?.ownerDocument.defaultView?.HTMLInputElement;
     if (
       control &&
-      (control instanceof HTMLButtonElement ||
-        control instanceof HTMLInputElement) &&
+      ((buttonElement && control instanceof buttonElement) ||
+        (inputElement && control instanceof inputElement)) &&
       this.controlHasNativeSubmitSemantics(control) &&
       control.hasAttribute("formaction")
     ) {
@@ -682,11 +452,18 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
     const sourceOrigin = control.ownerDocument.defaultView?.location.origin;
     if (!sourceOrigin) return false;
 
+    const elementConstructor =
+      query.kind === PasswordFormQueryKind.Scoped &&
+      query.formScope.kind === PasswordFormScopeKind.Unowned &&
+      query.root.nodeType === 1
+        ? query.root.ownerDocument?.defaultView?.Element
+        : false;
     const identityContainer: Element | false = form
       ? form
       : query.kind === PasswordFormQueryKind.Scoped &&
           query.formScope.kind === PasswordFormScopeKind.Unowned &&
-          query.root instanceof Element
+          elementConstructor &&
+          query.root instanceof elementConstructor
         ? query.root
         : false;
     const formIdentity = [
@@ -815,26 +592,6 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
     return false;
   }
 
-  private formHasAriaDisabledSemanticSubmitter(form: HTMLFormElement): boolean {
-    return Array.from(
-      form.ownerDocument.querySelectorAll<HTMLElement>(
-        semanticSubmitControlSelector,
-      ),
-    ).some((control) => {
-      if (
-        !(control instanceof HTMLButtonElement) &&
-        !(control instanceof HTMLInputElement)
-      ) {
-        return false;
-      }
-      return (
-        control.form === form &&
-        (control.getAttribute("aria-disabled") === "true" ||
-          this.isDisabledByAncestorAria(control))
-      );
-    });
-  }
-
   formHasRustClassifiableAdvanceControl(form: HTMLFormElement): boolean {
     const formScope: PasswordFormScope = {
       kind: PasswordFormScopeKind.Owned,
@@ -917,33 +674,27 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
     field,
     control,
   }: UnownedLocalScopeRequest): boolean {
-    if (root instanceof Element) {
+    const elementConstructor = field.ownerDocument.defaultView?.Element;
+    if (root.nodeType === 1) {
+      if (!elementConstructor || !(root instanceof elementConstructor))
+        return false;
       return root.contains(control) && root.contains(field);
     }
-    if (!(root instanceof Document)) return false;
+    if (root.nodeType !== 9 || root !== field.ownerDocument) return false;
     const containerRequest: UnownedAuthContainerRequest = {
       field,
       root: field.ownerDocument,
     };
     const container =
       passwordFieldDiscovery.nearestUnownedAuthContainer(containerRequest);
-    return container instanceof Element && container.contains(control);
-  }
-
-  formHasSemanticSubmitter(form: HTMLFormElement): boolean {
-    return Array.from(
-      form.ownerDocument.querySelectorAll<HTMLElement>(
-        semanticSubmitControlSelector,
-      ),
-    ).some((control) => {
-      if (
-        !(control instanceof HTMLButtonElement) &&
-        !(control instanceof HTMLInputElement)
-      ) {
-        return false;
-      }
-      return control.form === form && !this.controlIsInert(control);
-    });
+    const containerDocument = field.ownerDocument;
+    const containerElement = containerDocument?.defaultView?.Element;
+    return Boolean(
+      containerElement &&
+      container instanceof containerElement &&
+      container.contains(control) &&
+      field.ownerDocument.contains(container),
+    );
   }
 
   observeSubmit({
@@ -980,10 +731,15 @@ class AuthenticationSubmissionControls extends AuthenticationControlSurface {
       // must never replay a native GET that would serialize a password.
       allowNativeReplay: !(
         this.formSubmissionMethod(form) === PageControlSubmissionMethod.Get &&
-        Array.from(form.elements).some(
-          (element) =>
-            element instanceof HTMLInputElement && element.type === "password",
-        )
+        Array.from(form.elements).some((element) => {
+          const inputElement =
+            element.ownerDocument.defaultView?.HTMLInputElement;
+          return (
+            inputElement &&
+            element instanceof inputElement &&
+            element.type === "password"
+          );
+        })
       ),
     };
     return authenticationSubmissionBridge.observeAuthenticationSubmission(

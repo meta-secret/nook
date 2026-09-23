@@ -98,6 +98,13 @@
     return field.type ? `input[type="${CSS.escape(field.type)}"]` : 'input'
   }
 
+  function preservedFieldValue(field: SiteFixtureField): string {
+    if (field.type === 'password' || field.autocomplete === 'one-time-code') {
+      return ''
+    }
+    return previousUsername
+  }
+
   function readUsername(form: HTMLFormElement): string {
     if (renderState.kind === DetectionFixtureRenderKind.Missing) return ''
     const identity = renderState.step.fields.find(
@@ -204,6 +211,7 @@
         name={field.name}
         id={field.id}
         autocomplete={field.autocomplete}
+        value={preservedFieldValue(field)}
         inputmode={field.inputmode}
         placeholder={field.placeholder}
         aria-label={field['aria-label']}
@@ -219,6 +227,7 @@
       name={field.name}
       id={field.id}
       autocomplete={field.autocomplete}
+      value={preservedFieldValue(field)}
       inputmode={field.inputmode}
       placeholder={field.placeholder}
       aria-label={field['aria-label']}

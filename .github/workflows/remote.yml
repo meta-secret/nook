@@ -475,11 +475,11 @@ jobs:
       E2E_GREP: ${{ inputs.e2e_grep }}
     steps:
       - name: Run selected task without a nested container runtime
-        working-directory: /meta-secret/nook
         env:
           REMOTE_CONTAINER_TASK: ${{ inputs.tasks || inputs.task }}
         run: |
           set -euo pipefail
+          cd /meta-secret/nook
           case "$REMOTE_CONTAINER_TASK" in
             web:build) task _web:build ;;
             web:e2e) task _ci:main:web:e2e-only ;;
@@ -492,8 +492,9 @@ jobs:
 
       - name: Collect Playwright diagnostics
         if: always()
-        working-directory: /meta-secret/nook
         run: |
+          set -euo pipefail
+          cd /meta-secret/nook
           artifact_dir="$GITHUB_WORKSPACE/e2e-artifacts"
           mkdir -p "$artifact_dir/web" "$artifact_dir/extension"
           cp -R nook-app/nook-web/nook-web-app/test-results/. "$artifact_dir/web/" 2>/dev/null || true
@@ -529,11 +530,11 @@ jobs:
       CI: "1"
     steps:
       - name: Run complete E2E suite member
-        working-directory: /meta-secret/nook
         env:
           E2E_SUITE: ${{ matrix.suite }}
         run: |
           set -euo pipefail
+          cd /meta-secret/nook
           case "$E2E_SUITE" in
             stable) task _web:test:e2e:stable ;;
             unstable) task _web:test:e2e:unstable ;;
@@ -544,8 +545,9 @@ jobs:
 
       - name: Collect Playwright diagnostics
         if: always()
-        working-directory: /meta-secret/nook
         run: |
+          set -euo pipefail
+          cd /meta-secret/nook
           artifact_dir="$GITHUB_WORKSPACE/e2e-artifacts"
           mkdir -p "$artifact_dir/web" "$artifact_dir/extension"
           cp -R nook-app/nook-web/nook-web-app/test-results/. "$artifact_dir/web/" 2>/dev/null || true

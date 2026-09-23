@@ -8,6 +8,7 @@ import {
   authenticationFactObserverOptions,
   authenticationFactObserver,
 } from '../../../nook-web-shared/src/extension/authentication-fact-attributes'
+import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import { AuthenticationWorkflowSnapshotResponseKind } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { CompanionWasmSessionMessageType } from '../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 import { AuthenticationWorkflowClassification } from '../../../nook-web-shared/src/extension/password-form-classified-observations'
@@ -67,6 +68,10 @@ import {
   scanState,
   widgetState,
 } from './autofill/state'
+import {
+  queueSubmitCaptureUntilCompanionWasmReady,
+  runAfterCompanionWasmReady,
+} from './autofill/companion-wasm-gate'
 import { authenticationWidgetRenderer } from './autofill/widget-rendering'
 import { authenticationWidgetPosition } from './autofill/widget-position'
 import { workflowUi } from './autofill/workflow-ui'
@@ -258,14 +263,9 @@ class AuthenticationScanRenderLifecycle {
         removeScannedWidget()
         return AuthenticationScanOutcome.Removed
       }
-      const enrollmentCapability =
-        await authenticationRuntimeTransport.sendCompanionWasmRuntimeMessage({
-          type: CompanionWasmSessionMessageType.AuthenticationWorkflowPilotPresentationCapability,
-          payload: { snapshot: enrollmentMatch.snapshot },
-        })
       if (
-        enrollmentCapability.kind === RuntimeMessageDeliveryKind.Unavailable ||
-        enrollmentCapability.response !== 'propose-action'
+        !('pilotCapability' in enrollmentMatch) ||
+        enrollmentMatch.pilotCapability !== 'propose-action'
       ) {
         removeScannedWidget()
         return AuthenticationScanOutcome.Removed
@@ -629,60 +629,71 @@ scanState.schedule = authenticationScanRenderLifecycle.schedule.bind(
   authenticationScanRenderLifecycle,
 )
 
-void (async () => {
-  if (await simpleVaultRuntime.isRuntimeNookVaultAppUrl(location.href)) {
-    return
-  }
-  void authenticationScanRenderLifecycle.scanAndRender()
-  document.addEventListener(
-    'submit',
-    loginSaveInteraction.captureSubmittedLogin.bind(loginSaveInteraction),
-    true,
-  )
-  document.addEventListener(
-    'click',
-    (event) => {
-      authenticationScanRenderLifecycle.handleAuthenticationControlActivation(
-        event,
-      )
-      if (!namecheapLoginDrawerActivation.observe(event)) return
-      authenticationScanRenderLifecycle.schedule()
-    },
-    true,
-  )
+const captureSubmittedLogin =
+  loginSaveInteraction.captureSubmittedLogin.bind(loginSaveInteraction)
+const queuedSubmitCapture = queueSubmitCaptureUntilCompanionWasmReady(
+  captureSubmittedLogin,
+)
 
-  const observer = new MutationObserver(
-    authenticationScanRenderLifecycle.handleMutations.bind(
-      authenticationScanRenderLifecycle,
-    ),
-  )
-  const observerOptions: MutationObserverInit = {
-    ...authenticationFactObserverOptions,
-    attributeFilter: [...AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER],
-  }
-  observer.observe(document.documentElement, observerOptions)
-  authenticationFactObserver.observeAuthenticationSubmitValueAssignments(
-    authenticationScanRenderLifecycle.schedule.bind(
-      authenticationScanRenderLifecycle,
-    ),
-  )
-  const handleWindowMessage = (
-    event: MessageEvent<AuthenticationSourceMessage>,
-  ) => {
-    if (
-      !authenticationRouteBrowser.isAuthenticationRouteHistoryMessage(event) &&
-      !authenticationFactObserver.isAuthenticationSubmitValueMessage(event)
-    ) {
+document.addEventListener('submit', queuedSubmitCapture.capture, true)
+
+void runAfterCompanionWasmReady({
+  companionWasmReady,
+  start: async () => {
+    if (await simpleVaultRuntime.isRuntimeNookVaultAppUrl(location.href)) {
+      document.removeEventListener('submit', queuedSubmitCapture.capture, true)
+      queuedSubmitCapture.discard()
       return
     }
-    authenticationScanRenderLifecycle.schedule()
-  }
-  window.addEventListener('message', handleWindowMessage)
-  for (const eventName of AUTHENTICATION_VIEWPORT_EVENTS) {
-    const options: AddEventListenerOptions = {
-      capture: eventName === 'scroll',
-      passive: true,
+    queuedSubmitCapture.enable()
+    document.addEventListener(
+      'click',
+      (event) => {
+        authenticationScanRenderLifecycle.handleAuthenticationControlActivation(
+          event,
+        )
+        if (!namecheapLoginDrawerActivation.observe(event)) return
+        authenticationScanRenderLifecycle.schedule()
+      },
+      true,
+    )
+    void authenticationScanRenderLifecycle.scanAndRender()
+
+    const observer = new MutationObserver(
+      authenticationScanRenderLifecycle.handleMutations.bind(
+        authenticationScanRenderLifecycle,
+      ),
+    )
+    const observerOptions: MutationObserverInit = {
+      ...authenticationFactObserverOptions,
+      attributeFilter: [...AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER],
     }
-    window.addEventListener(eventName, handleViewportChange, options)
-  }
-})()
+    observer.observe(document.documentElement, observerOptions)
+    authenticationFactObserver.observeAuthenticationSubmitValueAssignments(
+      authenticationScanRenderLifecycle.schedule.bind(
+        authenticationScanRenderLifecycle,
+      ),
+    )
+    const handleWindowMessage = (
+      event: MessageEvent<AuthenticationSourceMessage>,
+    ) => {
+      if (
+        !authenticationRouteBrowser.isAuthenticationRouteHistoryMessage(
+          event,
+        ) &&
+        !authenticationFactObserver.isAuthenticationSubmitValueMessage(event)
+      ) {
+        return
+      }
+      authenticationScanRenderLifecycle.schedule()
+    }
+    window.addEventListener('message', handleWindowMessage)
+    for (const eventName of AUTHENTICATION_VIEWPORT_EVENTS) {
+      const options: AddEventListenerOptions = {
+        capture: eventName === 'scroll',
+        passive: true,
+      }
+      window.addEventListener(eventName, handleViewportChange, options)
+    }
+  },
+})

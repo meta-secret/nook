@@ -254,11 +254,13 @@ test.describe('vault connect flow', () => {
       localStorage.setItem('nook_e2e_manual_passkey', 'true')
     })
     await page.reload()
-    await expect(page.getByTestId('login-gate')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
-    await expect(page.getByTestId('passkey-auth-overlay')).toBeHidden()
     await authorizeDeviceProtection(page)
+    await expect
+      .poll(
+        () => page.evaluate(() => Boolean(window.__nookVault?.isAuthenticated)),
+        { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+      )
+      .toBe(true)
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })

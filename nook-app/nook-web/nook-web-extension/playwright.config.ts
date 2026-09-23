@@ -2,6 +2,9 @@ import { defineConfig } from '@playwright/test'
 
 const isCi = !!process.env.CI
 const isHostedSmoke = process.env.NOOK_EXTENSION_E2E_HOSTED === 'true'
+const chromiumExecutablePath = ((v) => (v ? v : ''))(
+  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim(),
+)
 
 export default defineConfig({
   testDir: 'e2e',
@@ -23,6 +26,11 @@ export default defineConfig({
   use: {
     actionTimeout: 5_000,
     trace: 'on-first-retry',
+    launchOptions: {
+      ...(chromiumExecutablePath
+        ? { executablePath: chromiumExecutablePath }
+        : {}),
+    },
   },
   projects: [
     {

@@ -6,6 +6,7 @@ import {
 import {
   FormSubmissionResult,
   PasswordFormQueryKind,
+  PasswordFormScopeKind,
   passwordFormCredentialInteraction,
   passwordFormInteraction,
 } from '../../../../nook-web-shared/src/extension/password-forms'
@@ -46,6 +47,46 @@ afterEach(() => {
 })
 
 describe('credential submission observation facts', () => {
+  test('accepts a locally scoped advance control from a foreign document realm', () => {
+    const frame = document.createElement('iframe')
+    document.body.append(frame)
+    const foreignWindow = frame.contentWindow
+    if (!foreignWindow) throw new Error('expected the foreign document realm')
+    const foreignDocument = foreignWindow.document
+    foreignDocument.body.innerHTML = `
+      <section>
+        <input autocomplete="username" />
+        <button type="button">Continue</button>
+      </section>
+    `
+    const root = foreignDocument.querySelector('section')
+    const usernameField = foreignDocument.querySelector<HTMLInputElement>(
+      'input[autocomplete="username"]',
+    )
+    const control = foreignDocument.querySelector<HTMLButtonElement>('button')
+    if (!root || !usernameField || !control) {
+      throw new Error('expected a foreign-realm authentication surface')
+    }
+    let clickCount = 0
+    control.addEventListener('click', () => {
+      clickCount += 1
+    })
+    const query: Parameters<
+      typeof authenticationSubmissionControls.clickAdvanceControl
+    >[0] = {
+      kind: PasswordFormQueryKind.Scoped,
+      root,
+      formScope: { kind: PasswordFormScopeKind.Unowned },
+      usernameField,
+      advanceControlIsSafe: () => true,
+    }
+
+    expect(authenticationSubmissionControls.clickAdvanceControl(query)).toBe(
+      true,
+    )
+    expect(clickCount).toBe(1)
+  })
+
   test('transports submitter and form destination authorship without conflating omission', () => {
     document.body.innerHTML = `
       <form method="post" id="login" action="/auth/login">

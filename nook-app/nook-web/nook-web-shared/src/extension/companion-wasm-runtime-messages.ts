@@ -57,6 +57,12 @@ export enum CompanionWasmContentResponseKind {
   LoginSavePending = "login-save-pending",
 }
 
+export enum AuthenticationEnrollmentWorkflowMatchResponseKind {
+  NoMatch = "no-match",
+  Rejected = "rejected",
+  Matched = "matched",
+}
+
 export type CompanionWasmLoginContextObservation = {
   readonly formIdentity: string;
   readonly ancestorIdentities: readonly string[];
@@ -202,6 +208,7 @@ export type CompanionWasmSessionResponse =
   | PasswordWorkflowActivityPresentation
   | AuthenticationObservationBindingToken
   | AuthenticationWorkflowMatch
+  | AuthenticationEnrollmentWorkflowMatchResponse
   | AuthenticationRecoveryCopyEvidence
   | AuthenticationWorkflowRoutingResponse
   | LoginPickerOpenResponse
@@ -240,6 +247,17 @@ export type CompanionWasmSessionResponse =
         readonly value: string;
         readonly matches: boolean;
       }[];
+    };
+
+export type AuthenticationEnrollmentWorkflowMatchResponse =
+  | { readonly kind: AuthenticationEnrollmentWorkflowMatchResponseKind.NoMatch }
+  | {
+      readonly kind: AuthenticationEnrollmentWorkflowMatchResponseKind.Rejected;
+    }
+  | {
+      readonly kind: AuthenticationEnrollmentWorkflowMatchResponseKind.Matched;
+      readonly snapshot: AuthenticationWorkflowSnapshot;
+      readonly pilotCapability: AuthenticationPilotPresentationCapability;
     };
 
 export type CompanionWasmRuntimeMessage = CompanionWasmSessionMessage & {
