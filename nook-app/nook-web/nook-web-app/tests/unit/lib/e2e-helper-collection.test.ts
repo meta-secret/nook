@@ -126,6 +126,7 @@ describe('Playwright collection imports', () => {
   test('waits through the passkey overlay while login unlock hands off device authorization', () => {
     const gate = new DeviceProtectionPostUnlockGate({
       loginGateVisible: true,
+      vaultAuthenticated: false,
       overlayVisible: true,
       authorizeReady: false,
       unlockReady: false,
@@ -140,6 +141,7 @@ describe('Playwright collection imports', () => {
     expect(
       new DeviceProtectionPostUnlockGate({
         loginGateVisible: false,
+        vaultAuthenticated: false,
         overlayVisible: false,
         authorizeReady: false,
         unlockReady: false,
@@ -150,6 +152,7 @@ describe('Playwright collection imports', () => {
     expect(
       new DeviceProtectionPostUnlockGate({
         loginGateVisible: true,
+        vaultAuthenticated: false,
         overlayVisible: false,
         authorizeReady: true,
         unlockReady: false,
@@ -160,6 +163,7 @@ describe('Playwright collection imports', () => {
     expect(
       new DeviceProtectionPostUnlockGate({
         loginGateVisible: true,
+        vaultAuthenticated: false,
         overlayVisible: false,
         authorizeReady: false,
         unlockReady: true,
@@ -170,6 +174,7 @@ describe('Playwright collection imports', () => {
     expect(
       new DeviceProtectionPostUnlockGate({
         loginGateVisible: true,
+        vaultAuthenticated: false,
         overlayVisible: false,
         authorizeReady: false,
         unlockReady: false,
@@ -180,6 +185,7 @@ describe('Playwright collection imports', () => {
     expect(
       new DeviceProtectionPostUnlockGate({
         loginGateVisible: true,
+        vaultAuthenticated: false,
         overlayVisible: false,
         authorizeReady: false,
         unlockReady: false,
@@ -190,6 +196,7 @@ describe('Playwright collection imports', () => {
     expect(
       new DeviceProtectionPostUnlockGate({
         loginGateVisible: true,
+        vaultAuthenticated: false,
         overlayVisible: false,
         authorizeReady: false,
         unlockReady: true,
@@ -200,6 +207,7 @@ describe('Playwright collection imports', () => {
     expect(
       new DeviceProtectionPostUnlockGate({
         loginGateVisible: true,
+        vaultAuthenticated: false,
         overlayVisible: false,
         authorizeReady: false,
         unlockReady: false,
@@ -207,6 +215,20 @@ describe('Playwright collection imports', () => {
         errorVisible: false,
       }).state(),
     ).toBe(DeviceProtectionAuthorizationGateState.Waiting)
+  })
+
+  test('recognizes the current authenticated session despite a visible load error', () => {
+    const gate = new DeviceProtectionPostUnlockGate({
+      loginGateVisible: true,
+      vaultAuthenticated: true,
+      overlayVisible: false,
+      authorizeReady: false,
+      unlockReady: false,
+      pickerVisible: false,
+      errorVisible: true,
+    })
+
+    expect(gate.state()).toBe(DeviceProtectionAuthorizationGateState.Unlocked)
   })
 
   test('shares the canonical trace transport without loading WASM', () => {
