@@ -32,6 +32,24 @@ async function openOwnedCompanionPopup(
   return popupPage
 }
 
+async function waitForOwnedCompanionPopup(
+  request: OwnedCompanionPopupOpen,
+): Promise<Page> {
+  const popupUrl = `chrome-extension://${request.extensionId}/popup/index.html`
+  const existingPopup = request.context
+    .pages()
+    .find((page) => page.url().startsWith(popupUrl))
+  if (existingPopup) return existingPopup
+
+  const popupPage = await request.context.waitForEvent('page', {
+    timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+  })
+  await popupPage.waitForURL((url) => url.toString().startsWith(popupUrl), {
+    timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+  })
+  return popupPage
+}
+
 async function completeCompanionPopupUnlock(
   request: CompanionPopupUnlock,
 ): Promise<void> {
@@ -78,18 +96,45 @@ export async function unlockPairedVaultThroughCompanion(
   await expect(authenticatedShell.or(unlockButton)).toBeVisible({
     timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
   })
+  const authenticated = await authenticatedShell.isVisible()
   if (
-    companionUnlock === PairedVaultCompanionUnlockKind.Required ||
-    !(await authenticatedShell.isVisible())
+    companionUnlock === PairedVaultCompanionUnlockKind.Required &&
+    authenticated
   ) {
     await unlockExtensionThroughCompanion({ context, extensionId })
-  }
-
-  if (await unlockButton.isVisible()) {
+  } else if (!authenticated) {
     await unlockButton.click()
+    await expect(vaultPage.getByTestId('passkey-auth-overlay')).toHaveCount(0)
+
+    if (companionUnlock === PairedVaultCompanionUnlockKind.Optional) {
+      try {
+        await expect(authenticatedShell).toBeVisible({
+          timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+        })
+      } catch {
+        const companionPopup = await waitForOwnedCompanionPopup({
+          context,
+          extensionId,
+        })
+        try {
+          await completeCompanionPopupUnlock({ page: companionPopup })
+        } finally {
+          await companionPopup.close()
+        }
+      }
+    } else {
+      const companionPopup = await waitForOwnedCompanionPopup({
+        context,
+        extensionId,
+      })
+      try {
+        await completeCompanionPopupUnlock({ page: companionPopup })
+      } finally {
+        await companionPopup.close()
+      }
+    }
   }
 
-  await expect(vaultPage.getByTestId('passkey-auth-overlay')).toHaveCount(0)
   await expect(authenticatedShell).toBeVisible({
     timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
   })
