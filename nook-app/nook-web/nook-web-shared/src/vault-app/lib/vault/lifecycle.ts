@@ -5,6 +5,7 @@ import {
 } from "$lib/vault/locale";
 import type { OAuthFailure } from "$lib/auth/oauth-failure";
 import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
+import { isVaultOperationStale } from "$lib/runtime/vault-operation-stale";
 import { err as storageErr, ok as storageOk, type Result } from "neverthrow";
 import {
   VaultStorageFailure as StorageOperationFailure,
@@ -581,6 +582,7 @@ export class VaultInitializationActions {
         state.errorMsg = state.t(secretRefresh1.error.translationKey);
         return;
       }
+      if (isVaultOperationStale(secretRefresh1.value)) return;
       const unlocked = state.markVaultUnlocked();
       if (unlocked.isErr()) {
         state.errorMsg = state.t(unlocked.error.translationKey);

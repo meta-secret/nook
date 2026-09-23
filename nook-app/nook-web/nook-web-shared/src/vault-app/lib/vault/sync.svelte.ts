@@ -1,6 +1,9 @@
 import type { OAuthFailure } from "$lib/auth/oauth-failure";
 import { ProviderSyncOutcome } from "$lib/vault/provider-sync.svelte";
-import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
+import {
+  isLocalDataInvalidationFailure,
+  NativeVaultStorageFailure,
+} from "$lib/runtime/storage-failure";
 import { err as storageErr, ok as storageOk, type Result } from "neverthrow";
 import {
   VaultStorageFailure as StorageOperationFailure,
@@ -61,6 +64,11 @@ import { AdminAccordionSection } from "$lib/vault/state/ui.svelte";
 import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
 import { ExtensionSyncPublication } from "$lib/vault/sync-extension-bridge";
 import { ProviderSyncActions } from "$lib/vault/provider-sync.svelte";
+import {
+  isVaultOperationStale,
+  VaultOperationStale,
+  VaultOperationStaleKind,
+} from "$lib/runtime/vault-operation-stale";
 
 export { VaultSyncRuntimeActions } from "$lib/vault/sync-runtime";
 
@@ -602,7 +610,10 @@ export class VaultSyncActions {
   async stageStagedProviderSyncIssue({
     args,
   }: StagedProviderSyncIssueAssessment): Promise<
-    Result<StagedProviderConflictOutcome, StorageOperationFailure>
+    Result<
+      StagedProviderConflictOutcome | VaultOperationStale,
+      StorageOperationFailure
+    >
   > {
     const state = this.state;
     const activeVault = state.activeVault;
@@ -643,15 +654,16 @@ export class VaultSyncActions {
       }
       const restored = await state.enqueueStorage(async () => {
         const current = state.admitManager();
-        if (current.isErr()) return storageErr(current.error);
+        if (current.isErr())
+          return storageOk(
+            new VaultOperationStale(VaultOperationStaleKind.ContextReplaced),
+          );
         if (
           current.value !== manager.value ||
           state.activeVault !== activeVault
         )
-          return storageErr(
-            new StorageOperationFailure(
-              StorageOperationFailureKind.GenerationChanged,
-            ),
+          return storageOk(
+            new VaultOperationStale(VaultOperationStaleKind.ContextReplaced),
           );
         try {
           await current.value.restore_local_after_provider_assessment();
@@ -660,14 +672,30 @@ export class VaultSyncActions {
           return storageErr(new NativeVaultStorageFailure(failure));
         }
       });
-      if (restored.isErr()) return storageErr(restored.error);
+      if (restored.isErr()) {
+        if (isLocalDataInvalidationFailure(restored.error))
+          return storageErr(restored.error);
+        const current = state.admitManager();
+        if (
+          current.isErr() ||
+          current.value !== manager.value ||
+          state.activeVault !== activeVault
+        )
+          return storageOk(
+            new VaultOperationStale(VaultOperationStaleKind.ContextReplaced),
+          );
+        return storageErr(restored.error);
+      }
+      if (isVaultOperationStale(restored.value))
+        return storageOk(restored.value);
       const current = state.admitManager();
-      if (current.isErr()) return storageErr(current.error);
+      if (current.isErr())
+        return storageOk(
+          new VaultOperationStale(VaultOperationStaleKind.ContextReplaced),
+        );
       if (current.value !== manager.value || state.activeVault !== activeVault)
-        return storageErr(
-          new StorageOperationFailure(
-            StorageOperationFailureKind.GenerationChanged,
-          ),
+        return storageOk(
+          new VaultOperationStale(VaultOperationStaleKind.ContextReplaced),
         );
       let revision: NookProviderSyncRevision;
       try {
@@ -822,6 +850,8 @@ export class VaultSyncActions {
     ) {
       const tokens = await state.ensureOAuthTokensFresh();
       if (tokens.isErr()) return storageErr(tokens.error);
+      if (isVaultOperationStale(tokens.value))
+        return storageOk(ProviderSyncOutcome.Skipped);
     }
     state.isSyncing = true;
     try {
@@ -832,7 +862,7 @@ export class VaultSyncActions {
         if (!provider)
           return storageErr(
             new StorageOperationFailure(
-              StorageOperationFailureKind.GenerationChanged,
+              StorageOperationFailureKind.VaultSelectionFailed,
             ),
           );
         if (provider.type === "local-folder") {

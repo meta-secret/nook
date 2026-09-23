@@ -20,6 +20,10 @@ import {
   VaultStorageFailure,
   VaultStorageFailureKind,
 } from '$lib/runtime/storage-failure'
+import {
+  VaultOperationStale,
+  VaultOperationStaleKind,
+} from '$lib/runtime/vault-operation-stale'
 import type { ProviderActionsContext } from '$lib/vault/action-contexts'
 import { VaultState } from '$lib/vault.svelte'
 import { ProviderConnectionActions } from '$lib/vault/provider-connection'
@@ -139,6 +143,31 @@ afterEach(() => {
 })
 
 describe('local-folder provider connection', () => {
+  test('silently discards a staged conflict result from a replaced context', async () => {
+    const scenario = providerConnectionScenario(() =>
+      ok(ProviderSyncOutcome.Synced),
+    )
+    const assessmentFailure = new VaultStorageFailure(
+      VaultStorageFailureKind.OperationFailed,
+    )
+    vi.spyOn(scenario.state, 'stagedRemoteStorageArgs').mockReturnValue({
+      kind: StagedRemoteStorageKind.Available,
+      args: scenario.state.wasmStorageArgs(),
+    })
+    vi.spyOn(scenario.state, 'assessVaultConnectStatus').mockResolvedValue(
+      err(assessmentFailure),
+    )
+    vi.spyOn(scenario.state, 'stageStagedProviderSyncIssue').mockResolvedValue(
+      ok(new VaultOperationStale(VaultOperationStaleKind.ContextReplaced)),
+    )
+
+    await scenario.actions.connectAndSyncStagedProvider()
+
+    expect(scenario.state.errorMsg).toBe('')
+    expect(scenario.syncProviderById).not.toHaveBeenCalled()
+    expect(scenario.state.isVerifying).toBe(false)
+  })
+
   test('synchronizes a healthy folder exactly once without a preflush', async () => {
     const scenario = providerConnectionScenario(() =>
       ok(ProviderSyncOutcome.Synced),

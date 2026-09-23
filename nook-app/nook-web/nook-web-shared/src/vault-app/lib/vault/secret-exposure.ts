@@ -1,9 +1,13 @@
 import { err, ok, type Result } from "neverthrow";
 import {
+  isLocalDataInvalidationFailure,
   VaultStorageFailure,
-  VaultStorageFailureKind,
 } from "$lib/runtime/storage-failure";
 import type { NookSecretRecord } from "$lib/nook";
+import {
+  VaultOperationStale,
+  VaultOperationStaleKind,
+} from "$lib/runtime/vault-operation-stale";
 
 export type DecryptedSecrets = Record<string, NookSecretRecord>;
 export type SecretLoader = (
@@ -39,21 +43,24 @@ export class SecretExposure {
     this.state = { kind: SecretExposureKind.Active, records: { ...records } };
   }
   private active(): Result<
-    Extract<SecretExposureState, { kind: SecretExposureKind.Active }>,
+    | Extract<SecretExposureState, { kind: SecretExposureKind.Active }>
+    | VaultOperationStale,
     VaultStorageFailure
   > {
     return this.state.kind === SecretExposureKind.Active
       ? ok(this.state)
-      : err(new VaultStorageFailure(VaultStorageFailureKind.GenerationChanged));
+      : ok(new VaultOperationStale(VaultOperationStaleKind.OwnerReleased));
   }
   async toggle({
     id,
     load,
   }: SecretExposureToggle): Promise<
-    Result<DecryptedSecrets, VaultStorageFailure>
+    Result<DecryptedSecrets | VaultOperationStale, VaultStorageFailure>
   > {
     const admitted = this.active();
     if (admitted.isErr()) return err(admitted.error);
+    if (admitted.value instanceof VaultOperationStale)
+      return ok(admitted.value);
     const active = admitted.value;
     const current = active.records[id];
     if (current) {
@@ -61,12 +68,21 @@ export class SecretExposure {
       current.free();
     } else {
       const result = await load(id);
-      if (result.isErr()) return err(result.error);
+      if (result.isErr()) {
+        if (
+          this.state !== active &&
+          !isLocalDataInvalidationFailure(result.error)
+        )
+          return ok(
+            new VaultOperationStale(VaultOperationStaleKind.OwnerReleased),
+          );
+        return err(result.error);
+      }
       const loaded = result.value;
       if (this.state !== active) {
         loaded.free();
-        return err(
-          new VaultStorageFailure(VaultStorageFailureKind.GenerationChanged),
+        return ok(
+          new VaultOperationStale(VaultOperationStaleKind.OwnerReleased),
         );
       }
       const concurrent = active.records[id];
@@ -82,21 +98,54 @@ export class SecretExposure {
     id,
     load,
     action,
-  }: DecryptedSecretOperation<T>): Promise<Result<T, VaultStorageFailure>> {
+  }: DecryptedSecretOperation<T>): Promise<
+    Result<T | VaultOperationStale, VaultStorageFailure>
+  > {
     const admitted = this.active();
     if (admitted.isErr()) return err(admitted.error);
+    if (admitted.value instanceof VaultOperationStale)
+      return ok(admitted.value);
     const active = admitted.value;
     const cached = active.records[id];
-    if (cached) return action(cached);
+    if (cached) {
+      const result = await action(cached);
+      if (
+        this.state !== active &&
+        result.isErr() &&
+        !isLocalDataInvalidationFailure(result.error)
+      )
+        return ok(
+          new VaultOperationStale(VaultOperationStaleKind.OwnerReleased),
+        );
+      return result;
+    }
     const result = await load(id);
-    if (result.isErr()) return err(result.error);
+    if (result.isErr()) {
+      if (
+        this.state !== active &&
+        !isLocalDataInvalidationFailure(result.error)
+      )
+        return ok(
+          new VaultOperationStale(VaultOperationStaleKind.OwnerReleased),
+        );
+      return err(result.error);
+    }
     const record = result.value;
     try {
       if (this.state !== active)
-        return err(
-          new VaultStorageFailure(VaultStorageFailureKind.GenerationChanged),
+        return ok(
+          new VaultOperationStale(VaultOperationStaleKind.OwnerReleased),
         );
-      return await action(record);
+      const actionResult = await action(record);
+      if (
+        this.state !== active &&
+        actionResult.isErr() &&
+        !isLocalDataInvalidationFailure(actionResult.error)
+      )
+        return ok(
+          new VaultOperationStale(VaultOperationStaleKind.OwnerReleased),
+        );
+      return actionResult;
     } finally {
       record.free();
     }
@@ -105,19 +154,41 @@ export class SecretExposure {
     id,
     load,
     action,
-  }: DecryptedSecretOperation<T>): Promise<Result<T, VaultStorageFailure>> {
+  }: DecryptedSecretOperation<T>): Promise<
+    Result<T | VaultOperationStale, VaultStorageFailure>
+  > {
     const admitted = this.active();
     if (admitted.isErr()) return err(admitted.error);
+    if (admitted.value instanceof VaultOperationStale)
+      return ok(admitted.value);
     const active = admitted.value;
     const result = await load(id);
-    if (result.isErr()) return err(result.error);
+    if (result.isErr()) {
+      if (
+        this.state !== active &&
+        !isLocalDataInvalidationFailure(result.error)
+      )
+        return ok(
+          new VaultOperationStale(VaultOperationStaleKind.OwnerReleased),
+        );
+      return err(result.error);
+    }
     const record = result.value;
     try {
       if (this.state !== active)
-        return err(
-          new VaultStorageFailure(VaultStorageFailureKind.GenerationChanged),
+        return ok(
+          new VaultOperationStale(VaultOperationStaleKind.OwnerReleased),
         );
-      return await action(record);
+      const actionResult = await action(record);
+      if (
+        this.state !== active &&
+        actionResult.isErr() &&
+        !isLocalDataInvalidationFailure(actionResult.error)
+      )
+        return ok(
+          new VaultOperationStale(VaultOperationStaleKind.OwnerReleased),
+        );
+      return actionResult;
     } finally {
       record.free();
     }

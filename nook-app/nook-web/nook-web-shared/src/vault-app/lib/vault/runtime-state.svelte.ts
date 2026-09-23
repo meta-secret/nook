@@ -6,6 +6,7 @@ import {
   VaultStorageFailureKind,
 } from "$lib/runtime/storage-failure";
 import type { OAuthFailure } from "$lib/auth/oauth-failure";
+import type { VaultOperationStale } from "$lib/runtime/vault-operation-stale";
 import type { NookStorageConnectArgs } from "$app-wasm";
 import {
   DeviceProtectionStatus,
@@ -274,7 +275,10 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
   }
 
   async ensureOAuthTokensFresh(): Promise<
-    Result<OAuthTokenFreshnessOutcome, OAuthFailure | VaultStorageFailure>
+    Result<
+      OAuthTokenFreshnessOutcome | VaultOperationStale,
+      OAuthFailure | VaultStorageFailure
+    >
   > {
     return new oauthActions.VaultOAuthActions(
       this.completeVaultState(),

@@ -1,4 +1,5 @@
 import { ProviderSyncActions } from "$lib/vault/provider-sync.svelte";
+import { isVaultOperationStale } from "$lib/runtime/vault-operation-stale";
 import {
   NativeVaultStorageFailure,
   type VaultStorageFailure,
@@ -92,6 +93,7 @@ export class VaultConnectionActions {
         state.errorMsg = state.t(refreshedTokens.error.translationKey);
         return;
       }
+      if (isVaultOperationStale(refreshedTokens.value)) return;
 
       if (
         !state.isAuthenticated &&
@@ -288,6 +290,7 @@ export class VaultConnectionActions {
         state.errorMsg = state.t(secretRefresh1.error.translationKey);
         return;
       }
+      if (isVaultOperationStale(secretRefresh1.value)) return;
       // Load sync providers before unlocking the UI. Otherwise a fast local
       // edit (especially delete, which used to fire-and-forget fan-out) can run
       // while `syncProviders` is still empty and never push the event remotely.

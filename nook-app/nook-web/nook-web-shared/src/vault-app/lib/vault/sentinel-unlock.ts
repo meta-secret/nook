@@ -1,4 +1,5 @@
 import type { OAuthFailure } from "$lib/auth/oauth-failure";
+import { isVaultOperationStale } from "$lib/runtime/vault-operation-stale";
 import type { SentinelActionResult } from "./sentinel-genesis";
 import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
 import { err as storageErr, ok as storageOk, type Result } from "neverthrow";
@@ -478,6 +479,7 @@ export class SentinelUnlockActions {
       if (secretRefresh1.isErr()) {
         return this.restoreFinalizationFailure(secretRefresh1.error);
       }
+      if (isVaultOperationStale(secretRefresh1.value)) return;
       state.sentinelCeremonyPrompt = false;
       state.sentinelUnlockRequest = "";
       const replaceUnlockSessionArgs3: Parameters<

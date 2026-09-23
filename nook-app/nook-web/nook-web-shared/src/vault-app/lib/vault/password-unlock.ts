@@ -1,6 +1,7 @@
 import { VaultType } from "$lib/vault/architecture-model";
 import type { Result } from "neverthrow";
 import type { OAuthFailure } from "$lib/auth/oauth-failure";
+import { isVaultOperationStale } from "$lib/runtime/vault-operation-stale";
 export enum PasswordOperationOutcome {
   Added = "added",
   Updated = "updated",
@@ -278,6 +279,7 @@ export class VaultPasswordActions {
         state.errorMsg = state.t(refreshedTokens.error.translationKey);
         return;
       }
+      if (isVaultOperationStale(refreshedTokens.value)) return;
     }
     if (!entryId.trim()) {
       state.errorMsg = state.t(I18N_KEYS.ErrorsVaultPasswordRequired);

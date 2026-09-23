@@ -6,6 +6,7 @@
     VaultStorageFailure,
     VaultStorageFailureKind,
   } from "$lib/runtime/storage-failure";
+  import { VaultOperationStale } from "$lib/runtime/vault-operation-stale";
   type SecretFieldCopy = {
     readonly text: string;
     readonly id: string;
@@ -281,10 +282,7 @@
         requestedOffset: 0,
       };
       void vault.loadSecretPage(pageRequest).then((result) => {
-        if (
-          result.isErr() &&
-          result.error.kind !== VaultStorageFailureKind.GenerationChanged
-        )
+        if (result.isErr())
           vault.errorMsg = vault.t(result.error.translationKey);
       });
       return;
@@ -299,10 +297,7 @@
       requestedOffset: 0,
     };
     void vault.loadSecretPage(pageRequest).then((result) => {
-      if (
-        result.isErr() &&
-        result.error.kind !== VaultStorageFailureKind.GenerationChanged
-      )
+      if (result.isErr())
         vault.errorMsg = vault.t(result.error.translationKey);
     });
   }
@@ -377,10 +372,7 @@
         requestedOffset: 0,
       };
       void vault.loadSecretPage(pageRequest).then((result) => {
-        if (
-          result.isErr() &&
-          result.error.kind !== VaultStorageFailureKind.GenerationChanged
-        )
+        if (result.isErr())
           vault.errorMsg = vault.t(result.error.translationKey);
       });
     }, 200);
@@ -452,6 +444,7 @@
       vault.errorMsg = vault.t(toggled.error.translationKey);
       return;
     }
+    if (toggled.value instanceof VaultOperationStale) return;
     decryptedSecrets = toggled.value;
     if (revealing) {
       expandedSecrets = { ...expandedSecrets, [id]: true };
@@ -810,11 +803,7 @@
                     ),
                   };
                   void vault.loadSecretPage(pageRequest).then((result) => {
-                    if (
-                      result.isErr() &&
-                      result.error.kind !==
-                        VaultStorageFailureKind.GenerationChanged
-                    )
+                    if (result.isErr())
                       vault.errorMsg = vault.t(result.error.translationKey);
                   });
                 }}
@@ -849,11 +838,7 @@
                       vault.secretPageOffset + vault.secretPageSize,
                   };
                   void vault.loadSecretPage(pageRequest).then((result) => {
-                    if (
-                      result.isErr() &&
-                      result.error.kind !==
-                        VaultStorageFailureKind.GenerationChanged
-                    )
+                    if (result.isErr())
                       vault.errorMsg = vault.t(result.error.translationKey);
                   });
                 }}

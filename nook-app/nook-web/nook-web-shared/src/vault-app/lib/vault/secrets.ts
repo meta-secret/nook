@@ -26,6 +26,10 @@ import type {
   PasswordEntriesRefreshSnapshot,
   SecretPageRefreshSnapshot,
 } from "$lib/vault/action-contexts";
+import {
+  VaultOperationStale,
+  VaultOperationStaleKind,
+} from "$lib/runtime/vault-operation-stale";
 
 export { VaultConnectionActions } from "$lib/vault/connection";
 
@@ -556,6 +560,12 @@ export class VaultSecretActions {
     if (state.storageMode !== "local") {
       const refreshed = await state.ensureOAuthTokensFresh();
       if (refreshed.isErr()) return storageErr(refreshed.error);
+      if (refreshed.value instanceof VaultOperationStale) {
+        const snapshot: PasswordEntriesRefreshSnapshot = {
+          entries: state.passwordEntries,
+        };
+        return storageOk(snapshot);
+      }
     }
     const entries = await state.enqueueStorage(async () => {
       const manager = state.admitManager();
@@ -609,14 +619,28 @@ export class VaultSecretActions {
       query: state.secretQuery,
       requestedOffset: state.secretPageRequestOffset,
     };
-    return this.loadSecretPage(loadSecretPageArgs2);
+    const refreshed = await this.loadSecretPage(loadSecretPageArgs2);
+    if (refreshed.isErr()) return refreshed;
+    if (refreshed.value instanceof VaultOperationStale) {
+      const snapshot: SecretPageRefreshSnapshot = {
+        displayedSecretCount: state.secrets.length,
+        totalSecretCount: state.secretTotal,
+        pageOffset: state.secretPageOffset,
+        query: state.secretQuery,
+      };
+      return storageOk(snapshot);
+    }
+    return refreshed;
   }
 
   async loadSecretPage({
     query,
     requestedOffset,
   }: SecretPageRequest): Promise<
-    Result<SecretPageRefreshSnapshot, StorageOperationFailure>
+    Result<
+      SecretPageRefreshSnapshot | VaultOperationStale,
+      StorageOperationFailure
+    >
   > {
     const state = this.state;
     if (!state.hasManager)
@@ -650,9 +674,11 @@ export class VaultSecretActions {
       }
     });
     if (page.isErr()) {
-      if (generation === state.secretPageGeneration) {
-        state.errorMsg = state.t(page.error.translationKey);
-      }
+      if (generation !== state.secretPageGeneration)
+        return storageOk(
+          new VaultOperationStale(VaultOperationStaleKind.RequestSuperseded),
+        );
+      state.errorMsg = state.t(page.error.translationKey);
       return storageErr(page.error);
     }
     let records = page.value.take_items();
@@ -661,10 +687,8 @@ export class VaultSecretActions {
     page.value.free();
     if (generation !== state.secretPageGeneration) {
       this.freeSecretRecords(records);
-      return storageErr(
-        new StorageOperationFailure(
-          StorageOperationFailureKind.GenerationChanged,
-        ),
+      return storageOk(
+        new VaultOperationStale(VaultOperationStaleKind.RequestSuperseded),
       );
     }
 
@@ -692,9 +716,11 @@ export class VaultSecretActions {
       });
       if (lastPage.isErr()) {
         this.freeSecretRecords(records);
-        if (generation === state.secretPageGeneration) {
-          state.errorMsg = state.t(lastPage.error.translationKey);
-        }
+        if (generation !== state.secretPageGeneration)
+          return storageOk(
+            new VaultOperationStale(VaultOperationStaleKind.RequestSuperseded),
+          );
+        state.errorMsg = state.t(lastPage.error.translationKey);
         return storageErr(lastPage.error);
       }
       records = lastPage.value.take_items();
@@ -703,10 +729,8 @@ export class VaultSecretActions {
       lastPage.value.free();
       if (generation !== state.secretPageGeneration) {
         this.freeSecretRecords(records);
-        return storageErr(
-          new StorageOperationFailure(
-            StorageOperationFailureKind.GenerationChanged,
-          ),
+        return storageOk(
+          new VaultOperationStale(VaultOperationStaleKind.RequestSuperseded),
         );
       }
     }

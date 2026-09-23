@@ -1,14 +1,17 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { err, type Result } from 'neverthrow'
+import { err, ok, type Result } from 'neverthrow'
 import {
   BrowserDataCleanupFailure,
   browserDataLifecycle,
+  type LocalDataStorageOperation,
 } from '$lib/runtime/browser-data'
 import {
   VaultStorageFailure,
   VaultStorageFailureKind,
 } from '$lib/runtime/storage-failure'
 import { browserLogRuntime } from '$lib/runtime/log'
+import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
+import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
 function messageEvent(event: MessageEventInit): MessageEvent {
   return new MessageEvent('message', event)
@@ -20,6 +23,72 @@ afterEach(() => {
 })
 
 describe('local data recovery support', () => {
+  test('keeps a localStorage generation mismatch as a reload alert', async () => {
+    const getItem = vi.fn(() => 'current-generation')
+    const operation = vi.fn(() => ok('completed'))
+    vi.stubGlobal('localStorage', { getItem })
+    vi.stubGlobal('navigator', {})
+    const storageOperation: LocalDataStorageOperation<string> = {
+      generation: 'captured-generation',
+      operation,
+    }
+
+    const result =
+      await browserDataLifecycle.runWithLocalDataStorageLock(storageOperation)
+
+    expect(result.isErr()).toBe(true)
+    if (result.isErr()) {
+      expect(result.error.kind).toBe(VaultStorageFailureKind.GenerationChanged)
+      expect(result.error.translationKey).toBe(
+        I18N_KEYS.ErrorsValidationLocalDataChangedInAnotherTab,
+      )
+    }
+    expect(getItem).toHaveBeenCalledOnce()
+    expect(operation).not.toHaveBeenCalled()
+  })
+
+  test('keeps unavailable marker reads as a reload alert', async () => {
+    const getItem = vi.fn(() => {
+      throw new Error('local storage unavailable')
+    })
+    vi.stubGlobal('localStorage', { getItem })
+    vi.stubGlobal('navigator', {})
+    const storageOperation: LocalDataStorageOperation<string> = {
+      generation: 'captured-generation',
+      operation: () => ok('completed'),
+    }
+
+    const result =
+      await browserDataLifecycle.runWithLocalDataStorageLock(storageOperation)
+
+    expect(result.isErr()).toBe(true)
+    if (result.isErr()) {
+      expect(result.error.kind).toBe(
+        VaultStorageFailureKind.GenerationUnavailable,
+      )
+      expect(result.error.translationKey).toBe(
+        I18N_KEYS.ErrorsValidationLocalDataChangedInAnotherTab,
+      )
+    }
+  })
+
+  test('keeps active deletion as a reload alert', async () => {
+    const state = VaultStateTestFixture.create()
+    state.localDataDeletionStarted = true
+    const operation = vi.fn(() => ok('completed'))
+
+    const result = await state.enqueueStorage(operation)
+
+    expect(result.isErr()).toBe(true)
+    if (result.isErr()) {
+      expect(result.error.kind).toBe(VaultStorageFailureKind.DeletionActive)
+      expect(result.error.translationKey).toBe(
+        I18N_KEYS.ErrorsValidationLocalDataChangedInAnotherTab,
+      )
+    }
+    expect(operation).not.toHaveBeenCalled()
+  })
+
   test('rejects missing Web Locks before contacting peer tabs', async () => {
     const broadcastChannel = vi.fn()
     vi.stubGlobal('navigator', {})

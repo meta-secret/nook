@@ -1,6 +1,7 @@
 import { StagedProviderConflictOutcome } from "$lib/vault/sync.svelte";
 import { ProviderSyncOutcome } from "$lib/vault/provider-sync.svelte";
 import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
+import { isVaultOperationStale } from "$lib/runtime/vault-operation-stale";
 import { err as storageErr, ok as storageOk, type Result } from "neverthrow";
 import {
   VaultStorageFailure as StorageOperationFailure,
@@ -176,6 +177,7 @@ export class ProviderConnectionActions {
               state.errorMsg = state.t(stagedConflict.error.translationKey);
               return;
             }
+            if (isVaultOperationStale(stagedConflict.value)) return;
             if (stagedConflict.value === StagedProviderConflictOutcome.Staged)
               return;
           }
@@ -233,6 +235,7 @@ export class ProviderConnectionActions {
           state.errorMsg = state.t(stagedConflict.error.translationKey);
           return;
         }
+        if (isVaultOperationStale(stagedConflict.value)) return;
         if (stagedConflict.value === StagedProviderConflictOutcome.Staged)
           return;
       }
