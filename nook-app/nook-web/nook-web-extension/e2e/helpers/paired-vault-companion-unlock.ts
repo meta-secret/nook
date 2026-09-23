@@ -22,8 +22,6 @@ type OwnedCompanionPopupOpen = {
   readonly extensionId: string
 }
 
-const COMPANION_UNLOCK_ADOPT_WAIT_MS = 3_000
-
 async function openOwnedCompanionPopup(
   request: OwnedCompanionPopupOpen,
 ): Promise<Page> {
@@ -74,24 +72,25 @@ export async function unlockPairedVaultThroughCompanion(
   request: PairedVaultCompanionUnlock,
 ): Promise<void> {
   const { context, vaultPage, companionUnlock, extensionId } = request
-  await vaultPage.getByTestId('unlock-vault-btn').click()
+  const authenticatedShell = vaultPage.getByTestId('authenticated-shell')
+  const unlockButton = vaultPage.getByTestId('unlock-vault-btn')
+
+  await expect(authenticatedShell.or(unlockButton)).toBeVisible({
+    timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+  })
+  if (
+    companionUnlock === PairedVaultCompanionUnlockKind.Required ||
+    !(await authenticatedShell.isVisible())
+  ) {
+    await unlockExtensionThroughCompanion({ context, extensionId })
+  }
+
+  if (await unlockButton.isVisible()) {
+    await unlockButton.click()
+  }
+
   await expect(vaultPage.getByTestId('passkey-auth-overlay')).toHaveCount(0)
-  if (companionUnlock === PairedVaultCompanionUnlockKind.Optional) {
-    try {
-      await expect(vaultPage.getByTestId('authenticated-shell')).toBeVisible({
-        timeout: COMPANION_UNLOCK_ADOPT_WAIT_MS,
-      })
-      return
-    } catch {
-      // The extension session is locked; unlock it through the companion popup.
-    }
-  }
-  const ownedPopupOpen: OwnedCompanionPopupOpen = { context, extensionId }
-  const companionUnlockPage: CompanionPopupUnlock = {
-    page: await openOwnedCompanionPopup(ownedPopupOpen),
-  }
-  await completeCompanionPopupUnlock(companionUnlockPage)
-  await expect(vaultPage.getByTestId('authenticated-shell')).toBeVisible({
+  await expect(authenticatedShell).toBeVisible({
     timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
   })
 }
