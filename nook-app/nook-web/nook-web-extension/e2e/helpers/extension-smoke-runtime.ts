@@ -496,7 +496,11 @@ export async function assertWebsitePasskeyThroughExtension({
   }, credentialId)
   await expect(page.locator('aside[aria-label="Nook passkey"]')).toBeVisible()
   await page.keyboard.press('Enter')
-  const result = await ceremony
+  const result = await withE2eDeadline(
+    ceremony,
+    'website passkey assertion ceremony',
+    30_000,
+  )
   expect(result).toMatchObject({
     id: credentialId,
   })
