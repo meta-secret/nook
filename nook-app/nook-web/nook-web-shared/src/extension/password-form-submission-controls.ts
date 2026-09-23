@@ -452,7 +452,12 @@ class AuthenticationSubmissionControls extends AuthenticationSubmissionSemantics
     const sourceOrigin = control.ownerDocument.defaultView?.location.origin;
     if (!sourceOrigin) return false;
 
-    const elementConstructor = control.ownerDocument.defaultView?.Element;
+    const elementConstructor =
+      query.kind === PasswordFormQueryKind.Scoped &&
+      query.formScope.kind === PasswordFormScopeKind.Unowned &&
+      query.root.nodeType === 1
+        ? query.root.ownerDocument.defaultView?.Element
+        : false;
     const identityContainer: Element | false = form
       ? form
       : query.kind === PasswordFormQueryKind.Scoped &&
@@ -675,6 +680,7 @@ class AuthenticationSubmissionControls extends AuthenticationSubmissionSemantics
         return false;
       return root.contains(control) && root.contains(field);
     }
+    if (root.nodeType !== 9 || root !== field.ownerDocument) return false;
     const containerRequest: UnownedAuthContainerRequest = {
       field,
       root: field.ownerDocument,
@@ -686,7 +692,8 @@ class AuthenticationSubmissionControls extends AuthenticationSubmissionSemantics
     return Boolean(
       containerElement &&
       container instanceof containerElement &&
-      container.contains(control)
+      container.contains(control) &&
+      field.ownerDocument.contains(container)
     );
   }
 

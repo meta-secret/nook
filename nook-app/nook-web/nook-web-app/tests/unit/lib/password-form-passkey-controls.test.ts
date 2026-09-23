@@ -36,8 +36,20 @@ describe('passkey control detection', () => {
       <button type="button">Sign in with a passkey</button>
     `
 
+    type ForeignBrowserProxyRead = [
+      target: typeof globalThis,
+      property: string | symbol,
+    ]
+    const foreignBrowser = new Proxy(globalThis, {
+      get: (...proxyRead: ForeignBrowserProxyRead) => {
+        const [, property] = proxyRead
+        if (property === 'document') return foreignDocument
+        if (property === 'location') return foreignWindow.location
+        throw new Error('unexpected browser global read')
+      },
+    })
     const workflows = new PasswordFormWorkflowObservation(
-      foreignWindow,
+      foreignBrowser,
     ).summarizeAuthenticationWorkflowForms()
     expect(
       workflows.some(

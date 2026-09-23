@@ -1,8 +1,5 @@
 /* eslint-disable @typescript-eslint/no-restricted-types, nook-typed-api/no-raw-object-arguments, max-params -- DOM policy collection uses browser-owned object contracts and callback shapes at this boundary. */
-import {
-  PasswordFormSummaryObservation,
-  type PasswordFormSummaryObservationBrowser,
-} from "./password-form-summary-observation";
+import { PasswordFormSummaryObservation } from "./password-form-summary-observation";
 import {
   PasswordAuthenticationWorkflowFormSummary,
   type PasswordAuthenticationWorkflowFormSummaryDependencies,
@@ -126,9 +123,7 @@ function companionExtensionRuntimePresent(): boolean {
 }
 
 /** Owns this browser host’s resources and interaction lifecycle. */
-export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservation<
-  PasswordFormSummaryObservationBrowser
-> {
+export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservation {
   private collectingPolicies:
     | {
         transportability: AuthenticationControlTransportability[];
