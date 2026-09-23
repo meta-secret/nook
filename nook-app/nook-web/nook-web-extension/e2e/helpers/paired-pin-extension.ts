@@ -320,11 +320,14 @@ export async function lockExtensionSession(
           'active extension session status request',
         ),
       )
+      // Locking can close these in-flight status ports. They add concurrency
+      // pressure but their responses are not part of the lock result.
+      const settledStatusRequests = Promise.allSettled(activeSessionRequests)
       const lockResult = await sendRuntimeMessage<SessionLockResponse>(
         { type: 'nook:extension-session-lock' },
         'extension session lock',
       )
-      await Promise.all(activeSessionRequests)
+      await settledStatusRequests
       return lockResult
     }, RUNTIME_RESPONSE_TIMEOUT_MS)
     if (result?.ok !== true) {
