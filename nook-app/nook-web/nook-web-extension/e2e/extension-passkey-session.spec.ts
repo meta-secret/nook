@@ -23,6 +23,7 @@ import {
   startLoginServer,
   waitForExtensionPairingReady,
   waitForNewPage,
+  withE2eDeadline,
   type WebsitePasskeyAssertionBrowserFlow,
 } from './helpers/extension-smoke-runtime'
 import {
@@ -213,40 +214,19 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await expect(
       simplePage.getByTestId('extension-connect-consent'),
     ).toBeVisible()
-    expect(
-      await simplePage.evaluate(
-        ({
-          extensionId,
-          nonce,
-          deviceId,
-          devicePublicKey,
-          deviceSigningPublicKey,
-        }) =>
-          new Promise((resolve) => {
-            chrome.runtime.sendMessage(
-              extensionId,
-              {
-                type: 'nook:extension-identity-handoff-request',
-                payload: {
-                  recipientPublicKey: 'age1replayattempt',
-                  nonce,
-                  expectedDeviceId: deviceId,
-                  expectedDevicePublicKey: devicePublicKey,
-                  expectedDeviceSigningPublicKey: deviceSigningPublicKey,
-                },
-              },
-              resolve,
-            )
-          }),
-        {
-          extensionId,
-          nonce: initialHandoffNonce,
-          deviceId: extensionDeviceId,
-          devicePublicKey: extensionDevicePublicKey,
-          deviceSigningPublicKey: extensionDeviceSigningPublicKey,
-        },
-      ),
-    ).toEqual({
+    const replayedHandoffResponse =
+      await test.step('reject replayed extension identity handoff', () =>
+        sendExternalMessage(simplePage, extensionId, {
+          type: 'nook:extension-identity-handoff-request',
+          payload: {
+            recipientPublicKey: 'age1replayattempt',
+            nonce: initialHandoffNonce,
+            expectedDeviceId: extensionDeviceId,
+            expectedDevicePublicKey: extensionDevicePublicKey,
+            expectedDeviceSigningPublicKey: extensionDeviceSigningPublicKey,
+          },
+        }))
+    expect(replayedHandoffResponse).toEqual({
       ok: false,
       reason: 'extension-identity-handoff-not-issued',
     })
@@ -403,7 +383,10 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     // routing and display metadata that must not enter that payload.
     await expect
       .poll(async () => {
-        const entries = await readPersistedAppLogs(reopenedVaultPage)
+        const entries = await withE2eDeadline(
+          readPersistedAppLogs(reopenedVaultPage),
+          'read lifecycle logs after reopening the paired vault',
+        )
         return entries.filter(
           (entry) =>
             entry.scope === 'vault-lifecycle' &&
@@ -617,7 +600,10 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     }
     await expect
       .poll(async () => {
-        const entries = await readPersistedAppLogs(reopenedVaultPage)
+        const entries = await withE2eDeadline(
+          readPersistedAppLogs(reopenedVaultPage),
+          'read lifecycle logs after unlocking the paired vault',
+        )
         return entries.filter(
           (entry) =>
             entry.scope === 'vault-lifecycle' &&
@@ -658,9 +644,21 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         assertWebsitePasskeyThroughExtension(websitePasskeyAssertion))
       await websiteAfterUnlock.page.close()
     }
-    await attachNookLogsForTest(reopenedVaultPage, testInfo)
+    await withE2eDeadline(
+      attachNookLogsForTest(reopenedVaultPage, testInfo),
+      'attach extension app logs',
+      10_000,
+    ).catch((error: unknown) => {
+      console.warn(
+        '[extension e2e] skipped app log attachment:',
+        error instanceof Error ? error.message : 'unknown failure',
+      )
+    })
 
-    await context.close()
+    await withE2eDeadline(
+      context.close(),
+      'close extension context before restart',
+    )
     const restartedContext = await chromium.launchPersistentContext(
       userDataDir,
       {
@@ -698,11 +696,14 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         lockedVaultPage.getByTestId('passkey-auth-overlay'),
       ).toHaveCount(0)
     } finally {
-      await restartedContext.close()
+      await withE2eDeadline(
+        restartedContext.close(),
+        'close restarted extension context',
+      )
     }
   } finally {
-    await context.close()
-    await loginServer.close()
+    await withE2eDeadline(context.close(), 'close extension context')
+    await withE2eDeadline(loginServer.close(), 'close mock credential server')
   }
 })
 

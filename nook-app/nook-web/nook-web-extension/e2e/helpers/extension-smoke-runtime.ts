@@ -46,6 +46,29 @@ export type { ExtensionPairingApprovedMessage }
 
 export const EXTENSION_UNLOCK_TIMEOUT_MS = 30_000
 const EXTENSION_RUNTIME_MESSAGE_TIMEOUT_MS = 15_000
+const E2E_OPERATION_TIMEOUT_MS = 15_000
+
+export async function withE2eDeadline<Result>(
+  operation: Promise<Result>,
+  purpose: string,
+  timeoutMs = E2E_OPERATION_TIMEOUT_MS,
+): Promise<Result> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(
+      () =>
+        reject(
+          new Error(`Timed out waiting for ${purpose} after ${timeoutMs}ms.`),
+        ),
+      timeoutMs,
+    )
+  })
+  try {
+    return await Promise.race([operation, deadline])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
 
 function pageAddress(page: Page): string {
   try {
@@ -534,7 +557,10 @@ export async function openSimpleVaultConnection(
 
 export async function readExtensionStorage(context: BrowserContext) {
   const worker = await getServiceWorker(context)
-  return readExtensionPairingStorage(worker)
+  return withE2eDeadline(
+    readExtensionPairingStorage(worker),
+    'extension pairing storage read',
+  )
 }
 
 export async function writeExtensionStorage(
