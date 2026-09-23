@@ -28,7 +28,7 @@ import {
 
 export type DeviceProtectionAuthorizationObservation = {
   readonly overlayVisible: boolean
-  readonly unlockVisible: boolean
+  readonly unlockReady: boolean
   readonly pickerVisible: boolean
   readonly lockedAccessVisible: boolean
   readonly authorizeReady: boolean
@@ -88,7 +88,7 @@ export class DeviceProtectionPostUnlockGate {
 
 export function deviceProtectionAuthorizationGateState({
   overlayVisible,
-  unlockVisible,
+  unlockReady,
   pickerVisible,
   lockedAccessVisible,
   authorizeReady,
@@ -99,7 +99,7 @@ export function deviceProtectionAuthorizationGateState({
     return DeviceProtectionAuthorizationGateState.Unlocked
   }
   if (overlayVisible) return DeviceProtectionAuthorizationGateState.Overlay
-  if (unlockVisible) return DeviceProtectionAuthorizationGateState.Unlock
+  if (unlockReady) return DeviceProtectionAuthorizationGateState.Unlock
   if (pickerVisible) return DeviceProtectionAuthorizationGateState.Picker
   if (lockedAccessVisible) {
     return DeviceProtectionAuthorizationGateState.LockedAccess
@@ -560,7 +560,7 @@ export async function authorizeDeviceProtection(
   const authorizationGateState = async () => {
     const observation: DeviceProtectionAuthorizationObservation = {
       overlayVisible: await overlay.isVisible(),
-      unlockVisible: await unlockVaultButton.isVisible(),
+      unlockReady: await unlockButtonReady(),
       pickerVisible: await vaultPicker.isVisible(),
       lockedAccessVisible: await lockedAccessDashboard.isVisible(),
       authorizeReady: await authorizeButtonReady(),

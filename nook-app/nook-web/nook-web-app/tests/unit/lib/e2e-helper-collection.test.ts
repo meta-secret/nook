@@ -66,7 +66,7 @@ describe('Playwright collection imports', () => {
     expect(
       deviceProtectionAuthorizationGateState({
         overlayVisible: false,
-        unlockVisible: false,
+        unlockReady: false,
         pickerVisible: false,
         lockedAccessVisible: false,
         authorizeReady: true,
@@ -76,10 +76,35 @@ describe('Playwright collection imports', () => {
     ).toBe(DeviceProtectionAuthorizationGateState.Authorize)
   })
 
+  test('does not treat a disabled login unlock action as ready', () => {
+    expect(
+      deviceProtectionAuthorizationGateState({
+        overlayVisible: false,
+        unlockReady: false,
+        pickerVisible: false,
+        lockedAccessVisible: false,
+        authorizeReady: false,
+        vaultAuthenticated: false,
+        workspaceUnlocked: false,
+      }),
+    ).toBe(DeviceProtectionAuthorizationGateState.Waiting)
+    expect(
+      deviceProtectionAuthorizationGateState({
+        overlayVisible: false,
+        unlockReady: true,
+        pickerVisible: false,
+        lockedAccessVisible: false,
+        authorizeReady: false,
+        vaultAuthenticated: false,
+        workspaceUnlocked: false,
+      }),
+    ).toBe(DeviceProtectionAuthorizationGateState.Unlock)
+  })
+
   test('recognizes the authenticated workspace after passkey unlock starts loadDb', () => {
     const passkeyUnlocking = {
       overlayVisible: true,
-      unlockVisible: false,
+      unlockReady: false,
       pickerVisible: false,
       lockedAccessVisible: false,
       authorizeReady: false,
