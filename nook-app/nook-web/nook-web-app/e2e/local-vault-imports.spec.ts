@@ -13,6 +13,12 @@ import {
   storedZip,
 } from './helpers'
 
+declare global {
+  interface Window {
+    __nookClipboardState: { text: string }
+  }
+}
+
 test.describe('local vault', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/app/')
@@ -763,13 +769,16 @@ test.describe('local vault', () => {
   }) => {
     await disableVaultIdleLock(page)
     await page.evaluate(() => {
-      let text = ''
+      Object.defineProperty(window, '__nookClipboardState', {
+        configurable: true,
+        value: { text: '' },
+      })
       Object.defineProperty(navigator, 'clipboard', {
         configurable: true,
         value: {
-          readText: () => Promise.resolve(text),
+          readText: () => Promise.resolve(window.__nookClipboardState.text),
           writeText: (value: string) => {
-            text = value
+            window.__nookClipboardState.text = value
             return Promise.resolve()
           },
         },
