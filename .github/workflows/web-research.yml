@@ -135,6 +135,7 @@ jobs:
     steps:
       - name: Install dependencies
         run: |
+          cp -R /meta-secret/nook/.github "$GITHUB_WORKSPACE/.github"
           cd /meta-secret/nook
           task web:research:install
 

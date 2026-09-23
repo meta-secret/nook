@@ -22,6 +22,8 @@ import {
   simpleVaultBaseUrl,
   startLoginServer,
   waitForExtensionPairingReady,
+  waitForNewPage,
+  withE2eDeadline,
   type WebsitePasskeyAssertionBrowserFlow,
 } from './helpers/extension-smoke-runtime'
 import {
@@ -212,40 +214,19 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await expect(
       simplePage.getByTestId('extension-connect-consent'),
     ).toBeVisible()
-    expect(
-      await simplePage.evaluate(
-        ({
-          extensionId,
-          nonce,
-          deviceId,
-          devicePublicKey,
-          deviceSigningPublicKey,
-        }) =>
-          new Promise((resolve) => {
-            chrome.runtime.sendMessage(
-              extensionId,
-              {
-                type: 'nook:extension-identity-handoff-request',
-                payload: {
-                  recipientPublicKey: 'age1replayattempt',
-                  nonce,
-                  expectedDeviceId: deviceId,
-                  expectedDevicePublicKey: devicePublicKey,
-                  expectedDeviceSigningPublicKey: deviceSigningPublicKey,
-                },
-              },
-              resolve,
-            )
-          }),
-        {
-          extensionId,
-          nonce: initialHandoffNonce,
-          deviceId: extensionDeviceId,
-          devicePublicKey: extensionDevicePublicKey,
-          deviceSigningPublicKey: extensionDeviceSigningPublicKey,
-        },
-      ),
-    ).toEqual({
+    const replayedHandoffResponse =
+      await test.step('reject replayed extension identity handoff', () =>
+        sendExternalMessage(simplePage, extensionId, {
+          type: 'nook:extension-identity-handoff-request',
+          payload: {
+            recipientPublicKey: 'age1replayattempt',
+            nonce: initialHandoffNonce,
+            expectedDeviceId: extensionDeviceId,
+            expectedDevicePublicKey: extensionDevicePublicKey,
+            expectedDeviceSigningPublicKey: extensionDeviceSigningPublicKey,
+          },
+        }))
+    expect(replayedHandoffResponse).toEqual({
       ok: false,
       reason: 'extension-identity-handoff-not-issued',
     })
@@ -289,14 +270,14 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       }),
     )
 
-    const openedPairingLauncher = context.waitForEvent('page')
-    expect(
-      await sendExternalMessage(simplePage, extensionId, {
+    const [launcherResponse, pairingLauncher] = await Promise.all([
+      sendExternalMessage(simplePage, extensionId, {
         type: 'nook:open-companion-launcher',
         payload: { intent: OpenCompanionLauncherIntent.Pair },
       }),
-    ).toEqual({ ok: true })
-    const pairingLauncher = await openedPairingLauncher
+      waitForNewPage(context, 'extension pairing launcher'),
+    ])
+    expect(launcherResponse).toEqual({ ok: true })
     await expect(pairingLauncher).toHaveURL(
       `chrome-extension://${extensionId}/popup/index.html?intent=pair`,
     )
@@ -310,9 +291,10 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       pairingLauncher.getByTestId('connect-simple-vault-btn'),
     ).toBeVisible()
 
-    const reopenedConnectPage = context.waitForEvent('page')
-    await pairingLauncher.getByTestId('connect-simple-vault-btn').click()
-    const reconnectPage = await reopenedConnectPage
+    const [reconnectPage] = await Promise.all([
+      waitForNewPage(context, 'reopened Simple Vault connection page'),
+      pairingLauncher.getByTestId('connect-simple-vault-btn').click(),
+    ])
     await expect(reconnectPage).toHaveURL((url) =>
       belongs_to_simple_vault(simpleVaultBaseUrl, url.toString()),
     )
@@ -366,9 +348,10 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       connectedPopupPage.getByTestId('open-simple-vault-btn'),
     ).toBeVisible()
 
-    const reopenedVaultPagePromise = context.waitForEvent('page')
-    await connectedPopupPage.getByTestId('open-simple-vault-btn').click()
-    const reopenedVaultPage = await reopenedVaultPagePromise
+    const [reopenedVaultPage] = await Promise.all([
+      waitForNewPage(context, 'reopened paired-vault page'),
+      connectedPopupPage.getByTestId('open-simple-vault-btn').click(),
+    ])
     await expect(reopenedVaultPage).toHaveURL((url) => {
       const expected = new URL(simpleVaultBaseUrl)
       return (
@@ -400,7 +383,10 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     // routing and display metadata that must not enter that payload.
     await expect
       .poll(async () => {
-        const entries = await readPersistedAppLogs(reopenedVaultPage)
+        const entries = await withE2eDeadline(
+          readPersistedAppLogs(reopenedVaultPage),
+          'read lifecycle logs after reopening the paired vault',
+        )
         return entries.filter(
           (entry) =>
             entry.scope === 'vault-lifecycle' &&
@@ -414,11 +400,10 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       const emptyOtpPage = await context.newPage()
       await emptyOtpPage.goto(`${loginServer.origin}/otp`)
       const emptyOtpWidget = emptyOtpPage.locator('#nook-auth-widget')
-      const emptyAuthenticatorPickerPromise = context.waitForEvent('page')
-      await emptyOtpWidget
-        .getByRole('button', { name: 'Fill 2FA code' })
-        .click()
-      const emptyAuthenticatorPicker = await emptyAuthenticatorPickerPromise
+      const [emptyAuthenticatorPicker] = await Promise.all([
+        waitForNewPage(context, 'empty authenticator picker'),
+        emptyOtpWidget.getByRole('button', { name: 'Fill 2FA code' }).click(),
+      ])
       await emptyAuthenticatorPicker.waitForURL(/intent=authenticator-picker/)
       await expect(
         emptyAuthenticatorPicker.getByRole('heading', {
@@ -497,13 +482,12 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       await fillLoginPage.goto(`${loginServer.origin}/login`)
       const fillWidget = fillLoginPage.locator('#nook-auth-widget')
       await expect(fillWidget).toBeVisible()
-      const loginPickerPromise = context.waitForEvent('page')
-      await fillWidget
-        .getByRole('button', { name: 'Continue with Nook' })
-        .click()
+      const [loginPicker] = await Promise.all([
+        waitForNewPage(context, 'website login picker'),
+        fillWidget.getByRole('button', { name: 'Continue with Nook' }).click(),
+      ])
       await expect(fillWidget.getByText('alice@nook.test')).toHaveCount(0)
       await expect(fillWidget.getByText('bob@nook.test')).toHaveCount(0)
-      const loginPicker = await loginPickerPromise
       await loginPicker.waitForURL(/intent=login-picker/)
       await expect(loginPicker.getByText('alice@nook.test')).toBeVisible({
         timeout: 20_000,
@@ -563,11 +547,12 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       await otpPage.goto(`${loginServer.origin}/otp`)
       const otpWidget = otpPage.locator('#nook-auth-widget')
       await expect(otpWidget.getByText('Fill your 2FA code')).toBeVisible()
-      const authenticatorPickerPromise = context.waitForEvent('page')
-      await otpWidget.getByRole('button', { name: 'Fill 2FA code' }).click()
+      const [authenticatorPicker] = await Promise.all([
+        waitForNewPage(context, 'authenticator picker'),
+        otpWidget.getByRole('button', { name: 'Fill 2FA code' }).click(),
+      ])
       await expect(otpWidget.getByText('Nook extension e2e')).toHaveCount(0)
       await expect(otpWidget.getByText('alice@nook.test')).toHaveCount(0)
-      const authenticatorPicker = await authenticatorPickerPromise
       await authenticatorPicker.waitForURL(/intent=authenticator-picker/)
       await expect(
         authenticatorPicker.getByText('Nook extension e2e'),
@@ -615,7 +600,10 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     }
     await expect
       .poll(async () => {
-        const entries = await readPersistedAppLogs(reopenedVaultPage)
+        const entries = await withE2eDeadline(
+          readPersistedAppLogs(reopenedVaultPage),
+          'read lifecycle logs after unlocking the paired vault',
+        )
         return entries.filter(
           (entry) =>
             entry.scope === 'vault-lifecycle' &&
@@ -627,19 +615,35 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       websiteAfterUnlock.kind === WebsitePageStateKind.Opened &&
       websitePasskeyState.kind === WebsitePasskeyStateKind.Created
     ) {
+      console.log('[extension e2e] reopening companion for website assertion')
       await unlockExtensionThroughCompanion({ context, extensionId })
-      await websiteAfterUnlock.page.reload()
+      console.log('[extension e2e] companion ready for website assertion')
+      await withE2eDeadline(
+        websiteAfterUnlock.page.reload(),
+        'reload website after companion unlock',
+      )
+      console.log('[extension e2e] website reloaded after companion unlock')
       await expect(
         websiteAfterUnlock.page.locator('#nook-auth-widget'),
       ).toBeVisible()
       const websiteWidget = websiteAfterUnlock.page.locator('#nook-auth-widget')
-      const websiteLoginPickerPromise = context.waitForEvent('page')
-      await websiteWidget
-        .getByRole('button', { name: 'Continue with Nook' })
-        .click()
-      const websiteLoginPicker = await websiteLoginPickerPromise
+      const [websiteLoginPicker] = await Promise.all([
+        waitForNewPage(context, 'post-unlock website login picker'),
+        websiteWidget
+          .getByRole('button', { name: 'Continue with Nook' })
+          .click(),
+      ])
+      await websiteLoginPicker.waitForURL(/intent=login-picker/)
+      await expect(websiteLoginPicker.getByText('alice@nook.test')).toBeVisible(
+        { timeout: 20_000 },
+      )
+      console.log('[extension e2e] post-unlock login picker loaded')
       await websiteLoginPicker.close()
-      await websiteAfterUnlock.page.reload()
+      await withE2eDeadline(
+        websiteAfterUnlock.page.reload(),
+        'reload website after login picker',
+      )
+      console.log('[extension e2e] website reloaded after login picker')
       await expect(
         websiteAfterUnlock.page.locator('#nook-auth-widget'),
       ).toBeVisible()
@@ -647,13 +651,22 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         page: websiteAfterUnlock.page,
         credentialId: websitePasskeyState.credentialId,
       }
+      console.log('[extension e2e] starting website passkey assertion')
       await test.step('assert website passkey after companion unlock', () =>
         assertWebsitePasskeyThroughExtension(websitePasskeyAssertion))
+      console.log('[extension e2e] website assertion complete')
       await websiteAfterUnlock.page.close()
     }
-    await attachNookLogsForTest(reopenedVaultPage, testInfo)
+    await withE2eDeadline(
+      attachNookLogsForTest(reopenedVaultPage, testInfo),
+      'attach extension app logs',
+      10_000,
+    )
 
-    await context.close()
+    await withE2eDeadline(
+      context.close(),
+      'close extension context before restart',
+    )
     const restartedContext = await chromium.launchPersistentContext(
       userDataDir,
       {
@@ -691,11 +704,14 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         lockedVaultPage.getByTestId('passkey-auth-overlay'),
       ).toHaveCount(0)
     } finally {
-      await restartedContext.close()
+      await withE2eDeadline(
+        restartedContext.close(),
+        'close restarted extension context',
+      )
     }
   } finally {
-    await context.close()
-    await loginServer.close()
+    await withE2eDeadline(context.close(), 'close extension context')
+    await withE2eDeadline(loginServer.close(), 'close mock credential server')
   }
 })
 
@@ -782,11 +798,10 @@ test('re-approves an existing local vault after reload without event-log-access-
     await expect(pairPopup.getByTestId('connect-simple-vault-btn')).toBeVisible(
       { timeout: EXTENSION_UNLOCK_TIMEOUT_MS },
     )
-    const openedConnect = context.waitForEvent('page', {
-      timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
-    })
-    await pairPopup.getByTestId('connect-simple-vault-btn').click()
-    const connectPage = await openedConnect
+    const [connectPage] = await Promise.all([
+      waitForNewPage(context, 'existing-vault connection page'),
+      pairPopup.getByTestId('connect-simple-vault-btn').click(),
+    ])
     await expect(connectPage).toHaveURL((url) =>
       belongs_to_simple_vault(simpleVaultBaseUrl, url.toString()),
     )
@@ -864,11 +879,10 @@ test('re-approves an existing local vault after reload without event-log-access-
     await expect(
       repairPopup.getByTestId('connect-simple-vault-btn'),
     ).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
-    const reopenedConnect = context.waitForEvent('page', {
-      timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
-    })
-    await repairPopup.getByTestId('connect-simple-vault-btn').click()
-    const reconnectPage = await reopenedConnect
+    const [reconnectPage] = await Promise.all([
+      waitForNewPage(context, 'repaired-vault connection page'),
+      repairPopup.getByTestId('connect-simple-vault-btn').click(),
+    ])
     await expect(reconnectPage).toHaveURL((url) =>
       belongs_to_simple_vault(simpleVaultBaseUrl, url.toString()),
     )

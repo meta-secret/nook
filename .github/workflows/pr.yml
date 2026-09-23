@@ -149,6 +149,14 @@ jobs:
       - name: Full browser and extension suites
         if: steps.browser-scope.outputs.validation == 'true' && inputs.full_e2e_requested
         run: task --silent ci:pr:browser:full
+      - name: Report failed extension browser context
+        if: failure() && inputs.full_e2e_requested
+        run: |
+          shopt -s globstar nullglob
+          for context in nook-app/nook-web/nook-web-extension/test-results/**/error-context.md; do
+            printf '%s\n' "$context"
+            cat "$context"
+          done
       - name: Authentication-sensitive extension regression
         if: steps.browser-scope.outputs.validation == 'true' && !inputs.full_e2e_requested && steps.browser-scope.outputs.auth == 'true'
         run: task --silent ci:pr:browser:auth
