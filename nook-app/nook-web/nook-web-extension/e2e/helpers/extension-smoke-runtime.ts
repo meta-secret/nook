@@ -53,21 +53,23 @@ export async function withE2eDeadline<Result>(
   purpose: string,
   timeoutMs = E2E_OPERATION_TIMEOUT_MS,
 ): Promise<Result> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  const deadline = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(
-      () =>
-        reject(
-          new Error(`Timed out waiting for ${purpose} after ${timeoutMs}ms.`),
-        ),
-      timeoutMs,
+  return new Promise<Result>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(
+        new Error(`Timed out waiting for ${purpose} after ${timeoutMs}ms.`),
+      )
+    }, timeoutMs)
+    void operation.then(
+      (result) => {
+        clearTimeout(timer)
+        resolve(result)
+      },
+      (error: unknown) => {
+        clearTimeout(timer)
+        reject(error)
+      },
     )
   })
-  try {
-    return await Promise.race([operation, deadline])
-  } finally {
-    if (timer) clearTimeout(timer)
-  }
 }
 
 function pageAddress(page: Page): string {
