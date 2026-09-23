@@ -239,8 +239,13 @@ export function installMockPasskeyRuntime() {
       return result(prfRequest, mode !== 'unsupported', false)
     }
   }
+  const credentials = new MockCredentialsContainer()
+  Object.defineProperty(window, '__nookE2ePasskeyMockGet', {
+    configurable: true,
+    value: credentials.get,
+  })
   Object.defineProperty(navigator, 'credentials', {
     configurable: true,
-    value: new MockCredentialsContainer(),
+    value: credentials,
   })
 }

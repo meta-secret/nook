@@ -180,6 +180,28 @@ export async function assertWebsitePasskeyThroughExtension({
   credentialId,
 }: WebsitePasskeyAssertionBrowserFlow): Promise<void> {
   await page.bringToFront()
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const mockGetDescriptor = Object.getOwnPropertyDescriptor(
+            window,
+            '__nookE2ePasskeyMockGet',
+          )
+          if (
+            !mockGetDescriptor ||
+            typeof mockGetDescriptor.value !== 'function'
+          ) {
+            return true
+          }
+          return navigator.credentials.get !== mockGetDescriptor.value
+        }),
+      {
+        message: 'The extension WebAuthn bridge was not installed.',
+        timeout: 15_000,
+      },
+    )
+    .toBe(true)
   const ceremony = page.evaluate<
     {
       id: string
