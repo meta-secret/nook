@@ -22,10 +22,22 @@ type CompanionPopupHandle = {
   readonly closeAfterUse: boolean
 }
 
+enum CompanionPopupLookupKind {
+  Found = 'found',
+  Missing = 'missing',
+}
+
+type CompanionPopupLookup =
+  | {
+      readonly kind: CompanionPopupLookupKind.Found
+      readonly page: Page
+    }
+  | { readonly kind: CompanionPopupLookupKind.Missing }
+
 type OwnedCompanionPopupOpen = {
   readonly context: BrowserContext
   readonly extensionId: string
-  readonly ignoredPages?: readonly Page[]
+  readonly ignoredPages: readonly Page[]
 }
 
 function companionPopupUrl(extensionId: string): string {
@@ -40,23 +52,25 @@ function isOwnedCompanionPopup(page: Page, extensionId: string): boolean {
 
 function findOwnedCompanionPopup(
   request: OwnedCompanionPopupOpen,
-): Page | undefined {
-  const ignoredPages = request.ignoredPages ?? []
-  return request.context
+): CompanionPopupLookup {
+  const page = request.context
     .pages()
     .find(
       (page) =>
-        !ignoredPages.includes(page) &&
+        !request.ignoredPages.includes(page) &&
         isOwnedCompanionPopup(page, request.extensionId),
     )
+  return page
+    ? { kind: CompanionPopupLookupKind.Found, page }
+    : { kind: CompanionPopupLookupKind.Missing }
 }
 
 async function openOwnedCompanionPopup(
   request: OwnedCompanionPopupOpen,
 ): Promise<CompanionPopupHandle> {
   const existingPopup = findOwnedCompanionPopup(request)
-  if (existingPopup) {
-    return { page: existingPopup, closeAfterUse: false }
+  if (existingPopup.kind === CompanionPopupLookupKind.Found) {
+    return { page: existingPopup.page, closeAfterUse: false }
   }
 
   const popupPage = await request.context.newPage()
@@ -68,12 +82,14 @@ async function waitForOwnedCompanionPopup(
   request: OwnedCompanionPopupOpen,
 ): Promise<CompanionPopupHandle> {
   const existingPopup = findOwnedCompanionPopup(request)
-  if (existingPopup) return { page: existingPopup, closeAfterUse: true }
+  if (existingPopup.kind === CompanionPopupLookupKind.Found) {
+    return { page: existingPopup.page, closeAfterUse: true }
+  }
 
   const popupPage = await request.context.waitForEvent('page', {
     timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
     predicate: (page) =>
-      !(request.ignoredPages ?? []).includes(page) &&
+      !request.ignoredPages.includes(page) &&
       isOwnedCompanionPopup(page, request.extensionId),
   })
   return { page: popupPage, closeAfterUse: true }
@@ -107,6 +123,7 @@ export async function unlockExtensionThroughCompanion({
   const companionPopup = await openOwnedCompanionPopup({
     context,
     extensionId,
+    ignoredPages: [],
   })
   try {
     await completeCompanionPopupUnlock({ page: companionPopup.page })
