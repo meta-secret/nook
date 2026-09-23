@@ -4,55 +4,104 @@
 
 ### Required bootstrap
 
-Meta-Cortex is a required development tool. Before normal repository work,
-verify that `.meta-cortex/AGENTS.md` and `.meta-cortex/meta-cortex.toml` exist in
-the Nook repository root.
+Meta-Cortex is a required development tool. Bootstrap it separately in every
+Nook worktree before normal repository work. Git ignores the root `.meta-cortex/`
+directory, so creating a worktree does not initialize its framework.
+
+Verify that `.meta-cortex/AGENTS.md` and `.meta-cortex/meta-cortex.toml` exist
+in the consuming worktree. Use that worktree's absolute filesystem path in each
+YAML request.
+
+Initialize a new worktree when `.meta-cortex/` is absent. Treat an existing
+directory with either required file missing as a partial installation and use
+the replacement procedure below before repository work.
 
 If the `meta-cortex` command is unavailable, install it with the official
-[shell installer](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex#shell-installer):
+[v0.7.0 shell installer](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/download/v0.7.0/meta-cortex-installer.sh):
 
 ```sh
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/latest/download/meta-cortex-installer.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/download/v0.7.0/meta-cortex-installer.sh | sh
 ```
 
-Verify that `meta-cortex --version` succeeds before initialization. The
-upstream [release README](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex#update-a-project)
-owns the command upgrade and framework replacement procedures.
+Verify that `meta-cortex --version` reports `0.7.0`. If a different version is
+installed, install the selected v0.7.0 release above. Use `meta-cortex list` to
+inspect the supported request schema and canonical YAML examples. The upstream
+[v0.7.0 release notes](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/tag/v0.7.0)
+and [project update procedure](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex#update-a-project)
+own the CLI upgrade and framework replacement procedures.
 
 If `.meta-cortex/` is missing:
 
-1. Run `meta-cortex init` from the Nook repository root.
-   - Plain `init` is non-interactive by default. To connect Codex and update
-     managed instructions, run `meta-cortex init --harness codex --instructions write`.
-2. Verify that `.meta-cortex/AGENTS.md` and `.meta-cortex/meta-cortex.toml` now
+1. From the consuming worktree, run the supported `Framework / Initialize`
+   request. Replace the absolute path below with that worktree's path.
+
+   ```sh
+   meta-cortex run --request - <<'REQUEST'
+   version: 1
+   project: /absolute/path/to/this/Nook/worktree
+   operation:
+     group: Framework
+     command:
+       name: Initialize
+       arguments:
+         harness: codex
+         instructions: write
+   REQUEST
+   ```
+
+2. Review the generated `.meta-cortex/meta-cortex.toml` and reapply the
+   consuming project's required configuration values. Session answers do not
+   belong in this file.
+3. Verify that `.meta-cortex/AGENTS.md` and `.meta-cortex/meta-cortex.toml` now
    exist.
 
 For existing and newly initialized frameworks:
 
-1. Run `meta-cortex info`. Confirm that the installed framework version matches
-   the CLI version and that Codex reports `Connected`.
+1. Run the supported `Framework / Info` request with the same absolute worktree
+   path.
+
+   ```sh
+   meta-cortex run --request - <<'REQUEST'
+   version: 1
+   project: /absolute/path/to/this/Nook/worktree
+   operation:
+     group: Framework
+     command:
+       name: Info
+       arguments: {}
+   REQUEST
+   ```
+
+2. Confirm that `cli_version` and `framework_version` both report `0.7.0` and
+   match, and that the Codex integration reports `Connected` in the response.
    - If the versions differ, follow the replacement procedure below before
      normal repository work.
-2. If a required framework entry is missing, or initialization reports
+3. If a required framework entry is missing, or initialization reports
    `missing required framework entry`, stop and report the affected path.
    - Back up and move the existing `.meta-cortex/` directory out of the
-     installation path. Run `meta-cortex init --harness codex --instructions
-     write` again, then review and reapply configuration changes.
+     installation path. Run the `Framework / Initialize` request again, then
+     review and reapply the consuming project's configuration values.
    - Do not treat a partial installation as available or substitute copied
      framework files.
-3. Read `.meta-cortex/CIRCUIT-BREAKER.md`, then `.meta-cortex/AGENTS.md`, and
-   continue through the normal Nook entry sequence.
+4. After verification succeeds, read `.meta-cortex/CIRCUIT-BREAKER.md`, then
+   `.meta-cortex/AGENTS.md`, and continue through the normal Nook entry sequence.
 
-If the command cannot be installed or initialization fails, stop all repository
-work and report the exact failure. Do not plan, edit, validate, or launch agents
-using a partial framework.
+- **Prohibited:** call the retired direct CLI operations.
+- **Preferred:** discover requests with `meta-cortex list`, then run the typed
+  `Framework / Initialize` and `Framework / Info` YAML operations.
+- **Prohibited:** give a request a worktree-relative `project` path.
+- **Preferred:** use the current worktree's absolute path in every YAML request.
 
-- **Prohibited:** continue a product change after `meta-cortex init` fails, using
-  only the Nook documents or a manually copied partial framework.
+If the command cannot be installed, initialization fails, or `Framework / Info`
+cannot verify the framework, stop all repository work and report the exact
+failure or affected path. Do not plan, edit, validate, or launch agents using a
+partial framework.
 
-- **Preferred:** install the official command, initialize the repository, verify
-  both required files, load the upstream entry point, and only then begin the
-  requested work.
+- **Prohibited:** continue repository work after installation or initialization
+  fails, using only the Nook documents or a manually copied partial framework.
+
+- **Preferred:** install the official v0.7.0 command, initialize this worktree,
+  verify its required files and Info response, then load the upstream entry point.
 
 ### Roots and ownership
 
@@ -86,15 +135,41 @@ It does not select launch models or reasoning effort. Read those settings from
 
 Follow the upstream [development-mode workflow](../.meta-cortex/AGENTS.md#development-mode)
 and its [native user-input skill](../.meta-cortex/teams/gizmo-team/agents/gizmo/skills/user-input/SKILL.md).
-The upstream [form](../.meta-cortex/development.yaml) supplies the session choice.
+The upstream [form](../.meta-cortex/development.yaml) defines both session
+choices. Resolve `development.mode` and `development.delivery` through that
+workflow before planning or launching agents. Validate explicit choices already
+supplied in the current conversation; do not ask again for inherited choices.
+
+- **`development.mode`**
+  - `single_agent`: use the current agent and conversation.
+  - `multi_agent`: use Nook's Gizmo workflow.
+- **`development.delivery`**
+  - `create_pr`: commit and push the validated feature, then create or update its PR.
+  - `local_only`: keep the work local without pushing or creating a PR.
+
+The upstream form marks `create_pr` as recommended. A recommendation or
+preselected option is not a submitted answer. Honor the explicit session choice.
 
 - In `single_agent` mode, the current agent loads the relevant roles and performs
   the work. Nook's coordinator, worker, integration-agent, and PR Lifecycle routing
   requirements apply only in `multi_agent` mode.
+- In `multi_agent` mode, use Nook's Team Gizmo assignments and delivery routing.
 - Preserve Nook's product boundaries, authorization, validation stages, and the
   user's stopping point in both modes.
-- Carry the selected mode through the current conversation and assignments.
-  Keep session answers out of repository files and upstream configuration.
+- Carry both choices through the current conversation, continuations, and every
+  assignment or handoff, through delivery reporting. A delegated agent inherits
+  them and does not start a new configuration flow.
+- If the user changes one choice, pass the change to active agents and retain the
+  other choice. Do not leave delegated agents running when changing to
+  `single_agent` mode.
+- Keep session answers out of repository files and `.meta-cortex/` configuration.
+
+- **Prohibited:** persist `development.mode` or `development.delivery` as
+  repository defaults, or ask an assigned worker to choose values already
+  supplied by the current conversation.
+- **Preferred:** collect both values through the upstream form for a new
+  conversation, carry them through each handoff and delivery report, and keep
+  them out of repository files and upstream configuration.
 
 For example, a single-agent migration updates local integration files in the
 current task. The current agent applies integration and PR roles locally when
@@ -143,20 +218,24 @@ assign a requested workflow rerun to upstream CI/CD with SRE context.
 ### Installed framework lifecycle
 
 The Meta-Cortex command owns framework installation in `.meta-cortex/`. Keep
-that directory untracked. Do not replace initialization with a manually copied
-release directory.
+that ignored directory untracked. Every new consuming worktree needs its own
+official `Framework / Initialize` operation. Do not copy the directory from
+another worktree or replace initialization with a manually copied release tree.
 
 For an existing installation, follow the upstream replacement procedure because
 upgrading the command does not replace the framework. Back up and move
-`.meta-cortex/` out of the installation path, run `meta-cortex init --harness
-codex --instructions write`, then review and reapply configuration changes and
-review upstream path changes against the thin wrapper and catalog mappings in
-this document.
+`.meta-cortex/` out of the installation path, run the `Framework / Initialize`
+request above, then review and reapply the consuming project's durable
+configuration values from the backup's `meta-cortex.toml`. Verify that the
+required files exist and rerun `Framework / Info`; confirm matching CLI and
+framework versions and Codex `Connected` before resuming repository work.
+Review upstream path changes against the thin wrapper and catalog mappings in
+this document. Do not copy framework files from the backup.
 
-To move to a newer release, compare `meta-cortex --version` with the upstream
-latest release. Rerun the shell installer above when the command is older.
-Then replace the project framework through the preceding procedure and confirm
-the CLI and framework versions with `meta-cortex info`.
+To move to a newer release, compare `meta-cortex --version` with the selected
+upstream release. Install that CLI release when the command is older. Then
+replace the project framework through the preceding procedure and verify the
+CLI and framework versions with `Framework / Info`.
 Update the pinned installer release in `preflight/Dockerfile` in the same change
 so hosted policy and Loom checks use the version selected for Nook.
 
@@ -165,5 +244,5 @@ so hosted policy and Loom checks use the version selected for Nook.
   the upstream procedure.
 
 - **Preferred:** treat command upgrades and installed-framework replacement as
-  separate operations, reinitialize through the official command when required,
-  and verify Nook's upstream links afterward.
+  separate operations, reinitialize through the official typed YAML operation
+  when required, and verify Nook's upstream links afterward.
