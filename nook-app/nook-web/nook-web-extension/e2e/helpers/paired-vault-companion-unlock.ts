@@ -71,9 +71,10 @@ function captureCompanionPopupDiagnostics(
   })
   page.on('requestfailed', (request) => {
     if (request.url().startsWith(extensionOrigin)) {
+      const failure = request.failure()
       diagnostics.failures.push(
         `request failed: ${request.url()} ` +
-          `(${request.failure()?.errorText ?? 'unknown'})`,
+          `(${failure ? failure.errorText : 'unknown'})`,
       )
     }
   })
@@ -92,7 +93,7 @@ async function describeCompanionPopup(page: Page): Promise<string> {
   const state = await page.evaluate(() => {
     const target = document.getElementById('app')
     const testIds = Array.from(document.querySelectorAll('[data-testid]'))
-      .map((element) => element.getAttribute('data-testid') ?? '')
+      .map((element) => element.getAttribute('data-testid') || '')
       .filter(Boolean)
       .slice(0, 20)
     return {
@@ -100,7 +101,7 @@ async function describeCompanionPopup(page: Page): Promise<string> {
       readyState: document.readyState,
       title: document.title,
       testIds,
-      appMounted: (target?.childElementCount ?? 0) > 0,
+      appMounted: target ? target.childElementCount > 0 : false,
     }
   })
   return JSON.stringify(state)
