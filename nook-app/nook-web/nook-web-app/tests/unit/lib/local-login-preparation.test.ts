@@ -18,9 +18,7 @@ describe('local login preparation', () => {
     state.deviceProtectionStatus = DeviceProtectionStatus.Passkey
     state.localVaultPresent = true
     state.localLoginPreparation = LocalLoginPreparationState.Idle
-    state.refreshPasswordEntriesList = vi.fn(async () =>
-      ok({ entries: [] }),
-    )
+    state.refreshPasswordEntriesList = vi.fn(async () => ok({ entries: [] }))
     const assessVaultConnectStatus = vi
       .spyOn(state, 'assessVaultConnectStatus')
       .mockResolvedValue(
