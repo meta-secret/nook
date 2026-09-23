@@ -149,6 +149,19 @@ jobs:
       - name: Full browser and extension suites
         if: steps.browser-scope.outputs.validation == 'true' && inputs.full_e2e_requested
         run: task --silent ci:pr:browser:full
+      - name: Report failed extension browser context
+        if: failure() && inputs.full_e2e_requested
+        run: |
+          find nook-app/nook-web/nook-web-extension/test-results \
+            -name error-context.md -type f -print -exec cat {} \; || true
+      - name: Upload failed extension browser traces
+        if: failure() && inputs.full_e2e_requested
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-e2e-failure-${{ github.run_id }}
+          path: nook-app/nook-web/nook-web-extension/test-results
+          if-no-files-found: ignore
+          retention-days: 1
       - name: Authentication-sensitive extension regression
         if: steps.browser-scope.outputs.validation == 'true' && !inputs.full_e2e_requested && steps.browser-scope.outputs.auth == 'true'
         run: task --silent ci:pr:browser:auth
