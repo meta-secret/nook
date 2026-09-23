@@ -36,16 +36,26 @@ export function installMockPasskeyRuntime() {
           new Uint8Array(source.buffer, source.byteOffset, source.byteLength),
         )
       : Uint8Array.from(new Uint8Array(source))
+  enum PrfRequestKind {
+    NoInput = 'no-input',
+    Input = 'input',
+  }
+  type PrfRequest =
+    | { kind: PrfRequestKind.NoInput }
+    | { kind: PrfRequestKind.Input; value: ArrayBuffer | ArrayBufferView }
   const result = (
-    first: ArrayBuffer | ArrayBufferView | undefined,
+    prfRequest: PrfRequest,
     enabled: boolean,
     registration: boolean,
   ) => {
-    const prfOutput = first ? derive(first) : new ArrayBuffer(0)
+    const prfOutput =
+      prfRequest.kind === PrfRequestKind.Input
+        ? derive(prfRequest.value)
+        : new ArrayBuffer(0)
     const authenticatorData = new Uint8Array(53)
     authenticatorData[32] = registration ? 0x5d : 0x1d
     if (registration) authenticatorData.fill(1, 37, 53)
-    if (first) {
+    if (prfRequest.kind === PrfRequestKind.Input) {
       Object.assign(window, {
         __nookE2eLastPrfOutput: btoa(
           String.fromCharCode(...new Uint8Array(prfOutput)),
@@ -63,15 +73,19 @@ export function installMockPasskeyRuntime() {
         getAuthenticatorData: () => authenticatorData.buffer,
         getTransports: () => (registration ? ['internal', 'hybrid'] : []),
       },
-      getClientExtensionResults: () =>
-        first
-          ? {
+      getClientExtensionResults: () => {
+        switch (prfRequest.kind) {
+          case PrfRequestKind.NoInput:
+            return {}
+          case PrfRequestKind.Input:
+            return {
               prf: {
                 enabled,
                 results: { first: prfOutput },
               },
             }
-          : {},
+        }
+      },
     }
   }
   const publicKeyCredential = {
@@ -172,7 +186,10 @@ export function installMockPasskeyRuntime() {
       if (first && !isUint8Array(first)) {
         throw new TypeError('WebAuthn creation PRF input must be binary')
       }
-      return result(first, mode !== 'unsupported', true)
+      const prfRequest: PrfRequest = first
+        ? { kind: PrfRequestKind.Input, value: first }
+        : { kind: PrfRequestKind.NoInput }
+      return result(prfRequest, mode !== 'unsupported', true)
     }
     async get(options: {
       publicKey?: {
@@ -216,7 +233,10 @@ export function installMockPasskeyRuntime() {
       // A credential that accepted PRF during registration keeps supporting
       // it when it is used to unlock the vault. Returning `false` here makes
       // the browser boundary reject an otherwise valid PRF result.
-      return result(first, mode !== 'unsupported', false)
+      const prfRequest: PrfRequest = first
+        ? { kind: PrfRequestKind.Input, value: first }
+        : { kind: PrfRequestKind.NoInput }
+      return result(prfRequest, mode !== 'unsupported', false)
     }
   }
   Object.defineProperty(navigator, 'credentials', {

@@ -188,8 +188,49 @@ export async function assertWebsitePasskeyThroughExtension({
     },
     string
   >(async (id) => {
-    const isArrayBuffer = (value: unknown): boolean =>
-      Object.prototype.toString.call(value) === '[object ArrayBuffer]'
+    enum AssertionBinaryKind {
+      Missing = 'missing',
+      Invalid = 'invalid',
+      Valid = 'valid',
+    }
+    enum AssertionBinaryField {
+      AuthenticatorData = 'authenticatorData',
+      Signature = 'signature',
+    }
+    type AssertionBinary =
+      | { kind: AssertionBinaryKind.Missing }
+      | { kind: AssertionBinaryKind.Invalid }
+      | { kind: AssertionBinaryKind.Valid; byteLength: number }
+    const readArrayBuffer = (value: unknown): AssertionBinary => {
+      if (
+        typeof value !== 'object' ||
+        Object.prototype.toString.call(value) !== '[object ArrayBuffer]' ||
+        !('byteLength' in value) ||
+        typeof value.byteLength !== 'number'
+      ) {
+        return { kind: AssertionBinaryKind.Invalid }
+      }
+      return { kind: AssertionBinaryKind.Valid, byteLength: value.byteLength }
+    }
+    const readAssertionBinary = (request: {
+      source: unknown
+      field: AssertionBinaryField
+    }): AssertionBinary => {
+      const { source, field } = request
+      if (!source || typeof source !== 'object') {
+        return { kind: AssertionBinaryKind.Missing }
+      }
+      if (field === AssertionBinaryField.AuthenticatorData) {
+        if (!('authenticatorData' in source)) {
+          return { kind: AssertionBinaryKind.Missing }
+        }
+        return readArrayBuffer(source.authenticatorData)
+      }
+      if (!('signature' in source)) {
+        return { kind: AssertionBinaryKind.Missing }
+      }
+      return readArrayBuffer(source.signature)
+    }
     const rawId = Uint8Array.from(
       atob(
         id.replaceAll('-', '+').replaceAll('_', '/') +
@@ -215,25 +256,17 @@ export async function assertWebsitePasskeyThroughExtension({
       throw new Error('Website passkey assertion did not return a public key')
     }
     const response = credential.response
-    const authenticatorData =
-      response &&
-      typeof response === 'object' &&
-      'authenticatorData' in response
-        ? response.authenticatorData
-        : undefined
-    const signature =
-      response && typeof response === 'object' && 'signature' in response
-        ? response.signature
-        : undefined
+    const authenticatorData = readAssertionBinary({
+      source: response,
+      field: AssertionBinaryField.AuthenticatorData,
+    })
+    const signature = readAssertionBinary({
+      source: response,
+      field: AssertionBinaryField.Signature,
+    })
     if (
-      !isArrayBuffer(authenticatorData) ||
-      !authenticatorData ||
-      !('byteLength' in authenticatorData) ||
-      typeof authenticatorData.byteLength !== 'number' ||
-      !isArrayBuffer(signature) ||
-      !signature ||
-      !('byteLength' in signature) ||
-      typeof signature.byteLength !== 'number'
+      authenticatorData.kind !== AssertionBinaryKind.Valid ||
+      signature.kind !== AssertionBinaryKind.Valid
     ) {
       throw new Error('Website passkey assertion has no assertion response')
     }
