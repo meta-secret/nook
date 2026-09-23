@@ -18,6 +18,15 @@ tasks:
     cmds:
       - task: preflight:repository-policy-untrusted
 
+  ci:repository-policy:stage-pinned-meta-cortex:
+    desc: Stage the pinned Meta-Cortex library checkout for repository policy.
+    dir: "{{.REPO_ROOT}}"
+    cmds:
+      - test "$(git -C .meta-cortex-source rev-parse HEAD)" = 3a87a1e9a28ae43a18921dc7002d351ceb03ad76
+      - mkdir .meta-cortex
+      - cp -R .meta-cortex-source/cortex/. .meta-cortex/
+      - cp .meta-cortex-source/LICENSE .meta-cortex/LICENSE
+
   ci:pr:deploy-and-verify-previews:
     desc: Deploy and verify Cloudflare Pages PR preview aliases.
     cmds:
