@@ -647,12 +647,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       attachNookLogsForTest(reopenedVaultPage, testInfo),
       'attach extension app logs',
       10_000,
-    ).catch((error: unknown) => {
-      console.warn(
-        '[extension e2e] skipped app log attachment:',
-        error instanceof Error ? error.message : 'unknown failure',
-      )
-    })
+    )
 
     await withE2eDeadline(
       context.close(),
