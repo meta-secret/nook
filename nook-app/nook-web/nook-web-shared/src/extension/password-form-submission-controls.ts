@@ -456,7 +456,7 @@ class AuthenticationSubmissionControls extends AuthenticationSubmissionSemantics
       query.kind === PasswordFormQueryKind.Scoped &&
       query.formScope.kind === PasswordFormScopeKind.Unowned &&
       query.root.nodeType === 1
-        ? query.root.ownerDocument.defaultView?.Element
+        ? query.root.ownerDocument?.defaultView?.Element
         : false;
     const identityContainer: Element | false = form
       ? form
@@ -693,7 +693,7 @@ class AuthenticationSubmissionControls extends AuthenticationSubmissionSemantics
       containerElement &&
       container instanceof containerElement &&
       container.contains(control) &&
-      field.ownerDocument.contains(container)
+      field.ownerDocument.contains(container),
     );
   }
 

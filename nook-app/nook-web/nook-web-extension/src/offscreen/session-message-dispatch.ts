@@ -214,9 +214,13 @@ export class ListeningExtensionSession<Response> {
     void chrome.runtime
       .sendMessage<BrowserRuntimeMessageValue>(message)
       .then((response) => {
+        const admission = BrowserRuntimeMessage.from(response)
+        if (admission.kind !== BrowserRuntimeMessageAdmissionKind.Accepted) {
+          throw new Error('extension session readiness was not acknowledged')
+        }
         const decodedResponse = runConcreteDecoder(
           ExtensionSessionReadyResponseDecoder.decode,
-          response,
+          admission.message,
         )
         if (decodedResponse.kind !== ConcreteDecoderResultKind.Decoded) {
           throw new Error('extension session readiness was not acknowledged')

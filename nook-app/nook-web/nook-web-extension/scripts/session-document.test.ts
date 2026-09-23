@@ -10,11 +10,12 @@ import {
   type ExtensionSessionTransportDelivery,
 } from '../src/background/service-worker/session-document'
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
-import { MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE } from '../src/offscreen/session-request-adapter'
 import {
-  ExtensionSessionReadinessMessageType,
-  isExtensionSessionReadinessQuery,
-} from '../src/lib/extension-session-readiness'
+  BrowserRuntimeMessage,
+  BrowserRuntimeMessageAdmissionKind,
+} from '../src/lib/browser-runtime-message'
+import { MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE } from '../src/offscreen/session-request-adapter'
+import { ExtensionSessionReadinessMessageType } from '../src/lib/extension-session-readiness'
 
 type RuntimeMessageListener = Parameters<
   typeof chrome.runtime.onMessage.addListener
@@ -109,7 +110,12 @@ class SessionDocumentFixture {
             message: unknown,
             respond: (value: unknown) => void,
           ) => {
-            if (isExtensionSessionReadinessQuery(message)) {
+            const admission = BrowserRuntimeMessage.from(message)
+            if (
+              admission.kind === BrowserRuntimeMessageAdmissionKind.Accepted &&
+              admission.message.type ===
+                ExtensionSessionReadinessMessageType.Query
+            ) {
               respond({ ok: true })
               return
             }
