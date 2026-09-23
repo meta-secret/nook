@@ -29,9 +29,14 @@ const wasmInit: Parameters<typeof initSync>[0] = {
 }
 initSync(wasmInit)
 
+const originalChrome = Object.getOwnPropertyDescriptor(globalThis, 'chrome')
 const originalLocation = Object.getOwnPropertyDescriptor(globalThis, 'location')
 
 beforeEach(() => {
+  Object.defineProperty(globalThis, 'chrome', {
+    configurable: true,
+    value: undefined,
+  })
   Object.defineProperty(globalThis, 'location', {
     configurable: true,
     value: testWindow.location,
@@ -39,6 +44,11 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  if (originalChrome) {
+    Object.defineProperty(globalThis, 'chrome', originalChrome)
+  } else {
+    Reflect.deleteProperty(globalThis, 'chrome')
+  }
   if (originalLocation) {
     Object.defineProperty(globalThis, 'location', originalLocation)
   } else {
