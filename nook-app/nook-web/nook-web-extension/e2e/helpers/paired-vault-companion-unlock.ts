@@ -82,9 +82,7 @@ function captureCompanionPopupDiagnostics(
       response.status() >= 400 &&
       response.url().startsWith(extensionOrigin)
     ) {
-      diagnostics.failures.push(
-        `HTTP ${response.status()}: ${response.url()}`,
-      )
+      diagnostics.failures.push(`HTTP ${response.status()}: ${response.url()}`)
     }
   })
   return diagnostics
