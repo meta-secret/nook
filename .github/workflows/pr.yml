@@ -157,14 +157,6 @@ jobs:
             printf '%s\n' "$context"
             cat "$context"
           done
-      - name: Upload failed extension browser traces
-        if: failure() && inputs.full_e2e_requested
-        uses: actions/upload-artifact@v4
-        with:
-          name: extension-e2e-failure-${{ github.run_id }}
-          path: nook-app/nook-web/nook-web-extension/test-results
-          if-no-files-found: ignore
-          retention-days: 1
       - name: Authentication-sensitive extension regression
         if: steps.browser-scope.outputs.validation == 'true' && !inputs.full_e2e_requested && steps.browser-scope.outputs.auth == 'true'
         run: task --silent ci:pr:browser:auth
