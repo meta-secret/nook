@@ -344,17 +344,42 @@ fn loom_workflow_audits_every_cortex_change() {
 #[test]
 fn preflight_installs_released_meta_cortex_without_configuration_override() {
     let dockerfile = RepositoryFixture::repository_root().read("preflight/Dockerfile");
+    let initialize_request = concat!(
+        "meta-cortex run --request - <<'YAML'\n",
+        "version: 1\n",
+        "project: /meta-secret/nook\n",
+        "operation:\n",
+        "  group: Framework\n",
+        "  command:\n",
+        "    name: Initialize\n",
+        "    arguments:\n",
+        "      harness: codex\n",
+        "      instructions: skip\n",
+        "YAML"
+    );
+    let info_request = concat!(
+        "meta-cortex run --request - <<'YAML'\n",
+        "version: 1\n",
+        "project: /meta-secret/nook\n",
+        "operation:\n",
+        "  group: Framework\n",
+        "  command:\n",
+        "    name: Info\n",
+        "    arguments: {}\n",
+        "YAML"
+    );
     assert!(
-        dockerfile.contains("meta-cortex/releases/download/v0.6.2/meta-cortex-installer.sh"),
+        dockerfile.contains("meta-cortex/releases/download/v0.7.0/meta-cortex-installer.sh"),
         "Meta-Cortex installation must use the selected upstream release"
     );
     assert!(
         dockerfile.contains(
             "META_CORTEX_UNMANAGED_INSTALL=/usr/local/bin sh /tmp/meta-cortex-installer.sh"
-        ) && dockerfile
-            .contains("meta-cortex init --harness codex --instructions skip /meta-secret/nook")
-            && dockerfile.contains("meta-cortex info /meta-secret/nook"),
-        "Meta-Cortex installation must initialize through the released command"
+        ) && dockerfile.contains(initialize_request)
+            && dockerfile.contains(info_request)
+            && !dockerfile.contains("meta-cortex init ")
+            && !dockerfile.contains("meta-cortex info "),
+        "Meta-Cortex installation must use the supported framework YAML requests"
     );
     assert!(
         !dockerfile.contains("sed -i"),

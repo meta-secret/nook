@@ -125,15 +125,35 @@ ARG LOOM_OWNERSHIP_FROM
 COPY --from=repository-source / /meta-secret/nook
 # The ignored library is absent from fresh checkouts. Initialize it through the
 # official released command before Loom reads its roles and skills.
-RUN set -eu \
-    && test ! -e /meta-secret/nook/.meta-cortex \
-    && curl --proto '=https' --tlsv1.2 -LsSf \
-      https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/download/v0.6.2/meta-cortex-installer.sh \
-      --output /tmp/meta-cortex-installer.sh \
-    && META_CORTEX_UNMANAGED_INSTALL=/usr/local/bin sh /tmp/meta-cortex-installer.sh \
-    && rm /tmp/meta-cortex-installer.sh \
-    && meta-cortex init --harness codex --instructions skip /meta-secret/nook \
-    && meta-cortex info /meta-secret/nook
+RUN <<'EOF'
+set -eu
+test ! -e /meta-secret/nook/.meta-cortex
+curl --proto '=https' --tlsv1.2 -LsSf \
+  https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/download/v0.7.0/meta-cortex-installer.sh \
+  --output /tmp/meta-cortex-installer.sh
+META_CORTEX_UNMANAGED_INSTALL=/usr/local/bin sh /tmp/meta-cortex-installer.sh
+rm /tmp/meta-cortex-installer.sh
+meta-cortex run --request - <<'YAML'
+version: 1
+project: /meta-secret/nook
+operation:
+  group: Framework
+  command:
+    name: Initialize
+    arguments:
+      harness: codex
+      instructions: skip
+YAML
+meta-cortex run --request - <<'YAML'
+version: 1
+project: /meta-secret/nook
+operation:
+  group: Framework
+  command:
+    name: Info
+    arguments: {}
+YAML
+EOF
 COPY --from=repository-git /git /meta-secret/nook/.git
 COPY --from=repository-git /event.json /tmp/policy-event.json
 ENV GITHUB_EVENT_PATH=/tmp/policy-event.json \
