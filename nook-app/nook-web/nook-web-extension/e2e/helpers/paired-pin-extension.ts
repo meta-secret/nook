@@ -314,7 +314,7 @@ export async function lockExtensionSession(
             payload: { queue: { kind: 'message-default' } },
           },
           'active extension session status request',
-        ).then(() => undefined),
+        ),
       )
       const lockResult = await sendRuntimeMessage<SessionLockResponse>(
         { type: 'nook:extension-session-lock' },
