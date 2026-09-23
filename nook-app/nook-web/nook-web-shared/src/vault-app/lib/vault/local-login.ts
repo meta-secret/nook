@@ -33,7 +33,6 @@ import {
   LocalLoginPreparationState,
   type LocalVaultCatalog,
 } from "$lib/vault/state/provider.svelte";
-import { LoginUnlockPresentation } from "$lib/vault/login-unlock-capabilities";
 import type { PasswordEntriesRefreshSnapshot } from "$lib/vault/action-contexts";
 
 const log = browserLogRuntime.createLogger("vault-local");
@@ -295,20 +294,6 @@ export class VaultLoginActions {
         else
           log.warn(
             `discarded local login metadata failure authenticated=${state.isAuthenticated} verifying=${state.isVerifying} epoch=${state.sessionEpoch}/${preparationSessionEpoch}`,
-          );
-        return;
-      }
-      const presentation = await new LoginUnlockPresentation(state).refresh();
-      if (presentation.isErr()) {
-        if (canPublishPreparationFailure())
-          state.errorMsg = state.t(
-            new StorageOperationFailure(
-              StorageOperationFailureKind.UnlockMetadataUnavailable,
-            ).translationKey,
-          );
-        else
-          log.warn(
-            `discarded local login presentation failure authenticated=${state.isAuthenticated} verifying=${state.isVerifying} epoch=${state.sessionEpoch}/${preparationSessionEpoch}`,
           );
         return;
       }
