@@ -638,6 +638,10 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         .getByRole('button', { name: 'Continue with Nook' })
         .click()
       const websiteLoginPicker = await websiteLoginPickerPromise
+      await websiteLoginPicker.waitForURL(/intent=login-picker/)
+      await expect(
+        websiteLoginPicker.getByText('alice@nook.test'),
+      ).toBeVisible({ timeout: 20_000 })
       await websiteLoginPicker.close()
       await websiteAfterUnlock.page.reload()
       await expect(
