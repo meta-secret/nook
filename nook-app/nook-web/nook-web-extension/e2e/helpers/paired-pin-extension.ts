@@ -298,7 +298,11 @@ export async function lockExtensionSession(
                 reject(new Error(`${purpose}: ${runtimeError}`))
                 return
               }
-              resolve(response as Response)
+              if (!response) {
+                reject(new Error(`${purpose}: no runtime response`))
+                return
+              }
+              resolve(response)
             },
           )
         })
