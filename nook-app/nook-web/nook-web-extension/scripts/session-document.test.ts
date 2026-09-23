@@ -11,6 +11,14 @@ import {
 } from '../src/background/service-worker/session-document'
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
 import { MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE } from '../src/offscreen/session-request-adapter'
+import {
+  ExtensionSessionReadinessMessageType,
+  isExtensionSessionReadinessQuery,
+} from '../src/lib/extension-session-readiness'
+
+type RuntimeMessageListener = Parameters<
+  typeof chrome.runtime.onMessage.addListener
+>[0]
 
 const fixtureSessionRequest = {
   type: ExtensionSessionMessageType.Status,
@@ -59,11 +67,14 @@ type BrowserReply =
     }
 
 class SessionDocumentFixture {
-  readonly owner = new ExtensionSessionDocumentOwner()
+  readonly owner: ExtensionSessionDocumentOwner
+  readonly listeners: RuntimeMessageListener[] = []
   readonly creation = new DeferredBrowserEffect<void>()
   readonly closure = new DeferredBrowserEffect<void>()
   readonly closureRequested = new DeferredBrowserEffect<void>()
-  readonly createDocument = mock(() => this.creation.operation)
+  readonly createDocument = mock(() =>
+    this.creation.operation.then(() => this.announceSessionReady()),
+  )
   readonly closeDocument = mock(() => {
     this.closureRequested.complete()
     return this.closure.operation
@@ -82,18 +93,44 @@ class SessionDocumentFixture {
           closeDocument: this.closeDocument,
         },
         runtime: {
+          id: 'fixture',
           ContextType: { OFFSCREEN_DOCUMENT: 'OFFSCREEN_DOCUMENT' },
           getURL: (path: string) => `chrome-extension://fixture/${path}`,
           getContexts: this.getContexts,
+          onMessage: {
+            addListener: (listener: RuntimeMessageListener) =>
+              this.listeners.push(listener),
+            removeListener: (listener: RuntimeMessageListener) => {
+              const index = this.listeners.indexOf(listener)
+              if (index >= 0) this.listeners.splice(index, 1)
+            },
+          },
           sendMessage: (
-            _message: unknown,
+            message: unknown,
             respond: (value: unknown) => void,
           ) => {
+            if (isExtensionSessionReadinessQuery(message)) {
+              respond({ ok: true })
+              return
+            }
             this.reply = { kind: BrowserReplyPhase.Pending, respond }
           },
         },
       },
     })
+    this.owner = new ExtensionSessionDocumentOwner()
+  }
+
+  announceSessionReady(): void {
+    const message = { type: ExtensionSessionReadinessMessageType.Ready }
+    const sender: Parameters<RuntimeMessageListener>[1] = {
+      id: 'fixture',
+      url: chrome.runtime.getURL(extensionSessionDocument),
+    }
+    const sendResponse: Parameters<RuntimeMessageListener>[2] = () => {}
+    for (const listener of this.listeners) {
+      listener(message, sender, sendResponse)
+    }
   }
 
   inheritDocument(): void {
@@ -134,6 +171,26 @@ describe('extension session document ownership', () => {
       documentUrls: [chrome.runtime.getURL(extensionSessionDocument)],
     })
     expect(fixture.createDocument).not.toHaveBeenCalled()
+  })
+
+  test('waits for the offscreen readiness message before exposing its transport', async () => {
+    const fixture = new SessionDocumentFixture()
+    fixture.createDocument.mockImplementationOnce(
+      () => fixture.creation.operation,
+    )
+    const opening = fixture.owner.open()
+    let settled = false
+    void opening.then(() => {
+      settled = true
+    })
+    await Promise.resolve()
+    expect(fixture.createDocument).toHaveBeenCalledTimes(1)
+    expect(fixture.creation.complete()).toEqual(ok())
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    fixture.announceSessionReady()
+    expect((await opening).isOk()).toBe(true)
   })
 
   test('does not admit an unrelated offscreen context when creation fails', async () => {

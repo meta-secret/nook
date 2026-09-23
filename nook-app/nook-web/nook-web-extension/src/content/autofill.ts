@@ -68,7 +68,10 @@ import {
   scanState,
   widgetState,
 } from './autofill/state'
-import { runAfterCompanionWasmReady } from './autofill/companion-wasm-gate'
+import {
+  queueSubmitCaptureUntilCompanionWasmReady,
+  runAfterCompanionWasmReady,
+} from './autofill/companion-wasm-gate'
 import { authenticationWidgetRenderer } from './autofill/widget-rendering'
 import { authenticationWidgetPosition } from './autofill/widget-position'
 import { workflowUi } from './autofill/workflow-ui'
@@ -626,17 +629,23 @@ scanState.schedule = authenticationScanRenderLifecycle.schedule.bind(
   authenticationScanRenderLifecycle,
 )
 
+const captureSubmittedLogin =
+  loginSaveInteraction.captureSubmittedLogin.bind(loginSaveInteraction)
+const queuedSubmitCapture = queueSubmitCaptureUntilCompanionWasmReady(
+  captureSubmittedLogin,
+)
+
+document.addEventListener('submit', queuedSubmitCapture.capture, true)
+
 void runAfterCompanionWasmReady({
   companionWasmReady,
   start: async () => {
     if (await simpleVaultRuntime.isRuntimeNookVaultAppUrl(location.href)) {
+      document.removeEventListener('submit', queuedSubmitCapture.capture, true)
+      queuedSubmitCapture.discard()
       return
     }
-    document.addEventListener(
-      'submit',
-      loginSaveInteraction.captureSubmittedLogin.bind(loginSaveInteraction),
-      true,
-    )
+    queuedSubmitCapture.enable()
     document.addEventListener(
       'click',
       (event) => {

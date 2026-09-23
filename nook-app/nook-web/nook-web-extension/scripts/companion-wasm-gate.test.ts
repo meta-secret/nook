@@ -1,7 +1,10 @@
 import { rejects } from 'node:assert/strict'
 import { describe, expect, test } from 'bun:test'
 
-import { runAfterCompanionWasmReady } from '../src/content/autofill/companion-wasm-gate'
+import {
+  queueSubmitCaptureUntilCompanionWasmReady,
+  runAfterCompanionWasmReady,
+} from '../src/content/autofill/companion-wasm-gate'
 
 type Deferred = {
   readonly promise: Promise<void>
@@ -24,6 +27,25 @@ function deferred(): Deferred {
 }
 
 describe('companion WASM startup gate', () => {
+  test('queues submit events until runtime-backed classification is ready', () => {
+    const events: Event[] = []
+    const capture = queueSubmitCaptureUntilCompanionWasmReady((event) =>
+      events.push(event),
+    )
+    const firstSubmit = new Event('submit')
+    const secondSubmit = new Event('submit')
+
+    capture.capture(firstSubmit)
+    expect(events).toEqual([])
+    capture.enable()
+    expect(events).toEqual([firstSubmit])
+    capture.capture(secondSubmit)
+    expect(events).toEqual([firstSubmit, secondSubmit])
+    capture.discard()
+    capture.capture(new Event('submit'))
+    expect(events).toEqual([firstSubmit, secondSubmit])
+  })
+
   test('holds the first Pilot startup until companion WASM is ready', async () => {
     const readiness = deferred()
     const events: string[] = []

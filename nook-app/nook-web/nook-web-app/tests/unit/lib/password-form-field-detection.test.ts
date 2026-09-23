@@ -304,6 +304,29 @@ describe('authentication field detection', () => {
     ).toEqual(['before-otp', 'inside-otp', 'after-otp'])
   })
 
+  test('matches externally associated fields when the form id is not a CSS identifier', () => {
+    const owner = document.createElement('form')
+    owner.id = ['login"', ' input, form[data-owner="hostile'].join('')
+    owner.method = 'post'
+    owner.action = '/auth/login'
+    const username = document.createElement('input')
+    username.autocomplete = 'username'
+    username.setAttribute('form', owner.id)
+    const password = document.createElement('input')
+    password.type = 'password'
+    password.setAttribute('form', owner.id)
+    document.body.append(username, owner, password)
+
+    const query: Parameters<
+      typeof passwordFieldDiscovery.findUsernameFields
+    >[0] = {
+      root: document,
+      formScope: { kind: PasswordFormScopeKind.Owned, owner },
+    }
+    expect(passwordFieldDiscovery.findUsernameFields(query)).toEqual([username])
+    expect(passwordFieldDiscovery.findPasswordFields(query)).toEqual([password])
+  })
+
   test('keeps form-less fields together with a sibling Sign in button', () => {
     document.body.innerHTML = `
       <div class="panel">

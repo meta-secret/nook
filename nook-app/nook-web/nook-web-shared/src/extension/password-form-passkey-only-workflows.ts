@@ -8,6 +8,7 @@ import {
 function companionExtensionRuntimePresent(): boolean {
   return typeof chrome === "object" && Boolean(chrome.runtime?.id);
 }
+
 import {
   PasswordFormScopeKind,
   type PasskeyControlCandidate,
@@ -24,6 +25,21 @@ import {
   authenticationSubmissionControls,
 } from "./password-form-submission-controls";
 import { authenticationFactBounds } from "./authentication-fact-bounds";
+
+function documentForParentNode(root: ParentNode): Document | false {
+  if (root.nodeType === 9) return root as Document;
+  if (root.nodeType === 1) return (root as Element).ownerDocument;
+  return false;
+}
+
+function isPasskeyButtonOrInput(control: HTMLElement): boolean {
+  const view = control.ownerDocument.defaultView;
+  return Boolean(
+    view &&
+    (control instanceof view.HTMLButtonElement ||
+      control instanceof view.HTMLInputElement),
+  );
+}
 
 type RankableWorkflowSummary = {
   oneTimeCodeFieldCount: number;
@@ -295,9 +311,12 @@ export class PasskeyOnlyWorkflowSummary<Summary> {
     observation: RankableWorkflowObservation,
   ): boolean {
     const { root, formScope, summary } = observation;
+    const document = documentForParentNode(root);
+    const view = document ? document.defaultView : false;
     if (
       formScope.kind !== PasswordFormScopeKind.Unowned ||
-      !(root instanceof Document || root instanceof Element)
+      !view ||
+      !(root instanceof view.Document || root instanceof view.Element)
     )
       return false;
     const controls = Array.from(
@@ -476,15 +495,15 @@ export class PasskeyOnlyWorkflowSummary<Summary> {
     const passkeyForms = [
       ...new Set(
         passkeyCandidates.flatMap(({ control }) => {
-          if (
-            (control instanceof HTMLButtonElement ||
-              control instanceof HTMLInputElement) &&
-            control.form
-          ) {
+          if (isPasskeyButtonOrInput(control) && control.form) {
             return [control.form];
           }
           const owner = control.closest("form");
-          return owner instanceof HTMLFormElement ? [owner] : [];
+          const formConstructor =
+            control.ownerDocument.defaultView?.HTMLFormElement;
+          return formConstructor && owner instanceof formConstructor
+            ? [owner]
+            : [];
         }),
       ),
     ];
@@ -500,13 +519,13 @@ export class PasskeyOnlyWorkflowSummary<Summary> {
       scopes.push(new PasskeyOnlyScope(ownedScope));
     }
     const formlessPasskeys = passkeyCandidates.filter(({ control }) => {
-      if (
-        control instanceof HTMLButtonElement ||
-        control instanceof HTMLInputElement
-      ) {
+      if (isPasskeyButtonOrInput(control)) {
         return !control.form;
       }
-      return !(control.closest("form") instanceof HTMLFormElement);
+      const owner = control.closest("form");
+      const formConstructor =
+        control.ownerDocument.defaultView?.HTMLFormElement;
+      return !(formConstructor && owner instanceof formConstructor);
     });
     const localPasskeyRoots = [
       ...new Set(

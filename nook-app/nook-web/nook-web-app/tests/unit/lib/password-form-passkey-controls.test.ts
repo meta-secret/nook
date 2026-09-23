@@ -11,6 +11,7 @@ import {
   passwordFieldDiscovery,
   passwordFormInteraction,
 } from '../../../../nook-web-shared/src/extension/password-forms'
+import { PasswordFormWorkflowObservation } from '../../../../nook-web-shared/src/extension/password-form-workflow-observation'
 import { MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS } from '../../../../nook-web-shared/src/extension/password-form-submission-controls'
 
 function observedAuthenticationWorkflow(): PasswordFormObservation {
@@ -25,6 +26,30 @@ afterEach(() => {
 })
 
 describe('passkey control detection', () => {
+  test('collects passkey-only workflows from a foreign document realm', () => {
+    const frame = document.createElement('iframe')
+    document.body.append(frame)
+    const foreignWindow = frame.contentWindow
+    if (!foreignWindow) throw new Error('expected the foreign document realm')
+    const foreignDocument = foreignWindow.document
+    foreignDocument.body.innerHTML = `
+      <button type="button">Sign in with a passkey</button>
+    `
+
+    const workflows = new PasswordFormWorkflowObservation(
+      foreignWindow,
+    ).summarizeAuthenticationWorkflowForms()
+    expect(
+      workflows.some(
+        ({ root, summary }) =>
+          summary.passkeyControlPresent &&
+          (root === foreignDocument ||
+            (root.nodeType === 1 &&
+              (root as Element).ownerDocument === foreignDocument)),
+      ),
+    ).toBe(true)
+  })
+
   test('keeps a safe login after POST forms with actionable GET siblings', () => {
     const decoys = Array.from(
       { length: MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS * 2 },
