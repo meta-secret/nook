@@ -36,6 +36,7 @@ const chromiumExecutablePath = ((v) => (v ? v : ''))(
 )
 const setupStorageKey = 'nook:extension-setup'
 const EXTENSION_TIMEOUT_MS = 45_000
+const RUNTIME_RESPONSE_TIMEOUT_MS = 30_000
 
 type SessionStatusResponse = {
   ok?: boolean
@@ -169,9 +170,10 @@ export async function launchPairedPinExtension(
   await popupPage.goto(`chrome-extension://${extensionId}/popup/index.html`)
   await ensurePinProtectedPopup(popupPage, pin)
 
-  const openedConnectPage = context.waitForEvent('page')
-  await popupPage.getByTestId('connect-simple-vault-btn').click()
-  const simplePage = await openedConnectPage
+  const [simplePage] = await Promise.all([
+    context.waitForEvent('page', { timeout: EXTENSION_TIMEOUT_MS }),
+    popupPage.getByTestId('connect-simple-vault-btn').click(),
+  ])
   await expect(simplePage).toHaveURL((url) =>
     belongs_to_simple_vault(simpleVaultBaseUrl, url.toString()),
   )
@@ -270,44 +272,63 @@ export async function lockExtensionSession(
   const popupPage = await context.newPage()
   try {
     await popupPage.goto(`chrome-extension://${extensionId}/popup/index.html`)
-    const result = await popupPage.evaluate(async () => {
-      await new Promise<{ ok?: boolean }>((resolve) => {
-        globalThis.chrome.runtime.sendMessage(
-          { type: 'nook:ensure-extension-session-runtime' },
-          (response?: SessionStatusResponse) =>
-            resolve(response ? response : {}),
-        )
-      })
-      const activeSessionRequests = Array.from(
-        { length: 24 },
-        () =>
-          new Promise<void>((resolve) => {
+    const result = await popupPage.evaluate(
+      async (responseTimeoutMs) => {
+        const sendRuntimeMessage = <Response>(
+          message: unknown,
+          purpose: string,
+        ): Promise<Response> =>
+          new Promise<Response>((resolve, reject) => {
+            let completed = false
+            const timeout = window.setTimeout(() => {
+              completed = true
+              reject(
+                new Error(
+                  `Timed out waiting for ${purpose} after ${responseTimeoutMs}ms.`,
+                ),
+              )
+            }, responseTimeoutMs)
             globalThis.chrome.runtime.sendMessage(
+              message,
+              (response?: Response) => {
+                if (completed) return
+                completed = true
+                window.clearTimeout(timeout)
+                const runtimeError =
+                  globalThis.chrome.runtime.lastError?.message
+                if (runtimeError) {
+                  reject(new Error(`${purpose}: ${runtimeError}`))
+                  return
+                }
+                resolve(response as Response)
+              },
+            )
+          })
+
+        await sendRuntimeMessage<SessionStatusResponse>(
+          { type: 'nook:ensure-extension-session-runtime' },
+          'extension session startup',
+        )
+        const activeSessionRequests = Array.from(
+          { length: 24 },
+          () =>
+            sendRuntimeMessage<unknown>(
               {
                 type: 'nook:extension-session-status',
                 payload: { queue: { kind: 'message-default' } },
               },
-              () => {
-                void globalThis.chrome.runtime.lastError
-                resolve()
-              },
-            )
-          }),
-      )
-      const lockResult = await new Promise<{
-        ok?: boolean
-        error?: string
-        reason?: string
-      }>((resolve) => {
-        globalThis.chrome.runtime.sendMessage(
-          { type: 'nook:extension-session-lock' },
-          (response?: SessionLockResponse) =>
-            resolve(response ? response : { ok: false, error: 'no-response' }),
+              'active extension session status request',
+            ).then(() => undefined),
         )
-      })
-      await Promise.all(activeSessionRequests)
-      return lockResult
-    })
+        const lockResult = await sendRuntimeMessage<SessionLockResponse>(
+          { type: 'nook:extension-session-lock' },
+          'extension session lock',
+        )
+        await Promise.all(activeSessionRequests)
+        return lockResult
+      },
+      RUNTIME_RESPONSE_TIMEOUT_MS,
+    )
     if (result?.ok !== true) {
       throw new Error(
         `Failed to lock extension session: ${((...[v = 'unknown']) => v)(((...[v = result?.reason]) => v)(result?.error))}`,

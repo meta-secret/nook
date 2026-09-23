@@ -45,6 +45,36 @@ export {
 export type { ExtensionPairingApprovedMessage }
 
 export const EXTENSION_UNLOCK_TIMEOUT_MS = 30_000
+const EXTENSION_RUNTIME_MESSAGE_TIMEOUT_MS = 15_000
+
+function pageAddress(page: Page): string {
+  try {
+    const url = new URL(page.url())
+    return `${url.origin}${url.pathname}`
+  } catch {
+    return 'unavailable page URL'
+  }
+}
+
+export async function waitForNewPage(
+  context: BrowserContext,
+  purpose: string,
+): Promise<Page> {
+  try {
+    return await context.waitForEvent('page', {
+      timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+    })
+  } catch (error) {
+    const openPages = context.pages().map(pageAddress)
+    throw new Error(
+      [
+        `Timed out waiting for ${purpose} after ${EXTENSION_UNLOCK_TIMEOUT_MS}ms.`,
+        `Open pages: ${openPages.length > 0 ? openPages.join(', ') : 'none'}.`,
+      ].join(' '),
+      { cause: error },
+    )
+  }
+}
 
 export async function advanceCreateVaultWizardToFinalStep(page: Page) {
   const chooser = page.getByTestId('login-create-vault-chooser')
@@ -492,9 +522,10 @@ export async function openSimpleVaultConnection(
   context: BrowserContext,
   popupPage: Page,
 ): Promise<Page> {
-  const openedConnectPage = context.waitForEvent('page')
-  await popupPage.getByTestId('connect-simple-vault-btn').click()
-  const simplePage = await openedConnectPage
+  const [simplePage] = await Promise.all([
+    waitForNewPage(context, 'Simple Vault connection page'),
+    popupPage.getByTestId('connect-simple-vault-btn').click(),
+  ])
   await expect(simplePage).toHaveURL((url) =>
     belongs_to_simple_vault(simpleVaultBaseUrl, url.toString()),
   )
@@ -527,9 +558,21 @@ export async function sendExternalMessage(
   message: unknown,
 ) {
   return page.evaluate(
-    ({ runtimeId, runtimeMessage }) =>
+    ({ runtimeId, runtimeMessage, messageType, timeoutMs }) =>
       new Promise<unknown>((resolve, reject) => {
+        let responded = false
+        const timeout = window.setTimeout(() => {
+          responded = true
+          reject(
+            new Error(
+              `Extension runtime message ${messageType} timed out after ${timeoutMs}ms.`,
+            ),
+          )
+        }, timeoutMs)
         chrome.runtime.sendMessage(runtimeId, runtimeMessage, (response) => {
+          if (responded) return
+          responded = true
+          window.clearTimeout(timeout)
           if (chrome.runtime.lastError?.message) {
             reject(new Error(chrome.runtime.lastError.message))
             return
@@ -537,6 +580,17 @@ export async function sendExternalMessage(
           resolve(response)
         })
       }),
-    { runtimeId: extensionId, runtimeMessage: message },
+    {
+      runtimeId: extensionId,
+      runtimeMessage: message,
+      messageType:
+        message &&
+        typeof message === 'object' &&
+        'type' in message &&
+        typeof message.type === 'string'
+          ? message.type
+          : 'unknown',
+      timeoutMs: EXTENSION_RUNTIME_MESSAGE_TIMEOUT_MS,
+    },
   )
 }
