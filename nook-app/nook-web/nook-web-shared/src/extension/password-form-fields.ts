@@ -78,11 +78,6 @@ type PageInputClassificationRequest = {
 
 type CompanionWasmFieldClassification = DirectFieldClassification;
 
-type AssociatedFormFieldSelectorRequest = {
-  selector: string;
-  escapedFormId: string;
-};
-
 export type LocalOwnedLoginObservationRootRequest = {
   owner: HTMLFormElement;
   passwordFields: readonly HTMLInputElement[];
@@ -447,16 +442,6 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
     );
   }
 
-  private associatedFormFieldSelector({
-    selector,
-    escapedFormId,
-  }: AssociatedFormFieldSelectorRequest): string {
-    return selector
-      .split(",")
-      .map((part) => `${part.trim()}[form="${escapedFormId}"]`)
-      .join(",");
-  }
-
   localOwnedLoginObservationRoot({
     owner,
     passwordFields,
@@ -573,17 +558,11 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
         }
       }
       if (owner.id) {
-        const css = owner.ownerDocument.defaultView?.CSS;
-        const associatedSelectorRequest: AssociatedFormFieldSelectorRequest = {
-          selector,
-          escapedFormId: css ? css.escape(owner.id) : owner.id,
-        };
         const associated =
-          owner.ownerDocument.querySelectorAll<HTMLInputElement>(
-            this.associatedFormFieldSelector(associatedSelectorRequest),
-          );
+          owner.ownerDocument.querySelectorAll<HTMLInputElement>("input[form]");
         for (const field of associated) {
           if (
+            field.matches(selector) &&
             !seen.has(field) &&
             field.form === owner &&
             (root === owner.ownerDocument ||

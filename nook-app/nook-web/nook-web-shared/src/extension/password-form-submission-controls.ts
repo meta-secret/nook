@@ -452,7 +452,10 @@ class AuthenticationSubmissionControls extends AuthenticationSubmissionSemantics
     const sourceOrigin = control.ownerDocument.defaultView?.location.origin;
     if (!sourceOrigin) return false;
 
-    const elementConstructor = globalThis.Element || false;
+    const elementConstructor =
+      query.root.nodeType === 1
+        ? (query.root as Element).ownerDocument.defaultView?.Element
+        : false;
     const identityContainer: Element | false = form
       ? form
       : query.kind === PasswordFormQueryKind.Scoped &&
@@ -669,8 +672,15 @@ class AuthenticationSubmissionControls extends AuthenticationSubmissionSemantics
     field,
     control,
   }: UnownedLocalScopeRequest): boolean {
-    const elementConstructor = globalThis.Element || false;
-    const documentConstructor = globalThis.Document || false;
+    const rootDocument =
+      root.nodeType === 9
+        ? (root as Document)
+        : root.nodeType === 1
+          ? (root as Element).ownerDocument
+          : false;
+    const rootView = rootDocument ? rootDocument.defaultView : false;
+    const elementConstructor = rootView ? rootView.Element : false;
+    const documentConstructor = rootView ? rootView.Document : false;
     if (elementConstructor && root instanceof elementConstructor) {
       return root.contains(control) && root.contains(field);
     }
@@ -682,9 +692,10 @@ class AuthenticationSubmissionControls extends AuthenticationSubmissionSemantics
     };
     const container =
       passwordFieldDiscovery.nearestUnownedAuthContainer(containerRequest);
+    const containerElement = container.ownerDocument.defaultView?.Element;
     return (
-      elementConstructor &&
-      container instanceof elementConstructor &&
+      containerElement &&
+      container instanceof containerElement &&
       container.contains(control)
     );
   }
