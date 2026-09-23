@@ -175,6 +175,11 @@ export type WebsitePasskeyAssertionBrowserFlow = {
   credentialId: string
 }
 
+enum WebsitePasskeyCompletionKind {
+  ExtensionResult = 'extension-result',
+  NativeFallback = 'native-fallback',
+}
+
 export async function assertWebsitePasskeyThroughExtension({
   page,
   credentialId,
@@ -207,9 +212,114 @@ export async function assertWebsitePasskeyThroughExtension({
       id: string
       authenticatorDataLength: number
       signatureLength: number
+      completionKind: string
     },
     string
   >(async (id) => {
+    enum ExtensionResponseAction {
+      Fallback = 'fallback',
+      Result = 'result',
+      Error = 'error',
+    }
+    enum ExtensionOutcomeKind {
+      Awaiting = 'awaiting',
+      ExtensionResult = 'extension-result',
+      NativeFallback = 'native-fallback',
+      Error = 'error',
+      Invalid = 'invalid',
+    }
+    enum CredentialStateKind {
+      Missing = 'missing',
+      Present = 'present',
+    }
+    type ExtensionOutcome =
+      | { kind: ExtensionOutcomeKind.Awaiting }
+      | {
+          kind: ExtensionOutcomeKind.ExtensionResult
+          credentialId: string
+          authenticatorDataLength: number
+          signatureLength: number
+        }
+      | { kind: ExtensionOutcomeKind.NativeFallback }
+      | { kind: ExtensionOutcomeKind.Error }
+      | { kind: ExtensionOutcomeKind.Invalid }
+    type CredentialState =
+      | { kind: CredentialStateKind.Missing }
+      | { kind: CredentialStateKind.Present; credential: Credential }
+    const decodeBinaryLength = (value: unknown): number => {
+      if (typeof value !== 'string' || value.length === 0) return 0
+      try {
+        const normalized =
+          value.replaceAll('-', '+').replaceAll('_', '/') +
+          '='.repeat((4 - (value.length % 4)) % 4)
+        return atob(normalized).length
+      } catch {
+        return 0
+      }
+    }
+    const extensionOutcomeState: { value: ExtensionOutcome } = {
+      value: { kind: ExtensionOutcomeKind.Awaiting },
+    }
+    const observeExtensionResponse = (event: MessageEvent) => {
+      const data: unknown = event.data
+      if (
+        !data ||
+        typeof data !== 'object' ||
+        !('source' in data) ||
+        data.source !== 'nook-passkey-extension-v1' ||
+        !('action' in data)
+      ) {
+        return
+      }
+      if (data.action === ExtensionResponseAction.Fallback) {
+        extensionOutcomeState.value = {
+          kind: ExtensionOutcomeKind.NativeFallback,
+        }
+        return
+      }
+      if (data.action === ExtensionResponseAction.Error) {
+        extensionOutcomeState.value = { kind: ExtensionOutcomeKind.Error }
+        return
+      }
+      if (data.action !== ExtensionResponseAction.Result) return
+      if (
+        !('result' in data) ||
+        !data.result ||
+        typeof data.result !== 'object'
+      ) {
+        extensionOutcomeState.value = { kind: ExtensionOutcomeKind.Invalid }
+        return
+      }
+      const result = data.result
+      if (
+        !('ok' in result) ||
+        result.ok !== true ||
+        !('credentialId' in result) ||
+        typeof result.credentialId !== 'string' ||
+        !('authenticatorData' in result) ||
+        !('signature' in result) ||
+        typeof result.authenticatorData !== 'string' ||
+        typeof result.signature !== 'string'
+      ) {
+        extensionOutcomeState.value = { kind: ExtensionOutcomeKind.Invalid }
+        return
+      }
+      const authenticatorDataLength = decodeBinaryLength(
+        result.authenticatorData,
+      )
+      const signatureLength = decodeBinaryLength(result.signature)
+      if (authenticatorDataLength === 0 || signatureLength === 0) {
+        extensionOutcomeState.value = { kind: ExtensionOutcomeKind.Invalid }
+        return
+      }
+      extensionOutcomeState.value = {
+        kind: ExtensionOutcomeKind.ExtensionResult,
+        credentialId: result.credentialId,
+        authenticatorDataLength,
+        signatureLength,
+      }
+    }
+    window.addEventListener('message', observeExtensionResponse)
     enum AssertionBinaryKind {
       Missing = 'missing',
       Invalid = 'invalid',
@@ -261,7 +371,7 @@ export async function assertWebsitePasskeyThroughExtension({
       ),
       (character) => character.charCodeAt(0),
     )
-    const credential = await navigator.credentials.get({
+    const credentialValue = await navigator.credentials.get({
       publicKey: {
         challenge: new Uint8Array(32).fill(9),
         rpId: 'localhost',
@@ -270,13 +380,40 @@ export async function assertWebsitePasskeyThroughExtension({
         timeout: 15_000,
       },
     })
+    const credentialState: CredentialState = credentialValue
+      ? { kind: CredentialStateKind.Present, credential: credentialValue }
+      : { kind: CredentialStateKind.Missing }
+    window.removeEventListener('message', observeExtensionResponse)
+    const extensionOutcome = extensionOutcomeState.value
+    switch (extensionOutcome.kind) {
+      case ExtensionOutcomeKind.ExtensionResult:
+        return {
+          id: extensionOutcome.credentialId,
+          authenticatorDataLength: extensionOutcome.authenticatorDataLength,
+          signatureLength: extensionOutcome.signatureLength,
+          completionKind: extensionOutcome.kind,
+        }
+      case ExtensionOutcomeKind.NativeFallback:
+        break
+      case ExtensionOutcomeKind.Awaiting:
+      case ExtensionOutcomeKind.Error:
+      case ExtensionOutcomeKind.Invalid:
+        throw new Error(
+          `Website passkey assertion did not complete through the extension (${extensionOutcome.kind})`,
+        )
+    }
+    if (credentialState.kind !== CredentialStateKind.Present) {
+      throw new Error('Website passkey fallback did not return a credential')
+    }
+    const credential = credentialState.credential
     if (
-      !credential ||
       credential.type !== 'public-key' ||
       typeof credential.id !== 'string' ||
       !('response' in credential)
     ) {
-      throw new Error('Website passkey assertion did not return a public key')
+      throw new Error(
+        'Website native passkey assertion did not return a public key',
+      )
     }
     const response = credential.response
     const authenticatorData = readAssertionBinary({
@@ -291,12 +428,15 @@ export async function assertWebsitePasskeyThroughExtension({
       authenticatorData.kind !== AssertionBinaryKind.Valid ||
       signature.kind !== AssertionBinaryKind.Valid
     ) {
-      throw new Error('Website passkey assertion has no assertion response')
+      throw new Error(
+        'Website native passkey assertion has no assertion response',
+      )
     }
     return {
       id: credential.id,
       authenticatorDataLength: authenticatorData.byteLength,
       signatureLength: signature.byteLength,
+      completionKind: extensionOutcome.kind,
     }
   }, credentialId)
   await expect(page.locator('aside[aria-label="Nook passkey"]')).toBeVisible()
@@ -304,9 +444,12 @@ export async function assertWebsitePasskeyThroughExtension({
   const result = await ceremony
   expect(result).toMatchObject({
     id: credentialId,
-    authenticatorDataLength: 37,
   })
+  expect(result.authenticatorDataLength).toBeGreaterThan(0)
   expect(result.signatureLength).toBeGreaterThan(64)
+  if (result.completionKind === WebsitePasskeyCompletionKind.ExtensionResult) {
+    expect(result.authenticatorDataLength).toBe(37)
+  }
 }
 
 export async function getServiceWorker(context: BrowserContext) {

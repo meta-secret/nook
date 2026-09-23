@@ -53,7 +53,9 @@ export function installMockPasskeyRuntime() {
         ? derive(prfRequest.value)
         : new ArrayBuffer(0)
     const authenticatorData = new Uint8Array(53)
+    const signature = new Uint8Array(72)
     authenticatorData[32] = registration ? 0x5d : 0x1d
+    signature.fill(registration ? 0x3d : 0x4d)
     if (registration) authenticatorData.fill(1, 37, 53)
     if (prfRequest.kind === PrfRequestKind.Input) {
       Object.assign(window, {
@@ -70,6 +72,7 @@ export function installMockPasskeyRuntime() {
       response: {
         userHandle: userHandle.buffer.slice(0),
         authenticatorData: authenticatorData.buffer,
+        signature: signature.buffer,
         getAuthenticatorData: () => authenticatorData.buffer,
         getTransports: () => (registration ? ['internal', 'hybrid'] : []),
       },

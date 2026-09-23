@@ -160,4 +160,17 @@ test('allows website assertions that do not request PRF', async () => {
   }
 
   expect(credential.getClientExtensionResults()).toEqual({})
+  if (!('response' in credential)) {
+    throw new Error('The mock did not return a credential response.')
+  }
+  const response = credential.response
+  if (
+    !response ||
+    typeof response !== 'object' ||
+    !('signature' in response) ||
+    !(response.signature instanceof ArrayBuffer)
+  ) {
+    throw new Error('The mock did not return native assertion material.')
+  }
+  expect(response.signature.byteLength).toBe(72)
 })
