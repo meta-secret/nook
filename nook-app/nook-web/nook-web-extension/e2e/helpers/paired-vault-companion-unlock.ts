@@ -52,6 +52,24 @@ async function completeCompanionPopupUnlock(
   })
 }
 
+export async function unlockExtensionThroughCompanion({
+  context,
+  extensionId,
+}: {
+  context: BrowserContext
+  extensionId: string
+}): Promise<void> {
+  const companionUnlockPage = await openOwnedCompanionPopup({
+    context,
+    extensionId,
+  })
+  try {
+    await completeCompanionPopupUnlock({ page: companionUnlockPage })
+  } finally {
+    await companionUnlockPage.close()
+  }
+}
+
 export async function unlockPairedVaultThroughCompanion(
   request: PairedVaultCompanionUnlock,
 ): Promise<void> {
