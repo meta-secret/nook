@@ -132,7 +132,7 @@ jobs:
       cache_publication_outcome: ${{ steps.publish_native_cache.outcome }}
     # Publish only from the verified job's node-local BuildKit shard.
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: read
       pull-requests: read
