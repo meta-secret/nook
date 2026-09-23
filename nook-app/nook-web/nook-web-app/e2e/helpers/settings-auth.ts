@@ -506,6 +506,16 @@ export async function authorizeDeviceProtection(
   page: Page,
   opts?: { storeId?: string },
 ) {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const vault = window.__nookVault
+          return Boolean(vault && !vault.isInitializing)
+        }),
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
+    .toBe(true)
   await keepVaultIdleLockDisabled(page)
   const overlay = page.getByTestId('passkey-auth-overlay')
   const loginGate = page.getByTestId('login-gate')
@@ -568,7 +578,9 @@ export async function authorizeDeviceProtection(
       pickerVisible: await vaultPicker.isVisible(),
       lockedAccessVisible: await lockedAccessDashboard.isVisible(),
       authorizeReady: await authorizeButtonReady(),
-      vaultAuthenticated: false,
+      vaultAuthenticated: await page.evaluate(() =>
+        Boolean(window.__nookVault?.isAuthenticated),
+      ),
       workspaceUnlocked: await isAuthenticatedWorkspace(),
     }
     return deviceProtectionAuthorizationGateState(observation)
