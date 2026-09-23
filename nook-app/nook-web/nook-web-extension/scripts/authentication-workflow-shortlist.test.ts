@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { Window } from 'happy-dom'
 import {
@@ -28,6 +28,23 @@ const wasmInit: Parameters<typeof initSync>[0] = {
   ),
 }
 initSync(wasmInit)
+
+const originalLocation = Object.getOwnPropertyDescriptor(globalThis, 'location')
+
+beforeEach(() => {
+  Object.defineProperty(globalThis, 'location', {
+    configurable: true,
+    value: testWindow.location,
+  })
+})
+
+afterEach(() => {
+  if (originalLocation) {
+    Object.defineProperty(globalThis, 'location', originalLocation)
+  } else {
+    Reflect.deleteProperty(globalThis, 'location')
+  }
+})
 
 function appendLoginForm(id: string, action: string): void {
   const form = testWindow.document.createElement('form')
