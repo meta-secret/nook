@@ -15,6 +15,7 @@ export type PairedVaultCompanionUnlock = {
 
 type CompanionPopupUnlock = {
   readonly page: Page
+  readonly diagnostics: CompanionPopupDiagnostics
 }
 
 type CompanionPopupHandle = {
@@ -178,9 +179,7 @@ async function waitForOwnedCompanionPopup(
 }
 
 async function completeCompanionPopupUnlock(
-  request: CompanionPopupUnlock & {
-    readonly diagnostics: CompanionPopupDiagnostics
-  },
+  request: CompanionPopupUnlock,
 ): Promise<void> {
   const { page, diagnostics } = request
   const deviceSetup = page.getByTestId('extension-device-setup')
@@ -225,7 +224,7 @@ export async function unlockExtensionThroughCompanion({
     ignoredPages: [],
   })
   try {
-    await completeCompanionPopupUnlock({ page: companionPopup.page })
+    await completeCompanionPopupUnlock(companionPopup)
   } finally {
     if (companionPopup.closeAfterUse && !companionPopup.page.isClosed()) {
       await companionPopup.page.close()
@@ -268,7 +267,7 @@ export async function unlockPairedVaultThroughCompanion(
           ignoredPages: existingCompanionPages,
         })
         try {
-          await completeCompanionPopupUnlock({ page: companionPopup.page })
+          await completeCompanionPopupUnlock(companionPopup)
         } finally {
           if (companionPopup.closeAfterUse && !companionPopup.page.isClosed()) {
             await companionPopup.page.close()
@@ -282,7 +281,7 @@ export async function unlockPairedVaultThroughCompanion(
         ignoredPages: existingCompanionPages,
       })
       try {
-        await completeCompanionPopupUnlock({ page: companionPopup.page })
+        await completeCompanionPopupUnlock(companionPopup)
       } finally {
         if (companionPopup.closeAfterUse && !companionPopup.page.isClosed()) {
           await companionPopup.page.close()
