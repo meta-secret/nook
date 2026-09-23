@@ -692,8 +692,12 @@ class AuthenticationSubmissionControls extends AuthenticationSubmissionSemantics
     };
     const container =
       passwordFieldDiscovery.nearestUnownedAuthContainer(containerRequest);
-    const containerElement = container.ownerDocument.defaultView?.Element;
-    return (
+    const containerDocument =
+      container.nodeType === 9
+        ? (container as Document)
+        : container.ownerDocument;
+    const containerElement = containerDocument?.defaultView?.Element;
+    return Boolean(
       containerElement &&
       container instanceof containerElement &&
       container.contains(control)

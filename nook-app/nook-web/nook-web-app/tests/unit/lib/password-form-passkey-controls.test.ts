@@ -37,7 +37,7 @@ describe('passkey control detection', () => {
     `
 
     const workflows = new PasswordFormWorkflowObservation(
-      foreignWindow,
+      foreignWindow as typeof globalThis,
     ).summarizeAuthenticationWorkflowForms()
     expect(
       workflows.some(

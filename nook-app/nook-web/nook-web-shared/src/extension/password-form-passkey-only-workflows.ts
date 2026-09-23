@@ -32,7 +32,9 @@ function documentForParentNode(root: ParentNode): Document | false {
   return false;
 }
 
-function isPasskeyButtonOrInput(control: HTMLElement): boolean {
+function isPasskeyButtonOrInput(
+  control: HTMLElement,
+): control is HTMLButtonElement | HTMLInputElement {
   const view = control.ownerDocument.defaultView;
   return Boolean(
     view &&
