@@ -27,25 +27,25 @@ If `.meta-cortex/` is missing:
 2. Verify that `.meta-cortex/AGENTS.md` and `.meta-cortex/meta-cortex.toml` now
    exist.
 
-Run `meta-cortex info` after initialization. Confirm that the installed
-framework version matches the CLI version and that Codex reports `Connected`.
-If the versions differ, follow the replacement procedure below before normal
-repository work.
+For existing and newly initialized frameworks:
 
-If `.meta-cortex/` exists but a required framework entry is missing, or
-initialization reports `missing required framework entry`, stop and report the
-affected path. Follow the upstream replacement procedure before continuing:
-back up and move the existing `.meta-cortex/` directory out of the installation
-path, run `meta-cortex init --harness codex --instructions write` again, then
-review and reapply configuration changes. Do not treat a partial installation
-as available or substitute copied framework files.
-
-After both required files exist, read `.meta-cortex/CIRCUIT-BREAKER.md`, then
-`.meta-cortex/AGENTS.md`, and continue through the normal Nook entry sequence.
+1. Run `meta-cortex info`. Confirm that the installed framework version matches
+   the CLI version and that Codex reports `Connected`.
+   - If the versions differ, follow the replacement procedure below before
+     normal repository work.
+2. If a required framework entry is missing, or initialization reports
+   `missing required framework entry`, stop and report the affected path.
+   - Back up and move the existing `.meta-cortex/` directory out of the
+     installation path. Run `meta-cortex init --harness codex --instructions
+     write` again, then review and reapply configuration changes.
+   - Do not treat a partial installation as available or substitute copied
+     framework files.
+3. Read `.meta-cortex/CIRCUIT-BREAKER.md`, then `.meta-cortex/AGENTS.md`, and
+   continue through the normal Nook entry sequence.
 
 If the command cannot be installed or initialization fails, stop all repository
-work. Report the exact failure as a blocker. Do not plan, edit, validate, launch
-agents, or substitute copied framework files.
+work and report the exact failure. Do not plan, edit, validate, or launch agents
+using a partial framework.
 
 - **Prohibited:** continue a product change after `meta-cortex init` fails, using
   only the Nook documents or a manually copied partial framework.
@@ -157,6 +157,8 @@ To move to a newer release, compare `meta-cortex --version` with the upstream
 latest release. Rerun the shell installer above when the command is older.
 Then replace the project framework through the preceding procedure and confirm
 the CLI and framework versions with `meta-cortex info`.
+Update the pinned installer release in `preflight/Dockerfile` in the same change
+so hosted policy and Loom checks use the version selected for Nook.
 
 - **Prohibited:** update the command and assume the already installed framework
   changed with it, or overwrite a locally changed framework without reviewing
