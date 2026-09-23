@@ -20,7 +20,7 @@ tasks:
 
   ci:repository-policy:stage-pinned-meta-cortex:
     desc: Stage the pinned Meta-Cortex library checkout for repository policy.
-    dir: "{{.REPO_ROOT}}"
+    dir: "{{.ROOT_DIR}}"
     cmds:
       - test "$(git -C .meta-cortex-source rev-parse HEAD)" = 3a87a1e9a28ae43a18921dc7002d351ceb03ad76
       - mkdir .meta-cortex
