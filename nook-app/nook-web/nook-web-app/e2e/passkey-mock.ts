@@ -18,36 +18,40 @@ export function installMockPasskeyRuntime() {
     }
     userHandle = Uint8Array.from(values)
   }
+  const isUint8Array = (source: unknown): boolean =>
+    ArrayBuffer.isView(source) &&
+    Object.prototype.toString.call(source) === '[object Uint8Array]'
   const saveUserHandle = () => {
     window.name = `nook-e2e-passkey:${JSON.stringify(Array.from(userHandle))}`
   }
   const derive = (source: ArrayBuffer | ArrayBufferView) => {
-    const bytes =
-      source instanceof ArrayBuffer
-        ? new Uint8Array(source)
-        : new Uint8Array(source.buffer, source.byteOffset, source.byteLength)
+    const bytes = ArrayBuffer.isView(source)
+      ? new Uint8Array(source.buffer, source.byteOffset, source.byteLength)
+      : new Uint8Array(source)
     return Uint8Array.from(bytes, (byte) => byte ^ 0xa5).buffer
   }
   const bytesFrom = (source: ArrayBuffer | ArrayBufferView) =>
-    source instanceof ArrayBuffer
-      ? Uint8Array.from(new Uint8Array(source))
-      : Uint8Array.from(
+    ArrayBuffer.isView(source)
+      ? Uint8Array.from(
           new Uint8Array(source.buffer, source.byteOffset, source.byteLength),
         )
+      : Uint8Array.from(new Uint8Array(source))
   const result = (
-    first: ArrayBuffer | ArrayBufferView,
+    first: ArrayBuffer | ArrayBufferView | undefined,
     enabled: boolean,
     registration: boolean,
   ) => {
-    const prfOutput = derive(first)
+    const prfOutput = first ? derive(first) : new ArrayBuffer(0)
     const authenticatorData = new Uint8Array(53)
     authenticatorData[32] = registration ? 0x5d : 0x1d
     if (registration) authenticatorData.fill(1, 37, 53)
-    Object.assign(window, {
-      __nookE2eLastPrfOutput: btoa(
-        String.fromCharCode(...new Uint8Array(prfOutput)),
-      ),
-    })
+    if (first) {
+      Object.assign(window, {
+        __nookE2eLastPrfOutput: btoa(
+          String.fromCharCode(...new Uint8Array(prfOutput)),
+        ),
+      })
+    }
     return {
       id: 'nook-e2e-passkey',
       rawId: credentialId.buffer.slice(0),
@@ -59,12 +63,15 @@ export function installMockPasskeyRuntime() {
         getAuthenticatorData: () => authenticatorData.buffer,
         getTransports: () => (registration ? ['internal', 'hybrid'] : []),
       },
-      getClientExtensionResults: () => ({
-        prf: {
-          enabled,
-          results: { first: prfOutput },
-        },
-      }),
+      getClientExtensionResults: () =>
+        first
+          ? {
+              prf: {
+                enabled,
+                results: { first: prfOutput },
+              },
+            }
+          : {},
     }
   }
   const publicKeyCredential = {
@@ -144,10 +151,10 @@ export function installMockPasskeyRuntime() {
         throw new DOMException('This is an invalid domain.', 'SecurityError')
       }
       const createdUserHandle = options.publicKey?.user?.id
-      if (!(options.publicKey?.challenge instanceof Uint8Array)) {
+      if (!isUint8Array(options.publicKey?.challenge)) {
         throw new TypeError('WebAuthn creation challenge must be binary')
       }
-      if (!(createdUserHandle instanceof Uint8Array)) {
+      if (!isUint8Array(createdUserHandle)) {
         throw new TypeError('WebAuthn creation user id must be binary')
       }
       if (createdUserHandle) {
@@ -162,10 +169,9 @@ export function installMockPasskeyRuntime() {
         ((v) => (v ? v : ''))(passkeyLabel),
       )
       const first = options.publicKey?.extensions?.prf?.eval?.first
-      if (!(first instanceof Uint8Array)) {
+      if (first && !isUint8Array(first)) {
         throw new TypeError('WebAuthn creation PRF input must be binary')
       }
-      if (!first) throw new Error('Missing E2E PRF create input')
       return result(first, mode !== 'unsupported', true)
     }
     async get(options: {
@@ -195,17 +201,18 @@ export function installMockPasskeyRuntime() {
         )
       }
       const prf = options.publicKey?.extensions?.prf
-      if (!(options.publicKey?.challenge instanceof Uint8Array)) {
+      if (!isUint8Array(options.publicKey?.challenge)) {
         throw new TypeError('WebAuthn request challenge must be binary')
       }
       const [
         first = Object.values(((v) => (v ? v : {}))(prf?.evalByCredential))[0]
           ?.first,
       ] = [prf?.eval?.first]
-      if (!(first instanceof Uint8Array)) {
+      if (first && !isUint8Array(first)) {
         throw new TypeError('WebAuthn request PRF input must be binary')
       }
-      if (!first) throw new Error('Missing E2E PRF get input')
+      // Website passkey assertions can omit PRF; extension device requests
+      // still supply it and retain the strict binary check above.
       // A credential that accepted PRF during registration keeps supporting
       // it when it is used to unlock the vault. Returning `false` here makes
       // the browser boundary reject an otherwise valid PRF result.

@@ -188,6 +188,8 @@ export async function assertWebsitePasskeyThroughExtension({
     },
     string
   >(async (id) => {
+    const isArrayBuffer = (value: unknown): boolean =>
+      Object.prototype.toString.call(value) === '[object ArrayBuffer]'
     const rawId = Uint8Array.from(
       atob(
         id.replaceAll('-', '+').replaceAll('_', '/') +
@@ -213,20 +215,32 @@ export async function assertWebsitePasskeyThroughExtension({
       throw new Error('Website passkey assertion did not return a public key')
     }
     const response = credential.response
+    const authenticatorData =
+      response &&
+      typeof response === 'object' &&
+      'authenticatorData' in response
+        ? response.authenticatorData
+        : undefined
+    const signature =
+      response && typeof response === 'object' && 'signature' in response
+        ? response.signature
+        : undefined
     if (
-      !response ||
-      typeof response !== 'object' ||
-      !('authenticatorData' in response) ||
-      !(response.authenticatorData instanceof ArrayBuffer) ||
-      !('signature' in response) ||
-      !(response.signature instanceof ArrayBuffer)
+      !isArrayBuffer(authenticatorData) ||
+      !authenticatorData ||
+      !('byteLength' in authenticatorData) ||
+      typeof authenticatorData.byteLength !== 'number' ||
+      !isArrayBuffer(signature) ||
+      !signature ||
+      !('byteLength' in signature) ||
+      typeof signature.byteLength !== 'number'
     ) {
       throw new Error('Website passkey assertion has no assertion response')
     }
     return {
       id: credential.id,
-      authenticatorDataLength: response.authenticatorData.byteLength,
-      signatureLength: response.signature.byteLength,
+      authenticatorDataLength: authenticatorData.byteLength,
+      signatureLength: signature.byteLength,
     }
   }, credentialId)
   await expect(page.locator('aside[aria-label="Nook passkey"]')).toBeVisible()
