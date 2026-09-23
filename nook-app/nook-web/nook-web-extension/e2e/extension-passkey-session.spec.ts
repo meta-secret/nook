@@ -628,6 +628,10 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       websitePasskeyState.kind === WebsitePasskeyStateKind.Created
     ) {
       await unlockExtensionThroughCompanion({ context, extensionId })
+      await websiteAfterUnlock.page.reload()
+      await expect(
+        websiteAfterUnlock.page.locator('#nook-auth-widget'),
+      ).toBeVisible()
       const websiteWidget = websiteAfterUnlock.page.locator('#nook-auth-widget')
       const websiteLoginPickerPromise = context.waitForEvent('page')
       await websiteWidget
