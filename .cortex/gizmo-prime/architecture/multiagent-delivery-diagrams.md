@@ -47,4 +47,5 @@ flowchart LR
 **Prohibited:** report a pushed branch or green subset of checks as full delivery.
 
 **Preferred:** report merged-state and cleanup evidence, or the explicit
-intermediate result requested by the user. No-check migration work stops at edits.
+intermediate result requested by the user. Migration work reaches the PR check
+stage unless the user explicitly asks to stop earlier.

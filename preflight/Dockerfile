@@ -123,20 +123,17 @@ RUN for directory in .cortex/teams/ai/dynamic-skills/*/scripts; do \
 FROM policy-tools AS policy-source
 ARG LOOM_OWNERSHIP_FROM
 COPY --from=repository-source / /meta-secret/nook
-# The ignored library is absent from fresh checkouts. Keep this pin aligned with
-# .cortex/meta-cortex-integration.md before any Loom audit or test reads its skills.
+# The ignored library is absent from fresh checkouts. Initialize it through the
+# official released command before Loom reads its roles and skills.
 RUN set -eu \
-    && meta_cortex_release=v0.6.0 \
-    && meta_cortex_source="$(mktemp -d)" \
-    && curl --fail --silent --show-error --location \
-      "https://codeload.github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/tar.gz/refs/tags/$meta_cortex_release" \
-      --output "$meta_cortex_source/source.tar.gz" \
-    && tar -xzf "$meta_cortex_source/source.tar.gz" -C "$meta_cortex_source" --strip-components=1 \
-      "meta-cortex-${meta_cortex_release#v}/cortex" "meta-cortex-${meta_cortex_release#v}/LICENSE" \
-    && rm -rf /meta-secret/nook/.meta-cortex \
-    && mv "$meta_cortex_source/cortex" /meta-secret/nook/.meta-cortex \
-    && mv "$meta_cortex_source/LICENSE" /meta-secret/nook/.meta-cortex/LICENSE \
-    && rm -rf "$meta_cortex_source"
+    && test ! -e /meta-secret/nook/.meta-cortex \
+    && curl --proto '=https' --tlsv1.2 -LsSf \
+      https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/download/v0.6.2/meta-cortex-installer.sh \
+      --output /tmp/meta-cortex-installer.sh \
+    && META_CORTEX_UNMANAGED_INSTALL=/usr/local/bin sh /tmp/meta-cortex-installer.sh \
+    && rm /tmp/meta-cortex-installer.sh \
+    && meta-cortex init --harness codex --instructions skip /meta-secret/nook \
+    && meta-cortex info /meta-secret/nook
 COPY --from=repository-git /git /meta-secret/nook/.git
 COPY --from=repository-git /event.json /tmp/policy-event.json
 ENV GITHUB_EVENT_PATH=/tmp/policy-event.json \

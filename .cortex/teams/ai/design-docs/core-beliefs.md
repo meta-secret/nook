@@ -68,7 +68,7 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 
 - Report the outcome once with essential evidence and unresolved blockers.
 - Keep elapsed time in required delivery records unless the user requests it.
-- See [pull request task completion](../../../gizmo-prime/workflows/pull-requests.md#promotion-and-completion-procedure).
+- See [feature delivery evidence](../../../gizmo-prime/architecture/dev-delivery.md#evidence).
 
 ## 8. Deliver Through One Feature Pull Request
 
@@ -113,4 +113,3 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 - **Root README is part of the same hygiene:** when a change alters package layout, dependency flow, sync/storage model, unlock/enrollment UX, public Task commands, or other facts the root [`README.md`](../../../../README.md) advertises, **update the README in the same PR**.
 - Keep the README a concise public summary.
 - Put depth in `.cortex`.
-- See [AGENTS.md — Keep the root README current](../../../../AGENTS.md#keep-the-root-readme-current).

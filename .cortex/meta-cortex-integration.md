@@ -8,30 +8,44 @@ Meta-Cortex is a required development tool. Before normal repository work,
 verify that `.meta-cortex/AGENTS.md` and `.meta-cortex/meta-cortex.toml` exist in
 the Nook repository root.
 
+If the `meta-cortex` command is unavailable, install it with the official
+[shell installer](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex#shell-installer):
+
+```sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/latest/download/meta-cortex-installer.sh | sh
+```
+
+Verify that `meta-cortex --version` succeeds before initialization. The
+upstream [release README](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex#update-a-project)
+owns the command upgrade and framework replacement procedures.
+
 If `.meta-cortex/` is missing:
 
-1. Install the `meta-cortex` command from the
-   [official upstream repository](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex).
-2. Run `meta-cortex init` from the Nook repository root.
+1. Run `meta-cortex init` from the Nook repository root.
    - Plain `init` is non-interactive by default. To connect Codex and update
      managed instructions, run `meta-cortex init --harness codex --instructions write`.
-3. Verify that `.meta-cortex/AGENTS.md` and `.meta-cortex/meta-cortex.toml` now
+2. Verify that `.meta-cortex/AGENTS.md` and `.meta-cortex/meta-cortex.toml` now
    exist.
 
-If `.meta-cortex/` exists but a required framework entry is missing, or
-initialization reports `missing required framework entry`, stop and report the
-affected path. Follow the upstream replacement procedure before continuing:
-back up and move the existing `.meta-cortex/` directory out of the installation
-path, run `meta-cortex init --harness codex --instructions write` again, then
-review and reapply configuration changes. Do not treat a partial installation
-as available or substitute copied framework files.
+For existing and newly initialized frameworks:
 
-After both required files exist, read `.meta-cortex/CIRCUIT-BREAKER.md`, then
-`.meta-cortex/AGENTS.md`, and continue through the normal Nook entry sequence.
+1. Run `meta-cortex info`. Confirm that the installed framework version matches
+   the CLI version and that Codex reports `Connected`.
+   - If the versions differ, follow the replacement procedure below before
+     normal repository work.
+2. If a required framework entry is missing, or initialization reports
+   `missing required framework entry`, stop and report the affected path.
+   - Back up and move the existing `.meta-cortex/` directory out of the
+     installation path. Run `meta-cortex init --harness codex --instructions
+     write` again, then review and reapply configuration changes.
+   - Do not treat a partial installation as available or substitute copied
+     framework files.
+3. Read `.meta-cortex/CIRCUIT-BREAKER.md`, then `.meta-cortex/AGENTS.md`, and
+   continue through the normal Nook entry sequence.
 
 If the command cannot be installed or initialization fails, stop all repository
-work. Report the exact failure as a blocker. Do not plan, edit, validate, launch
-agents, or substitute copied framework files.
+work and report the exact failure. Do not plan, edit, validate, or launch agents
+using a partial framework.
 
 - **Prohibited:** continue a product change after `meta-cortex init` fails, using
   only the Nook documents or a manually copied partial framework.
@@ -64,6 +78,10 @@ These wrappers select the upstream role behavior and the Nook context. Keep
 Nook-specific mappings in the project catalog and generic mappings in upstream
 catalogs.
 
+Loom's typed team catalog retains Nook role names, ownership, and context paths.
+It does not select launch models or reasoning effort. Read those settings from
+`.meta-cortex/meta-cortex.toml` when launching an agent.
+
 ### Session development mode
 
 Follow the upstream [development-mode workflow](../.meta-cortex/AGENTS.md#development-mode)
@@ -79,7 +97,8 @@ The upstream [form](../.meta-cortex/development.yaml) supplies the session choic
   Keep session answers out of repository files and upstream configuration.
 
 For example, a single-agent migration updates local integration files in the
-current task. It does not launch an integration agent or start GitHub delivery.
+current task. The current agent applies integration and PR roles locally when
+delivery is authorized; it does not launch those roles as subagents.
 
 ### Upstream layout
 
@@ -89,9 +108,8 @@ current task. It does not launch an integration agent or start GitHub delivery.
   with the selected language skill. They replace the former common coding skill.
 - Load shared [security requirements](../.meta-cortex/teams/security-team/docs/index.md)
   for product security work.
-- Resolve upstream skill rule maps through `index.md`. Version 0.6.1 replaces
-  the former skill-level `knowledge-graph.md` paths; Nook's own knowledge graphs
-  retain their existing names.
+- Resolve upstream skill rule maps through `index.md`; Nook's own knowledge
+  graphs retain their existing names.
 - Use the upstream SRE Docker, Kubernetes, and CI/CD roles with Nook's cache,
   cluster, and hosted-execution contexts. Use the upstream PR agent for GitHub
   pull-request mechanics with Nook's delivery policy.
@@ -134,6 +152,13 @@ upgrading the command does not replace the framework. Back up and move
 codex --instructions write`, then review and reapply configuration changes and
 review upstream path changes against the thin wrapper and catalog mappings in
 this document.
+
+To move to a newer release, compare `meta-cortex --version` with the upstream
+latest release. Rerun the shell installer above when the command is older.
+Then replace the project framework through the preceding procedure and confirm
+the CLI and framework versions with `meta-cortex info`.
+Update the pinned installer release in `preflight/Dockerfile` in the same change
+so hosted policy and Loom checks use the version selected for Nook.
 
 - **Prohibited:** update the command and assume the already installed framework
   changed with it, or overwrite a locally changed framework without reviewing
