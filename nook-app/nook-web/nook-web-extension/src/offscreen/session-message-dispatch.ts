@@ -225,9 +225,7 @@ export class ListeningExtensionSession<Response> {
   }
 
   private readinessQueryListener(): SessionReadinessQueryListener {
-    return (
-      ...listenerArguments: SessionReadinessQueryListenerArguments
-    ) => {
+    return (...listenerArguments: SessionReadinessQueryListenerArguments) => {
       const [message, sender, sendResponse] = listenerArguments
       const request: SessionReadinessQueryRequest = {
         message,

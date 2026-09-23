@@ -341,9 +341,7 @@ export class ExtensionSessionDocumentOwner {
                 ExtensionSessionReadyResponseDecoder.decode,
                 response,
               )
-              if (
-                decodedResponse.kind === ConcreteDecoderResultKind.Rejected
-              ) {
+              if (decodedResponse.kind === ConcreteDecoderResultKind.Rejected) {
                 resolve(ExtensionSessionTransportFailureKind.ResponseMissing)
               } else {
                 this.markReady()

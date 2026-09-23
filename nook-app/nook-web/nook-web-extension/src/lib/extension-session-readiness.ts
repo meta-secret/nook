@@ -21,8 +21,8 @@ type ExtensionSessionReadyResponseSchemaFields = {
 }
 
 export class ExtensionSessionReadyResponseDecoder {
-  private static readonly schemaFields:
-    ExtensionSessionReadyResponseSchemaFields = {
+  private static readonly schemaFields: ExtensionSessionReadyResponseSchemaFields =
+    {
       ok: Schema.Literal(true),
     }
   private static readonly schema = Schema.Struct(
