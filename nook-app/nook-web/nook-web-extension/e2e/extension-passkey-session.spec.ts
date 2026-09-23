@@ -419,9 +419,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       const emptyOtpWidget = emptyOtpPage.locator('#nook-auth-widget')
       const [emptyAuthenticatorPicker] = await Promise.all([
         waitForNewPage(context, 'empty authenticator picker'),
-        emptyOtpWidget
-          .getByRole('button', { name: 'Fill 2FA code' })
-          .click(),
+        emptyOtpWidget.getByRole('button', { name: 'Fill 2FA code' }).click(),
       ])
       await emptyAuthenticatorPicker.waitForURL(/intent=authenticator-picker/)
       await expect(
@@ -503,9 +501,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       await expect(fillWidget).toBeVisible()
       const [loginPicker] = await Promise.all([
         waitForNewPage(context, 'website login picker'),
-        fillWidget
-          .getByRole('button', { name: 'Continue with Nook' })
-          .click(),
+        fillWidget.getByRole('button', { name: 'Continue with Nook' }).click(),
       ])
       await expect(fillWidget.getByText('alice@nook.test')).toHaveCount(0)
       await expect(fillWidget.getByText('bob@nook.test')).toHaveCount(0)

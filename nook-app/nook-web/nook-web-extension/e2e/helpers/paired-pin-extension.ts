@@ -272,63 +272,57 @@ export async function lockExtensionSession(
   const popupPage = await context.newPage()
   try {
     await popupPage.goto(`chrome-extension://${extensionId}/popup/index.html`)
-    const result = await popupPage.evaluate(
-      async (responseTimeoutMs) => {
-        const sendRuntimeMessage = <Response>(
-          message: unknown,
-          purpose: string,
-        ): Promise<Response> =>
-          new Promise<Response>((resolve, reject) => {
-            let completed = false
-            const timeout = window.setTimeout(() => {
-              completed = true
-              reject(
-                new Error(
-                  `Timed out waiting for ${purpose} after ${responseTimeoutMs}ms.`,
-                ),
-              )
-            }, responseTimeoutMs)
-            globalThis.chrome.runtime.sendMessage(
-              message,
-              (response?: Response) => {
-                if (completed) return
-                completed = true
-                window.clearTimeout(timeout)
-                const runtimeError =
-                  globalThis.chrome.runtime.lastError?.message
-                if (runtimeError) {
-                  reject(new Error(`${purpose}: ${runtimeError}`))
-                  return
-                }
-                resolve(response as Response)
-              },
+    const result = await popupPage.evaluate(async (responseTimeoutMs) => {
+      const sendRuntimeMessage = <Response>(
+        message: unknown,
+        purpose: string,
+      ): Promise<Response> =>
+        new Promise<Response>((resolve, reject) => {
+          let completed = false
+          const timeout = window.setTimeout(() => {
+            completed = true
+            reject(
+              new Error(
+                `Timed out waiting for ${purpose} after ${responseTimeoutMs}ms.`,
+              ),
             )
-          })
+          }, responseTimeoutMs)
+          globalThis.chrome.runtime.sendMessage(
+            message,
+            (response?: Response) => {
+              if (completed) return
+              completed = true
+              window.clearTimeout(timeout)
+              const runtimeError = globalThis.chrome.runtime.lastError?.message
+              if (runtimeError) {
+                reject(new Error(`${purpose}: ${runtimeError}`))
+                return
+              }
+              resolve(response as Response)
+            },
+          )
+        })
 
-        await sendRuntimeMessage<SessionStatusResponse>(
-          { type: 'nook:ensure-extension-session-runtime' },
-          'extension session startup',
-        )
-        const activeSessionRequests = Array.from(
-          { length: 24 },
-          () =>
-            sendRuntimeMessage<unknown>(
-              {
-                type: 'nook:extension-session-status',
-                payload: { queue: { kind: 'message-default' } },
-              },
-              'active extension session status request',
-            ).then(() => undefined),
-        )
-        const lockResult = await sendRuntimeMessage<SessionLockResponse>(
-          { type: 'nook:extension-session-lock' },
-          'extension session lock',
-        )
-        await Promise.all(activeSessionRequests)
-        return lockResult
-      },
-      RUNTIME_RESPONSE_TIMEOUT_MS,
-    )
+      await sendRuntimeMessage<SessionStatusResponse>(
+        { type: 'nook:ensure-extension-session-runtime' },
+        'extension session startup',
+      )
+      const activeSessionRequests = Array.from({ length: 24 }, () =>
+        sendRuntimeMessage<unknown>(
+          {
+            type: 'nook:extension-session-status',
+            payload: { queue: { kind: 'message-default' } },
+          },
+          'active extension session status request',
+        ).then(() => undefined),
+      )
+      const lockResult = await sendRuntimeMessage<SessionLockResponse>(
+        { type: 'nook:extension-session-lock' },
+        'extension session lock',
+      )
+      await Promise.all(activeSessionRequests)
+      return lockResult
+    }, RUNTIME_RESPONSE_TIMEOUT_MS)
     if (result?.ok !== true) {
       throw new Error(
         `Failed to lock extension session: ${((...[v = 'unknown']) => v)(((...[v = result?.reason]) => v)(result?.error))}`,
