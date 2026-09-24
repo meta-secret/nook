@@ -108,6 +108,7 @@ describe('automatic vault sync', () => {
   test('clears a scheduled generation-unavailable alert after guarded sync succeeds', async () => {
     const state = VaultStateTestFixture.create()
     state.isAuthenticated = true
+    state.localVaultPresent = true
     state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked
     state.syncFromStorage = vi
       .fn()
@@ -144,6 +145,7 @@ describe('automatic vault sync', () => {
     async (_label, failureKind) => {
       const state = VaultStateTestFixture.create()
       state.isAuthenticated = true
+      state.localVaultPresent = true
       state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked
       state.syncFromStorage = vi
         .fn()
@@ -187,6 +189,7 @@ describe('automatic vault sync', () => {
     async ({ laterResult, expectedErrorKey }) => {
       const state = VaultStateTestFixture.create()
       state.isAuthenticated = true
+      state.localVaultPresent = true
       state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked
       state.syncFromStorage = vi
         .fn()
@@ -235,6 +238,7 @@ describe('automatic vault sync', () => {
     async (_label, invalidateClearance) => {
       const state = VaultStateTestFixture.create()
       state.isAuthenticated = true
+      state.localVaultPresent = true
       state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked
       state.syncFromStorage = vi
         .fn()
@@ -267,6 +271,7 @@ describe('automatic vault sync', () => {
   test('preserves an unrelated error assigned before scheduled success', async () => {
     const state = VaultStateTestFixture.create()
     state.isAuthenticated = true
+    state.localVaultPresent = true
     state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked
     state.syncFromStorage = vi
       .fn()
@@ -296,6 +301,7 @@ describe('automatic vault sync', () => {
   test('preserves a newer assignment of the same invalidation message', async () => {
     const state = VaultStateTestFixture.create()
     state.isAuthenticated = true
+    state.localVaultPresent = true
     state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked
     state.syncFromStorage = vi
       .fn()
@@ -329,6 +335,7 @@ describe('automatic vault sync', () => {
   test('does not let an earlier scheduled success clear a newer invalidation alert', async () => {
     const state = VaultStateTestFixture.create()
     state.isAuthenticated = true
+    state.localVaultPresent = true
     state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked
     const pendingSynchronizations: Array<
       (result: VaultSynchronizationResult) => void
@@ -381,6 +388,7 @@ describe('automatic vault sync', () => {
   test('skips the interval sync when no sync providers are configured', async () => {
     const state = VaultStateTestFixture.create()
     state.isAuthenticated = true
+    state.localVaultPresent = true
     state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked
     state.syncFromStorage = vi.fn(async () => ok(ProviderSyncOutcome.Synced))
     let scheduledCallback!: SyncScheduleRequest['callback']
