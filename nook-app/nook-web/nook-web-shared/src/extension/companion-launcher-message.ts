@@ -1,4 +1,4 @@
-import { Effect, Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
 
 import {
   RuntimeMessageDecodeFailure,
@@ -72,19 +72,12 @@ export class NormalizedOpenCompanionLauncherMessage {
   }
 
   static intent(
-    payload: NormalizedCompanionLauncherPayload | undefined,
+    payload: Option.Option<NormalizedCompanionLauncherPayload>,
   ): OpenCompanionLauncherIntent {
-    switch (typeof payload) {
-      case 'undefined':
-        return OpenCompanionLauncherIntent.Default;
-      case 'object':
-        switch (payload.intent) {
-          case OpenCompanionLauncherIntent.Pair:
-            return OpenCompanionLauncherIntent.Pair;
-          case OpenCompanionLauncherIntent.PilotAuth:
-            return OpenCompanionLauncherIntent.PilotAuth;
-        }
-    }
+    return Option.match(payload, {
+      onNone: () => OpenCompanionLauncherIntent.Default,
+      onSome: ({ intent }) => intent,
+    });
   }
 }
 
@@ -106,8 +99,9 @@ const normalizedCompanionLauncherTypeSchema = Schema.Literal(
 const normalizedCompanionLauncherPayloadSchema = Schema.Struct(
   normalizedCompanionLauncherPayloadFields,
 );
-const normalizedCompanionLauncherOptionalPayloadSchema = Schema.optional(
+const normalizedCompanionLauncherOptionalPayloadSchema = Schema.optionalWith(
   normalizedCompanionLauncherPayloadSchema,
+  { as: 'Option' },
 );
 type NormalizedCompanionLauncherMessageFields = {
   readonly type: typeof normalizedCompanionLauncherTypeSchema;

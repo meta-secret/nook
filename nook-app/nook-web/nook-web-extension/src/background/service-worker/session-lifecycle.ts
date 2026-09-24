@@ -1,4 +1,4 @@
-import { Schema } from 'effect'
+import { Option, Schema } from 'effect'
 import {
   ExtensionSessionDocumentOwner,
   ExtensionSessionDocumentStateKind,
@@ -54,8 +54,25 @@ type CompanionLauncherContextArgs = {
   launcherUrl: string
 }
 
-type CompanionLauncherWindowScope =
-  | { kind: 'normal-window'; windowId: number }
+export enum CompanionLauncherSourceKind {
+  DirectEntry = 'direct-entry',
+  SourceWindow = 'source-window',
+  Unobservable = 'unobservable',
+}
+
+export type CompanionLauncherSource =
+  | { kind: CompanionLauncherSourceKind.DirectEntry }
+  | { kind: CompanionLauncherSourceKind.SourceWindow; windowId: number }
+  | { kind: CompanionLauncherSourceKind.Unobservable }
+
+enum CompanionLauncherWindowScopeKind {
+  NormalWindow = 'normal-window',
+}
+
+type CompanionLauncherWindowScope = {
+  kind: CompanionLauncherWindowScopeKind.NormalWindow
+  windowId: number
+}
 
 enum CompanionLauncherWindowIdKind {
   Valid = 'valid',
@@ -86,9 +103,66 @@ enum CompanionLauncherContextObservationKind {
   MissingDocumentUrl = 'missing-document-url',
 }
 
+enum CompanionLauncherMatchingTabKind {
+  Missing = 'missing',
+  Present = 'present',
+}
+
+enum CompanionLauncherDocumentUrlKind {
+  Missing = 'missing',
+  Different = 'different',
+  Matching = 'matching',
+}
+
 /** Owns the browser runtime resources shared by these interactions. */
 export class ExtensionSessionLifecycle {
+  private static readonly directLauncherSource: CompanionLauncherSource = {
+    kind: CompanionLauncherSourceKind.DirectEntry,
+  }
+  private static readonly unobservableLauncherSource: CompanionLauncherSource = {
+    kind: CompanionLauncherSourceKind.Unobservable,
+  }
+  private static readonly senderSourceSchema = Schema.Struct({
+    tab: Schema.optionalWith(
+      Schema.Struct({ windowId: Schema.Number }),
+      { as: 'Option' },
+    ),
+  })
+
   private readonly document = new ExtensionSessionDocumentOwner()
+
+  static directEntrySource(): CompanionLauncherSource {
+    return this.directLauncherSource
+  }
+
+  static sourceFromTab(tab: chrome.tabs.Tab): CompanionLauncherSource {
+    return this.sourceWindow(tab.windowId)
+  }
+
+  static sourceFromSender(
+    sender: chrome.runtime.MessageSender,
+  ): CompanionLauncherSource {
+    const decoded = runConcreteDecoder(
+      Schema.decodeUnknown(this.senderSourceSchema),
+      sender,
+    )
+    switch (decoded.kind) {
+      case ConcreteDecoderResultKind.Decoded:
+        return Option.match(decoded.value.tab, {
+          onNone: () => this.directLauncherSource,
+          onSome: ({ windowId }) => this.sourceWindow(windowId),
+        })
+      case ConcreteDecoderResultKind.Rejected:
+        return this.unobservableLauncherSource
+    }
+  }
+
+  private static sourceWindow(windowId: number): CompanionLauncherSource {
+    return {
+      kind: CompanionLauncherSourceKind.SourceWindow,
+      windowId,
+    }
+  }
 
   private launcherUrl({ popupUrl, intent }: CompanionLauncherUrlArgs): string {
     switch (intent) {
@@ -109,61 +183,78 @@ export class ExtensionSessionLifecycle {
     CompanionLauncherTabLookup {
     let contextObservation =
       CompanionLauncherContextObservationKind.NoMissingDocumentUrl
-    const candidate = contexts.find((context) => {
+    for (const context of contexts) {
       if (
         context.contextType !== chrome.runtime.ContextType.TAB ||
         context.tabId < 0 ||
         context.windowId < 0
       ) {
-        return false
+        continue
       }
-      const matchingTab = tabs.find(
-        (tab) =>
-          tab.id === context.tabId && tab.windowId === context.windowId,
+      const matchingTab = Option.fromNullable(
+        tabs.find(
+          (tab) =>
+            tab.id === context.tabId && tab.windowId === context.windowId,
+        ),
       )
-      switch (matchingTab) {
-        case undefined:
-          return false
-        default:
+      const matchingTabKind = Option.match(matchingTab, {
+        onNone: () => CompanionLauncherMatchingTabKind.Missing,
+        onSome: () => CompanionLauncherMatchingTabKind.Present,
+      })
+      switch (matchingTabKind) {
+        case CompanionLauncherMatchingTabKind.Missing:
+          continue
+        case CompanionLauncherMatchingTabKind.Present:
           break
       }
-      switch (typeof context.documentUrl) {
-        case 'string':
-          return context.documentUrl === launcherUrl
-        case 'undefined':
+      const documentUrlKind = Option.match(
+        Option.fromNullable(context.documentUrl),
+        {
+          onNone: () => CompanionLauncherDocumentUrlKind.Missing,
+          onSome: (documentUrl) => {
+            switch (documentUrl) {
+              case launcherUrl:
+                return CompanionLauncherDocumentUrlKind.Matching
+              default:
+                return CompanionLauncherDocumentUrlKind.Different
+            }
+          },
+        },
+      )
+      switch (documentUrlKind) {
+        case CompanionLauncherDocumentUrlKind.Missing:
           contextObservation =
             CompanionLauncherContextObservationKind.MissingDocumentUrl
-          return false
+          break
+        case CompanionLauncherDocumentUrlKind.Different:
+          break
+        case CompanionLauncherDocumentUrlKind.Matching:
+          return {
+            kind: CompanionLauncherTabLookupKind.Found,
+            tabId: context.tabId,
+            windowId: context.windowId,
+          }
       }
-    })
-    switch (candidate) {
-      case undefined:
-        switch (contextObservation) {
-          case CompanionLauncherContextObservationKind.MissingDocumentUrl:
-            return {
-              kind: CompanionLauncherTabLookupKind.Unobservable,
-            }
-          case CompanionLauncherContextObservationKind.NoMissingDocumentUrl:
-            return { kind: CompanionLauncherTabLookupKind.Missing }
-        }
-      default:
+    }
+    switch (contextObservation) {
+      case CompanionLauncherContextObservationKind.MissingDocumentUrl:
         return {
-          kind: CompanionLauncherTabLookupKind.Found,
-          tabId: candidate.tabId,
-          windowId: candidate.windowId,
+          kind: CompanionLauncherTabLookupKind.Unobservable,
         }
+      case CompanionLauncherContextObservationKind.NoMissingDocumentUrl:
+        return { kind: CompanionLauncherTabLookupKind.Missing }
     }
   }
 
   private async launcherWindowScope(
-    initiatingTab: chrome.tabs.Tab | undefined,
+    source: CompanionLauncherSource,
   ): Promise<CompanionLauncherWindowScope> {
-    switch (initiatingTab) {
-      case undefined:
+    switch (source.kind) {
+      case CompanionLauncherSourceKind.DirectEntry:
         return this.lastFocusedNormalWindowScope()
-      default: {
+      case CompanionLauncherSourceKind.SourceWindow: {
         const sourceWindowIdState = this.launcherWindowIdState(
-          initiatingTab.windowId,
+          source.windowId,
         )
         switch (sourceWindowIdState.kind) {
           case CompanionLauncherWindowIdKind.Invalid:
@@ -175,7 +266,7 @@ export class ExtensionSessionLifecycle {
             switch (initiatingWindow.type) {
               case 'normal':
                 return {
-                  kind: 'normal-window',
+                  kind: CompanionLauncherWindowScopeKind.NormalWindow,
                   windowId: sourceWindowIdState.windowId,
                 }
               default:
@@ -184,6 +275,8 @@ export class ExtensionSessionLifecycle {
           }
         }
       }
+      case CompanionLauncherSourceKind.Unobservable:
+        throw new Error('launcher source tab is unobservable')
     }
   }
 
@@ -194,11 +287,17 @@ export class ExtensionSessionLifecycle {
     })
     switch (normalWindow.type) {
       case 'normal': {
-        const windowIdState = this.launcherWindowIdState(normalWindow.id)
+        const windowIdState = Option.match(
+          Option.fromNullable(normalWindow.id),
+          {
+            onNone: () => ({ kind: CompanionLauncherWindowIdKind.Invalid }),
+            onSome: (windowId) => this.launcherWindowIdState(windowId),
+          },
+        )
         switch (windowIdState.kind) {
           case CompanionLauncherWindowIdKind.Valid:
             return {
-              kind: 'normal-window',
+              kind: CompanionLauncherWindowScopeKind.NormalWindow,
               windowId: windowIdState.windowId,
             }
           case CompanionLauncherWindowIdKind.Invalid:
@@ -211,25 +310,20 @@ export class ExtensionSessionLifecycle {
   }
 
   private launcherWindowIdState(
-    windowId: number | undefined,
+    windowId: number,
   ): CompanionLauncherWindowIdState {
-    switch (typeof windowId) {
-      case 'number':
-        switch (Number.isInteger(windowId)) {
+    switch (Number.isInteger(windowId)) {
+      case true:
+        switch (windowId >= 0) {
           case true:
-            switch (windowId >= 0) {
-              case true:
-                return {
-                  kind: CompanionLauncherWindowIdKind.Valid,
-                  windowId,
-                }
-              case false:
-                return { kind: CompanionLauncherWindowIdKind.Invalid }
+            return {
+              kind: CompanionLauncherWindowIdKind.Valid,
+              windowId,
             }
           case false:
             return { kind: CompanionLauncherWindowIdKind.Invalid }
         }
-      case 'undefined':
+      case false:
         return { kind: CompanionLauncherWindowIdKind.Invalid }
     }
   }
@@ -343,27 +437,22 @@ export class ExtensionSessionLifecycle {
 
   async openCompanionLauncher(
     intent: OpenCompanionLauncherIntent,
-    initiatingTab?: chrome.tabs.Tab,
+    source: CompanionLauncherSource,
   ): Promise<void> {
     const popupUrl = chrome.runtime.getURL('popup/index.html')
     const launcherUrlArgs: CompanionLauncherUrlArgs = { popupUrl, intent }
     const requestedLauncherUrl = this.launcherUrl(launcherUrlArgs)
-    const windowScope = await this.launcherWindowScope(initiatingTab)
+    const windowScope = await this.launcherWindowScope(source)
     const queryArgs: Parameters<typeof chrome.tabs.query>[0] = {
       windowId: windowScope.windowId,
       windowType: 'normal',
     }
     const tabs = await new Promise<chrome.tabs.Tab[]>((resolve, reject) => {
       chrome.tabs.query(queryArgs, (result) => {
-        const lastError = chrome.runtime.lastError
-        switch (lastError) {
-          case undefined:
-            resolve(result)
-            break
-          default:
-            reject(new Error('launcher tabs.query failed'))
-            break
-        }
+        Option.match(Option.fromNullable(chrome.runtime.lastError), {
+          onNone: () => resolve(result),
+          onSome: () => reject(new Error('launcher tabs.query failed')),
+        })
       })
     })
     const contextQuery: Parameters<typeof chrome.runtime.getContexts>[0] = {
@@ -404,9 +493,9 @@ export class ExtensionSessionLifecycle {
 
   openCompanionLauncherBestEffort(
     intent: OpenCompanionLauncherIntent,
-    initiatingTab?: chrome.tabs.Tab,
+    source: CompanionLauncherSource,
   ): void {
-    void this.openCompanionLauncher(intent, initiatingTab).catch(() => {
+    void this.openCompanionLauncher(intent, source).catch(() => {
       console.warn('Nook authentication tab could not be opened')
     })
   }

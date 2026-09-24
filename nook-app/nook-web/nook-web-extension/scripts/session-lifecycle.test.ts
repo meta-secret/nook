@@ -76,6 +76,11 @@ enum LauncherLastFocusedWindowKind {
   MissingId = 'missing-id',
 }
 
+enum LauncherWindowType {
+  Normal = 'normal',
+  Popup = 'popup',
+}
+
 type LauncherLastFocusedWindow =
   | { kind: LauncherLastFocusedWindowKind.Identified; id: number }
   | { kind: LauncherLastFocusedWindowKind.MissingId }
@@ -100,7 +105,7 @@ type LauncherBrowserHost = {
   windowGetIds: number[]
   lastFocusedWindowCalls: number
   contextCalls: number
-  windowTypes: Map<number, 'normal' | 'popup'>
+  windowTypes: Map<number, LauncherWindowType>
   lastFocusedWindow: LauncherLastFocusedWindow
   failure: LauncherBrowserFailure
 }
@@ -261,7 +266,7 @@ function installLauncherBrowserHost(host: LauncherBrowserHost): void {
           const tabs = host.tabs.filter((tab) => {
             return (
               tab.windowId === query.windowId &&
-              host.windowTypes.get(tab.windowId) === 'normal'
+              host.windowTypes.get(tab.windowId) === LauncherWindowType.Normal
             )
           })
           callback(tabs)
@@ -295,7 +300,7 @@ function installLauncherBrowserHost(host: LauncherBrowserHost): void {
           created.windowId = windowId
           host.createdWindowIds.push(windowId)
           host.contexts.push(launcherContext(createdTabId, created.windowId, url))
-          host.windowTypes.set(created.windowId, 'normal')
+          host.windowTypes.set(created.windowId, LauncherWindowType.Normal)
           host.tabs.push(created)
           return Promise.resolve(created)
         },
@@ -377,7 +382,7 @@ function installLauncherBrowserHost(host: LauncherBrowserHost): void {
                 type: host.windowTypes.get(host.lastFocusedWindow.id),
               }
             case LauncherLastFocusedWindowKind.MissingId:
-              return { type: 'normal' }
+              return { type: LauncherWindowType.Normal }
           }
         },
         update: (
@@ -429,6 +434,26 @@ describe('ensureExtensionSessionDocument', () => {
 })
 
 describe('openCompanionLauncherBestEffort', () => {
+  test('normalizes sender tab presence into direct or source-window state', async () => {
+    const { CompanionLauncherSourceKind, ExtensionSessionLifecycle } =
+      await import('../src/background/service-worker/session-lifecycle')
+    const initiatingTab = browserTab('https://example.test/login', 50)
+    initiatingTab.windowId = 9
+
+    const directSource = ExtensionSessionLifecycle.sourceFromSender({})
+    const sourceWindow = ExtensionSessionLifecycle.sourceFromSender({
+      tab: initiatingTab,
+    })
+
+    expect(directSource).toEqual(
+      ExtensionSessionLifecycle.directEntrySource(),
+    )
+    expect(sourceWindow).toEqual({
+      kind: CompanionLauncherSourceKind.SourceWindow,
+      windowId: 9,
+    })
+  })
+
   test('preserves launcher failures for strict unlock callers', async () => {
     const host: LauncherBrowserHost = {
       tabs: [],
@@ -442,7 +467,7 @@ describe('openCompanionLauncherBestEffort', () => {
       windowGetIds: [],
       lastFocusedWindowCalls: 0,
       contextCalls: 0,
-      windowTypes: new Map([[7, 'normal']]),
+      windowTypes: new Map([[7, LauncherWindowType.Normal]]),
       lastFocusedWindow: { kind: LauncherLastFocusedWindowKind.Identified, id: 7 },
       failure: { kind: LauncherBrowserFailureKind.TabsCreate },
     }
@@ -450,12 +475,13 @@ describe('openCompanionLauncherBestEffort', () => {
     Object.assign(globalThis, {
       __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
     })
-    const { extensionSessionLifecycle } =
+    const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
     await expect(
       extensionSessionLifecycle.openCompanionLauncher(
         OpenCompanionLauncherIntent.Default,
+        ExtensionSessionLifecycle.directEntrySource(),
       ),
     ).rejects.toThrow('tabs.create failed')
     expect(host.createdUrls).toEqual([
@@ -478,7 +504,7 @@ describe('openCompanionLauncherBestEffort', () => {
       windowGetIds: [],
       lastFocusedWindowCalls: 0,
       contextCalls: 0,
-      windowTypes: new Map([[7, 'normal']]),
+      windowTypes: new Map([[7, LauncherWindowType.Normal]]),
       lastFocusedWindow: { kind: LauncherLastFocusedWindowKind.Identified, id: 7 },
       failure: { kind: LauncherBrowserFailureKind.Contexts },
     }
@@ -486,7 +512,7 @@ describe('openCompanionLauncherBestEffort', () => {
     Object.assign(globalThis, {
       __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
     })
-    const { extensionSessionLifecycle } =
+    const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
     let finishWarning: (() => void) | undefined
@@ -504,6 +530,7 @@ describe('openCompanionLauncherBestEffort', () => {
     try {
       extensionSessionLifecycle.openCompanionLauncherBestEffort(
         OpenCompanionLauncherIntent.Default,
+        ExtensionSessionLifecycle.directEntrySource(),
       )
       await warningObserved
       expect(warningSpy).toHaveBeenCalledTimes(1)
@@ -526,18 +553,18 @@ describe('openCompanionLauncherBestEffort', () => {
     const host = createLauncherBrowserHost({
       tabs: [initiatingSiteTab],
       contexts: [],
-      windowTypes: new Map([[7, 'normal']]),
+      windowTypes: new Map([[7, LauncherWindowType.Normal]]),
       lastFocusedWindow: { kind: LauncherLastFocusedWindowKind.Identified, id: 7 },
       failure: { kind: LauncherBrowserFailureKind.SourceWindow },
     })
     installLauncherBrowserHost(host)
-    const { extensionSessionLifecycle } =
+    const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
     await expectLauncherRejection(
       extensionSessionLifecycle.openCompanionLauncher(
         OpenCompanionLauncherIntent.PilotAuth,
-        initiatingSiteTab,
+        ExtensionSessionLifecycle.sourceFromTab(initiatingSiteTab),
       ),
     )
 
@@ -554,17 +581,18 @@ describe('openCompanionLauncherBestEffort', () => {
     const host = createLauncherBrowserHost({
       tabs: [],
       contexts: [],
-      windowTypes: new Map([[7, 'normal']]),
+      windowTypes: new Map([[7, LauncherWindowType.Normal]]),
       lastFocusedWindow: { kind: LauncherLastFocusedWindowKind.Identified, id: 7 },
       failure: { kind: LauncherBrowserFailureKind.LastFocusedWindow },
     })
     installLauncherBrowserHost(host)
-    const { extensionSessionLifecycle } =
+    const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
     await expectLauncherRejection(
       extensionSessionLifecycle.openCompanionLauncher(
         OpenCompanionLauncherIntent.Default,
+        ExtensionSessionLifecycle.directEntrySource(),
       ),
     )
 
@@ -582,10 +610,10 @@ describe('openCompanionLauncherBestEffort', () => {
       { kind: LauncherLastFocusedWindowKind.Identified, id: -1 },
     ]
     for (const lastFocusedWindow of invalidWindowIdentities) {
-      const windowTypes = new Map<number, 'normal' | 'popup'>()
+      const windowTypes = new Map<number, LauncherWindowType>()
       switch (lastFocusedWindow.kind) {
         case LauncherLastFocusedWindowKind.Identified:
-          windowTypes.set(lastFocusedWindow.id, 'normal')
+          windowTypes.set(lastFocusedWindow.id, LauncherWindowType.Normal)
           break
         case LauncherLastFocusedWindowKind.MissingId:
           break
@@ -598,12 +626,13 @@ describe('openCompanionLauncherBestEffort', () => {
         failure: { kind: LauncherBrowserFailureKind.None },
       })
       installLauncherBrowserHost(host)
-      const { extensionSessionLifecycle } =
+      const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
         await import('../src/background/service-worker/session-lifecycle')
 
       await expectLauncherRejection(
         extensionSessionLifecycle.openCompanionLauncher(
           OpenCompanionLauncherIntent.Default,
+          ExtensionSessionLifecycle.directEntrySource(),
         ),
       )
 
@@ -620,17 +649,18 @@ describe('openCompanionLauncherBestEffort', () => {
     const host = createLauncherBrowserHost({
       tabs: [],
       contexts: [],
-      windowTypes: new Map([[7, 'normal']]),
+      windowTypes: new Map([[7, LauncherWindowType.Normal]]),
       lastFocusedWindow: { kind: LauncherLastFocusedWindowKind.Identified, id: 7 },
       failure: { kind: LauncherBrowserFailureKind.TabsQuery },
     })
     installLauncherBrowserHost(host)
-    const { extensionSessionLifecycle } =
+    const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
     await expectLauncherRejection(
       extensionSessionLifecycle.openCompanionLauncher(
         OpenCompanionLauncherIntent.Default,
+        ExtensionSessionLifecycle.directEntrySource(),
       ),
     )
 
@@ -645,17 +675,18 @@ describe('openCompanionLauncherBestEffort', () => {
     const host = createLauncherBrowserHost({
       tabs: [],
       contexts: [],
-      windowTypes: new Map([[7, 'normal']]),
+      windowTypes: new Map([[7, LauncherWindowType.Normal]]),
       lastFocusedWindow: { kind: LauncherLastFocusedWindowKind.Identified, id: 7 },
       failure: { kind: LauncherBrowserFailureKind.Contexts },
     })
     installLauncherBrowserHost(host)
-    const { extensionSessionLifecycle } =
+    const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
     await expectLauncherRejection(
       extensionSessionLifecycle.openCompanionLauncher(
         OpenCompanionLauncherIntent.Default,
+        ExtensionSessionLifecycle.directEntrySource(),
       ),
     )
 
@@ -674,17 +705,18 @@ describe('openCompanionLauncherBestEffort', () => {
       const host = createLauncherBrowserHost({
         tabs: [authTab],
         contexts: [launcherContextWithoutDocumentUrl(52, 7)],
-        windowTypes: new Map([[7, 'normal']]),
+        windowTypes: new Map([[7, LauncherWindowType.Normal]]),
         lastFocusedWindow: { kind: LauncherLastFocusedWindowKind.Identified, id: 7 },
         failure: { kind: LauncherBrowserFailureKind.None },
       })
       installLauncherBrowserHost(host)
-      const { extensionSessionLifecycle } =
+      const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
         await import('../src/background/service-worker/session-lifecycle')
 
       await expectLauncherRejection(
         extensionSessionLifecycle.openCompanionLauncher(
           OpenCompanionLauncherIntent.Default,
+          ExtensionSessionLifecycle.directEntrySource(),
         ),
       )
 
@@ -712,22 +744,25 @@ describe('openCompanionLauncherBestEffort', () => {
         windowGetIds: [],
         lastFocusedWindowCalls: 0,
         contextCalls: 0,
-        windowTypes: new Map([[7, 'normal']]),
+        windowTypes: new Map([[7, LauncherWindowType.Normal]]),
         lastFocusedWindow: { kind: LauncherLastFocusedWindowKind.Identified, id: 7 },
         failure: { kind: LauncherBrowserFailureKind.None },
       }
       installLauncherBrowserHost(host)
-      const { extensionSessionLifecycle } =
+      const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
         await import('../src/background/service-worker/session-lifecycle')
 
       await extensionSessionLifecycle.openCompanionLauncher(
         OpenCompanionLauncherIntent.Default,
+        ExtensionSessionLifecycle.directEntrySource(),
       )
       await extensionSessionLifecycle.openCompanionLauncher(
         OpenCompanionLauncherIntent.PilotAuth,
+        ExtensionSessionLifecycle.directEntrySource(),
       )
       await extensionSessionLifecycle.openCompanionLauncher(
         OpenCompanionLauncherIntent.Default,
+        ExtensionSessionLifecycle.directEntrySource(),
       )
 
       expect(host.createdUrls).toEqual([
@@ -775,19 +810,19 @@ describe('openCompanionLauncherBestEffort', () => {
         lastFocusedWindowCalls: 0,
         contextCalls: 0,
         windowTypes: new Map([
-          [7, 'normal'],
-          [8, 'popup'],
+          [7, LauncherWindowType.Normal],
+          [8, LauncherWindowType.Popup],
         ]),
         lastFocusedWindow: { kind: LauncherLastFocusedWindowKind.Identified, id: 8 },
         failure: { kind: LauncherBrowserFailureKind.None },
       }
       installLauncherBrowserHost(host)
-      const { extensionSessionLifecycle } =
+      const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
         await import('../src/background/service-worker/session-lifecycle')
 
       await extensionSessionLifecycle.openCompanionLauncher(
         OpenCompanionLauncherIntent.PilotAuth,
-        initiatingSiteTab,
+        ExtensionSessionLifecycle.sourceFromTab(initiatingSiteTab),
       )
 
       expect(host.queryArgs).toEqual([{ windowId: 7, windowType: 'normal' }])
@@ -821,19 +856,19 @@ describe('openCompanionLauncherBestEffort', () => {
         lastFocusedWindowCalls: 0,
         contextCalls: 0,
         windowTypes: new Map([
-          [7, 'normal'],
-          [8, 'popup'],
+          [7, LauncherWindowType.Normal],
+          [8, LauncherWindowType.Popup],
         ]),
         lastFocusedWindow: { kind: LauncherLastFocusedWindowKind.Identified, id: 8 },
         failure: { kind: LauncherBrowserFailureKind.None },
       }
       installLauncherBrowserHost(host)
-      const { extensionSessionLifecycle } =
+      const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
         await import('../src/background/service-worker/session-lifecycle')
 
       await extensionSessionLifecycle.openCompanionLauncher(
         OpenCompanionLauncherIntent.PilotAuth,
-        initiatingSiteTab,
+        ExtensionSessionLifecycle.sourceFromTab(initiatingSiteTab),
       )
 
       expect(host.queryArgs).toEqual([{ windowId: 7, windowType: 'normal' }])
@@ -868,19 +903,19 @@ describe('openCompanionLauncherBestEffort', () => {
         lastFocusedWindowCalls: 0,
         contextCalls: 0,
         windowTypes: new Map([
-          [7, 'normal'],
-          [8, 'normal'],
+          [7, LauncherWindowType.Normal],
+          [8, LauncherWindowType.Normal],
         ]),
         lastFocusedWindow: { kind: LauncherLastFocusedWindowKind.Identified, id: 8 },
         failure: { kind: LauncherBrowserFailureKind.None },
       }
       installLauncherBrowserHost(host)
-      const { extensionSessionLifecycle } =
+      const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
         await import('../src/background/service-worker/session-lifecycle')
 
       await extensionSessionLifecycle.openCompanionLauncher(
         OpenCompanionLauncherIntent.PilotAuth,
-        initiatingSiteTab,
+        ExtensionSessionLifecycle.sourceFromTab(initiatingSiteTab),
       )
 
       expect(host.queryArgs).toEqual([{ windowId: 7, windowType: 'normal' }])
@@ -906,17 +941,17 @@ describe('openCompanionLauncherBestEffort', () => {
       const host = createLauncherBrowserHost({
         tabs: [existingDefaultTab, initiatingSiteTab],
         contexts: [launcherContext(90, 7, popupUrl)],
-        windowTypes: new Map([[7, 'normal']]),
+        windowTypes: new Map([[7, LauncherWindowType.Normal]]),
         lastFocusedWindow: { kind: LauncherLastFocusedWindowKind.Identified, id: 7 },
         failure: { kind: LauncherBrowserFailureKind.None },
       })
       installLauncherBrowserHost(host)
-      const { extensionSessionLifecycle } =
+      const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
         await import('../src/background/service-worker/session-lifecycle')
 
       await extensionSessionLifecycle.openCompanionLauncher(
         OpenCompanionLauncherIntent.PilotAuth,
-        initiatingSiteTab,
+        ExtensionSessionLifecycle.sourceFromTab(initiatingSiteTab),
       )
 
       expect(host.queryArgs).toEqual([{ windowId: 7, windowType: 'normal' }])
@@ -942,13 +977,13 @@ describe('openCompanionLauncherBestEffort', () => {
       failure: { kind: LauncherBrowserFailureKind.None },
     })
     installLauncherBrowserHost(host)
-    const { extensionSessionLifecycle } =
+    const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
     await expectLauncherRejection(
       extensionSessionLifecycle.openCompanionLauncher(
         OpenCompanionLauncherIntent.PilotAuth,
-        invalidSourceTab,
+        ExtensionSessionLifecycle.sourceFromTab(invalidSourceTab),
       ),
     )
 
@@ -976,20 +1011,20 @@ describe('openCompanionLauncherBestEffort', () => {
       lastFocusedWindowCalls: 0,
       contextCalls: 0,
       windowTypes: new Map([
-        [7, 'normal'],
-        [8, 'popup'],
+        [7, LauncherWindowType.Normal],
+        [8, LauncherWindowType.Popup],
       ]),
       lastFocusedWindow: { kind: LauncherLastFocusedWindowKind.Identified, id: 7 },
       failure: { kind: LauncherBrowserFailureKind.None },
     }
     installLauncherBrowserHost(host)
-    const { extensionSessionLifecycle } =
+    const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
     await expectLauncherRejection(
       extensionSessionLifecycle.openCompanionLauncher(
         OpenCompanionLauncherIntent.PilotAuth,
-        popupSiteTab,
+        ExtensionSessionLifecycle.sourceFromTab(popupSiteTab),
       ),
     )
     expect(host.windowGetIds).toEqual([8])

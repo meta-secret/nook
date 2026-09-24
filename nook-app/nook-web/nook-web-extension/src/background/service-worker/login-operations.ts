@@ -35,7 +35,10 @@ import {
 } from './account-pickers'
 import { extensionPairingIdentity } from './pairing-identity'
 import { LOGIN_PICKER_TTL_MS } from './account-pickers'
-import { extensionSessionLifecycle } from './session-lifecycle'
+import {
+  ExtensionSessionLifecycle,
+  extensionSessionLifecycle,
+} from './session-lifecycle'
 import {
   decodeLoginOperationResponse,
   decodeLoginSaveActionResponse,
@@ -438,7 +441,7 @@ export async function websiteLoginSaveOffer({
     ) {
       extensionSessionLifecycle.openCompanionLauncherBestEffort(
         OpenCompanionLauncherIntent.PilotAuth,
-        sender.tab,
+        ExtensionSessionLifecycle.sourceFromSender(sender),
       )
       return { kind: 'locked' }
     }
@@ -671,7 +674,7 @@ export async function websiteLoginSaveCommit({
   ) {
     extensionSessionLifecycle.openCompanionLauncherBestEffort(
       OpenCompanionLauncherIntent.PilotAuth,
-      sender.tab,
+      ExtensionSessionLifecycle.sourceFromSender(sender),
     )
     return {
       kind: 'rejected',

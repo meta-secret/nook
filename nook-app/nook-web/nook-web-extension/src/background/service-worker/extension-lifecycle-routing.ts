@@ -12,6 +12,7 @@ import type * as PairingImport from './pairing-import'
 import { LocalEventLogUpdateFailure } from './pairing-import'
 import type * as PairingStateQuery from './pairing-state-query'
 import type * as SessionLifecycle from './session-lifecycle'
+import { ExtensionSessionLifecycle } from './session-lifecycle'
 import type * as SessionRuntimeMessages from './session-runtime-messages'
 import type { ExtensionSessionRuntimeMessageValue } from './session-runtime-messages'
 import type * as AccountPickers from './account-pickers'
@@ -752,7 +753,8 @@ export function routeExtensionLifecycleMessage({
       sendResponse(forbiddenSenderResponse)
       return false
     }
-    void openCompanionLauncher(launcherMessage.value.intent, sender.tab)
+    const source = ExtensionSessionLifecycle.sourceFromSender(sender)
+    void openCompanionLauncher(launcherMessage.value.intent, source)
       .then(() => sendResponse(successResponse))
       .catch(() => sendResponse(launcherFailureResponse))
     return true

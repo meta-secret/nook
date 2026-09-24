@@ -61,7 +61,9 @@ import { extensionPairingGrantPolicyReady } from '../pairing-grants'
 import {
   SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS,
   extensionSessionLifecycle,
+  ExtensionSessionLifecycle,
 } from './session-lifecycle'
+import type { CompanionLauncherSource } from './session-lifecycle'
 import { identityHandoffSessionRequest } from './session-request-projections'
 import {
   ConcreteDecoderResultKind,
@@ -703,7 +705,7 @@ class ExtensionPairingIdentity {
 
   async requestPairedVaultUnlock(
     message: ExtensionPairedVaultUnlockRequestMessage,
-    initiatingTab?: chrome.tabs.Tab,
+    source: CompanionLauncherSource,
   ): Promise<ExtensionPairedVaultUnlockResponse> {
     const decodedRequest = runConcreteDecoder(
       decodeCompanionPairedVaultUnlockRequest,
@@ -748,7 +750,7 @@ class ExtensionPairingIdentity {
       if (!extensionSessionLifecycle.isUnlockedSessionStatus(statusResponse)) {
         await extensionSessionLifecycle.openCompanionLauncher(
           OpenCompanionLauncherIntent.Default,
-          initiatingTab,
+          source,
         )
       }
       return { ok: true, requestId, vaultStoreId }
@@ -912,7 +914,7 @@ class ExtensionPairingIdentity {
       if (sessionStatus !== ExtensionSessionStatusAvailability.Unlocked) {
         extensionSessionLifecycle.openCompanionLauncherBestEffort(
           OpenCompanionLauncherIntent.PilotAuth,
-          sender.tab,
+          ExtensionSessionLifecycle.sourceFromSender(sender),
         )
         return {
           response: {

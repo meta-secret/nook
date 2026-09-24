@@ -112,6 +112,7 @@ import {
   authenticationWorkflowSavedLoginCapability,
 } from './service-worker/authentication-workflow-routing'
 import {
+  ExtensionSessionLifecycle,
   extensionSessionDocument,
   extensionSessionLifecycle,
 } from './service-worker/session-lifecycle'
@@ -690,7 +691,7 @@ chrome.runtime.onMessage.addListener(backgroundRuntimeMessageListener)
 chrome.action.onClicked.addListener((tab) => {
   extensionSessionLifecycle.openCompanionLauncherBestEffort(
     OpenCompanionLauncherIntent.Default,
-    tab,
+    ExtensionSessionLifecycle.sourceFromTab(tab),
   )
 })
 

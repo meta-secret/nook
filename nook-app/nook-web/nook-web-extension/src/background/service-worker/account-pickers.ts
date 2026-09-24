@@ -42,6 +42,7 @@ import {
 import { extensionPairingIdentity } from './pairing-identity'
 import {
   SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS,
+  ExtensionSessionLifecycle,
   extensionSessionLifecycle,
 } from './session-lifecycle'
 import { websiteLoginOptionsWireAdapter } from './website-login-options-wire-adapter'
@@ -647,7 +648,7 @@ class AccountPickerSessions {
     if (!extensionSessionLifecycle.isUnlockedSessionStatus(status)) {
       extensionSessionLifecycle.openCompanionLauncherBestEffort(
         OpenCompanionLauncherIntent.PilotAuth,
-        sender.tab,
+        ExtensionSessionLifecycle.sourceFromSender(sender),
       )
       return { response: { ok: false, reason: reasons.locked } }
     }
@@ -805,7 +806,7 @@ class AccountPickerSessions {
       ) {
         resolvedDependencies.openCompanionLauncherBestEffort(
           OpenCompanionLauncherIntent.Pair,
-          sender.tab,
+          ExtensionSessionLifecycle.sourceFromSender(sender),
         )
       }
       return access.response
