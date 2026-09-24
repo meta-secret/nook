@@ -35,6 +35,7 @@ import type {
 import * as providersActions from "$lib/vault/providers.svelte";
 import * as localLoginActions from "$lib/vault/local-login";
 import * as syncActions from "$lib/vault/sync.svelte";
+import * as providerConflictActions from "$lib/vault/provider-conflict";
 import * as architectureActions from "$lib/vault/architecture";
 import * as sessionActions from "$lib/vault/session";
 import * as uiActions from "$lib/vault/ui";
@@ -637,10 +638,12 @@ export class VaultState extends VaultRuntimeState {
   }
 
   async stageStagedProviderSyncIssue(args: NookStorageConnectArgs) {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return new syncActions.VaultSyncActions(this).stageStagedProviderSyncIssue({
-      args,
-    });
+    const stagedProviderSyncIssueAssessment: Parameters<
+      typeof providerConflictActions.ProviderConflictActions.prototype.stageStagedProviderSyncIssue
+    >[0] = { args };
+    return new providerConflictActions.ProviderConflictActions(
+      this,
+    ).stageStagedProviderSyncIssue(stagedProviderSyncIssueAssessment);
   }
 
   async resolveSyncConflictImportRemote(
@@ -669,14 +672,14 @@ export class VaultState extends VaultRuntimeState {
   finishStagedProviderConnectAfterConflict(
     conflict: NookSyncConflictReview,
   ): void {
-    return new syncActions.VaultSyncActions(
+    return new providerConflictActions.ProviderConflictActions(
       this,
       // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     ).finishStagedProviderConnectAfterConflict({ conflict });
   }
 
   async ensureProviderSavedAfterConflict(conflict: NookSyncConflictReview) {
-    return new syncActions.VaultSyncActions(
+    return new providerConflictActions.ProviderConflictActions(
       this,
       // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
     ).ensureProviderSavedAfterConflict({

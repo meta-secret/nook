@@ -332,6 +332,7 @@ const INTERNAL_API_EXPERT_AUTHORED_CONSUMER_SCOPE_PATHS = [
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/vault/password-enrollment.ts',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/vault/password-unlock.ts',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/vault/provider-connection.ts',
+  'nook-app/nook-web/nook-web-shared/src/vault-app/lib/vault/provider-conflict.ts',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/vault/provider-vault-decision.ts',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/extension-connect-consent-workflow.ts',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/vault/provider-selection.svelte.ts',

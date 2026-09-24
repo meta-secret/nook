@@ -107,6 +107,16 @@ export class VaultStorageFailure {
   }
 }
 
+export function isLocalDataInvalidationFailure(
+  failure: VaultStorageFailure,
+): boolean {
+  return (
+    failure.kind === VaultStorageFailureKind.GenerationChanged ||
+    failure.kind === VaultStorageFailureKind.GenerationUnavailable ||
+    failure.kind === VaultStorageFailureKind.DeletionActive
+  );
+}
+
 /** Admits a native failure through Rust's compatibility classifier without retaining its message. */
 export class NativeVaultStorageFailure<
   NativeCause = Error | string,

@@ -10,7 +10,7 @@ import {
 
 const DEMO_BEAT_MS = 700
 
-test('open a new local vault without an empty-device sync error', async ({
+test('open an empty local vault without a browser-data reload alert', async ({
   page,
 }) => {
   await page.goto('/app/')
@@ -39,6 +39,7 @@ test('open a new local vault without an empty-device sync error', async ({
     return vault.storageMode
   })
   expect(storageMode).toBe(LOCAL_PROVIDER_TYPE)
+  await expect(page.getByTestId('vault-error')).toHaveCount(0)
   await page.waitForTimeout(DEMO_BEAT_MS)
 
   const languageSelect = page.getByTestId('header-language-select')

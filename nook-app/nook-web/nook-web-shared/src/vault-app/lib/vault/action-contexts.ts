@@ -1,8 +1,8 @@
 import type {
   ProviderSyncMetadataUpdateOutcome,
-  StagedProviderConflictOutcome,
   VaultSynchronizationResult,
 } from "$lib/vault/sync.svelte";
+import type { StagedProviderConflictOutcome } from "$lib/vault/provider-conflict";
 import type { ActiveVaultAuthSyncOutcome } from "$lib/vault/local-login";
 import type { ProviderSyncOutcome } from "$lib/vault/provider-sync.svelte";
 import type { Result } from "neverthrow";
@@ -50,6 +50,7 @@ import type {
 } from "$lib/vault/state/ui.svelte";
 import type { EventOutboxRequest } from "$lib/vault/sync-operation-state";
 import type { NookLocalVaultEntry, NookPasswordEntrySummary } from "$app-wasm";
+import type { VaultOperationStale } from "$lib/runtime/vault-operation-stale";
 
 export type LocalVaultCatalogRefreshSnapshot = {
   readonly vaults: readonly NookLocalVaultEntry[];
@@ -249,7 +250,12 @@ interface ProviderActionPorts extends SharedStorageActionsContext {
   showSuccess(message: string): void;
   stageStagedProviderSyncIssue(
     args: NookStorageConnectArgs,
-  ): Promise<Result<StagedProviderConflictOutcome, VaultStorageFailure>>;
+  ): Promise<
+    Result<
+      StagedProviderConflictOutcome | VaultOperationStale,
+      VaultStorageFailure
+    >
+  >;
   stagedRemoteStorageArgs(): StagedRemoteStorage;
   syncProviderById(
     request: ProviderSyncRequest,
@@ -411,7 +417,10 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   beginProviderSetup(request: ProviderSetupRequest): void;
   openAdmin(accordion: AdminAccordionSection): void;
   ensureOAuthTokensFresh(): Promise<
-    Result<OAuthTokenFreshnessOutcome, OAuthFailure | VaultStorageFailure>
+    Result<
+      OAuthTokenFreshnessOutcome | VaultOperationStale,
+      OAuthFailure | VaultStorageFailure
+    >
   >;
   ensureProviderSavedAfterConflict(
     conflict: NookSyncConflictReview,

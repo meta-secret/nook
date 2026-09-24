@@ -7,6 +7,10 @@ import { describe, expect, test, vi } from 'vitest'
 import { SecretType, type NookSecretRecord } from '$lib/nook'
 import { SecretExposure } from '$lib/vault/secret-exposure'
 import type { Result } from 'neverthrow'
+import {
+  VaultOperationStale,
+  VaultOperationStaleKind,
+} from '$lib/runtime/vault-operation-stale'
 
 function fakeRecord(value: string) {
   return {
@@ -71,11 +75,12 @@ describe('secret exposure lifecycle', () => {
     })
 
     expect(load).toHaveBeenCalledOnce()
-    expect(
-      records.isOk()
-        ? records.value['secret-1']?.primaryCredential
-        : records.error,
-    ).toBe('credential')
+    expect(records.isOk()).toBe(true)
+    if (records.isErr()) return
+    expect(records.value).not.toBeInstanceOf(VaultOperationStale)
+    if (records.value instanceof VaultOperationStale)
+      throw new Error('Reveal unexpectedly returned a stale outcome')
+    expect(records.value['secret-1']?.primaryCredential).toBe('credential')
   })
 
   test('hiding a revealed secret frees and removes plaintext', async () => {
@@ -177,10 +182,66 @@ describe('secret exposure lifecycle', () => {
     pending.resolve(ok(record))
     const result = await toggled
 
-    expect(result.isErr() ? result.error.kind : result.value).toBe(
-      VaultStorageFailureKind.GenerationChanged,
-    )
+    expect(result.isOk()).toBe(true)
+    if (result.isOk()) {
+      expect(result.value).toBeInstanceOf(VaultOperationStale)
+      if (result.value instanceof VaultOperationStale)
+        expect(result.value.kind).toBe(VaultOperationStaleKind.OwnerReleased)
+    }
     expect(record.free).toHaveBeenCalledOnce()
+  })
+
+  test('does not start a reveal after its presentation owner is released', async () => {
+    const load = vi.fn(async () => ok(fakeRecord('credential')))
+    const exposure = new SecretExposure({})
+
+    exposure.free()
+    const result = await exposure.toggle({ id: 'secret-1', load })
+
+    expect(result.isOk()).toBe(true)
+    if (result.isOk()) expect(result.value).toBeInstanceOf(VaultOperationStale)
+    expect(load).not.toHaveBeenCalled()
+  })
+
+  test('does not surface an obsolete load failure after release', async () => {
+    const pending = deferred<Result<NookSecretRecord, VaultStorageFailure>>()
+    const exposure = new SecretExposure({})
+    const toggled = exposure.toggle({
+      id: 'secret-1',
+      load: () => pending.promise,
+    })
+
+    exposure.free()
+    pending.resolve(
+      err(new VaultStorageFailure(VaultStorageFailureKind.OperationFailed)),
+    )
+    const result = await toggled
+
+    expect(result.isOk()).toBe(true)
+    if (result.isOk()) {
+      expect(result.value).toBeInstanceOf(VaultOperationStale)
+      if (result.value instanceof VaultOperationStale)
+        expect(result.value.kind).toBe(VaultOperationStaleKind.OwnerReleased)
+    }
+  })
+
+  test('preserves a browser-data invalidation failure after release', async () => {
+    const pending = deferred<Result<NookSecretRecord, VaultStorageFailure>>()
+    const exposure = new SecretExposure({})
+    const toggled = exposure.toggle({
+      id: 'secret-1',
+      load: () => pending.promise,
+    })
+
+    exposure.free()
+    pending.resolve(
+      err(new VaultStorageFailure(VaultStorageFailureKind.GenerationChanged)),
+    )
+    const result = await toggled
+
+    expect(result.isErr()).toBe(true)
+    if (result.isErr())
+      expect(result.error.kind).toBe(VaultStorageFailureKind.GenerationChanged)
   })
 
   test('a duplicate concurrent load is discarded at the active boundary', async () => {

@@ -1,4 +1,5 @@
 import {
+  isLocalDataInvalidationFailure,
   VaultStorageFailure,
   VaultStorageFailureKind,
 } from "$lib/runtime/storage-failure";
@@ -9,6 +10,10 @@ import {
   SharedStorageGrantFailure,
 } from "$lib/auth/oauth-failure";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
+import {
+  VaultOperationStale,
+  VaultOperationStaleKind,
+} from "$lib/runtime/vault-operation-stale";
 import type { VaultState } from "$lib/vault.svelte";
 import {
   OAuthTokenFreshnessKind,
@@ -122,7 +127,10 @@ export class VaultOAuthActions {
   constructor(private readonly state: VaultState) {}
 
   async ensureOAuthTokensFresh(): Promise<
-    Result<OAuthTokenFreshnessOutcome, OAuthFailure | VaultStorageFailure>
+    Result<
+      OAuthTokenFreshnessOutcome | VaultOperationStale,
+      OAuthFailure | VaultStorageFailure
+    >
   > {
     const state = this.state;
     if (
@@ -159,15 +167,24 @@ export class VaultOAuthActions {
       oauthFile.preset === "icloud"
         ? await iCloudOAuthSession.ensureValidICloudOAuthFileConfig(oauthFile)
         : await googleOAuthSession.ensureValidOAuthFileConfig(oauthFile);
-    if (refresh.isErr()) return err(refresh.error);
     if (
-      state.localDataDeletionStarted ||
+      refresh.isErr() &&
+      refresh.error instanceof VaultStorageFailure &&
+      isLocalDataInvalidationFailure(refresh.error)
+    )
+      return err(refresh.error);
+    if (state.localDataDeletionStarted)
+      return err(
+        new VaultStorageFailure(VaultStorageFailureKind.DeletionActive),
+      );
+    if (
       state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured ||
       state.oauthFileDraft.config !== oauthFile
     )
-      return err(
-        new VaultStorageFailure(VaultStorageFailureKind.GenerationChanged),
+      return ok(
+        new VaultOperationStale(VaultOperationStaleKind.ContextReplaced),
       );
+    if (refresh.isErr()) return err(refresh.error);
     const refreshed = refresh.value;
     if (
       refreshed.accessToken.state === oauthFile.accessToken.state &&

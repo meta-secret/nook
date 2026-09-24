@@ -1,7 +1,7 @@
 import {
+  isLocalDataInvalidationFailure,
   NativeVaultStorageFailure,
   VaultStorageFailure,
-  VaultStorageFailureKind,
 } from "$lib/runtime/storage-failure";
 import { err, ok, type Result } from "neverthrow";
 import type {
@@ -13,6 +13,12 @@ import {
   type VaultArchitecture,
 } from "$lib/vault/architecture-model";
 import { NookVaultArchitecture } from "$app-wasm";
+import {
+  VaultOperationStale,
+  VaultOperationStaleKind,
+} from "$lib/runtime/vault-operation-stale";
+
+type VaultArchitecturePermission = boolean | VaultOperationStale;
 
 type VaultArchitectureReplacement = {
   readonly architecture: VaultArchitecture;
@@ -127,22 +133,31 @@ export class VaultArchitectureActions {
   }
 
   async refreshArchitectureSecretCreationAllowed(): Promise<
-    Result<VaultArchitectureRefreshSnapshot, VaultStorageFailure>
+    Result<
+      VaultArchitectureRefreshSnapshot | VaultOperationStale,
+      VaultStorageFailure
+    >
   > {
     const state = this.state;
     const architecture = state.vaultArchitecture;
     const manager = state.admitManager();
     if (manager.isErr()) return err(manager.error);
     state.architectureSecretCreationAllowed = false;
-    const permission = await state.enqueueStorage(async () => {
+    const permission = await state.enqueueStorage<
+      VaultArchitecturePermission,
+      NativeVaultStorageFailure
+    >(async () => {
       const current = state.admitManager();
-      if (current.isErr()) return err(current.error);
+      if (current.isErr())
+        return ok(
+          new VaultOperationStale(VaultOperationStaleKind.ContextReplaced),
+        );
       if (
         current.value !== manager.value ||
         state.vaultArchitecture !== architecture
       ) {
-        return err(
-          new VaultStorageFailure(VaultStorageFailureKind.GenerationChanged),
+        return ok(
+          new VaultOperationStale(VaultOperationStaleKind.ContextReplaced),
         );
       }
       try {
@@ -151,15 +166,33 @@ export class VaultArchitectureActions {
         return err(new NativeVaultStorageFailure(failure));
       }
     });
-    if (permission.isErr()) return err(permission.error);
+    if (permission.isErr()) {
+      if (isLocalDataInvalidationFailure(permission.error))
+        return err(permission.error);
+      const current = state.admitManager();
+      if (
+        current.isErr() ||
+        current.value !== manager.value ||
+        state.vaultArchitecture !== architecture
+      )
+        return ok(
+          new VaultOperationStale(VaultOperationStaleKind.ContextReplaced),
+        );
+      return err(permission.error);
+    }
+    if (permission.value instanceof VaultOperationStale)
+      return ok(permission.value);
     const current = state.admitManager();
-    if (current.isErr()) return err(current.error);
+    if (current.isErr())
+      return ok(
+        new VaultOperationStale(VaultOperationStaleKind.ContextReplaced),
+      );
     if (
       current.value !== manager.value ||
       state.vaultArchitecture !== architecture
     ) {
-      return err(
-        new VaultStorageFailure(VaultStorageFailureKind.GenerationChanged),
+      return ok(
+        new VaultOperationStale(VaultOperationStaleKind.ContextReplaced),
       );
     }
     state.architectureSecretCreationAllowed = permission.value;
