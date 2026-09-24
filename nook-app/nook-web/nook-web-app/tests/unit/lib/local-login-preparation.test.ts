@@ -100,7 +100,12 @@ describe('local login preparation', () => {
 
     expect(refreshPasswordEntriesList).toHaveBeenCalledTimes(2)
     expect(state.localLoginPreparation).toBe(LocalLoginPreparationState.Ready)
-    expect(state.passwordEntries).toBe(passwordEntries)
+    expect(state.passwordEntries).toHaveLength(1)
+    expect(state.passwordEntries[0]).toMatchObject({
+      id: passwordEntry.id,
+      label: passwordEntry.label,
+      createdAt: passwordEntry.createdAt,
+    })
     expect(state.errorMsg).toBe('')
   })
 
