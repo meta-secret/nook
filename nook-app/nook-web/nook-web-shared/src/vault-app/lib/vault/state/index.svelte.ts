@@ -28,6 +28,9 @@ const runtimeKeys = [
   "locale",
   "translations",
   "errorMsg",
+  "errorMsgRevision",
+  "recordScheduledSyncInvalidationAlert",
+  "clearScheduledSyncInvalidationAlert",
   "successMsg",
   "isVerifying",
   "isSaving",
@@ -190,6 +193,9 @@ class VaultStateSlicesImplementation {
   declare locale: VaultRuntimeState["locale"];
   declare translations: VaultRuntimeState["translations"];
   declare errorMsg: VaultRuntimeState["errorMsg"];
+  declare readonly errorMsgRevision: VaultRuntimeState["errorMsgRevision"];
+  declare recordScheduledSyncInvalidationAlert: VaultRuntimeState["recordScheduledSyncInvalidationAlert"];
+  declare clearScheduledSyncInvalidationAlert: VaultRuntimeState["clearScheduledSyncInvalidationAlert"];
   declare successMsg: VaultRuntimeState["successMsg"];
   declare isVerifying: VaultRuntimeState["isVerifying"];
   declare isSaving: VaultRuntimeState["isSaving"];

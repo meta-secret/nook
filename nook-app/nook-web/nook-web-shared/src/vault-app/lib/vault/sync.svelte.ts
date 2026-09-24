@@ -72,6 +72,12 @@ export type VaultSynchronizationResult = Result<
   StorageOperationFailure | OAuthFailure
 >;
 
+interface AutomaticSyncResult {
+  readonly sessionEpoch: number;
+  readonly errorMsgRevision: number;
+  readonly synchronized: VaultSynchronizationResult;
+}
+
 export enum ProviderSyncMetadataUpdateOutcome {
   Updated = "updated",
 }
@@ -122,9 +128,7 @@ export type RosterHydrationResult = Result<
 export class VaultSyncActions {
   constructor(private readonly state: SyncActionsContext) {}
 
-  private automaticSyncFailureBelongsToCurrentSession(
-    sessionEpoch: number,
-  ): boolean {
+  private automaticSyncBelongsToCurrentSession(sessionEpoch: number): boolean {
     const state = this.state;
     return (
       state.sessionEpoch === sessionEpoch &&
@@ -135,6 +139,44 @@ export class VaultSyncActions {
         state.awaitingJoinApproval,
       ) === VaultSyncTimerStartDecision.Start
     );
+  }
+
+  private handleAutomaticSyncResult({
+    sessionEpoch,
+    errorMsgRevision,
+    synchronized,
+  }: AutomaticSyncResult): void {
+    const state = this.state;
+    if (synchronized.isErr()) {
+      if (!this.automaticSyncBelongsToCurrentSession(sessionEpoch)) {
+        log.warn(
+          `discarded late automatic sync failure: ${synchronized.error.kind}`,
+        );
+        return;
+      }
+      const message = state.t(synchronized.error.translationKey);
+      state.errorMsg = message;
+      if (
+        synchronized.error.kind ===
+        StorageOperationFailureKind.GenerationUnavailable
+      ) {
+        const ownership: Parameters<
+          typeof state.recordScheduledSyncInvalidationAlert
+        >[0] = { sessionEpoch, message };
+        state.recordScheduledSyncInvalidationAlert(ownership);
+      }
+      return;
+    }
+    if (
+      synchronized.value !== ProviderSyncOutcome.Synced ||
+      !this.automaticSyncBelongsToCurrentSession(sessionEpoch) ||
+      state.localDataDeletionStarted
+    )
+      return;
+    const clearance: Parameters<
+      typeof state.clearScheduledSyncInvalidationAlert
+    >[0] = { sessionEpoch, errorMsgRevision };
+    state.clearScheduledSyncInvalidationAlert(clearance);
   }
 
   async hydrateMultiDeviceState(): Promise<RosterHydrationResult> {
@@ -569,17 +611,16 @@ export class VaultSyncActions {
     log.info("vault sync timer started");
     if (state.isAuthenticated) {
       const sessionEpoch = state.sessionEpoch;
+      const errorMsgRevision = state.errorMsgRevision;
       void state
         .syncFromStorage(ProviderSyncFreshness.Scheduled)
         .then((synchronized) => {
-          if (synchronized.isErr()) {
-            if (this.automaticSyncFailureBelongsToCurrentSession(sessionEpoch))
-              state.errorMsg = state.t(synchronized.error.translationKey);
-            else
-              log.warn(
-                `discarded late automatic sync failure: ${synchronized.error.kind}`,
-              );
-          }
+          const automaticSyncResult: AutomaticSyncResult = {
+            sessionEpoch,
+            errorMsgRevision,
+            synchronized,
+          };
+          this.handleAutomaticSyncResult(automaticSyncResult);
         });
     }
     const scheduleSyncArgs: Parameters<typeof state.scheduleSync>[0] = {
@@ -598,19 +639,16 @@ export class VaultSyncActions {
           return;
         }
         const sessionEpoch = state.sessionEpoch;
+        const errorMsgRevision = state.errorMsgRevision;
         void state
           .syncFromStorage(ProviderSyncFreshness.Scheduled)
           .then((synchronized) => {
-            if (synchronized.isErr()) {
-              if (
-                this.automaticSyncFailureBelongsToCurrentSession(sessionEpoch)
-              )
-                state.errorMsg = state.t(synchronized.error.translationKey);
-              else
-                log.warn(
-                  `discarded late automatic sync failure: ${synchronized.error.kind}`,
-                );
-            }
+            const automaticSyncResult: AutomaticSyncResult = {
+              sessionEpoch,
+              errorMsgRevision,
+              synchronized,
+            };
+            this.handleAutomaticSyncResult(automaticSyncResult);
           });
       },
       intervalMs,
