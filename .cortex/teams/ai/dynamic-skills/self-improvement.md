@@ -86,9 +86,9 @@ for bounded delegation and shared-edit ownership.
 
 ### Loom extraction procedure
 
-Keep semantic policy with its owning Cortex authority. Follow the Nook
-[Loom-tool guidance](../references/loom-tools.md) for deterministic checks and
-the hosted PR validation boundary.
+1. Find the owning Nook authority in the root and team knowledge graphs.
+2. Keep semantic policy there; put only deterministic assertions in Nook Loom or Task tooling.
+3. Validate the changed policy through hosted PR checks.
 
 ## Pull-request completion contract
 
