@@ -99,7 +99,7 @@ It returns validated data only; the active harness owns agent lifecycle.
 ## TypeScript domain structure
 
 Loom follows [typescript-domain-structure.md](../../../../.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/practices/typescript-domain-structure.md)
-and the [TypeScript Effect Workflows](../../../../.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/practices/typescript-effect.md)
+and the [TypeScript Effect Workflows](../../../../.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/SKILL.md#choose-effect-for-workflows)
 policy for new and materially changed TypeScript workflows:
 
 - field-name enums passed into deny-unknown checks (never string sets)

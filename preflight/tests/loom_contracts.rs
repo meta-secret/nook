@@ -368,6 +368,16 @@ fn preflight_installs_released_meta_cortex_without_configuration_override() {
         "    arguments: {}\n",
         "YAML"
     );
+    let git_metadata_copy = dockerfile
+        .find("COPY --from=repository-git /git /meta-secret/nook/.git")
+        .expect("policy source must copy Git metadata into the project");
+    let initialize_position = dockerfile
+        .find(initialize_request)
+        .expect("policy source must initialize the Meta-Cortex framework");
+    assert!(
+        git_metadata_copy < initialize_position,
+        "policy source must copy Git metadata before Meta-Cortex Framework Initialize"
+    );
     assert!(
         dockerfile.contains("meta-cortex/releases/download/v0.8.0/meta-cortex-installer.sh"),
         "Meta-Cortex installation must use the selected upstream release"

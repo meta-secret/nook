@@ -91,10 +91,25 @@
     presentation.actionTranslationKey(workflowState),
   )
   const closeOutcome = $derived(session.workflow.closeOutcome(workflowState))
+  const isDeliveredSuccess = $derived(
+    workflowState.kind === ExtensionConsentWorkflowKind.Completed &&
+      workflowState.outcome.kind ===
+        ExtensionConsentDeliveryOutcomeKind.Delivered,
+  )
 
   $effect.pre(() => {
     const activeSession = session
     return () => activeSession.dispose()
+  })
+  $effect(() => {
+    if (!isDeliveredSuccess) return
+
+    // Leave the consent status visible briefly, then announce approval in the vault.
+    const returnTimer = window.setTimeout(() => {
+      vault.showSuccess(vault.t(I18N_KEYS.ExtensionConsentApproved))
+      onClose(ExtensionConsentCloseOutcome.Approved)
+    }, 2_000)
+    return () => window.clearTimeout(returnTimer)
   })
   onDestroy(() => session.dispose())
 
@@ -200,7 +215,7 @@
     </ul>
   </div>
 
-  {#if notice.kind === ExtensionConsentWorkflowNoticeKind.Message}
+  {#if notice.kind === ExtensionConsentWorkflowNoticeKind.Message && !isDeliveredSuccess}
     <p
       class="mt-4 rounded-md border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300"
       role="alert"
@@ -233,43 +248,47 @@
     >
       {vault.t(I18N_KEYS.ExtensionConsentApprovedReopen)}
     </p>
-  {:else if workflowState.kind === ExtensionConsentWorkflowKind.Completed}
+  {:else if isDeliveredSuccess}
     <p
       class="mt-4 rounded-md border border-primary/25 bg-primary/10 px-3 py-2 text-sm text-primary"
       data-testid="extension-connect-approved"
+      role="status"
+      aria-live="polite"
     >
-      {vault.t(I18N_KEYS.ExtensionConsentApprovedReturn)}
+      {vault.t(I18N_KEYS.ExtensionConsentApproved)}
     </p>
   {/if}
 
-  <div class="mt-4 flex flex-wrap justify-end gap-2">
-    <Button
-      type="button"
-      variant="outline"
-      disabled={workflowState.kind ===
-        ExtensionConsentWorkflowKind.SubmittingAuthorization ||
+  {#if !isDeliveredSuccess}
+    <div class="mt-4 flex flex-wrap justify-end gap-2">
+      <Button
+        type="button"
+        variant="outline"
+        disabled={workflowState.kind ===
+          ExtensionConsentWorkflowKind.SubmittingAuthorization ||
+          workflowState.kind === ExtensionConsentWorkflowKind.PreparingGrant ||
+          workflowState.kind === ExtensionConsentWorkflowKind.DeliveringGrant ||
+          workflowState.kind === ExtensionConsentWorkflowKind.RefreshingDevices}
+        onclick={closeConsent}
+      >
+        {closeOutcome === ExtensionConsentCloseOutcome.Approved
+          ? vault.t(I18N_KEYS.CommonDone)
+          : vault.t(I18N_KEYS.CommonCancel)}
+      </Button>
+      <Button
+        type="button"
+        disabled={!session.workflow.canContinue(workflowState)}
+        data-testid="approve-extension-device-btn"
+        onclick={() => void approveExtension()}
+      >
+        {workflowState.kind ===
+          ExtensionConsentWorkflowKind.SubmittingAuthorization ||
         workflowState.kind === ExtensionConsentWorkflowKind.PreparingGrant ||
         workflowState.kind === ExtensionConsentWorkflowKind.DeliveringGrant ||
-        workflowState.kind === ExtensionConsentWorkflowKind.RefreshingDevices}
-      onclick={closeConsent}
-    >
-      {closeOutcome === ExtensionConsentCloseOutcome.Approved
-        ? vault.t(I18N_KEYS.CommonDone)
-        : vault.t(I18N_KEYS.CommonCancel)}
-    </Button>
-    <Button
-      type="button"
-      disabled={!session.workflow.canContinue(workflowState)}
-      data-testid="approve-extension-device-btn"
-      onclick={() => void approveExtension()}
-    >
-      {workflowState.kind ===
-        ExtensionConsentWorkflowKind.SubmittingAuthorization ||
-      workflowState.kind === ExtensionConsentWorkflowKind.PreparingGrant ||
-      workflowState.kind === ExtensionConsentWorkflowKind.DeliveringGrant ||
-      workflowState.kind === ExtensionConsentWorkflowKind.RefreshingDevices
-        ? vault.t(I18N_KEYS.ExtensionConsentApproving)
-        : vault.t(actionTranslationKey)}
-    </Button>
-  </div>
+        workflowState.kind === ExtensionConsentWorkflowKind.RefreshingDevices
+          ? vault.t(I18N_KEYS.ExtensionConsentApproving)
+          : vault.t(actionTranslationKey)}
+      </Button>
+    </div>
+  {/if}
 </section>

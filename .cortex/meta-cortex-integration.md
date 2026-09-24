@@ -4,23 +4,31 @@
 
 ### Required bootstrap
 
-Nook uses Meta-Cortex 0.8.0. Each consuming worktree has its own ignored
-`.meta-cortex/` installation. A Git worktree does not create that installation.
-Never copy the directory from another checkout.
+Nook pins Meta-Cortex 0.8.0. Each consuming worktree has its own ignored
+`.meta-cortex/` installation. Creating a Git worktree does not install that
+framework. Never copy `.meta-cortex/` from another checkout. Use the consuming
+worktree's absolute path in every YAML request.
 
-Before normal repository work, confirm that the active worktree contains
-`.meta-cortex/AGENTS.md` and `.meta-cortex/meta-cortex.toml`. Use the worktree's
-absolute path in every request.
-
-If the `meta-cortex` command is unavailable, install the Nook-pinned release:
+Resolve the CLI before normal repository work. `command -v meta-cortex` must
+select the intended executable, and `meta-cortex --version` must report
+`0.8.0`. If the command is missing or resolves to another version, install the
+Nook-pinned [v0.8.0 release](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/tag/v0.8.0)
+and correct command resolution. Run `meta-cortex list` to inspect supported
+typed requests. The CLI upgrade and installed framework replacement are
+separate operations; use the upstream [release notes](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/tag/v0.8.0)
+and [project update procedure](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex#update-a-project).
 
 ```sh
 curl --proto '=https' --tlsv1.2 -LsSf https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/download/v0.8.0/meta-cortex-installer.sh | sh
 ```
 
-If `.meta-cortex/` is absent, initialize it through the typed operation. Keep
-the initializer's defaults for framework tools. `instructions: skip` preserves
-Nook's tracked root instructions.
+Before using the framework, confirm that `.meta-cortex/AGENTS.md` and
+`.meta-cortex/meta-cortex.toml` exist in the consuming worktree.
+
+Initialize a worktree only when `.meta-cortex/` is absent. Keep the
+initializer's framework-tool defaults. Set `instructions: skip` because the
+tracked root `AGENTS.md` owns Nook's harness instructions; initialization must
+leave those instructions unchanged.
 
 ```sh
 meta-cortex run --request - <<'REQUEST'
@@ -36,15 +44,13 @@ operation:
 REQUEST
 ```
 
-Do not initialize over an existing installation. If either required file is
-missing, `Framework / Info` reports mismatched versions or either version is
-not `0.8.0`, or initialization fails, follow the upstream
-[framework update procedure](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex#update-a-project)
-and stop repository work until the installation is complete. Updating the CLI
-alone does not replace the installed framework.
+Do not initialize over an existing installation. If either required framework
+file is missing, initialization fails, or the versions do not match, follow
+the upstream replacement procedure. Review and reapply local configuration
+changes as needed. Stop repository work until installation succeeds.
 
-Verify the installation with `Framework / Info` using the same absolute project
-path:
+Verify the installation with `Framework / Info` using the same absolute
+project path:
 
 ```sh
 meta-cortex run --request - <<'REQUEST'
@@ -61,37 +67,94 @@ REQUEST
 Continue only when `cli_version` and `framework_version` both report `0.8.0`
 and the Codex integration reports `Connected`. Then read the installed
 [Meta-Cortex circuit breaker](../.meta-cortex/CIRCUIT-BREAKER.md), followed by
-its [entry point](../.meta-cortex/AGENTS.md).
+its [entry point](../.meta-cortex/AGENTS.md). If the CLI cannot be installed,
+initialization fails, or Info cannot verify the framework, stop and report the
+exact failure or affected path.
 
-Keep the initializer-created `.meta-cortex/meta-cortex.toml` ignored and intact.
-Meta-Cortex owns generic configuration and launch procedure through its
+- **Prohibited:** Treat a fresh Git worktree as framework-ready or let
+  initialization rewrite Nook's tracked root instructions.
+- **Preferred:** Initialize the worktree separately with an absolute project
+  path and `instructions: skip`, then verify the pinned CLI and framework.
+
+### Configuration and ownership
+
+Keep `.meta-cortex/meta-cortex.toml` in the ignored worktree installation.
+Meta-Cortex owns generic role configuration and launch procedure through its
 [agent configuration rules](../.meta-cortex/teams/gizmo-team/docs/agent-configuration.md).
-Nook does not copy settings from another checkout or maintain per-role overrides.
-
-### Release pin
-
-The Nook version pin is 0.8.0. `preflight/Dockerfile` pins the installer URL;
-`.github/workflows/repository-policy.yml` and `.task/ci-workflows.yml` pin the
-release commit `9169b9a72a2871ba99fbe2d9f05174310480fe11`; and
-`preflight/tests/loom_contracts.rs` asserts the expected `v0.8.0` installer
-release. Future upgrades update this integration contract, each source pin, and
-their owning policy/test contracts together.
-
-## Project composition
+Read the active worktree's configuration and pass each role's configured model
+and reasoning effort. Do not copy role settings from a canonical checkout or
+maintain Nook-specific overrides. Resolve session development choices through
+the upstream [development-mode workflow](../.meta-cortex/AGENTS.md#development-mode)
+and apply Nook's assignment and delivery constraints in both modes.
 
 Meta-Cortex owns generic roles, skills, programming requirements, and authoring
 practices. Nook owns product architecture, product security, delivery
-constraints, and Nook-only tooling. The root [Nook routing contract](AGENTS.md)
-and its selected [team context](teams/ai/knowledge-graph.md) route those
-project requirements.
+constraints, and Nook-specific tooling. The root [Nook routing contract](AGENTS.md)
+and selected [team context](teams/ai/knowledge-graph.md) route those project
+requirements.
 
-Nook's Prime and Team Gizmo documents adapt their upstream roles. The Nook
+Nook's Prime and Team Gizmo documents adapt the upstream roles. The Nook
 [agent catalog](gizmo-prime/team-gizmo/role-catalog.md) maps project scopes to
-upstream roles and preserves the existing Nook role identities used by Loom.
-Generic role and skill authority remains in the installed Meta-Cortex catalogs.
+upstream roles and preserves the Nook role identities used by Loom. Upstream
+role and skill authority remains in the installed Meta-Cortex catalogs.
 
-For Cortex work, use the upstream [Tech Writer role](../.meta-cortex/teams/ai-team/agents/tech-writer/AGENTS.md) and
-[Context Engineering skill](../.meta-cortex/teams/ai-team/agents/tech-writer/skills/context-engineering/SKILL.md).
-Nook's AI graph points to the additional project-owned audit cards. Those cards
-own Nook tooling and graph topology; they do not redefine generic authoring
-rules.
+For Cortex work, use the upstream [Tech Writer role](../.meta-cortex/teams/ai-team/agents/tech-writer/AGENTS.md)
+and [Context Engineering skill](../.meta-cortex/teams/ai-team/agents/tech-writer/skills/context-engineering/SKILL.md).
+Nook's AI graph points to project-owned audit cards. Those cards own Nook
+tooling and graph topology; they do not redefine generic authoring rules.
+
+- **Prohibited:** Copy model or reasoning settings from another checkout, or
+  restate generic authoring rules in a Nook audit card.
+- **Preferred:** Use the active worktree configuration and link Nook-specific
+  tooling to the owning upstream authoring rules.
+
+### Release pin
+
+The Nook CLI release pin is 0.8.0. `preflight/Dockerfile` pins the installer
+URL. `.github/workflows/repository-policy.yml` and `.task/ci-workflows.yml` pin
+the upstream library commit
+`9169b9a72a2871ba99fbe2d9f05174310480fe11`. `preflight/tests/loom_contracts.rs`
+asserts the expected `v0.8.0` installer release. Future upgrades update this
+contract, each source pin, and their owning policy and test contracts together.
+
+- **Prohibited:** Update only the installer URL or only the pinned library
+  commit.
+- **Preferred:** Update the version contract, every source pin, and the
+  corresponding policy and test assertions in the same change.
+
+### Repository identity and ledger migration
+
+Meta-Cortex v0.8 stores feature ledgers outside Git at
+`${META_CORTEX_HOME:-$HOME/.meta-cortex}/<repository-id>/features`. Framework
+initialization creates or reads the repository UUID at
+`.meta-cortex/repository-id` in the actual Git main checkout. Linked worktrees
+reuse that UUID through their shared Git common directory.
+
+Preserve the exact UUID when replacing the main checkout's framework. Restore
+it to the new main checkout's `.meta-cortex/repository-id` before initializing
+features or linked worktrees, then verify that it selects the existing data
+directory. Do not reuse an identity across unrelated clones.
+
+The v0.8 upgrade does not relocate legacy ledgers from the Git common
+directory's `meta-cortex/features` folder. Before migrating them, stop all
+ledger writers and confirm that no files are open under the legacy directory.
+Copy each database with its `-wal`, `-shm`, or `-tshm` sidecars into
+`${META_CORTEX_HOME:-$HOME/.meta-cortex}/<repository-id>/features`. Keep the
+legacy copies until v0.8 `Feature / List`, `Feature / Status`, and
+`Task / History` confirm that feature IDs, task status, and history remain
+readable from the new location. Do not split or copy a live database.
+
+- **Prohibited:** Reuse a repository UUID in an unrelated clone or copy a live
+  ledger without its sidecars.
+- **Preferred:** Preserve the existing identity, stop writers, copy each
+  database with its sidecars, and retain the source until v0.8 history checks
+  confirm the migration.
+
+## Prohibited actions
+
+- Do not initialize over an existing `.meta-cortex/` installation.
+- Do not copy `.meta-cortex/` or repository identity from another checkout.
+- Do not treat a CLI upgrade as an installed-framework replacement.
+- Do not continue repository work after initialization or framework verification
+  fails.
+- Do not split, copy, or migrate a live ledger database.

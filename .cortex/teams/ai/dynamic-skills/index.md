@@ -95,6 +95,10 @@ authorities without copying their policies.
 - **[Agent self-improvement](self-improvement.md)**
   - Purpose: Promote evidenced Nook knowledge while respecting product authority and session boundaries.
 
+## Upstream navigation
+
+- [TypeScript Effect workflow](../../../../.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/SKILL.md#choose-effect-for-workflows)
+
 ## How to add a Nook skill
 
 Follow the Nook [dynamic-skill authoring](dynamic-skill-authoring.md) and

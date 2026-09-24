@@ -30,7 +30,7 @@ when the selected authority links them as read-only engineering policy.
 
 - [TypeScript domain structure](../../../.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/practices/typescript-domain-structure.md)
 - [TypeScript explicit state](../../../.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/practices/typescript-explicit-state.md)
-- [TypeScript Effect Workflows](../../../.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/practices/typescript-effect.md)
+- [TypeScript Effect Workflows](../../../.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/SKILL.md#choose-effect-for-workflows)
 - [TypeScript enums instead of booleans](../../../.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/practices/typescript-enums-over-booleans.md)
 - [TypeScript named call arguments](../../../.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/practices/typescript-named-args.md)
 - [TypeScript concrete values](../../../.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/practices/typescript-no-unknown.md)
