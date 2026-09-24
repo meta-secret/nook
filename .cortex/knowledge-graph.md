@@ -2,10 +2,10 @@
 
 ## Required entry
 
-Follow the [root routing contract](AGENTS.md) for the entry sequence. It
+Follow the root routing contract for the entry sequence. It
 requires the circuit breaker first and a verified per-worktree bootstrap
-through the [integration contract](meta-cortex-integration.md) before using
-this graph to select Nook context.
+through the integration contract before using this graph to select Nook
+context.
 
 - [Circuit breaker](CIRCUIT-BREAKER.md)
 - [Root routing contract](AGENTS.md)
