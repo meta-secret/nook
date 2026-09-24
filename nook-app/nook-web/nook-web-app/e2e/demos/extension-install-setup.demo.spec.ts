@@ -317,8 +317,7 @@ test('automatically return after accessible extension approval confirmation', as
     consent.locator('[data-extension-pairing-rejection-reason]'),
   ).toHaveCount(0)
 
-  const approvedMessage =
-    'Browser access approved. You can close this window or return to your vault.'
+  const approvedMessage = 'Extension device approved.'
   const approvedConfirmation = consent.getByRole('status')
   await expect(approvedConfirmation).toHaveCount(1, {
     timeout: UI_TIMEOUT_MS,
@@ -334,6 +333,10 @@ test('automatically return after accessible extension approval confirmation', as
     timeout: UI_TIMEOUT_MS,
   })
   await expect(consent).toHaveCount(0)
+  const approvalToast = page.getByTestId('app-success')
+  await expect(approvalToast).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  await expect(approvalToast).toHaveAttribute('role', 'status')
+  await expect(approvalToast).toHaveText(approvedMessage)
   await expect(html).toHaveAttribute('data-demo-pairing-delivery-count', '1')
   await demoBeat(page)
 })

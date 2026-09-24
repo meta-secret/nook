@@ -104,11 +104,11 @@
   $effect(() => {
     if (!isDeliveredSuccess) return
 
-    // Let the polite status be announced before returning to the vault.
-    const returnTimer = window.setTimeout(
-      () => onClose(ExtensionConsentCloseOutcome.Approved),
-      2_000,
-    )
+    // Leave the consent status visible briefly, then announce approval in the vault.
+    const returnTimer = window.setTimeout(() => {
+      vault.showSuccess(vault.t(I18N_KEYS.ExtensionConsentApproved))
+      onClose(ExtensionConsentCloseOutcome.Approved)
+    }, 2_000)
     return () => window.clearTimeout(returnTimer)
   })
   onDestroy(() => session.dispose())
@@ -255,7 +255,7 @@
       role="status"
       aria-live="polite"
     >
-      {vault.t(I18N_KEYS.ExtensionConsentApprovedReturn)}
+      {vault.t(I18N_KEYS.ExtensionConsentApproved)}
     </p>
   {/if}
 
