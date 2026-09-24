@@ -638,10 +638,12 @@ export class VaultState extends VaultRuntimeState {
   }
 
   async stageStagedProviderSyncIssue(args: NookStorageConnectArgs) {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
+    const stagedProviderSyncIssueAssessment: Parameters<
+      typeof providerConflictActions.ProviderConflictActions.prototype.stageStagedProviderSyncIssue
+    >[0] = { args };
     return new providerConflictActions.ProviderConflictActions(
       this,
-    ).stageStagedProviderSyncIssue({ args });
+    ).stageStagedProviderSyncIssue(stagedProviderSyncIssueAssessment);
   }
 
   async resolveSyncConflictImportRemote(
