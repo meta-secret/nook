@@ -116,7 +116,7 @@ catalogs the linked authorities without copying their policies.
     - Use field enums instead of string sets.
     - Use Effect's typed error channel for effectful workflows; prohibit new
       `neverthrow` and hand-rolled Promise error workflows.
-- **[typescript-effect.md](../../../../.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/practices/typescript-effect.md)**
+- **[typescript-effect.md](../../../../.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/SKILL.md#choose-effect-for-workflows)**
   - Purpose: Require Effect for new or materially changed TypeScript workflows
     that model async work, expected failure, resources, concurrency, services,
     or untrusted boundary decoding while preserving Rust/WASM ownership.
