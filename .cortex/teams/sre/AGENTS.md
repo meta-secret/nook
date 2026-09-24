@@ -43,6 +43,8 @@ product, security, web, or AI dependencies to the delivery owner.
 For an infrastructure expertise request, load the named consumer contract as
 read-only. Do not load the consumer team's complete graph.
 
+### Read-only JavaScript and TypeScript policy
+
 For authored JavaScript or TypeScript under `.github/` or SRE-owned scripts,
 load these web-owned skills directly as read-only engineering policy:
 
