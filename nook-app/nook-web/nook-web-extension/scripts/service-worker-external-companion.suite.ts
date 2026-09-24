@@ -218,6 +218,8 @@ describe('external companion routing', () => {
     openCompanionLauncher.mockClear()
     const { ExternalCompanionRouter } =
       await import('../src/background/service-worker/external-companion-routing')
+    const { ExtensionSessionLifecycle } =
+      await import('../src/background/service-worker/session-lifecycle')
     const sendResponse = mock(() => {})
     const routingArgs = {
       dependencies: externalDependencies,
@@ -236,7 +238,7 @@ describe('external companion routing', () => {
     expect(openCompanionLauncher).toHaveBeenCalledTimes(1)
     expect(openCompanionLauncher).toHaveBeenCalledWith(
       OpenCompanionLauncherIntent.Default,
-      undefined,
+      ExtensionSessionLifecycle.directEntrySource(),
     )
     expect(sendResponse).toHaveBeenCalledWith({ ok: true })
   })
@@ -344,6 +346,8 @@ describe('external companion routing', () => {
     openCompanionLauncher.mockClear()
     const { routeExtensionLifecycleMessage } =
       await import('../src/background/service-worker/extension-lifecycle-routing')
+    const { ExtensionSessionLifecycle } =
+      await import('../src/background/service-worker/session-lifecycle')
     const sendResponse = mock(() => {})
     const routingArgs: Parameters<typeof routeExtensionLifecycleMessage>[0] = {
       dependencies: lifecycleDependencies,
@@ -359,7 +363,7 @@ describe('external companion routing', () => {
     await flushResponses()
     expect(openCompanionLauncher).toHaveBeenCalledWith(
       OpenCompanionLauncherIntent.Pair,
-      undefined,
+      ExtensionSessionLifecycle.directEntrySource(),
     )
     expect(sendResponse).toHaveBeenCalledWith({ ok: true })
   })
