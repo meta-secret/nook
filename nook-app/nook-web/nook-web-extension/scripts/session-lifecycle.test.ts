@@ -278,7 +278,7 @@ function installLauncherBrowserHost(host: LauncherBrowserHost): void {
           callback(tabs)
         },
         create: (args: chrome.tabs.CreateProperties) => {
-          const url = requiredTestTabUrl({ url: args.url })
+          const url = requiredTestTabUrl(args)
           host.createdUrls.push(url)
           switch (host.failure.kind) {
             case LauncherBrowserFailureKind.TabsCreate:
@@ -290,7 +290,7 @@ function installLauncherBrowserHost(host: LauncherBrowserHost): void {
             case LauncherBrowserFailureKind.Contexts:
               break
           }
-          const windowId = requiredTestTabWindowId({ windowId: args.windowId })
+          const windowId = requiredTestTabWindowId(args)
           const createdTabId = 39 + host.createdUrls.length
           for (const tab of host.tabs) {
             switch (tab.windowId === windowId) {
@@ -311,14 +311,13 @@ function installLauncherBrowserHost(host: LauncherBrowserHost): void {
           return Promise.resolve(created)
         },
         update: (tabId: number, args: chrome.tabs.UpdateProperties) => {
-          const urlUpdate = launcherTabUrlUpdate({ url: args.url })
-          requireTestTabActivation({ active: args.active })
+          const urlUpdate = launcherTabUrlUpdate(args)
+          requireTestTabActivation(args)
           host.updatedTabIds.push(tabId)
           const tab = host.tabs.find((candidate) => candidate.id === tabId)
           switch (typeof tab) {
             case 'undefined': {
-              const missingTabResult: { tab?: chrome.tabs.Tab } = {}
-              return Promise.resolve(missingTabResult.tab)
+              return Promise.reject(new Error('tabs.update target tab is missing'))
             }
             default:
               for (const siblingTab of host.tabs) {
