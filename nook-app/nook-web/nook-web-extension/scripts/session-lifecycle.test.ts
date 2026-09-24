@@ -414,7 +414,10 @@ function installLauncherBrowserHost(host: LauncherBrowserHost): void {
             type: host.windowTypes.get(windowId),
           }
         },
-        getLastFocused: async () => {
+        getLastFocused: async (
+          args: Parameters<typeof chrome.windows.getLastFocused>[0],
+        ) => {
+          expect(args.windowTypes).toEqual(['normal'])
           host.lastFocusedWindowCalls += 1
           switch (host.failure.kind) {
             case LauncherBrowserFailureKind.LastFocusedWindow:
@@ -887,6 +890,7 @@ describe('openCompanionLauncherBestEffort', () => {
       failure: { kind: LauncherBrowserFailureKind.None },
     }
     installLauncherBrowserHost(host)
+    expect('WindowType' in chrome.windows).toBe(false)
     const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 

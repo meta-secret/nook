@@ -124,6 +124,8 @@ enum CompanionLauncherDocumentUrlKind {
 
 /** Owns the browser runtime resources shared by these interactions. */
 export class ExtensionSessionLifecycle {
+  private static readonly normalWindowType = 'normal' as const
+
   private static readonly directLauncherSource: CompanionLauncherSource = {
     kind: CompanionLauncherSourceKind.DirectEntry,
   }
@@ -182,7 +184,7 @@ export class ExtensionSessionLifecycle {
       case 'undefined':
         return { kind: CompanionLauncherObservedWindowTypeKind.Missing }
       case 'string':
-        if (windowType === chrome.windows.WindowType.NORMAL) {
+        if (windowType === ExtensionSessionLifecycle.normalWindowType) {
           return { kind: CompanionLauncherObservedWindowTypeKind.Normal }
         }
         return { kind: CompanionLauncherObservedWindowTypeKind.NonNormal }
@@ -295,7 +297,7 @@ export class ExtensionSessionLifecycle {
     const getLastFocusedArgs: Parameters<
       typeof chrome.windows.getLastFocused
     >[0] = {
-      windowTypes: [chrome.windows.WindowType.NORMAL],
+      windowTypes: [ExtensionSessionLifecycle.normalWindowType],
     }
     const normalWindow = await chrome.windows.getLastFocused(
       getLastFocusedArgs,
