@@ -50,7 +50,6 @@ type CompanionLauncherUrlArgs = {
 
 type CompanionLauncherContextArgs = {
   contexts: chrome.runtime.ExtensionContext[]
-  tabs: chrome.tabs.Tab[]
   launcherUrl: string
 }
 
@@ -101,20 +100,10 @@ enum CompanionLauncherContextObservationKind {
   MissingDocumentUrl = 'missing-document-url',
 }
 
-enum CompanionLauncherMatchingTabKind {
-  Missing = 'missing',
-  Present = 'present',
-}
-
 enum CompanionLauncherDocumentUrlKind {
   Missing = 'missing',
   Different = 'different',
   Matching = 'matching',
-}
-
-enum CompanionLauncherTabsQueryResultKind {
-  Succeeded = 'succeeded',
-  Failed = 'failed',
 }
 
 /** Owns the browser runtime resources shared by these interactions. */
@@ -165,7 +154,6 @@ export class ExtensionSessionLifecycle {
 
   private launcherTab({
     contexts,
-    tabs,
     launcherUrl,
   }: CompanionLauncherContextArgs):
     CompanionLauncherTabLookup {
@@ -178,24 +166,6 @@ export class ExtensionSessionLifecycle {
         context.windowId < 0
       ) {
         continue
-      }
-      const matchingTab = tabs.find(
-        (tab) =>
-          tab.id === context.tabId && tab.windowId === context.windowId,
-      )
-      let matchingTabKind = CompanionLauncherMatchingTabKind.Present
-      switch (typeof matchingTab) {
-        case 'undefined':
-          matchingTabKind = CompanionLauncherMatchingTabKind.Missing
-          break
-        default:
-          break
-      }
-      switch (matchingTabKind) {
-        case CompanionLauncherMatchingTabKind.Missing:
-          continue
-        case CompanionLauncherMatchingTabKind.Present:
-          break
       }
       let documentUrlKind = CompanionLauncherDocumentUrlKind.Missing
       switch (typeof context.documentUrl) {
@@ -434,37 +404,13 @@ export class ExtensionSessionLifecycle {
     const launcherUrlArgs: CompanionLauncherUrlArgs = { popupUrl, intent }
     const requestedLauncherUrl = this.launcherUrl(launcherUrlArgs)
     const windowScope = await this.launcherWindowScope(source)
-    const queryArgs: Parameters<typeof chrome.tabs.query>[0] = {
-      windowId: windowScope.windowId,
-      windowType: 'normal',
-    }
-    const tabs = await new Promise<chrome.tabs.Tab[]>((resolve, reject) => {
-      chrome.tabs.query(queryArgs, (result) => {
-        let queryResultKind = CompanionLauncherTabsQueryResultKind.Succeeded
-        switch (typeof chrome.runtime.lastError) {
-          case 'undefined':
-            break
-          default:
-            queryResultKind = CompanionLauncherTabsQueryResultKind.Failed
-            break
-        }
-        switch (queryResultKind) {
-          case CompanionLauncherTabsQueryResultKind.Succeeded:
-            resolve(result)
-            break
-          case CompanionLauncherTabsQueryResultKind.Failed:
-            reject(new Error('launcher tabs.query failed'))
-            break
-        }
-      })
-    })
     const contextQuery: Parameters<typeof chrome.runtime.getContexts>[0] = {
       contextTypes: [chrome.runtime.ContextType.TAB],
+      windowIds: [windowScope.windowId],
     }
     const contexts = await chrome.runtime.getContexts(contextQuery)
     const lookupArgs: CompanionLauncherContextArgs = {
       contexts,
-      tabs,
       launcherUrl: requestedLauncherUrl,
     }
     const launcherTabLookup = this.launcherTab(lookupArgs)

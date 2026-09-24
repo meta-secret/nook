@@ -66,9 +66,9 @@ enum LauncherBrowserFailureKind {
   None = 'none',
   SourceWindow = 'source-window',
   LastFocusedWindow = 'last-focused-window',
-  TabsQuery = 'tabs-query',
   Contexts = 'contexts',
   TabsCreate = 'tabs-create',
+  WindowUpdate = 'window-update',
 }
 
 enum LauncherLastFocusedWindowKind {
@@ -81,6 +81,11 @@ enum LauncherWindowType {
   Popup = 'popup',
 }
 
+type LauncherContextFilter = {
+  contextTypes: [typeof chrome.runtime.ContextType.TAB]
+  windowIds: [number]
+}
+
 type LauncherLastFocusedWindow =
   | { kind: LauncherLastFocusedWindowKind.Identified; id: number }
   | { kind: LauncherLastFocusedWindowKind.MissingId }
@@ -89,9 +94,9 @@ type LauncherBrowserFailure =
   | { kind: LauncherBrowserFailureKind.None }
   | { kind: LauncherBrowserFailureKind.SourceWindow }
   | { kind: LauncherBrowserFailureKind.LastFocusedWindow }
-  | { kind: LauncherBrowserFailureKind.TabsQuery }
   | { kind: LauncherBrowserFailureKind.Contexts }
   | { kind: LauncherBrowserFailureKind.TabsCreate }
+  | { kind: LauncherBrowserFailureKind.WindowUpdate }
 
 type LauncherBrowserHost = {
   tabs: chrome.tabs.Tab[]
@@ -101,7 +106,7 @@ type LauncherBrowserHost = {
   updatedUrls: string[]
   updatedTabIds: number[]
   focusedWindowIds: number[]
-  queryArgs: chrome.tabs.QueryInfo[]
+  contextFilters: LauncherContextFilter[]
   windowGetIds: number[]
   lastFocusedWindowCalls: number
   contextCalls: number
@@ -126,7 +131,7 @@ function createLauncherBrowserHost(
     updatedUrls: [],
     updatedTabIds: [],
     focusedWindowIds: [],
-    queryArgs: [],
+    contextFilters: [],
     windowGetIds: [],
     lastFocusedWindowCalls: 0,
     contextCalls: 0,
@@ -226,57 +231,38 @@ function launcherTabUrlUpdate(args: { url?: string }): LauncherTabUrlUpdate {
 }
 
 function installLauncherBrowserHost(host: LauncherBrowserHost): void {
-  const runtimeState: { lastError?: { message: string } } = {}
   Object.assign(globalThis, {
     chrome: {
       runtime: {
         ContextType: { TAB: 'TAB' },
-        get lastError() {
-          return runtimeState.lastError
-        },
         getURL: () => 'chrome-extension://nook/popup/index.html',
-        getContexts: async () => {
+        getContexts: async (filter: LauncherContextFilter) => {
           host.contextCalls += 1
+          host.contextFilters.push(filter)
           switch (host.failure.kind) {
             case LauncherBrowserFailureKind.Contexts:
               throw new Error('runtime.getContexts failed')
             case LauncherBrowserFailureKind.None:
             case LauncherBrowserFailureKind.SourceWindow:
             case LauncherBrowserFailureKind.LastFocusedWindow:
-            case LauncherBrowserFailureKind.TabsQuery:
             case LauncherBrowserFailureKind.TabsCreate:
+            case LauncherBrowserFailureKind.WindowUpdate:
               break
           }
-          return host.contexts
+          const selectedContexts: chrome.runtime.ExtensionContext[] = []
+          for (const context of host.contexts) {
+            switch (context.windowId) {
+              case filter.windowIds[0]:
+                selectedContexts.push(context)
+                break
+              default:
+                break
+            }
+          }
+          return selectedContexts
         },
       },
       tabs: {
-        query: (
-          query: chrome.tabs.QueryInfo,
-          callback: (result: chrome.tabs.Tab[]) => void,
-        ) => {
-          host.queryArgs.push(query)
-          switch (host.failure.kind) {
-            case LauncherBrowserFailureKind.TabsQuery:
-              runtimeState.lastError = { message: 'tabs.query failed' }
-              callback([])
-              delete runtimeState.lastError
-              return
-            case LauncherBrowserFailureKind.None:
-            case LauncherBrowserFailureKind.SourceWindow:
-            case LauncherBrowserFailureKind.LastFocusedWindow:
-            case LauncherBrowserFailureKind.Contexts:
-            case LauncherBrowserFailureKind.TabsCreate:
-              break
-          }
-          const tabs = host.tabs.filter((tab) => {
-            return (
-              tab.windowId === query.windowId &&
-              host.windowTypes.get(tab.windowId) === LauncherWindowType.Normal
-            )
-          })
-          callback(tabs)
-        },
         create: (args: chrome.tabs.CreateProperties) => {
           const url = requiredTestTabUrl(args)
           host.createdUrls.push(url)
@@ -286,8 +272,8 @@ function installLauncherBrowserHost(host: LauncherBrowserHost): void {
             case LauncherBrowserFailureKind.None:
             case LauncherBrowserFailureKind.SourceWindow:
             case LauncherBrowserFailureKind.LastFocusedWindow:
-            case LauncherBrowserFailureKind.TabsQuery:
             case LauncherBrowserFailureKind.Contexts:
+            case LauncherBrowserFailureKind.WindowUpdate:
               break
           }
           const windowId = requiredTestTabWindowId(args)
@@ -360,9 +346,9 @@ function installLauncherBrowserHost(host: LauncherBrowserHost): void {
               throw new Error('windows.get failed')
             case LauncherBrowserFailureKind.None:
             case LauncherBrowserFailureKind.LastFocusedWindow:
-            case LauncherBrowserFailureKind.TabsQuery:
             case LauncherBrowserFailureKind.Contexts:
             case LauncherBrowserFailureKind.TabsCreate:
+            case LauncherBrowserFailureKind.WindowUpdate:
               break
           }
           return {
@@ -377,9 +363,9 @@ function installLauncherBrowserHost(host: LauncherBrowserHost): void {
               throw new Error('windows.getLastFocused failed')
             case LauncherBrowserFailureKind.None:
             case LauncherBrowserFailureKind.SourceWindow:
-            case LauncherBrowserFailureKind.TabsQuery:
             case LauncherBrowserFailureKind.Contexts:
             case LauncherBrowserFailureKind.TabsCreate:
+            case LauncherBrowserFailureKind.WindowUpdate:
               break
           }
           switch (host.lastFocusedWindow.kind) {
@@ -397,7 +383,16 @@ function installLauncherBrowserHost(host: LauncherBrowserHost): void {
           _args: chrome.windows.UpdateInfo,
         ) => {
           host.focusedWindowIds.push(windowId)
-          return Promise.resolve({ id: windowId })
+          switch (host.failure.kind) {
+            case LauncherBrowserFailureKind.WindowUpdate:
+              return Promise.reject(new Error('windows.update failed'))
+            case LauncherBrowserFailureKind.None:
+            case LauncherBrowserFailureKind.SourceWindow:
+            case LauncherBrowserFailureKind.LastFocusedWindow:
+            case LauncherBrowserFailureKind.Contexts:
+            case LauncherBrowserFailureKind.TabsCreate:
+              return Promise.resolve({ id: windowId })
+          }
         },
       },
     },
@@ -470,7 +465,7 @@ describe('openCompanionLauncherBestEffort', () => {
       updatedUrls: [],
       updatedTabIds: [],
       focusedWindowIds: [],
-      queryArgs: [],
+      contextFilters: [],
       windowGetIds: [],
       lastFocusedWindowCalls: 0,
       contextCalls: 0,
@@ -507,7 +502,7 @@ describe('openCompanionLauncherBestEffort', () => {
       updatedUrls: [],
       updatedTabIds: [],
       focusedWindowIds: [],
-      queryArgs: [],
+      contextFilters: [],
       windowGetIds: [],
       lastFocusedWindowCalls: 0,
       contextCalls: 0,
@@ -544,7 +539,12 @@ describe('openCompanionLauncherBestEffort', () => {
     } finally {
       warningSpy.mockRestore()
     }
-    expect(host.queryArgs).toEqual([{ windowId: 7, windowType: 'normal' }])
+    expect(host.contextFilters).toEqual([
+      {
+        contextTypes: [chrome.runtime.ContextType.TAB],
+        windowIds: [7],
+      },
+    ])
     expect(host.contextCalls).toBe(1)
     expect(host.createdUrls).toEqual([])
     expect(host.updatedTabIds).toEqual([])
@@ -574,7 +574,7 @@ describe('openCompanionLauncherBestEffort', () => {
 
     expect(host.windowGetIds).toEqual([7])
     expect(host.lastFocusedWindowCalls).toBe(0)
-    expect(host.queryArgs).toEqual([])
+    expect(host.contextFilters).toEqual([])
     expect(host.contextCalls).toBe(0)
     expect(host.createdUrls).toEqual([])
     expect(host.updatedTabIds).toEqual([])
@@ -601,7 +601,7 @@ describe('openCompanionLauncherBestEffort', () => {
     )
 
     expect(host.lastFocusedWindowCalls).toBe(1)
-    expect(host.queryArgs).toEqual([])
+    expect(host.contextFilters).toEqual([])
     expect(host.contextCalls).toBe(0)
     expect(host.createdUrls).toEqual([])
     expect(host.updatedTabIds).toEqual([])
@@ -641,38 +641,12 @@ describe('openCompanionLauncherBestEffort', () => {
       )
 
       expect(host.lastFocusedWindowCalls).toBe(1)
-      expect(host.queryArgs).toEqual([])
+      expect(host.contextFilters).toEqual([])
       expect(host.contextCalls).toBe(0)
       expect(host.createdUrls).toEqual([])
       expect(host.updatedTabIds).toEqual([])
       expect(host.focusedWindowIds).toEqual([])
     }
-  })
-
-  test('rejects tabs.query lastError without observing or opening another tab', async () => {
-    const host = createLauncherBrowserHost({
-      tabs: [],
-      contexts: [],
-      windowTypes: new Map([[7, LauncherWindowType.Normal]]),
-      lastFocusedWindow: { kind: LauncherLastFocusedWindowKind.Identified, id: 7 },
-      failure: { kind: LauncherBrowserFailureKind.TabsQuery },
-    })
-    installLauncherBrowserHost(host)
-    const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
-      await import('../src/background/service-worker/session-lifecycle')
-
-    await expectLauncherRejection(
-      extensionSessionLifecycle.openCompanionLauncher(
-        OpenCompanionLauncherIntent.Default,
-        ExtensionSessionLifecycle.directEntrySource(),
-      ),
-    )
-
-    expect(host.queryArgs).toEqual([{ windowId: 7, windowType: 'normal' }])
-    expect(host.contextCalls).toBe(0)
-    expect(host.createdUrls).toEqual([])
-    expect(host.updatedTabIds).toEqual([])
-    expect(host.focusedWindowIds).toEqual([])
   })
 
   test('rejects a failed context observation without opening another tab', async () => {
@@ -694,7 +668,12 @@ describe('openCompanionLauncherBestEffort', () => {
       ),
     )
 
-    expect(host.queryArgs).toEqual([{ windowId: 7, windowType: 'normal' }])
+    expect(host.contextFilters).toEqual([
+      {
+        contextTypes: [chrome.runtime.ContextType.TAB],
+        windowIds: [7],
+      },
+    ])
     expect(host.contextCalls).toBe(1)
     expect(host.createdUrls).toEqual([])
     expect(host.updatedTabIds).toEqual([])
@@ -724,7 +703,12 @@ describe('openCompanionLauncherBestEffort', () => {
         ),
       )
 
-      expect(host.queryArgs).toEqual([{ windowId: 7, windowType: 'normal' }])
+      expect(host.contextFilters).toEqual([
+        {
+          contextTypes: [chrome.runtime.ContextType.TAB],
+          windowIds: [7],
+        },
+      ])
       expect(host.contextCalls).toBe(1)
       expect(host.createdUrls).toEqual([])
       expect(host.updatedTabIds).toEqual([])
@@ -732,6 +716,73 @@ describe('openCompanionLauncherBestEffort', () => {
       expect(authTab.url).toBe('chrome-extension://nook/popup/index.html')
     },
   )
+
+  test('rejects a stale exact-intent tab without creating a replacement', async () => {
+    const host = createLauncherBrowserHost({
+      tabs: [],
+      contexts: [
+        launcherContext(53, 7, 'chrome-extension://nook/popup/index.html'),
+      ],
+      windowTypes: new Map([[7, LauncherWindowType.Normal]]),
+      lastFocusedWindow: { kind: LauncherLastFocusedWindowKind.Identified, id: 7 },
+      failure: { kind: LauncherBrowserFailureKind.None },
+    })
+    installLauncherBrowserHost(host)
+    const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
+      await import('../src/background/service-worker/session-lifecycle')
+
+    await expect(
+      extensionSessionLifecycle.openCompanionLauncher(
+        OpenCompanionLauncherIntent.Default,
+        ExtensionSessionLifecycle.directEntrySource(),
+      ),
+    ).rejects.toThrow('tabs.update target tab is missing')
+
+    expect(host.contextFilters).toEqual([
+      {
+        contextTypes: [chrome.runtime.ContextType.TAB],
+        windowIds: [7],
+      },
+    ])
+    expect(host.updatedTabIds).toEqual([53])
+    expect(host.createdUrls).toEqual([])
+    expect(host.createdWindowIds).toEqual([])
+    expect(host.focusedWindowIds).toEqual([])
+  })
+
+  test('preserves a window-focus failure without creating a replacement tab', async () => {
+    const authUrl = 'chrome-extension://nook/popup/index.html?intent=pilot-auth'
+    const authTab = browserTab(authUrl, 54)
+    authTab.windowId = 7
+    const host = createLauncherBrowserHost({
+      tabs: [authTab],
+      contexts: [launcherContext(54, 7, authUrl)],
+      windowTypes: new Map([[7, LauncherWindowType.Normal]]),
+      lastFocusedWindow: { kind: LauncherLastFocusedWindowKind.Identified, id: 7 },
+      failure: { kind: LauncherBrowserFailureKind.WindowUpdate },
+    })
+    installLauncherBrowserHost(host)
+    const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
+      await import('../src/background/service-worker/session-lifecycle')
+
+    await expect(
+      extensionSessionLifecycle.openCompanionLauncher(
+        OpenCompanionLauncherIntent.PilotAuth,
+        ExtensionSessionLifecycle.directEntrySource(),
+      ),
+    ).rejects.toThrow('windows.update failed')
+
+    expect(host.contextFilters).toEqual([
+      {
+        contextTypes: [chrome.runtime.ContextType.TAB],
+        windowIds: [7],
+      },
+    ])
+    expect(host.updatedTabIds).toEqual([54])
+    expect(host.focusedWindowIds).toEqual([7])
+    expect(host.createdUrls).toEqual([])
+    expect(host.createdWindowIds).toEqual([])
+  })
 
   test(
     'routes toolbar and Pilot through the same component and reuses exact intents',
@@ -744,7 +795,7 @@ describe('openCompanionLauncherBestEffort', () => {
         updatedUrls: [],
         updatedTabIds: [],
         focusedWindowIds: [],
-        queryArgs: [],
+        contextFilters: [],
         windowGetIds: [],
         lastFocusedWindowCalls: 0,
         contextCalls: 0,
@@ -777,6 +828,20 @@ describe('openCompanionLauncherBestEffort', () => {
       expect(host.updatedUrls).toEqual([])
       expect(host.updatedTabIds).toEqual([40])
       expect(host.lastFocusedWindowCalls).toBe(3)
+      expect(host.contextFilters).toEqual([
+        {
+          contextTypes: [chrome.runtime.ContextType.TAB],
+          windowIds: [7],
+        },
+        {
+          contextTypes: [chrome.runtime.ContextType.TAB],
+          windowIds: [7],
+        },
+        {
+          contextTypes: [chrome.runtime.ContextType.TAB],
+          windowIds: [7],
+        },
+      ])
       expect(host.focusedWindowIds).toEqual([7, 7])
       expect(host.tabs).toHaveLength(2)
       expect(host.tabs.map((tab) => tab.url)).toEqual([
@@ -809,7 +874,7 @@ describe('openCompanionLauncherBestEffort', () => {
         updatedUrls: [],
         updatedTabIds: [],
         focusedWindowIds: [],
-        queryArgs: [],
+        contextFilters: [],
         windowGetIds: [],
         lastFocusedWindowCalls: 0,
         contextCalls: 0,
@@ -829,7 +894,12 @@ describe('openCompanionLauncherBestEffort', () => {
         ExtensionSessionLifecycle.sourceFromTab(initiatingSiteTab),
       )
 
-      expect(host.queryArgs).toEqual([{ windowId: 7, windowType: 'normal' }])
+      expect(host.contextFilters).toEqual([
+        {
+          contextTypes: [chrome.runtime.ContextType.TAB],
+          windowIds: [7],
+        },
+      ])
       expect(host.createdUrls).toEqual([])
       expect(host.updatedTabIds).toEqual([82])
       expect(host.updatedUrls).toEqual([])
@@ -855,7 +925,7 @@ describe('openCompanionLauncherBestEffort', () => {
         updatedUrls: [],
         updatedTabIds: [],
         focusedWindowIds: [],
-        queryArgs: [],
+        contextFilters: [],
         windowGetIds: [],
         lastFocusedWindowCalls: 0,
         contextCalls: 0,
@@ -875,7 +945,12 @@ describe('openCompanionLauncherBestEffort', () => {
         ExtensionSessionLifecycle.sourceFromTab(initiatingSiteTab),
       )
 
-      expect(host.queryArgs).toEqual([{ windowId: 7, windowType: 'normal' }])
+      expect(host.contextFilters).toEqual([
+        {
+          contextTypes: [chrome.runtime.ContextType.TAB],
+          windowIds: [7],
+        },
+      ])
       expect(host.createdUrls).toEqual([
         `${popupUrl}?intent=pilot-auth`,
       ])
@@ -902,7 +977,7 @@ describe('openCompanionLauncherBestEffort', () => {
         updatedUrls: [],
         updatedTabIds: [],
         focusedWindowIds: [],
-        queryArgs: [],
+        contextFilters: [],
         windowGetIds: [],
         lastFocusedWindowCalls: 0,
         contextCalls: 0,
@@ -922,7 +997,12 @@ describe('openCompanionLauncherBestEffort', () => {
         ExtensionSessionLifecycle.sourceFromTab(initiatingSiteTab),
       )
 
-      expect(host.queryArgs).toEqual([{ windowId: 7, windowType: 'normal' }])
+      expect(host.contextFilters).toEqual([
+        {
+          contextTypes: [chrome.runtime.ContextType.TAB],
+          windowIds: [7],
+        },
+      ])
       expect(host.createdUrls).toEqual([
         `${popupUrl}?intent=pilot-auth`,
       ])
@@ -958,7 +1038,12 @@ describe('openCompanionLauncherBestEffort', () => {
         ExtensionSessionLifecycle.sourceFromTab(initiatingSiteTab),
       )
 
-      expect(host.queryArgs).toEqual([{ windowId: 7, windowType: 'normal' }])
+      expect(host.contextFilters).toEqual([
+        {
+          contextTypes: [chrome.runtime.ContextType.TAB],
+          windowIds: [7],
+        },
+      ])
       expect(host.createdUrls).toEqual([
         `${popupUrl}?intent=pilot-auth`,
       ])
@@ -993,7 +1078,7 @@ describe('openCompanionLauncherBestEffort', () => {
 
     expect(host.windowGetIds).toEqual([])
     expect(host.lastFocusedWindowCalls).toBe(0)
-    expect(host.queryArgs).toEqual([])
+    expect(host.contextFilters).toEqual([])
     expect(host.createdUrls).toEqual([])
     expect(host.updatedTabIds).toEqual([])
     expect(host.focusedWindowIds).toEqual([])
@@ -1010,7 +1095,7 @@ describe('openCompanionLauncherBestEffort', () => {
       updatedUrls: [],
       updatedTabIds: [],
       focusedWindowIds: [],
-      queryArgs: [],
+      contextFilters: [],
       windowGetIds: [],
       lastFocusedWindowCalls: 0,
       contextCalls: 0,
@@ -1033,7 +1118,7 @@ describe('openCompanionLauncherBestEffort', () => {
     )
     expect(host.windowGetIds).toEqual([8])
     expect(host.lastFocusedWindowCalls).toBe(0)
-    expect(host.queryArgs).toEqual([])
+    expect(host.contextFilters).toEqual([])
     expect(host.createdUrls).toEqual([])
     expect(host.createdWindowIds).toEqual([])
     expect(host.updatedTabIds).toEqual([])
