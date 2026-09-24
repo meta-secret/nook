@@ -15,6 +15,33 @@ Resolve the session's development mode through the upstream
 or launching agents. Nook's delivery contract supplies the project-specific
 stages and constraints below.
 
+## Mandatory context selection
+
+Follow Meta-Cortex's [project context](../.meta-cortex/AGENTS.md#project-context)
+and [assignment context](../.meta-cortex/teams/AGENTS.md#assignment-context)
+rules for generic context selection and coordination. Meta-Cortex owns role
+configuration and defaults in `../.meta-cortex/meta-cortex.toml`; Nook `.cortex`
+adds no model or reasoning-effort overrides.
+
+For each multi-agent Nook assignment, include:
+
+- the Nook project root and shared Meta-Cortex library root;
+- selected base and feature branches;
+- each worker branch and worktree in dependency order; and
+- applicable Nook checks.
+
+Select the Nook product, security, delivery, and validation constraints from
+the root graph and owning team authorities. A Cortex task uses the AI context
+and its specialist graph; a vault or authentication task follows the product
+and security contexts selected by the root graph.
+
+**Prohibited:** “The worker has the Nook checkout, so it can infer its context
+and checks.”
+
+**Preferred:** “Name the Nook project root and shared Meta-Cortex library root,
+selected branches and worker worktrees in dependency order, and applicable Nook
+checks.”
+
 ## Canonical Cortex tree
 
 Meta-Cortex owns generic agents and skills. Nook retains six functional contexts:
