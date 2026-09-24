@@ -7,10 +7,15 @@ import {
   type NookAppLocale,
 } from "$app-wasm";
 
+enum ScheduledSyncInvalidationAlertOwnershipKind {
+  Unowned = "unowned",
+  Owned = "owned",
+}
+
 type ScheduledSyncInvalidationAlertOwnership =
-  | { readonly kind: "unowned" }
+  | { readonly kind: ScheduledSyncInvalidationAlertOwnershipKind.Unowned }
   | {
-      readonly kind: "owned";
+      readonly kind: ScheduledSyncInvalidationAlertOwnershipKind.Owned;
       readonly sessionEpoch: number;
       readonly errorMsgRevision: number;
       readonly message: string;
@@ -44,7 +49,9 @@ export class VaultRuntimeState {
   private errorMessageState = $state("");
   private errorMessageRevisionState = $state(0);
   private scheduledSyncInvalidationAlertOwnershipState =
-    $state<ScheduledSyncInvalidationAlertOwnership>({ kind: "unowned" });
+    $state<ScheduledSyncInvalidationAlertOwnership>({
+      kind: ScheduledSyncInvalidationAlertOwnershipKind.Unowned,
+    });
   get errorMsg(): string {
     return this.errorMessageState;
   }
@@ -55,7 +62,7 @@ export class VaultRuntimeState {
     this.errorMessageState = value;
     this.errorMessageRevisionState += 1;
     this.scheduledSyncInvalidationAlertOwnershipState = {
-      kind: "unowned",
+      kind: ScheduledSyncInvalidationAlertOwnershipKind.Unowned,
     };
   }
 
@@ -65,7 +72,7 @@ export class VaultRuntimeState {
   }: ScheduledSyncInvalidationAlertRecord): void {
     if (this.errorMessageState !== message) return;
     this.scheduledSyncInvalidationAlertOwnershipState = {
-      kind: "owned",
+      kind: ScheduledSyncInvalidationAlertOwnershipKind.Owned,
       sessionEpoch,
       errorMsgRevision: this.errorMessageRevisionState,
       message,
@@ -78,7 +85,7 @@ export class VaultRuntimeState {
   }: ScheduledSyncInvalidationAlertClearance): void {
     const ownership = this.scheduledSyncInvalidationAlertOwnershipState;
     if (
-      ownership.kind !== "owned" ||
+      ownership.kind !== ScheduledSyncInvalidationAlertOwnershipKind.Owned ||
       ownership.sessionEpoch !== sessionEpoch ||
       ownership.errorMsgRevision !== errorMsgRevision ||
       ownership.errorMsgRevision !== this.errorMessageRevisionState ||
