@@ -1,4 +1,4 @@
-import { err } from 'neverthrow'
+import { err, ok } from 'neverthrow'
 import { describe, expect, test, vi } from 'vitest'
 import {
   DeviceProtectionStatus,
@@ -14,7 +14,9 @@ import {
 import {
   SyncConflictPresentation,
   VaultSyncActions,
+  type VaultSynchronizationResult,
 } from '$lib/vault/sync.svelte'
+import { ProviderSyncOutcome } from '$lib/vault/provider-sync.svelte'
 import {
   TranslationMessage,
   type TranslationRequest,
@@ -102,6 +104,310 @@ describe('resolveVaultSyncIntervalMs', () => {
 })
 
 describe('automatic vault sync', () => {
+  test('clears a scheduled generation-unavailable alert after guarded sync succeeds', async () => {
+    const state = VaultStateTestFixture.create()
+    state.isAuthenticated = true
+    state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked
+    state.syncFromStorage = vi
+      .fn()
+      .mockResolvedValueOnce(
+        err(
+          new VaultStorageFailure(
+            VaultStorageFailureKind.GenerationUnavailable,
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(ok(ProviderSyncOutcome.Synced))
+    let scheduledCallback!: Parameters<typeof state.scheduleSync>[0]['callback']
+    state.scheduleSync = vi.fn((request) => {
+      scheduledCallback = request.callback
+    })
+
+    new VaultSyncActions(state).startVaultSync()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(state.errorMsg).toBe(
+      state.t(I18N_KEYS.ErrorsValidationLocalDataChangedInAnotherTab),
+    )
+
+    scheduledCallback()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(state.errorMsg).toBe('')
+  })
+
+  test.each([
+    ['generation changed', VaultStorageFailureKind.GenerationChanged],
+    ['deletion active', VaultStorageFailureKind.DeletionActive],
+  ])(
+    'preserves a %s alert after a later successful scheduled sync',
+    async (_label, failureKind) => {
+      const state = VaultStateTestFixture.create()
+      state.isAuthenticated = true
+      state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked
+      state.syncFromStorage = vi
+        .fn()
+        .mockResolvedValueOnce(err(new VaultStorageFailure(failureKind)))
+        .mockResolvedValueOnce(ok(ProviderSyncOutcome.Synced))
+      let scheduledCallback!: Parameters<
+        typeof state.scheduleSync
+      >[0]['callback']
+      state.scheduleSync = vi.fn((request) => {
+        scheduledCallback = request.callback
+      })
+
+      new VaultSyncActions(state).startVaultSync()
+      await Promise.resolve()
+      await Promise.resolve()
+      scheduledCallback()
+      await Promise.resolve()
+      await Promise.resolve()
+
+      expect(state.errorMsg).toBe(
+        state.t(I18N_KEYS.ErrorsValidationLocalDataChangedInAnotherTab),
+      )
+    },
+  )
+
+  test.each([
+    {
+      label: 'a skipped sync',
+      laterResult: ok(ProviderSyncOutcome.Skipped),
+      expectedErrorKey: I18N_KEYS.ErrorsValidationLocalDataChangedInAnotherTab,
+    },
+    {
+      label: 'a captured provider failure',
+      laterResult: ok(ProviderSyncOutcome.FailureCaptured),
+      expectedErrorKey: I18N_KEYS.ErrorsValidationLocalDataChangedInAnotherTab,
+    },
+    {
+      label: 'an unavailable sync',
+      laterResult: err(
+        new VaultStorageFailure(VaultStorageFailureKind.ManagerUnavailable),
+      ),
+      expectedErrorKey: I18N_KEYS.ErrorsEngineUnavailable,
+    },
+  ])(
+    'does not treat $label as successful recovery',
+    async ({ laterResult, expectedErrorKey }) => {
+      const state = VaultStateTestFixture.create()
+      state.isAuthenticated = true
+      state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked
+      state.syncFromStorage = vi
+        .fn()
+        .mockResolvedValueOnce(
+          err(
+            new VaultStorageFailure(
+              VaultStorageFailureKind.GenerationUnavailable,
+            ),
+          ),
+        )
+        .mockResolvedValueOnce(laterResult)
+      let scheduledCallback!: Parameters<
+        typeof state.scheduleSync
+      >[0]['callback']
+      state.scheduleSync = vi.fn((request) => {
+        scheduledCallback = request.callback
+      })
+
+      new VaultSyncActions(state).startVaultSync()
+      await Promise.resolve()
+      await Promise.resolve()
+      scheduledCallback()
+      await Promise.resolve()
+      await Promise.resolve()
+
+      expect(state.errorMsg).toBe(state.t(expectedErrorKey))
+    },
+  )
+
+  test.each([
+    [
+      'session changed',
+      (state: ReturnType<typeof VaultStateTestFixture.create>) => {
+        state.sessionEpoch += 1
+      },
+    ],
+    [
+      'scheduled sync became ineligible',
+      (state: ReturnType<typeof VaultStateTestFixture.create>) => {
+        state.isAuthenticated = false
+      },
+    ],
+    [
+      'local data deletion started',
+      (state: ReturnType<typeof VaultStateTestFixture.create>) => {
+        state.localDataDeletionStarted = true
+      },
+    ],
+  ])(
+    'preserves the generation-unavailable alert when %s before success',
+    async (_label, invalidateClearance) => {
+      const state = VaultStateTestFixture.create()
+      state.isAuthenticated = true
+      state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked
+      state.syncFromStorage = vi
+        .fn()
+        .mockResolvedValueOnce(
+          err(
+            new VaultStorageFailure(
+              VaultStorageFailureKind.GenerationUnavailable,
+            ),
+          ),
+        )
+        .mockImplementationOnce(async () => {
+          invalidateClearance(state)
+          return ok(ProviderSyncOutcome.Synced)
+        })
+      let scheduledCallback!: Parameters<
+        typeof state.scheduleSync
+      >[0]['callback']
+      state.scheduleSync = vi.fn((request) => {
+        scheduledCallback = request.callback
+      })
+
+      new VaultSyncActions(state).startVaultSync()
+      await Promise.resolve()
+      await Promise.resolve()
+      scheduledCallback()
+      await Promise.resolve()
+      await Promise.resolve()
+
+      expect(state.errorMsg).toBe(
+        state.t(I18N_KEYS.ErrorsValidationLocalDataChangedInAnotherTab),
+      )
+    },
+  )
+
+  test('preserves an unrelated error assigned before scheduled success', async () => {
+    const state = VaultStateTestFixture.create()
+    state.isAuthenticated = true
+    state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked
+    state.syncFromStorage = vi
+      .fn()
+      .mockResolvedValueOnce(
+        err(
+          new VaultStorageFailure(
+            VaultStorageFailureKind.GenerationUnavailable,
+          ),
+        ),
+      )
+      .mockImplementationOnce(async () => {
+        state.errorMsg = state.t(I18N_KEYS.AuthStorageSyncFailed)
+        return ok(ProviderSyncOutcome.Synced)
+      })
+    let scheduledCallback!: Parameters<typeof state.scheduleSync>[0]['callback']
+    state.scheduleSync = vi.fn((request) => {
+      scheduledCallback = request.callback
+    })
+
+    new VaultSyncActions(state).startVaultSync()
+    await Promise.resolve()
+    await Promise.resolve()
+    scheduledCallback()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(state.errorMsg).toBe(state.t(I18N_KEYS.AuthStorageSyncFailed))
+  })
+
+  test('preserves a newer assignment of the same invalidation message', async () => {
+    const state = VaultStateTestFixture.create()
+    state.isAuthenticated = true
+    state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked
+    state.syncFromStorage = vi
+      .fn()
+      .mockResolvedValueOnce(
+        err(
+          new VaultStorageFailure(
+            VaultStorageFailureKind.GenerationUnavailable,
+          ),
+        ),
+      )
+      .mockImplementationOnce(async () => {
+        state.errorMsg = state.t(
+          I18N_KEYS.ErrorsValidationLocalDataChangedInAnotherTab,
+        )
+        return ok(ProviderSyncOutcome.Synced)
+      })
+    let scheduledCallback!: Parameters<typeof state.scheduleSync>[0]['callback']
+    state.scheduleSync = vi.fn((request) => {
+      scheduledCallback = request.callback
+    })
+
+    new VaultSyncActions(state).startVaultSync()
+    await Promise.resolve()
+    await Promise.resolve()
+    scheduledCallback()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(state.errorMsg).toBe(
+      state.t(I18N_KEYS.ErrorsValidationLocalDataChangedInAnotherTab),
+    )
+  })
+
+  test('does not let an earlier scheduled success clear a newer invalidation alert', async () => {
+    const state = VaultStateTestFixture.create()
+    state.isAuthenticated = true
+    state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked
+    const pendingSynchronizations: Array<
+      (result: VaultSynchronizationResult) => void
+    > = []
+    state.syncFromStorage = vi.fn(
+      () =>
+        new Promise<VaultSynchronizationResult>((resolve) => {
+          pendingSynchronizations.push(resolve)
+        }),
+    )
+    const scheduledCallbacks: Array<
+      Parameters<typeof state.scheduleSync>[0]['callback']
+    > = []
+    state.scheduleSync = vi.fn((request) => {
+      scheduledCallbacks.push(request.callback)
+    })
+
+    new VaultSyncActions(state).startVaultSync()
+    const tickAfterAStarted = scheduledCallbacks[0]
+    if (!tickAfterAStarted)
+      throw new Error('Scheduled sync callback is missing.')
+    tickAfterAStarted()
+    const resolveB = pendingSynchronizations[1]
+    if (!resolveB) throw new Error('Second scheduled sync is missing.')
+    resolveB(
+      err(
+        new VaultStorageFailure(VaultStorageFailureKind.GenerationUnavailable),
+      ),
+    )
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(state.errorMsg).toBe(
+      state.t(I18N_KEYS.ErrorsValidationLocalDataChangedInAnotherTab),
+    )
+
+    const resolveA = pendingSynchronizations[0]
+    if (!resolveA) throw new Error('First scheduled sync is missing.')
+    resolveA(ok(ProviderSyncOutcome.Synced))
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(state.errorMsg).toBe(
+      state.t(I18N_KEYS.ErrorsValidationLocalDataChangedInAnotherTab),
+    )
+
+    new VaultSyncActions(state).startVaultSync()
+    const resolveC = pendingSynchronizations[2]
+    if (!resolveC) throw new Error('Third scheduled sync is missing.')
+    resolveC(ok(ProviderSyncOutcome.Synced))
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(state.errorMsg).toBe('')
+  })
+
   test('keeps a join-approval polling failure visible while unauthenticated', async () => {
     const state = VaultStateTestFixture.create()
     state.isAuthenticated = false

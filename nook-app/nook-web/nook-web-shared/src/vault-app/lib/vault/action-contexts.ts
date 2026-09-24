@@ -330,7 +330,13 @@ type SyncProviderFields = Pick<
 
 type SyncRuntimeFields = Pick<
   VaultRuntimeState,
-  "clientPolicy" | "errorMsg" | "isSaving" | "isVerifying"
+  | "clientPolicy"
+  | "clearScheduledSyncInvalidationAlert"
+  | "errorMsg"
+  | "errorMsgRevision"
+  | "isSaving"
+  | "isVerifying"
+  | "recordScheduledSyncInvalidationAlert"
 >;
 
 type SyncSessionFields = Pick<
@@ -402,6 +408,7 @@ type ProviderSyncMetadataRequest = {
 
 interface SyncActionPorts extends SharedStorageActionsContext {
   readonly deviceProtectionReady: boolean;
+  readonly localDataDeletionStarted: boolean;
   readonly runtimeConfig: NookRuntimeConfig;
   readonly syncBlocked: boolean;
   readonly syncProviders: StorageProvider[];
