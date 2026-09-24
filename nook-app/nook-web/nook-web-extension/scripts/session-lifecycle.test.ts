@@ -172,30 +172,33 @@ function launcherContextWithoutDocumentUrl(
   }
 }
 
-function requiredTestTabUrl(url: string | undefined): string {
-  switch (typeof url) {
+function requiredTestTabUrl(args: { url?: string }): string {
+  switch (typeof args.url) {
     case 'string':
-      return url
+      return args.url
     case 'undefined':
       throw new Error('launcher tab request omitted its URL')
   }
 }
 
-function requireTestTabActivation(active: boolean | undefined): void {
-  switch (active) {
-    case true:
-      return
-    case false:
-      throw new Error('launcher tab request must activate the tab')
-    case undefined:
+function requireTestTabActivation(args: { active?: boolean }): void {
+  switch (typeof args.active) {
+    case 'undefined':
       throw new Error('launcher tab request omitted its activation state')
+    case 'boolean':
+      switch (args.active) {
+        case true:
+          return
+        case false:
+          throw new Error('launcher tab request must activate the tab')
+      }
   }
 }
 
-function requiredTestTabWindowId(windowId: number | undefined): number {
-  switch (typeof windowId) {
+function requiredTestTabWindowId(args: { windowId?: number }): number {
+  switch (typeof args.windowId) {
     case 'number':
-      return windowId
+      return args.windowId
     case 'undefined':
       throw new Error('launcher tab request omitted its window ID')
   }
@@ -210,23 +213,26 @@ type LauncherTabUrlUpdate =
   | { kind: LauncherTabUrlUpdateKind.ActivationOnly }
   | { kind: LauncherTabUrlUpdateKind.Navigate; url: string }
 
-function launcherTabUrlUpdate(url: string | undefined): LauncherTabUrlUpdate {
-  switch (typeof url) {
+function launcherTabUrlUpdate(args: { url?: string }): LauncherTabUrlUpdate {
+  switch (typeof args.url) {
     case 'string':
-      return { kind: LauncherTabUrlUpdateKind.Navigate, url }
+      return {
+        kind: LauncherTabUrlUpdateKind.Navigate,
+        url: args.url,
+      }
     case 'undefined':
       return { kind: LauncherTabUrlUpdateKind.ActivationOnly }
   }
 }
 
 function installLauncherBrowserHost(host: LauncherBrowserHost): void {
-  let runtimeLastError: { message: string } | undefined
+  const runtimeState: { lastError?: { message: string } } = {}
   Object.assign(globalThis, {
     chrome: {
       runtime: {
         ContextType: { TAB: 'TAB' },
         get lastError() {
-          return runtimeLastError
+          return runtimeState.lastError
         },
         getURL: () => 'chrome-extension://nook/popup/index.html',
         getContexts: async () => {
@@ -252,9 +258,9 @@ function installLauncherBrowserHost(host: LauncherBrowserHost): void {
           host.queryArgs.push(query)
           switch (host.failure.kind) {
             case LauncherBrowserFailureKind.TabsQuery:
-              runtimeLastError = { message: 'tabs.query failed' }
+              runtimeState.lastError = { message: 'tabs.query failed' }
               callback([])
-              runtimeLastError = undefined
+              delete runtimeState.lastError
               return
             case LauncherBrowserFailureKind.None:
             case LauncherBrowserFailureKind.SourceWindow:
@@ -272,7 +278,7 @@ function installLauncherBrowserHost(host: LauncherBrowserHost): void {
           callback(tabs)
         },
         create: (args: chrome.tabs.CreateProperties) => {
-          const url = requiredTestTabUrl(args.url)
+          const url = requiredTestTabUrl({ url: args.url })
           host.createdUrls.push(url)
           switch (host.failure.kind) {
             case LauncherBrowserFailureKind.TabsCreate:
@@ -284,7 +290,7 @@ function installLauncherBrowserHost(host: LauncherBrowserHost): void {
             case LauncherBrowserFailureKind.Contexts:
               break
           }
-          const windowId = requiredTestTabWindowId(args.windowId)
+          const windowId = requiredTestTabWindowId({ windowId: args.windowId })
           const createdTabId = 39 + host.createdUrls.length
           for (const tab of host.tabs) {
             switch (tab.windowId === windowId) {
@@ -305,13 +311,15 @@ function installLauncherBrowserHost(host: LauncherBrowserHost): void {
           return Promise.resolve(created)
         },
         update: (tabId: number, args: chrome.tabs.UpdateProperties) => {
-          const urlUpdate = launcherTabUrlUpdate(args.url)
-          requireTestTabActivation(args.active)
+          const urlUpdate = launcherTabUrlUpdate({ url: args.url })
+          requireTestTabActivation({ active: args.active })
           host.updatedTabIds.push(tabId)
           const tab = host.tabs.find((candidate) => candidate.id === tabId)
-          switch (tab) {
-            case undefined:
-              return Promise.resolve(undefined)
+          switch (typeof tab) {
+            case 'undefined': {
+              const missingTabResult: { tab?: chrome.tabs.Tab } = {}
+              return Promise.resolve(missingTabResult.tab)
+            }
             default:
               for (const siblingTab of host.tabs) {
                 switch (siblingTab.windowId === tab.windowId) {
@@ -515,17 +523,14 @@ describe('openCompanionLauncherBestEffort', () => {
     const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
-    let finishWarning: (() => void) | undefined
+    let finishWarning = (): void => {
+      throw new Error('warning observer was not initialized')
+    }
     const warningObserved = new Promise<void>((resolve) => {
       finishWarning = resolve
     })
     const warningSpy = spyOn(console, 'warn').mockImplementation(() => {
-      switch (finishWarning) {
-        case undefined:
-          throw new Error('warning observer was not initialized')
-        default:
-          finishWarning()
-      }
+      finishWarning()
     })
     try {
       extensionSessionLifecycle.openCompanionLauncherBestEffort(
