@@ -689,10 +689,13 @@ const backgroundRuntimeMessageListener: BackgroundRuntimeMessageListener = (
 chrome.runtime.onMessage.addListener(backgroundRuntimeMessageListener)
 
 chrome.action.onClicked.addListener((tab) => {
-  extensionSessionLifecycle.openCompanionLauncherBestEffort(
-    OpenCompanionLauncherIntent.Default,
-    ExtensionSessionLifecycle.sourceFromTab(tab),
-  )
+  const launcherRequest: Parameters<
+    typeof extensionSessionLifecycle.openCompanionLauncherBestEffort
+  >[0] = {
+    intent: OpenCompanionLauncherIntent.Default,
+    source: ExtensionSessionLifecycle.sourceFromTab(tab),
+  }
+  extensionSessionLifecycle.openCompanionLauncherBestEffort(launcherRequest)
 })
 
 type ExternalRuntimeMessageListener = Parameters<

@@ -754,7 +754,11 @@ export function routeExtensionLifecycleMessage({
       return false
     }
     const source = ExtensionSessionLifecycle.sourceFromSender(sender)
-    void openCompanionLauncher(launcherMessage.value.intent, source)
+    const launcherRequest: Parameters<typeof openCompanionLauncher>[0] = {
+      intent: launcherMessage.value.intent,
+      source,
+    }
+    void openCompanionLauncher(launcherRequest)
       .then(() => sendResponse(successResponse))
       .catch(() => sendResponse(launcherFailureResponse))
     return true

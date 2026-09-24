@@ -48,6 +48,11 @@ type CompanionLauncherUrlArgs = {
   intent: OpenCompanionLauncherIntent
 }
 
+export type CompanionLauncherOpenRequest = {
+  intent: OpenCompanionLauncherIntent
+  source: CompanionLauncherSource
+}
+
 type CompanionLauncherContextArgs = {
   contexts: chrome.runtime.ExtensionContext[]
   launcherUrl: string
@@ -65,6 +70,17 @@ export type CompanionLauncherSource =
 enum CompanionLauncherWindowScopeKind {
   NormalWindow = 'normal-window',
 }
+
+enum CompanionLauncherObservedWindowTypeKind {
+  Missing = 'missing',
+  Normal = 'normal',
+  NonNormal = 'non-normal',
+}
+
+type CompanionLauncherObservedWindowType =
+  | { kind: CompanionLauncherObservedWindowTypeKind.Missing }
+  | { kind: CompanionLauncherObservedWindowTypeKind.Normal }
+  | { kind: CompanionLauncherObservedWindowTypeKind.NonNormal }
 
 type CompanionLauncherWindowScope = {
   kind: CompanionLauncherWindowScopeKind.NormalWindow
@@ -129,8 +145,15 @@ export class ExtensionSessionLifecycle {
     switch (typeof senderTab) {
       case 'undefined':
         return this.directLauncherSource
-      default:
+      case 'object':
         return this.sourceWindow(senderTab.windowId)
+      case 'string':
+      case 'number':
+      case 'bigint':
+      case 'boolean':
+      case 'symbol':
+      case 'function':
+        throw new Error('sender tab has an invalid runtime type')
     }
   }
 
@@ -152,6 +175,27 @@ export class ExtensionSessionLifecycle {
     }
   }
 
+  private observedWindowType(
+    windowType: chrome.windows.Window['type'],
+  ): CompanionLauncherObservedWindowType {
+    switch (typeof windowType) {
+      case 'undefined':
+        return { kind: CompanionLauncherObservedWindowTypeKind.Missing }
+      case 'string':
+        if (windowType === chrome.windows.WindowType.NORMAL) {
+          return { kind: CompanionLauncherObservedWindowTypeKind.Normal }
+        }
+        return { kind: CompanionLauncherObservedWindowTypeKind.NonNormal }
+      case 'number':
+      case 'bigint':
+      case 'boolean':
+      case 'symbol':
+      case 'object':
+      case 'function':
+        return { kind: CompanionLauncherObservedWindowTypeKind.NonNormal }
+    }
+  }
+
   private launcherTab({
     contexts,
     launcherUrl,
@@ -170,7 +214,7 @@ export class ExtensionSessionLifecycle {
       switch (typeof context.documentUrl) {
         case 'undefined':
           break
-        default:
+        case 'string':
           switch (context.documentUrl) {
             case launcherUrl:
               documentUrlKind = CompanionLauncherDocumentUrlKind.Matching
@@ -180,6 +224,13 @@ export class ExtensionSessionLifecycle {
               break
           }
           break
+        case 'number':
+        case 'bigint':
+        case 'boolean':
+        case 'symbol':
+        case 'object':
+        case 'function':
+          throw new Error('launcher tab document URL has an invalid type')
       }
       switch (documentUrlKind) {
         case CompanionLauncherDocumentUrlKind.Missing:
@@ -221,13 +272,17 @@ export class ExtensionSessionLifecycle {
             const initiatingWindow = await chrome.windows.get(
               sourceWindowIdState.windowId,
             )
-            switch (initiatingWindow.type) {
-              case 'normal':
+            const observedWindowType = this.observedWindowType(
+              initiatingWindow.type,
+            )
+            switch (observedWindowType.kind) {
+              case CompanionLauncherObservedWindowTypeKind.Normal:
                 return {
                   kind: CompanionLauncherWindowScopeKind.NormalWindow,
                   windowId: sourceWindowIdState.windowId,
                 }
-              default:
+              case CompanionLauncherObservedWindowTypeKind.Missing:
+              case CompanionLauncherObservedWindowTypeKind.NonNormal:
                 throw new Error('source tab is not in a normal browser window')
             }
           }
@@ -237,19 +292,35 @@ export class ExtensionSessionLifecycle {
   }
 
   private async lastFocusedNormalWindowScope(): Promise<CompanionLauncherWindowScope> {
-    const normalWindow = await chrome.windows.getLastFocused({
-      windowTypes: ['normal'],
-    })
-    switch (normalWindow.type) {
-      case 'normal': {
+    const getLastFocusedArgs: Parameters<
+      typeof chrome.windows.getLastFocused
+    >[0] = {
+      windowTypes: [chrome.windows.WindowType.NORMAL],
+    }
+    const normalWindow = await chrome.windows.getLastFocused(
+      getLastFocusedArgs,
+    )
+    const observedWindowType = this.observedWindowType(normalWindow.type)
+    switch (observedWindowType.kind) {
+      case CompanionLauncherObservedWindowTypeKind.Missing:
+      case CompanionLauncherObservedWindowTypeKind.NonNormal:
+        throw new Error('last-focused browser window is not normal')
+      case CompanionLauncherObservedWindowTypeKind.Normal: {
         let windowIdState: CompanionLauncherWindowIdState
         switch (typeof normalWindow.id) {
           case 'undefined':
             windowIdState = { kind: CompanionLauncherWindowIdKind.Invalid }
             break
-          default:
+          case 'number':
             windowIdState = this.launcherWindowIdState(normalWindow.id)
             break
+          case 'string':
+          case 'bigint':
+          case 'boolean':
+          case 'symbol':
+          case 'object':
+          case 'function':
+            throw new Error('last-focused normal window has an invalid ID type')
         }
         switch (windowIdState.kind) {
           case CompanionLauncherWindowIdKind.Valid:
@@ -261,8 +332,6 @@ export class ExtensionSessionLifecycle {
             throw new Error('last-focused normal window has no valid ID')
         }
       }
-      default:
-        throw new Error('last-focused browser window is not normal')
     }
   }
 
@@ -280,6 +349,7 @@ export class ExtensionSessionLifecycle {
           case false:
             return { kind: CompanionLauncherWindowIdKind.Invalid }
         }
+        break
       case false:
         return { kind: CompanionLauncherWindowIdKind.Invalid }
     }
@@ -392,10 +462,10 @@ export class ExtensionSessionLifecycle {
     return this.notifyAuthenticationSurfaces(args)
   }
 
-  async openCompanionLauncher(
-    intent: OpenCompanionLauncherIntent,
-    source: CompanionLauncherSource,
-  ): Promise<void> {
+  async openCompanionLauncher({
+    intent,
+    source,
+  }: CompanionLauncherOpenRequest): Promise<void> {
     const popupUrl = chrome.runtime.getURL('popup/index.html')
     const launcherUrlArgs: CompanionLauncherUrlArgs = { popupUrl, intent }
     const requestedLauncherUrl = this.launcherUrl(launcherUrlArgs)
@@ -437,10 +507,9 @@ export class ExtensionSessionLifecycle {
   }
 
   openCompanionLauncherBestEffort(
-    intent: OpenCompanionLauncherIntent,
-    source: CompanionLauncherSource,
+    request: CompanionLauncherOpenRequest,
   ): void {
-    void this.openCompanionLauncher(intent, source).catch(() => {
+    void this.openCompanionLauncher(request).catch(() => {
       console.warn('Nook authentication tab could not be opened')
     })
   }

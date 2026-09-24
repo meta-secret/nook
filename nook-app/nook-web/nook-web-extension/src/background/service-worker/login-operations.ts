@@ -439,10 +439,13 @@ export async function websiteLoginSaveOffer({
       'error' in response &&
       response.error === SessionOperationFailureKind.Locked
     ) {
-      extensionSessionLifecycle.openCompanionLauncherBestEffort(
-        OpenCompanionLauncherIntent.PilotAuth,
-        ExtensionSessionLifecycle.sourceFromSender(sender),
-      )
+      const launcherRequest: Parameters<
+        typeof extensionSessionLifecycle.openCompanionLauncherBestEffort
+      >[0] = {
+        intent: OpenCompanionLauncherIntent.PilotAuth,
+        source: ExtensionSessionLifecycle.sourceFromSender(sender),
+      }
+      extensionSessionLifecycle.openCompanionLauncherBestEffort(launcherRequest)
       return { kind: 'locked' }
     }
     if (
@@ -672,10 +675,13 @@ export async function websiteLoginSaveCommit({
     typeof status !== 'object' ||
     !extensionSessionLifecycle.isUnlockedSessionStatus(status)
   ) {
-    extensionSessionLifecycle.openCompanionLauncherBestEffort(
-      OpenCompanionLauncherIntent.PilotAuth,
-      ExtensionSessionLifecycle.sourceFromSender(sender),
-    )
+    const launcherRequest: Parameters<
+      typeof extensionSessionLifecycle.openCompanionLauncherBestEffort
+    >[0] = {
+      intent: OpenCompanionLauncherIntent.PilotAuth,
+      source: ExtensionSessionLifecycle.sourceFromSender(sender),
+    }
+    extensionSessionLifecycle.openCompanionLauncherBestEffort(launcherRequest)
     return {
       kind: 'rejected',
       reason: 'login-save-locked',

@@ -76,6 +76,9 @@ async function main() {
     case OpenCompanionLauncherIntent.PilotAuth:
       launcherIntent = OpenCompanionLauncherIntent.PilotAuth
       break
+    case null:
+      launcherIntent = OpenCompanionLauncherIntent.Default
+      break
     default:
       launcherIntent = OpenCompanionLauncherIntent.Default
       break

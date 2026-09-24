@@ -646,10 +646,13 @@ class AccountPickerSessions {
     if (delivery.isErr()) return { response: delivery.error.response }
     const status = delivery.value
     if (!extensionSessionLifecycle.isUnlockedSessionStatus(status)) {
-      extensionSessionLifecycle.openCompanionLauncherBestEffort(
-        OpenCompanionLauncherIntent.PilotAuth,
-        ExtensionSessionLifecycle.sourceFromSender(sender),
-      )
+      const launcherRequest: Parameters<
+        typeof extensionSessionLifecycle.openCompanionLauncherBestEffort
+      >[0] = {
+        intent: OpenCompanionLauncherIntent.PilotAuth,
+        source: ExtensionSessionLifecycle.sourceFromSender(sender),
+      }
+      extensionSessionLifecycle.openCompanionLauncherBestEffort(launcherRequest)
       return { response: { ok: false, reason: reasons.locked } }
     }
     return { grant }
@@ -804,10 +807,13 @@ class AccountPickerSessions {
           WebsiteAuthenticatorResponseStatus.Unavailable &&
         openUnavailableCompanion
       ) {
-        resolvedDependencies.openCompanionLauncherBestEffort(
-          OpenCompanionLauncherIntent.Pair,
-          ExtensionSessionLifecycle.sourceFromSender(sender),
-        )
+        const launcherRequest: Parameters<
+          typeof resolvedDependencies.openCompanionLauncherBestEffort
+        >[0] = {
+          intent: OpenCompanionLauncherIntent.Pair,
+          source: ExtensionSessionLifecycle.sourceFromSender(sender),
+        }
+        resolvedDependencies.openCompanionLauncherBestEffort(launcherRequest)
       }
       return access.response
     }

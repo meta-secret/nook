@@ -1,7 +1,7 @@
 import { describe, expect, spyOn, test } from 'bun:test'
 import { ok } from 'neverthrow'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
-import { DeviceProtectionStatus } from '../src/lib/nook-wasm'
+import { DeviceProtectionStatus } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { WebsiteAuthenticatorResponseStatus } from '../src/lib/login-fill-messages'
 import { OpenCompanionLauncherIntent } from '../../nook-web-shared/src/extension/companion-launcher-message'
 import type { StoredExtensionPairingGrant } from '../src/background/pairing-grants'

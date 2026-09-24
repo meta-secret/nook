@@ -167,6 +167,11 @@ type ExtensionPairedVaultUnlockResponse =
       reason: string
     }
 
+type PairedVaultUnlockRequest = {
+  message: ExtensionPairedVaultUnlockRequestMessage
+  source: CompanionLauncherSource
+}
+
 export enum WebsitePasskeyRequestContextKind {
   Rejected = 'rejected',
   Validated = 'validated',
@@ -703,10 +708,10 @@ class ExtensionPairingIdentity {
     }
   }
 
-  async requestPairedVaultUnlock(
-    message: ExtensionPairedVaultUnlockRequestMessage,
-    source: CompanionLauncherSource,
-  ): Promise<ExtensionPairedVaultUnlockResponse> {
+  async requestPairedVaultUnlock({
+    message,
+    source,
+  }: PairedVaultUnlockRequest): Promise<ExtensionPairedVaultUnlockResponse> {
     const decodedRequest = runConcreteDecoder(
       decodeCompanionPairedVaultUnlockRequest,
       message,
@@ -748,10 +753,13 @@ class ExtensionPairingIdentity {
         return { ...statusDelivery.error.response, requestId, vaultStoreId }
       const statusResponse = statusDelivery.value
       if (!extensionSessionLifecycle.isUnlockedSessionStatus(statusResponse)) {
-        await extensionSessionLifecycle.openCompanionLauncher(
-          OpenCompanionLauncherIntent.Default,
+        const launcherRequest: Parameters<
+          typeof extensionSessionLifecycle.openCompanionLauncher
+        >[0] = {
+          intent: OpenCompanionLauncherIntent.Default,
           source,
-        )
+        }
+        await extensionSessionLifecycle.openCompanionLauncher(launcherRequest)
       }
       return { ok: true, requestId, vaultStoreId }
     } catch {
@@ -912,10 +920,13 @@ class ExtensionPairingIdentity {
     const sessionStatus = this.websiteSessionStatusTransport(status)
     if (openLockedCompanion) {
       if (sessionStatus !== ExtensionSessionStatusAvailability.Unlocked) {
-        extensionSessionLifecycle.openCompanionLauncherBestEffort(
-          OpenCompanionLauncherIntent.PilotAuth,
-          ExtensionSessionLifecycle.sourceFromSender(sender),
-        )
+        const launcherRequest: Parameters<
+          typeof extensionSessionLifecycle.openCompanionLauncherBestEffort
+        >[0] = {
+          intent: OpenCompanionLauncherIntent.PilotAuth,
+          source: ExtensionSessionLifecycle.sourceFromSender(sender),
+        }
+        extensionSessionLifecycle.openCompanionLauncherBestEffort(launcherRequest)
         return {
           response: {
             ok: true,

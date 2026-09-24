@@ -124,7 +124,11 @@ export class ExternalCompanionRouter {
     )
     if (launcherMessage.kind === ConcreteDecoderResultKind.Decoded) {
       const source = ExtensionSessionLifecycle.sourceFromSender(sender)
-      void openCompanionLauncher(launcherMessage.value.intent, source)
+      const launcherRequest: Parameters<typeof openCompanionLauncher>[0] = {
+        intent: launcherMessage.value.intent,
+        source,
+      }
+      void openCompanionLauncher(launcherRequest)
         .then(() => sendResponse(successResponse))
         .catch(() => sendResponse(launcherFailureResponse))
       return true
@@ -152,7 +156,11 @@ export class ExternalCompanionRouter {
     if (pairedVaultUnlock.kind === ConcreteDecoderResultKind.Decoded) {
       const decodedMessage = pairedVaultUnlock.value
       const source = ExtensionSessionLifecycle.sourceFromSender(sender)
-      void requestPairedVaultUnlock(decodedMessage, source)
+      const unlockRequest: Parameters<typeof requestPairedVaultUnlock>[0] = {
+        message: decodedMessage,
+        source,
+      }
+      void requestPairedVaultUnlock(unlockRequest)
         .then(sendResponse)
         .catch(() => {
           const unlockFailureResponse: Parameters<typeof sendResponse>[0] = {

@@ -71,11 +71,18 @@ export class NormalizedOpenCompanionLauncherMessage {
               type,
               intent: OpenCompanionLauncherIntent.Default,
             };
-          default:
+          case "object":
             return {
               type,
               intent: NormalizedOpenCompanionLauncherMessage.intent(payload),
             };
+          case "string":
+          case "number":
+          case "bigint":
+          case "boolean":
+          case "symbol":
+          case "function":
+            throw new Error("validated launcher payload has an invalid type");
         }
       }),
     );

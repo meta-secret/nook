@@ -141,10 +141,24 @@ function createLauncherBrowserHost(
   }
 }
 
-async function expectLauncherRejection(
-  operation: Promise<void>,
-): Promise<void> {
-  await expect(operation).rejects.toBeInstanceOf(Error)
+type LauncherRejectionRequest = {
+  operation: Promise<void>
+  expectedMessage: string
+}
+
+function expectLauncherRejection({
+  operation,
+  expectedMessage,
+}: LauncherRejectionRequest): Promise<void> {
+  return operation.then(
+    () => {
+      throw new Error('expected launcher operation to reject')
+    },
+    (failure: unknown) => {
+      expect(failure).toBeInstanceOf(Error)
+      expect(failure).toHaveProperty('message', expectedMessage)
+    },
+  )
 }
 
 function launcherContext(
@@ -177,16 +191,23 @@ function launcherContextWithoutDocumentUrl(
   }
 }
 
-function requiredTestTabUrl(args: { url?: string }): string {
+function requiredTestTabUrl(args: chrome.tabs.CreateProperties): string {
   switch (typeof args.url) {
     case 'string':
       return args.url
     case 'undefined':
       throw new Error('launcher tab request omitted its URL')
+    case 'number':
+    case 'bigint':
+    case 'boolean':
+    case 'symbol':
+    case 'object':
+    case 'function':
+      throw new Error('launcher tab request has an invalid URL type')
   }
 }
 
-function requireTestTabActivation(args: { active?: boolean }): void {
+function requireTestTabActivation(args: chrome.tabs.UpdateProperties): void {
   switch (typeof args.active) {
     case 'undefined':
       throw new Error('launcher tab request omitted its activation state')
@@ -197,15 +218,30 @@ function requireTestTabActivation(args: { active?: boolean }): void {
         case false:
           throw new Error('launcher tab request must activate the tab')
       }
+      break
+    case 'string':
+    case 'number':
+    case 'bigint':
+    case 'symbol':
+    case 'object':
+    case 'function':
+      throw new Error('launcher tab request has an invalid activation type')
   }
 }
 
-function requiredTestTabWindowId(args: { windowId?: number }): number {
+function requiredTestTabWindowId(args: chrome.tabs.CreateProperties): number {
   switch (typeof args.windowId) {
     case 'number':
       return args.windowId
     case 'undefined':
       throw new Error('launcher tab request omitted its window ID')
+    case 'string':
+    case 'bigint':
+    case 'boolean':
+    case 'symbol':
+    case 'object':
+    case 'function':
+      throw new Error('launcher tab request has an invalid window ID type')
   }
 }
 
@@ -218,7 +254,9 @@ type LauncherTabUrlUpdate =
   | { kind: LauncherTabUrlUpdateKind.ActivationOnly }
   | { kind: LauncherTabUrlUpdateKind.Navigate; url: string }
 
-function launcherTabUrlUpdate(args: { url?: string }): LauncherTabUrlUpdate {
+function launcherTabUrlUpdate(
+  args: chrome.tabs.UpdateProperties,
+): LauncherTabUrlUpdate {
   switch (typeof args.url) {
     case 'string':
       return {
@@ -227,6 +265,13 @@ function launcherTabUrlUpdate(args: { url?: string }): LauncherTabUrlUpdate {
       }
     case 'undefined':
       return { kind: LauncherTabUrlUpdateKind.ActivationOnly }
+    case 'number':
+    case 'bigint':
+    case 'boolean':
+    case 'symbol':
+    case 'object':
+    case 'function':
+      throw new Error('launcher tab update has an invalid URL type')
   }
 }
 
@@ -304,12 +349,7 @@ function installLauncherBrowserHost(host: LauncherBrowserHost): void {
           host.updatedTabIds.push(tabId)
           const tab = host.tabs.find((candidate) => candidate.id === tabId)
           switch (typeof tab) {
-            case 'undefined': {
-              return Promise.reject(
-                new Error('tabs.update target tab is missing'),
-              )
-            }
-            default:
+            case 'object':
               for (const siblingTab of host.tabs) {
                 switch (siblingTab.windowId === tab.windowId) {
                   case true:
@@ -339,6 +379,20 @@ function installLauncherBrowserHost(host: LauncherBrowserHost): void {
                   }
               }
               return Promise.resolve(tab)
+            case 'undefined': {
+              return Promise.reject(
+                new Error('tabs.update target tab is missing'),
+              )
+            }
+            case 'string':
+            case 'number':
+            case 'bigint':
+            case 'boolean':
+            case 'symbol':
+            case 'function':
+              return Promise.reject(
+                new Error('tabs.update target tab has an invalid runtime type'),
+              )
           }
         },
       },
@@ -382,7 +436,7 @@ function installLauncherBrowserHost(host: LauncherBrowserHost): void {
               return { type: LauncherWindowType.Normal }
           }
         },
-        update: (windowId: number, _args: chrome.windows.UpdateInfo) => {
+        update: (windowId: number) => {
           host.focusedWindowIds.push(windowId)
           switch (host.failure.kind) {
             case LauncherBrowserFailureKind.WindowUpdate:
@@ -482,12 +536,13 @@ describe('openCompanionLauncherBestEffort', () => {
     const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
-    await expect(
-      extensionSessionLifecycle.openCompanionLauncher(
-        OpenCompanionLauncherIntent.Default,
-        ExtensionSessionLifecycle.directEntrySource(),
-      ),
-    ).rejects.toThrow('tabs.create failed')
+    await expectLauncherRejection({
+      operation: extensionSessionLifecycle.openCompanionLauncher({
+        intent: OpenCompanionLauncherIntent.Default,
+        source: ExtensionSessionLifecycle.directEntrySource(),
+      }),
+      expectedMessage: 'tabs.create failed',
+    })
     expect(host.createdUrls).toEqual([
       'chrome-extension://nook/popup/index.html',
     ])
@@ -532,10 +587,10 @@ describe('openCompanionLauncherBestEffort', () => {
       finishWarning()
     })
     try {
-      extensionSessionLifecycle.openCompanionLauncherBestEffort(
-        OpenCompanionLauncherIntent.Default,
-        ExtensionSessionLifecycle.directEntrySource(),
-      )
+      extensionSessionLifecycle.openCompanionLauncherBestEffort({
+        intent: OpenCompanionLauncherIntent.Default,
+        source: ExtensionSessionLifecycle.directEntrySource(),
+      })
       await warningObserved
       expect(warningSpy).toHaveBeenCalledTimes(1)
       expect(warningSpy).toHaveBeenCalledWith(
@@ -573,12 +628,13 @@ describe('openCompanionLauncherBestEffort', () => {
     const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
-    await expectLauncherRejection(
-      extensionSessionLifecycle.openCompanionLauncher(
-        OpenCompanionLauncherIntent.PilotAuth,
-        ExtensionSessionLifecycle.sourceFromTab(initiatingSiteTab),
-      ),
-    )
+    await expectLauncherRejection({
+      operation: extensionSessionLifecycle.openCompanionLauncher({
+        intent: OpenCompanionLauncherIntent.PilotAuth,
+        source: ExtensionSessionLifecycle.sourceFromTab(initiatingSiteTab),
+      }),
+      expectedMessage: 'windows.get failed',
+    })
 
     expect(host.windowGetIds).toEqual([7])
     expect(host.lastFocusedWindowCalls).toBe(0)
@@ -604,12 +660,13 @@ describe('openCompanionLauncherBestEffort', () => {
     const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
-    await expectLauncherRejection(
-      extensionSessionLifecycle.openCompanionLauncher(
-        OpenCompanionLauncherIntent.Default,
-        ExtensionSessionLifecycle.directEntrySource(),
-      ),
-    )
+    await expectLauncherRejection({
+      operation: extensionSessionLifecycle.openCompanionLauncher({
+        intent: OpenCompanionLauncherIntent.Default,
+        source: ExtensionSessionLifecycle.directEntrySource(),
+      }),
+      expectedMessage: 'windows.getLastFocused failed',
+    })
 
     expect(host.lastFocusedWindowCalls).toBe(1)
     expect(host.contextFilters).toEqual([])
@@ -644,12 +701,13 @@ describe('openCompanionLauncherBestEffort', () => {
       const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
         await import('../src/background/service-worker/session-lifecycle')
 
-      await expectLauncherRejection(
-        extensionSessionLifecycle.openCompanionLauncher(
-          OpenCompanionLauncherIntent.Default,
-          ExtensionSessionLifecycle.directEntrySource(),
-        ),
-      )
+      await expectLauncherRejection({
+        operation: extensionSessionLifecycle.openCompanionLauncher({
+          intent: OpenCompanionLauncherIntent.Default,
+          source: ExtensionSessionLifecycle.directEntrySource(),
+        }),
+        expectedMessage: 'last-focused normal window has no valid ID',
+      })
 
       expect(host.lastFocusedWindowCalls).toBe(1)
       expect(host.contextFilters).toEqual([])
@@ -675,12 +733,13 @@ describe('openCompanionLauncherBestEffort', () => {
     const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
-    await expectLauncherRejection(
-      extensionSessionLifecycle.openCompanionLauncher(
-        OpenCompanionLauncherIntent.Default,
-        ExtensionSessionLifecycle.directEntrySource(),
-      ),
-    )
+    await expectLauncherRejection({
+      operation: extensionSessionLifecycle.openCompanionLauncher({
+        intent: OpenCompanionLauncherIntent.Default,
+        source: ExtensionSessionLifecycle.directEntrySource(),
+      }),
+      expectedMessage: 'runtime.getContexts failed',
+    })
 
     expect(host.contextFilters).toEqual([
       {
@@ -711,12 +770,13 @@ describe('openCompanionLauncherBestEffort', () => {
     const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
-    await expectLauncherRejection(
-      extensionSessionLifecycle.openCompanionLauncher(
-        OpenCompanionLauncherIntent.Default,
-        ExtensionSessionLifecycle.directEntrySource(),
-      ),
-    )
+    await expectLauncherRejection({
+      operation: extensionSessionLifecycle.openCompanionLauncher({
+        intent: OpenCompanionLauncherIntent.Default,
+        source: ExtensionSessionLifecycle.directEntrySource(),
+      }),
+      expectedMessage: 'launcher tab context is unobservable',
+    })
 
     expect(host.contextFilters).toEqual([
       {
@@ -748,12 +808,13 @@ describe('openCompanionLauncherBestEffort', () => {
     const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
-    await expect(
-      extensionSessionLifecycle.openCompanionLauncher(
-        OpenCompanionLauncherIntent.Default,
-        ExtensionSessionLifecycle.directEntrySource(),
-      ),
-    ).rejects.toThrow('tabs.update target tab is missing')
+    await expectLauncherRejection({
+      operation: extensionSessionLifecycle.openCompanionLauncher({
+        intent: OpenCompanionLauncherIntent.Default,
+        source: ExtensionSessionLifecycle.directEntrySource(),
+      }),
+      expectedMessage: 'tabs.update target tab is missing',
+    })
 
     expect(host.contextFilters).toEqual([
       {
@@ -785,12 +846,13 @@ describe('openCompanionLauncherBestEffort', () => {
     const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
-    await expect(
-      extensionSessionLifecycle.openCompanionLauncher(
-        OpenCompanionLauncherIntent.PilotAuth,
-        ExtensionSessionLifecycle.directEntrySource(),
-      ),
-    ).rejects.toThrow('windows.update failed')
+    await expectLauncherRejection({
+      operation: extensionSessionLifecycle.openCompanionLauncher({
+        intent: OpenCompanionLauncherIntent.PilotAuth,
+        source: ExtensionSessionLifecycle.directEntrySource(),
+      }),
+      expectedMessage: 'windows.update failed',
+    })
 
     expect(host.contextFilters).toEqual([
       {
@@ -828,18 +890,18 @@ describe('openCompanionLauncherBestEffort', () => {
     const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
-    await extensionSessionLifecycle.openCompanionLauncher(
-      OpenCompanionLauncherIntent.Default,
-      ExtensionSessionLifecycle.directEntrySource(),
-    )
-    await extensionSessionLifecycle.openCompanionLauncher(
-      OpenCompanionLauncherIntent.PilotAuth,
-      ExtensionSessionLifecycle.directEntrySource(),
-    )
-    await extensionSessionLifecycle.openCompanionLauncher(
-      OpenCompanionLauncherIntent.Default,
-      ExtensionSessionLifecycle.directEntrySource(),
-    )
+    await extensionSessionLifecycle.openCompanionLauncher({
+      intent: OpenCompanionLauncherIntent.Default,
+      source: ExtensionSessionLifecycle.directEntrySource(),
+    })
+    await extensionSessionLifecycle.openCompanionLauncher({
+      intent: OpenCompanionLauncherIntent.PilotAuth,
+      source: ExtensionSessionLifecycle.directEntrySource(),
+    })
+    await extensionSessionLifecycle.openCompanionLauncher({
+      intent: OpenCompanionLauncherIntent.Default,
+      source: ExtensionSessionLifecycle.directEntrySource(),
+    })
 
     expect(host.createdUrls).toEqual([
       'chrome-extension://nook/popup/index.html',
@@ -910,10 +972,10 @@ describe('openCompanionLauncherBestEffort', () => {
     const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
-    await extensionSessionLifecycle.openCompanionLauncher(
-      OpenCompanionLauncherIntent.PilotAuth,
-      ExtensionSessionLifecycle.sourceFromTab(initiatingSiteTab),
-    )
+    await extensionSessionLifecycle.openCompanionLauncher({
+      intent: OpenCompanionLauncherIntent.PilotAuth,
+      source: ExtensionSessionLifecycle.sourceFromTab(initiatingSiteTab),
+    })
 
     expect(host.contextFilters).toEqual([
       {
@@ -961,10 +1023,10 @@ describe('openCompanionLauncherBestEffort', () => {
     const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
-    await extensionSessionLifecycle.openCompanionLauncher(
-      OpenCompanionLauncherIntent.PilotAuth,
-      ExtensionSessionLifecycle.sourceFromTab(initiatingSiteTab),
-    )
+    await extensionSessionLifecycle.openCompanionLauncher({
+      intent: OpenCompanionLauncherIntent.PilotAuth,
+      source: ExtensionSessionLifecycle.sourceFromTab(initiatingSiteTab),
+    })
 
     expect(host.contextFilters).toEqual([
       {
@@ -1011,10 +1073,10 @@ describe('openCompanionLauncherBestEffort', () => {
     const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
-    await extensionSessionLifecycle.openCompanionLauncher(
-      OpenCompanionLauncherIntent.PilotAuth,
-      ExtensionSessionLifecycle.sourceFromTab(initiatingSiteTab),
-    )
+    await extensionSessionLifecycle.openCompanionLauncher({
+      intent: OpenCompanionLauncherIntent.PilotAuth,
+      source: ExtensionSessionLifecycle.sourceFromTab(initiatingSiteTab),
+    })
 
     expect(host.contextFilters).toEqual([
       {
@@ -1050,10 +1112,10 @@ describe('openCompanionLauncherBestEffort', () => {
     const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
-    await extensionSessionLifecycle.openCompanionLauncher(
-      OpenCompanionLauncherIntent.PilotAuth,
-      ExtensionSessionLifecycle.sourceFromTab(initiatingSiteTab),
-    )
+    await extensionSessionLifecycle.openCompanionLauncher({
+      intent: OpenCompanionLauncherIntent.PilotAuth,
+      source: ExtensionSessionLifecycle.sourceFromTab(initiatingSiteTab),
+    })
 
     expect(host.contextFilters).toEqual([
       {
@@ -1086,12 +1148,13 @@ describe('openCompanionLauncherBestEffort', () => {
     const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
-    await expectLauncherRejection(
-      extensionSessionLifecycle.openCompanionLauncher(
-        OpenCompanionLauncherIntent.PilotAuth,
-        ExtensionSessionLifecycle.sourceFromTab(invalidSourceTab),
-      ),
-    )
+    await expectLauncherRejection({
+      operation: extensionSessionLifecycle.openCompanionLauncher({
+        intent: OpenCompanionLauncherIntent.PilotAuth,
+        source: ExtensionSessionLifecycle.sourceFromTab(invalidSourceTab),
+      }),
+      expectedMessage: 'source tab has no valid browser window',
+    })
 
     expect(host.windowGetIds).toEqual([])
     expect(host.lastFocusedWindowCalls).toBe(0)
@@ -1130,12 +1193,13 @@ describe('openCompanionLauncherBestEffort', () => {
     const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
-    await expectLauncherRejection(
-      extensionSessionLifecycle.openCompanionLauncher(
-        OpenCompanionLauncherIntent.PilotAuth,
-        ExtensionSessionLifecycle.sourceFromTab(popupSiteTab),
-      ),
-    )
+    await expectLauncherRejection({
+      operation: extensionSessionLifecycle.openCompanionLauncher({
+        intent: OpenCompanionLauncherIntent.PilotAuth,
+        source: ExtensionSessionLifecycle.sourceFromTab(popupSiteTab),
+      }),
+      expectedMessage: 'source tab is not in a normal browser window',
+    })
     expect(host.windowGetIds).toEqual([8])
     expect(host.lastFocusedWindowCalls).toBe(0)
     expect(host.contextFilters).toEqual([])

@@ -127,6 +127,13 @@
         return readyDescription(vaultName)
       case 'undefined':
         return connectDescription()
+      case 'number':
+      case 'bigint':
+      case 'boolean':
+      case 'symbol':
+      case 'object':
+      case 'function':
+        throw new Error('vault name has an invalid runtime type')
     }
   }
 
