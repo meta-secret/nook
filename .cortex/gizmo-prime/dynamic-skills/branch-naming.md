@@ -70,20 +70,12 @@ single hyphens. Do not use leading, trailing, or repeated hyphens.
 - Worker branches are local integration inputs, not PR branches.
 - Push and publish only the Prime feature branch as the feature remote branch.
 
-## Dispatch and follow-up
+## Feature branch authority
 
-- Prime dispatches every dependency-ready Team Gizmo with a disjoint scope
-  concurrently and uses the active harness's actual admission result.
-- A temporary admission refusal queues the task for retry when capacity releases.
-- A host or session allocation is current availability, not an architecture or
-  product limit.
-- Do not pre-check or budget a dispatch wave against a numeric limit.
-- Never encode, infer, or repeat a fixed numeric agent or subagent concurrency
-  cap.
-- A follow-up user message does not stop Team Gizmos or leaf agents that are
-  already delegated.
-- Prime routes additions concurrently when dependencies are ready and scopes are
-  disjoint.
+Use the upstream [Team Gizmo coordination contract](../../../.meta-cortex/teams/gizmo-team/agents/gizmo/AGENTS.md#coordinate-assignments)
+and [coordination circuit breaker](../../../.meta-cortex/teams/gizmo-team/CIRCUIT-BREAKER.md#securing-trusted-agent-handoffs)
+for generic assignment admission and backpressure.
+
 - Prime remains the user-facing mission coordinator and root, not a subagent.
 - Prime authorizes the canonical feature branch name. The branch name is the
   workflow authority for publication and remote work.

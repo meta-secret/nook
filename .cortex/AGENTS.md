@@ -10,10 +10,37 @@ succeeds, read the [root knowledge graph](knowledge-graph.md).
 Load the [upstream entry point](../.meta-cortex/AGENTS.md) with those project
 constraints. Explicit user instructions determine task scope and stopping point.
 
-Resolve the session's development mode through the upstream entry point before
-planning, editing, or launching agents. Apply the
-[Nook mode integration](meta-cortex-integration.md#session-development-mode)
-to the coordination requirements below and in linked Nook contexts.
+Resolve the session's development mode through the upstream
+[workflow](../.meta-cortex/AGENTS.md#development-mode) before planning, editing,
+or launching agents. Nook's delivery contract supplies the project-specific
+stages and constraints below.
+
+## Mandatory context selection
+
+Follow Meta-Cortex's [project context](../.meta-cortex/AGENTS.md#project-context)
+and [assignment context](../.meta-cortex/teams/AGENTS.md#assignment-context)
+rules for generic context selection and coordination. Meta-Cortex owns role
+configuration and defaults in `../.meta-cortex/meta-cortex.toml`; Nook `.cortex`
+adds no model or reasoning-effort overrides.
+
+For each multi-agent Nook assignment, include:
+
+- the Nook project root and shared Meta-Cortex library root;
+- selected base and feature branches;
+- each worker branch and worktree in dependency order; and
+- applicable Nook checks.
+
+Select the Nook product, security, delivery, and validation constraints from
+the root graph and owning team authorities. A Cortex task uses the AI context
+and its specialist graph; a vault or authentication task follows the product
+and security contexts selected by the root graph.
+
+**Prohibited:** “The worker has the Nook checkout, so it can infer its context
+and checks.”
+
+**Preferred:** “Name the Nook project root and shared Meta-Cortex library root,
+selected branches and worker worktrees in dependency order, and applicable Nook
+checks.”
 
 ## Canonical Cortex tree
 
@@ -28,17 +55,17 @@ ownership boundary.
 - [Nook Gizmo Prime](gizmo-prime/AGENTS.md) wraps upstream Prime.
 - [Nook Team Gizmo](gizmo-prime/team-gizmo/AGENTS.md) wraps the single upstream coordinator.
 - [Nook agent catalog](gizmo-prime/team-gizmo/role-catalog.md) maps project scopes to roles.
-- [Agent configuration](../.meta-cortex/meta-cortex.toml) is the sole source of
-  active launch settings; pass each role's exact `model` and
-  `reasoning_effort` values.
+- The active ignored `.meta-cortex/meta-cortex.toml` is the sole live launch
+  configuration. Follow Meta-Cortex's
+  [agent configuration rules](../.meta-cortex/teams/gizmo-team/docs/agent-configuration.md).
+  Nook documents do not copy or override its settings.
 
-## Mandatory context selection
+## Nook assignment context
 
-Supply the upstream library root, Nook project root, assigned worktree, resolved
-role locations, configuration, and selected skills to every assignment.
-Load only the owning Nook context and the requirements needed for its scope.
-The coordinator reads upstream team catalogs plus Nook's catalog before routing.
-Workers consume assigned context directly instead of restarting root routing.
+Follow the upstream [assignment context](../.meta-cortex/teams/AGENTS.md#assignment-context).
+Select the owning Nook context from the root graph and include its product,
+security, delivery, and validation requirements when they apply. Workers use
+the assigned context directly.
 
 ## Context routes
 
@@ -49,11 +76,10 @@ Workers consume assigned context directly instead of restarting root routing.
 - [Web Development](teams/web-dev/AGENTS.md): browser presentation and interaction.
 - [Delivery Pipeline](teams/delivery-pipeline/AGENTS.md): authorized GitHub mechanics.
 
-## Universal language authoring
+## Nook language and tooling constraints
 
-Select the responsible upstream role from its team catalog. Load that role's
-skills and prerequisites before editing, including for scripts and tests.
-The following are Nook-specific additions rather than competing language rules:
+Use the responsible Meta-Cortex role, programming documents, and skills for
+generic language rules. Nook adds these project constraints:
 
 - [Rust lint rollout and existing values](teams/dev-core/design-docs/typed-newtypes.md).
 - [Rust ownership lint rollout](teams/dev-core/design-docs/rust-action-ownership.md).
@@ -72,21 +98,15 @@ schemas require an explicit migration decision and behavior-focused Rust coverag
 
 ## Team worker contract
 
-Follow the upstream Prime, Team Gizmo, and
-[integration agent](../.meta-cortex/teams/delivery-team/agents/integration-agent/AGENTS.md)
-with Nook's functional scopes and acceptance evidence. Team-context Gizmo paths
-resolve to the single coordinator. Another active task remains read-only without
-an explicit handoff. Use the compact
-[subagent-delegation workflow](gizmo-prime/workflows/subagent-delegation.md) for
-Nook assignment requirements. The active host owns agent communication.
+Use upstream Prime and Team Gizmo roles with Nook's functional scopes and
+acceptance requirements. Team-context Gizmo paths resolve to the feature's
+single coordinator. Another active task remains read-only without an explicit
+handoff. Add Nook-specific assignment details through the
+[subagent-delegation workflow](gizmo-prime/workflows/subagent-delegation.md).
 
-Select the upstream integration agent directly for local Git work. Supply it
-with the Nook project root and shared Meta-Cortex library root.
-Supply the selected base and feature branches.
-Supply each worker branch and worktree in dependency order,
-along with the applicable Nook checks. Nook context adds branch naming,
-product constraints, and remote-delivery boundaries. It does not wrap or
-restate the upstream Git procedure.
+The upstream [integration agent](../.meta-cortex/teams/delivery-team/agents/integration-agent/AGENTS.md)
+owns local Git mechanics. Nook adds its feature constraints and applicable
+checks through the root and selected team authorities.
 
 ## Mandatory delivery architecture
 
@@ -160,6 +180,7 @@ Nook's executable documentation tooling retains these project-specific cards:
 
 - [Writer integration](teams/ai/dynamic-skills/cortex-writer.md).
 - [Article audit integration](teams/ai/dynamic-skills/cortex-article-structure/SKILL.md).
+- [Document-map audit integration](teams/ai/dynamic-skills/cortex-document-map/SKILL.md).
 - [Consistency compilation](teams/ai/dynamic-skills/cortex-consistency/SKILL.md).
 
 These cards own Nook tooling details only. Upstream owns generic authoring rules.
@@ -181,7 +202,7 @@ checks honestly at any requested intermediate stop.
 Codex scheduled tasks, heartbeats, and deferred repository automations remain
 prohibited. Use the active task and the repository's existing CI contracts.
 
-## Agent communication
+## Reporting
 
-Report outcomes, material blockers, and evidence concisely. Follow host progress
-requirements. Do not repeat unchanged status or claim execution from reading prose.
+Follow Meta-Cortex's [communication and decisions](../.meta-cortex/teams/AGENTS.md#communication-and-decisions)
+rules. Include Nook-specific evidence and blockers in the upward report.

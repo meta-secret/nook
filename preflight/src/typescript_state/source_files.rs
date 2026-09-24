@@ -56,6 +56,7 @@ impl AuthoredSourceFiles<'_> {
         if path.ends_with(Path::new(LEGACY_IMPECCABLE_INSTALL)) {
             return true;
         }
+        // The ignored Meta-Cortex installation is framework-owned, not Nook-authored source.
         path.file_name()
             .and_then(OsStr::to_str)
             .is_some_and(|name| {
@@ -77,7 +78,7 @@ impl AuthoredSourceFiles<'_> {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::AuthoredSourceFiles;
     use std::path::Path;
 

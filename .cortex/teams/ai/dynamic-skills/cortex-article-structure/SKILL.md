@@ -5,7 +5,8 @@ description: Apply Nook executable article-structure audits to Cortex documents.
 
 # Nook Cortex Article Audit
 
-Meta-Cortex Context Engineering owns generic article structure.
+Meta-Cortex [article structure](../../../../../.meta-cortex/teams/ai-team/agents/tech-writer/skills/context-engineering/practices/article-structure.md)
+owns generic article rules.
 This card owns Nook's executable audit semantics and its Loom integration.
 
 ## Mechanical enforcement
@@ -14,7 +15,8 @@ Loom parses the Markdown syntax tree and adapts repository documents into the
 semantic request. The co-located application under `scripts/` validates that
 request, audits it,
 independently verifies the findings, and enforces request and result bounds.
-This Cortex card remains the sole semantic authority.
+This card is the sole semantic authority for the Nook executable audit and its
+Loom integration.
 
 It rejects mechanically provable failures:
 
@@ -51,4 +53,3 @@ The author still owns hierarchy, meaning, and consistency review.
 The application remains an in-process Loom dependency with no command, network,
 write, scheduling, or lifecycle authority. The static executable-skill host
 also exposes its validated audit action through strict YAML.
-

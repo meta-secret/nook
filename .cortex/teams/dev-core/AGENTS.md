@@ -17,14 +17,12 @@ broad pre-push commands are not local or feature-stage permissions.
 Development core owns Nook's portable application behavior, including the Rust
 implementation of security controls.
 
-## Context loading
+## Nook context authorities
 
-1. Read [the development core knowledge graph](knowledge-graph.md).
-2. Select the product specification or design authority for the assigned
-   portable behavior.
-3. Load only the relevant headings and directly required Rust skill.
-4. Do not preload every product specification or design document.
-5. Do not open the security, SRE, web, or AI graph for background context.
+Follow Meta-Cortex [assignment context](../../../.meta-cortex/teams/AGENTS.md#assignment-context)
+for generic context selection. The Nook [development core graph](knowledge-graph.md)
+catalogs the product specifications, design authorities, and linked upstream
+Rust skills used by this context.
 
 Load a shared architecture document only when the assigned contract crosses a
 named package boundary. Report every foreign-team dependency to the delivery
