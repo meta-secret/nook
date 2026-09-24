@@ -75,16 +75,17 @@ For AI work that authors TypeScript, JavaScript, or Svelte, the acceptance
 packet names these Nook enforcement surfaces:
 
 - `task loom:verify` checks Loom and every executable-skill package.
-- `task preflight:typescript-state` checks the repository's TypeScript state
-  contract.
-- `task preflight:source-architecture` checks source architecture and language
+- `task preflight:typescript-state` checks authored `null`, `undefined`,
+  TypeScript state-modeling rules.
+- `task preflight:source-architecture` checks source-language and source-size
   boundaries.
 - Semantic ownership review follows upstream
   [function ownership](../../../.meta-cortex/teams/dev-team/docs/programming/function-ownership.md).
 
 Run these checks only in the feature pull request's required-check stage.
-`task loom:verify` does not replace the preflight checks or semantic ownership
-review. Describe each evidence source separately in the acceptance record.
+The acceptance record must not claim that `task loom:verify` alone proves
+TypeScript-state, source-architecture, or semantic ownership compliance.
+Describe each evidence source separately in the acceptance record.
 
 Loom compiles only its typed contracts and registered workflow bindings.
 Markdown remains documentation and does not become executable workflow state.
