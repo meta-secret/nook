@@ -36,8 +36,46 @@ test('shows backup-password unlock after locked local-vault startup', async ({
   await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
-  await selectLoginUnlockMethod(page, UnlockMethod.Password)
+  await expect(page.getByTestId('vault-error')).not.toBeVisible()
 
+  await page.evaluate(async () => {
+    const vault = window.__nookVault
+    if (!vault) {
+      throw new Error('__nookVault is unavailable')
+    }
+    const admittedManager = vault.admitManager()
+    if (admittedManager.isErr()) {
+      throw new Error('Local vault manager is unavailable')
+    }
+    const manager = admittedManager.value
+    const fetchPasswordEntries =
+      manager.fetch_vault_password_entries.bind(manager)
+    vault.localLoginPreparation = 'idle' as typeof vault.localLoginPreparation
+    manager.fetch_vault_password_entries = async () => {
+      manager.fetch_vault_password_entries = fetchPasswordEntries
+      throw new Error('Demo transient metadata fetch failure')
+    }
+    await vault.prepareLocalLogin()
+    if (String(vault.localLoginPreparation) !== 'idle') {
+      throw new Error('Failed metadata preparation did not return to idle')
+    }
+  })
+  const vaultError = page.getByTestId('vault-error')
+  await expect(vaultError).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  await page.waitForTimeout(DEMO_BEAT_MS)
+
+  const retryPreparation = await page.evaluate(async () => {
+    const vault = window.__nookVault
+    if (!vault) {
+      throw new Error('__nookVault is unavailable')
+    }
+    await vault.prepareLocalLogin()
+    return String(vault.localLoginPreparation)
+  })
+  expect(retryPreparation).toBe('ready')
+  await expect(vaultError).not.toBeVisible()
+
+  await selectLoginUnlockMethod(page, UnlockMethod.Password)
   const passwordEntries = page.getByTestId('login-password-entry-list')
   await expect(passwordEntries).toBeVisible({ timeout: UI_TIMEOUT_MS })
   await expect(
@@ -45,6 +83,6 @@ test('shows backup-password unlock after locked local-vault startup', async ({
   ).toBeVisible()
   await expect(page.getByTestId('login-password-input')).toBeVisible()
   await expect(page.getByTestId('passkey-auth-overlay')).toBeHidden()
-  await expect(page.getByTestId('vault-error')).not.toBeVisible()
+  await expect(vaultError).not.toBeVisible()
   await page.waitForTimeout(DEMO_BEAT_MS)
 })
