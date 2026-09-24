@@ -16,6 +16,7 @@ import {
   VaultSyncActions,
   type VaultSynchronizationResult,
 } from '$lib/vault/sync.svelte'
+import type { SyncScheduleRequest } from '$lib/vault/action-contexts'
 import { ProviderSyncOutcome } from '$lib/vault/provider-sync.svelte'
 import {
   TranslationMessage,
@@ -118,8 +119,8 @@ describe('automatic vault sync', () => {
         ),
       )
       .mockResolvedValueOnce(ok(ProviderSyncOutcome.Synced))
-    let scheduledCallback!: Parameters<typeof state.scheduleSync>[0]['callback']
-    state.scheduleSync = vi.fn((request) => {
+    let scheduledCallback!: SyncScheduleRequest['callback']
+    state.scheduleSync = vi.fn((request: SyncScheduleRequest) => {
       scheduledCallback = request.callback
     })
 
@@ -151,10 +152,8 @@ describe('automatic vault sync', () => {
         .fn()
         .mockResolvedValueOnce(err(new VaultStorageFailure(failureKind)))
         .mockResolvedValueOnce(ok(ProviderSyncOutcome.Synced))
-      let scheduledCallback!: Parameters<
-        typeof state.scheduleSync
-      >[0]['callback']
-      state.scheduleSync = vi.fn((request) => {
+      let scheduledCallback!: SyncScheduleRequest['callback']
+      state.scheduleSync = vi.fn((request: SyncScheduleRequest) => {
         scheduledCallback = request.callback
       })
 
@@ -205,10 +204,8 @@ describe('automatic vault sync', () => {
           ),
         )
         .mockResolvedValueOnce(laterResult)
-      let scheduledCallback!: Parameters<
-        typeof state.scheduleSync
-      >[0]['callback']
-      state.scheduleSync = vi.fn((request) => {
+      let scheduledCallback!: SyncScheduleRequest['callback']
+      state.scheduleSync = vi.fn((request: SyncScheduleRequest) => {
         scheduledCallback = request.callback
       })
 
@@ -261,10 +258,8 @@ describe('automatic vault sync', () => {
           invalidateClearance(state)
           return ok(ProviderSyncOutcome.Synced)
         })
-      let scheduledCallback!: Parameters<
-        typeof state.scheduleSync
-      >[0]['callback']
-      state.scheduleSync = vi.fn((request) => {
+      let scheduledCallback!: SyncScheduleRequest['callback']
+      state.scheduleSync = vi.fn((request: SyncScheduleRequest) => {
         scheduledCallback = request.callback
       })
 
@@ -298,8 +293,8 @@ describe('automatic vault sync', () => {
         state.errorMsg = state.t(I18N_KEYS.AuthStorageSyncFailed)
         return ok(ProviderSyncOutcome.Synced)
       })
-    let scheduledCallback!: Parameters<typeof state.scheduleSync>[0]['callback']
-    state.scheduleSync = vi.fn((request) => {
+    let scheduledCallback!: SyncScheduleRequest['callback']
+    state.scheduleSync = vi.fn((request: SyncScheduleRequest) => {
       scheduledCallback = request.callback
     })
 
@@ -332,8 +327,8 @@ describe('automatic vault sync', () => {
         )
         return ok(ProviderSyncOutcome.Synced)
       })
-    let scheduledCallback!: Parameters<typeof state.scheduleSync>[0]['callback']
-    state.scheduleSync = vi.fn((request) => {
+    let scheduledCallback!: SyncScheduleRequest['callback']
+    state.scheduleSync = vi.fn((request: SyncScheduleRequest) => {
       scheduledCallback = request.callback
     })
 
@@ -362,10 +357,8 @@ describe('automatic vault sync', () => {
           pendingSynchronizations.push(resolve)
         }),
     )
-    const scheduledCallbacks: Array<
-      Parameters<typeof state.scheduleSync>[0]['callback']
-    > = []
-    state.scheduleSync = vi.fn((request) => {
+    const scheduledCallbacks: Array<SyncScheduleRequest['callback']> = []
+    state.scheduleSync = vi.fn((request: SyncScheduleRequest) => {
       scheduledCallbacks.push(request.callback)
     })
 
@@ -416,7 +409,7 @@ describe('automatic vault sync', () => {
       err(new VaultStorageFailure(VaultStorageFailureKind.OperationFailed)),
     )
     state.scheduleSync = vi.fn(
-      (request: Parameters<typeof state.scheduleSync>[0]) => request.callback(),
+      (request: SyncScheduleRequest) => request.callback(),
     )
 
     new VaultSyncActions(state).startVaultSync()
@@ -439,7 +432,7 @@ describe('automatic vault sync', () => {
       )
     })
     state.scheduleSync = vi.fn(
-      (request: Parameters<typeof state.scheduleSync>[0]) => request.callback(),
+      (request: SyncScheduleRequest) => request.callback(),
     )
 
     new VaultSyncActions(state).startVaultSync()

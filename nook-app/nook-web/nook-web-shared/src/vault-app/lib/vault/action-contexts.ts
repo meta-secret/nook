@@ -361,7 +361,7 @@ type SyncSessionFields = Pick<
   | "vaultMembers"
 >;
 
-type SyncScheduleRequest = {
+export type SyncScheduleRequest = {
   readonly callback: () => void;
   readonly intervalMs: number;
 };
