@@ -471,7 +471,12 @@ const previewManifestArgs: CreateExtensionManifestArgs = {
 }
 const previewManifest = createManifest(previewManifestArgs)
 if (
-  previewManifest.action.default_popup !== 'popup/index.html' ||
+  Object.prototype.hasOwnProperty.call(
+    previewManifest.action,
+    'default_popup',
+  ) ||
+  previewManifest.background.service_worker !==
+    'background/service-worker.js' ||
   previewManifest.externally_connectable.matches[0] !==
     'https://pr-391.nokey-simple.pages.dev/*' ||
   !previewManifest.content_scripts[0]?.exclude_matches.includes(
