@@ -369,7 +369,7 @@ fn preflight_installs_released_meta_cortex_without_configuration_override() {
         "YAML"
     );
     assert!(
-        dockerfile.contains("meta-cortex/releases/download/v0.7.0/meta-cortex-installer.sh"),
+        dockerfile.contains("meta-cortex/releases/download/v0.8.0/meta-cortex-installer.sh"),
         "Meta-Cortex installation must use the selected upstream release"
     );
     assert!(
