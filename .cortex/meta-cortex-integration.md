@@ -98,6 +98,8 @@ Nook's Prime and Team Gizmo documents adapt the upstream roles. The Nook
 upstream roles and preserves the Nook role identities used by Loom. Upstream
 role and skill authority remains in the installed Meta-Cortex catalogs.
 
+#### Cortex authoring
+
 For Cortex work, use the upstream [Tech Writer role](../.meta-cortex/teams/ai-team/agents/tech-writer/AGENTS.md)
 and [Context Engineering skill](../.meta-cortex/teams/ai-team/agents/tech-writer/skills/context-engineering/SKILL.md).
 Nook's AI graph points to project-owned audit cards. Those cards own Nook
