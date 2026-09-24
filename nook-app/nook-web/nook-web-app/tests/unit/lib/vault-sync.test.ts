@@ -119,10 +119,7 @@ describe('automatic vault sync', () => {
         ),
       )
       .mockResolvedValueOnce(ok(ProviderSyncOutcome.Synced))
-    let scheduledCallback!: SyncScheduleRequest['callback']
-    state.scheduleSync = vi.fn((request: SyncScheduleRequest) => {
-      scheduledCallback = request.callback
-    })
+    state.scheduleSync = vi.fn()
 
     new VaultSyncActions(state).startVaultSync()
     await Promise.resolve()
@@ -132,7 +129,7 @@ describe('automatic vault sync', () => {
       state.t(I18N_KEYS.ErrorsValidationLocalDataChangedInAnotherTab),
     )
 
-    scheduledCallback()
+    new VaultSyncActions(state).startVaultSync()
     await Promise.resolve()
     await Promise.resolve()
 
@@ -152,15 +149,12 @@ describe('automatic vault sync', () => {
         .fn()
         .mockResolvedValueOnce(err(new VaultStorageFailure(failureKind)))
         .mockResolvedValueOnce(ok(ProviderSyncOutcome.Synced))
-      let scheduledCallback!: SyncScheduleRequest['callback']
-      state.scheduleSync = vi.fn((request: SyncScheduleRequest) => {
-        scheduledCallback = request.callback
-      })
+      state.scheduleSync = vi.fn()
 
       new VaultSyncActions(state).startVaultSync()
       await Promise.resolve()
       await Promise.resolve()
-      scheduledCallback()
+      new VaultSyncActions(state).startVaultSync()
       await Promise.resolve()
       await Promise.resolve()
 
@@ -204,15 +198,12 @@ describe('automatic vault sync', () => {
           ),
         )
         .mockResolvedValueOnce(laterResult)
-      let scheduledCallback!: SyncScheduleRequest['callback']
-      state.scheduleSync = vi.fn((request: SyncScheduleRequest) => {
-        scheduledCallback = request.callback
-      })
+      state.scheduleSync = vi.fn()
 
       new VaultSyncActions(state).startVaultSync()
       await Promise.resolve()
       await Promise.resolve()
-      scheduledCallback()
+      new VaultSyncActions(state).startVaultSync()
       await Promise.resolve()
       await Promise.resolve()
 
@@ -258,15 +249,12 @@ describe('automatic vault sync', () => {
           invalidateClearance(state)
           return ok(ProviderSyncOutcome.Synced)
         })
-      let scheduledCallback!: SyncScheduleRequest['callback']
-      state.scheduleSync = vi.fn((request: SyncScheduleRequest) => {
-        scheduledCallback = request.callback
-      })
+      state.scheduleSync = vi.fn()
 
       new VaultSyncActions(state).startVaultSync()
       await Promise.resolve()
       await Promise.resolve()
-      scheduledCallback()
+      new VaultSyncActions(state).startVaultSync()
       await Promise.resolve()
       await Promise.resolve()
 
@@ -293,15 +281,12 @@ describe('automatic vault sync', () => {
         state.errorMsg = state.t(I18N_KEYS.AuthStorageSyncFailed)
         return ok(ProviderSyncOutcome.Synced)
       })
-    let scheduledCallback!: SyncScheduleRequest['callback']
-    state.scheduleSync = vi.fn((request: SyncScheduleRequest) => {
-      scheduledCallback = request.callback
-    })
+    state.scheduleSync = vi.fn()
 
     new VaultSyncActions(state).startVaultSync()
     await Promise.resolve()
     await Promise.resolve()
-    scheduledCallback()
+    new VaultSyncActions(state).startVaultSync()
     await Promise.resolve()
     await Promise.resolve()
 
@@ -327,15 +312,12 @@ describe('automatic vault sync', () => {
         )
         return ok(ProviderSyncOutcome.Synced)
       })
-    let scheduledCallback!: SyncScheduleRequest['callback']
-    state.scheduleSync = vi.fn((request: SyncScheduleRequest) => {
-      scheduledCallback = request.callback
-    })
+    state.scheduleSync = vi.fn()
 
     new VaultSyncActions(state).startVaultSync()
     await Promise.resolve()
     await Promise.resolve()
-    scheduledCallback()
+    new VaultSyncActions(state).startVaultSync()
     await Promise.resolve()
     await Promise.resolve()
 
@@ -357,16 +339,11 @@ describe('automatic vault sync', () => {
           pendingSynchronizations.push(resolve)
         }),
     )
-    const scheduledCallbacks: Array<SyncScheduleRequest['callback']> = []
-    state.scheduleSync = vi.fn((request: SyncScheduleRequest) => {
-      scheduledCallbacks.push(request.callback)
-    })
+    state.scheduleSync = vi.fn()
 
-    new VaultSyncActions(state).startVaultSync()
-    const tickAfterAStarted = scheduledCallbacks[0]
-    if (!tickAfterAStarted)
-      throw new Error('Scheduled sync callback is missing.')
-    tickAfterAStarted()
+    const syncActions = new VaultSyncActions(state)
+    syncActions.startVaultSync()
+    syncActions.startVaultSync()
     const resolveB = pendingSynchronizations[1]
     if (!resolveB) throw new Error('Second scheduled sync is missing.')
     resolveB(
@@ -391,7 +368,7 @@ describe('automatic vault sync', () => {
       state.t(I18N_KEYS.ErrorsValidationLocalDataChangedInAnotherTab),
     )
 
-    new VaultSyncActions(state).startVaultSync()
+    syncActions.startVaultSync()
     const resolveC = pendingSynchronizations[2]
     if (!resolveC) throw new Error('Third scheduled sync is missing.')
     resolveC(ok(ProviderSyncOutcome.Synced))
@@ -399,6 +376,32 @@ describe('automatic vault sync', () => {
     await Promise.resolve()
 
     expect(state.errorMsg).toBe('')
+  })
+
+  test('skips the interval sync when no sync providers are configured', async () => {
+    const state = VaultStateTestFixture.create()
+    state.isAuthenticated = true
+    state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked
+    state.syncFromStorage = vi.fn(async () => ok(ProviderSyncOutcome.Synced))
+    let scheduledCallback!: SyncScheduleRequest['callback']
+    state.scheduleSync = vi.fn((request: SyncScheduleRequest) => {
+      scheduledCallback = request.callback
+    })
+
+    new VaultSyncActions(state).startVaultSync()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(state.syncProviders).toHaveLength(0)
+    expect(state.syncFromStorage).toHaveBeenCalledTimes(1)
+    scheduledCallback()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(state.syncFromStorage).toHaveBeenCalledTimes(1)
+    expect(state.syncFromStorage).toHaveBeenCalledWith(
+      ProviderSyncFreshness.Scheduled,
+    )
   })
 
   test('keeps a join-approval polling failure visible while unauthenticated', async () => {

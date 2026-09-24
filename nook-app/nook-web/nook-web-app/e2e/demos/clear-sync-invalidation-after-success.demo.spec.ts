@@ -5,6 +5,7 @@ import {
   waitForStorageChainIdle,
 } from '../helpers'
 import { installMockPasskeyRuntime } from '../passkey-mock'
+import { I18N_KEYS } from '../../../nook-web-shared/src/generated/i18n-keys'
 
 const LOCAL_DATA_STORAGE_GENERATION_KEY = 'nook-local-data-storage-generation'
 
@@ -13,6 +14,9 @@ test('clear a recovered scheduled sync alert on extension consent', async ({
   page,
 }) => {
   await connectLocalVault(page)
+  await expect
+    .poll(() => page.evaluate(() => window.__nookVault?.syncProviders.length))
+    .toBe(0)
   await page.evaluate(() => window.__nookVault?.stopVaultSync())
   await waitForStorageChainIdle(page)
 
@@ -40,6 +44,12 @@ test('clear a recovered scheduled sync alert on extension consent', async ({
 
   const vaultError = page.getByTestId('vault-error')
   await expect(vaultError).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  const generationUnavailableMessage = await page.evaluate((translationKey) => {
+    const vault = window.__nookVault
+    if (!vault) throw new Error('__nookVault is unavailable')
+    return vault.t(translationKey)
+  }, I18N_KEYS.ErrorsValidationLocalDataChangedInAnotherTab)
+  await expect(vaultError).toHaveText(generationUnavailableMessage)
   await page.evaluate(() => window.__nookVault?.stopVaultSync())
 
   const extensionContext = await browser.newContext()
@@ -81,7 +91,7 @@ test('clear a recovered scheduled sync alert on extension consent', async ({
 
   const consent = page.getByTestId('extension-connect-consent')
   await expect(consent).toBeVisible({ timeout: UI_TIMEOUT_MS })
-  await expect(vaultError).toBeVisible()
+  await expect(vaultError).toHaveText(generationUnavailableMessage)
   const consentWorkflowNotice = consent.locator('[role="alert"]')
   await expect(consentWorkflowNotice).toHaveCount(0)
 
