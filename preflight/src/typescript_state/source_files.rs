@@ -62,6 +62,7 @@ impl AuthoredSourceFiles<'_> {
                 matches!(
                     name,
                     ".git"
+                        | ".meta-cortex"
                         | ".svelte-kit"
                         | "build"
                         | "coverage"
@@ -87,6 +88,16 @@ mod tests {
         )));
         assert!(!AuthoredSourceFiles::is_excluded_directory(Path::new(
             "/repo/.agents/skills/example"
+        )));
+    }
+
+    #[test]
+    fn excludes_installed_meta_cortex_and_keeps_nook_sources_scannable() {
+        assert!(AuthoredSourceFiles::is_excluded_directory(Path::new(
+            "/repo/.meta-cortex"
+        )));
+        assert!(!AuthoredSourceFiles::is_excluded_directory(Path::new(
+            "/repo/nook-app/nook-web/src"
         )));
     }
 }

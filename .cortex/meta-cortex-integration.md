@@ -19,16 +19,18 @@ the replacement procedure below before repository work.
 #### Install and verify the CLI
 
 If the `meta-cortex` command is unavailable, install it with the official
-[v0.7.0 shell installer](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/download/v0.7.0/meta-cortex-installer.sh):
+[v0.8.0 shell installer](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/download/v0.8.0/meta-cortex-installer.sh):
 
 ```sh
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/download/v0.7.0/meta-cortex-installer.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/download/v0.8.0/meta-cortex-installer.sh | sh
 ```
 
-Verify that `meta-cortex --version` reports `0.7.0`. If a different version is
-installed, install the selected v0.7.0 release above. Use `meta-cortex list` to
+Verify that `command -v meta-cortex` resolves to the intended executable and
+`meta-cortex --version` reports `0.8.0`. If a different version is installed,
+install the selected v0.8.0 release above and correct the shell's command
+resolution. Use `meta-cortex list` to
 inspect the supported request schema and canonical YAML examples. The upstream
-[v0.7.0 release notes](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/tag/v0.7.0)
+[v0.8.0 release notes](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/tag/v0.8.0)
 and [project update procedure](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex#update-a-project)
 own the CLI upgrade and framework replacement procedures.
 
@@ -47,7 +49,7 @@ If `.meta-cortex/` is missing:
        name: Initialize
        arguments:
          harness: codex
-         instructions: write
+         instructions: skip
    REQUEST
    ```
 
@@ -89,7 +91,7 @@ For existing and newly initialized frameworks:
    REQUEST
    ```
 
-2. Confirm that `cli_version` and `framework_version` both report `0.7.0` and
+2. Confirm that `cli_version` and `framework_version` both report `0.8.0` and
    match, and that the Codex integration reports `Connected` in the response.
    - If the versions differ, follow the replacement procedure below before
      normal repository work.
@@ -121,7 +123,7 @@ partial framework.
 - **Prohibited:** continue repository work after installation or initialization
   fails, using only the Nook documents or a manually copied partial framework.
 
-- **Preferred:** install the official v0.7.0 command, initialize this worktree,
+- **Preferred:** install the official v0.8.0 command, initialize this worktree,
   verify its required files and Info response, then load the upstream entry point.
 
 ### Roots and ownership
@@ -246,6 +248,9 @@ The Meta-Cortex command owns framework installation in `.meta-cortex/`. Keep
 that ignored directory untracked. Every new consuming worktree needs its own
 official `Framework / Initialize` operation. Do not copy the directory from
 another worktree or replace initialization with a manually copied release tree.
+Use `instructions: skip` for Nook initialization requests. The root
+`AGENTS.md` is tracked and owns Nook's harness instructions; initialization must
+not rewrite it.
 
 For an existing installation, follow the upstream replacement procedure because
 upgrading the command does not replace the framework. Back up and move
@@ -257,12 +262,35 @@ framework versions and Codex `Connected` before resuming repository work.
 Review upstream path changes against the thin wrapper and catalog mappings in
 this document. Do not copy framework files from the backup.
 
-To move to a newer release, compare `meta-cortex --version` with the selected
-upstream release. Install that CLI release when the command is older. Then
+To move to a newer release, compare the executable selected by `command -v
+meta-cortex` and `meta-cortex --version` with the selected upstream release.
+Install that CLI release when the command is older or a different executable
+shadows it. Then
 replace the project framework through the preceding procedure and verify the
 CLI and framework versions with `Framework / Info`.
 Update the pinned installer release in `preflight/Dockerfile` in the same change
 so hosted policy and Loom checks use the version selected for Nook.
+
+### Repository identity and coordination data
+
+Meta-Cortex v0.8 stores feature ledgers outside Git at
+`${META_CORTEX_HOME:-$HOME/.meta-cortex}/<repository-id>/features`. Framework
+initialization creates or reads the repository UUID in
+`.meta-cortex/repository-id` in the actual Git main checkout; linked worktrees
+reuse that UUID through their shared Git common directory. Preserve the exact
+UUID when replacing the main checkout's framework. Restore it to the new main
+`.meta-cortex/repository-id` before initializing features or linked worktrees,
+and verify that it still selects the existing data directory. Do not reuse an
+identity across unrelated clones.
+
+The v0.8 upgrade does not relocate legacy ledgers from the Git common
+directory's `meta-cortex/features` folder. Before migrating them, stop all
+ledger writers and confirm that no files are open under the legacy directory.
+Copy each database together with any `-wal`, `-shm`, or `-tshm` sidecars into
+`${META_CORTEX_HOME:-$HOME/.meta-cortex}/<repository-id>/features`. Keep the
+legacy source copies until v0.8 `Feature / List`, `Feature / Status`, and
+`Task / History` commands confirm that feature IDs, task status, and history
+remain readable from the new location. Do not split or copy a live database.
 
 - **Prohibited:** update the command and assume the already installed framework
   changed with it, or overwrite a locally changed framework without reviewing

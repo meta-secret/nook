@@ -18,7 +18,7 @@ Web development owns Nook's TypeScript and Svelte engineering expertise. It
 also owns browser presentation and frontend interaction behavior.
 
 For authored TypeScript, JavaScript, or Svelte scripts, load the Web-owned
-[TypeScript Effect Workflows](../../../.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/practices/typescript-effect.md) policy.
+[TypeScript Effect Workflows](../../../.meta-cortex/teams/dev-team/agents/typescript-dev/skills/ts-dev-skill/SKILL.md#choose-effect-for-workflows) policy.
 Apply Effect when the changed workflow meets its scope, and preserve Rust/WASM
 ownership of portable domain and security behavior.
 

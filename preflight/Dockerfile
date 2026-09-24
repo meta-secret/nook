@@ -123,13 +123,14 @@ RUN for directory in .cortex/teams/ai/dynamic-skills/*/scripts; do \
 FROM policy-tools AS policy-source
 ARG LOOM_OWNERSHIP_FROM
 COPY --from=repository-source / /meta-secret/nook
+COPY --from=repository-git /git /meta-secret/nook/.git
 # The ignored library is absent from fresh checkouts. Initialize it through the
 # official released command before Loom reads its roles and skills.
 RUN <<'EOF'
 set -eu
 test ! -e /meta-secret/nook/.meta-cortex
 curl --proto '=https' --tlsv1.2 -LsSf \
-  https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/download/v0.7.0/meta-cortex-installer.sh \
+  https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/download/v0.8.0/meta-cortex-installer.sh \
   --output /tmp/meta-cortex-installer.sh
 META_CORTEX_UNMANAGED_INSTALL=/usr/local/bin sh /tmp/meta-cortex-installer.sh
 rm /tmp/meta-cortex-installer.sh
@@ -154,7 +155,6 @@ operation:
     arguments: {}
 YAML
 EOF
-COPY --from=repository-git /git /meta-secret/nook/.git
 COPY --from=repository-git /event.json /tmp/policy-event.json
 ENV GITHUB_EVENT_PATH=/tmp/policy-event.json \
     LOOM_OWNERSHIP_FROM=$LOOM_OWNERSHIP_FROM

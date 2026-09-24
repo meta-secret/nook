@@ -251,7 +251,7 @@ test('offer browser extension install on vault home and in Devices', async ({
   await demoBeat(page)
 })
 
-test('accept delayed extension pairing acknowledgement without duplicate delivery', async ({
+test('automatically return after accessible extension approval confirmation', async ({
   browser,
   page,
 }) => {
@@ -317,13 +317,27 @@ test('accept delayed extension pairing acknowledgement without duplicate deliver
     consent.locator('[data-extension-pairing-rejection-reason]'),
   ).toHaveCount(0)
 
-  await expect(page.getByTestId('extension-connect-approved')).toBeVisible({
+  const approvedMessage = 'Extension device approved.'
+  const approvedConfirmation = consent.getByRole('status')
+  await expect(approvedConfirmation).toHaveCount(1, {
     timeout: UI_TIMEOUT_MS,
   })
+  await expect(approvedConfirmation).toBeVisible()
+  await expect(approvedConfirmation).toHaveText(approvedMessage)
+  await expect(page.getByText(approvedMessage, { exact: true })).toHaveCount(1)
+  await expect(consent.getByRole('alert')).toHaveCount(0)
+  await expect(consent.getByRole('button', { name: 'Done' })).toHaveCount(0)
+
+  await expect(page).toHaveURL(/\/vault\/?$/, { timeout: UI_TIMEOUT_MS })
+  await expect(page.getByTestId('vault-panel')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+  await expect(consent).toHaveCount(0)
+  const approvalToast = page.getByTestId('app-success')
+  await expect(approvalToast).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  await expect(approvalToast).toHaveAttribute('role', 'status')
+  await expect(approvalToast).toHaveText(approvedMessage)
   await expect(html).toHaveAttribute('data-demo-pairing-delivery-count', '1')
-  await expect(
-    consent.locator('[data-extension-pairing-rejection-reason]'),
-  ).toHaveCount(0)
   await demoBeat(page)
 })
 
