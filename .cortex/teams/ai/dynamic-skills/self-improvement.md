@@ -37,7 +37,7 @@ decision supports it.
 
 Prefer an existing authority over a new document. Use implementation evidence
 to correct inaccurate guidance, and report an implementation mismatch when code
-violates an active requirement. The [root graph](../../../../knowledge-graph.md)
+violates an active requirement. The [root graph](../../../knowledge-graph.md)
 and owning team graph identify Nook document owners.
 
 ## User authority for major architectural initiatives
