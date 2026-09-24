@@ -20,14 +20,12 @@ boundaries, security review guidance, and security-specific agent skills.
 Security authority describes implemented controls and required invariants. It
 must not claim guarantees that the repository does not prove.
 
-## Context loading
+## Nook context authorities
 
-1. Read [the security knowledge graph](knowledge-graph.md).
-2. Select the exact architecture, reference, or security skill for the assigned
-   question.
-3. Load only the relevant headings and named source evidence.
-4. Do not preload every security document.
-5. Do not open another team's graph for general background.
+Follow Meta-Cortex [assignment context](../../../.meta-cortex/teams/AGENTS.md#assignment-context)
+for generic context selection. The Nook [security graph](knowledge-graph.md)
+catalogs the architecture, reference, and security-skill authorities used by
+this context.
 
 Load a foreign-team product specification or implementation file only when the
 task names it as evidence or a consumer contract. Treat that material as

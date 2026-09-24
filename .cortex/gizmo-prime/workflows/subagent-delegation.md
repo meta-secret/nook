@@ -18,5 +18,7 @@
 ## Prohibited actions
 
 Do not duplicate the upstream local feature procedure in Nook wrappers. Do not
-use repository journals as a dispatch mechanism. The active host provides agent
-communication. Explicit user limits on delegation remain binding.
+use repository journals as a dispatch mechanism. Follow upstream
+[communication and decisions](../../../.meta-cortex/teams/AGENTS.md#communication-and-decisions)
+for agent reporting and routing. Explicit user limits on delegation remain
+binding.

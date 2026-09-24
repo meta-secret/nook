@@ -1,19 +1,19 @@
 # Cortex Specialist Knowledge Graph
 
-Load only the authority needed for the assigned Cortex packet.
+Use the Nook AI authorities and packet boundaries relevant to the assigned
+Cortex work.
 
-## Parent contracts
+## Specialist context
 
 - [Cortex Specialist contract](AGENTS.md)
-- [AI Team Gizmo contract](../gizmo/AGENTS.md)
 - [AI team contract](../AGENTS.md)
 - [AI team knowledge graph](../knowledge-graph.md)
-- [Gizmo Prime knowledge graph](../../../gizmo-prime/knowledge-graph.md)
 
 ## Specialist focus
 
 - Cortex work is limited to the exact AI-owned documents and evidence named by the packet.
-- The specialist follows AI authorities for Cortex structure, navigation, authoring, and consistency.
+- The specialist follows Nook AI authorities for Cortex ownership, navigation,
+  and tooling.
 - Foreign-team implementation and routing remain with their owning teams.
 
 ## Delivery authority

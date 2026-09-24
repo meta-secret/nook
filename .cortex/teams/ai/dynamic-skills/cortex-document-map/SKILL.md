@@ -1,18 +1,24 @@
 ---
 name: cortex-document-map
-description: Audit Cortex document navigation, ownership graphs, and canonical index structure.
+description: Audit Nook Cortex navigation, ownership graphs, and canonical index structure.
 ---
 
-# Cortex Document Navigation
+# Nook Cortex Navigation
 
 ## Purpose
 
-Route humans and agents to the smallest relevant Cortex context without
-duplicating each document's heading hierarchy.
+Route people and agents to Nook's owning Cortex context without copying
+upstream authoring practices or another document's headings.
 
-## Graph topology
+Meta-Cortex owns generic graph and article rules. Follow its
+[knowledge-graph practice](../../../../../.meta-cortex/teams/ai-team/agents/tech-writer/skills/context-engineering/practices/knowledge-graphs.md)
+and [article-structure practice](../../../../../.meta-cortex/teams/ai-team/agents/tech-writer/skills/context-engineering/practices/article-structure.md).
+Nook graph placement and topology are defined below and in the
+[root knowledge graph](../../../../knowledge-graph.md).
 
-Cortex has one root router, a Gizmo Prime graph, six engineering/operational
+## Nook graph topology
+
+Nook has one root router, a Gizmo Prime graph, six engineering and operational
 owner graphs, and shared knowledge.
 
 - The root graph selects Gizmo Prime, Delivery Pipeline, AI, development core,
@@ -21,115 +27,61 @@ owner graphs, and shared knowledge.
   child contexts.
 - The Delivery Pipeline `pr-lifecycle` child owns bounded feature PR mechanics.
 - Gizmo Prime owns end-to-end feature delivery.
-- The six engineering/operational owner graphs index documents owned by their
-  teams: Delivery Pipeline, AI, development core, security, SRE, and web
+- The six engineering and operational owner graphs index documents owned by
+  their teams: Delivery Pipeline, AI, development core, security, SRE, and web
   development.
-- The single Team Gizmo coordinates all six Nook contexts under Prime.
-- Team-specific Gizmo paths are context adapters for this coordinator.
+- One Team Gizmo coordinates the six Nook contexts under Prime. Team-specific
+  Gizmo paths adapt those contexts for the single coordinator.
 - The shared graph indexes genuinely cross-team documents.
-- Every document has exactly one owning graph.
-- The root graph does not index child documents directly.
-- One child graph does not index another context's documents.
+- Each Nook document belongs to one owning graph. The root graph does not index
+  child documents directly, and one child graph does not index another
+  context's documents.
 
 **Prohibited:** launch separate AI and web coordinators because their contexts
 have separate graphs.
 
-**Preferred:** the existing Team Gizmo supplies the AI and web contexts to
-their respective bounded worker assignments.
+**Preferred:** the existing Team Gizmo supplies the AI and web contexts to their
+bounded worker assignments.
 
-## Knowledge-graph shape
+## Nook document placement
 
-Knowledge graphs are document catalogs, not generated tables of contents.
+When adding or moving a Nook document:
 
-- Group documents under meaningful categories.
-- Give each category a short routing sentence when its purpose is not obvious.
-- Link each owned document exactly once.
-- Do not add fragment links to document headings.
-- Do not repeat a document's internal structure in a graph.
-- Keep lists vertical and scannable. Do not create horizontal link chains.
+1. Select its owning context from the [root graph](../../../../knowledge-graph.md)
+   and confirm placement in that team's graph.
+2. Put the document under its owning context and link it once from that graph.
+3. Remove obsolete ownership links and update direct callers when a path changes.
+4. Update the central [Nook skill registry](../index.md) when a skill card is
+   added, moved, or retired.
+5. Keep Delivery Pipeline's `gizmo` and `pr-lifecycle` children beneath its
+   team graph.
 
-The target document's headings provide section-level navigation after the
-document is selected.
-
-## Selective context loading
-
-Use the root router at task entry to select one primary owning context.
-Delegated workers start with the owning context and prerequisites supplied by
-Team Gizmo in their assignment.
-
-1. Read the selected context's `AGENTS.md` and graph.
-2. Select one relevant category.
-3. Open only the documents needed for the assigned functionality.
-4. Read task-relevant reference headings. Load selected skills and practices in full.
-5. Stop when the task contract has enough authoritative context.
-
-**Prohibited:** an assigned Cortex writer restarts root routing to choose a team.
-
-**Preferred:** the writer consumes the supplied AI context and selected
-authoring documents directly.
-
-- Agents must not preload all graphs, all team documents, or the shared corpus.
-- A foreign-team implementation requirement returns to Gizmo.
-- A team subagent does not load the Gizmo graph.
-
-A selected team authority may link the smallest task-relevant set of
-foreign-team skills as read-only engineering policy. The worker opens those
-skills directly without opening the foreign team's graph. Skill consumption
-does not require delegation. A foreign-team writer still requires an explicit
-expertise contract.
-
-## Individual document structure
-
-Every Cortex document except a knowledge graph has:
-
-1. exactly one H1 title at the beginning;
-2. an optional short introduction; and
-3. content organized under semantic H2 and H3 headings.
-
-Individual documents do not contain inline `Relationships` or `Document map`
-sections. Their natural heading hierarchy is the local map. Vale owns this
-case-sensitive H2 lint rule; knowledge-graph documents are excluded because
-they own centralized navigation.
-
-## Application procedure
-
-1. Determine whether the document belongs to Gizmo Prime, Delivery
-   Pipeline, AI, development core, security, SRE, web development, or shared
-   knowledge.
-2. Place it under the owning context.
-3. Add one document-level link to that context's graph.
-4. Remove obsolete links from the previous graph.
-5. Update direct callers and the canonical skill catalog.
-6. Defer executable audits to the pr-lifecycle slow PR stage.
+Use the supplied context and the upstream
+[assignment-context rules](../../../../../.meta-cortex/teams/AGENTS.md#assignment-context)
+for general context loading. An assigned Cortex writer works from the supplied
+AI context and relevant authorities without restarting root routing.
 
 ## Validation
 
-Only in the pr-lifecycle remote slow PR stage, run:
+The current pull request path runs `task loom:cortex-audit` in
+`pr-verification`. The policy path `ci:pr:tests:policy-with-delivery-helpers`
+invokes `preflight:repository-policy`; its Docker stage inherits
+`loom-verify` and runs `task loom:verify` plus the document-map audit. These
+commands run in the pull request's required checks, not locally or during
+feature work:
 
 ```bash
 task loom:cortex-audit
 task loom:verify
-task preflight:loom-contracts
 ```
 
-Loom enforces:
-
-- Gizmo Prime and the six engineering/operational owner graphs exist;
-- the root links these owning graphs and routes Delivery Pipeline's direct
-  children beneath its team graph;
-- every document is indexed by its owner;
-- graphs do not cross ownership boundaries;
-- each graph indexes a document once; and
-- graphs contain no fragment-link duplication.
-
-Vale rejects exact `## Relationships` and `## Document map` headings in
-individual Cortex documents. `task vale:cortex` belongs only to the pr-lifecycle
-remote slow PR stage, not local or feature validation.
+`task loom:cortex-audit` checks Nook graph topology, document ownership, index
+uniqueness, and fragment-link rules. `task loom:verify` runs through the policy
+Docker stage described above. Semantic review still checks that the selected
+owner and links match the document's actual purpose.
 
 The co-located read-only TypeScript application owns deterministic graph
-topology diagnostics and legacy index migration rendering. Vale owns prose and
-heading lint rules that its Markdown scopes express directly. The project is
-automatically installed and verified with every executable skill. Discover its
-bounded audit action with
-`task skills:tools-list`. The action does not read or write repository files,
-spawn processes, or coordinate agents.
+topology diagnostics and legacy index migration rendering. The static
+executable-skill host exposes its validated audit action through strict YAML;
+discover it with `task skills:tools-list`. The action does not read or write
+repository files, spawn processes, or coordinate agents.
