@@ -100,7 +100,7 @@ schemas require an explicit migration decision and behavior-focused Rust coverag
 
 Use upstream Prime and Team Gizmo roles with Nook's functional scopes and
 acceptance requirements. Team-context Gizmo paths resolve to the feature's
-single coordinator. Keep another active task read-only without an explicit
+single coordinator. Another active task remains read-only without an explicit
 handoff. Add Nook-specific assignment details through the
 [subagent-delegation workflow](gizmo-prime/workflows/subagent-delegation.md).
 

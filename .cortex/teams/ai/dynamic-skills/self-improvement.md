@@ -2,43 +2,60 @@
 
 ## Purpose
 
-Use concrete work evidence to improve Nook's durable context without turning
-Cortex into a mandatory journal. No documentation change is a valid outcome.
-Generic documentation ownership, authoring, and consistency practices belong to
-Meta-Cortex [Context Engineering](../../../../.meta-cortex/teams/ai-team/agents/tech-writer/skills/context-engineering/SKILL.md).
-This Nook card owns project-specific promotion targets, session boundaries, and
-product authority.
+Use concrete Nook evidence to improve durable context without making Cortex a
+mandatory journal. No Cortex update is a valid outcome. Generic documentation
+ownership and authoring follow Meta-Cortex
+[Context Engineering](../../../../.meta-cortex/teams/ai-team/agents/tech-writer/skills/context-engineering/SKILL.md);
+this card owns Nook promotion targets, session boundaries, and product
+authority.
 
 ## Session notes
 
-- Create `.cortex/.session/<task>.md` only when temporary notes materially help
-  the current task. Session files are optional.
-- Never store credentials, secrets, private data, environment dumps, or large
-  logs in session memory.
-- Remove optional session notes before the Cortex handoff. Confirm that no
-  session file is tracked with `git ls-files .cortex/.session`.
+- A session file is optional; create `.cortex/.session/<task>.md` only when
+  temporary notes materially help the task.
+- Never store secrets, private data, environment dumps, or large logs there.
+- Remove session notes before handoff and confirm
+  `git ls-files .cortex/.session` is empty.
 
-## Promote Nook knowledge
+## Knowledge classification
 
-Promote a lesson only when evidence from Nook source, behavior-focused tests,
-configuration, repository workflows, observed behavior, or an accepted product
-decision supports it.
+Use upstream [Context Engineering](../../../../.meta-cortex/teams/ai-team/agents/tech-writer/skills/context-engineering/SKILL.md)
+for generic knowledge classification and review. Use its
+[knowledge-graph guidance](../../../../.meta-cortex/teams/ai-team/agents/tech-writer/skills/context-engineering/practices/knowledge-graphs.md)
+to locate the owning authority.
 
-- Update the most specific current product specification or architecture
-  authority for product behavior.
-- Update the owning team rule or workflow for Nook-specific agent procedures.
-- Use the [dynamic-skill authoring workflow](dynamic-skill-authoring.md) for
-  reusable code feedback or implementation patterns; update the central index
-  and owning graph when a skill is added, moved, or retired.
-- Use upstream Context Engineering for generic writing, policy ownership,
-  graph, and consistency requirements instead of creating a local duplicate.
-- Keep task state, speculation, immediately stale observations, and facts
-  already evident from nearby code ephemeral.
+## Self-improvement review
 
-Prefer an existing authority over a new document. Use implementation evidence
-to correct inaccurate guidance, and report an implementation mismatch when code
-violates an active requirement. The [root graph](../../../knowledge-graph.md)
-and owning team graph identify Nook document owners.
+Use upstream [bounded review](../../../../.meta-cortex/teams/ai-team/agents/tech-writer/skills/context-engineering/practices/consistency.md#bounded-review)
+when Nook work reveals durable lessons or stale, duplicated, contradictory,
+or missing guidance. A session file is not required.
+
+## Promotion criteria
+
+Promote only when Nook source, behavior-focused tests, configuration, repository
+workflow, observed behavior, or an accepted product decision supports the
+lesson. Update the specific product authority for behavior, the owning team
+rule for Nook procedures, or use the
+[dynamic-skill authoring workflow](dynamic-skill-authoring.md) for reusable
+implementation patterns; update its index and graph when ownership or path
+changes. Route generic writing and consistency rules upstream. Keep task state,
+speculation, stale observations, and facts evident from nearby code ephemeral.
+
+## Evidence and consistency
+
+When evidence conflicts or is weak, resolve it with upstream
+[bounded review](../../../../.meta-cortex/teams/ai-team/agents/tech-writer/skills/context-engineering/practices/consistency.md#bounded-review)
+or keep the candidate ephemeral. Use the
+[root graph](../../../knowledge-graph.md) and owning team graph to find the
+Nook authority; update a graph only when ownership, path, or discoverability
+changes. Correct inaccurate Nook guidance from implementation evidence and
+report code that violates an active requirement.
+
+## Protocol evolution safety
+
+Change a Nook protocol when observed work shows repeated mistakes, missing
+validation, poor context selection, unnecessary repeated work, or a clearly
+safer, simpler workflow. Preserve existing safeguards.
 
 ## User authority for major architectural initiatives
 
@@ -54,17 +71,40 @@ materially different project pattern, or solution whose complexity or risk is
 disproportionate to the request. It does not restrict ordinary fixes, tests,
 documentation corrections, or architecture-preserving refactors.
 
-## Nook Cortex handoff
+## Workflow improvement review
+
+Use upstream [bounded review](../../../../.meta-cortex/teams/ai-team/agents/tech-writer/skills/context-engineering/practices/consistency.md#bounded-review)
+for a touched Nook workflow when evidence shows duplicated guidance, repeated
+deterministic work, unclear ownership, or recurring friction.
+
+### Instruction classification
+
+Follow upstream [Context Engineering](../../../../.meta-cortex/teams/ai-team/agents/tech-writer/skills/context-engineering/SKILL.md)
+for generic instruction classification; use Nook's
+[subagent-delegation contract](../../../gizmo-prime/workflows/subagent-delegation.md)
+for bounded delegation and shared-edit ownership.
+
+### Loom extraction procedure
+
+Keep semantic policy with its owning Cortex authority. Follow the Nook
+[Loom-tool guidance](../references/loom-tools.md) for deterministic checks and
+the hosted PR validation boundary.
+
+## Pull-request completion contract
 
 Before returning an AI-owned Cortex change to Gizmo:
 
-- Every promoted rule has supporting evidence and one owning authority.
-- Related callers and catalogs reflect the changed ownership, path, or
-  discoverability.
-- Optional session notes are removed and no session file is tracked.
-- The report names the branch, focused evidence, and unresolved blockers.
+- Focused implementation evidence supports each promoted rule, with one owning
+  authority; update related callers when ownership or discoverability changes.
+- Remove optional session notes and confirm no session file is tracked.
+- PR readiness requires removing temporary Cortex session memory. The hosted
+  check runs `task loom:cortex-session-clean` against the ignored session
+  directory.
+- Include the branch, focused evidence, and unresolved blockers in the report.
+- Include promotion in the PR for the work that justified it; rerun required
+  hosted checks after the head changes.
 
 For semantic review, follow the upstream authoring practices. Mechanical Nook
 Cortex checks run only in the required PR stage listed by the
-[Cortex document-map card](cortex-document-map/SKILL.md#validation). Do not run
-those checks locally or during feature work.
+[Cortex document-map card](cortex-document-map/SKILL.md#validation); do not run
+them locally or during feature work.
