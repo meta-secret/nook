@@ -408,8 +408,8 @@ describe('automatic vault sync', () => {
     state.syncFromStorage = vi.fn(async () =>
       err(new VaultStorageFailure(VaultStorageFailureKind.OperationFailed)),
     )
-    state.scheduleSync = vi.fn(
-      (request: SyncScheduleRequest) => request.callback(),
+    state.scheduleSync = vi.fn((request: SyncScheduleRequest) =>
+      request.callback(),
     )
 
     new VaultSyncActions(state).startVaultSync()
@@ -431,8 +431,8 @@ describe('automatic vault sync', () => {
         new VaultStorageFailure(VaultStorageFailureKind.OperationFailed),
       )
     })
-    state.scheduleSync = vi.fn(
-      (request: SyncScheduleRequest) => request.callback(),
+    state.scheduleSync = vi.fn((request: SyncScheduleRequest) =>
+      request.callback(),
     )
 
     new VaultSyncActions(state).startVaultSync()
