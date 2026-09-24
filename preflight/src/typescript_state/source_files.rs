@@ -56,12 +56,14 @@ impl AuthoredSourceFiles<'_> {
         if path.ends_with(Path::new(LEGACY_IMPECCABLE_INSTALL)) {
             return true;
         }
+        // The ignored Meta-Cortex installation is framework-owned, not Nook-authored source.
         path.file_name()
             .and_then(OsStr::to_str)
             .is_some_and(|name| {
                 matches!(
                     name,
-                    ".git"
+                    ".meta-cortex"
+                        | ".git"
                         | ".svelte-kit"
                         | "build"
                         | "coverage"
@@ -76,7 +78,7 @@ impl AuthoredSourceFiles<'_> {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::AuthoredSourceFiles;
     use std::path::Path;
 
@@ -87,6 +89,16 @@ mod tests {
         )));
         assert!(!AuthoredSourceFiles::is_excluded_directory(Path::new(
             "/repo/.agents/skills/example"
+        )));
+    }
+
+    #[test]
+    fn excludes_framework_library_and_keeps_nook_source_directories() {
+        assert!(AuthoredSourceFiles::is_excluded_directory(Path::new(
+            "/repo/.meta-cortex"
+        )));
+        assert!(!AuthoredSourceFiles::is_excluded_directory(Path::new(
+            "/repo/nook-web/nook-web-app/src"
         )));
     }
 }
