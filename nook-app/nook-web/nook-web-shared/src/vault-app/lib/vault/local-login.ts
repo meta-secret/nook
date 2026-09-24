@@ -273,7 +273,7 @@ export class VaultLoginActions {
     )
       return;
     const preparationSessionEpoch = state.sessionEpoch;
-    const canPublishPreparationFailure = () =>
+    const canPublishPreparationResult = () =>
       !state.isAuthenticated &&
       !state.isVerifying &&
       state.sessionEpoch === preparationSessionEpoch;
@@ -286,7 +286,7 @@ export class VaultLoginActions {
       state.clearLocalFolder();
       const passwordRefresh1 = await state.refreshPasswordEntriesList();
       if (passwordRefresh1.isErr()) {
-        if (canPublishPreparationFailure())
+        if (canPublishPreparationResult())
           state.errorMsg = state.t(
             new StorageOperationFailure(
               StorageOperationFailureKind.UnlockMetadataUnavailable,
@@ -298,6 +298,12 @@ export class VaultLoginActions {
           );
         return;
       }
+      if (
+        canPublishPreparationResult() &&
+        state.errorMsg ===
+          state.t(I18N_KEYS.ErrorsVaultUnlockMetadataUnavailable)
+      )
+        state.errorMsg = "";
       state.localLoginPreparation = LocalLoginPreparationState.Ready;
     } finally {
       if (state.localLoginPreparation === LocalLoginPreparationState.Preparing)
