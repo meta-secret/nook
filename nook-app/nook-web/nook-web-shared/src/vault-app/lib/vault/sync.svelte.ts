@@ -1,9 +1,6 @@
 import type { OAuthFailure } from "$lib/auth/oauth-failure";
 import { ProviderSyncOutcome } from "$lib/vault/provider-sync.svelte";
-import {
-  isLocalDataInvalidationFailure,
-  NativeVaultStorageFailure,
-} from "$lib/runtime/storage-failure";
+import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
 import { err as storageErr, ok as storageOk, type Result } from "neverthrow";
 import {
   VaultStorageFailure as StorageOperationFailure,
@@ -32,15 +29,12 @@ import {
 } from "$lib/nook";
 import {
   NookManagerStoreScope,
-  NookEventLogSyncIssueState,
   NookLocalFolderHealthState,
   NookPendingSyncConflict,
   NookProviderSyncRevision,
-  NookSyncConflictReview,
   ProviderSyncFailureHandling,
   ProviderSyncFreshness,
   ProviderSyncVisibility,
-  read_local_vault_yaml,
   update_provider_sync_metadata,
   VaultStorageSyncDecision,
   VaultSyncTimerStartDecision,
@@ -50,7 +44,6 @@ import {
   activeVaultScope,
   type AuthProvidersSnapshot,
   LOCAL_FOLDER_PROVIDER_TYPE,
-  LOCAL_PROVIDER_TYPE,
   unselectedVaultScope,
 } from "$lib/auth/providers";
 import {
@@ -61,16 +54,10 @@ import {
   type EventOutboxTarget,
 } from "$lib/vault/sync-operation-state";
 import { AdminAccordionSection } from "$lib/vault/state/ui.svelte";
-import {
-  ActiveVaultKind,
-  type ActiveVault,
-} from "$lib/vault/state/provider.svelte";
+import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
 import { ExtensionSyncPublication } from "$lib/vault/sync-extension-bridge";
 import { ProviderSyncActions } from "$lib/vault/provider-sync.svelte";
-import {
-  VaultOperationStale,
-  VaultOperationStaleKind,
-} from "$lib/runtime/vault-operation-stale";
+import { VaultOperationStale } from "$lib/runtime/vault-operation-stale";
 
 export { VaultSyncRuntimeActions } from "$lib/vault/sync-runtime";
 
@@ -91,8 +78,6 @@ export enum ProviderSyncMetadataUpdateOutcome {
 
 const log = browserLogRuntime.createLogger("vault-sync");
 
-type StagedProviderRestoreOutcome = ActiveVault | VaultOperationStale;
-
 interface EventOutboxTargetSelection {
   readonly request: EventOutboxRequest;
 }
@@ -105,24 +90,6 @@ interface ProviderSyncMetadataUpdate {
   readonly providerId: string;
   readonly yaml: string;
   readonly revision: NookProviderSyncRevision;
-}
-
-interface StagedProviderConflictCompletion {
-  readonly conflict: NookSyncConflictReview;
-}
-
-interface ProviderConflictPersistence {
-  readonly conflict: NookSyncConflictReview;
-}
-
-/** Whether the browser staged a conflict dialog for the attempted provider. */
-export enum StagedProviderConflictOutcome {
-  NotStaged = "not-staged",
-  Staged = "staged",
-}
-
-interface StagedProviderSyncIssueAssessment {
-  readonly args: NookStorageConnectArgs;
 }
 
 interface SyncConflictStaging {
@@ -573,167 +540,6 @@ export class VaultSyncActions {
       type: LOCAL_FOLDER_PROVIDER_TYPE,
     };
     state.beginProviderSetup(setupRequest);
-  }
-
-  finishStagedProviderConnectAfterConflict({
-    conflict,
-  }: StagedProviderConflictCompletion): void {
-    const state = this.state;
-    if (!conflict.isPendingProvider) return;
-    state.clearLoginSetup();
-    state.addProviderOpen = false;
-  }
-
-  async ensureProviderSavedAfterConflict({
-    conflict,
-  }: ProviderConflictPersistence): Promise<
-    Result<string, StorageOperationFailure>
-  > {
-    const state = this.state;
-    if (
-      !conflict.isPendingProvider &&
-      state.providers.some((provider) => provider.id === conflict.providerId)
-    ) {
-      return storageOk(conflict.providerId);
-    }
-    const saved = await state.ensureProviderSaved();
-    if (saved.isErr()) return storageErr(saved.error);
-    const [provider = state.providers[state.providers.length - 1]] = [
-      state.syncProviders[state.syncProviders.length - 1],
-    ];
-    if (!provider || provider.type === LOCAL_PROVIDER_TYPE) {
-      return storageErr(
-        new StorageOperationFailure(
-          StorageOperationFailureKind.OperationFailed,
-        ),
-      );
-    }
-    return storageOk(provider.id);
-  }
-
-  async stageStagedProviderSyncIssue({
-    args,
-  }: StagedProviderSyncIssueAssessment): Promise<
-    Result<
-      StagedProviderConflictOutcome | VaultOperationStale,
-      StorageOperationFailure
-    >
-  > {
-    const state = this.state;
-    const activeVault = state.activeVault;
-    const manager = state.admitManager();
-    if (manager.isErr()) return storageErr(manager.error);
-    let issueResult: ReturnType<typeof manager.value.take_event_log_sync_issue>;
-    try {
-      issueResult = manager.value.take_event_log_sync_issue();
-    } catch (failure) {
-      return storageErr(new NativeVaultStorageFailure(failure));
-    }
-    let issue: ReturnType<typeof issueResult.issue>;
-    try {
-      if (issueResult.state === NookEventLogSyncIssueState.Clear)
-        return storageOk(StagedProviderConflictOutcome.NotStaged);
-      issue = issueResult.issue();
-    } catch (failure) {
-      return storageErr(new NativeVaultStorageFailure(failure));
-    } finally {
-      issueResult.free();
-    }
-    try {
-      let localStoreId: string;
-      let remoteStoreId: string;
-      try {
-        if (!issue.isStoreMismatch)
-          return storageOk(StagedProviderConflictOutcome.NotStaged);
-        localStoreId = issue.localStoreId;
-        remoteStoreId = issue.remoteStoreId;
-      } catch (failure) {
-        return storageErr(new NativeVaultStorageFailure(failure));
-      }
-      let localYaml: string;
-      try {
-        localYaml = await read_local_vault_yaml();
-      } catch (failure) {
-        return storageErr(new NativeVaultStorageFailure(failure));
-      }
-      const restored = await state.enqueueStorage<
-        StagedProviderRestoreOutcome,
-        NativeVaultStorageFailure
-      >(async () => {
-        const current = state.admitManager();
-        if (current.isErr())
-          return storageOk(
-            new VaultOperationStale(VaultOperationStaleKind.ContextReplaced),
-          );
-        if (
-          current.value !== manager.value ||
-          state.activeVault !== activeVault
-        )
-          return storageOk(
-            new VaultOperationStale(VaultOperationStaleKind.ContextReplaced),
-          );
-        try {
-          await current.value.restore_local_after_provider_assessment();
-          return storageOk(state.activeVault);
-        } catch (failure) {
-          return storageErr(new NativeVaultStorageFailure(failure));
-        }
-      });
-      if (restored.isErr()) {
-        if (isLocalDataInvalidationFailure(restored.error))
-          return storageErr(restored.error);
-        const current = state.admitManager();
-        if (
-          current.isErr() ||
-          current.value !== manager.value ||
-          state.activeVault !== activeVault
-        )
-          return storageOk(
-            new VaultOperationStale(VaultOperationStaleKind.ContextReplaced),
-          );
-        return storageErr(restored.error);
-      }
-      if (restored.value instanceof VaultOperationStale)
-        return storageOk(restored.value);
-      const current = state.admitManager();
-      if (current.isErr())
-        return storageOk(
-          new VaultOperationStale(VaultOperationStaleKind.ContextReplaced),
-        );
-      if (current.value !== manager.value || state.activeVault !== activeVault)
-        return storageOk(
-          new VaultOperationStale(VaultOperationStaleKind.ContextReplaced),
-        );
-      let revision: NookProviderSyncRevision;
-      try {
-        revision = NookProviderSyncRevision.untracked();
-      } catch (failure) {
-        return storageErr(new NativeVaultStorageFailure(failure));
-      }
-      let conflict: NookPendingSyncConflict;
-      try {
-        conflict = NookPendingSyncConflict.pending_store_id(
-          state.stagedProviderLabel(),
-          localYaml,
-          "",
-          args.mode,
-          args.pat,
-          args.repo,
-          revision,
-          localStoreId,
-          remoteStoreId,
-        );
-      } catch (failure) {
-        return storageErr(new NativeVaultStorageFailure(failure));
-      } finally {
-        revision.free();
-      }
-      state.stageSyncConflict(conflict);
-      log.warn("staged provider store mismatch staged");
-      return storageOk(StagedProviderConflictOutcome.Staged);
-    } finally {
-      issue.free();
-    }
   }
 
   startVaultSync() {

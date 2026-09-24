@@ -1,4 +1,4 @@
-import { StagedProviderConflictOutcome } from "$lib/vault/sync.svelte";
+import { StagedProviderConflictOutcome } from "$lib/vault/provider-conflict";
 import { ProviderSyncOutcome } from "$lib/vault/provider-sync.svelte";
 import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
 import { VaultOperationStale } from "$lib/runtime/vault-operation-stale";

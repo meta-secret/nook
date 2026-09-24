@@ -1,8 +1,8 @@
 import type {
   ProviderSyncMetadataUpdateOutcome,
-  StagedProviderConflictOutcome,
   VaultSynchronizationResult,
 } from "$lib/vault/sync.svelte";
+import type { StagedProviderConflictOutcome } from "$lib/vault/provider-conflict";
 import type { ActiveVaultAuthSyncOutcome } from "$lib/vault/local-login";
 import type { ProviderSyncOutcome } from "$lib/vault/provider-sync.svelte";
 import type { Result } from "neverthrow";

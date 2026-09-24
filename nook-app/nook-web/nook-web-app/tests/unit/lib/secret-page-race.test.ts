@@ -266,11 +266,15 @@ describe('loadSecretPage', () => {
         query: 'vault',
       }),
     )
-    expect(paginationResult.isErr()).toBe(true)
+    expect(paginationResult).toEqual(
+      ok(new VaultOperationStale(VaultOperationStaleKind.RequestSuperseded)),
+    )
     expect(queryPreparedSecretPage.mock.calls[1]?.[0]).toBe('vault')
     expect(queryPreparedSecretPage.mock.calls[1]?.slice(2)).toEqual([25, 25])
     expect(state.secrets).toEqual([refreshedPage.record])
+    expect(state.secretQuery).toBe('vault')
     expect(state.secretPageOffset).toBe(25)
+    expect(state.secretPageRequestOffset).toBe(25)
     expect(paginatedPage.record.free).toHaveBeenCalledOnce()
   })
 })
