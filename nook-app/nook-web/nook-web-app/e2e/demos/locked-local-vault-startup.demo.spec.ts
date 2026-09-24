@@ -1,4 +1,5 @@
 import { UnlockMethod } from '$lib/components/login/login-unlock-state'
+import { LocalLoginPreparationState } from '$lib/vault/state/provider.svelte'
 import { expect, test } from '../fixtures'
 import {
   addVaultPassword,
@@ -38,7 +39,7 @@ test('shows backup-password unlock after locked local-vault startup', async ({
   })
   await expect(page.getByTestId('vault-error')).not.toBeVisible()
 
-  await page.evaluate(async () => {
+  await page.evaluate(async (idlePreparation) => {
     const vault = window.__nookVault
     if (!vault) {
       throw new Error('__nookVault is unavailable')
@@ -50,29 +51,32 @@ test('shows backup-password unlock after locked local-vault startup', async ({
     const manager = admittedManager.value
     const fetchPasswordEntries =
       manager.fetch_vault_password_entries.bind(manager)
-    vault.localLoginPreparation = 'idle' as typeof vault.localLoginPreparation
+    vault.localLoginPreparation = idlePreparation
     manager.fetch_vault_password_entries = async () => {
       manager.fetch_vault_password_entries = fetchPasswordEntries
       throw new Error('Demo transient metadata fetch failure')
     }
     await vault.prepareLocalLogin()
-    if (String(vault.localLoginPreparation) !== 'idle') {
+    if (vault.localLoginPreparation !== idlePreparation) {
       throw new Error('Failed metadata preparation did not return to idle')
     }
-  })
+  }, LocalLoginPreparationState.Idle)
   const vaultError = page.getByTestId('vault-error')
   await expect(vaultError).toBeVisible({ timeout: UI_TIMEOUT_MS })
   await page.waitForTimeout(DEMO_BEAT_MS)
 
-  const retryPreparation = await page.evaluate(async () => {
+  const retryPreparation = await page.evaluate(async (readyPreparation) => {
     const vault = window.__nookVault
     if (!vault) {
       throw new Error('__nookVault is unavailable')
     }
     await vault.prepareLocalLogin()
-    return String(vault.localLoginPreparation)
-  })
-  expect(retryPreparation).toBe('ready')
+    if (vault.localLoginPreparation !== readyPreparation) {
+      throw new Error('Local login preparation did not reach Ready')
+    }
+    return vault.localLoginPreparation
+  }, LocalLoginPreparationState.Ready)
+  expect(retryPreparation).toBe(LocalLoginPreparationState.Ready)
   await expect(vaultError).not.toBeVisible()
 
   await selectLoginUnlockMethod(page, UnlockMethod.Password)
