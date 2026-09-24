@@ -256,10 +256,8 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
     );
     let skills_typescript =
         root.read(".cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/tsconfig.json");
-    assert!(
-        skills_typescript
-            .contains("\"include\": [\"**/*.ts\", \"**/*.js\", \"**/*.mjs\", \"**/*.cjs\"]")
-    );
+    assert!(skills_typescript
+        .contains("\"include\": [\"**/*.ts\", \"**/*.js\", \"**/*.mjs\", \"**/*.cjs\"]"));
     let source_gate = root.read("agentic-ai/loom/tests/skill-application-source-boundary.test.ts");
     assert!(
         source_gate.contains("ExecutableSkillSource.analyze")
@@ -367,6 +365,16 @@ fn preflight_installs_released_meta_cortex_without_configuration_override() {
         "    name: Info\n",
         "    arguments: {}\n",
         "YAML"
+    );
+    let git_metadata_copy = dockerfile
+        .find("COPY --from=repository-git /git /meta-secret/nook/.git")
+        .expect("policy source must copy Git metadata into the project");
+    let initialize_position = dockerfile
+        .find(initialize_request)
+        .expect("policy source must initialize the Meta-Cortex framework");
+    assert!(
+        git_metadata_copy < initialize_position,
+        "policy source must copy Git metadata before Meta-Cortex Framework Initialize"
     );
     assert!(
         dockerfile.contains("meta-cortex/releases/download/v0.8.0/meta-cortex-installer.sh"),

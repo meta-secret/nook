@@ -123,6 +123,7 @@ RUN for directory in .cortex/teams/ai/dynamic-skills/*/scripts; do \
 FROM policy-tools AS policy-source
 ARG LOOM_OWNERSHIP_FROM
 COPY --from=repository-source / /meta-secret/nook
+COPY --from=repository-git /git /meta-secret/nook/.git
 # The ignored library is absent from fresh checkouts. Initialize it through the
 # official released command before Loom reads its roles and skills.
 RUN <<'EOF'
@@ -154,7 +155,6 @@ operation:
     arguments: {}
 YAML
 EOF
-COPY --from=repository-git /git /meta-secret/nook/.git
 COPY --from=repository-git /event.json /tmp/policy-event.json
 ENV GITHUB_EVENT_PATH=/tmp/policy-event.json \
     LOOM_OWNERSHIP_FROM=$LOOM_OWNERSHIP_FROM
