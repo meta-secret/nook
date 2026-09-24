@@ -118,7 +118,8 @@ task loom:skill-scaffold CONFIG=path/to/request.yaml
 The scaffold creates the prose-only `<slug>.md` form. When the skill needs a
 deterministic application, convert it in the same change to
 `<slug>/SKILL.md`, add the co-located `scripts/` package, and update its index
-link. Then fill the card content and verify with `task loom:cortex-audit`.
+link. Then fill the card content; `task loom:cortex-audit` runs only in the
+authorized hosted PR validation stage.
 
 See [loom-tools.md](../references/loom-tools.md).
 
@@ -127,16 +128,10 @@ from the user's example and surrounding code.
 
 ## Skill Card Rules
 
-- Keep cards concise and actionable. They are working instructions, not essays.
-- Follow [cortex-writer.md](../dynamic-skills/cortex-writer.md).
-- Use short sentences, bullets, and lists.
-- Follow [cortex-consistency](../dynamic-skills/cortex-consistency/SKILL.md).
-- Check new or updated cards against sibling docs and current code.
-- Prefer concrete code references over copied code blocks.
-- Capture durable engineering knowledge only. Do not record task status, secrets,
-  temporary debugging notes, or chat-only context.
-- State negative space: where the skill should not be applied.
-- Include validation so refactors do not rely on prose alone.
+Follow upstream [Context Engineering](../../../../.meta-cortex/teams/ai-team/agents/tech-writer/skills/context-engineering/SKILL.md)
+for generic authoring, example, structure, and consistency requirements. Nook
+card fields, team ownership, evidence sources, and registry updates are defined
+by [Dynamic Skill Authoring](../dynamic-skills/dynamic-skill-authoring.md).
 
 ## Applying A Dynamic Skill
 

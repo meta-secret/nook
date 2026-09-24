@@ -30,15 +30,12 @@ runbooks, and deployment authorization remain the execution contract.
 - **Preferred:** run the separately authorized existing deployment procedure and
   return its actual revision and outcome to the feature owner.
 
-## Context loading
+## Nook context authorities
 
-1. Read [the SRE knowledge graph](knowledge-graph.md).
-2. Select the exact platform, workflow, skill, or runbook for the assigned
-   operational functionality.
-3. Load only the relevant headings.
-4. Do not preload every CI, cluster, or provider document.
-5. Do not open the development-core, security, web, or AI graph for background
-   context.
+Follow Meta-Cortex [assignment context](../../../.meta-cortex/teams/AGENTS.md#assignment-context)
+for generic context selection. The Nook [SRE graph](knowledge-graph.md)
+catalogs the platform, workflow, skill, and runbook authorities used by this
+context.
 
 Load shared architecture only for a named cross-team execution contract. Report
 product, security, web, or AI dependencies to the delivery owner.

@@ -97,7 +97,8 @@ Does not apply to:
     lockfile;
   - update `.cortex/teams/ai/dynamic-skills/index.md` and the owning knowledge graph if
     Loom did not.
-- Run `task loom:cortex-audit` after the card and registry agree.
+- Defer `task loom:cortex-audit` to the authorized hosted PR validation stage
+  after the card and registry agree.
 
 ## Validation
 

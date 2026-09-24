@@ -5,7 +5,8 @@ description: Compile Nook typed Cortex policy contracts and workflow bindings.
 
 # Nook Cortex Consistency Compiler
 
-Meta-Cortex Context Engineering owns generic consistency and authority rules.
+Meta-Cortex [consistency](../../../../../.meta-cortex/teams/ai-team/agents/tech-writer/skills/context-engineering/practices/consistency.md)
+owns generic authority and consistency rules.
 This card owns Nook's closed policy registry and executable compilation.
 
 ## Deterministic contract compilation

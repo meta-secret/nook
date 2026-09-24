@@ -22,15 +22,12 @@ For authored TypeScript, JavaScript, or Svelte scripts, load the Web-owned
 Apply Effect when the changed workflow meets its scope, and preserve Rust/WASM
 ownership of portable domain and security behavior.
 
-## Context loading
+## Nook context authorities
 
-1. Read [the web development knowledge graph](knowledge-graph.md).
-2. Select the exact product specification, design, frontend skill, or reference
-   for the assigned interaction.
-3. Load only the relevant headings.
-4. Do not preload every extension, UI, or browser document.
-5. Do not open the development-core, security, SRE, or AI graph for background
-   context.
+Follow Meta-Cortex [assignment context](../../../.meta-cortex/teams/AGENTS.md#assignment-context)
+for generic context selection. The Nook [web development graph](knowledge-graph.md)
+catalogs the product specifications, design, frontend skills, and references
+used by this context.
 
 Load a development-core specification only when an explicit typed consumer
 contract requires it. Treat that authority as read-only and return provider
