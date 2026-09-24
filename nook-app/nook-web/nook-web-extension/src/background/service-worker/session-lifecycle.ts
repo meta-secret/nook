@@ -1,4 +1,4 @@
-import { Option, Schema } from 'effect'
+import { Schema } from 'effect'
 import {
   ExtensionSessionDocumentOwner,
   ExtensionSessionDocumentStateKind,
@@ -57,13 +57,11 @@ type CompanionLauncherContextArgs = {
 export enum CompanionLauncherSourceKind {
   DirectEntry = 'direct-entry',
   SourceWindow = 'source-window',
-  Unobservable = 'unobservable',
 }
 
 export type CompanionLauncherSource =
   | { kind: CompanionLauncherSourceKind.DirectEntry }
   | { kind: CompanionLauncherSourceKind.SourceWindow; windowId: number }
-  | { kind: CompanionLauncherSourceKind.Unobservable }
 
 enum CompanionLauncherWindowScopeKind {
   NormalWindow = 'normal-window',
@@ -114,20 +112,16 @@ enum CompanionLauncherDocumentUrlKind {
   Matching = 'matching',
 }
 
+enum CompanionLauncherTabsQueryResultKind {
+  Succeeded = 'succeeded',
+  Failed = 'failed',
+}
+
 /** Owns the browser runtime resources shared by these interactions. */
 export class ExtensionSessionLifecycle {
   private static readonly directLauncherSource: CompanionLauncherSource = {
     kind: CompanionLauncherSourceKind.DirectEntry,
   }
-  private static readonly unobservableLauncherSource: CompanionLauncherSource = {
-    kind: CompanionLauncherSourceKind.Unobservable,
-  }
-  private static readonly senderSourceSchema = Schema.Struct({
-    tab: Schema.optionalWith(
-      Schema.Struct({ windowId: Schema.Number }),
-      { as: 'Option' },
-    ),
-  })
 
   private readonly document = new ExtensionSessionDocumentOwner()
 
@@ -142,18 +136,12 @@ export class ExtensionSessionLifecycle {
   static sourceFromSender(
     sender: chrome.runtime.MessageSender,
   ): CompanionLauncherSource {
-    const decoded = runConcreteDecoder(
-      Schema.decodeUnknown(this.senderSourceSchema),
-      sender,
-    )
-    switch (decoded.kind) {
-      case ConcreteDecoderResultKind.Decoded:
-        return Option.match(decoded.value.tab, {
-          onNone: () => this.directLauncherSource,
-          onSome: ({ windowId }) => this.sourceWindow(windowId),
-        })
-      case ConcreteDecoderResultKind.Rejected:
-        return this.unobservableLauncherSource
+    const senderTab = sender.tab
+    switch (typeof senderTab) {
+      case 'undefined':
+        return this.directLauncherSource
+      default:
+        return this.sourceWindow(senderTab.windowId)
     }
   }
 
@@ -191,36 +179,39 @@ export class ExtensionSessionLifecycle {
       ) {
         continue
       }
-      const matchingTab = Option.fromNullable(
-        tabs.find(
-          (tab) =>
-            tab.id === context.tabId && tab.windowId === context.windowId,
-        ),
+      const matchingTab = tabs.find(
+        (tab) =>
+          tab.id === context.tabId && tab.windowId === context.windowId,
       )
-      const matchingTabKind = Option.match(matchingTab, {
-        onNone: () => CompanionLauncherMatchingTabKind.Missing,
-        onSome: () => CompanionLauncherMatchingTabKind.Present,
-      })
+      let matchingTabKind = CompanionLauncherMatchingTabKind.Present
+      switch (typeof matchingTab) {
+        case 'undefined':
+          matchingTabKind = CompanionLauncherMatchingTabKind.Missing
+          break
+        default:
+          break
+      }
       switch (matchingTabKind) {
         case CompanionLauncherMatchingTabKind.Missing:
           continue
         case CompanionLauncherMatchingTabKind.Present:
           break
       }
-      const documentUrlKind = Option.match(
-        Option.fromNullable(context.documentUrl),
-        {
-          onNone: () => CompanionLauncherDocumentUrlKind.Missing,
-          onSome: (documentUrl) => {
-            switch (documentUrl) {
-              case launcherUrl:
-                return CompanionLauncherDocumentUrlKind.Matching
-              default:
-                return CompanionLauncherDocumentUrlKind.Different
-            }
-          },
-        },
-      )
+      let documentUrlKind = CompanionLauncherDocumentUrlKind.Missing
+      switch (typeof context.documentUrl) {
+        case 'undefined':
+          break
+        default:
+          switch (context.documentUrl) {
+            case launcherUrl:
+              documentUrlKind = CompanionLauncherDocumentUrlKind.Matching
+              break
+            default:
+              documentUrlKind = CompanionLauncherDocumentUrlKind.Different
+              break
+          }
+          break
+      }
       switch (documentUrlKind) {
         case CompanionLauncherDocumentUrlKind.Missing:
           contextObservation =
@@ -275,8 +266,6 @@ export class ExtensionSessionLifecycle {
           }
         }
       }
-      case CompanionLauncherSourceKind.Unobservable:
-        throw new Error('launcher source tab is unobservable')
     }
   }
 
@@ -287,13 +276,15 @@ export class ExtensionSessionLifecycle {
     })
     switch (normalWindow.type) {
       case 'normal': {
-        const windowIdState = Option.match(
-          Option.fromNullable(normalWindow.id),
-          {
-            onNone: () => ({ kind: CompanionLauncherWindowIdKind.Invalid }),
-            onSome: (windowId) => this.launcherWindowIdState(windowId),
-          },
-        )
+        let windowIdState: CompanionLauncherWindowIdState
+        switch (typeof normalWindow.id) {
+          case 'undefined':
+            windowIdState = { kind: CompanionLauncherWindowIdKind.Invalid }
+            break
+          default:
+            windowIdState = this.launcherWindowIdState(normalWindow.id)
+            break
+        }
         switch (windowIdState.kind) {
           case CompanionLauncherWindowIdKind.Valid:
             return {
@@ -449,10 +440,22 @@ export class ExtensionSessionLifecycle {
     }
     const tabs = await new Promise<chrome.tabs.Tab[]>((resolve, reject) => {
       chrome.tabs.query(queryArgs, (result) => {
-        Option.match(Option.fromNullable(chrome.runtime.lastError), {
-          onNone: () => resolve(result),
-          onSome: () => reject(new Error('launcher tabs.query failed')),
-        })
+        let queryResultKind = CompanionLauncherTabsQueryResultKind.Succeeded
+        switch (typeof chrome.runtime.lastError) {
+          case 'undefined':
+            break
+          default:
+            queryResultKind = CompanionLauncherTabsQueryResultKind.Failed
+            break
+        }
+        switch (queryResultKind) {
+          case CompanionLauncherTabsQueryResultKind.Succeeded:
+            resolve(result)
+            break
+          case CompanionLauncherTabsQueryResultKind.Failed:
+            reject(new Error('launcher tabs.query failed'))
+            break
+        }
       })
     })
     const contextQuery: Parameters<typeof chrome.runtime.getContexts>[0] = {
