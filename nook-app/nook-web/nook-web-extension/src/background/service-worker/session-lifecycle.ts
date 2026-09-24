@@ -155,8 +155,7 @@ export class ExtensionSessionLifecycle {
   private launcherTab({
     contexts,
     launcherUrl,
-  }: CompanionLauncherContextArgs):
-    CompanionLauncherTabLookup {
+  }: CompanionLauncherContextArgs): CompanionLauncherTabLookup {
     let contextObservation =
       CompanionLauncherContextObservationKind.NoMissingDocumentUrl
     for (const context of contexts) {
@@ -214,9 +213,7 @@ export class ExtensionSessionLifecycle {
       case CompanionLauncherSourceKind.DirectEntry:
         return this.lastFocusedNormalWindowScope()
       case CompanionLauncherSourceKind.SourceWindow: {
-        const sourceWindowIdState = this.launcherWindowIdState(
-          source.windowId,
-        )
+        const sourceWindowIdState = this.launcherWindowIdState(source.windowId)
         switch (sourceWindowIdState.kind) {
           case CompanionLauncherWindowIdKind.Invalid:
             throw new Error('source tab has no valid browser window')
@@ -239,8 +236,7 @@ export class ExtensionSessionLifecycle {
     }
   }
 
-  private async lastFocusedNormalWindowScope():
-    Promise<CompanionLauncherWindowScope> {
+  private async lastFocusedNormalWindowScope(): Promise<CompanionLauncherWindowScope> {
     const normalWindow = await chrome.windows.getLastFocused({
       windowTypes: ['normal'],
     })

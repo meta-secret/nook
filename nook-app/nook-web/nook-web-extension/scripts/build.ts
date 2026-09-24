@@ -372,8 +372,7 @@ type WidgetLocaleMessageKey =
   keyof NookLocaleCatalogShape['extension']['widget']
 type PasskeyLocaleMessageKey =
   keyof NookLocaleCatalogShape['extension']['passkey']
-type SetupLocaleMessageKey =
-  keyof NookLocaleCatalogShape['extension']['setup']
+type SetupLocaleMessageKey = keyof NookLocaleCatalogShape['extension']['setup']
 
 class LocaleMessageSection<Key extends string> {
   private readonly messages: Record<string, unknown>

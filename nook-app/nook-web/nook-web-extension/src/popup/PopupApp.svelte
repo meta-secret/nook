@@ -133,9 +133,7 @@
   function companionDescription(): string {
     switch (launcherIntent) {
       case OpenCompanionLauncherIntent.PilotAuth:
-        return translatePlain(
-          I18N_KEYS.ExtensionCompanionPilotReturnGuidance,
-        )
+        return translatePlain(I18N_KEYS.ExtensionCompanionPilotReturnGuidance)
       case OpenCompanionLauncherIntent.Default:
       case OpenCompanionLauncherIntent.Pair:
         switch (isConnected) {
@@ -443,9 +441,7 @@
         >
           {busy
             ? translatePlain(I18N_KEYS.DeviceProtectionAuthorizing)
-            : translatePlain(
-                connectActionKey(),
-              )}
+            : translatePlain(connectActionKey())}
         </button>
         <button
           type="button"
