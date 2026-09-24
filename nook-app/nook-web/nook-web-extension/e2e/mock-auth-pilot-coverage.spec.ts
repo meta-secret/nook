@@ -805,10 +805,18 @@ test.describe('PIN Pilot mock-auth coverage', () => {
         ),
       ).toBeVisible()
 
-      const authTab = paired.popupPage
+      const originalAuthTab = paired.popupPage
+      await expect(originalAuthTab).toHaveURL(
+        `chrome-extension://${paired.extensionId}/popup/index.html`,
+      )
+      const pilotAuthTabPromise = paired.context.waitForEvent('page')
       await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+      const authTab = await pilotAuthTabPromise
       await expect(authTab).toHaveURL(
         `chrome-extension://${paired.extensionId}/popup/index.html?intent=pilot-auth`,
+      )
+      await expect(originalAuthTab).toHaveURL(
+        `chrome-extension://${paired.extensionId}/popup/index.html`,
       )
       await expect(authTab.getByTestId('extension-device-setup')).toBeVisible()
       await expect(

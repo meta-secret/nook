@@ -51,28 +51,44 @@ type CompanionLauncherUrlArgs = {
 type CompanionLauncherContextArgs = {
   contexts: chrome.runtime.ExtensionContext[]
   tabs: chrome.tabs.Tab[]
-  launcherUrls: Set<string>
+  launcherUrl: string
 }
 
 type CompanionLauncherWindowScope =
   | { kind: 'normal-window'; windowId: number }
-  | { kind: 'last-focused-normal-window' }
+
+enum CompanionLauncherWindowIdKind {
+  Valid = 'valid',
+  Invalid = 'invalid',
+}
+
+type CompanionLauncherWindowIdState =
+  | { kind: CompanionLauncherWindowIdKind.Valid; windowId: number }
+  | { kind: CompanionLauncherWindowIdKind.Invalid }
+
+enum CompanionLauncherTabLookupKind {
+  Found = 'found',
+  Missing = 'missing',
+  Unobservable = 'unobservable',
+}
 
 type CompanionLauncherTabLookup =
-  | { kind: 'found'; tabId: number; windowId: number }
-  | { kind: 'missing' }
+  | {
+      kind: CompanionLauncherTabLookupKind.Found
+      tabId: number
+      windowId: number
+    }
+  | { kind: CompanionLauncherTabLookupKind.Missing }
+  | { kind: CompanionLauncherTabLookupKind.Unobservable }
+
+enum CompanionLauncherContextObservationKind {
+  NoMissingDocumentUrl = 'no-missing-document-url',
+  MissingDocumentUrl = 'missing-document-url',
+}
 
 /** Owns the browser runtime resources shared by these interactions. */
 export class ExtensionSessionLifecycle {
   private readonly document = new ExtensionSessionDocumentOwner()
-
-  private launcherTabUrls(popupUrl: string): Set<string> {
-    return new Set([
-      popupUrl,
-      `${popupUrl}?intent=${OpenCompanionLauncherIntent.Pair}`,
-      `${popupUrl}?intent=${OpenCompanionLauncherIntent.PilotAuth}`,
-    ])
-  }
 
   private launcherUrl({ popupUrl, intent }: CompanionLauncherUrlArgs): string {
     switch (intent) {
@@ -88,9 +104,11 @@ export class ExtensionSessionLifecycle {
   private launcherTab({
     contexts,
     tabs,
-    launcherUrls,
+    launcherUrl,
   }: CompanionLauncherContextArgs):
     CompanionLauncherTabLookup {
+    let contextObservation =
+      CompanionLauncherContextObservationKind.NoMissingDocumentUrl
     const candidate = contexts.find((context) => {
       if (
         context.contextType !== chrome.runtime.ContextType.TAB ||
@@ -99,24 +117,38 @@ export class ExtensionSessionLifecycle {
       ) {
         return false
       }
-      switch (typeof context.documentUrl) {
-        case 'string':
-          if (!launcherUrls.has(context.documentUrl)) return false
-          break
-        case 'undefined':
-          return false
-      }
-      return tabs.some(
+      const matchingTab = tabs.find(
         (tab) =>
           tab.id === context.tabId && tab.windowId === context.windowId,
       )
+      switch (matchingTab) {
+        case undefined:
+          return false
+        default:
+          break
+      }
+      switch (typeof context.documentUrl) {
+        case 'string':
+          return context.documentUrl === launcherUrl
+        case 'undefined':
+          contextObservation =
+            CompanionLauncherContextObservationKind.MissingDocumentUrl
+          return false
+      }
     })
     switch (candidate) {
       case undefined:
-        return { kind: 'missing' }
+        switch (contextObservation) {
+          case CompanionLauncherContextObservationKind.MissingDocumentUrl:
+            return {
+              kind: CompanionLauncherTabLookupKind.Unobservable,
+            }
+          case CompanionLauncherContextObservationKind.NoMissingDocumentUrl:
+            return { kind: CompanionLauncherTabLookupKind.Missing }
+        }
       default:
         return {
-          kind: 'found',
+          kind: CompanionLauncherTabLookupKind.Found,
           tabId: candidate.tabId,
           windowId: candidate.windowId,
         }
@@ -129,73 +161,76 @@ export class ExtensionSessionLifecycle {
     switch (initiatingTab) {
       case undefined:
         return this.lastFocusedNormalWindowScope()
-      default:
-        if (
-          Number.isInteger(initiatingTab.windowId) &&
-          initiatingTab.windowId >= 0
-        ) {
-          try {
+      default: {
+        const sourceWindowIdState = this.launcherWindowIdState(
+          initiatingTab.windowId,
+        )
+        switch (sourceWindowIdState.kind) {
+          case CompanionLauncherWindowIdKind.Invalid:
+            throw new Error('source tab has no valid browser window')
+          case CompanionLauncherWindowIdKind.Valid: {
             const initiatingWindow = await chrome.windows.get(
-              initiatingTab.windowId,
+              sourceWindowIdState.windowId,
             )
             switch (initiatingWindow.type) {
               case 'normal':
                 return {
                   kind: 'normal-window',
-                  windowId: initiatingTab.windowId,
+                  windowId: sourceWindowIdState.windowId,
                 }
               default:
-                return this.lastFocusedNormalWindowScope()
+                throw new Error('source tab is not in a normal browser window')
             }
-          } catch {
-            return this.lastFocusedNormalWindowScope()
           }
         }
-        return this.lastFocusedNormalWindowScope()
+      }
     }
   }
 
   private async lastFocusedNormalWindowScope():
     Promise<CompanionLauncherWindowScope> {
-    try {
-      const normalWindow = await chrome.windows.getLastFocused({
-        windowTypes: ['normal'],
-      })
-      switch (normalWindow.type) {
-        case 'normal':
-          switch (typeof normalWindow.id) {
-            case 'number':
-              if (Number.isInteger(normalWindow.id) && normalWindow.id >= 0) {
-                return { kind: 'normal-window', windowId: normalWindow.id }
-              }
-              break
-            case 'undefined':
-              break
-          }
-          break
-        default:
-          break
+    const normalWindow = await chrome.windows.getLastFocused({
+      windowTypes: ['normal'],
+    })
+    switch (normalWindow.type) {
+      case 'normal': {
+        const windowIdState = this.launcherWindowIdState(normalWindow.id)
+        switch (windowIdState.kind) {
+          case CompanionLauncherWindowIdKind.Valid:
+            return {
+              kind: 'normal-window',
+              windowId: windowIdState.windowId,
+            }
+          case CompanionLauncherWindowIdKind.Invalid:
+            throw new Error('last-focused normal window has no valid ID')
+        }
       }
-    } catch {
-      // Keep the default-window fallback when the browser has no normal window.
+      default:
+        throw new Error('last-focused browser window is not normal')
     }
-    return { kind: 'last-focused-normal-window' }
   }
 
-  private launcherTabQueryArgs(
-    windowScope: CompanionLauncherWindowScope,
-  ): Parameters<typeof chrome.tabs.query>[0] {
-    switch (windowScope.kind) {
-      case 'normal-window':
-        return {
-          windowId: windowScope.windowId,
-          windowType: 'normal',
+  private launcherWindowIdState(
+    windowId: number | undefined,
+  ): CompanionLauncherWindowIdState {
+    switch (typeof windowId) {
+      case 'number':
+        switch (Number.isInteger(windowId)) {
+          case true:
+            switch (windowId >= 0) {
+              case true:
+                return {
+                  kind: CompanionLauncherWindowIdKind.Valid,
+                  windowId,
+                }
+              case false:
+                return { kind: CompanionLauncherWindowIdKind.Invalid }
+            }
+          case false:
+            return { kind: CompanionLauncherWindowIdKind.Invalid }
         }
-      case 'last-focused-normal-window':
-        return {
-          lastFocusedWindow: true,
-          windowType: 'normal',
-        }
+      case 'undefined':
+        return { kind: CompanionLauncherWindowIdKind.Invalid }
     }
   }
 
@@ -313,57 +348,48 @@ export class ExtensionSessionLifecycle {
     const popupUrl = chrome.runtime.getURL('popup/index.html')
     const launcherUrlArgs: CompanionLauncherUrlArgs = { popupUrl, intent }
     const requestedLauncherUrl = this.launcherUrl(launcherUrlArgs)
-    const launcherUrls = this.launcherTabUrls(popupUrl)
     const windowScope = await this.launcherWindowScope(initiatingTab)
-    const queryArgs = this.launcherTabQueryArgs(windowScope)
-    const tabs = await new Promise<chrome.tabs.Tab[]>((resolve) => {
-      chrome.tabs.query(queryArgs, resolve)
-    })
-    let contexts: chrome.runtime.ExtensionContext[]
-    try {
-      const contextQuery: Parameters<typeof chrome.runtime.getContexts>[0] = {
-        contextTypes: [chrome.runtime.ContextType.TAB],
-      }
-      contexts = await chrome.runtime.getContexts(contextQuery)
-    } catch {
-      // Opening a fresh tab keeps the launch usable when context observation
-      // is unavailable; a later request can reuse it once observation works.
-      contexts = []
+    const queryArgs: Parameters<typeof chrome.tabs.query>[0] = {
+      windowId: windowScope.windowId,
+      windowType: 'normal',
     }
+    const tabs = await new Promise<chrome.tabs.Tab[]>((resolve, reject) => {
+      chrome.tabs.query(queryArgs, (result) => {
+        const lastError = chrome.runtime.lastError
+        switch (lastError) {
+          case undefined:
+            resolve(result)
+            break
+          default:
+            reject(new Error('launcher tabs.query failed'))
+            break
+        }
+      })
+    })
+    const contextQuery: Parameters<typeof chrome.runtime.getContexts>[0] = {
+      contextTypes: [chrome.runtime.ContextType.TAB],
+    }
+    const contexts = await chrome.runtime.getContexts(contextQuery)
     const lookupArgs: CompanionLauncherContextArgs = {
       contexts,
       tabs,
-      launcherUrls,
+      launcherUrl: requestedLauncherUrl,
     }
     const launcherTabLookup = this.launcherTab(lookupArgs)
     switch (launcherTabLookup.kind) {
-      case 'missing': {
+      case CompanionLauncherTabLookupKind.Missing: {
         const createArgs: Parameters<typeof chrome.tabs.create>[0] = {
           url: requestedLauncherUrl,
           active: true,
-        }
-        switch (windowScope.kind) {
-          case 'normal-window':
-            createArgs.windowId = windowScope.windowId
-            break
-          case 'last-focused-normal-window': {
-            const [lastFocusedTab] = tabs
-            switch (lastFocusedTab) {
-              case undefined:
-                break
-              default:
-                createArgs.windowId = lastFocusedTab.windowId
-                break
-            }
-            break
-          }
+          windowId: windowScope.windowId,
         }
         await chrome.tabs.create(createArgs)
         return
       }
-      case 'found': {
+      case CompanionLauncherTabLookupKind.Unobservable:
+        throw new Error('launcher tab context is unobservable')
+      case CompanionLauncherTabLookupKind.Found: {
         const updateArgs: Parameters<typeof chrome.tabs.update>[1] = {
-          url: requestedLauncherUrl,
           active: true,
         }
         await chrome.tabs.update(launcherTabLookup.tabId, updateArgs)
@@ -380,7 +406,9 @@ export class ExtensionSessionLifecycle {
     intent: OpenCompanionLauncherIntent,
     initiatingTab?: chrome.tabs.Tab,
   ): void {
-    void this.openCompanionLauncher(intent, initiatingTab).catch(() => {})
+    void this.openCompanionLauncher(intent, initiatingTab).catch(() => {
+      console.warn('Nook authentication tab could not be opened')
+    })
   }
 }
 

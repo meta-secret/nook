@@ -6,8 +6,11 @@ Status: Implemented direction for #234, #235, #237, #239, #244, #441, and #461.
 
 `nook-web-extension` is the browser integration for Simple Vault. It does not
 duplicate the vault application UI. On first run, clicking the extension opens
-the standard device-protection widget in one extension-owned authentication tab.
-The toolbar and a locked Pilot action focus or open that same tab and component.
+the standard device-protection widget in an extension-owned authentication tab.
+The toolbar and locked Pilot action use the same extension authentication
+component in the initiating normal window. A launcher reuses only a tab whose
+intent matches the requested action; it leaves an open tab with another intent
+untouched and opens the requested intent in a separate tab in that window.
 After the extension device exists, the tab sends its public keys directly to the
 configured Simple Vault deployment, which remains the only surface for creating,
 importing, unlocking, browsing, editing, recovering, and administering vaults.
@@ -142,10 +145,12 @@ private identity.
 
 ## Toolbar Behavior
 
-- The toolbar action and Pilot lock entry use one extension-owned authentication
-  tab and component per initiating normal window. The service worker focuses
-  that window's existing tab or opens one there when absent; it does not focus an
-  auth tab in another normal window.
+- The toolbar action and Pilot lock entry use the same extension-owned
+  authentication component per initiating normal window. The service worker
+  focuses an existing tab only when its intent matches the requested action; it
+  leaves a different-intent auth tab untouched and opens the requested intent
+  in another tab in the source window. It does not focus an auth tab in another
+  normal window.
 - Existing companion popup windows created by older versions are not closed or
   focused automatically, preserving any in-progress passkey ceremony; the next
   launch opens or focuses the authentication tab in the current normal window.

@@ -1,8 +1,10 @@
 # Nook Browser Extension
 
 `nook-web-extension` is Nook's browser-integration package. Before pairing, the
-toolbar action opens one extension-owned authentication tab with the standard
-device-protection widget; a locked Pilot action opens or focuses that same tab.
+toolbar action opens the extension-owned authentication component in a normal
+browser tab. A locked Pilot action opens or focuses the matching Pilot auth tab
+in the initiating normal window. If another auth intent is already open, it is
+left untouched and the requested intent opens in a separate tab in that window.
 The tab creates or unlocks the extension's separately revocable identity, then
 sends the public device request directly to the configured Simple Vault
 deployment, which owns the complete vault interface. The extension contains
