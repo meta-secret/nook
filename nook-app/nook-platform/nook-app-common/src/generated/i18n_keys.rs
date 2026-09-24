@@ -924,6 +924,8 @@ pub const EXTENSION_COMPANION_LINKED: &str = "extension.companion.linked";
 pub const EXTENSION_COMPANION_LOADING: &str = "extension.companion.loading";
 pub const EXTENSION_COMPANION_NOT_CONNECTED: &str = "extension.companion.not_connected";
 pub const EXTENSION_COMPANION_PAIR_ANOTHER_VAULT: &str = "extension.companion.pair_another_vault";
+pub const EXTENSION_COMPANION_PILOT_RETURN_GUIDANCE: &str =
+    "extension.companion.pilot_return_guidance";
 pub const EXTENSION_COMPANION_PROTECTED: &str = "extension.companion.protected";
 pub const EXTENSION_COMPANION_READY_DESCRIPTION: &str = "extension.companion.ready_description";
 pub const EXTENSION_COMPANION_READY_TITLE: &str = "extension.companion.ready_title";

@@ -236,6 +236,7 @@ describe('external companion routing', () => {
     expect(openCompanionLauncher).toHaveBeenCalledTimes(1)
     expect(openCompanionLauncher).toHaveBeenCalledWith(
       OpenCompanionLauncherIntent.Default,
+      undefined,
     )
     expect(sendResponse).toHaveBeenCalledWith({ ok: true })
   })
@@ -358,6 +359,7 @@ describe('external companion routing', () => {
     await flushResponses()
     expect(openCompanionLauncher).toHaveBeenCalledWith(
       OpenCompanionLauncherIntent.Pair,
+      undefined,
     )
     expect(sendResponse).toHaveBeenCalledWith({ ok: true })
   })

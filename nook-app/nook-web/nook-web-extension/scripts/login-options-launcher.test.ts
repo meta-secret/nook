@@ -122,9 +122,10 @@ describe('websiteLoginOptions', () => {
       loginAccountAvailabilityForOrigin,
       openCompanionLauncherBestEffort,
     }
+    const sender = websiteSender()
     const response = await accountPickerSessions.websiteLoginOptions({
       message: { payload: { origin: 'https://example.test' } },
-      sender: websiteSender(),
+      sender,
       dependencies,
     })
 
@@ -135,6 +136,7 @@ describe('websiteLoginOptions', () => {
     expect(openCompanionLauncherBestEffort).toHaveBeenCalledTimes(1)
     expect(openCompanionLauncherBestEffort).toHaveBeenCalledWith(
       OpenCompanionLauncherIntent.Pair,
+      sender.tab,
     )
     expect(openExtensionWindow).toHaveBeenCalledTimes(1)
     expect(openedUrls).toEqual([

@@ -12,14 +12,23 @@ export enum OpenCompanionLauncherMessageType {
 export enum OpenCompanionLauncherIntent {
   Default = "default",
   Pair = "pair",
+  PilotAuth = "pilot-auth",
 }
+
+type NormalizedCompanionLauncherPayload = {
+  readonly intent:
+    | OpenCompanionLauncherIntent.Pair
+    | OpenCompanionLauncherIntent.PilotAuth;
+};
 
 /** Structural browser wire value; validation requires no instance methods or runtime state. */
 export class OpenCompanionLauncherMessage {
   private constructor() {}
   declare readonly type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher;
   declare readonly payload?: {
-    intent: OpenCompanionLauncherIntent.Pair;
+    intent:
+      | OpenCompanionLauncherIntent.Pair
+      | OpenCompanionLauncherIntent.PilotAuth;
   };
   static decode<WireMessage>(
     message: WireMessage,
@@ -57,17 +66,31 @@ export class NormalizedOpenCompanionLauncherMessage {
       }),
       Effect.map(({ type, payload }) => ({
         type,
-        intent:
-          payload?.intent === OpenCompanionLauncherIntent.Pair
-            ? OpenCompanionLauncherIntent.Pair
-            : OpenCompanionLauncherIntent.Default,
+        intent: OpenCompanionLauncherMessage.intent(payload),
       })),
     );
+  }
+
+  static intent(
+    payload: NormalizedCompanionLauncherPayload | undefined,
+  ): OpenCompanionLauncherIntent {
+    switch (typeof payload) {
+      case 'undefined':
+        return OpenCompanionLauncherIntent.Default;
+      case 'object':
+        switch (payload.intent) {
+          case OpenCompanionLauncherIntent.Pair:
+            return OpenCompanionLauncherIntent.Pair;
+          case OpenCompanionLauncherIntent.PilotAuth:
+            return OpenCompanionLauncherIntent.PilotAuth;
+        }
+    }
   }
 }
 
 const normalizedCompanionLauncherIntentSchema = Schema.Literal(
   OpenCompanionLauncherIntent.Pair,
+  OpenCompanionLauncherIntent.PilotAuth,
 );
 type NormalizedCompanionLauncherPayloadFields = {
   readonly intent: typeof normalizedCompanionLauncherIntentSchema;

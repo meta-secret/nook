@@ -703,6 +703,7 @@ class ExtensionPairingIdentity {
 
   async requestPairedVaultUnlock(
     message: ExtensionPairedVaultUnlockRequestMessage,
+    initiatingTab?: chrome.tabs.Tab,
   ): Promise<ExtensionPairedVaultUnlockResponse> {
     const decodedRequest = runConcreteDecoder(
       decodeCompanionPairedVaultUnlockRequest,
@@ -747,6 +748,7 @@ class ExtensionPairingIdentity {
       if (!extensionSessionLifecycle.isUnlockedSessionStatus(statusResponse)) {
         await extensionSessionLifecycle.openCompanionLauncher(
           OpenCompanionLauncherIntent.Default,
+          initiatingTab,
         )
       }
       return { ok: true, requestId, vaultStoreId }
@@ -909,7 +911,8 @@ class ExtensionPairingIdentity {
     if (openLockedCompanion) {
       if (sessionStatus !== ExtensionSessionStatusAvailability.Unlocked) {
         extensionSessionLifecycle.openCompanionLauncherBestEffort(
-          OpenCompanionLauncherIntent.Default,
+          OpenCompanionLauncherIntent.PilotAuth,
+          sender.tab,
         )
         return {
           response: {

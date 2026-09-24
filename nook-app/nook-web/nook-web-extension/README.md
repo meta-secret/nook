@@ -1,14 +1,16 @@
 # Nook Browser Extension
 
 `nook-web-extension` is Nook's browser-integration package. Before pairing, the
-toolbar popup shows the standard device-protection widget and creates or
-unlocks the extension's separately revocable identity. It then sends the public
-device request directly to the configured Simple Vault deployment, which owns
-the complete vault interface. The extension contains browser-only behavior:
-device protection, the in-page **Nook Pilot** authentication HUD, minimal DOM
-observation/fill integration, and background coordination. The HUD reports the
-current Rust-classified authentication workflow, progress, site context, next
-approved action, and manual takeover without becoming a second vault interface.
+toolbar action opens one extension-owned authentication tab with the standard
+device-protection widget; a locked Pilot action opens or focuses that same tab.
+The tab creates or unlocks the extension's separately revocable identity, then
+sends the public device request directly to the configured Simple Vault
+deployment, which owns the complete vault interface. The extension contains
+browser-only behavior: device protection, the in-page **Nook Pilot**
+authentication HUD, minimal DOM observation/fill integration, and background
+coordination. The HUD reports the current Rust-classified authentication
+workflow, progress, site context, next approved action, and manual takeover
+without becoming a second vault interface.
 
 On OTP challenges, the same widget detects standard one-time-code fields. It
 asks the unlocked Rust/WASM session for safe authenticator labels, requires the
@@ -30,17 +32,22 @@ can always choose the browser or a security key instead. Locked, unavailable,
 or account-less Nook sessions automatically use that native fallback.
 
 After a passkey or PIN authorization, the extension keeps its decrypted device
-identity only in an offscreen extension document for 15 minutes. Reopening the
-toolbar popup during that window resumes pairing without another prompt. The
-identity is never written to browser-vendor storage; the session is cleared when the
-timer expires or the browser closes.
+identity only in an offscreen extension document under a 15-minute renewable
+lease. Successful identity handoffs renew the lease; status, read, retry, and
+closing/reopening the authentication tab do not. Reopening the tab during a
+live lease remains unlocked. Lease expiry, explicit lock, or browser/context
+restart requires reauthentication. This preserves required prompts rather than
+reducing them. The identity is never written to browser-vendor storage.
 
 The extension first-run model is specified in
 [`.cortex/teams/web-dev/product-specs/browser-extension.md`](../../../.cortex/teams/web-dev/product-specs/browser-extension.md).
 The extension becomes its own passkey-protected Nook device and pairs only
 through vault consent at the configured Simple Vault
 `/extension-connect` route; it does not borrow or scrape the Simple web app
-device key. There is no website-first enable screen or second extension window.
+device key. There is no website-first enable screen, floating companion window,
+or toolbar default popup. The auth tab also displays localized return guidance
+after a Pilot unlock; the page HUD waits for a fresh Continue click and rechecks
+the current origin/workflow before it acts.
 It intentionally has no miniature vault interface. Sentinel Vault
 is excluded by the manifest, runtime guard, pairing validation, and Rust/WASM
 capability checks.

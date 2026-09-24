@@ -728,6 +728,7 @@ export const I18N_KEYS = {
   ExtensionCompanionLoading: 'extension.companion.loading',
   ExtensionCompanionNotConnected: 'extension.companion.not_connected',
   ExtensionCompanionPairAnotherVault: 'extension.companion.pair_another_vault',
+  ExtensionCompanionPilotReturnGuidance: 'extension.companion.pilot_return_guidance',
   ExtensionCompanionProtected: 'extension.companion.protected',
   ExtensionCompanionReadyDescription: 'extension.companion.ready_description',
   ExtensionCompanionReadyTitle: 'extension.companion.ready_title',

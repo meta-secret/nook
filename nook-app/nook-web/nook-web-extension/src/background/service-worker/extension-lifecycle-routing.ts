@@ -752,7 +752,7 @@ export function routeExtensionLifecycleMessage({
       sendResponse(forbiddenSenderResponse)
       return false
     }
-    void openCompanionLauncher(launcherMessage.value.intent)
+    void openCompanionLauncher(launcherMessage.value.intent, sender.tab)
       .then(() => sendResponse(successResponse))
       .catch(() => sendResponse(launcherFailureResponse))
     return true

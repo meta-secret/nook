@@ -437,7 +437,8 @@ export async function websiteLoginSaveOffer({
       response.error === SessionOperationFailureKind.Locked
     ) {
       extensionSessionLifecycle.openCompanionLauncherBestEffort(
-        OpenCompanionLauncherIntent.Default,
+        OpenCompanionLauncherIntent.PilotAuth,
+        sender.tab,
       )
       return { kind: 'locked' }
     }
@@ -669,7 +670,8 @@ export async function websiteLoginSaveCommit({
     !extensionSessionLifecycle.isUnlockedSessionStatus(status)
   ) {
     extensionSessionLifecycle.openCompanionLauncherBestEffort(
-      OpenCompanionLauncherIntent.Default,
+      OpenCompanionLauncherIntent.PilotAuth,
+      sender.tab,
     )
     return {
       kind: 'rejected',

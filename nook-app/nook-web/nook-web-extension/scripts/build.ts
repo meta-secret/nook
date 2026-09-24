@@ -245,6 +245,9 @@ async function buildSveltePage(page: 'popup') {
 
 type NookLocaleCatalogShape = {
   extension: {
+    setup: {
+      status_locked: string
+    }
     widget: {
       open_vault: string
       dismiss: string
@@ -369,6 +372,8 @@ type WidgetLocaleMessageKey =
   keyof NookLocaleCatalogShape['extension']['widget']
 type PasskeyLocaleMessageKey =
   keyof NookLocaleCatalogShape['extension']['passkey']
+type SetupLocaleMessageKey =
+  keyof NookLocaleCatalogShape['extension']['setup']
 
 class LocaleMessageSection<Key extends string> {
   private readonly messages: Record<string, unknown>
@@ -399,6 +404,7 @@ class LocaleMessageSection<Key extends string> {
 
 type NookLocaleCatalog = {
   extension: {
+    setup: LocaleMessageSection<SetupLocaleMessageKey>
     widget: LocaleMessageSection<WidgetLocaleMessageKey>
     passkey: LocaleMessageSection<PasskeyLocaleMessageKey>
   }
@@ -417,6 +423,7 @@ class ExtensionLocaleCatalogAdmission {
       !value.extension ||
       typeof value.extension !== 'object' ||
       Array.isArray(value.extension) ||
+      !('setup' in value.extension) ||
       !('widget' in value.extension) ||
       !('passkey' in value.extension)
     ) {
@@ -424,6 +431,10 @@ class ExtensionLocaleCatalogAdmission {
     }
     return {
       extension: {
+        setup: new LocaleMessageSection<SetupLocaleMessageKey>(
+          value.extension.setup,
+          `${locale} setup`,
+        ),
         widget: new LocaleMessageSection<WidgetLocaleMessageKey>(
           value.extension.widget,
           `${locale} widget`,
@@ -475,6 +486,9 @@ async function buildChromeLocales() {
             'vault_not_connected',
             locale,
           ),
+        },
+        widgetVaultLocked: {
+          message: catalog.extension.setup.message('status_locked', locale),
         },
         widgetConnectVault: {
           message: catalog.extension.widget.message('connect_vault', locale),

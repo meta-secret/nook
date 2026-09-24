@@ -1,4 +1,7 @@
-import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
+import {
+  BROWSER_MESSAGE_KEYS,
+  type BrowserMessageKey,
+} from '../../lib/browser-message-keys'
 import {
   OpenSimpleVaultMessageType,
   type OpenSimpleVaultMessage,
@@ -302,6 +305,11 @@ type CreateWidgetShellArgs = {
   totalSteps: number
 }
 
+type WidgetShellDescriptionKeyArgs = {
+  copy: WorkflowCopy
+  vaultPresentation: WidgetVaultPresentation
+}
+
 type MountWidgetShellArgs = {
   shell: WidgetShell
   workflowKey: string
@@ -314,6 +322,22 @@ type AuthenticationWidgetShellContext = {
 }
 class AuthenticationWidgetShell {
   constructor(private readonly ui: AuthenticationWidgetShellContext) {}
+
+  private descriptionKey({
+    copy,
+    vaultPresentation,
+  }: WidgetShellDescriptionKeyArgs): BrowserMessageKey {
+    switch (vaultPresentation.kind) {
+      case WidgetVaultPresentationKind.Locked:
+        return BROWSER_MESSAGE_KEYS.WidgetUnlockThenContinue
+      case WidgetVaultPresentationKind.NotConnected:
+      case WidgetVaultPresentationKind.Connected:
+      case WidgetVaultPresentationKind.NoMatchingCredential:
+      case WidgetVaultPresentationKind.CredentialAvailable:
+      case WidgetVaultPresentationKind.Unavailable:
+        return copy.descriptionKey
+    }
+  }
 
   buildEnrollmentFlowHost({
     panel,
@@ -476,6 +500,8 @@ class AuthenticationWidgetShell {
     const vaultStatus = document.createElement('p')
     vaultStatus.className = 'vault-status'
     vaultStatus.setAttribute('data-testid', 'nook-auth-gate-vault-status')
+    vaultStatus.setAttribute('role', 'status')
+    vaultStatus.setAttribute('aria-live', 'polite')
     vaultStatus.dataset.connected =
       vaultPresentation.kind === WidgetVaultPresentationKind.NotConnected
         ? 'false'
@@ -485,7 +511,13 @@ class AuthenticationWidgetShell {
 
     const description = document.createElement('p')
     description.className = 'description'
-    description.textContent = workflowUi.translatedMessage(copy.descriptionKey)
+    const descriptionKeyArgs: WidgetShellDescriptionKeyArgs = {
+      copy,
+      vaultPresentation,
+    }
+    description.textContent = workflowUi.translatedMessage(
+      this.descriptionKey(descriptionKeyArgs),
+    )
 
     const continueButton = document.createElement('button')
     continueButton.type = 'button'

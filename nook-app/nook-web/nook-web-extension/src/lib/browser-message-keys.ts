@@ -92,6 +92,7 @@ export const BROWSER_MESSAGE_KEYS = {
   WidgetUsePasskey: 'widgetUsePasskey',
   WidgetUsePasskeyWorking: 'widgetUsePasskeyWorking',
   WidgetVaultConnected: 'widgetVaultConnected',
+  WidgetVaultLocked: 'widgetVaultLocked',
   WidgetVaultNotConnected: 'widgetVaultNotConnected',
   WidgetWorking: 'widgetWorking',
   WidgetAddFromPage: 'widgetAddFromPage',

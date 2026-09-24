@@ -646,7 +646,8 @@ class AccountPickerSessions {
     const status = delivery.value
     if (!extensionSessionLifecycle.isUnlockedSessionStatus(status)) {
       extensionSessionLifecycle.openCompanionLauncherBestEffort(
-        OpenCompanionLauncherIntent.Default,
+        OpenCompanionLauncherIntent.PilotAuth,
+        sender.tab,
       )
       return { response: { ok: false, reason: reasons.locked } }
     }
@@ -804,6 +805,7 @@ class AccountPickerSessions {
       ) {
         resolvedDependencies.openCompanionLauncherBestEffort(
           OpenCompanionLauncherIntent.Pair,
+          sender.tab,
         )
       }
       return access.response

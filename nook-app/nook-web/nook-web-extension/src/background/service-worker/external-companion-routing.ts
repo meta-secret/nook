@@ -122,7 +122,7 @@ export class ExternalCompanionRouter {
       message,
     )
     if (launcherMessage.kind === ConcreteDecoderResultKind.Decoded) {
-      void openCompanionLauncher(launcherMessage.value.intent)
+      void openCompanionLauncher(launcherMessage.value.intent, sender.tab)
         .then(() => sendResponse(successResponse))
         .catch(() => sendResponse(launcherFailureResponse))
       return true
@@ -149,7 +149,7 @@ export class ExternalCompanionRouter {
     )
     if (pairedVaultUnlock.kind === ConcreteDecoderResultKind.Decoded) {
       const decodedMessage = pairedVaultUnlock.value
-      void requestPairedVaultUnlock(decodedMessage)
+      void requestPairedVaultUnlock(decodedMessage, sender.tab)
         .then(sendResponse)
         .catch(() => {
           const unlockFailureResponse: Parameters<typeof sendResponse>[0] = {
