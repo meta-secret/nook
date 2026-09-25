@@ -144,22 +144,93 @@ test('sets up the extension device first and sends its public keys to Simple Vau
       )
     })
 
-    const openedCompanionPage = context.waitForEvent('page', {
-      timeout: 30_000,
-    })
+    const readCompanionTabs = async () =>
+      worker.evaluate(
+        async ({ popupUrl, connectionUrl }) => {
+          const contexts = await chrome.runtime.getContexts({
+            contextTypes: [chrome.runtime.ContextType.TAB],
+          })
+          const popupContext = contexts.find(
+            (candidate) => candidate.documentUrl === popupUrl,
+          )
+          const tabs = await chrome.tabs.query({})
+          const connectionTab = tabs.find(
+            (candidate) => candidate.url === connectionUrl,
+          )
+          if (
+            typeof popupContext?.tabId !== 'number' ||
+            typeof popupContext.windowId !== 'number' ||
+            typeof connectionTab?.id !== 'number' ||
+            typeof connectionTab.windowId !== 'number'
+          ) {
+            return { kind: 'tabs-not-observed' as const }
+          }
+          const popupTab = await chrome.tabs.get(popupContext.tabId)
+          const popupWindow = await chrome.windows.get(popupTab.windowId)
+          return {
+            kind: 'observed' as const,
+            popupTabId: popupTab.id,
+            popupWindowId: popupTab.windowId,
+            popupActive: popupTab.active,
+            popupWindowFocused: popupWindow.focused,
+            connectionTabId: connectionTab.id,
+            connectionWindowId: connectionTab.windowId,
+          }
+        },
+        { popupUrl: popupPage.url(), connectionUrl: simplePage.url() },
+      )
+
+    const tabsBeforeLaunch = await readCompanionTabs()
+    if (tabsBeforeLaunch.kind !== 'observed') {
+      throw new Error('Could not identify the popup and connection tabs.')
+    }
+    if (tabsBeforeLaunch.popupWindowId !== tabsBeforeLaunch.connectionWindowId) {
+      await worker.evaluate(
+        async ({ tabId, windowId }) => {
+          await chrome.tabs.move(tabId, { windowId })
+        },
+        {
+          tabId: tabsBeforeLaunch.connectionTabId,
+          windowId: tabsBeforeLaunch.popupWindowId,
+        },
+      )
+    }
+    const launcherSourceTabs = await readCompanionTabs()
+    if (launcherSourceTabs.kind !== 'observed') {
+      throw new Error('Could not verify the companion launch source tabs.')
+    }
+    expect(launcherSourceTabs.popupWindowId).toBe(
+      launcherSourceTabs.connectionWindowId,
+    )
+    const pageCountBeforeLaunch = context.pages().length
     expect(
       await sendExternalMessage(simplePage, extensionId, {
         type: 'nook:open-companion-launcher',
       }),
     ).toEqual({ ok: true })
-    const companionPage = await openedCompanionPage
-    await expect(companionPage).toHaveURL(
+    const tabsAfterLaunch = await readCompanionTabs()
+    if (tabsAfterLaunch.kind !== 'observed') {
+      throw new Error('Could not verify the reused companion tab.')
+    }
+    expect(tabsAfterLaunch.popupTabId).toBe(launcherSourceTabs.popupTabId)
+    expect(tabsAfterLaunch.connectionTabId).toBe(
+      launcherSourceTabs.connectionTabId,
+    )
+    expect(tabsAfterLaunch.popupWindowId).toBe(
+      launcherSourceTabs.connectionWindowId,
+    )
+    expect(tabsAfterLaunch.connectionWindowId).toBe(
+      tabsAfterLaunch.popupWindowId,
+    )
+    expect(tabsAfterLaunch.popupActive).toBe(true)
+    expect(tabsAfterLaunch.popupWindowFocused).toBe(true)
+    expect(context.pages()).toHaveLength(pageCountBeforeLaunch)
+    await expect(popupPage).toHaveURL(
       `chrome-extension://${extensionId}/popup/index.html`,
     )
     await expect(
-      companionPage.getByTestId('extension-device-setup'),
+      popupPage.getByTestId('extension-device-setup'),
     ).toBeVisible()
-    await companionPage.close()
 
     const loginPage = await context.newPage()
     await loginPage.goto(`${loginServer.origin}/login`)
@@ -434,7 +505,8 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     await expect(
       simplePage.getByTestId('extension-connect-approved'),
     ).toBeVisible()
-    await simplePage.getByRole('button', { name: 'Done' }).click()
+    await expect(simplePage).toHaveURL((url) => url.pathname.endsWith('/vault'))
+    await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
 
     await simplePage.getByTestId('vault-settings-tab').click()
     const dangerSection = simplePage.getByTestId('vault-danger-section')

@@ -330,7 +330,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       await website.page.close()
     }
 
-    await simplePage.getByRole('button', { name: 'Done' }).click()
+    await expect(simplePage).toHaveURL((url) => url.pathname.endsWith('/vault'))
     await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
     await simplePage.close()
 
@@ -834,7 +834,8 @@ test('re-approves an existing local vault after reload without event-log-access-
     await expect(
       connectPage.getByTestId('extension-connect-approved'),
     ).toBeVisible()
-    await connectPage.getByRole('button', { name: 'Done' }).click()
+    await expect(connectPage).toHaveURL((url) => url.pathname.endsWith('/vault'))
+    await expect(connectPage.getByTestId('authenticated-shell')).toBeVisible()
 
     const pairedStorage = await readExtensionStorage(context)
     const grantKeys = Object.keys(pairedStorage).filter((key) =>
