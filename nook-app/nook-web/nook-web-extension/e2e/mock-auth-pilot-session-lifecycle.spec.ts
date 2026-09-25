@@ -56,7 +56,7 @@ test.describe('PIN Pilot session lifecycle', () => {
         `chrome-extension://${paired.extensionId}/popup/index.html`,
       )
       await expect(
-        originalAuthTab.getByTestId('extension-toolbar-menu'),
+        originalAuthTab.getByTestId('device-protection-pin-unlock-btn'),
       ).toBeVisible()
       await expect(originalAuthTab).toHaveURL(
         `chrome-extension://${paired.extensionId}/popup/index.html`,
