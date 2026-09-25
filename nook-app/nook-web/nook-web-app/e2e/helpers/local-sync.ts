@@ -786,6 +786,7 @@ export async function waitForLoadedSyncProviders(
   timeoutMs = ENROLLMENT_UNLOCK_TIMEOUT_MS,
 ) {
   await assertVaultReady(page)
+  let loadedProviderCount = 0
   await expect
     .poll(
       async () => {
@@ -807,21 +808,22 @@ export async function waitForLoadedSyncProviders(
             count: ((v) => (v ? v : 0))(providerCount),
           }
         })
+        loadedProviderCount = state.authenticated ? state.count : -1
         if (state.authenticated && state.count < minCount) {
           await invokeInitializedVaultProviderReload(page).catch(() => {})
         }
-        return state.authenticated ? state.count : -1
+        return loadedProviderCount
       },
       { timeout: timeoutMs },
     )
     .toBeGreaterThanOrEqual(minCount)
 
   const pattern =
-    minCount === 0
+    loadedProviderCount === 0
       ? /No sync providers/
-      : minCount === 1
+      : loadedProviderCount === 1
         ? /1 sync provider/
-        : new RegExp(`${minCount} sync providers`)
+        : new RegExp(`${loadedProviderCount} sync providers`)
   const syncStatus = page.getByTestId('vault-sync-out-status')
   await expect(syncStatus).toBeVisible({ timeout: timeoutMs })
   await expect(syncStatus).toContainText(pattern, { timeout: timeoutMs })

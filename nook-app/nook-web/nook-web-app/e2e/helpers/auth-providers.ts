@@ -526,16 +526,25 @@ export async function readRawAuthProvidersFromIdb(
             oauthFileValue instanceof Object &&
             !Array.isArray(oauthFileValue)
           ) {
+            const configuredValue: unknown = Object.getOwnPropertyDescriptor(
+              oauthFileValue,
+              'config',
+            )?.value
+            const credentialSource =
+              configuredValue instanceof Object &&
+              !Array.isArray(configuredValue)
+                ? configuredValue
+                : oauthFileValue
             const oauthFile: NonNullable<
               RawAuthProvidersSnapshot['providers'][number]['oauthFile']
             > = {}
             const accessToken = readCredential(
-              Object.getOwnPropertyDescriptor(oauthFileValue, 'accessToken')
+              Object.getOwnPropertyDescriptor(credentialSource, 'accessToken')
                 ?.value,
             )
             if (accessToken !== undefined) oauthFile.accessToken = accessToken
             const refreshToken = readCredential(
-              Object.getOwnPropertyDescriptor(oauthFileValue, 'refreshToken')
+              Object.getOwnPropertyDescriptor(credentialSource, 'refreshToken')
                 ?.value,
             )
             if (refreshToken !== undefined) {

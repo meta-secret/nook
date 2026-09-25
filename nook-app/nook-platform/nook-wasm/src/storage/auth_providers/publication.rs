@@ -76,7 +76,7 @@ impl ProviderSnapshotPublication<'_> {
         if refresh_legacy
             && matches!(
                 legacy,
-                rollback_projection::ProviderSnapshotObservation::Present(_)
+                rollback_projection::ProviderSnapshotObservation::Present { .. }
             )
             && legacy_belongs_to_identity == rollback_projection::LegacyProjectionOwnership::Foreign
         {

@@ -247,7 +247,7 @@ impl AuthProviderDatabase {
         if AuthProviderDatabase::projections_match(ProviderDbProjectionsMatch {
             scoped: &scoped,
             legacy: &legacy,
-        }) == rollback_projection::ProviderProjectionRelation::Equal
+        }) == rollback_projection::ProviderProjectionRelation::Equivalent
         {
             for key in [STATE_KEY, SCHEMA_KEY] {
                 store
@@ -521,7 +521,7 @@ mod wasm_idb_tests {
                 scoped: &scoped,
                 legacy: &legacy,
             }),
-            rollback_projection::ProviderProjectionRelation::Equal
+            rollback_projection::ProviderProjectionRelation::Equivalent
         );
         AuthProviderDatabase::clear_auth_providers_db().await?;
         NookDatabase::clear_keyring_for_test().await?;
