@@ -62,6 +62,36 @@ impl StoredLocalFolderConfiguration {
 }
 
 struct LegacyStorageProvider<'a>(&'a StorageProviderData);
+impl LegacyStorageProvider<'_> {
+    fn is_rollback_compatible(&self) -> bool {
+        match self.0.provider_type {
+            crate::StorageProviderType::OauthFile => match &self.0.oauth_file {
+                StoredOAuthFileConfiguration::Configured(config) => {
+                    Self::oauth_config_is_rollback_compatible(config)
+                }
+                StoredOAuthFileConfiguration::NotApplicable => true,
+            },
+            crate::StorageProviderType::Local
+            | crate::StorageProviderType::LocalFolder
+            | crate::StorageProviderType::Github => true,
+        }
+    }
+
+    fn oauth_config_is_rollback_compatible(config: &super::OAuthFileConfig) -> bool {
+        match (config.preset, config.resolved_google_drive_mode()) {
+            (crate::OauthFilePreset::GoogleDrive, crate::GoogleDriveMode::Private) => {
+                match &config.drive_private_target {
+                    StoredGoogleDrivePrivateTarget::LegacyAppDataFolder => true,
+                    StoredGoogleDrivePrivateTarget::Pending
+                    | StoredGoogleDrivePrivateTarget::FolderId(_) => false,
+                }
+            }
+            (crate::OauthFilePreset::GoogleDrive, crate::GoogleDriveMode::Shared)
+            | (crate::OauthFilePreset::ICloud, crate::GoogleDriveMode::Private)
+            | (crate::OauthFilePreset::ICloud, crate::GoogleDriveMode::Shared) => true,
+        }
+    }
+}
 impl Serialize for LegacyStorageProvider<'_> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let provider = self.0;
@@ -80,21 +110,6 @@ impl Serialize for LegacyStorageProvider<'_> {
     }
 }
 
-fn rollback_compatible(provider: &StorageProviderData) -> bool {
-    if provider.provider_type != crate::StorageProviderType::OauthFile {
-        return true;
-    }
-    let StoredOAuthFileConfiguration::Configured(config) = &provider.oauth_file else {
-        return true;
-    };
-    config.preset != crate::OauthFilePreset::GoogleDrive
-        || config.resolved_google_drive_mode() != crate::GoogleDriveMode::Private
-        || matches!(
-            &config.drive_private_target,
-            StoredGoogleDrivePrivateTarget::LegacyAppDataFolder
-        )
-}
-
 pub struct LegacyAuthProvidersSnapshot<'a>(&'a AuthProvidersSnapshotData);
 impl Serialize for LegacyAuthProvidersSnapshot<'_> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
@@ -103,8 +118,8 @@ impl Serialize for LegacyAuthProvidersSnapshot<'_> {
             .0
             .providers
             .iter()
-            .filter(|provider| rollback_compatible(provider))
             .map(LegacyStorageProvider)
+            .filter(LegacyStorageProvider::is_rollback_compatible)
             .collect();
         map.serialize_entry("providers", &providers)?;
         self.0
