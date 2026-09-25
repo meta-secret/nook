@@ -152,9 +152,9 @@ fn development_cloudflare_deploy_preserves_isolated_origins() -> anyhow::Result<
         );
     }
     assert!(
-        main.contains("VITE_SITE_URL=${{ env.CI_MAIN_DEV_URL }}")
-            && main.contains("VITE_SIMPLE_APP_URL=${{ env.CI_MAIN_SIMPLE_URL }}")
-            && main.contains("VITE_SENTINEL_APP_URL=${{ env.CI_MAIN_SENTINEL_URL }}"),
+        main.contains("VITE_SITE_URL=\"$CI_MAIN_DEV_URL\"")
+            && main.contains("VITE_SIMPLE_APP_URL=\"$CI_MAIN_SIMPLE_URL\"")
+            && main.contains("VITE_SENTINEL_APP_URL=\"$CI_MAIN_SENTINEL_URL\""),
         "development artifacts must embed their stable isolated channel origins"
     );
 
