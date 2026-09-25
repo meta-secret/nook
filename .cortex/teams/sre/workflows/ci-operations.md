@@ -40,15 +40,6 @@ lifecycle, sync, and WASM events that neither linters nor DOM assertions expose.
 - **Remote e2e failure:** read Playwright attachment `nook-app-logs.json` from
   the CI artifact/report before changing code. The attachment is created for
   every e2e result; failures also print the same entries to test output.
-- **PR full E2E failure:** the PR validation workflow uploads the existing web
-  and extension Playwright `test-results` directories from
-  `PR_ARTIFACT_DIR/runtime/nook-app/nook-web/nook-web-app/test-results` and
-  `PR_ARTIFACT_DIR/runtime/nook-app/nook-web/nook-web-extension/test-results`
-  as `pr-full-e2e-failure-<run_id>-<run_attempt>` for 15 days. Inspect the
-  artifact for emitted `error-context.md`, app logs, traces, and other existing
-  Playwright diagnostics before changing code. This upload does not change
-  capture policy: with zero retries and `trace: on-first-retry`, a web trace
-  may be absent.
 - **E2e failure repair:** for every failed e2e test, analyze the underlying
   cause and write a focused unit test at the owning boundary before fixing the
   defect. Direct e2e-test edits are allowed only when a unit test is infeasible
