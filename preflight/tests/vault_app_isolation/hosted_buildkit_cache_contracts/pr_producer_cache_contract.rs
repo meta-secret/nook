@@ -84,7 +84,8 @@ impl<'a> PrProducerCacheContract<'a> {
         assert!(web.contains("FROM nook-web-source AS pr-web-tests"));
         assert!(!web.contains("FROM pr-web-verification AS pr-web-tests"));
         assert!(tasks.contains("coverage-export.output=type=cacheonly"));
-        assert!(tasks.contains("pr-browser-artifacts.output=type=local"));
+        assert!(tasks.contains("pr-browser-artifacts.output=type=tar"));
+        assert!(tasks.contains("tar -xf '{{.PR_ARTIFACT_DIR}}/browser.tar'"));
         assert!(tasks.contains(
             "test -e '{{.PR_ARTIFACT_DIR}}/runtime/nook-app/nook-web/node_modules' || ln -s nook-web-app/node_modules '{{.PR_ARTIFACT_DIR}}/runtime/nook-app/nook-web/node_modules'",
         ));

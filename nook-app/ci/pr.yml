@@ -85,7 +85,7 @@ tasks:
           -f '{{.REPO_ROOT}}/nook-app/ci/pr.docker-bake.hcl' \
           --allow='fs.write={{.PR_ARTIFACT_DIR}}' \
           --set 'coverage-export.output=type=cacheonly' \
-          --set 'pr-browser-artifacts.output=type=local,dest={{.PR_ARTIFACT_DIR}}/browser' \
+          --set 'pr-browser-artifacts.output=type=tar,dest={{.PR_ARTIFACT_DIR}}/browser.tar' \
           --set "rust-dylint.args.RUST_DYLINT_COVERAGE_FLOOR=$floor" \
           --set 'rust-ecosystem-deterministic.args.NATIVE_COVERAGE_PROVIDED=true' \
           --set 'builder-wasm.output=type=cacheonly' \
@@ -118,6 +118,7 @@ tasks:
         vars: { PR_BAKE_TARGET: pr-browser-artifacts }
       - |
         set -euo pipefail
+        tar -xf '{{.PR_ARTIFACT_DIR}}/browser.tar' -C '{{.PR_ARTIFACT_DIR}}/browser'
         git clone --quiet --shared --no-checkout '{{.REPO_ROOT}}' '{{.PR_ARTIFACT_DIR}}/runtime'
         git -C '{{.PR_ARTIFACT_DIR}}/runtime' checkout --quiet --detach "$(git -C '{{.REPO_ROOT}}' rev-parse HEAD)"
         cp -a '{{.PR_ARTIFACT_DIR}}/browser/nook-app/.' '{{.PR_ARTIFACT_DIR}}/runtime/nook-app/'

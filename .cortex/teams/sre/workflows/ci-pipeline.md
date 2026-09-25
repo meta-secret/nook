@@ -353,7 +353,7 @@ telemetry, error/fallback policy and the warm-cache zero-hit gate remain.
 - Web static checks and unit tests derive from the same prepared source stage.
   Vitest runs at most four isolated workers. Native coverage retains its
   existing Docker lineage and per-package floor enforcement.
-- The browser branch exports production artifacts as soon as they are built.
+- The browser branch exports production artifacts as a tar archive when built.
   It copies them into a separate checkout under `PR_ARTIFACT_DIR/runtime`.
   Browser tests never mutate the original checkout while BuildKit reads it.
 - Full web/extension suites, or the focused authentication regression, run

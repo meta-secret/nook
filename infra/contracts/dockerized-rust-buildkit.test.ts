@@ -55,7 +55,8 @@ class DockerizedRustBuildKitContract {
     expect(tasks).toContain("buildx bake");
     expect(tasks).toContain("coverage-export.output=type=cacheonly");
     expect(tasks).not.toContain("coverage-export.output=type=local");
-    expect(tasks).toContain("pr-browser-artifacts.output=type=local");
+    expect(tasks).toContain("pr-browser-artifacts.output=type=tar");
+    expect(tasks).toContain("tar -xf '{{.PR_ARTIFACT_DIR}}/browser.tar'");
     expect(tasks).toContain(".package_lines_percent.nook_domain_api | numbers");
     expect(tasks).toContain(
       "rust-dylint.args.RUST_DYLINT_COVERAGE_FLOOR=$floor",
