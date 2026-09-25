@@ -50,24 +50,60 @@ tasks:
 
   web:static:container:
     desc: Independently lint and typecheck all authored web sources inside the prepared web container.
+    cmds:
+      - task --parallel web:static:lint web:static:app web:static:extension web:static:research web:static:simple web:static:sentinel
+
+  web:static:lint:
     dir: "{{.ROOT_DIR}}/nook-app/nook-web"
+    cmds:
+      - nook-web-app/node_modules/.bin/eslint --config eslint.config.js .
+
+  web:static:app:
+    cmds:
+      - task: web:static:surface
+        vars: { SURFACE: nook-web-app }
+
+  web:static:extension:
+    cmds:
+      - task: web:static:surface
+        vars: { SURFACE: nook-web-extension }
+
+  web:static:research:
+    cmds:
+      - task: web:static:surface
+        vars: { SURFACE: nook-web-research }
+
+  web:static:simple:
+    cmds:
+      - task: web:static:surface
+        vars: { SURFACE: nook-vault-simple }
+
+  web:static:sentinel:
+    cmds:
+      - task: web:static:surface
+        vars: { SURFACE: nook-vault-sentinel }
+
+  web:static:surface:
+    dir: "{{.ROOT_DIR}}/nook-app/nook-web"
+    requires:
+      vars: [SURFACE]
+    env:
+      SURFACE: "{{.SURFACE}}"
     cmds:
       - |
         failed=0
-        nook-web-app/node_modules/.bin/eslint --config eslint.config.js . || failed=1
-        for directory in nook-web-app nook-web-extension nook-web-research nook-vault-simple nook-vault-sentinel; do
-          for config in "$directory"/tsconfig*.json; do
-            case "$config" in
-              */tsconfig.json)
-                if [ "$directory" = nook-web-app ]; then continue; fi
-                ;;
-            esac
-            nook-web-app/node_modules/.bin/tsc --noEmit -p "$config" || failed=1
-          done
-          config="$directory/tsconfig.json"
-          if [ "$directory" = nook-web-app ]; then config="$directory/tsconfig.app.json"; fi
-          nook-web-app/node_modules/.bin/svelte-check --workspace "$directory" --tsconfig "${config#*/}" || failed=1
+        directory="$SURFACE"
+        for config in "$directory"/tsconfig*.json; do
+          case "$config" in
+            */tsconfig.json)
+              if [ "$directory" = nook-web-app ]; then continue; fi
+              ;;
+          esac
+          nook-web-app/node_modules/.bin/tsc --noEmit -p "$config" || failed=1
         done
+        config="$directory/tsconfig.json"
+        if [ "$directory" = nook-web-app ]; then config="$directory/tsconfig.app.json"; fi
+        nook-web-app/node_modules/.bin/svelte-check --workspace "$directory" --tsconfig "${config#*/}" || failed=1
         exit "$failed"
 
   static:check:

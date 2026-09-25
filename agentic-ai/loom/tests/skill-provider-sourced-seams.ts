@@ -145,6 +145,10 @@ const AUDITED_COMMAND_EXECUTING_FIND = new Map<string, string>();
 
 const AUDITED_RUNTIME_SOURCES = new Map([
   [
+    'infra/contracts/pr-preview-parallel.test.ts',
+    '298ea7e3aab353000763afd9b8c334a690b60de5771150b66811c863ccbc449f',
+  ],
+  [
     '.github/actions/nook-cache-connect/main.js',
     '2a5052024b204660e51efe455bce752c603d70e8e7c36e4118a25834516ac036',
   ],

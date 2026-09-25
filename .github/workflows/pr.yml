@@ -44,6 +44,7 @@ jobs:
       BUILDKIT_PROGRESS: plain
       LOOM_OWNERSHIP_FROM: ${{ github.event.pull_request.base.sha }}
       SCCACHE_OPTIONAL: ${{ (github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]') && '1' || '' }}
+      VITEST_MAX_WORKERS: ${{ vars.VITEST_MAX_WORKERS }}
       WASM_BUILD_MODE: dev
       PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium
       VITE_BASE: /
@@ -61,14 +62,6 @@ jobs:
           ref: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Materialize event metadata for the ARC job container
-        env:
-          PR_EVENT_JSON: ${{ toJSON(github.event) }}
-        run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          printf '%s\n' "$PR_EVENT_JSON" > "$RUNNER_TEMP/pr-event.json"
-          echo "NOOK_GITHUB_EVENT_PATH=$RUNNER_TEMP/pr-event.json" >> "$GITHUB_ENV"
-          echo "PR_ARTIFACT_DIR=$RUNNER_TEMP/nook-pr-artifacts" >> "$GITHUB_ENV"
       - name: Connect trusted persistent BuildKit
         if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
         uses: ./.github/actions/nook-docker-setup
@@ -98,18 +91,21 @@ jobs:
         if: github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]'
         uses: docker/setup-buildx-action@v4
       - uses: ./.github/actions/nook-node-setup
-      - name: Use the builder's local cache throughout this job
-        run: |
-          echo 'GHA_CACHE_ENABLED=' >> "$GITHUB_ENV"
-          echo 'GHA_CACHE_WRITE_ENABLED=' >> "$GITHUB_ENV"
-          echo 'NOOK_REGISTRY_CACHE_LOCAL_PUBLISH=0' >> "$GITHUB_ENV"
-      - name: Detect required validation and browser regressions
+      - name: Prepare job metadata, cache policy, and validation scope
         id: browser-scope
         env:
+          PR_EVENT_JSON: ${{ toJSON(github.event) }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           VALIDATION_REQUESTED: ${{ inputs.validation_requested }}
         run: |
           set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          printf '%s\n' "$PR_EVENT_JSON" > "$RUNNER_TEMP/pr-event.json"
+          echo "NOOK_GITHUB_EVENT_PATH=$RUNNER_TEMP/pr-event.json" >> "$GITHUB_ENV"
+          echo "PR_ARTIFACT_DIR=$RUNNER_TEMP/nook-pr-artifacts" >> "$GITHUB_ENV"
+          echo 'GHA_CACHE_ENABLED=' >> "$GITHUB_ENV"
+          echo 'GHA_CACHE_WRITE_ENABLED=' >> "$GITHUB_ENV"
+          echo 'NOOK_REGISTRY_CACHE_LOCAL_PUBLISH=0' >> "$GITHUB_ENV"
           auth=false
           validation="$VALIDATION_REQUESTED"
           research=false
@@ -126,11 +122,9 @@ jobs:
           echo "auth=$auth" >> "$GITHUB_OUTPUT"
           echo "validation=$validation" >> "$GITHUB_OUTPUT"
           echo "research=$research" >> "$GITHUB_OUTPUT"
-      - name: Enforce UI demo contract
-        if: steps.browser-scope.outputs.validation == 'true'
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: bash .github/scripts/ui-demo-contract.sh "$BASE_SHA"
+          if [ "$validation" = true ]; then
+            bash .github/scripts/ui-demo-contract.sh "$BASE_SHA"
+          fi
       - name: Parallel validation and browser tests
         if: steps.browser-scope.outputs.validation == 'true'
         env:
@@ -163,15 +157,17 @@ jobs:
             cp -a "$PR_ARTIFACT_DIR/runtime/nook-app/nook-web/nook-web-research/dist" nook-app/nook-web/nook-web-research/
           fi
       - name: Deploy and report preview
+        id: previews
         if: steps.browser-scope.outputs.validation == 'true' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
         uses: ./.github/actions/nook-pr-preview
         with:
           cloudflare-token: ${{ secrets.CLOUD_FLARE_PAGES_TOKEN }}
           cloudflare-account: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
           source-sha: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
-      - name: Deploy and report research preview
+          research-requested: ${{ steps.browser-scope.outputs.research }}
+      - name: Report research preview
         if: steps.browser-scope.outputs.research == 'true' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
         uses: ./.github/actions/nook-pr-research-preview
         with:
-          cloudflare-token: ${{ secrets.CLOUD_FLARE_PAGES_TOKEN }}
-          cloudflare-account: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
+          deployment-url: ${{ steps.previews.outputs.research-url }}
+          deploy-branch: ${{ steps.previews.outputs.research-branch }}

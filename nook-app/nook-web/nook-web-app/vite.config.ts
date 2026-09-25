@@ -308,7 +308,8 @@ export default defineConfig(({ mode }) => {
       isolate: true,
       pool: 'forks',
       fileParallelism: true,
-      maxWorkers: 4,
+      // Vitest resolves available parallelism; VITEST_MAX_WORKERS overrides it.
+      maxWorkers: '100%',
     },
   }
 })
