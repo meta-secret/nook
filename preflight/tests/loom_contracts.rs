@@ -347,7 +347,8 @@ fn meta_cortex_integration_documents_host_native_execution_and_storage_contracts
         RepositoryFixture::repository_root().read(".cortex/meta-cortex-integration.md");
     for required in [
         "Execution speed is selected by host-native settings",
-        "each role's configured model and reasoning effort",
+        "each role's configured model",
+        "and `reasoning_effort`",
         "no `mode` or `service_tier` fields",
         "storage version 3",
         "storage version 1 and 2 feature databases are imported transactionally and only once",
