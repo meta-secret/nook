@@ -30,7 +30,7 @@ test.describe('PIN Pilot against mock auth', () => {
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
       await expect(
         widget.getByTestId('nook-auth-gate-vault-status'),
-      ).toHaveText(/Connected to Mock auth vault/)
+      ).toHaveText('Matching saved logins: 1')
       await expect(
         widget.getByTestId('nook-auth-gate-vault-status'),
       ).toHaveAttribute('data-state', 'credential-available')

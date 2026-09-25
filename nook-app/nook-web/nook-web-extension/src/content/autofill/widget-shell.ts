@@ -33,6 +33,7 @@ import {
 import type { WorkflowCopy } from './workflow-ui'
 import {
   WidgetVaultPresentationKind,
+  savedLoginDescriptionKey,
   type WidgetVaultPresentation,
 } from './widget-presentation-state'
 
@@ -301,6 +302,7 @@ type CreateWidgetMarkArgs = {
 type CreateWidgetShellArgs = {
   copy: WorkflowCopy
   vaultPresentation: WidgetVaultPresentation
+  savedLoginAction: boolean
   currentStep: number
   totalSteps: number
 }
@@ -308,6 +310,7 @@ type CreateWidgetShellArgs = {
 type WidgetShellDescriptionKeyArgs = {
   copy: WorkflowCopy
   vaultPresentation: WidgetVaultPresentation
+  savedLoginAction: boolean
 }
 
 type MountWidgetShellArgs = {
@@ -326,17 +329,13 @@ class AuthenticationWidgetShell {
   private descriptionKey({
     copy,
     vaultPresentation,
+    savedLoginAction,
   }: WidgetShellDescriptionKeyArgs): BrowserMessageKey {
-    switch (vaultPresentation.kind) {
-      case WidgetVaultPresentationKind.Locked:
-        return BROWSER_MESSAGE_KEYS.WidgetUnlockThenContinue
-      case WidgetVaultPresentationKind.NotConnected:
-      case WidgetVaultPresentationKind.Connected:
-      case WidgetVaultPresentationKind.NoMatchingCredential:
-      case WidgetVaultPresentationKind.CredentialAvailable:
-      case WidgetVaultPresentationKind.Unavailable:
-        return copy.descriptionKey
+    if (savedLoginAction) return savedLoginDescriptionKey(vaultPresentation)
+    if (vaultPresentation.kind === WidgetVaultPresentationKind.Locked) {
+      return BROWSER_MESSAGE_KEYS.WidgetUnlockThenContinue
     }
+    return copy.descriptionKey
   }
 
   buildEnrollmentFlowHost({
@@ -430,6 +429,7 @@ class AuthenticationWidgetShell {
   createWidgetShell({
     copy,
     vaultPresentation,
+    savedLoginAction,
     currentStep,
     totalSteps,
   }: CreateWidgetShellArgs): WidgetShell {
@@ -514,6 +514,7 @@ class AuthenticationWidgetShell {
     const descriptionKeyArgs: WidgetShellDescriptionKeyArgs = {
       copy,
       vaultPresentation,
+      savedLoginAction,
     }
     description.textContent = workflowUi.translatedMessage(
       this.descriptionKey(descriptionKeyArgs),

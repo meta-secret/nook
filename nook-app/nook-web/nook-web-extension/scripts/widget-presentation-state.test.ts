@@ -4,12 +4,14 @@ import type { AuthenticationWorkflowRoutingResponse } from '../src/background/se
 import { type WebsiteLoginMatchAvailability } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   PilotVaultConnectionKind,
+  savedLoginDescriptionKey,
   WidgetVaultPresentationKind,
   WidgetVaultPresentationProjection,
   type PilotVaultConnection,
   type WidgetVaultPresentation,
   type WidgetVaultPresentationProjectionArgs,
 } from '../src/content/autofill/widget-presentation-state'
+import { BROWSER_MESSAGE_KEYS } from '../src/lib/browser-message-keys'
 import { authenticationWidgetWorkflowKey } from '../src/content/autofill/widget-workflow-key'
 import type {
   AuthenticationPageObservationFacts,
@@ -20,7 +22,6 @@ await companionWasmReady
 
 const connectedVault: PilotVaultConnection = {
   kind: PilotVaultConnectionKind.Connected,
-  vaultName: 'Mock auth vault',
 }
 
 type WidgetRoutingPresentationCase = {
@@ -61,7 +62,6 @@ describe('authentication widget vault presentation', () => {
       new WidgetVaultPresentationProjection(lockedRequest).state(),
     ).toEqual({
       kind: WidgetVaultPresentationKind.Locked,
-      vaultName: connectedVault.vaultName,
     })
     const unavailableRequest: WidgetVaultPresentationProjectionArgs = {
       vaultConnection: connectedVault,
@@ -71,7 +71,6 @@ describe('authentication widget vault presentation', () => {
       new WidgetVaultPresentationProjection(unavailableRequest).state(),
     ).toEqual({
       kind: WidgetVaultPresentationKind.Unavailable,
-      vaultName: connectedVault.vaultName,
     })
   })
 
@@ -93,7 +92,7 @@ describe('authentication widget vault presentation', () => {
       new WidgetVaultPresentationProjection(noMatchRequest).state(),
     ).toEqual({
       kind: WidgetVaultPresentationKind.NoMatchingCredential,
-      vaultName: connectedVault.vaultName,
+      count: 0,
     })
     const availableRequest: WidgetVaultPresentationProjectionArgs = {
       vaultConnection: connectedVault,
@@ -103,8 +102,69 @@ describe('authentication widget vault presentation', () => {
       new WidgetVaultPresentationProjection(availableRequest).state(),
     ).toEqual({
       kind: WidgetVaultPresentationKind.CredentialAvailable,
-      vaultName: connectedVault.vaultName,
+      count: 1,
     })
+  })
+
+  test('preserves the number of matching logins without projecting labels', () => {
+    const projection = new WidgetVaultPresentationProjection({
+      vaultConnection: connectedVault,
+      loginMatches: { kind: 'ready', count: 3 },
+    })
+
+    const presentation = projection.state()
+
+    expect(presentation).toEqual({
+      kind: WidgetVaultPresentationKind.CredentialAvailable,
+      count: 3,
+    })
+    expect(presentation).not.toHaveProperty('vaultName')
+    expect(JSON.stringify(presentation)).not.toContain('alice@nook.test')
+  })
+
+  test('chooses honest saved-login guidance for every availability state', () => {
+    const cases: ReadonlyArray<{
+      presentation: WidgetVaultPresentation
+      expected: string
+    }> = [
+      {
+        presentation: { kind: WidgetVaultPresentationKind.NotConnected },
+        expected: BROWSER_MESSAGE_KEYS.WidgetConnectVault,
+      },
+      {
+        presentation: { kind: WidgetVaultPresentationKind.Locked },
+        expected: BROWSER_MESSAGE_KEYS.WidgetUnlockThenContinue,
+      },
+      {
+        presentation: {
+          kind: WidgetVaultPresentationKind.NoMatchingCredential,
+          count: 0,
+        },
+        expected: BROWSER_MESSAGE_KEYS.WidgetLoginNoMatchDescription,
+      },
+      {
+        presentation: {
+          kind: WidgetVaultPresentationKind.CredentialAvailable,
+          count: 1,
+        },
+        expected: BROWSER_MESSAGE_KEYS.WidgetLoginSingleDescription,
+      },
+      {
+        presentation: {
+          kind: WidgetVaultPresentationKind.CredentialAvailable,
+          count: 2,
+        },
+        expected: BROWSER_MESSAGE_KEYS.WidgetLoginMultipleDescription,
+      },
+      {
+        presentation: { kind: WidgetVaultPresentationKind.Unavailable },
+        expected: BROWSER_MESSAGE_KEYS.WidgetLoginUnavailableDescription,
+      },
+    ]
+
+    for (const { presentation, expected } of cases) {
+      expect(savedLoginDescriptionKey(presentation)).toBe(expected)
+    }
   })
 
   test('maps typed routing outcomes to locked and no-match widget states', () => {
@@ -117,7 +177,6 @@ describe('authentication widget vault presentation', () => {
         },
         expected: {
           kind: WidgetVaultPresentationKind.Locked,
-          vaultName: connectedVault.vaultName,
         },
       },
       {
@@ -128,7 +187,7 @@ describe('authentication widget vault presentation', () => {
         },
         expected: {
           kind: WidgetVaultPresentationKind.NoMatchingCredential,
-          vaultName: connectedVault.vaultName,
+          count: 0,
         },
       },
     ]

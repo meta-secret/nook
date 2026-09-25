@@ -168,10 +168,7 @@ class WorkflowUi {
   async loadPilotVaultConnection(): Promise<PilotVaultConnection> {
     const setup = await extensionPairingStateLoader.loadExtensionSetupState()
     return setup.kind === ExtensionSetupLoadKind.Ready
-      ? {
-          kind: PilotVaultConnectionKind.Connected,
-          vaultName: setup.setup.selectedVaultName,
-        }
+      ? { kind: PilotVaultConnectionKind.Connected }
       : { kind: PilotVaultConnectionKind.NotConnected }
   }
 
@@ -184,19 +181,20 @@ class WorkflowUi {
       case WidgetVaultPresentationKind.Locked:
         return this.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetVaultLocked)
       case WidgetVaultPresentationKind.NoMatchingCredential:
-        return this.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetNoMatch)
-      case WidgetVaultPresentationKind.Unavailable:
-        return this.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetConnectVault)
-      case WidgetVaultPresentationKind.Connected:
       case WidgetVaultPresentationKind.CredentialAvailable: {
-        const nookTypedArgs0_1: Parameters<
-          typeof this.translatedMessageWithSubstitution
-        >[0] = {
-          key: BROWSER_MESSAGE_KEYS.WidgetVaultConnected,
-          substitution: presentation.vaultName,
+        const count = presentation.count
+        const matchCountMessage: TranslatedMessageWithSubstitutionArgs = {
+          key: BROWSER_MESSAGE_KEYS.WidgetLoginMatchCount,
+          substitution: String(count),
         }
-        return this.translatedMessageWithSubstitution(nookTypedArgs0_1)
+        return this.translatedMessageWithSubstitution(matchCountMessage)
       }
+      case WidgetVaultPresentationKind.Unavailable:
+        return this.translatedMessage(
+          BROWSER_MESSAGE_KEYS.WidgetLoginUnavailable,
+        )
+      case WidgetVaultPresentationKind.Connected:
+        return this.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetVaultConnected)
     }
   }
 

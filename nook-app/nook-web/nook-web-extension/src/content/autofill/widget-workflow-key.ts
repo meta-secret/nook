@@ -41,7 +41,6 @@ export async function authenticationWidgetWorkflowKey({
     loginMatches.kind,
     'count' in loginMatches ? loginMatches.count : 0,
     vaultPresentation.kind,
-    'vaultName' in vaultPresentation ? vaultPresentation.vaultName : '',
     bindingToken,
   ].join(':')
 }

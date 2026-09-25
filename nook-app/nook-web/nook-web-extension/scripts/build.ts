@@ -259,6 +259,12 @@ type NookLocaleCatalogShape = {
       connect_vault: string
       login_title: string
       login_description: string
+      login_match_count: string
+      login_single_description: string
+      login_multiple_description: string
+      login_no_match_description: string
+      login_unavailable: string
+      login_unavailable_description: string
       signup_title: string
       signup_description: string
       password_change_title: string
@@ -486,6 +492,12 @@ async function buildChromeLocales() {
             locale,
           ),
         },
+        widgetLoginMatchCount: {
+          message: catalog.extension.widget.message('login_match_count', locale),
+        },
+        widgetLoginUnavailable: {
+          message: catalog.extension.widget.message('login_unavailable', locale),
+        },
         widgetVaultLocked: {
           message: catalog.extension.setup.message('status_locked', locale),
         },
@@ -498,6 +510,30 @@ async function buildChromeLocales() {
         widgetLoginDescription: {
           message: catalog.extension.widget.message(
             'login_description',
+            locale,
+          ),
+        },
+        widgetLoginSingleDescription: {
+          message: catalog.extension.widget.message(
+            'login_single_description',
+            locale,
+          ),
+        },
+        widgetLoginMultipleDescription: {
+          message: catalog.extension.widget.message(
+            'login_multiple_description',
+            locale,
+          ),
+        },
+        widgetLoginNoMatchDescription: {
+          message: catalog.extension.widget.message(
+            'login_no_match_description',
+            locale,
+          ),
+        },
+        widgetLoginUnavailableDescription: {
+          message: catalog.extension.widget.message(
+            'login_unavailable_description',
             locale,
           ),
         },

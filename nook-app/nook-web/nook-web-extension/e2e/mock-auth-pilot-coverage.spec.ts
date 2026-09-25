@@ -40,6 +40,17 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await loginPage.goto(`${mockAuth.origin}/plain/login`)
       const widget = loginPage.locator('#nook-auth-widget')
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
+      await expect(
+        widget.getByTestId('nook-auth-gate-vault-status'),
+      ).toHaveText('Matching saved logins: 2')
+      await expect(
+        widget.getByText(
+          'Multiple saved logins match this site. Continue opens the Nook picker. Nook fills and submits only after you choose one.',
+        ),
+      ).toBeVisible()
+      await expect(widget.getByText('Mock auth chooser vault')).toHaveCount(0)
+      await expect(loginPage.locator('input[name="username"]')).toHaveValue('')
+      await expect(loginPage.locator('input[name="password"]')).toHaveValue('')
       // Saving two entries can cross the short e2e idle timeout. Refresh the
       // session immediately before the website asks the extension to open its
       // picker so this test covers picker routing rather than lock recovery.
@@ -85,6 +96,15 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await loginPage.goto(`${mockAuth.origin}/plain/login`)
       const loginWidget = loginPage.locator('#nook-auth-widget')
       await expect(loginWidget.getByText('Ready to sign in')).toBeVisible()
+      await expect(
+        loginWidget.getByTestId('nook-auth-gate-vault-status'),
+      ).toHaveText('Matching saved logins: 0')
+      await expect(
+        loginWidget.getByText(
+          'No saved login matches this site. Continue checks again; if none is found, sign in manually or add one in Nook.',
+        ),
+      ).toBeVisible()
+      await expect(loginWidget.getByText('Mock auth empty vault')).toHaveCount(0)
       await expect(
         loginWidget.getByTestId('nook-auth-gate-vault-status'),
       ).toHaveAttribute('data-state', 'no-matching-credential')
@@ -957,6 +977,17 @@ async function expectPilotPlainSuccess(
   if (beforeContinue) await beforeContinue(page)
   const widget = page.locator('#nook-auth-widget')
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
+  await expect(
+    widget.getByText(new URL(url).hostname, { exact: true }),
+  ).toBeVisible()
+  await expect(
+    widget.getByTestId('nook-auth-gate-vault-status'),
+  ).toHaveText('Matching saved logins: 1')
+  await expect(
+    widget.getByText(
+      'One saved login matches this site. Nothing is filled or submitted until you click Continue; that click fills and submits it.',
+    ),
+  ).toBeVisible()
   await widget.getByRole('button', { name: 'Continue with Nook' }).click()
   await expect(page.getByTestId('mock-auth-success')).toHaveText(
     'Authentication complete',
