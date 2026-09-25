@@ -4,22 +4,22 @@
 
 ### Required bootstrap
 
-Nook pins Meta-Cortex 0.8.1. Each consuming worktree has its own ignored
+Nook pins Meta-Cortex v0.9.0. Each consuming worktree has its own ignored
 `.meta-cortex/` installation. Creating a Git worktree does not install that
-framework. Never copy `.meta-cortex/` from another checkout. Use the consuming
-worktree's absolute path in every YAML request.
+framework. Never copy `.meta-cortex/` or a ledger database from another
+checkout. Use the consuming worktree's absolute path in every YAML request.
 
 Resolve the CLI before normal repository work. `command -v meta-cortex` must
 select the intended executable, and `meta-cortex --version` must report
-`0.8.1`. If the command is missing or resolves to another version, install the
-Nook-pinned [v0.8.1 release](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/tag/v0.8.1)
+`0.9.0`. If the command is missing or resolves to another version, install the
+Nook-pinned [v0.9.0 release](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/tag/v0.9.0)
 and correct command resolution. Run `meta-cortex list` to inspect supported
 typed requests. The CLI upgrade and installed framework replacement are
-separate operations; use the upstream [release notes](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/tag/v0.8.1)
+separate operations; use the upstream [v0.9.0 release notes](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/tag/v0.9.0)
 and [project update procedure](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex#update-a-project).
 
 ```sh
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/download/v0.8.1/meta-cortex-installer.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/download/v0.9.0/meta-cortex-installer.sh | sh
 ```
 
 Before using the framework, confirm that `.meta-cortex/AGENTS.md` and
@@ -64,7 +64,7 @@ operation:
 REQUEST
 ```
 
-Continue only when `cli_version` and `framework_version` both report `0.8.1`
+Continue only when `cli_version` and `framework_version` both report `0.9.0`
 and the Codex integration reports `Connected`. Then read the installed
 [Meta-Cortex circuit breaker](../.meta-cortex/CIRCUIT-BREAKER.md), followed by
 its [entry point](../.meta-cortex/AGENTS.md). If the CLI cannot be installed,
@@ -112,11 +112,11 @@ tooling and graph topology; they do not redefine generic authoring rules.
 
 ### Release pin
 
-The Nook CLI release pin is 0.8.1. `preflight/Dockerfile` pins the installer
-URL. `.github/workflows/repository-policy.yml` and `.task/ci-workflows.yml` pin
-the upstream library commit
-`4ab2db8e39d111305e0e83fd145fbeee02966dfc`. `preflight/tests/loom_contracts.rs`
-asserts the expected `v0.8.1` installer release. Future upgrades update this
+Nook pins the CLI release at v0.9.0. `preflight/Dockerfile` pins the v0.9.0
+installer URL. `.github/workflows/repository-policy.yml` and
+`.task/ci-workflows.yml` pin the upstream library commit
+`16ed1940aa7c91ddb381898f4e2081fe6b95716c`. `preflight/tests/loom_contracts.rs`
+asserts the expected `v0.9.0` installer release. Future upgrades update this
 contract, each source pin, and their owning policy and test contracts together.
 
 - **Prohibited:** Update only the installer URL or only the pinned library
@@ -124,11 +124,11 @@ contract, each source pin, and their owning policy and test contracts together.
 - **Preferred:** Update the version contract, every source pin, and the
   corresponding policy and test assertions in the same change.
 
-### Repository identity and ledger migration
+### Historical v0.8 repository identity and ledger migration
 
-Meta-Cortex v0.8 stores feature ledgers outside Git at
-`${META_CORTEX_HOME:-$HOME/.meta-cortex}/<repository-id>/features`. Framework
-initialization creates or reads the repository UUID at
+In v0.8, Meta-Cortex stored feature ledgers outside Git at
+`${META_CORTEX_HOME:-$HOME/.meta-cortex}/<repository-id>/features`. In v0.8,
+framework initialization created or read the repository UUID at
 `.meta-cortex/repository-id` in the actual Git main checkout. Linked worktrees
 reuse that UUID through their shared Git common directory.
 
