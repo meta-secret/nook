@@ -362,6 +362,54 @@ mod wasm_idb_tests {
         github_snapshot_with_id("gh-wasm", pat)
     }
 
+    fn github_oauth_snapshot(
+        github_pat: &str,
+        access_token: &str,
+        refresh_token: &str,
+    ) -> AuthProvidersSnapshotData {
+        AuthProvidersSnapshotData {
+            providers: vec![
+                StorageProviderData::github(
+                    "gh-wasm",
+                    "GitHub",
+                    github_pat,
+                    "nook",
+                    "2026-06-24T00:00:00.000Z",
+                ),
+                StorageProviderData {
+                    id: "gd-wasm".to_owned(),
+                    provider_type: StorageProviderType::OauthFile,
+                    label: "Google Drive".to_owned(),
+                    github_pat: StoredGithubPat::Missing,
+                    github_repo: StoredGithubRepository::DefaultRepository,
+                    oauth_file: StoredOAuthFileConfiguration::configured(OAuthFileConfigData {
+                        preset: OauthFilePreset::GoogleDrive,
+                        access_token: StoredOAuthAccessCredential::AccessToken(
+                            access_token.to_owned(),
+                        ),
+                        refresh_token: StoredOAuthRefreshCredential::Token(
+                            refresh_token.to_owned(),
+                        ),
+                        expires_at: StoredOAuthTokenExpiry::Unknown,
+                        file_id: StoredOAuthRemoteFileId::Unresolved,
+                        file_name: StoredOAuthRemoteFileName::FileName("nook-events".to_owned()),
+                        account_email: StoredOAuthAccountIdentity::Unknown,
+                        drive_mode: GoogleDriveMode::Private,
+                        folder_id: StoredGoogleDriveFolder::Root,
+                        drive_private_target: StoredGoogleDrivePrivateTarget::LegacyAppDataFolder,
+                        icloud_mode: ICloudMode::Private,
+                        icloud_share_target: StoredICloudShareTarget::Personal,
+                    }),
+                    local_folder: StoredLocalFolderConfiguration::NotApplicable,
+                    store_id: ProviderVaultScope::Unscoped,
+                    sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
+                    created_at: "2026-06-24T00:00:00.000Z".to_owned(),
+                },
+            ],
+            active_vault_store_id: ActiveVaultScope::Unselected,
+        }
+    }
+
     fn empty_snapshot() -> AuthProvidersSnapshotData {
         AuthProvidersSnapshotData {
             providers: Vec::new(),
@@ -573,21 +621,66 @@ mod wasm_idb_tests {
     -> anyhow::Result<()> {
         let first = DeviceIdentity::generate()?;
         let second = DeviceIdentity::generate()?;
-        let mut legacy = github_snapshot("github_pat_legacy_first");
+        let github_pat = "github_pat_legacy_first";
+        let access_token = "ya29.legacy-oauth-access";
+        let refresh_token = "1//legacy-oauth-refresh";
+        let mut legacy = github_oauth_snapshot(github_pat, access_token, refresh_token);
         legacy = legacy
             .seal_credentials(&first)
             .map_err(|rejection| rejection.into_cause())?;
         AuthProviderDatabase::write_snapshot(&legacy).await?;
 
         AuthProviderDatabase::migrate_legacy_auth_providers_for_identity(&first).await?;
-        let mut rollback =
-            NormalizedAuthSnapshot::from(AuthProviderDatabase::read_raw_snapshot().await?).snapshot;
+        let raw_rollback = AuthProviderDatabase::read_raw_snapshot().await?;
+        let raw_github_pat = raw_rollback["providers"][0]["githubPat"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("schema-1 githubPat should be a flat string"))?;
+        assert_eq!(
+            ProviderCredentialEncoding::observe(raw_github_pat),
+            ProviderCredentialEncoding::ArmorMarked
+        );
+        assert!(!raw_github_pat.contains(github_pat));
+
+        let raw_oauth = &raw_rollback["providers"][1]["oauthFile"];
+        let raw_access_token = raw_oauth["accessToken"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("schema-1 accessToken should be a flat string"))?;
+        let raw_refresh_token = raw_oauth["refreshToken"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("schema-1 refreshToken should be a flat string"))?;
+        assert_eq!(
+            ProviderCredentialEncoding::observe(raw_access_token),
+            ProviderCredentialEncoding::ArmorMarked
+        );
+        assert_eq!(
+            ProviderCredentialEncoding::observe(raw_refresh_token),
+            ProviderCredentialEncoding::ArmorMarked
+        );
+        assert!(!raw_access_token.contains(access_token));
+        assert!(!raw_refresh_token.contains(refresh_token));
+
+        let mut rollback = NormalizedAuthSnapshot::from(raw_rollback).snapshot;
         rollback = rollback
             .open_credentials(&first)
             .map_err(|rejection| rejection.into_cause())?;
         assert_eq!(
             rollback.providers[0].github_pat,
-            StoredGithubPat::Token(("github_pat_legacy_first").to_owned())
+            StoredGithubPat::Token(github_pat.to_owned())
+        );
+        let StoredOAuthFileConfiguration::Configured(rollback_oauth) =
+            &rollback.providers[1].oauth_file
+        else {
+            return Err(anyhow::anyhow!(
+                "rollback OAuth configuration should be present"
+            ));
+        };
+        assert_eq!(
+            rollback_oauth.access_token,
+            StoredOAuthAccessCredential::AccessToken(access_token.to_owned())
+        );
+        assert_eq!(
+            rollback_oauth.refresh_token,
+            StoredOAuthRefreshCredential::Token(refresh_token.to_owned())
         );
         ProviderSnapshotPublication {
             identity: &second,
@@ -910,36 +1003,10 @@ mod wasm_idb_tests {
     async fn save_seals_oauth_tokens_in_indexed_db() -> anyhow::Result<()> {
         clear_auth_snapshot().await?;
         let identity = DeviceIdentity::generate()?;
+        let github_pat = "github_pat_44WASMgithubSECRET";
         let access = "ya29.wasm-oauth-access";
         let refresh = "1//wasm-refresh-secret";
-        let snapshot = AuthProvidersSnapshotData {
-            providers: vec![StorageProviderData {
-                id: "gd-wasm".to_owned(),
-                provider_type: StorageProviderType::OauthFile,
-                label: "Google Drive".to_owned(),
-                github_pat: StoredGithubPat::Missing,
-                github_repo: StoredGithubRepository::DefaultRepository,
-                oauth_file: StoredOAuthFileConfiguration::configured(OAuthFileConfigData {
-                    preset: OauthFilePreset::GoogleDrive,
-                    access_token: StoredOAuthAccessCredential::AccessToken(access.to_owned()),
-                    refresh_token: StoredOAuthRefreshCredential::Token(refresh.to_owned()),
-                    expires_at: StoredOAuthTokenExpiry::Unknown,
-                    file_id: StoredOAuthRemoteFileId::Unresolved,
-                    file_name: StoredOAuthRemoteFileName::FileName("nook-events".to_owned()),
-                    account_email: StoredOAuthAccountIdentity::Unknown,
-                    drive_mode: GoogleDriveMode::Private,
-                    folder_id: StoredGoogleDriveFolder::Root,
-                    drive_private_target: StoredGoogleDrivePrivateTarget::LegacyAppDataFolder,
-                    icloud_mode: ICloudMode::Private,
-                    icloud_share_target: StoredICloudShareTarget::Personal,
-                }),
-                local_folder: StoredLocalFolderConfiguration::NotApplicable,
-                store_id: ProviderVaultScope::Unscoped,
-                sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
-                created_at: "2026-06-24T00:00:00.000Z".to_owned(),
-            }],
-            active_vault_store_id: ActiveVaultScope::Unselected,
-        };
+        let snapshot = github_oauth_snapshot(github_pat, access, refresh);
         ProviderSnapshotPublication {
             identity: &identity,
             snapshot: &snapshot,
@@ -950,8 +1017,41 @@ mod wasm_idb_tests {
             &AuthProviderDatabase::state_key_for_app_id(identity.app_id()),
         )
         .await?;
+        let raw_github_pat = &raw["providers"][0]["githubPat"];
+        assert_eq!(raw_github_pat["state"], "token");
+        let stored_github_pat = raw_github_pat["value"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("schema-2 githubPat value should be a string"))?;
+        assert_eq!(
+            ProviderCredentialEncoding::observe(stored_github_pat),
+            ProviderCredentialEncoding::ArmorMarked
+        );
+        assert!(!stored_github_pat.contains(github_pat));
+
+        let raw_oauth = &raw["providers"][1]["oauthFile"];
+        assert_eq!(raw_oauth["state"], "configured");
+        let raw_oauth_config = &raw_oauth["config"];
+        assert_eq!(raw_oauth_config["accessToken"]["state"], "accessToken");
+        assert_eq!(raw_oauth_config["refreshToken"]["state"], "token");
+        let raw_access = raw_oauth_config["accessToken"]["value"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("schema-2 accessToken value should be a string"))?;
+        let raw_refresh = raw_oauth_config["refreshToken"]["value"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("schema-2 refreshToken value should be a string"))?;
+        assert_eq!(
+            ProviderCredentialEncoding::observe(raw_access),
+            ProviderCredentialEncoding::ArmorMarked
+        );
+        assert_eq!(
+            ProviderCredentialEncoding::observe(raw_refresh),
+            ProviderCredentialEncoding::ArmorMarked
+        );
+        assert!(!raw_access.contains(access));
+        assert!(!raw_refresh.contains(refresh));
+
         let stored = NormalizedAuthSnapshot::from(raw).snapshot;
-        let StoredOAuthFileConfiguration::Configured(oauth) = &stored.providers[0].oauth_file
+        let StoredOAuthFileConfiguration::Configured(oauth) = &stored.providers[1].oauth_file
         else {
             return Err((anyhow::anyhow!("stored OAuth configuration missing")).into());
         };
@@ -974,7 +1074,7 @@ mod wasm_idb_tests {
 
         let loaded = AuthProviderDatabase::load_auth_providers(&identity).await?;
         let StoredOAuthFileConfiguration::Configured(loaded_oauth) =
-            &loaded.snapshot.providers[0].oauth_file
+            &loaded.snapshot.providers[1].oauth_file
         else {
             return Err((anyhow::anyhow!("loaded oauth_file configuration missing")).into());
         };
