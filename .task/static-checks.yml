@@ -51,7 +51,7 @@ tasks:
   web:static:container:
     desc: Independently lint and typecheck all authored web sources inside the prepared web container.
     cmds:
-      - task --parallel --failfast=false web:static:lint web:static:app web:static:extension web:static:research web:static:simple web:static:sentinel
+      - task --parallel web:static:lint web:static:app web:static:extension web:static:research web:static:simple web:static:sentinel
 
   web:static:lint:
     dir: "{{.ROOT_DIR}}/nook-app/nook-web"
