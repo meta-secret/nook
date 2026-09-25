@@ -443,7 +443,7 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
         "\n  ui-demos:\n",
         "\n  deploy:\n",
         "needs: [preflight]",
-        "needs: [preflight-cache-publish, native-cache-publish, rust-ecosystem, web, web-e2e, extension-e2e, wasm-cache-proof]",
+        "needs: [preflight, rust, rust-ecosystem, web, web-e2e, extension-e2e, wasm-cache-proof]",
         "task _ci:main:web:e2e-only",
         "task _extension:test:e2e",
         "task _web:test:ui-demo",

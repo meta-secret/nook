@@ -109,7 +109,7 @@ impl WorkflowRuntimeContract<'_> {
         let root = self.root;
         for (workflow, end_marker, required_steps) in [(
             ".github/workflows/main.yml",
-            "  wasm-cache-publish:\n",
+            "  wasm-cache-proof:\n",
             [
                 "name: WASM and web verification",
                 "Prepare web artifacts alongside verified WASM cache publication",
@@ -136,21 +136,14 @@ impl WorkflowRuntimeContract<'_> {
         }
 
         let ecosystem_source = root.read(".github/workflows/rust-ecosystem-checks.yml");
-        let deterministic_job = ecosystem_source
-            .split_once("  deterministic-tests:\n")
-            .and_then(|(_, jobs)| jobs.split_once("\n  dylint:\n").map(|(job, _)| job))
-            .unwrap_or_else(|| panic!("rust ecosystem workflow must define deterministic tests"));
-        assert!(
-            deterministic_job.contains("timeout-minutes: 10"),
-            "deterministic, fuzz, and Kani checks must retain their bounded ten-minute envelope"
-        );
-        let dylint_job = ecosystem_source
-            .split_once("  dylint:\n")
+        let ecosystem_job = ecosystem_source
+            .split_once("  checks:\n")
             .map(|(_, job)| job)
-            .unwrap_or_else(|| panic!("rust ecosystem workflow must define a Dylint job"));
+            .unwrap_or_else(|| panic!("rust ecosystem workflow must define its aggregated job"));
         assert!(
-            dylint_job.contains("timeout-minutes: 10"),
-            "Rust ecosystem Dylint job must leave bounded time for a cold toolchain and telemetry"
+            ecosystem_job.contains("timeout-minutes: 10")
+                && ecosystem_job.contains("task docker:ecosystem:check"),
+            "concurrent ecosystem checks must retain their bounded ten-minute envelope"
         );
     }
 

@@ -68,9 +68,10 @@ E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_I
 Main finishes repository preflight before native Rust verification begins.
 Preflight and native cache exports stay in their verified jobs on the same
 node-local shards that solved them.
-Each explicit outcome feeds an independent required status gate.
-Publication failures do not erase successful Rust evidence or suppress WASM,
-web, and browser consumers.
+Each explicit outcome feeds a required assertion inside its producer job.
+Publication failures fail the producer job. Consumers use explicit validation
+outcomes so successful Rust evidence can still feed WASM, web, and browser
+tests. Deployment requires successful producers as well as all test consumers.
 Each publisher exports only its verified complete graph.
 Preflight publishes `nook-preflight-v1`.
 Native publishes the mode-max `nook-rust-native-source-v4` graph, which embeds

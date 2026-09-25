@@ -314,6 +314,42 @@ tasks:
       - task --taskfile "{{.REPO_ROOT}}/Taskfile.yml" preflight:dependency-policy
       - task: fuzz:dependency-policy
 
+  docker:ecosystem:check:
+    desc: Run all ecosystem check groups concurrently on one node-local BuildKit shard.
+    cmds:
+      - |
+        log_dir="${RUNNER_TEMP:-/tmp}/nook-ecosystem-logs"
+        mkdir -p "$log_dir"
+        task docker:ecosystem:dependency-policy >"$log_dir/policy.log" 2>&1 & policy_pid=$!
+        task docker:ecosystem:smoke >"$log_dir/smoke.log" 2>&1 & smoke_pid=$!
+        task docker:ecosystem:dylint >"$log_dir/dylint.log" 2>&1 & dylint_pid=$!
+        failed=0
+        for group in policy smoke dylint; do
+          case "$group" in
+            policy) pid=$policy_pid ;;
+            smoke) pid=$smoke_pid ;;
+            dylint) pid=$dylint_pid ;;
+          esac
+          result=success
+          if ! wait "$pid"; then
+            result=failure
+            failed=1
+          fi
+          echo "::group::Rust ecosystem: $group ($result)"
+          cat "$log_dir/$group.log"
+          echo "::endgroup::"
+          if [ "$result" = failure ]; then
+            echo "::error::Rust ecosystem $group failed"
+          fi
+          if [ -n "${GITHUB_OUTPUT:-}" ]; then
+            echo "$group=$result" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+            echo "- Rust ecosystem $group: $result" >> "$GITHUB_STEP_SUMMARY"
+          fi
+        done
+        test "$failed" -eq 0
+
   docker:ecosystem:smoke:
     desc: Run deterministic tests, fuzz, and Kani concurrently on one runner.
     cmds:

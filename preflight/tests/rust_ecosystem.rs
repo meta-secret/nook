@@ -37,15 +37,14 @@ fn dependency_policy_allows_main_cache_seed_latency() -> anyhow::Result<()> {
     let checks =
         RepositoryFixture::repository_root().read(".github/workflows/rust-ecosystem-checks.yml")?;
     let dependency_policy = checks
-        .split_once("  dependency-policy:")
-        .and_then(|(_, jobs)| jobs.split_once("\n  deterministic-tests:"))
-        .map(|(job, _)| job)
-        .ok_or_else(|| anyhow::anyhow!("dependency-policy job block is missing"))?;
+        .split_once("  checks:")
+        .map(|(_, job)| job)
+        .ok_or_else(|| anyhow::anyhow!("ecosystem job block is missing"))?;
 
     assert!(
         dependency_policy.contains("timeout-minutes: 10")
-            && dependency_policy.contains("task docker:ecosystem:dependency-policy"),
-        "dependency policy must retain its command within the five-minute job limit"
+            && dependency_policy.contains("task docker:ecosystem:check"),
+        "dependency policy must retain its command within the ten-minute job limit"
     );
 
     Ok(())
@@ -137,9 +136,8 @@ impl RustEcosystemFixture {
         let root = RepositoryFixture::repository_root();
         let checks = root.read(".github/workflows/rust-ecosystem-checks.yml")?;
         let dependency_policy = checks
-            .split_once("  dependency-policy:")
-            .and_then(|(_, jobs)| jobs.split_once("  deterministic-tests:"))
-            .map_or_else(String::new, |(job, _)| job.to_owned());
+            .split_once("  checks:")
+            .map_or_else(String::new, |(_, job)| job.to_owned());
         let rust_dockerfiles = [
             "nook-app/nook-platform/docker/rust/base/Dockerfile",
             "nook-app/nook-platform/docker/rust/ecosystem/policy/Dockerfile",
@@ -258,7 +256,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
                         && line.contains("(vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest'")
                 })
                 .count()
-                == 3,
+                == 1,
         "trusted native/ecosystem Rust jobs must use their ARC execution class while forks fall back hosted"
     );
     assert!(fixture.entry.contains("branches: [main]"));
@@ -269,9 +267,9 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     assert!(
         fixture
             .dependency_policy
-            .contains("name: Dependency policy and RustSec")
+            .contains("name: Rust ecosystem verification")
             && fixture.dependency_policy.contains("timeout-minutes: 10"),
-        "Dependency policy must enforce the five-minute job limit"
+        "Dependency policy must enforce the ten-minute job limit"
     );
     assert!(
         !fixture.entry.contains("Run dependency policy")
@@ -287,12 +285,8 @@ fn rust_ecosystem_jobs_keep_their_shared_execution_contract() -> anyhow::Result<
     let fixture = RustEcosystemFixture::load()?;
 
     for marker in [
-        "Run dependency policy",
-        "Run deterministic tests, fuzz smoke, and Kani in parallel",
-        "Bake rust-dylint",
-        "task docker:ecosystem:dependency-policy",
-        "task docker:ecosystem:smoke",
-        "task docker:ecosystem:dylint",
+        "Run dependency policy, deterministic tests, fuzz, Kani, and Dylint in parallel",
+        "task docker:ecosystem:check",
         "nook-docker-setup",
         "NOOK_SCCACHE_ACCESS_KEY",
         "FUZZ_SECONDS",
@@ -320,10 +314,51 @@ fn rust_ecosystem_jobs_keep_their_shared_execution_contract() -> anyhow::Result<
                 "cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}"
             )
             .count(),
-        3,
-        "every Bake-backed ecosystem job must seed Main and isolate PR cache writes"
+        1,
+        "the aggregated Bake-backed ecosystem job must seed Main and isolate PR cache writes"
     );
 
+    Ok(())
+}
+
+#[test]
+fn ecosystem_aggregation_starts_all_groups_and_collects_every_result() -> anyhow::Result<()> {
+    let fixture = RustEcosystemFixture::load()?;
+    let aggregate = fixture
+        .docker_tasks
+        .split_once("  docker:ecosystem:check:")
+        .and_then(|(_, rest)| rest.split_once("  docker:ecosystem:smoke:"))
+        .map(|(task, _)| task)
+        .ok_or_else(|| anyhow::anyhow!("ecosystem aggregate task is missing"))?;
+    let wait = aggregate
+        .find("if ! wait")
+        .ok_or_else(|| anyhow::anyhow!("aggregate must await every group"))?;
+    for (task, pid, output) in [
+        ("dependency-policy", "policy_pid=$!", "policy"),
+        ("smoke", "smoke_pid=$!", "smoke"),
+        ("dylint", "dylint_pid=$!", "dylint"),
+    ] {
+        assert!(aggregate.contains(&format!("task docker:ecosystem:{task} ")));
+        assert!(aggregate.find(pid).is_some_and(|start| start < wait));
+        assert!(
+            fixture
+                .checks
+                .contains(&format!("steps.checks.outputs.{output}"))
+        );
+    }
+    assert!(
+        aggregate.contains("for group in policy smoke dylint; do")
+            && aggregate.contains("failed=1")
+            && aggregate.contains("test \"$failed\" -eq 0")
+            && aggregate.contains("echo \"$group=$result\" >> \"$GITHUB_OUTPUT\"")
+    );
+    assert_eq!(
+        fixture
+            .checks
+            .matches("uses: ./.github/actions/nook-docker-setup")
+            .count(),
+        1
+    );
     Ok(())
 }
 
