@@ -212,12 +212,14 @@ mod tests {
     }
 
     fn drive_provider(id: &str, target: StoredGoogleDrivePrivateTarget) -> StorageProviderData {
-        let mut config = OAuthFileConfigData::default();
-        config.preset = OauthFilePreset::GoogleDrive;
-        config.drive_mode = GoogleDriveMode::Private;
-        config.file_id = StoredOAuthRemoteFileId::FileId(format!("old-file-{id}"));
-        config.file_name = StoredOAuthRemoteFileName::FileName(format!("{id}.yaml"));
-        config.drive_private_target = target;
+        let config = OAuthFileConfigData {
+            preset: OauthFilePreset::GoogleDrive,
+            drive_mode: GoogleDriveMode::Private,
+            file_id: StoredOAuthRemoteFileId::FileId(format!("old-file-{id}")),
+            file_name: StoredOAuthRemoteFileName::FileName(format!("{id}.yaml")),
+            drive_private_target: target,
+            ..OAuthFileConfigData::default()
+        };
         StorageProviderData {
             id: id.to_owned(),
             provider_type: StorageProviderType::OauthFile,

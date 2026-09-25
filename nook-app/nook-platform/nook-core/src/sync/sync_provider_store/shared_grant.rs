@@ -17,7 +17,7 @@ pub struct SharedGrantProviderRequest {
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum SharedGrantProviderOutcome {
     AuthorizationRequired,
-    Existing { provider: StorageProviderData },
+    Existing { provider: Box<StorageProviderData> },
 }
 impl SharedGrantProviderRequest {
     #[must_use]
@@ -73,7 +73,9 @@ mod selection_tests {
         }
         .select();
         match outcome {
-            SharedGrantProviderOutcome::Existing { provider } => assert_eq!(provider, row),
+            SharedGrantProviderOutcome::Existing { provider } => {
+                assert_eq!(provider.as_ref(), &row)
+            }
             SharedGrantProviderOutcome::AuthorizationRequired => {
                 anyhow::bail!("eligible saved provider should be selected")
             }

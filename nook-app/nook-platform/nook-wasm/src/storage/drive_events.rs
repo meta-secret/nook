@@ -207,10 +207,8 @@ impl DriveEventStore<'_> {
     fn parent_query_fragment(parent: &DriveEventParent) -> String {
         match parent {
             DriveEventParent::AppDataFolder => "'appDataFolder' in parents".to_owned(),
-            DriveEventParent::PrivateAppDataFolder { folder_id } => {
-                format!("'{}' in parents", folder_id.replace('\'', "\\'"))
-            }
-            DriveEventParent::SharedFolder { folder_id } => {
+            DriveEventParent::PrivateAppDataFolder { folder_id }
+            | DriveEventParent::SharedFolder { folder_id } => {
                 format!("'{}' in parents", folder_id.replace('\'', "\\'"))
             }
         }
@@ -219,8 +217,8 @@ impl DriveEventStore<'_> {
     fn parent_id_for_create(parent: &DriveEventParent) -> &str {
         match parent {
             DriveEventParent::AppDataFolder => "appDataFolder",
-            DriveEventParent::PrivateAppDataFolder { folder_id } => folder_id.as_str(),
-            DriveEventParent::SharedFolder { folder_id } => folder_id.as_str(),
+            DriveEventParent::PrivateAppDataFolder { folder_id }
+            | DriveEventParent::SharedFolder { folder_id } => folder_id.as_str(),
         }
     }
 

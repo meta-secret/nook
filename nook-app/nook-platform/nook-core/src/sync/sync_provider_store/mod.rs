@@ -169,7 +169,7 @@ impl From<OAuthAccessTokenRef<'_>> for OAuthAccessToken {
 #[tsify(into_wasm_abi)]
 pub enum DuplicateSyncProvider {
     Unique,
-    Duplicate { provider: StorageProvider },
+    Duplicate { provider: Box<StorageProvider> },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
