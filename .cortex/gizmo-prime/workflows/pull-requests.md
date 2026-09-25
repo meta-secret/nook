@@ -18,6 +18,13 @@ explicit handoff.
   validation, or local preflight; use the terminal GitHub Actions outcome as
   execution evidence.
 - Wait for the complete terminal check wave.
+- For a failed PR validation run requested with `FULL_E2E=1`, inspect the
+  `pr-full-e2e-failure-<run_id>-<run_attempt>` artifact. It contains the
+  existing web and extension Playwright `test-results` directories at
+  `PR_ARTIFACT_DIR/runtime/nook-app/nook-web/nook-web-app/test-results` and
+  `PR_ARTIFACT_DIR/runtime/nook-app/nook-web/nook-web-extension/test-results`.
+  It is retained for 15 days and may omit traces when Playwright's configured
+  retry policy does not emit them.
 - When changing Main aggregation, validate the
   [producer and consumer failure gates](../../teams/sre/workflows/ci-pipeline.md)
   in hosted CI. Removing a status-only job must preserve its required assertion.
