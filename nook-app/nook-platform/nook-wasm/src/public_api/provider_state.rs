@@ -423,7 +423,7 @@ mod tests {
             NookStoredOAuthFileConfigurationState::NotApplicable
         );
         assert_eq!(
-            stored_oauth_file_configuration_state(StoredOAuthFileConfiguration::Configured(
+            stored_oauth_file_configuration_state(StoredOAuthFileConfiguration::configured(
                 nook_core::OAuthFileConfigData::default(),
             )),
             NookStoredOAuthFileConfigurationState::Configured

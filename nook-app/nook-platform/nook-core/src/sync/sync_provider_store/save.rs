@@ -160,7 +160,7 @@ impl ProviderSaveRequest {
             StorageProviderType::OauthFile => {
                 let drive_file = request.configured_drive_file();
                 let mut oauth = match &request.oauth_file {
-                    StoredOAuthFileConfiguration::Configured(config) => config.clone(),
+                    StoredOAuthFileConfiguration::Configured(config) => config.as_ref().clone(),
                     StoredOAuthFileConfiguration::NotApplicable => OAuthFileConfigData {
                         preset: request.oauth_preset,
                         file_name: StoredOAuthRemoteFileName::FileName(drive_file.clone()),
@@ -182,7 +182,7 @@ impl ProviderSaveRequest {
                     })
                     .render(),
                 });
-                provider.oauth_file = StoredOAuthFileConfiguration::Configured(oauth);
+                provider.oauth_file = StoredOAuthFileConfiguration::configured(oauth);
                 Ok(provider)
             }
             StorageProviderType::LocalFolder => {
@@ -273,7 +273,7 @@ impl OAuthUpdateTarget<'_> {
             label: String::new(),
             github_pat: StoredGithubPat::Missing,
             github_repo: StoredGithubRepository::DefaultRepository,
-            oauth_file: StoredOAuthFileConfiguration::Configured(active_oauth.clone()),
+            oauth_file: StoredOAuthFileConfiguration::configured(active_oauth.clone()),
             local_folder: StoredLocalFolderConfiguration::NotApplicable,
             store_id: ProviderVaultScope::Unscoped,
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
@@ -411,13 +411,14 @@ impl ProviderSaveRequest {
                         }
                         .merge();
                         provider.oauth_file =
-                            StoredOAuthFileConfiguration::Configured(merged.clone());
-                        returned_oauth = StoredOAuthFileConfiguration::Configured(merged);
+                            StoredOAuthFileConfiguration::configured(merged.clone());
+                        returned_oauth = StoredOAuthFileConfiguration::configured(merged);
                     }
                 }
             }
             if matches!(returned_oauth, StoredOAuthFileConfiguration::NotApplicable) {
-                returned_oauth = StoredOAuthFileConfiguration::Configured(active_oauth.clone());
+                returned_oauth =
+                    StoredOAuthFileConfiguration::configured(active_oauth.as_ref().clone());
             }
         }
 
@@ -614,7 +615,7 @@ mod tests {
             folder_id: StoredGoogleDriveFolder::FolderId("folder".to_owned()),
             ..OAuthFileConfigData::default()
         };
-        request.oauth_file = StoredOAuthFileConfiguration::Configured(active);
+        request.oauth_file = StoredOAuthFileConfiguration::configured(active);
         let ProviderSaveOutcome::Saved {
             snapshot,
             oauth_file,
@@ -647,7 +648,7 @@ mod tests {
         );
         assert_eq!(
             *oauth_file,
-            StoredOAuthFileConfiguration::Configured(persisted.clone())
+            StoredOAuthFileConfiguration::configured(persisted.clone())
         );
         Ok(())
     }

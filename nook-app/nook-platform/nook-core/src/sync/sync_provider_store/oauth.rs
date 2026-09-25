@@ -85,7 +85,7 @@ impl OAuthFileConfigData {
         let expires_at = input.expires_at;
         let existing = input.existing;
         let existing = match existing {
-            StoredOAuthFileConfiguration::Configured(config) => config.clone(),
+            StoredOAuthFileConfiguration::Configured(config) => config.as_ref().clone(),
             StoredOAuthFileConfiguration::NotApplicable => OAuthFileConfigData::default(),
         };
         let drive_mode = existing.resolved_google_drive_mode();
@@ -112,7 +112,7 @@ impl OAuthFileConfigData {
         let account_name = input.account_name;
         let existing = input.existing;
         let existing = match existing {
-            StoredOAuthFileConfiguration::Configured(config) => config.clone(),
+            StoredOAuthFileConfiguration::Configured(config) => config.as_ref().clone(),
             StoredOAuthFileConfiguration::NotApplicable => OAuthFileConfigData::default(),
         };
         let icloud_mode = existing.resolved_icloud_mode();
@@ -331,7 +331,7 @@ mod tests {
         let google = OAuthFileConfigData::from_google_token(&GoogleOAuthTokenInput {
             access_token: "new-google-token",
             expires_at: "2026-07-20T00:00:00Z",
-            existing: &StoredOAuthFileConfiguration::Configured(google_existing.clone()),
+            existing: &StoredOAuthFileConfiguration::configured(google_existing.clone()),
         });
         assert_eq!(
             google.access_token,
@@ -365,7 +365,7 @@ mod tests {
         let icloud = OAuthFileConfigData::from_icloud_token(&ICloudOAuthTokenInput {
             access_token: "new-icloud-token",
             account_name: &StoredOAuthAccountIdentity::Email("new@example.com".to_owned()),
-            existing: &StoredOAuthFileConfiguration::Configured(icloud_existing.clone()),
+            existing: &StoredOAuthFileConfiguration::configured(icloud_existing.clone()),
         });
         assert_eq!(
             icloud.access_token,
@@ -567,7 +567,7 @@ mod tests {
             let projected = OAuthFileConfigData::from_icloud_token(&ICloudOAuthTokenInput {
                 access_token: " token ",
                 account_name: &account_name,
-                existing: &StoredOAuthFileConfiguration::Configured(existing.clone()),
+                existing: &StoredOAuthFileConfiguration::configured(existing.clone()),
             });
             assert_eq!(
                 projected.access_token,

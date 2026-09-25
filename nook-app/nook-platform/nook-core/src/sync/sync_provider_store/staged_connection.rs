@@ -89,7 +89,7 @@ impl StagedRemoteConnection<'_> {
                     label: String::new(),
                     github_pat: StoredGithubPat::Missing,
                     github_repo: StoredGithubRepository::DefaultRepository,
-                    oauth_file: StoredOAuthFileConfiguration::Configured(oauth),
+                    oauth_file: StoredOAuthFileConfiguration::configured(oauth),
                     local_folder: StoredLocalFolderConfiguration::NotApplicable,
                     store_id: ProviderVaultScope::Unscoped,
                     sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,

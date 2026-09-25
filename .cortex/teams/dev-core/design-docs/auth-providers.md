@@ -235,27 +235,30 @@ collaborator saves a separate OAuth token for their own Google account. Switchin
 modes clears the scope-bound token and target in Rust before the user signs in
 again; it never reuses an app-data token for a shared folder or vice versa.
 
-Schema-1 and pre-scoped private Drive providers keep using the historical
-`appDataFolder` event root, even when they have an old unresolved `fileId`; the
-target is not inferred from the name, `store_id`, or ID slot. A new schema-2
-private provider instead looks up or creates one folder named
-`nook-events-v2-{fileName}` directly under `appDataFolder`, then persists that
-folder's stable Drive ID in `drivePrivateTarget`. All event list/fetch/write
-operations and the local projection-cache key use that ID. If the name resolves
-to multiple matching folders, sync fails closed and does not choose a parent.
-Lookup or creation failure leaves the typed target pending; the next connection
-repeats lookup/create resolution before any event operation.
-The Drive API supports listing the appData space and creating folder resources
-there ([appData guide](https://developers.google.com/workspace/drive/api/guides/appdata),
-[folder guide](https://developers.google.com/workspace/drive/api/guides/folder)).
-Google forbids moving or trashing appData entries, so Nook leaves legacy root
-events in place and performs no automatic event migration.
+#### Private Drive target and rollback compatibility
 
-Schema-1 rollback projection preserves historical private-root and shared
-providers but omits new schema-2 private-folder providers. This prevents an old
-build from interpreting the folder ID as a historical file ID and routing the
-provider to the shared `appDataFolder` root. The folder and its events remain in
-Drive during rollback.
+- **Historical target:** Schema-1 and pre-scoped private Drive providers keep
+  using the historical `appDataFolder` event root, even when they have an old
+  unresolved `fileId`. The target is not inferred from the name, `store_id`, or
+  ID slot.
+- **New target:** A new schema-2 private provider looks up or creates one folder
+  named `nook-events-v2-{fileName}` directly under `appDataFolder`, then persists
+  that folder's stable Drive ID in `drivePrivateTarget`. All event
+  list/fetch/write operations and the local projection-cache key use that ID.
+- **Fail-closed resolution:** If the name resolves to multiple matching
+  folders, sync fails closed and does not choose a parent. Lookup or creation
+  failure leaves the typed target pending; the next connection repeats
+  lookup/create resolution before any event operation.
+- **No event migration:** The Drive API supports listing the appData space and
+  creating folder resources there ([appData guide](https://developers.google.com/workspace/drive/api/guides/appdata),
+  [folder guide](https://developers.google.com/workspace/drive/api/guides/folder)).
+  Google forbids moving or trashing appData entries, so Nook leaves legacy root
+  events in place and performs no automatic event migration.
+- **Rollback:** The schema-1 projection preserves historical private-root and
+  shared providers but omits new schema-2 private-folder providers. This
+  prevents an old build from interpreting the folder ID as a historical file
+  ID and routing the provider to the shared `appDataFolder` root. The folder
+  and its events remain in Drive during rollback.
 
 **Shared-folder grant outcomes:** After Rust validates a shared Google Drive
 grant request, WASM attempts `files.create` (folder) and `permissions.create`

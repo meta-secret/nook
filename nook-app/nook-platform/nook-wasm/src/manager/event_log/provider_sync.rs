@@ -852,10 +852,23 @@ mod tests {
                     && message.contains("store_local12345")
                     && message.contains("store_remote1234")
         ));
-        let issue = manager.take_event_log_sync_issue().issue()?;
+        let issue = manager
+            .take_event_log_sync_issue()
+            .issue()
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
         assert!(issue.is_store_mismatch());
-        assert_eq!(issue.local_store_id()?, "store_local12345");
-        assert_eq!(issue.remote_store_id()?, "store_remote1234");
+        assert_eq!(
+            issue
+                .local_store_id()
+                .map_err(|error| anyhow::anyhow!("{error}"))?,
+            "store_local12345"
+        );
+        assert_eq!(
+            issue
+                .remote_store_id()
+                .map_err(|error| anyhow::anyhow!("{error}"))?,
+            "store_remote1234"
+        );
         Ok(())
     }
 

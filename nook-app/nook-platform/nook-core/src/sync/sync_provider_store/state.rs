@@ -150,13 +150,13 @@ pub enum ActiveVaultScope {
 pub enum StoredOAuthFileConfiguration {
     #[default]
     NotApplicable,
-    Configured(OAuthFileConfig),
+    Configured(Box<OAuthFileConfig>),
 }
 
 impl StoredOAuthFileConfiguration {
     #[must_use]
-    pub const fn configured(config: OAuthFileConfig) -> Self {
-        Self::Configured(config)
+    pub fn configured(config: OAuthFileConfig) -> Self {
+        Self::Configured(Box::new(config))
     }
 }
 

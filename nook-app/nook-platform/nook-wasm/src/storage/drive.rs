@@ -84,12 +84,12 @@ struct DrivePrivateFolderResource {
     mime_type: String,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct DrivePrivateFolderMetadata<'a> {
-    name: &'a str,
-    mime_type: &'static str,
-    parents: [&'static str; 1],
+struct DrivePrivateFolderMetadataV2 {
+    name: String,
+    mime_type: String,
+    parents: Vec<String>,
 }
 
 fn private_event_folder_name(file_name: &nook_core::DriveBackupName) -> String {
@@ -103,11 +103,11 @@ fn private_event_folder_query(name: &str) -> String {
     )
 }
 
-fn private_event_folder_metadata(name: &str) -> DrivePrivateFolderMetadata<'_> {
-    DrivePrivateFolderMetadata {
-        name,
-        mime_type: DRIVE_FOLDER_MIME_TYPE,
-        parents: ["appDataFolder"],
+fn private_event_folder_metadata(name: &str) -> DrivePrivateFolderMetadataV2 {
+    DrivePrivateFolderMetadataV2 {
+        name: name.to_owned(),
+        mime_type: DRIVE_FOLDER_MIME_TYPE.to_owned(),
+        parents: vec!["appDataFolder".to_owned()],
     }
 }
 
@@ -288,10 +288,16 @@ mod tests {
         assert!(private_event_folder_query(&folder_name).contains(
             "name = 'nook-events-v2-family_vault.yaml' and mimeType = 'application/vnd.google-apps.folder' and 'appDataFolder' in parents and trashed = false"
         ));
-        let metadata = serde_json::to_value(private_event_folder_metadata(&folder_name))?;
-        assert_eq!(metadata["name"], folder_name);
-        assert_eq!(metadata["mimeType"], DRIVE_FOLDER_MIME_TYPE);
-        assert_eq!(metadata["parents"][0], "appDataFolder");
+        let encoded = serde_json::to_vec(&private_event_folder_metadata(&folder_name))?;
+        let metadata: DrivePrivateFolderMetadataV2 = serde_json::from_slice(&encoded)?;
+        assert_eq!(
+            metadata,
+            DrivePrivateFolderMetadataV2 {
+                name: folder_name,
+                mime_type: DRIVE_FOLDER_MIME_TYPE.to_owned(),
+                parents: vec!["appDataFolder".to_owned()],
+            }
+        );
         Ok(())
     }
 

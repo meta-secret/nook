@@ -9,8 +9,7 @@
 
 use crate::{
     AgeArmoredCiphertext, AuthProvidersSnapshotData, DeviceIdentity, DevicePublicKey, Sha256Hex,
-    StoredGithubPat, StoredGoogleDrivePrivateTarget, StoredOAuthAccessCredential,
-    StoredOAuthRefreshCredential,
+    StoredGithubPat, StoredOAuthAccessCredential, StoredOAuthRefreshCredential,
     errors::{MultiDeviceError, MultiDeviceResult},
 };
 use crate::{OAuthFileConfigData, StorageProviderData, StoredOAuthFileConfiguration};
@@ -129,7 +128,7 @@ impl CredentialTransition<'_> {
                 StoredOAuthFileConfiguration::NotApplicable
             }
             StoredOAuthFileConfiguration::Configured(oauth) => {
-                StoredOAuthFileConfiguration::Configured(OAuthFileConfigData {
+                StoredOAuthFileConfiguration::configured(OAuthFileConfigData {
                     access_token: match &oauth.access_token {
                         StoredOAuthAccessCredential::SignedOut => {
                             StoredOAuthAccessCredential::SignedOut
@@ -460,10 +459,11 @@ impl ProviderCredentialField {
 mod tests {
     use crate::{
         ActiveVaultScope, GoogleDriveMode, ProviderSyncCheckpoint, ProviderVaultScope,
-        StoredGithubPat, StoredGithubRepository, StoredGoogleDriveFolder, StoredICloudShareTarget,
-        StoredLocalFolderConfiguration, StoredOAuthAccessCredential, StoredOAuthAccountIdentity,
-        StoredOAuthFileConfiguration, StoredOAuthRefreshCredential, StoredOAuthRemoteFileId,
-        StoredOAuthRemoteFileName, StoredOAuthTokenExpiry,
+        StoredGithubPat, StoredGithubRepository, StoredGoogleDriveFolder,
+        StoredGoogleDrivePrivateTarget, StoredICloudShareTarget, StoredLocalFolderConfiguration,
+        StoredOAuthAccessCredential, StoredOAuthAccountIdentity, StoredOAuthFileConfiguration,
+        StoredOAuthRefreshCredential, StoredOAuthRemoteFileId, StoredOAuthRemoteFileName,
+        StoredOAuthTokenExpiry,
     };
 
     use std::io;

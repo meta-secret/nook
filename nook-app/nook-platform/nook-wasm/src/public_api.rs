@@ -379,7 +379,7 @@ impl NookTotpCode {
 ) -> Result<NookStagedStorageArgs, wasm_bindgen::JsError> {
     Ok(NookStagedStorageArgs::new(
         StagedRemoteConnection::OAuth(StagedOAuthConnection {
-            configuration: &StoredOAuthFileConfiguration::Configured(oauth_file.clone()),
+            configuration: &StoredOAuthFileConfiguration::configured(oauth_file.clone()),
             file_name: &StoredOAuthRemoteFileName::Unresolved,
             setup,
         })
@@ -446,7 +446,7 @@ mod browser_tests {
             label: "Google Drive".into(),
             github_pat: StoredGithubPat::Missing,
             github_repo: StoredGithubRepository::DefaultRepository,
-            oauth_file: StoredOAuthFileConfiguration::Configured(nook_core::OAuthFileConfigData {
+            oauth_file: StoredOAuthFileConfiguration::configured(nook_core::OAuthFileConfigData {
                 preset: OauthFilePreset::GoogleDrive,
                 access_token: StoredOAuthAccessCredential::AccessToken("access-token".into()),
                 file_name: StoredOAuthRemoteFileName::FileName("Vault.yaml".into()),
@@ -464,7 +464,7 @@ mod browser_tests {
     fn shared_icloud_provider() -> StorageProviderData {
         let mut provider = shared_oauth_provider();
         provider.oauth_file =
-            StoredOAuthFileConfiguration::Configured(nook_core::OAuthFileConfigData {
+            StoredOAuthFileConfiguration::configured(nook_core::OAuthFileConfigData {
                 preset: OauthFilePreset::ICloud,
                 access_token: StoredOAuthAccessCredential::AccessToken("access-token".into()),
                 file_name: StoredOAuthRemoteFileName::FileName("Vault.yaml".into()),

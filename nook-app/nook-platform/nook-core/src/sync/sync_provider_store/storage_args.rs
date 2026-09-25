@@ -35,6 +35,67 @@ impl StorageConnectArgs {
     }
 }
 
+fn oauth_file_name(oauth: &super::OAuthFileConfig) -> &str {
+    match &oauth.file_name {
+        StoredOAuthRemoteFileName::FileName(name) if !name.trim().is_empty() => name.trim(),
+        StoredOAuthRemoteFileName::FileName(_) | StoredOAuthRemoteFileName::Unresolved => {
+            DEFAULT_DRIVE_BACKUP_NAME
+        }
+    }
+}
+
+fn oauth_storage_id(oauth: &super::OAuthFileConfig) -> ValidationResult<String> {
+    let storage_id = match oauth.preset {
+        OauthFilePreset::GoogleDrive
+            if oauth.resolved_google_drive_mode() == GoogleDriveMode::Shared =>
+        {
+            match &oauth.folder_id {
+                StoredGoogleDriveFolder::FolderId(folder) if !folder.trim().is_empty() => {
+                    format!("shared:{}", folder.trim())
+                }
+                StoredGoogleDriveFolder::Root | StoredGoogleDriveFolder::FolderId(_) => {
+                    return Err(ValidationError::SharedStorageTargetRequired);
+                }
+            }
+        }
+        OauthFilePreset::ICloud if oauth.resolved_icloud_mode() == ICloudMode::Shared => {
+            match &oauth.icloud_share_target {
+                StoredICloudShareTarget::SharedTarget(target) if !target.trim().is_empty() => {
+                    target.trim().to_owned()
+                }
+                StoredICloudShareTarget::Personal | StoredICloudShareTarget::SharedTarget(_) => {
+                    return Err(ValidationError::SharedStorageTargetRequired);
+                }
+            }
+        }
+        OauthFilePreset::GoogleDrive | OauthFilePreset::ICloud => match &oauth.file_id {
+            StoredOAuthRemoteFileId::Unresolved => String::new(),
+            StoredOAuthRemoteFileId::FileId(id) => id.trim().to_owned(),
+        },
+    };
+
+    if oauth.preset == OauthFilePreset::GoogleDrive
+        && oauth.resolved_google_drive_mode() == GoogleDriveMode::Private
+    {
+        Ok(match &oauth.drive_private_target {
+            StoredGoogleDrivePrivateTarget::Pending => {
+                crate::DRIVE_PRIVATE_FOLDER_PENDING_REF.to_owned()
+            }
+            StoredGoogleDrivePrivateTarget::FolderId(folder_id) if !folder_id.trim().is_empty() => {
+                format!(
+                    "{}{}",
+                    crate::DRIVE_PRIVATE_FOLDER_REF_PREFIX,
+                    folder_id.trim()
+                )
+            }
+            StoredGoogleDrivePrivateTarget::LegacyAppDataFolder
+            | StoredGoogleDrivePrivateTarget::FolderId(_) => storage_id,
+        })
+    } else {
+        Ok(storage_id)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ProviderStorageDetailLabels {
     pub this_device_desc: String,
@@ -61,113 +122,52 @@ impl StorageProviderData {
             StorageProviderType::Local | StorageProviderType::LocalFolder => {
                 Ok(StorageConnectArgs::local())
             }
-            StorageProviderType::Github => Ok(StorageConnectArgs {
-                mode: StorageMode::Github.as_str().to_owned(),
-                pat: match &self.github_pat {
-                    StoredGithubPat::Token(pat) => pat.trim().to_owned(),
-                    StoredGithubPat::Missing => String::new(),
-                },
-                repo: match &self.github_repo {
-                    StoredGithubRepository::Repository(repo) if !repo.trim().is_empty() => {
-                        repo.trim().to_owned()
-                    }
-                    StoredGithubRepository::Repository(_)
-                    | StoredGithubRepository::DefaultRepository => {
-                        DEFAULT_GITHUB_REPO_NAME.to_owned()
-                    }
-                },
-            }),
-            StorageProviderType::OauthFile => {
-                let StoredOAuthFileConfiguration::Configured(oauth) = &self.oauth_file else {
-                    return Ok(StorageConnectArgs {
-                        mode: StorageMode::GoogleDrive.as_str().to_owned(),
-                        pat: String::new(),
-                        repo: DEFAULT_DRIVE_BACKUP_NAME.to_owned(),
-                    });
-                };
-                let file_name = match &oauth.file_name {
-                    StoredOAuthRemoteFileName::FileName(name) if !name.trim().is_empty() => {
-                        name.trim()
-                    }
-                    StoredOAuthRemoteFileName::FileName(_)
-                    | StoredOAuthRemoteFileName::Unresolved => DEFAULT_DRIVE_BACKUP_NAME,
-                };
-                let storage_id = match oauth.preset {
-                    OauthFilePreset::GoogleDrive
-                        if oauth.resolved_google_drive_mode() == GoogleDriveMode::Shared =>
-                    {
-                        match &oauth.folder_id {
-                            StoredGoogleDriveFolder::FolderId(folder)
-                                if !folder.trim().is_empty() =>
-                            {
-                                format!("shared:{}", folder.trim())
-                            }
-                            StoredGoogleDriveFolder::Root
-                            | StoredGoogleDriveFolder::FolderId(_) => {
-                                return Err(ValidationError::SharedStorageTargetRequired);
-                            }
-                        }
-                    }
-                    OauthFilePreset::ICloud
-                        if oauth.resolved_icloud_mode() == ICloudMode::Shared =>
-                    {
-                        match &oauth.icloud_share_target {
-                            StoredICloudShareTarget::SharedTarget(target)
-                                if !target.trim().is_empty() =>
-                            {
-                                target.trim().to_owned()
-                            }
-                            StoredICloudShareTarget::Personal
-                            | StoredICloudShareTarget::SharedTarget(_) => {
-                                return Err(ValidationError::SharedStorageTargetRequired);
-                            }
-                        }
-                    }
-                    OauthFilePreset::GoogleDrive | OauthFilePreset::ICloud => {
-                        match &oauth.file_id {
-                            StoredOAuthRemoteFileId::Unresolved => String::new(),
-                            StoredOAuthRemoteFileId::FileId(id) => id.trim().to_owned(),
-                        }
-                    }
-                };
-                let storage_id = if oauth.preset == OauthFilePreset::GoogleDrive
-                    && oauth.resolved_google_drive_mode() == GoogleDriveMode::Private
-                {
-                    match &oauth.drive_private_target {
-                        StoredGoogleDrivePrivateTarget::Pending => {
-                            crate::DRIVE_PRIVATE_FOLDER_PENDING_REF.to_owned()
-                        }
-                        StoredGoogleDrivePrivateTarget::FolderId(folder_id)
-                            if !folder_id.trim().is_empty() =>
-                        {
-                            format!(
-                                "{}{}",
-                                crate::DRIVE_PRIVATE_FOLDER_REF_PREFIX,
-                                folder_id.trim()
-                            )
-                        }
-                        StoredGoogleDrivePrivateTarget::LegacyAppDataFolder
-                        | StoredGoogleDrivePrivateTarget::FolderId(_) => storage_id,
-                    }
-                } else {
-                    storage_id
-                };
-                Ok(StorageConnectArgs {
-                    mode: match oauth.preset {
-                        OauthFilePreset::GoogleDrive => StorageMode::GoogleDrive,
-                        OauthFilePreset::ICloud => StorageMode::ICloud,
-                    }
-                    .as_str()
-                    .to_owned(),
-                    pat: match &oauth.access_token {
-                        StoredOAuthAccessCredential::SignedOut => String::new(),
-                        StoredOAuthAccessCredential::AccessToken(token) => token.trim().to_owned(),
-                    },
-                    repo: DriveBackupName::format_storage_ref_raw(&storage_id, file_name),
-                })
-            }
+            StorageProviderType::Github => Ok(self.github_connection_args()),
+            StorageProviderType::OauthFile => self.oauth_file_connection_args(),
         }
     }
+
+    fn github_connection_args(&self) -> StorageConnectArgs {
+        StorageConnectArgs {
+            mode: StorageMode::Github.as_str().to_owned(),
+            pat: match &self.github_pat {
+                StoredGithubPat::Token(pat) => pat.trim().to_owned(),
+                StoredGithubPat::Missing => String::new(),
+            },
+            repo: match &self.github_repo {
+                StoredGithubRepository::Repository(repo) if !repo.trim().is_empty() => {
+                    repo.trim().to_owned()
+                }
+                StoredGithubRepository::Repository(_)
+                | StoredGithubRepository::DefaultRepository => DEFAULT_GITHUB_REPO_NAME.to_owned(),
+            },
+        }
+    }
+
+    fn oauth_file_connection_args(&self) -> ValidationResult<StorageConnectArgs> {
+        let StoredOAuthFileConfiguration::Configured(oauth) = &self.oauth_file else {
+            return Ok(StorageConnectArgs {
+                mode: StorageMode::GoogleDrive.as_str().to_owned(),
+                pat: String::new(),
+                repo: DEFAULT_DRIVE_BACKUP_NAME.to_owned(),
+            });
+        };
+        let storage_id = oauth_storage_id(oauth)?;
+        let mode = match oauth.preset {
+            OauthFilePreset::GoogleDrive => StorageMode::GoogleDrive,
+            OauthFilePreset::ICloud => StorageMode::ICloud,
+        };
+        let token = match &oauth.access_token {
+            StoredOAuthAccessCredential::SignedOut => String::new(),
+            StoredOAuthAccessCredential::AccessToken(token) => token.trim().to_owned(),
+        };
+        Ok(StorageConnectArgs {
+            mode: mode.as_str().to_owned(),
+            pat: token,
+            repo: DriveBackupName::format_storage_ref_raw(&storage_id, oauth_file_name(oauth)),
+        })
+    }
+
     #[must_use]
     pub fn replication_capability(&self) -> ProviderReplicationCapability {
         let preset = match &self.oauth_file {
@@ -601,7 +601,7 @@ mod tests {
         };
         assert_eq!(
             StagedRemoteConnection::OAuth(StagedOAuthConnection {
-                configuration: &StoredOAuthFileConfiguration::Configured(oauth.clone()),
+                configuration: &StoredOAuthFileConfiguration::configured(oauth.clone()),
                 file_name: &StoredOAuthRemoteFileName::FileName(("draft-name").to_owned()),
                 setup: ProviderSaveSetup::Existing,
             })
@@ -614,7 +614,7 @@ mod tests {
         oauth.folder_id = StoredGoogleDriveFolder::FolderId("shared-folder".to_owned());
         assert_eq!(
             StagedRemoteConnection::OAuth(StagedOAuthConnection {
-                configuration: &StoredOAuthFileConfiguration::Configured(oauth.clone()),
+                configuration: &StoredOAuthFileConfiguration::configured(oauth.clone()),
                 file_name: &StoredOAuthRemoteFileName::FileName(("ignored-draft-name").to_owned()),
                 setup: ProviderSaveSetup::Existing,
             })
@@ -628,7 +628,7 @@ mod tests {
         oauth.drive_private_target = StoredGoogleDrivePrivateTarget::Pending;
         assert_eq!(
             StagedRemoteConnection::OAuth(StagedOAuthConnection {
-                configuration: &StoredOAuthFileConfiguration::Configured(oauth.clone()),
+                configuration: &StoredOAuthFileConfiguration::configured(oauth.clone()),
                 file_name: &StoredOAuthRemoteFileName::FileName(("ignored-draft-name").to_owned()),
                 setup: ProviderSaveSetup::Existing,
             })
@@ -641,7 +641,7 @@ mod tests {
             StoredGoogleDrivePrivateTarget::FolderId("stable-folder".to_owned());
         assert_eq!(
             StagedRemoteConnection::OAuth(StagedOAuthConnection {
-                configuration: &StoredOAuthFileConfiguration::Configured(oauth),
+                configuration: &StoredOAuthFileConfiguration::configured(oauth),
                 file_name: &StoredOAuthRemoteFileName::FileName(("ignored-draft-name").to_owned()),
                 setup: ProviderSaveSetup::Existing,
             })
@@ -663,7 +663,7 @@ mod tests {
             file_name: StoredOAuthRemoteFileName::FileName("named-vault.yaml".to_owned()),
             ..OAuthFileConfigData::default()
         };
-        let persisted_legacy = StoredOAuthFileConfiguration::Configured(config);
+        let persisted_legacy = StoredOAuthFileConfiguration::configured(config);
         let file_name = StoredOAuthRemoteFileName::Unresolved;
         let existing = StagedRemoteConnection::OAuth(StagedOAuthConnection {
             configuration: &persisted_legacy,
@@ -700,12 +700,13 @@ mod tests {
             crate::DRIVE_PRIVATE_FOLDER_PENDING_REF
         );
 
-        let StoredOAuthFileConfiguration::Configured(mut shared) = persisted_legacy else {
+        let StoredOAuthFileConfiguration::Configured(shared) = persisted_legacy else {
             anyhow::bail!("the legacy row must contain an OAuth config")
         };
+        let mut shared = *shared;
         shared.drive_mode = GoogleDriveMode::Shared;
         shared.folder_id = StoredGoogleDriveFolder::FolderId("shared-folder".to_owned());
-        let shared_provider = StoredOAuthFileConfiguration::Configured(shared);
+        let shared_provider = StoredOAuthFileConfiguration::configured(shared);
         let shared_args = StagedRemoteConnection::OAuth(StagedOAuthConnection {
             configuration: &shared_provider,
             file_name: &file_name,
@@ -762,7 +763,7 @@ mod tests {
         let before = oauth.clone();
         assert_eq!(
             StagedRemoteConnection::OAuth(StagedOAuthConnection {
-                configuration: &StoredOAuthFileConfiguration::Configured(oauth.clone()),
+                configuration: &StoredOAuthFileConfiguration::configured(oauth.clone()),
                 file_name: &StoredOAuthRemoteFileName::Unresolved,
                 setup: ProviderSaveSetup::Existing,
             })
@@ -774,7 +775,7 @@ mod tests {
         let before = oauth.clone();
         assert_eq!(
             StagedRemoteConnection::OAuth(StagedOAuthConnection {
-                configuration: &StoredOAuthFileConfiguration::Configured(oauth.clone()),
+                configuration: &StoredOAuthFileConfiguration::configured(oauth.clone()),
                 file_name: &StoredOAuthRemoteFileName::Unresolved,
                 setup: ProviderSaveSetup::Existing,
             })

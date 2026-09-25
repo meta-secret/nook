@@ -62,7 +62,7 @@ mod selection_tests {
     fn returns_the_exact_selected_row_with_credentials_and_scope() -> anyhow::Result<()> {
         let mut row = StorageProviderData::github("selected", "Shared provider", "", "", "now");
         row.provider_type = StorageProviderType::OauthFile;
-        row.oauth_file = StoredOAuthFileConfiguration::Configured(OAuthFileConfigData {
+        row.oauth_file = StoredOAuthFileConfiguration::configured(OAuthFileConfigData {
             preset: OAuthFilePreset::GoogleDrive,
             access_token: StoredOAuthAccessCredential::AccessToken("credential".into()),
             ..Default::default()
