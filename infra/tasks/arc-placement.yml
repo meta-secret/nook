@@ -1,0 +1,75 @@
+version: "3"
+
+tasks:
+  arc:placement:labels:
+    desc: Apply native capacity topology labels to the declared build nodes.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        nodes="$(kubectl get nodes -l nook.nokey.sh/arc-build=true -o json)"
+        expected="$(sort "{{.INFRA_REMOTE_DIR}}/infra/k0s/config/arc-build-nodes")"
+        test "$(jq -r '.items[].metadata.name' <<<"$nodes" | sort)" = "$expected"
+        while IFS=$'\t' read -r node tier; do
+          # These optional topology keys add a per-host penalty. Home deliberately
+          # has neither key; every node still has kubernetes.io/hostname.
+          case "$tier" in
+            primary)
+              kubectl label node "$node" \
+                "nook.nokey.sh/arc-standard-host=$node" \
+                nook.nokey.sh/arc-overflow-host- --overwrite ;;
+            secondary)
+              kubectl label node "$node" \
+                nook.nokey.sh/arc-standard-host- \
+                nook.nokey.sh/arc-overflow-host- --overwrite ;;
+            overflow)
+              kubectl label node "$node" \
+                "nook.nokey.sh/arc-standard-host=$node" \
+                "nook.nokey.sh/arc-overflow-host=$node" --overwrite ;;
+            *) echo "Unknown ARC tier on $node: $tier" >&2; exit 1 ;;
+          esac
+        done < <(jq -r '.items[] | [.metadata.name, .metadata.labels["nook.nokey.sh/arc-tier"]] | @tsv' <<<"$nodes")
+        REMOTE
+
+  arc:placement:hive:
+    desc: Share general-runner placement with the existing Hive scale set.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        kubeconfig="$(mktemp)"
+        placement="$(mktemp)"
+        trap 'rm -f "$kubeconfig" "$placement"' EXIT
+        chmod 0600 "$kubeconfig" "$placement"
+        sudo -n k0s kubeconfig admin > "$kubeconfig"
+        export KUBECONFIG="$kubeconfig"
+        # Only placement is owned here. Keep Hive's image, identity, credentials,
+        # security settings and queue ceiling in its existing Helm release.
+        helm get values nook-k0s --namespace arc-runners --output json |
+          jq -e '.template.spec.affinity | select(.podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution | length == 3) |
+            {template: {spec: {affinity: ., topologySpreadConstraints: []}}}' > "$placement"
+        helm upgrade nook-k0s-hive "{{.ARC_RUNNER_CHART}}" \
+          --version "{{.ARC_CHART_VERSION}}" --namespace arc-runners \
+          --reuse-values --values "$placement" --wait --timeout 10m
+        REMOTE
+
+  arc:placement:status:
+    desc: Show real workload placement and node usage across all ARC pools.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        kubectl get nodes -l nook.nokey.sh/arc-build=true \
+          -L nook.nokey.sh/arc-tier,nook.nokey.sh/arc-standard-host,nook.nokey.sh/arc-overflow-host
+        kubectl get pods --namespace arc-runners \
+          -l 'nook.nokey.sh/arc-spread-group in (general,hive,container)' \
+          -o custom-columns='POD:.metadata.name,NODE:.spec.nodeName,POOL:.metadata.labels.nook\.nokey\.sh/arc-spread-group,PHASE:.status.phase'
+        kubectl top nodes -l nook.nokey.sh/arc-build=true
+        kubectl top pods --namespace arc-runners \
+          -l app.kubernetes.io/name=nook-buildkit
+        REMOTE

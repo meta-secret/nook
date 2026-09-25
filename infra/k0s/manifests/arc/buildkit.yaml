@@ -237,10 +237,6 @@ spec:
               type: Unconfined
             appArmorProfile:
               type: Unconfined
-          resources:
-            requests:
-              cpu: "4"
-              memory: 8Gi
           volumeMounts:
             - name: buildkit-state
               mountPath: /home/user/.local/share/buildkit

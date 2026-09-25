@@ -45,52 +45,63 @@ container-runtime API.
 ARC keeps no warm runner Pod. It creates one Pod for each queued job and removes
 that Pod after completion.
 
-Two scale sets serve trusted work:
+Three scale sets share the cluster: `nook-k0s` serves general jobs,
+`nook-k0s-container` launches browser job Pods, and the separately owned
+`nook-k0s-hive` serves Hive jobs. Their existing queue ceilings are 35, 20,
+and 10 respectively.
 
-- **`nook-k0s`**
-  - Serves general trusted jobs.
-  - Advertises `maxRunners: 35`.
+The four qualified nodes use soft tier preferences: Rise-S workers score 100,
+the home 7950X3D scores 90, and the older control/storage worker scores 1.
+Home has twice each Rise node's logical CPUs, but its 250 Mbps connection makes
+Rise preferable for the first network-heavy jobs. Browser jobs retain their
+explicit Rise/overflow eligibility inventory.
 
-The four qualified nodes use tier preferences:
+### Shared workload preferences
 
-1. Both Rise-S workers are `primary`.
-2. The home 7950X3D worker is `secondary`.
-3. KS-6 is `overflow`.
+All heavy execution Pods share preferred pod anti-affinity. Its selector counts
+`arc-spread-group` values `general`, `hive`, and `container` together.
+Container-runner managers and BuildKit daemons are excluded. General runners
+include lightweight orchestration jobs; a Pod count is a placement proxy, not a
+measurement of actual CPU use or active BuildKit solves.
 
-Topology spreading discourages burst work from concentrating on one node.
-The preferred hostname skew is two Pods. It is a soft scheduler score.
-Tier affinity prefers both primary nodes over secondary.
-It prefers secondary over overflow.
-A five-job burst targets two jobs on each primary node and one on secondary.
-Kubernetes does not guarantee that exact distribution.
-Its other scheduler scores and live node pressure remain authoritative.
+The native scheduler applies these marginal penalties per matching Pod:
 
-A 24-runner burst must not be forced into six jobs per node.
-Primary-dominant distributions score above equal cross-tier distribution.
-Soft hostname spreading still discourages piling work onto one primary.
+- Home: 25 from the hostname term.
+- Each Rise: 50, combining hostname (25) and standard-host (25).
+- Control/storage: 100, combining hostname (25), standard-host (25),
+  and overflow-host (50).
 
-Deployment activation follows these rules:
+Every node has its ordinary hostname label. The two additional topology labels
+contain that node's unique name and are deliberately absent outside their
+capacity tier. They are used only in preferred terms. Deployment applies them
+through `infra:arc:placement:labels` before updating runner templates.
+Do not use these partial topology labels for required anti-affinity or spread
+constraints. For example, two jobs on home contribute the same raw penalty as
+one job on a Rise node. The scheduler also scores existing Pods' preferences,
+normalizes the scores, and combines them with its other plugins; these numbers
+are neither guaranteed allocation ratios nor concurrency limits.
 
-- Keep every build node quarantined until all listeners are ready.
-- Validate the declared tier counts.
-- Expose both primary nodes as one group before secondary.
-- Expose overflow last.
-- Prevent a queued burst from seeing one weaker node first.
-- Do not guarantee an exact scheduler distribution.
+There is no `maxSkew` rule on execution Pods. An occupied Rise is less desirable
+than an otherwise equivalent empty Rise from the first job onward. Placement
+remains soft when nodes are busy or unavailable. It never requires an equal
+number of jobs on the weak control/storage node. Scheduler preferences do not
+guarantee that a busy node will be avoided; observe real placement and node use
+with `task infra:arc:placement:status`.
 
-The target aggregate envelope remains:
+### Deployment and resource policy
 
-- each Rise-S: about 9-10 runners;
-- home worker: about 8 runners; and
-- KS-6: about 8 runners.
+Deployment keeps all build nodes quarantined until listeners are ready, exposes
+both Rise nodes together, then home, then overflow. The existing Hive Helm
+release keeps ownership of its image, credentials and security settings.
+`infra:arc:placement:hive` updates only its affinity and removes its old separate
+spread constraint using the general runner's deployed policy. Hive must already
+be installed by its owner; a missing release is a deployment error.
 
-The scale-set limits are queue ceilings. Disposable runner and job containers
-do not declare resource requests or limits. Kubernetes may admit Pods up to the
-scale-set ceilings. Each container may share all CPU available on its node.
-Topology spreading and tier preferences distribute that burst work across
-qualified nodes. Support-container memory envelopes remain admission
-boundaries. Empty-directory and persistent-volume sizes retain storage
-boundaries.
+Scale-set ceilings remain unchanged. Runner, job and BuildKit containers have
+no CPU or memory requests or limits. Tools retain automatic full-CPU
+parallelism. Support-container memory envelopes and storage sizes remain
+unchanged. Do not infer available CPUs from a Kubernetes request: CPU affinity,
+cgroup quota and tool configuration determine runtime parallelism.
 
 ## Persistent local BuildKit shards
 
@@ -102,11 +113,9 @@ Each replica uses:
 - rootless BuildKit `v0.32.2`;
 - a retained 128 GiB local persistent volume;
 - the host path `/var/lib/nook-arc-buildkit/state` behind that volume;
-- garbage collection with a 120 GB maximum-use target and 8 GB free-space
-  target (while retaining an 8 GB reserved floor);
-- a 4 CPU request;
-- an 8 GiB memory request; and
-- no CPU or memory limits.
+- garbage collection with a 112 GB maximum-use target, 16 GB free-space
+  target, and 64 GB reserved floor; and
+- no CPU or memory requests or limits.
 
 Build-host key quotas follow these rules:
 

@@ -15,7 +15,6 @@ import {
   arcPodSchema,
 } from "./arc-manifest-model";
 import {
-  ArcPlacementScenario,
   ArcActivationScenario,
   ArcContainerResourceContract,
 } from "./arc-placement-contracts";
@@ -225,8 +224,12 @@ class ArcManifestContract {
     if (resourceAdmission6.isErr()) return err(resourceAdmission6.error);
 
     const admittedContract1 = runners.requireAll([
-      "maxSkew: 2",
-      "whenUnsatisfiable: ScheduleAnyway",
+      "podAntiAffinity:",
+      "topologyKey: nook.nokey.sh/arc-standard-host",
+      "topologyKey: nook.nokey.sh/arc-overflow-host",
+      "values: [general, hive, container]",
+      "weight: 25",
+      "weight: 90",
       "weight: 100",
       "weight: 50",
       "weight: 1",
@@ -237,10 +240,10 @@ class ArcManifestContract {
       "registry.dev.nokey.sh/library/docker:29.2.1-cli@sha256:",
     ]);
     if (admittedContract1.isErr()) return err(admittedContract1.error);
-    const admittedContract2 = runners.forbid("maxSkew: 5");
+    const admittedContract2 = runners.forbid("topologySpreadConstraints:");
     if (admittedContract2.isErr()) return err(admittedContract2.error);
     const admittedContract3 = runners.forbid(
-      "whenUnsatisfiable: DoNotSchedule",
+      "requiredDuringSchedulingIgnoredDuringExecution:",
     );
     if (admittedContract3.isErr()) return err(admittedContract3.error);
     const admittedContract4 = runners.forbidAll([
@@ -288,8 +291,12 @@ class ArcManifestContract {
       "values: [primary]",
       "values: [secondary]",
       "values: [overflow]",
-      "maxSkew: 2",
-      "whenUnsatisfiable: ScheduleAnyway",
+      "podAntiAffinity:",
+      "topologyKey: nook.nokey.sh/arc-standard-host",
+      "topologyKey: nook.nokey.sh/arc-overflow-host",
+      "values: [general, hive, container]",
+      "weight: 25",
+      "weight: 90",
       "weight: 100",
       "weight: 50",
       "weight: 1",
@@ -306,8 +313,8 @@ class ArcManifestContract {
     ]);
     if (admittedContract7.isErr()) return err(admittedContract7.error);
     const admittedContract8 = containerHook.forbidAll([
-      "maxSkew: 5",
-      "whenUnsatisfiable: DoNotSchedule",
+      "topologySpreadConstraints:",
+      "requiredDuringSchedulingIgnoredDuringExecution:",
       "privileged: true",
       "docker.sock",
       "containerd.sock",
@@ -327,37 +334,6 @@ class ArcManifestContract {
         kind: OperationalContractFailureKind.Requirement,
         message:
           "ARC container-job node inventory must contain exactly the declared eligible nodes",
-      });
-    }
-
-    // These scenarios compare the declared preferences; Kubernetes still combines
-    // them with its other scheduler scores and live node state.
-    const fiveJobPreference = new ArcPlacementScenario(2, 2, 1, 0);
-    const fiveJobPrimaryPile = new ArcPlacementScenario(4, 0, 1, 0);
-    if (
-      fiveJobPreference.primarySkew() >= fiveJobPrimaryPile.primarySkew() ||
-      fiveJobPreference.secondary >= fiveJobPreference.primaryOne ||
-      fiveJobPreference.overflow >= fiveJobPreference.secondary
-    ) {
-      return err({
-        kind: OperationalContractFailureKind.Requirement,
-        message:
-          "ARC five-job intent must balance primary nodes while limiting weaker tiers",
-      });
-    }
-
-    const primaryDominantBurst = new ArcPlacementScenario(9, 9, 5, 1);
-    const forcedEqualBurst = new ArcPlacementScenario(6, 6, 6, 6);
-    if (
-      primaryDominantBurst.tierPreferenceScore() <=
-        forcedEqualBurst.tierPreferenceScore() ||
-      primaryDominantBurst.secondary >= primaryDominantBurst.primaryOne ||
-      primaryDominantBurst.overflow >= primaryDominantBurst.secondary
-    ) {
-      return err({
-        kind: OperationalContractFailureKind.Requirement,
-        message:
-          "ARC 24-runner intent must prefer primary capacity over equal cross-tier load",
       });
     }
 
@@ -381,8 +357,6 @@ class ArcManifestContract {
       'nook.nokey.sh/arc-build: "true"',
       "v0.32.2-rootless@sha256:60d1f642e29dc938bd6c109ba5500849fccf41921927c5339788b8227f57feb9",
       "--oci-worker-no-process-sandbox",
-      'cpu: "4"',
-      "memory: 8Gi",
       "storage: 128Gi",
       "type: Unconfined",
       "[worker.oci]",
@@ -418,12 +392,7 @@ class ArcManifestContract {
       expected: 4,
     });
     if (admittedContract15.isErr()) return err(admittedContract15.error);
-    const admittedContract16 = buildkitContainer.requireAll([
-      "resources:",
-      "requests:",
-      'cpu: "4"',
-      "memory: 8Gi",
-    ]);
+    const admittedContract16 = buildkitContainer.forbid("resources:");
     if (admittedContract16.isErr()) return err(admittedContract16.error);
     const admittedContract17 = buildkitContainer.forbid("limits:");
     if (admittedContract17.isErr()) return err(admittedContract17.error);

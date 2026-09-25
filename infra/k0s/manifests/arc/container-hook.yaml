@@ -68,7 +68,7 @@ data:
                   - key: nook.nokey.sh/arc-tier
                     operator: In
                     values: [primary]
-            - weight: 50
+            - weight: 90
               preference:
                 matchExpressions:
                   - key: nook.nokey.sh/arc-tier
@@ -80,16 +80,34 @@ data:
                   - key: nook.nokey.sh/arc-tier
                     operator: In
                     values: [overflow]
-      topologySpreadConstraints:
-        # Match the regular runner's soft, primary-dominant placement intent.
-        - maxSkew: 2
-          topologyKey: kubernetes.io/hostname
-          whenUnsatisfiable: ScheduleAnyway
-          nodeAffinityPolicy: Honor
-          nodeTaintsPolicy: Honor
-          labelSelector:
-            matchLabels:
-              nook.nokey.sh/arc-spread-group: container
+        podAntiAffinity:
+          # Shared workload count; managers and BuildKit daemons are excluded.
+          # Marginal penalties: home 25, Rise 50, overflow 100.
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 25
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchExpressions:
+                    - key: nook.nokey.sh/arc-spread-group
+                      operator: In
+                      values: [general, hive, container]
+            - weight: 25
+              podAffinityTerm:
+                topologyKey: nook.nokey.sh/arc-standard-host
+                labelSelector:
+                  matchExpressions:
+                    - key: nook.nokey.sh/arc-spread-group
+                      operator: In
+                      values: [general, hive, container]
+            - weight: 50
+              podAffinityTerm:
+                topologyKey: nook.nokey.sh/arc-overflow-host
+                labelSelector:
+                  matchExpressions:
+                    - key: nook.nokey.sh/arc-spread-group
+                      operator: In
+                      values: [general, hive, container]
       containers:
         - name: "$job"
           env:

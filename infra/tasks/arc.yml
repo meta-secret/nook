@@ -1,9 +1,6 @@
 version: "3"
 
 vars:
-  ARC_CHART_VERSION: 0.14.2
-  ARC_CONTROLLER_CHART: oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller
-  ARC_RUNNER_CHART: oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
   ARC_RUNNER_LABEL: nook-k0s
   ARC_SMOKE_TASK: '{{default "preflight" .ARC_SMOKE_TASK}}'
   ARC_SMOKE_JOB_NAME: '{{default "Remote / preflight" .ARC_SMOKE_JOB_NAME}}'
@@ -592,6 +589,7 @@ tasks:
       - task: arc:build-hosts:quarantine
       - task: arc:container-hosts:reconcile
       - task: arc:buildkit:storage:prepare
+      - task: arc:placement:labels
       - task: arc:render:check
       - |
         ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
@@ -704,5 +702,6 @@ tasks:
         done
         echo "ARC scale sets are dispatch-ready"
         REMOTE
+      - task: arc:placement:hive
       - task: arc:build-hosts:activate
       - task: arc:status

@@ -4,27 +4,6 @@ import {
   type OperationalContractFailure,
 } from "./operational-contract";
 import type { ArcContainer } from "./arc-manifest-model";
-export class ArcPlacementScenario {
-  constructor(
-    readonly primaryOne: number,
-    readonly primaryTwo: number,
-    readonly secondary: number,
-    readonly overflow: number,
-  ) {}
-
-  tierPreferenceScore(): number {
-    return (
-      (this.primaryOne + this.primaryTwo) * 100 +
-      this.secondary * 50 +
-      this.overflow
-    );
-  }
-
-  primarySkew(): number {
-    return Math.abs(this.primaryOne - this.primaryTwo);
-  }
-}
-
 export class ArcActivationScenario {
   constructor(
     readonly queuedRunners: number,
