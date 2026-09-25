@@ -7,6 +7,7 @@ import {
   type AuthProvidersSnapshot,
   type GoogleDriveMode,
   type ICloudMode,
+  type OAuthFileConfig,
   type OAuthFilePreset,
   type StorageProvider,
 } from '$app-wasm'
@@ -25,6 +26,7 @@ export type SeededAuthProvider = {
     refreshToken?: string
     fileName: string
     driveMode: GoogleDriveMode
+    drivePrivateTarget?: OAuthFileConfig['drivePrivateTarget']
     iCloudMode: ICloudMode
     accountEmail?: string
     folderId?: string
@@ -139,6 +141,9 @@ function storedProvider(
               ? { state: 'email', value: oauth.accountEmail }
               : { state: 'unknown' },
           driveMode: oauth.driveMode,
+          ...(oauth.drivePrivateTarget
+            ? { drivePrivateTarget: oauth.drivePrivateTarget }
+            : {}),
           folderId:
             'folderId' in oauth && typeof oauth.folderId === 'string'
               ? { state: 'folderId', value: oauth.folderId }
@@ -329,6 +334,7 @@ type SeededOauthFileProviderInput = {
   accessToken: string
   accountEmail?: string
   folderId?: string
+  drivePrivateTarget?: OAuthFileConfig['drivePrivateTarget']
 }
 
 async function seedOauthFileProviders(
@@ -346,6 +352,8 @@ async function seedOauthFileProviders(
     }
     if (provider.accountEmail) oauthFile.accountEmail = provider.accountEmail
     if (provider.folderId) oauthFile.folderId = provider.folderId
+    if (provider.drivePrivateTarget)
+      oauthFile.drivePrivateTarget = provider.drivePrivateTarget
     return {
       id: provider.id,
       type: 'oauth-file',
@@ -397,10 +405,10 @@ export type RawAuthProvidersSnapshot = {
   providers: Array<{
     id: string
     type: string
-    githubPat?: string
+    githubPat?: string | { state: string; value?: string }
     oauthFile?: {
-      accessToken?: string
-      refreshToken?: string
+      accessToken?: string | { state: string; value?: string }
+      refreshToken?: string | { state: string; value?: string }
     }
   }>
 }
@@ -464,6 +472,28 @@ export async function readRawAuthProvidersFromIdb(
           return
         }
         const providers: RawAuthProvidersSnapshot['providers'] = []
+        const readCredential = (
+          credential: unknown,
+        ): RawAuthProvidersSnapshot['providers'][number]['githubPat'] => {
+          if (typeof credential === 'string') return credential
+          if (
+            typeof credential !== 'object' ||
+            credential === null ||
+            Array.isArray(credential)
+          ) {
+            return undefined
+          }
+          const state: unknown = Object.getOwnPropertyDescriptor(
+            credential,
+            'state',
+          )?.value
+          if (typeof state !== 'string') return undefined
+          const value: unknown = Object.getOwnPropertyDescriptor(
+            credential,
+            'value',
+          )?.value
+          return typeof value === 'string' ? { state, value } : { state }
+        }
         for (const providerValue of providersValue) {
           if (
             typeof providerValue !== 'object' ||
@@ -484,11 +514,10 @@ export async function readRawAuthProvidersFromIdb(
             id,
             type,
           }
-          const githubPat: unknown = Object.getOwnPropertyDescriptor(
-            providerValue,
-            'githubPat',
-          )?.value
-          if (typeof githubPat === 'string') provider.githubPat = githubPat
+          const githubPat = readCredential(
+            Object.getOwnPropertyDescriptor(providerValue, 'githubPat')?.value,
+          )
+          if (githubPat !== undefined) provider.githubPat = githubPat
           const oauthFileValue: unknown = Object.getOwnPropertyDescriptor(
             providerValue,
             'oauthFile',
@@ -500,18 +529,18 @@ export async function readRawAuthProvidersFromIdb(
             const oauthFile: NonNullable<
               RawAuthProvidersSnapshot['providers'][number]['oauthFile']
             > = {}
-            const accessToken: unknown = Object.getOwnPropertyDescriptor(
-              oauthFileValue,
-              'accessToken',
-            )?.value
-            if (typeof accessToken === 'string')
-              oauthFile.accessToken = accessToken
-            const refreshToken: unknown = Object.getOwnPropertyDescriptor(
-              oauthFileValue,
-              'refreshToken',
-            )?.value
-            if (typeof refreshToken === 'string')
+            const accessToken = readCredential(
+              Object.getOwnPropertyDescriptor(oauthFileValue, 'accessToken')
+                ?.value,
+            )
+            if (accessToken !== undefined) oauthFile.accessToken = accessToken
+            const refreshToken = readCredential(
+              Object.getOwnPropertyDescriptor(oauthFileValue, 'refreshToken')
+                ?.value,
+            )
+            if (refreshToken !== undefined) {
               oauthFile.refreshToken = refreshToken
+            }
             provider.oauthFile = oauthFile
           }
           providers.push(provider)
@@ -644,13 +673,29 @@ export async function saveAuthProvidersInBrowser(
   expect(stored).toEqual({ ok: true })
 }
 
-export function expectSealedCredential(stored: unknown, plaintext: string) {
-  expect(typeof stored).toBe('string')
-  if (typeof stored !== 'string') {
+export function expectSealedCredential(
+  stored: unknown,
+  plaintext: string,
+  expectedState?: string,
+) {
+  const isTagged =
+    typeof stored === 'object' && stored !== null && !Array.isArray(stored)
+  if (expectedState !== undefined) {
+    expect(isTagged).toBe(true)
+    if (isTagged) expect(Reflect.get(stored, 'state')).toBe(expectedState)
+  }
+  const ciphertext =
+    typeof stored === 'string'
+      ? stored
+      : isTagged
+        ? Reflect.get(stored, 'value')
+        : undefined
+  expect(typeof ciphertext).toBe('string')
+  if (typeof ciphertext !== 'string') {
     throw new Error('expected a persisted sealed credential')
   }
-  expect(stored).toContain(AGE_ARMOR_MARKER)
-  expect(stored).not.toContain(plaintext)
+  expect(ciphertext).toContain(AGE_ARMOR_MARKER)
+  expect(ciphertext).not.toContain(plaintext)
 }
 
 /** Default GitHub sync provider for local e2e onboarding / fan-out specs. */
@@ -679,4 +724,5 @@ export type E2eOauthSyncProvider = {
   fileName: string
   accessToken: string
   accountEmail?: string
+  drivePrivateTarget?: OAuthFileConfig['drivePrivateTarget']
 }

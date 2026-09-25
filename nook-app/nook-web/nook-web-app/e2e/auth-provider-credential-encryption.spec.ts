@@ -50,7 +50,7 @@ test.describe('sync provider credential encryption', () => {
     )
 
     const raw = await readRawAuthProvidersFromIdb(page)
-    expectSealedCredential(raw.providers[0]?.githubPat, pat)
+    expectSealedCredential(raw.providers[0]?.githubPat, pat, 'token')
 
     const decrypted = await new AuthProviderBrowserFixture(page).load()
     expect(decrypted.isOk()).toBe(true)
@@ -145,8 +145,8 @@ test.describe('sync provider credential encryption', () => {
 
     const raw = await readRawAuthProvidersFromIdb(page)
     const oauth = raw.providers[0]?.oauthFile
-    expectSealedCredential(oauth?.accessToken, access)
-    expectSealedCredential(oauth?.refreshToken, refresh)
+    expectSealedCredential(oauth?.accessToken, access, 'accessToken')
+    expectSealedCredential(oauth?.refreshToken, refresh, 'token')
 
     const decrypted = await new AuthProviderBrowserFixture(page).load()
     expect(decrypted.isOk()).toBe(true)
