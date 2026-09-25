@@ -87,9 +87,9 @@ maintain Nook-specific overrides. Resolve session development choices through
 the upstream [development-mode workflow](../.meta-cortex/AGENTS.md#development-mode)
 and apply Nook's assignment and delivery constraints in both modes.
 
-Meta-Cortex execution mode selects speed: `standard` or `fast`. The omitted mode defaults to fast.
-Execution speed is independent of `reasoning_effort` and the session's
-`development.mode` choice.
+Meta-Cortex execution mode selects speed: `standard` or `fast`;
+the omitted mode defaults to fast. Execution speed is independent of
+`reasoning_effort` and session `development.mode`.
 
 Meta-Cortex owns generic roles, skills, programming requirements, and authoring
 practices. Nook owns product architecture, product security, delivery
