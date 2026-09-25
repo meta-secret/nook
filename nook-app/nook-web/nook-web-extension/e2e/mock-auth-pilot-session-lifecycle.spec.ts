@@ -51,7 +51,13 @@ test.describe('PIN Pilot session lifecycle', () => {
         ),
       ).toBeVisible()
 
-      const originalAuthTab = paired.popupPage
+      const originalAuthTab = await paired.context.newPage()
+      await originalAuthTab.goto(
+        `chrome-extension://${paired.extensionId}/popup/index.html`,
+      )
+      await expect(
+        originalAuthTab.getByTestId('extension-toolbar-menu'),
+      ).toBeVisible()
       await expect(originalAuthTab).toHaveURL(
         `chrome-extension://${paired.extensionId}/popup/index.html`,
       )
@@ -104,7 +110,10 @@ test.describe('PIN Pilot session lifecycle', () => {
     })
     try {
       const extensionId = paired.extensionId
-      const originalAuthTab = paired.popupPage
+      const originalAuthTab = await paired.context.newPage()
+      await originalAuthTab.goto(
+        `chrome-extension://${extensionId}/popup/index.html`,
+      )
       await expect(
         originalAuthTab.getByTestId('extension-toolbar-menu'),
       ).toBeVisible()
