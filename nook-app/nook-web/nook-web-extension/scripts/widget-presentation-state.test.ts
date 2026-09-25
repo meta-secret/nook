@@ -13,6 +13,8 @@ import {
   type WidgetVaultPresentationProjectionArgs,
 } from '../src/content/autofill/widget-presentation-state'
 import { BROWSER_MESSAGE_KEYS } from '../src/lib/browser-message-keys'
+import type { BrowserMessageKey } from '../src/lib/browser-message-keys'
+import { ExtensionSetupLoadKind } from '../src/lib/pairing-state'
 import { authenticationWidgetWorkflowKey } from '../src/content/autofill/widget-workflow-key'
 import type {
   AuthenticationPageObservationFacts,
@@ -33,7 +35,7 @@ type WidgetRoutingPresentationCase = {
 describe('authentication widget vault presentation', () => {
   test('keeps a failed setup status lookup unavailable', () => {
     const vaultConnection = pilotVaultConnectionFromSetupState({
-      kind: 'unavailable',
+      kind: ExtensionSetupLoadKind.Unavailable,
     })
     expect(vaultConnection).toEqual({
       kind: PilotVaultConnectionKind.Unavailable,
@@ -146,7 +148,7 @@ describe('authentication widget vault presentation', () => {
   test('chooses honest saved-login guidance for every availability state', () => {
     const cases: ReadonlyArray<{
       presentation: WidgetVaultPresentation
-      expected: string
+      expected: BrowserMessageKey
     }> = [
       {
         presentation: { kind: WidgetVaultPresentationKind.NotConnected },

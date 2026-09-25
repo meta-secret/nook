@@ -417,7 +417,7 @@ function installLauncherBrowserHost(host: LauncherBrowserHost): void {
         getLastFocused: async (
           args: Parameters<typeof chrome.windows.getLastFocused>[0],
         ) => {
-          expect(args.windowTypes).toEqual(['normal'])
+          expect(args?.windowTypes).toEqual(['normal'])
           host.lastFocusedWindowCalls += 1
           switch (host.failure.kind) {
             case LauncherBrowserFailureKind.LastFocusedWindow:

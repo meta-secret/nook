@@ -101,10 +101,10 @@ describe('passive website session status transport', () => {
       extensionPairingIdentity,
       'passwordPairingGrants',
     ).mockResolvedValue([storedPasswordGrant])
-    const lockedStatus: ExtensionSessionResponse = {
+    const lockedStatus = {
       ok: true,
       status: DeviceProtectionStatus.Pin,
-    }
+    } as unknown as ExtensionSessionResponse
     const status = spyOn(
       extensionPairingIdentity,
       'sendSessionMessage',
