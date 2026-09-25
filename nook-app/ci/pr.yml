@@ -134,6 +134,6 @@ tasks:
   ci:pr:browser:auth:
     desc: Run the required focused real-extension authentication regression.
     env:
-      E2E_SPEC: e2e/mock-auth-pilot-coverage.spec.ts
+      E2E_SPEC: 'e2e/mock-auth-pilot-(coverage|session-lifecycle)[.]spec[.]ts'
     cmds:
-      - E2E_SPEC=e2e/mock-auth-pilot-coverage.spec.ts task --silent _extension:test:e2e:file
+      - E2E_SPEC='e2e/mock-auth-pilot-(coverage|session-lifecycle)[.]spec[.]ts' task --silent _extension:test:e2e:file

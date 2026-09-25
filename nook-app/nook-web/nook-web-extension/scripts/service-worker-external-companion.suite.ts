@@ -236,10 +236,10 @@ describe('external companion routing', () => {
     expect(await new ExternalCompanionRouter(routingArgs).route()).toBe(true)
     await flushResponses()
     expect(openCompanionLauncher).toHaveBeenCalledTimes(1)
-    expect(openCompanionLauncher).toHaveBeenCalledWith(
-      OpenCompanionLauncherIntent.Default,
-      ExtensionSessionLifecycle.directEntrySource(),
-    )
+    expect(openCompanionLauncher).toHaveBeenCalledWith({
+      intent: OpenCompanionLauncherIntent.Default,
+      source: ExtensionSessionLifecycle.directEntrySource(),
+    })
     expect(sendResponse).toHaveBeenCalledWith({ ok: true })
   })
 
@@ -361,10 +361,10 @@ describe('external companion routing', () => {
 
     expect(routeExtensionLifecycleMessage(routingArgs)).toBe(true)
     await flushResponses()
-    expect(openCompanionLauncher).toHaveBeenCalledWith(
-      OpenCompanionLauncherIntent.Pair,
-      ExtensionSessionLifecycle.directEntrySource(),
-    )
+    expect(openCompanionLauncher).toHaveBeenCalledWith({
+      intent: OpenCompanionLauncherIntent.Pair,
+      source: ExtensionSessionLifecycle.directEntrySource(),
+    })
     expect(sendResponse).toHaveBeenCalledWith({ ok: true })
   })
 })

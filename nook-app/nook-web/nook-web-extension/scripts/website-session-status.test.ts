@@ -95,7 +95,7 @@ describe('passive website session status transport', () => {
     })
     const { ExtensionSessionStatusAvailability, extensionPairingIdentity } =
       await import('../src/background/service-worker/pairing-identity')
-    const { extensionSessionLifecycle } =
+    const { ExtensionSessionLifecycle, extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
     const grants = spyOn(
       extensionPairingIdentity,
@@ -132,10 +132,10 @@ describe('passive website session status transport', () => {
       expect(status).toHaveBeenCalledTimes(1)
       expect(sessionAvailability).toHaveBeenCalledWith(sessionResponse)
       expect(openLauncher).toHaveBeenCalledTimes(1)
-      expect(openLauncher).toHaveBeenCalledWith(
-        OpenCompanionLauncherIntent.PilotAuth,
-        sender.tab,
-      )
+      expect(openLauncher).toHaveBeenCalledWith({
+        intent: OpenCompanionLauncherIntent.PilotAuth,
+        source: ExtensionSessionLifecycle.sourceFromSender(sender),
+      })
     } finally {
       openLauncher.mockRestore()
       sessionAvailability.mockRestore()

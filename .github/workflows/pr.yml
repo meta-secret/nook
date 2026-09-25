@@ -119,7 +119,7 @@ jobs:
               *) validation=true ;;
             esac
             case "$path" in
-              nook-app/nook-web/nook-web-shared/src/extension/password-form*|nook-app/nook-web/nook-web-extension/src/content/autofill.ts|nook-app/nook-web/nook-web-extension/src/content/autofill/*|nook-app/nook-web/nook-web-extension/e2e/mock-auth-provider-scenarios.ts|nook-app/nook-web/nook-web-extension/e2e/mock-auth/src/pages/DetectionHiddenHeaderLogin.svelte|nook-app/nook-web/nook-web-extension/e2e/mock-auth-pilot-coverage.spec.ts) auth=true ;;
+              nook-app/nook-web/nook-web-shared/src/extension/password-form*|nook-app/nook-web/nook-web-extension/src/content/autofill.ts|nook-app/nook-web/nook-web-extension/src/content/autofill/*|nook-app/nook-web/nook-web-extension/e2e/mock-auth-provider-scenarios.ts|nook-app/nook-web/nook-web-extension/e2e/mock-auth/src/pages/DetectionHiddenHeaderLogin.svelte|nook-app/nook-web/nook-web-extension/e2e/mock-auth-pilot-coverage.spec.ts|nook-app/nook-web/nook-web-extension/e2e/mock-auth-pilot-session-lifecycle.spec.ts) auth=true ;;
             esac
             case "$path" in .github/workflows/web-research.yml|.github/scripts/web-research-deploy.sh|.github/scripts/web-research-verify-live.sh|.task/ci-workflows.yml|nook-app/nook-web/nook-web-research/*) research=true; validation=true ;; esac
           done < <(git diff --name-only -z "$BASE_SHA" HEAD)
