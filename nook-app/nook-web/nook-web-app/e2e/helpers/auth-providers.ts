@@ -401,24 +401,30 @@ export async function seedUnscopedOauthFileProvidersForEnrollment(
 
 export const AGE_ARMOR_MARKER = 'BEGIN AGE ENCRYPTED FILE'
 
-export type RawCredentialRead =
+type RawCredentialRead =
   | { kind: 'absent' }
   | { kind: 'malformed' }
   | { kind: 'legacy-ciphertext'; ciphertext: string }
   | { kind: 'tagged-ciphertext'; state: string; ciphertext: string }
   | { kind: 'tagged-without-ciphertext'; state: string }
 
-export type RawOAuthFileCredentials = {
-  accessToken: RawCredentialRead
-  refreshToken: RawCredentialRead
+type RawCredentialSnapshotValue =
+  string | { state: string } | { state: string; value: string }
+
+type RawCredentialProjection =
+  { kind: 'omit' } | { kind: 'include'; value: RawCredentialSnapshotValue }
+
+type RawOAuthFileCredentials = {
+  accessToken?: RawCredentialSnapshotValue
+  refreshToken?: RawCredentialSnapshotValue
 }
 
 export type RawAuthProvidersSnapshot = {
   providers: Array<{
     id: string
     type: string
-    githubPat: RawCredentialRead
-    oauthFile: RawOAuthFileCredentials
+    githubPat?: RawCredentialSnapshotValue
+    oauthFile?: RawOAuthFileCredentials
   }>
 }
 
@@ -467,8 +473,7 @@ export async function readRawAuthProvidersFromIdb(
       const resolveSnapshot = (rawSnapshot: unknown) => {
         if (
           typeof rawSnapshot !== 'object' ||
-          Object(rawSnapshot) !== rawSnapshot ||
-          Array.isArray(rawSnapshot)
+          Object(rawSnapshot) !== rawSnapshot
         ) {
           resolve({ providers: [] })
           return
@@ -521,7 +526,10 @@ export async function readRawAuthProvidersFromIdb(
             !('value' in valueProperty) ||
             typeof valueProperty.value !== 'string'
           ) {
-            return { kind: 'malformed' }
+            return {
+              kind: 'tagged-without-ciphertext',
+              state: stateProperty.value,
+            }
           }
           return {
             kind: 'tagged-ciphertext',
@@ -537,6 +545,30 @@ export async function readRawAuthProvidersFromIdb(
           if (!descriptor) return { kind: 'absent' }
           if (!('value' in descriptor)) return { kind: 'malformed' }
           return readCredential(descriptor.value)
+        }
+        const projectCredential = (
+          credential: RawCredentialRead,
+        ): RawCredentialProjection => {
+          switch (credential.kind) {
+            case 'absent':
+            case 'malformed':
+              return { kind: 'omit' }
+            case 'legacy-ciphertext':
+              return { kind: 'include', value: credential.ciphertext }
+            case 'tagged-ciphertext':
+              return {
+                kind: 'include',
+                value: {
+                  state: credential.state,
+                  value: credential.ciphertext,
+                },
+              }
+            case 'tagged-without-ciphertext':
+              return {
+                kind: 'include',
+                value: { state: credential.state },
+              }
+          }
         }
         for (const providerValue of providersValue) {
           if (!isRecord(providerValue)) continue
@@ -560,25 +592,25 @@ export async function readRawAuthProvidersFromIdb(
           }
           const id = idProperty.value
           const type = typeProperty.value
+          const provider: RawAuthProvidersSnapshot['providers'][number] = {
+            id,
+            type,
+          }
+          const githubPat = projectCredential(
+            readCredentialProperty(providerValue, 'githubPat'),
+          )
+          if (githubPat.kind === 'include') {
+            provider.githubPat = githubPat.value
+          }
           const oauthFileProperty = Object.getOwnPropertyDescriptor(
             providerValue,
             'oauthFile',
           )
-          let oauthFileCredentials: RawOAuthFileCredentials
-          if (!oauthFileProperty) {
-            oauthFileCredentials = {
-              accessToken: { kind: 'absent' },
-              refreshToken: { kind: 'absent' },
-            }
-          } else if (
-            !('value' in oauthFileProperty) ||
-            !isRecord(oauthFileProperty.value)
+          if (
+            oauthFileProperty &&
+            'value' in oauthFileProperty &&
+            isRecord(oauthFileProperty.value)
           ) {
-            oauthFileCredentials = {
-              accessToken: { kind: 'malformed' },
-              refreshToken: { kind: 'malformed' },
-            }
-          } else {
             const oauthFileValue = oauthFileProperty.value
             const configuredProperty = Object.getOwnPropertyDescriptor(
               oauthFileValue,
@@ -592,23 +624,22 @@ export async function readRawAuthProvidersFromIdb(
             ) {
               credentialSource = configuredProperty.value
             }
-            oauthFileCredentials = {
-              accessToken: readCredentialProperty(
-                credentialSource,
-                'accessToken',
-              ),
-              refreshToken: readCredentialProperty(
-                credentialSource,
-                'refreshToken',
-              ),
+            const oauthFile: RawOAuthFileCredentials = {}
+            const accessToken = projectCredential(
+              readCredentialProperty(credentialSource, 'accessToken'),
+            )
+            if (accessToken.kind === 'include') {
+              oauthFile.accessToken = accessToken.value
             }
+            const refreshToken = projectCredential(
+              readCredentialProperty(credentialSource, 'refreshToken'),
+            )
+            if (refreshToken.kind === 'include') {
+              oauthFile.refreshToken = refreshToken.value
+            }
+            provider.oauthFile = oauthFile
           }
-          providers.push({
-            id,
-            type,
-            githubPat: readCredentialProperty(providerValue, 'githubPat'),
-            oauthFile: oauthFileCredentials,
-          })
+          providers.push(provider)
         }
         resolve({ providers })
       }
@@ -743,45 +774,27 @@ export function expectSealedCredential(
   plaintext: string,
   expectedState: string,
 ) {
-  const isRecord = (value: unknown): value is Record<string, unknown> =>
+  const isTagged = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' &&
     Object(value) === value &&
     !Array.isArray(value)
-  const isCredentialRead = (value: unknown): value is RawCredentialRead => {
-    if (!isRecord(value)) return false
-    switch (Reflect.get(value, 'kind')) {
-      case 'absent':
-      case 'malformed':
-        return true
-      case 'legacy-ciphertext':
-        return typeof Reflect.get(value, 'ciphertext') === 'string'
-      case 'tagged-ciphertext':
-        return (
-          typeof Reflect.get(value, 'state') === 'string' &&
-          typeof Reflect.get(value, 'ciphertext') === 'string'
-        )
-      case 'tagged-without-ciphertext':
-        return typeof Reflect.get(value, 'state') === 'string'
-      default:
-        return false
-    }
+  expect(isTagged(stored)).toBe(true)
+  if (!isTagged(stored)) {
+    throw new Error('expected a tagged sealed credential')
   }
-  expect(isCredentialRead(stored)).toBe(true)
-  if (!isCredentialRead(stored)) {
-    throw new Error('expected a persisted credential read')
+  const stateProperty = Object.getOwnPropertyDescriptor(stored, 'state')
+  const valueProperty = Object.getOwnPropertyDescriptor(stored, 'value')
+  if (
+    !stateProperty ||
+    !('value' in stateProperty) ||
+    !valueProperty ||
+    !('value' in valueProperty) ||
+    typeof valueProperty.value !== 'string'
+  ) {
+    throw new Error('expected a persisted sealed credential')
   }
-  let ciphertext: string
-  switch (stored.kind) {
-    case 'tagged-ciphertext':
-      expect(stored.state).toBe(expectedState)
-      ciphertext = stored.ciphertext
-      break
-    case 'absent':
-    case 'malformed':
-    case 'legacy-ciphertext':
-    case 'tagged-without-ciphertext':
-      throw new Error('expected a tagged sealed credential')
-  }
+  expect(stateProperty.value).toBe(expectedState)
+  const ciphertext = valueProperty.value
   expect(typeof ciphertext).toBe('string')
   expect(ciphertext).toContain(AGE_ARMOR_MARKER)
   expect(ciphertext).not.toContain(plaintext)
