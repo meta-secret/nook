@@ -105,10 +105,6 @@ jobs:
           CI: true
           GHA_CACHE_WRITE_ENABLED: "1"
 
-      - name: Preserve cache telemetry
-        if: always()
-        uses: ./.github/actions/nook-cache-telemetry
-
       - name: Require successful preflight cache publication
         if: ${{ !cancelled() }}
         env:
@@ -118,6 +114,10 @@ jobs:
             echo "Preflight cache publication failed in the verified producer: $CACHE_PUBLICATION_OUTCOME" >&2
             exit 1
           fi
+
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
 
   rust:
     name: Native Rust verification
@@ -167,10 +167,6 @@ jobs:
           GHA_CACHE_WRITE_ENABLED: "1"
           WASM_BUILD_MODE: dev
 
-      - name: Preserve cache telemetry
-        if: always()
-        uses: ./.github/actions/nook-cache-telemetry
-
       - name: Require successful native cache publication
         if: ${{ !cancelled() }}
         env:
@@ -180,6 +176,10 @@ jobs:
             echo "Native cache publication failed in the verified producer: $CACHE_PUBLICATION_OUTCOME" >&2
             exit 1
           fi
+
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
 
   web:
     name: WASM and web verification
@@ -305,10 +305,6 @@ jobs:
           GHA_CACHE_WRITE_ENABLED: "1"
           WASM_BUILD_MODE: dev
 
-      - name: Preserve cache telemetry
-        if: always()
-        uses: ./.github/actions/nook-cache-telemetry
-
       - name: Require successful WASM cache publication
         if: ${{ !cancelled() }}
         env:
@@ -318,6 +314,10 @@ jobs:
             echo "WASM cache publication failed in the verified producer: $CACHE_PUBLICATION_OUTCOME" >&2
             exit 1
           fi
+
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
 
   wasm-cache-proof:
     name: Portable WASM cache publication proof

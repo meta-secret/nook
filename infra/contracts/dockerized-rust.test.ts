@@ -26,6 +26,11 @@ enum WorkflowStepKind {
   Action = "action",
 }
 
+enum EcosystemTask {
+  Smoke = "docker:ecosystem:smoke",
+  Check = "docker:ecosystem:check",
+}
+
 type WorkflowStep =
   | { readonly kind: WorkflowStepKind.Command; readonly command: string }
   | { readonly kind: WorkflowStepKind.Action };
@@ -101,15 +106,13 @@ class DockerizedRustContract {
     const tasks = z
       .object({
         tasks: z.object({
-          "docker:ecosystem:smoke": z.object({ cmds: z.array(z.string()) }),
+          [EcosystemTask.Smoke]: z.object({ cmds: z.tuple([z.string()]) }),
+          [EcosystemTask.Check]: z.object({ cmds: z.tuple([z.string()]) }),
         }),
       })
       .parse(
         Bun.YAML.parse(this.read("nook-app/nook-platform/docker/Taskfile.yml")),
       );
-    const script = z
-      .string()
-      .parse(tasks.tasks["docker:ecosystem:smoke"].cmds[0]);
     const temporary = mkdtempSync(join(tmpdir(), "nook-ecosystem-results-"));
     try {
       writeFileSync(
@@ -117,23 +120,55 @@ class DockerizedRustContract {
         '#!/bin/sh\ncase ",$FAILURES," in *",$1,"*) exit 1 ;; *) exit 0 ;; esac\n',
         { mode: 0o755 },
       );
-      for (let failures = 0; failures < 8; failures += 1) {
-        const selected = [];
-        if (failures & 1) selected.push("docker:ecosystem:deterministic");
-        if (failures & 2) selected.push("docker:ecosystem:fuzz");
-        if (failures & 4) selected.push("docker:ecosystem:kani");
-        const run = spawnSync("bash", ["-e", "-c", script], {
-          encoding: "utf8",
-          env: {
-            ...process.env,
-            PATH: `${temporary}:${process.env.PATH}`,
-            FAILURES: selected.join(","),
-          },
-        });
-        expect(run.status === 0, run.stdout).toBe(failures === 0);
-        expect(run.stdout).toContain("Deterministic tests");
-        expect(run.stdout).toContain("Fuzz smoke");
-        expect(run.stdout).toContain("Kani proofs");
+      for (const group of [
+        {
+          task: EcosystemTask.Smoke,
+          children: ["deterministic", "fuzz", "kani"],
+          labels: ["Deterministic tests", "Fuzz smoke", "Kani proofs"],
+        },
+        {
+          task: EcosystemTask.Check,
+          children: ["dependency-policy", "smoke", "dylint"],
+          labels: [
+            "Rust ecosystem: policy",
+            "Rust ecosystem: smoke",
+            "Rust ecosystem: dylint",
+          ],
+        },
+      ]) {
+        const script = tasks.tasks[group.task].cmds[0];
+        for (let failures = 0; failures < 8; failures += 1) {
+          const selected = group.children
+            .filter((_, index) => (failures & (1 << index)) !== 0)
+            .map((child) => "docker:ecosystem:" + child);
+          const output = join(temporary, "outputs");
+          writeFileSync(output, "");
+          const run = spawnSync("bash", ["-e", "-c", script], {
+            encoding: "utf8",
+            env: {
+              ...process.env,
+              PATH: temporary + ":" + process.env.PATH,
+              FAILURES: selected.join(","),
+              RUNNER_TEMP: temporary,
+              GITHUB_OUTPUT: output,
+              GITHUB_STEP_SUMMARY: join(temporary, "summary"),
+            },
+          });
+          expect(run.status === 0, run.stdout).toBe(failures === 0);
+          for (const label of group.labels) expect(run.stdout).toContain(label);
+          switch (group.task) {
+            case EcosystemTask.Check: {
+              const results = readFileSync(output, "utf8").trim().split("\n");
+              expect(results).toHaveLength(3);
+              expect(
+                results.filter((result) => result.endsWith("=failure")),
+              ).toHaveLength(selected.length);
+              break;
+            }
+            case EcosystemTask.Smoke:
+              break;
+          }
+        }
       }
     } finally {
       rmSync(temporary, { recursive: true, force: true });
@@ -214,7 +249,7 @@ class DockerizedRustContract {
     expect(ecosystem).toContain("SCCACHE_OPTIONAL:");
     expect(ecosystem).toContain("'dependabot[bot]') && '1' || ''");
     expect(ecosystem.match(/uses: docker\/setup-buildx-action/g)).toHaveLength(
-      3,
+      1,
     );
     let routedJobs = 0;
     for (const line of ecosystem.split("\n")) {
@@ -230,7 +265,7 @@ class DockerizedRustContract {
         "(vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest'",
       );
     }
-    expect(routedJobs).toBe(3);
+    expect(routedJobs).toBe(1);
 
     expect(this.read(".github/formatting/Dockerfile")).toContain(
       "prettier-skill.json",

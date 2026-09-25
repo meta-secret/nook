@@ -47,12 +47,12 @@ impl WorkflowRuntimeContract<'_> {
                             .contains("github.event.pull_request.user.login != 'dependabot[bot]'")
                         && line.contains("(vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest'"))
                     .count()
-                    == 3
-                && ecosystem.matches("github.event_name == 'schedule'").count() == 3
+                    == 1
+                && ecosystem.matches("github.event_name == 'schedule'").count() == 1
                 && ecosystem
                     .matches("github.event_name == 'workflow_dispatch'")
                     .count()
-                    == 3
+                    == 1
                 && ecosystem_entry.contains("github.event_name == 'schedule'")
                 && ecosystem_entry.contains("github.event_name == 'workflow_dispatch'")
                 && ecosystem_entry.contains("uses: ./.github/workflows/rust-ecosystem-checks.yml"),

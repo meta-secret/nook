@@ -322,47 +322,6 @@ fn rust_ecosystem_jobs_keep_their_shared_execution_contract() -> anyhow::Result<
 }
 
 #[test]
-fn ecosystem_aggregation_starts_all_groups_and_collects_every_result() -> anyhow::Result<()> {
-    let fixture = RustEcosystemFixture::load()?;
-    let aggregate = fixture
-        .docker_tasks
-        .split_once("  docker:ecosystem:check:")
-        .and_then(|(_, rest)| rest.split_once("  docker:ecosystem:smoke:"))
-        .map(|(task, _)| task)
-        .ok_or_else(|| anyhow::anyhow!("ecosystem aggregate task is missing"))?;
-    let wait = aggregate
-        .find("if ! wait")
-        .ok_or_else(|| anyhow::anyhow!("aggregate must await every group"))?;
-    for (task, pid, output) in [
-        ("dependency-policy", "policy_pid=$!", "policy"),
-        ("smoke", "smoke_pid=$!", "smoke"),
-        ("dylint", "dylint_pid=$!", "dylint"),
-    ] {
-        assert!(aggregate.contains(&format!("task docker:ecosystem:{task} ")));
-        assert!(aggregate.find(pid).is_some_and(|start| start < wait));
-        assert!(
-            fixture
-                .checks
-                .contains(&format!("steps.checks.outputs.{output}"))
-        );
-    }
-    assert!(
-        aggregate.contains("for group in policy smoke dylint; do")
-            && aggregate.contains("failed=1")
-            && aggregate.contains("test \"$failed\" -eq 0")
-            && aggregate.contains("echo \"$group=$result\" >> \"$GITHUB_OUTPUT\"")
-    );
-    assert_eq!(
-        fixture
-            .checks
-            .matches("uses: ./.github/actions/nook-docker-setup")
-            .count(),
-        1
-    );
-    Ok(())
-}
-
-#[test]
 fn rust_ecosystem_taskfiles_keep_workspace_ownership() -> anyhow::Result<()> {
     let fixture = RustEcosystemFixture::load()?;
 
