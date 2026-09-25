@@ -11,6 +11,7 @@ import {
   LauncherLastFocusedWindowKind,
   LauncherWindowType,
   type LauncherBrowserHost,
+  type LauncherLastFocusedWindow,
 } from './companion-launcher-test-support'
 
 describe('openCompanionLauncherBestEffort', () => {

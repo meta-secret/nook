@@ -1,5 +1,4 @@
 import { expect } from 'bun:test'
-import { OpenCompanionLauncherIntent } from '../../nook-web-shared/src/extension/companion-launcher-message'
 
 export function browserTab(
   url: string,
@@ -48,7 +47,7 @@ type LauncherContextFilter = {
   windowIds: [number]
 }
 
-type LauncherLastFocusedWindow =
+export type LauncherLastFocusedWindow =
   | { kind: LauncherLastFocusedWindowKind.Identified; id: number }
   | { kind: LauncherLastFocusedWindowKind.MissingId }
 
