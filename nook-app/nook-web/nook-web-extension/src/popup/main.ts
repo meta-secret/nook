@@ -68,16 +68,14 @@ async function main() {
     return
   }
 
+  const [launcherIntentValue = ''] = searchParams.getAll('intent')
   let launcherIntent: OpenCompanionLauncherIntent
-  switch (searchParams.get('intent')) {
+  switch (launcherIntentValue) {
     case OpenCompanionLauncherIntent.Pair:
       launcherIntent = OpenCompanionLauncherIntent.Pair
       break
     case OpenCompanionLauncherIntent.PilotAuth:
       launcherIntent = OpenCompanionLauncherIntent.PilotAuth
-      break
-    case null:
-      launcherIntent = OpenCompanionLauncherIntent.Default
       break
     default:
       launcherIntent = OpenCompanionLauncherIntent.Default
