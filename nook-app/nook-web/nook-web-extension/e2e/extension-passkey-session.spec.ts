@@ -834,7 +834,9 @@ test('re-approves an existing local vault after reload without event-log-access-
     await expect(
       connectPage.getByTestId('extension-connect-approved'),
     ).toBeVisible()
-    await expect(connectPage).toHaveURL((url) => url.pathname.endsWith('/vault'))
+    await expect(connectPage).toHaveURL((url) =>
+      url.pathname.endsWith('/vault'),
+    )
     await expect(connectPage.getByTestId('authenticated-shell')).toBeVisible()
 
     const pairedStorage = await readExtensionStorage(context)
