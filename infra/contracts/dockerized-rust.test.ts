@@ -100,7 +100,7 @@ class DockerizedRustContract {
       "nook-pr-coverage",
     );
     expect(prTasks).toContain(
-      "E2E_SPEC: e2e/mock-auth-pilot-coverage.spec.ts",
+      "E2E_SPEC: 'e2e/mock-auth-pilot-(coverage|session-lifecycle)[.]spec[.]ts'",
     );
   }
 
