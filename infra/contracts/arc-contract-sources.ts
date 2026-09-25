@@ -107,7 +107,10 @@ export class ArcContractSourceInventory {
     }
     const buildkitContainer = new TextContract({
       label: "ARC persistent BuildKit container",
-      source: buildkitSource.slice(),
+      source: buildkitSource.slice(
+        buildkitContainerStart,
+        buildkitContainerEnd,
+      ),
     });
     const readSource17 = await new OperationalContractSource(
       resolve(this.root, "infra/k0s/manifests/arc/network-policy.yaml"),

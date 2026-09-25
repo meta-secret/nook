@@ -56,6 +56,8 @@ Home has twice each Rise node's logical CPUs, but its 250 Mbps connection makes
 Rise preferable for the first network-heavy jobs. Browser jobs retain their
 explicit Rise/overflow eligibility inventory.
 
+### Shared workload preferences
+
 All heavy execution Pods share preferred pod anti-affinity. Its selector counts
 `arc-spread-group` values `general`, `hive`, and `container` together.
 Container-runner managers and BuildKit daemons are excluded. General runners
@@ -64,11 +66,10 @@ measurement of actual CPU use or active BuildKit solves.
 
 The native scheduler applies these marginal penalties per matching Pod:
 
-| Node | Hostname term | Standard-host term | Overflow-host term | Total |
-| --- | --- | --- | --- | --- |
-| Home | 25 | absent | absent | 25 |
-| Each Rise | 25 | 25 | absent | 50 |
-| Control/storage | 25 | 25 | 50 | 100 |
+- Home: 25 from the hostname term.
+- Each Rise: 50, combining hostname (25) and standard-host (25).
+- Control/storage: 100, combining hostname (25), standard-host (25),
+  and overflow-host (50).
 
 Every node has its ordinary hostname label. The two additional topology labels
 contain that node's unique name and are deliberately absent outside their
@@ -86,6 +87,8 @@ remains soft when nodes are busy or unavailable. It never requires an equal
 number of jobs on the weak control/storage node. Scheduler preferences do not
 guarantee that a busy node will be avoided; observe real placement and node use
 with `task infra:arc:placement:status`.
+
+### Deployment and resource policy
 
 Deployment keeps all build nodes quarantined until listeners are ready, exposes
 both Rise nodes together, then home, then overflow. The existing Hive Helm
