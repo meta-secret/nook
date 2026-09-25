@@ -16,6 +16,17 @@ import {
 
 describe('openCompanionLauncherBestEffort', () => {
   test('normalizes sender tab presence into direct or source-window state', async () => {
+    installLauncherBrowserHost(
+      createLauncherBrowserHost({
+        tabs: [],
+        contexts: [],
+        windowTypes: new Map<number, LauncherWindowType>(),
+        lastFocusedWindow: {
+          kind: LauncherLastFocusedWindowKind.MissingId,
+        },
+        failure: { kind: LauncherBrowserFailureKind.None },
+      }),
+    )
     const { CompanionLauncherSourceKind, ExtensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
     const initiatingTab = browserTab('https://example.test/login', 50)
