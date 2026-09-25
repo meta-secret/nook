@@ -14,10 +14,8 @@ impl PrDeliveryScenario<'_> {
         let pr = self.root.read(".github/workflows/pr.yml");
         let mut previous = 0;
         for phase in [
-            "run: task --silent ci:pr:verification\n",
-            "run: task --silent ci:pr:tests\n",
-            "run: task --silent ci:pr:post-tests\n",
-            "run: task --silent ci:pr:browser:full\n",
+            "run: task --silent ci:pr:validate\n",
+            "name: Import production artifacts after all validation succeeds",
             "uses: ./.github/actions/nook-pr-preview",
         ] {
             let position = pr
@@ -25,7 +23,7 @@ impl PrDeliveryScenario<'_> {
                 .with_context(|| format!("missing PR phase: {phase}"))?;
             assert!(
                 position > previous,
-                "verification, tests, post-test fan-out, browser work and preview must be ordered"
+                "validation join, artifact import and preview must be ordered"
             );
             previous = position;
         }
@@ -33,9 +31,8 @@ impl PrDeliveryScenario<'_> {
         assert!(!pr.contains("    needs:"));
         assert!(!pr.contains("continue-on-error:"));
         assert!(!pr.contains("type=registry"));
-        assert!(pr.contains("task --silent ci:pr:browser:auth"));
-        assert!(pr.contains("steps.browser-scope.outputs.auth == 'true'"));
-        assert!(pr.contains("task --silent web:research:verify"));
+        assert!(pr.contains("PR_AUTH_E2E: ${{ steps.browser-scope.outputs.auth }}"));
+        assert!(pr.contains("PR_RESEARCH: ${{ steps.browser-scope.outputs.research }}"));
         assert!(!pr.contains("nook-pr-coverage"));
         assert!(pr.contains("require-sccache: \"true\""));
         assert!(!pr.contains("Preserve cache telemetry"));
@@ -47,10 +44,12 @@ impl PrDeliveryScenario<'_> {
     fn assert_artifact_backed_pr_fanout(&self) {
         let pr = self.root.read(".github/workflows/pr.yml");
         let pr_tasks = self.root.read("nook-app/ci/pr.yml");
-        let post_tests = section(&pr_tasks, "  ci:pr:post-tests:\n", "\n  ci:pr:bake:");
+        let join = section(&pr_tasks, "  ci:pr:validate:\n", "\n  ci:pr:checks:");
         assert!(
-            pr.contains("run: task --silent ci:pr:post-tests")
-                && post_tests.contains("task --parallel ci:pr:heavy ci:pr:browser:prepare")
+            pr.contains("run: task --silent ci:pr:validate")
+                && join.contains("deps:")
+                && join.contains("- ci:pr:browser")
+                && join.contains("- ci:pr:checks")
         );
     }
 }

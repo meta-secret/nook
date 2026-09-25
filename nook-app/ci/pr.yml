@@ -1,7 +1,7 @@
 version: "3"
 
-# Ordered phases in one GitHub job. Bake parallelizes independent targets on
-# the runner node's persistent builder; only small outputs leave that builder.
+# One job joins independent validation branches before publishing previews.
+# BuildKit owns preparation dependencies and reuses the persistent local cache.
 tasks:
   ci:pr:runner:publish:
     desc: Publish the source-free PR runner once per tooling revision (not a PR phase).
@@ -31,16 +31,22 @@ tasks:
         --set 'arc-runner.tags={{.ARC_RUNNER_IMAGE}}'
         arc-runner arc-runner-hooks-proof
 
-  ci:pr:verification:
-    desc: Verify tooling, formatting, Rust, WASM and web before compiling tests.
-    cmds:
-      - task: ci:pr:verification:early
-      - task --parallel ci:pr:verification:product docker:ecosystem:dependency-policy
-
-  ci:pr:verification:early:
+  ci:pr:validate:
+    desc: Join every required check and browser branch before preview deployment.
     deps:
       - ci:pr:verification:format
       - ci:pr:verification:tooling
+      - docker:ecosystem:dependency-policy
+      - ci:pr:checks
+      - ci:pr:tests:policy
+      - ci:pr:delivery-helpers
+      - ci:pr:browser
+
+  ci:pr:checks:
+    desc: Run independent checks from their prepared BuildKit stages.
+    cmds:
+      - task: ci:pr:bake
+        vars: { PR_BAKE_TARGET: pr-checks }
 
   ci:pr:verification:format:
     cmds:
@@ -50,21 +56,6 @@ tasks:
     cmds:
       - task: preflight:policy:run
         vars: { POLICY_STAGE: pr-verification }
-
-  ci:pr:verification:product:
-    cmds:
-      - task: ci:pr:bake
-        vars: { PR_BAKE_TARGET: pr-verification }
-
-  ci:pr:tests:
-    desc: Run unit/integration tests and coverage after verification succeeds.
-    cmds:
-      - task --parallel ci:pr:tests:product ci:pr:tests:policy ci:pr:delivery-helpers
-
-  ci:pr:tests:product:
-    cmds:
-      - task: ci:pr:bake
-        vars: { PR_BAKE_TARGET: pr-tests }
 
   ci:pr:tests:policy:
     cmds:
@@ -81,17 +72,6 @@ tasks:
       - cd "{{.REPO_ROOT}}" && node --test .github/scripts/workbench-publish.test.cjs
       - cd "{{.REPO_ROOT}}" && node --test .github/workflows/lib/linear-ui-demo.test.cjs .github/workflows/lib/buildkit-cache-export-telemetry.test.mjs .github/workflows/lib/cache-telemetry-baseline.test.mjs .github/workflows/lib/cache-telemetry.test.mjs .github/workflows/lib/cache-telemetry-split-log.test.mjs .github/workflows/lib/compile-only-dockerfile.test.mjs .github/workflows/lib/pr-cache-health.test.mjs
 
-  ci:pr:heavy:
-    desc: Run fuzz and Kani only after unit/integration tests succeed.
-    cmds:
-      - task: ci:pr:bake
-        vars: { PR_BAKE_TARGET: pr-heavy }
-
-  ci:pr:post-tests:
-    desc: Prepare heavy checks and browser artifacts concurrently after tests succeed.
-    cmds:
-      - task --parallel ci:pr:heavy ci:pr:browser:prepare
-
   ci:pr:bake:
     internal: true
     requires:
@@ -105,23 +85,46 @@ tasks:
           -f '{{.REPO_ROOT}}/nook-app/ci/pr.docker-bake.hcl' \
           --allow='fs.write={{.PR_ARTIFACT_DIR}}' \
           --set 'coverage-export.output=type=cacheonly' \
-          --set 'pr-browser-artifacts.output=type=local,dest={{.PR_ARTIFACT_DIR}}/browser' \
+          --set 'pr-browser-artifacts.output=type=tar,dest={{.PR_ARTIFACT_DIR}}/browser.tar' \
           --set "rust-dylint.args.RUST_DYLINT_COVERAGE_FLOOR=$floor" \
           --set 'rust-ecosystem-deterministic.args.NATIVE_COVERAGE_PROVIDED=true' \
           --set 'builder-wasm.output=type=cacheonly' \
           '{{.PR_BAKE_TARGET}}'
 
+  ci:pr:browser:
+    desc: Run selected browser suites in an isolated artifact-backed workspace.
+    cmds:
+      - task: ci:pr:browser:prepare
+      - |
+        set -euo pipefail
+        cd '{{.PR_ARTIFACT_DIR}}/runtime'
+        export REPO_ROOT="$PWD"
+        export GITHUB_WORKSPACE="$PWD"
+        if [ "${PR_FULL_E2E:-false}" = true ]; then
+          task --silent ci:pr:browser:full
+        elif [ "${PR_AUTH_E2E:-false}" = true ]; then
+          task --silent ci:pr:browser:auth
+        fi
+        if [ "${PR_RESEARCH:-false}" = true ]; then
+          task --silent web:research:verify
+        fi
+
   ci:pr:browser:prepare:
-    desc: Export built web artifacts and dependencies into this runner's checkout.
+    desc: Export artifacts into a separate checkout while other BuildKit solves read the source.
     requires:
       vars: [PR_ARTIFACT_DIR]
     cmds:
       - task: ci:pr:bake
         vars: { PR_BAKE_TARGET: pr-browser-artifacts }
-      - cp -a '{{.PR_ARTIFACT_DIR}}/browser/nook-app/.' '{{.REPO_ROOT}}/nook-app/'
-      - test -e '{{.REPO_ROOT}}/nook-app/nook-web/node_modules' || ln -s nook-web-app/node_modules '{{.REPO_ROOT}}/nook-app/nook-web/node_modules'
       - |
-        revision="$(jq -er '.browsers[] | select(.name == "ffmpeg") | .revision' '{{.REPO_ROOT}}/nook-app/nook-web/nook-web-app/node_modules/playwright-core/browsers.json')"
+        set -euo pipefail
+        tar -xf '{{.PR_ARTIFACT_DIR}}/browser.tar' -C '{{.PR_ARTIFACT_DIR}}/browser'
+        git clone --quiet --shared --no-checkout '{{.REPO_ROOT}}' '{{.PR_ARTIFACT_DIR}}/runtime'
+        git -C '{{.PR_ARTIFACT_DIR}}/runtime' checkout --quiet --detach "$(git -C '{{.REPO_ROOT}}' rev-parse HEAD)"
+        cp -a '{{.PR_ARTIFACT_DIR}}/browser/nook-app/.' '{{.PR_ARTIFACT_DIR}}/runtime/nook-app/'
+      - test -e '{{.PR_ARTIFACT_DIR}}/runtime/nook-app/nook-web/node_modules' || ln -s nook-web-app/node_modules '{{.PR_ARTIFACT_DIR}}/runtime/nook-app/nook-web/node_modules'
+      - |
+        revision="$(jq -er '.browsers[] | select(.name == "ffmpeg") | .revision' '{{.PR_ARTIFACT_DIR}}/runtime/nook-app/nook-web/nook-web-app/node_modules/playwright-core/browsers.json')"
         install -d "${PLAYWRIGHT_BROWSERS_PATH}/ffmpeg-${revision}"
         ln -sf /usr/bin/ffmpeg "${PLAYWRIGHT_BROWSERS_PATH}/ffmpeg-${revision}/ffmpeg-linux"
 

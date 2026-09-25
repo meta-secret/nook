@@ -180,52 +180,31 @@ impl RustEcosystemFixture {
         })
     }
 
-    fn assert_pr_phase_barriers_and_post_test_fanout(&self) -> anyhow::Result<()> {
-        let phase_markers = [
-            "run: task --silent ci:pr:verification\n",
-            "run: task --silent ci:pr:tests\n",
-            "run: task --silent ci:pr:post-tests\n",
-        ];
-        let mut previous_phase = None;
-        for marker in phase_markers {
-            let guarded_marker = format!(
-                "if: steps.browser-scope.outputs.validation == 'true'\n        {}",
-                marker.trim_end()
-            );
-            let phase = self
-                .pr
-                .find(marker)
-                .unwrap_or_else(|| panic!("PR workflow is missing phase barrier: {marker}"));
-            assert!(
-                self.pr.contains(&guarded_marker),
-                "Product PR phase must retain its validation guard: {marker}"
-            );
-            assert!(
-                previous_phase.is_none_or(|previous| previous < phase),
-                "PR workflow phase barriers must remain ordered: {marker}"
-            );
-            previous_phase = Some(phase);
-        }
-        let post_tests = self
+    fn assert_pr_validation_join(&self) -> anyhow::Result<()> {
+        let validation = self
+            .pr
+            .find("run: task --silent ci:pr:validate\n")
+            .ok_or_else(|| anyhow::anyhow!("missing PR validation join"))?;
+        let deploy = self
+            .pr
+            .find("uses: ./.github/actions/nook-pr-preview")
+            .ok_or_else(|| anyhow::anyhow!("missing preview"))?;
+        assert!(validation < deploy);
+        assert!(!self.pr.contains("continue-on-error:"));
+        let join = self
             .pr_tasks
-            .split_once("  ci:pr:post-tests:\n")
-            .and_then(|(_, rest)| rest.split_once("\n  ci:pr:bake:"))
+            .split_once("  ci:pr:validate:\n")
+            .and_then(|(_, rest)| rest.split_once("\n  ci:pr:checks:"))
             .map(|(task, _)| task)
-            .ok_or_else(|| anyhow::anyhow!("post-test PR task block is missing"))?;
+            .ok_or_else(|| anyhow::anyhow!("missing parallel validation task"))?;
         assert!(
-            post_tests.contains("task --parallel ci:pr:heavy ci:pr:browser:prepare"),
-            "The post-test barrier must execute heavy verification and browser preparation concurrently"
+            join.contains("deps:")
+                && join.contains("- ci:pr:checks")
+                && join.contains("- docker:ecosystem:dependency-policy")
+                && join.contains("- ci:pr:browser")
         );
-        let heavy = self
-            .pr_tasks
-            .split_once("  ci:pr:heavy:\n")
-            .and_then(|(_, rest)| rest.split_once("\n  ci:pr:post-tests:"))
-            .map(|(task, _)| task)
-            .ok_or_else(|| anyhow::anyhow!("heavy PR task block is missing"))?;
-        assert!(
-            heavy.contains("PR_BAKE_TARGET: pr-heavy"),
-            "The post-test fan-out must retain the heavy Bake target"
-        );
+        let bake = self.root.read("nook-app/ci/pr.docker-bake.hcl")?;
+        assert!(bake.contains("\"rust-fuzz-smoke\"") && bake.contains("\"rust-kani\""));
         Ok(())
     }
 }
@@ -233,7 +212,7 @@ impl RustEcosystemFixture {
 #[test]
 fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()> {
     let fixture = RustEcosystemFixture::load()?;
-    fixture.assert_pr_phase_barriers_and_post_test_fanout()?;
+    fixture.assert_pr_validation_join()?;
     assert!(
         fixture
             .entry
