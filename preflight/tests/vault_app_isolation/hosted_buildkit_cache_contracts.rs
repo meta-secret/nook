@@ -321,7 +321,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         .find("task ci:main:publish-web-cache")
         .context("Main web job must publish its cache")?;
     let web_browser_image = web
-        .find("- name: Publish exact-source browser job image")
+        .find("task web:e2e:kubernetes-image:artifacts")
         .context("Main web producer must publish the exact browser image")?;
     let ui_demo_step = ui_demo
         .find("- name: Headless UI demos")

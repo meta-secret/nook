@@ -199,7 +199,7 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
     let main_workflow = root.read(".github/workflows/main.yml");
     let main_browser_image = section(
         &main_workflow,
-        "      - name: Publish exact-source browser job image\n",
+        "      - name: Prepare web artifacts alongside verified WASM cache publication\n",
         "\n      - name: Preserve cache telemetry",
     );
     for required in [

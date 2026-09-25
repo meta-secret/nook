@@ -574,7 +574,7 @@ class ArcManifestContract {
       "main-web-deploy-${{ github.run_id }}",
       "runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}",
       "runs-on: nook-k0s-container",
-      "Publish exact-source browser job image",
+      "task web:e2e:kubernetes-image:artifacts",
       "name: WASM and web verification",
       "needs: [preflight-cache-publish, native-cache-publish, rust-ecosystem, web, web-e2e, extension-e2e, wasm-cache-proof]",
       "task _ci:main:web:e2e-only",

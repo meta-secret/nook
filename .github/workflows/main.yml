@@ -1,5 +1,5 @@
 # Main runs native and WASM/web verification concurrently after preflight.
-# The WASM/web producer overlaps verified WASM cache publication with web checks
+# The WASM/web producer overlaps verified WASM cache publication with web checks and image publication
 # on its own builder. Web and two isolated extension shards consume one verified image.
 # All validation and cache gates join before development deployment.
 # Each browser solve is read-only. Headless UI demos are temporarily disabled while their
@@ -269,6 +269,10 @@ jobs:
             VITE_SIMPLE_APP_URL="$CI_MAIN_SIMPLE_URL" \
             VITE_SENTINEL_APP_URL="$CI_MAIN_SENTINEL_URL" \
             WASM_BUILD_MODE=dev || web_status=$?
+          if [ "$web_status" -eq 0 ]; then
+            task web:e2e:kubernetes-image:artifacts \
+              CI_ARTIFACT_DIR="${{ runner.temp }}/nook-ci-artifacts/joined" || web_status=$?
+          fi
           cache_outcome=success
           wait "$cache_pid" || cache_outcome=failure
           cat "$cache_log"
@@ -279,6 +283,13 @@ jobs:
           # Keep verification read-only; publish the already-solved dependency graph afterward.
           GHA_CACHE_WRITE_ENABLED: ""
           GIT_COMMIT_ID: ${{ github.sha }}
+          DOCKER_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
+          DOCKER_E2E_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
+          VITE_BASE: ${{ env.CI_MAIN_VITE_BASE }}
+          VITE_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}
+          VITE_PUBLIC_APP_URL: ${{ env.CI_MAIN_DEV_URL }}
+          VITE_SIMPLE_APP_URL: ${{ env.CI_MAIN_SIMPLE_URL }}
+          VITE_SENTINEL_APP_URL: ${{ env.CI_MAIN_SENTINEL_URL }}
           NOOK_SIMPLE_VAULT_URL: ${{ env.CI_MAIN_SIMPLE_URL }}/
           NOOK_EXTENSION_CHANNEL: development
           NOOK_EXTENSION_COMMIT: ${{ github.sha }}
@@ -293,26 +304,6 @@ jobs:
           path: ${{ runner.temp }}/nook-ci-artifacts/web-deploy/nook-app
           if-no-files-found: error
           retention-days: 1
-
-      - name: Publish exact-source browser job image
-        run: >-
-          task web:e2e:kubernetes-image:artifacts
-          CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
-        env:
-          DOCKER_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
-          DOCKER_E2E_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
-          CI: true
-          GIT_COMMIT_ID: ${{ github.sha }}
-          VITE_BASE: ${{ env.CI_MAIN_VITE_BASE }}
-          VITE_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}
-          VITE_PUBLIC_APP_URL: ${{ env.CI_MAIN_DEV_URL }}
-          VITE_SIMPLE_APP_URL: ${{ env.CI_MAIN_SIMPLE_URL }}
-          VITE_SENTINEL_APP_URL: ${{ env.CI_MAIN_SENTINEL_URL }}
-          WASM_BUILD_MODE: dev
-          NOOK_SIMPLE_VAULT_URL: ${{ env.CI_MAIN_SIMPLE_URL }}/
-          NOOK_EXTENSION_CHANNEL: development
-          NOOK_EXTENSION_COMMIT: ${{ github.sha }}
-          NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
 
       - name: Publish verified web BuildKit cache
         if: success()
