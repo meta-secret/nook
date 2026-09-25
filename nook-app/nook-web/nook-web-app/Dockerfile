@@ -81,6 +81,7 @@ RUN task _format:check \
     && task --parallel web:static:container _lint:parallel _compile:parallel
 
 FROM nook-web-source AS pr-web-tests
+ARG VITEST_MAX_WORKERS
 RUN CI=1 task _unit:parallel
 
 # Build the production web dist and browser extension at image time so both artifacts are present in
