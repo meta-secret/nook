@@ -95,6 +95,8 @@ and apply Nook's assignment and delivery constraints in both modes.
 When upgrading an older configuration, remove obsolete per-role `mode` and
 `service_tier` fields while retaining each role's `model` and `reasoning_effort`.
 
+#### Ownership boundaries
+
 Meta-Cortex owns generic roles, skills, programming requirements, and authoring
 practices. Nook owns product architecture, product security, delivery
 constraints, and Nook-specific tooling. The root [Nook routing contract](AGENTS.md)
@@ -146,6 +148,8 @@ Preserve the exact UUID when replacing the main checkout's framework. Restore
 it to the new main checkout's `.meta-cortex/repository-id` before initializing
 features or linked worktrees, then verify that it selects the existing data
 directory. An unrelated clone receives its own identity and data directory.
+
+#### Legacy database migration
 
 Before upgrading, stop all old ledger writers because older executables continue
 to write legacy per-feature database files under
