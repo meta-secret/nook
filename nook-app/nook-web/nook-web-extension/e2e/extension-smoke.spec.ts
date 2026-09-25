@@ -184,7 +184,9 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     if (tabsBeforeLaunch.kind !== 'observed') {
       throw new Error('Could not identify the popup and connection tabs.')
     }
-    if (tabsBeforeLaunch.popupWindowId !== tabsBeforeLaunch.connectionWindowId) {
+    if (
+      tabsBeforeLaunch.popupWindowId !== tabsBeforeLaunch.connectionWindowId
+    ) {
       await worker.evaluate(
         async ({ tabId, windowId }) => {
           await chrome.tabs.move(tabId, { windowId })
@@ -228,9 +230,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await expect(popupPage).toHaveURL(
       `chrome-extension://${extensionId}/popup/index.html`,
     )
-    await expect(
-      popupPage.getByTestId('extension-device-setup'),
-    ).toBeVisible()
+    await expect(popupPage.getByTestId('extension-device-setup')).toBeVisible()
 
     const loginPage = await context.newPage()
     await loginPage.goto(`${loginServer.origin}/login`)
