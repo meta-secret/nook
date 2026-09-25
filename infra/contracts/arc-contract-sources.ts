@@ -233,21 +233,9 @@ export class ArcContractSourceInventory {
       label: "PR task phases",
       source: readPrTasks.value,
     });
-    const authSensitiveJobStart = prWorkflowSource.indexOf(
-      "      - name: Authentication-sensitive extension regression",
-    );
-    const authSensitiveJobEnd = prWorkflowSource.indexOf(
-      "      - name: Deploy and report preview",
-    );
-    if (authSensitiveJobStart < 0 || authSensitiveJobEnd < 0) {
-      return err({
-        kind: OperationalContractFailureKind.Requirement,
-        message: "PR extension e2e step is missing",
-      });
-    }
     const authSensitiveJob = new TextContract({
-      label: "PR extension e2e step",
-      source: prWorkflowSource.slice(),
+      label: "PR browser branch",
+      source: readPrTasks.value,
     });
     const readSource8 = await new OperationalContractSource(
       resolve(this.root, ".github/workflows/repository-policy.yml"),

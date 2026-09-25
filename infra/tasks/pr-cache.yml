@@ -1,9 +1,9 @@
 version: "3"
 
-# Real BuildKit simulator for the single-job PR phases.
+# Real BuildKit proof for independent checks and the final publication join.
 tasks:
   bake-cache:prove-pr:
-    desc: Prove shared local BuildKit utility reuse and PR phase failure barriers without Zot.
+    desc: Prove shared local BuildKit utility reuse and the PR publication barrier without Zot.
     preconditions:
       - sh: test "${NOOK_ARC_RUNNER:-}" != 1
         msg: This local Docker proof creates a disposable builder; never run it inside ARC.
@@ -19,61 +19,59 @@ tasks:
         cp -R "$repo_root/infra/sim/bake-cache" "$context"
         fixture="$context/pr-pipeline.docker-bake.hcl"
         for temperature in cold warm; do
-          for phase in verification tests post-tests; do
-            docker buildx bake --builder "$builder" --progress=plain \
-              --metadata-file "$output/$temperature-$phase.json" \
-              -f "$fixture" --set "*.context=$context" \
-              --allow="fs.read=$context" \
-              --allow="fs.write=$output" \
-              --set "pr-proof-heavy.output=type=local,dest=$output/result" \
-              "pr-proof-$phase" 2>&1 | tee "$output/$temperature-$phase.log"
-          done
+          phase=checks
+          docker buildx bake --builder "$builder" --progress=plain \
+            --metadata-file "$output/$temperature-$phase.json" \
+            -f "$fixture" --set "*.context=$context" \
+            --allow="fs.read=$context" \
+            --allow="fs.write=$output" \
+            --set "pr-proof-heavy.output=type=local,dest=$output/result" \
+            "pr-proof-$phase" 2>&1 | tee "$output/$temperature-$phase.log"
         done
         test -s "$output/result/proof/verification"
         test -s "$output/result/proof/tests"
         test -s "$output/result/proof/heavy"
-        grep -q 'exporting to image' "$output/cold-verification.log"
-        grep -q 'pr-proof-coverage' "$output/cold-tests.log"
-        grep -q 'pr-proof-browser' "$output/cold-post-tests.log"
-        if grep -q 'exporting cache' "$output/cold-verification.log"; then
+        grep -q 'exporting to image' "$output/cold-checks.log"
+        grep -q 'pr-proof-coverage' "$output/cold-checks.log"
+        grep -q 'pr-proof-browser' "$output/cold-checks.log"
+        if grep -Eq '\[pr-proof-verification\] exporting cache' "$output/cold-checks.log"; then
           echo 'Dylint verification unexpectedly used a cache-only/export-cache result' >&2
           exit 1
         fi
-        dylint_dependency_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[dylint-deps 3\/3\] RUN .*/\1/p' "$output/warm-verification.log" | head -n 1)"
-        dependency_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[chef-deps 2\/2\] RUN .*/\1/p' "$output/warm-verification.log" | head -n 1)"
+        dylint_dependency_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[[^]]*dylint-deps 3\/3\] RUN .*/\1/p' "$output/warm-checks.log" | head -n 1)"
+        dependency_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[[^]]*chef-deps 2\/2\] RUN .*/\1/p' "$output/warm-checks.log" | head -n 1)"
         test -n "$dylint_dependency_vertex"
         test -n "$dependency_vertex"
-        grep -qx "$dylint_dependency_vertex CACHED" "$output/warm-verification.log"
-        grep -qx "$dependency_vertex CACHED" "$output/warm-verification.log"
-        if grep -Eq '^#[0-9]+ [0-9.]+ bake-sim-cargo-dylint-product-dependencies$' "$output/warm-verification.log"; then
+        grep -qx "$dylint_dependency_vertex CACHED" "$output/warm-checks.log"
+        grep -qx "$dependency_vertex CACHED" "$output/warm-checks.log"
+        if grep -Eq '^#[0-9]+ [0-9.]+ bake-sim-cargo-dylint-product-dependencies$' "$output/warm-checks.log"; then
           echo 'Warm verification unexpectedly rebuilt Dylint product dependencies' >&2
           exit 1
         fi
-        if grep -Eq '^#[0-9]+ [0-9.]+ bake-sim-cargo-chef-wasm-release$' "$output/warm-verification.log"; then
+        if grep -Eq '^#[0-9]+ [0-9.]+ bake-sim-cargo-chef-wasm-release$' "$output/warm-checks.log"; then
           echo 'Warm verification unexpectedly recooked WASM dependencies' >&2
           exit 1
         fi
-        grep -q ' CACHED' "$output/warm-tests.log"
-        fuzz_dependency_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[[^]]*rust-fuzz-deps 2\/2\] RUN .*/\1/p' "$output/warm-post-tests.log" | head -n 1)"
+        grep -q ' CACHED' "$output/warm-checks.log"
+        fuzz_dependency_vertex="$(sed -n 's/^\(#[0-9][0-9]*\) \[[^]]*rust-fuzz-deps 2\/2\] RUN .*/\1/p' "$output/warm-checks.log" | head -n 1)"
         test -n "$fuzz_dependency_vertex"
-        grep -qx "$fuzz_dependency_vertex CACHED" "$output/warm-post-tests.log"
-        if grep -Eq '^#[0-9]+ [0-9.]+ bake-sim-fuzz-dependencies$' "$output/warm-post-tests.log"; then
-          echo 'Warm post-test solve unexpectedly reinstalled fuzz dependencies' >&2
+        grep -qx "$fuzz_dependency_vertex CACHED" "$output/warm-checks.log"
+        if grep -Eq '^#[0-9]+ [0-9.]+ bake-sim-fuzz-dependencies$' "$output/warm-checks.log"; then
+          echo 'Warm check solve unexpectedly reinstalled fuzz dependencies' >&2
           exit 1
         fi
         if grep -E 'importing cache manifest|exporting cache to registry' "$output/"*.log; then
           echo 'Unexpected registry cache transfer' >&2
           exit 1
         fi
-        # Execute the same sequential shell barrier with actual failing solves.
-        # The next phase must never be invoked after either earlier phase fails.
+        # A failing leaf must block publication even when sibling checks succeed.
         for failure in verification tests; do
           set +e
           if [ "$failure" = verification ]; then
             docker buildx bake --builder "$builder" --progress=plain -f "$fixture" \
               --set "*.context=$context" \
               --allow="fs.read=$context" \
-              --set '*.args.FAIL_VERIFICATION=1' pr-proof-verification \
+              --set '*.args.FAIL_VERIFICATION=1' pr-proof-checks \
               >"$output/failure-$failure.log" 2>&1 \
               && printf 'unexpected downstream invocation\n' >"$output/$failure-downstream"
             status="$?"
@@ -81,7 +79,7 @@ tasks:
             docker buildx bake --builder "$builder" --progress=plain -f "$fixture" \
               --set "*.context=$context" \
               --allow="fs.read=$context" \
-              --set '*.args.FAIL_TESTS=1' pr-proof-tests \
+              --set '*.args.FAIL_TESTS=1' pr-proof-checks \
               >"$output/failure-$failure.log" 2>&1 \
               && printf 'unexpected downstream invocation\n' >"$output/$failure-downstream"
             status="$?"

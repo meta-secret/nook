@@ -294,7 +294,7 @@ fn loom_workflow_audits_every_cortex_change() {
                 "  policy:\n    name: Repository policy\n    if: github.event_name == 'push'\n    needs: scope\n    uses: ./.github/workflows/repository-policy.yml\n    secrets: inherit",
             )
             && entrypoint.contains("    uses: ./.github/workflows/pr.yml")
-            && pr_workflow.contains("run: task --silent ci:pr:tests\n")
+            && pr_workflow.contains("run: task --silent ci:pr:validate\n")
             && pr_workflow.contains(
                 "run: task --silent ci:pr:tests:policy-with-delivery-helpers\n",
             )

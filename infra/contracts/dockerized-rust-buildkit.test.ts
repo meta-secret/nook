@@ -44,7 +44,7 @@ class DockerizedRustBuildKitContract {
     expect(dockerSetup).toContain("--password-stdin");
     expect(dockerSetup).not.toContain("docker/login-action");
     expect(workflow).toContain("BUILDKIT_PROGRESS: plain");
-    expect(workflow).toContain("task --silent ci:pr:verification");
+    expect(workflow).toContain("task --silent ci:pr:validate");
     expect(workflow).not.toContain("nook-cache-telemetry");
     expect(workflow).not.toContain("actions/upload-artifact");
     expect(workflow).toContain("GHA_CACHE_ENABLED=");
@@ -58,7 +58,7 @@ class DockerizedRustBuildKitContract {
     expect(tasks).toContain("pr-browser-artifacts.output=type=local");
     expect(tasks).toContain(".package_lines_percent.nook_domain_api | numbers");
     expect(tasks).toContain(
-      'rust-dylint.args.RUST_DYLINT_COVERAGE_FLOOR=$floor',
+      "rust-dylint.args.RUST_DYLINT_COVERAGE_FLOOR=$floor",
     );
     expect(tasks).not.toContain("rust-dylint-self-test.args");
     expect(tasks).not.toContain(
@@ -115,7 +115,7 @@ class DockerizedRustBuildKitContract {
     expect(bake).toContain('web-artifacts = "target:pr-wasm-artifacts"');
     expect(bake).toContain('output = ["type=cacheonly"]');
     expect(bake).toContain(
-      'targets = ["pr-rust-verify", "pr-web-verification", "pr-web-build", "rust-dylint"]',
+      'targets = ["pr-rust-verify", "pr-web-verification", "rust-dylint", "coverage-export", "builder-wasm", "pr-web-tests", "rust-ecosystem-deterministic", "rust-fuzz-smoke", "rust-kani"]',
     );
     expect(bake).not.toContain(
       'targets = ["pr-rust-verify", "pr-web-verification", "pr-web-build", "rust-dylint-wasm"]',
@@ -298,7 +298,8 @@ class DockerizedRustBuildKitContract {
   }
 
   dylintWrapperContentInvalidatesBuildGraph(): void {
-    const nightlyPath = "nook-app/nook-platform/docker/rust/ecosystem/nightly/Dockerfile";
+    const nightlyPath =
+      "nook-app/nook-platform/docker/rust/ecosystem/nightly/Dockerfile";
     const nightly = this.read(nightlyPath);
     const bake = this.read(
       "nook-app/nook-platform/docker/rust/docker-bake.hcl",
@@ -557,9 +558,9 @@ class DockerizedRustBuildKitContract {
     expect(this.read("nook-app/docker-bake.hcl")).not.toContain(
       "NOOK_SCCACHE_TELEMETRY_REPLAY",
     );
-    expect(this.read(".github/actions/nook-docker-setup/action.yml")).not.toContain(
-      "NOOK_SCCACHE_TELEMETRY_REPLAY",
-    );
+    expect(
+      this.read(".github/actions/nook-docker-setup/action.yml"),
+    ).not.toContain("NOOK_SCCACHE_TELEMETRY_REPLAY");
   }
 
   compilerGraphsDoNotConsumeTelemetryReplayArgument(): void {
@@ -578,15 +579,11 @@ class DockerizedRustBuildKitContract {
     expect(product).not.toContain("NOOK_SCCACHE_TELEMETRY_REPLAY");
     expect(
       this.read("nook-app/nook-platform/docker/rust/compile/Dockerfile"),
-    ).not.toContain(
-      "NOOK_SCCACHE_TELEMETRY_REPLAY",
-    );
+    ).not.toContain("NOOK_SCCACHE_TELEMETRY_REPLAY");
   }
 
   prCacheProofCoversChefDependencyReuse(): void {
-    const simulator = this.read(
-      "infra/sim/bake-cache/pr-pipeline.Dockerfile",
-    );
+    const simulator = this.read("infra/sim/bake-cache/pr-pipeline.Dockerfile");
     const chefDependencies = this.read(
       "infra/sim/bake-cache/inputs/chef-dependencies.txt",
     );
@@ -594,13 +591,11 @@ class DockerizedRustBuildKitContract {
       "infra/sim/bake-cache/inputs/dylint-dependencies.txt",
     );
     const proof = this.read("infra/tasks/pr-cache.yml");
-    expect(chefDependencies).toContain(
-      "Cargo.toml and Cargo.lock fixture",
-    );
+    expect(chefDependencies).toContain("Cargo.toml and Cargo.lock fixture");
     expect(dylintDependencies).toContain("cargo-dylint=6.0.1");
-    expect(simulator.indexOf("COPY inputs/dylint-dependencies.txt")).toBeLessThan(
-      simulator.indexOf("COPY inputs/chef-dependencies.txt"),
-    );
+    expect(
+      simulator.indexOf("COPY inputs/dylint-dependencies.txt"),
+    ).toBeLessThan(simulator.indexOf("COPY inputs/chef-dependencies.txt"));
     expect(simulator.indexOf("COPY inputs/chef-dependencies.txt")).toBeLessThan(
       simulator.indexOf("COPY inputs/compile-web-source.txt"),
     );
@@ -617,13 +612,13 @@ class DockerizedRustBuildKitContract {
     );
     expect(simulator).toContain("bake-sim-fuzz-dependencies");
     expect(simulator).toContain("FROM tests AS coverage-export");
-    expect(simulator).toContain("FROM tests AS browser-artifacts");
+    expect(simulator).toContain("FROM prepared AS browser-artifacts");
     expect(proof).toContain('grep -qx "$fuzz_dependency_vertex CACHED"');
-    expect(proof).toContain("for phase in verification tests post-tests");
+    expect(proof).toContain("phase=checks");
     expect(proof).toContain('"pr-proof-$phase"');
-    expect(proof).toContain("cold-tests.log");
+    expect(proof).toContain("cold-checks.log");
     expect(proof).toContain(
-      "Warm post-test solve unexpectedly reinstalled fuzz dependencies",
+      "Warm check solve unexpectedly reinstalled fuzz dependencies",
     );
     expect(proof).toContain("grep -q 'exporting to image'");
     expect(proof).toContain(

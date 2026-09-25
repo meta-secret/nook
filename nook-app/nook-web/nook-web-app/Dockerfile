@@ -74,13 +74,13 @@ RUN CI=1 timeout --kill-after=10s 10m task _ci:pr \
     && install -d /opt/nook \
     && touch /opt/nook/web-verified
 
-# One PR runner requests these phases in separate solves. Tests cannot start
-# while Rust, tooling, or web verification is still in progress.
+# PR static checks and unit tests share prepared sources, dependencies and WASM.
+# Neither consumes the other's result; the PR validation join requires both.
 FROM nook-web-source AS pr-web-verification
 RUN task _format:check \
     && task --parallel web:static:container _lint:parallel _compile:parallel
 
-FROM pr-web-verification AS pr-web-tests
+FROM nook-web-source AS pr-web-tests
 RUN CI=1 task _unit:parallel
 
 # Build the production web dist and browser extension at image time so both artifacts are present in

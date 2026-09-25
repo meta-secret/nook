@@ -39,15 +39,8 @@ target "pr-browser-artifacts" {
   target = "pr-browser-artifacts"
 }
 
-group "pr-verification" {
-  targets = ["pr-rust-verify", "pr-web-verification", "pr-web-build", "rust-dylint"]
-}
-
-// This group is invoked only after the entire verification solve succeeds.
-group "pr-tests" {
-  targets = ["coverage-export", "builder-wasm", "pr-web-tests", "rust-ecosystem-deterministic"]
-}
-
-group "pr-heavy" {
-  targets = ["rust-fuzz-smoke", "rust-kani"]
+// Each leaf waits only for its own image/toolchain preparation. The Task join
+// also waits for policy checks and the separately exported browser artifacts.
+group "pr-checks" {
+  targets = ["pr-rust-verify", "pr-web-verification", "rust-dylint", "coverage-export", "builder-wasm", "pr-web-tests", "rust-ecosystem-deterministic", "rust-fuzz-smoke", "rust-kani"]
 }

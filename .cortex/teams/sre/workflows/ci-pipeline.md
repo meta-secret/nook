@@ -342,30 +342,31 @@ telemetry, error/fallback policy and the warm-cache zero-hit gate remain.
 - Main publishes the portable WASM dependency fingerprint from its verified ARC solve.
 - Repository invariants in `preflight/tests/sccache_s3.rs` and `preflight/tests/vault_app_isolation.rs` enforce the topology and proof.
 
-**Single-job PR phases:**
+**Single-job PR validation:**
 
-- `nook-app/ci/pr.yml` owns ordered verification and test barriers, then the
-  joined post-test fan-out.
-- Verification runs formatting, Loom/tooling checks, Clippy, TypeScript checks,
-  lint and product builds before test-binary compilation.
-- Bake and Task run independent work concurrently within each phase.
-- Rust/WASM/web tests, Loom tests and delivery-helper contracts follow verification.
-- The `ci:pr:tests` Bake solve retains Docker-side coverage generation and
-  per-package floor enforcement with a cache-only coverage output.
-- After tests succeed, `ci:pr:post-tests` runs heavy verification and
-  browser-artifact preparation concurrently on the same runner and BuildKit
-  connection.
-- Requested browser suites begin after that fan-out joins. Browser/deployment
-  files are exported locally; PR coverage artifacts, downloads, uploads and
-  comments are not created.
-- Preview actions run on the same runner. A failure skips downstream phases
-  and leaves the single required check failed.
-- Policy-only PRs use the same job without the product/browser phases.
-- The trusted artifact-promotion workflow is removed. BuildKit is the cache authority.
+- `ci:pr:validate` in `nook-app/ci/pr.yml` joins independent Task dependencies:
+  formatting, tooling, dependency policy, product checks, repository policy,
+  delivery helpers and the browser branch.
+- The `pr-checks` Bake group runs Rust/WASM/web checks and tests, coverage,
+  Dylint, deterministic ecosystem tests, fuzz and Kani concurrently.
+  Each target waits for its own Docker preparation stages.
+- Web static checks and unit tests derive from the same prepared source stage.
+  Vitest runs at most four isolated workers. Native coverage retains its
+  existing Docker lineage and per-package floor enforcement.
+- The browser branch exports production artifacts as soon as they are built.
+  It copies them into a separate checkout under `PR_ARTIFACT_DIR/runtime`.
+  Browser tests never mutate the original checkout while BuildKit reads it.
+- Full web/extension suites, or the focused authentication regression, run
+  before any requested research suite within the browser branch.
+  These suites remain sequential to avoid shared browser ports.
+- Artifact import and preview deployment follow the complete validation join.
+  For example, a failed static check blocks preview even if browser tests pass.
+- Policy-only PRs retain the same job without product or browser validation.
+- BuildKit remains the cache authority. No additional workflow, image handoff,
+  registry transfer or cancellation job is introduced.
 - `task infra:bake-cache:prove-pr` exercises real cold/warm Docker solves and
-  verification/test failure barriers. The full Bake proof includes it.
-- Update required-check settings to the single job before removing obsolete checks.
-- No performance improvement is asserted without measured proof execution.
+  verification/test failures at the joined publication boundary.
+- Compare hosted run timings before claiming a measured improvement.
 
 The web dependency stage runs `bun install --frozen-lockfile` directly in its
 Dockerfile layer. It has no host or BuildKit daemon cache mount; the frozen

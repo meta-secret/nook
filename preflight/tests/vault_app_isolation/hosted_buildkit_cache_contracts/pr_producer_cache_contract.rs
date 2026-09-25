@@ -40,43 +40,56 @@ impl<'a> PrProducerCacheContract<'a> {
                 "PR steps must not introduce a cross-job handoff: {forbidden}"
             );
         }
-        let verification = pr
-            .find("run: task --silent ci:pr:verification\n")
-            .context("missing verification")?;
-        let tests = pr
-            .find("run: task --silent ci:pr:tests\n")
-            .context("missing tests")?;
-        let post_tests = pr
-            .find("run: task --silent ci:pr:post-tests\n")
-            .context("missing post-test phase")?;
-        assert!(verification < tests && tests < post_tests);
-        let post_tests_task = tasks
-            .split_once("  ci:pr:post-tests:\n")
-            .and_then(|(_, rest)| rest.split_once("\n  ci:pr:bake:"))
+        let validation = pr
+            .find("run: task --silent ci:pr:validate\n")
+            .context("missing validation join")?;
+        let publish = pr
+            .find("uses: ./.github/actions/nook-pr-preview")
+            .context("missing preview")?;
+        assert!(validation < publish);
+        let join = tasks
+            .split_once("  ci:pr:validate:\n")
+            .and_then(|(_, rest)| rest.split_once("\n  ci:pr:checks:"))
             .map(|(task, _)| task)
-            .context("missing post-test task block")?;
-        assert!(post_tests_task.contains("task --parallel ci:pr:heavy ci:pr:browser:prepare"));
-        let heavy = tasks
-            .split_once("  ci:pr:heavy:\n")
-            .and_then(|(_, rest)| rest.split_once("\n  ci:pr:post-tests:"))
-            .map(|(task, _)| task)
-            .context("missing heavy task block")?;
-        assert!(heavy.contains("PR_BAKE_TARGET: pr-heavy"));
+            .context("missing validation join task")?;
+        for branch in [
+            "ci:pr:verification:format",
+            "ci:pr:verification:tooling",
+            "docker:ecosystem:dependency-policy",
+            "ci:pr:checks",
+            "ci:pr:tests:policy",
+            "ci:pr:delivery-helpers",
+            "ci:pr:browser",
+        ] {
+            assert!(join.contains(&format!("      - {branch}\n")));
+        }
+        assert!(join.contains("deps:"));
+        assert!(!join.contains("cmds:"));
         assert!(bake.contains("web-artifacts = \"target:pr-wasm-artifacts\""));
         assert!(bake.contains("output = [\"type=cacheonly\"]"));
-        assert!(bake.contains(
-            "targets = [\"pr-rust-verify\", \"pr-web-verification\", \"pr-web-build\", \"rust-dylint\"]"
-        ));
-        assert!(!bake.contains(
-            "targets = [\"pr-rust-verify\", \"pr-web-verification\", \"pr-web-build\", \"rust-dylint-wasm\"]"
-        ));
+        for target in [
+            "pr-rust-verify",
+            "pr-web-verification",
+            "rust-dylint",
+            "coverage-export",
+            "builder-wasm",
+            "pr-web-tests",
+            "rust-ecosystem-deterministic",
+            "rust-fuzz-smoke",
+            "rust-kani",
+        ] {
+            assert!(bake.contains(&format!("\"{target}\"")));
+        }
+        let web = self.root.read("nook-app/nook-web/nook-web-app/Dockerfile");
+        assert!(web.contains("FROM nook-web-source AS pr-web-tests"));
+        assert!(!web.contains("FROM pr-web-verification AS pr-web-tests"));
         assert!(tasks.contains("coverage-export.output=type=cacheonly"));
         assert!(tasks.contains("pr-browser-artifacts.output=type=local"));
         assert!(tasks.contains(
-            "test -e '{{.REPO_ROOT}}/nook-app/nook-web/node_modules' || ln -s nook-web-app/node_modules '{{.REPO_ROOT}}/nook-app/nook-web/node_modules'",
+            "test -e '{{.PR_ARTIFACT_DIR}}/runtime/nook-app/nook-web/node_modules' || ln -s nook-web-app/node_modules '{{.PR_ARTIFACT_DIR}}/runtime/nook-app/nook-web/node_modules'",
         ));
         assert!(tasks.contains(
-            "'{{.REPO_ROOT}}/nook-app/nook-web/nook-web-app/node_modules/playwright-core/browsers.json'",
+            "'{{.PR_ARTIFACT_DIR}}/runtime/nook-app/nook-web/nook-web-app/node_modules/playwright-core/browsers.json'",
         ));
         let product = self
             .root
