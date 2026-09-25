@@ -311,7 +311,8 @@ impl ProviderSnapshotStore<'_> {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod tests {
     use super::{
-        PresealedProviderSnapshotPublication, ProviderSnapshotPublication, auth_providers,
+        LEGACY_STORAGE_SCHEMA_VERSION, PresealedProviderSnapshotPublication,
+        ProviderSnapshotPublication, STORAGE_SCHEMA_VERSION, auth_providers,
     };
     use crate::storage::identity_record;
     use crate::{

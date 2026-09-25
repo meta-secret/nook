@@ -74,7 +74,7 @@ mod selection_tests {
         .select();
         match outcome {
             SharedGrantProviderOutcome::Existing { provider } => {
-                assert_eq!(provider.as_ref(), &row)
+                assert_eq!(provider.as_ref(), &row);
             }
             SharedGrantProviderOutcome::AuthorizationRequired => {
                 anyhow::bail!("eligible saved provider should be selected")

@@ -543,6 +543,7 @@ mod tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
+    use crate::public_api::{staged_oauth_remote_storage_args, update_oauth_remote_ref};
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
