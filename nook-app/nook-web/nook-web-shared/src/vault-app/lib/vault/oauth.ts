@@ -650,9 +650,12 @@ export class VaultOAuthActions {
       const configuration: Parameters<typeof configuredOAuthFile>[0] = {
         ...previous,
         fileName:
-          previous.fileName.state === "fileName"
-            ? previous.fileName
-            : storedOAuthRemoteFileName(fallbackFileName),
+          state.loginSetup.kind === LoginSetupKind.Active &&
+          previous.driveMode === "private"
+            ? storedOAuthRemoteFileName(fallbackFileName)
+            : previous.fileName.state === "fileName"
+              ? previous.fileName
+              : storedOAuthRemoteFileName(fallbackFileName),
         accountEmail:
           email.value.kind === GoogleAccountIdentityKind.Available
             ? storedOAuthAccountEmail(email.value.label)

@@ -501,8 +501,16 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
 export async function reloadUnlockLocalVaultWithSync(
   page: Page,
   sharedStub?: E2eOauthFileStub,
+  options?: { privateDriveFolderV2?: boolean },
 ) {
-  await seedExtraOauthFileProviders(page, [E2E_OAUTH_ONBOARD_PROVIDER])
+  await seedExtraOauthFileProviders(page, [
+    {
+      ...E2E_OAUTH_ONBOARD_PROVIDER,
+      ...(options?.privateDriveFolderV2
+        ? { drivePrivateTarget: { state: 'pending' as const } }
+        : {}),
+    },
+  ])
 
   const vaultYaml = await readLocalVaultYamlFromIdb(page)
   if (vaultYaml.trim()) {
