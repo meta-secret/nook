@@ -111,8 +111,8 @@ impl WorkflowRuntimeContract<'_> {
             ".github/workflows/main.yml",
             "  wasm-cache-publish:\n",
             [
-                "name: WASM verification and artifact",
-                "Publish verified WASM BuildKit cache",
+                "name: WASM and web verification",
+                "Prepare web artifacts alongside verified WASM cache publication",
                 "Stamp WASM run attempt",
                 "Upload WASM handoff",
                 "uses: ./.github/actions/nook-cache-telemetry",
@@ -120,12 +120,12 @@ impl WorkflowRuntimeContract<'_> {
         )] {
             let workflow_source = root.read(workflow);
             let wasm_job = workflow_source
-                .split_once("  wasm:\n")
+                .split_once("  web:\n")
                 .and_then(|(_, remainder)| remainder.split_once(end_marker).map(|(job, _)| job))
                 .unwrap_or_else(|| panic!("{workflow} must define a bounded WASM producer job"));
             assert!(
-                wasm_job.contains("timeout-minutes: 10"),
-                "{workflow} WASM producer must retain its bounded 10-minute execution envelope"
+                wasm_job.contains("timeout-minutes: 15"),
+                "{workflow} WASM producer must retain its bounded 15-minute combined execution envelope"
             );
             for required_step in required_steps {
                 assert!(

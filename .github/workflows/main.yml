@@ -1,8 +1,7 @@
-# Main branch: keep one active run plus only the newest pending revision. Run the shared
-# Rust ecosystem gates beside the product pipeline. Product verification produces immutable
-# handoffs before cache publication, so a cache exporter failure cannot suppress web or browser
-# evidence. After the verified
-# WASM handoff, local-provider web e2e, and extension e2e overlap on ARC runtime-capable runners.
+# Main runs native and WASM/web verification concurrently after preflight.
+# The WASM/web producer overlaps verified WASM cache publication with web checks
+# on its own builder. Web and two isolated extension shards consume one verified image.
+# All validation and cache gates join before development deployment.
 # Each browser solve is read-only. Headless UI demos are temporarily disabled while their
 # implementation remains available for later re-enable. Deploy the fast, unoptimized development
 # channel to Cloudflare
@@ -193,13 +192,13 @@ jobs:
             exit 1
           fi
 
-  wasm:
-    name: WASM verification and artifact
-    needs: [rust, preflight]
+  web:
+    name: WASM and web verification
+    needs: [preflight]
     outputs:
-      cache_publication_outcome: ${{ steps.publish_wasm_cache.outcome }}
+      cache_publication_outcome: ${{ steps.prepare_web.outputs.cache_publication_outcome }}
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: read
       pull-requests: read
@@ -254,10 +253,70 @@ jobs:
           NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
           WASM_BUILD_MODE: dev
 
-      - name: Publish verified WASM BuildKit cache
-        id: publish_wasm_cache
-        continue-on-error: true
-        run: task ci:main:publish-wasm-cache
+      - name: Prepare web artifacts alongside verified WASM cache publication
+        id: prepare_web
+        shell: bash
+        run: |
+          cache_log="$RUNNER_TEMP/main-wasm-cache.log"
+          GHA_CACHE_WRITE_ENABLED=1 task ci:main:publish-wasm-cache >"$cache_log" 2>&1 &
+          cache_pid=$!
+          web_status=0
+          task ci:main:web:artifacts \
+            CI_ARTIFACT_DIR="${{ runner.temp }}/nook-ci-artifacts/joined" \
+            VITE_BASE="$CI_MAIN_VITE_BASE" \
+            VITE_SITE_URL="$CI_MAIN_DEV_URL" \
+            VITE_PUBLIC_APP_URL="$CI_MAIN_DEV_URL" \
+            VITE_SIMPLE_APP_URL="$CI_MAIN_SIMPLE_URL" \
+            VITE_SENTINEL_APP_URL="$CI_MAIN_SENTINEL_URL" \
+            WASM_BUILD_MODE=dev || web_status=$?
+          cache_outcome=success
+          wait "$cache_pid" || cache_outcome=failure
+          cat "$cache_log"
+          echo "cache_publication_outcome=$cache_outcome" >> "$GITHUB_OUTPUT"
+          exit "$web_status"
+        env:
+          CI: true
+          # Keep verification read-only; publish the already-solved dependency graph afterward.
+          GHA_CACHE_WRITE_ENABLED: ""
+          GIT_COMMIT_ID: ${{ github.sha }}
+          NOOK_SIMPLE_VAULT_URL: ${{ env.CI_MAIN_SIMPLE_URL }}/
+          NOOK_EXTENSION_CHANNEL: development
+          NOOK_EXTENSION_COMMIT: ${{ github.sha }}
+          NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
+          WASM_BUILD_MODE: dev
+          WEB_DEPLOY_ARTIFACT_DIR: ${{ runner.temp }}/nook-ci-artifacts/web-deploy
+
+      - name: Upload verified development deployment handoff
+        uses: actions/upload-artifact@v7
+        with:
+          name: main-web-deploy-${{ github.run_id }}
+          path: ${{ runner.temp }}/nook-ci-artifacts/web-deploy/nook-app
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Publish exact-source browser job image
+        run: >-
+          task web:e2e:kubernetes-image:artifacts
+          CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
+        env:
+          DOCKER_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
+          DOCKER_E2E_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
+          CI: true
+          GIT_COMMIT_ID: ${{ github.sha }}
+          VITE_BASE: ${{ env.CI_MAIN_VITE_BASE }}
+          VITE_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}
+          VITE_PUBLIC_APP_URL: ${{ env.CI_MAIN_DEV_URL }}
+          VITE_SIMPLE_APP_URL: ${{ env.CI_MAIN_SIMPLE_URL }}
+          VITE_SENTINEL_APP_URL: ${{ env.CI_MAIN_SENTINEL_URL }}
+          WASM_BUILD_MODE: dev
+          NOOK_SIMPLE_VAULT_URL: ${{ env.CI_MAIN_SIMPLE_URL }}/
+          NOOK_EXTENSION_CHANNEL: development
+          NOOK_EXTENSION_COMMIT: ${{ github.sha }}
+          NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
+
+      - name: Publish verified web BuildKit cache
+        if: success()
+        run: task ci:main:publish-web-cache
         env:
           CI: true
           GHA_CACHE_WRITE_ENABLED: "1"
@@ -269,13 +328,13 @@ jobs:
 
   wasm-cache-publish:
     name: WASM cache publication
-    needs: [wasm]
+    needs: [web]
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     timeout-minutes: 10
     steps:
       - name: Require successful WASM cache publication
         env:
-          CACHE_PUBLICATION_OUTCOME: ${{ needs.wasm.outputs.cache_publication_outcome }}
+          CACHE_PUBLICATION_OUTCOME: ${{ needs.web.outputs.cache_publication_outcome }}
         run: |
           if [ "$CACHE_PUBLICATION_OUTCOME" != "success" ]; then
             echo "WASM cache publication failed in the verified producer: $CACHE_PUBLICATION_OUTCOME" >&2
@@ -321,91 +380,6 @@ jobs:
         if: always()
         uses: ./.github/actions/nook-cache-telemetry
 
-  web:
-    name: Verify web build
-    timeout-minutes: 10
-    needs: [wasm]
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
-    permissions:
-      contents: read
-      pull-requests: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Docker setup
-        uses: ./.github/actions/nook-docker-setup
-        with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
-      - name: Download verified WASM handoff
-        uses: actions/download-artifact@v8
-        with:
-          name: main-wasm-${{ github.run_id }}
-          path: ${{ runner.temp }}/nook-ci-artifacts/joined/nook-wasm
-
-      - name: Svelte checks, JS unit tests, lint, and web build
-        run: >-
-          task ci:main:web:artifacts
-          CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
-          VITE_BASE=${{ env.CI_MAIN_VITE_BASE }}
-          VITE_SITE_URL=${{ env.CI_MAIN_DEV_URL }}
-          VITE_PUBLIC_APP_URL=${{ env.CI_MAIN_DEV_URL }}
-          VITE_SIMPLE_APP_URL=${{ env.CI_MAIN_SIMPLE_URL }}
-          VITE_SENTINEL_APP_URL=${{ env.CI_MAIN_SENTINEL_URL }}
-          WASM_BUILD_MODE=dev
-        env:
-          CI: true
-          # Keep verification read-only; publish the already-solved dependency graph afterward.
-          GHA_CACHE_WRITE_ENABLED: ""
-          GIT_COMMIT_ID: ${{ github.sha }}
-          NOOK_SIMPLE_VAULT_URL: ${{ env.CI_MAIN_SIMPLE_URL }}/
-          NOOK_EXTENSION_CHANNEL: development
-          NOOK_EXTENSION_COMMIT: ${{ github.sha }}
-          NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
-          WEB_DEPLOY_ARTIFACT_DIR: ${{ runner.temp }}/nook-ci-artifacts/web-deploy
-
-      - name: Upload verified development deployment handoff
-        uses: actions/upload-artifact@v7
-        with:
-          name: main-web-deploy-${{ github.run_id }}
-          path: ${{ runner.temp }}/nook-ci-artifacts/web-deploy/nook-app
-          if-no-files-found: error
-          retention-days: 1
-
-      - name: Publish exact-source browser job image
-        run: >-
-          task web:e2e:kubernetes-image:artifacts
-          CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
-        env:
-          DOCKER_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
-          DOCKER_E2E_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
-          CI: true
-          GIT_COMMIT_ID: ${{ github.sha }}
-          VITE_BASE: ${{ env.CI_MAIN_VITE_BASE }}
-          VITE_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}
-          VITE_PUBLIC_APP_URL: ${{ env.CI_MAIN_DEV_URL }}
-          VITE_SIMPLE_APP_URL: ${{ env.CI_MAIN_SIMPLE_URL }}
-          VITE_SENTINEL_APP_URL: ${{ env.CI_MAIN_SENTINEL_URL }}
-          WASM_BUILD_MODE: dev
-          NOOK_SIMPLE_VAULT_URL: ${{ env.CI_MAIN_SIMPLE_URL }}/
-          NOOK_EXTENSION_CHANNEL: development
-          NOOK_EXTENSION_COMMIT: ${{ github.sha }}
-          NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
-
-      - name: Publish verified web BuildKit cache
-        if: success()
-        run: task ci:main:publish-web-cache
-        env:
-          CI: true
-          GHA_CACHE_WRITE_ENABLED: "1"
-          WASM_BUILD_MODE: dev
-
-      - name: Preserve cache telemetry
-        if: always()
-        uses: ./.github/actions/nook-cache-telemetry
-
   web-e2e:
     name: Web e2e
     needs: [web]
@@ -435,7 +409,11 @@ jobs:
           VITE_SENTINEL_APP_URL: ${{ env.CI_MAIN_SENTINEL_URL }}
 
   extension-e2e:
-    name: Extension e2e
+    name: Extension e2e (${{ matrix.shard }}/2)
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     needs: [web]
     runs-on: nook-k0s-container
     timeout-minutes: 180
@@ -452,9 +430,10 @@ jobs:
         run: |
           cp -R /meta-secret/nook/.github "$GITHUB_WORKSPACE/.github"
           cd /meta-secret/nook
-          task _extension:test:e2e
+          task _extension:test:e2e:shard
         env:
           CI: true
+          E2E_SHARD: ${{ matrix.shard }}/2
 
   ui-demos:
     name: UI demos
@@ -552,7 +531,8 @@ jobs:
 
   deploy:
     name: Deploy development
-    needs: [web, web-e2e, extension-e2e, wasm-cache-proof]
+    if: github.ref == 'refs/heads/main'
+    needs: [preflight-cache-publish, native-cache-publish, rust-ecosystem, web, web-e2e, extension-e2e, wasm-cache-proof]
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     timeout-minutes: 10
     environment:
