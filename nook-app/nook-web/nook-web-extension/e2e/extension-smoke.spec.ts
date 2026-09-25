@@ -189,7 +189,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     ) {
       await worker.evaluate(
         async ({ tabId, windowId }) => {
-          await chrome.tabs.move(tabId, { windowId })
+          await chrome.tabs.move(tabId, { windowId, index: -1 })
         },
         {
           tabId: tabsBeforeLaunch.connectionTabId,
