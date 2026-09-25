@@ -67,9 +67,7 @@
   import LoginVaultPicker from '$lib/components/login/LoginVaultPicker.svelte'
   import LoginProviderManagement from '$lib/components/login/LoginProviderManagement.svelte'
   import { LoginProviderManagementVariant } from '$lib/components/login/login-provider-management-state'
-  import {
-    focusIdentityContextWhenAvailable as restoreIdentityContextFocus,
-  } from './login-gate-focus'
+  import { focusIdentityContextWhenAvailable as restoreIdentityContextFocus } from './login-gate-focus'
   import LoginEnrollmentPanel from '$lib/components/login/LoginEnrollmentPanel.svelte'
   import EnrollmentQrOnboardCard from '$lib/components/login/EnrollmentQrOnboardCard.svelte'
   import SentinelCeremonyPanel from '$lib/components/login/SentinelCeremonyPanel.svelte'
@@ -283,9 +281,7 @@
       typeof restoreIdentityContextFocus
     >[0] = {
       waitForNextFrame: () =>
-        new Promise<void>((resolve) =>
-          requestAnimationFrame(() => resolve()),
-        ),
+        new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
       identityContextLoading: () =>
         Boolean(
           document.querySelector(
@@ -411,8 +407,10 @@
       sentinelVisibility.value === SentinelCeremonyVisibility.Visible,
   )
   $effect(() => {
-    if (sentinelVisibility.isErr())
-      vault.errorMsg = vault.t(sentinelVisibility.error.translationKey)
+    if (sentinelVisibility.isErr()) {
+      const message = vault.t(sentinelVisibility.error.translationKey)
+      if (untrack(() => vault.errorMsg) !== message) vault.errorMsg = message
+    }
   })
   const hasKnownLocalVault = $derived(
     vault.localVaultPresent || vault.localVaults.length > 0,
