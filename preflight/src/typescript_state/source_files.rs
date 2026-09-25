@@ -56,7 +56,7 @@ impl AuthoredSourceFiles<'_> {
         if path.ends_with(Path::new(LEGACY_IMPECCABLE_INSTALL)) {
             return true;
         }
-        // The ignored Meta-Cortex installation is framework-owned, not Nook-authored source.
+        // Meta-Cortex installations and its pinned source checkout are not Nook-authored source.
         path.file_name()
             .and_then(OsStr::to_str)
             .is_some_and(|name| {
@@ -64,6 +64,7 @@ impl AuthoredSourceFiles<'_> {
                     name,
                     ".git"
                         | ".meta-cortex"
+                        | ".meta-cortex-source"
                         | ".svelte-kit"
                         | "build"
                         | "coverage"
@@ -80,6 +81,7 @@ impl AuthoredSourceFiles<'_> {
 #[cfg(test)]
 pub mod tests {
     use super::AuthoredSourceFiles;
+    use std::fs;
     use std::path::Path;
 
     #[test]
@@ -100,5 +102,28 @@ pub mod tests {
         assert!(!AuthoredSourceFiles::is_excluded_directory(Path::new(
             "/repo/nook-app/nook-web/src"
         )));
+    }
+
+    #[test]
+    fn collect_excludes_external_meta_cortex_source_and_keeps_nook_sources() -> anyhow::Result<()> {
+        let fixture = tempfile::tempdir()?;
+        let external_directory = fixture.path().join(".meta-cortex-source");
+        fs::create_dir(&external_directory)?;
+        let external_source = external_directory.join("articles.ts");
+        fs::write(&external_source, "const externalSource = null;\n")?;
+
+        let nook_directory = fixture.path().join("nook-app/nook-web/src");
+        fs::create_dir_all(&nook_directory)?;
+        let nook_source = nook_directory.join("component.ts");
+        fs::write(&nook_source, "const nookSource = undefined;\n")?;
+
+        let files = AuthoredSourceFiles {
+            directory: fixture.path(),
+        }
+        .collect()?;
+
+        assert!(!files.contains(&external_source));
+        assert!(files.contains(&nook_source));
+        Ok(())
     }
 }
