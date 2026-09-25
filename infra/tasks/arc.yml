@@ -587,9 +587,9 @@ tasks:
       - task: arc:controller-build:prepare
       - task: arc:build-host:resolve
       - task: arc:build-hosts:quarantine
-      - task: arc:placement:labels
       - task: arc:container-hosts:reconcile
       - task: arc:buildkit:storage:prepare
+      - task: arc:placement:labels
       - task: arc:render:check
       - |
         ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
