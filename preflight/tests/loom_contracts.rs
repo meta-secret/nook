@@ -379,7 +379,7 @@ fn preflight_installs_released_meta_cortex_without_configuration_override() {
         "policy source must copy Git metadata before Meta-Cortex Framework Initialize"
     );
     assert!(
-        dockerfile.contains("meta-cortex/releases/download/v0.9.0/meta-cortex-installer.sh"),
+        dockerfile.contains("meta-cortex/releases/download/v0.9.1/meta-cortex-installer.sh"),
         "Meta-Cortex installation must use the selected upstream release"
     );
     assert!(
