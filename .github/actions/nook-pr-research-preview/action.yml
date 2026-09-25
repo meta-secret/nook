@@ -1,33 +1,20 @@
-name: Publish research PR preview
+name: Report research PR preview
 description: Reuse the verified research dist in the consolidated PR job.
 inputs:
-  cloudflare-token:
+  deployment-url:
     required: true
-    description: Pages API token.
-  cloudflare-account:
+    description: URL from the completed parallel research upload.
+  deploy-branch:
     required: true
-    description: Pages account.
+    description: Branch from the completed parallel research upload.
 runs:
   using: composite
   steps:
-    - name: Deploy to Cloudflare Pages
-      id: deploy
-      env:
-        CF_PAGES_PROJECT_NAME: nook-web-research
-        RESEARCH_DIR: nook-app/nook-web/nook-web-research
-        WRANGLER_VERSION: 4.110.0
-        CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare-token }}
-        CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account }}
-        PR_NUMBER: ${{ github.event.pull_request.number }}
-        EVENT_NAME: ${{ github.event_name }}
-      shell: bash
-      run: task web:research:deploy
-
     - name: Comment preview URL on PR
       if: github.event_name == 'pull_request'
       uses: actions/github-script@v9
       env:
-        PREVIEW_URL: ${{ steps.deploy.outputs.deployment_url }}
+        PREVIEW_URL: ${{ inputs.deployment-url }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
       with:
         retries: 3
@@ -62,8 +49,8 @@ runs:
       uses: actions/github-script@v9
       env:
         RESEARCH_URL: https://web-research.nkey.app
-        DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
-        DEPLOY_BRANCH: ${{ steps.deploy.outputs.deploy_branch }}
+        DEPLOYMENT_URL: ${{ inputs.deployment-url }}
+        DEPLOY_BRANCH: ${{ inputs.deploy-branch }}
         DEPLOY_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
         EVENT_NAME: ${{ github.event_name }}
       with:

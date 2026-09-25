@@ -351,7 +351,11 @@ telemetry, error/fallback policy and the warm-cache zero-hit gate remain.
   Dylint, deterministic ecosystem tests, fuzz and Kani concurrently.
   Each target waits for its own Docker preparation stages.
 - Web static checks and unit tests derive from the same prepared source stage.
-  Vitest runs at most four isolated workers. Native coverage retains its
+  The five surfaces and ESLint run concurrently through Task; each surface
+  retains its complete TypeScript and Svelte checks. Vitest uses available CPU
+  parallelism by default. The repository variable `VITEST_MAX_WORKERS` can set
+  an explicit worker count, such as `8`, for the PR test target.
+  Native coverage retains its
   existing Docker lineage and per-package floor enforcement.
 - The browser branch exports production artifacts as a tar archive when built.
   It copies them into a separate checkout under `PR_ARTIFACT_DIR/runtime`.
@@ -361,6 +365,11 @@ telemetry, error/fallback policy and the warm-cache zero-hit gate remain.
   These suites remain sequential to avoid shared browser ports.
 - Artifact import and preview deployment follow the complete validation join.
   For example, a failed static check blocks preview even if browser tests pass.
+- Product and requested research uploads run concurrently after validation.
+  Both must succeed before publishing their outputs. GitHub comments and
+  deployment records remain ordered after that upload join.
+- Job metadata, local-cache settings, scope detection and the UI demo contract
+  share one setup step after BuildKit and Node setup.
 - Policy-only PRs retain the same job without product or browser validation.
 - BuildKit remains the cache authority. No additional workflow, image handoff,
   registry transfer or cancellation job is introduced.

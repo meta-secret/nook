@@ -1,3 +1,7 @@
+variable "VITEST_MAX_WORKERS" {
+  default = ""
+}
+
 // PR targets stay in the selected builder. No image export or registry cache.
 target "pr-rust-verify" {
   inherits = ["rust-base"]
@@ -25,6 +29,7 @@ target "pr-web-verification" {
 }
 
 target "pr-web-tests" {
+  args = { VITEST_MAX_WORKERS = VITEST_MAX_WORKERS }
   inherits = ["_pr-web"]
   target = "pr-web-tests"
 }
