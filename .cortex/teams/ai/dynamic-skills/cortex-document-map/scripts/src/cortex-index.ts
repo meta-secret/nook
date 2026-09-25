@@ -293,12 +293,15 @@ export const CORTEX_CONTEXT_ROUTER_MARKDOWN = `# Nook Cortex Knowledge Graph
 
 ## Required entry
 
-Read the circuit breaker, root routing contract, and integration contract in
-that order. They supply Nook context before upstream role and skill selection.
+Follow the root routing contract for the entry sequence. It
+requires the circuit breaker first and a verified per-worktree bootstrap
+through the integration contract before using this graph to select Nook
+context.
 
 - [Circuit breaker](CIRCUIT-BREAKER.md)
 - [Root routing contract](AGENTS.md)
 - [Meta-Cortex integration and provenance](meta-cortex-integration.md)
+- [Installed Meta-Cortex entry point](../.meta-cortex/AGENTS.md)
 - [Upstream Team Gizmo](../.meta-cortex/teams/gizmo-team/agents/gizmo/AGENTS.md)
 - [Upstream local feature integration](../.meta-cortex/teams/delivery-team/agents/integration-agent/AGENTS.md)
 
