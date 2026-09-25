@@ -529,10 +529,10 @@ class DockerizedRustBuildKitContract {
     expect([...browserStage.matchAll(/^RUN\b/gm)]).toHaveLength(0);
 
     const ecosystem = this.read(".github/workflows/rust-ecosystem-checks.yml");
-    const dylintJob = ecosystem.split("\n  dylint:\n")[1];
-    if (!dylintJob) throw new Error("Dylint job is missing");
-    const nodeProvision = dylintJob.indexOf("actions/setup-node@v7");
-    const dockerSetup = dylintJob.indexOf(
+    const ecosystemJob = ecosystem.split("\n  checks:\n")[1];
+    if (!ecosystemJob) throw new Error("Aggregated ecosystem job is missing");
+    const nodeProvision = ecosystemJob.indexOf("actions/setup-node@v7");
+    const dockerSetup = ecosystemJob.indexOf(
       "uses: ./.github/actions/nook-docker-setup",
     );
     expect(nodeProvision).toBe(-1);
