@@ -1,8 +1,8 @@
 # Shared Rust ecosystem gates (dependency policy, deterministic tests, fuzz,
 # Kani, Dylint). Called from the labeled PR workflow and from the thin
 # Main and specialist scheduled and manual entry points.
-# Kept reusable so PR validation shows every job on one run page without
-# duplicating Bake steps across callers.
+# One runner shares its node-local BuildKit cache across concurrent check groups.
+# Each group retains its result; every group finishes even if another fails.
 
 name: Rust ecosystem checks
 
@@ -10,14 +10,14 @@ on:
   workflow_call:
     outputs:
       dependency-policy-result:
-        description: Terminal result of the dependency policy job.
-        value: ${{ jobs.dependency-policy.outputs.cache-result }}
+        description: Terminal result of the dependency policy check group.
+        value: ${{ jobs.checks.outputs.dependency-policy-result }}
       deterministic-tests-result:
-        description: Terminal result of the deterministic tests job.
-        value: ${{ jobs.deterministic-tests.outputs.cache-result }}
+        description: Terminal result of the deterministic tests check group.
+        value: ${{ jobs.checks.outputs.deterministic-tests-result }}
       dylint-result:
-        description: Terminal result of the Dylint job.
-        value: ${{ jobs.dylint.outputs.cache-result }}
+        description: Terminal result of the Dylint check group.
+        value: ${{ jobs.checks.outputs.dylint-result }}
     inputs:
       native_coverage_provided:
         description: Required sibling native gate covers replication unit tests.
@@ -45,12 +45,14 @@ env:
   SCCACHE_OPTIONAL: ${{ github.event_name == 'pull_request' && (github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]') && '1' || '' }}
 
 jobs:
-  dependency-policy:
-    name: Dependency policy and RustSec
+  checks:
+    name: Rust ecosystem verification
     runs-on: ${{ (github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
     timeout-minutes: 10
     outputs:
-      cache-result: ${{ steps.cache-result.outputs.result }}
+      dependency-policy-result: ${{ steps.checks.outputs.policy }}
+      deterministic-tests-result: ${{ steps.checks.outputs.smoke }}
+      dylint-result: ${{ steps.checks.outputs.dylint }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -81,112 +83,24 @@ jobs:
           cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}
           main-cache-only: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'false' || 'true' }}
           isolated-cache-write: ${{ inputs.isolated_cache_write }}
-      - name: Run dependency policy
-        run: task docker:ecosystem:dependency-policy
-
-      - name: Preserve cache telemetry
-        if: always()
-        uses: ./.github/actions/nook-cache-telemetry
-        with:
-          artifact-suffix: ecosystem-policy
-      - name: Record cache-health job result
-        id: cache-result
-        if: always()
-        run: echo "result=${{ job.status }}" >> "$GITHUB_OUTPUT"
-
-  deterministic-tests:
-    name: Deterministic tests, fuzz, and Kani
-    runs-on: ${{ (github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
-    timeout-minutes: 10
-    outputs:
-      cache-result: ${{ steps.cache-result.outputs.result }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.source_sha || github.event.pull_request.head.sha || github.sha }}
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: go-task/setup-task@v2
-        if: github.event_name == 'pull_request' && (github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]')
-        with:
-          version: 3.52.0
-      - uses: docker/setup-buildx-action@v4
-        if: github.event_name == 'pull_request' && (github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]')
-      - uses: ./.github/actions/nook-docker-setup
-        if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')
-        with:
-          registry-host: registry.dev.nokey.sh
-          # Main push must use the trusted writer for nook/buildcache/**.
-          # PRs/schedule keep the remote identity for isolated/read-only access.
-          registry-username: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NOOK_REGISTRY_USERNAME || secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NOOK_REGISTRY_PASSWORD || secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
-          cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}
-          main-cache-only: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'false' || 'true' }}
-          isolated-cache-write: ${{ inputs.isolated_cache_write }}
-      - name: Run deterministic tests, fuzz smoke, and Kani in parallel
+      - name: Run dependency policy, deterministic tests, fuzz, Kani, and Dylint in parallel
+        id: checks
         env:
           FUZZ_SECONDS: ${{ inputs.fuzz_seconds }}
           NATIVE_COVERAGE_PROVIDED: ${{ inputs.native_coverage_provided }}
-        run: task docker:ecosystem:smoke
+        run: task docker:ecosystem:check
+
+      - name: Preserve ecosystem group logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ecosystem-logs-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
+          path: ${{ runner.temp }}/nook-ecosystem-logs
+          retention-days: 3
+          if-no-files-found: warn
 
       - name: Preserve cache telemetry
         if: always()
         uses: ./.github/actions/nook-cache-telemetry
         with:
-          artifact-suffix: ecosystem-smoke
-      - name: Record cache-health job result
-        id: cache-result
-        if: always()
-        run: echo "result=${{ job.status }}" >> "$GITHUB_OUTPUT"
-
-  dylint:
-    name: Dylint repository lints
-    runs-on: ${{ (github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
-    # Cold nightly-toolchain builds can approach five minutes; leave bounded
-    # room for the lint result, mandatory telemetry, and cleanup.
-    timeout-minutes: 10
-    outputs:
-      cache-result: ${{ steps.cache-result.outputs.result }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.source_sha || github.event.pull_request.head.sha || github.sha }}
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: go-task/setup-task@v2
-        if: github.event_name == 'pull_request' && (github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]')
-        with:
-          version: 3.52.0
-      - uses: docker/setup-buildx-action@v4
-        if: github.event_name == 'pull_request' && (github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]')
-      - uses: ./.github/actions/nook-docker-setup
-        if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')
-        with:
-          registry-host: registry.dev.nokey.sh
-          # Main push must use the trusted writer for nook/buildcache/**.
-          # PRs/schedule keep the remote identity for isolated/read-only access.
-          registry-username: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NOOK_REGISTRY_USERNAME || secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NOOK_REGISTRY_PASSWORD || secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
-          cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}
-          main-cache-only: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'false' || 'true' }}
-          isolated-cache-write: ${{ inputs.isolated_cache_write }}
-      - name: Bake rust-dylint
-        run: task docker:ecosystem:dylint
-
-      - name: Preserve cache telemetry
-        if: always()
-        uses: ./.github/actions/nook-cache-telemetry
-        with:
-          artifact-suffix: ecosystem-dylint
-      - name: Record cache-health job result
-        id: cache-result
-        if: always()
-        run: echo "result=${{ job.status }}" >> "$GITHUB_OUTPUT"
+          artifact-suffix: ecosystem

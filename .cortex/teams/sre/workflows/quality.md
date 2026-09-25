@@ -98,7 +98,7 @@ Use this workflow for quality, CI, and deployment changes.
    - `vitest run`
    - `vite build`
    - `task preflight` — repository-wide Rust invariant tests, before app setup
-   - `PR / Rust ecosystem / Dependency policy and RustSec` —
+   - `Rust ecosystem: Dependency policy and RustSec` —
      `task docker:ecosystem:dependency-policy` builds pinned `cargo-deny` and
      `cargo-audit` via `docker:ecosystem:policy-tools`, then runs each workspace
      task (`dylint:dependency-policy`, `rust:dependency-policy`,
@@ -111,7 +111,7 @@ Use this workflow for quality, CI, and deployment changes.
      must name the RustSec IDs, identify the exact pinned upstream graph, and
      state the dependency upgrade that removes them in both `deny.toml` and
      the affected workspace's `.cargo/audit.toml`.
-   - `PR / Rust ecosystem / Proptest, Insta, and Loom` —
+   - `Rust ecosystem: Proptest, Insta, and Loom` —
      `task docker:ecosystem:deterministic` warms `docker:rust-base`, then Bakes
      `rust-ecosystem-deterministic` on `rust-platform` (platform sources over
      cooked `builder-core-deps`) so
@@ -128,20 +128,20 @@ Use this workflow for quality, CI, and deployment changes.
      per-crate COPY+RUN layering so one crate edit reuses earlier compile layers.
      `builder-wasm-source` uses the same per-crate COPY+RUN order for wasm32
      compiles before sibling clippy, package, and test stages.
-   - `PR / Rust ecosystem / Cargo fuzz smoke` —
+   - `Rust ecosystem: Cargo fuzz smoke` —
      `task docker:ecosystem:fuzz` warms `docker:rust-base`, then
      Bakes the `rust-fuzz-smoke` stage from the same Dockerfile as the
      toolchain-only `rust-ecosystem-nightly` stage with pinned
      [`cargo-fuzz`](https://rust-fuzz.github.io/book/cargo-fuzz.html).
      The leaf stage owns the platform source copy after the shared tool stage.
      Fuzz restores nightly read-only and writes `nook-rust-ecosystem-fuzz-v4`.
-   - `PR / Rust ecosystem / Kani bounded proofs` —
+   - `Rust ecosystem: Kani bounded proofs` —
      [`Kani`](https://model-checking.github.io/kani/) exhaustively verifies
      bounded proof harnesses with a pinned specialized toolchain.
      `task docker:ecosystem:kani` Bakes the `rust-kani` internal stage.
      `nook-rust-ecosystem-kani-v2` caches both installation and proof
      compilation because Kani's compiler cannot use ordinary rustc sccache.
-   - `PR / Rust ecosystem / Dylint repository lints` —
+   - `Rust ecosystem: Dylint repository lints` —
      `task docker:ecosystem:dylint` warms `docker:rust-base`,
      Bakes `rust-dylint` from the same Dockerfile as `rust-ecosystem-nightly`,
      then publishes only the full-graph dylint leaf when writes are enabled.

@@ -69,7 +69,7 @@ jobs:
     name: Repository preflight
     if: inputs.product_changed
     outputs:
-      cache_publication_outcome: ${{ steps.publish_preflight_cache.outcome }}
+      verification_outcome: ${{ steps.verify_preflight.outcome }}
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     timeout-minutes: 10
     permissions:
@@ -91,6 +91,7 @@ jobs:
           require-sccache: "true"
 
       - name: Repository invariant validation
+        id: verify_preflight
         run: task preflight
         env:
           CI: true
@@ -104,31 +105,24 @@ jobs:
           CI: true
           GHA_CACHE_WRITE_ENABLED: "1"
 
-      - name: Preserve cache telemetry
-        if: always()
-        uses: ./.github/actions/nook-cache-telemetry
-
-  preflight-cache-publish:
-    name: Preflight cache publication
-    needs: [preflight]
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
-    timeout-minutes: 10
-    steps:
       - name: Require successful preflight cache publication
+        if: ${{ !cancelled() }}
         env:
-          CACHE_PUBLICATION_OUTCOME: ${{ needs.preflight.outputs.cache_publication_outcome }}
+          CACHE_PUBLICATION_OUTCOME: ${{ steps.publish_preflight_cache.outcome }}
         run: |
           if [ "$CACHE_PUBLICATION_OUTCOME" != "success" ]; then
             echo "Preflight cache publication failed in the verified producer: $CACHE_PUBLICATION_OUTCOME" >&2
             exit 1
           fi
 
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
+
   rust:
     name: Native Rust verification
     needs: [preflight]
-    if: inputs.product_changed
-    outputs:
-      cache_publication_outcome: ${{ steps.publish_native_cache.outcome }}
+    if: ${{ !cancelled() && inputs.product_changed && needs.preflight.outputs.verification_outcome == 'success' }}
     # Publish only from the verified job's node-local BuildKit shard.
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     timeout-minutes: 15
@@ -173,30 +167,27 @@ jobs:
           GHA_CACHE_WRITE_ENABLED: "1"
           WASM_BUILD_MODE: dev
 
-      - name: Preserve cache telemetry
-        if: always()
-        uses: ./.github/actions/nook-cache-telemetry
-
-  native-cache-publish:
-    name: Native cache publication
-    needs: [rust]
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
-    timeout-minutes: 10
-    steps:
       - name: Require successful native cache publication
+        if: ${{ !cancelled() }}
         env:
-          CACHE_PUBLICATION_OUTCOME: ${{ needs.rust.outputs.cache_publication_outcome }}
+          CACHE_PUBLICATION_OUTCOME: ${{ steps.publish_native_cache.outcome }}
         run: |
           if [ "$CACHE_PUBLICATION_OUTCOME" != "success" ]; then
             echo "Native cache publication failed in the verified producer: $CACHE_PUBLICATION_OUTCOME" >&2
             exit 1
           fi
 
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
+
   web:
     name: WASM and web verification
     needs: [preflight]
+    if: ${{ !cancelled() && needs.preflight.outputs.verification_outcome == 'success' }}
     outputs:
       cache_publication_outcome: ${{ steps.prepare_web.outputs.cache_publication_outcome }}
+      verification_outcome: ${{ steps.upload_web.outcome }}
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     timeout-minutes: 15
     permissions:
@@ -298,6 +289,7 @@ jobs:
           WEB_DEPLOY_ARTIFACT_DIR: ${{ runner.temp }}/nook-ci-artifacts/web-deploy
 
       - name: Upload verified development deployment handoff
+        id: upload_web
         uses: actions/upload-artifact@v7
         with:
           name: main-web-deploy-${{ github.run_id }}
@@ -313,28 +305,24 @@ jobs:
           GHA_CACHE_WRITE_ENABLED: "1"
           WASM_BUILD_MODE: dev
 
-      - name: Preserve cache telemetry
-        if: always()
-        uses: ./.github/actions/nook-cache-telemetry
-
-  wasm-cache-publish:
-    name: WASM cache publication
-    needs: [web]
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
-    timeout-minutes: 10
-    steps:
       - name: Require successful WASM cache publication
+        if: ${{ !cancelled() }}
         env:
-          CACHE_PUBLICATION_OUTCOME: ${{ needs.web.outputs.cache_publication_outcome }}
+          CACHE_PUBLICATION_OUTCOME: ${{ steps.prepare_web.outputs.cache_publication_outcome }}
         run: |
           if [ "$CACHE_PUBLICATION_OUTCOME" != "success" ]; then
             echo "WASM cache publication failed in the verified producer: $CACHE_PUBLICATION_OUTCOME" >&2
             exit 1
           fi
 
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
+
   wasm-cache-proof:
     name: Portable WASM cache publication proof
-    needs: [wasm-cache-publish]
+    needs: [web]
+    if: ${{ !cancelled() && needs.web.outputs.verification_outcome == 'success' && needs.web.outputs.cache_publication_outcome == 'success' }}
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     timeout-minutes: 10
     permissions:
@@ -374,6 +362,7 @@ jobs:
   web-e2e:
     name: Web e2e
     needs: [web]
+    if: ${{ !cancelled() && needs.web.outputs.verification_outcome == 'success' }}
     runs-on: nook-k0s-container
     timeout-minutes: 180
     container:
@@ -406,6 +395,7 @@ jobs:
       matrix:
         shard: [1, 2]
     needs: [web]
+    if: ${{ !cancelled() && needs.web.outputs.verification_outcome == 'success' }}
     runs-on: nook-k0s-container
     timeout-minutes: 180
     container:
@@ -523,7 +513,7 @@ jobs:
   deploy:
     name: Deploy development
     if: github.ref == 'refs/heads/main'
-    needs: [preflight-cache-publish, native-cache-publish, rust-ecosystem, web, web-e2e, extension-e2e, wasm-cache-proof]
+    needs: [preflight, rust, rust-ecosystem, web, web-e2e, extension-e2e, wasm-cache-proof]
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     timeout-minutes: 10
     environment:

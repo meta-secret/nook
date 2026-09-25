@@ -18,6 +18,9 @@ explicit handoff.
   validation, or local preflight; use the terminal GitHub Actions outcome as
   execution evidence.
 - Wait for the complete terminal check wave.
+- When changing Main aggregation, validate the
+  [producer and consumer failure gates](../../teams/sre/workflows/ci-pipeline.md)
+  in hosted CI. Removing a status-only job must preserve its required assertion.
 - Return every failed or cancelled required job before repair.
 - Treat reviews and approvals as optional.
 - Permit the owning Feature Gizmo to merge its own pull request.
