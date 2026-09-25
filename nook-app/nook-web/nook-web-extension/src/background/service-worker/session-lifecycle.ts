@@ -299,9 +299,7 @@ export class ExtensionSessionLifecycle {
     >[0] = {
       windowTypes: [ExtensionSessionLifecycle.normalWindowType],
     }
-    const normalWindow = await chrome.windows.getLastFocused(
-      getLastFocusedArgs,
-    )
+    const normalWindow = await chrome.windows.getLastFocused(getLastFocusedArgs)
     const observedWindowType = this.observedWindowType(normalWindow.type)
     switch (observedWindowType.kind) {
       case CompanionLauncherObservedWindowTypeKind.Missing:
@@ -508,9 +506,7 @@ export class ExtensionSessionLifecycle {
     }
   }
 
-  openCompanionLauncherBestEffort(
-    request: CompanionLauncherOpenRequest,
-  ): void {
+  openCompanionLauncherBestEffort(request: CompanionLauncherOpenRequest): void {
     void this.openCompanionLauncher(request).catch(() => {
       console.warn('Nook authentication tab could not be opened')
     })

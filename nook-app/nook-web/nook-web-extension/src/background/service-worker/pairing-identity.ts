@@ -926,7 +926,9 @@ class ExtensionPairingIdentity {
           intent: OpenCompanionLauncherIntent.PilotAuth,
           source: ExtensionSessionLifecycle.sourceFromSender(sender),
         }
-        extensionSessionLifecycle.openCompanionLauncherBestEffort(launcherRequest)
+        extensionSessionLifecycle.openCompanionLauncherBestEffort(
+          launcherRequest,
+        )
         return {
           response: {
             ok: true,

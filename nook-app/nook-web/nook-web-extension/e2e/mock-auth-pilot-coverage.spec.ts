@@ -104,7 +104,9 @@ test.describe('PIN Pilot mock-auth coverage', () => {
           'No saved login matches this site. Continue checks again; if none is found, sign in manually or add one in Nook.',
         ),
       ).toBeVisible()
-      await expect(loginWidget.getByText('Mock auth empty vault')).toHaveCount(0)
+      await expect(loginWidget.getByText('Mock auth empty vault')).toHaveCount(
+        0,
+      )
       await expect(
         loginWidget.getByTestId('nook-auth-gate-vault-status'),
       ).toHaveAttribute('data-state', 'no-matching-credential')
@@ -980,9 +982,9 @@ async function expectPilotPlainSuccess(
   await expect(
     widget.getByText(new URL(url).hostname, { exact: true }),
   ).toBeVisible()
-  await expect(
-    widget.getByTestId('nook-auth-gate-vault-status'),
-  ).toHaveText('Matching saved logins: 1')
+  await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(
+    'Matching saved logins: 1',
+  )
   await expect(
     widget.getByText(
       'One saved login matches this site. Nothing is filled or submitted until you click Continue; that click fills and submits it.',

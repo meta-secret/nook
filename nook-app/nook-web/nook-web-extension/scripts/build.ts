@@ -493,10 +493,16 @@ async function buildChromeLocales() {
           ),
         },
         widgetLoginMatchCount: {
-          message: catalog.extension.widget.message('login_match_count', locale),
+          message: catalog.extension.widget.message(
+            'login_match_count',
+            locale,
+          ),
         },
         widgetLoginUnavailable: {
-          message: catalog.extension.widget.message('login_unavailable', locale),
+          message: catalog.extension.widget.message(
+            'login_unavailable',
+            locale,
+          ),
         },
         widgetVaultLocked: {
           message: catalog.extension.setup.message('status_locked', locale),
