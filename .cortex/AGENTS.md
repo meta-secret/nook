@@ -210,6 +210,8 @@ concrete, evidence-backed strong reason in the task notes.
   dispatch those prerequisites separately.
 - Record the outcome after the command finishes.
 
+#### Scope and boundaries
+
 This permission is for local diagnostics. It does not change configured
 `create_pr` or `local_only` delivery. A local result does not make a task
 `local_only` and does not satisfy required PR checks.
@@ -223,6 +225,8 @@ Do not issue direct Docker or BuildKit commands or control them directly. Do not
 perform direct cache operations or mutate cache, destroy a daemon or container,
 change secret or host boundaries, or bypass a circuit breaker.
 
+#### Example: browser check failure
+
 **Prohibited:** after a browser check fails in `e2e/connect.spec.ts`, run the
 full local `task ci:pr:e2e` mirror and report its result as satisfying required
 PR checks.
@@ -232,6 +236,8 @@ PR checks.
 outcome, and keep hosted PR checks pending until they pass. The selected task
 may run its declared Taskfile prerequisites, including its 212 and 723 test
 stages when declared; do not invoke those stages separately.
+
+#### Reporting and follow-up
 
 Never report an unexecuted check as passing.
 
