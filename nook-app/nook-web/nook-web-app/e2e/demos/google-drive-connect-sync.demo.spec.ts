@@ -71,6 +71,7 @@ test('Google Drive setup shows named New and legacy Existing targets behind the 
   await demoBeat(page)
 
   await page.getByTestId('cancel-provider-setup').click()
+  await page.getByTestId('cancel-add-provider-btn').click()
   const existingLegacyTarget = {
     ...E2E_OAUTH_ONBOARD_PROVIDER,
     id: 'e2e-existing-legacy-drive-demo',
