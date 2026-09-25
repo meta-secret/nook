@@ -9,7 +9,8 @@
 
 use crate::{
     AgeArmoredCiphertext, AuthProvidersSnapshotData, DeviceIdentity, DevicePublicKey, Sha256Hex,
-    StoredGithubPat, StoredOAuthAccessCredential, StoredOAuthRefreshCredential,
+    StoredGithubPat, StoredGoogleDrivePrivateTarget, StoredOAuthAccessCredential,
+    StoredOAuthRefreshCredential,
     errors::{MultiDeviceError, MultiDeviceResult},
 };
 use crate::{OAuthFileConfigData, StorageProviderData, StoredOAuthFileConfiguration};
@@ -149,6 +150,7 @@ impl CredentialTransition<'_> {
                     expires_at: oauth.expires_at.clone(),
                     file_id: oauth.file_id.clone(),
                     folder_id: oauth.folder_id.clone(),
+                    drive_private_target: oauth.drive_private_target.clone(),
                     drive_mode: oauth.drive_mode,
                     icloud_mode: oauth.icloud_mode,
                     icloud_share_target: oauth.icloud_share_target.clone(),
@@ -539,6 +541,7 @@ mod tests {
                         expires_at: StoredOAuthTokenExpiry::Unknown,
                         file_id: StoredOAuthRemoteFileId::Unresolved,
                         folder_id: StoredGoogleDriveFolder::Root,
+                        drive_private_target: StoredGoogleDrivePrivateTarget::LegacyAppDataFolder,
                         drive_mode: GoogleDriveMode::Private,
                         icloud_mode: ICloudMode::Private,
                         icloud_share_target: StoredICloudShareTarget::Personal,

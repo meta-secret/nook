@@ -39,7 +39,8 @@ const DB_NAME: &str = "nook_auth";
 const STORE: &str = "auth";
 const STATE_KEY: &str = "providers";
 const SCHEMA_KEY: &str = "providers-schema";
-const STORAGE_SCHEMA_VERSION: u32 = 1;
+const LEGACY_STORAGE_SCHEMA_VERSION: u32 = 1;
+const STORAGE_SCHEMA_VERSION: u32 = 2;
 
 /// Named values required by `AuthProviderDatabase::read_raw_snapshot_from_store`.
 pub(crate) struct ProviderDbReadRawSnapshotFromStore<'a> {
@@ -159,7 +160,7 @@ impl AuthProviderDatabase {
             state_key,
             schema_key,
         }
-        .write(snapshot)
+        .write_legacy(snapshot)
         .await?;
         transaction.done().await.map_err(|e| {
             NookError::IndexedDb(format!("{}: {:?}", "nook_auth transaction done error", e))
@@ -329,9 +330,10 @@ mod wasm_idb_tests {
     use nook_core::{
         ActiveVaultScope, GoogleDriveMode, ProviderSyncCheckpoint, ProviderVaultScope,
         StorageProviderType, StoredGithubPat, StoredGithubRepository, StoredGoogleDriveFolder,
-        StoredICloudShareTarget, StoredLocalFolderConfiguration, StoredOAuthAccessCredential,
-        StoredOAuthAccountIdentity, StoredOAuthFileConfiguration, StoredOAuthRefreshCredential,
-        StoredOAuthRemoteFileId, StoredOAuthRemoteFileName, StoredOAuthTokenExpiry,
+        StoredGoogleDrivePrivateTarget, StoredICloudShareTarget, StoredLocalFolderConfiguration,
+        StoredOAuthAccessCredential, StoredOAuthAccountIdentity, StoredOAuthFileConfiguration,
+        StoredOAuthRefreshCredential, StoredOAuthRemoteFileId, StoredOAuthRemoteFileName,
+        StoredOAuthTokenExpiry,
     };
     use nook_core::{
         DeviceIdentityProtection, ProviderCredentialEncoding, ProviderCredentialStorageAdmission,
@@ -927,6 +929,7 @@ mod wasm_idb_tests {
                     account_email: StoredOAuthAccountIdentity::Unknown,
                     drive_mode: GoogleDriveMode::Private,
                     folder_id: StoredGoogleDriveFolder::Root,
+                    drive_private_target: StoredGoogleDrivePrivateTarget::LegacyAppDataFolder,
                     icloud_mode: ICloudMode::Private,
                     icloud_share_target: StoredICloudShareTarget::Personal,
                 }),

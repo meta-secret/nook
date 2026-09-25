@@ -6,7 +6,9 @@ use crate::types::{NookManagerStoreScope, NookProviderSyncRevision};
 use crate::{BrowserCredentialCreationOptions, BrowserCredentialRequestOptions};
 use crate::{BrowserPasskeyClient, BrowserPasskeyCreationOptions, NookTotpCode};
 use nook_core::{PasswordGenerationOptions, TotpAlgorithm, TotpDigits, TotpPeriod, TotpSecret};
-use nook_core::{StagedGithubConnection, StagedOAuthConnection, StagedRemoteConnection};
+use nook_core::{
+    ProviderSaveSetup, StagedGithubConnection, StagedOAuthConnection, StagedRemoteConnection,
+};
 use nook_core::{
     StoredGithubPat, StoredGithubRepository, StoredLocalFolderHandle, StoredOAuthAccessCredential,
     StoredOAuthFileConfiguration, StoredOAuthRemoteFileName,
@@ -345,9 +347,14 @@ impl NookTotpCode {
 #[allow(clippy::needless_pass_by_value)]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn update_oauth_remote_ref(
     config: nook_core::OAuthFileConfigData,
+    setup: ProviderSaveSetup,
     remote_ref: &str,
 ) -> NookOAuthRemoteConfigurationUpdate {
-    NookOAuthRemoteConfigurationUpdate::new(config.with_remote_ref(remote_ref))
+    NookOAuthRemoteConfigurationUpdate::new(
+        config
+            .with_provider_save_setup(setup)
+            .with_remote_ref(remote_ref),
+    )
 }
 
 #[wasm_bindgen]
@@ -368,11 +375,13 @@ impl NookTotpCode {
 #[allow(clippy::needless_pass_by_value)]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn staged_oauth_remote_storage_args(
     oauth_file: nook_core::OAuthFileConfigData,
+    setup: ProviderSaveSetup,
 ) -> Result<NookStagedStorageArgs, wasm_bindgen::JsError> {
     Ok(NookStagedStorageArgs::new(
         StagedRemoteConnection::OAuth(StagedOAuthConnection {
             configuration: &StoredOAuthFileConfiguration::Configured(oauth_file.clone()),
             file_name: &StoredOAuthRemoteFileName::Unresolved,
+            setup,
         })
         .project()?,
     ))
@@ -571,7 +580,7 @@ mod browser_tests {
         let remote = oauth_remote_storage_ref(oauth.clone());
         assert!(remote.value().is_err());
         assert!(
-            update_oauth_remote_ref(oauth.clone(), "file-1")
+            update_oauth_remote_ref(oauth.clone(), ProviderSaveSetup::Existing, "file-1")
                 .config()
                 .is_ok()
         );
@@ -586,7 +595,7 @@ mod browser_tests {
             NookStagedStorageArgsState::Incomplete
         );
         assert_eq!(
-            staged_oauth_remote_storage_args(oauth.clone())
+            staged_oauth_remote_storage_args(oauth.clone(), ProviderSaveSetup::Existing)
                 .unwrap()
                 .state(),
             NookStagedStorageArgsState::Incomplete

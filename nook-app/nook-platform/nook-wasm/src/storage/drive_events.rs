@@ -53,7 +53,9 @@ struct DriveEventQuery<'a> {
 impl DriveEventQuery<'_> {
     fn scoped_url(self) -> String {
         match self.parent {
-            DriveEventParent::AppDataFolder => format!("{}&spaces=appDataFolder", self.url),
+            DriveEventParent::AppDataFolder | DriveEventParent::PrivateAppDataFolder { .. } => {
+                format!("{}&spaces=appDataFolder", self.url)
+            }
             DriveEventParent::SharedFolder { .. } => self.url.to_owned(),
         }
     }
@@ -205,6 +207,9 @@ impl DriveEventStore<'_> {
     fn parent_query_fragment(parent: &DriveEventParent) -> String {
         match parent {
             DriveEventParent::AppDataFolder => "'appDataFolder' in parents".to_owned(),
+            DriveEventParent::PrivateAppDataFolder { folder_id } => {
+                format!("'{}' in parents", folder_id.replace('\'', "\\'"))
+            }
             DriveEventParent::SharedFolder { folder_id } => {
                 format!("'{}' in parents", folder_id.replace('\'', "\\'"))
             }
@@ -214,6 +219,7 @@ impl DriveEventStore<'_> {
     fn parent_id_for_create(parent: &DriveEventParent) -> &str {
         match parent {
             DriveEventParent::AppDataFolder => "appDataFolder",
+            DriveEventParent::PrivateAppDataFolder { folder_id } => folder_id.as_str(),
             DriveEventParent::SharedFolder { folder_id } => folder_id.as_str(),
         }
     }
@@ -657,6 +663,9 @@ mod tests {
     )]
     fn private_and_shared_queries_keep_their_original_scope() {
         let private = DriveEventParent::AppDataFolder;
+        let private_child = DriveEventParent::PrivateAppDataFolder {
+            folder_id: "child-folder".to_owned(),
+        };
         let shared = DriveEventParent::SharedFolder {
             folder_id: "owner's-folder".to_owned(),
         };
@@ -675,6 +684,22 @@ mod tests {
         assert_eq!(
             DriveEventStore::parent_id_for_create(&private),
             "appDataFolder"
+        );
+        assert_eq!(
+            DriveEventStore::parent_query_fragment(&private_child),
+            "'child-folder' in parents"
+        );
+        assert_eq!(
+            DriveEventQuery {
+                url: "files?q=events",
+                parent: &private_child
+            }
+            .scoped_url(),
+            "files?q=events&spaces=appDataFolder"
+        );
+        assert_eq!(
+            DriveEventStore::parent_id_for_create(&private_child),
+            "child-folder"
         );
         assert_eq!(
             DriveEventStore::parent_query_fragment(&shared),

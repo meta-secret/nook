@@ -819,6 +819,51 @@ mod tests {
         dylint_lib = "nook_domain_api",
         expect(
             unowned_function,
+            reason = "framework boundary: wasm-bindgen-test callback"
+        )
+    )]
+    #[cfg_attr(
+        dylint_lib = "non_local_effect_before_unhandled_error",
+        allow(
+            non_local_effect_before_unhandled_error,
+            reason = "the test intentionally observes and then inspects the mismatch issue"
+        )
+    )]
+    fn private_drive_folder_target_keeps_store_id_mismatch_fail_closed() -> anyhow::Result<()> {
+        let mut manager = NookVaultManager::new();
+        manager.storage.mode = StorageMode::GoogleDrive;
+        manager.storage.drive_event_parent = nook_core::DriveEventParent::PrivateAppDataFolder {
+            folder_id: "stable-private-folder".to_owned(),
+        };
+        manager.storage.remote_ref = manager.storage.drive_event_parent.encode_storage_id();
+        let classification = RemoteEventLogClassification::DifferentStore {
+            local_store_id: "store_local12345".to_owned(),
+            remote_store_id: "store_remote1234".to_owned(),
+        };
+
+        let Err(error) = manager.guard_remote_event_log_classification("Drive", &classification)
+        else {
+            anyhow::bail!("a private Drive target must not bypass the store_id guard");
+        };
+        assert!(matches!(
+            error,
+            NookError::Database(message)
+                if message.contains("Drive")
+                    && message.contains("store_local12345")
+                    && message.contains("store_remote1234")
+        ));
+        let issue = manager.take_event_log_sync_issue().issue()?;
+        assert!(issue.is_store_mismatch());
+        assert_eq!(issue.local_store_id()?, "store_local12345");
+        assert_eq!(issue.remote_store_id()?, "store_remote1234");
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
             reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
         )
     )]

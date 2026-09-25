@@ -18,8 +18,8 @@ use crate::{
     DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, GoogleDriveMode, OAuthAccessTokenRef,
     OAuthFilePreset, OauthFilePreset, ProviderSyncCheckpoint, ProviderVaultScope,
     StorageProviderType, StoredGithubPat, StoredGithubRepository, StoredGoogleDriveFolder,
-    StoredLocalFolderConfiguration, StoredOAuthAccountIdentity, StoredOAuthFileConfiguration,
-    StoredOAuthRemoteFileName, StoredOAuthTokenExpiry,
+    StoredGoogleDrivePrivateTarget, StoredLocalFolderConfiguration, StoredOAuthAccountIdentity,
+    StoredOAuthFileConfiguration, StoredOAuthRemoteFileName, StoredOAuthTokenExpiry,
 };
 
 use super::{AuthProvidersSnapshotData, OAuthFileConfigData, StorageProviderData};
@@ -169,6 +169,11 @@ impl ProviderSaveRequest {
                 };
                 oauth.preset = request.oauth_preset;
                 oauth.file_name = StoredOAuthRemoteFileName::FileName(drive_file.clone());
+                if oauth.preset == OauthFilePreset::GoogleDrive
+                    && oauth.resolved_google_drive_mode() == GoogleDriveMode::Private
+                {
+                    oauth.drive_private_target = StoredGoogleDrivePrivateTarget::Pending;
+                }
                 let mut provider = request.provider_defaults(ProviderRowDefaults {
                     provider_type,
                     label: ProviderLabel::OAuth(crate::OAuthProviderLabel {
@@ -227,6 +232,7 @@ impl ActiveOAuthMerge<'_> {
                 StoredGoogleDriveFolder::FolderId(_) => active.folder_id.clone(),
                 StoredGoogleDriveFolder::Root => persisted.folder_id.clone(),
             },
+            drive_private_target: active.drive_private_target.clone(),
             drive_mode: active.drive_mode,
             icloud_mode: active.icloud_mode,
             icloud_share_target: match active.icloud_share_target {

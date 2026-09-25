@@ -89,6 +89,12 @@ pub struct OAuthFileConfig {
     /// `drive.readonly`). Private-mode
     /// providers leave this unset and continue using `drive.appdata`.
     pub folder_id: StoredGoogleDriveFolder,
+    /// Versioned private event target. Schema-1 rows map to the legacy
+    /// `appDataFolder` root; newly created private Drive rows resolve to a
+    /// stable child-folder ID before event sync.
+    #[serde(default)]
+    #[tsify(optional)]
+    pub drive_private_target: StoredGoogleDrivePrivateTarget,
     /// Explicit iCloud provider mode.
     #[serde(rename = "iCloudMode")]
     pub icloud_mode: ICloudMode,
@@ -110,6 +116,8 @@ struct OAuthFileConfigWire {
     account_email: StoredOAuthAccountIdentity,
     drive_mode: GoogleDriveMode,
     folder_id: StoredGoogleDriveFolder,
+    #[serde(default)]
+    drive_private_target: StoredGoogleDrivePrivateTarget,
     #[serde(rename = "iCloudMode")]
     icloud_mode: ICloudMode,
     #[serde(default, rename = "iCloudShareTarget", alias = "icloudShareTarget")]
@@ -128,6 +136,7 @@ impl From<OAuthFileConfigWire> for OAuthFileConfig {
             account_email: wire.account_email,
             drive_mode: wire.drive_mode,
             folder_id: wire.folder_id,
+            drive_private_target: wire.drive_private_target,
             icloud_mode: wire.icloud_mode,
             icloud_share_target: wire.icloud_share_target,
         }

@@ -213,7 +213,7 @@ impl AuthProviderDatabase {
                 state_key: STATE_KEY,
                 schema_key: SCHEMA_KEY,
             }
-            .write(&snapshot)
+            .write_legacy(&snapshot)
             .await?;
         }
         transaction
@@ -305,7 +305,7 @@ impl AuthProviderDatabase {
                     state_key: STATE_KEY,
                     schema_key: SCHEMA_KEY,
                 }
-                .write(&snapshot)
+                .write_legacy(&snapshot)
                 .await?;
             }
         }

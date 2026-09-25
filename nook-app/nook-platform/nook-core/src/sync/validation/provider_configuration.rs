@@ -163,12 +163,54 @@ impl DriveBackupName {
 
 /// Prefix used in Drive storage refs for shared My Drive folder parents.
 pub const DRIVE_SHARED_FOLDER_REF_PREFIX: &str = "shared:";
+/// Prefix used in Drive storage refs for schema-2 private appData child folders.
+pub const DRIVE_PRIVATE_FOLDER_REF_PREFIX: &str = "private-folder-v2:";
+/// Explicit pre-resolution marker for newly created private Drive targets.
+pub const DRIVE_PRIVATE_FOLDER_PENDING_REF: &str = "private-folder-v2:pending";
+
+/// Parsed Drive target reference from the existing storage-ref ID slot.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DriveStorageTargetRef {
+    LegacyAppDataFolder,
+    SharedFolder { folder_id: String },
+    PendingPrivateFolder,
+    PrivateFolder { folder_id: String },
+}
+
+impl DriveStorageTargetRef {
+    /// Parse the existing Drive reference slot without inferring legacy state
+    /// from file-name, store identity, or an unresolved file ID.
+    pub fn parse(storage_id: &str) -> ValidationResult<Self> {
+        let trimmed = storage_id.trim();
+        if let Some(folder_id) = trimmed.strip_prefix(DRIVE_SHARED_FOLDER_REF_PREFIX) {
+            let folder_id = folder_id.trim();
+            if folder_id.is_empty() {
+                return Err(ValidationError::SharedStorageTargetRequired);
+            }
+            return Ok(Self::SharedFolder {
+                folder_id: folder_id.to_owned(),
+            });
+        }
+        if trimmed == DRIVE_PRIVATE_FOLDER_PENDING_REF {
+            return Ok(Self::PendingPrivateFolder);
+        }
+        if let Some(folder_id) = trimmed.strip_prefix(DRIVE_PRIVATE_FOLDER_REF_PREFIX) {
+            let folder_id = GoogleDriveFolderId::parse(folder_id)?;
+            return Ok(Self::PrivateFolder {
+                folder_id: folder_id.into_inner(),
+            });
+        }
+        Ok(Self::LegacyAppDataFolder)
+    }
+}
 
 /// Where Google Drive event files live for the current vault.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DriveEventParent {
     /// Private provider mode: hidden application data folder (`drive.appdata`).
     AppDataFolder,
+    /// Private schema-2 provider child folder under `appDataFolder`.
+    PrivateAppDataFolder { folder_id: String },
     /// Shared provider mode: a My Drive folder written with `drive.file` and
     /// read across collaborator accounts with `drive.readonly`.
     SharedFolder { folder_id: String },
@@ -201,6 +243,9 @@ impl DriveEventParent {
     pub fn encode_storage_id(&self) -> String {
         match self {
             Self::AppDataFolder => String::new(),
+            Self::PrivateAppDataFolder { folder_id } => {
+                format!("{DRIVE_PRIVATE_FOLDER_REF_PREFIX}{}", folder_id.trim())
+            }
             Self::SharedFolder { folder_id } => {
                 format!("{DRIVE_SHARED_FOLDER_REF_PREFIX}{}", folder_id.trim())
             }

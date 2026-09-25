@@ -10,7 +10,7 @@
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use super as auth_providers;
 use super::rollback_projection;
-use super::{SCHEMA_KEY, STATE_KEY, STORAGE_SCHEMA_VERSION, STORE};
+use super::{LEGACY_STORAGE_SCHEMA_VERSION, SCHEMA_KEY, STATE_KEY, STORAGE_SCHEMA_VERSION, STORE};
 use crate::AuthProviderDatabase;
 use crate::NookError;
 use crate::ProviderDbLegacySnapshotBelongsToIdentity;
@@ -235,7 +235,7 @@ impl PreparedProviderSnapshotWrite {
                 state_key: STATE_KEY,
                 schema_key: SCHEMA_KEY,
             }
-            .write(&snapshot)
+            .write_legacy(&snapshot)
             .await?;
         }
         let result = transaction
@@ -247,7 +247,8 @@ impl PreparedProviderSnapshotWrite {
         result
     }
 }
-/// The schema-1 writer also serves the existing rollback migration transaction.
+/// Writes either the current identity-scoped schema-2 snapshot or the
+/// rollback-compatible schema-1 singleton projection.
 pub(super) struct ProviderSnapshotStore<'a> {
     pub(super) store: &'a Store,
     pub(super) state_key: &'a str,
@@ -255,6 +256,24 @@ pub(super) struct ProviderSnapshotStore<'a> {
 }
 impl ProviderSnapshotStore<'_> {
     pub(super) async fn write(self, snapshot: &AuthProvidersSnapshotData) -> Result<(), NookError> {
+        self.write_versioned(snapshot, STORAGE_SCHEMA_VERSION, false)
+            .await
+    }
+
+    pub(super) async fn write_legacy(
+        self,
+        snapshot: &AuthProvidersSnapshotData,
+    ) -> Result<(), NookError> {
+        self.write_versioned(snapshot, LEGACY_STORAGE_SCHEMA_VERSION, true)
+            .await
+    }
+
+    async fn write_versioned(
+        self,
+        snapshot: &AuthProvidersSnapshotData,
+        schema_version: u32,
+        legacy_projection: bool,
+    ) -> Result<(), NookError> {
         let Self {
             store,
             state_key,
@@ -263,19 +282,21 @@ impl ProviderSnapshotStore<'_> {
 
         let key = serde_wasm_bindgen::to_value(state_key)
             .map_err(|e| NookError::IndexedDb(format!("{}: {:?}", "nook_auth key error", e)))?;
-        let storage_value = snapshot.legacy_storage_snapshot();
-        let value = storage_value
-            .serialize(&Serializer::json_compatible())
-            .map_err(|e| {
-                NookError::IndexedDb(format!("{}: {:?}", "nook_auth serialize error", e))
-            })?;
+        let value = if legacy_projection {
+            snapshot
+                .legacy_storage_snapshot()
+                .serialize(&Serializer::json_compatible())
+        } else {
+            snapshot.serialize(&Serializer::json_compatible())
+        }
+        .map_err(|e| NookError::IndexedDb(format!("{}: {:?}", "nook_auth serialize error", e)))?;
         store
             .put(&value, Some(&key))
             .await
             .map_err(|e| NookError::IndexedDb(format!("{}: {:?}", "nook_auth put error", e)))?;
         let schema_key = serde_wasm_bindgen::to_value(schema_key)
             .map_err(|e| NookError::IndexedDb(format!("{}: {:?}", "schema key error", e)))?;
-        let schema_value = serde_wasm_bindgen::to_value(&STORAGE_SCHEMA_VERSION)
+        let schema_value = serde_wasm_bindgen::to_value(&schema_version)
             .map_err(|e| NookError::IndexedDb(format!("{}: {:?}", "schema version error", e)))?;
         store
             .put(&schema_value, Some(&schema_key))
@@ -480,6 +501,20 @@ mod tests {
         let raw = fixture.scoped().await?;
         let stored = NormalizedAuthSnapshot::from(raw).snapshot;
         assert_eq!(stored, admitted);
+        let scoped_schema = AuthProviderDatabase::read_raw_snapshot_at(
+            &AuthProviderDatabase::schema_key_for_app_id(fixture.identity.app_id()),
+        )
+        .await?;
+        let rollback_schema =
+            AuthProviderDatabase::read_raw_snapshot_at(auth_providers::SCHEMA_KEY).await?;
+        assert_eq!(
+            scoped_schema.as_u64(),
+            Some(u64::from(STORAGE_SCHEMA_VERSION))
+        );
+        assert_eq!(
+            rollback_schema.as_u64(),
+            Some(u64::from(LEGACY_STORAGE_SCHEMA_VERSION))
+        );
         let loaded = AuthProviderDatabase::load_auth_providers(&fixture.identity).await?;
         assert_eq!(loaded.snapshot, fixture.snapshot);
         Ok(())

@@ -1,7 +1,7 @@
 //! Staged connections preserve provider-specific configuration and readiness.
 use super::{
     DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, GoogleDriveMode, OauthFilePreset,
-    ProviderSyncCheckpoint, ProviderVaultScope, StorageConnectArgs, StorageMode,
+    ProviderSaveSetup, ProviderSyncCheckpoint, ProviderVaultScope, StorageConnectArgs, StorageMode,
     StorageProviderData, StorageProviderType, StoredGithubPat, StoredGithubRepository,
     StoredGoogleDriveFolder, StoredLocalFolderConfiguration, StoredOAuthAccessCredential,
     StoredOAuthFileConfiguration, StoredOAuthRemoteFileName, ValidationResult,
@@ -13,6 +13,7 @@ pub struct StagedGithubConnection<'a> {
 pub struct StagedOAuthConnection<'a> {
     pub configuration: &'a StoredOAuthFileConfiguration,
     pub file_name: &'a StoredOAuthRemoteFileName,
+    pub setup: ProviderSaveSetup,
 }
 pub enum StagedRemoteConnection<'a> {
     Local,
@@ -79,7 +80,7 @@ impl StagedRemoteConnection<'_> {
                     StoredOAuthRemoteFileName::Unresolved
                     | StoredOAuthRemoteFileName::FileName(_) => stored_name,
                 };
-                let mut oauth = config.clone();
+                let mut oauth = config.with_provider_save_setup(draft.setup);
                 oauth.access_token = StoredOAuthAccessCredential::AccessToken(token.to_owned());
                 oauth.file_name = StoredOAuthRemoteFileName::FileName(file_name.to_owned());
                 StorageProviderData {
