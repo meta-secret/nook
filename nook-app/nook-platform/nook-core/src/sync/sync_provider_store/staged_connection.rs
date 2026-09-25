@@ -30,106 +30,102 @@ impl StagedRemoteConnection<'_> {
     pub fn project(self) -> ValidationResult<StagedStorageConnection> {
         match self {
             Self::Local => Ok(StagedStorageConnection::Incomplete),
-            Self::Github(draft) => Self::project_github(draft),
-            Self::OAuth(draft) => Self::project_oauth(draft),
-        }
-    }
-
-    fn project_github(
-        draft: StagedGithubConnection<'_>,
-    ) -> ValidationResult<StagedStorageConnection> {
-        let StoredGithubPat::Token(pat) = draft.credential else {
-            return Ok(StagedStorageConnection::Incomplete);
-        };
-        let pat = pat.trim();
-        if pat.is_empty() {
-            return Ok(StagedStorageConnection::Incomplete);
-        }
-        let repo = match draft.repository {
-            StoredGithubRepository::Repository(repo) if !repo.trim().is_empty() => repo.trim(),
-            StoredGithubRepository::Repository(_) | StoredGithubRepository::DefaultRepository => {
-                DEFAULT_GITHUB_REPO_NAME
+            Self::Github(draft) => {
+                let StoredGithubPat::Token(pat) = draft.credential else {
+                    return Ok(StagedStorageConnection::Incomplete);
+                };
+                let pat = pat.trim();
+                if pat.is_empty() {
+                    return Ok(StagedStorageConnection::Incomplete);
+                }
+                let repo = match draft.repository {
+                    StoredGithubRepository::Repository(repo) if !repo.trim().is_empty() => {
+                        repo.trim()
+                    }
+                    StoredGithubRepository::Repository(_)
+                    | StoredGithubRepository::DefaultRepository => DEFAULT_GITHUB_REPO_NAME,
+                };
+                Ok(StagedStorageConnection::Ready(StorageConnectArgs {
+                    mode: StorageMode::Github.as_str().to_owned(),
+                    pat: pat.to_owned(),
+                    repo: repo.to_owned(),
+                }))
             }
-        };
-        Ok(StagedStorageConnection::Ready(StorageConnectArgs {
-            mode: StorageMode::Github.as_str().to_owned(),
-            pat: pat.to_owned(),
-            repo: repo.to_owned(),
-        }))
-    }
-
-    fn project_oauth(
-        draft: StagedOAuthConnection<'_>,
-    ) -> ValidationResult<StagedStorageConnection> {
-        let StoredOAuthFileConfiguration::Configured(config) = draft.configuration else {
-            return Ok(StagedStorageConnection::Incomplete);
-        };
-        let StoredOAuthAccessCredential::AccessToken(token) = &config.access_token else {
-            return Ok(StagedStorageConnection::Incomplete);
-        };
-        let token = token.trim();
-        if token.is_empty() {
-            return Ok(StagedStorageConnection::Incomplete);
+            Self::OAuth(draft) => {
+                let StoredOAuthFileConfiguration::Configured(config) = draft.configuration else {
+                    return Ok(StagedStorageConnection::Incomplete);
+                };
+                let StoredOAuthAccessCredential::AccessToken(token) = &config.access_token else {
+                    return Ok(StagedStorageConnection::Incomplete);
+                };
+                let token = token.trim();
+                if token.is_empty() {
+                    return Ok(StagedStorageConnection::Incomplete);
+                }
+                let stored_name = match &config.file_name {
+                    StoredOAuthRemoteFileName::FileName(name) if !name.trim().is_empty() => {
+                        name.trim()
+                    }
+                    StoredOAuthRemoteFileName::Unresolved
+                    | StoredOAuthRemoteFileName::FileName(_) => DEFAULT_DRIVE_BACKUP_NAME,
+                };
+                let file_name = match (
+                    draft.setup,
+                    config.preset,
+                    config.resolved_google_drive_mode(),
+                    &config.drive_private_target,
+                    &config.folder_id,
+                    &draft.file_name,
+                ) {
+                    (
+                        ProviderSaveSetup::Existing,
+                        OauthFilePreset::GoogleDrive,
+                        GoogleDriveMode::Private,
+                        StoredGoogleDrivePrivateTarget::Pending
+                        | StoredGoogleDrivePrivateTarget::FolderId(_),
+                        _,
+                        _,
+                    )
+                    | (_, OauthFilePreset::GoogleDrive, GoogleDriveMode::Shared, _, _, _) => {
+                        stored_name
+                    }
+                    (
+                        _,
+                        OauthFilePreset::GoogleDrive,
+                        _,
+                        _,
+                        StoredGoogleDriveFolder::FolderId(id),
+                        _,
+                    ) if !id.trim().is_empty() => stored_name,
+                    (_, _, _, _, _, StoredOAuthRemoteFileName::FileName(name))
+                        if !name.trim().is_empty() =>
+                    {
+                        name.trim()
+                    }
+                    (
+                        ..,
+                        StoredOAuthRemoteFileName::Unresolved
+                        | StoredOAuthRemoteFileName::FileName(_),
+                    ) => stored_name,
+                };
+                let mut oauth = config.with_provider_save_setup(draft.setup);
+                oauth.access_token = StoredOAuthAccessCredential::AccessToken(token.to_owned());
+                oauth.file_name = StoredOAuthRemoteFileName::FileName(file_name.to_owned());
+                StorageProviderData {
+                    id: "staged-oauth-file".to_owned(),
+                    provider_type: StorageProviderType::OauthFile,
+                    label: String::new(),
+                    github_pat: StoredGithubPat::Missing,
+                    github_repo: StoredGithubRepository::DefaultRepository,
+                    oauth_file: StoredOAuthFileConfiguration::configured(oauth),
+                    local_folder: StoredLocalFolderConfiguration::NotApplicable,
+                    store_id: ProviderVaultScope::Unscoped,
+                    sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
+                    created_at: String::new(),
+                }
+                .connection_args()
+                .map(StagedStorageConnection::Ready)
+            }
         }
-        let stored_name = match &config.file_name {
-            StoredOAuthRemoteFileName::FileName(name) if !name.trim().is_empty() => name.trim(),
-            StoredOAuthRemoteFileName::Unresolved | StoredOAuthRemoteFileName::FileName(_) => {
-                DEFAULT_DRIVE_BACKUP_NAME
-            }
-        };
-        let file_name = match (
-            draft.setup,
-            config.preset,
-            config.resolved_google_drive_mode(),
-            &config.drive_private_target,
-            &config.folder_id,
-            &draft.file_name,
-        ) {
-            (
-                ProviderSaveSetup::Existing,
-                OauthFilePreset::GoogleDrive,
-                GoogleDriveMode::Private,
-                StoredGoogleDrivePrivateTarget::Pending
-                | StoredGoogleDrivePrivateTarget::FolderId(_),
-                _,
-                _,
-            )
-            | (_, OauthFilePreset::GoogleDrive, GoogleDriveMode::Shared, _, _, _) => stored_name,
-            (_, OauthFilePreset::GoogleDrive, _, _, StoredGoogleDriveFolder::FolderId(id), _)
-                if !id.trim().is_empty() =>
-            {
-                stored_name
-            }
-            (_, _, _, _, _, StoredOAuthRemoteFileName::FileName(name))
-                if !name.trim().is_empty() =>
-            {
-                name.trim()
-            }
-            (
-                _,
-                _,
-                _,
-                _,
-                _,
-                StoredOAuthRemoteFileName::Unresolved | StoredOAuthRemoteFileName::FileName(_),
-            ) => stored_name,
-        };
-        let mut oauth = config.with_provider_save_setup(draft.setup);
-        oauth.access_token = StoredOAuthAccessCredential::AccessToken(token.to_owned());
-        oauth.file_name = StoredOAuthRemoteFileName::FileName(file_name.to_owned());
-        StorageProviderData {
-            id: "staged-oauth-file".to_owned(),
-            provider_type: StorageProviderType::OauthFile,
-            label: String::new(),
-            github_pat: StoredGithubPat::Missing,
-            github_repo: StoredGithubRepository::DefaultRepository,
-            oauth_file: StoredOAuthFileConfiguration::configured(oauth),
-            local_folder: StoredLocalFolderConfiguration::NotApplicable,
-            store_id: ProviderVaultScope::Unscoped,
-            sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
-            created_at: String::new(),
-        }
-        .connection_args()
-        .map(StagedStorageConnection::Ready)
     }
 }
