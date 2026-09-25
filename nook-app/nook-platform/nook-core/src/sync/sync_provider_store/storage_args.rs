@@ -700,6 +700,19 @@ mod tests {
             crate::DRIVE_PRIVATE_FOLDER_PENDING_REF
         );
 
+        let new_file_name = StoredOAuthRemoteFileName::FileName("new-vault.yaml".to_owned());
+        let new_private_provider = StagedRemoteConnection::OAuth(StagedOAuthConnection {
+            configuration: &persisted_legacy,
+            file_name: &new_file_name,
+            setup: ProviderSaveSetup::New(StorageProviderType::OauthFile),
+        })
+        .project()?
+        .ready()?;
+        assert_eq!(
+            new_private_provider.repo,
+            "private-folder-v2:pending\tnew-vault.yaml"
+        );
+
         let StoredOAuthFileConfiguration::Configured(shared) = persisted_legacy else {
             anyhow::bail!("the legacy row must contain an OAuth config")
         };

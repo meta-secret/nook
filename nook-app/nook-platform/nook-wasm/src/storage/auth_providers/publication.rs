@@ -506,16 +506,18 @@ mod tests {
             &AuthProviderDatabase::schema_key_for_app_id(fixture.identity.app_id()),
         )
         .await?;
+        let rollback_snapshot =
+            AuthProviderDatabase::read_raw_snapshot_at(auth_providers::STATE_KEY).await?;
         let rollback_schema =
             AuthProviderDatabase::read_raw_snapshot_at(auth_providers::SCHEMA_KEY).await?;
         assert_eq!(
             scoped_schema.as_u64(),
             Some(u64::from(STORAGE_SCHEMA_VERSION))
         );
-        assert_eq!(
-            rollback_schema.as_u64(),
-            Some(u64::from(LEGACY_STORAGE_SCHEMA_VERSION))
-        );
+        // The generated fixture identity is not in the active keyring, so its
+        // publication must not create an identity-owned rollback projection.
+        assert!(rollback_snapshot.is_null());
+        assert!(rollback_schema.is_null());
         let loaded = AuthProviderDatabase::load_auth_providers(&fixture.identity).await?;
         assert_eq!(loaded.snapshot, fixture.snapshot);
         Ok(())
