@@ -648,7 +648,7 @@ mod tests {
         );
         assert_eq!(
             *oauth_file,
-            StoredOAuthFileConfiguration::configured(persisted.clone())
+            StoredOAuthFileConfiguration::configured(persisted.as_ref().clone())
         );
         Ok(())
     }
