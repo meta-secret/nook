@@ -174,7 +174,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'infra/contracts/dockerized-rust.test.ts',
-    'aa688b86fc0c6d9269cd00f5f1ee5432b77e479184219c67a4da2321af1136f1',
+    '7a0d05e23af4f5babc0570977db9c428b881ccf22eae7a803bbfb7ffb0b14b41',
   ],
   [
     'infra/contracts/dockerized-rust-cache-registry.test.ts',
@@ -230,7 +230,7 @@ const AUDITED_RUNTIME_SOURCES = new Map([
   ],
   [
     'nook-app/nook-web/nook-web-app/scripts/verify-app-isolation.ts',
-    '63d4d81f964a15fdb81529a7894501fef993a5fce9ebee94630d39aa282c3c6c',
+    'c9257538e7885c40e6b6485a08857d63c457350b731921dbf21c87b24d51a6b6',
   ],
   [
     'nook-app/nook-web/nook-web-extension/scripts/hosted-extension.sh',

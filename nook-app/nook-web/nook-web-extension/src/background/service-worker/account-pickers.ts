@@ -42,6 +42,7 @@ import {
 import { extensionPairingIdentity } from './pairing-identity'
 import {
   SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS,
+  ExtensionSessionLifecycle,
   extensionSessionLifecycle,
 } from './session-lifecycle'
 import { websiteLoginOptionsWireAdapter } from './website-login-options-wire-adapter'
@@ -645,9 +646,13 @@ class AccountPickerSessions {
     if (delivery.isErr()) return { response: delivery.error.response }
     const status = delivery.value
     if (!extensionSessionLifecycle.isUnlockedSessionStatus(status)) {
-      extensionSessionLifecycle.openCompanionLauncherBestEffort(
-        OpenCompanionLauncherIntent.Default,
-      )
+      const launcherRequest: Parameters<
+        typeof extensionSessionLifecycle.openCompanionLauncherBestEffort
+      >[0] = {
+        intent: OpenCompanionLauncherIntent.PilotAuth,
+        source: ExtensionSessionLifecycle.sourceFromSender(sender),
+      }
+      extensionSessionLifecycle.openCompanionLauncherBestEffort(launcherRequest)
       return { response: { ok: false, reason: reasons.locked } }
     }
     return { grant }
@@ -802,9 +807,13 @@ class AccountPickerSessions {
           WebsiteAuthenticatorResponseStatus.Unavailable &&
         openUnavailableCompanion
       ) {
-        resolvedDependencies.openCompanionLauncherBestEffort(
-          OpenCompanionLauncherIntent.Pair,
-        )
+        const launcherRequest: Parameters<
+          typeof resolvedDependencies.openCompanionLauncherBestEffort
+        >[0] = {
+          intent: OpenCompanionLauncherIntent.Pair,
+          source: ExtensionSessionLifecycle.sourceFromSender(sender),
+        }
+        resolvedDependencies.openCompanionLauncherBestEffort(launcherRequest)
       }
       return access.response
     }

@@ -61,7 +61,9 @@ import { extensionPairingGrantPolicyReady } from '../pairing-grants'
 import {
   SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS,
   extensionSessionLifecycle,
+  ExtensionSessionLifecycle,
 } from './session-lifecycle'
+import type { CompanionLauncherSource } from './session-lifecycle'
 import { identityHandoffSessionRequest } from './session-request-projections'
 import {
   ConcreteDecoderResultKind,
@@ -164,6 +166,11 @@ type ExtensionPairedVaultUnlockResponse =
       vaultStoreId: string
       reason: string
     }
+
+type PairedVaultUnlockRequest = {
+  message: ExtensionPairedVaultUnlockRequestMessage
+  source: CompanionLauncherSource
+}
 
 export enum WebsitePasskeyRequestContextKind {
   Rejected = 'rejected',
@@ -701,9 +708,10 @@ class ExtensionPairingIdentity {
     }
   }
 
-  async requestPairedVaultUnlock(
-    message: ExtensionPairedVaultUnlockRequestMessage,
-  ): Promise<ExtensionPairedVaultUnlockResponse> {
+  async requestPairedVaultUnlock({
+    message,
+    source,
+  }: PairedVaultUnlockRequest): Promise<ExtensionPairedVaultUnlockResponse> {
     const decodedRequest = runConcreteDecoder(
       decodeCompanionPairedVaultUnlockRequest,
       message,
@@ -745,9 +753,13 @@ class ExtensionPairingIdentity {
         return { ...statusDelivery.error.response, requestId, vaultStoreId }
       const statusResponse = statusDelivery.value
       if (!extensionSessionLifecycle.isUnlockedSessionStatus(statusResponse)) {
-        await extensionSessionLifecycle.openCompanionLauncher(
-          OpenCompanionLauncherIntent.Default,
-        )
+        const launcherRequest: Parameters<
+          typeof extensionSessionLifecycle.openCompanionLauncher
+        >[0] = {
+          intent: OpenCompanionLauncherIntent.Default,
+          source,
+        }
+        await extensionSessionLifecycle.openCompanionLauncher(launcherRequest)
       }
       return { ok: true, requestId, vaultStoreId }
     } catch {
@@ -908,8 +920,14 @@ class ExtensionPairingIdentity {
     const sessionStatus = this.websiteSessionStatusTransport(status)
     if (openLockedCompanion) {
       if (sessionStatus !== ExtensionSessionStatusAvailability.Unlocked) {
+        const launcherRequest: Parameters<
+          typeof extensionSessionLifecycle.openCompanionLauncherBestEffort
+        >[0] = {
+          intent: OpenCompanionLauncherIntent.PilotAuth,
+          source: ExtensionSessionLifecycle.sourceFromSender(sender),
+        }
         extensionSessionLifecycle.openCompanionLauncherBestEffort(
-          OpenCompanionLauncherIntent.Default,
+          launcherRequest,
         )
         return {
           response: {

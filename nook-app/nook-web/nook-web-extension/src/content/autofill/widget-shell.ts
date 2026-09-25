@@ -1,4 +1,7 @@
-import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
+import {
+  BROWSER_MESSAGE_KEYS,
+  type BrowserMessageKey,
+} from '../../lib/browser-message-keys'
 import {
   OpenSimpleVaultMessageType,
   type OpenSimpleVaultMessage,
@@ -30,6 +33,7 @@ import {
 import type { WorkflowCopy } from './workflow-ui'
 import {
   WidgetVaultPresentationKind,
+  savedLoginDescriptionKey,
   type WidgetVaultPresentation,
 } from './widget-presentation-state'
 
@@ -298,8 +302,15 @@ type CreateWidgetMarkArgs = {
 type CreateWidgetShellArgs = {
   copy: WorkflowCopy
   vaultPresentation: WidgetVaultPresentation
+  savedLoginAction: boolean
   currentStep: number
   totalSteps: number
+}
+
+type WidgetShellDescriptionKeyArgs = {
+  copy: WorkflowCopy
+  vaultPresentation: WidgetVaultPresentation
+  savedLoginAction: boolean
 }
 
 type MountWidgetShellArgs = {
@@ -314,6 +325,18 @@ type AuthenticationWidgetShellContext = {
 }
 class AuthenticationWidgetShell {
   constructor(private readonly ui: AuthenticationWidgetShellContext) {}
+
+  private descriptionKey({
+    copy,
+    vaultPresentation,
+    savedLoginAction,
+  }: WidgetShellDescriptionKeyArgs): BrowserMessageKey {
+    if (savedLoginAction) return savedLoginDescriptionKey(vaultPresentation)
+    if (vaultPresentation.kind === WidgetVaultPresentationKind.Locked) {
+      return BROWSER_MESSAGE_KEYS.WidgetUnlockThenContinue
+    }
+    return copy.descriptionKey
+  }
 
   buildEnrollmentFlowHost({
     panel,
@@ -406,6 +429,7 @@ class AuthenticationWidgetShell {
   createWidgetShell({
     copy,
     vaultPresentation,
+    savedLoginAction,
     currentStep,
     totalSteps,
   }: CreateWidgetShellArgs): WidgetShell {
@@ -476,6 +500,8 @@ class AuthenticationWidgetShell {
     const vaultStatus = document.createElement('p')
     vaultStatus.className = 'vault-status'
     vaultStatus.setAttribute('data-testid', 'nook-auth-gate-vault-status')
+    vaultStatus.setAttribute('role', 'status')
+    vaultStatus.setAttribute('aria-live', 'polite')
     vaultStatus.dataset.connected =
       vaultPresentation.kind === WidgetVaultPresentationKind.NotConnected
         ? 'false'
@@ -485,7 +511,14 @@ class AuthenticationWidgetShell {
 
     const description = document.createElement('p')
     description.className = 'description'
-    description.textContent = workflowUi.translatedMessage(copy.descriptionKey)
+    const descriptionKeyArgs: WidgetShellDescriptionKeyArgs = {
+      copy,
+      vaultPresentation,
+      savedLoginAction,
+    }
+    description.textContent = workflowUi.translatedMessage(
+      this.descriptionKey(descriptionKeyArgs),
+    )
 
     const continueButton = document.createElement('button')
     continueButton.type = 'button'

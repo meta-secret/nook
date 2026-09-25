@@ -6,8 +6,12 @@ Status: Implemented direction for #234, #235, #237, #239, #244, #441, and #461.
 
 `nook-web-extension` is the browser integration for Simple Vault. It does not
 duplicate the vault application UI. On first run, clicking the extension opens
-the standard device-protection widget inside the trusted toolbar popup. After
-the extension device exists, the popup sends its public keys directly to the
+the standard device-protection widget in an extension-owned authentication tab.
+The toolbar and locked Pilot action use the same extension authentication
+component in the initiating normal window. A launcher reuses only a tab whose
+intent matches the requested action; it leaves an open tab with another intent
+untouched and opens the requested intent in a separate tab in that window.
+After the extension device exists, the tab sends its public keys directly to the
 configured Simple Vault deployment, which remains the only surface for creating,
 importing, unlocking, browsing, editing, recovering, and administering vaults.
 
@@ -44,8 +48,10 @@ application capability checks enforce the vault-type boundary.
 
 - **`simple.nokey.sh`**
   - **Responsibility:** Complete vault UI, unlock, consent, device management, recovery, and settings
-- **Extension toolbar action**
-  - **Responsibility:** Create or unlock the extension device; companion home explains readiness, vault linkage, and the next available action
+- **Extension toolbar action and Pilot lock entry**
+  - **Responsibility:** Open or focus the shared extension-owned authentication
+    tab; create or unlock the extension device there and show localized return
+    guidance for Pilot
 - **Extension background/WASM runtime**
   - **Responsibility:** Local device key, selected identity, encrypted state, sync, domain matching, and fill authorization
 - **In-page auth gate**
@@ -68,9 +74,9 @@ It uses local decode/extract, WASM validation, and confirmation before any vault
 write.
 It is never silent page scraping or background scanning.
 
-"No vault UI in the extension" means no second vault-management UI. The toolbar
-popup may contain the standard one-time device-protection widget because
-WebAuthn needs an extension-owned document and a user gesture. A bounded
+"No vault UI in the extension" means no second vault-management UI. The shared
+authentication tab contains the standard one-time device-protection widget
+because WebAuthn needs an extension-owned document and a user gesture. A bounded
 extension-owned authenticator picker may show searchable non-secret 2FA
 metadata for one explicit fill choice; it cannot create, reveal, edit, delete,
 recover, or administer vault items.
@@ -78,13 +84,14 @@ recover, or administer vault items.
 ## First Run And Approval
 
 1. The user clicks the extension toolbar button and sees the standard
-   extension-owned device-protection widget.
+   extension-owned device-protection widget in the shared authentication tab.
 2. One user action creates or recovers the separate extension device and
    protects its private key using WebAuthn PRF through Rust/WASM. Existing
    protected devices ask only for their passkey or PIN unlock.
-3. The popup immediately opens the configured Simple Vault `/extension-connect`
-   route with the extension runtime id and its public device request. There is
-   no website-first enable screen and no second extension window.
+3. When the user explicitly chooses Connect / pair, the extension opens the
+   configured Simple Vault `/extension-connect` route with its runtime id and
+   public device request. There is no website-first enable screen, floating
+   companion window, or competing toolbar popup.
 4. The user creates, imports, or unlocks the full Simple vault on the website.
    When creating a vault from this route, the unlocked extension sends its age
    identity and matching event-signing seed in a one-time, nonce-bound age
@@ -138,32 +145,41 @@ private identity.
 
 ## Toolbar Behavior
 
-- The toolbar always opens the extension-owned launcher.
-- Before approval, the popup shows device setup or device unlock. Completing
+- The toolbar action and Pilot lock entry use the same extension-owned
+  authentication component per initiating normal window. The service worker
+  focuses an existing tab only when its intent matches the requested action; it
+  leaves a different-intent auth tab untouched and opens the requested intent
+  in another tab in the source window. It does not focus an auth tab in another
+  normal window.
+- Existing companion popup windows created by older versions are not closed or
+  focused automatically, preserving any in-progress passkey ceremony; the next
+  launch opens or focuses the authentication tab in the current normal window.
+- Before approval, the tab shows device setup or device unlock. Completing
   that action lands on a companion home that explains the protected browser
   identity, its vault connection, and the actions available next.
 - After a grant and usable encrypted event-log projection are persisted, unlock
   or a ready session shows the same companion home. Open Simple Vault is the
-  primary management action; pairing another vault is secondary. Closing the
-  popup leaves the companion ready for site authentication. Grant metadata by
+  primary management action; pairing another vault is secondary. Closing and
+  reopening the tab during the live session lease leaves the companion ready for
+  site authentication. Grant metadata by
   itself never produces connected state, and a connected unlock never auto-opens
   Simple Vault.
 - The companion home summarizes the current secret total and whether the
   protected extension app key is linked to an authorized Simple Vault. These
   values come from the unlocked Rust/WASM vault projection; unavailable state
   remains visible instead of treating event-log history as a secret count.
-- The popup starts the Simple Vault approval route only after an explicit
+- The tab starts the Simple Vault approval route only after an explicit
   Connect / pair action (or Open Simple Vault).
 - The Simple Vault header vault menu lists every local vault in the viewport.
 - The vault that currently holds the companion grant shows a connected badge.
 - An unlocked vault that is not the connected vault can start pairing from that
   menu.
-- The companion popup can start pairing another vault while a grant already
+- The companion tab can start pairing another vault while a grant already
   exists.
 - Never put vault browsing or management in the launcher.
 - Management actions originating from the widget open the corresponding Simple
   Vault route rather than recreating that interface in the extension.
-- Primary popup controls use the same neutral primary tokens as nook-web dark
+- Authentication-tab controls use the same neutral primary tokens as nook-web dark
   mode rather than a separate green button style.
 
 The Simple Vault base URL is build-selected rather than hard-coded:
@@ -277,7 +293,7 @@ It encrypts the authenticator only after Sufficient outcome evidence.
 Consented backup-code capture follows.
 Secrets never appear in the HUD.
 
-The companion popup “Ready / Connected” state means the extension device is
+The companion tab “Ready / Connected” state means the extension device is
 paired to a vault. It is not login detection. Login detection is the in-page
 Nook Pilot HUD; the companion may also show a one-line current-tab hint
 (“Login form detected on this page” / “No login form detected”).
@@ -332,8 +348,10 @@ The gate must:
   recovery code, or provider credential;
 - offer a primary Continue with Nook action that lists matching logins for the
   page origin, reveals one credential after explicit choice, fills the form,
-  and submits; when locked, open the companion launcher and ask the user to
-  unlock then continue again;
+  and submits only after explicit user action; when locked, open the shared
+  extension authentication tab and keep the host page in status/Continue mode.
+  After unlock, show localized return guidance and require a fresh Continue click
+  with existing origin/workflow revalidation before any page interaction;
 - keep Open vault as an optional secondary action;
 - never request a vault password, recovery secret, or provider credential;
 - never silently fill or submit;
@@ -454,8 +472,9 @@ When both devices exist, unlock selection is deterministic:
      Unlocked or Locked for that vault.
    - A locked website app key must not block re-adopting that unlocked
      companion identity.
-2. if the extension is locked, the user may unlock it from the toolbar and
-   retry; the website must not attempt an extension-origin WebAuthn ceremony;
+2. if the extension is locked, the user may unlock it from the shared extension
+   authentication tab and retry; the website must not attempt an extension-origin
+   WebAuthn ceremony;
 3. if the extension is locked, unavailable, revoked, or cannot unlock, offer
    the website's protected device as the fallback when one exists;
 4. if no independent website device or recovery method exists, explain that the
@@ -495,8 +514,15 @@ re-sealed for the extension device before leaving the approving vault session.
 
 ## Revocation And Failure
 
-- Closing the popup or vault approval route leaves the extension unpaired; the
-  toolbar returns to device setup or device unlock.
+- Closing the authentication tab does not lock or unpair the extension. The
+  decrypted offscreen identity uses a 15-minute renewable lease: successful
+  identity handoffs renew it, while status/read/retry operations and tab
+  close/reopen do not. Reopening during a live lease remains unlocked. Lease
+  expiry, explicit lock, and browser/context restart keep reauthentication
+  required; this flow does not reduce any policy-required prompt.
+- Closing the vault approval route leaves the extension paired or unpaired
+  according to its persisted grant state; the authentication tab reflects that
+  state when reopened.
 - A denied or malformed request adds no device and transfers no vault state.
 - Pairing grant import must not persist quarantined/unauthorized event bytes.
   A rejected import (`event-log-access-not-granted`) rolls back that vault's

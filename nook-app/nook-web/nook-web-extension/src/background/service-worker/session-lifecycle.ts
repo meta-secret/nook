@@ -8,12 +8,21 @@ import {
 export { extensionSessionDocument } from './session-document'
 import { simpleVaultRuntime } from '../../lib/simple-vault-runtime'
 import { DeviceProtectionStatus } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
-import { OpenCompanionLauncherIntent } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
 import { ExtensionRuntimeRequestType } from '../../lib/extension-runtime-request-type'
 import {
   ConcreteDecoderResultKind,
   runConcreteDecoder,
 } from '../../lib/concrete-decoder'
+import { CompanionLauncher } from './companion-launcher'
+import type {
+  CompanionLauncherOpenRequest,
+  CompanionLauncherSource,
+} from './companion-launcher'
+export { CompanionLauncherSourceKind } from './companion-launcher'
+export type {
+  CompanionLauncherOpenRequest,
+  CompanionLauncherSource,
+} from './companion-launcher'
 
 export const SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS = 4_000
 
@@ -45,6 +54,22 @@ type AuthenticationSurfaceDeliveryRequest = {
 
 /** Owns the browser runtime resources shared by these interactions. */
 export class ExtensionSessionLifecycle {
+  private readonly launcher = new CompanionLauncher()
+
+  static directEntrySource(): CompanionLauncherSource {
+    return CompanionLauncher.directEntrySource()
+  }
+
+  static sourceFromTab(tab: chrome.tabs.Tab): CompanionLauncherSource {
+    return CompanionLauncher.sourceFromTab(tab)
+  }
+
+  static sourceFromSender(
+    sender: chrome.runtime.MessageSender,
+  ): CompanionLauncherSource {
+    return CompanionLauncher.sourceFromSender(sender)
+  }
+
   private readonly document = new ExtensionSessionDocumentOwner()
 
   async ensureExtensionSessionDocument(): Promise<
@@ -154,33 +179,12 @@ export class ExtensionSessionLifecycle {
     return this.notifyAuthenticationSurfaces(args)
   }
 
-  async openCompanionLauncher(
-    intent: OpenCompanionLauncherIntent,
-  ): Promise<void> {
-    const popupUrl = chrome.runtime.getURL('popup/index.html')
-    const launcherUrl =
-      intent === OpenCompanionLauncherIntent.Pair
-        ? `${popupUrl}?intent=${OpenCompanionLauncherIntent.Pair}`
-        : popupUrl
-    if (chrome.windows?.create) {
-      const nookTypedArgs0_7: Parameters<typeof chrome.windows.create>[0] = {
-        url: launcherUrl,
-        type: 'popup',
-        width: 440,
-        height: 620,
-        focused: true,
-      }
-      await chrome.windows.create(nookTypedArgs0_7)
-      return
-    }
-    const nookTypedArgs0_8: Parameters<typeof chrome.tabs.create>[0] = {
-      url: launcherUrl,
-    }
-    await chrome.tabs.create(nookTypedArgs0_8)
+  openCompanionLauncher(request: CompanionLauncherOpenRequest): Promise<void> {
+    return this.launcher.openCompanionLauncher(request)
   }
 
-  openCompanionLauncherBestEffort(intent: OpenCompanionLauncherIntent): void {
-    void this.openCompanionLauncher(intent).catch(() => {})
+  openCompanionLauncherBestEffort(request: CompanionLauncherOpenRequest): void {
+    this.launcher.openCompanionLauncherBestEffort(request)
   }
 }
 

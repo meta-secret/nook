@@ -35,7 +35,10 @@ import {
 } from './account-pickers'
 import { extensionPairingIdentity } from './pairing-identity'
 import { LOGIN_PICKER_TTL_MS } from './account-pickers'
-import { extensionSessionLifecycle } from './session-lifecycle'
+import {
+  ExtensionSessionLifecycle,
+  extensionSessionLifecycle,
+} from './session-lifecycle'
 import {
   decodeLoginOperationResponse,
   decodeLoginSaveActionResponse,
@@ -436,9 +439,13 @@ export async function websiteLoginSaveOffer({
       'error' in response &&
       response.error === SessionOperationFailureKind.Locked
     ) {
-      extensionSessionLifecycle.openCompanionLauncherBestEffort(
-        OpenCompanionLauncherIntent.Default,
-      )
+      const launcherRequest: Parameters<
+        typeof extensionSessionLifecycle.openCompanionLauncherBestEffort
+      >[0] = {
+        intent: OpenCompanionLauncherIntent.PilotAuth,
+        source: ExtensionSessionLifecycle.sourceFromSender(sender),
+      }
+      extensionSessionLifecycle.openCompanionLauncherBestEffort(launcherRequest)
       return { kind: 'locked' }
     }
     if (
@@ -668,9 +675,13 @@ export async function websiteLoginSaveCommit({
     typeof status !== 'object' ||
     !extensionSessionLifecycle.isUnlockedSessionStatus(status)
   ) {
-    extensionSessionLifecycle.openCompanionLauncherBestEffort(
-      OpenCompanionLauncherIntent.Default,
-    )
+    const launcherRequest: Parameters<
+      typeof extensionSessionLifecycle.openCompanionLauncherBestEffort
+    >[0] = {
+      intent: OpenCompanionLauncherIntent.PilotAuth,
+      source: ExtensionSessionLifecycle.sourceFromSender(sender),
+    }
+    extensionSessionLifecycle.openCompanionLauncherBestEffort(launcherRequest)
     return {
       kind: 'rejected',
       reason: 'login-save-locked',

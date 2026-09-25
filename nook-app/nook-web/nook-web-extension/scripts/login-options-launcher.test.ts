@@ -7,6 +7,7 @@ import {
   ExtensionSessionTransportFailure,
   ExtensionSessionTransportFailureKind,
 } from '../src/background/service-worker/session-document'
+import type { CompanionLauncherOpenRequest } from '../src/background/service-worker/session-lifecycle'
 
 type GrantAccessResponse =
   | {
@@ -68,6 +69,8 @@ describe('websiteLoginOptions', () => {
     })
     const { accountPickerSessions } =
       await import('../src/background/service-worker/account-pickers')
+    const { ExtensionSessionLifecycle } =
+      await import('../src/background/service-worker/session-lifecycle')
     let grantAccessResponse: GrantAccessResponse = {
       response: {
         ok: true,
@@ -88,8 +91,8 @@ describe('websiteLoginOptions', () => {
       openedUrls.push(url)
     })
     const openCompanionLauncherBestEffort = mock(
-      (intent: OpenCompanionLauncherIntent) => {
-        if (intent !== OpenCompanionLauncherIntent.Pair) return
+      (request: CompanionLauncherOpenRequest) => {
+        if (request.intent !== OpenCompanionLauncherIntent.Pair) return
         const extensionWindowRequest: ExtensionWindowRequest = {
           url: extensionRuntimeUrl('popup/index.html?intent=pair'),
         }
@@ -122,9 +125,10 @@ describe('websiteLoginOptions', () => {
       loginAccountAvailabilityForOrigin,
       openCompanionLauncherBestEffort,
     }
+    const sender = websiteSender()
     const response = await accountPickerSessions.websiteLoginOptions({
       message: { payload: { origin: 'https://example.test' } },
-      sender: websiteSender(),
+      sender,
       dependencies,
     })
 
@@ -133,8 +137,12 @@ describe('websiteLoginOptions', () => {
       status: WebsiteAuthenticatorResponseStatus.Unavailable,
     })
     expect(openCompanionLauncherBestEffort).toHaveBeenCalledTimes(1)
+    const expectedLauncherRequest: CompanionLauncherOpenRequest = {
+      intent: OpenCompanionLauncherIntent.Pair,
+      source: ExtensionSessionLifecycle.sourceFromSender(sender),
+    }
     expect(openCompanionLauncherBestEffort).toHaveBeenCalledWith(
-      OpenCompanionLauncherIntent.Pair,
+      expectedLauncherRequest,
     )
     expect(openExtensionWindow).toHaveBeenCalledTimes(1)
     expect(openedUrls).toEqual([

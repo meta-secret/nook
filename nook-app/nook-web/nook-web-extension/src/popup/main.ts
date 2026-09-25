@@ -1,6 +1,7 @@
 import { mount } from 'svelte'
 import type { ComponentProps, MountOptions } from 'svelte'
 import { extensionLocaleCatalog } from '../lib/i18n'
+import { OpenCompanionLauncherIntent } from '../../../nook-web-shared/src/extension/companion-launcher-message'
 import {
   extensionPairingStateLoader,
   ExtensionSetupLoadKind,
@@ -67,6 +68,20 @@ async function main() {
     return
   }
 
+  const [launcherIntentValue = ''] = searchParams.getAll('intent')
+  let launcherIntent: OpenCompanionLauncherIntent
+  switch (launcherIntentValue) {
+    case OpenCompanionLauncherIntent.Pair:
+      launcherIntent = OpenCompanionLauncherIntent.Pair
+      break
+    case OpenCompanionLauncherIntent.PilotAuth:
+      launcherIntent = OpenCompanionLauncherIntent.PilotAuth
+      break
+    default:
+      launcherIntent = OpenCompanionLauncherIntent.Default
+      break
+  }
+
   const vaultConnection = await loadCompanionVaultConnection()
   const protectionStatus =
     await extensionWasmRuntime.extensionDeviceProtectionStatus()
@@ -86,7 +101,7 @@ async function main() {
             vaultStoreId: vaultConnection.vaultStoreId,
           }
         : {}),
-      pairingRequested: searchParams.get('intent') === 'pair',
+      launcherIntent,
       protectionStatus,
       activeSessionDevice,
     },
