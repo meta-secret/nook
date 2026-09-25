@@ -72,12 +72,34 @@ test.describe('file sync provider onboarding', () => {
   })
 
   test('enrolls a clean browser through the file sync provider without IndexedDB seeding', async () => {
+    let googleDriveFallbackCount = 0
+    await deviceA.route('https://www.googleapis.com/**', async (route) => {
+      googleDriveFallbackCount += 1
+      await route.fulfill({
+        status: 418,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: '{}',
+      })
+    })
     await connectGoogleDriveGenesisDevice(
       deviceA,
       target.pat,
       target.repoName,
       target.stub,
     )
+    const unsupportedStatus = await deviceA.evaluate(async (accessToken) => {
+      const response = await fetch(
+        'https://www.googleapis.com/drive/v3/e2e-unsupported-route',
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      )
+      return response.status
+    }, target.pat)
+    expect(unsupportedStatus).toBe(404)
+    expect(googleDriveFallbackCount).toBe(0)
+    const privateFolderIds = target.stub.getPrivateFolderIds()
+    expect(privateFolderIds).toHaveLength(1)
+    expect(target.stub.getPrivateFolderCreateCount()).toBe(1)
     await assertVaultReady(deviceA)
     await disableVaultIdleLock(deviceA)
 
@@ -88,6 +110,9 @@ test.describe('file sync provider onboarding', () => {
       target,
       (snapshot) => snapshot.secretIds.length >= 1,
     )
+    expect(target.stub.getPrivateFolderIds()).toEqual(privateFolderIds)
+    expect(target.stub.getPrivateFolderCreateCount()).toBe(1)
+    expect(target.stub.getEventFileCount()).toBeGreaterThan(0)
 
     await openStorageSettings(deviceA)
     await addVaultPassword(deviceA, 'File onboarding', VAULT_PASSWORD)
