@@ -6,22 +6,23 @@ type RuntimeMessageEventFixture = typeof chrome.runtime.onMessage & {
   >
 }
 
-test('loads account pickers with the extension test runtime installed', async () => {
+const preloadedChromeHost = globalThis.chrome
+
+test('loads account pickers with isolated Chrome hosts', async () => {
   Object.assign(globalThis, {
     __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
+    chrome: preloadedChromeHost,
   })
   const runtimeMessages =
-    chrome.runtime.onMessage as RuntimeMessageEventFixture
+    preloadedChromeHost.runtime.onMessage as RuntimeMessageEventFixture
   const initialListenerCount = runtimeMessages.listeners.length
 
   const { accountPickerSessions } =
     await import('../src/background/service-worker/account-pickers')
 
-  expect(accountPickerSessions).toBeDefined()
+  expect(accountPickerSessions.loginAccountsForOrigin).toBeInstanceOf(Function)
   expect(runtimeMessages.listeners).toHaveLength(initialListenerCount + 1)
-})
 
-test('registers readiness on an explicit host and still requires Chrome', async () => {
   const { ExtensionSessionLifecycle } =
     await import('../src/background/service-worker/session-lifecycle')
   const listeners: Array<
@@ -38,16 +39,18 @@ test('registers readiness on an explicit host and still requires Chrome', async 
       },
     },
   }
-  Object.assign(globalThis, { chrome: browserHost })
-
-  const lifecycle = new ExtensionSessionLifecycle()
-  expect(lifecycle).toBeInstanceOf(ExtensionSessionLifecycle)
-  expect(listeners).toHaveLength(1)
-
-  Reflect.deleteProperty(globalThis, 'chrome')
   try {
+    Object.assign(globalThis, { chrome: browserHost })
+
+    const lifecycle = new ExtensionSessionLifecycle()
+    expect(lifecycle).toBeInstanceOf(ExtensionSessionLifecycle)
+    expect(listeners).toHaveLength(1)
+
+    Reflect.deleteProperty(globalThis, 'chrome')
     expect(() => new ExtensionSessionLifecycle()).toThrow(ReferenceError)
   } finally {
-    Object.assign(globalThis, { chrome: browserHost })
+    Object.assign(globalThis, { chrome: preloadedChromeHost })
   }
+
+  expect(globalThis.chrome).toBe(preloadedChromeHost)
 })
