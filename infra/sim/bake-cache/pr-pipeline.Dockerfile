@@ -15,22 +15,23 @@ RUN cat /chef/dependencies.txt >/chef/cooked \
     && sleep 1 \
     && echo bake-sim-cargo-chef-wasm-release
 
-FROM chef-deps AS verification
-ARG FAIL_VERIFICATION=0
+FROM chef-deps AS prepared
 COPY inputs/compile-web-source.txt /source/compile-web-source.txt
+RUN mkdir /proof
+
+FROM prepared AS verification
+ARG FAIL_VERIFICATION=0
 RUN test "$FAIL_VERIFICATION" = 0 \
     && test -s /dylint/installed \
     && test -s /chef/cooked \
     && test -s /source/compile-web-source.txt \
-    && mkdir /proof \
     && sha256sum /source/compile-web-source.txt >/proof/source-content \
     && printf 'verified\n' >/proof/verification \
     && echo pr-proof-verification
 
-FROM verification AS tests
+FROM prepared AS tests
 ARG FAIL_TESTS=0
 RUN test "$FAIL_TESTS" = 0 \
-    && test -s /proof/verification \
     && printf 'tests and coverage\n' >/proof/tests \
     && echo pr-proof-test-compilation
 
@@ -46,19 +47,18 @@ RUN cat /fuzz/dependencies.txt >/fuzz/installed \
     && sleep 1 \
     && echo bake-sim-fuzz-dependencies
 
-# Heavy work consumes the already floor-validated test and coverage solve.
-FROM coverage-export AS heavy
+# Heavy work shares preparation but does not depend on tests.
+FROM prepared AS heavy
 COPY --from=rust-fuzz-deps /fuzz/installed /fuzz/installed
-RUN test -s /proof/tests \
-    && test -s /fuzz/installed \
+RUN test -s /fuzz/installed \
     && printf 'browser and expensive checks\n' >/proof/heavy \
     && echo pr-proof-heavy
 
-FROM tests AS browser-artifacts
+FROM prepared AS browser-artifacts
 RUN printf 'browser artifacts\n' >/proof/browser \
     && echo pr-proof-browser
 
 FROM scratch AS result
-COPY --from=heavy /proof/verification /proof/verification
-COPY --from=heavy /proof/tests /proof/tests
+COPY --from=verification /proof/verification /proof/verification
+COPY --from=coverage-export /proof/tests /proof/tests
 COPY --from=heavy /proof/heavy /proof/heavy

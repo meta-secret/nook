@@ -68,12 +68,7 @@ class DockerizedRustContract {
     expect(Object.keys(workflow.jobs)).toEqual(["validation"]);
     const steps = jobContract.parse(workflow.jobs.validation).steps;
     let previous = -1;
-    for (const command of [
-      "task --silent ci:pr:verification",
-      "task --silent ci:pr:tests",
-      "task --silent ci:pr:post-tests",
-      "task --silent ci:pr:browser:full",
-    ]) {
+    for (const command of ["task --silent ci:pr:validate"]) {
       const index = steps.findIndex((step) => step.run === command);
       expect(index).toBeGreaterThan(previous);
       const step = stepContract.parse(steps[index]);
@@ -91,17 +86,13 @@ class DockerizedRustContract {
       "github.event.pull_request.head.repo.full_name == github.repository",
     );
     const prTasks = this.read("nook-app/ci/pr.yml");
-    expect(prTasks).toContain(
-      "task --parallel ci:pr:heavy ci:pr:browser:prepare",
-    );
+    expect(prTasks).toContain("- ci:pr:browser");
     expect(prTasks).toContain("coverage-export.output=type=cacheonly");
     expect(prTasks).not.toContain("coverage-export.output=type=local");
     expect(this.read(".github/workflows/pr.yml")).not.toContain(
       "nook-pr-coverage",
     );
-    expect(prTasks).toContain(
-      "E2E_SPEC: e2e/mock-auth-pilot-coverage.spec.ts",
-    );
+    expect(prTasks).toContain("E2E_SPEC: e2e/mock-auth-pilot-coverage.spec.ts");
   }
 
   ecosystemResults(): void {

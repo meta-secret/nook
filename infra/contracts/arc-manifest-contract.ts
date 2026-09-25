@@ -593,13 +593,11 @@ class ArcManifestContract {
       "inputs.full_e2e_requested",
       "name: Verify and preview",
       "'nook-k0s-container' || 'ubuntu-latest'",
-      "task --silent ci:pr:verification",
-      "task --silent ci:pr:tests",
-      "task --silent ci:pr:post-tests",
+      "task --silent ci:pr:validate",
       "VALIDATION_REQUESTED: ${{ inputs.validation_requested }}",
       "steps.browser-scope.outputs.validation == 'true'",
-      "task --silent ci:pr:browser:full",
-      "task --silent ci:pr:browser:auth",
+      "PR_FULL_E2E:",
+      "PR_AUTH_E2E:",
       "nook-app/nook-web/nook-web-shared/src/extension/password-form*",
       "nook-app/nook-web/nook-web-extension/src/content/autofill.ts",
       "nook-app/nook-web/nook-web-extension/src/content/autofill/*",
@@ -610,9 +608,7 @@ class ArcManifestContract {
     if (admittedContract30.isErr()) return err(admittedContract30.error);
     const admittedContract30a = prWorkflow.forbid("nook-pr-coverage");
     if (admittedContract30a.isErr()) return err(admittedContract30a.error);
-    const admittedContract30b = prTasks.require(
-      "task --parallel ci:pr:heavy ci:pr:browser:prepare",
-    );
+    const admittedContract30b = prTasks.require("- ci:pr:browser");
     if (admittedContract30b.isErr()) return err(admittedContract30b.error);
     const admittedContract30c = prTasks.require(
       "coverage-export.output=type=cacheonly",
@@ -623,10 +619,13 @@ class ArcManifestContract {
     );
     if (admittedContract30d.isErr()) return err(admittedContract30d.error);
     const admittedContract31 = authSensitiveJob.requireAll([
-      "!inputs.full_e2e_requested && steps.browser-scope.outputs.auth == 'true'",
-      "github.event.pull_request.head.repo.full_name == github.repository",
-      "github.event.pull_request.user.login != 'dependabot[bot]'",
-      "run: task --silent ci:pr:browser:auth",
+      'if [ "${PR_FULL_E2E:-false}" = true ]; then',
+      'elif [ "${PR_AUTH_E2E:-false}" = true ]; then',
+      "task --silent ci:pr:browser:full",
+      "task --silent ci:pr:browser:auth",
+      "task --silent web:research:verify",
+      "git clone --quiet --shared --no-checkout",
+      "{{.PR_ARTIFACT_DIR}}/runtime",
     ]);
     if (admittedContract31.isErr()) return err(admittedContract31.error);
     const admittedContract32 = extensionTasks.requireAll([

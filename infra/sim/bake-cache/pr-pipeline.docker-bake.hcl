@@ -21,6 +21,6 @@ target "pr-proof-browser" {
   output = ["type=cacheonly"]
 }
 
-group "pr-proof-post-tests" {
-  targets = ["pr-proof-heavy", "pr-proof-browser"]
+group "pr-proof-checks" {
+  targets = ["pr-proof-verification", "pr-proof-tests", "pr-proof-heavy", "pr-proof-browser"]
 }

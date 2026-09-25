@@ -6,16 +6,18 @@ struct PreparedPodBuildScenario<'a> {
 }
 
 impl PreparedPodBuildScenario<'_> {
-    fn assert_pr_post_test_fanout(&self) {
+    fn assert_pr_validation_fanout(&self) {
         let pr_workflow = self.root.read(".github/workflows/pr.yml");
         let pr_tasks = self.root.read("nook-app/ci/pr.yml");
-        let post_tests = section(&pr_tasks, "  ci:pr:post-tests:\n", "\n  ci:pr:bake:");
+        let join = section(&pr_tasks, "  ci:pr:validate:\n", "\n  ci:pr:checks:");
         assert!(
-            pr_workflow.contains("run: task --silent ci:pr:post-tests")
+            pr_workflow.contains("run: task --silent ci:pr:validate")
                 && pr_workflow.contains("uses: ./.github/actions/nook-pr-preview")
                 && !pr_workflow.contains("Publish exact-source PR browser job image")
                 && !pr_workflow.contains("Upload preview dist handoff")
-                && post_tests.contains("task --parallel ci:pr:heavy ci:pr:browser:prepare"),
+                && join.contains("deps:")
+                && join.contains("- ci:pr:browser")
+                && join.contains("- ci:pr:checks"),
             "PR must fan out verified artifacts locally and deploy them in the same job"
         );
     }
@@ -35,7 +37,7 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
     PreparedPodBuildScenario {
         root: root.as_ref(),
     }
-    .assert_pr_post_test_fanout();
+    .assert_pr_validation_fanout();
     let release = root.read(".github/workflows/release.yml");
     assert_eq!(
         release.matches("WASM_BUILD_MODE: prod").count(),

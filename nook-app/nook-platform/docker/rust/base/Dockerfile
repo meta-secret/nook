@@ -178,7 +178,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     cargo chef cook --release --clippy --target wasm32-unknown-unknown --recipe-path recipe.json \
     && nook-sccache-report chef-wasm-clippy
 FROM chef-deps AS builder-wasm-deps
-# Test compilation belongs to builder-wasm-tests, requested only after PR verification.
+# Test compilation belongs to builder-wasm-tests, independent of PR static checks.
 
 FROM builder-wasm-deps AS builder-core-deps
 

@@ -96,9 +96,8 @@ impl SourceArchitectureScenario {
                 && pr_workflow.contains("VALIDATION_REQUESTED: ${{ inputs.validation_requested }}")
                 && pr_workflow.contains("*) validation=true ;;")
                 && pr_workflow.contains("if: steps.browser-scope.outputs.validation == 'true'")
-                && pr_workflow.contains("run: task --silent ci:pr:verification\n")
                 && pr_workflow.contains("run: task --silent ci:pr:verification:tooling\n")
-                && pr_workflow.contains("run: task --silent ci:pr:tests\n")
+                && pr_workflow.contains("run: task --silent ci:pr:validate\n")
                 && pr_workflow
                     .contains("run: task --silent ci:pr:tests:policy-with-delivery-helpers\n")
                 && pr_taskfile.contains("ci:pr:verification:tooling:")

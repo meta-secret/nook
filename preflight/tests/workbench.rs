@@ -56,17 +56,15 @@ impl PrWorkbenchScenario {
         let pr_workflow = root.read(".github/workflows/pr.yml");
         let pr_tasks = root.read("nook-app/ci/pr.yml");
         let publisher_suite = root.read(".github/scripts/workbench-publish.test.cjs");
-        let product_tests = self.task_body(&pr_tasks, "ci:pr:tests", "ci:pr:tests:product");
-        let delivery_helpers = self.task_body(&pr_tasks, "ci:pr:delivery-helpers", "ci:pr:heavy");
+        let product_tests = self.task_body(&pr_tasks, "ci:pr:validate", "ci:pr:checks");
+        let delivery_helpers = self.task_body(&pr_tasks, "ci:pr:delivery-helpers", "ci:pr:bake");
 
         assert!(
-            pr_workflow.contains("run: task --silent ci:pr:tests\n"),
+            pr_workflow.contains("run: task --silent ci:pr:validate\n"),
             "PR CI must invoke the consolidated PR test phase"
         );
         assert!(
-            product_tests.contains(
-                "task --parallel ci:pr:tests:product ci:pr:tests:policy ci:pr:delivery-helpers",
-            ),
+            product_tests.contains("- ci:pr:delivery-helpers",),
             "the consolidated PR test phase must fan out product tests through delivery helpers"
         );
         assert!(
