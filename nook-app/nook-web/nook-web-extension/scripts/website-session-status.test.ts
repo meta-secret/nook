@@ -93,7 +93,7 @@ describe('passive website session status transport', () => {
       __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
       chrome: { runtime: { id: 'nook-extension' } },
     })
-    const { extensionPairingIdentity } =
+    const { ExtensionSessionStatusAvailability, extensionPairingIdentity } =
       await import('../src/background/service-worker/pairing-identity')
     const { extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
@@ -101,14 +101,15 @@ describe('passive website session status transport', () => {
       extensionPairingIdentity,
       'passwordPairingGrants',
     ).mockResolvedValue([storedPasswordGrant])
-    const lockedStatus = {
-      ok: true,
-      status: DeviceProtectionStatus.Pin,
-    } as unknown as ExtensionSessionResponse
+    const sessionResponse: ExtensionSessionResponse = { ok: true }
     const status = spyOn(
       extensionPairingIdentity,
       'sendSessionMessage',
-    ).mockResolvedValue(ok(lockedStatus))
+    ).mockResolvedValue(ok(sessionResponse))
+    const sessionAvailability = spyOn(
+      extensionPairingIdentity,
+      'websiteSessionStatusTransport',
+    ).mockReturnValue(ExtensionSessionStatusAvailability.Locked)
     const sender = authorizedWebsiteSender()
     const openLauncher = spyOn(
       extensionSessionLifecycle,
@@ -129,6 +130,7 @@ describe('passive website session status transport', () => {
         },
       })
       expect(status).toHaveBeenCalledTimes(1)
+      expect(sessionAvailability).toHaveBeenCalledWith(sessionResponse)
       expect(openLauncher).toHaveBeenCalledTimes(1)
       expect(openLauncher).toHaveBeenCalledWith(
         OpenCompanionLauncherIntent.PilotAuth,
@@ -136,6 +138,7 @@ describe('passive website session status transport', () => {
       )
     } finally {
       openLauncher.mockRestore()
+      sessionAvailability.mockRestore()
       status.mockRestore()
       grants.mockRestore()
     }
