@@ -343,7 +343,7 @@ fn loom_workflow_audits_every_cortex_change() {
 fn meta_cortex_integration_documents_supported_execution_modes() {
     let integration =
         RepositoryFixture::repository_root().read(".cortex/meta-cortex-integration.md");
-    for required in ["standard", "fast", "The omitted mode defaults to fast."] {
+    for required in ["standard", "fast", "the omitted mode defaults to fast."] {
         assert!(
             integration.contains(required),
             "Meta-Cortex integration contract must document `{required}`"
