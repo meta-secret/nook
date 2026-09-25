@@ -4,15 +4,15 @@ type RuntimeMessageListener = Parameters<
 
 const sessionReadinessListeners: Array<RuntimeMessageListener> = []
 
-Object.assign(globalThis, {
-  chrome: {
-    runtime: {
-      onMessage: {
-        listeners: sessionReadinessListeners,
-        addListener(listener: RuntimeMessageListener): void {
-          sessionReadinessListeners.push(listener)
-        },
+export const extensionTestBrowserHost = {
+  runtime: {
+    onMessage: {
+      listeners: sessionReadinessListeners,
+      addListener(listener: RuntimeMessageListener): void {
+        sessionReadinessListeners.push(listener)
       },
     },
   },
-})
+}
+
+Object.assign(globalThis, { chrome: extensionTestBrowserHost })

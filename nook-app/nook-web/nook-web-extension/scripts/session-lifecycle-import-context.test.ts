@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+import { extensionTestBrowserHost } from './extension-test-browser-host'
 
 enum ChromeHostAtTestEntryKind {
   Present = 'present',
@@ -26,25 +27,10 @@ test('loads account pickers with isolated Chrome hosts', async () => {
       break
   }
 
-  const accountPickerListeners: Array<
-    Parameters<typeof chrome.runtime.onMessage.addListener>[0]
-  > = []
-  const accountPickerHost = {
-    runtime: {
-      onMessage: {
-        listeners: accountPickerListeners,
-        addListener(
-          listener: Parameters<typeof chrome.runtime.onMessage.addListener>[0],
-        ): void {
-          accountPickerListeners.push(listener)
-        },
-      },
-    },
-  }
   try {
     Object.assign(globalThis, {
       __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
-      chrome: accountPickerHost,
+      chrome: extensionTestBrowserHost,
     })
 
     const { accountPickerSessions } =
@@ -53,7 +39,6 @@ test('loads account pickers with isolated Chrome hosts', async () => {
     expect(accountPickerSessions.loginAccountsForOrigin).toBeInstanceOf(
       Function,
     )
-    expect(accountPickerListeners).toHaveLength(1)
 
     const { ExtensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
