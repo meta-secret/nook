@@ -1,0 +1,2 @@
+[test]
+preload = ["./scripts/extension-test-browser-host.ts"]

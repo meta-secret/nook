@@ -4,22 +4,22 @@
 
 ### Required bootstrap
 
-Nook pins Meta-Cortex 0.8.0. Each consuming worktree has its own ignored
+Nook pins Meta-Cortex 0.8.1. Each consuming worktree has its own ignored
 `.meta-cortex/` installation. Creating a Git worktree does not install that
 framework. Never copy `.meta-cortex/` from another checkout. Use the consuming
 worktree's absolute path in every YAML request.
 
 Resolve the CLI before normal repository work. `command -v meta-cortex` must
 select the intended executable, and `meta-cortex --version` must report
-`0.8.0`. If the command is missing or resolves to another version, install the
-Nook-pinned [v0.8.0 release](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/tag/v0.8.0)
+`0.8.1`. If the command is missing or resolves to another version, install the
+Nook-pinned [v0.8.1 release](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/tag/v0.8.1)
 and correct command resolution. Run `meta-cortex list` to inspect supported
 typed requests. The CLI upgrade and installed framework replacement are
-separate operations; use the upstream [release notes](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/tag/v0.8.0)
+separate operations; use the upstream [release notes](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/tag/v0.8.1)
 and [project update procedure](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex#update-a-project).
 
 ```sh
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/download/v0.8.0/meta-cortex-installer.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/download/v0.8.1/meta-cortex-installer.sh | sh
 ```
 
 Before using the framework, confirm that `.meta-cortex/AGENTS.md` and
@@ -64,7 +64,7 @@ operation:
 REQUEST
 ```
 
-Continue only when `cli_version` and `framework_version` both report `0.8.0`
+Continue only when `cli_version` and `framework_version` both report `0.8.1`
 and the Codex integration reports `Connected`. Then read the installed
 [Meta-Cortex circuit breaker](../.meta-cortex/CIRCUIT-BREAKER.md), followed by
 its [entry point](../.meta-cortex/AGENTS.md). If the CLI cannot be installed,
@@ -112,11 +112,11 @@ tooling and graph topology; they do not redefine generic authoring rules.
 
 ### Release pin
 
-The Nook CLI release pin is 0.8.0. `preflight/Dockerfile` pins the installer
+The Nook CLI release pin is 0.8.1. `preflight/Dockerfile` pins the installer
 URL. `.github/workflows/repository-policy.yml` and `.task/ci-workflows.yml` pin
 the upstream library commit
-`9169b9a72a2871ba99fbe2d9f05174310480fe11`. `preflight/tests/loom_contracts.rs`
-asserts the expected `v0.8.0` installer release. Future upgrades update this
+`4ab2db8e39d111305e0e83fd145fbeee02966dfc`. `preflight/tests/loom_contracts.rs`
+asserts the expected `v0.8.1` installer release. Future upgrades update this
 contract, each source pin, and their owning policy and test contracts together.
 
 - **Prohibited:** Update only the installer URL or only the pinned library
