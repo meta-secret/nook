@@ -102,8 +102,15 @@ impl StagedRemoteConnection<'_> {
                     {
                         name.trim()
                     }
-                    (_, _, _, _, _, StoredOAuthRemoteFileName::Unresolved)
-                    | (_, _, _, _, _, StoredOAuthRemoteFileName::FileName(_)) => stored_name,
+                    (
+                        _,
+                        _,
+                        _,
+                        _,
+                        _,
+                        StoredOAuthRemoteFileName::Unresolved
+                        | StoredOAuthRemoteFileName::FileName(_),
+                    ) => stored_name,
                 };
                 let mut oauth = config.with_provider_save_setup(draft.setup);
                 oauth.access_token = StoredOAuthAccessCredential::AccessToken(token.to_owned());
