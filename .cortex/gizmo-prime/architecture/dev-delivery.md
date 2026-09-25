@@ -56,8 +56,10 @@ follows the latest head and reruns the affected checks.
 - Keep worker branches local.
 - Author meaningful Rust behavior tests and targeted web flow tests with the
   implementation.
-- Permit only the scoped local feedback authorized by the owning language
-  policy. Product validation runs in the pull request.
+- Follow the root [delivery and validation policy](../../AGENTS.md#delivery-and-validation)
+  for local test, check, or E2E diagnostics. Hosted PR checks remain mandatory
+  for readiness, and local results do not replace them.
+- Product validation runs in the pull request.
 
 ### Pull request
 

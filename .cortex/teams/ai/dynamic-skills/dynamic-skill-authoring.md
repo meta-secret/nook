@@ -97,23 +97,26 @@ Does not apply to:
     lockfile;
   - update `.cortex/teams/ai/dynamic-skills/index.md` and the owning knowledge graph if
     Loom did not.
-- Defer `task loom:cortex-audit` to the authorized hosted PR validation stage
-  after the card and registry agree.
+- Run `task loom:cortex-audit` in the required hosted PR validation stage after
+  the card and registry agree. A local diagnostic follows the root
+  [delivery and validation policy](../../../AGENTS.md#delivery-and-validation).
 
 ## Validation
 
-- For documentation-only captures, run `task loom:cortex-audit` only in the
-  authorized hosted PR validation stage.
+- For documentation-only captures, the required hosted PR stage runs
+  `task loom:cortex-audit`. Use the root policy for any local diagnostic.
 - Follow explicit user instructions that change the execution stage or require
   stopping without checks.
 
 **Prohibited:** run the audit locally merely because the capture changes only prose.
 
-**Preferred:** complete a user-requested local-only capture without checks.
-Report the hosted audit as unrun.
+**Preferred:** if the user explicitly requests a local audit, record that
+request, the command and scope, and the outcome; still report the hosted audit
+as pending. A local-only delivery request alone does not request local checks.
 
-For code refactors using a dynamic skill, apply only the permitted scoped
-formatters or inexpensive diagnostics. Finish the assigned worker branch with
+For code refactors using a dynamic skill, keep routine local feedback to
+permitted scoped formatters or inexpensive diagnostics. Local test, check, or
+E2E execution follows the root policy. Finish the assigned worker branch with
 every resulting mutation in the allowed paths. Return the branch and focused
 evidence to Gizmo. Do not run a local pre-push or broad validation gate. Prime
 authorizes hosted validation. Gizmo routes local integration through the

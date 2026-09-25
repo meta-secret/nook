@@ -4,8 +4,10 @@
 
 Follow the [dev delivery contract](../../../gizmo-prime/architecture/dev-delivery.md) for
 feature compilation and the manually run Feature Gizmo's slow PR cycle.
-Runtime workflow details below do not grant permission to run local tests or
-feature-stage slow checks.
+Local test, check, and E2E diagnostics follow the root
+[delivery and validation policy](../../../AGENTS.md#delivery-and-validation).
+Runtime workflow details below do not override that policy or grant permission
+for broad feature-stage checks.
 
 ## Overview
 
@@ -553,9 +555,11 @@ cross-package app tasks in `nook-app/ci/Taskfile.yml`, Docker tasks in
 `nook-web-extension/` / `nook-platform/`:
 
 ```bash
-# Feature-local feedback: scoped rustfmt and bounded TS diagnostics only
+# Routine feature-local feedback: scoped rustfmt and bounded TS diagnostics
+# Other local test, check, or E2E diagnostics follow the root policy.
 
-# Optional local mirrors (humans / deep debug — not agent merge gates)
+# Broad local mirrors for human debugging; agents use the root policy's narrow
+# diagnostic exception and never treat local results as merge gates.
 task check                          # format, clippy, unit tests, wasm-bindgen tests, web build (dev/no-opt wasm)
 WASM_BUILD_MODE=dev task ci:pr       # prepare → no-opt WASM → verify ‖ build (no browser e2e)
 task ci:pr:e2e                       # full local-provider web e2e + extension e2e
@@ -760,8 +764,9 @@ coverage solve and package floors in the verified Rust graph.
   A Main final-image cache therefore cannot substitute a stale source snapshot.
 - Main and release jobs import neither candidate nor stable formatter tags.
 - Hosted promotion independently fingerprints the exact committed source SHA.
-- Gizmo still dispatches build, test, proof, and validation tasks remotely.
-  Local execution remains available only for explicit rare-case debugging.
+- Gizmo still dispatches build, proof, and required validation tasks remotely.
+  Local test, check, and E2E diagnostics follow the root policy; local results
+  never replace hosted PR checks.
 - Commit-scoped local publish requires a clean worktree. Dirty builds remain
   local and cannot poison the committed PR scope.
 - The formatter dependency candidate is the exception because its targets

@@ -4,8 +4,10 @@
 
 Follow the [dev delivery contract](../../gizmo-prime/architecture/dev-delivery.md) for
 feature compilation and the manually run Feature Gizmo's slow PR cycle.
-Runtime workflow details below do not grant permission to run local tests or
-feature-stage slow checks.
+Use the root [delivery and validation policy](../../AGENTS.md#delivery-and-validation)
+to decide whether a bounded local test, check, or E2E diagnostic may run.
+Runtime workflow details below do not independently grant that permission or
+replace required hosted PR checks.
 
 ## Overview
 

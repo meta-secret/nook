@@ -66,10 +66,10 @@ Gizmo for routing.
 
 ## Validation
 
-Follow the root Nook [validation boundary](../../AGENTS.md#delivery-and-validation).
-Author behavior-focused tests for changed AI runtime behavior, but execute them
-only in the feature pull request's required-check stage. End-to-end coverage
-does not replace domain tests.
+Follow the root Nook [delivery and validation policy](../../AGENTS.md#delivery-and-validation).
+Author behavior-focused tests for changed AI runtime behavior. Required hosted
+PR checks remain mandatory for delivery and readiness; local results do not
+replace them. End-to-end coverage does not replace domain tests.
 
 For AI work that authors TypeScript, JavaScript, or Svelte, the acceptance
 packet names these Nook enforcement surfaces:
@@ -82,10 +82,17 @@ packet names these Nook enforcement surfaces:
 - Semantic ownership review follows upstream
   [function ownership](../../../.meta-cortex/teams/dev-team/docs/programming/function-ownership.md).
 
-Run these checks only in the feature pull request's required-check stage.
+Hosted execution remains the default. The feature pull request's required-check
+stage remains the authoritative delivery evidence for these checks. A specific
+preflight or other repository target may be selected directly only when it is
+the smallest suitable diagnostic for a recorded task need under the root policy;
+unrelated or broader local targets remain prohibited. A selected diagnostic may
+also execute its actually declared necessary Taskfile prerequisites through
+that target. Local test, check, E2E, preflight, coverage, or build diagnostics
+follow the root policy and must use its narrow scope and recording requirements.
 The acceptance record must not claim that `task loom:verify` alone proves
 TypeScript-state, source-architecture, or semantic ownership compliance.
-Describe each evidence source separately in the acceptance record.
+Describe each evidence source separately.
 
 Loom compiles only its typed contracts and registered workflow bindings.
 Markdown remains documentation and does not become executable workflow state.

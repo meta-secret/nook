@@ -188,11 +188,52 @@ These cards own Nook tooling details only. Upstream owns generic authoring rules
 ## Delivery and validation
 
 Author behavior-focused Rust tests for changed domain logic and targeted web tests
-for changed user flows. E2E does not replace domain tests. Nook executes tests,
-preflight, builds, and full Loom verification only in the authorized hosted stage.
-Local feedback is limited to scoped rustfmt and inexpensive TS diagnostics or
-formatting unless the user explicitly authorizes another command. Never report an
-unexecuted check as passing.
+for changed user flows. E2E does not replace domain tests. The authorized hosted
+stage runs the required tests, preflight, builds, and full Loom verification.
+Hosted PR checks remain mandatory for delivery and readiness. Local diagnostic
+results never replace those checks.
+
+### Local diagnostic execution
+
+Hosted or remote execution is the default. A user may explicitly request a
+local test, check, E2E, preflight, coverage, or build-target run. Otherwise, an
+agent may run one without separate authorization only after recording a
+concrete, evidence-backed strong reason in the task notes.
+
+- Record either the user's explicit request or the concrete evidence and why a
+  local run is needed.
+- Record the exact repository-supported command and target scope before running.
+- Choose the smallest suitable repository-supported target that addresses the
+  recorded task need. It may be selected directly or reached as a necessary
+  prerequisite declared by the selected Taskfile target.
+- Run declared necessary prerequisites only through the selected target; do not
+  dispatch those prerequisites separately.
+- Record the outcome after the command finishes.
+
+This permission is for local diagnostics. It does not change configured
+`create_pr` or `local_only` delivery. A local result does not make a task
+`local_only` and does not satisfy required PR checks.
+
+A selected target may itself be a preflight, coverage, or build target when that
+specific target is the smallest suitable diagnostic for the recorded task need.
+The exception does not authorize unrelated or broader local preflight, coverage,
+builds or other targets, or deployment.
+
+Do not issue direct Docker or BuildKit commands or control them directly. Do not
+perform direct cache operations or mutate cache, destroy a daemon or container,
+change secret or host boundaries, or bypass a circuit breaker.
+
+**Prohibited:** after a browser check fails in `e2e/connect.spec.ts`, run the
+full local `task ci:pr:e2e` mirror and report its result as satisfying required
+PR checks.
+
+**Preferred:** record the failed browser check and its evidence, run only
+`E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file`, record the command and
+outcome, and keep hosted PR checks pending until they pass. The selected task
+may run its declared Taskfile prerequisites, including its 212 and 723 test
+stages when declared; do not invoke those stages separately.
+
+Never report an unexecuted check as passing.
 
 Complete authorized delivery requires all required PR checks, actual squash merge
 into main, and remote feature-branch cleanup. A migration follows those stages
