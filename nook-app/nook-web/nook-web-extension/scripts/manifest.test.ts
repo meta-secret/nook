@@ -43,6 +43,10 @@ const environments = [
 ] as const
 
 describe('extension origin isolation', () => {
+  test('opens the toolbar through the service worker instead of a competing popup', () => {
+    expect('default_popup' in defaultManifest().action).toBe(false)
+  })
+
   for (const environment of environments) {
     test(`connects only to ${environment.simple}`, () => {
       const manifestArgs: CreateExtensionManifestArgs = {

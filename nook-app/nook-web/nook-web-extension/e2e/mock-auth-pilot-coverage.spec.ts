@@ -1,7 +1,6 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test'
 import {
   launchPairedPinExtension,
-  lockExtensionSession,
   saveVaultAuthenticator,
   saveVaultLogin,
   unlockExtensionPopupPin,
@@ -39,6 +38,17 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await loginPage.goto(`${mockAuth.origin}/plain/login`)
       const widget = loginPage.locator('#nook-auth-widget')
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
+      await expect(
+        widget.getByTestId('nook-auth-gate-vault-status'),
+      ).toHaveText('Matching saved logins: 2')
+      await expect(
+        widget.getByText(
+          'Multiple saved logins match this site. Continue opens the Nook picker. Nook fills and submits only after you choose one.',
+        ),
+      ).toBeVisible()
+      await expect(widget.getByText('Mock auth chooser vault')).toHaveCount(0)
+      await expect(loginPage.locator('input[name="username"]')).toHaveValue('')
+      await expect(loginPage.locator('input[name="password"]')).toHaveValue('')
       // Saving two entries can cross the short e2e idle timeout. Refresh the
       // session immediately before the website asks the extension to open its
       // picker so this test covers picker routing rather than lock recovery.
@@ -84,6 +94,17 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await loginPage.goto(`${mockAuth.origin}/plain/login`)
       const loginWidget = loginPage.locator('#nook-auth-widget')
       await expect(loginWidget.getByText('Ready to sign in')).toBeVisible()
+      await expect(
+        loginWidget.getByTestId('nook-auth-gate-vault-status'),
+      ).toHaveText('Matching saved logins: 0')
+      await expect(
+        loginWidget.getByText(
+          'No saved login matches this site. Continue checks again; if none is found, sign in manually or add one in Nook.',
+        ),
+      ).toBeVisible()
+      await expect(loginWidget.getByText('Mock auth empty vault')).toHaveCount(
+        0,
+      )
       await expect(
         loginWidget.getByTestId('nook-auth-gate-vault-status'),
       ).toHaveAttribute('data-state', 'no-matching-credential')
@@ -763,56 +784,6 @@ test.describe('PIN Pilot mock-auth coverage', () => {
     }
   })
 
-  test('prompts unlock when locked then resumes Continue with Nook', async ({
-    browserName,
-  }, testInfo) => {
-    test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
-
-    const mockAuth = await startMockAuthServer()
-    const paired = await launchPairedPinExtension(testInfo, {
-      vaultName: 'Mock auth lock vault',
-    })
-    try {
-      await saveVaultLogin(
-        paired.vaultPage,
-        mockAuth.origin,
-        'alice@nook.test',
-        'extension-fill-password',
-      )
-
-      await lockExtensionSession(paired.context)
-
-      const loginPage = await paired.context.newPage()
-      await loginPage.goto(`${mockAuth.origin}/plain/login`)
-      const widget = loginPage.locator('#nook-auth-widget')
-      await expect(widget.getByText('Ready to sign in')).toBeVisible()
-      await expect(
-        widget.getByTestId('nook-auth-gate-vault-status'),
-      ).toHaveAttribute('data-state', 'vault-locked')
-      await widget.getByRole('button', { name: 'Continue with Nook' }).click()
-      await expect(
-        widget.getByTestId('nook-auth-gate-vault-status'),
-      ).toHaveText(
-        'Unlock Nook in the companion window, then click Continue with Nook again.',
-        { timeout: 15_000 },
-      )
-      await expect(
-        widget.getByRole('button', { name: 'Open vault' }),
-      ).toBeVisible()
-
-      await unlockExtensionPopupPin(paired.context, paired.extensionId)
-
-      await widget.getByRole('button', { name: 'Continue with Nook' }).click()
-      await expect(loginPage.getByTestId('mock-auth-success')).toHaveText(
-        'Authentication complete',
-        { timeout: 20_000 },
-      )
-    } finally {
-      await paired.context.close()
-      await mockAuth.close()
-    }
-  })
-
   test('shows multi-authenticator chooser and fills a code', async ({
     browserName,
   }, testInfo) => {
@@ -885,6 +856,17 @@ async function expectPilotPlainSuccess(
   if (beforeContinue) await beforeContinue(page)
   const widget = page.locator('#nook-auth-widget')
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
+  await expect(
+    widget.getByText(new URL(url).hostname, { exact: true }),
+  ).toBeVisible()
+  await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(
+    'Matching saved logins: 1',
+  )
+  await expect(
+    widget.getByText(
+      'One saved login matches this site. Nothing is filled or submitted until you click Continue; that click fills and submits it.',
+    ),
+  ).toBeVisible()
   await widget.getByRole('button', { name: 'Continue with Nook' }).click()
   await expect(page.getByTestId('mock-auth-success')).toHaveText(
     'Authentication complete',

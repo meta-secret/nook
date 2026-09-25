@@ -50,7 +50,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     path.join(extensionDir, 'manifest.json'),
     'utf8',
   )
-  expect(manifestText).toMatch(/"default_popup"\s*:\s*"popup\/index\.html"/u)
+  expect(manifestText).not.toMatch(/"default_popup"\s*:/u)
 
   const loginServer = await startLoginServer()
   const userDataDir = testInfo.outputPath('chromium-profile')

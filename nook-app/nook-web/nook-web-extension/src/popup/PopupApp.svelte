@@ -21,6 +21,7 @@
     type ExtensionTranslationRequest,
     extensionLocaleCatalog,
   } from '../lib/i18n'
+  import { OpenCompanionLauncherIntent } from '../../../nook-web-shared/src/extension/companion-launcher-message'
   import {
     DeviceMode,
     DeviceProtectionStatus,
@@ -43,7 +44,7 @@
     isConnected,
     vaultName,
     vaultStoreId,
-    pairingRequested = false,
+    launcherIntent,
     protectionStatus,
     activeSessionDevice,
   }: {
@@ -51,7 +52,7 @@
     isConnected: boolean
     vaultName?: string
     vaultStoreId?: string
-    pairingRequested?: boolean
+    launcherIntent: OpenCompanionLauncherIntent
     protectionStatus: DeviceProtectionStatus
     activeSessionDevice: ExtensionSessionDeviceState
   } = $props()
@@ -84,7 +85,19 @@
       status === DeviceProtectionStatus.Plaintext,
   )
   const showToolbarMenu = $derived(status === DeviceProtectionStatus.Unlocked)
-  const showExistingConnection = $derived(isConnected && !pairingRequested)
+  const showExistingConnection = $derived(
+    isConnected && launcherIntent !== OpenCompanionLauncherIntent.Pair,
+  )
+
+  function connectActionKey(): I18nKey {
+    switch (launcherIntent) {
+      case OpenCompanionLauncherIntent.Default:
+      case OpenCompanionLauncherIntent.PilotAuth:
+        return I18N_KEYS.ExtensionSetupConnectSimpleVault
+      case OpenCompanionLauncherIntent.Pair:
+        return I18N_KEYS.ExtensionCompanionPairAnotherVault
+    }
+  }
 
   function connectedVaultLabel(vault: string): string {
     const request: ExtensionTranslationRequest = {
@@ -102,6 +115,41 @@
       replacements: { vault },
     }
     return i18n.t(request)
+  }
+
+  function connectDescription(): string {
+    return translatePlain(I18N_KEYS.ExtensionCompanionConnectDescription)
+  }
+
+  function connectedDescription(): string {
+    switch (typeof vaultName) {
+      case 'string':
+        return readyDescription(vaultName)
+      case 'undefined':
+        return connectDescription()
+      case 'number':
+      case 'bigint':
+      case 'boolean':
+      case 'symbol':
+      case 'object':
+      case 'function':
+        throw new Error('vault name has an invalid runtime type')
+    }
+  }
+
+  function companionDescription(): string {
+    switch (launcherIntent) {
+      case OpenCompanionLauncherIntent.PilotAuth:
+        return translatePlain(I18N_KEYS.ExtensionCompanionPilotReturnGuidance)
+      case OpenCompanionLauncherIntent.Default:
+      case OpenCompanionLauncherIntent.Pair:
+        switch (isConnected) {
+          case true:
+            return connectedDescription()
+          case false:
+            return connectDescription()
+        }
+    }
   }
 
   function secretCountValue(): string {
@@ -333,9 +381,7 @@
         )}
       </h1>
       <p class="companion-description" data-testid="companion-description">
-        {isConnected && vaultName
-          ? readyDescription(vaultName)
-          : translatePlain(I18N_KEYS.ExtensionCompanionConnectDescription)}
+        {companionDescription()}
       </p>
     </header>
 
@@ -402,11 +448,7 @@
         >
           {busy
             ? translatePlain(I18N_KEYS.DeviceProtectionAuthorizing)
-            : translatePlain(
-                pairingRequested
-                  ? I18N_KEYS.ExtensionCompanionPairAnotherVault
-                  : I18N_KEYS.ExtensionSetupConnectSimpleVault,
-              )}
+            : translatePlain(connectActionKey())}
         </button>
         <button
           type="button"

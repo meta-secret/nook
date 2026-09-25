@@ -924,6 +924,8 @@ pub const EXTENSION_COMPANION_LINKED: &str = "extension.companion.linked";
 pub const EXTENSION_COMPANION_LOADING: &str = "extension.companion.loading";
 pub const EXTENSION_COMPANION_NOT_CONNECTED: &str = "extension.companion.not_connected";
 pub const EXTENSION_COMPANION_PAIR_ANOTHER_VAULT: &str = "extension.companion.pair_another_vault";
+pub const EXTENSION_COMPANION_PILOT_RETURN_GUIDANCE: &str =
+    "extension.companion.pilot_return_guidance";
 pub const EXTENSION_COMPANION_PROTECTED: &str = "extension.companion.protected";
 pub const EXTENSION_COMPANION_READY_DESCRIPTION: &str = "extension.companion.ready_description";
 pub const EXTENSION_COMPANION_READY_TITLE: &str = "extension.companion.ready_title";
@@ -1129,9 +1131,19 @@ pub const EXTENSION_WIDGET_GENERATE_PASSWORD_WORKING: &str =
 pub const EXTENSION_WIDGET_GENERATED_PASSWORD_FILLED: &str =
     "extension.widget.generated_password_filled";
 pub const EXTENSION_WIDGET_LOGIN_DESCRIPTION: &str = "extension.widget.login_description";
+pub const EXTENSION_WIDGET_LOGIN_MATCH_COUNT: &str = "extension.widget.login_match_count";
+pub const EXTENSION_WIDGET_LOGIN_MULTIPLE_DESCRIPTION: &str =
+    "extension.widget.login_multiple_description";
+pub const EXTENSION_WIDGET_LOGIN_NO_MATCH_DESCRIPTION: &str =
+    "extension.widget.login_no_match_description";
 pub const EXTENSION_WIDGET_LOGIN_PICKER_CANCELED: &str = "extension.widget.login_picker_canceled";
 pub const EXTENSION_WIDGET_LOGIN_PICKER_OPENED: &str = "extension.widget.login_picker_opened";
+pub const EXTENSION_WIDGET_LOGIN_SINGLE_DESCRIPTION: &str =
+    "extension.widget.login_single_description";
 pub const EXTENSION_WIDGET_LOGIN_TITLE: &str = "extension.widget.login_title";
+pub const EXTENSION_WIDGET_LOGIN_UNAVAILABLE: &str = "extension.widget.login_unavailable";
+pub const EXTENSION_WIDGET_LOGIN_UNAVAILABLE_DESCRIPTION: &str =
+    "extension.widget.login_unavailable_description";
 pub const EXTENSION_WIDGET_MANUAL_DESCRIPTION: &str = "extension.widget.manual_description";
 pub const EXTENSION_WIDGET_MANUAL_TITLE: &str = "extension.widget.manual_title";
 pub const EXTENSION_WIDGET_NO_AUTHENTICATOR: &str = "extension.widget.no_authenticator";

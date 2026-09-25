@@ -23,6 +23,7 @@ import {
   runConcreteDecoder,
 } from '../lib/concrete-decoder'
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
+import { OpenCompanionLauncherIntent } from '../../../nook-web-shared/src/extension/companion-launcher-message'
 import {
   AuthenticationWorkflowSnapshotIngress,
   AuthenticationWorkflowSnapshotMessageType,
@@ -111,6 +112,7 @@ import {
   authenticationWorkflowSavedLoginCapability,
 } from './service-worker/authentication-workflow-routing'
 import {
+  ExtensionSessionLifecycle,
   extensionSessionDocument,
   extensionSessionLifecycle,
 } from './service-worker/session-lifecycle'
@@ -685,6 +687,16 @@ const backgroundRuntimeMessageListener: BackgroundRuntimeMessageListener = (
 }
 
 chrome.runtime.onMessage.addListener(backgroundRuntimeMessageListener)
+
+chrome.action.onClicked.addListener((tab) => {
+  const launcherRequest: Parameters<
+    typeof extensionSessionLifecycle.openCompanionLauncherBestEffort
+  >[0] = {
+    intent: OpenCompanionLauncherIntent.Default,
+    source: ExtensionSessionLifecycle.sourceFromTab(tab),
+  }
+  extensionSessionLifecycle.openCompanionLauncherBestEffort(launcherRequest)
+})
 
 type ExternalRuntimeMessageListener = Parameters<
   typeof chrome.runtime.onMessageExternal.addListener

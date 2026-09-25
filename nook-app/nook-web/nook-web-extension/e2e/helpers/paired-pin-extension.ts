@@ -206,7 +206,6 @@ export async function launchPairedPinExtension(
     vaultName,
   )
 
-  await simplePage.getByRole('button', { name: 'Done' }).click()
   await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible({
     timeout: EXTENSION_TIMEOUT_MS,
   })

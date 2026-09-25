@@ -273,7 +273,6 @@ async function renderPasskeyWidget({
         (loginMatches.kind === 'ready' && loginMatches.count > 0),
       vaultConnection: {
         kind: PilotVaultConnectionKind.Connected,
-        vaultName: 'Personal',
       },
     }
   await authenticationWidgetRenderer.renderWidget(args)
@@ -363,7 +362,6 @@ describe('authenticator enrollment workflow', () => {
       savedLoginActionAvailable: false,
       vaultConnection: {
         kind: PilotVaultConnectionKind.Connected,
-        vaultName: 'Personal',
       },
     }
 

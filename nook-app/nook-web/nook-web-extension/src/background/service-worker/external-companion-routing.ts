@@ -8,6 +8,7 @@ import { NormalizedOpenCompanionLauncherMessage as NormalizedOpenCompanionLaunch
 import type * as PairingIdentity from './pairing-identity'
 import type * as PairingImport from './pairing-import'
 import type * as SessionLifecycle from './session-lifecycle'
+import { ExtensionSessionLifecycle } from './session-lifecycle'
 import {
   ConcreteDecoderResultKind,
   runConcreteDecoder,
@@ -122,7 +123,12 @@ export class ExternalCompanionRouter {
       message,
     )
     if (launcherMessage.kind === ConcreteDecoderResultKind.Decoded) {
-      void openCompanionLauncher(launcherMessage.value.intent)
+      const source = ExtensionSessionLifecycle.sourceFromSender(sender)
+      const launcherRequest: Parameters<typeof openCompanionLauncher>[0] = {
+        intent: launcherMessage.value.intent,
+        source,
+      }
+      void openCompanionLauncher(launcherRequest)
         .then(() => sendResponse(successResponse))
         .catch(() => sendResponse(launcherFailureResponse))
       return true
@@ -149,7 +155,12 @@ export class ExternalCompanionRouter {
     )
     if (pairedVaultUnlock.kind === ConcreteDecoderResultKind.Decoded) {
       const decodedMessage = pairedVaultUnlock.value
-      void requestPairedVaultUnlock(decodedMessage)
+      const source = ExtensionSessionLifecycle.sourceFromSender(sender)
+      const unlockRequest: Parameters<typeof requestPairedVaultUnlock>[0] = {
+        message: decodedMessage,
+        source,
+      }
+      void requestPairedVaultUnlock(unlockRequest)
         .then(sendResponse)
         .catch(() => {
           const unlockFailureResponse: Parameters<typeof sendResponse>[0] = {

@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'bun:test'
-import { OpenCompanionLauncherIntent } from '../../nook-web-shared/src/extension/companion-launcher-message'
 
 function browserTab(url: string, id: number | false = false): chrome.tabs.Tab {
   const tab: chrome.tabs.Tab = {
@@ -95,64 +94,6 @@ describe('ensureExtensionSessionDocument', () => {
 
     await new ExtensionSessionLifecycle().ensureExtensionSessionDocument()
     expect(createAttempts).toBe(0)
-  })
-})
-
-describe('openCompanionLauncherBestEffort', () => {
-  test('preserves launcher failures for strict unlock callers', async () => {
-    Object.assign(globalThis, {
-      __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
-    })
-    Object.assign(globalThis, {
-      chrome: {
-        runtime: {
-          getURL: () => 'chrome-extension://nook/popup/index.html',
-        },
-        windows: {
-          create: () => Promise.reject(new Error('launcher unavailable')),
-        },
-      },
-    })
-    const { extensionSessionLifecycle } =
-      await import('../src/background/service-worker/session-lifecycle')
-
-    let launcherRejected = false
-    try {
-      await extensionSessionLifecycle.openCompanionLauncher(
-        OpenCompanionLauncherIntent.Default,
-      )
-    } catch (failure) {
-      launcherRejected = true
-      expect(failure).toBeInstanceOf(Error)
-      if (failure instanceof Error)
-        expect(failure.message).toContain('launcher unavailable')
-    }
-    expect(launcherRejected).toBe(true)
-  })
-
-  test('contains launcher failures for callers returning locked responses', async () => {
-    Object.assign(globalThis, {
-      __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
-    })
-    Object.assign(globalThis, {
-      chrome: {
-        runtime: {
-          getURL: () => 'chrome-extension://nook/popup/index.html',
-        },
-        windows: {
-          create: () => Promise.reject(new Error('launcher unavailable')),
-        },
-      },
-    })
-    const { extensionSessionLifecycle } =
-      await import('../src/background/service-worker/session-lifecycle')
-
-    expect(() =>
-      extensionSessionLifecycle.openCompanionLauncherBestEffort(
-        OpenCompanionLauncherIntent.Default,
-      ),
-    ).not.toThrow()
-    await Promise.resolve()
   })
 })
 

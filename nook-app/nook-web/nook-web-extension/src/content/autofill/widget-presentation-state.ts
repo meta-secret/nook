@@ -1,16 +1,28 @@
 import { type WebsiteLoginMatchAvailability } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  BROWSER_MESSAGE_KEYS,
+  type BrowserMessageKey,
+} from '../../lib/browser-message-keys'
+import type { ExtensionSetupLoad } from '../../lib/pairing-state'
 
 export enum PilotVaultConnectionKind {
   NotConnected = 'not-connected',
   Connected = 'connected',
+  Unavailable = 'unavailable',
 }
 
 export type PilotVaultConnection =
   | { readonly kind: PilotVaultConnectionKind.NotConnected }
-  | {
-      readonly kind: PilotVaultConnectionKind.Connected
-      readonly vaultName: string
-    }
+  | { readonly kind: PilotVaultConnectionKind.Connected }
+  | { readonly kind: PilotVaultConnectionKind.Unavailable }
+
+export function pilotVaultConnectionFromSetupState(
+  setup: ExtensionSetupLoad,
+): PilotVaultConnection {
+  return setup.kind === 'ready'
+    ? { kind: PilotVaultConnectionKind.Connected }
+    : { kind: PilotVaultConnectionKind.Unavailable }
+}
 
 export enum WidgetVaultPresentationKind {
   NotConnected = 'vault-not-connected',
@@ -23,26 +35,17 @@ export enum WidgetVaultPresentationKind {
 
 export type WidgetVaultPresentation =
   | { readonly kind: WidgetVaultPresentationKind.NotConnected }
-  | {
-      readonly kind: WidgetVaultPresentationKind.Connected
-      readonly vaultName: string
-    }
-  | {
-      readonly kind: WidgetVaultPresentationKind.Locked
-      readonly vaultName: string
-    }
+  | { readonly kind: WidgetVaultPresentationKind.Connected }
+  | { readonly kind: WidgetVaultPresentationKind.Locked }
   | {
       readonly kind: WidgetVaultPresentationKind.NoMatchingCredential
-      readonly vaultName: string
+      readonly count: 0
     }
   | {
       readonly kind: WidgetVaultPresentationKind.CredentialAvailable
-      readonly vaultName: string
+      readonly count: number
     }
-  | {
-      readonly kind: WidgetVaultPresentationKind.Unavailable
-      readonly vaultName: string
-    }
+  | { readonly kind: WidgetVaultPresentationKind.Unavailable }
 
 export type WidgetVaultPresentationProjectionArgs = {
   readonly vaultConnection: PilotVaultConnection
@@ -61,10 +64,9 @@ export class WidgetVaultPresentationProjection {
     if (connection.kind === PilotVaultConnectionKind.NotConnected) {
       return { kind: WidgetVaultPresentationKind.NotConnected }
     }
-    return {
-      kind: WidgetVaultPresentationKind.Connected,
-      vaultName: connection.vaultName,
-    }
+    return connection.kind === PilotVaultConnectionKind.Unavailable
+      ? { kind: WidgetVaultPresentationKind.Unavailable }
+      : { kind: WidgetVaultPresentationKind.Connected }
   }
 
   state(): WidgetVaultPresentation {
@@ -72,33 +74,48 @@ export class WidgetVaultPresentationProjection {
     if (vaultConnection.kind === PilotVaultConnectionKind.NotConnected) {
       return { kind: WidgetVaultPresentationKind.NotConnected }
     }
+    if (vaultConnection.kind === PilotVaultConnectionKind.Unavailable) {
+      return { kind: WidgetVaultPresentationKind.Unavailable }
+    }
 
     switch (loginMatches.kind) {
       case 'locked':
-        return {
-          kind: WidgetVaultPresentationKind.Locked,
-          vaultName: vaultConnection.vaultName,
-        }
+        return { kind: WidgetVaultPresentationKind.Locked }
       case 'unavailable':
-        return {
-          kind: WidgetVaultPresentationKind.Unavailable,
-          vaultName: vaultConnection.vaultName,
-        }
+        return { kind: WidgetVaultPresentationKind.Unavailable }
       case 'ready':
         return loginMatches.count === 0
           ? {
               kind: WidgetVaultPresentationKind.NoMatchingCredential,
-              vaultName: vaultConnection.vaultName,
+              count: 0,
             }
           : {
               kind: WidgetVaultPresentationKind.CredentialAvailable,
-              vaultName: vaultConnection.vaultName,
+              count: loginMatches.count,
             }
       default:
-        return {
-          kind: WidgetVaultPresentationKind.Unavailable,
-          vaultName: vaultConnection.vaultName,
-        }
+        return { kind: WidgetVaultPresentationKind.Unavailable }
     }
+  }
+}
+
+export function savedLoginDescriptionKey(
+  presentation: WidgetVaultPresentation,
+): BrowserMessageKey {
+  switch (presentation.kind) {
+    case WidgetVaultPresentationKind.NotConnected:
+      return BROWSER_MESSAGE_KEYS.WidgetConnectVault
+    case WidgetVaultPresentationKind.Connected:
+      return BROWSER_MESSAGE_KEYS.WidgetLoginDescription
+    case WidgetVaultPresentationKind.Locked:
+      return BROWSER_MESSAGE_KEYS.WidgetUnlockThenContinue
+    case WidgetVaultPresentationKind.NoMatchingCredential:
+      return BROWSER_MESSAGE_KEYS.WidgetLoginNoMatchDescription
+    case WidgetVaultPresentationKind.CredentialAvailable:
+      return presentation.count === 1
+        ? BROWSER_MESSAGE_KEYS.WidgetLoginSingleDescription
+        : BROWSER_MESSAGE_KEYS.WidgetLoginMultipleDescription
+    case WidgetVaultPresentationKind.Unavailable:
+      return BROWSER_MESSAGE_KEYS.WidgetLoginUnavailableDescription
   }
 }

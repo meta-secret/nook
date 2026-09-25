@@ -93,7 +93,6 @@ class AuthenticationWidgetRenderer {
       hints.qr ? 'qr' : '',
       hints.backupCodes ? 'backup' : '',
       vaultPresentation.kind,
-      'vaultName' in vaultPresentation ? vaultPresentation.vaultName : '',
     ].join(':')
     if (this.ui.pickerState.login.kind === LoginPickerKind.Open) {
       loginPasskeyInteraction.cancelPendingLoginPickerRequest()
@@ -117,6 +116,7 @@ class AuthenticationWidgetRenderer {
     >[0] = {
       copy: authenticationWidgetShell.enrollmentCopy(hints),
       vaultPresentation,
+      savedLoginAction: false,
       currentStep: snapshot.currentStep,
       totalSteps: snapshot.totalSteps,
     }
@@ -244,6 +244,8 @@ class AuthenticationWidgetRenderer {
           )
         : WorkflowCopy.forKind(snapshot.kind),
       vaultPresentation,
+      savedLoginAction:
+        snapshot.action === AuthenticationWorkflowAction.ContinueWithNook,
       currentStep: snapshot.currentStep,
       totalSteps: snapshot.totalSteps,
     }

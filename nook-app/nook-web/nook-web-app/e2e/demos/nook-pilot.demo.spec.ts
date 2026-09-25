@@ -414,8 +414,9 @@ test('guide a login through the Nook Pilot control plane', async ({ page }) => {
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
   const vaultStatus = widget.getByTestId('nook-auth-gate-vault-status')
   await expect(vaultStatus).toHaveAttribute('data-state', 'vault-locked')
-  await expect(vaultStatus).toHaveText(
-    'Unlock Nook in the companion window, then click Continue with Nook again.',
+  await expect(vaultStatus).toHaveText('locked')
+  await expect(widget.locator('p.description')).toHaveText(
+    'Unlock Nook in the Nook tab, return to the site, then select Continue with Nook again.',
   )
   await expect
     .poll(() =>
@@ -434,7 +435,7 @@ test('guide a login through the Nook Pilot control plane', async ({ page }) => {
 
   await widget.getByRole('button', { name: 'Continue with Nook' }).click()
   await expect(widget.locator('p.description')).toHaveText(
-    'Unlock Nook in the companion window, then click Continue with Nook again.',
+    'Unlock Nook in the Nook tab, return to the site, then select Continue with Nook again.',
   )
   await demoBeat(page)
 
@@ -693,7 +694,7 @@ test('revalidate contextual email-first facts through Nook Pilot', async ({
   await widget.getByRole('button', { name: 'Continue with Nook' }).click()
   await expect(
     widget.getByText(
-      'Unlock Nook in the companion window, then click Continue with Nook again.',
+      'Unlock Nook in the Nook tab, return to the site, then select Continue with Nook again.',
     ),
   ).toBeVisible()
   await widget.getByRole('button', { name: 'Continue with Nook' }).click()
