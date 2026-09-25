@@ -89,6 +89,7 @@ import {
   local_vault_storage_args,
   type NookStorageConnectArgs,
   type ActiveProviderCredentialsRequest,
+  type ProviderSaveSetup,
   type ProviderSaveRequest,
   type AuthProvidersSnapshot,
 } from "$app-wasm";
@@ -111,6 +112,17 @@ export { ProviderSelectionActions } from "$lib/vault/provider-selection.svelte";
 export { ProviderConnectionActions } from "$lib/vault/provider-connection";
 
 const log = browserLogRuntime.createLogger("vault-providers");
+
+function providerSaveSetup(
+  loginSetup: ProviderActionsContext["loginSetup"],
+): ProviderSaveSetup {
+  switch (loginSetup.kind) {
+    case LoginSetupKind.Active:
+      return new_provider_save_setup(loginSetup.providerType);
+    case LoginSetupKind.Inactive:
+      return existing_provider_save_setup();
+  }
+}
 
 export interface VaultConnectAssessmentRequest {
   readonly args: NookStorageConnectArgs;
@@ -222,6 +234,7 @@ export class VaultProviderActions {
     ) {
       return draft_oauth_storage_args(
         $state.snapshot(state.oauthFileDraft.config),
+        providerSaveSetup(state.loginSetup),
       );
     }
     return draft_local_storage_args();
@@ -260,6 +273,7 @@ export class VaultProviderActions {
             state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
           ? staged_oauth_remote_storage_args(
               $state.snapshot(state.oauthFileDraft.config),
+              providerSaveSetup(state.loginSetup),
             )
           : staged_local_remote_storage_args();
     try {
@@ -354,6 +368,7 @@ export class VaultProviderActions {
     try {
       updated = update_oauth_remote_ref(
         $state.snapshot(draft.config),
+        providerSaveSetup(state.loginSetup),
         manager.value.storage_remote_ref,
       );
     } catch (failure) {
@@ -786,10 +801,7 @@ export class ProviderPersistenceActions {
         : state.oauthSetupSelection.kind === OAuthSetupPresetKind.Selected
           ? state.oauthSetupSelection.preset
           : "google-drive";
-    const setup =
-      state.loginSetup.kind === LoginSetupKind.Active
-        ? new_provider_save_setup(state.loginSetup.providerType)
-        : existing_provider_save_setup();
+    const setup = providerSaveSetup(state.loginSetup);
     const request: ProviderSaveRequest = {
       snapshot: {
         providers: $state.snapshot(state.providers),
