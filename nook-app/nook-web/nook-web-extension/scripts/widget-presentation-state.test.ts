@@ -4,6 +4,7 @@ import type { AuthenticationWorkflowRoutingResponse } from '../src/background/se
 import { type WebsiteLoginMatchAvailability } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   PilotVaultConnectionKind,
+  pilotVaultConnectionFromSetupState,
   savedLoginDescriptionKey,
   WidgetVaultPresentationKind,
   WidgetVaultPresentationProjection,
@@ -30,6 +31,26 @@ type WidgetRoutingPresentationCase = {
 }
 
 describe('authentication widget vault presentation', () => {
+  test('keeps a failed setup status lookup unavailable', () => {
+    const vaultConnection = pilotVaultConnectionFromSetupState({
+      kind: 'unavailable',
+    })
+    expect(vaultConnection).toEqual({
+      kind: PilotVaultConnectionKind.Unavailable,
+    })
+
+    const projection = new WidgetVaultPresentationProjection({
+      vaultConnection,
+      loginMatches: { kind: 'ready', count: 1 },
+    })
+    expect(projection.state()).toEqual({
+      kind: WidgetVaultPresentationKind.Unavailable,
+    })
+    expect(
+      WidgetVaultPresentationProjection.forConnection(vaultConnection),
+    ).toEqual({ kind: WidgetVaultPresentationKind.Unavailable })
+  })
+
   test('keeps an unconnected vault distinct from runtime availability', () => {
     const loginMatches: WebsiteLoginMatchAvailability = {
       kind: 'ready',

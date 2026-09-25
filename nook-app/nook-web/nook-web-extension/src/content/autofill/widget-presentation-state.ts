@@ -3,15 +3,26 @@ import {
   BROWSER_MESSAGE_KEYS,
   type BrowserMessageKey,
 } from '../../lib/browser-message-keys'
+import type { ExtensionSetupLoad } from '../../lib/pairing-state'
 
 export enum PilotVaultConnectionKind {
   NotConnected = 'not-connected',
   Connected = 'connected',
+  Unavailable = 'unavailable',
 }
 
 export type PilotVaultConnection =
   | { readonly kind: PilotVaultConnectionKind.NotConnected }
   | { readonly kind: PilotVaultConnectionKind.Connected }
+  | { readonly kind: PilotVaultConnectionKind.Unavailable }
+
+export function pilotVaultConnectionFromSetupState(
+  setup: ExtensionSetupLoad,
+): PilotVaultConnection {
+  return setup.kind === 'ready'
+    ? { kind: PilotVaultConnectionKind.Connected }
+    : { kind: PilotVaultConnectionKind.Unavailable }
+}
 
 export enum WidgetVaultPresentationKind {
   NotConnected = 'vault-not-connected',
@@ -53,13 +64,18 @@ export class WidgetVaultPresentationProjection {
     if (connection.kind === PilotVaultConnectionKind.NotConnected) {
       return { kind: WidgetVaultPresentationKind.NotConnected }
     }
-    return { kind: WidgetVaultPresentationKind.Connected }
+    return connection.kind === PilotVaultConnectionKind.Unavailable
+      ? { kind: WidgetVaultPresentationKind.Unavailable }
+      : { kind: WidgetVaultPresentationKind.Connected }
   }
 
   state(): WidgetVaultPresentation {
     const { vaultConnection, loginMatches } = this.request
     if (vaultConnection.kind === PilotVaultConnectionKind.NotConnected) {
       return { kind: WidgetVaultPresentationKind.NotConnected }
+    }
+    if (vaultConnection.kind === PilotVaultConnectionKind.Unavailable) {
+      return { kind: WidgetVaultPresentationKind.Unavailable }
     }
 
     switch (loginMatches.kind) {
