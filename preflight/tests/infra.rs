@@ -346,12 +346,13 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
 
     for contract in [
         "maxRunners: 35",
-        "topologySpreadConstraints:",
-        "maxSkew: 2",
+        "podAntiAffinity:",
+        "topologyKey: nook.nokey.sh/arc-standard-host",
+        "topologyKey: nook.nokey.sh/arc-overflow-host",
+        "values: [general, hive, container]",
+        "weight: 25",
+        "weight: 90",
         "topologyKey: kubernetes.io/hostname",
-        "whenUnsatisfiable: ScheduleAnyway",
-        "nodeAffinityPolicy: Honor",
-        "nodeTaintsPolicy: Honor",
         "weight: 100",
         "weight: 50",
         "weight: 1",
@@ -367,7 +368,7 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
         );
     }
     assert!(
-        !values.contains("whenUnsatisfiable: DoNotSchedule"),
+        !values.contains("topologySpreadConstraints:"),
         "ARC hostname spreading must not force equal cross-tier placement"
     );
     for forbidden in ["runtimeClassName:", "podman", "docker.sock", "hostPath:"] {
