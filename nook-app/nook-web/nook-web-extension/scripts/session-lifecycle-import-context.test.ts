@@ -50,7 +50,9 @@ test('loads account pickers with isolated Chrome hosts', async () => {
     const { accountPickerSessions } =
       await import('../src/background/service-worker/account-pickers')
 
-    expect(accountPickerSessions.loginAccountsForOrigin).toBeInstanceOf(Function)
+    expect(accountPickerSessions.loginAccountsForOrigin).toBeInstanceOf(
+      Function,
+    )
     expect(accountPickerListeners).toHaveLength(1)
 
     const { ExtensionSessionLifecycle } =
@@ -62,7 +64,9 @@ test('loads account pickers with isolated Chrome hosts', async () => {
       runtime: {
         onMessage: {
           addListener(
-            listener: Parameters<typeof chrome.runtime.onMessage.addListener>[0],
+            listener: Parameters<
+              typeof chrome.runtime.onMessage.addListener
+            >[0],
           ): void {
             listeners.push(listener)
           },
