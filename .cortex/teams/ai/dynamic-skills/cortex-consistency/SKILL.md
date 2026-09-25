@@ -21,8 +21,10 @@ The ownership boundary is explicit:
 - Markdown does not become executable state.
 - The rules and their executable policy remain beside this procedure.
 
-Only in the feature pull request's required-check stage, run the compiler through the
-Cortex consistency command below. Never invoke it locally or in feature work.
+Run the compiler through the Cortex consistency command below in the required
+feature PR checks. A local diagnostic follows the root
+[delivery and validation policy](../../../../AGENTS.md#delivery-and-validation)
+and never replaces the hosted result.
 
 ```bash
 task loom:cortex-audit
@@ -30,8 +32,9 @@ task loom:cortex-audit
 
 The command reports failures in `contractFindings`.
 
-The co-located application is also a discoverable executable skill. These
-invocations are likewise restricted to the feature pull request's required-check stage:
+The co-located application is also a discoverable executable skill. Its required
+hosted check runs in the feature PR stage. Local diagnostics follow the root
+policy and do not replace that check:
 
 ```bash
 task skills:tools-list

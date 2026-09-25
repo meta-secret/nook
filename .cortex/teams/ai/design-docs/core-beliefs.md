@@ -45,9 +45,12 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 - Docker tasks live in `nook-app/nook-platform/docker/Taskfile.yml` and `nook-app/nook-web/docker/Taskfile.yml`.
 - Web-family tasks live in `nook-app/nook-web/Taskfile.yml` and `nook-web-extension/Taskfile.yml`.
 - Agents do not run raw compiler, bundler, or environment commands.
-- Use required PR-check execution for feature feedback.
-- Author behavior tests and execute them in the feature pull request's required-check stage.
-- Local feedback permits scoped rustfmt and bounded inexpensive TS diagnostics.
+- Required hosted PR checks remain mandatory for feature readiness. Follow the
+  root [delivery and validation policy](../../../AGENTS.md#delivery-and-validation)
+  for any local test, check, or E2E diagnostic; local results do not replace
+  hosted evidence.
+- Author behavior tests and retain their required PR-check execution.
+- Routine local feedback remains scoped rustfmt and bounded inexpensive TS diagnostics.
 - Follow the [dev contract](../../../gizmo-prime/architecture/dev-delivery.md).
 
 ## 5. Pay Down Tech Debt Continuously

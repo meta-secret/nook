@@ -4,8 +4,10 @@
 
 Follow the [dev delivery contract](../../../gizmo-prime/architecture/dev-delivery.md) for
 feature compilation and the manually run Feature Gizmo's slow PR cycle.
-Runtime workflow details below do not grant permission to run local tests or
-feature-stage slow checks.
+Local diagnostics follow the root
+[delivery and validation policy](../../../AGENTS.md#delivery-and-validation).
+The workflow below does not override that policy or grant permission for broad
+feature-stage checks.
 
 ## Overview
 
@@ -458,7 +460,15 @@ Use this workflow for quality, CI, and deployment changes.
     - Feature feedback requires required PR-check capability.
     - Missing capability is a blocker, not permission for slow feature checks.
     - The manually run Feature Gizmo owns the full slow feature pull request cycle.
-    - Local tests, Docker work, compilation, and broad pre-push are prohibited.
+    - Hosted execution is the default; required PR checks remain mandatory for
+      delivery and readiness. Local results do not replace them. A specific
+      local preflight, coverage, or build target may be selected directly only
+      when it is the smallest suitable diagnostic for the recorded task need
+      under the root policy. A selected Taskfile target may also run its
+      declared necessary prerequisites through that target.
+    - Unrelated or broader targets, deployments, and broad pre-push remain
+      prohibited locally. Direct Docker/BuildKit control, direct cache
+      operations or mutation, and daemon/container destruction remain prohibited.
     - See [dev delivery](../../../gizmo-prime/architecture/dev-delivery.md).
 12. After a slow-stage failure, delegate repair through the normal feature path.
     Select a replacement snapshot only after the prior slow attempt finishes.

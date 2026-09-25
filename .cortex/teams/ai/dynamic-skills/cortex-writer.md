@@ -11,8 +11,10 @@ with the article-audit and consistency-compiler cards for Cortex write scopes.
 ## Mechanical lint
 
 The changed-file density gate has bounded scope. Its implementation semantics
-are described below. Execute documentation audits through the feature PR
-required-check stage; this description grants no local pre-push permission.
+are described below. The required documentation audit runs in the feature PR
+required-check stage. A local diagnostic follows the root
+[delivery and validation policy](../../../AGENTS.md#delivery-and-validation);
+this card does not authorize a local pre-push gate.
 
 - It compares the working branch with the merge base selected by Nook's
   pull-request audit stage. Branch and workspace creation remain owned by the
