@@ -68,7 +68,7 @@ tasks:
     cmds:
       - bash "{{.REPO_ROOT}}/.github/formatting/format-host-apply.test.sh"
       - bun test "{{.REPO_ROOT}}/infra/contracts/dockerized-rust.test.ts"
-      - bun test "{{.REPO_ROOT}}/infra/contracts/dockerized-rust-buildkit.test.ts" "{{.REPO_ROOT}}/infra/contracts/pr-preview-parallel.test.ts"
+      - bun test "{{.REPO_ROOT}}/infra/contracts/dockerized-rust-buildkit.test.ts" "{{.REPO_ROOT}}/infra/contracts/pr-preview-parallel.test.ts" "{{.REPO_ROOT}}/infra/contracts/main-producer-parallel.test.ts"
       - bun test "{{.REPO_ROOT}}/infra/contracts/dockerized-rust-cache-registry.test.ts"
 
   preflight:dependency-policy:

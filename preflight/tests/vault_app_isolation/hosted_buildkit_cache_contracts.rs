@@ -278,11 +278,11 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
     let preflight = section(&main, "  preflight:\n", "\n  preflight-cache-publish:\n");
     let preflight_cache_publish = section(&main, "  preflight-cache-publish:\n", "\n  rust:\n");
     let rust = section(&main, "  rust:\n", "\n  native-cache-publish:\n");
-    let native_cache_publish = section(&main, "  native-cache-publish:\n", "\n  wasm:\n");
-    let wasm = section(&main, "  wasm:\n", "\n  wasm-cache-publish:\n");
+    let native_cache_publish = section(&main, "  native-cache-publish:\n", "\n  web:\n");
+    let wasm = section(&main, "  web:\n", "\n  wasm-cache-publish:\n");
     let wasm_cache_publish = section(&main, "  wasm-cache-publish:\n", "\n  wasm-cache-proof:\n");
-    let wasm_cache_proof = section(&main, "  wasm-cache-proof:\n", "\n  web:\n");
-    let web = section(&main, "  web:\n", "\n  web-e2e:\n");
+    let wasm_cache_proof = section(&main, "  wasm-cache-proof:\n", "\n  web-e2e:\n");
+    let web = section(&main, "  web:\n", "\n  wasm-cache-publish:\n");
     let ui_demo = section(&main, "  ui-demos:\n", "\n  deploy:\n");
     let rust_verify = rust
         .find("task ci:main:rust")
@@ -309,7 +309,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         .find("task ci:main:wasm-node-test")
         .context("Main WASM job must run Node tests")?;
     let wasm_publish_id = wasm
-        .find("id: publish_wasm_cache")
+        .find("id: prepare_web")
         .context("Main WASM producer must expose its cache publication outcome")?;
     let wasm_publish = wasm
         .find("task ci:main:publish-wasm-cache")
@@ -321,7 +321,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         .find("task ci:main:publish-web-cache")
         .context("Main web job must publish its cache")?;
     let web_browser_image = web
-        .find("- name: Publish exact-source browser job image")
+        .find("task web:e2e:kubernetes-image:artifacts")
         .context("Main web producer must publish the exact browser image")?;
     let ui_demo_step = ui_demo
         .find("- name: Headless UI demos")
@@ -401,7 +401,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && !native_cache_publish.contains("actions/checkout")
             && main.matches("task ci:main:publish-native-cache").count() == 1
             && main.matches("task ci:main:publish-preflight-cache").count() == 1
-            && wasm.contains("needs: [rust, preflight]")
+            && wasm.contains("needs: [preflight]")
             && !wasm.contains("native-cache-publish")
             && !wasm.contains("preflight-cache-publish")
             && !wasm.contains("cache-selection:")
@@ -409,12 +409,14 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && wasm_node < wasm_publish_id
             && wasm_publish_id < wasm_publish
             && wasm_verification_to_publish.contains("GHA_CACHE_WRITE_ENABLED: \"\"")
-            && wasm.contains("cache_publication_outcome: ${{ steps.publish_wasm_cache.outcome }}")
-            && wasm_publish_step.contains("continue-on-error: true")
-            && wasm_publish_section.contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
-            && wasm_cache_publish.contains("needs: [wasm]")
+            && wasm.contains("cache_publication_outcome: ${{ steps.prepare_web.outputs.cache_publication_outcome }}")
+            && wasm_publish_step.contains("shell: bash")
+            && wasm.contains("GHA_CACHE_WRITE_ENABLED=1 task ci:main:publish-wasm-cache")
+            && wasm_publish_section.contains("wait \"$cache_pid\" || cache_outcome=failure")
+            && wasm_publish_section.contains("exit \"$web_status\"")
+            && wasm_cache_publish.contains("needs: [web]")
             && wasm_cache_publish.contains(
-                "CACHE_PUBLICATION_OUTCOME: ${{ needs.wasm.outputs.cache_publication_outcome }}"
+                "CACHE_PUBLICATION_OUTCOME: ${{ needs.web.outputs.cache_publication_outcome }}"
             )
             && wasm_cache_publish.contains("if [ \"$CACHE_PUBLICATION_OUTCOME\" != \"success\" ]")
             && !wasm_cache_publish.contains("task ci:main:publish-wasm-cache")
@@ -425,10 +427,10 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && main.matches("task ci:main:publish-wasm-cache").count() == 1
             && wasm_cache_proof.contains("needs: [wasm-cache-publish]")
             && !wasm_cache_proof.contains("cache-selection:")
-            && web.contains("needs: [wasm]")
+            && web.contains("needs: [preflight]")
             && !web.contains("cache-selection:")
             && !web.contains("wasm-cache-publish")
-            && web.contains("uses: actions/download-artifact@v8")
+            && !web.contains("uses: actions/download-artifact@v8")
             && web.contains("name: main-wasm-${{ github.run_id }}")
             && web_verify < web_publish
             && web_verify < web_browser_image
@@ -598,10 +600,10 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
 fn assert_main_split_pipeline(root: &Path) -> anyhow::Result<()> {
     let main = (root).read(".github/workflows/main.yml");
     let web_tasks = (root).read("nook-app/nook-web/docker/Taskfile.yml");
-    let wasm = section(&main, "  wasm:\n", "\n  wasm-cache-publish:\n");
+    let wasm = section(&main, "  web:\n", "\n  wasm-cache-publish:\n");
     let wasm_publish = section(&main, "  wasm-cache-publish:\n", "\n  wasm-cache-proof:\n");
-    let wasm_proof = section(&main, "  wasm-cache-proof:\n", "\n  web:\n");
-    let web = section(&main, "  web:\n", "\n  web-e2e:\n");
+    let wasm_proof = section(&main, "  wasm-cache-proof:\n", "\n  web-e2e:\n");
+    let web = section(&main, "  web:\n", "\n  wasm-cache-publish:\n");
     let deploy = main
         .split("\n  deploy:\n")
         .nth(1)
@@ -609,8 +611,8 @@ fn assert_main_split_pipeline(root: &Path) -> anyhow::Result<()> {
     assert!(
         main.contains("\n  rust:\n")
             && main.contains("\n  preflight:\n")
-            && main.contains("\n  wasm:\n")
             && main.contains("\n  web:\n")
+            && !main.contains("\n  wasm:\n")
             && main.contains("\n  web-e2e:\n")
             && main.contains("task ci:main:rust")
             && main.contains("task ci:pr:wasm")
@@ -623,16 +625,16 @@ fn assert_main_split_pipeline(root: &Path) -> anyhow::Result<()> {
             && main.contains("\n  wasm-cache-publish:\n")
             && main.contains("\n  wasm-cache-proof:\n")
             && main.contains("NOOK_WASM_CACHE_PROMOTION_ENABLED: \"1\"")
-            && web.contains("needs: [wasm]")
+            && web.contains("needs: [preflight]")
             && wasm.contains("task ci:main:publish-wasm-cache")
-            && wasm.contains("continue-on-error: true")
-            && wasm_publish.contains("needs: [wasm]")
+            && wasm.contains("wait \"$cache_pid\" || cache_outcome=failure")
+            && wasm_publish.contains("needs: [web]")
             && wasm_publish.contains(
-                "CACHE_PUBLICATION_OUTCOME: ${{ needs.wasm.outputs.cache_publication_outcome }}"
+                "CACHE_PUBLICATION_OUTCOME: ${{ needs.web.outputs.cache_publication_outcome }}"
             )
             && !wasm_publish.contains("task ci:main:publish-wasm-cache")
             && wasm_proof.contains("needs: [wasm-cache-publish]")
-            && main.contains("needs: [web, web-e2e, extension-e2e, wasm-cache-proof]"),
+            && main.contains("needs: [preflight-cache-publish, native-cache-publish, rust-ecosystem, web, web-e2e, extension-e2e, wasm-cache-proof]"),
         "Main must let verified WASM feed product jobs independently while cache publication and deployment remain fail-closed"
     );
     assert!(
@@ -642,7 +644,7 @@ fn assert_main_split_pipeline(root: &Path) -> anyhow::Result<()> {
     );
     assert!(
         deploy.starts_with(
-            "    name: Deploy development\n    needs: [web, web-e2e, extension-e2e, wasm-cache-proof]"
+            "    name: Deploy development\n    if: github.ref == 'refs/heads/main'\n    needs: [preflight-cache-publish, native-cache-publish, rust-ecosystem, web, web-e2e, extension-e2e, wasm-cache-proof]"
         ) && deploy.contains("\n    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}\n"),
         "the development deployment lane must use the general ARC scale set"
     );

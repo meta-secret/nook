@@ -104,14 +104,22 @@ and manual ecosystem execution in one Actions run named `CI`.
   explicit `workflow_dispatch` with `product_changed=true`.
 - Owns merged-head ecosystem cache seeding and local cache telemetry.
 - Native Rust, WASM, and browser-free web verification use the configured ARC scale set.
-- Each lane serially exports its already-solved local BuildKit graph after validation.
-- Local-provider web e2e and extension e2e consume verified WASM on separate
-  runners.
+- After preflight, native Rust runs beside the combined WASM/web producer.
+  The latter uses its local WASM artifact and overlaps verified WASM cache
+  publication with web verification and browser-image publication on the same
+  BuildKit shard. The image is published only after web verification succeeds.
+- A failed WASM cache export retains its separate required failure gate while
+  successful web validation can still produce browser evidence. A failed web
+  check blocks image publication and browser consumers.
+- Local-provider web e2e and two extension shards consume the verified browser
+  image in separate pods. Each extension shard keeps one Playwright worker.
+  For example, `E2E_SHARD=1/2 task _extension:test:e2e:shard` runs one half.
 - Each browser E2E solve is read-only.
 - Headless UI-demo execution and new artifact publication are temporarily
   disabled.
 - Deploys to `dev.nokey.sh` and `*.dev.nokey.sh` only after both browser e2e
-  suites and the remaining required verification succeed.
+  suites, native verification, ecosystem checks and cache gates succeed.
+  Dispatching a feature branch exercises validation without development deployment.
 
 **`release.yml`**
 

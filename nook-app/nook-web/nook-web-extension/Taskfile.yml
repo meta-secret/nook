@@ -227,6 +227,14 @@ tasks:
     cmds:
       - cd "{{.EXTENSION_ROOT}}" && bun run test:e2e
 
+  _extension:test:e2e:shard:
+    desc: Run one isolated Main extension browser shard with one worker.
+    preconditions:
+      - sh: test -n "${E2E_SHARD:-}"
+        msg: E2E_SHARD is required.
+    cmds:
+      - cd "{{.EXTENSION_ROOT}}" && bash scripts/test-e2e.sh --shard="$E2E_SHARD"
+
   _extension:test:e2e:file:
     desc: Run one browser extension Playwright e2e spec.
     preconditions:

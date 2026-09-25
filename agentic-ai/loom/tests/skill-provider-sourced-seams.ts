@@ -145,6 +145,10 @@ const AUDITED_COMMAND_EXECUTING_FIND = new Map<string, string>();
 
 const AUDITED_RUNTIME_SOURCES = new Map([
   [
+    'infra/contracts/main-producer-parallel.test.ts',
+    '50fb6aeae565ddc007044d33273b9b84defe81242eaeaa6c980350740fa35687',
+  ],
+  [
     'infra/contracts/pr-preview-parallel.test.ts',
     '298ea7e3aab353000763afd9b8c334a690b60de5771150b66811c863ccbc449f',
   ],

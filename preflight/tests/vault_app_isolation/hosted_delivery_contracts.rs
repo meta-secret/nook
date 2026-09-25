@@ -437,14 +437,13 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
     let main_ui_demo_job = section(&main, "  ui-demos:\n", "  deploy:\n");
     for required in [
         "\n  rust:\n",
-        "\n  wasm:\n",
         "\n  web:\n",
         "\n  web-e2e:\n",
         "\n  extension-e2e:\n",
         "\n  ui-demos:\n",
         "\n  deploy:\n",
-        "needs: [wasm]",
-        "needs: [web, web-e2e, extension-e2e, wasm-cache-proof]",
+        "needs: [preflight]",
+        "needs: [preflight-cache-publish, native-cache-publish, rust-ecosystem, web, web-e2e, extension-e2e, wasm-cache-proof]",
         "task _ci:main:web:e2e-only",
         "task _extension:test:e2e",
         "task _web:test:ui-demo",
