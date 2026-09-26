@@ -579,6 +579,27 @@ describe('icloud-oauth', () => {
       )
     })
 
+    it('returns a CloudKit authentication failure for an unexpected native sign-in rejection', async () => {
+      const setUpAuth = ICloudOAuthTestFixture.resolvedSignedOutIdentity()
+      const whenUserSignsIn = vi.fn().mockRejectedValue({
+        serverErrorCode: 'INTERNAL_ERROR',
+        reason: 'unexpected CloudKit sign-in failure',
+      })
+      ICloudOAuthTestFixture.useContainer({
+        setUpAuth,
+        whenUserSignsIn,
+      })
+
+      await iCloudOAuthSession.prepareICloudSignInControl()
+      const request = nativeICloudWebAuthTokenRequest()
+      await expect(
+        iCloudOAuthSession.requestPreparedICloudWebAuthToken(request),
+      ).resolves.toEqual(
+        err(new OAuthFailure(OAuthFailureKind.CloudKitAuthentication)),
+      )
+      expect(whenUserSignsIn).toHaveBeenCalledOnce()
+    })
+
     it('falls back to CloudKit web auth redirect when CloudKit JS hides the auth challenge', async () => {
       const setUpAuth = ICloudOAuthTestFixture.resolvedSignedOutIdentity()
       const whenUserSignsIn = vi.fn().mockRejectedValue({

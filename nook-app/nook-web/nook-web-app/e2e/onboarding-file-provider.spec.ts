@@ -334,6 +334,67 @@ test.describe('iCloud provider modes', () => {
     )
     await expect(page.getByTestId('icloud-shared-target-step')).toBeVisible()
   })
+
+  test('shows the translated error and clears the busy state after native CloudKit sign-in fails', async ({
+    page,
+  }) => {
+    await page.route('https://localhost:5173/**', async (route) => {
+      const localRequestUrl = new URL(route.request().url())
+      localRequestUrl.protocol = 'http:'
+      localRequestUrl.hostname = '127.0.0.1'
+      await route.fulfill({
+        response: await route.fetch({ url: localRequestUrl.toString() }),
+      })
+    })
+    await page.route('https://api.apple-cloudkit.com/**', (route) =>
+      route.abort(),
+    )
+    await page.route('https://cdn.apple-cloudkit.com/**', (route) =>
+      route.abort(),
+    )
+    await page.route('https://idmsa.apple.com/**', (route) => route.abort())
+    await page.addInitScript(() => {
+      const container = {
+        setUpAuth: async () => ({ userRecordName: 1 }),
+        whenUserSignsIn: () =>
+          Promise.reject({
+            serverErrorCode: 'INTERNAL_ERROR',
+            reason: 'unexpected CloudKit sign-in failure',
+          }),
+      }
+      Object.defineProperty(window, 'CloudKit', {
+        configurable: true,
+        value: {
+          configure: () => {
+            const control = document.createElement('button')
+            control.type = 'button'
+            control.style.width = '64px'
+            control.style.height = '36px'
+            control.setAttribute('data-testid', 'mock-cloudkit-sign-in')
+            document.getElementById('apple-sign-in-button')?.append(control)
+          },
+          getDefaultContainer: () => container,
+        },
+      })
+    })
+    await page.goto('https://localhost:5173/app/')
+    await clearBrowserVault(page)
+    await page.reload()
+
+    await openLoginProviderSetup(page)
+    await page.getByTestId('provider-option-icloud').click()
+    await expect(page.getByTestId('icloud-oauth-setup')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await expect(page.getByTestId('icloud-origin-unsupported')).toHaveCount(0)
+    await expect(page.getByTestId('mock-cloudkit-sign-in')).toBeVisible()
+    await page.getByTestId('mock-cloudkit-sign-in').click()
+
+    const signInControl = page.getByTestId('icloud-sign-in-btn')
+    await expect(page.getByTestId('icloud-oauth-error')).toBeVisible()
+    await expect(signInControl.locator('div.absolute.inset-0')).toHaveCount(0)
+    await expect(signInControl).not.toHaveClass(/opacity-60/)
+  })
 })
 
 async function connectCleanBrowserToFileProvider(
