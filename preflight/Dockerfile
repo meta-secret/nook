@@ -144,6 +144,10 @@ printf '%s  %s\n' "$mise_sha256" /tmp/mise | sha256sum --check -
 install -d -m 0755 /root/.meta-cortex/mise/bin
 install -m 0755 /tmp/mise /root/.meta-cortex/mise/bin/mise
 rm /tmp/mise
+# Framework Initialize expects the pinned image tools in Meta-Cortex's managed paths.
+install -d -m 0755 /root/.meta-cortex/bun/bin /root/.meta-cortex/vale/bin
+install -m 0755 /usr/local/bin/bun /root/.meta-cortex/bun/bin/bun
+install -m 0755 /usr/local/bin/vale /root/.meta-cortex/vale/bin/vale
 meta-cortex run --request - <<'YAML'
 version: 1
 project: /meta-secret/nook
