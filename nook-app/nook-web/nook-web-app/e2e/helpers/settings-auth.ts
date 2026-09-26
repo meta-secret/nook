@@ -679,8 +679,7 @@ export async function authorizeDeviceProtection(
     })
     await unlockVaultButton.click()
   }
-  let lastPostUnlockObservation:
-    DeviceProtectionPostUnlockObservation | undefined
+  let lastPostUnlockObservationText = 'unavailable'
   try {
     await expect
       .poll(
@@ -718,7 +717,7 @@ export async function authorizeDeviceProtection(
               errorVisible: isVisible('vault-error'),
             }
           })
-          lastPostUnlockObservation = observation
+          lastPostUnlockObservationText = JSON.stringify(observation)
           const state = new DeviceProtectionPostUnlockGate({
             ...observation,
           }).state()
@@ -748,9 +747,7 @@ export async function authorizeDeviceProtection(
     const diagnostic = (await vaultError.isVisible())
       ? (await vaultError.innerText()).trim()
       : ''
-    const lastObservation = lastPostUnlockObservation
-      ? JSON.stringify(lastPostUnlockObservation)
-      : 'unavailable'
+    const lastObservation = lastPostUnlockObservationText
     throw new Error(
       diagnostic
         ? `Vault authorization did not settle. Current visible vault error: ${diagnostic}. Last observed gate state: ${lastObservation}`
