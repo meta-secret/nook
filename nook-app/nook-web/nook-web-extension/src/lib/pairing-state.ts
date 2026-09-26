@@ -71,13 +71,14 @@ export function extensionPairingStateQueryResponseFromStorage(
   if (!stored || typeof stored !== 'object') {
     return { ok: false, reason: 'pairing-state-invalid' }
   }
-  if (!Object.hasOwn(stored, setupKey)) {
+  const setupDescriptor = Object.getOwnPropertyDescriptor(stored, setupKey)
+  if (!setupDescriptor) {
     return {
       ok: true,
       setupState: ExtensionPairingSetupResponseKind.NotConnected,
     }
   }
-  const setup = Reflect.get(stored, setupKey)
+  const setup: unknown = setupDescriptor.value
   if (!isExtensionReadySetupState(setup)) {
     return { ok: false, reason: 'pairing-state-invalid' }
   }

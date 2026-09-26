@@ -5,7 +5,7 @@ import { clearBrowserVault, connectLocalVault, UI_TIMEOUT_MS } from '../helpers'
 
 declare global {
   interface Window {
-    readonly __nookVault: VaultState
+    readonly __nookVault?: VaultState
   }
 }
 
@@ -33,6 +33,7 @@ test('keeps the create workflow usable after locked-login Sentinel status errors
   await page.evaluate(
     async (statuses: SentinelStatusCycle) => {
       const vault = window.__nookVault
+      if (!vault) throw new Error('__nookVault is unavailable')
       const manager = vault.admitManager().match(
         (admittedManager) => admittedManager,
         () => {
