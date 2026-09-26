@@ -144,22 +144,21 @@ test('sets up the extension device first and sends its public keys to Simple Vau
       )
     })
 
-    const openedCompanionPage = context.waitForEvent('page', {
-      timeout: 30_000,
-    })
     expect(
       await sendExternalMessage(simplePage, extensionId, {
         type: 'nook:open-companion-launcher',
       }),
     ).toEqual({ ok: true })
-    const companionPage = await openedCompanionPage
-    await expect(companionPage).toHaveURL(
-      `chrome-extension://${extensionId}/popup/index.html`,
-    )
+    const companionLauncherUrl =
+      `chrome-extension://${extensionId}/popup/index.html`
+    await expect(popupPage).toHaveURL(companionLauncherUrl)
+    expect(
+      context.pages().filter((page) => page.url() === companionLauncherUrl),
+    ).toHaveLength(1)
     await expect(
-      companionPage.getByTestId('extension-device-setup'),
+      popupPage.getByTestId('extension-device-setup'),
     ).toBeVisible()
-    await companionPage.close()
+    await popupPage.close()
 
     const loginPage = await context.newPage()
     await loginPage.goto(`${loginServer.origin}/login`)
@@ -168,9 +167,9 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await expect(widget.getByText('Nook Pilot · 1/3')).toBeVisible()
     await expect(widget.getByText('Ready to sign in')).toBeVisible()
     await expect(widget.getByText('localhost')).toBeVisible()
-    await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(
-      'Vault not connected',
-    )
+    const vaultStatus = widget.getByTestId('nook-auth-gate-vault-status')
+    await expect(vaultStatus).toHaveAttribute('data-state', 'unavailable')
+    await expect(vaultStatus).toHaveText('Saved logins could not be checked')
     await expect(
       widget.getByRole('button', { name: 'Continue with Nook' }),
     ).toBeVisible()
@@ -434,7 +433,8 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     await expect(
       simplePage.getByTestId('extension-connect-approved'),
     ).toBeVisible()
-    await simplePage.getByRole('button', { name: 'Done' }).click()
+    await expect(simplePage.getByTestId('app-success')).toBeVisible()
+    await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
 
     await simplePage.getByTestId('vault-settings-tab').click()
     const dangerSection = simplePage.getByTestId('vault-danger-section')
