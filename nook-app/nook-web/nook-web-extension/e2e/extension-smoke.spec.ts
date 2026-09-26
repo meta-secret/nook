@@ -149,15 +149,12 @@ test('sets up the extension device first and sends its public keys to Simple Vau
         type: 'nook:open-companion-launcher',
       }),
     ).toEqual({ ok: true })
-    const companionLauncherUrl =
-      `chrome-extension://${extensionId}/popup/index.html`
+    const companionLauncherUrl = `chrome-extension://${extensionId}/popup/index.html`
     await expect(popupPage).toHaveURL(companionLauncherUrl)
     expect(
       context.pages().filter((page) => page.url() === companionLauncherUrl),
     ).toHaveLength(1)
-    await expect(
-      popupPage.getByTestId('extension-device-setup'),
-    ).toBeVisible()
+    await expect(popupPage.getByTestId('extension-device-setup')).toBeVisible()
     await popupPage.close()
 
     const loginPage = await context.newPage()
