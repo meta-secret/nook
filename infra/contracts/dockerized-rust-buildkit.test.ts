@@ -46,7 +46,38 @@ class DockerizedRustBuildKitContract {
     expect(workflow).toContain("BUILDKIT_PROGRESS: plain");
     expect(workflow).toContain("task --silent ci:pr:validate");
     expect(workflow).not.toContain("nook-cache-telemetry");
-    expect(workflow).not.toContain("actions/upload-artifact");
+    const workflowStep = (name: string): string => {
+      const stepStart = workflow.indexOf(`      - name: ${name}\n`);
+      expect(stepStart).toBeGreaterThanOrEqual(0);
+      const nextStep = workflow.indexOf("\n      - name:", stepStart + 1);
+      return workflow.slice(
+        stepStart,
+        nextStep === -1 ? workflow.length : nextStep,
+      );
+    };
+    const diagnosticsStep = workflowStep(
+      "Preserve failed extension Playwright diagnostics",
+    );
+    expect(diagnosticsStep).toMatch(
+      /^        if: failure\(\) && inputs\.full_e2e_requested$/m,
+    );
+    expect(diagnosticsStep).toMatch(
+      /^        uses: actions\/upload-artifact@v7$/m,
+    );
+    const diagnosticPaths = diagnosticsStep.match(
+      /          path: \|\n((?:            [^\n]+\n)+)          if-no-files-found: warn\n          retention-days: 15(?:\n|$)/,
+    );
+    expect(diagnosticPaths?.[1]?.trimEnd().split("\n")).toEqual([
+      "            ${{ runner.temp }}/nook-pr-artifacts/runtime/nook-app/nook-web/nook-web-extension/test-results/**/trace.zip",
+      "            ${{ runner.temp }}/nook-pr-artifacts/runtime/nook-app/nook-web/nook-web-extension/test-results/**/error-context.md",
+    ]);
+    expect(workflow.match(/uses: actions\/upload-artifact@[^\s]+/g)).toEqual([
+      "uses: actions/upload-artifact@v7",
+    ]);
+    const validationStep = workflowStep(
+      "Parallel validation and browser tests",
+    );
+    expect(validationStep).not.toMatch(/^        continue-on-error:/m);
     expect(workflow).toContain("GHA_CACHE_ENABLED=");
     expect(workflow).toContain("GHA_CACHE_WRITE_ENABLED=");
     expect(workflow).not.toMatch(
