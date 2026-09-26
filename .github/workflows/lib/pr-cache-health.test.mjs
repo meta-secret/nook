@@ -765,7 +765,6 @@ void test("one PR job avoids telemetry and registry handoffs", () => {
     workflow,
     /uses: \.\/\.github\/actions\/nook-cache-telemetry/,
   );
-  assert.doesNotMatch(workflow, /actions\/upload-artifact/);
   assert.doesNotMatch(workflow, /pr-cache-health\.mjs/);
   assert.match(workflow, /preinstalled-tooling: "true"/);
   assert.doesNotMatch(
@@ -782,6 +781,61 @@ void test("one PR job avoids telemetry and registry handoffs", () => {
   }
   assert.match(workflow, /require-sccache: "true"/);
 });
+
+void test(
+  "failed FULL_E2E PR validation preserves only extension Playwright diagnostics",
+  () => {
+    const workflow = fs.readFileSync(".github/workflows/pr.yml", "utf8");
+    const stepStart = workflow.indexOf(
+      "      - name: Preserve failed extension Playwright diagnostics\n",
+    );
+    assert.notEqual(stepStart, -1);
+    const nextStep = workflow.indexOf("\n      - name:", stepStart + 1);
+    const step = workflow.slice(
+      stepStart,
+      nextStep === -1 ? workflow.length : nextStep,
+    );
+    const validationStart = workflow.indexOf(
+      "      - name: Parallel validation and browser tests\n",
+    );
+    assert.notEqual(validationStart, -1);
+    const validationNextStep = workflow.indexOf(
+      "\n      - name:",
+      validationStart + 1,
+    );
+    const validationStep = workflow.slice(
+      validationStart,
+      validationNextStep === -1 ? workflow.length : validationNextStep,
+    );
+
+    assert.match(
+      step,
+      /^        if: failure\(\) && inputs\.full_e2e_requested$/m,
+    );
+    assert.match(step, /^        uses: actions\/upload-artifact@v7$/m);
+    assert.match(
+      step,
+      /          name: pr-extension-playwright-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}/,
+    );
+    const pathBlock = step.match(
+      /        with:\n          name: [^\n]+\n          path: \|\n((?:            [^\n]+\n)+)          if-no-files-found: warn\n          retention-days: 15(?:\n|$)/,
+    );
+    assert.ok(pathBlock);
+    assert.deepEqual(pathBlock[1].trimEnd().split("\n"), [
+      "            ${{ runner.temp }}/nook-pr-artifacts/runtime/nook-app/nook-web/nook-web-extension/test-results/**/trace.zip",
+      "            ${{ runner.temp }}/nook-pr-artifacts/runtime/nook-app/nook-web/nook-web-extension/test-results/**/error-context.md",
+    ]);
+    assert.match(
+      validationStep,
+      /^        run: task --silent ci:pr:validate$/m,
+    );
+    assert.doesNotMatch(validationStep, /^        continue-on-error:/m);
+    assert.equal(
+      workflow.match(/^        uses: actions\/upload-artifact@v7$/gm)?.length,
+      1,
+    );
+  },
+);
 
 void test("warm local BuildKit keeps the zero-hit compiler gate without registry imports", () => {
   const record = telemetry("validation", {
