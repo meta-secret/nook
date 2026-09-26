@@ -820,8 +820,9 @@ void test(
     const pathBlock = step.match(
       / {8}with:\n {10}name: [^\n]+\n {10}path: \|\n((?: {12}[^\n]+\n)+) {10}if-no-files-found: warn\n {10}retention-days: 15(?:\n|$)/,
     );
-    assert.ok(pathBlock);
-    assert.deepEqual(pathBlock[1].trimEnd().split("\n"), [
+    const pathEntries = pathBlock?.[1];
+    assert.ok(pathEntries);
+    assert.deepEqual(pathEntries.trimEnd().split("\n"), [
       "            ${{ runner.temp }}/nook-pr-artifacts/runtime/nook-app/nook-web/nook-web-extension/test-results/**/trace.zip",
       "            ${{ runner.temp }}/nook-pr-artifacts/runtime/nook-app/nook-web/nook-web-extension/test-results/**/error-context.md",
     ]);
