@@ -76,4 +76,75 @@ describe('extension pairing state loader', () => {
       kind: ExtensionSetupLoadKind.Unavailable,
     })
   })
+
+  test('classifies a successful response with an explicit null setup as not connected', async () => {
+    const absentSetupResponse: unknown = JSON.parse(
+      '{"ok":true,"setup":null}',
+    )
+    const sendMessage = mock(
+      (
+        _message: ExtensionPairingStateQueryMessage,
+        respond: (response: unknown) => void,
+      ) => respond(absentSetupResponse),
+    )
+    Object.assign(globalThis, {
+      chrome: { runtime: { sendMessage, lastError: false } },
+    })
+    const loader = new ExtensionPairingStateLoader({ browser: globalThis })
+
+    expect(await loader.loadExtensionSetupState()).toEqual({
+      kind: ExtensionSetupLoadKind.NotConnected,
+    })
+  })
+
+  test('keeps failed status queries unavailable', async () => {
+    const sendMessage = mock(
+      (
+        _message: ExtensionPairingStateQueryMessage,
+        respond: (response: unknown) => void,
+      ) => respond({ ok: false, reason: 'pairing-state-read-failed' }),
+    )
+    Object.assign(globalThis, {
+      chrome: { runtime: { sendMessage, lastError: false } },
+    })
+    const loader = new ExtensionPairingStateLoader({ browser: globalThis })
+
+    expect(await loader.loadExtensionSetupState()).toEqual({
+      kind: ExtensionSetupLoadKind.Unavailable,
+    })
+  })
+
+  test('keeps runtime transport errors unavailable', async () => {
+    const sendMessage = mock(
+      (
+        _message: ExtensionPairingStateQueryMessage,
+        respond: (response: unknown) => void,
+      ) => respond({ ok: true, setup: readySetup }),
+    )
+    Object.assign(globalThis, {
+      chrome: { runtime: { sendMessage, lastError: { message: 'failed' } } },
+    })
+    const loader = new ExtensionPairingStateLoader({ browser: globalThis })
+
+    expect(await loader.loadExtensionSetupState()).toEqual({
+      kind: ExtensionSetupLoadKind.Unavailable,
+    })
+  })
+
+  test('keeps a successful response with a missing setup field unavailable', async () => {
+    const sendMessage = mock(
+      (
+        _message: ExtensionPairingStateQueryMessage,
+        respond: (response: unknown) => void,
+      ) => respond({ ok: true }),
+    )
+    Object.assign(globalThis, {
+      chrome: { runtime: { sendMessage, lastError: false } },
+    })
+    const loader = new ExtensionPairingStateLoader({ browser: globalThis })
+
+    expect(await loader.loadExtensionSetupState()).toEqual({
+      kind: ExtensionSetupLoadKind.Unavailable,
+    })
+  })
 })

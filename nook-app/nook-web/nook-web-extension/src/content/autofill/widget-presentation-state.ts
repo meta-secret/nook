@@ -3,7 +3,10 @@ import {
   BROWSER_MESSAGE_KEYS,
   type BrowserMessageKey,
 } from '../../lib/browser-message-keys'
-import type { ExtensionSetupLoad } from '../../lib/pairing-state'
+import {
+  ExtensionSetupLoadKind,
+  type ExtensionSetupLoad,
+} from '../../lib/pairing-state'
 
 export enum PilotVaultConnectionKind {
   NotConnected = 'not-connected',
@@ -19,9 +22,14 @@ export type PilotVaultConnection =
 export function pilotVaultConnectionFromSetupState(
   setup: ExtensionSetupLoad,
 ): PilotVaultConnection {
-  return setup.kind === 'ready'
-    ? { kind: PilotVaultConnectionKind.Connected }
-    : { kind: PilotVaultConnectionKind.Unavailable }
+  switch (setup.kind) {
+    case ExtensionSetupLoadKind.Ready:
+      return { kind: PilotVaultConnectionKind.Connected }
+    case ExtensionSetupLoadKind.NotConnected:
+      return { kind: PilotVaultConnectionKind.NotConnected }
+    case ExtensionSetupLoadKind.Unavailable:
+      return { kind: PilotVaultConnectionKind.Unavailable }
+  }
 }
 
 export enum WidgetVaultPresentationKind {

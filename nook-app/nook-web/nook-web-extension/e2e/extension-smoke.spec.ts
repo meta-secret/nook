@@ -232,6 +232,11 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     )
     await expect(popupPage.getByTestId('extension-device-setup')).toBeVisible()
 
+    const extensionStorageBeforeStatus = await readExtensionStorage(context)
+    expect(Object.hasOwn(extensionStorageBeforeStatus, setupStorageKey)).toBe(
+      false,
+    )
+
     const loginPage = await context.newPage()
     await loginPage.goto(`${loginServer.origin}/login`)
     const widget = loginPage.locator('#nook-auth-widget')
@@ -242,6 +247,9 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(
       'Vault not connected',
     )
+    await expect(
+      widget.getByTestId('nook-auth-gate-vault-status'),
+    ).toHaveAttribute('data-state', 'vault-not-connected')
     await expect(
       widget.getByRole('button', { name: 'Continue with Nook' }),
     ).toBeVisible()

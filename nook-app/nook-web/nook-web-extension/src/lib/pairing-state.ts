@@ -82,8 +82,22 @@ export class ExtensionPairingStateLoader {
             !('ok' in runtimeResponse) ||
             runtimeResponse.ok !== true ||
             !('setup' in runtimeResponse) ||
-            !isExtensionReadySetupState(runtimeResponse.setup)
+            !Object.hasOwn(runtimeResponse, 'setup')
           ) {
+            const unavailable: ExtensionSetupLoad = {
+              kind: ExtensionSetupLoadKind.Unavailable,
+            }
+            resolve(unavailable)
+            return
+          }
+          if (Schema.is(Schema.Null)(runtimeResponse.setup)) {
+            const notConnected: ExtensionSetupLoad = {
+              kind: ExtensionSetupLoadKind.NotConnected,
+            }
+            resolve(notConnected)
+            return
+          }
+          if (!isExtensionReadySetupState(runtimeResponse.setup)) {
             const unavailable: ExtensionSetupLoad = {
               kind: ExtensionSetupLoadKind.Unavailable,
             }
@@ -110,9 +124,11 @@ export const extensionPairingStateLoader = new ExtensionPairingStateLoader(
 
 export enum ExtensionSetupLoadKind {
   Ready = 'ready',
+  NotConnected = 'not-connected',
   Unavailable = 'unavailable',
 }
 
 export type ExtensionSetupLoad =
   | { kind: ExtensionSetupLoadKind.Ready; setup: ExtensionReadySetupState }
+  | { kind: ExtensionSetupLoadKind.NotConnected }
   | { kind: ExtensionSetupLoadKind.Unavailable }

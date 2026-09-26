@@ -15,6 +15,7 @@ import {
 import { BROWSER_MESSAGE_KEYS } from '../src/lib/browser-message-keys'
 import type { BrowserMessageKey } from '../src/lib/browser-message-keys'
 import { ExtensionSetupLoadKind } from '../src/lib/pairing-state'
+import type { ExtensionReadySetupState } from '../src/background/pairing-grants'
 import { authenticationWidgetWorkflowKey } from '../src/content/autofill/widget-workflow-key'
 import type {
   AuthenticationPageObservationFacts,
@@ -27,12 +28,38 @@ const connectedVault: PilotVaultConnection = {
   kind: PilotVaultConnectionKind.Connected,
 }
 
+const readySetup: ExtensionReadySetupState = {
+  status: 'ready',
+  deviceLabel: 'Nook Extension',
+  pairedVaults: ['Personal'],
+  selectedVaultStoreId: 'store_abcdefghijk',
+  selectedVaultName: 'Personal',
+  syncProviderCount: 0,
+  eventCount: 1,
+  eventLogHeads: ['event-1'],
+  lastLocalSyncAt: '2026-09-12T00:00:00.000Z',
+}
+
 type WidgetRoutingPresentationCase = {
   response: AuthenticationWorkflowRoutingResponse
   expected: WidgetVaultPresentation
 }
 
 describe('authentication widget vault presentation', () => {
+  test('maps typed setup states to their connection states', () => {
+    expect(
+      pilotVaultConnectionFromSetupState({
+        kind: ExtensionSetupLoadKind.NotConnected,
+      }),
+    ).toEqual({ kind: PilotVaultConnectionKind.NotConnected })
+    expect(
+      pilotVaultConnectionFromSetupState({
+        kind: ExtensionSetupLoadKind.Ready,
+        setup: readySetup,
+      }),
+    ).toEqual({ kind: PilotVaultConnectionKind.Connected })
+  })
+
   test('keeps a failed setup status lookup unavailable', () => {
     const vaultConnection = pilotVaultConnectionFromSetupState({
       kind: ExtensionSetupLoadKind.Unavailable,
