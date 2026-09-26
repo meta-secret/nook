@@ -79,6 +79,10 @@ enum SessionDocumentAccess {
 class OpenExtensionSessionDocument implements ExtensionSessionTransport {
   private access = SessionDocumentAccess.Sending
 
+  revoke(): void {
+    this.access = SessionDocumentAccess.Revoked
+  }
+
   sendMessage(
     delivery: ExtensionSessionTransportDelivery,
   ): Promise<ExtensionSessionTransportResult>
@@ -166,7 +170,7 @@ class OpenExtensionSessionDocument implements ExtensionSessionTransport {
   async close(): Promise<
     ExtensionSessionTransportResult<ExtensionSessionDocumentStateKind.Closed>
   > {
-    this.access = SessionDocumentAccess.Revoked
+    this.revoke()
     try {
       await chrome.offscreen.closeDocument()
       return ok(ExtensionSessionDocumentStateKind.Closed)
@@ -202,6 +206,7 @@ type ExtensionSessionDocumentState =
       readonly operation: Promise<
         ExtensionSessionTransportResult<OpenExtensionSessionDocument>
       >
+      readonly previous: OpenExtensionSessionDocument | false
     }
   | {
       readonly kind: ExtensionSessionDocumentStateKind.Open
@@ -425,6 +430,42 @@ export class ExtensionSessionDocumentOwner {
     return this.create()
   }
 
+  private async reobserveOpenDocument(
+    document: OpenExtensionSessionDocument,
+  ): Promise<ExtensionSessionTransportResult<OpenExtensionSessionDocument>> {
+    const documentUrl = chrome.runtime.getURL(extensionSessionDocument)
+    let contexts: chrome.runtime.ExtensionContext[]
+    try {
+      const observationRequest: Parameters<
+        typeof chrome.runtime.getContexts
+      >[0] = {
+        contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT],
+        documentUrls: [documentUrl],
+      }
+      contexts = await chrome.runtime.getContexts(observationRequest)
+    } catch {
+      document.revoke()
+      return err(
+        new ExtensionSessionTransportFailure(
+          ExtensionSessionTransportFailureKind.ObservationFailed,
+        ),
+      )
+    }
+    if (
+      contexts.some(
+        (context) =>
+          context.contextType ===
+            chrome.runtime.ContextType.OFFSCREEN_DOCUMENT &&
+          context.documentUrl === documentUrl,
+      )
+    ) {
+      return ok(document)
+    }
+    document.revoke()
+    this.readiness = { kind: SessionReadinessKind.Idle }
+    return this.create()
+  }
+
   async open(): Promise<
     ExtensionSessionTransportResult<ExtensionSessionTransport>
   > {
@@ -438,10 +479,9 @@ export class ExtensionSessionDocumentOwner {
       case ExtensionSessionDocumentStateKind.ObservationFailed:
       case ExtensionSessionDocumentStateKind.ClosureFailed:
         return err(state.failure)
-      case ExtensionSessionDocumentStateKind.Open:
-        return ok(state.document)
       case ExtensionSessionDocumentStateKind.Creating:
         return this.admitCreatedDocument(state.operation)
+      case ExtensionSessionDocumentStateKind.Open:
       case ExtensionSessionDocumentStateKind.Unobserved:
       case ExtensionSessionDocumentStateKind.Closed:
         break
@@ -449,7 +489,9 @@ export class ExtensionSessionDocumentOwner {
     const operation = (
       state.kind === ExtensionSessionDocumentStateKind.Unobserved
         ? this.openExistingOrCreate()
-        : this.create()
+        : state.kind === ExtensionSessionDocumentStateKind.Open
+          ? this.reobserveOpenDocument(state.document)
+          : this.create()
     ).then((created) => {
       if (
         this.state.kind === ExtensionSessionDocumentStateKind.Creating &&
@@ -470,7 +512,14 @@ export class ExtensionSessionDocumentOwner {
       }
       return created
     })
-    this.state = { kind: ExtensionSessionDocumentStateKind.Creating, operation }
+    this.state = {
+      kind: ExtensionSessionDocumentStateKind.Creating,
+      operation,
+      previous:
+        state.kind === ExtensionSessionDocumentStateKind.Open
+          ? state.document
+          : false,
+    }
     return this.admitCreatedDocument(operation)
   }
 
@@ -569,6 +618,12 @@ export class ExtensionSessionDocumentOwner {
       return operation
     }
     // Already-open aliases are revoked synchronously by closeDocument before its first await.
+    if (
+      state.kind === ExtensionSessionDocumentStateKind.Creating &&
+      state.previous
+    ) {
+      state.previous.revoke()
+    }
     const operation =
       state.kind === ExtensionSessionDocumentStateKind.Creating
         ? state.operation.then(
