@@ -23,6 +23,7 @@ import {
   startLoginServer,
   waitForExtensionPairingReady,
   waitForNewPage,
+  waitForPageUrl,
   withE2eDeadline,
   type WebsitePasskeyAssertionBrowserFlow,
 } from './helpers/extension-smoke-runtime'
@@ -624,8 +625,6 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         websiteAfterUnlock.page.reload(),
         'reload website after companion unlock',
       )
-      console.log('[extension e2e] website reloaded after companion unlock')
-      console.log('[extension e2e] widget wait begin')
       await withE2eDeadline(
         expect(websiteWidget).toBeVisible(),
         'wait for widget after companion-unlock reload',
@@ -635,49 +634,17 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         context,
         'post-unlock website login picker',
       )
-      console.log('[extension e2e] Continue click begin')
       await websiteWidget
         .getByRole('button', { name: 'Continue with Nook' })
         .click()
       console.log('[extension e2e] Continue click complete')
       const websiteLoginPicker = await websiteLoginPickerPromise
-      const formatDiagnosticUrl = (pageUrl: string): string => {
-        try {
-          const url = new URL(pageUrl)
-          const intentValues = url.searchParams.getAll('intent')
-          url.username = ''
-          url.password = ''
-          url.search = ''
-          url.hash = ''
-          for (const intent of intentValues) {
-            url.searchParams.append('intent', intent)
-          }
-          return url.toString()
-        } catch {
-          return 'unavailable page URL'
-        }
-      }
-      websiteLoginPicker.on('framenavigated', (frame) => {
-        console.log(
-          '[extension e2e] post-unlock login picker navigated URL',
-          formatDiagnosticUrl(frame.url()),
-        )
-      })
-      console.log(
-        '[extension e2e] post-unlock login picker initial URL',
-        formatDiagnosticUrl(websiteLoginPicker.url()),
+      await waitForPageUrl(
+        websiteLoginPicker,
+        context,
+        /intent=login-picker/,
+        'post-unlock website login picker',
       )
-      try {
-        await expect(websiteLoginPicker).toHaveURL(/intent=login-picker/, {
-          timeout: 20_000,
-        })
-      } catch (failure) {
-        console.log(
-          '[extension e2e] post-unlock login picker URL assertion failed; context page URLs',
-          context.pages().map((page) => formatDiagnosticUrl(page.url())),
-        )
-        throw failure
-      }
       await expect(websiteLoginPicker.getByText('alice@nook.test')).toBeVisible(
         { timeout: 20_000 },
       )
@@ -687,7 +654,6 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         websiteAfterUnlock.page.reload(),
         'reload website after login picker',
       )
-      console.log('[extension e2e] website reloaded after login picker')
       await expect(
         websiteAfterUnlock.page.locator('#nook-auth-widget'),
       ).toBeVisible()
@@ -695,10 +661,8 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         page: websiteAfterUnlock.page,
         credentialId: websitePasskeyState.credentialId,
       }
-      console.log('[extension e2e] starting website passkey assertion')
       await test.step('assert website passkey after companion unlock', () =>
         assertWebsitePasskeyThroughExtension(websitePasskeyAssertion))
-      console.log('[extension e2e] website assertion complete')
       await websiteAfterUnlock.page.close()
     }
     await withE2eDeadline(
