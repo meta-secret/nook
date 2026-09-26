@@ -109,6 +109,12 @@ import { ProviderSelectionActions } from "$lib/vault/provider-selection.svelte";
 
 export { ProviderSelectionActions } from "$lib/vault/provider-selection.svelte";
 
+type ProviderAssessmentFailureLogContext = {
+  readonly provider_type: string;
+  readonly failure_kind: StorageOperationFailure["kind"];
+  readonly http_status: 401 | undefined;
+};
+
 export { ProviderConnectionActions } from "$lib/vault/provider-connection";
 
 const log = browserLogRuntime.createLogger("vault-providers");
@@ -419,17 +425,19 @@ export class VaultProviderActions {
           );
         } catch (nativeFailure) {
           const failure = new NativeVaultStorageFailure(nativeFailure);
-          const failureContext = {
+          const failureContext: ProviderAssessmentFailureLogContext = {
             provider_type: args.mode,
             failure_kind: failure.kind,
-            ...(failure.kind === StorageOperationFailureKind.GitHubTokenRejected
-              ? { http_status: 401 }
-              : {}),
+            http_status:
+              failure.kind === StorageOperationFailureKind.GitHubTokenRejected
+                ? 401
+                : undefined,
           };
-          log.warnWithContext({
+          const warningContext: Parameters<typeof log.warnWithContext>[0] = {
             message: "provider vault assessment failed",
             serializedContext: JSON.stringify(failureContext),
-          });
+          };
+          log.warnWithContext(warningContext);
           return storageErr(failure);
         }
       })();

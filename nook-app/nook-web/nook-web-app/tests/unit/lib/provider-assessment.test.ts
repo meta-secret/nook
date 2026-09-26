@@ -8,11 +8,12 @@ import { VaultProviderActions } from '$lib/vault/providers.svelte'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
+import type { SerializedLogContext } from '$lib/runtime/log'
 
 const mockLogger = vi.hoisted(() => ({
   info: vi.fn(),
   warn: vi.fn(),
-  warnWithContext: vi.fn(),
+  warnWithContext: vi.fn<(context: SerializedLogContext) => void>(),
 }))
 
 vi.mock('$lib/runtime/log', () => ({
@@ -60,9 +61,9 @@ describe('GitHub provider assessment failure', () => {
       )
     }
     expect(mockLogger.warnWithContext).toHaveBeenCalledOnce()
-    const [logContext] = mockLogger.warnWithContext.mock.calls[0] as [
-      { message: string; serializedContext: string },
-    ]
+    const logContextCall = mockLogger.warnWithContext.mock.calls[0]
+    if (!logContextCall) throw new Error('expected a logged warning context')
+    const [logContext] = logContextCall
     expect(logContext.message).toBe('provider vault assessment failed')
     expect(JSON.parse(logContext.serializedContext)).toEqual({
       provider_type: GITHUB_PROVIDER_TYPE,

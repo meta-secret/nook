@@ -76,6 +76,12 @@ type ProviderFailurePresentation = {
   readonly failure: VaultStorageFailure;
 };
 
+type ProviderSyncFailureLogContext = {
+  readonly provider_type: StorageProvider["type"];
+  readonly failure_kind: VaultStorageFailure["kind"];
+  readonly http_status: 401 | undefined;
+};
+
 /** Owns provider synchronization and its visible or captured outcome. */
 export class ProviderSyncActions {
   constructor(private readonly state: SyncActionsContext) {}
@@ -179,17 +185,19 @@ export class ProviderSyncActions {
     Result<ProviderSyncOutcome, VaultStorageFailure>
   > {
     const state = this.state;
-    const failureContext = {
+    const failureContext: ProviderSyncFailureLogContext = {
       provider_type: provider.type,
       failure_kind: failure.kind,
-      ...(failure.kind === VaultStorageFailureKind.GitHubTokenRejected
-        ? { http_status: 401 }
-        : {}),
+      http_status:
+        failure.kind === VaultStorageFailureKind.GitHubTokenRejected
+          ? 401
+          : undefined,
     };
-    log.warnWithContext({
+    const warningContext: Parameters<typeof log.warnWithContext>[0] = {
       message: "provider synchronization failed",
       serializedContext: JSON.stringify(failureContext),
-    });
+    };
+    log.warnWithContext(warningContext);
     const admitted = state.admitManager();
     if (admitted.isErr()) return err(admitted.error);
     let issueResult: ReturnType<
