@@ -78,9 +78,7 @@ describe('extension pairing state loader', () => {
   })
 
   test('classifies a successful response with an explicit null setup as not connected', async () => {
-    const absentSetupResponse: unknown = JSON.parse(
-      '{"ok":true,"setup":null}',
-    )
+    const absentSetupResponse: unknown = JSON.parse('{"ok":true,"setup":null}')
     const sendMessage = mock(
       (
         _message: ExtensionPairingStateQueryMessage,
