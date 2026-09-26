@@ -41,7 +41,18 @@ impl AsRef<Path> for RepositoryFixture {
 fn is_generated_repository_component(component: &OsStr) -> bool {
     matches!(
         component.to_str(),
-        Some(".git" | "node_modules" | ".meta-cortex" | ".meta-cortex-source")
+        Some(
+            ".git"
+                | "node_modules"
+                | ".meta-cortex"
+                | ".meta-cortex-source"
+                | "target"
+                | "dist"
+                | "coverage"
+                | "test-results"
+                | "playwright-report"
+                | "ui-demo-results"
+        )
     )
 }
 
@@ -300,12 +311,24 @@ fn inventory_prunes_generated_source_context_paths_and_preserves_tracked_files()
         PathBuf::from(".meta-cortex"),
         PathBuf::from(".meta-cortex-source"),
         cortex_scripts.join("node_modules"),
+        PathBuf::from("nook-app/nook-platform/target"),
+        PathBuf::from("nook-app/nook-platform/dist"),
+        PathBuf::from("nook-app/nook-platform/coverage"),
+        PathBuf::from("nook-app/nook-platform/test-results"),
+        PathBuf::from("nook-app/nook-platform/playwright-report"),
+        PathBuf::from("nook-app/nook-platform/ui-demo-results"),
     ];
     let generated_directories = [
         PathBuf::from("node_modules/package"),
         PathBuf::from(".meta-cortex/node_modules/package"),
         PathBuf::from(".meta-cortex-source/cache/package"),
         cortex_scripts.join("node_modules/package"),
+        PathBuf::from("nook-app/nook-platform/target/debug/deps"),
+        PathBuf::from("nook-app/nook-platform/dist/assets"),
+        PathBuf::from("nook-app/nook-platform/coverage/artifacts"),
+        PathBuf::from("nook-app/nook-platform/test-results/chromium"),
+        PathBuf::from("nook-app/nook-platform/playwright-report/data"),
+        PathBuf::from("nook-app/nook-platform/ui-demo-results/chromium"),
     ];
     for directory in &generated_directories {
         fs::create_dir_all(fixture.path().join(directory))?;
