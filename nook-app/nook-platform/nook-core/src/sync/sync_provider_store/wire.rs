@@ -81,6 +81,7 @@ impl ProviderFields {
             ("fileName", "unresolved", "fileName"),
             ("accountEmail", "unknown", "email"),
             ("folderId", "root", "folderId"),
+            ("drivePrivateTarget", "legacyAppDataFolder", "folderId"),
             ("iCloudShareTarget", "personal", "sharedTarget"),
         ] {
             self = self.field(ProviderFieldMigration {

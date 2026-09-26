@@ -83,6 +83,36 @@ describe('service worker routing', () => {
     })
   })
 
+  test('returns the session document failure kind when ensure-runtime loses a concurrent close', async () => {
+    const { routeExtensionLifecycleMessage } =
+      await import('../src/background/service-worker/extension-lifecycle-routing')
+    const sendResponse = mock(() => {})
+    const dependencies: ExtensionLifecycleRoutingDependencies = {
+      ...lifecycleDependencies,
+      ensureExtensionSessionDocument: async () =>
+        err(
+          new ExtensionSessionTransportFailure(
+            ExtensionSessionTransportFailureKind.Closed,
+          ),
+        ),
+    }
+
+    expect(
+      routeExtensionLifecycleMessage({
+        dependencies,
+        message: { type: ExtensionRuntimeRequestType.EnsureRuntime },
+        sender: { id: 'nook-extension' },
+        sendResponse,
+      }),
+    ).toBe(true)
+    await flushResponses()
+
+    expect(sendResponse).toHaveBeenCalledWith({
+      ok: false,
+      reason: ExtensionSessionTransportFailureKind.Closed,
+    })
+  })
+
   test('refreshes mounted authentication surfaces from an authorized sender', async () => {
     const { routeExtensionLifecycleMessage } =
       await import('../src/background/service-worker/extension-lifecycle-routing')

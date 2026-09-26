@@ -29,9 +29,10 @@ use crate::NookError;
 use crate::VaultMemberProjectionRequest;
 use crate::storage::local_folder::LocalFolderHandles;
 use nook_core::{
-    DeviceIdentity, DeviceIdentitySecret, DriveEventParent, ICloudEventTarget, MultiDeviceError,
-    SelfRosterSync, SentinelGenesisPhase, StorageMode, SymmetricKey, VaultCrypto, VaultNameRef,
-    VaultStoreIdentityRef, VaultType, VaultUnlock, VaultVersionWrite, i18n_keys,
+    DeviceIdentity, DeviceIdentitySecret, DriveEventParent, DriveStorageTargetRef,
+    ICloudEventTarget, MultiDeviceError, SelfRosterSync, SentinelGenesisPhase, StorageMode,
+    SymmetricKey, VaultCrypto, VaultNameRef, VaultStoreIdentityRef, VaultType, VaultUnlock,
+    VaultVersionWrite, i18n_keys,
 };
 use nook_core::{EnsureSelfInRosterRequest, VaultMetaState};
 use std::mem;
@@ -598,16 +599,38 @@ impl NookVaultManager {
                     nook_core::OauthAccessToken::parse(github_pat)?.to_string();
                 let (known_file_id, file_name) =
                     nook_core::DriveBackupName::parse_storage_ref(github_repo_name)?;
-                self.storage.drive_event_parent = DriveEventParent::from_storage_id(&known_file_id);
                 self.storage.remote_path = file_name.to_string();
                 drop(self.status.tx.send("DRIVE_VERIFY".to_owned()));
                 DriveStorageClient::new(&self.storage.access_token)
                     .verify_drive_access()
                     .await?;
-                // Personal: optional vault yaml file id. Shared: folder id for events.
+                // Schema-1 and unprefixed historical IDs keep the appData root.
+                // New schema-2 private targets resolve a deterministic child folder;
+                // shared Drive still targets the configured My Drive folder.
+                self.storage.drive_event_parent =
+                    match DriveStorageTargetRef::parse(&known_file_id)? {
+                        DriveStorageTargetRef::LegacyAppDataFolder => {
+                            DriveEventParent::AppDataFolder
+                        }
+                        DriveStorageTargetRef::SharedFolder { folder_id } => {
+                            DriveEventParent::SharedFolder { folder_id }
+                        }
+                        DriveStorageTargetRef::PendingPrivateFolder => {
+                            let folder_id = DriveStorageClient::new(&self.storage.access_token)
+                                .ensure_private_event_folder(&file_name)
+                                .await?;
+                            DriveEventParent::PrivateAppDataFolder { folder_id }
+                        }
+                        DriveStorageTargetRef::PrivateFolder { folder_id } => {
+                            DriveEventParent::PrivateAppDataFolder { folder_id }
+                        }
+                    };
                 self.storage.remote_ref = match &self.storage.drive_event_parent {
                     DriveEventParent::SharedFolder { folder_id } => folder_id.clone(),
                     DriveEventParent::AppDataFolder => known_file_id,
+                    DriveEventParent::PrivateAppDataFolder { .. } => {
+                        self.storage.drive_event_parent.encode_storage_id()
+                    }
                 };
                 self.storage.icloud_event_target = ICloudEventTarget::Private;
             }
@@ -818,6 +841,18 @@ mod tests {
             manager.local_cache_ref(),
             StorageMode::Github.cache_ref("owner/repo", "vault.yaml")
         );
+
+        manager.storage.mode = StorageMode::GoogleDrive;
+        manager.storage.drive_event_parent = DriveEventParent::PrivateAppDataFolder {
+            folder_id: "private-folder-a".to_owned(),
+        };
+        manager.storage.remote_ref = manager.storage.drive_event_parent.encode_storage_id();
+        let first_private_cache = manager.local_cache_ref();
+        manager.storage.drive_event_parent = DriveEventParent::PrivateAppDataFolder {
+            folder_id: "private-folder-b".to_owned(),
+        };
+        manager.storage.remote_ref = manager.storage.drive_event_parent.encode_storage_id();
+        assert_ne!(first_private_cache, manager.local_cache_ref());
     }
 
     #[wasm_bindgen_test]

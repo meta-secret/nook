@@ -16,6 +16,7 @@ export enum VaultStorageFailureKind {
   ManagerUnavailable = "manager-unavailable",
   TimedOut = "timed-out",
   OperationFailed = "operation-failed",
+  GitHubTokenRejected = "github-token-rejected",
   VaultSelectionFailed = "vault-selection-failed",
   IdentityHandoffRejected = "identity-handoff-rejected",
   IdentityHandoffUnavailable = "identity-handoff-unavailable",
@@ -34,6 +35,11 @@ export enum VaultStorageFailureKind {
   ReloadFailed = "reload-failed",
   ExtensionPublicationFailed = "extension-publication-failed",
   ExtensionApprovalContextChanged = "extension-approval-context-changed",
+}
+
+/** Stable codes attached by the native provider adapter across the WASM boundary. */
+export enum NativeProviderFailureCode {
+  GitHubTokenRejected = "github-token-rejected",
 }
 
 export type VaultStorageFailureRequest = {
@@ -88,6 +94,8 @@ export class VaultStorageFailure {
         return I18N_KEYS.ToastsErrorTimeout;
       case VaultStorageFailureKind.VaultSelectionFailed:
         return I18N_KEYS.ErrorsVaultSelectionFailed;
+      case VaultStorageFailureKind.GitHubTokenRejected:
+        return I18N_KEYS.AuthStorageGithubTokenRejected;
       case VaultStorageFailureKind.ExtensionApprovalContextChanged:
         return I18N_KEYS.ExtensionConsentApprovalFailed;
       case VaultStorageFailureKind.ExtensionPublicationFailed:
@@ -122,11 +130,16 @@ export class NativeVaultStorageFailure<
   NativeCause = Error | string,
 > extends VaultStorageFailure {
   constructor(cause: NativeCause) {
+    const causeMessage = cause instanceof Error ? cause.message : String(cause);
+    const isGitHubTokenRejected =
+      cause instanceof Error &&
+      "code" in cause &&
+      cause.code === NativeProviderFailureCode.GitHubTokenRejected;
     const request: VaultStorageFailureRequest = {
-      kind: VaultStorageFailureKind.OperationFailed,
-      recoveryKind: classify_vault_recovery_error(
-        cause instanceof Error ? cause.message : String(cause),
-      ),
+      kind: isGitHubTokenRejected
+        ? VaultStorageFailureKind.GitHubTokenRejected
+        : VaultStorageFailureKind.OperationFailed,
+      recoveryKind: classify_vault_recovery_error(causeMessage),
     };
     super(request);
   }

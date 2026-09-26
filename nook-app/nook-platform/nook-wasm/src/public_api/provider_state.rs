@@ -5,7 +5,8 @@ use nook_core::{
 };
 use nook_core::{
     DraftStorageConnection, GithubStorageDraft, OAuthRemoteConfigurationUpdate,
-    OAuthRemoteStorageReference, OAuthStorageDraft, ProviderSelection, StagedStorageConnection,
+    OAuthRemoteStorageReference, OAuthStorageDraft, ProviderSaveSetup, ProviderSelection,
+    StagedStorageConnection,
 };
 use wasm_bindgen::JsError;
 
@@ -346,7 +347,8 @@ impl NookGithubPatHint {
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 #[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn draft_oauth_storage_args(config: nook_core::OAuthFileConfigData) -> NookStorageConnectArgs {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn draft_oauth_storage_args(config: nook_core::OAuthFileConfigData, setup: ProviderSaveSetup) -> NookStorageConnectArgs {
+    let config = config.with_provider_save_setup(setup);
     DraftStorageConnection::OAuth(OAuthStorageDraft {
         preset: config.preset,
         credential: &config.access_token,
@@ -421,7 +423,7 @@ mod tests {
             NookStoredOAuthFileConfigurationState::NotApplicable
         );
         assert_eq!(
-            stored_oauth_file_configuration_state(StoredOAuthFileConfiguration::Configured(
+            stored_oauth_file_configuration_state(StoredOAuthFileConfiguration::configured(
                 nook_core::OAuthFileConfigData::default(),
             )),
             NookStoredOAuthFileConfigurationState::Configured
@@ -522,7 +524,10 @@ mod tests {
         assert_eq!(github_args.mode, "github");
         assert_eq!(github_args.pat, "pat");
         assert_eq!(github_args.repo, "owner/repo");
-        assert_eq!(draft_oauth_storage_args(config).mode, "google-drive");
+        assert_eq!(
+            draft_oauth_storage_args(config, ProviderSaveSetup::Existing).mode,
+            "google-drive"
+        );
 
         let no_hint = mask_github_pat_hint(nook_core::StoredGithubPat::Missing);
         assert_eq!(no_hint.state(), NookGithubPatHintState::Missing);
@@ -538,6 +543,7 @@ mod tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
+    use crate::public_api::{staged_oauth_remote_storage_args, update_oauth_remote_ref};
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -631,7 +637,57 @@ mod browser_tests {
         assert_eq!(github.mode, "github");
         assert_eq!(github.pat, "pat");
         assert_eq!(github.repo, "owner/repo");
-        let oauth = draft_oauth_storage_args(configured);
+        let oauth = draft_oauth_storage_args(configured.clone(), ProviderSaveSetup::Existing);
         assert_eq!(oauth.mode, "google-drive");
+
+        let new_provider_setup = ProviderSaveSetup::New(nook_core::StorageProviderType::OauthFile);
+        let new_private = nook_core::OAuthFileConfigData {
+            preset: nook_core::OauthFilePreset::GoogleDrive,
+            access_token: nook_core::StoredOAuthAccessCredential::AccessToken("token".into()),
+            file_id: nook_core::StoredOAuthRemoteFileId::FileId("old-file-id".into()),
+            file_name: nook_core::StoredOAuthRemoteFileName::FileName("Vault.yaml".into()),
+            ..Default::default()
+        };
+        let draft_args = draft_oauth_storage_args(new_private.clone(), new_provider_setup);
+        assert_eq!(draft_args.repo, "private-folder-v2:pending\tVault.yaml");
+        let staged_args =
+            staged_oauth_remote_storage_args(new_private.clone(), new_provider_setup).unwrap();
+        assert_eq!(
+            staged_args.args().unwrap().repo,
+            "private-folder-v2:pending\tVault.yaml"
+        );
+        let updated_new_provider = update_oauth_remote_ref(
+            new_private.clone(),
+            new_provider_setup,
+            "private-folder-v2:stable-folder-id",
+        );
+        let updated_config = updated_new_provider.config().unwrap();
+        assert_eq!(
+            updated_config.drive_private_target,
+            nook_core::StoredGoogleDrivePrivateTarget::FolderId("stable-folder-id".into())
+        );
+        assert_eq!(
+            updated_config.file_id,
+            nook_core::StoredOAuthRemoteFileId::FileId("old-file-id".into())
+        );
+
+        let updated_existing_provider =
+            update_oauth_remote_ref(new_private.clone(), ProviderSaveSetup::Existing, "file-1");
+        let updated_existing_config = updated_existing_provider.config().unwrap();
+        assert_eq!(
+            updated_existing_config.drive_private_target,
+            nook_core::StoredGoogleDrivePrivateTarget::LegacyAppDataFolder
+        );
+        assert_eq!(
+            updated_existing_config.file_id,
+            nook_core::StoredOAuthRemoteFileId::FileId("file-1".into())
+        );
+
+        let existing_staged =
+            staged_oauth_remote_storage_args(new_private, ProviderSaveSetup::Existing).unwrap();
+        assert_eq!(
+            existing_staged.args().unwrap().repo,
+            "old-file-id\tVault.yaml"
+        );
     }
 }

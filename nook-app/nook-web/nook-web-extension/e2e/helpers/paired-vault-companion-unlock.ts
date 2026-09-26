@@ -108,6 +108,49 @@ async function describeCompanionPopup(page: Page): Promise<string> {
   return JSON.stringify(state)
 }
 
+async function describeCompanionRuntime(page: Page): Promise<string> {
+  const state = await page.evaluate(async () => {
+    const offscreenContextCount: number | string = await (async () => {
+      try {
+        const contexts = await chrome.runtime.getContexts({
+          contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT],
+        })
+        return contexts.length
+      } catch {
+        return 'observation-failed'
+      }
+    })()
+
+    const ensureRuntime = await new Promise<unknown>((resolve) => {
+      chrome.runtime.sendMessage(
+        { type: 'nook:ensure-extension-session-runtime' },
+        (response: unknown) => {
+          if (chrome.runtime.lastError) {
+            resolve({ ok: false, reason: 'runtime-message-failed' })
+            return
+          }
+          resolve(response)
+        },
+      )
+    })
+    const reason =
+      ensureRuntime &&
+      typeof ensureRuntime === 'object' &&
+      'ok' in ensureRuntime &&
+      ensureRuntime.ok === true
+        ? 'ok'
+        : ensureRuntime &&
+            typeof ensureRuntime === 'object' &&
+            'reason' in ensureRuntime &&
+            typeof ensureRuntime.reason === 'string' &&
+            /^[a-z0-9-]{1,80}$/.test(ensureRuntime.reason)
+          ? ensureRuntime.reason
+          : 'unavailable'
+    return { offscreenContextCount, ensureRuntimeReason: reason }
+  })
+  return JSON.stringify(state)
+}
+
 function findOwnedCompanionPopup(
   request: OwnedCompanionPopupOpen,
 ): CompanionPopupLookup {
@@ -205,7 +248,26 @@ async function completeCompanionPopupUnlock(
   if (!(await deviceSetup.isVisible())) {
     return
   }
-  await page.getByTestId('device-protection-unlock-btn').click()
+  const unlockButton = page.getByTestId('device-protection-unlock-btn')
+  const runtimeError = page.getByTestId('extension-runtime-error')
+  await expect(unlockButton.or(runtimeError)).toBeVisible({
+    timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+  })
+  if (await runtimeError.isVisible()) {
+    const errorText = await runtimeError.innerText()
+    const runtimeState = await describeCompanionRuntime(page)
+    const failures = diagnostics.failures.slice(-10)
+    throw new Error(
+      [
+        `Companion popup runtime error: ${errorText}`,
+        `Runtime diagnostics: ${runtimeState}`,
+        ...(failures.length > 0
+          ? [`Companion popup browser failures: ${failures.join(' | ')}`]
+          : []),
+      ].join('\n'),
+    )
+  }
+  await unlockButton.click()
   await expect(companionHome).toBeVisible({
     timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
   })

@@ -509,7 +509,11 @@
           <div id="apple-sign-out-button" class="hidden"></div>
           {#if oauthBusy || icloudSignInPreparing}
             <div class={icloudSignInButtonClass}>
-              {vault.t(I18N_KEYS.ProviderSetupIcloudSigningIn)}
+              {vault.t(
+                icloudSignInPreparing
+                  ? I18N_KEYS.ProviderSetupIcloudPreparingSignIn
+                  : I18N_KEYS.ProviderSetupIcloudSigningIn,
+              )}
             </div>
           {/if}
         </div>

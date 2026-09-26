@@ -66,6 +66,21 @@ pub enum StoredGoogleDriveFolder {
     FolderId(String),
 }
 
+/// Private Google Drive event target for a schema-2 provider.
+///
+/// Schema-1 rows default to `LegacyAppDataFolder`, preserving their existing
+/// root event log. New private Drive providers use `Pending` until the adapter
+/// resolves or creates a named child folder, then persist its stable Drive ID.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(tag = "state", content = "value", rename_all = "camelCase")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum StoredGoogleDrivePrivateTarget {
+    #[default]
+    LegacyAppDataFolder,
+    Pending,
+    FolderId(String),
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "value", rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
@@ -135,13 +150,13 @@ pub enum ActiveVaultScope {
 pub enum StoredOAuthFileConfiguration {
     #[default]
     NotApplicable,
-    Configured(OAuthFileConfig),
+    Configured(Box<OAuthFileConfig>),
 }
 
 impl StoredOAuthFileConfiguration {
     #[must_use]
-    pub const fn configured(config: OAuthFileConfig) -> Self {
-        Self::Configured(config)
+    pub fn configured(config: OAuthFileConfig) -> Self {
+        Self::Configured(Box::new(config))
     }
 }
 

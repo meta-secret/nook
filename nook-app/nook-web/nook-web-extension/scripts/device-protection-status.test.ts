@@ -2,6 +2,7 @@ import initNookWasm from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook
 import { beforeAll, describe, expect, test } from 'bun:test'
 import {
   DeviceProtectionStatus,
+  ExtensionSessionRuntimeClosed,
   extensionWasmRuntime,
 } from '../src/lib/nook-wasm'
 
@@ -26,6 +27,15 @@ function installSessionResponses(responses: unknown[]): void {
 }
 
 describe('extensionDeviceProtectionStatus', () => {
+  test('identifies a concurrent session close during startup', async () => {
+    installSessionResponses([
+      { ok: false, reason: 'extension-session-document-closed' },
+    ])
+
+    expect(
+      extensionWasmRuntime.extensionDeviceProtectionStatus(),
+    ).rejects.toBeInstanceOf(ExtensionSessionRuntimeClosed)
+  })
   test('rejects an unrecognized status from the extension session', async () => {
     const responses: unknown[] = [
       { ok: true },

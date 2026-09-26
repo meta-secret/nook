@@ -48,6 +48,7 @@ export enum DeviceProtectionAuthorizationGateState {
 
 export type DeviceProtectionPostUnlockObservation = {
   readonly loginGateVisible: boolean
+  readonly authenticatedShellVisible: boolean
   readonly vaultAuthenticated: boolean
   readonly overlayVisible: boolean
   readonly authorizeReady: boolean
@@ -62,14 +63,16 @@ export class DeviceProtectionPostUnlockGate {
   ) {}
 
   state(): DeviceProtectionAuthorizationGateState {
-    if (
-      this.observation.vaultAuthenticated ||
-      !this.observation.loginGateVisible
-    ) {
+    if (this.observation.vaultAuthenticated) {
       return DeviceProtectionAuthorizationGateState.Unlocked
     }
-    if (this.observation.overlayVisible) {
-      return DeviceProtectionAuthorizationGateState.Waiting
+    if (
+      new AuthenticatedWorkspaceObservation({
+        authenticatedShellVisible: this.observation.authenticatedShellVisible,
+        loginGateVisible: this.observation.loginGateVisible,
+      }).state() === AuthenticatedWorkspaceState.Unlocked
+    ) {
+      return DeviceProtectionAuthorizationGateState.Unlocked
     }
     if (this.observation.authorizeReady) {
       return DeviceProtectionAuthorizationGateState.Authorize
@@ -79,6 +82,9 @@ export class DeviceProtectionPostUnlockGate {
     }
     if (this.observation.unlockReady) {
       return DeviceProtectionAuthorizationGateState.Unlock
+    }
+    if (this.observation.overlayVisible) {
+      return DeviceProtectionAuthorizationGateState.Waiting
     }
     // The shared vault error surface also reports transient engine and sync
     // diagnostics while the login gate is still advancing. It is evidence for
@@ -673,27 +679,47 @@ export async function authorizeDeviceProtection(
     })
     await unlockVaultButton.click()
   }
-  // The device ceremony sets VaultState.isAuthenticated before Svelte finishes
-  // remounting the authenticated shell. Read that current session state on
-  // each poll so an earlier visible load error cannot mask a completed unlock.
+  let lastPostUnlockObservationText = 'unavailable'
   try {
     await expect
       .poll(
         async () => {
-          const errorVisible = await vaultError.isVisible()
-          const vaultAuthenticated = await page.evaluate(() => {
-            const vault = window.__nookVault
-            if (!vault) return false
-            return vault.isAuthenticated
+          const observation = await page.evaluate(() => {
+            const isVisible = (testId: string) => {
+              const element = document.querySelector(
+                `[data-testid="${testId}"]`,
+              )
+              if (!(element instanceof HTMLElement)) return false
+              return (
+                element.getClientRects().length > 0 &&
+                window.getComputedStyle(element).visibility !== 'hidden'
+              )
+            }
+            const isEnabled = (testId: string) => {
+              const element = document.querySelector(
+                `[data-testid="${testId}"]`,
+              )
+              if (!(element instanceof HTMLButtonElement)) return false
+              return (
+                isVisible(testId) &&
+                !element.disabled &&
+                element.getAttribute('aria-disabled') !== 'true'
+              )
+            }
+            return {
+              loginGateVisible: isVisible('login-gate'),
+              authenticatedShellVisible: isVisible('authenticated-shell'),
+              vaultAuthenticated: window.__nookVault?.isAuthenticated === true,
+              overlayVisible: isVisible('passkey-auth-overlay'),
+              authorizeReady: isEnabled('device-protection-unlock-btn'),
+              unlockReady: isEnabled('unlock-vault-btn'),
+              pickerVisible: isVisible('login-vault-picker'),
+              errorVisible: isVisible('vault-error'),
+            }
           })
+          lastPostUnlockObservationText = JSON.stringify(observation)
           const state = new DeviceProtectionPostUnlockGate({
-            loginGateVisible: await loginGate.isVisible(),
-            vaultAuthenticated,
-            overlayVisible: await overlay.isVisible(),
-            authorizeReady: await authorizeButtonReady(),
-            unlockReady: await unlockButtonReady(),
-            pickerVisible: await vaultPicker.isVisible(),
-            errorVisible,
+            ...observation,
           }).state()
           if (state === DeviceProtectionAuthorizationGateState.Picker) {
             const option = opts?.storeId
@@ -721,10 +747,11 @@ export async function authorizeDeviceProtection(
     const diagnostic = (await vaultError.isVisible())
       ? (await vaultError.innerText()).trim()
       : ''
+    const lastObservation = lastPostUnlockObservationText
     throw new Error(
       diagnostic
-        ? `Vault authorization did not settle. Current visible vault error: ${diagnostic}`
-        : 'Vault authorization did not settle without a visible vault error.',
+        ? `Vault authorization did not settle. Current visible vault error: ${diagnostic}. Last observed gate state: ${lastObservation}`
+        : `Vault authorization did not settle without a visible vault error. Last observed gate state: ${lastObservation}`,
       { cause: failure },
     )
   }

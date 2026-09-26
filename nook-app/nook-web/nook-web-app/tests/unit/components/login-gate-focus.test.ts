@@ -138,4 +138,56 @@ describe('login gate identity focus restoration', () => {
       'login-unlock-method-keys',
     )
   })
+
+  test('does not reclaim focus after navigation during identity reload', async () => {
+    document.body.innerHTML =
+      '<button data-testid="login-review-identities"></button><button data-testid="login-unlock-method-keys"></button>'
+    enum IdentityLoadState {
+      Initial = 'Initial',
+      Reloading = 'Reloading',
+      Ready = 'Ready',
+    }
+    let identityLoadState: IdentityLoadState = IdentityLoadState.Initial
+    let frame = 0
+
+    await new IdentityContextFocusRestoration({
+      waitForNextFrame: async () => {
+        frame += 1
+        switch (frame) {
+          case 2:
+            identityLoadState = IdentityLoadState.Reloading
+            document
+              .querySelector<HTMLButtonElement>(
+                '[data-testid="login-unlock-method-keys"]',
+              )
+              ?.focus()
+            document
+              .querySelector<HTMLButtonElement>(
+                '[data-testid="login-review-identities"]',
+              )
+              ?.remove()
+            break
+          case 3:
+            identityLoadState = IdentityLoadState.Ready
+            document.body.insertAdjacentHTML(
+              'beforeend',
+              '<button data-testid="login-review-identities"></button>',
+            )
+            break
+          default:
+            break
+        }
+      },
+      identityContextLoading: () =>
+        identityLoadState === IdentityLoadState.Reloading,
+      reviewButton: () =>
+        document.querySelector<HTMLButtonElement>(
+          '[data-testid="login-review-identities"]',
+        ) || false,
+    }).restoreWhenAvailable()
+
+    expect(document.activeElement?.getAttribute('data-testid')).toBe(
+      'login-unlock-method-keys',
+    )
+  })
 })

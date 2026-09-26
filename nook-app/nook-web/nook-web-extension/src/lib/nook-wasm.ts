@@ -203,6 +203,12 @@ type ExtensionSessionResponseRequest<Response> = {
 type ExtensionRuntimeStartupResponse =
   { readonly ok: true } | { readonly ok: false; readonly reason?: string }
 
+export class ExtensionSessionRuntimeClosed extends Error {
+  constructor() {
+    super('The extension session closed during startup.')
+  }
+}
+
 /** Owns the browser runtime resources shared by these interactions. */
 class ExtensionWasmRuntime {
   private extensionWasmStartup: ExtensionWasmStartup = {
@@ -282,6 +288,14 @@ class ExtensionWasmRuntime {
       !('ok' in runtime) ||
       runtime.ok !== true
     ) {
+      if (
+        runtime &&
+        typeof runtime === 'object' &&
+        'reason' in runtime &&
+        runtime.reason === 'extension-session-document-closed'
+      ) {
+        throw new ExtensionSessionRuntimeClosed()
+      }
       throw new Error(
         runtime &&
           typeof runtime === 'object' &&

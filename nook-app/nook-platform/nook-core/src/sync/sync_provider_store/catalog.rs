@@ -261,7 +261,7 @@ impl DuplicateProviderSelection<'_> {
             provider.target_key() == candidate_key
         }) {
             Some(provider) => DuplicateSyncProvider::Duplicate {
-                provider: provider.clone(),
+                provider: Box::new(provider.clone()),
             },
             None => DuplicateSyncProvider::Unique,
         }

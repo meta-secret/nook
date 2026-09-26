@@ -146,6 +146,16 @@ jobs:
             printf '%s\n' "$context"
             cat "$context"
           done
+      - name: Preserve failed extension Playwright diagnostics
+        if: failure() && inputs.full_e2e_requested
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr-extension-playwright-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/nook-pr-artifacts/runtime/nook-app/nook-web/nook-web-extension/test-results/**/trace.zip
+            ${{ runner.temp }}/nook-pr-artifacts/runtime/nook-app/nook-web/nook-web-extension/test-results/**/error-context.md
+          if-no-files-found: warn
+          retention-days: 15
       - name: Import production artifacts after all validation succeeds
         if: steps.browser-scope.outputs.validation == 'true'
         run: |

@@ -5,6 +5,7 @@ import {
   VaultStorageFailureKind,
   NativeVaultStorageFailure,
 } from "$lib/runtime/storage-failure";
+import { ProviderFailureLogContext } from "$lib/vault/provider-failure-log-context";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 
 /** Sync actions that snapshot reactive Svelte state at WASM boundaries. */
@@ -179,7 +180,17 @@ export class ProviderSyncActions {
     Result<ProviderSyncOutcome, VaultStorageFailure>
   > {
     const state = this.state;
-    log.warn("provider synchronization failed");
+    const failureRequest: Parameters<typeof ProviderFailureLogContext.from>[0] =
+      {
+        provider_type: provider.type,
+        failure_kind: failure.kind,
+      };
+    const failureContext = ProviderFailureLogContext.from(failureRequest);
+    const warningContext: Parameters<typeof log.warnWithContext>[0] = {
+      message: "provider synchronization failed",
+      serializedContext: failureContext.serialize(),
+    };
+    log.warnWithContext(warningContext);
     const admitted = state.admitManager();
     if (admitted.isErr()) return err(admitted.error);
     let issueResult: ReturnType<

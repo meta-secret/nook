@@ -62,7 +62,9 @@ test.describe('file sync provider event log', () => {
       throw new Error('file sync target did not create a file-backed remote')
     }
 
-    await connectSyncGenesisDevice(deviceA, target)
+    await connectSyncGenesisDevice(deviceA, target, {
+      privateDriveFolderV2: true,
+    })
     await assertVaultReady(deviceA)
 
     const key = uniqueSecretKey('e2e-file-sync')
@@ -117,7 +119,9 @@ test.describe('file sync provider event log', () => {
       'vault2-backup',
     )
 
-    await connectSyncGenesisDevice(deviceA, commonVault)
+    await connectSyncGenesisDevice(deviceA, commonVault, {
+      privateDriveFolderV2: true,
+    })
     await assertVaultReady(deviceA)
     await waitForFileEvents(commonVault, 1)
 
@@ -233,6 +237,7 @@ async function addFileBackupProvider(
       fileName: target.repoName,
       accessToken: target.pat,
       accountEmail: `${opts.id}@e2e.local`,
+      drivePrivateTarget: { state: 'pending' },
     },
   ])
   await invokeInitializedVaultProviderReload(page)

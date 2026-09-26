@@ -128,7 +128,7 @@ impl CredentialTransition<'_> {
                 StoredOAuthFileConfiguration::NotApplicable
             }
             StoredOAuthFileConfiguration::Configured(oauth) => {
-                StoredOAuthFileConfiguration::Configured(OAuthFileConfigData {
+                StoredOAuthFileConfiguration::configured(OAuthFileConfigData {
                     access_token: match &oauth.access_token {
                         StoredOAuthAccessCredential::SignedOut => {
                             StoredOAuthAccessCredential::SignedOut
@@ -149,6 +149,7 @@ impl CredentialTransition<'_> {
                     expires_at: oauth.expires_at.clone(),
                     file_id: oauth.file_id.clone(),
                     folder_id: oauth.folder_id.clone(),
+                    drive_private_target: oauth.drive_private_target.clone(),
                     drive_mode: oauth.drive_mode,
                     icloud_mode: oauth.icloud_mode,
                     icloud_share_target: oauth.icloud_share_target.clone(),
@@ -458,10 +459,11 @@ impl ProviderCredentialField {
 mod tests {
     use crate::{
         ActiveVaultScope, GoogleDriveMode, ProviderSyncCheckpoint, ProviderVaultScope,
-        StoredGithubPat, StoredGithubRepository, StoredGoogleDriveFolder, StoredICloudShareTarget,
-        StoredLocalFolderConfiguration, StoredOAuthAccessCredential, StoredOAuthAccountIdentity,
-        StoredOAuthFileConfiguration, StoredOAuthRefreshCredential, StoredOAuthRemoteFileId,
-        StoredOAuthRemoteFileName, StoredOAuthTokenExpiry,
+        StoredGithubPat, StoredGithubRepository, StoredGoogleDriveFolder,
+        StoredGoogleDrivePrivateTarget, StoredICloudShareTarget, StoredLocalFolderConfiguration,
+        StoredOAuthAccessCredential, StoredOAuthAccountIdentity, StoredOAuthFileConfiguration,
+        StoredOAuthRefreshCredential, StoredOAuthRemoteFileId, StoredOAuthRemoteFileName,
+        StoredOAuthTokenExpiry,
     };
 
     use std::io;
@@ -539,6 +541,7 @@ mod tests {
                         expires_at: StoredOAuthTokenExpiry::Unknown,
                         file_id: StoredOAuthRemoteFileId::Unresolved,
                         folder_id: StoredGoogleDriveFolder::Root,
+                        drive_private_target: StoredGoogleDrivePrivateTarget::LegacyAppDataFolder,
                         drive_mode: GoogleDriveMode::Private,
                         icloud_mode: ICloudMode::Private,
                         icloud_share_target: StoredICloudShareTarget::Personal,

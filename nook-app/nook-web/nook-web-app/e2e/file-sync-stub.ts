@@ -8,10 +8,40 @@ import {
   parseEventMultipart,
   EventMultipartParseKind,
 } from './event-log-stub'
+import { parseJson, requireRecord } from './helpers/guards'
 
 const DEFAULT_FILE_NAME = 'nook-e2e-file-sync'
 const EVENT_LOG_DIR = path.join('nook-log', 'v1', 'events')
 const EVENT_FILE_NAME_PATTERN = new RegExp(`^(${EVENT_DIGEST_PATTERN})\\.yaml$`)
+const PRIVATE_EVENT_FOLDER_PREFIX = 'nook-events-v2-'
+const DRIVE_FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder'
+
+type PrivateFolderResource = {
+  id: string
+  name: string
+  mimeType: string
+}
+
+function isPrivateFolderLookup(requestUrl: string, fileName: string): boolean {
+  const expectedName = `${PRIVATE_EVENT_FOLDER_PREFIX}${fileName}`
+  const escapedName = expectedName.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+  const expectedQuery = `name = '${escapedName}' and mimeType = '${DRIVE_FOLDER_MIME_TYPE}' and 'appDataFolder' in parents and trashed = false`
+  const search = new URL(requestUrl).searchParams
+  const queryValues = search.getAll('q')
+  const spaces = search.getAll('spaces')
+  return (
+    queryValues.length === 1 &&
+    queryValues[0] === expectedQuery &&
+    spaces.length === 1 &&
+    spaces[0] === 'appDataFolder'
+  )
+}
+
+function privateFolderHasAppDataParent(value: unknown): boolean {
+  return (
+    Array.isArray(value) && value.length === 1 && value[0] === 'appDataFolder'
+  )
+}
 
 function toPosixPath(value: string) {
   return value.split(path.sep).join('/')
@@ -47,6 +77,8 @@ export function createLocalE2eFileSyncVaultStub(
   let vaultFileExists = initialYaml.trim().length > 0
   let fileId = `e2e-file-vault-${fileName.replace(/\W/g, '-')}`
   let md5Checksum = 'e2e-file-stub-md5'
+  let privateFolders: PrivateFolderResource[] = []
+  let privateFolderCreateCount = 0
   const offlinePages = new WeakSet<Page>()
 
   function eventsDir() {
@@ -135,6 +167,8 @@ export function createLocalE2eFileSyncVaultStub(
       }
     },
     getEventFileCount: () => eventDigests().length,
+    getPrivateFolderIds: () => privateFolders.map(({ id }) => id),
+    getPrivateFolderCreateCount: () => privateFolderCreateCount,
     getEventFilePaths: () =>
       eventDigests().map((digest) =>
         toPosixPath(path.join(EVENT_LOG_DIR, `${digest}.yaml`)),
@@ -177,9 +211,22 @@ export function createLocalE2eFileSyncVaultStub(
       const accessToken = opts?.accessToken
 
       await page.route('https://www.googleapis.com/**', async (route) => {
+        const request = route.request()
+        const method = request.method()
+        if (method === 'OPTIONS' && accessToken) {
+          await route.fulfill({
+            status: 204,
+            headers: {
+              'access-control-allow-origin': '*',
+              'access-control-allow-methods': 'GET, POST, PATCH, OPTIONS',
+              'access-control-allow-headers': 'Authorization, Content-Type',
+            },
+          })
+          return
+        }
         if (accessToken) {
           const authorization = ((v) => (v ? v : ''))(
-            route.request().headers().authorization,
+            request.headers().authorization,
           )
           if (authorization !== `Bearer ${accessToken}`) {
             await route.fallback()
@@ -196,9 +243,7 @@ export function createLocalE2eFileSyncVaultStub(
           return
         }
 
-        const request = route.request()
         const [url = ''] = [request.url().split('?')[0]]
-        const method = request.method()
         const fullUrl = request.url()
 
         if (url === 'https://www.googleapis.com/drive/v3/about') {
@@ -216,6 +261,19 @@ export function createLocalE2eFileSyncVaultStub(
           url === 'https://www.googleapis.com/drive/v3/files' &&
           method === 'GET'
         ) {
+          if (isPrivateFolderLookup(fullUrl, fileName)) {
+            const expectedName = `${PRIVATE_EVENT_FOLDER_PREFIX}${fileName}`
+            const files = privateFolders
+              .filter((folder) => folder.name === expectedName)
+              .map(({ id, name, mimeType }) => ({ id, name, mimeType }))
+            await route.fulfill({
+              status: 200,
+              contentType: 'application/json',
+              headers: { 'access-control-allow-origin': '*' },
+              body: JSON.stringify({ files }),
+            })
+            return
+          }
           const decoded = decodeURIComponent(fullUrl)
           const eventDigest = decoded.match(
             new RegExp(`name\\s*=\\s*'(${EVENT_DIGEST_PATTERN})\\.yaml'`),
@@ -242,6 +300,46 @@ export function createLocalE2eFileSyncVaultStub(
             }),
           })
           return
+        }
+
+        if (
+          url === 'https://www.googleapis.com/drive/v3/files' &&
+          method === 'POST'
+        ) {
+          const bodyText = ((v) => (v ? v : ''))(request.postData())
+          let metadata: Record<string, unknown> = {}
+          try {
+            metadata = requireRecord(
+              parseJson(bodyText),
+              'Drive folder metadata',
+            )
+          } catch {
+            // The initialized empty metadata remains valid when the body is malformed.
+          }
+          const folderName =
+            typeof metadata.name === 'string' ? metadata.name : ''
+          if (
+            metadata.mimeType === DRIVE_FOLDER_MIME_TYPE &&
+            privateFolderHasAppDataParent(metadata.parents) &&
+            folderName.length > 0
+          ) {
+            privateFolderCreateCount += 1
+            const folder: PrivateFolderResource = {
+              id: `e2e-file-private-folder-${Buffer.from(folderName).toString('base64url')}`,
+              name: folderName,
+              mimeType: DRIVE_FOLDER_MIME_TYPE,
+            }
+            privateFolders = privateFolders
+              .filter((existing) => existing.name !== folderName)
+              .concat(folder)
+            await route.fulfill({
+              status: 200,
+              contentType: 'application/json',
+              headers: { 'access-control-allow-origin': '*' },
+              body: JSON.stringify(folder),
+            })
+            return
+          }
         }
 
         const driveFileMatch = url.match(
@@ -357,6 +455,20 @@ export function createLocalE2eFileSyncVaultStub(
             status: 200,
             contentType: 'application/json',
             body: JSON.stringify({ id: fileId, md5Checksum }),
+          })
+          return
+        }
+
+        if (accessToken) {
+          await route.fulfill({
+            status: 404,
+            contentType: 'application/json',
+            headers: { 'access-control-allow-origin': '*' },
+            body: JSON.stringify({
+              error: {
+                message: 'Unsupported Google Drive route in e2e file stub',
+              },
+            }),
           })
           return
         }

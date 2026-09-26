@@ -47,7 +47,9 @@ test.describe('multi-device local vault with sync provider', () => {
     await stub.install(deviceA, { fileName, vaultYaml: genesisYaml })
     await stub.install(deviceB, { fileName, vaultYaml: genesisYaml })
 
-    await reloadUnlockLocalVaultWithSync(deviceA, stub)
+    await reloadUnlockLocalVaultWithSync(deviceA, stub, {
+      privateDriveFolderV2: true,
+    })
     await triggerVaultSyncRefresh(deviceA)
     await expect(deviceA.getByTestId('vault-last-sync')).toContainText(
       /just now|s ago/,

@@ -18,7 +18,11 @@ import {
   shouldFlushSharedDriveGrant,
 } from '$lib/vault/password-unlock'
 
-function driveProvider(id: string, folderId: string): StorageProvider {
+function driveProvider(
+  id: string,
+  folderId: string,
+  includeLegacyPrivateTarget = !folderId,
+): StorageProvider {
   const config = {
     ...defaultOAuthFileConfig({
       preset: 'google-drive',
@@ -29,6 +33,9 @@ function driveProvider(id: string, folderId: string): StorageProvider {
       ? storedGoogleDriveFolder(folderId)
       : rootGoogleDriveFolder(),
     driveMode: folderId ? ('shared' as const) : ('private' as const),
+    ...(includeLegacyPrivateTarget
+      ? { drivePrivateTarget: { state: 'legacyAppDataFolder' as const } }
+      : {}),
   }
   return {
     ...providerPersistenceDefaults(),
@@ -60,6 +67,11 @@ describe('shared enrollment provider selection', () => {
 
   test('reuses only the provider saved for the granted target', () => {
     const matchingDrive = driveProvider('matching', 'folder-required')
+    const expectedMatchingDrive = driveProvider(
+      'matching',
+      'folder-required',
+      true,
+    )
 
     expect(
       findSharedGrantProvider({
@@ -72,7 +84,7 @@ describe('shared enrollment provider selection', () => {
       }),
     ).toEqual({
       kind: 'existing',
-      provider: matchingDrive,
+      provider: expectedMatchingDrive,
     })
   })
 

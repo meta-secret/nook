@@ -4,10 +4,10 @@
 
 ### Required bootstrap
 
-Nook pins Meta-Cortex 0.9.1. Each consuming worktree has its own ignored
+Nook pins Meta-Cortex v0.9.1. Each consuming worktree has its own ignored
 `.meta-cortex/` installation. Creating a Git worktree does not install that
-framework. Never copy `.meta-cortex/` from another checkout. Use the consuming
-worktree's absolute path in every YAML request.
+framework. Never copy `.meta-cortex/` or a ledger database from another
+checkout. Use the consuming worktree's absolute path in every YAML request.
 
 Resolve the CLI before normal repository work. `command -v meta-cortex` must
 select the intended executable, and `meta-cortex --version` must report
@@ -15,7 +15,7 @@ select the intended executable, and `meta-cortex --version` must report
 Nook-pinned [v0.9.1 release](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/tag/v0.9.1)
 and correct command resolution. Run `meta-cortex list` to inspect supported
 typed requests. The CLI upgrade and installed framework replacement are
-separate operations; use the upstream [release notes](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/tag/v0.9.1)
+separate operations; use the upstream [v0.9.1 release notes](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/tag/v0.9.1)
 and [project update procedure](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex#update-a-project).
 
 ```sh
@@ -64,9 +64,9 @@ operation:
 REQUEST
 ```
 
-Continue only when `cli_version` and `framework_version` both report `0.9.1`,
-`schema_version` reports `5`, and the Codex integration reports `Connected`.
-Then read the installed
+`Framework / Info` reports schema version 5. Continue only when
+`schema_version` is `5`, `cli_version` and `framework_version` both report
+`0.9.1`, and the Codex integration reports `Connected`. Then read the installed
 [Meta-Cortex circuit breaker](../.meta-cortex/CIRCUIT-BREAKER.md), followed by
 its [entry point](../.meta-cortex/AGENTS.md). If the CLI cannot be installed,
 initialization fails, or Info cannot verify the framework, stop and report the
@@ -85,12 +85,16 @@ Meta-Cortex owns generic role configuration and launch procedure through its
 Read the active worktree's configuration and pass each role's configured model
 and `reasoning_effort`. Preserve those configured values during upgrades. Do not
 copy role settings from a canonical checkout or maintain Nook-specific
-overrides. Execution speed is selected by host-native settings. Framework role
-configuration has no `mode` or `service_tier` fields. Keep Nook's session
-`development.mode` (`single_agent` or `multi_agent`) separate from execution
-speed and reasoning effort. Resolve session development choices through the
-upstream [development-mode workflow](../.meta-cortex/AGENTS.md#development-mode)
-and apply Nook's assignment and delivery constraints in both modes.
+overrides. Meta-Cortex v0.9.1 configures only model and reasoning effort for
+each role. Its configuration has no `mode` or `service_tier` fields.
+Execution speed is selected by host-native settings. Leave subagent speed selection to
+the host session. Keep Nook's session `development.mode` (`single_agent` or
+`multi_agent`) separate from execution speed and reasoning effort. Resolve the
+separate `development.mode` and `development.delivery` session choices through
+the upstream [development-mode workflow](../.meta-cortex/AGENTS.md#development-mode).
+They select the coordination and delivery paths; they are not framework
+configuration or launch fields. Apply Nook's assignment and delivery
+constraints to either coordination path.
 
 When upgrading an older configuration, remove obsolete per-role `mode` and
 `service_tier` fields while retaining each role's `model` and `reasoning_effort`.
@@ -135,6 +139,9 @@ contract, each source pin, and their owning policy and test contracts together.
   corresponding policy and test assertions in the same change.
 
 ### Repository identity and ledger migration
+
+In v0.8, Meta-Cortex stored feature ledgers as per-feature databases. The v0.9.1
+workbench below imports those legacy databases into its shared repository database.
 
 Meta-Cortex v0.9.1 stores all feature ledgers in one shared workbench database
 outside Git at

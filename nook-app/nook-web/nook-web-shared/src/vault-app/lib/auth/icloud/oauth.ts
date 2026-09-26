@@ -619,10 +619,7 @@ class ICloudOAuthSession {
           diagnostic: new CloudKitFailureDiagnostic(error),
           hasSignInControl: this.hasCloudKitSignInControl(),
         };
-        if (
-          !clickSignInControl ||
-          new CloudKitSetupFailure(failureCheck).expected
-        ) {
+        if (new CloudKitSetupFailure(failureCheck).expected) {
           expectedFailure = true;
           const signedOut: CloudKitIdentity = {
             kind: CloudKitIdentityKind.SignedOut,

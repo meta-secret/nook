@@ -3,6 +3,8 @@
 workflow/processing
 # Host-installed by `task impeccable:install`; must not enter build or preflight COPY.
 /.agents/skills/impeccable/
+# Host-initialized by Meta-Cortex; preflight initializes its pinned copy in-image.
+/.meta-cortex/
 **/target
 preflight/target
 **/node_modules

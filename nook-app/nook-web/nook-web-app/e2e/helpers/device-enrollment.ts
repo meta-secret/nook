@@ -145,7 +145,7 @@ export async function connectGoogleDriveVault(
 ) {
   await installGoogleOAuthMock(page, accessToken)
   if (stub) {
-    await stub.install(page, { fileName })
+    await stub.install(page, { fileName, accessToken })
   }
   await page.goto('/app/')
   await createLocalVaultOnLogin(page)
