@@ -171,6 +171,7 @@ export const I18N_KEYS = {
   AuthStorageDuplicateSyncProvider: 'auth_storage.duplicate_sync_provider',
   AuthStorageExistingVaultNotFound: 'auth_storage.existing_vault_not_found',
   AuthStorageGithub: 'auth_storage.github',
+  AuthStorageGithubTokenRejected: 'auth_storage.github_token_rejected',
   AuthStorageGoogleNotSignedIn: 'auth_storage.google_not_signed_in',
   AuthStorageGoogleSignedIn: 'auth_storage.google_signed_in',
   AuthStorageIcloudNotSignedIn: 'auth_storage.icloud_not_signed_in',

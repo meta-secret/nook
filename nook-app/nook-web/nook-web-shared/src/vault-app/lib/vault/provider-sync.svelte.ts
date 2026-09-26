@@ -179,7 +179,17 @@ export class ProviderSyncActions {
     Result<ProviderSyncOutcome, VaultStorageFailure>
   > {
     const state = this.state;
-    log.warn("provider synchronization failed");
+    const failureContext = {
+      provider_type: provider.type,
+      failure_kind: failure.kind,
+      ...(failure.kind === VaultStorageFailureKind.GitHubTokenRejected
+        ? { http_status: 401 }
+        : {}),
+    };
+    log.warnWithContext({
+      message: "provider synchronization failed",
+      serializedContext: JSON.stringify(failureContext),
+    });
     const admitted = state.admitManager();
     if (admitted.isErr()) return err(admitted.error);
     let issueResult: ReturnType<

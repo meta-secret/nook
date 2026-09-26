@@ -1392,6 +1392,7 @@
     "security_conflict_edits": "Security conflict detected. Sync from all devices before editing.",
     "sync_blocked_edits": "Resolve the sync conflict before changing secrets.",
     "sync_failed": "Sync failed for this provider.",
+    "github_token_rejected": "GitHub rejected this token (401). Check that it is active and has access to the selected repository.",
     "duplicate_sync_provider": "This sync provider is already connected with the same storage target.",
     "existing_vault_not_found": "No existing vault was found in this provider. Choose another provider, or go back and create a new vault.",
     "local_folder_choose_err": "Choose a local backup folder before connecting.",

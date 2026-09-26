@@ -34,13 +34,14 @@ use crate::storage::identity_record::{PendingSimpleGenesis, SimpleGenesisComplet
 
 use crate::storage::identity_record;
 use crate::{NookError, NookSecretRecord};
+use js_sys::{Error as JsNativeError, Reflect};
 use nook_core::{AssessConnectAccessRequest, VaultMetaState};
 use nook_core::{
     ConnectAccessStatus, EventGraphAuthorizationProjection, EventId, IdentityVaultDekEpoch,
     IdentityVaultEventId, StorageMode, StoreId, VaultAccessStatus, VaultUnlock,
 };
-use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
+use wasm_bindgen::{JsError, JsValue};
 
 impl NookError {
     fn requires_sentinel_ceremony(&self) -> bool {
@@ -114,6 +115,28 @@ mod tests {
             }
             .verify();
         }
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    fn github_token_rejection_projects_a_typed_safe_wasm_error() {
+        let failure = NookVaultManager::assessment_failure_js_value(NookError::GitHubTokenRejected);
+        let code = js_sys::Reflect::get(&failure, &JsValue::from_str("code"))
+            .expect("provider error exposes its code");
+        let message = js_sys::Reflect::get(&failure, &JsValue::from_str("message"))
+            .expect("provider error exposes its safe message");
+
+        assert_eq!(code.as_string().as_deref(), Some("github-token-rejected"));
+        assert_eq!(
+            message.as_string().as_deref(),
+            Some("GitHub authentication failed.")
+        );
     }
 
     #[wasm_bindgen_test]
@@ -354,7 +377,8 @@ mod tests {
         assert_eq!(
             manager
                 .assess_vault_connect("local".to_owned(), String::new(), String::new())
-                .await?,
+                .await
+                .expect("local assessment succeeds"),
             VaultAccessStatus::NewVault
         );
         manager.prepare_connect_from_local_cache();
@@ -456,7 +480,8 @@ mod tests {
         resumed.device.identity_private_key = identity.secret_string().into_inner();
         let status = resumed
             .assess_vault_connect("local".to_owned(), String::new(), String::new())
-            .await?;
+            .await
+            .expect("resumed local assessment succeeds");
         assert_ne!(status, VaultAccessStatus::NewVault);
 
         manager.delete_local_browser_data().await?;
@@ -520,34 +545,13 @@ mod tests {
     }
 }
 
-#[wasm_bindgen]
 impl NookVaultManager {
-    /// Discover the single vault identity exposed by a staged sync provider
-    /// without requiring or decrypting a device identity. Hosts use this only
-    /// to bind an existing-vault import to an already-paired companion.
-    #[wasm_bindgen]
-    pub async fn discover_remote_vault_store_id(
+    async fn assess_vault_connect_inner(
         &mut self,
         storage_mode: String,
         github_pat: String,
         github_repo: String,
-    ) -> Result<String, JsError> {
-        self.reset_vault_session();
-        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
-            .await?;
-        if self.storage.mode != StorageMode::Local {
-            self.sync_events_from_current_provider().await?;
-        }
-        Ok(self.vault.store_id.clone())
-    }
-
-    /// Return the typed, core-owned connect status for the selected provider.
-    pub async fn assess_vault_connect(
-        &mut self,
-        storage_mode: String,
-        github_pat: String,
-        github_repo: String,
-    ) -> Result<nook_core::VaultAccessStatus, JsError> {
+    ) -> Result<VaultAccessStatus, NookError> {
         self.prepare_storage(&storage_mode, &github_pat, &github_repo)
             .await?;
         let identity = self.ensure_device_identity()?;
@@ -616,6 +620,61 @@ impl NookVaultManager {
             "assess_vault_connect"
         );
         Ok(status)
+    }
+
+    fn assessment_failure_js_value(error: NookError) -> JsValue {
+        match error {
+            NookError::GitHubTokenRejected => {
+                let js_error = JsNativeError::new("GitHub authentication failed.");
+                js_error.set_name("NookProviderFailure");
+                let js_error: JsValue = js_error.into();
+                let code_set = Reflect::set(
+                    &js_error,
+                    &JsValue::from_str("code"),
+                    &JsValue::from_str("github-token-rejected"),
+                )
+                .unwrap_or_default();
+                if !code_set {
+                    return JsError::new("GitHub authentication failed.").into();
+                }
+                js_error
+            }
+            other => JsError::new(&other.to_string()).into(),
+        }
+    }
+}
+
+#[wasm_bindgen]
+impl NookVaultManager {
+    /// Discover the single vault identity exposed by a staged sync provider
+    /// without requiring or decrypting a device identity. Hosts use this only
+    /// to bind an existing-vault import to an already-paired companion.
+    #[wasm_bindgen]
+    pub async fn discover_remote_vault_store_id(
+        &mut self,
+        storage_mode: String,
+        github_pat: String,
+        github_repo: String,
+    ) -> Result<String, JsError> {
+        self.reset_vault_session();
+        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
+            .await?;
+        if self.storage.mode != StorageMode::Local {
+            self.sync_events_from_current_provider().await?;
+        }
+        Ok(self.vault.store_id.clone())
+    }
+
+    /// Return the typed, core-owned connect status for the selected provider.
+    pub async fn assess_vault_connect(
+        &mut self,
+        storage_mode: String,
+        github_pat: String,
+        github_repo: String,
+    ) -> Result<nook_core::VaultAccessStatus, JsValue> {
+        self.assess_vault_connect_inner(storage_mode, github_pat, github_repo)
+            .await
+            .map_err(Self::assessment_failure_js_value)
     }
 
     /// Return an authenticated local session to local storage after a staged

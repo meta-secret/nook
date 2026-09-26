@@ -230,6 +230,7 @@ pub const AUTH_STORAGE_DISCONNECT: &str = "auth_storage.disconnect";
 pub const AUTH_STORAGE_DUPLICATE_SYNC_PROVIDER: &str = "auth_storage.duplicate_sync_provider";
 pub const AUTH_STORAGE_EXISTING_VAULT_NOT_FOUND: &str = "auth_storage.existing_vault_not_found";
 pub const AUTH_STORAGE_GITHUB: &str = "auth_storage.github";
+pub const AUTH_STORAGE_GITHUB_TOKEN_REJECTED: &str = "auth_storage.github_token_rejected";
 pub const AUTH_STORAGE_GOOGLE_NOT_SIGNED_IN: &str = "auth_storage.google_not_signed_in";
 pub const AUTH_STORAGE_GOOGLE_SIGNED_IN: &str = "auth_storage.google_signed_in";
 pub const AUTH_STORAGE_ICLOUD_NOT_SIGNED_IN: &str = "auth_storage.icloud_not_signed_in";

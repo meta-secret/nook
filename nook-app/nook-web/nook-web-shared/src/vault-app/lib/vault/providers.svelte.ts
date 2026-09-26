@@ -418,7 +418,19 @@ export class VaultProviderActions {
             ),
           );
         } catch (nativeFailure) {
-          return storageErr(new NativeVaultStorageFailure(nativeFailure));
+          const failure = new NativeVaultStorageFailure(nativeFailure);
+          const failureContext = {
+            provider_type: args.mode,
+            failure_kind: failure.kind,
+            ...(failure.kind === StorageOperationFailureKind.GitHubTokenRejected
+              ? { http_status: 401 }
+              : {}),
+          };
+          log.warnWithContext({
+            message: "provider vault assessment failed",
+            serializedContext: JSON.stringify(failureContext),
+          });
+          return storageErr(failure);
         }
       })();
       const deadline: ConstructorParameters<typeof VaultDiscoveryTimeout>[0] = {

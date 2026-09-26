@@ -60,6 +60,14 @@ impl GitHubStorageClient<'_> {
             "GitHub API request failed"
         );
     }
+
+    pub(crate) fn github_api_failure(status: StatusCode, message: String) -> NookError {
+        if status == StatusCode::UNAUTHORIZED {
+            NookError::GitHubTokenRejected
+        } else {
+            NookError::GitHub(message)
+        }
+    }
 }
 
 // -------------------------------------------------------------
@@ -136,9 +144,10 @@ impl GitHubStorageClient<'_> {
                 path: "",
                 status,
             });
-            return Err(NookError::GitHub(
-            "GitHub rejected your token (401). Check that it is valid, not expired, and has repo access.".to_owned(),
-        ));
+            return Err(GitHubStorageClient::github_api_failure(
+                status,
+                "GitHub authentication failed.".to_owned(),
+            ));
         }
 
         if !status.is_success() {
@@ -148,9 +157,10 @@ impl GitHubStorageClient<'_> {
                 path: "",
                 status,
             });
-            return Err(NookError::GitHub(format!(
-                "Failed to fetch GitHub user details: status {status}"
-            )));
+            return Err(GitHubStorageClient::github_api_failure(
+                status,
+                format!("Failed to fetch GitHub user details: status {status}"),
+            ));
         }
 
         let parsed: GitHubUserResponse = serde_json::from_str(text)
@@ -176,9 +186,10 @@ impl GitHubStorageClient<'_> {
                 path: "",
                 status,
             });
-            return Err(NookError::GitHub(format!(
-                "Failed to check GitHub repository {repo}: status {status}"
-            )));
+            return Err(GitHubStorageClient::github_api_failure(
+                status,
+                format!("Failed to check GitHub repository {repo}: status {status}"),
+            ));
         }
 
         Ok(false)
@@ -206,9 +217,10 @@ impl GitHubStorageClient<'_> {
                 path,
                 status,
             });
-            return Err(NookError::GitHub(format!(
-                "GitHub API responded with status {status}"
-            )));
+            return Err(GitHubStorageClient::github_api_failure(
+                status,
+                format!("GitHub API responded with status {status}"),
+            ));
         }
 
         let entries: Vec<GitHubDirEntry> = serde_json::from_str(text).map_err(|e| {
@@ -249,9 +261,10 @@ impl GitHubStorageClient<'_> {
                 path,
                 status,
             });
-            return Err(NookError::GitHub(format!(
-                "GitHub API responded with status {status}"
-            )));
+            return Err(GitHubStorageClient::github_api_failure(
+                status,
+                format!("GitHub API responded with status {status}"),
+            ));
         }
 
         let parsed: GitHubFileResponse = serde_json::from_str(text)
@@ -296,7 +309,7 @@ impl GitHubStorageClient<'_> {
             } else {
                 format!("GitHub API responded with status {status}")
             };
-            return Err(NookError::GitHub(message));
+            return Err(GitHubStorageClient::github_api_failure(status, message));
         }
 
         let parsed: GitHubPutResponse = serde_json::from_str(text)
@@ -395,9 +408,10 @@ impl GitHubStorageClient<'_> {
             path: "",
             status,
         });
-        Err(NookError::GitHub(format!(
-            "Failed to create GitHub repository {repo}: status {status}"
-        )))
+        Err(GitHubStorageClient::github_api_failure(
+            status,
+            format!("Failed to create GitHub repository {repo}: status {status}"),
+        ))
     }
 }
 
@@ -636,12 +650,14 @@ mod tests {
 
     #[wasm_bindgen_test]
     fn github_username_response_covers_auth_statuses_and_payloads() -> anyhow::Result<()> {
-        assert!(matches!(GitHubStorageClient::github_username_response(
-            GitHubStorageClientGithubUsernameResponse {
-                status: StatusCode::UNAUTHORIZED,
-                text: "",
-            },
-        ), Err(NookError::GitHub(message)) if message.contains("rejected your token")
+        assert!(matches!(
+            GitHubStorageClient::github_username_response(
+                GitHubStorageClientGithubUsernameResponse {
+                    status: StatusCode::UNAUTHORIZED,
+                    text: "",
+                },
+            ),
+            Err(NookError::GitHubTokenRejected)
         ));
 
         assert!(matches!(GitHubStorageClient::github_username_response(

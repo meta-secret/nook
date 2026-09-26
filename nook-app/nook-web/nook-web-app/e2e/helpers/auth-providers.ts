@@ -401,18 +401,45 @@ export async function seedUnscopedOauthFileProvidersForEnrollment(
 
 export const AGE_ARMOR_MARKER = 'BEGIN AGE ENCRYPTED FILE'
 
+enum RawCredentialReadKind {
+  Absent = 'absent',
+  Malformed = 'malformed',
+  LegacyCiphertext = 'legacy-ciphertext',
+  TaggedCiphertext = 'tagged-ciphertext',
+  TaggedWithoutCiphertext = 'tagged-without-ciphertext',
+}
+
+enum RawCredentialProjectionKind {
+  Omit = 'omit',
+  Include = 'include',
+}
+
 type RawCredentialRead =
-  | { kind: 'absent' }
-  | { kind: 'malformed' }
-  | { kind: 'legacy-ciphertext'; ciphertext: string }
-  | { kind: 'tagged-ciphertext'; state: string; ciphertext: string }
-  | { kind: 'tagged-without-ciphertext'; state: string }
+  | { kind: RawCredentialReadKind.Absent }
+  | { kind: RawCredentialReadKind.Malformed }
+  | { kind: RawCredentialReadKind.LegacyCiphertext; ciphertext: string }
+  | {
+      kind: RawCredentialReadKind.TaggedCiphertext
+      state: string
+      ciphertext: string
+    }
+  | { kind: RawCredentialReadKind.TaggedWithoutCiphertext; state: string }
 
 type RawCredentialSnapshotValue =
   string | { state: string } | { state: string; value: string }
 
 type RawCredentialProjection =
-  { kind: 'omit' } | { kind: 'include'; value: RawCredentialSnapshotValue }
+  | { kind: RawCredentialProjectionKind.Omit }
+  | {
+      kind: RawCredentialProjectionKind.Include
+      value: RawCredentialSnapshotValue
+    }
+
+type RawAuthProviderPageReadRequest = {
+  stateKey: string
+  credentialReadKind: typeof RawCredentialReadKind
+  credentialProjectionKind: typeof RawCredentialProjectionKind
+}
 
 type RawOAuthFileCredentials = {
   accessToken?: RawCredentialSnapshotValue
@@ -467,7 +494,17 @@ export async function readRawAuthProvidersFromIdb(
   page: Page,
 ): Promise<RawAuthProvidersSnapshot> {
   const stateKey = await activeAuthProviderStateKey(page)
-  return page.evaluate((scopedStateKey) => {
+  const request: RawAuthProviderPageReadRequest = {
+    stateKey,
+    credentialReadKind: RawCredentialReadKind,
+    credentialProjectionKind: RawCredentialProjectionKind,
+  }
+  return page.evaluate((request) => {
+    const {
+      stateKey: scopedStateKey,
+      credentialReadKind,
+      credentialProjectionKind,
+    } = request
     return new Promise<RawAuthProvidersSnapshot>((resolve, reject) => {
       const resolveEmptySnapshot = () => resolve({ providers: [] })
       const resolveSnapshot = (rawSnapshot: unknown) => {
@@ -498,9 +535,13 @@ export async function readRawAuthProvidersFromIdb(
           !Array.isArray(value)
         const readCredential = (credential: unknown): RawCredentialRead => {
           if (typeof credential === 'string') {
-            return { kind: 'legacy-ciphertext', ciphertext: credential }
+            return {
+              kind: credentialReadKind.LegacyCiphertext,
+              ciphertext: credential,
+            }
           }
-          if (!isRecord(credential)) return { kind: 'malformed' }
+          if (!isRecord(credential))
+            return { kind: credentialReadKind.Malformed }
           const stateProperty = Object.getOwnPropertyDescriptor(
             credential,
             'state',
@@ -510,7 +551,7 @@ export async function readRawAuthProvidersFromIdb(
             !('value' in stateProperty) ||
             typeof stateProperty.value !== 'string'
           ) {
-            return { kind: 'malformed' }
+            return { kind: credentialReadKind.Malformed }
           }
           const valueProperty = Object.getOwnPropertyDescriptor(
             credential,
@@ -518,7 +559,7 @@ export async function readRawAuthProvidersFromIdb(
           )
           if (!valueProperty) {
             return {
-              kind: 'tagged-without-ciphertext',
+              kind: credentialReadKind.TaggedWithoutCiphertext,
               state: stateProperty.value,
             }
           }
@@ -527,12 +568,12 @@ export async function readRawAuthProvidersFromIdb(
             typeof valueProperty.value !== 'string'
           ) {
             return {
-              kind: 'tagged-without-ciphertext',
+              kind: credentialReadKind.TaggedWithoutCiphertext,
               state: stateProperty.value,
             }
           }
           return {
-            kind: 'tagged-ciphertext',
+            kind: credentialReadKind.TaggedCiphertext,
             state: stateProperty.value,
             ciphertext: valueProperty.value,
           }
@@ -542,30 +583,34 @@ export async function readRawAuthProvidersFromIdb(
           property: string,
         ): RawCredentialRead => {
           const descriptor = Object.getOwnPropertyDescriptor(owner, property)
-          if (!descriptor) return { kind: 'absent' }
-          if (!('value' in descriptor)) return { kind: 'malformed' }
+          if (!descriptor) return { kind: credentialReadKind.Absent }
+          if (!('value' in descriptor))
+            return { kind: credentialReadKind.Malformed }
           return readCredential(descriptor.value)
         }
         const projectCredential = (
           credential: RawCredentialRead,
         ): RawCredentialProjection => {
           switch (credential.kind) {
-            case 'absent':
-            case 'malformed':
-              return { kind: 'omit' }
-            case 'legacy-ciphertext':
-              return { kind: 'include', value: credential.ciphertext }
-            case 'tagged-ciphertext':
+            case credentialReadKind.Absent:
+            case credentialReadKind.Malformed:
+              return { kind: credentialProjectionKind.Omit }
+            case credentialReadKind.LegacyCiphertext:
               return {
-                kind: 'include',
+                kind: credentialProjectionKind.Include,
+                value: credential.ciphertext,
+              }
+            case credentialReadKind.TaggedCiphertext:
+              return {
+                kind: credentialProjectionKind.Include,
                 value: {
                   state: credential.state,
                   value: credential.ciphertext,
                 },
               }
-            case 'tagged-without-ciphertext':
+            case credentialReadKind.TaggedWithoutCiphertext:
               return {
-                kind: 'include',
+                kind: credentialProjectionKind.Include,
                 value: { state: credential.state },
               }
           }
@@ -599,7 +644,7 @@ export async function readRawAuthProvidersFromIdb(
           const githubPat = projectCredential(
             readCredentialProperty(providerValue, 'githubPat'),
           )
-          if (githubPat.kind === 'include') {
+          if (githubPat.kind === credentialProjectionKind.Include) {
             provider.githubPat = githubPat.value
           }
           const oauthFileProperty = Object.getOwnPropertyDescriptor(
@@ -628,13 +673,13 @@ export async function readRawAuthProvidersFromIdb(
             const accessToken = projectCredential(
               readCredentialProperty(credentialSource, 'accessToken'),
             )
-            if (accessToken.kind === 'include') {
+            if (accessToken.kind === credentialProjectionKind.Include) {
               oauthFile.accessToken = accessToken.value
             }
             const refreshToken = projectCredential(
               readCredentialProperty(credentialSource, 'refreshToken'),
             )
-            if (refreshToken.kind === 'include') {
+            if (refreshToken.kind === credentialProjectionKind.Include) {
               oauthFile.refreshToken = refreshToken.value
             }
             provider.oauthFile = oauthFile
@@ -684,7 +729,7 @@ export async function readRawAuthProvidersFromIdb(
           reject(((v) => (v ? v : new Error('idb tx failed')))(tx.error))
       }
     })
-  }, stateKey)
+  }, request)
 }
 
 export async function waitForAuthProvidersE2eHook(page: Page) {

@@ -86,9 +86,11 @@ impl LegacyStorageProvider<'_> {
                     | StoredGoogleDrivePrivateTarget::FolderId(_) => false,
                 }
             }
-            (crate::OauthFilePreset::GoogleDrive, crate::GoogleDriveMode::Shared)
-            | (crate::OauthFilePreset::ICloud, crate::GoogleDriveMode::Private)
-            | (crate::OauthFilePreset::ICloud, crate::GoogleDriveMode::Shared) => true,
+            (
+                crate::OauthFilePreset::GoogleDrive | crate::OauthFilePreset::ICloud,
+                crate::GoogleDriveMode::Shared,
+            )
+            | (crate::OauthFilePreset::ICloud, crate::GoogleDriveMode::Private) => true,
         }
     }
 }

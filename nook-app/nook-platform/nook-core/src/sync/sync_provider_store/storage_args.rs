@@ -58,21 +58,23 @@ impl super::OAuthFileConfig {
             self.resolved_google_drive_mode(),
             self.resolved_icloud_mode(),
         ) {
-            (OauthFilePreset::GoogleDrive, GoogleDriveMode::Shared, ICloudMode::Private)
-            | (OauthFilePreset::GoogleDrive, GoogleDriveMode::Shared, ICloudMode::Shared) => {
-                match &self.folder_id {
-                    StoredGoogleDriveFolder::FolderId(folder) if !folder.trim().is_empty() => {
-                        OAuthStorageReference::from(format!("shared:{}", folder.trim()))
-                    }
-                    StoredGoogleDriveFolder::Root | StoredGoogleDriveFolder::FolderId(_) => {
-                        return Err(ValidationError::SharedStorageTargetRequired);
-                    }
+            (
+                OauthFilePreset::GoogleDrive,
+                GoogleDriveMode::Shared,
+                ICloudMode::Private | ICloudMode::Shared,
+            ) => match &self.folder_id {
+                StoredGoogleDriveFolder::FolderId(folder) if !folder.trim().is_empty() => {
+                    OAuthStorageReference::from(format!("shared:{}", folder.trim()))
                 }
-            }
-            (OauthFilePreset::ICloud, GoogleDriveMode::Private, ICloudMode::Shared)
-            | (OauthFilePreset::ICloud, GoogleDriveMode::Shared, ICloudMode::Shared) => match &self
-                .icloud_share_target
-            {
+                StoredGoogleDriveFolder::Root | StoredGoogleDriveFolder::FolderId(_) => {
+                    return Err(ValidationError::SharedStorageTargetRequired);
+                }
+            },
+            (
+                OauthFilePreset::ICloud,
+                GoogleDriveMode::Private | GoogleDriveMode::Shared,
+                ICloudMode::Shared,
+            ) => match &self.icloud_share_target {
                 StoredICloudShareTarget::SharedTarget(target) if !target.trim().is_empty() => {
                     OAuthStorageReference::from(target.trim().to_owned())
                 }
@@ -80,9 +82,12 @@ impl super::OAuthFileConfig {
                     return Err(ValidationError::SharedStorageTargetRequired);
                 }
             },
-            (OauthFilePreset::GoogleDrive, GoogleDriveMode::Private, ICloudMode::Private)
+            (
+                OauthFilePreset::GoogleDrive | OauthFilePreset::ICloud,
+                GoogleDriveMode::Private,
+                ICloudMode::Private,
+            )
             | (OauthFilePreset::GoogleDrive, GoogleDriveMode::Private, ICloudMode::Shared)
-            | (OauthFilePreset::ICloud, GoogleDriveMode::Private, ICloudMode::Private)
             | (OauthFilePreset::ICloud, GoogleDriveMode::Shared, ICloudMode::Private) => {
                 legacy_storage_id
             }
@@ -92,9 +97,8 @@ impl super::OAuthFileConfig {
             (OauthFilePreset::GoogleDrive, GoogleDriveMode::Private) => {
                 Ok(self.private_drive_connection_storage_id(storage_id))
             }
-            (OauthFilePreset::GoogleDrive, GoogleDriveMode::Shared)
-            | (OauthFilePreset::ICloud, GoogleDriveMode::Private)
-            | (OauthFilePreset::ICloud, GoogleDriveMode::Shared) => Ok(storage_id),
+            (OauthFilePreset::GoogleDrive | OauthFilePreset::ICloud, GoogleDriveMode::Shared)
+            | (OauthFilePreset::ICloud, GoogleDriveMode::Private) => Ok(storage_id),
         }
     }
 

@@ -123,10 +123,9 @@ tasks:
         vars: { TASK: _web:test:e2e:parallel }
 
   web:test:e2e:file:
-    desc: Run specific Playwright e2e spec file(s) in Docker (E2E_SPEC env var).
+    desc: Run specific Playwright e2e spec file(s) in a focused Docker image (E2E_SPEC env var).
     deps:
-      - task: setup
-        vars: { SETUP_TARGET: nook-web-e2e }
+      - task: setup:web:e2e:focused
     env:
       E2E_SPEC: "{{.E2E_SPEC}}"
     cmds:
