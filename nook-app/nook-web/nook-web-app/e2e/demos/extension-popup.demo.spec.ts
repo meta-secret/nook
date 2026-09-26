@@ -138,7 +138,7 @@ test('keeps mixed session status safe and actionable', async ({ page }) => {
   await demoBeat(page)
 })
 
-test('restores the paired companion home after a restart unlock', async ({
+test('restores the paired companion home after a restart unlock and popup reopen', async ({
   page,
 }) => {
   const session: PopupDemoSession = {
@@ -177,6 +177,16 @@ test('restores the paired companion home after a restart unlock', async ({
   )
   await expect(page.getByTestId('companion-connection-status')).toHaveText(
     'Connected',
+  )
+  await page.reload()
+  await expect(page.getByTestId('extension-runtime-error')).toHaveCount(0)
+  await expect(page.getByTestId('extension-device-setup')).toBeVisible()
+  await page.getByTestId('device-protection-pin-unlock-input').fill('123456')
+  await page.getByTestId('device-protection-pin-unlock-btn').click()
+  await expect(page.getByTestId('extension-toolbar-menu')).toBeVisible()
+  await expect(page.getByTestId('companion-vault-status')).toHaveAttribute(
+    'data-connected',
+    'true',
   )
   await demoBeat(page)
 })
