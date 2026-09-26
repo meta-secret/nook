@@ -624,26 +624,21 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         'reload website after companion unlock',
       )
       console.log('[extension e2e] website reloaded after companion unlock')
-      await test.step(
+      console.log('[extension e2e] widget wait begin')
+      await withE2eDeadline(
+        expect(websiteWidget).toBeVisible(),
         'wait for widget after companion-unlock reload',
-        async () => {
-          await withE2eDeadline(
-            expect(websiteWidget).toBeVisible(),
-            'wait for widget after companion-unlock reload',
-          )
-        },
       )
+      console.log('[extension e2e] widget wait complete')
       const websiteLoginPickerPromise = waitForNewPage(
         context,
         'post-unlock website login picker',
       )
-      await test.step(
-        'click Continue with Nook after companion-unlock reload',
-        () =>
-          websiteWidget
-            .getByRole('button', { name: 'Continue with Nook' })
-            .click(),
-      )
+      console.log('[extension e2e] Continue click begin')
+      await websiteWidget
+        .getByRole('button', { name: 'Continue with Nook' })
+        .click()
+      console.log('[extension e2e] Continue click complete')
       const websiteLoginPicker = await websiteLoginPickerPromise
       await websiteLoginPicker.waitForURL(/intent=login-picker/)
       await expect(websiteLoginPicker.getByText('alice@nook.test')).toBeVisible(
@@ -716,17 +711,22 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         lockedVaultPage.getByTestId('passkey-auth-overlay'),
       ).toHaveCount(0)
     } finally {
+      console.log('[extension e2e] closing restarted context')
       await withE2eDeadline(
         restartedContext.close(),
         'close restarted extension context',
       )
+      console.log('[extension e2e] restarted context closed')
     }
   } finally {
+    console.log('[extension e2e] closing extension context')
     await withE2eDeadline(context.close(), 'close extension context')
+    console.log('[extension e2e] extension context closed')
+    console.log('[extension e2e] closing mock credential server')
     await withE2eDeadline(loginServer.close(), 'close mock credential server')
+    console.log('[extension e2e] mock credential server closed')
   }
 })
-
 test('accepts the pairing grant after the extension session was locked', async ({
   browserName,
 }, testInfo) => {
