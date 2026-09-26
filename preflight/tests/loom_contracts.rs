@@ -344,6 +344,34 @@ fn loom_workflow_audits_every_cortex_change() {
 #[test]
 fn preflight_initializes_released_meta_cortex_with_explicit_docker_tool_policies() {
     let dockerfile = RepositoryFixture::repository_root().read("preflight/Dockerfile");
+    assert!(
+        dockerfile.contains("mise_version=v2026.9.13")
+            && dockerfile.contains(
+                "mise_asset_url=\"https://github.com/jdx/mise/releases/download/${mise_version}/mise-${mise_version}-linux-x64\""
+            ),
+        "Docker preflight must pin mise v2026.9.13 to its official Linux x64 release asset"
+    );
+    let mise_sha256 = "a72f49916b33ba952ba398046c5cc91a58238f0b718fee1d938206ef2af21c6d";
+    assert!(
+        dockerfile.contains(&format!("mise_sha256={mise_sha256}"))
+            && dockerfile
+                .contains("printf '%s  %s\\n' \"$mise_sha256\" /tmp/mise | sha256sum --check -"),
+        "Docker preflight must verify the pinned official mise SHA-256 before installation"
+    );
+    let mise_download_position = dockerfile
+        .find("--output /tmp/mise \"$mise_asset_url\"")
+        .expect("Docker preflight must download the pinned mise release asset");
+    let mise_verification_position = dockerfile
+        .find("sha256sum --check -")
+        .expect("Docker preflight must verify mise against its fixed SHA-256");
+    let mise_install_directory = "install -d -m 0755 /root/.meta-cortex/mise/bin";
+    let mise_install_directory_position = dockerfile
+        .find(mise_install_directory)
+        .expect("Docker preflight must create Meta-Cortex's mise directory");
+    let mise_install_path = "install -m 0755 /tmp/mise /root/.meta-cortex/mise/bin/mise";
+    let mise_install_position = dockerfile
+        .find(mise_install_path)
+        .expect("Docker preflight must install mise executable at Meta-Cortex's expected path");
     let initialize_request_prefix = concat!(
         "meta-cortex run --request - <<'YAML'\n",
         "version: 1\n",
@@ -389,6 +417,13 @@ fn preflight_initializes_released_meta_cortex_with_explicit_docker_tool_policies
     let initialize_position = dockerfile
         .find(initialize_request_prefix)
         .expect("Docker policy source must include its Framework Initialize request");
+    assert!(
+        mise_download_position < mise_verification_position
+            && mise_verification_position < mise_install_directory_position
+            && mise_install_directory_position < mise_install_position
+            && mise_install_position < initialize_position,
+        "Docker preflight must download, verify, and install pinned mise before Framework Initialize"
+    );
     assert!(
         git_metadata_copy < initialize_position,
         "policy source must copy Git metadata before Meta-Cortex Framework Initialize"
