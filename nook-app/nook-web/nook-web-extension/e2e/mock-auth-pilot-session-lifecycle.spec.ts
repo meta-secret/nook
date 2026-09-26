@@ -3,12 +3,29 @@ import {
   launchPairedPinExtension,
   lockExtensionSession,
   saveVaultLogin,
+  waitForExtensionPopupEntrySurface,
 } from './helpers/paired-pin-extension'
 import { ensurePinProtectedPopup } from './helpers/pin-device'
 import { startMockAuthServer } from './mock-auth'
 
 test.describe('PIN Pilot session lifecycle', () => {
   test.describe.configure({ timeout: 180_000 })
+
+  test('reports an extension popup initialization failure as soon as it is visible', async ({
+    page,
+  }) => {
+    await page.setContent(`
+      <main data-testid="extension-device-setup">
+        <p role="alert" data-testid="extension-runtime-error">
+          Runtime unavailable
+        </p>
+      </main>
+    `)
+
+    await expect(waitForExtensionPopupEntrySurface(page)).rejects.toThrow(
+      'Extension popup failed to initialize: Runtime unavailable',
+    )
+  })
 
   test('returns to the site after Pilot unlock and waits for a fresh Continue click', async ({
     browserName,
