@@ -30,12 +30,14 @@ export function handlePairingStateQuery({
   void extensionPairingIdentity
     .getPairingStorage(setupStorageKey)
     .then((stored) => {
-      const storageResponseRequest: ExtensionPairingStateStorageResponseRequest = {
-        stored,
-        setupKey: setupStorageKey,
-      }
-      const storedStateResponse =
-        extensionPairingStateQueryResponseFromStorage(storageResponseRequest)
+      const storageResponseRequest: ExtensionPairingStateStorageResponseRequest =
+        {
+          stored,
+          setupKey: setupStorageKey,
+        }
+      const storedStateResponse = extensionPairingStateQueryResponseFromStorage(
+        storageResponseRequest,
+      )
       return sendResponse(storedStateResponse)
     })
     .catch(() => {
