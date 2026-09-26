@@ -3,10 +3,7 @@
     I18N_KEYS,
     type I18nKey,
   } from '../../../nook-web-shared/src/generated/i18n-keys'
-  import {
-    type ExtensionI18n,
-    extensionLocaleCatalog,
-  } from '../lib/i18n'
+  import { type ExtensionI18n, extensionLocaleCatalog } from '../lib/i18n'
 
   let { i18n }: { i18n: ExtensionI18n } = $props()
 
