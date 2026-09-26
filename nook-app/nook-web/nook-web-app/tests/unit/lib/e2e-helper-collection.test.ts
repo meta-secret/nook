@@ -126,6 +126,7 @@ describe('Playwright collection imports', () => {
   test('waits through the passkey overlay while login unlock hands off device authorization', () => {
     const gate = new DeviceProtectionPostUnlockGate({
       loginGateVisible: true,
+      authenticatedShellVisible: false,
       vaultAuthenticated: false,
       overlayVisible: true,
       authorizeReady: false,
@@ -141,6 +142,7 @@ describe('Playwright collection imports', () => {
     expect(
       new DeviceProtectionPostUnlockGate({
         loginGateVisible: false,
+        authenticatedShellVisible: true,
         vaultAuthenticated: false,
         overlayVisible: false,
         authorizeReady: false,
@@ -152,6 +154,7 @@ describe('Playwright collection imports', () => {
     expect(
       new DeviceProtectionPostUnlockGate({
         loginGateVisible: true,
+        authenticatedShellVisible: false,
         vaultAuthenticated: false,
         overlayVisible: false,
         authorizeReady: true,
@@ -163,6 +166,7 @@ describe('Playwright collection imports', () => {
     expect(
       new DeviceProtectionPostUnlockGate({
         loginGateVisible: true,
+        authenticatedShellVisible: false,
         vaultAuthenticated: false,
         overlayVisible: false,
         authorizeReady: false,
@@ -174,6 +178,7 @@ describe('Playwright collection imports', () => {
     expect(
       new DeviceProtectionPostUnlockGate({
         loginGateVisible: true,
+        authenticatedShellVisible: false,
         vaultAuthenticated: false,
         overlayVisible: false,
         authorizeReady: false,
@@ -185,6 +190,7 @@ describe('Playwright collection imports', () => {
     expect(
       new DeviceProtectionPostUnlockGate({
         loginGateVisible: true,
+        authenticatedShellVisible: false,
         vaultAuthenticated: false,
         overlayVisible: false,
         authorizeReady: false,
@@ -196,6 +202,7 @@ describe('Playwright collection imports', () => {
     expect(
       new DeviceProtectionPostUnlockGate({
         loginGateVisible: true,
+        authenticatedShellVisible: false,
         vaultAuthenticated: false,
         overlayVisible: false,
         authorizeReady: false,
@@ -207,6 +214,7 @@ describe('Playwright collection imports', () => {
     expect(
       new DeviceProtectionPostUnlockGate({
         loginGateVisible: true,
+        authenticatedShellVisible: false,
         vaultAuthenticated: false,
         overlayVisible: false,
         authorizeReady: false,
@@ -220,6 +228,7 @@ describe('Playwright collection imports', () => {
   test('recognizes the current authenticated session despite a visible load error', () => {
     const gate = new DeviceProtectionPostUnlockGate({
       loginGateVisible: true,
+      authenticatedShellVisible: false,
       vaultAuthenticated: true,
       overlayVisible: false,
       authorizeReady: false,
@@ -229,6 +238,36 @@ describe('Playwright collection imports', () => {
     })
 
     expect(gate.state()).toBe(DeviceProtectionAuthorizationGateState.Unlocked)
+  })
+
+  test('recognizes the authenticated workspace after the login gate remounts', () => {
+    const gate = new DeviceProtectionPostUnlockGate({
+      loginGateVisible: false,
+      authenticatedShellVisible: true,
+      vaultAuthenticated: false,
+      overlayVisible: false,
+      authorizeReady: false,
+      unlockReady: false,
+      pickerVisible: false,
+      errorVisible: false,
+    })
+
+    expect(gate.state()).toBe(DeviceProtectionAuthorizationGateState.Unlocked)
+  })
+
+  test('acts on an enabled device authorization button while the overlay is visible', () => {
+    const gate = new DeviceProtectionPostUnlockGate({
+      loginGateVisible: true,
+      authenticatedShellVisible: false,
+      vaultAuthenticated: false,
+      overlayVisible: true,
+      authorizeReady: true,
+      unlockReady: false,
+      pickerVisible: false,
+      errorVisible: false,
+    })
+
+    expect(gate.state()).toBe(DeviceProtectionAuthorizationGateState.Authorize)
   })
 
   test('shares the canonical trace transport without loading WASM', () => {
