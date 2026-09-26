@@ -5,26 +5,48 @@ export type IdentityContextFocusSchedule = {
 };
 
 /** Restore review focus after the login identity context has remounted. */
-export async function focusIdentityContextWhenAvailable(
-  schedule: IdentityContextFocusSchedule,
-): Promise<void> {
-  let focusedReviewButton: HTMLButtonElement | false = false;
-  for (let frame = 0; frame < 30; frame += 1) {
-    await schedule.waitForNextFrame();
-    if (schedule.identityContextLoading()) {
-      focusedReviewButton = false;
-      continue;
+export class IdentityContextFocusRestoration {
+  private focusedReviewButton: HTMLButtonElement | false = false;
+  private focusOwner: Element = document.body;
+
+  constructor(private readonly schedule: IdentityContextFocusSchedule) {
+    const initialReviewButton = schedule.reviewButton();
+    switch (initialReviewButton) {
+      case false:
+        break;
+      default:
+        this.focusOwner = initialReviewButton;
     }
-    const reviewButton = schedule.reviewButton();
-    if (!reviewButton) {
-      focusedReviewButton = false;
-      continue;
+  }
+
+  async restoreWhenAvailable(): Promise<void> {
+    for (let frame = 0; frame < 30; frame += 1) {
+      await this.schedule.waitForNextFrame();
+      const activeElement = document.activeElement;
+      switch (activeElement) {
+        case document.body:
+        case document.documentElement:
+        case this.focusOwner:
+          break;
+        default:
+          return;
+      }
+      if (this.schedule.identityContextLoading()) {
+        this.focusedReviewButton = false;
+        continue;
+      }
+      const reviewButton = this.schedule.reviewButton();
+      if (!reviewButton) {
+        this.focusedReviewButton = false;
+        continue;
+      }
+      if (reviewButton !== this.focusedReviewButton) {
+        reviewButton.focus();
+        this.focusedReviewButton = reviewButton;
+        this.focusOwner = reviewButton;
+        continue;
+      }
+      return;
     }
-    if (reviewButton !== focusedReviewButton) {
-      reviewButton.focus();
-      focusedReviewButton = reviewButton;
-      continue;
-    }
-    return;
   }
 }
