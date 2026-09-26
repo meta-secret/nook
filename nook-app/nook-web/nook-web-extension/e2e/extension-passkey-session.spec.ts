@@ -618,24 +618,44 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       console.log('[extension e2e] reopening companion for website assertion')
       await unlockExtensionThroughCompanion({ context, extensionId })
       console.log('[extension e2e] companion ready for website assertion')
-      await withE2eDeadline(
-        websiteAfterUnlock.page.reload(),
-        'reload website after companion unlock',
-      )
-      console.log('[extension e2e] website reloaded after companion unlock')
-      await expect(
-        websiteAfterUnlock.page.locator('#nook-auth-widget'),
-      ).toBeVisible()
       const websiteWidget = websiteAfterUnlock.page.locator('#nook-auth-widget')
-      const [websiteLoginPicker] = await Promise.all([
-        waitForNewPage(context, 'post-unlock website login picker'),
-        websiteWidget
-          .getByRole('button', { name: 'Continue with Nook' })
-          .click(),
-      ])
-      await websiteLoginPicker.waitForURL(/intent=login-picker/)
-      await expect(websiteLoginPicker.getByText('alice@nook.test')).toBeVisible(
-        { timeout: 20_000 },
+      await test.step('reload website after companion unlock', async () => {
+        await withE2eDeadline(
+          websiteAfterUnlock.page.reload(),
+          'reload website after companion unlock',
+        )
+        console.log('[extension e2e] website reloaded after companion unlock')
+      })
+      await test.step(
+        'wait for widget after companion-unlock reload',
+        async () => {
+          await withE2eDeadline(
+            expect(websiteWidget).toBeVisible(),
+            'wait for widget after companion-unlock reload',
+          )
+        },
+      )
+      const websiteLoginPickerPromise = waitForNewPage(
+        context,
+        'post-unlock website login picker',
+      )
+      await test.step(
+        'click Continue with Nook after companion-unlock reload',
+        () =>
+          websiteWidget
+            .getByRole('button', { name: 'Continue with Nook' })
+            .click(),
+      )
+      const websiteLoginPicker = await test.step(
+        'open and verify website login picker after companion-unlock reload',
+        async () => {
+          const picker = await websiteLoginPickerPromise
+          await picker.waitForURL(/intent=login-picker/)
+          await expect(picker.getByText('alice@nook.test')).toBeVisible({
+            timeout: 20_000,
+          })
+          return picker
+        },
       )
       console.log('[extension e2e] post-unlock login picker loaded')
       await websiteLoginPicker.close()
