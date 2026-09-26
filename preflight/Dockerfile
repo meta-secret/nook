@@ -144,6 +144,9 @@ operation:
     arguments:
       harness: codex
       instructions: skip
+      mise: InstallMissing
+      bun: InstallMissing
+      vale: InstallMissing
 YAML
 meta-cortex run --request - <<'YAML'
 version: 1

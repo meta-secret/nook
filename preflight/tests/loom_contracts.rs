@@ -342,9 +342,9 @@ fn loom_workflow_audits_every_cortex_change() {
 }
 
 #[test]
-fn preflight_installs_released_meta_cortex_without_configuration_override() {
+fn preflight_initializes_released_meta_cortex_with_explicit_docker_tool_policies() {
     let dockerfile = RepositoryFixture::repository_root().read("preflight/Dockerfile");
-    let initialize_request = concat!(
+    let initialize_request_prefix = concat!(
         "meta-cortex run --request - <<'YAML'\n",
         "version: 1\n",
         "project: /meta-secret/nook\n",
@@ -354,9 +354,24 @@ fn preflight_installs_released_meta_cortex_without_configuration_override() {
         "    name: Initialize\n",
         "    arguments:\n",
         "      harness: codex\n",
-        "      instructions: skip\n",
-        "YAML"
+        "      instructions: skip\n"
     );
+    let initialize_request_body = dockerfile
+        .split_once(initialize_request_prefix)
+        .and_then(|(_, remainder)| remainder.split_once("\nYAML"))
+        .map(|(request_body, _)| request_body)
+        .expect(
+            "Docker Framework Initialize request must use the selected harness and instructions",
+        );
+    for tool in ["mise", "bun", "vale"] {
+        let expected_policy = format!("      {tool}: InstallMissing");
+        assert!(
+            initialize_request_body
+                .lines()
+                .any(|line| line == expected_policy.as_str()),
+            "Docker Framework Initialize request must declare `{tool}: InstallMissing` for image bootstrap"
+        );
+    }
     let info_request = concat!(
         "meta-cortex run --request - <<'YAML'\n",
         "version: 1\n",
@@ -372,8 +387,8 @@ fn preflight_installs_released_meta_cortex_without_configuration_override() {
         .find("COPY --from=repository-git /git /meta-secret/nook/.git")
         .expect("policy source must copy Git metadata into the project");
     let initialize_position = dockerfile
-        .find(initialize_request)
-        .expect("policy source must initialize the Meta-Cortex framework");
+        .find(initialize_request_prefix)
+        .expect("Docker policy source must include its Framework Initialize request");
     assert!(
         git_metadata_copy < initialize_position,
         "policy source must copy Git metadata before Meta-Cortex Framework Initialize"
@@ -385,8 +400,7 @@ fn preflight_installs_released_meta_cortex_without_configuration_override() {
     assert!(
         dockerfile.contains(
             "META_CORTEX_UNMANAGED_INSTALL=/usr/local/bin sh /tmp/meta-cortex-installer.sh"
-        ) && dockerfile.contains(initialize_request)
-            && dockerfile.contains(info_request)
+        ) && dockerfile.contains(info_request)
             && !dockerfile.contains("meta-cortex init ")
             && !dockerfile.contains("meta-cortex info "),
         "Meta-Cortex installation must use the supported framework YAML requests"
