@@ -666,43 +666,48 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
         })
         return true
       }
-      void parseExtensionSessionRequest(message).then((parsed) => {
-        if (parsed.kind === ExtensionSessionRequestParseKind.Invalid) {
-          const invalidResponse: Parameters<typeof sendResponse>[0] = {
-            ok: false,
-            error: 'Invalid extension session request.',
+      const dispatchFailureResponse: Parameters<typeof sendResponse>[0] = {
+        ok: false,
+        error: SessionOperationFailureKind.Failed,
+      }
+      void parseExtensionSessionRequest(message)
+        .then(async (parsed) => {
+          if (parsed.kind === ExtensionSessionRequestParseKind.Invalid) {
+            const invalidResponse: Parameters<typeof sendResponse>[0] = {
+              ok: false,
+              error: 'Invalid extension session request.',
+            }
+            sendResponse(invalidResponse)
+            return
           }
-          sendResponse(invalidResponse)
-          return
-        }
-        const request = parsed.request
-        const type = request.type
-        const serviceWorkerOnly =
-          type === ExtensionSessionMessageType.SealIdentityHandoff ||
-          type === ExtensionSessionMessageType.CancelPasskey
-        if (
-          (serviceWorkerOnly && !serviceWorkerSender) ||
-          !type.startsWith('nook:extension-session-')
-        ) {
-          const forbiddenResponse: Parameters<typeof sendResponse>[0] = {
-            ok: false,
-            error: 'Forbidden extension session request.',
+          const request = parsed.request
+          const type = request.type
+          const serviceWorkerOnly =
+            type === ExtensionSessionMessageType.SealIdentityHandoff ||
+            type === ExtensionSessionMessageType.CancelPasskey
+          if (
+            (serviceWorkerOnly && !serviceWorkerSender) ||
+            !type.startsWith('nook:extension-session-')
+          ) {
+            const forbiddenResponse: Parameters<typeof sendResponse>[0] = {
+              ok: false,
+              error: 'Forbidden extension session request.',
+            }
+            sendResponse(forbiddenResponse)
+            return
           }
-          sendResponse(forbiddenResponse)
-          return
-        }
-        const direct =
-          type === ExtensionSessionMessageType.DismissLoginSave ||
-          type === ExtensionSessionMessageType.CancelPasskey
-        const response = direct
-          ? this.context.handleMessage(request)
-          : this.enqueue(request)
-        void response.then((result) =>
+          const direct =
+            type === ExtensionSessionMessageType.DismissLoginSave ||
+            type === ExtensionSessionMessageType.CancelPasskey
+          const response = direct
+            ? this.context.handleMessage(request)
+            : this.enqueue(request)
+          const result = await response
           result.match(sendResponse, (failure) =>
             sendResponse({ ok: false, error: failure.message }),
-          ),
-        )
-      })
+          )
+        })
+        .catch(() => sendResponse(dispatchFailureResponse))
       return true
     }
   }

@@ -57,6 +57,32 @@ describe('service worker routing', () => {
     expect(ensureExtensionSessionDocument).toHaveBeenCalledTimes(1)
   })
 
+  test('closes the ensure-runtime response with a typed failure when startup rejects', async () => {
+    const { routeExtensionLifecycleMessage } =
+      await import('../src/background/service-worker/extension-lifecycle-routing')
+    const sendResponse = mock(() => {})
+    const dependencies: ExtensionLifecycleRoutingDependencies = {
+      ...lifecycleDependencies,
+      ensureExtensionSessionDocument: () =>
+        Promise.reject(new Error('session startup rejected')),
+    }
+
+    expect(
+      routeExtensionLifecycleMessage({
+        dependencies,
+        message: { type: ExtensionRuntimeRequestType.EnsureRuntime },
+        sender: { id: 'nook-extension' },
+        sendResponse,
+      }),
+    ).toBe(true)
+    await flushResponses()
+
+    expect(sendResponse).toHaveBeenCalledWith({
+      ok: false,
+      reason: 'session-runtime-failed',
+    })
+  })
+
   test('refreshes mounted authentication surfaces from an authorized sender', async () => {
     const { routeExtensionLifecycleMessage } =
       await import('../src/background/service-worker/extension-lifecycle-routing')

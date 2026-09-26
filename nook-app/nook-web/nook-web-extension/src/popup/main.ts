@@ -12,6 +12,7 @@ import {
   type ExtensionSessionDeviceState,
   extensionWasmRuntime,
 } from '../lib/nook-wasm'
+import { PopupInitializationStateKind } from './popup-app-state'
 import PopupApp from './PopupApp.svelte'
 import AuthenticatorPicker from './AuthenticatorPicker.svelte'
 import LoginPicker from './LoginPicker.svelte'
@@ -82,31 +83,48 @@ async function main() {
       break
   }
 
-  const vaultConnection = await loadCompanionVaultConnection()
-  const protectionStatus =
-    await extensionWasmRuntime.extensionDeviceProtectionStatus()
-  const activeSessionDevice: ExtensionSessionDeviceState =
-    protectionStatus === DeviceProtectionStatus.Unlocked
-      ? await extensionWasmRuntime.extensionSessionDevice()
-      : { kind: ExtensionSessionDeviceStateKind.Locked }
+  try {
+    const vaultConnection = await loadCompanionVaultConnection()
+    const protectionStatus =
+      await extensionWasmRuntime.extensionDeviceProtectionStatus()
+    const activeSessionDevice: ExtensionSessionDeviceState =
+      protectionStatus === DeviceProtectionStatus.Unlocked
+        ? await extensionWasmRuntime.extensionSessionDevice()
+        : { kind: ExtensionSessionDeviceStateKind.Locked }
 
-  const nookTypedArgs0_2: MountOptions<ComponentProps<typeof PopupApp>> = {
-    target,
-    props: {
+    const nookTypedArgs0_2: MountOptions<ComponentProps<typeof PopupApp>> = {
+      target,
+      props: {
+        i18n,
+        isConnected: vaultConnection.isConnected,
+        ...(vaultConnection.isConnected
+          ? {
+              vaultName: vaultConnection.vaultName,
+              vaultStoreId: vaultConnection.vaultStoreId,
+            }
+          : {}),
+        launcherIntent,
+        protectionStatus,
+        activeSessionDevice,
+        initializationState: PopupInitializationStateKind.Ready,
+      },
+    }
+    mount(PopupApp, nookTypedArgs0_2)
+  } catch {
+    const failureProps: ComponentProps<typeof PopupApp> = {
       i18n,
-      isConnected: vaultConnection.isConnected,
-      ...(vaultConnection.isConnected
-        ? {
-            vaultName: vaultConnection.vaultName,
-            vaultStoreId: vaultConnection.vaultStoreId,
-          }
-        : {}),
+      isConnected: false,
       launcherIntent,
-      protectionStatus,
-      activeSessionDevice,
-    },
+      protectionStatus: DeviceProtectionStatus.Error,
+      activeSessionDevice: { kind: ExtensionSessionDeviceStateKind.Locked },
+      initializationState: PopupInitializationStateKind.Failed,
+    }
+    const failureMountOptions: MountOptions<ComponentProps<typeof PopupApp>> = {
+      target,
+      props: failureProps,
+    }
+    mount(PopupApp, failureMountOptions)
   }
-  mount(PopupApp, nookTypedArgs0_2)
 }
 
 void main()
