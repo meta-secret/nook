@@ -314,7 +314,7 @@ export function createLocalE2eFileSyncVaultStub(
               'Drive folder metadata',
             )
           } catch {
-            metadata = {}
+            // The initialized empty metadata remains valid when the body is malformed.
           }
           const folderName =
             typeof metadata.name === 'string' ? metadata.name : ''
