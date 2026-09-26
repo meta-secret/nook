@@ -7,7 +7,8 @@ afterEach(() => {
 
 describe('login gate identity focus restoration', () => {
   test('focuses the review action while focus remains at the document host', async () => {
-    document.body.innerHTML = '<button data-testid="login-review-identities"></button>'
+    document.body.innerHTML =
+      '<button data-testid="login-review-identities"></button>'
 
     await new IdentityContextFocusRestoration({
       waitForNextFrame: async () => {},
