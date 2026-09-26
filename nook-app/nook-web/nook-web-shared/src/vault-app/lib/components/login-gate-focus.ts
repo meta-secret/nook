@@ -8,14 +8,25 @@ export type IdentityContextFocusSchedule = {
 export async function focusIdentityContextWhenAvailable(
   schedule: IdentityContextFocusSchedule,
 ): Promise<void> {
+  const initialFocusTarget = document.activeElement || document.body;
   let focusedReviewButton: HTMLButtonElement | false = false;
   for (let frame = 0; frame < 30; frame += 1) {
     await schedule.waitForNextFrame();
+    const reviewButton = schedule.reviewButton();
+    const activeElement = document.activeElement || document.body;
+    if (
+      activeElement !== document.body &&
+      activeElement !== document.documentElement &&
+      activeElement !== initialFocusTarget &&
+      activeElement !== focusedReviewButton &&
+      activeElement !== reviewButton
+    ) {
+      return;
+    }
     if (schedule.identityContextLoading()) {
       focusedReviewButton = false;
       continue;
     }
-    const reviewButton = schedule.reviewButton();
     if (!reviewButton) {
       focusedReviewButton = false;
       continue;
