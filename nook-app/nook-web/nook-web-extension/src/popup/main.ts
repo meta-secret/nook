@@ -12,6 +12,7 @@ import {
   type ExtensionSessionDeviceState,
   extensionWasmRuntime,
 } from '../lib/nook-wasm'
+import { retryClosedExtensionSessionOnce } from '../lib/extension-runtime-retry'
 import PopupApp from './PopupApp.svelte'
 import PopupInitializationFailure from './PopupInitializationFailure.svelte'
 import AuthenticatorPicker from './AuthenticatorPicker.svelte'
@@ -85,12 +86,16 @@ async function main() {
 
   try {
     const vaultConnection = await loadCompanionVaultConnection()
-    const protectionStatus =
-      await extensionWasmRuntime.extensionDeviceProtectionStatus()
-    const activeSessionDevice: ExtensionSessionDeviceState =
-      protectionStatus === DeviceProtectionStatus.Unlocked
-        ? await extensionWasmRuntime.extensionSessionDevice()
-        : { kind: ExtensionSessionDeviceStateKind.Locked }
+    const { protectionStatus, activeSessionDevice } =
+      await retryClosedExtensionSessionOnce(async () => {
+        const protectionStatus =
+          await extensionWasmRuntime.extensionDeviceProtectionStatus()
+        const activeSessionDevice: ExtensionSessionDeviceState =
+          protectionStatus === DeviceProtectionStatus.Unlocked
+            ? await extensionWasmRuntime.extensionSessionDevice()
+            : { kind: ExtensionSessionDeviceStateKind.Locked }
+        return { protectionStatus, activeSessionDevice }
+      })
 
     const nookTypedArgs0_2: MountOptions<ComponentProps<typeof PopupApp>> = {
       target,

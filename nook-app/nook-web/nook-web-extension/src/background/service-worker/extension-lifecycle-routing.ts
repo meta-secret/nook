@@ -496,11 +496,12 @@ export function routeExtensionLifecycleMessage({
       return false
     }
     void ensureExtensionSessionDocument()
-      .then((opened) =>
-        sendResponse(
-          opened.isOk() ? successResponse : sessionRuntimeFailureResponse,
-        ),
-      )
+      .then((opened) => {
+        const response: { ok: boolean; reason?: string } = opened.isOk()
+          ? { ok: true }
+          : { ok: false, reason: opened.error.kind }
+        sendResponse(response)
+      })
       .catch(() => sendResponse(sessionRuntimeFailureResponse))
     return true
   }
