@@ -60,12 +60,17 @@ enum BrowserReplyPhase {
   Unrequested = 'unrequested',
   Pending = 'pending',
 }
+enum BrowserReadinessQueryMode {
+  Immediate = 'immediate',
+  Deferred = 'deferred',
+}
 type BrowserReply =
   | { readonly kind: BrowserReplyPhase.Unrequested }
   | {
       readonly kind: BrowserReplyPhase.Pending
       readonly respond: (value: unknown) => void
     }
+type BrowserRuntimeLastError = false | { readonly message: string }
 
 class SessionDocumentFixture {
   readonly owner: ExtensionSessionDocumentOwner
@@ -73,6 +78,7 @@ class SessionDocumentFixture {
   readonly creation = new DeferredBrowserEffect<void>()
   readonly closure = new DeferredBrowserEffect<void>()
   readonly closureRequested = new DeferredBrowserEffect<void>()
+  readonly readinessQueryRequested = new DeferredBrowserEffect<void>()
   readonly createDocument = mock(() =>
     this.creation.operation.then(() => this.announceSessionReady()),
   )
@@ -84,8 +90,11 @@ class SessionDocumentFixture {
     async (): Promise<chrome.runtime.ExtensionContext[]> => [],
   )
   private reply: BrowserReply = { kind: BrowserReplyPhase.Unrequested }
+  private readinessQueryMode = BrowserReadinessQueryMode.Immediate
+  private runtimeLastError: BrowserRuntimeLastError = false
 
   constructor() {
+    const readRuntimeLastError = () => this.runtimeLastError
     Object.assign(globalThis, {
       chrome: {
         offscreen: {
@@ -95,6 +104,9 @@ class SessionDocumentFixture {
         },
         runtime: {
           id: 'fixture',
+          get lastError() {
+            return readRuntimeLastError()
+          },
           ContextType: { OFFSCREEN_DOCUMENT: 'OFFSCREEN_DOCUMENT' },
           getURL: (path: string) => `chrome-extension://fixture/${path}`,
           getContexts: this.getContexts,
@@ -116,7 +128,18 @@ class SessionDocumentFixture {
               admission.message.type ===
                 ExtensionSessionReadinessMessageType.Query
             ) {
-              respond({ ok: true })
+              if (
+                this.readinessQueryMode === BrowserReadinessQueryMode.Deferred
+              ) {
+                this.readinessQueryMode = BrowserReadinessQueryMode.Immediate
+                this.reply = {
+                  kind: BrowserReplyPhase.Pending,
+                  respond,
+                }
+                this.readinessQueryRequested.complete()
+              } else {
+                respond({ ok: true })
+              }
               return
             }
             this.reply = { kind: BrowserReplyPhase.Pending, respond }
@@ -155,11 +178,29 @@ class SessionDocumentFixture {
     ])
   }
 
-  respond(value: unknown): Result<void, BrowserReplyPhase> {
+  deferReadinessQuery(): Promise<void> {
+    this.readinessQueryMode = BrowserReadinessQueryMode.Deferred
+    return this.readinessQueryRequested.operation
+  }
+
+  respond(
+    value: unknown,
+    deliveryFailure = false,
+  ): Result<void, BrowserReplyPhase> {
     const reply = this.reply
     if (reply.kind !== BrowserReplyPhase.Pending) return err(reply.kind)
     this.reply = { kind: BrowserReplyPhase.Unrequested }
-    reply.respond(value)
+    this.runtimeLastError = deliveryFailure
+      ? {
+          message:
+            'Could not establish connection. Receiving end does not exist.',
+        }
+      : false
+    try {
+      reply.respond(value)
+    } finally {
+      this.runtimeLastError = false
+    }
     return ok()
   }
 }
@@ -176,6 +217,20 @@ describe('extension session document ownership', () => {
       contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT],
       documentUrls: [chrome.runtime.getURL(extensionSessionDocument)],
     })
+    expect(fixture.createDocument).not.toHaveBeenCalled()
+  })
+
+  test('admits the inherited session when readiness arrives before query failure is handled', async () => {
+    const fixture = new SessionDocumentFixture()
+    fixture.inheritDocument()
+    const readinessQueryRequested = fixture.deferReadinessQuery()
+
+    const opening = fixture.owner.open()
+    await readinessQueryRequested
+    fixture.announceSessionReady()
+    expect(fixture.respond({}, true)).toEqual(ok())
+
+    expect((await opening).isOk()).toBe(true)
     expect(fixture.createDocument).not.toHaveBeenCalled()
   })
 
