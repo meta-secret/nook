@@ -59,13 +59,13 @@ class DockerizedRustBuildKitContract {
       "Preserve failed extension Playwright diagnostics",
     );
     expect(diagnosticsStep).toMatch(
-      /^        if: failure\(\) && inputs\.full_e2e_requested$/m,
+      /^ {8}if: failure\(\) && inputs\.full_e2e_requested$/m,
     );
     expect(diagnosticsStep).toMatch(
-      /^        uses: actions\/upload-artifact@v7$/m,
+      /^ {8}uses: actions\/upload-artifact@v7$/m,
     );
     const diagnosticPaths = diagnosticsStep.match(
-      /          path: \|\n((?:            [^\n]+\n)+)          if-no-files-found: warn\n          retention-days: 15(?:\n|$)/,
+      / {10}path: \|\n((?: {12}[^\n]+\n)+) {10}if-no-files-found: warn\n {10}retention-days: 15(?:\n|$)/,
     );
     expect(diagnosticPaths?.[1]?.trimEnd().split("\n")).toEqual([
       "            ${{ runner.temp }}/nook-pr-artifacts/runtime/nook-app/nook-web/nook-web-extension/test-results/**/trace.zip",
@@ -77,7 +77,7 @@ class DockerizedRustBuildKitContract {
     const validationStep = workflowStep(
       "Parallel validation and browser tests",
     );
-    expect(validationStep).not.toMatch(/^        continue-on-error:/m);
+    expect(validationStep).not.toMatch(/^ {8}continue-on-error:/m);
     expect(workflow).toContain("GHA_CACHE_ENABLED=");
     expect(workflow).toContain("GHA_CACHE_WRITE_ENABLED=");
     expect(workflow).not.toMatch(

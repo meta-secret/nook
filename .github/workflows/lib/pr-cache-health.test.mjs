@@ -810,15 +810,15 @@ void test(
 
     assert.match(
       step,
-      /^        if: failure\(\) && inputs\.full_e2e_requested$/m,
+      /^ {8}if: failure\(\) && inputs\.full_e2e_requested$/m,
     );
-    assert.match(step, /^        uses: actions\/upload-artifact@v7$/m);
+    assert.match(step, /^ {8}uses: actions\/upload-artifact@v7$/m);
     assert.match(
       step,
-      /          name: pr-extension-playwright-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}/,
+      / {10}name: pr-extension-playwright-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}/,
     );
     const pathBlock = step.match(
-      /        with:\n          name: [^\n]+\n          path: \|\n((?:            [^\n]+\n)+)          if-no-files-found: warn\n          retention-days: 15(?:\n|$)/,
+      / {8}with:\n {10}name: [^\n]+\n {10}path: \|\n((?: {12}[^\n]+\n)+) {10}if-no-files-found: warn\n {10}retention-days: 15(?:\n|$)/,
     );
     assert.ok(pathBlock);
     assert.deepEqual(pathBlock[1].trimEnd().split("\n"), [
@@ -827,11 +827,11 @@ void test(
     ]);
     assert.match(
       validationStep,
-      /^        run: task --silent ci:pr:validate$/m,
+      /^ {8}run: task --silent ci:pr:validate$/m,
     );
-    assert.doesNotMatch(validationStep, /^        continue-on-error:/m);
+    assert.doesNotMatch(validationStep, /^ {8}continue-on-error:/m);
     assert.equal(
-      workflow.match(/^        uses: actions\/upload-artifact@v7$/gm)?.length,
+      workflow.match(/^ {8}uses: actions\/upload-artifact@v7$/gm)?.length,
       1,
     );
   },
