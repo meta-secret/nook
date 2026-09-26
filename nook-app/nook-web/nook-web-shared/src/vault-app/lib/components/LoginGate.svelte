@@ -67,7 +67,7 @@
   import LoginVaultPicker from '$lib/components/login/LoginVaultPicker.svelte'
   import LoginProviderManagement from '$lib/components/login/LoginProviderManagement.svelte'
   import { LoginProviderManagementVariant } from '$lib/components/login/login-provider-management-state'
-  import { focusIdentityContextWhenAvailable as restoreIdentityContextFocus } from './login-gate-focus'
+  import { IdentityContextFocusRestoration } from './login-gate-focus'
   import LoginEnrollmentPanel from '$lib/components/login/LoginEnrollmentPanel.svelte'
   import EnrollmentQrOnboardCard from '$lib/components/login/EnrollmentQrOnboardCard.svelte'
   import SentinelCeremonyPanel from '$lib/components/login/SentinelCeremonyPanel.svelte'
@@ -293,7 +293,9 @@
           '[data-testid="login-review-identities"]',
         ) || false,
     }
-    await restoreIdentityContextFocus(focusIdentityContextArgs)
+    await new IdentityContextFocusRestoration(
+      focusIdentityContextArgs,
+    ).restoreWhenAvailable()
   }
 
   async function openDevicesAccess(

@@ -1,29 +1,46 @@
 import { afterEach, describe, expect, test } from 'vitest'
-import { focusIdentityContextWhenAvailable } from '../../../../nook-web-shared/src/vault-app/lib/components/login-gate-focus'
+import { IdentityContextFocusRestoration } from '../../../../nook-web-shared/src/vault-app/lib/components/login-gate-focus'
 
 afterEach(() => {
   document.body.replaceChildren()
 })
 
 describe('login gate identity focus restoration', () => {
-  test('focuses the remounted review action despite an unrelated active element', async () => {
-    document.body.innerHTML =
-      '<button data-testid="other-focus-target"></button><button data-testid="login-review-identities"></button>'
-    document
-      .querySelector<HTMLButtonElement>('[data-testid="other-focus-target"]')
-      ?.focus()
+  test('focuses the review action while focus remains at the document host', async () => {
+    document.body.innerHTML = '<button data-testid="login-review-identities"></button>'
 
-    await focusIdentityContextWhenAvailable({
+    await new IdentityContextFocusRestoration({
       waitForNextFrame: async () => {},
       identityContextLoading: () => false,
       reviewButton: () =>
         document.querySelector<HTMLButtonElement>(
           '[data-testid="login-review-identities"]',
         ) || false,
-    })
+    }).restoreWhenAvailable()
 
     expect(document.activeElement?.getAttribute('data-testid')).toBe(
       'login-review-identities',
+    )
+  })
+
+  test('does not take focus from another active control', async () => {
+    document.body.innerHTML =
+      '<button data-testid="other-focus-target"></button><button data-testid="login-review-identities"></button>'
+    document
+      .querySelector<HTMLButtonElement>('[data-testid="other-focus-target"]')
+      ?.focus()
+
+    await new IdentityContextFocusRestoration({
+      waitForNextFrame: async () => {},
+      identityContextLoading: () => false,
+      reviewButton: () =>
+        document.querySelector<HTMLButtonElement>(
+          '[data-testid="login-review-identities"]',
+        ) || false,
+    }).restoreWhenAvailable()
+
+    expect(document.activeElement?.getAttribute('data-testid')).toBe(
+      'other-focus-target',
     )
   })
 
@@ -32,7 +49,7 @@ describe('login gate identity focus restoration', () => {
       '<button data-testid="login-review-identities"></button>'
     let replacementQueued = false
 
-    await focusIdentityContextWhenAvailable({
+    await new IdentityContextFocusRestoration({
       waitForNextFrame: async () => {},
       identityContextLoading: () => false,
       reviewButton: () => {
@@ -49,7 +66,7 @@ describe('login gate identity focus restoration', () => {
         }
         return reviewButton || false
       },
-    })
+    }).restoreWhenAvailable()
 
     expect(document.activeElement?.getAttribute('data-testid')).toBe(
       'login-review-identities',
@@ -64,7 +81,7 @@ describe('login gate identity focus restoration', () => {
       '<button data-testid="login-review-identities"></button><button data-testid="login-unlock-method-keys"></button>'
     let frame = 0
 
-    await focusIdentityContextWhenAvailable({
+    await new IdentityContextFocusRestoration({
       waitForNextFrame: async () => {
         frame += 1
         if (frame === 2) {
@@ -80,7 +97,41 @@ describe('login gate identity focus restoration', () => {
         document.querySelector<HTMLButtonElement>(
           '[data-testid="login-review-identities"]',
         ) || false,
-    })
+    }).restoreWhenAvailable()
+
+    expect(document.activeElement?.getAttribute('data-testid')).toBe(
+      'login-unlock-method-keys',
+    )
+  })
+
+  test('keeps the keys method focused when Tab occurs during the loading wait', async () => {
+    document.body.innerHTML =
+      '<button data-testid="login-review-identities"></button><button data-testid="login-unlock-method-keys"></button>'
+    let frame = 0
+    let identityContextIsLoading = true
+
+    await new IdentityContextFocusRestoration({
+      waitForNextFrame: async () => {
+        frame += 1
+        switch (frame) {
+          case 2:
+            document
+              .querySelector<HTMLButtonElement>(
+                '[data-testid="login-unlock-method-keys"]',
+              )
+              ?.focus()
+            identityContextIsLoading = false
+            break
+          default:
+            break
+        }
+      },
+      identityContextLoading: () => identityContextIsLoading,
+      reviewButton: () =>
+        document.querySelector<HTMLButtonElement>(
+          '[data-testid="login-review-identities"]',
+        ) || false,
+    }).restoreWhenAvailable()
 
     expect(document.activeElement?.getAttribute('data-testid')).toBe(
       'login-unlock-method-keys',
