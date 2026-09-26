@@ -405,6 +405,105 @@ describe('extension session document ownership', () => {
     expect(await closing).toEqual(ok(ExtensionSessionDocumentStateKind.Closed))
   })
 
+  test('reobserves a cached document and recreates it when the browser has closed it', async () => {
+    const fixture = new SessionDocumentFixture()
+    const firstOpening = fixture.owner.open()
+    await Promise.resolve()
+    expect(fixture.creation.complete()).toEqual(ok())
+    const first = await firstOpening
+    if (first.isErr()) throw new Error('document creation must succeed')
+
+    fixture.createDocument.mockImplementationOnce(async () => {
+      fixture.announceSessionReady()
+    })
+    const second = await fixture.owner.open()
+    if (second.isErr()) throw new Error('document recreation must succeed')
+    expect(fixture.getContexts).toHaveBeenCalledTimes(2)
+    expect(fixture.createDocument).toHaveBeenCalledTimes(2)
+    expect(second.value).not.toBe(first.value)
+    expect(
+      await first.value.sendMessage({ message: fixtureSessionRequest }),
+    ).toEqual(
+      err(
+        new ExtensionSessionTransportFailure(
+          ExtensionSessionTransportFailureKind.Closed,
+        ),
+      ),
+    )
+  })
+
+  test('reuses a cached document when the browser still observes it', async () => {
+    const fixture = new SessionDocumentFixture()
+    fixture.inheritDocument()
+    const first = await fixture.owner.open()
+    const second = await fixture.owner.open()
+    if (first.isErr() || second.isErr())
+      throw new Error('inherited document must be available')
+    expect(second.value).toBe(first.value)
+    expect(fixture.getContexts).toHaveBeenCalledTimes(2)
+    expect(fixture.createDocument).not.toHaveBeenCalled()
+  })
+
+  test('denies a cached alias when browser reobservation fails', async () => {
+    const fixture = new SessionDocumentFixture()
+    fixture.inheritDocument()
+    const opened = await fixture.owner.open()
+    if (opened.isErr()) throw new Error('inherited document must be available')
+    fixture.getContexts.mockRejectedValueOnce(new Error('observation failed'))
+
+    const failure = err(
+      new ExtensionSessionTransportFailure(
+        ExtensionSessionTransportFailureKind.ObservationFailed,
+      ),
+    )
+    expect(await fixture.owner.open()).toEqual(failure)
+    expect(await fixture.owner.open()).toEqual(failure)
+    expect(
+      await opened.value.sendMessage({ message: fixtureSessionRequest }),
+    ).toEqual(
+      err(
+        new ExtensionSessionTransportFailure(
+          ExtensionSessionTransportFailureKind.Closed,
+        ),
+      ),
+    )
+  })
+
+  test('revokes a cached alias when closure begins during reobservation', async () => {
+    const fixture = new SessionDocumentFixture()
+    fixture.inheritDocument()
+    const opened = await fixture.owner.open()
+    if (opened.isErr()) throw new Error('inherited document must be available')
+    const observation = new DeferredBrowserEffect<
+      chrome.runtime.ExtensionContext[]
+    >()
+    fixture.getContexts.mockImplementationOnce(() => observation.operation)
+
+    const reopening = fixture.owner.open()
+    const closing = fixture.owner.close()
+    expect(
+      await opened.value.sendMessage({ message: fixtureSessionRequest }),
+    ).toEqual(
+      err(
+        new ExtensionSessionTransportFailure(
+          ExtensionSessionTransportFailureKind.Closed,
+        ),
+      ),
+    )
+    expect(observation.complete([])).toEqual(ok())
+    await Promise.resolve()
+    expect(fixture.creation.complete()).toEqual(ok())
+    expect(await reopening).toEqual(
+      err(
+        new ExtensionSessionTransportFailure(
+          ExtensionSessionTransportFailureKind.Closed,
+        ),
+      ),
+    )
+    expect(fixture.closure.complete()).toEqual(ok())
+    expect(await closing).toEqual(ok(ExtensionSessionDocumentStateKind.Closed))
+  })
+
   test('rejects a non-object browser reply before invoking the decoder', async () => {
     const fixture = new SessionDocumentFixture()
     const opening = fixture.owner.open()
