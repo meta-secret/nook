@@ -249,6 +249,44 @@ class SentinelFinalizationFixture {
 }
 
 describe('Sentinel quorum completion presentation', () => {
+  test.each([LoginSurface.Gate, LoginSurface.Step])(
+    'does not rewrite the same sentinel error during status refresh in %s',
+    async (surface) => {
+      const fixture = new SentinelFinalizationFixture()
+      const failure = new NativeVaultStorageFailure(
+        new Error('provider unavailable'),
+      )
+      const readStatusAndFail = () => {
+        void fixture.state.sentinelUnlockStatus
+        return err(failure)
+      }
+      const visibility = vi
+        .spyOn(SentinelUnlockActions.prototype, 'ceremonyVisibility')
+        .mockImplementation(readStatusAndFail)
+      const vaultType = vi
+        .spyOn(SentinelUnlockActions.prototype, 'vaultType')
+        .mockImplementation(readStatusAndFail)
+      const view = fixture.renderLogin(surface)
+
+      await tick()
+
+      expect(fixture.state.errorMsg).toBe(I18N_KEYS.AuthStorageSyncFailed)
+      const revision = fixture.state.errorMsgRevision
+
+      fixture.state.sentinelUnlockStatus = SentinelVaultUnlockState.Unlocked
+      await tick()
+      fixture.state.sentinelUnlockStatus =
+        SentinelVaultUnlockState.AwaitingShares
+      await tick()
+
+      expect(fixture.state.errorMsgRevision).toBe(revision)
+      view.unmount()
+      visibility.mockRestore()
+      vaultType.mockRestore()
+      fixture.dispose()
+    },
+  )
+
   test('does not list stored deliveries while the helper is collapsed', async () => {
     const fixture = new SentinelFinalizationFixture()
     const view = render(SentinelUnlockParticipantHelper, {
