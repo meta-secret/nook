@@ -34,14 +34,26 @@ use crate::storage::identity_record::{PendingSimpleGenesis, SimpleGenesisComplet
 
 use crate::storage::identity_record;
 use crate::{NookError, NookSecretRecord};
-use js_sys::{Error as JsNativeError, Reflect};
+use js_sys::Error as JsNativeError;
 use nook_core::{AssessConnectAccessRequest, VaultMetaState};
 use nook_core::{
     ConnectAccessStatus, EventGraphAuthorizationProjection, EventId, IdentityVaultDekEpoch,
     IdentityVaultEventId, StorageMode, StoreId, VaultAccessStatus, VaultUnlock,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
-use wasm_bindgen::{JsError, JsValue};
+use wasm_bindgen::{JsCast, JsError};
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(extends = JsNativeError, typescript_type = "Error & { code: string }")]
+    type GitHubProviderError;
+
+    #[wasm_bindgen(method, getter, structural, js_name = code)]
+    fn github_provider_error_code(error: &GitHubProviderError) -> js_sys::JsString;
+
+    #[wasm_bindgen(method, setter, structural, js_name = code)]
+    fn set_github_provider_error_code(error: &GitHubProviderError, code: &str);
+}
 
 impl NookError {
     fn requires_sentinel_ceremony(&self) -> bool {
@@ -126,16 +138,23 @@ mod tests {
         )
     )]
     fn github_token_rejection_projects_a_typed_safe_wasm_error() {
-        let failure = NookVaultManager::assessment_failure_js_value(NookError::GitHubTokenRejected);
-        let code = js_sys::Reflect::get(&failure, &JsValue::from_str("code"))
-            .expect("provider error exposes its code");
-        let message = js_sys::Reflect::get(&failure, &JsValue::from_str("message"))
-            .expect("provider error exposes its safe message");
+        let failure = NookVaultManager::assessment_failure_js_error(NookError::GitHubTokenRejected);
 
-        assert_eq!(code.as_string().as_deref(), Some("github-token-rejected"));
         assert_eq!(
-            message.as_string().as_deref(),
+            failure
+                .unchecked_ref::<GitHubProviderError>()
+                .github_provider_error_code()
+                .as_string()
+                .as_deref(),
+            Some("github-token-rejected")
+        );
+        assert_eq!(
+            failure.message().as_string().as_deref(),
             Some("GitHub authentication failed.")
+        );
+        assert_eq!(
+            failure.name().as_string().as_deref(),
+            Some("NookProviderFailure")
         );
     }
 
@@ -622,24 +641,17 @@ impl NookVaultManager {
         Ok(status)
     }
 
-    fn assessment_failure_js_value(error: NookError) -> JsValue {
+    fn assessment_failure_js_error(error: NookError) -> JsNativeError {
         match error {
             NookError::GitHubTokenRejected => {
                 let js_error = JsNativeError::new("GitHub authentication failed.");
                 js_error.set_name("NookProviderFailure");
-                let js_error: JsValue = js_error.into();
-                let code_set = Reflect::set(
-                    &js_error,
-                    &JsValue::from_str("code"),
-                    &JsValue::from_str("github-token-rejected"),
-                )
-                .unwrap_or_default();
-                if !code_set {
-                    return JsError::new("GitHub authentication failed.").into();
-                }
+                js_error
+                    .unchecked_ref::<GitHubProviderError>()
+                    .set_github_provider_error_code("github-token-rejected");
                 js_error
             }
-            other => JsError::new(&other.to_string()).into(),
+            other => JsNativeError::new(&other.to_string()),
         }
     }
 }
@@ -671,10 +683,10 @@ impl NookVaultManager {
         storage_mode: String,
         github_pat: String,
         github_repo: String,
-    ) -> Result<nook_core::VaultAccessStatus, JsValue> {
+    ) -> Result<nook_core::VaultAccessStatus, JsNativeError> {
         self.assess_vault_connect_inner(storage_mode, github_pat, github_repo)
             .await
-            .map_err(Self::assessment_failure_js_value)
+            .map_err(Self::assessment_failure_js_error)
     }
 
     /// Return an authenticated local session to local storage after a staged
