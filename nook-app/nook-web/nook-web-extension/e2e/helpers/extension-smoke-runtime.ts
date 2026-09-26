@@ -75,9 +75,34 @@ export async function withE2eDeadline<Result>(
 function pageAddress(page: Page): string {
   try {
     const url = new URL(page.url())
-    return `${url.origin}${url.pathname}`
+    const intent = url.searchParams.get('intent')
+    const query = intent ? `?intent=${encodeURIComponent(intent)}` : ''
+    return `${url.origin}${url.pathname}${query}`
   } catch {
     return 'unavailable page URL'
+  }
+}
+
+export async function waitForPageUrl(
+  page: Page,
+  context: BrowserContext,
+  expected: RegExp,
+  purpose: string,
+): Promise<void> {
+  try {
+    await page.waitForURL(expected, { timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
+  } catch (error) {
+    const openPages = context.pages().map(pageAddress)
+    throw new Error(
+      [
+        `Timed out: ${purpose} after ${EXTENSION_UNLOCK_TIMEOUT_MS}ms.`,
+        `Current page: ${pageAddress(page)}.`,
+        `Open pages: ${
+          openPages.length > 0 ? openPages.join(', ') : 'none'
+        }.`,
+      ].join(' '),
+      { cause: error },
+    )
   }
 }
 
