@@ -481,8 +481,10 @@ fn preflight_initializes_released_meta_cortex_with_only_default_tool_policies() 
         "policy source must copy Git metadata before Meta-Cortex Framework Initialize"
     );
     assert!(
-        dockerfile.contains("meta-cortex/releases/download/v0.9.1/meta-cortex-installer.sh"),
-        "Meta-Cortex installation must use the selected upstream release"
+        dockerfile.contains(
+            "https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/download/v0.9.2/meta-cortex-installer.sh"
+        ),
+        "Meta-Cortex installation must use the official v0.9.2 release"
     );
     assert!(
         dockerfile.contains(
@@ -495,5 +497,27 @@ fn preflight_initializes_released_meta_cortex_with_only_default_tool_policies() 
     assert!(
         !dockerfile.contains("sed -i"),
         "Meta-Cortex installation must not rewrite upstream configuration"
+    );
+}
+
+#[test]
+fn repository_policy_pins_meta_cortex_library_to_the_selected_commit() {
+    let root = RepositoryFixture::repository_root();
+    let workflow = root.read(".github/workflows/repository-policy.yml");
+    let taskfile = root.read(".task/ci-workflows.yml");
+    let expected_commit = "bdd02072bb7ddf03930b27516925bf62502ff056";
+    let workflow_checkout = format!(
+        "          repository: ai-ai-ai-ai-ai-ai-ai/meta-cortex\n          ref: {expected_commit}\n          path: .meta-cortex-source"
+    );
+    let task_checkout =
+        format!("test \"$(git -C .meta-cortex-source rev-parse HEAD)\" = {expected_commit}");
+
+    assert!(
+        workflow.contains(&workflow_checkout),
+        "repository policy must checkout the selected Meta-Cortex library commit"
+    );
+    assert!(
+        taskfile.contains(&task_checkout),
+        "repository policy staging must require the selected Meta-Cortex library commit"
     );
 }
