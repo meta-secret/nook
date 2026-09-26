@@ -97,9 +97,7 @@ export async function waitForPageUrl(
       [
         `Timed out: ${purpose} after ${EXTENSION_UNLOCK_TIMEOUT_MS}ms.`,
         `Current page: ${pageAddress(page)}.`,
-        `Open pages: ${
-          openPages.length > 0 ? openPages.join(', ') : 'none'
-        }.`,
+        `Open pages: ${openPages.length > 0 ? openPages.join(', ') : 'none'}.`,
       ].join(' '),
       { cause: error },
     )
