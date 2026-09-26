@@ -55,8 +55,8 @@ authorities without copying their policies.
   - Purpose: Capture user feedback as durable team-owned Cortex skill cards.
 - **[Efficient PR delivery](../../../gizmo-prime/dynamic-skills/efficient-pr-delivery.md)**
   - Purpose: Route current development delivery and retain prior PR runtime reference.
-- **[GitHub Actions-only validation](../../sre/dynamic-skills/github-actions-only-validation.md)**
-  - Purpose: Route feature compilation and required PR checks to remote execution.
+- **[GitHub Actions execution and validation](../../sre/dynamic-skills/github-actions-only-validation.md)**
+  - Purpose: Route feature compilation and required PR checks to remote execution; local diagnostics follow the root policy.
 - **[Kubernetes-native cluster execution](../../sre/dynamic-skills/kubernetes-native-cluster-execution.md)**
   - Purpose: Prohibit nested container runtimes in Kubernetes and k0s; require direct Pod execution for Playwright and other workloads.
 - **[Browser-extension release security](../../security/dynamic-skills/browser-extension-release-security.md)**

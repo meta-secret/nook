@@ -63,12 +63,18 @@ AI context and relevant authorities without restarting root routing.
 
 ## Validation
 
-The current pull request path runs `task loom:cortex-audit` in
+The required pull request path runs `task loom:cortex-audit` in
 `pr-verification`. The policy path `ci:pr:tests:policy-with-delivery-helpers`
 invokes `preflight:repository-policy`; its Docker stage inherits
-`loom-verify` and runs `task loom:verify` plus the document-map audit. These
-commands run in the pull request's required checks, not locally or during
-feature work:
+`loom-verify` and runs `task loom:verify` plus the document-map audit. Hosted
+execution is the default; required hosted checks remain mandatory. A local run
+of `task loom:cortex-audit` is a diagnostic governed by the root
+[delivery and validation policy](../../../../AGENTS.md#delivery-and-validation)
+and never replaces the hosted result. Do not invoke unrelated or broader local
+preflight targets. A specific preflight target may be selected directly when it
+is the smallest suitable diagnostic for the recorded task need under the root
+policy. A selected repository task may also execute its declared necessary
+Taskfile prerequisites through that task.
 
 ```bash
 task loom:cortex-audit
@@ -77,8 +83,12 @@ task loom:verify
 
 `task loom:cortex-audit` checks Nook graph topology, document ownership, index
 uniqueness, and fragment-link rules. `task loom:verify` runs through the policy
-Docker stage described above. Semantic review still checks that the selected
-owner and links match the document's actual purpose.
+Docker stage described above as a required hosted check. A local `loom:verify`
+run is permitted only if that exact target is the smallest suitable diagnostic
+for the recorded task need under the root policy, whether selected directly or
+declared as a necessary prerequisite and invoked through the selected Task
+target; local output never replaces the hosted result. Semantic review still
+checks that the selected owner and links match the document's actual purpose.
 
 The co-located read-only TypeScript application owns deterministic graph
 topology diagnostics and legacy index migration rendering. The static

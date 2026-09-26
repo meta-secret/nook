@@ -144,18 +144,101 @@ test('sets up the extension device first and sends its public keys to Simple Vau
       )
     })
 
+    const readCompanionTabs = async () =>
+      worker.evaluate(
+        async ({ popupUrl, connectionUrl }) => {
+          const contexts = await chrome.runtime.getContexts({
+            contextTypes: [chrome.runtime.ContextType.TAB],
+          })
+          const popupContext = contexts.find(
+            (candidate) => candidate.documentUrl === popupUrl,
+          )
+          const tabs = await chrome.tabs.query({})
+          const connectionTab = tabs.find(
+            (candidate) => candidate.url === connectionUrl,
+          )
+          if (
+            typeof popupContext?.tabId !== 'number' ||
+            typeof popupContext.windowId !== 'number' ||
+            typeof connectionTab?.id !== 'number' ||
+            typeof connectionTab.windowId !== 'number'
+          ) {
+            return { kind: 'tabs-not-observed' as const }
+          }
+          const popupTab = await chrome.tabs.get(popupContext.tabId)
+          const popupWindow = await chrome.windows.get(popupTab.windowId)
+          return {
+            kind: 'observed' as const,
+            popupTabId: popupTab.id,
+            popupWindowId: popupTab.windowId,
+            popupActive: popupTab.active,
+            popupWindowFocused: popupWindow.focused,
+            connectionTabId: connectionTab.id,
+            connectionWindowId: connectionTab.windowId,
+          }
+        },
+        { popupUrl: popupPage.url(), connectionUrl: simplePage.url() },
+      )
+
+    const tabsBeforeLaunch = await readCompanionTabs()
+    if (tabsBeforeLaunch.kind !== 'observed') {
+      throw new Error('Could not identify the popup and connection tabs.')
+    }
+    if (
+      tabsBeforeLaunch.popupWindowId !== tabsBeforeLaunch.connectionWindowId
+    ) {
+      await worker.evaluate(
+        async ({ tabId, windowId }) => {
+          await chrome.tabs.move(tabId, { windowId, index: -1 })
+        },
+        {
+          tabId: tabsBeforeLaunch.connectionTabId,
+          windowId: tabsBeforeLaunch.popupWindowId,
+        },
+      )
+    }
+    const launcherSourceTabs = await readCompanionTabs()
+    if (launcherSourceTabs.kind !== 'observed') {
+      throw new Error('Could not verify the companion launch source tabs.')
+    }
+    expect(launcherSourceTabs.popupWindowId).toBe(
+      launcherSourceTabs.connectionWindowId,
+    )
+    const pageCountBeforeLaunch = context.pages().length
     expect(
       await sendExternalMessage(simplePage, extensionId, {
         type: 'nook:open-companion-launcher',
       }),
     ).toEqual({ ok: true })
     const companionLauncherUrl = `chrome-extension://${extensionId}/popup/index.html`
+    const tabsAfterLaunch = await readCompanionTabs()
+    if (tabsAfterLaunch.kind !== 'observed') {
+      throw new Error('Could not verify the reused companion tab.')
+    }
+    expect(tabsAfterLaunch.popupTabId).toBe(launcherSourceTabs.popupTabId)
+    expect(tabsAfterLaunch.connectionTabId).toBe(
+      launcherSourceTabs.connectionTabId,
+    )
+    expect(tabsAfterLaunch.popupWindowId).toBe(
+      launcherSourceTabs.connectionWindowId,
+    )
+    expect(tabsAfterLaunch.connectionWindowId).toBe(
+      tabsAfterLaunch.popupWindowId,
+    )
+    expect(tabsAfterLaunch.popupActive).toBe(true)
+    expect(tabsAfterLaunch.popupWindowFocused).toBe(true)
+    expect(context.pages()).toHaveLength(pageCountBeforeLaunch)
     await expect(popupPage).toHaveURL(companionLauncherUrl)
     expect(
       context.pages().filter((page) => page.url() === companionLauncherUrl),
     ).toHaveLength(1)
     await expect(popupPage.getByTestId('extension-device-setup')).toBeVisible()
     await popupPage.close()
+
+    const extensionStorageBeforeStatus = await readExtensionStorage(context)
+    expect(Object.hasOwn(extensionStorageBeforeStatus, setupStorageKey)).toBe(
+      false,
+    )
 
     const loginPage = await context.newPage()
     await loginPage.goto(`${loginServer.origin}/login`)
@@ -165,8 +248,11 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await expect(widget.getByText('Ready to sign in')).toBeVisible()
     await expect(widget.getByText('localhost')).toBeVisible()
     const vaultStatus = widget.getByTestId('nook-auth-gate-vault-status')
-    await expect(vaultStatus).toHaveAttribute('data-state', 'unavailable')
-    await expect(vaultStatus).toHaveText('Saved logins could not be checked')
+    await expect(vaultStatus).toHaveText('Vault not connected')
+    await expect(vaultStatus).toHaveAttribute(
+      'data-state',
+      'vault-not-connected',
+    )
     await expect(
       widget.getByRole('button', { name: 'Continue with Nook' }),
     ).toBeVisible()
@@ -431,6 +517,7 @@ test('keeps the extension vault independent and switches after valid re-pairing'
       simplePage.getByTestId('extension-connect-approved'),
     ).toBeVisible()
     await expect(simplePage.getByTestId('app-success')).toBeVisible()
+    await expect(simplePage).toHaveURL((url) => url.pathname.endsWith('/vault'))
     await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
 
     await simplePage.getByTestId('vault-settings-tab').click()

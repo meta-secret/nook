@@ -157,10 +157,19 @@ behavior for packets issued by SRE Team Gizmo.
 
 ## Validation boundary
 
-- Feature-stage local validation is limited to static syntax, format, and diff
-  inspection.
-- The specialist must not run local tests, Docker, preflight, or product
-  compilation during feature work.
+- Hosted execution is the default. Hosted PR checks remain mandatory for
+  delivery and readiness; local results are diagnostic and do not replace them.
+- By default, feature-stage local validation is limited to static syntax,
+  format, and diff inspection. Local diagnostics follow the root
+  [delivery and validation policy](../../../AGENTS.md#delivery-and-validation).
+- A specific repository preflight, coverage, or build target may be selected
+  directly only when it is the smallest suitable diagnostic for the recorded
+  task need. A selected Taskfile target may also execute its actually declared
+  necessary prerequisites through that task. Unrelated or broader local targets
+  and deployment remain prohibited.
+- Direct Docker/BuildKit control, direct cache operations or mutation, and
+  daemon/container destruction remain prohibited; use only repository targets
+  permitted by the root policy.
 - Upstream CI/CD with Nook SRE context owns remote `build:compile` execution.
 - Delivery resolves and validates the latest canonical feature-branch head.
 - A warm replay is accepted only when it completes within five minutes and

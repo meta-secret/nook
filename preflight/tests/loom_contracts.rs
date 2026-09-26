@@ -256,10 +256,8 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
     );
     let skills_typescript =
         root.read(".cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/tsconfig.json");
-    assert!(
-        skills_typescript
-            .contains("\"include\": [\"**/*.ts\", \"**/*.js\", \"**/*.mjs\", \"**/*.cjs\"]")
-    );
+    assert!(skills_typescript
+        .contains("\"include\": [\"**/*.ts\", \"**/*.js\", \"**/*.mjs\", \"**/*.cjs\"]"));
     let source_gate = root.read("agentic-ai/loom/tests/skill-application-source-boundary.test.ts");
     assert!(
         source_gate.contains("ExecutableSkillSource.analyze")
@@ -342,7 +340,27 @@ fn loom_workflow_audits_every_cortex_change() {
 }
 
 #[test]
-fn preflight_initializes_released_meta_cortex_with_explicit_docker_tool_policies() {
+fn meta_cortex_integration_documents_host_native_execution_and_storage_contracts() {
+    let integration =
+        RepositoryFixture::repository_root().read(".cortex/meta-cortex-integration.md");
+    for required in [
+        "Execution speed is selected by host-native settings",
+        "each role's configured model",
+        "and `reasoning_effort`",
+        "no `mode` or `service_tier` fields",
+        "storage version 3",
+        "storage version 1 and 2 feature databases are imported transactionally and only once",
+        "Legacy databases and their sidecars are preserved as backups.",
+    ] {
+        assert!(
+            integration.contains(required),
+            "Meta-Cortex integration contract must document `{required}`"
+        );
+    }
+}
+
+#[test]
+fn preflight_initializes_released_meta_cortex_with_only_default_tool_policies() {
     let dockerfile = RepositoryFixture::repository_root().read("preflight/Dockerfile");
     assert!(
         dockerfile.contains("mise_version=v2026.9.13")
@@ -416,15 +434,19 @@ fn preflight_initializes_released_meta_cortex_with_explicit_docker_tool_policies
         .expect(
             "Docker Framework Initialize request must use the selected harness and instructions",
         );
-    for tool in ["mise", "bun", "vale"] {
-        let expected_policy = format!("      {tool}: InstallMissing");
-        assert!(
-            initialize_request_body
-                .lines()
-                .any(|line| line == expected_policy.as_str()),
-            "Docker Framework Initialize request must declare `{tool}: InstallMissing` for image bootstrap"
-        );
-    }
+    let configured_tool_policies = initialize_request_body
+        .lines()
+        .map(str::trim)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        configured_tool_policies,
+        [
+            "mise: InstallMissing",
+            "bun: InstallMissing",
+            "vale: InstallMissing",
+        ],
+        "Docker Initialize may spell out only the framework's default tool policies"
+    );
     let info_request = concat!(
         "meta-cortex run --request - <<'YAML'\n",
         "version: 1\n",

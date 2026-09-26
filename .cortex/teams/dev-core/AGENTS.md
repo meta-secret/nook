@@ -8,11 +8,12 @@ over legacy generic wording here; Nook product and delivery requirements remain.
 ## Mission
 
 Apply the [dev delivery stages](../../gizmo-prime/architecture/dev-delivery.md).
-Author meaningful tests in feature work, but execute them only in the feature
-PR required-check stage. Feature validation is required PR-check execution only. Local
-feedback is limited to scoped rustfmt and bounded inexpensive TS diagnostics
-or formatting. Older instructions to run Loom tests, audits, preflight, or
-broad pre-push commands are not local or feature-stage permissions.
+Author meaningful tests in feature work. The hosted feature PR required-check
+stage remains mandatory for delivery and readiness. Follow the root
+[delivery and validation policy](../../AGENTS.md#delivery-and-validation) for
+local test, check, or E2E diagnostics; local results do not replace hosted
+checks. Other local feedback remains limited to scoped rustfmt and bounded
+inexpensive TS diagnostics or formatting.
 
 Development core owns Nook's portable application behavior, including the Rust
 implementation of security controls.

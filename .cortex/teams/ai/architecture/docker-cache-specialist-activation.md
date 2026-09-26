@@ -105,8 +105,16 @@ continues to own GitHub execution mechanics.
 - Do not execute GitHub, PR, publication, landing, or promotion mechanics.
 - Do not retry a failed sccache gate or continue compilation after a terminal
   sccache failure. Do not expose sensitive transport or credential data.
-- Do not run local tests, Docker, preflight, or product compilation during the
-  feature stage.
+- Hosted execution is the default. Hosted PR checks remain mandatory for
+  delivery and readiness; local results are diagnostic and do not replace them.
+- Local diagnostics follow the root
+  [delivery and validation policy](../../../AGENTS.md#delivery-and-validation).
+  A specific repository preflight, coverage, or build target may be selected
+  directly only when it is the smallest suitable diagnostic for the recorded
+  task need; otherwise, unrelated or broader targets remain prohibited. A
+  selected Taskfile target may execute its declared necessary prerequisites
+  through that task. Direct Docker/BuildKit control, direct cache operations or
+  mutation, daemon/container destruction, and deployment remain prohibited.
 
 ## Fast path
 

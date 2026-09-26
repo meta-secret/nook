@@ -5,37 +5,47 @@ export type IdentityContextFocusSchedule = {
 };
 
 /** Restore review focus after the login identity context has remounted. */
-export async function focusIdentityContextWhenAvailable(
-  schedule: IdentityContextFocusSchedule,
-): Promise<void> {
-  const initialFocusTarget = document.activeElement || document.body;
-  let focusedReviewButton: HTMLButtonElement | false = false;
-  for (let frame = 0; frame < 30; frame += 1) {
-    await schedule.waitForNextFrame();
-    const reviewButton = schedule.reviewButton();
-    const activeElement = document.activeElement || document.body;
-    if (
-      activeElement !== document.body &&
-      activeElement !== document.documentElement &&
-      activeElement !== initialFocusTarget &&
-      activeElement !== focusedReviewButton &&
-      activeElement !== reviewButton
-    ) {
+export class IdentityContextFocusRestoration {
+  private focusedReviewButton: HTMLButtonElement | false = false;
+  private focusOwner: Element = document.body;
+
+  constructor(private readonly schedule: IdentityContextFocusSchedule) {
+    const initialReviewButton = schedule.reviewButton();
+    switch (initialReviewButton) {
+      case false:
+        break;
+      default:
+        this.focusOwner = initialReviewButton;
+    }
+  }
+
+  async restoreWhenAvailable(): Promise<void> {
+    for (let frame = 0; frame < 30; frame += 1) {
+      await this.schedule.waitForNextFrame();
+      const activeElement = document.activeElement;
+      if (
+        activeElement !== document.body &&
+        activeElement !== document.documentElement &&
+        activeElement !== this.focusOwner
+      ) {
+        return;
+      }
+      if (this.schedule.identityContextLoading()) {
+        this.focusedReviewButton = false;
+        continue;
+      }
+      const reviewButton = this.schedule.reviewButton();
+      if (!reviewButton) {
+        this.focusedReviewButton = false;
+        continue;
+      }
+      if (reviewButton !== this.focusedReviewButton) {
+        reviewButton.focus();
+        this.focusedReviewButton = reviewButton;
+        this.focusOwner = reviewButton;
+        continue;
+      }
       return;
     }
-    if (schedule.identityContextLoading()) {
-      focusedReviewButton = false;
-      continue;
-    }
-    if (!reviewButton) {
-      focusedReviewButton = false;
-      continue;
-    }
-    if (reviewButton !== focusedReviewButton) {
-      reviewButton.focus();
-      focusedReviewButton = reviewButton;
-      continue;
-    }
-    return;
   }
 }

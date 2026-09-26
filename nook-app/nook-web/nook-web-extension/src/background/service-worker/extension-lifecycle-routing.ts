@@ -495,11 +495,13 @@ export function routeExtensionLifecycleMessage({
       sendResponse(forbiddenSenderResponse)
       return false
     }
-    void ensureExtensionSessionDocument().then((opened) =>
-      sendResponse(
-        opened.isOk() ? successResponse : sessionRuntimeFailureResponse,
-      ),
-    )
+    void ensureExtensionSessionDocument()
+      .then((opened) =>
+        sendResponse(
+          opened.isOk() ? successResponse : sessionRuntimeFailureResponse,
+        ),
+      )
+      .catch(() => sendResponse(sessionRuntimeFailureResponse))
     return true
   }
 
