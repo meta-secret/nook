@@ -213,6 +213,26 @@ No `update_event` or `delete_event` in v1.
 
 The active provider adapters are GitHub, Google Drive, and iCloud.
 
+### Google Drive private target compatibility
+
+The provider-settings wire version is independent of the vault event schema.
+Schema-1 private Drive providers continue to list, fetch, and write in the
+historical `appDataFolder` root. They are not reclassified from an unresolved
+`fileId`, target label, or vault `store_id`. New private-provider setup projects
+a pending target for its first remote assessment using the Rust-owned setup kind.
+After setup, schema-2 private providers resolve a deterministic child folder
+named `nook-events-v2-{fileName}` under `appDataFolder`; the provider persists
+the stable folder ID and uses it for remote parent queries and its local cache key.
+An ambiguous name match fails closed before event sync.
+
+No event files are automatically moved, renamed, or deleted. Schema-1
+rollback projection keeps legacy-root and shared Drive providers and omits
+schema-2 private-folder providers, preventing an older build from silently
+routing a new provider back to the shared root. Restore schema 2 to use those
+new targets. The event classification guard still runs inside each selected
+target: a different `store_id`, multiple store IDs, unreadable files, or invalid
+event bytes fail closed before any writes.
+
 Provider synchronization rules:
 
 - During outbox flush, upload queued events that are absent remotely. Then

@@ -20,7 +20,7 @@ impl<'a> DriveStorageClient<'a> {
     }
 }
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
 #[allow(dead_code)]
@@ -58,6 +58,190 @@ impl DriveStorageClient<'_> {
                 format!(" — {body}")
             }
         ))
+    }
+}
+
+const DRIVE_FOLDER_MIME_TYPE: &str = "application/vnd.google-apps.folder";
+const PRIVATE_EVENT_FOLDER_PREFIX: &str = "nook-events-v2-";
+
+#[derive(Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DrivePrivateFolderListResponse {
+    #[serde(default)]
+    files: Vec<DrivePrivateFolderResource>,
+    #[serde(default)]
+    next_page_token: Option<String>,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DrivePrivateFolderResource {
+    #[serde(default)]
+    id: String,
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    mime_type: String,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DrivePrivateFolderMetadataV2 {
+    name: String,
+    mime_type: String,
+    parents: Vec<String>,
+}
+
+impl DriveStorageClient<'_> {
+    fn private_event_folder_name(file_name: &nook_core::DriveBackupName) -> String {
+        format!("{PRIVATE_EVENT_FOLDER_PREFIX}{}", file_name.as_str())
+    }
+
+    fn private_event_folder_query(name: &str) -> String {
+        let escaped_name = name.replace('\\', "\\\\").replace('\'', "\\'");
+        format!(
+            "name = '{escaped_name}' and mimeType = '{DRIVE_FOLDER_MIME_TYPE}' and 'appDataFolder' in parents and trashed = false"
+        )
+    }
+
+    fn private_event_folder_metadata(name: &str) -> DrivePrivateFolderMetadataV2 {
+        DrivePrivateFolderMetadataV2 {
+            name: name.to_owned(),
+            mime_type: DRIVE_FOLDER_MIME_TYPE.to_owned(),
+            parents: vec!["appDataFolder".to_owned()],
+        }
+    }
+
+    fn select_private_event_folder(
+        folders: &[DrivePrivateFolderResource],
+    ) -> Result<Option<String>, NookError> {
+        if folders.len() > 1 {
+            return Err(NookError::Drive(
+                "Google Drive contains ambiguous private target folders; choose a unique target name before syncing.".to_owned(),
+            ));
+        }
+        let Some(folder) = folders.first() else {
+            return Ok(None);
+        };
+        if folder.id.trim().is_empty() {
+            return Err(NookError::Drive(
+                "Google Drive private target folder is missing its ID.".to_owned(),
+            ));
+        }
+        Ok(Some(Self::validate_private_event_folder_id(&folder.id)?))
+    }
+
+    fn validate_private_event_folder_id(folder_id: &str) -> Result<String, NookError> {
+        nook_core::GoogleDriveFolderId::parse(folder_id)
+            .map(nook_core::GoogleDriveFolderId::into_inner)
+            .map_err(|_| {
+                NookError::Drive(
+                    "Google Drive returned an invalid private target folder ID.".to_owned(),
+                )
+            })
+    }
+
+    fn private_target_api_error(operation: &str, status: StatusCode) -> NookError {
+        NookError::Drive(format!(
+            "Google Drive private target {operation} failed with status {status}"
+        ))
+    }
+}
+
+impl DriveStorageClient<'_> {
+    async fn list_private_event_folders(
+        &self,
+        name: &str,
+    ) -> Result<Vec<DrivePrivateFolderResource>, NookError> {
+        let token = self.as_str().trim();
+        let query = Self::private_event_folder_query(name);
+        let mut page_token: Option<String> = None;
+        let mut folders = Vec::new();
+        loop {
+            let mut request = self
+                .client
+                .get("https://www.googleapis.com/drive/v3/files")
+                .query(&[
+                    ("q", query.as_str()),
+                    ("spaces", "appDataFolder"),
+                    ("fields", "nextPageToken,files(id,name,mimeType)"),
+                    ("pageSize", "1000"),
+                ]);
+            if let Some(page) = page_token.as_deref() {
+                request = request.query(&[("pageToken", page)]);
+            }
+            let mut request = request;
+            for (header, value) in DriveStorageClient::new(token).drive_headers() {
+                request = request.header(header, value);
+            }
+            let response = request.send().await?;
+            if !response.status().is_success() {
+                return Err(NookError::Drive(format!(
+                    "Google Drive private target lookup failed with status {}",
+                    response.status()
+                )));
+            }
+            let body: DrivePrivateFolderListResponse = response
+                .json()
+                .await
+                .map_err(|error| NookError::Serialization(error.to_string()))?;
+            folders.extend(body.files.into_iter().filter(|folder| {
+                folder.name == name && folder.mime_type == DRIVE_FOLDER_MIME_TYPE
+            }));
+            page_token = body.next_page_token;
+            if page_token.is_none() {
+                break;
+            }
+        }
+        Ok(folders)
+    }
+
+    /// Find or create the deterministic appData child folder used by a new
+    /// private Drive target. Legacy-root targets never call this method.
+    pub(crate) async fn ensure_private_event_folder(
+        &self,
+        file_name: &nook_core::DriveBackupName,
+    ) -> Result<String, NookError> {
+        let name = Self::private_event_folder_name(file_name);
+        let folders = self.list_private_event_folders(&name).await?;
+        if let Some(folder_id) = Self::select_private_event_folder(&folders)? {
+            return Ok(folder_id);
+        }
+
+        let token = self.as_str().trim();
+        let metadata = Self::private_event_folder_metadata(&name);
+        let response = self
+            .client
+            .post("https://www.googleapis.com/drive/v3/files")
+            .header("Authorization", format!("Bearer {token}"))
+            .header("User-Agent", "nook-wasm")
+            .json(&metadata)
+            .send()
+            .await?;
+        if !response.status().is_success() {
+            return Err(Self::private_target_api_error(
+                "creation",
+                response.status(),
+            ));
+        }
+        let created: DrivePrivateFolderResource = response
+            .json()
+            .await
+            .map_err(|error| NookError::Serialization(error.to_string()))?;
+        if created.id.trim().is_empty()
+            || created.name != name
+            || created.mime_type != DRIVE_FOLDER_MIME_TYPE
+        {
+            return Err(NookError::Drive(
+                "Google Drive returned an invalid private target folder.".to_owned(),
+            ));
+        }
+        let created_id = Self::validate_private_event_folder_id(&created.id)?;
+
+        // A second lookup catches duplicate folder creation races before any
+        // event write can select one of two ambiguous parents.
+        let folders = self.list_private_event_folders(&name).await?;
+        Ok(Self::select_private_event_folder(&folders)?.unwrap_or(created_id))
     }
 }
 
@@ -100,6 +284,81 @@ impl DriveStorageClient<'_> {
 mod tests {
     use super::*;
     use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[wasm_bindgen_test]
+    fn private_target_folder_name_query_and_metadata_are_stable() -> anyhow::Result<()> {
+        let name = nook_core::DriveBackupName::parse("family_vault.yaml")?;
+        let folder_name = DriveStorageClient::private_event_folder_name(&name);
+        assert_eq!(folder_name, "nook-events-v2-family_vault.yaml");
+        assert!(DriveStorageClient::private_event_folder_query(&folder_name).contains(
+            "name = 'nook-events-v2-family_vault.yaml' and mimeType = 'application/vnd.google-apps.folder' and 'appDataFolder' in parents and trashed = false"
+        ));
+        let encoded = serde_json::to_vec(&DriveStorageClient::private_event_folder_metadata(
+            &folder_name,
+        ))?;
+        let metadata: DrivePrivateFolderMetadataV2 = serde_json::from_slice(&encoded)?;
+        assert_eq!(
+            metadata,
+            DrivePrivateFolderMetadataV2 {
+                name: folder_name,
+                mime_type: DRIVE_FOLDER_MIME_TYPE.to_owned(),
+                parents: vec!["appDataFolder".to_owned()],
+            }
+        );
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn private_target_folder_selection_rejects_ambiguity_and_invalid_ids() {
+        let one = DrivePrivateFolderResource {
+            id: "folder-id".to_owned(),
+            name: "target".to_owned(),
+            mime_type: DRIVE_FOLDER_MIME_TYPE.to_owned(),
+        };
+        assert_eq!(
+            DriveStorageClient::select_private_event_folder(std::slice::from_ref(&one)).unwrap(),
+            Some("folder-id".to_owned())
+        );
+        assert_eq!(
+            DriveStorageClient::select_private_event_folder(&[]).unwrap(),
+            None
+        );
+        assert!(matches!(
+            DriveStorageClient::select_private_event_folder(&[one, DrivePrivateFolderResource {
+                id: "another-folder".to_owned(),
+                name: "target".to_owned(),
+                mime_type: DRIVE_FOLDER_MIME_TYPE.to_owned(),
+            }]),
+            Err(NookError::Drive(message)) if message.contains("ambiguous")
+        ));
+        assert!(matches!(
+            DriveStorageClient::select_private_event_folder(&[DrivePrivateFolderResource {
+                id: " ".to_owned(),
+                name: "target".to_owned(),
+                mime_type: DRIVE_FOLDER_MIME_TYPE.to_owned(),
+            }]),
+            Err(NookError::Drive(message)) if message.contains("missing its ID")
+        ));
+        assert!(matches!(
+            DriveStorageClient::select_private_event_folder(&[DrivePrivateFolderResource {
+                id: "folder/with/slashes".to_owned(),
+                name: "target".to_owned(),
+                mime_type: DRIVE_FOLDER_MIME_TYPE.to_owned(),
+            }]),
+            Err(NookError::Drive(message)) if message.contains("invalid private target folder ID")
+        ));
+    }
+
+    #[wasm_bindgen_test]
+    fn private_target_http_errors_are_status_only() {
+        assert!(matches!(
+            DriveStorageClient::private_target_api_error("creation", StatusCode::FORBIDDEN),
+            NookError::Drive(message)
+                if message == "Google Drive private target creation failed with status 403 Forbidden"
+                    && !message.contains("response body")
+                    && !message.contains("token")
+        ));
+    }
 
     #[wasm_bindgen_test]
     fn headers_trim_access_tokens_and_keep_the_product_user_agent() {
@@ -167,7 +426,6 @@ pub(crate) struct DriveStorageClientDriveError<'a> {
     pub(crate) status: reqwest::StatusCode,
     pub(crate) body: &'a str,
 }
-
 #[derive(Default, Deserialize)]
 #[serde(untagged)]
 #[allow(dead_code)]

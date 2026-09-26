@@ -337,7 +337,9 @@ export class ExtensionSessionDocumentOwner {
           readinessQuery,
           (response: BrowserRuntimeMessageValue) => {
             const deliveryFailure = chrome.runtime.lastError
-            if (deliveryFailure) {
+            if (this.readiness.kind === SessionReadinessKind.Ready) {
+              resolve(false)
+            } else if (deliveryFailure) {
               resolve(ExtensionSessionTransportFailureKind.DeliveryFailed)
             } else {
               const decodedResponse = runConcreteDecoder(

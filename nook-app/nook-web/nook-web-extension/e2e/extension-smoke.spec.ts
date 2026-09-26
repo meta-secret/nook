@@ -210,6 +210,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
         type: 'nook:open-companion-launcher',
       }),
     ).toEqual({ ok: true })
+    const companionLauncherUrl = `chrome-extension://${extensionId}/popup/index.html`
     const tabsAfterLaunch = await readCompanionTabs()
     if (tabsAfterLaunch.kind !== 'observed') {
       throw new Error('Could not verify the reused companion tab.')
@@ -227,10 +228,12 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     expect(tabsAfterLaunch.popupActive).toBe(true)
     expect(tabsAfterLaunch.popupWindowFocused).toBe(true)
     expect(context.pages()).toHaveLength(pageCountBeforeLaunch)
-    await expect(popupPage).toHaveURL(
-      `chrome-extension://${extensionId}/popup/index.html`,
-    )
+    await expect(popupPage).toHaveURL(companionLauncherUrl)
+    expect(
+      context.pages().filter((page) => page.url() === companionLauncherUrl),
+    ).toHaveLength(1)
     await expect(popupPage.getByTestId('extension-device-setup')).toBeVisible()
+    await popupPage.close()
 
     const extensionStorageBeforeStatus = await readExtensionStorage(context)
     expect(Object.hasOwn(extensionStorageBeforeStatus, setupStorageKey)).toBe(
@@ -244,12 +247,12 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await expect(widget.getByText('Nook Pilot · 1/3')).toBeVisible()
     await expect(widget.getByText('Ready to sign in')).toBeVisible()
     await expect(widget.getByText('localhost')).toBeVisible()
-    await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(
-      'Vault not connected',
+    const vaultStatus = widget.getByTestId('nook-auth-gate-vault-status')
+    await expect(vaultStatus).toHaveText('Vault not connected')
+    await expect(vaultStatus).toHaveAttribute(
+      'data-state',
+      'vault-not-connected',
     )
-    await expect(
-      widget.getByTestId('nook-auth-gate-vault-status'),
-    ).toHaveAttribute('data-state', 'vault-not-connected')
     await expect(
       widget.getByRole('button', { name: 'Continue with Nook' }),
     ).toBeVisible()
@@ -513,6 +516,7 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     await expect(
       simplePage.getByTestId('extension-connect-approved'),
     ).toBeVisible()
+    await expect(simplePage.getByTestId('app-success')).toBeVisible()
     await expect(simplePage).toHaveURL((url) => url.pathname.endsWith('/vault'))
     await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
 

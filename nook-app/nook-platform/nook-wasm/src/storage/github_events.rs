@@ -66,9 +66,10 @@ impl GitHubEventStore<'_> {
             return Ok(RepositoryDiscovery::Missing);
         }
         if !status.is_success() {
-            return Err(NookError::GitHub(format!(
-                "Failed to read GitHub repository {repo}: {status}"
-            )));
+            return Err(GitHubStorageClient::github_api_failure(
+                status,
+                format!("Failed to read GitHub repository {repo}: {status}"),
+            ));
         }
 
         serde_json::from_str(text)
@@ -81,9 +82,10 @@ impl GitHubEventStore<'_> {
             return Ok(TreeDiscovery::Missing);
         }
         if !status.is_success() {
-            return Err(NookError::GitHub(format!(
-                "Failed to list GitHub tree for {EVENT_LOG_ROOT}: {status}"
-            )));
+            return Err(GitHubStorageClient::github_api_failure(
+                status,
+                format!("Failed to list GitHub tree for {EVENT_LOG_ROOT}: {status}"),
+            ));
         }
 
         let tree: GitTreeResponse =

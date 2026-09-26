@@ -50,18 +50,32 @@ how provider transports relate independently to identities and vaults.
 - **Value**
   - **Value:** `{ providers: StorageProvider[], activeVaultStoreId?: string }`
 - **Schema markers**
-  - **Value:** `providers-schema:{app_id}` and `providers-schema` (`1`)
+  - **Value:** `providers-schema:{app_id}` (`2`) and `providers-schema` (`1`)
 
 The persisted object is a structured-clone JS object (not a JSON string). Rust
 owns both contracts:
 
-- semantic enums are used in memory and exported through Tsify/`$app-wasm`; and
-- `legacy_storage.rs` projects them to the schema-1 string-or-absent wire shape.
+- semantic enums are used in memory and exported through Tsify/`$app-wasm`;
+- the identity-scoped record uses schema 2, including the typed private Drive
+  target; and
+- `legacy_storage.rs` projects rollback-compatible rows to the schema-1
+  string-or-absent wire shape.
 
-Keeping schema 1 on disk is intentional rollback compatibility.
+The current identity-scoped row is schema 2. The singleton `providers` row is
+intentionally kept at schema 1 for the prior deployed build.
 
 - The app-scoped row is authoritative for the current build.
 - The singleton row remains readable by the prior deployed build.
+- Schema-1 private Drive configs migrate to
+  `drivePrivateTarget: legacyAppDataFolder`; migration preserves `fileId` and
+  keeps their event operations at the existing `appDataFolder` root.
+- New private Drive setup uses the Rust-owned `New(OauthFile)` setup kind to
+  project `pending` for its first remote assessment, even if the transient draft
+  was made from a legacy-shaped default. After folder resolution, the returned
+  child ID is saved in the schema-2 typed field. Such rows are omitted from the
+  schema-1 singleton projection because an old build would otherwise route them
+  back to the shared root. A rollback therefore hides these new providers until
+  schema 2 is restored; it does not rewrite their folder or event data.
 - A sole local identity refreshes both rows in one `nook_auth` transaction.
 - Equality with the app-scoped row proves ownership even when a projection has
   no credential ciphertext to open.
@@ -80,6 +94,9 @@ Any future incompatible persisted shape must:
 - ship an explicit forward migration; and
 - retain either a backward projection or a separate rollback-readable key until
   the prior release is no longer a supported rollback target.
+
+The schema-2 Drive target migration is route selection only: it never moves,
+renames, or deletes historical appData event files.
 
 A domain-type refactor alone never authorizes a wire format change.
 
@@ -108,6 +125,9 @@ A domain-type refactor alone never authorizes a wire format change.
   - **Notes:** Non-secret metadata
 - **`driveMode?`, `folderId?`**
   - **Notes:** Google Drive private/shared; absent legacy rows migrate
+- **`drivePrivateTarget?`**
+  - **Notes:** Schema-2 private Drive routing: `legacyAppDataFolder`, `pending`,
+    or `folderId`. Missing schema-1 fields normalize to the legacy root.
 - **`iCloudMode?`, `iCloudShareTarget?`**
   - **Notes:** iCloud private/shared; share target is credential-free routing
 
@@ -214,6 +234,31 @@ writes remain limited to app-created files below that selected folder. Each
 collaborator saves a separate OAuth token for their own Google account. Switching
 modes clears the scope-bound token and target in Rust before the user signs in
 again; it never reuses an app-data token for a shared folder or vice versa.
+
+#### Private Drive target and rollback compatibility
+
+- **Historical target:** Schema-1 and pre-scoped private Drive providers keep
+  using the historical `appDataFolder` event root, even when they have an old
+  unresolved `fileId`. The target is not inferred from the name, `store_id`, or
+  ID slot.
+- **New target:** A new schema-2 private provider looks up or creates one folder
+  named `nook-events-v2-{fileName}` directly under `appDataFolder`, then persists
+  that folder's stable Drive ID in `drivePrivateTarget`. All event
+  list/fetch/write operations and the local projection-cache key use that ID.
+- **Fail-closed resolution:** If the name resolves to multiple matching
+  folders, sync fails closed and does not choose a parent. Lookup or creation
+  failure leaves the typed target pending; the next connection repeats
+  lookup/create resolution before any event operation.
+- **No event migration:** The Drive API supports listing the appData space and
+  creating folder resources there ([appData guide](https://developers.google.com/workspace/drive/api/guides/appdata),
+  [folder guide](https://developers.google.com/workspace/drive/api/guides/folder)).
+  Google forbids moving or trashing appData entries, so Nook leaves legacy root
+  events in place and performs no automatic event migration.
+- **Rollback:** The schema-1 projection preserves historical private-root and
+  shared providers but omits new schema-2 private-folder providers. This
+  prevents an old build from interpreting the folder ID as a historical file
+  ID and routing the provider to the shared `appDataFolder` root. The folder
+  and its events remain in Drive during rollback.
 
 **Shared-folder grant outcomes:** After Rust validates a shared Google Drive
 grant request, WASM attempts `files.create` (folder) and `permissions.create`

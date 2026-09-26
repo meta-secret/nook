@@ -600,6 +600,49 @@ mod tests {
             StorageMode::GoogleDrive.cache_ref("file-id", ""),
             "drive:file-id"
         );
+        let first_private_target = DriveEventParent::PrivateAppDataFolder {
+            folder_id: "folder-a".to_owned(),
+        }
+        .encode_storage_id();
+        let second_private_target = DriveEventParent::PrivateAppDataFolder {
+            folder_id: "folder-b".to_owned(),
+        }
+        .encode_storage_id();
+        assert_ne!(
+            StorageMode::GoogleDrive.cache_ref(&first_private_target, "vault.yaml"),
+            StorageMode::GoogleDrive.cache_ref(&second_private_target, "vault.yaml")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn drive_target_ref_keeps_legacy_root_and_namespaces_new_private_targets() -> anyhow::Result<()>
+    {
+        assert_eq!(
+            DriveStorageTargetRef::parse("")?,
+            DriveStorageTargetRef::LegacyAppDataFolder
+        );
+        assert_eq!(
+            DriveStorageTargetRef::parse("historical-file-id")?,
+            DriveStorageTargetRef::LegacyAppDataFolder
+        );
+        assert_eq!(
+            DriveStorageTargetRef::parse(DRIVE_PRIVATE_FOLDER_PENDING_REF)?,
+            DriveStorageTargetRef::PendingPrivateFolder
+        );
+        assert_eq!(
+            DriveStorageTargetRef::parse("private-folder-v2:child-folder-id")?,
+            DriveStorageTargetRef::PrivateFolder {
+                folder_id: "child-folder-id".to_owned(),
+            }
+        );
+        assert_eq!(
+            DriveStorageTargetRef::parse("shared:my-drive-folder")?,
+            DriveStorageTargetRef::SharedFolder {
+                folder_id: "my-drive-folder".to_owned(),
+            }
+        );
+        assert!(DriveStorageTargetRef::parse("private-folder-v2:").is_err());
         Ok(())
     }
 

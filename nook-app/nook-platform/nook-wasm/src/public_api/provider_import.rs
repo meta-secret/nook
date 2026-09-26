@@ -201,7 +201,7 @@ mod extension_pairing_provider_tests {
         ));
         let mut provider =
             serde_json::from_str::<StorageProvider>(&ProviderFixture::json(ARMORED_SECRET))?;
-        provider.oauth_file = StoredOAuthFileConfiguration::Configured(OAuthFileConfigData {
+        provider.oauth_file = StoredOAuthFileConfiguration::configured(OAuthFileConfigData {
             access_token: StoredOAuthAccessCredential::AccessToken(ARMORED_SECRET.to_owned()),
             refresh_token: StoredOAuthRefreshCredential::Token(ARMORED_SECRET.to_owned()),
             ..OAuthFileConfigData::default()

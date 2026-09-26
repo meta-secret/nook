@@ -15,13 +15,9 @@ pub struct SharedGrantProviderRequest {
 #[derive(Debug, Serialize, Deserialize, Tsify)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
-#[expect(
-    clippy::large_enum_variant,
-    reason = "the typed WASM result preserves the provider's existing wire shape"
-)]
 pub enum SharedGrantProviderOutcome {
     AuthorizationRequired,
-    Existing { provider: StorageProviderData },
+    Existing { provider: Box<StorageProviderData> },
 }
 impl SharedGrantProviderRequest {
     #[must_use]
@@ -62,7 +58,7 @@ mod selection_tests {
     fn returns_the_exact_selected_row_with_credentials_and_scope() -> anyhow::Result<()> {
         let mut row = StorageProviderData::github("selected", "Shared provider", "", "", "now");
         row.provider_type = StorageProviderType::OauthFile;
-        row.oauth_file = StoredOAuthFileConfiguration::Configured(OAuthFileConfigData {
+        row.oauth_file = StoredOAuthFileConfiguration::configured(OAuthFileConfigData {
             preset: OAuthFilePreset::GoogleDrive,
             access_token: StoredOAuthAccessCredential::AccessToken("credential".into()),
             ..Default::default()
@@ -77,7 +73,9 @@ mod selection_tests {
         }
         .select();
         match outcome {
-            SharedGrantProviderOutcome::Existing { provider } => assert_eq!(provider, row),
+            SharedGrantProviderOutcome::Existing { provider } => {
+                assert_eq!(provider.as_ref(), &row);
+            }
             SharedGrantProviderOutcome::AuthorizationRequired => {
                 anyhow::bail!("eligible saved provider should be selected")
             }

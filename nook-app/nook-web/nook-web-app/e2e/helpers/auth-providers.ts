@@ -7,6 +7,7 @@ import {
   type AuthProvidersSnapshot,
   type GoogleDriveMode,
   type ICloudMode,
+  type OAuthFileConfig,
   type OAuthFilePreset,
   type StorageProvider,
 } from '$app-wasm'
@@ -25,6 +26,7 @@ export type SeededAuthProvider = {
     refreshToken?: string
     fileName: string
     driveMode: GoogleDriveMode
+    drivePrivateTarget?: OAuthFileConfig['drivePrivateTarget']
     iCloudMode: ICloudMode
     accountEmail?: string
     folderId?: string
@@ -139,6 +141,9 @@ function storedProvider(
               ? { state: 'email', value: oauth.accountEmail }
               : { state: 'unknown' },
           driveMode: oauth.driveMode,
+          ...(oauth.drivePrivateTarget
+            ? { drivePrivateTarget: oauth.drivePrivateTarget }
+            : {}),
           folderId:
             'folderId' in oauth && typeof oauth.folderId === 'string'
               ? { state: 'folderId', value: oauth.folderId }
@@ -329,6 +334,7 @@ type SeededOauthFileProviderInput = {
   accessToken: string
   accountEmail?: string
   folderId?: string
+  drivePrivateTarget?: OAuthFileConfig['drivePrivateTarget']
 }
 
 async function seedOauthFileProviders(
@@ -346,6 +352,8 @@ async function seedOauthFileProviders(
     }
     if (provider.accountEmail) oauthFile.accountEmail = provider.accountEmail
     if (provider.folderId) oauthFile.folderId = provider.folderId
+    if (provider.drivePrivateTarget)
+      oauthFile.drivePrivateTarget = provider.drivePrivateTarget
     return {
       id: provider.id,
       type: 'oauth-file',
@@ -393,15 +401,57 @@ export async function seedUnscopedOauthFileProvidersForEnrollment(
 
 export const AGE_ARMOR_MARKER = 'BEGIN AGE ENCRYPTED FILE'
 
+enum RawCredentialReadKind {
+  Absent = 'absent',
+  Malformed = 'malformed',
+  LegacyCiphertext = 'legacy-ciphertext',
+  TaggedCiphertext = 'tagged-ciphertext',
+  TaggedWithoutCiphertext = 'tagged-without-ciphertext',
+}
+
+enum RawCredentialProjectionKind {
+  Omit = 'omit',
+  Include = 'include',
+}
+
+type RawCredentialRead =
+  | { kind: RawCredentialReadKind.Absent }
+  | { kind: RawCredentialReadKind.Malformed }
+  | { kind: RawCredentialReadKind.LegacyCiphertext; ciphertext: string }
+  | {
+      kind: RawCredentialReadKind.TaggedCiphertext
+      state: string
+      ciphertext: string
+    }
+  | { kind: RawCredentialReadKind.TaggedWithoutCiphertext; state: string }
+
+type RawCredentialSnapshotValue =
+  string | { state: string } | { state: string; value: string }
+
+type RawCredentialProjection =
+  | { kind: RawCredentialProjectionKind.Omit }
+  | {
+      kind: RawCredentialProjectionKind.Include
+      value: RawCredentialSnapshotValue
+    }
+
+type RawAuthProviderPageReadRequest = {
+  stateKey: string
+  credentialReadKind: typeof RawCredentialReadKind
+  credentialProjectionKind: typeof RawCredentialProjectionKind
+}
+
+type RawOAuthFileCredentials = {
+  accessToken?: RawCredentialSnapshotValue
+  refreshToken?: RawCredentialSnapshotValue
+}
+
 export type RawAuthProvidersSnapshot = {
   providers: Array<{
     id: string
     type: string
-    githubPat?: string
-    oauthFile?: {
-      accessToken?: string
-      refreshToken?: string
-    }
+    githubPat?: RawCredentialSnapshotValue
+    oauthFile?: RawOAuthFileCredentials
   }>
 }
 
@@ -444,7 +494,17 @@ export async function readRawAuthProvidersFromIdb(
   page: Page,
 ): Promise<RawAuthProvidersSnapshot> {
   const stateKey = await activeAuthProviderStateKey(page)
-  return page.evaluate((scopedStateKey) => {
+  const request: RawAuthProviderPageReadRequest = {
+    stateKey,
+    credentialReadKind: RawCredentialReadKind,
+    credentialProjectionKind: RawCredentialProjectionKind,
+  }
+  return page.evaluate((request) => {
+    const {
+      stateKey: scopedStateKey,
+      credentialReadKind,
+      credentialProjectionKind,
+    } = request
     return new Promise<RawAuthProvidersSnapshot>((resolve, reject) => {
       const resolveEmptySnapshot = () => resolve({ providers: [] })
       const resolveSnapshot = (rawSnapshot: unknown) => {
@@ -455,64 +515,165 @@ export async function readRawAuthProvidersFromIdb(
           resolve({ providers: [] })
           return
         }
-        const providersValue: unknown = Object.getOwnPropertyDescriptor(
+        enum OwnPropertyReadKind {
+          InvalidOwner = 'invalid-owner',
+          Missing = 'missing',
+          Accessor = 'accessor',
+          Value = 'value',
+        }
+        type OwnPropertyRead =
+          | { kind: OwnPropertyReadKind.InvalidOwner }
+          | { kind: OwnPropertyReadKind.Missing }
+          | { kind: OwnPropertyReadKind.Accessor }
+          | { kind: OwnPropertyReadKind.Value; value: unknown }
+        const readOwnProperty = (
+          owner: unknown,
+          property: string,
+        ): OwnPropertyRead => {
+          if (typeof owner !== 'object' || !owner || Array.isArray(owner)) {
+            return { kind: OwnPropertyReadKind.InvalidOwner }
+          }
+          const descriptor = Object.getOwnPropertyDescriptor(owner, property)
+          if (!descriptor) return { kind: OwnPropertyReadKind.Missing }
+          if (!('value' in descriptor))
+            return { kind: OwnPropertyReadKind.Accessor }
+          return { kind: OwnPropertyReadKind.Value, value: descriptor.value }
+        }
+        const providersProperty = Object.getOwnPropertyDescriptor(
           rawSnapshot,
           'providers',
-        )?.value
-        if (!Array.isArray(providersValue)) {
+        )
+        if (
+          !providersProperty ||
+          !('value' in providersProperty) ||
+          !Array.isArray(providersProperty.value)
+        ) {
           resolve({ providers: [] })
           return
         }
+        const providersValue: unknown[] = providersProperty.value
         const providers: RawAuthProvidersSnapshot['providers'] = []
-        for (const providerValue of providersValue) {
+        const readCredential = (credential: unknown): RawCredentialRead => {
+          if (typeof credential === 'string') {
+            return {
+              kind: credentialReadKind.LegacyCiphertext,
+              ciphertext: credential,
+            }
+          }
+          const stateProperty = readOwnProperty(credential, 'state')
           if (
-            typeof providerValue !== 'object' ||
-            Object(providerValue) !== providerValue
+            stateProperty.kind !== OwnPropertyReadKind.Value ||
+            typeof stateProperty.value !== 'string'
+          ) {
+            return { kind: credentialReadKind.Malformed }
+          }
+          const valueProperty = readOwnProperty(credential, 'value')
+          if (
+            valueProperty.kind !== OwnPropertyReadKind.Value ||
+            typeof valueProperty.value !== 'string'
+          ) {
+            return {
+              kind: credentialReadKind.TaggedWithoutCiphertext,
+              state: stateProperty.value,
+            }
+          }
+          return {
+            kind: credentialReadKind.TaggedCiphertext,
+            state: stateProperty.value,
+            ciphertext: valueProperty.value,
+          }
+        }
+        const readCredentialProperty = (
+          owner: unknown,
+          property: string,
+        ): RawCredentialRead => {
+          const propertyRead = readOwnProperty(owner, property)
+          if (propertyRead.kind === OwnPropertyReadKind.Missing) {
+            return { kind: credentialReadKind.Absent }
+          }
+          if (propertyRead.kind !== OwnPropertyReadKind.Value) {
+            return { kind: credentialReadKind.Malformed }
+          }
+          return readCredential(propertyRead.value)
+        }
+        const projectCredential = (
+          credential: RawCredentialRead,
+        ): RawCredentialProjection => {
+          switch (credential.kind) {
+            case credentialReadKind.Absent:
+            case credentialReadKind.Malformed:
+              return { kind: credentialProjectionKind.Omit }
+            case credentialReadKind.LegacyCiphertext:
+              return {
+                kind: credentialProjectionKind.Include,
+                value: credential.ciphertext,
+              }
+            case credentialReadKind.TaggedCiphertext:
+              return {
+                kind: credentialProjectionKind.Include,
+                value: {
+                  state: credential.state,
+                  value: credential.ciphertext,
+                },
+              }
+            case credentialReadKind.TaggedWithoutCiphertext:
+              return {
+                kind: credentialProjectionKind.Include,
+                value: { state: credential.state },
+              }
+          }
+        }
+        for (const providerValue of providersValue) {
+          const idProperty = readOwnProperty(providerValue, 'id')
+          const typeProperty = readOwnProperty(providerValue, 'type')
+          if (
+            idProperty.kind !== OwnPropertyReadKind.Value ||
+            typeof idProperty.value !== 'string' ||
+            typeProperty.kind !== OwnPropertyReadKind.Value ||
+            typeof typeProperty.value !== 'string'
           ) {
             continue
           }
-          const id: unknown = Object.getOwnPropertyDescriptor(
-            providerValue,
-            'id',
-          )?.value
-          const type: unknown = Object.getOwnPropertyDescriptor(
-            providerValue,
-            'type',
-          )?.value
-          if (typeof id !== 'string' || typeof type !== 'string') continue
+          const id = idProperty.value
+          const type = typeProperty.value
           const provider: RawAuthProvidersSnapshot['providers'][number] = {
             id,
             type,
           }
-          const githubPat: unknown = Object.getOwnPropertyDescriptor(
-            providerValue,
-            'githubPat',
-          )?.value
-          if (typeof githubPat === 'string') provider.githubPat = githubPat
-          const oauthFileValue: unknown = Object.getOwnPropertyDescriptor(
-            providerValue,
-            'oauthFile',
-          )?.value
-          if (
-            oauthFileValue instanceof Object &&
-            !Array.isArray(oauthFileValue)
-          ) {
-            const oauthFile: NonNullable<
-              RawAuthProvidersSnapshot['providers'][number]['oauthFile']
-            > = {}
-            const accessToken: unknown = Object.getOwnPropertyDescriptor(
-              oauthFileValue,
-              'accessToken',
-            )?.value
-            if (typeof accessToken === 'string')
-              oauthFile.accessToken = accessToken
-            const refreshToken: unknown = Object.getOwnPropertyDescriptor(
-              oauthFileValue,
-              'refreshToken',
-            )?.value
-            if (typeof refreshToken === 'string')
-              oauthFile.refreshToken = refreshToken
-            provider.oauthFile = oauthFile
+          const githubPat = projectCredential(
+            readCredentialProperty(providerValue, 'githubPat'),
+          )
+          if (githubPat.kind === credentialProjectionKind.Include) {
+            provider.githubPat = githubPat.value
+          }
+          const oauthFileProperty = readOwnProperty(providerValue, 'oauthFile')
+          if (oauthFileProperty.kind === OwnPropertyReadKind.Value) {
+            const oauthFileValue = oauthFileProperty.value
+            const configuredProperty = readOwnProperty(oauthFileValue, 'config')
+            if (configuredProperty.kind !== OwnPropertyReadKind.InvalidOwner) {
+              let credentialSource = oauthFileValue
+              if (
+                configuredProperty.kind === OwnPropertyReadKind.Value &&
+                readOwnProperty(configuredProperty.value, 'accessToken')
+                  .kind !== OwnPropertyReadKind.InvalidOwner
+              ) {
+                credentialSource = configuredProperty.value
+              }
+              const oauthFile: RawOAuthFileCredentials = {}
+              const accessToken = projectCredential(
+                readCredentialProperty(credentialSource, 'accessToken'),
+              )
+              if (accessToken.kind === credentialProjectionKind.Include) {
+                oauthFile.accessToken = accessToken.value
+              }
+              const refreshToken = projectCredential(
+                readCredentialProperty(credentialSource, 'refreshToken'),
+              )
+              if (refreshToken.kind === credentialProjectionKind.Include) {
+                oauthFile.refreshToken = refreshToken.value
+              }
+              provider.oauthFile = oauthFile
+            }
           }
           providers.push(provider)
         }
@@ -559,7 +720,7 @@ export async function readRawAuthProvidersFromIdb(
           reject(((v) => (v ? v : new Error('idb tx failed')))(tx.error))
       }
     })
-  }, stateKey)
+  }, request)
 }
 
 export async function waitForAuthProvidersE2eHook(page: Page) {
@@ -644,13 +805,60 @@ export async function saveAuthProvidersInBrowser(
   expect(stored).toEqual({ ok: true })
 }
 
-export function expectSealedCredential(stored: unknown, plaintext: string) {
-  expect(typeof stored).toBe('string')
-  if (typeof stored !== 'string') {
+export function expectSealedCredential(
+  stored: unknown,
+  plaintext: string,
+  expectedState: string,
+) {
+  enum PersistedSealedCredentialReadKind {
+    NotTagged = 'not-tagged',
+    Incomplete = 'incomplete',
+    Tagged = 'tagged',
+  }
+  type PersistedSealedCredentialRead =
+    | { kind: PersistedSealedCredentialReadKind.NotTagged }
+    | { kind: PersistedSealedCredentialReadKind.Incomplete }
+    | {
+        kind: PersistedSealedCredentialReadKind.Tagged
+        state: unknown
+        ciphertext: string
+      }
+  const readPersistedSealedCredential = (
+    value: unknown,
+  ): PersistedSealedCredentialRead => {
+    if (typeof value !== 'object' || !value || Array.isArray(value)) {
+      return { kind: PersistedSealedCredentialReadKind.NotTagged }
+    }
+    const stateProperty = Object.getOwnPropertyDescriptor(value, 'state')
+    const valueProperty = Object.getOwnPropertyDescriptor(value, 'value')
+    if (
+      !stateProperty ||
+      !('value' in stateProperty) ||
+      !valueProperty ||
+      !('value' in valueProperty) ||
+      typeof valueProperty.value !== 'string'
+    ) {
+      return { kind: PersistedSealedCredentialReadKind.Incomplete }
+    }
+    return {
+      kind: PersistedSealedCredentialReadKind.Tagged,
+      state: stateProperty.value,
+      ciphertext: valueProperty.value,
+    }
+  }
+  const credential = readPersistedSealedCredential(stored)
+  expect(credential.kind).not.toBe(PersistedSealedCredentialReadKind.NotTagged)
+  if (credential.kind === PersistedSealedCredentialReadKind.NotTagged) {
+    throw new Error('expected a tagged sealed credential')
+  }
+  if (credential.kind === PersistedSealedCredentialReadKind.Incomplete) {
     throw new Error('expected a persisted sealed credential')
   }
-  expect(stored).toContain(AGE_ARMOR_MARKER)
-  expect(stored).not.toContain(plaintext)
+  expect(credential.state).toBe(expectedState)
+  const ciphertext = credential.ciphertext
+  expect(typeof ciphertext).toBe('string')
+  expect(ciphertext).toContain(AGE_ARMOR_MARKER)
+  expect(ciphertext).not.toContain(plaintext)
 }
 
 /** Default GitHub sync provider for local e2e onboarding / fan-out specs. */
@@ -679,4 +887,5 @@ export type E2eOauthSyncProvider = {
   fileName: string
   accessToken: string
   accountEmail?: string
+  drivePrivateTarget?: OAuthFileConfig['drivePrivateTarget']
 }

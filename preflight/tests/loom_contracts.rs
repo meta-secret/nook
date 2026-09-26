@@ -362,9 +362,62 @@ fn meta_cortex_integration_documents_host_native_execution_and_storage_contracts
 }
 
 #[test]
-fn preflight_installs_released_meta_cortex_without_configuration_override() {
+fn preflight_initializes_released_meta_cortex_with_only_default_tool_policies() {
     let dockerfile = RepositoryFixture::repository_root().read("preflight/Dockerfile");
-    let initialize_request = concat!(
+    assert!(
+        dockerfile.contains("mise_version=v2026.9.13")
+            && dockerfile.contains(
+                "mise_asset_url=\"https://github.com/jdx/mise/releases/download/${mise_version}/mise-${mise_version}-linux-x64\""
+            ),
+        "Docker preflight must pin mise v2026.9.13 to its official Linux x64 release asset"
+    );
+    let mise_sha256 = "a72f49916b33ba952ba398046c5cc91a58238f0b718fee1d938206ef2af21c6d";
+    assert!(
+        dockerfile.contains(&format!("mise_sha256={mise_sha256}"))
+            && dockerfile
+                .contains("printf '%s  %s\\n' \"$mise_sha256\" /tmp/mise | sha256sum --check -"),
+        "Docker preflight must verify the pinned official mise SHA-256 before installation"
+    );
+    let mise_download_position = dockerfile
+        .find("--output /tmp/mise \"$mise_asset_url\"")
+        .expect("Docker preflight must download the pinned mise release asset");
+    let mise_verification_position = dockerfile
+        .find("sha256sum --check -")
+        .expect("Docker preflight must verify mise against its fixed SHA-256");
+    let mise_install_directory = "install -d -m 0755 /root/.meta-cortex/mise/bin";
+    let mise_install_directory_position = dockerfile
+        .find(mise_install_directory)
+        .expect("Docker preflight must create Meta-Cortex's mise directory");
+    let mise_install_path = "install -m 0755 /tmp/mise /root/.meta-cortex/mise/bin/mise";
+    let mise_install_position = dockerfile
+        .find(mise_install_path)
+        .expect("Docker preflight must install mise executable at Meta-Cortex's expected path");
+    let bun_image_pin = "registry.dev.nokey.sh/oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4";
+    let vale_asset_pin = "https://github.com/vale-cli/vale/releases/download/v3.19.0/vale_3.19.0_Linux_64-bit.tar.gz";
+    let vale_sha256 = "c8f9d6c8055442bc7e9c121b2498e6f0e3fb670f4665e6ee577f1897f7665cf6";
+    assert!(
+        dockerfile.contains(bun_image_pin),
+        "Docker preflight must stage Bun from the pinned 1.3.14 image"
+    );
+    assert!(
+        dockerfile.contains(vale_asset_pin)
+            && dockerfile.contains(&format!("{vale_sha256}  /tmp/vale.tar.gz")),
+        "Docker preflight must stage Vale from its pinned, checksum-verified 3.19.0 release"
+    );
+    let bun_install_directory =
+        "install -d -m 0755 /root/.meta-cortex/bun/bin /root/.meta-cortex/vale/bin";
+    let bun_install_directory_position = dockerfile
+        .find(bun_install_directory)
+        .expect("Docker preflight must create Meta-Cortex Bun and Vale directories");
+    let bun_install_path = "install -m 0755 /usr/local/bin/bun /root/.meta-cortex/bun/bin/bun";
+    let bun_install_position = dockerfile.find(bun_install_path).expect(
+        "Docker preflight must stage the pinned Bun executable at Meta-Cortex's expected path",
+    );
+    let vale_install_path = "install -m 0755 /usr/local/bin/vale /root/.meta-cortex/vale/bin/vale";
+    let vale_install_position = dockerfile.find(vale_install_path).expect(
+        "Docker preflight must stage the pinned Vale executable at Meta-Cortex's expected path",
+    );
+    let initialize_request_prefix = concat!(
         "meta-cortex run --request - <<'YAML'\n",
         "version: 1\n",
         "project: /meta-secret/nook\n",
@@ -374,8 +427,27 @@ fn preflight_installs_released_meta_cortex_without_configuration_override() {
         "    name: Initialize\n",
         "    arguments:\n",
         "      harness: codex\n",
-        "      instructions: skip\n",
-        "YAML"
+        "      instructions: skip\n"
+    );
+    let initialize_request_body = dockerfile
+        .split_once(initialize_request_prefix)
+        .and_then(|(_, remainder)| remainder.split_once("\nYAML"))
+        .map(|(request_body, _)| request_body)
+        .expect(
+            "Docker Framework Initialize request must use the selected harness and instructions",
+        );
+    let configured_tool_policies = initialize_request_body
+        .lines()
+        .map(str::trim)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        configured_tool_policies,
+        [
+            "mise: InstallMissing",
+            "bun: InstallMissing",
+            "vale: InstallMissing",
+        ],
+        "Docker Initialize may spell out only the framework's default tool policies"
     );
     let info_request = concat!(
         "meta-cortex run --request - <<'YAML'\n",
@@ -392,8 +464,18 @@ fn preflight_installs_released_meta_cortex_without_configuration_override() {
         .find("COPY --from=repository-git /git /meta-secret/nook/.git")
         .expect("policy source must copy Git metadata into the project");
     let initialize_position = dockerfile
-        .find(initialize_request)
-        .expect("policy source must initialize the Meta-Cortex framework");
+        .find(initialize_request_prefix)
+        .expect("Docker policy source must include its Framework Initialize request");
+    assert!(
+        mise_download_position < mise_verification_position
+            && mise_verification_position < mise_install_directory_position
+            && mise_install_directory_position < mise_install_position
+            && mise_install_position < bun_install_directory_position
+            && bun_install_directory_position < bun_install_position
+            && bun_install_position < vale_install_position
+            && vale_install_position < initialize_position,
+        "Docker preflight must install pinned mise, stage pinned Bun and Vale, then run Framework Initialize"
+    );
     assert!(
         git_metadata_copy < initialize_position,
         "policy source must copy Git metadata before Meta-Cortex Framework Initialize"
@@ -405,8 +487,7 @@ fn preflight_installs_released_meta_cortex_without_configuration_override() {
     assert!(
         dockerfile.contains(
             "META_CORTEX_UNMANAGED_INSTALL=/usr/local/bin sh /tmp/meta-cortex-installer.sh"
-        ) && dockerfile.contains(initialize_request)
-            && dockerfile.contains(info_request)
+        ) && dockerfile.contains(info_request)
             && !dockerfile.contains("meta-cortex init ")
             && !dockerfile.contains("meta-cortex info "),
         "Meta-Cortex installation must use the supported framework YAML requests"

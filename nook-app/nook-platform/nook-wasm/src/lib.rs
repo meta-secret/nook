@@ -146,6 +146,9 @@ pub enum NookError {
     #[error("GitHub error: {0}")]
     GitHub(String),
 
+    #[error("GitHub authentication failed.")]
+    GitHubTokenRejected,
+
     #[error("Drive error: {0}")]
     Drive(String),
 

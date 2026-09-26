@@ -193,7 +193,7 @@ mod tests {
                 current_storage_mode: StorageProviderType::Github,
                 current_github_pat: "current-pat".to_owned(),
                 current_github_repo: "current/repo".to_owned(),
-                current_oauth_file: StoredOAuthFileConfiguration::Configured(
+                current_oauth_file: StoredOAuthFileConfiguration::configured(
                     OAuthFileConfigData::default(),
                 ),
                 current_local_folder: StoredLocalFolderConfiguration::Configured(
@@ -312,7 +312,7 @@ mod tests {
         };
         let mut provider =
             StorageProviderData::credential_projection_fixture(StorageProviderType::OauthFile);
-        provider.oauth_file = StoredOAuthFileConfiguration::Configured(oauth.clone());
+        provider.oauth_file = StoredOAuthFileConfiguration::configured(oauth.clone());
         let mut request = ActiveProviderCredentialsRequest::fixture();
         request.sync_providers = vec![provider];
 
@@ -322,7 +322,7 @@ mod tests {
         assert_eq!(projection.github_repo, "vault.yaml");
         assert_eq!(
             projection.oauth_file,
-            StoredOAuthFileConfiguration::Configured(oauth)
+            StoredOAuthFileConfiguration::configured(oauth)
         );
         assert_eq!(
             projection.local_folder,
@@ -453,7 +453,7 @@ mod tests {
             let mut first = StorageProviderData::credential_projection_fixture(mode);
             first.github_pat = StoredGithubPat::Token(" malformed token \u{FEFF}".to_owned());
             first.github_repo = StoredGithubRepository::Repository(" \u{FEFF}".to_owned());
-            first.oauth_file = StoredOAuthFileConfiguration::Configured(OAuthFileConfigData {
+            first.oauth_file = StoredOAuthFileConfiguration::configured(OAuthFileConfigData {
                 file_name: StoredOAuthRemoteFileName::FileName("\u{FEFF} ".to_owned()),
                 ..OAuthFileConfigData::default()
             });

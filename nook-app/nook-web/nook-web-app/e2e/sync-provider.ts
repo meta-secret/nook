@@ -312,6 +312,7 @@ export async function connectSyncVault(page: Page, target: SyncE2eTarget) {
 export async function connectSyncGenesisDevice(
   page: Page,
   target: SyncE2eTarget,
+  options?: { privateDriveFolderV2?: boolean },
 ) {
   if (
     target.providerId === E2eSyncProviderId.GoogleDrive ||
@@ -359,6 +360,9 @@ export async function connectSyncGenesisDevice(
           label: e2eSyncProviderDef(target.providerId).label,
           fileName: target.repoName,
           accessToken: target.pat,
+          ...(options?.privateDriveFolderV2
+            ? { drivePrivateTarget: { state: 'pending' as const } }
+            : {}),
         },
       ],
       sharedStub: remote,

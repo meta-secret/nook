@@ -123,7 +123,9 @@ impl SharedGrantProviderSelection<'_> {
                 }
             }
         }) {
-            Some(provider) => SharedGrantProviderOutcome::Existing { provider: provider.clone() },
+            Some(provider) => SharedGrantProviderOutcome::Existing {
+                provider: Box::new(provider.clone()),
+            },
             None => SharedGrantProviderOutcome::AuthorizationRequired,
         }
     }
