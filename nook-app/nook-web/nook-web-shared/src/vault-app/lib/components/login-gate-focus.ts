@@ -23,13 +23,12 @@ export class IdentityContextFocusRestoration {
     for (let frame = 0; frame < 30; frame += 1) {
       await this.schedule.waitForNextFrame();
       const activeElement = document.activeElement;
-      switch (activeElement) {
-        case document.body:
-        case document.documentElement:
-        case this.focusOwner:
-          break;
-        default:
-          return;
+      if (
+        activeElement !== document.body &&
+        activeElement !== document.documentElement &&
+        activeElement !== this.focusOwner
+      ) {
+        return;
       }
       if (this.schedule.identityContextLoading()) {
         this.focusedReviewButton = false;

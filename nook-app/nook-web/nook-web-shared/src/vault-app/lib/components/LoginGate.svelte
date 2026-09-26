@@ -67,7 +67,10 @@
   import LoginVaultPicker from '$lib/components/login/LoginVaultPicker.svelte'
   import LoginProviderManagement from '$lib/components/login/LoginProviderManagement.svelte'
   import { LoginProviderManagementVariant } from '$lib/components/login/login-provider-management-state'
-  import { IdentityContextFocusRestoration } from './login-gate-focus'
+  import {
+    IdentityContextFocusRestoration,
+    type IdentityContextFocusSchedule,
+  } from './login-gate-focus'
   import LoginEnrollmentPanel from '$lib/components/login/LoginEnrollmentPanel.svelte'
   import EnrollmentQrOnboardCard from '$lib/components/login/EnrollmentQrOnboardCard.svelte'
   import SentinelCeremonyPanel from '$lib/components/login/SentinelCeremonyPanel.svelte'
@@ -277,9 +280,7 @@
   }
 
   async function focusIdentityContextWhenAvailable(): Promise<void> {
-    const focusIdentityContextArgs: Parameters<
-      typeof restoreIdentityContextFocus
-    >[0] = {
+    const focusIdentityContextArgs: IdentityContextFocusSchedule = {
       waitForNextFrame: () =>
         new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
       identityContextLoading: () =>
