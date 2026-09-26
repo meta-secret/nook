@@ -3,8 +3,10 @@ import type { VaultState } from '$lib/vault.svelte'
 import { expect, test } from '../fixtures'
 import { clearBrowserVault, connectLocalVault, UI_TIMEOUT_MS } from '../helpers'
 
-type LockedLoginWindow = Window & {
-  readonly __nookVault: VaultState
+declare global {
+  interface Window {
+    readonly __nookVault: VaultState
+  }
 }
 
 type SentinelStatusCycle = {
@@ -30,7 +32,7 @@ test('keeps the create workflow usable after locked-login Sentinel status errors
 
   await page.evaluate(
     async (statuses: SentinelStatusCycle) => {
-      const vault = (window as LockedLoginWindow).__nookVault
+      const vault = window.__nookVault
       const manager = vault.admitManager().match(
         (admittedManager) => admittedManager,
         () => {

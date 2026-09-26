@@ -58,17 +58,26 @@ export type ExtensionPairingStateQueryResponse =
     }
   | { readonly ok: false; readonly reason: string }
 
+export type ExtensionPairingStateStorageResponseRequest = {
+  readonly stored: unknown
+  readonly setupKey: string
+}
+
 export function extensionPairingStateQueryResponseFromStorage(
-  stored: Readonly<Record<string, unknown>>,
-  setupKey: string,
+  request: ExtensionPairingStateStorageResponseRequest,
 ): ExtensionPairingStateQueryResponse {
+  const stored = request.stored
+  const setupKey = request.setupKey
+  if (!stored || typeof stored !== 'object') {
+    return { ok: false, reason: 'pairing-state-invalid' }
+  }
   if (!Object.hasOwn(stored, setupKey)) {
     return {
       ok: true,
       setupState: ExtensionPairingSetupResponseKind.NotConnected,
     }
   }
-  const setup = stored[setupKey]
+  const setup = Reflect.get(stored, setupKey)
   if (!isExtensionReadySetupState(setup)) {
     return { ok: false, reason: 'pairing-state-invalid' }
   }
@@ -136,9 +145,13 @@ export class ExtensionPairingStateLoader {
           }
           switch (runtimeResponse.setupState) {
             case ExtensionPairingSetupResponseKind.NotConnected: {
+              const notConnectedResponseFields: ExtensionPairingStateResponseFieldsCheck =
+                {
+                  response: runtimeResponse,
+                  expectedFields: ['ok', 'setupState'],
+                }
               const notConnected: ExtensionSetupLoad = hasExactResponseFields(
-                runtimeResponse,
-                ['ok', 'setupState'],
+                notConnectedResponseFields,
               )
                 ? { kind: ExtensionSetupLoadKind.NotConnected }
                 : { kind: ExtensionSetupLoadKind.Unavailable }
@@ -146,12 +159,13 @@ export class ExtensionPairingStateLoader {
               return
             }
             case ExtensionPairingSetupResponseKind.Ready: {
+              const readyResponseFields: ExtensionPairingStateResponseFieldsCheck =
+                {
+                  response: runtimeResponse,
+                  expectedFields: ['ok', 'setupState', 'setup'],
+                }
               if (
-                !hasExactResponseFields(runtimeResponse, [
-                  'ok',
-                  'setupState',
-                  'setup',
-                ]) ||
+                !hasExactResponseFields(readyResponseFields) ||
                 !('setup' in runtimeResponse) ||
                 !isExtensionReadySetupState(runtimeResponse.setup)
               ) {
@@ -182,10 +196,19 @@ export class ExtensionPairingStateLoader {
   }
 }
 
+type ExtensionPairingStateResponseFieldsCheck = {
+  readonly response: unknown
+  readonly expectedFields: readonly string[]
+}
+
 function hasExactResponseFields(
-  response: object,
-  expectedFields: readonly string[],
+  request: ExtensionPairingStateResponseFieldsCheck,
 ): boolean {
+  const response = request.response
+  if (!response || typeof response !== 'object') {
+    return false
+  }
+  const expectedFields = request.expectedFields
   const responseFields = Object.keys(response)
   return (
     responseFields.length === expectedFields.length &&

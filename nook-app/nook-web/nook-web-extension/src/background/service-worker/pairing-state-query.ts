@@ -1,6 +1,7 @@
 import { setupStorageKey } from '../pairing-grants'
 import {
   extensionPairingStateQueryResponseFromStorage,
+  type ExtensionPairingStateStorageResponseRequest,
   type ExtensionPairingStateQueryResponse,
 } from '../../lib/pairing-state'
 import { extensionPairingIdentity } from './pairing-identity'
@@ -29,10 +30,12 @@ export function handlePairingStateQuery({
   void extensionPairingIdentity
     .getPairingStorage(setupStorageKey)
     .then((stored) => {
-      const storedStateResponse = extensionPairingStateQueryResponseFromStorage(
+      const storageResponseRequest: ExtensionPairingStateStorageResponseRequest = {
         stored,
-        setupStorageKey,
-      )
+        setupKey: setupStorageKey,
+      }
+      const storedStateResponse =
+        extensionPairingStateQueryResponseFromStorage(storageResponseRequest)
       return sendResponse(storedStateResponse)
     })
     .catch(() => {

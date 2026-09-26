@@ -8,6 +8,7 @@ import {
   ExtensionPairingStateLoader,
   ExtensionSetupLoadKind,
   extensionPairingStateQueryResponseFromStorage,
+  type ExtensionPairingStateStorageResponseRequest,
 } from '../src/lib/pairing-state'
 
 const readySetup: ExtensionReadySetupState = {
@@ -24,19 +25,24 @@ const readySetup: ExtensionReadySetupState = {
 
 describe('extension pairing state loader', () => {
   test('encodes absent stored setup with an explicit not-connected tag', () => {
-    expect(extensionPairingStateQueryResponseFromStorage({}, 'setup')).toEqual({
+    const request: ExtensionPairingStateStorageResponseRequest = {
+      stored: {},
+      setupKey: 'setup',
+    }
+
+    expect(extensionPairingStateQueryResponseFromStorage(request)).toEqual({
       ok: true,
       setupState: ExtensionPairingSetupResponseKind.NotConnected,
     })
   })
 
   test('encodes valid stored setup with an explicit ready tag and payload', () => {
-    expect(
-      extensionPairingStateQueryResponseFromStorage(
-        { setup: readySetup },
-        'setup',
-      ),
-    ).toEqual({
+    const request: ExtensionPairingStateStorageResponseRequest = {
+      stored: { setup: readySetup },
+      setupKey: 'setup',
+    }
+
+    expect(extensionPairingStateQueryResponseFromStorage(request)).toEqual({
       ok: true,
       setupState: ExtensionPairingSetupResponseKind.Ready,
       setup: readySetup,
@@ -44,12 +50,27 @@ describe('extension pairing state loader', () => {
   })
 
   test('rejects malformed stored setup instead of encoding it as ready', () => {
-    expect(
-      extensionPairingStateQueryResponseFromStorage(
-        { setup: { status: 'not-ready' } },
-        'setup',
-      ),
-    ).toEqual({ ok: false, reason: 'pairing-state-invalid' })
+    const request: ExtensionPairingStateStorageResponseRequest = {
+      stored: { setup: { status: 'not-ready' } },
+      setupKey: 'setup',
+    }
+
+    expect(extensionPairingStateQueryResponseFromStorage(request)).toEqual({
+      ok: false,
+      reason: 'pairing-state-invalid',
+    })
+  })
+
+  test('rejects malformed storage results as invalid', () => {
+    const request: ExtensionPairingStateStorageResponseRequest = {
+      stored: 'invalid-storage-result',
+      setupKey: 'setup',
+    }
+
+    expect(extensionPairingStateQueryResponseFromStorage(request)).toEqual({
+      ok: false,
+      reason: 'pairing-state-invalid',
+    })
   })
 
   test('keeps the query message structural while loading setup through its transport owner', async () => {
@@ -136,6 +157,39 @@ describe('extension pairing state loader', () => {
     expect(await loader.loadExtensionSetupState()).toEqual({
       kind: ExtensionSetupLoadKind.NotConnected,
     })
+  })
+
+  test('keeps extra response fields unavailable for either setup tag', async () => {
+    const responses: unknown[] = [
+      {
+        ok: true,
+        setupState: ExtensionPairingSetupResponseKind.NotConnected,
+        extra: true,
+      },
+      {
+        ok: true,
+        setupState: ExtensionPairingSetupResponseKind.Ready,
+        setup: readySetup,
+        extra: true,
+      },
+    ]
+
+    for (const runtimeResponse of responses) {
+      const sendMessage = mock(
+        (
+          _message: ExtensionPairingStateQueryMessage,
+          respond: (response: unknown) => void,
+        ) => respond(runtimeResponse),
+      )
+      Object.assign(globalThis, {
+        chrome: { runtime: { sendMessage, lastError: false } },
+      })
+      const loader = new ExtensionPairingStateLoader({ browser: globalThis })
+
+      expect(await loader.loadExtensionSetupState()).toEqual({
+        kind: ExtensionSetupLoadKind.Unavailable,
+      })
+    }
   })
 
   test('keeps failed status queries unavailable', async () => {
