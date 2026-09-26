@@ -86,7 +86,108 @@ class DockerizedRustCacheRegistryContract {
       config: { digest: `sha256:${"b".repeat(64)}` },
       layers: [{ digest: `sha256:${"c".repeat(64)}` }],
     });
+    const scenarios = [
+      {
+        name: "registry and both cache refs are available",
+        registryStatus: 200,
+        currentStatus: 200,
+        parentStatus: 200,
+        blobStatus: 200,
+        fetchFailure: "0",
+        expectation: {
+          kind: "success",
+          githubEnvironment:
+            "GHA_CACHE_EXACT_COMPILE_CURRENT_AVAILABLE=1\n" +
+            "GHA_CACHE_EXACT_COMPILE_PARENT_AVAILABLE=1\n",
+        },
+      },
+      {
+        name: "current cache ref is absent",
+        registryStatus: 200,
+        currentStatus: 404,
+        parentStatus: 200,
+        blobStatus: 200,
+        fetchFailure: "0",
+        expectation: {
+          kind: "success",
+          githubEnvironment:
+            "GHA_CACHE_EXACT_COMPILE_CURRENT_AVAILABLE=0\n" +
+            "GHA_CACHE_EXACT_COMPILE_PARENT_AVAILABLE=1\n",
+        },
+      },
+      {
+        name: "parent cache ref is absent",
+        registryStatus: 200,
+        currentStatus: 200,
+        parentStatus: 404,
+        blobStatus: 200,
+        fetchFailure: "0",
+        expectation: {
+          kind: "success",
+          githubEnvironment:
+            "GHA_CACHE_EXACT_COMPILE_CURRENT_AVAILABLE=1\n" +
+            "GHA_CACHE_EXACT_COMPILE_PARENT_AVAILABLE=0\n",
+        },
+      },
+      {
+        name: "both cache refs are absent",
+        registryStatus: 200,
+        currentStatus: 404,
+        parentStatus: 404,
+        blobStatus: 200,
+        fetchFailure: "0",
+        expectation: {
+          kind: "success",
+          githubEnvironment:
+            "GHA_CACHE_EXACT_COMPILE_CURRENT_AVAILABLE=0\n" +
+            "GHA_CACHE_EXACT_COMPILE_PARENT_AVAILABLE=0\n",
+        },
+      },
+      ...[401, 403, 404, 503].map((status) => ({
+        name: "registry API rejects HTTP " + status,
+        registryStatus: status,
+        currentStatus: 200,
+        parentStatus: 200,
+        blobStatus: 200,
+        fetchFailure: "0",
+        expectation: { kind: "failure" },
+      })),
+      ...[401, 403, 503].map((status) => ({
+        name: "current cache manifest rejects HTTP " + status,
+        registryStatus: 200,
+        currentStatus: status,
+        parentStatus: 200,
+        blobStatus: 200,
+        fetchFailure: "0",
+        expectation: { kind: "failure" },
+      })),
+      {
+        name: "referenced cache blob rejects HTTP 404",
+        registryStatus: 200,
+        currentStatus: 200,
+        parentStatus: 200,
+        blobStatus: 404,
+        fetchFailure: "0",
+        expectation: { kind: "failure" },
+      },
+      {
+        name: "registry transport fails",
+        registryStatus: 200,
+        currentStatus: 200,
+        parentStatus: 200,
+        blobStatus: 200,
+        fetchFailure: "1",
+        expectation: { kind: "failure" },
+      },
+    ] as const;
     const harness = `
+      import assert from "node:assert/strict";
+      import { pathToFileURL } from "node:url";
+      import { readFileSync, writeFileSync } from "node:fs";
+
+      const scenarios = JSON.parse(process.env.CACHE_SCENARIOS);
+      writeFileSync(process.env.CACHE_VERIFIER_FILE, process.env.CACHE_VERIFIER_SCRIPT);
+      const verifierUrl = pathToFileURL(process.env.CACHE_VERIFIER_FILE).href;
       globalThis.fetch = async (input, init = {}) => {
         if (process.env.CACHE_FETCH_FAILURE === "1") {
           throw new Error("mock registry network failure");
@@ -115,70 +216,60 @@ class DockerizedRustCacheRegistryContract {
         }
         return new Response("", { status: 500 });
       };
-      await import("data:text/javascript," + encodeURIComponent(process.env.CACHE_VERIFIER_SCRIPT));
+      for (const [index, scenario] of scenarios.entries()) {
+        process.env.CACHE_REGISTRY_STATUS = String(scenario.registryStatus);
+        process.env.CACHE_CURRENT_STATUS = String(scenario.currentStatus);
+        process.env.CACHE_PARENT_STATUS = String(scenario.parentStatus);
+        process.env.CACHE_BLOB_STATUS = String(scenario.blobStatus);
+        process.env.CACHE_FETCH_FAILURE = scenario.fetchFailure;
+        writeFileSync(process.env.GITHUB_ENV, "");
+        let actualOutcome = "success";
+        try {
+          await import(verifierUrl + "?scenario=" + index);
+        } catch (error) {
+          actualOutcome = "failure";
+        }
+        switch (scenario.expectation.kind) {
+          case "success":
+            assert.equal(actualOutcome, "success", scenario.name);
+            assert.equal(
+              readFileSync(process.env.GITHUB_ENV, "utf8"),
+              scenario.expectation.githubEnvironment,
+              scenario.name,
+            );
+            continue;
+          case "failure":
+            assert.equal(actualOutcome, "failure", scenario.name);
+            continue;
+        }
+        assert.fail("unsupported registry expectation: " + scenario.expectation.kind);
+      }
     `;
     const temporary = mkdtempSync(join(tmpdir(), "nook-cache-registry-"));
     try {
       const githubEnvironmentFile = join(temporary, "github-env");
-      for (const [
-        registry,
-        current,
-        parent,
-        blob,
-        networkFailure,
-        expected,
-      ] of [
-        [200, 200, 200, 200, false, true],
-        [200, 404, 200, 200, false, true],
-        [200, 200, 404, 200, false, true],
-        [200, 404, 404, 200, false, true],
-        [401, 200, 200, 200, false, false],
-        [403, 200, 200, 200, false, false],
-        [404, 200, 200, 200, false, false],
-        [503, 200, 200, 200, false, false],
-        [200, 401, 200, 200, false, false],
-        [200, 403, 200, 200, false, false],
-        [200, 503, 200, 200, false, false],
-        [200, 200, 200, 404, false, false],
-        [200, 200, 200, 200, true, false],
-      ] as const) {
-        writeFileSync(githubEnvironmentFile, "");
-        const result = spawnSync(
-          "node",
-          ["--input-type=module", "-e", harness],
-          {
-            encoding: "utf8",
-            env: {
-              ...process.env,
-              CACHE_VERIFIER_SCRIPT: registryGateScript,
-              CACHE_REGISTRY_STATUS: String(registry),
-              CACHE_ROOT_MANIFEST: rootManifest,
-              CACHE_NESTED_MANIFEST: nestedManifest,
-              CACHE_CURRENT_STATUS: String(current),
-              CACHE_PARENT_STATUS: String(parent),
-              CACHE_BLOB_STATUS: String(blob),
-              CACHE_FETCH_FAILURE: networkFailure ? "1" : "0",
-              GHA_CACHE_SCOPE_SUFFIX: "-git-current",
-              GHA_CACHE_PARENT_SCOPE_SUFFIX: "-git-parent",
-              GITHUB_ENV: githubEnvironmentFile,
-              REGISTRY_HOST: "registry.example.test",
-              REGISTRY_USERNAME: "sim-user",
-              REGISTRY_PASSWORD: "sim-password",
-            },
-          },
-        );
-        expect(result.status === 0, result.stderr || result.stdout).toBe(
-          expected,
-        );
-        if (expected) {
-          const expectedCurrentAvailability = current === 200 ? "1" : "0";
-          const expectedParentAvailability = parent === 200 ? "1" : "0";
-          expect(readFileSync(githubEnvironmentFile, "utf8")).toBe(
-            `GHA_CACHE_EXACT_COMPILE_CURRENT_AVAILABLE=${expectedCurrentAvailability}\n` +
-              `GHA_CACHE_EXACT_COMPILE_PARENT_AVAILABLE=${expectedParentAvailability}\n`,
-          );
-        }
-      }
+      const verifierFile = join(temporary, "registry-verifier.mjs");
+      writeFileSync(githubEnvironmentFile, "");
+      // Share one Node startup across the matrix and stay under Bun's 5s timeout.
+      const result = spawnSync("node", ["--input-type=module", "-e", harness], {
+        encoding: "utf8",
+        timeout: 4_000,
+        env: {
+          ...process.env,
+          CACHE_VERIFIER_SCRIPT: registryGateScript,
+          CACHE_VERIFIER_FILE: verifierFile,
+          CACHE_SCENARIOS: JSON.stringify(scenarios),
+          CACHE_ROOT_MANIFEST: rootManifest,
+          CACHE_NESTED_MANIFEST: nestedManifest,
+          GHA_CACHE_SCOPE_SUFFIX: "-git-current",
+          GHA_CACHE_PARENT_SCOPE_SUFFIX: "-git-parent",
+          GITHUB_ENV: githubEnvironmentFile,
+          REGISTRY_HOST: "registry.example.test",
+          REGISTRY_USERNAME: "sim-user",
+          REGISTRY_PASSWORD: "sim-password",
+        },
+      });
+      expect(result.status === 0, result.stderr || result.stdout).toBe(true);
     } finally {
       rmSync(temporary, { recursive: true, force: true });
     }

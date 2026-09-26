@@ -860,8 +860,7 @@ test('re-approves an existing local vault after reload without event-log-access-
     expect(grantKeys.length).toBeGreaterThan(0)
     await removeExtensionStorageKeys(context, grantKeys)
 
-    // Reload so the website manager must restore its signing seed from
-    // IndexedDB, then unlock with the local website passkey and re-approve.
+    // Reload, restore the IndexedDB signing seed, then unlock and re-approve.
     await simplePage.goto(simpleVaultBaseUrl)
     const reloadedShell = simplePage.getByTestId('authenticated-shell')
     const reloadedUnlock = simplePage.getByTestId('login-local-unlock-step')
