@@ -414,4 +414,4 @@ tasks:
           echo "task setup:web:e2e:focused: refusing oversized WASM handoff (${artifact_kib} KiB)" >&2;
           exit 1;
         };
-        WEB_ARTIFACTS_CONTEXT="$artifacts_dir" bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh" "setup: nook-web-e2e-focused" {{.DOCKER}} buildx bake --allow=fs.read="$artifacts_dir" {{.NOOK_BAKE_FILES}} nook-web-e2e-focused'
+        WEB_ARTIFACTS_CONTEXT="$artifacts_dir" bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh" "setup: nook-web-e2e" {{.DOCKER}} buildx bake --allow=fs.read="$artifacts_dir" {{.NOOK_BAKE_FILES}} nook-web-e2e'

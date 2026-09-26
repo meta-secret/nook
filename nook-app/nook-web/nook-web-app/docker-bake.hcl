@@ -158,14 +158,3 @@ target "nook-web-focused" {
   cache-from = web_cache_from
   cache-to   = web_cache_to
 }
-
-// Focused Playwright runs need the browser image, but not the full verification/coverage graph.
-target "nook-web-e2e-focused" {
-  inherits = ["_nook-web-focused-common"]
-  contexts = {
-    web-runtime = "target:web-e2e-base"
-  }
-  tags       = [DOCKER_E2E_IMAGE]
-  output     = ["type=docker"]
-  cache-from = web_e2e_cache_from
-}
