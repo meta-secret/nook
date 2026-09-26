@@ -3,7 +3,10 @@
 Meta-Cortex [programming requirements](../../../.meta-cortex/teams/dev-team/docs/programming/testing-pyramid-and-regression.md)
 own the testing pyramid and regression-before-fix procedure.
 Nook supplies its product scenario mapping, existing harnesses, and
-coverage gate here. Execute checks only in the Nook-authorized delivery stage.
+coverage gate here. Hosted PR checks remain mandatory for delivery and
+readiness. Local test, check, or E2E diagnostics follow the root
+[delivery and validation policy](../../AGENTS.md#delivery-and-validation), and
+local outcomes do not replace hosted evidence.
 
 ## Product evidence
 
@@ -45,7 +48,8 @@ Use typed WASM tests for the bridge and Playwright for browser-only behavior.
 **Prohibited:** replace a Rust vault-policy regression with browser E2E alone.
 
 **Preferred:** author the Rust regression and retain the user-flow assertion.
-Report before/after execution as pending until the authorized stage runs it.
+Record any local run as diagnostic evidence. Keep the required hosted result
+pending until the authorized PR stage reports it.
 
 ### Existing browser harnesses
 
@@ -67,4 +71,3 @@ The portable Rust crates (`nook-app-common`, `nook-authenticator-domain`,
 - Coverage below 90% fails the CI gate (`task rust:coverage:check`).
 - When under 90%, add Rust tests in the same task.
 - At or above 90%, do not chase marginal line coverage; focus on behavior and invariants.
-

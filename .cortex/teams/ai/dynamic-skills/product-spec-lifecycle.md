@@ -139,7 +139,9 @@ After:
 ## Validation
 
 - Review the docs diff to verify that product specifications accurately describe current product behavior.
-- Run `task loom:cortex-audit` to verify links, index entries, and structure.
+- The required hosted PR stage runs `task loom:cortex-audit` to verify links,
+  index entries, and structure. Any local diagnostic follows the root
+  [delivery and validation policy](../../../AGENTS.md#delivery-and-validation).
 - For implementation tasks, apply only permitted scoped formatting or
   inexpensive diagnostics and finish the coherent worker branch. Include every
   formatter mutation in allowed source or Cortex paths. Return the branch and

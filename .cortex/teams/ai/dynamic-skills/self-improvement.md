@@ -105,6 +105,8 @@ Before returning an AI-owned Cortex change to Gizmo:
   hosted checks after the head changes.
 
 For semantic review, follow the upstream authoring practices. Mechanical Nook
-Cortex checks run only in the required PR stage listed by the
-[Cortex document-map card](cortex-document-map/SKILL.md#validation); do not run
-them locally or during feature work.
+Cortex checks run in the required PR stage listed by the
+[Cortex document-map card](cortex-document-map/SKILL.md#validation). A local
+diagnostic follows the root
+[delivery and validation policy](../../../AGENTS.md#delivery-and-validation)
+and never replaces the required hosted check.

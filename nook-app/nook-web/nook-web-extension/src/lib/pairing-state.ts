@@ -36,7 +36,60 @@ export type ExtensionPairingStateLoaderArgs = {
   browser: typeof globalThis
 }
 
-function isExtensionReadySetupState(
+export enum ExtensionPairingSetupResponseKind {
+  NotConnected = 'not-connected',
+  Ready = 'ready',
+}
+
+/**
+ * Internal response for the service worker and content script shipped in one
+ * extension build. Untagged replies from an older bundle fail closed as
+ * Unavailable; this contract has no legacy fallback or external versioning.
+ */
+export type ExtensionPairingStateQueryResponse =
+  | {
+      readonly ok: true
+      readonly setupState: ExtensionPairingSetupResponseKind.NotConnected
+    }
+  | {
+      readonly ok: true
+      readonly setupState: ExtensionPairingSetupResponseKind.Ready
+      readonly setup: ExtensionReadySetupState
+    }
+  | { readonly ok: false; readonly reason: string }
+
+export type ExtensionPairingStateStorageResponseRequest = {
+  readonly stored: unknown
+  readonly setupKey: string
+}
+
+export function extensionPairingStateQueryResponseFromStorage(
+  request: ExtensionPairingStateStorageResponseRequest,
+): ExtensionPairingStateQueryResponse {
+  const stored = request.stored
+  const setupKey = request.setupKey
+  if (!stored || typeof stored !== 'object') {
+    return { ok: false, reason: 'pairing-state-invalid' }
+  }
+  const setupDescriptor = Object.getOwnPropertyDescriptor(stored, setupKey)
+  if (!setupDescriptor) {
+    return {
+      ok: true,
+      setupState: ExtensionPairingSetupResponseKind.NotConnected,
+    }
+  }
+  const setup: unknown = setupDescriptor.value
+  if (!isExtensionReadySetupState(setup)) {
+    return { ok: false, reason: 'pairing-state-invalid' }
+  }
+  return {
+    ok: true,
+    setupState: ExtensionPairingSetupResponseKind.Ready,
+    setup,
+  }
+}
+
+export function isExtensionReadySetupState(
   value: unknown,
 ): value is ExtensionReadySetupState {
   return (
@@ -80,9 +133,10 @@ export class ExtensionPairingStateLoader {
             !runtimeResponse ||
             typeof runtimeResponse !== 'object' ||
             !('ok' in runtimeResponse) ||
+            !Object.hasOwn(runtimeResponse, 'ok') ||
             runtimeResponse.ok !== true ||
-            !('setup' in runtimeResponse) ||
-            !isExtensionReadySetupState(runtimeResponse.setup)
+            !('setupState' in runtimeResponse) ||
+            !Object.hasOwn(runtimeResponse, 'setupState')
           ) {
             const unavailable: ExtensionSetupLoad = {
               kind: ExtensionSetupLoadKind.Unavailable,
@@ -90,15 +144,77 @@ export class ExtensionPairingStateLoader {
             resolve(unavailable)
             return
           }
-          const ready: ExtensionSetupLoad = {
-            kind: ExtensionSetupLoadKind.Ready,
-            setup: runtimeResponse.setup,
+          switch (runtimeResponse.setupState) {
+            case ExtensionPairingSetupResponseKind.NotConnected: {
+              const notConnectedResponseFields: ExtensionPairingStateResponseFieldsCheck =
+                {
+                  response: runtimeResponse,
+                  expectedFields: ['ok', 'setupState'],
+                }
+              const notConnected: ExtensionSetupLoad = hasExactResponseFields(
+                notConnectedResponseFields,
+              )
+                ? { kind: ExtensionSetupLoadKind.NotConnected }
+                : { kind: ExtensionSetupLoadKind.Unavailable }
+              resolve(notConnected)
+              return
+            }
+            case ExtensionPairingSetupResponseKind.Ready: {
+              const readyResponseFields: ExtensionPairingStateResponseFieldsCheck =
+                {
+                  response: runtimeResponse,
+                  expectedFields: ['ok', 'setupState', 'setup'],
+                }
+              if (
+                !hasExactResponseFields(readyResponseFields) ||
+                !('setup' in runtimeResponse) ||
+                !isExtensionReadySetupState(runtimeResponse.setup)
+              ) {
+                const unavailable: ExtensionSetupLoad = {
+                  kind: ExtensionSetupLoadKind.Unavailable,
+                }
+                resolve(unavailable)
+                return
+              }
+              const ready: ExtensionSetupLoad = {
+                kind: ExtensionSetupLoadKind.Ready,
+                setup: runtimeResponse.setup,
+              }
+              resolve(ready)
+              return
+            }
+            default: {
+              const unavailable: ExtensionSetupLoad = {
+                kind: ExtensionSetupLoadKind.Unavailable,
+              }
+              resolve(unavailable)
+              return
+            }
           }
-          resolve(ready)
         },
       )
     })
   }
+}
+
+type ExtensionPairingStateResponseFieldsCheck = {
+  readonly response: unknown
+  readonly expectedFields: readonly string[]
+}
+
+function hasExactResponseFields(
+  request: ExtensionPairingStateResponseFieldsCheck,
+): boolean {
+  const response = request.response
+  if (!response || typeof response !== 'object') {
+    return false
+  }
+  const expectedFields = request.expectedFields
+  const responseFields = Object.keys(response)
+  return (
+    responseFields.length === expectedFields.length &&
+    expectedFields.every((field) => Object.hasOwn(response, field))
+  )
 }
 
 const extensionPairingStateLoaderArgs: ExtensionPairingStateLoaderArgs = {
@@ -110,9 +226,11 @@ export const extensionPairingStateLoader = new ExtensionPairingStateLoader(
 
 export enum ExtensionSetupLoadKind {
   Ready = 'ready',
+  NotConnected = 'not-connected',
   Unavailable = 'unavailable',
 }
 
 export type ExtensionSetupLoad =
   | { kind: ExtensionSetupLoadKind.Ready; setup: ExtensionReadySetupState }
+  | { kind: ExtensionSetupLoadKind.NotConnected }
   | { kind: ExtensionSetupLoadKind.Unavailable }

@@ -68,7 +68,8 @@
   import LoginProviderManagement from '$lib/components/login/LoginProviderManagement.svelte'
   import { LoginProviderManagementVariant } from '$lib/components/login/login-provider-management-state'
   import {
-    focusIdentityContextWhenAvailable as restoreIdentityContextFocus,
+    IdentityContextFocusRestoration,
+    type IdentityContextFocusSchedule,
   } from './login-gate-focus'
   import LoginEnrollmentPanel from '$lib/components/login/LoginEnrollmentPanel.svelte'
   import EnrollmentQrOnboardCard from '$lib/components/login/EnrollmentQrOnboardCard.svelte'
@@ -279,13 +280,9 @@
   }
 
   async function focusIdentityContextWhenAvailable(): Promise<void> {
-    const focusIdentityContextArgs: Parameters<
-      typeof restoreIdentityContextFocus
-    >[0] = {
+    const focusIdentityContextArgs: IdentityContextFocusSchedule = {
       waitForNextFrame: () =>
-        new Promise<void>((resolve) =>
-          requestAnimationFrame(() => resolve()),
-        ),
+        new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
       identityContextLoading: () =>
         Boolean(
           document.querySelector(
@@ -297,7 +294,9 @@
           '[data-testid="login-review-identities"]',
         ) || false,
     }
-    await restoreIdentityContextFocus(focusIdentityContextArgs)
+    await new IdentityContextFocusRestoration(
+      focusIdentityContextArgs,
+    ).restoreWhenAvailable()
   }
 
   async function openDevicesAccess(
@@ -411,8 +410,10 @@
       sentinelVisibility.value === SentinelCeremonyVisibility.Visible,
   )
   $effect(() => {
-    if (sentinelVisibility.isErr())
-      vault.errorMsg = vault.t(sentinelVisibility.error.translationKey)
+    if (sentinelVisibility.isErr()) {
+      const message = vault.t(sentinelVisibility.error.translationKey)
+      if (untrack(() => vault.errorMsg) !== message) vault.errorMsg = message
+    }
   })
   const hasKnownLocalVault = $derived(
     vault.localVaultPresent || vault.localVaults.length > 0,

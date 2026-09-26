@@ -3,8 +3,10 @@
 ## Purpose
 
 The [dev delivery contract](../../../gizmo-prime/architecture/dev-delivery.md)
-defines two remote stages. Agents keep local work limited to editing, reading,
-scoped rustfmt, and bounded inexpensive TS diagnostics or formatting.
+defines the remote build-only and required-check stages. Hosted execution is the
+default. Follow the root [delivery and validation policy](../../../AGENTS.md#delivery-and-validation)
+for any bounded local diagnostic. Local results never replace required hosted
+PR checks.
 
 ## Required actions
 
@@ -43,7 +45,14 @@ scoped rustfmt, and bounded inexpensive TS diagnostics or formatting.
 
 ## Prohibited actions
 
-- Do not run local tests, Docker work, product compilation, or coverage.
+- Do not use this build-only route to run tests, coverage, E2E, or preflight.
+- Under the root policy, a specific local preflight, coverage, or build target
+  may be selected directly only when it is the smallest suitable diagnostic for
+  the recorded task need. A selected Taskfile target may also execute its
+  declared necessary prerequisites through that task; unrelated or broader
+  targets and deployment remain prohibited locally.
+- Do not use the exception for direct Docker/BuildKit control, direct cache
+  operations or mutation, or daemon/container destruction.
 - Do not treat `rust:ci`, `web:verify`, or `loom:verify` as build-only.
 - Do not add an automatic dev-push slow pipeline.
 - Do not create a custom scheduler or cancel runs outside native supersession.

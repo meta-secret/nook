@@ -44,6 +44,8 @@ Author meaningful tests and finish the assigned worker branch. Report the branch
 and focused evidence to Team Gizmo. Team Gizmo routes local integration through
 the upstream integration agent and waits for its feature branch, integration
 outcome, and checks. The feature Gizmo then requests required PR-check evidence.
-Tests and mechanical Cortex checks
-execute in the feature pull request's required-check stage. Local feedback is
+Required tests and mechanical Cortex checks execute in the feature pull
+request's required-check stage. Local test, check, or E2E diagnostics follow the
+root [delivery and validation policy](../../../AGENTS.md#delivery-and-validation);
+local results do not replace hosted evidence. Routine local feedback is also
 limited by the [dev contract](../../../gizmo-prime/architecture/dev-delivery.md).

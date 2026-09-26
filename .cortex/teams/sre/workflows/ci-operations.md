@@ -4,8 +4,10 @@
 
 Follow the [dev delivery contract](../../../gizmo-prime/architecture/dev-delivery.md) for
 feature compilation and the manually run Feature Gizmo's slow PR cycle.
-Runtime workflow details below document current CI operations; they do not
-grant permission to run local tests or restore superseded delivery stages.
+Local diagnostics follow the root
+[delivery and validation policy](../../../AGENTS.md#delivery-and-validation).
+The runtime workflow below documents CI operations; it does not override that
+policy or restore superseded delivery stages.
 
 ## Overview
 
@@ -44,16 +46,21 @@ lifecycle, sync, and WASM events that neither linters nor DOM assertions expose.
   cause and write a focused unit test at the owning boundary before fixing the
   defect. Direct e2e-test edits are allowed only when a unit test is infeasible
   (rare).
-- **Human local repro:** `E2E_SPEC=… task web:test:e2e:file`, then
-  `fetchAppLogs(page)` or open `/app-logs?minLevel=debug&limit=1000`. Agents use
-  the hosted remote catalog.
+- **Single-spec repro:** `E2E_SPEC=… task web:test:e2e:file`, then
+  `fetchAppLogs(page)` or open `/app-logs?minLevel=debug&limit=1000`. Hosted
+  execution remains the default. Agents may run the local target only under the
+  root diagnostic policy and must record the request or evidence, exact command
+  and scope, and outcome. The selected target may execute only its declared
+  necessary Taskfile prerequisites through that target; do not dispatch them
+  separately.
 - **Human inspection:** `/logs` in the running app.
 
 Full reference: [logging.md § Debugging, troubleshooting, and CI verification](../../../shared/references/logging.md#debugging-troubleshooting-and-ci-verification).
 
-Local `task ci:pr` remains available as an optional warm-cache debug mirror.
-See [pull request validation](../../../gizmo-prime/workflows/pull-requests.md)
-and [mission delivery](../../../gizmo-prime/workflows/mission-delivery.md).
+For human debugging, local `task ci:pr` remains an optional warm-cache mirror.
+It is a broad gate, not an agent local diagnostic target or a merge gate. See
+[pull request validation](../../../gizmo-prime/workflows/pull-requests.md) and
+[mission delivery](../../../gizmo-prime/workflows/mission-delivery.md).
 
 E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_INTERVAL_MS=1000` for fast background sync. Main saves prod dist before e2e and restores after (`web:e2e:restore-prod-dist`).
 
@@ -171,14 +178,21 @@ assume per-PR Cloudflare preview hosts can be covered by wildcards. See
 
 ## Agent execution policy
 
-- GitHub Actions is the agent build/test environment and sole merge-validation
-  pipeline.
+- GitHub Actions runs required hosted PR checks and remains the sole
+  merge-validation pipeline. Local diagnostics follow the root policy and never
+  replace those checks.
+- A specific local preflight, coverage, or build target may be selected directly
+  only when it is the smallest suitable diagnostic for the recorded task need
+  under the root policy. A selected Taskfile target may also execute its
+  actually declared necessary prerequisites through that task. Unrelated or
+  broader targets, deployment, and broad pre-push remain prohibited locally.
+  Direct Docker/BuildKit control, direct cache operations or mutation, and
+  daemon/container destruction remain prohibited.
 - Feature teams author tests and finish scoped worker branches.
 - Feature Gizmos route those branches through the upstream integration agent and
   wait for its feature branch, integration outcome, and checks.
 - Feature Gizmos request only the required required PR-check capability.
 - The Feature Gizmo alone requests the full slow feature pull request checks.
-- Local tests, Docker work, product compilation, and broad pre-push are prohibited.
 - Missing build-only tooling is a visible runtime prerequisite.
 - Repairs return through the feature path and serialized feature pull-request delivery.
 
@@ -187,7 +201,9 @@ assume per-PR Cloudflare preview hosts can be covered by wildcards. See
 1. **Do not** move real GitHub API tests back into `main.yml` — extend stub coverage instead.
 2. **Do** add new sync-provider integration tests to the `e2e` spec list first; add a small live smoke under `e2e/live/` if the provider has a real backend.
 3. **Do** return the formatted worker branch and focused evidence to Team Gizmo
-   for upstream local integration; never run heavy product work locally.
+   for upstream local integration. Use the root policy for bounded local
+   test/check/E2E diagnostics; do not run unrelated heavy product builds or
+   broad local gates.
 4. **Do** update this doc and
    [pull requests](../../../gizmo-prime/workflows/pull-requests.md) when workflow
    behavior changes.

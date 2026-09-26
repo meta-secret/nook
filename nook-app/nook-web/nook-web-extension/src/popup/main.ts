@@ -13,6 +13,7 @@ import {
   extensionWasmRuntime,
 } from '../lib/nook-wasm'
 import PopupApp from './PopupApp.svelte'
+import PopupInitializationFailure from './PopupInitializationFailure.svelte'
 import AuthenticatorPicker from './AuthenticatorPicker.svelte'
 import LoginPicker from './LoginPicker.svelte'
 import './popup.css'
@@ -82,31 +83,41 @@ async function main() {
       break
   }
 
-  const vaultConnection = await loadCompanionVaultConnection()
-  const protectionStatus =
-    await extensionWasmRuntime.extensionDeviceProtectionStatus()
-  const activeSessionDevice: ExtensionSessionDeviceState =
-    protectionStatus === DeviceProtectionStatus.Unlocked
-      ? await extensionWasmRuntime.extensionSessionDevice()
-      : { kind: ExtensionSessionDeviceStateKind.Locked }
+  try {
+    const vaultConnection = await loadCompanionVaultConnection()
+    const protectionStatus =
+      await extensionWasmRuntime.extensionDeviceProtectionStatus()
+    const activeSessionDevice: ExtensionSessionDeviceState =
+      protectionStatus === DeviceProtectionStatus.Unlocked
+        ? await extensionWasmRuntime.extensionSessionDevice()
+        : { kind: ExtensionSessionDeviceStateKind.Locked }
 
-  const nookTypedArgs0_2: MountOptions<ComponentProps<typeof PopupApp>> = {
-    target,
-    props: {
-      i18n,
-      isConnected: vaultConnection.isConnected,
-      ...(vaultConnection.isConnected
-        ? {
-            vaultName: vaultConnection.vaultName,
-            vaultStoreId: vaultConnection.vaultStoreId,
-          }
-        : {}),
-      launcherIntent,
-      protectionStatus,
-      activeSessionDevice,
-    },
+    const nookTypedArgs0_2: MountOptions<ComponentProps<typeof PopupApp>> = {
+      target,
+      props: {
+        i18n,
+        isConnected: vaultConnection.isConnected,
+        ...(vaultConnection.isConnected
+          ? {
+              vaultName: vaultConnection.vaultName,
+              vaultStoreId: vaultConnection.vaultStoreId,
+            }
+          : {}),
+        launcherIntent,
+        protectionStatus,
+        activeSessionDevice,
+      },
+    }
+    mount(PopupApp, nookTypedArgs0_2)
+  } catch {
+    const failureMountOptions: MountOptions<
+      ComponentProps<typeof PopupInitializationFailure>
+    > = {
+      target,
+      props: { i18n },
+    }
+    mount(PopupInitializationFailure, failureMountOptions)
   }
-  mount(PopupApp, nookTypedArgs0_2)
 }
 
 void main()

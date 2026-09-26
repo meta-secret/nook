@@ -65,7 +65,10 @@ and `preflight` sources. Unused-code ownership is split as follows:
     while either gate is red.
   - See [quality.md § Fix check findings](../../sre/workflows/quality.md#fix-check-findings--not-silence-them).
 
-- **Human interactive single-spec debug:** `E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file`. Agents use the hosted remote catalog.
+- **Single-spec debug:** `E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file`.
+  Hosted remote execution is the default for agents. A local run follows the
+  root [delivery and validation policy](../../../AGENTS.md#delivery-and-validation)
+  and is diagnostic only.
 - Full stub Playwright: `task web:test:e2e` runs the `stable` IndexedDB group at
   3 workers. It then runs the provider/sync `unstable` group at 2 workers.
 - Stable subset Playwright (`stable` project): `task web:test:e2e:pr` uses 3
@@ -82,15 +85,17 @@ and `preflight` sources. Unused-code ownership is split as follows:
   and uses the applicable
   [existing browser harness](../../../shared/dynamic-skills/testing-pyramid-and-regression.md#existing-browser-harnesses).
 - Before integration, the Web worker authors focused behavior tests, finishes
-  the assigned worker branch, and reports focused evidence. Local feedback
-  permits only bounded inexpensive diagnostics or formatting. Browser and
-  behavior tests execute in the feature PR validation stage against the
-  published branch head.
+  the assigned worker branch, and reports focused evidence. Routine local
+  feedback remains bounded to inexpensive diagnostics or formatting; local
+  test/check/E2E runs follow the root policy. Required browser and behavior tests
+  execute in the hosted feature PR validation stage against the published
+  branch head, and local results do not replace them.
 - The upstream integration agent integrates the worker branch and reports its
   feature branch, integration outcome, and checks to Gizmo.
 - Gizmo routes feature-branch publication and required PR-check evidence through
   the Delivery Pipeline.
-- Tests and required browser E2E execute in the feature PR validation stage.
+- Required tests and browser E2E execute in the feature PR validation stage.
+  Local diagnostics do not replace those hosted checks.
 - Web development owns browser acceptance requirements.
 - The Feature Gizmo owns readiness; Delivery Pipeline owns authorized GitHub
   publication and squash-merge mechanics.

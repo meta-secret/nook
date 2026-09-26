@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte'
   import { VaultType } from '$lib/vault/architecture-model'
   type VaultPasswordUnlock = {
     readonly entryId: string
@@ -92,8 +93,10 @@
       sentinelVisibility.value === SentinelCeremonyVisibility.Visible,
   )
   $effect(() => {
-    if (sentinelVisibility.isErr())
-      vault.errorMsg = vault.t(sentinelVisibility.error.translationKey)
+    if (sentinelVisibility.isErr()) {
+      const message = vault.t(sentinelVisibility.error.translationKey)
+      if (untrack(() => vault.errorMsg) !== message) vault.errorMsg = message
+    }
   })
   const presentedVaultType = $derived(
     new SentinelUnlockActions(vault).vaultType(),
@@ -104,8 +107,10 @@
       presentedVaultType.value === VaultType.Sentinel,
   )
   $effect(() => {
-    if (presentedVaultType.isErr())
-      vault.errorMsg = vault.t(presentedVaultType.error.translationKey)
+    if (presentedVaultType.isErr()) {
+      const message = vault.t(presentedVaultType.error.translationKey)
+      if (untrack(() => vault.errorMsg) !== message) vault.errorMsg = message
+    }
   })
   const passwordUnlock = $derived<PasswordUnlockCapability>(
     hidePasswordUnlock
@@ -173,11 +178,7 @@
 </script>
 
 <div class="space-y-5" data-testid="login-local-unlock-step">
-  <LoginVaultWorkflowNav
-    {vault}
-    active={workflow}
-    onSelect={selectWorkflow}
-  />
+  <LoginVaultWorkflowNav {vault} active={workflow} onSelect={selectWorkflow} />
 
   {#if workflow === LoginVaultWorkflow.Open}
     {#if vaultEntry.kind === LoginVaultEntryKind.Available}

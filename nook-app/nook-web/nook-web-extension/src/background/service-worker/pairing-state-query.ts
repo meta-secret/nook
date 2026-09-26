@@ -1,4 +1,9 @@
 import { setupStorageKey } from '../pairing-grants'
+import {
+  extensionPairingStateQueryResponseFromStorage,
+  type ExtensionPairingStateStorageResponseRequest,
+  type ExtensionPairingStateQueryResponse,
+} from '../../lib/pairing-state'
 import { extensionPairingIdentity } from './pairing-identity'
 
 type RuntimeMessageListener = Parameters<
@@ -15,7 +20,7 @@ export function handlePairingStateQuery({
   sendResponse,
 }: PairingStateQueryContext): boolean {
   if (sender.id !== chrome.runtime.id) {
-    const forbiddenResponse: Parameters<typeof sendResponse>[0] = {
+    const forbiddenResponse: ExtensionPairingStateQueryResponse = {
       ok: false,
       reason: 'forbidden-sender',
     }
@@ -25,14 +30,18 @@ export function handlePairingStateQuery({
   void extensionPairingIdentity
     .getPairingStorage(setupStorageKey)
     .then((stored) => {
-      const storedStateResponse: Parameters<typeof sendResponse>[0] = {
-        ok: true,
-        setup: stored[setupStorageKey],
-      }
+      const storageResponseRequest: ExtensionPairingStateStorageResponseRequest =
+        {
+          stored,
+          setupKey: setupStorageKey,
+        }
+      const storedStateResponse = extensionPairingStateQueryResponseFromStorage(
+        storageResponseRequest,
+      )
       return sendResponse(storedStateResponse)
     })
     .catch(() => {
-      const failedResponse: Parameters<typeof sendResponse>[0] = {
+      const failedResponse: ExtensionPairingStateQueryResponse = {
         ok: false,
         reason: 'pairing-state-read-failed',
       }

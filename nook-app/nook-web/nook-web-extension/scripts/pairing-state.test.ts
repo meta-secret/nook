@@ -2,10 +2,13 @@ import { describe, expect, mock, test } from 'bun:test'
 import { type ExtensionReadySetupState } from '../src/background/pairing-grants'
 import { Effect } from 'effect'
 import {
+  ExtensionPairingSetupResponseKind,
   ExtensionPairingStateQueryMessage,
   ExtensionPairingStateQueryMessageType,
   ExtensionPairingStateLoader,
   ExtensionSetupLoadKind,
+  extensionPairingStateQueryResponseFromStorage,
+  type ExtensionPairingStateStorageResponseRequest,
 } from '../src/lib/pairing-state'
 
 const readySetup: ExtensionReadySetupState = {
@@ -21,6 +24,55 @@ const readySetup: ExtensionReadySetupState = {
 }
 
 describe('extension pairing state loader', () => {
+  test('encodes absent stored setup with an explicit not-connected tag', () => {
+    const request: ExtensionPairingStateStorageResponseRequest = {
+      stored: {},
+      setupKey: 'setup',
+    }
+
+    expect(extensionPairingStateQueryResponseFromStorage(request)).toEqual({
+      ok: true,
+      setupState: ExtensionPairingSetupResponseKind.NotConnected,
+    })
+  })
+
+  test('encodes valid stored setup with an explicit ready tag and payload', () => {
+    const request: ExtensionPairingStateStorageResponseRequest = {
+      stored: { setup: readySetup },
+      setupKey: 'setup',
+    }
+
+    expect(extensionPairingStateQueryResponseFromStorage(request)).toEqual({
+      ok: true,
+      setupState: ExtensionPairingSetupResponseKind.Ready,
+      setup: readySetup,
+    })
+  })
+
+  test('rejects malformed stored setup instead of encoding it as ready', () => {
+    const request: ExtensionPairingStateStorageResponseRequest = {
+      stored: { setup: { status: 'not-ready' } },
+      setupKey: 'setup',
+    }
+
+    expect(extensionPairingStateQueryResponseFromStorage(request)).toEqual({
+      ok: false,
+      reason: 'pairing-state-invalid',
+    })
+  })
+
+  test('rejects malformed storage results as invalid', () => {
+    const request: ExtensionPairingStateStorageResponseRequest = {
+      stored: 'invalid-storage-result',
+      setupKey: 'setup',
+    }
+
+    expect(extensionPairingStateQueryResponseFromStorage(request)).toEqual({
+      ok: false,
+      reason: 'pairing-state-invalid',
+    })
+  })
+
   test('keeps the query message structural while loading setup through its transport owner', async () => {
     const sentMessages: ExtensionPairingStateQueryMessage[] = []
     const sendMessage = mock(
@@ -29,7 +81,11 @@ describe('extension pairing state loader', () => {
         respond: (response: unknown) => void,
       ) => {
         sentMessages.push(message)
-        respond({ ok: true, setup: readySetup })
+        respond({
+          ok: true,
+          setupState: ExtensionPairingSetupResponseKind.Ready,
+          setup: readySetup,
+        })
       },
     )
     Object.assign(globalThis, {
@@ -65,7 +121,12 @@ describe('extension pairing state loader', () => {
       (
         _message: ExtensionPairingStateQueryMessage,
         respond: (response: unknown) => void,
-      ) => respond({ ok: true, setup: { status: 'not-ready' } }),
+      ) =>
+        respond({
+          ok: true,
+          setupState: ExtensionPairingSetupResponseKind.Ready,
+          setup: { status: 'not-ready' },
+        }),
     )
     Object.assign(globalThis, {
       chrome: { runtime: { sendMessage, lastError: false } },
@@ -75,5 +136,163 @@ describe('extension pairing state loader', () => {
     expect(await loader.loadExtensionSetupState()).toEqual({
       kind: ExtensionSetupLoadKind.Unavailable,
     })
+  })
+
+  test('classifies the explicit not-connected response tag', async () => {
+    const sendMessage = mock(
+      (
+        _message: ExtensionPairingStateQueryMessage,
+        respond: (response: unknown) => void,
+      ) =>
+        respond({
+          ok: true,
+          setupState: ExtensionPairingSetupResponseKind.NotConnected,
+        }),
+    )
+    Object.assign(globalThis, {
+      chrome: { runtime: { sendMessage, lastError: false } },
+    })
+    const loader = new ExtensionPairingStateLoader({ browser: globalThis })
+
+    expect(await loader.loadExtensionSetupState()).toEqual({
+      kind: ExtensionSetupLoadKind.NotConnected,
+    })
+  })
+
+  test('keeps extra response fields unavailable for either setup tag', async () => {
+    const responses: unknown[] = [
+      {
+        ok: true,
+        setupState: ExtensionPairingSetupResponseKind.NotConnected,
+        extra: true,
+      },
+      {
+        ok: true,
+        setupState: ExtensionPairingSetupResponseKind.Ready,
+        setup: readySetup,
+        extra: true,
+      },
+    ]
+
+    for (const runtimeResponse of responses) {
+      const sendMessage = mock(
+        (
+          _message: ExtensionPairingStateQueryMessage,
+          respond: (response: unknown) => void,
+        ) => respond(runtimeResponse),
+      )
+      Object.assign(globalThis, {
+        chrome: { runtime: { sendMessage, lastError: false } },
+      })
+      const loader = new ExtensionPairingStateLoader({ browser: globalThis })
+
+      expect(await loader.loadExtensionSetupState()).toEqual({
+        kind: ExtensionSetupLoadKind.Unavailable,
+      })
+    }
+  })
+
+  test('keeps failed status queries unavailable', async () => {
+    const sendMessage = mock(
+      (
+        _message: ExtensionPairingStateQueryMessage,
+        respond: (response: unknown) => void,
+      ) => respond({ ok: false, reason: 'pairing-state-read-failed' }),
+    )
+    Object.assign(globalThis, {
+      chrome: { runtime: { sendMessage, lastError: false } },
+    })
+    const loader = new ExtensionPairingStateLoader({ browser: globalThis })
+
+    expect(await loader.loadExtensionSetupState()).toEqual({
+      kind: ExtensionSetupLoadKind.Unavailable,
+    })
+  })
+
+  test('keeps runtime transport errors unavailable', async () => {
+    const sendMessage = mock(
+      (
+        _message: ExtensionPairingStateQueryMessage,
+        respond: (response: unknown) => void,
+      ) =>
+        respond({
+          ok: true,
+          setupState: ExtensionPairingSetupResponseKind.Ready,
+          setup: readySetup,
+        }),
+    )
+    Object.assign(globalThis, {
+      chrome: { runtime: { sendMessage, lastError: { message: 'failed' } } },
+    })
+    const loader = new ExtensionPairingStateLoader({ browser: globalThis })
+
+    expect(await loader.loadExtensionSetupState()).toEqual({
+      kind: ExtensionSetupLoadKind.Unavailable,
+    })
+  })
+
+  test('keeps an untagged successful response unavailable', async () => {
+    const sendMessage = mock(
+      (
+        _message: ExtensionPairingStateQueryMessage,
+        respond: (response: unknown) => void,
+      ) => respond({ ok: true, setup: readySetup }),
+    )
+    Object.assign(globalThis, {
+      chrome: { runtime: { sendMessage, lastError: false } },
+    })
+    const loader = new ExtensionPairingStateLoader({ browser: globalThis })
+
+    expect(await loader.loadExtensionSetupState()).toEqual({
+      kind: ExtensionSetupLoadKind.Unavailable,
+    })
+  })
+
+  test('keeps unknown setup-state tags unavailable', async () => {
+    const sendMessage = mock(
+      (
+        _message: ExtensionPairingStateQueryMessage,
+        respond: (response: unknown) => void,
+      ) => respond({ ok: true, setupState: 'unknown' }),
+    )
+    Object.assign(globalThis, {
+      chrome: { runtime: { sendMessage, lastError: false } },
+    })
+    const loader = new ExtensionPairingStateLoader({ browser: globalThis })
+
+    expect(await loader.loadExtensionSetupState()).toEqual({
+      kind: ExtensionSetupLoadKind.Unavailable,
+    })
+  })
+
+  test('keeps ready responses with missing or malformed setup unavailable', async () => {
+    const responses: unknown[] = [
+      {
+        ok: true,
+        setupState: ExtensionPairingSetupResponseKind.Ready,
+      },
+      {
+        ok: true,
+        setupState: ExtensionPairingSetupResponseKind.Ready,
+        setup: { status: 'ready' },
+      },
+    ]
+
+    for (const runtimeResponse of responses) {
+      const sendMessage = mock(
+        (
+          _message: ExtensionPairingStateQueryMessage,
+          respond: (response: unknown) => void,
+        ) => respond(runtimeResponse),
+      )
+      Object.assign(globalThis, {
+        chrome: { runtime: { sendMessage, lastError: false } },
+      })
+      const loader = new ExtensionPairingStateLoader({ browser: globalThis })
+
+      expect(await loader.loadExtensionSetupState()).toEqual({
+        kind: ExtensionSetupLoadKind.Unavailable,
+      })
+    }
   })
 })

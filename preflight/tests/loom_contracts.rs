@@ -342,6 +342,26 @@ fn loom_workflow_audits_every_cortex_change() {
 }
 
 #[test]
+fn meta_cortex_integration_documents_host_native_execution_and_storage_contracts() {
+    let integration =
+        RepositoryFixture::repository_root().read(".cortex/meta-cortex-integration.md");
+    for required in [
+        "Execution speed is selected by host-native settings",
+        "each role's configured model",
+        "and `reasoning_effort`",
+        "no `mode` or `service_tier` fields",
+        "storage version 3",
+        "storage version 1 and 2 feature databases are imported transactionally and only once",
+        "Legacy databases and their sidecars are preserved as backups.",
+    ] {
+        assert!(
+            integration.contains(required),
+            "Meta-Cortex integration contract must document `{required}`"
+        );
+    }
+}
+
+#[test]
 fn preflight_installs_released_meta_cortex_without_configuration_override() {
     let dockerfile = RepositoryFixture::repository_root().read("preflight/Dockerfile");
     let initialize_request = concat!(
@@ -379,7 +399,7 @@ fn preflight_installs_released_meta_cortex_without_configuration_override() {
         "policy source must copy Git metadata before Meta-Cortex Framework Initialize"
     );
     assert!(
-        dockerfile.contains("meta-cortex/releases/download/v0.8.1/meta-cortex-installer.sh"),
+        dockerfile.contains("meta-cortex/releases/download/v0.9.1/meta-cortex-installer.sh"),
         "Meta-Cortex installation must use the selected upstream release"
     );
     assert!(

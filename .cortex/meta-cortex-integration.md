@@ -4,22 +4,22 @@
 
 ### Required bootstrap
 
-Nook pins Meta-Cortex 0.8.1. Each consuming worktree has its own ignored
+Nook pins Meta-Cortex 0.9.1. Each consuming worktree has its own ignored
 `.meta-cortex/` installation. Creating a Git worktree does not install that
 framework. Never copy `.meta-cortex/` from another checkout. Use the consuming
 worktree's absolute path in every YAML request.
 
 Resolve the CLI before normal repository work. `command -v meta-cortex` must
 select the intended executable, and `meta-cortex --version` must report
-`0.8.1`. If the command is missing or resolves to another version, install the
-Nook-pinned [v0.8.1 release](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/tag/v0.8.1)
+`0.9.1`. If the command is missing or resolves to another version, install the
+Nook-pinned [v0.9.1 release](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/tag/v0.9.1)
 and correct command resolution. Run `meta-cortex list` to inspect supported
 typed requests. The CLI upgrade and installed framework replacement are
-separate operations; use the upstream [release notes](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/tag/v0.8.1)
+separate operations; use the upstream [release notes](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/tag/v0.9.1)
 and [project update procedure](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex#update-a-project).
 
 ```sh
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/download/v0.8.1/meta-cortex-installer.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/download/v0.9.1/meta-cortex-installer.sh | sh
 ```
 
 Before using the framework, confirm that `.meta-cortex/AGENTS.md` and
@@ -64,8 +64,9 @@ operation:
 REQUEST
 ```
 
-Continue only when `cli_version` and `framework_version` both report `0.8.1`
-and the Codex integration reports `Connected`. Then read the installed
+Continue only when `cli_version` and `framework_version` both report `0.9.1`,
+`schema_version` reports `5`, and the Codex integration reports `Connected`.
+Then read the installed
 [Meta-Cortex circuit breaker](../.meta-cortex/CIRCUIT-BREAKER.md), followed by
 its [entry point](../.meta-cortex/AGENTS.md). If the CLI cannot be installed,
 initialization fails, or Info cannot verify the framework, stop and report the
@@ -82,10 +83,19 @@ Keep `.meta-cortex/meta-cortex.toml` in the ignored worktree installation.
 Meta-Cortex owns generic role configuration and launch procedure through its
 [agent configuration rules](../.meta-cortex/teams/gizmo-team/docs/agent-configuration.md).
 Read the active worktree's configuration and pass each role's configured model
-and reasoning effort. Do not copy role settings from a canonical checkout or
-maintain Nook-specific overrides. Resolve session development choices through
-the upstream [development-mode workflow](../.meta-cortex/AGENTS.md#development-mode)
+and `reasoning_effort`. Preserve those configured values during upgrades. Do not
+copy role settings from a canonical checkout or maintain Nook-specific
+overrides. Execution speed is selected by host-native settings. Framework role
+configuration has no `mode` or `service_tier` fields. Keep Nook's session
+`development.mode` (`single_agent` or `multi_agent`) separate from execution
+speed and reasoning effort. Resolve session development choices through the
+upstream [development-mode workflow](../.meta-cortex/AGENTS.md#development-mode)
 and apply Nook's assignment and delivery constraints in both modes.
+
+When upgrading an older configuration, remove obsolete per-role `mode` and
+`service_tier` fields while retaining each role's `model` and `reasoning_effort`.
+
+#### Ownership boundaries
 
 Meta-Cortex owns generic roles, skills, programming requirements, and authoring
 practices. Nook owns product architecture, product security, delivery
@@ -112,11 +122,11 @@ tooling and graph topology; they do not redefine generic authoring rules.
 
 ### Release pin
 
-The Nook CLI release pin is 0.8.1. `preflight/Dockerfile` pins the installer
-URL. `.github/workflows/repository-policy.yml` and `.task/ci-workflows.yml` pin
-the upstream library commit
-`4ab2db8e39d111305e0e83fd145fbeee02966dfc`. `preflight/tests/loom_contracts.rs`
-asserts the expected `v0.8.1` installer release. Future upgrades update this
+The Nook CLI release pin is 0.9.1. `preflight/Dockerfile` pins the official
+v0.9.1 installer URL. `.github/workflows/repository-policy.yml` and
+`.task/ci-workflows.yml` pin the upstream library commit
+`23f8683e0bedf4a258fa3237f2fa48f48bd388a7`. `preflight/tests/loom_contracts.rs`
+asserts the expected `v0.9.1` installer release. Future upgrades update this
 contract, each source pin, and their owning policy and test contracts together.
 
 - **Prohibited:** Update only the installer URL or only the pinned library
@@ -126,31 +136,40 @@ contract, each source pin, and their owning policy and test contracts together.
 
 ### Repository identity and ledger migration
 
-Meta-Cortex v0.8 stores feature ledgers outside Git at
-`${META_CORTEX_HOME:-$HOME/.meta-cortex}/<repository-id>/features`. Framework
-initialization creates or reads the repository UUID at
+Meta-Cortex v0.9.1 stores all feature ledgers in one shared workbench database
+outside Git at
+`${META_CORTEX_HOME:-$HOME/.meta-cortex}/<repo-name>/<repository-id>/workbench.db`.
+The database uses storage version 3; command and record versions remain `1`.
+Framework initialization creates or reads the repository UUID at
 `.meta-cortex/repository-id` in the actual Git main checkout. Linked worktrees
 reuse that UUID through their shared Git common directory.
 
 Preserve the exact UUID when replacing the main checkout's framework. Restore
 it to the new main checkout's `.meta-cortex/repository-id` before initializing
 features or linked worktrees, then verify that it selects the existing data
-directory. Do not reuse an identity across unrelated clones.
+directory. An unrelated clone receives its own identity and data directory.
 
-The v0.8 upgrade does not relocate legacy ledgers from the Git common
-directory's `meta-cortex/features` folder. Before migrating them, stop all
-ledger writers and confirm that no files are open under the legacy directory.
-Copy each database with its `-wal`, `-shm`, or `-tshm` sidecars into
-`${META_CORTEX_HOME:-$HOME/.meta-cortex}/<repository-id>/features`. Keep the
-legacy copies until v0.8 `Feature / List`, `Feature / Status`, and
-`Task / History` confirm that feature IDs, task status, and history remain
-readable from the new location. Do not split or copy a live database.
+#### Legacy database migration
 
-- **Prohibited:** Reuse a repository UUID in an unrelated clone or copy a live
-  ledger without its sidecars.
-- **Preferred:** Preserve the existing identity, stop writers, copy each
-  database with its sidecars, and retain the source until v0.8 history checks
-  confirm the migration.
+Before upgrading, stop all old ledger writers because older executables continue
+to write legacy per-feature database files under
+`${META_CORTEX_HOME:-$HOME/.meta-cortex}/<repository-id>/features`. On first
+access to the v0.9.1 workbench,
+storage version 1 and 2 feature databases are imported transactionally and only once
+into the shared storage version 3 database. The import retains records and
+history; an invalid source leaves its feature import uncommitted and returns an
+error.
+
+Legacy databases and their sidecars are preserved as backups. Do not resume
+older writers against those backups or manually copy, reset, or delete legacy
+databases, records, or sidecars.
+
+- **Prohibited:** Reuse a repository UUID in an unrelated clone, upgrade while
+  old ledger writers are active, or manually copy, reset, or delete legacy
+  ledger data.
+- **Preferred:** Preserve the existing identity, stop old writers, and let the
+  v0.9.1 workbench import legacy databases transactionally while retaining the
+  source databases and sidecars as backups.
 
 ## Prohibited actions
 
@@ -159,4 +178,5 @@ readable from the new location. Do not split or copy a live database.
 - Do not treat a CLI upgrade as an installed-framework replacement.
 - Do not continue repository work after initialization or framework verification
   fails.
-- Do not split, copy, or migrate a live ledger database.
+- Do not upgrade while old ledger writers are active.
+- Do not manually copy, reset, or delete legacy databases, records, or sidecars.

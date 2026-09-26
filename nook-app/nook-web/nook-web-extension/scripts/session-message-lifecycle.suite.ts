@@ -6,6 +6,7 @@ import {
   ExtensionSessionMessageType,
   decodeProviders,
   githubProvider,
+  MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
   vaultImportRequest,
   type StorageProvider,
 } from './session-message-dispatch-test-support'
@@ -152,6 +153,41 @@ describe('ExtensionSessionMessageDispatcher lifecycle cancellation', () => {
     expect(await malformedResponse).toEqual({
       ok: false,
       error: 'Invalid extension session request.',
+    })
+  })
+
+  test('responds to a status request when the session queue rejects', async () => {
+    const dispatcher = new ExtensionSessionMessageDispatcher({
+      handleCompanionIdentityDiscovery: async () =>
+        err(
+          new SessionOperationFailure(
+            SessionOperationFailureKind.InvalidRequest,
+          ),
+        ),
+      handleCompanionIdentityHandoff: async () =>
+        err(
+          new SessionOperationFailure(
+            SessionOperationFailureKind.InvalidRequest,
+          ),
+        ),
+      decodeProviders,
+      handleMessage: async () => ok({ ok: true }),
+    })
+    dispatcher.enqueue = () => Promise.reject(new Error('status rejected'))
+    const statusResponse = Promise.withResolvers<unknown>()
+    const keepsResponseChannelOpen = dispatcher.listener()(
+      {
+        type: ExtensionSessionMessageType.Status,
+        payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
+      },
+      { id: 'nook-extension' },
+      statusResponse.resolve,
+    )
+
+    expect(Boolean(keepsResponseChannelOpen)).toBe(true)
+    expect(await statusResponse.promise).toEqual({
+      ok: false,
+      error: SessionOperationFailureKind.Failed,
     })
   })
 

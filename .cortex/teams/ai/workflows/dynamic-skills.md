@@ -118,8 +118,10 @@ task loom:skill-scaffold CONFIG=path/to/request.yaml
 The scaffold creates the prose-only `<slug>.md` form. When the skill needs a
 deterministic application, convert it in the same change to
 `<slug>/SKILL.md`, add the co-located `scripts/` package, and update its index
-link. Then fill the card content; `task loom:cortex-audit` runs only in the
-authorized hosted PR validation stage.
+link. Then fill the card content. The required hosted PR stage runs
+`task loom:cortex-audit`; any local diagnostic follows the root
+[delivery and validation policy](../../../AGENTS.md#delivery-and-validation)
+and does not replace the hosted check.
 
 See [loom-tools.md](../references/loom-tools.md).
 
