@@ -12,8 +12,8 @@ import {
   type ExtensionSessionDeviceState,
   extensionWasmRuntime,
 } from '../lib/nook-wasm'
-import { PopupInitializationStateKind } from './popup-app-state'
 import PopupApp from './PopupApp.svelte'
+import PopupInitializationFailure from './PopupInitializationFailure.svelte'
 import AuthenticatorPicker from './AuthenticatorPicker.svelte'
 import LoginPicker from './LoginPicker.svelte'
 import './popup.css'
@@ -106,24 +106,17 @@ async function main() {
         launcherIntent,
         protectionStatus,
         activeSessionDevice,
-        initializationState: PopupInitializationStateKind.Ready,
       },
     }
     mount(PopupApp, nookTypedArgs0_2)
   } catch {
-    const failureProps: ComponentProps<typeof PopupApp> = {
-      i18n,
-      isConnected: false,
-      launcherIntent,
-      protectionStatus: DeviceProtectionStatus.Error,
-      activeSessionDevice: { kind: ExtensionSessionDeviceStateKind.Locked },
-      initializationState: PopupInitializationStateKind.Failed,
-    }
-    const failureMountOptions: MountOptions<ComponentProps<typeof PopupApp>> = {
+    const failureMountOptions: MountOptions<
+      ComponentProps<typeof PopupInitializationFailure>
+    > = {
       target,
-      props: failureProps,
+      props: { i18n },
     }
-    mount(PopupApp, failureMountOptions)
+    mount(PopupInitializationFailure, failureMountOptions)
   }
 }
 

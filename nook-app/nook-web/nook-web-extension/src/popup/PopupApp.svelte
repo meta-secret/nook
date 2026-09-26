@@ -33,7 +33,6 @@
   } from '../lib/nook-wasm'
   import {
     PairingCandidateKind,
-    PopupInitializationStateKind,
     type PairingCandidate,
     CompanionSecretCountKind,
     type CompanionSecretCount,
@@ -48,7 +47,6 @@
     launcherIntent,
     protectionStatus,
     activeSessionDevice,
-    initializationState,
   }: {
     i18n: ExtensionI18n
     isConnected: boolean
@@ -57,7 +55,6 @@
     launcherIntent: OpenCompanionLauncherIntent
     protectionStatus: DeviceProtectionStatus
     activeSessionDevice: ExtensionSessionDeviceState
-    initializationState: PopupInitializationStateKind
   } = $props()
 
   function translatePlain(key: I18nKey): string {
@@ -353,18 +350,7 @@
   }
 </script>
 
-{#if initializationState === PopupInitializationStateKind.Failed}
-  <main class="device-setup" data-testid="extension-device-setup">
-    <h1>{translatePlain(I18N_KEYS.DeviceProtectionTitle)}</h1>
-    <p
-      class="error-message"
-      role="alert"
-      data-testid="extension-runtime-error"
-    >
-      {translatePlain(I18N_KEYS.ErrorsEngineUnavailable)}
-    </p>
-  </main>
-{:else if showToolbarMenu}
+{#if showToolbarMenu}
   <main class="toolbar-menu" data-testid="extension-toolbar-menu">
     <header class="companion-header">
       <div class="companion-brand-row">

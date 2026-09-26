@@ -1,10 +1,5 @@
 import type { ExtensionSessionDeviceWire } from '../lib/nook-wasm'
 
-export enum PopupInitializationStateKind {
-  Ready = 'ready',
-  Failed = 'failed',
-}
-
 export enum PairingCandidateKind {
   NotSelected = 'not-selected',
   Selected = 'selected',
