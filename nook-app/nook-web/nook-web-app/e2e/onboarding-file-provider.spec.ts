@@ -381,10 +381,13 @@ test.describe('iCloud provider modes', () => {
         configurable: true,
         value: {
           configure: (configuration: {
-            containers: Array<{ containerIdentifier: string }>
+            containers: [
+              { containerIdentifier: string },
+              ...{ containerIdentifier: string }[],
+            ]
           }) => {
             const configuredContainerIdentifier =
-              configuration.containers[0]?.containerIdentifier ?? ''
+              configuration.containers[0].containerIdentifier
             document.documentElement.setAttribute(
               'data-e2e-cloudkit-container',
               configuredContainerIdentifier,
