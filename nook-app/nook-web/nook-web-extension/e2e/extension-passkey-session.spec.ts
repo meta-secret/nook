@@ -641,7 +641,43 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         .click()
       console.log('[extension e2e] Continue click complete')
       const websiteLoginPicker = await websiteLoginPickerPromise
-      await websiteLoginPicker.waitForURL(/intent=login-picker/)
+      const formatDiagnosticUrl = (pageUrl: string): string => {
+        try {
+          const url = new URL(pageUrl)
+          const intentValues = url.searchParams.getAll('intent')
+          url.username = ''
+          url.password = ''
+          url.search = ''
+          url.hash = ''
+          for (const intent of intentValues) {
+            url.searchParams.append('intent', intent)
+          }
+          return url.toString()
+        } catch {
+          return 'unavailable page URL'
+        }
+      }
+      websiteLoginPicker.on('framenavigated', (frame) => {
+        console.log(
+          '[extension e2e] post-unlock login picker navigated URL',
+          formatDiagnosticUrl(frame.url()),
+        )
+      })
+      console.log(
+        '[extension e2e] post-unlock login picker initial URL',
+        formatDiagnosticUrl(websiteLoginPicker.url()),
+      )
+      try {
+        await expect(websiteLoginPicker).toHaveURL(/intent=login-picker/, {
+          timeout: 20_000,
+        })
+      } catch (failure) {
+        console.log(
+          '[extension e2e] post-unlock login picker URL assertion failed; context page URLs',
+          context.pages().map((page) => formatDiagnosticUrl(page.url())),
+        )
+        throw failure
+      }
       await expect(websiteLoginPicker.getByText('alice@nook.test')).toBeVisible(
         { timeout: 20_000 },
       )
