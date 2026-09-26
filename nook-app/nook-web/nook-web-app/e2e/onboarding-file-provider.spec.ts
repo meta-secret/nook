@@ -33,8 +33,11 @@ import {
   type SyncE2eTarget,
 } from './sync-provider'
 import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
+import enLocale from '../../../nook-platform/nook-app-common/locales/en.json' with { type: 'json' }
+import ruLocale from '../../../nook-platform/nook-app-common/locales/ru.json' with { type: 'json' }
 
 const VAULT_PASSWORD = 'file-onboard-pass-1'
+const ICLOUD_CONTAINER_IDENTIFIER = 'iCloud.metasecret.project.com'
 
 test.describe('file sync provider onboarding', () => {
   test.setTimeout(180_000)
@@ -333,6 +336,123 @@ test.describe('iCloud provider modes', () => {
       'true',
     )
     await expect(page.getByTestId('icloud-shared-target-step')).toBeVisible()
+  })
+
+  test('opens one Apple sign-in tab from the prepared CloudKit control', async ({
+    page,
+  }) => {
+    await page.route('https://localhost:5173/**', async (route) => {
+      const localRequestUrl = new URL(route.request().url())
+      localRequestUrl.protocol = 'http:'
+      localRequestUrl.hostname = '127.0.0.1'
+      await route.fulfill({
+        response: await route.fetch({ url: localRequestUrl.toString() }),
+      })
+    })
+    const context = page.context()
+    await context.route('https://api.apple-cloudkit.com/**', (route) =>
+      route.abort(),
+    )
+    await context.route('https://cdn.apple-cloudkit.com/**', (route) =>
+      route.abort(),
+    )
+    await context.route('https://idmsa.apple.com/**', (route) =>
+      route.fulfill({ status: 200, contentType: 'text/html', body: '' }),
+    )
+    await page.addInitScript(() => {
+      const container = {
+        setUpAuth: async () => {
+          document.documentElement.setAttribute(
+            'data-e2e-cloudkit-auth-setup',
+            'waiting',
+          )
+          await new Promise<void>((resolve) => {
+            document.addEventListener(
+              'e2e-cloudkit-auth-setup-release',
+              () => resolve(),
+              { once: true },
+            )
+          })
+          return { kind: 'signed-out' as const }
+        },
+        whenUserSignsIn: () => new Promise<never>(() => {}),
+      }
+      Object.defineProperty(window, 'CloudKit', {
+        configurable: true,
+        value: {
+          configure: (configuration: {
+            containers: Array<{ containerIdentifier: string }>
+          }) => {
+            const configuredContainerIdentifier =
+              configuration.containers[0]?.containerIdentifier ?? ''
+            document.documentElement.setAttribute(
+              'data-e2e-cloudkit-container',
+              configuredContainerIdentifier,
+            )
+            const control = document.createElement('button')
+            control.type = 'button'
+            control.className = 'apple-auth-button'
+            control.style.width = '64px'
+            control.style.height = '36px'
+            control.addEventListener('click', () => {
+              const authUrl = new URL(
+                'https://idmsa.apple.com/appleauth/auth/signin',
+              )
+              authUrl.searchParams.set(
+                'containerIdentifier',
+                configuredContainerIdentifier,
+              )
+              window.open(authUrl.toString(), '_blank')
+            })
+            document.getElementById('apple-sign-in-button')?.append(control)
+          },
+          getDefaultContainer: () => container,
+        },
+      })
+    })
+    await page.goto('https://localhost:5173/app/')
+    await clearBrowserVault(page)
+    await page.reload()
+
+    await openLoginProviderSetup(page)
+    await page.getByTestId('provider-option-icloud').click()
+    await expect(page.getByTestId('icloud-oauth-setup')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await expect(page.getByTestId('icloud-origin-unsupported')).toHaveCount(0)
+    const signInControl = page.getByTestId('icloud-sign-in-btn')
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-e2e-cloudkit-auth-setup',
+      'waiting',
+    )
+    const locale = await page.locator('html').getAttribute('lang')
+    const localeCopy = locale?.startsWith('ru') ? ruLocale : enLocale
+    const preparingCopy = localeCopy.provider_setup.icloud_preparing_sign_in
+    await expect(signInControl).toContainText(preparingCopy)
+    await page.evaluate(() => {
+      document.dispatchEvent(new Event('e2e-cloudkit-auth-setup-release'))
+    })
+    const signInButton = page.locator(
+      '#apple-sign-in-button .apple-auth-button',
+    )
+    await expect(signInButton).toHaveCount(1)
+    await expect(signInButton).toBeVisible()
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-e2e-cloudkit-container',
+      ICLOUD_CONTAINER_IDENTIFIER,
+    )
+
+    const popupPromise = page.waitForEvent('popup')
+    await signInButton.click()
+    const popup = await popupPromise
+    await popup.waitForLoadState('domcontentloaded')
+
+    const authUrl = new URL(popup.url())
+    expect(authUrl.hostname).toBe('idmsa.apple.com')
+    expect(authUrl.searchParams.get('containerIdentifier')).toBe(
+      ICLOUD_CONTAINER_IDENTIFIER,
+    )
+    expect(context.pages()).toHaveLength(2)
   })
 
   test('shows the translated error and clears the busy state after native CloudKit sign-in fails', async ({

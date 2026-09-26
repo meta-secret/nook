@@ -1616,6 +1616,7 @@ export const I18N_KEYS = {
   ProviderSetupIcloudEventLogDesc: 'provider_setup.icloud_event_log_desc',
   ProviderSetupIcloudMode: 'provider_setup.icloud_mode',
   ProviderSetupIcloudOauthUnconfigured: 'provider_setup.icloud_oauth_unconfigured',
+  ProviderSetupIcloudPreparingSignIn: 'provider_setup.icloud_preparing_sign_in',
   ProviderSetupIcloudPrivate: 'provider_setup.icloud_private',
   ProviderSetupIcloudPrivateDesc: 'provider_setup.icloud_private_desc',
   ProviderSetupIcloudShared: 'provider_setup.icloud_shared',

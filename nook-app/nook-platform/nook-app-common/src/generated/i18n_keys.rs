@@ -1971,6 +1971,7 @@ pub const PROVIDER_SETUP_ICLOUD_EVENT_LOG_DESC: &str = "provider_setup.icloud_ev
 pub const PROVIDER_SETUP_ICLOUD_MODE: &str = "provider_setup.icloud_mode";
 pub const PROVIDER_SETUP_ICLOUD_OAUTH_UNCONFIGURED: &str =
     "provider_setup.icloud_oauth_unconfigured";
+pub const PROVIDER_SETUP_ICLOUD_PREPARING_SIGN_IN: &str = "provider_setup.icloud_preparing_sign_in";
 pub const PROVIDER_SETUP_ICLOUD_PRIVATE: &str = "provider_setup.icloud_private";
 pub const PROVIDER_SETUP_ICLOUD_PRIVATE_DESC: &str = "provider_setup.icloud_private_desc";
 pub const PROVIDER_SETUP_ICLOUD_SHARED: &str = "provider_setup.icloud_shared";

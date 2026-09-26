@@ -1744,6 +1744,7 @@
     "icloud_connection_subtitle": "Sign in with Apple and choose your vault file",
     "icloud_sync_subtitle": "Save this provider and reconcile with your vault",
     "sign_in_with_icloud": "Sign in with Apple",
+    "icloud_preparing_sign_in": "Preparing Apple sign-in…",
     "icloud_signing_in": "Opening Apple sign-in…",
     "icloud_signed_in_as": "Signed in as {account}",
     "icloud_sign_in_required": "Apple sign-in is required. Click Sign in with Apple to continue.",

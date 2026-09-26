@@ -1662,6 +1662,7 @@
     "icloud_connection_subtitle": "Войдите через Apple и выберите файл сейфа",
     "icloud_sync_subtitle": "Сохраните провайдера и согласуйте сейф",
     "sign_in_with_icloud": "Войти через Apple",
+    "icloud_preparing_sign_in": "Подготавливаем вход через Apple…",
     "icloud_signing_in": "Открываем вход Apple…",
     "icloud_signed_in_as": "Вошли как {account}",
     "icloud_sign_in_required": "Требуется вход через Apple. Нажмите «Войти через Apple», чтобы продолжить.",
