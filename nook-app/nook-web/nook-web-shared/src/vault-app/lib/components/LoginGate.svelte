@@ -411,8 +411,11 @@
       sentinelVisibility.value === SentinelCeremonyVisibility.Visible,
   )
   $effect(() => {
-    if (sentinelVisibility.isErr())
-      vault.errorMsg = vault.t(sentinelVisibility.error.translationKey)
+    if (sentinelVisibility.isErr()) {
+      const message = vault.t(sentinelVisibility.error.translationKey)
+      if (untrack(() => vault.errorMsg) !== message)
+        vault.errorMsg = message
+    }
   })
   const hasKnownLocalVault = $derived(
     vault.localVaultPresent || vault.localVaults.length > 0,
