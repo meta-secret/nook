@@ -38,6 +38,18 @@ impl AsRef<Path> for RepositoryFixture {
     }
 }
 
+fn is_generated_repository_component(component: &OsStr) -> bool {
+    matches!(
+        component.to_str(),
+        Some(".git" | "node_modules" | ".meta-cortex" | ".meta-cortex-source")
+    )
+}
+
+fn has_generated_repository_component(path: &Path) -> bool {
+    path.components()
+        .any(|component| is_generated_repository_component(component.as_os_str()))
+}
+
 fn repository_paths(root: &Path, source_context: bool) -> anyhow::Result<Vec<PathBuf>> {
     let mut paths = BTreeSet::new();
     let mut builder = ignore::WalkBuilder::new(root);
@@ -50,7 +62,9 @@ fn repository_paths(root: &Path, source_context: bool) -> anyhow::Result<Vec<Pat
         .ignore(!source_context)
         .parents(false)
         .require_git(false)
-        .filter_entry(|entry| entry.file_name() != OsStr::new(".git"))
+        .filter_entry(|entry| {
+            entry.depth() == 0 || !is_generated_repository_component(entry.file_name())
+        })
         .sort_by_file_path(Ord::cmp);
 
     for entry in builder.build() {
@@ -76,7 +90,11 @@ fn repository_paths(root: &Path, source_context: bool) -> anyhow::Result<Vec<Pat
             if bytes.is_empty() {
                 continue;
             }
-            let path = root.join(str::from_utf8(bytes)?);
+            let relative_path = Path::new(str::from_utf8(bytes)?);
+            if has_generated_repository_component(relative_path) {
+                continue;
+            }
+            let path = root.join(relative_path);
             let kind = fs::symlink_metadata(&path)?.file_type();
             if kind.is_file() || kind.is_symlink() {
                 paths.insert(path);
@@ -271,21 +289,50 @@ fn repository_language_rule_stays_wired_to_agent_guidance() -> anyhow::Result<()
 }
 
 #[test]
-fn inventory_prunes_local_dependencies_but_preserves_tracked_files() -> anyhow::Result<()> {
+fn inventory_prunes_generated_source_context_paths_and_preserves_tracked_files()
+-> anyhow::Result<()> {
     let fixture = tempfile::tempdir()?;
-    fs::create_dir_all(fixture.path().join("dist"))?;
-    fs::create_dir_all(fixture.path().join("node_modules/package"))?;
-    fs::write(
-        fixture.path().join(".gitignore"),
-        "/dist/\n/node_modules/\n",
+    let cortex_scripts = Path::new(".cortex/teams/ai/dynamic-skills/example/scripts");
+    let ignored_authored = cortex_scripts.join("authored.ts");
+    let generated_roots = [
+        PathBuf::from(".git"),
+        PathBuf::from("node_modules"),
+        PathBuf::from(".meta-cortex"),
+        PathBuf::from(".meta-cortex-source"),
+        cortex_scripts.join("node_modules"),
+    ];
+    let generated_directories = [
+        PathBuf::from("node_modules/package"),
+        PathBuf::from(".meta-cortex/node_modules/package"),
+        PathBuf::from(".meta-cortex-source/cache/package"),
+        cortex_scripts.join("node_modules/package"),
+    ];
+    for directory in &generated_directories {
+        fs::create_dir_all(fixture.path().join(directory))?;
+    }
+    let generated_files: Vec<PathBuf> = generated_directories
+        .iter()
+        .map(|directory| directory.join("generated.js"))
+        .collect();
+    for path in &generated_files {
+        fs::write(fixture.path().join(path), "export {};\n")?;
+    }
+    let external_dependency = tempfile::tempdir()?;
+    let external_dependency_file = external_dependency.path().join("from-linked-dependency.js");
+    fs::write(&external_dependency_file, "export {};\n")?;
+    let dependency_symlink = cortex_scripts.join("node_modules/linked-dependency");
+    unix_fs::symlink(
+        external_dependency.path(),
+        fixture.path().join(&dependency_symlink),
     )?;
+    let gitignore = format!(
+        "node_modules/\n.meta-cortex/\n.meta-cortex-source/\n{}/authored.ts\n",
+        cortex_scripts.display()
+    );
+    fs::write(fixture.path().join(".gitignore"), gitignore)?;
     fs::write(fixture.path().join("kept.ts"), "export {};\n")?;
-    let tracked = fixture.path().join("dist/runtime.py");
-    fs::write(&tracked, "print('tracked')\n")?;
-    fs::write(
-        fixture.path().join("node_modules/package/ignored.js"),
-        "export {};\n",
-    )?;
+    let ignored_authored_path = fixture.path().join(&ignored_authored);
+    fs::write(&ignored_authored_path, "export {};\n")?;
     anyhow::ensure!(
         Command::new("git")
             .arg("init")
@@ -294,22 +341,39 @@ fn inventory_prunes_local_dependencies_but_preserves_tracked_files() -> anyhow::
             .status()?
             .success()
     );
-    anyhow::ensure!(
-        Command::new("git")
-            .arg("-C")
-            .arg(fixture.path())
-            .args(["add", "--force", "dist/runtime.py"])
-            .status()?
-            .success()
-    );
-    let host_paths = repository_paths(fixture.path(), false)?;
-    assert!(host_paths.contains(&tracked));
+    let mut git_add = Command::new("git");
+    git_add
+        .arg("-C")
+        .arg(fixture.path())
+        .args(["add", "--force", "--"])
+        .arg(&ignored_authored);
+    for path in &generated_files {
+        git_add.arg(path);
+    }
+    anyhow::ensure!(git_add.status()?.success());
+
+    for source_context in [false, true] {
+        let paths = repository_paths(fixture.path(), source_context)?;
+        assert!(paths.contains(&fixture.path().join("kept.ts")));
+        assert!(paths.contains(&ignored_authored_path));
+        for generated_root in &generated_roots {
+            let generated_path = fixture.path().join(generated_root);
+            assert!(
+                !paths.iter().any(|path| path.starts_with(&generated_path)),
+                "generated path {} must be pruned in source_context={source_context}",
+                generated_root.display()
+            );
+        }
+        assert!(!paths.contains(&fixture.path().join(&dependency_symlink)));
+        assert!(!paths.contains(&external_dependency_file));
+    }
     assert!(
-        !host_paths
-            .iter()
-            .any(|path| path.to_string_lossy().contains("node_modules"))
+        repository_paths(fixture.path(), true)?.iter().any(|path| {
+            path.strip_prefix(fixture.path())
+                .is_ok_and(|relative| relative.starts_with(".cortex"))
+        }),
+        "source-context scanning must preserve the .cortex source tree"
     );
-    assert!(repository_paths(fixture.path(), true)?.contains(&tracked));
     Ok(())
 }
 
