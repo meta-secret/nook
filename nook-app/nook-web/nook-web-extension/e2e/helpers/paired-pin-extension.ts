@@ -341,6 +341,26 @@ export async function lockExtensionSession(
   await new Promise((resolve) => setTimeout(resolve, 500))
 }
 
+export async function waitForExtensionPopupEntrySurface(
+  popupPage: Page,
+): Promise<void> {
+  const pinUnlock = popupPage.getByTestId('device-protection-pin-unlock-btn')
+  const companionHome = popupPage.getByTestId('extension-toolbar-menu')
+  const runtimeError = popupPage.getByTestId('extension-runtime-error')
+  await expect(
+    pinUnlock.or(companionHome).or(runtimeError).first(),
+  ).toBeVisible({ timeout: EXTENSION_TIMEOUT_MS })
+
+  if (await runtimeError.isVisible()) {
+    const errorText = (await runtimeError.innerText()).trim()
+    throw new Error(
+      errorText
+        ? `Extension popup failed to initialize: ${errorText}`
+        : 'Extension popup failed to initialize.',
+    )
+  }
+}
+
 export async function unlockExtensionPopupPin(
   context: BrowserContext,
   extensionId: string,
@@ -349,11 +369,7 @@ export async function unlockExtensionPopupPin(
   const popupPage = await context.newPage()
   try {
     await popupPage.goto(`chrome-extension://${extensionId}/popup/index.html`)
-    await expect(
-      popupPage
-        .getByTestId('device-protection-pin-unlock-btn')
-        .or(popupPage.getByTestId('extension-toolbar-menu')),
-    ).toBeVisible({ timeout: 45_000 })
+    await waitForExtensionPopupEntrySurface(popupPage)
     await ensurePinProtectedPopup(popupPage, pin)
   } finally {
     await popupPage.close()
