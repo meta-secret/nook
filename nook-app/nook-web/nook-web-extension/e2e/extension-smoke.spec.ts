@@ -158,6 +158,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await expect(
       popupPage.getByTestId('extension-device-setup'),
     ).toBeVisible()
+    await popupPage.close()
 
     const loginPage = await context.newPage()
     await loginPage.goto(`${loginServer.origin}/login`)
