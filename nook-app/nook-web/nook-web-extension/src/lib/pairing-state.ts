@@ -136,10 +136,10 @@ export class ExtensionPairingStateLoader {
           }
           switch (runtimeResponse.setupState) {
             case ExtensionPairingSetupResponseKind.NotConnected: {
-              const notConnected: ExtensionSetupLoad = hasExactResponseFields(runtimeResponse, [
-                'ok',
-                'setupState',
-              ])
+              const notConnected: ExtensionSetupLoad = hasExactResponseFields(
+                runtimeResponse,
+                ['ok', 'setupState'],
+              )
                 ? { kind: ExtensionSetupLoadKind.NotConnected }
                 : { kind: ExtensionSetupLoadKind.Unavailable }
               resolve(notConnected)
