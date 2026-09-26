@@ -19,9 +19,9 @@ describe('extension popup session startup', () => {
       throw new ExtensionSessionRuntimeClosed()
     })
 
-    expect(
-      retryClosedExtensionSessionOnce(operation),
-    ).rejects.toBeInstanceOf(ExtensionSessionRuntimeClosed)
+    expect(retryClosedExtensionSessionOnce(operation)).rejects.toBeInstanceOf(
+      ExtensionSessionRuntimeClosed,
+    )
     expect(operation).toHaveBeenCalledTimes(2)
   })
 
@@ -31,9 +31,7 @@ describe('extension popup session startup', () => {
       throw failure
     })
 
-    expect(retryClosedExtensionSessionOnce(operation)).rejects.toBe(
-      failure,
-    )
+    expect(retryClosedExtensionSessionOnce(operation)).rejects.toBe(failure)
     expect(operation).toHaveBeenCalledTimes(1)
   })
 })
