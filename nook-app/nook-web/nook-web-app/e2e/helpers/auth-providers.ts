@@ -515,26 +515,29 @@ export async function readRawAuthProvidersFromIdb(
           resolve({ providers: [] })
           return
         }
+        enum OwnPropertyReadKind {
+          InvalidOwner = 'invalid-owner',
+          Missing = 'missing',
+          Accessor = 'accessor',
+          Value = 'value',
+        }
         type OwnPropertyRead =
-          | { kind: 'invalid-owner' }
-          | { kind: 'missing' }
-          | { kind: 'accessor' }
-          | { kind: 'value'; value: unknown }
+          | { kind: OwnPropertyReadKind.InvalidOwner }
+          | { kind: OwnPropertyReadKind.Missing }
+          | { kind: OwnPropertyReadKind.Accessor }
+          | { kind: OwnPropertyReadKind.Value; value: unknown }
         const readOwnProperty = (
           owner: unknown,
           property: string,
         ): OwnPropertyRead => {
-          if (
-            typeof owner !== 'object' ||
-            owner === null ||
-            Array.isArray(owner)
-          ) {
-            return { kind: 'invalid-owner' }
+          if (typeof owner !== 'object' || !owner || Array.isArray(owner)) {
+            return { kind: OwnPropertyReadKind.InvalidOwner }
           }
           const descriptor = Object.getOwnPropertyDescriptor(owner, property)
-          if (!descriptor) return { kind: 'missing' }
-          if (!('value' in descriptor)) return { kind: 'accessor' }
-          return { kind: 'value', value: descriptor.value }
+          if (!descriptor) return { kind: OwnPropertyReadKind.Missing }
+          if (!('value' in descriptor))
+            return { kind: OwnPropertyReadKind.Accessor }
+          return { kind: OwnPropertyReadKind.Value, value: descriptor.value }
         }
         const providersProperty = Object.getOwnPropertyDescriptor(
           rawSnapshot,
@@ -559,14 +562,14 @@ export async function readRawAuthProvidersFromIdb(
           }
           const stateProperty = readOwnProperty(credential, 'state')
           if (
-            stateProperty.kind !== 'value' ||
+            stateProperty.kind !== OwnPropertyReadKind.Value ||
             typeof stateProperty.value !== 'string'
           ) {
             return { kind: credentialReadKind.Malformed }
           }
           const valueProperty = readOwnProperty(credential, 'value')
           if (
-            valueProperty.kind !== 'value' ||
+            valueProperty.kind !== OwnPropertyReadKind.Value ||
             typeof valueProperty.value !== 'string'
           ) {
             return {
@@ -585,10 +588,10 @@ export async function readRawAuthProvidersFromIdb(
           property: string,
         ): RawCredentialRead => {
           const propertyRead = readOwnProperty(owner, property)
-          if (propertyRead.kind === 'missing') {
+          if (propertyRead.kind === OwnPropertyReadKind.Missing) {
             return { kind: credentialReadKind.Absent }
           }
-          if (propertyRead.kind !== 'value') {
+          if (propertyRead.kind !== OwnPropertyReadKind.Value) {
             return { kind: credentialReadKind.Malformed }
           }
           return readCredential(propertyRead.value)
@@ -624,9 +627,9 @@ export async function readRawAuthProvidersFromIdb(
           const idProperty = readOwnProperty(providerValue, 'id')
           const typeProperty = readOwnProperty(providerValue, 'type')
           if (
-            idProperty.kind !== 'value' ||
+            idProperty.kind !== OwnPropertyReadKind.Value ||
             typeof idProperty.value !== 'string' ||
-            typeProperty.kind !== 'value' ||
+            typeProperty.kind !== OwnPropertyReadKind.Value ||
             typeof typeProperty.value !== 'string'
           ) {
             continue
@@ -644,15 +647,15 @@ export async function readRawAuthProvidersFromIdb(
             provider.githubPat = githubPat.value
           }
           const oauthFileProperty = readOwnProperty(providerValue, 'oauthFile')
-          if (oauthFileProperty.kind === 'value') {
+          if (oauthFileProperty.kind === OwnPropertyReadKind.Value) {
             const oauthFileValue = oauthFileProperty.value
             const configuredProperty = readOwnProperty(oauthFileValue, 'config')
-            if (configuredProperty.kind !== 'invalid-owner') {
+            if (configuredProperty.kind !== OwnPropertyReadKind.InvalidOwner) {
               let credentialSource = oauthFileValue
               if (
-                configuredProperty.kind === 'value' &&
+                configuredProperty.kind === OwnPropertyReadKind.Value &&
                 readOwnProperty(configuredProperty.value, 'accessToken')
-                  .kind !== 'invalid-owner'
+                  .kind !== OwnPropertyReadKind.InvalidOwner
               ) {
                 credentialSource = configuredProperty.value
               }
@@ -807,15 +810,24 @@ export function expectSealedCredential(
   plaintext: string,
   expectedState: string,
 ) {
+  enum PersistedSealedCredentialReadKind {
+    NotTagged = 'not-tagged',
+    Incomplete = 'incomplete',
+    Tagged = 'tagged',
+  }
   type PersistedSealedCredentialRead =
-    | { kind: 'not-tagged' }
-    | { kind: 'incomplete' }
-    | { kind: 'tagged'; state: unknown; ciphertext: string }
+    | { kind: PersistedSealedCredentialReadKind.NotTagged }
+    | { kind: PersistedSealedCredentialReadKind.Incomplete }
+    | {
+        kind: PersistedSealedCredentialReadKind.Tagged
+        state: unknown
+        ciphertext: string
+      }
   const readPersistedSealedCredential = (
     value: unknown,
   ): PersistedSealedCredentialRead => {
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-      return { kind: 'not-tagged' }
+    if (typeof value !== 'object' || !value || Array.isArray(value)) {
+      return { kind: PersistedSealedCredentialReadKind.NotTagged }
     }
     const stateProperty = Object.getOwnPropertyDescriptor(value, 'state')
     const valueProperty = Object.getOwnPropertyDescriptor(value, 'value')
@@ -826,20 +838,20 @@ export function expectSealedCredential(
       !('value' in valueProperty) ||
       typeof valueProperty.value !== 'string'
     ) {
-      return { kind: 'incomplete' }
+      return { kind: PersistedSealedCredentialReadKind.Incomplete }
     }
     return {
-      kind: 'tagged',
+      kind: PersistedSealedCredentialReadKind.Tagged,
       state: stateProperty.value,
       ciphertext: valueProperty.value,
     }
   }
   const credential = readPersistedSealedCredential(stored)
-  expect(credential.kind).not.toBe('not-tagged')
-  if (credential.kind === 'not-tagged') {
+  expect(credential.kind).not.toBe(PersistedSealedCredentialReadKind.NotTagged)
+  if (credential.kind === PersistedSealedCredentialReadKind.NotTagged) {
     throw new Error('expected a tagged sealed credential')
   }
-  if (credential.kind === 'incomplete') {
+  if (credential.kind === PersistedSealedCredentialReadKind.Incomplete) {
     throw new Error('expected a persisted sealed credential')
   }
   expect(credential.state).toBe(expectedState)

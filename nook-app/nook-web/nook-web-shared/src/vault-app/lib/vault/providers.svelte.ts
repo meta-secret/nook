@@ -5,6 +5,7 @@ import {
   VaultStorageFailure as StorageOperationFailure,
   VaultStorageFailureKind as StorageOperationFailureKind,
 } from "$lib/runtime/storage-failure";
+import { ProviderFailureLogContext } from "$lib/vault/provider-failure-log-context";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 
 /** Provider actions that snapshot reactive Svelte state at WASM boundaries. */
@@ -108,12 +109,6 @@ import { VaultDiscoveryTimeout } from "$lib/vault/vault-discovery-timeout";
 import { ProviderSelectionActions } from "$lib/vault/provider-selection.svelte";
 
 export { ProviderSelectionActions } from "$lib/vault/provider-selection.svelte";
-
-type ProviderAssessmentFailureLogContext = {
-  readonly provider_type: string;
-  readonly failure_kind: StorageOperationFailure["kind"];
-  readonly http_status: 401 | undefined;
-};
 
 export { ProviderConnectionActions } from "$lib/vault/provider-connection";
 
@@ -425,17 +420,16 @@ export class VaultProviderActions {
           );
         } catch (nativeFailure) {
           const failure = new NativeVaultStorageFailure(nativeFailure);
-          const failureContext: ProviderAssessmentFailureLogContext = {
+          const failureRequest: Parameters<
+            typeof ProviderFailureLogContext.from
+          >[0] = {
             provider_type: args.mode,
             failure_kind: failure.kind,
-            http_status:
-              failure.kind === StorageOperationFailureKind.GitHubTokenRejected
-                ? 401
-                : undefined,
           };
+          const failureContext = ProviderFailureLogContext.from(failureRequest);
           const warningContext: Parameters<typeof log.warnWithContext>[0] = {
             message: "provider vault assessment failed",
-            serializedContext: JSON.stringify(failureContext),
+            serializedContext: failureContext.serialize(),
           };
           log.warnWithContext(warningContext);
           return storageErr(failure);

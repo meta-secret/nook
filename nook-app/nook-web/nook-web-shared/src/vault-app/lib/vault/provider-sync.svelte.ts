@@ -5,6 +5,7 @@ import {
   VaultStorageFailureKind,
   NativeVaultStorageFailure,
 } from "$lib/runtime/storage-failure";
+import { ProviderFailureLogContext } from "$lib/vault/provider-failure-log-context";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 
 /** Sync actions that snapshot reactive Svelte state at WASM boundaries. */
@@ -74,12 +75,6 @@ type ProviderFailurePresentation = {
   readonly visibility: ProviderSyncVisibility;
   readonly failureHandling: ProviderSyncFailureHandling;
   readonly failure: VaultStorageFailure;
-};
-
-type ProviderSyncFailureLogContext = {
-  readonly provider_type: StorageProvider["type"];
-  readonly failure_kind: VaultStorageFailure["kind"];
-  readonly http_status: 401 | undefined;
 };
 
 /** Owns provider synchronization and its visible or captured outcome. */
@@ -185,17 +180,15 @@ export class ProviderSyncActions {
     Result<ProviderSyncOutcome, VaultStorageFailure>
   > {
     const state = this.state;
-    const failureContext: ProviderSyncFailureLogContext = {
-      provider_type: provider.type,
-      failure_kind: failure.kind,
-      http_status:
-        failure.kind === VaultStorageFailureKind.GitHubTokenRejected
-          ? 401
-          : undefined,
-    };
+    const failureRequest: Parameters<typeof ProviderFailureLogContext.from>[0] =
+      {
+        provider_type: provider.type,
+        failure_kind: failure.kind,
+      };
+    const failureContext = ProviderFailureLogContext.from(failureRequest);
     const warningContext: Parameters<typeof log.warnWithContext>[0] = {
       message: "provider synchronization failed",
-      serializedContext: JSON.stringify(failureContext),
+      serializedContext: failureContext.serialize(),
     };
     log.warnWithContext(warningContext);
     const admitted = state.admitManager();

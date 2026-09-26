@@ -90,8 +90,12 @@ describe('login gate identity focus restoration', () => {
   test('does not reclaim focus after navigation during identity reload', async () => {
     document.body.innerHTML =
       '<button data-testid="login-review-identities"></button><button data-testid="login-unlock-method-keys"></button>'
-    type IdentityLoadState = 'Initial' | 'Reloading' | 'Ready'
-    let identityLoadState: IdentityLoadState = 'Initial'
+    enum IdentityLoadState {
+      Initial = 'Initial',
+      Reloading = 'Reloading',
+      Ready = 'Ready',
+    }
+    let identityLoadState: IdentityLoadState = IdentityLoadState.Initial
     let frame = 0
 
     await focusIdentityContextWhenAvailable({
@@ -99,7 +103,7 @@ describe('login gate identity focus restoration', () => {
         frame += 1
         switch (frame) {
           case 2:
-            identityLoadState = 'Reloading'
+            identityLoadState = IdentityLoadState.Reloading
             document
               .querySelector<HTMLButtonElement>(
                 '[data-testid="login-unlock-method-keys"]',
@@ -112,7 +116,7 @@ describe('login gate identity focus restoration', () => {
               ?.remove()
             break
           case 3:
-            identityLoadState = 'Ready'
+            identityLoadState = IdentityLoadState.Ready
             document.body.insertAdjacentHTML(
               'beforeend',
               '<button data-testid="login-review-identities"></button>',
@@ -122,7 +126,8 @@ describe('login gate identity focus restoration', () => {
             break
         }
       },
-      identityContextLoading: () => identityLoadState === 'Reloading',
+      identityContextLoading: () =>
+        identityLoadState === IdentityLoadState.Reloading,
       reviewButton: () =>
         document.querySelector<HTMLButtonElement>(
           '[data-testid="login-review-identities"]',
