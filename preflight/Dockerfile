@@ -134,6 +134,16 @@ curl --proto '=https' --tlsv1.2 -LsSf \
   --output /tmp/meta-cortex-installer.sh
 META_CORTEX_UNMANAGED_INSTALL=/usr/local/bin sh /tmp/meta-cortex-installer.sh
 rm /tmp/meta-cortex-installer.sh
+# Framework Initialize invokes mise while applying its InstallMissing policies.
+mise_version=v2026.9.13
+mise_sha256=a72f49916b33ba952ba398046c5cc91a58238f0b718fee1d938206ef2af21c6d
+mise_asset_url="https://github.com/jdx/mise/releases/download/${mise_version}/mise-${mise_version}-linux-x64"
+curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error \
+  --output /tmp/mise "$mise_asset_url"
+printf '%s  %s\n' "$mise_sha256" /tmp/mise | sha256sum --check -
+install -d -m 0755 /root/.meta-cortex/mise/bin
+install -m 0755 /tmp/mise /root/.meta-cortex/mise/bin/mise
+rm /tmp/mise
 meta-cortex run --request - <<'YAML'
 version: 1
 project: /meta-secret/nook
