@@ -33,6 +33,7 @@
   ],
   "unstable": [
     "file-sync-provider.spec.ts",
+    "google-drive-private-v2-existing-vault.spec.ts",
     "onboarding-file-provider.spec.ts",
     "sync-fanout.spec.ts",
     "multi-device-local.spec.ts",
