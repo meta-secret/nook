@@ -1668,6 +1668,7 @@
     "icloud_sign_in_required": "Требуется вход через Apple. Нажмите «Войти через Apple», чтобы продолжить.",
     "icloud_sign_in_loading": "Вход через Apple ещё загружается. Повторите попытку через несколько секунд.",
     "icloud_sign_in_ready": "Вход через Apple готов. Ещё раз нажмите «Войти через Apple».",
+    "icloud_sign_in_timeout": "Истекло время ожидания входа через Apple. Завершите вход в уже открытом окне Apple, затем повторите попытку входа в iCloud.",
     "icloud_unknown_error": "CloudKit не удалось завершить вход. Проверьте, что API-токен iCloud включён для этого контейнера и разрешён origin браузера.",
     "icloud_sign_in_failed": "Не удалось войти через iCloud.",
     "icloud_tokens_local_desc": "Токены CloudKit web auth остаются только в этом браузере, как сохранённый токен GitHub.",

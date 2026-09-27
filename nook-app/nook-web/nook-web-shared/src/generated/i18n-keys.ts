@@ -1646,6 +1646,7 @@ export const I18N_KEYS = {
   ProviderSetupIcloudSignInLoading: 'provider_setup.icloud_sign_in_loading',
   ProviderSetupIcloudSignInReady: 'provider_setup.icloud_sign_in_ready',
   ProviderSetupIcloudSignInRequired: 'provider_setup.icloud_sign_in_required',
+  ProviderSetupIcloudSignInTimeout: 'provider_setup.icloud_sign_in_timeout',
   ProviderSetupIcloudSignedInAs: 'provider_setup.icloud_signed_in_as',
   ProviderSetupIcloudSigningIn: 'provider_setup.icloud_signing_in',
   ProviderSetupIcloudSyncSubtitle: 'provider_setup.icloud_sync_subtitle',
