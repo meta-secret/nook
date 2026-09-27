@@ -55,7 +55,7 @@ lifecycle, sync, and WASM events that neither linters nor DOM assertions expose.
   separately.
 - **Human inspection:** `/logs` in the running app.
 
-Full reference: [logging.md § Debugging, troubleshooting, and CI verification](../../../shared/references/logging.md#debugging-troubleshooting-and-ci-verification).
+Full specification: [logging.md § Debugging, troubleshooting, and CI verification](../../../../nook-app/.cortex/docs/spec/logging.md#debugging-troubleshooting-and-ci-verification).
 
 For human debugging, local `task ci:pr` remains an optional warm-cache mirror.
 It is a broad gate, not an agent local diagnostic target or a merge gate. See

@@ -1,4 +1,4 @@
-# Reference: Application Logging
+# Application Logging Specification
 
 ## Overview
 
@@ -34,19 +34,19 @@ See [Agent rule: use app logs](#agent-rule-use-app-logs-for-playwright-debug-and
 ## Architecture
 
 - **Logger core**
-  - File: [`nook-app/nook-platform/nook-wasm/src/logger.rs`](../../../nook-app/nook-platform/nook-wasm/src/logger.rs)
+  - File: [`nook-app/nook-platform/nook-wasm/src/logger.rs`](../../../nook-platform/nook-wasm/src/logger.rs)
   - Responsibility: `tracing` subscriber + reloadable level filter, `IndexedDbLayer` persistence (rexie), dump/flush/clear
 - **Web shim / console authority**
-  - File: [`runtime/log.ts`](../../../nook-app/nook-web/nook-web-shared/src/vault-app/lib/runtime/log.ts)
+  - File: [`runtime/log.ts`](../../../nook-web/nook-web-shared/src/vault-app/lib/runtime/log.ts)
   - Responsibility: `createLogger(scope)`, `console.*` capture, `window.__nookConsole.echo`, initial level, flush loop, `window.__nookLog`
 - **Viewer**
-  - File: [`LogsPage.svelte`](../../../nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/LogsPage.svelte)
+  - File: [`LogsPage.svelte`](../../../nook-web/nook-web-shared/src/vault-app/lib/components/LogsPage.svelte)
   - Responsibility: `/logs` page: filter, pagination, copy, clear
 - **JSON export**
-  - Files: [`app/logs-api.ts`](../../../nook-app/nook-web/nook-web-shared/src/vault-app/lib/app/logs-api.ts), [`AppLogsApiPage.svelte`](../../../nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/AppLogsApiPage.svelte)
+  - Files: [`app/logs-api.ts`](../../../nook-web/nook-web-shared/src/vault-app/lib/app/logs-api.ts), [`AppLogsApiPage.svelte`](../../../nook-web/nook-web-shared/src/vault-app/lib/components/AppLogsApiPage.svelte)
   - Responsibility: `/app-logs` — machine-readable JSON export for agents and log pipelines
 - **e2e**
-  - Files: [`nook-web-app/e2e/fixtures.ts`](../../../nook-app/nook-web/nook-web-app/e2e/fixtures.ts), [`helpers.ts`](../../../nook-app/nook-web/nook-web-app/e2e/helpers.ts)
+  - Files: [`nook-web-app/e2e/fixtures.ts`](../../../nook-web/nook-web-app/e2e/fixtures.ts), [`helpers.ts`](../../../nook-web/nook-web-app/e2e/helpers.ts)
   - Responsibility: Attach canonical `nook-app-logs.json` to every test result, print on failure; `fetchAppLogs()` via `/app-logs`
 
 - **Built on `tracing`:** `nook-core` and `nook-wasm` emit structured events via
@@ -171,7 +171,7 @@ default is `info`. Almost all app logs today are `debug` (`wasm` status drain,
 
 ## e2e integration (per-test log attachment)
 
-Specs import `test`/`expect` from [`e2e/fixtures.ts`](../../../nook-app/nook-web/nook-web-app/e2e/fixtures.ts)
+Specs import `test`/`expect` from [`e2e/fixtures.ts`](../../../nook-web/nook-web-app/e2e/fixtures.ts)
 (not `@playwright/test`). The fixture attaches `nook-app-logs.json` to every
 test result using the same canonical `nook.app-logs.v1` envelope exposed by
 `/app-logs` (up to the IndexedDB ring-buffer cap of 5000 entries). On failure it
@@ -204,7 +204,7 @@ the default trail is too thin.
 - The **CI preview** server serves a prebuilt `dist/` (level `info`). To capture
   more on CI, rebuild with `VITE_LOG_LEVEL=debug`, or in a spec:
   `await page.addInitScript(() => localStorage.setItem('nook_log_level', 'trace'))`.
-- `dumpNookLogs(page, label)` in [`e2e/helpers.ts`](../../../nook-app/nook-web/nook-web-app/e2e/helpers.ts)
+- `dumpNookLogs(page, label)` in [`e2e/helpers.ts`](../../../nook-web/nook-web-app/e2e/helpers.ts)
   prints logs at any point during a flow.
 - `fetchAppLogs(page, options)` in the same file loads `/app-logs` and returns
   the parsed `nook.app-logs.v1` payload.
@@ -222,7 +222,7 @@ at default capture level in CI). Ordered assertions should cover causality that
 the UI does not show directly, for example "manual sync started" before "secret
 added" in an event-log sync flow.
 
-- **[`connect.spec.ts`](../../../nook-app/nook-web/nook-web-app/e2e/connect.spec.ts)**
+- **[`connect.spec.ts`](../../../nook-web/nook-web-app/e2e/connect.spec.ts)**
   - **Local vault created**
     - **Scope:** `vault-local`
     - **Message (includes):** `local vault created`
@@ -235,21 +235,21 @@ added" in an event-log sync flow.
   - **User locks vault**
     - **Scope:** `vault-session`
     - **Message (includes):** `vault locked`
-- **[`idle-session-lock.spec.ts`](../../../nook-app/nook-web/nook-web-app/e2e/idle-session-lock.spec.ts)**
+- **[`idle-session-lock.spec.ts`](../../../nook-web/nook-web-app/e2e/idle-session-lock.spec.ts)**
   - **Idle timeout**
     - **Scope:** `vault-session`
     - **Message (includes):** `vault locked`
   - **Re-unlock**
     - **Scope:** `vault`
     - **Message (includes):** `vault session unlocked`
-- **[`event-log-sync.spec.ts`](../../../nook-app/nook-web/nook-web-app/e2e/event-log-sync.spec.ts)**
+- **[`event-log-sync.spec.ts`](../../../nook-web/nook-web-app/e2e/event-log-sync.spec.ts)**
   - **Manual sync**
     - **Scope:** `vault-sync`
     - **Message (includes):** `manual sync started`
   - **Secret saved**
     - **Scope:** `connect`
     - **Message (includes):** `secret added`
-- **[`logs-page.spec.ts`](../../../nook-app/nook-web/nook-web-app/e2e/logs-page.spec.ts)**
+- **[`logs-page.spec.ts`](../../../nook-web/nook-web-app/e2e/logs-page.spec.ts)**
   - **Logging infra**
     - **Scope:** (multiple)
     - **Message (includes):** See spec — owns `/logs` and `/app-logs`
@@ -257,5 +257,5 @@ added" in an event-log sync flow.
 **Note:** `connect` / `vault connected` is emitted by `loadDb` (provider unlock
 path), not device-key local vault creation (`vault-local` + `wasm-connect` instead).
 
-See also: [rust-wasm.md](../../teams/dev-core/references/rust-wasm.md), [bun-svelte.md](../../teams/web-dev/references/bun-svelte.md),
-[../workflows/ci-pipeline.md](../../teams/sre/workflows/ci-pipeline.md).
+See also: [rust-wasm.md](../../../../.cortex/teams/dev-core/references/rust-wasm.md), [bun-svelte.md](../../../../.cortex/teams/web-dev/references/bun-svelte.md),
+[CI pipeline](../../../../.cortex/teams/sre/workflows/ci-pipeline.md).

@@ -21,6 +21,7 @@ context.
 ## Project-local context
 
 - [Nook application architecture](../nook-app/.cortex/docs/architecture/index.md)
+- [Nook application specifications](../nook-app/.cortex/docs/spec/index.md)
 
 ## Product and operational contexts
 

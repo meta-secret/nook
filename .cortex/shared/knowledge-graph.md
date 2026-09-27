@@ -18,13 +18,13 @@ These documents route repository-wide relationships and application-owned contex
 - [System architecture](architecture/system.md)
 - [Nook application architecture](../../nook-app/.cortex/docs/architecture/index.md)
 
-## Product and reference catalogs
+## Product and specification catalogs
 
 These catalogs route cross-team lookup without transferring ownership.
 
 - [Product specifications catalog](product-specs/index.md)
-- [Technical references catalog](references/index.md)
-- [Application logging](references/logging.md)
+- [Shared specifications catalog](spec/index.md)
+- [Application logging](../../nook-app/.cortex/docs/spec/logging.md)
 
 ## Shared engineering rules
 
