@@ -283,7 +283,11 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
   let revision = 0
   let sha = 'e2e-stub-sha-0'
   let failureScenario = GithubStubFailureScenario.None
-  const failureResponses: Array<{ path: string; status: number }> = []
+  const failureResponses: Array<{
+    method: string
+    path: string
+    status: number
+  }> = []
   const eventFiles = new Map<string, string>()
   const eventShas = new Map<string, string>()
   const bumpSha = () => {
@@ -331,7 +335,7 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
 
         if (url === 'https://api.github.com/user') {
           if (failureScenario === GithubStubFailureScenario.UserUnauthorized) {
-            failureResponses.push({ path: '/user', status: 401 })
+            failureResponses.push({ method, path: '/user', status: 401 })
             await route.fulfill({
               status: 401,
               contentType: 'application/json',
@@ -451,6 +455,7 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
         if (url.startsWith(`${contentsPrefix}nook-log/`)) {
           if (failureScenario === GithubStubFailureScenario.EventLogForbidden) {
             failureResponses.push({
+              method,
               path: url.slice('https://api.github.com'.length),
               status: 403,
             })
