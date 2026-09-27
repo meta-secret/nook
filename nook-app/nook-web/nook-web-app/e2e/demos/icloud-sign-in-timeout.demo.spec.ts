@@ -7,9 +7,37 @@ import {
 import enLocale from '../../../../nook-platform/nook-app-common/locales/en.json' with { type: 'json' }
 import ruLocale from '../../../../nook-platform/nook-app-common/locales/ru.json' with { type: 'json' }
 
+type OpenedUrlsDecode = { kind: 'valid'; urls: string[] } | { kind: 'invalid' }
+
+function decodeOpenedUrls(serialized: string | null): OpenedUrlsDecode {
+  try {
+    const decoded: unknown = JSON.parse(serialized ?? '[]')
+    if (!Array.isArray(decoded)) return { kind: 'invalid' }
+
+    const urls: string[] = []
+    for (const entry of decoded) {
+      if (typeof entry !== 'string') return { kind: 'invalid' }
+      urls.push(entry)
+    }
+    return { kind: 'valid', urls }
+  } catch {
+    return { kind: 'invalid' }
+  }
+}
+
 test('shows retry guidance when native Apple sign-in times out', async ({
   page,
 }) => {
+  const appleSignInUrl = 'https://idmsa.apple.com/appleauth/auth/signin'
+  expect(decodeOpenedUrls(JSON.stringify([appleSignInUrl]))).toEqual({
+    kind: 'valid',
+    urls: [appleSignInUrl],
+  })
+  expect(decodeOpenedUrls('{invalid-json')).toEqual({ kind: 'invalid' })
+  expect(decodeOpenedUrls(JSON.stringify([appleSignInUrl, 1]))).toEqual({
+    kind: 'invalid',
+  })
+
   await page.clock.install()
   await page.route('https://localhost:5173/**', async (route) => {
     const localRequestUrl = new URL(route.request().url())
@@ -98,10 +126,18 @@ test('shows retry guidance when native Apple sign-in times out', async ({
   await expect(page.getByTestId('icloud-oauth-error')).toContainText(
     localeCopy.provider_setup.icloud_sign_in_timeout,
   )
-  const openedUrls = JSON.parse(
-    (await page.locator('html').getAttribute('data-demo-opened-urls')) || '[]',
-  ) as string[]
+  const decodedOpenedUrls = decodeOpenedUrls(
+    await page.locator('html').getAttribute('data-demo-opened-urls'),
+  )
+  if (decodedOpenedUrls.kind !== 'valid') {
+    throw new Error('Expected the demo to record a valid array of opened URLs')
+  }
+  const openedUrls = decodedOpenedUrls.urls
   expect(openedUrls).toHaveLength(1)
-  expect(new URL(openedUrls[0]).hostname).toBe('idmsa.apple.com')
+  const openedUrl = openedUrls[0]
+  if (openedUrl === undefined) {
+    throw new Error('Expected the demo to record one Apple sign-in URL')
+  }
+  expect(new URL(openedUrl).hostname).toBe('idmsa.apple.com')
   expect(page.context().pages()).toHaveLength(1)
 })
