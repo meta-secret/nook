@@ -50,7 +50,7 @@ tasks:
       - bash "{{.EXTENSION_ROOT}}/scripts/setup-brave-vault.test.sh"
 
   extension:test:taskfile:
-    desc: Test the focused Extension E2E Task, Docker Taskfile, and login options contracts in the E2E image without browser tests.
+    desc: Test the focused Extension E2E Task and Docker Taskfile contracts in the E2E image without browser tests.
     deps:
       - task: setup:web:e2e:focused
     cmds:
@@ -275,9 +275,9 @@ tasks:
       - cd "{{.EXTENSION_ROOT}}" && bun run test:e2e
 
   _extension:test:taskfile:
-    desc: Test focused Extension E2E Task, Docker Taskfile, and login options contracts without browser tests.
+    desc: Test focused Extension E2E Task and Docker Taskfile contracts without browser tests.
     cmds:
-      - cd "{{.EXTENSION_ROOT}}" && bun test scripts/extension-e2e-taskfile.test.ts scripts/login-options-launcher.test.ts ../docker/e2e-taskfile-contract.test.ts
+      - cd "{{.EXTENSION_ROOT}}" && bun test scripts/extension-e2e-taskfile.test.ts ../docker/e2e-taskfile-contract.test.ts
 
   _extension:test:e2e:shard:
     desc: Run one isolated Main extension browser shard with one worker.

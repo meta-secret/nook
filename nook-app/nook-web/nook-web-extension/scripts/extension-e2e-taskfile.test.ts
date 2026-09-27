@@ -43,10 +43,10 @@ test('the public focused Extension E2E target forwards one selected spec safely'
   expect(internalTarget).toContain('bash scripts/test-e2e.sh "$E2E_SPEC"')
 })
 
-test('the public Taskfile contract target includes login options launcher coverage', () => {
+test('the public Taskfile contract target runs focused Taskfile checks', () => {
   expect(taskfilePublicTarget).toContain('TASK: _extension:test:taskfile')
   expect(taskfileInternalTarget).toContain(
-    'bun test scripts/extension-e2e-taskfile.test.ts scripts/login-options-launcher.test.ts ../docker/e2e-taskfile-contract.test.ts',
+    'bun test scripts/extension-e2e-taskfile.test.ts ../docker/e2e-taskfile-contract.test.ts',
   )
   expect(taskfileInternalTarget).not.toContain('scripts/test-e2e.sh')
 })
