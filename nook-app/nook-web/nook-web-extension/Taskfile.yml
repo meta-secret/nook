@@ -49,6 +49,14 @@ tasks:
       - bash "{{.EXTENSION_ROOT}}/scripts/test-hosted-smoke.test.sh"
       - bash "{{.EXTENSION_ROOT}}/scripts/setup-brave-vault.test.sh"
 
+  extension:test:taskfile:
+    desc: Test the focused Extension E2E Task input contract in the E2E image without running browser tests.
+    deps:
+      - task: setup:web:e2e:focused
+    cmds:
+      - task: docker:e2e:run
+        vars: { TASK: _extension:test:taskfile }
+
   extension:test:e2e:
     desc: Run browser extension Playwright e2e in Docker.
     deps:
@@ -63,6 +71,43 @@ tasks:
     cmds:
       - task: docker:e2e:run
         vars: { TASK: _extension:test:e2e }
+
+  extension:test:e2e:file:
+    desc: Run one browser extension Playwright E2E spec file or line (E2E_SPEC).
+    env:
+      E2E_SPEC: '{{default "" .E2E_SPEC}}'
+    preconditions:
+      - sh: |
+          case "${E2E_SPEC:-}" in
+            ''|*[!A-Za-z0-9_.:-]*) exit 1 ;;
+          esac
+          case "$E2E_SPEC" in
+            *.spec.ts) ;;
+            *.spec.ts:*)
+              spec_name="${E2E_SPEC%:*}"
+              line_number="${E2E_SPEC##*:}"
+              case "$spec_name" in
+                *:*) exit 1 ;;
+                *.spec.ts) ;;
+                *) exit 1 ;;
+              esac
+              case "$line_number" in
+                ''|*[!0-9]*) exit 1 ;;
+                *[1-9]*) ;;
+                *) exit 1 ;;
+              esac
+              ;;
+            *) exit 1 ;;
+          esac
+        msg: >-
+          E2E_SPEC must be an Extension E2E spec basename ending in .spec.ts,
+          optionally followed by :<positive line number>.
+    cmds:
+      - task: setup:web:e2e:focused
+      - task: docker:e2e:run
+        vars:
+          TASK: _extension:test:e2e:file
+          E2E_SPEC: '{{.E2E_SPEC}}'
 
   extension:smoke:hosted:
     desc: Download and verify a dev or PR extension, then run its disposable hosted Simple Vault smoke in Docker.
@@ -226,6 +271,11 @@ tasks:
     desc: Run browser extension Playwright e2e.
     cmds:
       - cd "{{.EXTENSION_ROOT}}" && bun run test:e2e
+
+  _extension:test:taskfile:
+    desc: Test focused Extension E2E Task input validation without running browser tests.
+    cmds:
+      - cd "{{.EXTENSION_ROOT}}" && bun test scripts/extension-e2e-taskfile.test.ts
 
   _extension:test:e2e:shard:
     desc: Run one isolated Main extension browser shard with one worker.
