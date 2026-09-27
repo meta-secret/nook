@@ -602,6 +602,7 @@ export class CortexDocumentStructure {
     // Vendored library links are dependencies, not Nook-owned graph entries.
     // The repository link audit still checks their file destinations.
     if (repositoryPath.startsWith('.meta-cortex/')) return false;
+    if (!repositoryPath.startsWith('.cortex/')) return false;
     const targetRelativePath = this.normalizeCortexRelativePath(repositoryPath);
 
     return {

@@ -87,6 +87,18 @@ test('treats vendored skills as dependencies rather than Nook graph ownership', 
   ).toEqual([]);
 });
 
+test('does not index repository documents outside the root Cortex graph', () => {
+  const document =
+    CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
+      path: '.cortex/knowledge-graph.md',
+      content:
+        '# Nook graph\n\n- [Nook app architecture](../nook-app/.cortex/docs/architecture/index.md)\n',
+    });
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.audit([document]),
+  ).toEqual([]);
+});
+
 test('accepts document-level team and shared graphs', () => {
   expect(
     CortexDocumentMapCortexDocumentStructureScenario.audit(
