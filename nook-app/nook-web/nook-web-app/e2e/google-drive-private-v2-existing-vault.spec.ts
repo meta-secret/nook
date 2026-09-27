@@ -61,10 +61,9 @@ test('discovers an existing Private Drive v2 vault, distinguishes an empty provi
     privateFolderName,
   ).toString('base64url')}`
   await expect
-    .poll(
-      () => driveStub.getEventFileCountForParent(privateFolderId),
-      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
-    )
+    .poll(() => driveStub.getEventFileCountForParent(privateFolderId), {
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
     .toBeGreaterThan(0)
   expect(driveStub.getEventFileCountForParent('appDataFolder')).toBe(0)
 
@@ -100,8 +99,12 @@ test('discovers an existing Private Drive v2 vault, distinguishes an empty provi
     await setupGoogleDriveProvider(existingPage, PRIVATE_V2_DRIVE_FILE_NAME)
     await existingPage.getByTestId('connect-provider-btn').click()
     try {
-      await expect(existingPage.getByTestId('devices-access-nudge')).toBeVisible()
-      await expect(existingPage.locator('body')).toContainText('Join this vault')
+      await expect(
+        existingPage.getByTestId('devices-access-nudge'),
+      ).toBeVisible()
+      await expect(existingPage.locator('body')).toContainText(
+        'Join this vault',
+      )
       await expect(existingPage.locator('body')).toContainText(
         'This browser is not enrolled yet',
       )
@@ -112,7 +115,9 @@ test('discovers an existing Private Drive v2 vault, distinguishes an empty provi
           new URLSearchParams(query).get('q')?.includes(privateFolderName),
       )
       if (!privateFolderLookup || privateFolderLookup.status !== 200) {
-        throw new Error('Private v2 folder lookup was not observed with HTTP 200.')
+        throw new Error(
+          'Private v2 folder lookup was not observed with HTTP 200.',
+        )
       }
     } catch {
       const visiblePageText = (
@@ -175,10 +180,7 @@ test('discovers an existing Private Drive v2 vault, distinguishes an empty provi
       fileName: PRIVATE_V2_NEW_VAULT_FILE_NAME,
     })
     await newVaultPage.goto('/app/')
-    await createLocalVaultOnLogin(
-      newVaultPage,
-      PRIVATE_V2_NEW_VAULT_FILE_NAME,
-    )
+    await createLocalVaultOnLogin(newVaultPage, PRIVATE_V2_NEW_VAULT_FILE_NAME)
     await connectGoogleDriveSyncProviderFromSettings(
       newVaultPage,
       PRIVATE_V2_NEW_VAULT_FILE_NAME,
@@ -195,7 +197,9 @@ test('discovers an existing Private Drive v2 vault, distinguishes an empty provi
         { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
       )
       .toBeGreaterThan(0)
-    expect(newVaultDriveStub.getEventFileCountForParent('appDataFolder')).toBe(0)
+    expect(newVaultDriveStub.getEventFileCountForParent('appDataFolder')).toBe(
+      0,
+    )
   } finally {
     await newVaultContext.close()
   }

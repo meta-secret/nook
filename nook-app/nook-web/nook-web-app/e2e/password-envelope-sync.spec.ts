@@ -345,19 +345,6 @@ test.describe('vault password envelope with sync provider', () => {
 
     const failureResponses = stub.getFailureResponses()
     const failureCountAfterSave = failureResponses.length
-    const safeErrorMessageState = await deviceA.evaluate(() => {
-      const errorMsg =
-        (window as Window & { __nookVault?: { errorMsg?: string } }).__nookVault
-          ?.errorMsg ?? ''
-      switch (errorMsg) {
-        case 'Sync failed for this provider.':
-          return 'generic-provider-sync-failed'
-        case '':
-          return 'empty'
-        default:
-          return 'other'
-      }
-    })
     expect(failureCountAfterSave).toBeGreaterThan(failureCountBeforeSave)
     expect(failureResponses).toContainEqual(
       expect.objectContaining({
@@ -366,7 +353,6 @@ test.describe('vault password envelope with sync provider', () => {
         path: expect.stringContaining('/contents/nook-log/'),
       }),
     )
-    expect(safeErrorMessageState).toBe('generic-provider-sync-failed')
     await expect(deviceA.getByTestId('vault-error')).toContainText(
       'Sync failed for this provider.',
     )
