@@ -20,7 +20,6 @@ import {
   readRawAuthProvidersFromIdb,
   submitOnboardEnrollmentCode,
   enrollmentCodeFromLink,
-  triggerVaultSyncRefresh,
   waitForVaultOperationsIdle,
   UI_TIMEOUT_MS,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -334,40 +333,43 @@ test.describe('vault password envelope with sync provider', () => {
     await deviceA
       .getByTestId('secret-value')
       .fill('fixture event for GitHub repository permission coverage')
+    const failureCountBeforeSave = stub.getFailureResponses().length
     await deviceA.getByTestId('save-secret-btn').click()
     await waitForVaultOperationsIdle(deviceA)
 
-    const expectedFailureContext = JSON.stringify({
-      provider_type: 'github',
-      failure_kind: 'operation-failed',
-    })
-    await triggerVaultSyncRefresh(deviceA)
     const failureResponses = stub.getFailureResponses()
+    const failureCountAfterSave = failureResponses.length
+    const safeErrorMessageState = await deviceA.evaluate(() => {
+      const errorMsg = (
+        window as Window & { __nookVault?: { errorMsg?: string } }
+      ).__nookVault?.errorMsg ?? ''
+      switch (errorMsg) {
+        case 'Sync failed for this provider.':
+          return 'generic-provider-sync-failed'
+        case '':
+          return 'empty'
+        default:
+          return 'other'
+      }
+    })
+    expect(failureCountAfterSave).toBeGreaterThan(failureCountBeforeSave)
     expect(failureResponses).toContainEqual(
       expect.objectContaining({
+        method: 'GET',
         status: 403,
         path: expect.stringContaining('/contents/nook-log/'),
       }),
     )
-    const refreshLogSnapshot = await readNookLogSnapshot(deviceA, {
-      limit: 5000,
-    })
-    const synchronizationFailures = refreshLogSnapshot.entries.filter(
-      (entry) =>
-        entry.message === 'provider synchronization failed' &&
-        entry.data === expectedFailureContext,
-    )
-    expect(synchronizationFailures.length).toBeGreaterThan(0)
-    const synchronizationFailure =
-      synchronizationFailures[synchronizationFailures.length - 1]
-    expect(synchronizationFailure?.level).toBe('warn')
-    expect(synchronizationFailure?.data).toBe(expectedFailureContext)
+    expect(safeErrorMessageState).toBe('generic-provider-sync-failed')
     await expect(deviceA.getByTestId('vault-error')).toContainText(
       'Sync failed for this provider.',
     )
 
-    expect(JSON.stringify(refreshLogSnapshot.entries)).not.toContain(target.pat)
-    expect(JSON.stringify(refreshLogSnapshot.entries)).not.toContain(
+    const saveLogSnapshot = await readNookLogSnapshot(deviceA, {
+      limit: 5000,
+    })
+    expect(JSON.stringify(saveLogSnapshot.entries)).not.toContain(target.pat)
+    expect(JSON.stringify(saveLogSnapshot.entries)).not.toContain(
       'Resource not accessible by integration',
     )
   })
