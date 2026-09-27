@@ -365,14 +365,18 @@ impl NookVaultManager {
         github_repo: String,
     ) -> Result<(), JsError> {
         let restore_local = self.storage.mode == StorageMode::Local;
-        self.prepare_storage_preserving_vault_metadata(&storage_mode, &github_pat, &github_repo)
+        let flush_result = async {
+            self.prepare_storage_preserving_vault_metadata(
+                &storage_mode,
+                &github_pat,
+                &github_repo,
+            )
             .await?;
-        self.flush_event_outbox().await?;
-        if restore_local {
-            self.prepare_storage_preserving_vault_metadata("local", "", "")
-                .await?;
+            self.flush_event_outbox().await
         }
-        Ok(())
+        .await;
+        self.finish_event_outbox_provider_flush(flush_result, restore_local)
+            .await
     }
 
     #[wasm_bindgen]
@@ -460,6 +464,28 @@ impl NookVaultManager {
         }])
         .await?;
         Ok(self.get_records()?)
+    }
+}
+
+impl NookVaultManager {
+    async fn finish_event_outbox_provider_flush(
+        &mut self,
+        flush_result: Result<(), NookError>,
+        restore_local: bool,
+    ) -> Result<(), JsError> {
+        let flush_result = flush_result.map_err(|error| JsError::new(&error.to_string()));
+        let restore_result = if restore_local {
+            self.prepare_storage_preserving_vault_metadata("local", "", "")
+                .await
+                .map_err(|error| JsError::new(&error.to_string()))
+        } else {
+            Ok(())
+        };
+        match (flush_result, restore_result) {
+            (Err(flush_error), _) => Err(flush_error),
+            (Ok(()), Err(restore_error)) => Err(restore_error),
+            (Ok(()), Ok(())) => Ok(()),
+        }
     }
 }
 
@@ -839,5 +865,34 @@ mod projection_tests {
 
         js(manager.delete_local_browser_data().await)?;
         Ok(())
+    }
+}
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod outbox_browser_tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    async fn flush_event_outbox_propagates_github_403_and_restores_local_storage() {
+        let mut manager = NookVaultManager::new();
+        manager.storage.mode = StorageMode::Github;
+        let forbidden = crate::GitHubStorageClient::github_api_failure(
+            reqwest::StatusCode::FORBIDDEN,
+            "GitHub event write failed with status 403 Forbidden".to_owned(),
+        );
+        assert!(matches!(
+            &forbidden,
+            NookError::GitHub(message) if message.contains("403 Forbidden")
+        ));
+
+        let result = manager
+            .finish_event_outbox_provider_flush(Err(forbidden), true)
+            .await;
+
+        assert!(result.is_err());
+        assert_eq!(manager.storage.mode, StorageMode::Local);
     }
 }
