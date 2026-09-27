@@ -61,7 +61,10 @@ test('shows retry guidance when native Apple sign-in times out', async ({
           control.style.width = '64px'
           control.style.height = '36px'
           control.addEventListener('click', () => {
-            window.open('https://idmsa.apple.com/appleauth/auth/signin', '_blank')
+            window.open(
+              'https://idmsa.apple.com/appleauth/auth/signin',
+              '_blank',
+            )
           })
           document.getElementById('apple-sign-in-button')?.append(control)
         },
@@ -80,9 +83,7 @@ test('shows retry guidance when native Apple sign-in times out', async ({
   })
   await expect(page.getByTestId('icloud-origin-unsupported')).toHaveCount(0)
 
-  const signInButton = page.locator(
-    '#apple-sign-in-button .apple-auth-button',
-  )
+  const signInButton = page.locator('#apple-sign-in-button .apple-auth-button')
   await expect(signInButton).toBeVisible({ timeout: UI_TIMEOUT_MS })
   await signInButton.click()
   await expect(page.locator('html')).toHaveAttribute(
