@@ -47,6 +47,13 @@ export type { ExtensionPairingApprovedMessage }
 export const EXTENSION_UNLOCK_TIMEOUT_MS = 30_000
 const EXTENSION_RUNTIME_MESSAGE_TIMEOUT_MS = 15_000
 const E2E_OPERATION_TIMEOUT_MS = 15_000
+const SAFE_PAGE_INTENTS = [
+  'default',
+  'pair',
+  'pilot-auth',
+  'login-picker',
+  'authenticator-picker',
+]
 
 export async function withE2eDeadline<Result>(
   operation: Promise<Result>,
@@ -75,12 +82,69 @@ export async function withE2eDeadline<Result>(
 function pageAddress(page: Page): string {
   try {
     const url = new URL(page.url())
-    const intent = url.searchParams.get('intent')
+    const [rawIntent] = url.searchParams.getAll('intent')
+    const intent =
+      typeof rawIntent === 'string' && rawIntent.length > 0
+        ? SAFE_PAGE_INTENTS.includes(rawIntent)
+          ? rawIntent
+          : 'unknown'
+        : undefined
     const query = intent ? `?intent=${encodeURIComponent(intent)}` : ''
     return `${url.origin}${url.pathname}${query}`
   } catch {
     return 'unavailable page URL'
   }
+}
+
+async function pageState(page: Page): Promise<string> {
+  const state = await page
+    .evaluate((safePageIntents: string[]) => {
+      const url = new URL(window.location.href)
+      const [rawIntent] = url.searchParams.getAll('intent')
+      const intent =
+        typeof rawIntent === 'string' && rawIntent.length > 0
+          ? safePageIntents.includes(rawIntent)
+            ? rawIntent
+            : 'unknown'
+          : ''
+      const extensionPage = url.protocol === 'chrome-extension:'
+      const knownTestIds = [
+        'extension-toolbar-menu',
+        'extension-device-setup',
+        'extension-runtime-error',
+        'device-protection-unlock-btn',
+        'device-protection-error',
+        'login-picker',
+      ]
+      const testIds = extensionPage
+        ? Array.from(document.querySelectorAll('[data-testid]'))
+            .map((element) => element.getAttribute('data-testid'))
+            .filter(
+              (testId): testId is string =>
+                typeof testId === 'string' && knownTestIds.includes(testId),
+            )
+            .slice(0, 20)
+        : []
+      return {
+        intent,
+        extensionPage,
+        readyState: document.readyState,
+        testIds,
+        appMounted: document.querySelectorAll('#app > *').length > 0,
+        runtimeError:
+          document.querySelectorAll('[data-testid="extension-runtime-error"]')
+            .length > 0,
+      }
+    }, SAFE_PAGE_INTENTS)
+    .catch(() => ({
+      intent: '',
+      extensionPage: false,
+      readyState: 'unavailable',
+      testIds: [],
+      appMounted: false,
+      runtimeError: false,
+    }))
+  return JSON.stringify({ address: pageAddress(page), ...state })
 }
 
 export async function waitForPageUrl(
@@ -89,14 +153,28 @@ export async function waitForPageUrl(
   expected: RegExp,
   purpose: string,
 ): Promise<void> {
+  const pageErrors: string[] = []
+  page.on('pageerror', (error) => pageErrors.push(error.name))
+  page.on('console', (message) => {
+    switch (message.type()) {
+      case 'error':
+        pageErrors.push('console-error')
+        break
+      default:
+        break
+    }
+  })
   try {
     await page.waitForURL(expected, { timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
   } catch (error) {
     const openPages = context.pages().map(pageAddress)
+    const popupState = await pageState(page)
     throw new Error(
       [
         `Timed out: ${purpose} after ${EXTENSION_UNLOCK_TIMEOUT_MS}ms.`,
         `Current page: ${pageAddress(page)}.`,
+        `Current page state: ${popupState}.`,
+        `Observed page errors: ${pageErrors.length > 0 ? pageErrors.join(', ') : 'none'}.`,
         `Open pages: ${openPages.length > 0 ? openPages.join(', ') : 'none'}.`,
       ].join(' '),
       { cause: error },
