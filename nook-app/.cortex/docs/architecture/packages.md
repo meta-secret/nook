@@ -2,9 +2,9 @@
 
 ## Overview
 
-This document details the responsibilities, module structures, and interface boundaries of every package in the Nook workspace.
+This document details the responsibilities, module structures, and interface boundaries of the packages under `nook-app/`.
 
-For the high-level architecture overview and dependency DAG, see [ARCHITECTURE.md](../architecture/system.md).
+For the high-level architecture overview and dependency DAG, see [application architecture](system.md).
 
 ---
 

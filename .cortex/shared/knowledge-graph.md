@@ -11,11 +11,12 @@ Open one relevant category. Do not preload all shared documents.
 
 ## System architecture
 
-These documents define repository-wide package and runtime relationships.
+These documents route repository-wide relationships and application-owned context.
 
 - [Architecture catalog](architecture/index.md)
-- [Package responsibilities and layers](architecture/packages.md)
+- [Package responsibilities and layers](../../nook-app/.cortex/docs/architecture/packages.md)
 - [System architecture](architecture/system.md)
+- [Nook application architecture](../../nook-app/.cortex/docs/architecture/index.md)
 
 ## Product and reference catalogs
 

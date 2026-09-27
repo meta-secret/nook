@@ -16,7 +16,7 @@ app-key membership, a local identity keyring, and per-store DEKs as defined in
   is the source of truth.
   - `nook-projection.yaml` is only the local projection and import format.
 
-**Related:** [ARCHITECTURE.md](../../../shared/architecture/system.md) §2 (`nook-auth2` boundary), §4 (storage and cryptographic catalog), §3 (connect flow), [slip39-recovery.md](slip39-recovery.md) (fixed 2-of-3 device quorum recovery).
+**Related:** [Application architecture](../../../../nook-app/.cortex/docs/architecture/system.md) §2 (`nook-auth2` boundary), §4 (storage and cryptographic catalog), §3 (connect flow), [slip39-recovery.md](slip39-recovery.md) (fixed 2-of-3 device quorum recovery).
 
 ---
 

@@ -144,7 +144,7 @@ When applying a skill to code:
 2. Search for candidate code by behavior and exact symbols.
 3. Refactor only the requested scope unless the skill card explicitly defines a
    broader migration.
-4. Preserve package boundaries in [`.cortex/shared/architecture/system.md`](../../../shared/architecture/system.md).
+4. Preserve package boundaries in [`nook-app/.cortex/docs/architecture/system.md`](../../../../nook-app/.cortex/docs/architecture/system.md).
 5. Add or update tests when the refactor changes behavior or protects a durable
    invariant.
 6. Apply only the permitted scoped formatting or inexpensive diagnostics during

@@ -12,7 +12,7 @@ material are derived projection, interchange, or migration context. See
 **Related:** [unified-vault.md](../../dev-core/design-docs/unified-vault.md),
 [secret-store-identity.md](secret-store-identity.md),
 [auth-providers.md](../../dev-core/design-docs/auth-providers.md), and
-[system architecture](../../../shared/architecture/system.md).
+[system architecture](../../../../nook-app/.cortex/docs/architecture/system.md).
 
 ---
 

@@ -221,4 +221,4 @@ assume per-PR Cloudflare preview hosts can be covered by wildcards. See
    - Credentialed **sync-live** checks are explicit manual runs.
 6. **Never** add Dockerfile `RUN --mount=type=cache`; dependency installs must use normal image layers. The repository-root Rust suite invoked by `task preflight` rejects violations before app setup.
 
-See also: [ARCHITECTURE.md §7](../../../shared/architecture/system.md#7-the-engineering-harness), [pull requests](../../../gizmo-prime/workflows/pull-requests.md).
+See also: [System architecture §3](../../../shared/architecture/system.md#3-the-engineering-harness), [pull requests](../../../gizmo-prime/workflows/pull-requests.md).

@@ -69,7 +69,7 @@ Use this workflow for quality, CI, and deployment changes.
    - The Rust dep cache and warm `target/` are baked into normal image layers.
    - Workspace source is copied into the nook-web image (sealed image, no runtime mount).
    - Authenticated SeaweedFS S3 `sccache` is a compiler-output optimization below Docker/cargo-chef and never a correctness input.
-   - See [ARCHITECTURE.md §7](../../../shared/architecture/system.md#7-the-engineering-harness).
+   - See [System architecture §3](../../../shared/architecture/system.md#3-the-engineering-harness).
 4. Use Bun for web tooling. Do not introduce npm commands or Node-only command flows.
 5. Prefer official prebuilt release archives downloaded with `curl` for standalone Docker image tools. Avoid `cargo install` when a release archive is available.
 6. Preserve these gates unless the task explicitly changes them:
