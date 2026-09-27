@@ -87,7 +87,7 @@ test('treats vendored skills as dependencies rather than Nook graph ownership', 
   ).toEqual([]);
 });
 
-test('resolves repository documents outside the root Cortex graph', () => {
+test('delegates links outside the root Cortex graph to the repository link audit', () => {
   const graph = CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
     path: '.cortex/knowledge-graph.md',
     content:
@@ -107,13 +107,7 @@ test('resolves repository documents outside the root Cortex graph', () => {
     CortexDocumentMapCortexDocumentStructureScenario.audit([
       missingArchitecture,
     ]),
-  ).toContainEqual({
-    code: CortexStructureFindingCode.InvalidIndexEntry,
-    file: '.cortex/knowledge-graph.md',
-    line: 3,
-    message:
-      'Index link points to non-existent document: nook-app/.cortex/docs/architecture/missing.md',
-  });
+  ).toEqual([]);
 });
 
 test('accepts document-level team and shared graphs', () => {

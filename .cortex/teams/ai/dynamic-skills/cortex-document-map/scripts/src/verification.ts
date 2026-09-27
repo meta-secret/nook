@@ -1,7 +1,6 @@
 import { err, ok, type Result } from 'neverthrow';
 import { CortexDocumentMapResultDecodeError } from './codec.ts';
 import path from 'node:path';
-import { existsSync } from 'node:fs';
 
 import GithubSlugger from 'github-slugger';
 
@@ -316,10 +315,7 @@ export class CortexDocumentMapVerifier {
         continue;
       }
       const [target = false] = [args.catalog.get(resolved.target)];
-      if (
-        !resolved.target.startsWith('.cortex/') &&
-        existsSync(path.join(this.request.repoRoot || '.', resolved.target))
-      ) {
+      if (!resolved.target.startsWith('.cortex/')) {
         continue;
       }
       if (target === false) {
