@@ -7,7 +7,7 @@ This registry routes feature work to reusable, read-only domain experts.
 The registry does not grant write authority.
 It does not schedule work.
 It does not replace package responsibilities in
-[packages.md](../../../shared/architecture/packages.md).
+[packages.md](../../../../nook-app/.cortex/docs/architecture/packages.md).
 
 Universal worker behavior follows the root
 [team worker contract](../../../AGENTS.md#team-worker-contract) and

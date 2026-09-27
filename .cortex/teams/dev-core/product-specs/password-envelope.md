@@ -27,7 +27,7 @@ There is no approval round-trip.
 **Related:**
 [decentralized-auth.md](decentralized-auth.md) §2 (key hierarchy),
 [auth-providers.md](../design-docs/auth-providers.md) §3 (UI states),
-[ARCHITECTURE.md](../../../shared/architecture/system.md) §4 (storage and cryptographic catalog).
+[Application architecture](../../../../nook-app/.cortex/docs/architecture/system.md) §4 (storage and cryptographic catalog).
 
 ---
 

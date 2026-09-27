@@ -35,7 +35,7 @@ export type ModuleExpertGeneratedMarker = {
   readonly producerEvidence: readonly string[];
 };
 
-const PACKAGE_AUTHORITY_PATH = '.cortex/shared/architecture/packages.md';
+const PACKAGE_AUTHORITY_PATH = 'nook-app/.cortex/docs/architecture/packages.md';
 const EXPERT_AUTHORITY_PATH = '.cortex/teams/ai/architecture/module-experts.md';
 const MODULE_EXPERT_SKILL_PATH =
   '.cortex/teams/ai/dynamic-skills/module-expert.md';

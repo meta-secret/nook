@@ -16,7 +16,7 @@
 **Related:** [auth-providers.md](auth-providers.md),
 [vault-session-and-lock.md](../../security/architecture/vault-session-and-lock.md),
 [secret-store-identity.md](../../security/architecture/secret-store-identity.md),
-and [system architecture](../../../shared/architecture/system.md).
+and [system architecture](../../../../nook-app/.cortex/docs/architecture/system.md).
 
 ---
 
