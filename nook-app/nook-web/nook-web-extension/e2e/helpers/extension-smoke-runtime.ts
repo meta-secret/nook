@@ -88,7 +88,7 @@ function pageAddress(page: Page): string {
         ? SAFE_PAGE_INTENTS.includes(rawIntent)
           ? rawIntent
           : 'unknown'
-        : undefined
+        : ''
     const query = intent ? `?intent=${encodeURIComponent(intent)}` : ''
     return `${url.origin}${url.pathname}${query}`
   } catch {
@@ -118,11 +118,8 @@ async function pageState(page: Page): Promise<string> {
       ]
       const testIds = extensionPage
         ? Array.from(document.querySelectorAll('[data-testid]'))
-            .map((element) => element.getAttribute('data-testid'))
-            .filter(
-              (testId): testId is string =>
-                typeof testId === 'string' && knownTestIds.includes(testId),
-            )
+            .map((element) => element.getAttribute('data-testid') ?? '')
+            .filter((testId) => knownTestIds.includes(testId))
             .slice(0, 20)
         : []
       return {
@@ -160,7 +157,24 @@ export async function waitForPageUrl(
       case 'error':
         pageErrors.push('console-error')
         break
-      default:
+      case 'log':
+      case 'debug':
+      case 'info':
+      case 'warning':
+      case 'dir':
+      case 'dirxml':
+      case 'table':
+      case 'trace':
+      case 'clear':
+      case 'startGroup':
+      case 'startGroupCollapsed':
+      case 'endGroup':
+      case 'assert':
+      case 'profile':
+      case 'profileEnd':
+      case 'count':
+      case 'time':
+      case 'timeEnd':
         break
     }
   })

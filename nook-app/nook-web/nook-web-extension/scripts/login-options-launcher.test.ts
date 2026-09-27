@@ -9,24 +9,18 @@ import {
 } from '../src/background/service-worker/session-document'
 import type { CompanionLauncherOpenRequest } from '../src/background/service-worker/session-lifecycle'
 
-type GrantAccessResponse =
-  | {
-      response: {
-        ok: true
-        status:
-          | WebsiteAuthenticatorResponseStatus.Unavailable
-          | WebsiteAuthenticatorResponseStatus.Locked
-      }
-    }
-  | { response: { ok: false; reason: string } }
-  | { grants: [] }
-
 type ExtensionWindowRequest = {
   url: string
 }
 
 type AccountPickerSessions =
   (typeof import('../src/background/service-worker/account-pickers'))['accountPickerSessions']
+type WebsiteLoginOptionsDependencies = NonNullable<
+  Parameters<AccountPickerSessions['websiteLoginOptions']>[0]['dependencies']
+>
+type GrantAccessResponse = Awaited<
+  ReturnType<WebsiteLoginOptionsDependencies['availableWebsiteGrants']>
+>
 type LoginAccountAvailabilityRequest = Parameters<
   AccountPickerSessions['loginAccountAvailabilityForOrigin']
 >[0]
