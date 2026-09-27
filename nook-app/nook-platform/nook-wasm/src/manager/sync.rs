@@ -26,7 +26,7 @@ impl NookVaultManager {
             storage = %storage_mode,
             "sync_vault_from_storage started"
         );
-        let restore_local = self.storage.mode == StorageMode::Local;
+        let initial_storage_mode = self.storage.mode;
         // `prepare_storage` clears `password_entries`/`unlock` on a mode/ref
         // switch (it assumes a *different* vault). A same-vault sync only
         // toggles the local-cache/remote tag, so preserve the backup-password
@@ -37,33 +37,10 @@ impl NookVaultManager {
 
         if self.event_log.enabled || NookDatabase::is_event_log_mode().await? {
             self.event_log.enabled = true;
-            let event_changed = self.sync_event_log_from_storage().await.unwrap_or(false);
-            let changed = event_changed;
-            if self.vault.crypto.is_unlocked() {
-                if changed {
-                    self.persist_projection_cache().await?;
-                }
-            } else {
-                // Locked sentinel joiners still need share/join meta for ceremony.
-                drop(self.materialize_vault_meta_from_events().await);
-            }
-            let result = NookVaultSyncResult::sync_result_session(SyncResultSessionRequest {
-                manager: self,
-                changed,
-            })?;
-            tracing::debug!(
-                scope = "wasm-sync",
-                changed,
-                storage = %storage_mode,
-                "sync_vault_from_storage (event log)"
-            );
-            if restore_local {
-                // Same preservation as above: flipping the tag back to the local
-                // cache must not wipe the in-memory password envelope.
-                self.prepare_storage_preserving_vault_metadata("local", "", "")
-                    .await?;
-            }
-            return Ok(result);
+            let sync_result = self.sync_event_log_from_storage().await;
+            return self
+                .finish_event_log_sync(sync_result, initial_storage_mode, &storage_mode)
+                .await;
         }
 
         let mut remote_content_missing = false;
@@ -95,6 +72,63 @@ impl NookVaultManager {
         }
 
         Err(NookError::Database("Vault event log is required.".to_owned()).into())
+    }
+}
+
+impl NookVaultManager {
+    async fn finish_event_log_sync(
+        &mut self,
+        sync_result: Result<bool, NookError>,
+        initial_storage_mode: StorageMode,
+        storage_mode: &str,
+    ) -> Result<NookVaultSyncResult, JsError> {
+        let sync_result = match sync_result {
+            Ok(changed) => {
+                self.build_event_log_sync_result(changed, storage_mode)
+                    .await
+            }
+            Err(error) => Err(JsError::new(&error.to_string())),
+        };
+        let restore_result = match initial_storage_mode {
+            StorageMode::Local => self
+                .prepare_storage_preserving_vault_metadata("local", "", "")
+                .await
+                .map_err(|error| JsError::new(&error.to_string())),
+            StorageMode::Github | StorageMode::GoogleDrive | StorageMode::ICloud => Ok(()),
+        };
+        match (sync_result, restore_result) {
+            (Err(sync_error), _) => Err(sync_error),
+            (Ok(_), Err(restore_error)) => Err(restore_error),
+            (Ok(result), Ok(())) => Ok(result),
+        }
+    }
+
+    async fn build_event_log_sync_result(
+        &mut self,
+        changed: bool,
+        storage_mode: &str,
+    ) -> Result<NookVaultSyncResult, JsError> {
+        if self.vault.crypto.is_unlocked() {
+            if changed {
+                self.persist_projection_cache()
+                    .await
+                    .map_err(|error| JsError::new(&error.to_string()))?;
+            }
+        } else {
+            // Locked sentinel joiners still need share/join meta for ceremony.
+            drop(self.materialize_vault_meta_from_events().await);
+        }
+        let result = NookVaultSyncResult::sync_result_session(SyncResultSessionRequest {
+            manager: self,
+            changed,
+        })?;
+        tracing::debug!(
+            scope = "wasm-sync",
+            changed,
+            storage = %storage_mode,
+            "sync_vault_from_storage (event log)"
+        );
+        Ok(result)
     }
 }
 
@@ -190,5 +224,26 @@ mod browser_tests {
         NookDatabase::clear_event_log_mode().await?;
         manager.delete_local_browser_data().await?;
         Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn event_log_sync_propagates_github_403_and_restores_local_storage() {
+        let mut manager = NookVaultManager::new();
+        manager.storage.mode = StorageMode::Github;
+        let forbidden = crate::GitHubStorageClient::github_api_failure(
+            reqwest::StatusCode::FORBIDDEN,
+            "GitHub event tree listing failed with status 403 Forbidden".to_owned(),
+        );
+        assert!(matches!(
+            &forbidden,
+            NookError::GitHub(message) if message.contains("403 Forbidden")
+        ));
+
+        let result = manager
+            .finish_event_log_sync(Err(forbidden), StorageMode::Local, "github")
+            .await;
+
+        assert!(result.is_err());
+        assert_eq!(manager.storage.mode, StorageMode::Local);
     }
 }
