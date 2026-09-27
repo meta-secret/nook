@@ -192,7 +192,7 @@ TypeScript owns browser integration:
   - Seal them inside `save_auth_providers` / `seal_provider_credentials` and
     unseal them inside the `load_auth_providers` pipeline.
   - Keep non-secret labels, repositories, and timestamps plaintext.
-  - Keep crypto out of TypeScript. See [architecture/packages.md](../../../shared/architecture/packages.md).
+  - Keep crypto out of TypeScript. See [architecture/packages.md](../../../../nook-app/.cortex/docs/architecture/packages.md).
 - **Current storage mapping:** Existing code names the device key a “device
   identity.” Do not mint another key for provider storage.
   - Reuse this browser's **age X25519 device key**: `device_id` /

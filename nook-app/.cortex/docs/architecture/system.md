@@ -135,7 +135,7 @@ The normative model is in
 Nook is structured into three architectural tiers: portable Rust platform crates, a typed WebAssembly bridge, and isolated web presentation packages.
 
 Detailed package design, module breakdowns, and service boundaries live in
-[architecture/packages.md](../../../../.cortex/shared/architecture/packages.md).
+[package responsibilities and layers](packages.md).
 
 ### Rust Platform Tier
 

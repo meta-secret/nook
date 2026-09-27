@@ -183,7 +183,7 @@ describe('module expert audit', () => {
       '.cortex/gizmo-prime/workflows/module-oriented-development.md',
     ]);
     expect(WEB_EXPERT_AUTHORITY_PATHS).toEqual([
-      '.cortex/shared/architecture/packages.md',
+      'nook-app/.cortex/docs/architecture/packages.md',
       '.cortex/teams/ai/architecture/module-experts.md',
     ]);
     expect(WEB_EXPERT_PRODUCT_SPEC_PATHS).toEqual([
