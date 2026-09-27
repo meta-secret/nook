@@ -2014,6 +2014,7 @@ pub const PROVIDER_SETUP_ICLOUD_SIGN_IN_FAILED: &str = "provider_setup.icloud_si
 pub const PROVIDER_SETUP_ICLOUD_SIGN_IN_LOADING: &str = "provider_setup.icloud_sign_in_loading";
 pub const PROVIDER_SETUP_ICLOUD_SIGN_IN_READY: &str = "provider_setup.icloud_sign_in_ready";
 pub const PROVIDER_SETUP_ICLOUD_SIGN_IN_REQUIRED: &str = "provider_setup.icloud_sign_in_required";
+pub const PROVIDER_SETUP_ICLOUD_SIGN_IN_TIMEOUT: &str = "provider_setup.icloud_sign_in_timeout";
 pub const PROVIDER_SETUP_ICLOUD_SIGNED_IN_AS: &str = "provider_setup.icloud_signed_in_as";
 pub const PROVIDER_SETUP_ICLOUD_SIGNING_IN: &str = "provider_setup.icloud_signing_in";
 pub const PROVIDER_SETUP_ICLOUD_SYNC_SUBTITLE: &str = "provider_setup.icloud_sync_subtitle";
