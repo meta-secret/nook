@@ -60,6 +60,19 @@ ownership boundary.
   [agent configuration rules](../.meta-cortex/teams/gizmo-team/docs/agent-configuration.md).
   Nook documents do not copy or override its settings.
 
+### Project-local Cortex
+
+Projects and subprojects may keep a `.cortex/` beside their code. Place local
+knowledge in `docs/` and project-specific agents in `team/agents/` when needed.
+Keep context with the smallest project that owns it, and link to it from broader
+Cortex catalogs. Repository-wide requirements still apply.
+
+**Prohibited:** keep a second copy of application architecture in root shared
+Cortex after moving its authority into `nook-app/`.
+
+**Preferred:** load [nook-app architecture](../nook-app/.cortex/docs/architecture/index.md)
+for application work and link to shared requirements that remain at the root.
+
 ## Nook assignment context
 
 Follow the upstream [assignment context](../.meta-cortex/teams/AGENTS.md#assignment-context).

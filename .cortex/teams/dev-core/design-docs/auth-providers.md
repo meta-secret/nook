@@ -16,7 +16,7 @@ how provider transports relate independently to identities and vaults.
 > [vault-event-log.md](vault-event-log.md); this doc owns credentials, sealing,
 > login UX, and OAuth origin constraints.
 
-**Related:** [ARCHITECTURE.md](../../../shared/architecture/system.md) §4,
+**Related:** [Application architecture](../../../../nook-app/.cortex/docs/architecture/system.md) §4,
 [password-manager.md](../product-specs/password-manager.md) §2A,
 [secret-store-identity.md](../../security/architecture/secret-store-identity.md).
 

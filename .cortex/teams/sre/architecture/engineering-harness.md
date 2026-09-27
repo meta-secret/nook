@@ -4,7 +4,8 @@
 
 All development tasks in Nook run containerized via `Taskfile`. This document specifies the Taskfile hierarchy, sealed container image architecture, BuildKit Docker cache model, Zot OCI registry scopes, and SeaweedFS `sccache` compiler caching.
 
-For the system overview and crate dependency flow, see [ARCHITECTURE.md](../../../shared/architecture/system.md).
+For repository-wide structure, see the [system overview](../../../shared/architecture/system.md).
+For crate dependency flow, see [application architecture](../../../../nook-app/.cortex/docs/architecture/system.md).
 
 ---
 

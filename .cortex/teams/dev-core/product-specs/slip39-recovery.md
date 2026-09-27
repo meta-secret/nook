@@ -11,7 +11,7 @@
 - **Related context:**
   - [Decentralized auth](decentralized-auth.md)
   - [Password envelope](password-envelope.md)
-  - [Architecture section 2](../../../shared/architecture/system.md)
+  - [Architecture section 2](../../../../nook-app/.cortex/docs/architecture/system.md)
   - [Issue #259](https://github.com/meta-secret/nook/issues/259)
 - **Sentinel separation:** Fixed 2-of-3 recovery is distinct from Sentinel
   genesis.

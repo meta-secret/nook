@@ -9,4 +9,6 @@ This directory contains the normative, permanent architectural specifications fo
 - [Structural Refactoring Expert Registry](../../teams/ai/architecture/refactoring-experts.md): Read-only code and Cortex refactoring expertise with synthesis-only system coherence.
 - [The Engineering Harness](../../teams/sre/architecture/engineering-harness.md): Containerized Taskfile hierarchy, sealed Docker image lineages, BuildKit caching, Zot registry scopes, and SeaweedFS sccache compiler acceleration.
 
-For the system-wide architecture overview and dependency DAG, see [ARCHITECTURE.md](../architecture/system.md).
+For repository-wide structure, see the [system overview](system.md).
+Application architecture and its dependency DAG live in the
+[nook-app architecture catalog](../../../nook-app/.cortex/docs/architecture/index.md).
