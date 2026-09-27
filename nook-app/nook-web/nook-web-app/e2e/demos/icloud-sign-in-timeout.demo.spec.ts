@@ -4,39 +4,100 @@ import {
   openLoginProviderSetup,
   UI_TIMEOUT_MS,
 } from '../helpers'
+import { Effect, Schema } from 'effect'
 import enLocale from '../../../../nook-platform/nook-app-common/locales/en.json' with { type: 'json' }
 import ruLocale from '../../../../nook-platform/nook-app-common/locales/ru.json' with { type: 'json' }
 
-type OpenedUrlsDecode = { kind: 'valid'; urls: string[] } | { kind: 'invalid' }
+enum OpenedUrlsDecodeKind {
+  Valid = 'valid',
+  Invalid = 'invalid',
+}
 
-function decodeOpenedUrls(serialized: string | null): OpenedUrlsDecode {
-  try {
-    const decoded: unknown = JSON.parse(serialized ?? '[]')
-    if (!Array.isArray(decoded)) return { kind: 'invalid' }
+type OpenedUrlsDecode =
+  | { kind: OpenedUrlsDecodeKind.Valid; urls: readonly string[] }
+  | { kind: OpenedUrlsDecodeKind.Invalid }
 
-    const urls: string[] = []
-    for (const entry of decoded) {
-      if (typeof entry !== 'string') return { kind: 'invalid' }
-      urls.push(entry)
-    }
-    return { kind: 'valid', urls }
-  } catch {
-    return { kind: 'invalid' }
+enum DemoLocale {
+  English = 'english',
+  Russian = 'russian',
+}
+
+enum DemoLocalePrefix {
+  English = 'en',
+  Russian = 'ru',
+}
+
+function decodeOpenedUrls(
+  serialized: unknown,
+): Effect.Effect<OpenedUrlsDecode> {
+  return Schema.decodeUnknown(Schema.parseJson(Schema.Array(Schema.String)))(
+    serialized,
+  ).pipe(
+    Effect.map((urls): OpenedUrlsDecode => ({
+      kind: OpenedUrlsDecodeKind.Valid,
+      urls,
+    })),
+    Effect.catchAll(() =>
+      Effect.succeed<OpenedUrlsDecode>({
+        kind: OpenedUrlsDecodeKind.Invalid,
+      }),
+    ),
+  )
+}
+
+function openedUrlsFromDecode(result: OpenedUrlsDecode): readonly string[] {
+  switch (result.kind) {
+    case OpenedUrlsDecodeKind.Valid:
+      return result.urls
+    case OpenedUrlsDecodeKind.Invalid:
+      throw new Error(
+        'Expected the demo to record a valid array of opened URLs',
+      )
   }
+}
+
+function localeTimeoutCopy(localeValue: unknown): string {
+  return Effect.runSync(
+    Schema.decodeUnknown(Schema.String)(localeValue).pipe(
+      Effect.map((locale) => {
+        switch (locale.slice(0, 2)) {
+          case DemoLocalePrefix.English:
+            return DemoLocale.English
+          case DemoLocalePrefix.Russian:
+            return DemoLocale.Russian
+          default:
+            return DemoLocale.English
+        }
+      }),
+      Effect.catchAll(() => Effect.succeed(DemoLocale.English)),
+      Effect.map((locale) => {
+        switch (locale) {
+          case DemoLocale.English:
+            return enLocale.provider_setup.icloud_sign_in_timeout
+          case DemoLocale.Russian:
+            return ruLocale.provider_setup.icloud_sign_in_timeout
+        }
+      }),
+    ),
+  )
 }
 
 test('shows retry guidance when native Apple sign-in times out', async ({
   page,
 }) => {
   const appleSignInUrl = 'https://idmsa.apple.com/appleauth/auth/signin'
-  expect(decodeOpenedUrls(JSON.stringify([appleSignInUrl]))).toEqual({
-    kind: 'valid',
+  expect(
+    Effect.runSync(decodeOpenedUrls(JSON.stringify([appleSignInUrl]))),
+  ).toEqual({
+    kind: OpenedUrlsDecodeKind.Valid,
     urls: [appleSignInUrl],
   })
-  expect(decodeOpenedUrls('{invalid-json')).toEqual({ kind: 'invalid' })
-  expect(decodeOpenedUrls(JSON.stringify([appleSignInUrl, 1]))).toEqual({
-    kind: 'invalid',
+  expect(Effect.runSync(decodeOpenedUrls('{invalid-json'))).toEqual({
+    kind: OpenedUrlsDecodeKind.Invalid,
   })
+  expect(
+    Effect.runSync(decodeOpenedUrls(JSON.stringify([appleSignInUrl, 1]))),
+  ).toEqual({ kind: OpenedUrlsDecodeKind.Invalid })
 
   await page.clock.install()
   await page.route('https://localhost:5173/**', async (route) => {
@@ -121,23 +182,18 @@ test('shows retry guidance when native Apple sign-in times out', async ({
 
   await page.clock.fastForward(60_001)
 
-  const locale = await page.locator('html').getAttribute('lang')
-  const localeCopy = locale?.startsWith('ru') ? ruLocale : enLocale
   await expect(page.getByTestId('icloud-oauth-error')).toContainText(
-    localeCopy.provider_setup.icloud_sign_in_timeout,
+    localeTimeoutCopy(await page.locator('html').getAttribute('lang')),
   )
-  const decodedOpenedUrls = decodeOpenedUrls(
-    await page.locator('html').getAttribute('data-demo-opened-urls'),
+  const openedUrls = openedUrlsFromDecode(
+    Effect.runSync(
+      decodeOpenedUrls(
+        await page.locator('html').getAttribute('data-demo-opened-urls'),
+      ),
+    ),
   )
-  if (decodedOpenedUrls.kind !== 'valid') {
-    throw new Error('Expected the demo to record a valid array of opened URLs')
-  }
-  const openedUrls = decodedOpenedUrls.urls
   expect(openedUrls).toHaveLength(1)
-  const openedUrl = openedUrls[0]
-  if (openedUrl === undefined) {
-    throw new Error('Expected the demo to record one Apple sign-in URL')
-  }
+  const openedUrl = openedUrls.join('')
   expect(new URL(openedUrl).hostname).toBe('idmsa.apple.com')
   expect(page.context().pages()).toHaveLength(1)
 })
