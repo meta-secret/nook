@@ -88,12 +88,11 @@ test('treats vendored skills as dependencies rather than Nook graph ownership', 
 });
 
 test('resolves repository documents outside the root Cortex graph', () => {
-  const graph =
-    CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
-      path: '.cortex/knowledge-graph.md',
-      content:
-        '# Nook graph\n\n- [Nook app architecture](../nook-app/.cortex/docs/architecture/index.md)\n',
-    });
+  const graph = CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
+    path: '.cortex/knowledge-graph.md',
+    content:
+      '# Nook graph\n\n- [Nook app architecture](../nook-app/.cortex/docs/architecture/index.md)\n',
+  });
   const architecture =
     CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
       path: 'nook-app/.cortex/docs/architecture/index.md',
