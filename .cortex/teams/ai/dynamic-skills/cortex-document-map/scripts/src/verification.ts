@@ -318,7 +318,7 @@ export class CortexDocumentMapVerifier {
       const [target = false] = [args.catalog.get(resolved.target)];
       if (
         !resolved.target.startsWith('.cortex/') &&
-        existsSync(path.join(this.request.repoRoot ?? '.', resolved.target))
+        existsSync(path.join(this.request.repoRoot || '.', resolved.target))
       ) {
         continue;
       }

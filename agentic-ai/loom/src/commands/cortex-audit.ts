@@ -165,7 +165,9 @@ export class CortexAuditCommand {
         content: document.content,
       })),
       excludedDocumentPaths,
-    }).withRepoRoot(repoRoot).execute();
+    })
+      .withRepoRoot(repoRoot)
+      .execute();
     if (documentMapResult.isErr()) return err(documentMapResult.error);
     const structureFindings = [...documentMapResult.value.findings];
     const syntaxInvalidPaths = new Set(
