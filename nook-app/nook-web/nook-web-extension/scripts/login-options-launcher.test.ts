@@ -277,6 +277,10 @@ describe('websiteLoginOptions', () => {
         openedLaunchers.push(request)
       },
     )
+    const grantSuccessStatus:
+      | WebsiteAuthenticatorResponseStatus.Locked
+      | WebsiteAuthenticatorResponseStatus.Unavailable =
+      WebsiteAuthenticatorResponseStatus.Locked
     const availableWebsiteGrants = mock(() => {
       const launcherRequest: CompanionLauncherOpenRequest = {
         intent: OpenCompanionLauncherIntent.PilotAuth,
@@ -286,7 +290,7 @@ describe('websiteLoginOptions', () => {
       return Promise.resolve({
         response: {
           ok: true as const,
-          status: WebsiteAuthenticatorResponseStatus.Locked,
+          status: grantSuccessStatus,
         },
       })
     })

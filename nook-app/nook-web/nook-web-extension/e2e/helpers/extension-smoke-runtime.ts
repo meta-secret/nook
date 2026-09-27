@@ -118,7 +118,27 @@ async function pageState(page: Page): Promise<string> {
       ]
       const testIds = extensionPage
         ? Array.from(document.querySelectorAll('[data-testid]'))
-            .map((element) => element.getAttribute('data-testid') ?? '')
+            .map((element) => {
+              const testId = element.getAttribute('data-testid')
+              switch (typeof testId) {
+                case 'string':
+                  return testId
+                case 'object':
+                  return ''
+                case 'number':
+                  return ''
+                case 'bigint':
+                  return ''
+                case 'boolean':
+                  return ''
+                case 'symbol':
+                  return ''
+                case 'undefined':
+                  return ''
+                case 'function':
+                  return ''
+              }
+            })
             .filter((testId) => knownTestIds.includes(testId))
             .slice(0, 20)
         : []
