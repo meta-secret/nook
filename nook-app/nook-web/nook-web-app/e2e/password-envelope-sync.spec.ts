@@ -260,6 +260,10 @@ test.describe('vault password envelope with sync provider', () => {
   })
 
   test('translates a GitHub 401 and logs only fixed rejection metadata', async () => {
+    test.skip(
+      target.providerId !== E2eSyncProviderId.GitHub,
+      'Requires the GitHub mock provider',
+    )
     if (target.providerId !== E2eSyncProviderId.GitHub || !target.stub) {
       throw new Error('This scenario requires the GitHub mock provider')
     }
@@ -318,6 +322,10 @@ test.describe('vault password envelope with sync provider', () => {
   })
 
   test('reports event-log 403 as a translated sync failure with safe metadata', async () => {
+    test.skip(
+      target.providerId !== E2eSyncProviderId.GitHub,
+      'Requires the GitHub mock provider',
+    )
     if (target.providerId !== E2eSyncProviderId.GitHub || !target.stub) {
       throw new Error('This scenario requires the GitHub mock provider')
     }
