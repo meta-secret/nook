@@ -19,10 +19,15 @@ export class CortexDocumentMapApplication {
   private constructor(
     private readonly request: AuditCortexDocumentMapRequest,
   ) {}
+  private repoRoot = '.';
   static from(
     request: AuditCortexDocumentMapRequest,
   ): CortexDocumentMapApplication {
     return new CortexDocumentMapApplication(request);
+  }
+  withRepoRoot(repoRoot: string): CortexDocumentMapApplication {
+    this.repoRoot = repoRoot;
+    return this;
   }
   execute(): Result<CortexDocumentMapResult, CortexDocumentMapFailure> {
     return new CortexDocumentMapRequestEncoding(this.request)
@@ -33,9 +38,12 @@ export class CortexDocumentMapApplication {
       .andThen((auditRequest) =>
         new CortexDocumentMapResultAcceptance({
           auditRequest,
+          repoRoot: this.repoRoot,
           result: {
             kind: CortexDocumentMapContractKind.Result,
-            findings: CortexDocumentMapAudit.from(auditRequest).execute(),
+            findings: CortexDocumentMapAudit.from(auditRequest)
+              .withRepoRoot(this.repoRoot)
+              .execute(),
           },
         }).execute(),
       );
@@ -59,5 +67,6 @@ export class CortexDocumentMapResultAcceptance {
 }
 export type AcceptCortexDocumentMapResultRequest = {
   readonly auditRequest: AuditCortexDocumentMapRequest;
+  readonly repoRoot?: string;
   readonly result: CortexDocumentMapResult;
 };

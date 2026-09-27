@@ -223,10 +223,16 @@ export class CortexDocumentStructure {
       this.parseDocument(value),
     );
     const catalog = new Map(
-      parsedDocuments.map((document) => [
-        this.normalizeCortexRelativePath(document.relativePath),
-        document,
-      ]),
+      parsedDocuments.map((document) => {
+        const normalizedPath = document.relativePath.replace(/\\/g, '/');
+        const catalogPath =
+          normalizedPath.startsWith('.cortex/') ||
+          normalizedPath.startsWith('./.cortex/') ||
+          !normalizedPath.includes('/')
+            ? this.normalizeCortexRelativePath(normalizedPath)
+            : normalizedPath;
+        return [catalogPath, document] as const;
+      }),
     );
 
     const [rootIndexDoc = false] = [
@@ -505,6 +511,10 @@ export class CortexDocumentStructure {
       }
 
       const targetDoc = args.catalog.get(resolved.targetRelativePath);
+      // Repository links outside Cortex belong to the host's global link audit.
+      if (!resolved.targetRelativePath.startsWith('.cortex/')) {
+        continue;
+      }
       const reference = new CortexChildGraphReference({
         graphPath: args.indexDocument.relativePath,
         indexedPath: resolved.targetRelativePath,
@@ -602,7 +612,9 @@ export class CortexDocumentStructure {
     // Vendored library links are dependencies, not Nook-owned graph entries.
     // The repository link audit still checks their file destinations.
     if (repositoryPath.startsWith('.meta-cortex/')) return false;
-    const targetRelativePath = this.normalizeCortexRelativePath(repositoryPath);
+    const targetRelativePath = repositoryPath.startsWith('.cortex/')
+      ? this.normalizeCortexRelativePath(repositoryPath)
+      : repositoryPath;
 
     return {
       targetRelativePath,

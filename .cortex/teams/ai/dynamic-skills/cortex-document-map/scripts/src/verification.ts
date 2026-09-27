@@ -113,10 +113,16 @@ export class CortexDocumentMapVerifier {
     readonly findings: CortexStructureFinding[];
   }): void {
     const catalog = new Map(
-      args.documents.map((document) => [
-        this.normalize(document.relativePath),
-        document,
-      ]),
+      args.documents.map((document) => {
+        const normalizedPath = document.relativePath.replace(/\\/gu, '/');
+        const catalogPath =
+          normalizedPath.startsWith('.cortex/') ||
+          normalizedPath.startsWith('./.cortex/') ||
+          !normalizedPath.includes('/')
+            ? this.normalize(normalizedPath)
+            : normalizedPath;
+        return [catalogPath, document] as const;
+      }),
     );
     const [root = false] = [
       ['.cortex/knowledge-graph.md', '.cortex/k-graph.md', '.cortex/INDEX.md']
@@ -309,6 +315,9 @@ export class CortexDocumentMapVerifier {
         continue;
       }
       const [target = false] = [args.catalog.get(resolved.target)];
+      if (!resolved.target.startsWith('.cortex/')) {
+        continue;
+      }
       if (target === false) {
         this.add(args.findings)({
           code: CortexStructureFindingCode.InvalidIndexEntry,
@@ -409,7 +418,9 @@ export class CortexDocumentMapVerifier {
       ),
     );
     if (repositoryPath.startsWith('.meta-cortex/')) return false;
-    const target = this.normalize(repositoryPath);
+    const target = repositoryPath.startsWith('.cortex/')
+      ? this.normalize(repositoryPath)
+      : repositoryPath;
     return { target, fragment };
   }
 
@@ -467,6 +478,7 @@ export class CortexDocumentMapVerifier {
 
 export type VerifyCortexDocumentMapResultRequest = {
   readonly auditRequest: AuditCortexDocumentMapRequest;
+  readonly repoRoot?: string;
   readonly result: CortexDocumentMapResult;
 };
 

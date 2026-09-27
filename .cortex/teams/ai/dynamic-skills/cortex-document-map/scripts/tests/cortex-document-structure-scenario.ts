@@ -15,7 +15,7 @@ import type {
 } from '../src/cortex-document-structure.ts';
 import { CortexDocumentMapContractKind } from '../src/domain.ts';
 
-const REPO_ROOT = '/repo';
+const REPO_ROOT = path.resolve(import.meta.dir, '../../../../../../../');
 
 export const PIPELINE_GRAPH_PATH =
   '.cortex/teams/delivery-pipeline/knowledge-graph.md';
@@ -61,7 +61,9 @@ export class CortexDocumentMapCortexDocumentStructureScenario {
         content: document.content,
       })),
       excludedDocumentPaths: [],
-    }).execute();
+    })
+      .withRepoRoot(REPO_ROOT)
+      .execute();
     expect(result.map((value) => value.findings)).toEqual(ok(expected));
     return expected;
   }

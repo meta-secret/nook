@@ -9,24 +9,18 @@ import {
 } from '../src/background/service-worker/session-document'
 import type { CompanionLauncherOpenRequest } from '../src/background/service-worker/session-lifecycle'
 
-type GrantAccessResponse =
-  | {
-      response: {
-        ok: true
-        status:
-          | WebsiteAuthenticatorResponseStatus.Unavailable
-          | WebsiteAuthenticatorResponseStatus.Locked
-      }
-    }
-  | { response: { ok: false; reason: string } }
-  | { grants: [] }
-
 type ExtensionWindowRequest = {
   url: string
 }
 
 type AccountPickerSessions =
   (typeof import('../src/background/service-worker/account-pickers'))['accountPickerSessions']
+type WebsiteLoginOptionsDependencies = NonNullable<
+  Parameters<AccountPickerSessions['websiteLoginOptions']>[0]['dependencies']
+>
+type GrantAccessResponse = Awaited<
+  ReturnType<WebsiteLoginOptionsDependencies['availableWebsiteGrants']>
+>
 type LoginAccountAvailabilityRequest = Parameters<
   AccountPickerSessions['loginAccountAvailabilityForOrigin']
 >[0]
@@ -265,6 +259,80 @@ describe('websiteLoginOptions', () => {
     expect(openedUrls).toEqual([
       'chrome-extension://nook/popup/index.html?intent=pair',
     ])
+  })
+
+  test('keeps login options locked and withholds accounts when Continue finds a locked session', async () => {
+    Object.assign(globalThis, {
+      __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
+      chrome: { runtime: { id: 'nook-extension' } },
+    })
+    const { accountPickerSessions } =
+      await import('../src/background/service-worker/account-pickers')
+    const { ExtensionSessionLifecycle } =
+      await import('../src/background/service-worker/session-lifecycle')
+    const sender = websiteSender()
+    const openedLaunchers: CompanionLauncherOpenRequest[] = []
+    const openCompanionLauncherBestEffort = mock(
+      (request: CompanionLauncherOpenRequest) => {
+        openedLaunchers.push(request)
+      },
+    )
+    const grantSuccessStatus:
+      | WebsiteAuthenticatorResponseStatus.Locked
+      | WebsiteAuthenticatorResponseStatus.Unavailable =
+      WebsiteAuthenticatorResponseStatus.Locked
+    const availableWebsiteGrants = mock(() => {
+      const launcherRequest: CompanionLauncherOpenRequest = {
+        intent: OpenCompanionLauncherIntent.PilotAuth,
+        source: ExtensionSessionLifecycle.sourceFromSender(sender),
+      }
+      openCompanionLauncherBestEffort(launcherRequest)
+      return Promise.resolve({
+        response: {
+          ok: true as const,
+          status: grantSuccessStatus,
+        },
+      })
+    })
+    const loginAccountsForOrigin = mock(() => Promise.resolve([]))
+    const loginAccountAvailabilityForOrigin = mock(() =>
+      Promise.resolve({ ok: true as const, accounts: [] }),
+    )
+    const dependencies = {
+      accountPickerAuthorizationCleanupPending: mock(() =>
+        Promise.resolve(false),
+      ),
+      accountPickerAuthorizationGeneration: mock(() =>
+        Promise.resolve('epoch-1'),
+      ),
+      accountPickerAuthorizationIsCurrent: mock(() => true),
+      availableWebsiteGrants,
+      passiveAvailableWebsiteGrants: mock(() =>
+        Promise.resolve({ grants: [] }),
+      ),
+      loginAccountsForOrigin,
+      loginAccountAvailabilityForOrigin,
+      openCompanionLauncherBestEffort,
+    }
+
+    const response = await accountPickerSessions.websiteLoginOptions({
+      message: { payload: { origin: 'https://example.test' } },
+      sender,
+      dependencies,
+    })
+
+    expect(response).toEqual({
+      ok: true,
+      status: WebsiteAuthenticatorResponseStatus.Locked,
+    })
+    expect(openedLaunchers).toEqual([
+      {
+        intent: OpenCompanionLauncherIntent.PilotAuth,
+        source: ExtensionSessionLifecycle.sourceFromSender(sender),
+      },
+    ])
+    expect(loginAccountsForOrigin).not.toHaveBeenCalled()
+    expect(loginAccountAvailabilityForOrigin).not.toHaveBeenCalled()
   })
 
   test('withholds direct account results invalidated during lookup', async () => {
