@@ -234,6 +234,12 @@ export enum ListGithubStubDirResultType {
   Dir = 'dir',
 }
 
+export enum GithubStubFailureScenario {
+  None = 'none',
+  UserUnauthorized = 'user-unauthorized',
+  EventLogForbidden = 'event-log-forbidden',
+}
+
 export function listGithubStubDir(
   eventFiles: Map<string, string>,
   relativePath: string,
@@ -276,6 +282,12 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
   let vaultYaml = initialYaml
   let revision = 0
   let sha = 'e2e-stub-sha-0'
+  let failureScenario = GithubStubFailureScenario.None
+  const failureResponses: Array<{
+    method: string
+    path: string
+    status: number
+  }> = []
   const eventFiles = new Map<string, string>()
   const eventShas = new Map<string, string>()
   const bumpSha = () => {
@@ -293,6 +305,11 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
     getEventFileCount: () => eventFiles.size,
     getEventFilePaths: () => [...eventFiles.keys()],
     getEventFileContents: () => [...eventFiles.values()],
+    getFailureResponses: () => [...failureResponses],
+    setFailureScenario: (scenario: GithubStubFailureScenario) => {
+      failureScenario = scenario
+      failureResponses.length = 0
+    },
     clearEventFiles: () => {
       eventFiles.clear()
       eventShas.clear()
@@ -317,6 +334,15 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
         const method = request.method()
 
         if (url === 'https://api.github.com/user') {
+          if (failureScenario === GithubStubFailureScenario.UserUnauthorized) {
+            failureResponses.push({ method, path: '/user', status: 401 })
+            await route.fulfill({
+              status: 401,
+              contentType: 'application/json',
+              body: JSON.stringify({ message: 'Bad credentials' }),
+            })
+            return
+          }
           await route.fulfill({
             status: 200,
             contentType: 'application/json',
@@ -427,6 +453,21 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
           return
         }
         if (url.startsWith(`${contentsPrefix}nook-log/`)) {
+          if (failureScenario === GithubStubFailureScenario.EventLogForbidden) {
+            failureResponses.push({
+              method,
+              path: url.slice('https://api.github.com'.length),
+              status: 403,
+            })
+            await route.fulfill({
+              status: 403,
+              contentType: 'application/json',
+              body: JSON.stringify({
+                message: 'Resource not accessible by integration',
+              }),
+            })
+            return
+          }
           const relativePath = url.slice(contentsPrefix.length)
           if (method === 'PUT') {
             const body = requireRecord(
