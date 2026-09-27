@@ -20,7 +20,7 @@ function taskBlock(taskfile: string, name: string) {
 
   const bodyStart = start + header.length
   const remaining = taskfile.slice(bodyStart)
-  const nextTarget = remaining.search(/^  [A-Za-z0-9:_-]+:$/m)
+  const nextTarget = remaining.search(/^ {2}[A-Za-z0-9:_-]+:$/m)
   return remaining.slice(0, nextTarget === -1 ? remaining.length : nextTarget)
 }
 
