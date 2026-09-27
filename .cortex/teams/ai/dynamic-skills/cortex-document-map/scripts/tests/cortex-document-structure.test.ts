@@ -87,16 +87,42 @@ test('treats vendored skills as dependencies rather than Nook graph ownership', 
   ).toEqual([]);
 });
 
-test('does not index repository documents outside the root Cortex graph', () => {
-  const document =
+test('resolves repository documents outside the root Cortex graph', () => {
+  const graph =
     CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
       path: '.cortex/knowledge-graph.md',
       content:
         '# Nook graph\n\n- [Nook app architecture](../nook-app/.cortex/docs/architecture/index.md)\n',
     });
+  const architecture =
+    CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
+      path: 'nook-app/.cortex/docs/architecture/index.md',
+      content: '# Nook App Architecture\n',
+    });
   expect(
-    CortexDocumentMapCortexDocumentStructureScenario.audit([document]),
+    CortexDocumentMapCortexDocumentStructureScenario.audit([
+      graph,
+      architecture,
+    ]),
   ).toEqual([]);
+
+  const missingArchitecture =
+    CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
+      path: '.cortex/knowledge-graph.md',
+      content:
+        '# Nook graph\n\n- [Missing architecture](../nook-app/.cortex/docs/architecture/missing.md)\n',
+    });
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.audit([
+      missingArchitecture,
+    ]),
+  ).toContainEqual({
+    code: CortexStructureFindingCode.InvalidIndexEntry,
+    file: '.cortex/knowledge-graph.md',
+    line: 3,
+    message:
+      'Index link points to non-existent document: nook-app/.cortex/docs/architecture/missing.md',
+  });
 });
 
 test('accepts document-level team and shared graphs', () => {
