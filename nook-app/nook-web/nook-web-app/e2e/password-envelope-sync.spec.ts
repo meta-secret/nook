@@ -15,8 +15,13 @@ import {
   seedExtraOauthFileProviders,
   seedLocalVaultYamlForEnrollment,
   readLocalVaultYamlFromIdb,
+  readNookLogEntries,
+  readNookLogSnapshot,
+  readRawAuthProvidersFromIdb,
   submitOnboardEnrollmentCode,
   enrollmentCodeFromLink,
+  triggerVaultSyncRefresh,
+  waitForVaultOperationsIdle,
   UI_TIMEOUT_MS,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   uniqueSecretKey,
@@ -30,12 +35,14 @@ import {
 } from './helpers'
 import {
   createSyncTarget,
+  E2eSyncProviderId,
   installSyncRemote,
   installSyncRemoteOnPages,
   connectSyncGenesisDevice,
   waitForSyncRemoteState,
   type SyncE2eTarget,
 } from './sync-provider'
+import { GithubStubFailureScenario } from './helpers/local-sync'
 import { PasswordEnvelopeCiphertextStateKind } from './vault-yaml'
 
 test.describe('vault password envelope with sync provider', () => {
@@ -251,5 +258,128 @@ test.describe('vault password envelope with sync provider', () => {
     expect(yaml.hasPasswordEnvelope).toBe(false)
     expect(yaml.authPkIds.length).toBeGreaterThanOrEqual(1)
     expect(yaml.secretIds.length).toBeGreaterThanOrEqual(1)
+  })
+
+  test('translates a GitHub 401 and logs only fixed rejection metadata', async () => {
+    if (target.providerId !== E2eSyncProviderId.GitHub || !target.stub) {
+      throw new Error('This scenario requires the GitHub mock provider')
+    }
+    const stub = target.stub
+    const fixtureToken = 'fixture-rejected-token-not-a-pat'
+    stub.setFailureScenario(GithubStubFailureScenario.UserUnauthorized)
+    const logCountBefore = (await readNookLogEntries(deviceA, 500)).length
+
+    await openStorageSettings(deviceA)
+    await expandSettingsSection(deviceA, 'storage')
+    await deviceA.getByTestId('add-provider-btn').first().click()
+    await deviceA.getByTestId('provider-option-github').click()
+    await deviceA.getByTestId('github-repo-input').fill('e2e-rejected-repo')
+    await deviceA.getByTestId('github-pat-input').fill(fixtureToken)
+    await deviceA.getByTestId('connect-provider-btn').click()
+
+    await expect(deviceA.getByTestId('vault-error')).toContainText(
+      'GitHub rejected this token (401). Check that it is active and has access to the selected repository.',
+    )
+    expect(stub.getFailureResponses().length).toBeGreaterThan(0)
+    expect(
+      stub
+        .getFailureResponses()
+        .every(
+          (response) => response.path === '/user' && response.status === 401,
+        ),
+    ).toBe(true)
+    const logEntries = await readNookLogEntries(deviceA, 500)
+    const assessmentWarning = logEntries
+      .slice(logCountBefore)
+      .find((entry) => entry.message === 'provider vault assessment failed')
+    expect(assessmentWarning?.data).toBe(
+      JSON.stringify({
+        provider_type: 'github',
+        failure_kind: 'github-token-rejected',
+        http_status: 401,
+      }),
+    )
+    expect(JSON.stringify(assessmentWarning)).not.toContain(fixtureToken)
+    expect(await deviceA.locator('body').innerText()).not.toContain(
+      fixtureToken,
+    )
+    expect(await deviceA.content()).not.toContain(fixtureToken)
+    await expect(deviceA.getByTestId('github-pat-input')).toHaveCount(0)
+    const storedProviders = await readRawAuthProvidersFromIdb(deviceA)
+    expect(JSON.stringify(storedProviders)).not.toContain(fixtureToken)
+
+    const cancelSetup = deviceA.getByTestId('cancel-provider-setup')
+    if ((await cancelSetup.count()) > 0) await cancelSetup.click()
+    const cancelAdd = deviceA.getByTestId('cancel-add-provider-btn')
+    if ((await cancelAdd.count()) > 0) await cancelAdd.click()
+    await expect(
+      deviceA.locator('[data-testid^="sync-provider-"]').first(),
+    ).toBeVisible()
+    stub.setFailureScenario(GithubStubFailureScenario.None)
+  })
+
+  test('reports event-log 403 as a translated sync failure with safe metadata', async () => {
+    if (target.providerId !== E2eSyncProviderId.GitHub || !target.stub) {
+      throw new Error('This scenario requires the GitHub mock provider')
+    }
+    await deviceB.close()
+    const stub = target.stub
+    stub.setFailureScenario(GithubStubFailureScenario.EventLogForbidden)
+    await deviceA.getByTestId('vault-secrets-tab').click()
+    const eventKey = uniqueSecretKey('e2e-github-permission-event')
+    await deviceA.getByTestId('add-secret-btn').click()
+    await deviceA.getByTestId('add-secret-panel').waitFor({ state: 'visible' })
+    await deviceA.getByTestId('item-type-api-key').click()
+    await deviceA.getByTestId('secret-label').fill(eventKey)
+    await deviceA
+      .getByTestId('secret-value')
+      .fill('fixture event for GitHub repository permission coverage')
+    await deviceA.getByTestId('save-secret-btn').click()
+    await waitForVaultOperationsIdle(deviceA)
+
+    const expectedFailureContext = JSON.stringify({
+      provider_type: 'github',
+      failure_kind: 'operation-failed',
+    })
+    const logSnapshotBeforeRefresh = await readNookLogSnapshot(deviceA, {
+      limit: 5000,
+    })
+    const failureCountBeforeRefresh = logSnapshotBeforeRefresh.entries.filter(
+      (entry) =>
+        entry.message === 'provider synchronization failed' &&
+        entry.data === expectedFailureContext,
+    ).length
+
+    await triggerVaultSyncRefresh(deviceA)
+    const failureResponses = stub.getFailureResponses()
+    expect(failureResponses).toContainEqual(
+      expect.objectContaining({
+        status: 403,
+        path: expect.stringContaining('/contents/nook-log/'),
+      }),
+    )
+    const refreshLogSnapshot = await readNookLogSnapshot(deviceA, {
+      limit: 5000,
+    })
+    const synchronizationFailures = refreshLogSnapshot.entries.filter(
+      (entry) =>
+        entry.message === 'provider synchronization failed' &&
+        entry.data === expectedFailureContext,
+    )
+    expect(synchronizationFailures.length).toBeGreaterThan(
+      failureCountBeforeRefresh,
+    )
+    const synchronizationFailure =
+      synchronizationFailures[synchronizationFailures.length - 1]
+    expect(synchronizationFailure?.level).toBe('warn')
+    expect(synchronizationFailure?.data).toBe(expectedFailureContext)
+    await expect(deviceA.getByTestId('vault-error')).toContainText(
+      'Sync failed for this provider.',
+    )
+
+    expect(JSON.stringify(refreshLogSnapshot.entries)).not.toContain(target.pat)
+    expect(JSON.stringify(refreshLogSnapshot.entries)).not.toContain(
+      'Resource not accessible by integration',
+    )
   })
 })
