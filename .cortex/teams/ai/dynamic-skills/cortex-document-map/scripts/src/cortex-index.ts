@@ -309,6 +309,10 @@ context.
 
 - [Prime, single Team Gizmo, and delivery](gizmo-prime/knowledge-graph.md)
 
+## Project-local context
+
+- [Nook application architecture](../nook-app/.cortex/docs/architecture/index.md)
+
 ## Product and operational contexts
 
 - [AI](teams/ai/knowledge-graph.md)
