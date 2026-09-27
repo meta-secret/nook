@@ -336,13 +336,19 @@ test.describe('vault password envelope with sync provider', () => {
     const failureCountBeforeSave = stub.getFailureResponses().length
     await deviceA.getByTestId('save-secret-btn').click()
     await waitForVaultOperationsIdle(deviceA)
+    await expect
+      .poll(() => stub.getFailureResponses().length, {
+        intervals: [100, 250, 500],
+        timeout: 5000,
+      })
+      .toBeGreaterThan(failureCountBeforeSave)
 
     const failureResponses = stub.getFailureResponses()
     const failureCountAfterSave = failureResponses.length
     const safeErrorMessageState = await deviceA.evaluate(() => {
-      const errorMsg = (
-        window as Window & { __nookVault?: { errorMsg?: string } }
-      ).__nookVault?.errorMsg ?? ''
+      const errorMsg =
+        (window as Window & { __nookVault?: { errorMsg?: string } }).__nookVault
+          ?.errorMsg ?? ''
       switch (errorMsg) {
         case 'Sync failed for this provider.':
           return 'generic-provider-sync-failed'
