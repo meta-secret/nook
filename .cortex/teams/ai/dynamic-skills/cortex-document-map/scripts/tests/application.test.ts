@@ -88,11 +88,11 @@ test('keeps documents outside the vendored library in graph validation', () => {
     },
     {
       url: '../.meta-cortex-copy/AGENTS.md',
-      target: '.cortex/.meta-cortex-copy/AGENTS.md',
+      target: '.meta-cortex-copy/AGENTS.md',
     },
     {
       url: '../.meta-cortex/../missing.md',
-      target: '.cortex/missing.md',
+      target: 'missing.md',
     },
   ];
   for (const localLink of localLinks) {

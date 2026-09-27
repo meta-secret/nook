@@ -93,16 +93,8 @@ test('resolves repository documents outside the root Cortex graph', () => {
     content:
       '# Nook graph\n\n- [Nook app architecture](../nook-app/.cortex/docs/architecture/index.md)\n',
   });
-  const architecture =
-    CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
-      path: 'nook-app/.cortex/docs/architecture/index.md',
-      content: '# Nook App Architecture\n',
-    });
   expect(
-    CortexDocumentMapCortexDocumentStructureScenario.audit([
-      graph,
-      architecture,
-    ]),
+    CortexDocumentMapCortexDocumentStructureScenario.audit([graph]),
   ).toEqual([]);
 
   const missingArchitecture =

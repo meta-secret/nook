@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { existsSync } from 'node:fs';
 
 // Semantic implementation for the Cortex document-map executable skill.
 import GithubSlugger from 'github-slugger';
@@ -511,6 +512,12 @@ export class CortexDocumentStructure {
       }
 
       const targetDoc = args.catalog.get(resolved.targetRelativePath);
+      if (
+        !resolved.targetRelativePath.startsWith('.cortex/') &&
+        existsSync(path.join(args.repoRoot, resolved.targetRelativePath))
+      ) {
+        continue;
+      }
       const reference = new CortexChildGraphReference({
         graphPath: args.indexDocument.relativePath,
         indexedPath: resolved.targetRelativePath,

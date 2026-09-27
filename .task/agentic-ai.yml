@@ -23,6 +23,21 @@ tasks:
     cmds:
       - bun "{{.REPO_ROOT}}/agentic-ai/loom/src/executable-skills/package-gate-cli.ts" verify "{{.REPO_ROOT}}"
 
+  skills:verify:document-map:
+    desc: Check the Cortex document-map skill and its focused graph tests.
+    deps: [skills:install]
+    cmds:
+      - bun run --cwd "{{.REPO_ROOT}}/.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts" format:check
+      - bun run --cwd "{{.REPO_ROOT}}/.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts" lint
+      - bun run --cwd "{{.REPO_ROOT}}/.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts" check
+      - bun test --cwd "{{.REPO_ROOT}}/.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts" tests/application.test.ts tests/cortex-document-structure.test.ts tests/result-contract.test.ts
+
+  skills:format:document-map:
+    desc: Format the Cortex document-map executable skill.
+    deps: [skills:install]
+    cmds:
+      - bun run --cwd "{{.REPO_ROOT}}/.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts" format
+
   skills:run:
     desc: Run one executable skill action from strict YAML (REQUEST_YAML='<yaml>').
     deps: [skills:install]

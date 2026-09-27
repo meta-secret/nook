@@ -15,9 +15,15 @@ export class CortexDocumentMapAudit {
   private constructor(
     private readonly request: AuditCortexDocumentMapRequest,
   ) {}
+  private repoRoot = '.';
 
   static from(request: AuditCortexDocumentMapRequest): CortexDocumentMapAudit {
     return new CortexDocumentMapAudit(request);
+  }
+
+  withRepoRoot(repoRoot: string): CortexDocumentMapAudit {
+    this.repoRoot = repoRoot;
+    return this;
   }
 
   public execute(): CortexStructureFinding[] {
@@ -49,7 +55,7 @@ export class CortexDocumentMapAudit {
     const structureFindings = CortexDocumentStructure.from({
       documents: structureDocuments,
       excludedDocumentPaths: invalidSyntaxPaths,
-      repoRoot: '.',
+      repoRoot: this.repoRoot,
     }).execute();
     return [...syntaxFindings, ...structureFindings];
   }
