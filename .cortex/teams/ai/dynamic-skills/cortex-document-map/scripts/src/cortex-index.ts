@@ -310,6 +310,10 @@ context.
 - [Nook application architecture](../nook-app/.cortex/docs/architecture/index.md)
 - [Nook application specifications](../nook-app/.cortex/docs/spec/index.md)
 
+## Project-local context
+
+- [Nook application architecture](../nook-app/.cortex/docs/architecture/index.md)
+
 ## Product and operational contexts
 
 - [AI](teams/ai/index.md)

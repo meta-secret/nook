@@ -78,12 +78,13 @@ export class OAuthFailure {
         return I18N_KEYS.ProviderSetupIcloudSharedIdentifierMissing;
       case OAuthFailureKind.SharedConnection:
         return I18N_KEYS.ProviderSetupIcloudSharedConnectFailed;
+      case OAuthFailureKind.TimedOut:
+        return I18N_KEYS.ProviderSetupIcloudSignInTimeout;
       case OAuthFailureKind.CloudKitScript:
       case OAuthFailureKind.CloudKitUnavailable:
       case OAuthFailureKind.CloudKitAuthentication:
       case OAuthFailureKind.ControlUnavailable:
       case OAuthFailureKind.TokenUnavailable:
-      case OAuthFailureKind.TimedOut:
       case OAuthFailureKind.Cancelled:
       case OAuthFailureKind.PopupBlocked:
       case OAuthFailureKind.CleanupFailed:

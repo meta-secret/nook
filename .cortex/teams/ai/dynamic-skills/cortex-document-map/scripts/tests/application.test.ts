@@ -80,7 +80,7 @@ test('treats vendored Meta-Cortex links as external graph dependencies', () => {
   }
 });
 
-test('keeps documents outside the vendored library in graph validation', () => {
+test('validates Cortex links and delegates other repository links to the host', () => {
   const localLinks: readonly MissingGraphDocument[] = [
     {
       url: '.meta-cortex/AGENTS.md',
@@ -88,11 +88,11 @@ test('keeps documents outside the vendored library in graph validation', () => {
     },
     {
       url: '../.meta-cortex-copy/AGENTS.md',
-      target: '.cortex/.meta-cortex-copy/AGENTS.md',
+      target: '.meta-cortex-copy/AGENTS.md',
     },
     {
       url: '../.meta-cortex/../missing.md',
-      target: '.cortex/missing.md',
+      target: 'missing.md',
     },
   ];
   for (const localLink of localLinks) {
@@ -102,14 +102,16 @@ test('keeps documents outside the vendored library in graph validation', () => {
     const request = CortexDocumentMapApplicationScenario.request(graph);
     const expected: CortexDocumentMapResult = {
       kind: CortexDocumentMapContractKind.Result,
-      findings: [
-        {
-          code: CortexStructureFindingCode.InvalidIndexEntry,
-          file: '.cortex/index.md',
-          line: 3,
-          message: `Index link points to non-existent document: ${localLink.target}`,
-        },
-      ],
+      findings: localLink.target.startsWith('.cortex/')
+        ? [
+            {
+              code: CortexStructureFindingCode.InvalidIndexEntry,
+              file: '.cortex/index.md',
+              line: 3,
+              message: `Index link points to non-existent document: ${localLink.target}`,
+            },
+          ]
+        : [],
     };
     expect(CortexDocumentMapApplication.from(request).execute()).toEqual(
       ok(expected),
