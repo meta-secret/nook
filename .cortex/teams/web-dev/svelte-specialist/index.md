@@ -1,4 +1,4 @@
-# Svelte Specialist Knowledge Graph
+# Svelte Specialist Index
 
 Load only the authority needed for the assigned Svelte packet.
 
@@ -7,8 +7,8 @@ Load only the authority needed for the assigned Svelte packet.
 - [Svelte Specialist contract](AGENTS.md)
 - [Web Development Team Gizmo contract](../gizmo/AGENTS.md)
 - [Web Development team contract](../AGENTS.md)
-- [Web Development team knowledge graph](../knowledge-graph.md)
-- [Gizmo Prime knowledge graph](../../../gizmo-prime/knowledge-graph.md)
+- [Web Development team index](../index.md)
+- [Gizmo Prime index](../../../gizmo-prime/index.md)
 
 ## Specialist focus
 

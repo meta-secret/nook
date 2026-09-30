@@ -6,49 +6,49 @@
       "kind": "category",
       "authority": "gizmo-prime",
       "title": "Gizmo Prime",
-      "locator": ".cortex/gizmo-prime/knowledge-graph.md"
+      "locator": ".cortex/gizmo-prime/index.md"
     },
     {
       "id": "CX-AI",
       "kind": "category",
       "authority": "ai",
       "title": "AI",
-      "locator": ".cortex/teams/ai/knowledge-graph.md"
+      "locator": ".cortex/teams/ai/index.md"
     },
     {
       "id": "CX-CORE",
       "kind": "category",
       "authority": "development-core",
       "title": "Development core",
-      "locator": ".cortex/teams/dev-core/knowledge-graph.md"
+      "locator": ".cortex/teams/dev-core/index.md"
     },
     {
       "id": "CX-SEC",
       "kind": "category",
       "authority": "security",
       "title": "Security",
-      "locator": ".cortex/teams/security/knowledge-graph.md"
+      "locator": ".cortex/teams/security/index.md"
     },
     {
       "id": "CX-SRE",
       "kind": "category",
       "authority": "sre",
       "title": "SRE",
-      "locator": ".cortex/teams/sre/knowledge-graph.md"
+      "locator": ".cortex/teams/sre/index.md"
     },
     {
       "id": "CX-WEB",
       "kind": "category",
       "authority": "web-development",
       "title": "Web development",
-      "locator": ".cortex/teams/web-dev/knowledge-graph.md"
+      "locator": ".cortex/teams/web-dev/index.md"
     },
     {
       "id": "CX-SHARED",
       "kind": "category",
       "authority": "shared",
       "title": "Shared",
-      "locator": ".cortex/shared/knowledge-graph.md"
+      "locator": ".cortex/shared/index.md"
     },
     {
       "id": "CX-AI-4D7NQ",

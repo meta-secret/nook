@@ -29,8 +29,8 @@ export class CortexIdentifiersFixture {
     const cortexRoot = join(repoRoot, '.cortex');
     await mkdir(cortexRoot);
     await writeFile(
-      join(cortexRoot, 'knowledge-graph.md'),
-      '# Knowledge graph\n',
+      join(cortexRoot, 'index.md'),
+      '# Index\n',
       'utf8',
     );
     await writeFile(
@@ -74,7 +74,7 @@ export class CortexIdentifiersFixture {
       kind: CortexIdentifierKind.Category,
       authority: 'ai',
       title: 'AI',
-      locator: '.cortex/knowledge-graph.md',
+      locator: '.cortex/index.md',
     };
   }
 }

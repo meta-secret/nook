@@ -21,7 +21,7 @@ implementation of security controls.
 ## Nook context authorities
 
 Follow Meta-Cortex [assignment context](../../../.meta-cortex/teams/AGENTS.md#assignment-context)
-for generic context selection. The Nook [development core graph](knowledge-graph.md)
+for generic context selection. The Nook [development core graph](index.md)
 catalogs the product specifications, design authorities, and linked upstream
 Rust skills used by this context.
 

@@ -5,7 +5,7 @@
 Apply the [upstream role](../../../../.meta-cortex/teams/ai-team/agents/tech-writer/AGENTS.md) with the project context
 and skill prerequisites supplied by Nook Team Gizmo.
 
-Nook scope: Nook instructions, specifications, skill integration, and knowledge graphs.
+Nook scope: Nook instructions, specifications, skill integration, and indexes.
 The assignment supplies the owning Nook team contract, its relevant product
 authorities, bounded files, worktree, and delivery constraints.
 Return scoped implementation evidence and unresolved blockers to Team Gizmo.

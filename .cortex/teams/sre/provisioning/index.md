@@ -1,4 +1,4 @@
-# Provisioning and CI/CD Knowledge Graph
+# Provisioning and CI/CD Index
 
 Load only the authority needed for the assigned provisioning packet.
 
@@ -7,8 +7,8 @@ Load only the authority needed for the assigned provisioning packet.
 - [Provisioning and CI/CD adapter](AGENTS.md)
 - [SRE Team Gizmo contract](../gizmo/AGENTS.md)
 - [SRE team contract](../AGENTS.md)
-- [SRE team knowledge graph](../knowledge-graph.md)
-- [Gizmo Prime knowledge graph](../../../gizmo-prime/knowledge-graph.md)
+- [SRE team index](../index.md)
+- [Gizmo Prime index](../../../gizmo-prime/index.md)
 
 ## Specialist focus
 

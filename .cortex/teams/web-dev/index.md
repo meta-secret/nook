@@ -1,4 +1,4 @@
-# Web Development Knowledge Graph
+# Web Development Index
 
 Load only the category that owns the assigned browser-facing functionality.
 
@@ -42,6 +42,6 @@ when the selected authority links them as read-only engineering policy.
 
 ## Team topology
 
-- [Web Development Team Gizmo](gizmo/knowledge-graph.md) coordinates bounded Web Development mechanics.
-- [TypeScript specialist](typescript-specialist/knowledge-graph.md) handles packeted TypeScript implementation work.
-- [Svelte specialist](svelte-specialist/knowledge-graph.md) handles packeted Svelte presentation and interaction work.
+- [Web Development Team Gizmo](gizmo/index.md) coordinates bounded Web Development mechanics.
+- [TypeScript specialist](typescript-specialist/index.md) handles packeted TypeScript implementation work.
+- [Svelte specialist](svelte-specialist/index.md) handles packeted Svelte presentation and interaction work.

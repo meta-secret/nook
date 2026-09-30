@@ -141,7 +141,7 @@ test('limits enforcement to affected prose in changed Cortex Markdown', () => {
       ].join('\n'),
     );
     writeFileSync(
-      path.join(fixture.repoRoot, '.cortex/knowledge-graph.md'),
+      path.join(fixture.repoRoot, '.cortex/index.md'),
       '# Graph; route; policy.\n',
     );
     writeFileSync(
@@ -155,7 +155,7 @@ test('limits enforcement to affected prose in changed Cortex Markdown', () => {
     const report = ChangedCortexDensityScenario.lintFixture(reportArgs);
     expect(report.checkedPaths).toEqual([
       '.cortex/changed.md',
-      '.cortex/knowledge-graph.md',
+      '.cortex/index.md',
       '.cortex/legacy.md',
     ]);
     expect(report.findings.length).toBeGreaterThan(0);
@@ -169,7 +169,7 @@ test('limits enforcement to affected prose in changed Cortex Markdown', () => {
       })),
     ).toEqual([
       { file: '.cortex/changed.md', line: 1 },
-      { file: '.cortex/knowledge-graph.md', line: 1 },
+      { file: '.cortex/index.md', line: 1 },
     ]);
   } finally {
     rmSync(fixture.repoRoot, REMOVE_OPTIONS);

@@ -1,4 +1,4 @@
-# TypeScript Specialist Knowledge Graph
+# TypeScript Specialist Index
 
 Load only the authority needed for the assigned TypeScript packet.
 
@@ -7,8 +7,8 @@ Load only the authority needed for the assigned TypeScript packet.
 - [TypeScript Specialist contract](AGENTS.md)
 - [Web Development Team Gizmo contract](../gizmo/AGENTS.md)
 - [Web Development team contract](../AGENTS.md)
-- [Web Development team knowledge graph](../knowledge-graph.md)
-- [Gizmo Prime knowledge graph](../../../gizmo-prime/knowledge-graph.md)
+- [Web Development team index](../index.md)
+- [Gizmo Prime index](../../../gizmo-prime/index.md)
 
 ## Specialist focus
 

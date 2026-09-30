@@ -1,4 +1,4 @@
-# Gizmo Prime Knowledge Graph
+# Gizmo Prime Index
 
 ## Prime authority
 

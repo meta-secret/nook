@@ -14,9 +14,13 @@ Meta-Cortex owns generic graph and article rules. Follow its
 [knowledge-graph practice](../../../../../.meta-cortex/teams/ai-team/agents/tech-writer/skills/context-engineering/practices/knowledge-graphs.md)
 and [article-structure practice](../../../../../.meta-cortex/teams/ai-team/agents/tech-writer/skills/context-engineering/practices/article-structure.md).
 Nook graph placement and topology are defined below and in the
-[root knowledge graph](../../../../knowledge-graph.md).
+[root index](../../../../index.md).
 
 ## Nook graph topology
+
+Every Nook navigation document is named `index.md`. Existing subject catalogs
+keep that same filename. The document-map tooling uses root, owner, and child
+indexes directly, without alternate navigation filenames.
 
 Nook has one root router, a Gizmo Prime graph, six engineering and operational
 owner graphs, and shared knowledge.
@@ -47,7 +51,7 @@ bounded worker assignments.
 
 When adding or moving a Nook document:
 
-1. Select its owning context from the [root graph](../../../../knowledge-graph.md)
+1. Select its owning context from the [root graph](../../../../index.md)
    and confirm placement in that team's graph.
 2. Put the document under its owning context and link it once from that graph.
 3. Remove obsolete ownership links and update direct callers when a path changes.

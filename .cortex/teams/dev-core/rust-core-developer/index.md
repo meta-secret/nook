@@ -1,4 +1,4 @@
-# Rust Core Developer Knowledge Graph
+# Rust Core Developer Index
 
 Load only the authority needed for the assigned Rust core packet.
 
@@ -7,8 +7,8 @@ Load only the authority needed for the assigned Rust core packet.
 - [Rust Core Developer contract](AGENTS.md)
 - [Development Core Team Gizmo contract](../gizmo/AGENTS.md)
 - [Development Core team contract](../AGENTS.md)
-- [Development Core team knowledge graph](../knowledge-graph.md)
-- [Gizmo Prime knowledge graph](../../../gizmo-prime/knowledge-graph.md)
+- [Development Core team index](../index.md)
+- [Gizmo Prime index](../../../gizmo-prime/index.md)
 
 ## Specialist focus
 

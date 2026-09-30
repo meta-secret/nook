@@ -1,10 +1,10 @@
-# Delivery Pipeline Knowledge Graph
+# Delivery Pipeline Index
 
 ## Team authority
 
 - [Delivery Pipeline contract](AGENTS.md)
-- [Team Gizmo knowledge graph](gizmo/knowledge-graph.md)
-- [PR Lifecycle Agent knowledge graph](pr-lifecycle/knowledge-graph.md)
+- [Team Gizmo index](gizmo/index.md)
+- [PR Lifecycle Agent index](pr-lifecycle/index.md)
 
 ## Canonical delivery
 

@@ -87,14 +87,10 @@ export class CortexKnowledgeGraphPath {
       .relative(args.cortexRoot, args.filePath)
       .split(path.sep)
       .join('/');
-    if (
-      relativePath === 'knowledge-graph.md' ||
-      relativePath === 'k-graph.md' ||
-      relativePath === 'INDEX.md'
-    ) {
+    if (relativePath === 'index.md') {
       return CortexMarkdownRole.KnowledgeGraph;
     }
-    return /^(?:gizmo-prime|shared|teams\/(?:ai|dev-core|security|sre|web-dev))\/knowledge-graph\.md$/u.test(
+    return /^(?:gizmo-prime|shared|teams\/(?:ai|dev-core|security|sre|web-dev))\/index\.md$/u.test(
       relativePath,
     )
       ? CortexMarkdownRole.KnowledgeGraph

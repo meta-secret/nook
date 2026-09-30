@@ -1,4 +1,4 @@
-# Rust Auth2 Developer Knowledge Graph
+# Rust Auth2 Developer Index
 
 Load only the authority needed for the assigned Rust Auth2 packet.
 
@@ -7,8 +7,8 @@ Load only the authority needed for the assigned Rust Auth2 packet.
 - [Rust Auth2 Developer contract](AGENTS.md)
 - [Development Core Team Gizmo contract](../gizmo/AGENTS.md)
 - [Development Core team contract](../AGENTS.md)
-- [Development Core team knowledge graph](../knowledge-graph.md)
-- [Gizmo Prime knowledge graph](../../../gizmo-prime/knowledge-graph.md)
+- [Development Core team index](../index.md)
+- [Gizmo Prime index](../../../gizmo-prime/index.md)
 
 ## Specialist focus
 

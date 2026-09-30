@@ -1,4 +1,4 @@
-# SRE Knowledge Graph
+# SRE Index
 
 Load only the category that owns the assigned operational functionality.
 
@@ -41,10 +41,10 @@ action being performed.
 
 ## Team topology
 
-- [SRE Team Gizmo](gizmo/knowledge-graph.md) coordinates bounded SRE-team mechanics.
-- [Provisioning and CI/CD adapter](provisioning/knowledge-graph.md) supplies Nook
+- [SRE Team Gizmo](gizmo/index.md) coordinates bounded SRE-team mechanics.
+- [Provisioning and CI/CD adapter](provisioning/index.md) supplies Nook
   provider and hosted-execution context to upstream operations.
-- [Cloud-native specialist](cloud-native/knowledge-graph.md) handles packeted cloud-native work.
+- [Cloud-native specialist](cloud-native/index.md) handles packeted cloud-native work.
 - [Docker cache specialist contract](docker-cache-specialist/AGENTS.md) and
-  [knowledge graph](docker-cache-specialist/knowledge-graph.md) handle packeted
+  [index](docker-cache-specialist/index.md) handle packeted
   Docker, BuildKit, and compiler-cache performance work.

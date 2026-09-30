@@ -186,7 +186,7 @@ export const TEAM_AUTHORITY_CATALOG: readonly TeamAuthority[] = [
       'Owns Cortex, Loom, agent skills, expert routing, and agent automation.',
     contextPaths: [
       '.cortex/teams/ai/AGENTS.md',
-      '.cortex/teams/ai/knowledge-graph.md',
+      '.cortex/teams/ai/index.md',
     ],
     capabilityBoundary: `AI defines agent capability semantics and acceptance. ${PARENT_OWNED_LIFECYCLE_BOUNDARY}`,
   },
@@ -197,7 +197,7 @@ export const TEAM_AUTHORITY_CATALOG: readonly TeamAuthority[] = [
       'Owns portable Rust behavior, vault behavior, security-control implementation, and typed WASM contracts.',
     contextPaths: [
       '.cortex/teams/dev-core/AGENTS.md',
-      '.cortex/teams/dev-core/knowledge-graph.md',
+      '.cortex/teams/dev-core/index.md',
     ],
     capabilityBoundary: `Development core does not own browser presentation, infrastructure operations, or another team's Cortex authority. ${PARENT_OWNED_LIFECYCLE_BOUNDARY}`,
   },
@@ -208,7 +208,7 @@ export const TEAM_AUTHORITY_CATALOG: readonly TeamAuthority[] = [
       'Owns security architecture, cryptographic policy, trust boundaries, and security acceptance.',
     contextPaths: [
       '.cortex/teams/security/AGENTS.md',
-      '.cortex/teams/security/knowledge-graph.md',
+      '.cortex/teams/security/index.md',
     ],
     capabilityBoundary: `Security owns invariants and acceptance without taking implementation ownership from another team. ${PARENT_OWNED_LIFECYCLE_BOUNDARY}`,
   },
@@ -219,7 +219,7 @@ export const TEAM_AUTHORITY_CATALOG: readonly TeamAuthority[] = [
       'Owns CI/CD, clusters, deployments, runners, containers, and operations.',
     contextPaths: [
       '.cortex/teams/sre/AGENTS.md',
-      '.cortex/teams/sre/knowledge-graph.md',
+      '.cortex/teams/sre/index.md',
     ],
     capabilityBoundary: `SRE does not own product rules, browser presentation, or another team's Cortex authority. ${PARENT_OWNED_LIFECYCLE_BOUNDARY}`,
   },
@@ -230,7 +230,7 @@ export const TEAM_AUTHORITY_CATALOG: readonly TeamAuthority[] = [
       'Owns TypeScript and Svelte engineering expertise, browser presentation, frontend behavior, and extension interaction.',
     contextPaths: [
       '.cortex/teams/web-dev/AGENTS.md',
-      '.cortex/teams/web-dev/knowledge-graph.md',
+      '.cortex/teams/web-dev/index.md',
     ],
     capabilityBoundary: `Web development may implement bounded TypeScript expertise without taking consumer capability semantics or Cortex authority. ${PARENT_OWNED_LIFECYCLE_BOUNDARY}`,
   },
@@ -241,7 +241,7 @@ export const TEAM_AUTHORITY_CATALOG: readonly TeamAuthority[] = [
       'Owns authorized pull-request lifecycle mechanics, including publication, check observation, squash merge, and remote feature-branch cleanup.',
     contextPaths: [
       '.cortex/teams/delivery-pipeline/AGENTS.md',
-      '.cortex/teams/delivery-pipeline/knowledge-graph.md',
+      '.cortex/teams/delivery-pipeline/index.md',
     ],
     capabilityBoundary: `Delivery Pipeline executes authorized GitHub pull-request, merge, and branch-cleanup mechanics. Local feature integration belongs to the upstream integration agent, and Delivery Pipeline does not own functional product implementation or policy verdicts. ${PARENT_OWNED_LIFECYCLE_BOUNDARY}`,
   },
@@ -256,7 +256,7 @@ export const TEAM_GIZMO_CATALOG: readonly TeamGizmoProfile[] = [
       'AI context for the single feature Team Gizmo: bounded routing, context synthesis, and reporting to Gizmo Prime.',
     contextPaths: [
       '.cortex/teams/ai/gizmo/AGENTS.md',
-      '.cortex/teams/ai/gizmo/knowledge-graph.md',
+      '.cortex/teams/ai/gizmo/index.md',
     ],
     parent: 'Gizmo Prime',
     reportingBoundary:
@@ -271,7 +271,7 @@ export const TEAM_GIZMO_CATALOG: readonly TeamGizmoProfile[] = [
       'Development Core context for the single feature Team Gizmo: bounded routing, context synthesis, and reporting to Gizmo Prime.',
     contextPaths: [
       '.cortex/teams/dev-core/gizmo/AGENTS.md',
-      '.cortex/teams/dev-core/gizmo/knowledge-graph.md',
+      '.cortex/teams/dev-core/gizmo/index.md',
     ],
     parent: 'Gizmo Prime',
     reportingBoundary:
@@ -286,7 +286,7 @@ export const TEAM_GIZMO_CATALOG: readonly TeamGizmoProfile[] = [
       'Security context for the single feature Team Gizmo: bounded routing, context synthesis, and reporting to Gizmo Prime.',
     contextPaths: [
       '.cortex/teams/security/gizmo/AGENTS.md',
-      '.cortex/teams/security/gizmo/knowledge-graph.md',
+      '.cortex/teams/security/gizmo/index.md',
     ],
     parent: 'Gizmo Prime',
     reportingBoundary:
@@ -301,7 +301,7 @@ export const TEAM_GIZMO_CATALOG: readonly TeamGizmoProfile[] = [
       'SRE context for the single feature Team Gizmo: bounded routing, context synthesis, and reporting to Gizmo Prime.',
     contextPaths: [
       '.cortex/teams/sre/gizmo/AGENTS.md',
-      '.cortex/teams/sre/gizmo/knowledge-graph.md',
+      '.cortex/teams/sre/gizmo/index.md',
     ],
     parent: 'Gizmo Prime',
     reportingBoundary:
@@ -316,7 +316,7 @@ export const TEAM_GIZMO_CATALOG: readonly TeamGizmoProfile[] = [
       'Web Development context for the single feature Team Gizmo: bounded routing, context synthesis, and reporting to Gizmo Prime.',
     contextPaths: [
       '.cortex/teams/web-dev/gizmo/AGENTS.md',
-      '.cortex/teams/web-dev/gizmo/knowledge-graph.md',
+      '.cortex/teams/web-dev/gizmo/index.md',
     ],
     parent: 'Gizmo Prime',
     reportingBoundary:
@@ -331,7 +331,7 @@ export const TEAM_GIZMO_CATALOG: readonly TeamGizmoProfile[] = [
       'Delivery Pipeline context for the single feature Team Gizmo: bounded mechanics, evidence synthesis, and reporting to Gizmo Prime.',
     contextPaths: [
       '.cortex/teams/delivery-pipeline/gizmo/AGENTS.md',
-      '.cortex/teams/delivery-pipeline/gizmo/knowledge-graph.md',
+      '.cortex/teams/delivery-pipeline/gizmo/index.md',
     ],
     parent: 'Gizmo Prime',
     reportingBoundary:
@@ -350,7 +350,7 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
         'Maintains Loom typed workflows, team-agent catalogs, context resolution, and deterministic AI tooling.',
       contextPaths: [
         '.cortex/teams/ai/loom-specialist/AGENTS.md',
-        '.cortex/teams/ai/loom-specialist/knowledge-graph.md',
+        '.cortex/teams/ai/loom-specialist/index.md',
       ],
       parent: TeamGizmoKey.Ai,
       reportingBoundary:
@@ -362,10 +362,10 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
       team: TeamKey.Ai,
       identity: 'Cortex specialist',
       description:
-        'Maintains Cortex routing, knowledge-graph consistency, context contracts, and agent-authority semantics.',
+        'Maintains Cortex routing, index consistency, context contracts, and agent-authority semantics.',
       contextPaths: [
         '.cortex/teams/ai/cortex-specialist/AGENTS.md',
-        '.cortex/teams/ai/cortex-specialist/knowledge-graph.md',
+        '.cortex/teams/ai/cortex-specialist/index.md',
       ],
       parent: TeamGizmoKey.Ai,
       reportingBoundary:
@@ -380,7 +380,7 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
         'Implements bounded portable Rust core behavior and its behavior-focused tests under Development Core ownership.',
       contextPaths: [
         '.cortex/teams/dev-core/rust-core-developer/AGENTS.md',
-        '.cortex/teams/dev-core/rust-core-developer/knowledge-graph.md',
+        '.cortex/teams/dev-core/rust-core-developer/index.md',
       ],
       parent: TeamGizmoKey.DevelopmentCore,
       reportingBoundary:
@@ -395,7 +395,7 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
         'Implements bounded Rust auth2 behavior and its behavior-focused tests under Development Core ownership.',
       contextPaths: [
         '.cortex/teams/dev-core/rust-auth2-developer/AGENTS.md',
-        '.cortex/teams/dev-core/rust-auth2-developer/knowledge-graph.md',
+        '.cortex/teams/dev-core/rust-auth2-developer/index.md',
       ],
       parent: TeamGizmoKey.DevelopmentCore,
       reportingBoundary:
@@ -410,7 +410,7 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
         'Reviews cryptographic invariants, secret-handling boundaries, and security evidence within the assigned scope.',
       contextPaths: [
         '.cortex/teams/security/cryptography-specialist/AGENTS.md',
-        '.cortex/teams/security/cryptography-specialist/knowledge-graph.md',
+        '.cortex/teams/security/cryptography-specialist/index.md',
       ],
       parent: TeamGizmoKey.Security,
       reportingBoundary:
@@ -425,7 +425,7 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
         'Performs bounded security review of trust boundaries, authorization, and release-impacting changes.',
       contextPaths: [
         '.cortex/teams/security/security-review-specialist/AGENTS.md',
-        '.cortex/teams/security/security-review-specialist/knowledge-graph.md',
+        '.cortex/teams/security/security-review-specialist/index.md',
       ],
       parent: TeamGizmoKey.Security,
       reportingBoundary:
@@ -440,7 +440,7 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
         'Executes bounded CI/CD workflows, diagnostics, and infrastructure provisioning mechanics under SRE ownership.',
       contextPaths: [
         '.cortex/teams/sre/provisioning/AGENTS.md',
-        '.cortex/teams/sre/provisioning/knowledge-graph.md',
+        '.cortex/teams/sre/provisioning/index.md',
       ],
       parent: TeamGizmoKey.Sre,
       reportingBoundary:
@@ -455,7 +455,7 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
         'Maintains bounded cloud-native deployment, container, cluster, and runner mechanics under SRE ownership.',
       contextPaths: [
         '.cortex/teams/sre/cloud-native/AGENTS.md',
-        '.cortex/teams/sre/cloud-native/knowledge-graph.md',
+        '.cortex/teams/sre/cloud-native/index.md',
       ],
       parent: TeamGizmoKey.Sre,
       reportingBoundary:
@@ -470,7 +470,7 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
         'Implements bounded TypeScript state, typed projections, and focused web behavior under Web Development ownership.',
       contextPaths: [
         '.cortex/teams/web-dev/typescript-specialist/AGENTS.md',
-        '.cortex/teams/web-dev/typescript-specialist/knowledge-graph.md',
+        '.cortex/teams/web-dev/typescript-specialist/index.md',
       ],
       parent: TeamGizmoKey.WebDevelopment,
       reportingBoundary:
@@ -485,7 +485,7 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
         'Implements bounded Svelte presentation, browser interaction, and focused web-flow tests under Web Development ownership.',
       contextPaths: [
         '.cortex/teams/web-dev/svelte-specialist/AGENTS.md',
-        '.cortex/teams/web-dev/svelte-specialist/knowledge-graph.md',
+        '.cortex/teams/web-dev/svelte-specialist/index.md',
       ],
       parent: TeamGizmoKey.WebDevelopment,
       reportingBoundary:
@@ -500,7 +500,7 @@ export const TEAM_INTERNAL_AGENT_CATALOG: readonly TeamInternalAgentProfile[] =
         'Executes explicitly authorized pull-request publication, required-check observation, squash merge, and remote feature-branch cleanup for Delivery Pipeline.',
       contextPaths: [
         '.cortex/teams/delivery-pipeline/pr-lifecycle/AGENTS.md',
-        '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md',
+        '.cortex/teams/delivery-pipeline/pr-lifecycle/index.md',
       ],
       parent: TeamGizmoKey.DeliveryPipeline,
       reportingBoundary:

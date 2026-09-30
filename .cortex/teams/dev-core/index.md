@@ -1,4 +1,4 @@
-# Development Core Knowledge Graph
+# Development Core Index
 
 Load only the category that owns the assigned portable product functionality.
 
@@ -48,6 +48,6 @@ Open the narrow design authority for the affected Rust or WASM contract.
 
 ## Team topology
 
-- [Development Core Team Gizmo](gizmo/knowledge-graph.md) coordinates bounded Development Core mechanics.
-- [Rust Core Developer](rust-core-developer/knowledge-graph.md) handles packeted portable Rust core work.
-- [Rust Auth2 Developer](rust-auth2-developer/knowledge-graph.md) handles packeted portable Rust Auth2 work.
+- [Development Core Team Gizmo](gizmo/index.md) coordinates bounded Development Core mechanics.
+- [Rust Core Developer](rust-core-developer/index.md) handles packeted portable Rust core work.
+- [Rust Auth2 Developer](rust-auth2-developer/index.md) handles packeted portable Rust Auth2 work.

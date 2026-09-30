@@ -127,7 +127,7 @@ Gizmo reviews every finding before assigning edits.
 6. Assign dependent consumer changes after their provider contract is
    accepted.
 7. Update canonical Cortex cards when durable guidance changes.
-8. Update the owning knowledge graph when document ownership, path, or
+8. Update the owning index when document ownership, path, or
    discoverability changes.
 9. Run the validation owned by each edit group.
 
@@ -161,7 +161,7 @@ A structural refactor is complete when:
 - legacy material is removed or labeled historical;
 - deterministic mechanics have typed enforcement or remain explicit proposals;
 - tracked harness skill mirrors remain absent;
-- the knowledge graph indexes every owned document exactly once;
+- the index indexes every owned document exactly once;
 - the updated exact head passes its required gates.
 
 Running the same semantic audit again should not propose equivalent churn.

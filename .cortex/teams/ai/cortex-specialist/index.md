@@ -1,4 +1,4 @@
-# Cortex Specialist Knowledge Graph
+# Cortex Specialist Index
 
 Use the Nook AI authorities and packet boundaries relevant to the assigned
 Cortex work.
@@ -7,7 +7,7 @@ Cortex work.
 
 - [Cortex Specialist contract](AGENTS.md)
 - [AI team contract](../AGENTS.md)
-- [AI team knowledge graph](../knowledge-graph.md)
+- [AI team index](../index.md)
 
 ## Specialist focus
 

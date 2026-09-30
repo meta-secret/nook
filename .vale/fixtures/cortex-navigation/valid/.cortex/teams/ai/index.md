@@ -1,8 +1,8 @@
-# AI knowledge graph
+# AI index
 
 ## Relationships
 
-Nested owner knowledge graphs are excluded too.
+Nested owner indexes are excluded too.
 
 ## Document map
 

@@ -19,7 +19,7 @@ test('requires the sole H1 title to be the first document node', () => {
   expect(
     CortexDocumentMapCortexDocumentStructureScenario.audit([
       CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
-        path: '.cortex/knowledge-graph.md',
+        path: '.cortex/index.md',
         content: '# Index\n\n- [Late title](late-title.md)\n',
       }),
       document,
@@ -49,7 +49,7 @@ test('rejects block, inline, comment, and indexed Cortex HTML nodes', () => {
   }
 
   const index = CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
-    path: '.cortex/knowledge-graph.md',
+    path: '.cortex/index.md',
     content: '# Index\n\n<!-- hidden index note -->\n',
   });
   expect(

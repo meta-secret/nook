@@ -1,4 +1,4 @@
-# Loom Specialist Knowledge Graph
+# Loom Specialist Index
 
 Load only the authority needed for the assigned Loom packet.
 
@@ -7,8 +7,8 @@ Load only the authority needed for the assigned Loom packet.
 - [Loom Specialist contract](AGENTS.md)
 - [AI Team Gizmo contract](../gizmo/AGENTS.md)
 - [AI team contract](../AGENTS.md)
-- [AI team knowledge graph](../knowledge-graph.md)
-- [Gizmo Prime knowledge graph](../../../gizmo-prime/knowledge-graph.md)
+- [AI team index](../index.md)
+- [Gizmo Prime index](../../../gizmo-prime/index.md)
 
 ## Specialist focus
 

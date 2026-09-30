@@ -240,7 +240,7 @@ It identifies:
   security skill is required.
 - **Base context:** Every invocation receives these authorities.
   - `.cortex/teams/web-dev/AGENTS.md`
-  - `.cortex/teams/web-dev/knowledge-graph.md`
+  - `.cortex/teams/web-dev/index.md`
   - `.cortex/teams/ai/dynamic-skills/module-expert.md`
   - `.cortex/gizmo-prime/workflows/module-oriented-development.md`
 - **Allowed product authority catalog:** The task selects only the authorities

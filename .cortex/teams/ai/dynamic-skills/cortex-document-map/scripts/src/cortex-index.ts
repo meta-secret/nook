@@ -261,11 +261,7 @@ export class CortexNavigationExtraction {
       const rel = source.relativePath.startsWith('.cortex/')
         ? source.relativePath.slice('.cortex/'.length)
         : source.relativePath;
-      if (
-        rel === 'knowledge-graph.md' ||
-        rel === 'k-graph.md' ||
-        rel === 'INDEX.md'
-      ) {
+      if (rel === 'index.md') {
         continue;
       }
       const parseArgs: ParseDocumentIndexArgs = {
@@ -289,7 +285,7 @@ export class CortexNavigationExtraction {
   }
 }
 
-export const CORTEX_CONTEXT_ROUTER_MARKDOWN = `# Nook Cortex Knowledge Graph
+export const CORTEX_CONTEXT_ROUTER_MARKDOWN = `# Nook Cortex Index
 
 ## Required entry
 
@@ -307,17 +303,22 @@ context.
 
 ## Coordination
 
-- [Prime, single Team Gizmo, and delivery](gizmo-prime/knowledge-graph.md)
+- [Prime, single Team Gizmo, and delivery](gizmo-prime/index.md)
+
+## Project-local context
+
+- [Nook application architecture](../nook-app/.cortex/docs/architecture/index.md)
+- [Nook application specifications](../nook-app/.cortex/docs/spec/index.md)
 
 ## Product and operational contexts
 
-- [AI](teams/ai/knowledge-graph.md)
-- [Development Core](teams/dev-core/knowledge-graph.md)
-- [Security](teams/security/knowledge-graph.md)
-- [SRE](teams/sre/knowledge-graph.md)
-- [Web Development](teams/web-dev/knowledge-graph.md)
-- [Delivery Pipeline](teams/delivery-pipeline/knowledge-graph.md)
-- [Shared knowledge](shared/knowledge-graph.md)
+- [AI](teams/ai/index.md)
+- [Development Core](teams/dev-core/index.md)
+- [Security](teams/security/index.md)
+- [SRE](teams/sre/index.md)
+- [Web Development](teams/web-dev/index.md)
+- [Delivery Pipeline](teams/delivery-pipeline/index.md)
+- [Shared knowledge](shared/index.md)
 `;
 
 export class CortexNavigationStripping {

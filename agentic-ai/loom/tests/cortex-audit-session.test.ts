@@ -280,8 +280,8 @@ test('fails the integrated Cortex audit for rendered Markdown tables', async () 
 `,
     );
     writeFileSync(
-      path.join(cortexRoot, 'knowledge-graph.md'),
-      '# Knowledge Graph\n',
+      path.join(cortexRoot, 'index.md'),
+      '# Index\n',
     );
     writeFileSync(path.join(skillsRoot, 'index.md'), '# Skills\n');
     const request = { includeDensityLint: true };
@@ -349,8 +349,8 @@ Fourth paragraph.
 `,
     );
     writeFileSync(
-      path.join(cortexRoot, 'knowledge-graph.md'),
-      '# Knowledge Graph\n\nRoute one; route two; route three.\n',
+      path.join(cortexRoot, 'index.md'),
+      '# Index\n\nRoute one; route two; route three.\n',
     );
     writeFileSync(path.join(skillsRoot, 'index.md'), '# Skills\n');
     writeFileSync(
@@ -404,7 +404,7 @@ Fourth paragraph.
       report.densityValeAlerts.some(
         (alert) =>
           alert.check === 'NookDensity.Semicolons' &&
-          alert.file.endsWith('/.cortex/knowledge-graph.md'),
+          alert.file.endsWith('/.cortex/index.md'),
       ),
     ).toBe(true);
   } finally {
@@ -427,8 +427,8 @@ test('admits session Markdown only through the global HTML syntax gate', async (
     mkdirSync(skillsRoot, directoryOptions);
     writeFileSync(path.join(cortexRoot, 'AGENTS.md'), '# Agent Map\n');
     writeFileSync(
-      path.join(cortexRoot, 'knowledge-graph.md'),
-      '# Knowledge Graph\n',
+      path.join(cortexRoot, 'index.md'),
+      '# Index\n',
     );
     writeFileSync(path.join(skillsRoot, 'index.md'), '# Skills\n');
     const sessionPath = path.join(sessionRoot, 'current-task.md');
@@ -522,42 +522,42 @@ test('admits Gizmo skill rows without cascading from rejected syntax', async () 
     mkdirSync(path.join(cortexRoot, 'shared'), directoryOptions);
     writeFileSync(path.join(cortexRoot, 'AGENTS.md'), '# Agent Map\n');
     writeFileSync(
-      path.join(cortexRoot, 'knowledge-graph.md'),
-      `# Knowledge Graph
+      path.join(cortexRoot, 'index.md'),
+      `# Index
 
 - [Agent Map](AGENTS.md)
-- [Gizmo](gizmo-prime/knowledge-graph.md)
-- [AI](teams/ai/knowledge-graph.md)
-- [Development core](teams/dev-core/knowledge-graph.md)
-- [Security](teams/security/knowledge-graph.md)
-- [SRE](teams/sre/knowledge-graph.md)
-- [Web development](teams/web-dev/knowledge-graph.md)
-- [Shared](shared/knowledge-graph.md)
+- [Gizmo](gizmo-prime/index.md)
+- [AI](teams/ai/index.md)
+- [Development core](teams/dev-core/index.md)
+- [Security](teams/security/index.md)
+- [SRE](teams/sre/index.md)
+- [Web development](teams/web-dev/index.md)
+- [Shared](shared/index.md)
 `,
     );
     writeFileSync(
-      path.join(aiRoot, 'knowledge-graph.md'),
-      `# AI Knowledge Graph
+      path.join(aiRoot, 'index.md'),
+      `# AI Index
 
 - [Skill index](dynamic-skills/index.md)
 - [Rejected skill](dynamic-skills/bad.md)
 `,
     );
     writeFileSync(
-      path.join(gizmoRoot, 'knowledge-graph.md'),
-      `# Gizmo Knowledge Graph
+      path.join(gizmoRoot, 'index.md'),
+      `# Gizmo Index
 
 ${gizmoGraphRows}
 `,
     );
     for (const graphPath of [
-      path.join(teamsRoot, 'dev-core', 'knowledge-graph.md'),
-      path.join(teamsRoot, 'security', 'knowledge-graph.md'),
-      path.join(teamsRoot, 'sre', 'knowledge-graph.md'),
-      path.join(teamsRoot, 'web-dev', 'knowledge-graph.md'),
-      path.join(cortexRoot, 'shared', 'knowledge-graph.md'),
+      path.join(teamsRoot, 'dev-core', 'index.md'),
+      path.join(teamsRoot, 'security', 'index.md'),
+      path.join(teamsRoot, 'sre', 'index.md'),
+      path.join(teamsRoot, 'web-dev', 'index.md'),
+      path.join(cortexRoot, 'shared', 'index.md'),
     ]) {
-      writeFileSync(graphPath, '# Knowledge Graph\n');
+      writeFileSync(graphPath, '# Index\n');
     }
     writeFileSync(
       path.join(skillsRoot, 'index.md'),
@@ -601,17 +601,17 @@ ${gizmoIndexRows}
         },
         {
           code: CortexStructureFindingCode.MissingIndex,
-          file: '.cortex/teams/delivery-pipeline/knowledge-graph.md',
+          file: '.cortex/teams/delivery-pipeline/index.md',
           line: 1,
           message:
-            'Required owner knowledge graph is missing: .cortex/teams/delivery-pipeline/knowledge-graph.md',
+            'Required owner index is missing: .cortex/teams/delivery-pipeline/index.md',
         },
         {
           code: CortexStructureFindingCode.MissingFromIndex,
-          file: '.cortex/knowledge-graph.md',
+          file: '.cortex/index.md',
           line: 1,
           message:
-            'Root knowledge graph must link the owner graph: .cortex/teams/delivery-pipeline/knowledge-graph.md',
+            'Root index must link the owner graph: .cortex/teams/delivery-pipeline/index.md',
         },
       ],
       articleStructureFindings: [],

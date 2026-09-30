@@ -1,4 +1,4 @@
-# PR Lifecycle Agent Knowledge Graph
+# PR Lifecycle Agent Index
 
 ## Required context
 

@@ -22,17 +22,17 @@ import { tmpdir } from 'node:os';
 const REPO_ROOT = join(import.meta.dir, '../../../..');
 const SRE_CONTEXT_PATHS = [
   '.cortex/teams/sre/AGENTS.md',
-  '.cortex/teams/sre/knowledge-graph.md',
+  '.cortex/teams/sre/index.md',
 ] as const;
 const SRE_DELTA_SKILL =
   '.cortex/teams/sre/dynamic-skills/github-actions-only-validation.md';
 const DELIVERY_PIPELINE_GIZMO_CONTEXT_PATHS = [
   '.cortex/teams/delivery-pipeline/gizmo/AGENTS.md',
-  '.cortex/teams/delivery-pipeline/gizmo/knowledge-graph.md',
+  '.cortex/teams/delivery-pipeline/gizmo/index.md',
 ] as const;
 const DELIVERY_PIPELINE_PR_LIFECYCLE_CONTEXT_PATHS = [
   '.cortex/teams/delivery-pipeline/pr-lifecycle/AGENTS.md',
-  '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md',
+  '.cortex/teams/delivery-pipeline/pr-lifecycle/index.md',
 ] as const;
 
 describe('team task context', () => {

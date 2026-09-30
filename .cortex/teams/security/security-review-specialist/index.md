@@ -1,4 +1,4 @@
-# Security Review Specialist Knowledge Graph
+# Security Review Specialist Index
 
 Load only the authority needed for the assigned security review packet.
 
@@ -7,8 +7,8 @@ Load only the authority needed for the assigned security review packet.
 - [Security Review Specialist contract](AGENTS.md)
 - [Security Team Gizmo contract](../gizmo/AGENTS.md)
 - [Security team contract](../AGENTS.md)
-- [Security team knowledge graph](../knowledge-graph.md)
-- [Gizmo Prime knowledge graph](../../../gizmo-prime/knowledge-graph.md)
+- [Security team index](../index.md)
+- [Gizmo Prime index](../../../gizmo-prime/index.md)
 
 ## Specialist focus
 

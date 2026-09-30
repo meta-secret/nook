@@ -8,7 +8,7 @@ become shared merely because several teams consume one team's expertise.
 
 ## Load boundary
 
-Load [the shared knowledge graph](knowledge-graph.md) only when the assigned
+Load [the shared index](index.md) only when the assigned
 task names a cross-team architecture, catalog, reference, or engineering rule.
 
 - Open only the named shared document.

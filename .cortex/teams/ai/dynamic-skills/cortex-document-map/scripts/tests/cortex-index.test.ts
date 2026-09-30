@@ -66,22 +66,22 @@ Model text.
 
   const renderArgs = { index };
   const markdown = CORTEX_CONTEXT_ROUTER_MARKDOWN;
-  expect(markdown).toContain('# Nook Cortex Knowledge Graph');
+  expect(markdown).toContain('# Nook Cortex Index');
   expect(markdown).toContain('## Product and operational contexts');
   expect(markdown).toContain(
-    '[Prime, single Team Gizmo, and delivery](gizmo-prime/knowledge-graph.md)',
+    '[Prime, single Team Gizmo, and delivery](gizmo-prime/index.md)',
   );
   expect(markdown).not.toContain(
-    '[Gizmo Prime](teams/gizmo/knowledge-graph.md)',
+    '[Gizmo Prime](teams/gizmo/index.md)',
   );
   expect(markdown).toContain(
-    '[Delivery Pipeline](teams/delivery-pipeline/knowledge-graph.md)',
+    '[Delivery Pipeline](teams/delivery-pipeline/index.md)',
   );
   expect(markdown).not.toContain('teams/pr-lifecycle-gizmo/');
   expect(markdown).not.toContain('teams/delivery-pipeline/internal/');
-  expect(markdown).toContain('[AI](teams/ai/knowledge-graph.md)');
-  expect(markdown).toContain('[Security](teams/security/knowledge-graph.md)');
-  expect(markdown).toContain('[Shared knowledge](shared/knowledge-graph.md)');
+  expect(markdown).toContain('[AI](teams/ai/index.md)');
+  expect(markdown).toContain('[Security](teams/security/index.md)');
+  expect(markdown).toContain('[Shared knowledge](shared/index.md)');
   expect(markdown).toContain('meta-cortex-integration.md');
   expect(markdown).toContain(
     '../.meta-cortex/teams/gizmo-team/agents/gizmo/AGENTS.md',
@@ -93,7 +93,7 @@ Model text.
 test('renders the complete canonical Cortex context router', () => {
   const markdown = CORTEX_CONTEXT_ROUTER_MARKDOWN;
   const canonicalRouter = readFileSync(
-    new URL('../../../../../../knowledge-graph.md', import.meta.url),
+    new URL('../../../../../../index.md', import.meta.url),
     'utf8',
   );
 
@@ -103,6 +103,7 @@ test('renders the complete canonical Cortex context router', () => {
 
   const requiredSections = [
     '## Required entry',
+    '## Project-local context',
     '## Product and operational contexts',
   ];
   for (const section of requiredSections) {
@@ -110,13 +111,13 @@ test('renders the complete canonical Cortex context router', () => {
   }
 
   const teamOwnershipContracts = [
-    '[Prime, single Team Gizmo, and delivery](gizmo-prime/knowledge-graph.md)',
-    '[Delivery Pipeline](teams/delivery-pipeline/knowledge-graph.md)',
-    '[AI](teams/ai/knowledge-graph.md)',
-    '[Development Core](teams/dev-core/knowledge-graph.md)',
-    '[Security](teams/security/knowledge-graph.md)',
-    '[SRE](teams/sre/knowledge-graph.md)',
-    '[Web Development](teams/web-dev/knowledge-graph.md)',
+    '[Prime, single Team Gizmo, and delivery](gizmo-prime/index.md)',
+    '[Delivery Pipeline](teams/delivery-pipeline/index.md)',
+    '[AI](teams/ai/index.md)',
+    '[Development Core](teams/dev-core/index.md)',
+    '[Security](teams/security/index.md)',
+    '[SRE](teams/sre/index.md)',
+    '[Web Development](teams/web-dev/index.md)',
   ];
   for (const contract of teamOwnershipContracts) {
     expect(markdown).toContain(contract);
@@ -253,7 +254,7 @@ test('keeps AI acceptance claims aligned with executable enforcement', () => {
 
 test('routes AI and Delivery Pipeline authorities through their owner graphs', () => {
   const aiGraph = readFileSync(
-    new URL('../../../../../../teams/ai/knowledge-graph.md', import.meta.url),
+    new URL('../../../../../../teams/ai/index.md', import.meta.url),
     'utf8',
   );
   const aiSkills = readFileSync(
@@ -272,7 +273,7 @@ test('routes AI and Delivery Pipeline authorities through their owner graphs', (
   );
   const pipelineGraph = readFileSync(
     new URL(
-      '../../../../../../teams/delivery-pipeline/gizmo/knowledge-graph.md',
+      '../../../../../../teams/delivery-pipeline/gizmo/index.md',
       import.meta.url,
     ),
     'utf8',
@@ -296,17 +297,17 @@ test('routes AI and Delivery Pipeline authorities through their owner graphs', (
 test('keeps Delivery Pipeline direct-child ownership in its parent graph', () => {
   const deliveryPipelineGraph = readFileSync(
     new URL(
-      '../../../../../../teams/delivery-pipeline/knowledge-graph.md',
+      '../../../../../../teams/delivery-pipeline/index.md',
       import.meta.url,
     ),
     'utf8',
   );
 
   expect(deliveryPipelineGraph).toContain(
-    '- [Team Gizmo knowledge graph](gizmo/knowledge-graph.md)',
+    '- [Team Gizmo index](gizmo/index.md)',
   );
   expect(deliveryPipelineGraph).toContain(
-    '- [PR Lifecycle Agent knowledge graph](pr-lifecycle/knowledge-graph.md)',
+    '- [PR Lifecycle Agent index](pr-lifecycle/index.md)',
   );
   expect(deliveryPipelineGraph).not.toContain('internal/');
 });

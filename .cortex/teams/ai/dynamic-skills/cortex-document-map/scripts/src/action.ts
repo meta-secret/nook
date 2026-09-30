@@ -40,7 +40,7 @@ export const CORTEX_DOCUMENT_MAP_AUDIT_EXAMPLE = `cortexDocumentMap:
   audit:
     kind: cortex-document-map-audit-v1
     documents:
-      - relativePath: .cortex/knowledge-graph.md
+      - relativePath: .cortex/index.md
         content: |-
           # Cortex Context Router
     excludedDocumentPaths: []
@@ -90,7 +90,7 @@ export const CORTEX_DOCUMENT_MAP_ACTION_DEFINITION = Object.freeze({
   skillId: 'cortex-document-map',
   family: 'cortexDocumentMap',
   operation: 'audit',
-  description: 'Audit Cortex Markdown and owning knowledge-graph topology.',
+  description: 'Audit Cortex Markdown and owning index topology.',
   exampleRequest: "task skills:run REQUEST_YAML='<strict-yaml>'",
   exampleYaml: CORTEX_DOCUMENT_MAP_AUDIT_EXAMPLE,
   resolvedExampleYaml: CORTEX_DOCUMENT_MAP_AUDIT_EXAMPLE,

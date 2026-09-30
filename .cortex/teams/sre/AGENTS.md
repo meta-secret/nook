@@ -34,7 +34,7 @@ runbooks, and deployment authorization remain the execution contract.
 ## Nook context authorities
 
 Follow Meta-Cortex [assignment context](../../../.meta-cortex/teams/AGENTS.md#assignment-context)
-for generic context selection. The Nook [SRE graph](knowledge-graph.md)
+for generic context selection. The Nook [SRE graph](index.md)
 catalogs the platform, workflow, skill, and runbook authorities used by this
 context.
 

@@ -5,7 +5,7 @@
 This catalog links application specifications and repository-wide tooling and
 operational specifications. Application-owned content lives in `nook-app/.cortex/docs/spec/`.
 
-- **Consult during tasks:** Retrieve exact specification anchors from [`.cortex/knowledge-graph.md`](../../knowledge-graph.md) when debugging, interacting with WASM bindings, checking log formats, or using Loom tools.
+- **Consult during tasks:** Retrieve exact specification anchors from [`.cortex/index.md`](../../index.md) when debugging, interacting with WASM bindings, checking log formats, or using Loom tools.
 - **Maintain dynamically:** When tooling commands, logging schemas, WASM binding signatures, or platform operational capabilities change, agents must update the corresponding specification in the same PR.
 - **Consistency:** Treat stale commands or obsolete tool flags in specifications as P1 documentation defects under [`cortex-consistency/SKILL.md`](../../teams/ai/dynamic-skills/cortex-consistency/SKILL.md).
 

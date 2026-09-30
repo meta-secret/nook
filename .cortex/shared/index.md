@@ -1,4 +1,4 @@
-# Shared Knowledge Graph
+# Shared Index
 
 Use this graph only after the root router identifies a named cross-team
 dependency.

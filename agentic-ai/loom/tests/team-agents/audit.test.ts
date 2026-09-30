@@ -177,7 +177,7 @@ describe('canonical Cortex team authority', () => {
       parent: 'Gizmo Prime',
       contextPaths: [
         '.cortex/teams/delivery-pipeline/gizmo/AGENTS.md',
-        '.cortex/teams/delivery-pipeline/gizmo/knowledge-graph.md',
+        '.cortex/teams/delivery-pipeline/gizmo/index.md',
       ],
     });
     expect(internalAgent).toMatchObject({
@@ -187,7 +187,7 @@ describe('canonical Cortex team authority', () => {
       parent: TeamGizmoKey.DeliveryPipeline,
       contextPaths: [
         '.cortex/teams/delivery-pipeline/pr-lifecycle/AGENTS.md',
-        '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md',
+        '.cortex/teams/delivery-pipeline/pr-lifecycle/index.md',
       ],
     });
     expect(provisioningAgent).toMatchObject({
@@ -199,7 +199,7 @@ describe('canonical Cortex team authority', () => {
       parent: TeamGizmoKey.Sre,
       contextPaths: [
         '.cortex/teams/sre/provisioning/AGENTS.md',
-        '.cortex/teams/sre/provisioning/knowledge-graph.md',
+        '.cortex/teams/sre/provisioning/index.md',
       ],
     });
     expect(deliveryPipelineAuthority).toMatchObject({
@@ -363,7 +363,7 @@ describe('canonical Cortex team authority', () => {
           join(REPO_ROOT, '.cortex/teams/ai/dynamic-skills'),
           join(aiRoot, 'dynamic-skills'),
         );
-        await writeFile(join(aiRoot, 'knowledge-graph.md'), 'knowledge\n');
+        await writeFile(join(aiRoot, 'index.md'), 'knowledge\n');
         if (contextNode === 'directory') {
           await mkdir(aiAgentsPath);
         } else {

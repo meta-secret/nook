@@ -1,4 +1,4 @@
-# Docker Cache Specialist Knowledge Graph
+# Docker Cache Specialist Index
 
 Load only the authority needed for the assigned Docker cache packet.
 
@@ -7,8 +7,8 @@ Load only the authority needed for the assigned Docker cache packet.
 - [Docker Cache Specialist contract](AGENTS.md)
 - [SRE Team Gizmo contract](../gizmo/AGENTS.md)
 - [SRE team contract](../AGENTS.md)
-- [SRE team knowledge graph](../knowledge-graph.md)
-- [Gizmo Prime knowledge graph](../../../gizmo-prime/knowledge-graph.md)
+- [SRE team index](../index.md)
+- [Gizmo Prime index](../../../gizmo-prime/index.md)
 
 ## Cache authorities
 

@@ -46,7 +46,7 @@ const invalidRootRequest: AuditCortexDocumentMapRequest = {
   kind: CortexDocumentMapContractKind.Request,
   documents: [
     {
-      relativePath: '.cortex/knowledge-graph.md',
+      relativePath: '.cortex/index.md',
       content: '# Cortex Context Router\n\n<div>hidden</div>\n',
     },
   ],
@@ -57,7 +57,7 @@ const transientLinkRequest: AuditCortexDocumentMapRequest = {
   kind: CortexDocumentMapContractKind.Request,
   documents: [
     {
-      relativePath: '.cortex/knowledge-graph.md',
+      relativePath: '.cortex/index.md',
       content: '# Cortex Context Router\n\n- [Transient](.session/note.md)\n',
     },
     { relativePath: '.cortex/.session/note.md', content: '# Temporary\n' },
@@ -67,9 +67,9 @@ const transientLinkRequest: AuditCortexDocumentMapRequest = {
 
 const validFinding = {
   code: CortexStructureFindingCode.MissingIndex,
-  file: '.cortex/knowledge-graph.md',
+  file: '.cortex/index.md',
   line: 1,
-  message: 'Centralized Cortex knowledge graph is missing.',
+  message: 'Centralized Cortex index is missing.',
 };
 
 test('acceptance verifies direct child graph ownership and rejects omitted evidence', () => {
@@ -88,22 +88,22 @@ test('acceptance verifies direct child graph ownership and rejects omitted evide
     excludedDocumentPaths: [],
     documents: [
       {
-        relativePath: '.cortex/knowledge-graph.md',
-        content: `# Router\n\n${contexts.map((context) => `- [${context}](${context}/knowledge-graph.md)`).join('\n')}\n`,
+        relativePath: '.cortex/index.md',
+        content: `# Router\n\n${contexts.map((context) => `- [${context}](${context}/index.md)`).join('\n')}\n`,
       },
       ...contexts.map((context) => ({
-        relativePath: `.cortex/${context}/knowledge-graph.md`,
+        relativePath: `.cortex/${context}/index.md`,
         content: '# Owner Graph\n',
       })),
       {
         relativePath:
-          '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md',
-        content: '# Feature Gizmo Knowledge Graph\n',
+          '.cortex/teams/delivery-pipeline/pr-lifecycle/index.md',
+        content: '# Feature Gizmo Index\n',
       },
       {
         relativePath:
-          '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md',
-        content: '# PR Lifecycle Knowledge Graph\n',
+          '.cortex/teams/delivery-pipeline/pr-lifecycle/index.md',
+        content: '# PR Lifecycle Index\n',
       },
       {
         relativePath: '.cortex/teams/delivery-pipeline/pr-lifecycle/policy.md',
@@ -120,17 +120,17 @@ test('acceptance verifies direct child graph ownership and rejects omitted evide
     findings: [
       {
         code: CortexStructureFindingCode.MissingFromIndex,
-        file: '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md',
+        file: '.cortex/teams/delivery-pipeline/pr-lifecycle/index.md',
         line: 1,
         message:
-          'Document is not indexed in its owning knowledge graph .cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md: .cortex/teams/delivery-pipeline/pr-lifecycle/policy.md',
+          'Document is not indexed in its owning index .cortex/teams/delivery-pipeline/pr-lifecycle/index.md: .cortex/teams/delivery-pipeline/pr-lifecycle/policy.md',
       },
       {
         code: CortexStructureFindingCode.MissingFromIndex,
-        file: '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md',
+        file: '.cortex/teams/delivery-pipeline/pr-lifecycle/index.md',
         line: 1,
         message:
-          'Document is not indexed in its owning knowledge graph .cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md: .cortex/teams/delivery-pipeline/pr-lifecycle/policy.md',
+          'Document is not indexed in its owning index .cortex/teams/delivery-pipeline/pr-lifecycle/index.md: .cortex/teams/delivery-pipeline/pr-lifecycle/policy.md',
       },
     ],
   } as const;
@@ -152,10 +152,10 @@ test('acceptance verifies direct child graph ownership and rejects omitted evide
     ...auditRequest,
     documents: auditRequest.documents.map((document) =>
       document.relativePath ===
-      '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md'
+      '.cortex/teams/delivery-pipeline/pr-lifecycle/index.md'
         ? { ...document, content: '# Owner Graph\n\n- [Policy](policy.md)\n' }
         : document.relativePath ===
-            '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md'
+            '.cortex/teams/delivery-pipeline/pr-lifecycle/index.md'
           ? {
               ...document,
               content: '# Owner Graph\n\n- [Policy](policy.md)\n',
@@ -330,7 +330,7 @@ test('acceptance binds findings to the exact admitted request', () => {
     ...invalidRootRequest,
     documents: [
       {
-        relativePath: '.cortex/knowledge-graph.md',
+        relativePath: '.cortex/index.md',
         content: '# Cortex Context Router\n',
       },
     ],

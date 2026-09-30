@@ -1,4 +1,4 @@
-# Security Knowledge Graph
+# Security Index
 
 Load only the category that owns the assigned security question.
 
@@ -36,6 +36,6 @@ contract.
 
 ## Team topology
 
-- [Security Team Gizmo](gizmo/knowledge-graph.md) coordinates bounded Security-team mechanics.
-- [Cryptography specialist](cryptography-specialist/knowledge-graph.md) handles packeted cryptographic policy and review work.
-- [Security review specialist](security-review-specialist/knowledge-graph.md) handles packeted security review and acceptance evidence.
+- [Security Team Gizmo](gizmo/index.md) coordinates bounded Security-team mechanics.
+- [Cryptography specialist](cryptography-specialist/index.md) handles packeted cryptographic policy and review work.
+- [Security review specialist](security-review-specialist/index.md) handles packeted security review and acceptance evidence.

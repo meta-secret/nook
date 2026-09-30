@@ -141,7 +141,7 @@ test('lints only the explicit ordered Markdown files and parses native alerts', 
       line: 3,
       match: 'Relationships',
       message:
-        'Inline `## Relationships` is prohibited; navigation is centralized in `.cortex/knowledge-graph.md`.',
+        'Inline `## Relationships` is prohibited; navigation is centralized in `.cortex/index.md`.',
       severity: ValeAlertSeverity.Error,
     },
     {
@@ -150,7 +150,7 @@ test('lints only the explicit ordered Markdown files and parses native alerts', 
       line: 7,
       match: 'Document map',
       message:
-        'Inline `## Document map` is prohibited; navigation is centralized in `.cortex/knowledge-graph.md`.',
+        'Inline `## Document map` is prohibited; navigation is centralized in `.cortex/index.md`.',
       severity: ValeAlertSeverity.Error,
     },
   ]);

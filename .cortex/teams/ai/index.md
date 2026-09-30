@@ -1,4 +1,4 @@
-# AI Team Knowledge Graph
+# AI Team Index
 
 Use this graph to locate the Nook AI authority that owns the assigned
 functionality.
@@ -67,6 +67,6 @@ Use these workflows for AI-owned skills and cross-package changes.
 - [Docker cache specialist activation](architecture/docker-cache-specialist-activation.md)
   defines deterministic SRE routing from cache-health telemetry.
 
-- [AI Team Gizmo](gizmo/knowledge-graph.md) coordinates bounded AI-team mechanics.
-- [Loom specialist](loom-specialist/knowledge-graph.md) handles packeted AI-owned Loom work.
-- [Cortex specialist](cortex-specialist/knowledge-graph.md) handles packeted AI-owned Cortex work.
+- [AI Team Gizmo](gizmo/index.md) coordinates bounded AI-team mechanics.
+- [Loom specialist](loom-specialist/index.md) handles packeted AI-owned Loom work.
+- [Cortex specialist](cortex-specialist/index.md) handles packeted AI-owned Cortex work.
