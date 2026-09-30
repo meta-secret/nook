@@ -89,7 +89,7 @@ test('treats vendored skills as dependencies rather than Nook graph ownership', 
 
 test('delegates links outside the root Cortex graph to the repository link audit', () => {
   const graph = CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
-    path: '.cortex/knowledge-graph.md',
+    path: '.cortex/index.md',
     content:
       '# Nook graph\n\n- [Nook app architecture](../nook-app/.cortex/docs/architecture/index.md)\n',
   });
@@ -99,7 +99,7 @@ test('delegates links outside the root Cortex graph to the repository link audit
 
   const missingArchitecture =
     CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
-      path: '.cortex/knowledge-graph.md',
+      path: '.cortex/index.md',
       content:
         '# Nook graph\n\n- [Missing architecture](../nook-app/.cortex/docs/architecture/missing.md)\n',
     });
