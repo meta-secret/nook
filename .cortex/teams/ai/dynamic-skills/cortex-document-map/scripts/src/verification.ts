@@ -130,8 +130,7 @@ export class CortexDocumentMapVerifier {
         code: CortexStructureFindingCode.MissingIndex,
         file: '.cortex/index.md',
         line: 1,
-        message:
-          'Centralized Cortex index `.cortex/index.md` is missing.',
+        message: 'Centralized Cortex index `.cortex/index.md` is missing.',
       });
     } else {
       this.deriveGraphFindings({ ...args, catalog, root });

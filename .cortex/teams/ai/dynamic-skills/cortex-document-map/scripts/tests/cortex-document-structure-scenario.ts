@@ -17,8 +17,7 @@ import { CortexDocumentMapContractKind } from '../src/domain.ts';
 
 const REPO_ROOT = path.resolve(import.meta.dir, '../../../../../../../');
 
-export const PIPELINE_GRAPH_PATH =
-  '.cortex/teams/delivery-pipeline/index.md';
+export const PIPELINE_GRAPH_PATH = '.cortex/teams/delivery-pipeline/index.md';
 
 export type MakeDocumentArgs = {
   readonly path: string;

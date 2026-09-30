@@ -96,13 +96,11 @@ test('acceptance verifies direct child graph ownership and rejects omitted evide
         content: '# Owner Graph\n',
       })),
       {
-        relativePath:
-          '.cortex/teams/delivery-pipeline/pr-lifecycle/index.md',
+        relativePath: '.cortex/teams/delivery-pipeline/pr-lifecycle/index.md',
         content: '# Feature Gizmo Index\n',
       },
       {
-        relativePath:
-          '.cortex/teams/delivery-pipeline/pr-lifecycle/index.md',
+        relativePath: '.cortex/teams/delivery-pipeline/pr-lifecycle/index.md',
         content: '# PR Lifecycle Index\n',
       },
       {

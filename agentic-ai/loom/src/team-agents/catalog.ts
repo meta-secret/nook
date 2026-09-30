@@ -184,10 +184,7 @@ export const TEAM_AUTHORITY_CATALOG: readonly TeamAuthority[] = [
     identity: 'AI',
     description:
       'Owns Cortex, Loom, agent skills, expert routing, and agent automation.',
-    contextPaths: [
-      '.cortex/teams/ai/AGENTS.md',
-      '.cortex/teams/ai/index.md',
-    ],
+    contextPaths: ['.cortex/teams/ai/AGENTS.md', '.cortex/teams/ai/index.md'],
     capabilityBoundary: `AI defines agent capability semantics and acceptance. ${PARENT_OWNED_LIFECYCLE_BOUNDARY}`,
   },
   {
@@ -217,10 +214,7 @@ export const TEAM_AUTHORITY_CATALOG: readonly TeamAuthority[] = [
     identity: 'SRE',
     description:
       'Owns CI/CD, clusters, deployments, runners, containers, and operations.',
-    contextPaths: [
-      '.cortex/teams/sre/AGENTS.md',
-      '.cortex/teams/sre/index.md',
-    ],
+    contextPaths: ['.cortex/teams/sre/AGENTS.md', '.cortex/teams/sre/index.md'],
     capabilityBoundary: `SRE does not own product rules, browser presentation, or another team's Cortex authority. ${PARENT_OWNED_LIFECYCLE_BOUNDARY}`,
   },
   {

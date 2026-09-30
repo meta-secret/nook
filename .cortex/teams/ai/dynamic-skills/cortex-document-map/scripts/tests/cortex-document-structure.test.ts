@@ -332,8 +332,7 @@ test('audits Delivery Pipeline direct child graphs with matching ownership', () 
 test('rejects sibling same-team child authority from a child graph', () => {
   const managerGraphPath =
     '.cortex/teams/delivery-pipeline/pr-lifecycle/index.md';
-  const siblingGraphPath =
-    '.cortex/teams/delivery-pipeline/gizmo/index.md';
+  const siblingGraphPath = '.cortex/teams/delivery-pipeline/gizmo/index.md';
   const documents =
     CortexDocumentMapCortexDocumentStructureScenario.nestedDistributedDocuments().map(
       (document) =>
@@ -413,8 +412,7 @@ test('rejects duplicate direct-child document indexing but allows external autho
 test('validates direct child graph titles and duplicate entries without root links', () => {
   const documents =
     CortexDocumentMapCortexDocumentStructureScenario.nestedDistributedDocuments();
-  const gizmoGraphPath =
-    '.cortex/teams/delivery-pipeline/gizmo/index.md';
+  const gizmoGraphPath = '.cortex/teams/delivery-pipeline/gizmo/index.md';
   const lifecycleGraphPath =
     '.cortex/teams/delivery-pipeline/pr-lifecycle/index.md';
   const malformed = documents.map((document) => {

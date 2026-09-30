@@ -279,10 +279,7 @@ test('fails the integrated Cortex audit for rendered Markdown tables', async () 
 | Rule | Parallel constraints |
 `,
     );
-    writeFileSync(
-      path.join(cortexRoot, 'index.md'),
-      '# Index\n',
-    );
+    writeFileSync(path.join(cortexRoot, 'index.md'), '# Index\n');
     writeFileSync(path.join(skillsRoot, 'index.md'), '# Skills\n');
     const request = { includeDensityLint: true };
     const auditArgs = { request, startDirectory: repoRoot };
@@ -426,10 +423,7 @@ test('admits session Markdown only through the global HTML syntax gate', async (
     mkdirSync(sessionRoot, directoryOptions);
     mkdirSync(skillsRoot, directoryOptions);
     writeFileSync(path.join(cortexRoot, 'AGENTS.md'), '# Agent Map\n');
-    writeFileSync(
-      path.join(cortexRoot, 'index.md'),
-      '# Index\n',
-    );
+    writeFileSync(path.join(cortexRoot, 'index.md'), '# Index\n');
     writeFileSync(path.join(skillsRoot, 'index.md'), '# Skills\n');
     const sessionPath = path.join(sessionRoot, 'current-task.md');
     writeFileSync(

@@ -28,11 +28,7 @@ export class CortexIdentifiersFixture {
     const repoRoot = await mkdtemp(join(tmpdir(), 'cortex-identifiers-'));
     const cortexRoot = join(repoRoot, '.cortex');
     await mkdir(cortexRoot);
-    await writeFile(
-      join(cortexRoot, 'index.md'),
-      '# Index\n',
-      'utf8',
-    );
+    await writeFile(join(cortexRoot, 'index.md'), '# Index\n', 'utf8');
     await writeFile(
       join(cortexRoot, 'policy.md'),
       '# Policy\n\n## Event evidence\n',

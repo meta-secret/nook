@@ -61,9 +61,7 @@ export class CortexDocumentPath {
 
   childGraphTeam(): string | false {
     const child = this.canonicalChildDirectory();
-    return child && this.filePath.endsWith('/index.md')
-      ? child.team
-      : false;
+    return child && this.filePath.endsWith('/index.md') ? child.team : false;
   }
 
   childTeam(): string | false {
@@ -178,8 +176,7 @@ export class CortexChildGraphReference {
     const parentTeamPath = this.graphPath.childGraphParentPath();
     if (
       parentTeamPath !== false &&
-      indexedPath ===
-        parentTeamPath.replace('/index.md', '/AGENTS.md')
+      indexedPath === parentTeamPath.replace('/index.md', '/AGENTS.md')
     ) {
       return true;
     }
@@ -241,8 +238,7 @@ export class CortexDocumentStructure {
         code: CortexStructureFindingCode.MissingIndex,
         file: '.cortex/index.md',
         line: 1,
-        message:
-          'Centralized Cortex index `.cortex/index.md` is missing.',
+        message: 'Centralized Cortex index `.cortex/index.md` is missing.',
       };
       this.addFinding(findingArgs);
     } else {

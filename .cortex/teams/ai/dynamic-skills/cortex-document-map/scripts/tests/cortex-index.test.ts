@@ -71,9 +71,7 @@ Model text.
   expect(markdown).toContain(
     '[Prime, single Team Gizmo, and delivery](gizmo-prime/index.md)',
   );
-  expect(markdown).not.toContain(
-    '[Gizmo Prime](teams/gizmo/index.md)',
-  );
+  expect(markdown).not.toContain('[Gizmo Prime](teams/gizmo/index.md)');
   expect(markdown).toContain(
     '[Delivery Pipeline](teams/delivery-pipeline/index.md)',
   );
