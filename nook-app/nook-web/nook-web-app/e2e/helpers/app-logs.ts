@@ -279,7 +279,7 @@ export async function waitForPersistedAppLog(
   return found.entry
 }
 
-/** Wait for each persisted log milestone in order (see `.cortex/shared/references/logging.md`). */
+/** Wait for each persisted log milestone in order (see `nook-app/.cortex/docs/spec/logging.md`). */
 export async function expectAppLogMilestones(
   page: Page,
   milestones: Array<{

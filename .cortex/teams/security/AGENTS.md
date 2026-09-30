@@ -24,7 +24,7 @@ must not claim guarantees that the repository does not prove.
 ## Nook context authorities
 
 Follow Meta-Cortex [assignment context](../../../.meta-cortex/teams/AGENTS.md#assignment-context)
-for generic context selection. The Nook [security graph](knowledge-graph.md)
+for generic context selection. The Nook [security graph](index.md)
 catalogs the architecture, reference, and security-skill authorities used by
 this context.
 

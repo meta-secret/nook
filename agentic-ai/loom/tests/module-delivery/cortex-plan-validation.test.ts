@@ -210,7 +210,7 @@ describe('Cortex module-delivery plan validation', () => {
     if (result.status !== ModuleDeliveryValidationStatus.Accepted) return;
     expect(result.plan.nodes[0]?.resources.read).toEqual([
       '.cortex/teams/sre/AGENTS.md',
-      '.cortex/teams/sre/knowledge-graph.md',
+      '.cortex/teams/sre/index.md',
       ...CORTEX_AUTHORING_SKILL_PATHS,
       SRE_SKILL,
     ]);

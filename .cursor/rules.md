@@ -1,7 +1,7 @@
 # Cursor Rules
 
 Before working on a Nook task, read `.cortex/AGENTS.md` and
-`.cortex/knowledge-graph.md`.
+`.cortex/index.md`.
 
 Follow the root router to exactly one Gizmo or team entry point. Load only the
 task-relevant authorities selected through that context.

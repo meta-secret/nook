@@ -15,7 +15,7 @@ ownership.
 
 ## Preferred pattern
 
-1. Start from `.cortex/knowledge-graph.md` and select only the AI team graph.
+1. Start from `.cortex/index.md` and select only the AI team graph.
 2. Declare bounded repository read claims and a non-empty evidence surface
    covered by those claims, then read the owning authority and its one-hop
    context.

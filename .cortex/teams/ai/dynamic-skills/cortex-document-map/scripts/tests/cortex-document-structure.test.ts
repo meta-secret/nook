@@ -11,8 +11,8 @@ import type {
 } from './cortex-document-structure-scenario.ts';
 
 const INDEX_DOC_ARGS: MakeDocumentArgs = {
-  path: '.cortex/knowledge-graph.md',
-  content: `# Cortex Knowledge Graph & Navigation Map
+  path: '.cortex/index.md',
+  content: `# Cortex Index & Navigation Map
 
 ## Overview
 
@@ -64,7 +64,7 @@ const DOCUMENT_B =
     DOCUMENT_B_ARGS,
   );
 
-test('accepts clean documents and valid centralized knowledge-graph.md', () => {
+test('accepts clean documents and valid centralized index.md', () => {
   expect(
     CortexDocumentMapCortexDocumentStructureScenario.audit([
       INDEX_DOC,
@@ -76,7 +76,7 @@ test('accepts clean documents and valid centralized knowledge-graph.md', () => {
 
 test('treats vendored skills as dependencies rather than Nook graph ownership', () => {
   const request: MakeDocumentArgs = {
-    path: '.cortex/knowledge-graph.md',
+    path: '.cortex/index.md',
     content:
       '# Nook graph\n\n- [Programming requirements](../.meta-cortex/teams/dev-team/docs/index.md)\n',
   };
@@ -89,7 +89,7 @@ test('treats vendored skills as dependencies rather than Nook graph ownership', 
 
 test('delegates links outside the root Cortex graph to the repository link audit', () => {
   const graph = CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
-    path: '.cortex/knowledge-graph.md',
+    path: '.cortex/index.md',
     content:
       '# Nook graph\n\n- [Nook app architecture](../nook-app/.cortex/docs/architecture/index.md)\n',
   });
@@ -99,7 +99,7 @@ test('delegates links outside the root Cortex graph to the repository link audit
 
   const missingArchitecture =
     CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
-      path: '.cortex/knowledge-graph.md',
+      path: '.cortex/index.md',
       content:
         '# Nook graph\n\n- [Missing architecture](../nook-app/.cortex/docs/architecture/missing.md)\n',
     });
@@ -121,7 +121,7 @@ test('accepts document-level team and shared graphs', () => {
 test('allows every child graph to reference the root circuit breaker read-only', () => {
   const circuitBreakerPath = '.cortex/CIRCUIT-BREAKER.md';
   const childGraphPath =
-    '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md';
+    '.cortex/teams/delivery-pipeline/pr-lifecycle/index.md';
   const documents =
     CortexDocumentMapCortexDocumentStructureScenario.nestedDistributedDocuments();
   documents.push(
@@ -131,7 +131,7 @@ test('allows every child graph to reference the root circuit breaker read-only',
     }),
   );
   const linkedDocuments = documents.map((document) => {
-    if (document.relativePath === '.cortex/knowledge-graph.md') {
+    if (document.relativePath === '.cortex/index.md') {
       return {
         ...document,
         content: `${document.content}\n- [Circuit breaker](CIRCUIT-BREAKER.md)\n`,
@@ -161,13 +161,13 @@ test('indexes PR Lifecycle Agent documents only through their owning graph', () 
   const documents =
     CortexDocumentMapCortexDocumentStructureScenario.distributedDocuments();
   const managerGraphPath =
-    '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md';
+    '.cortex/teams/delivery-pipeline/pr-lifecycle/index.md';
   const policyPath =
     '.cortex/teams/delivery-pipeline/pr-lifecycle/workflows/policy.md';
   documents.push(
     CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
       path: managerGraphPath,
-      content: '# Delivery Pipeline PR Lifecycle Knowledge Graph\n',
+      content: '# Delivery Pipeline PR Lifecycle Index\n',
     }),
     CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
       path: policyPath,
@@ -180,7 +180,7 @@ test('indexes PR Lifecycle Agent documents only through their owning graph', () 
     code: CortexStructureFindingCode.MissingFromIndex,
     file: managerGraphPath,
     line: 1,
-    message: `Document is not indexed in its owning knowledge graph ${managerGraphPath}: ${policyPath}`,
+    message: `Document is not indexed in its owning index ${managerGraphPath}: ${policyPath}`,
   });
   const indexedDocuments = documents.map((document) =>
     document.relativePath === managerGraphPath
@@ -194,7 +194,7 @@ test('indexes PR Lifecycle Agent documents only through their owning graph', () 
     CortexDocumentMapCortexDocumentStructureScenario.audit(indexedDocuments),
   ).toEqual([]);
   const foreignIndex = indexedDocuments.map((document) =>
-    document.relativePath === '.cortex/gizmo-prime/knowledge-graph.md'
+    document.relativePath === '.cortex/gizmo-prime/index.md'
       ? {
           ...document,
           content: `${document.content}\n- [PR lifecycle policy](../teams/delivery-pipeline/pr-lifecycle/workflows/policy.md)\n`,
@@ -205,16 +205,16 @@ test('indexes PR Lifecycle Agent documents only through their owning graph', () 
     CortexDocumentMapCortexDocumentStructureScenario.audit(foreignIndex),
   ).toContainEqual({
     code: CortexStructureFindingCode.InvalidIndexEntry,
-    file: '.cortex/gizmo-prime/knowledge-graph.md',
+    file: '.cortex/gizmo-prime/index.md',
     line: 1,
-    message: `Owning knowledge graph cannot index another context's document: ${policyPath}`,
+    message: `Owning index cannot index another context's document: ${policyPath}`,
   });
 });
 
 test('indexes Team Gizmo documents only through their owning graph', () => {
   const documents =
     CortexDocumentMapCortexDocumentStructureScenario.distributedDocuments();
-  const graphPath = '.cortex/teams/delivery-pipeline/gizmo/knowledge-graph.md';
+  const graphPath = '.cortex/teams/delivery-pipeline/gizmo/index.md';
   const policyPath = '.cortex/teams/delivery-pipeline/gizmo/policy.md';
   documents.push(
     CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
@@ -234,7 +234,7 @@ test('indexes Team Gizmo documents only through their owning graph', () => {
     code: CortexStructureFindingCode.MissingFromIndex,
     file: graphPath,
     line: 1,
-    message: `Document is not indexed in its owning knowledge graph ${graphPath}: ${policyPath}`,
+    message: `Document is not indexed in its owning index ${graphPath}: ${policyPath}`,
   });
   const indexedDocuments = documents.map((document) =>
     document.relativePath === graphPath
@@ -262,7 +262,7 @@ test('indexes Delivery Pipeline documents only through their owning graph', () =
     code: CortexStructureFindingCode.MissingFromIndex,
     file: PIPELINE_GRAPH_PATH,
     line: 1,
-    message: `Document is not indexed in its owning knowledge graph ${PIPELINE_GRAPH_PATH}: ${policyPath}`,
+    message: `Document is not indexed in its owning index ${PIPELINE_GRAPH_PATH}: ${policyPath}`,
   });
   const indexedDocuments = documents.map((document) =>
     document.relativePath === PIPELINE_GRAPH_PATH
@@ -273,7 +273,7 @@ test('indexes Delivery Pipeline documents only through their owning graph', () =
     CortexDocumentMapCortexDocumentStructureScenario.audit(indexedDocuments),
   ).toEqual([]);
   const foreignIndex = indexedDocuments.map((document) =>
-    document.relativePath === '.cortex/gizmo-prime/knowledge-graph.md'
+    document.relativePath === '.cortex/gizmo-prime/index.md'
       ? {
           ...document,
           content: `${document.content}\n- [Delivery Pipeline policy](../teams/delivery-pipeline/policy.md)\n`,
@@ -284,9 +284,9 @@ test('indexes Delivery Pipeline documents only through their owning graph', () =
     CortexDocumentMapCortexDocumentStructureScenario.audit(foreignIndex),
   ).toContainEqual({
     code: CortexStructureFindingCode.InvalidIndexEntry,
-    file: '.cortex/gizmo-prime/knowledge-graph.md',
+    file: '.cortex/gizmo-prime/index.md',
     line: 1,
-    message: `Owning knowledge graph cannot index another context's document: ${policyPath}`,
+    message: `Owning index cannot index another context's document: ${policyPath}`,
   });
 });
 
@@ -298,14 +298,14 @@ test('audits Delivery Pipeline direct child graphs with matching ownership', () 
   ).toEqual([]);
 
   const lifecycleGraphPath =
-    '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md';
+    '.cortex/teams/delivery-pipeline/pr-lifecycle/index.md';
   const lifecyclePolicyPath =
     '.cortex/teams/delivery-pipeline/pr-lifecycle/workflows/policy.md';
   const parentOnlyIndex = documents.map((document) => {
     if (document.relativePath === lifecycleGraphPath) {
       return {
         ...document,
-        content: '# Delivery Pipeline PR Lifecycle Knowledge Graph\n',
+        content: '# Delivery Pipeline PR Lifecycle Index\n',
       };
     }
     if (document.relativePath === PIPELINE_GRAPH_PATH) {
@@ -325,22 +325,21 @@ test('audits Delivery Pipeline direct child graphs with matching ownership', () 
     code: CortexStructureFindingCode.MissingFromIndex,
     file: lifecycleGraphPath,
     line: 1,
-    message: `Document is not indexed in its owning knowledge graph ${lifecycleGraphPath}: ${lifecyclePolicyPath}`,
+    message: `Document is not indexed in its owning index ${lifecycleGraphPath}: ${lifecyclePolicyPath}`,
   });
 });
 
 test('rejects sibling same-team child authority from a child graph', () => {
   const managerGraphPath =
-    '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md';
-  const siblingGraphPath =
-    '.cortex/teams/delivery-pipeline/gizmo/knowledge-graph.md';
+    '.cortex/teams/delivery-pipeline/pr-lifecycle/index.md';
+  const siblingGraphPath = '.cortex/teams/delivery-pipeline/gizmo/index.md';
   const documents =
     CortexDocumentMapCortexDocumentStructureScenario.nestedDistributedDocuments().map(
       (document) =>
         document.relativePath === managerGraphPath
           ? {
               ...document,
-              content: `${document.content}- [Sibling authority](../gizmo/knowledge-graph.md)\n`,
+              content: `${document.content}- [Sibling authority](../gizmo/index.md)\n`,
             }
           : document,
     );
@@ -350,14 +349,14 @@ test('rejects sibling same-team child authority from a child graph', () => {
     CortexDocumentMapCortexDocumentStructureScenario.hasFinding(findings, {
       code: CortexStructureFindingCode.InvalidIndexEntry,
       file: managerGraphPath,
-      message: `Child knowledge graph may link only its own directory or explicit read-only authorities: ${siblingGraphPath}`,
+      message: `Child index may link only its own directory or explicit read-only authorities: ${siblingGraphPath}`,
     }),
   ).toBe(true);
 });
 
 test('admits a same-team sibling AGENTS authority as read-only', () => {
   const managerGraphPath =
-    '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md';
+    '.cortex/teams/delivery-pipeline/pr-lifecycle/index.md';
   const siblingAuthorityPath =
     '.cortex/teams/delivery-pipeline/gizmo/AGENTS.md';
   const documents = [
@@ -381,7 +380,7 @@ test('admits a same-team sibling AGENTS authority as read-only', () => {
     CortexDocumentMapCortexDocumentStructureScenario.hasFinding(findings, {
       code: CortexStructureFindingCode.InvalidIndexEntry,
       file: managerGraphPath,
-      message: `Child knowledge graph may link only its own directory or explicit read-only authorities: ${siblingAuthorityPath}`,
+      message: `Child index may link only its own directory or explicit read-only authorities: ${siblingAuthorityPath}`,
     }),
   ).toBe(false);
 });
@@ -406,17 +405,16 @@ test('rejects duplicate direct-child document indexing but allows external autho
     code: CortexStructureFindingCode.InvalidIndexEntry,
     file: PIPELINE_GRAPH_PATH,
     line: 1,
-    message: `Knowledge graphs must index each non-graph document once: ${workflowPath}`,
+    message: `Indexes must index each non-graph document once: ${workflowPath}`,
   });
 });
 
 test('validates direct child graph titles and duplicate entries without root links', () => {
   const documents =
     CortexDocumentMapCortexDocumentStructureScenario.nestedDistributedDocuments();
-  const gizmoGraphPath =
-    '.cortex/teams/delivery-pipeline/gizmo/knowledge-graph.md';
+  const gizmoGraphPath = '.cortex/teams/delivery-pipeline/gizmo/index.md';
   const lifecycleGraphPath =
-    '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md';
+    '.cortex/teams/delivery-pipeline/pr-lifecycle/index.md';
   const malformed = documents.map((document) => {
     if (document.relativePath === gizmoGraphPath) {
       return {
@@ -444,7 +442,7 @@ test('validates direct child graph titles and duplicate entries without root lin
     code: CortexStructureFindingCode.InvalidIndexEntry,
     file: lifecycleGraphPath,
     line: 1,
-    message: `Knowledge graph must index each document once: .cortex/teams/delivery-pipeline/pr-lifecycle/workflows/policy.md`,
+    message: `Index must index each document once: .cortex/teams/delivery-pipeline/pr-lifecycle/workflows/policy.md`,
   });
 });
 
@@ -455,20 +453,20 @@ test('rejects a root link that bypasses Delivery Pipeline child graphs', () => {
   if (!root) throw new Error('Expected nested distributed root document');
   documents[0] = {
     ...root,
-    content: `${root.content}- [Nested Gizmo](teams/delivery-pipeline/gizmo/knowledge-graph.md)\n`,
+    content: `${root.content}- [Nested Gizmo](teams/delivery-pipeline/gizmo/index.md)\n`,
   };
   expect(
     CortexDocumentMapCortexDocumentStructureScenario.audit(documents),
   ).toContainEqual({
     code: CortexStructureFindingCode.InvalidIndexEntry,
-    file: '.cortex/knowledge-graph.md',
+    file: '.cortex/index.md',
     line: 1,
     message:
-      'Root knowledge graph must route through owner graphs instead of indexing owned documents directly: .cortex/teams/delivery-pipeline/gizmo/knowledge-graph.md',
+      'Root index must route through owner graphs instead of indexing owned documents directly: .cortex/teams/delivery-pipeline/gizmo/index.md',
   });
 });
 
-test('requires the root knowledge graph to link the Delivery Pipeline graph', () => {
+test('requires the root index to link the Delivery Pipeline graph', () => {
   const documents =
     CortexDocumentMapCortexDocumentStructureScenario.distributedDocuments({
       rootExtra: '',
@@ -477,7 +475,7 @@ test('requires the root knowledge graph to link the Delivery Pipeline graph', ()
     }).map((document) => ({
       ...document,
       content: document.content.replace(
-        '- [Delivery Pipeline](teams/delivery-pipeline/knowledge-graph.md)\n',
+        '- [Delivery Pipeline](teams/delivery-pipeline/index.md)\n',
         '',
       ),
     }));
@@ -485,14 +483,14 @@ test('requires the root knowledge graph to link the Delivery Pipeline graph', ()
     CortexDocumentMapCortexDocumentStructureScenario.audit(documents),
   ).toContainEqual({
     code: CortexStructureFindingCode.MissingFromIndex,
-    file: '.cortex/knowledge-graph.md',
+    file: '.cortex/index.md',
     line: 1,
     message:
-      'Root knowledge graph must link the owner graph: .cortex/teams/delivery-pipeline/knowledge-graph.md',
+      'Root index must link the owner graph: .cortex/teams/delivery-pipeline/index.md',
   });
 });
 
-test('requires the root knowledge graph to link the Gizmo Prime graph', () => {
+test('requires the root index to link the Gizmo Prime graph', () => {
   const documents =
     CortexDocumentMapCortexDocumentStructureScenario.distributedDocuments({
       rootExtra: '',
@@ -501,7 +499,7 @@ test('requires the root knowledge graph to link the Gizmo Prime graph', () => {
     }).map((document) => ({
       ...document,
       content: document.content.replace(
-        '- [Gizmo Prime](gizmo-prime/knowledge-graph.md)\n',
+        '- [Gizmo Prime](gizmo-prime/index.md)\n',
         '',
       ),
     }));
@@ -509,14 +507,14 @@ test('requires the root knowledge graph to link the Gizmo Prime graph', () => {
     CortexDocumentMapCortexDocumentStructureScenario.audit(documents),
   ).toContainEqual({
     code: CortexStructureFindingCode.MissingFromIndex,
-    file: '.cortex/knowledge-graph.md',
+    file: '.cortex/index.md',
     line: 1,
     message:
-      'Root knowledge graph must link the owner graph: .cortex/gizmo-prime/knowledge-graph.md',
+      'Root index must link the owner graph: .cortex/gizmo-prime/index.md',
   });
 });
 
-test('requires the root knowledge graph to link the Gizmo graph', () => {
+test('requires the root index to link the Gizmo graph', () => {
   const distributedArgs: DistributedDocumentsArgs = {
     rootExtra: '',
     devTarget: 'policy.md',
@@ -531,7 +529,7 @@ test('requires the root knowledge graph to link the Gizmo graph', () => {
   documents[0] = {
     ...rootDocument,
     content: rootDocument.content.replace(
-      '- [Gizmo Prime](gizmo-prime/knowledge-graph.md)\n',
+      '- [Gizmo Prime](gizmo-prime/index.md)\n',
       '',
     ),
   };
@@ -539,9 +537,9 @@ test('requires the root knowledge graph to link the Gizmo graph', () => {
     CortexDocumentMapCortexDocumentStructureScenario.audit(documents);
   const expectedFinding = {
     code: CortexStructureFindingCode.MissingFromIndex,
-    file: '.cortex/knowledge-graph.md',
+    file: '.cortex/index.md',
     message:
-      'Root knowledge graph must link the owner graph: .cortex/gizmo-prime/knowledge-graph.md',
+      'Root index must link the owner graph: .cortex/gizmo-prime/index.md',
   };
   expect(
     CortexDocumentMapCortexDocumentStructureScenario.hasFinding(
@@ -551,7 +549,7 @@ test('requires the root knowledge graph to link the Gizmo graph', () => {
   ).toBe(true);
 });
 
-test('maps Gizmo Prime-owned documents to the Gizmo Prime knowledge graph', () => {
+test('maps Gizmo Prime-owned documents to the Gizmo Prime index', () => {
   const distributedArgs: DistributedDocumentsArgs = {
     rootExtra: '',
     devTarget: 'policy.md',
@@ -564,9 +562,9 @@ test('maps Gizmo Prime-owned documents to the Gizmo Prime knowledge graph', () =
   );
   const expectedFinding = {
     code: CortexStructureFindingCode.MissingFromIndex,
-    file: '.cortex/gizmo-prime/knowledge-graph.md',
+    file: '.cortex/gizmo-prime/index.md',
     message:
-      'Document is not indexed in its owning knowledge graph .cortex/gizmo-prime/knowledge-graph.md: .cortex/gizmo-prime/policy.md',
+      'Document is not indexed in its owning index .cortex/gizmo-prime/index.md: .cortex/gizmo-prime/policy.md',
   };
   expect(
     CortexDocumentMapCortexDocumentStructureScenario.hasFinding(
@@ -576,7 +574,7 @@ test('maps Gizmo Prime-owned documents to the Gizmo Prime knowledge graph', () =
   ).toBe(true);
 });
 
-test('rejects section links and duplicate document entries in knowledge graphs', () => {
+test('rejects section links and duplicate document entries in indexes', () => {
   const distributedArgs: DistributedDocumentsArgs = {
     rootExtra: '',
     devTarget: 'policy.md#boundary',
@@ -589,7 +587,7 @@ test('rejects section links and duplicate document entries in knowledge graphs',
   );
   const expectedFinding = {
     code: CortexStructureFindingCode.InvalidIndexEntry,
-    file: '.cortex/teams/dev-core/knowledge-graph.md',
+    file: '.cortex/teams/dev-core/index.md',
   };
   expect(
     CortexDocumentMapCortexDocumentStructureScenario.hasFinding(
@@ -638,7 +636,7 @@ test('rejects a team graph that indexes another team document', () => {
     CortexDocumentMapCortexDocumentStructureScenario.audit(documents);
   const expectedFinding = {
     code: CortexStructureFindingCode.InvalidIndexEntry,
-    file: '.cortex/teams/dev-core/knowledge-graph.md',
+    file: '.cortex/teams/dev-core/index.md',
   };
   expect(
     CortexDocumentMapCortexDocumentStructureScenario.hasFinding(
@@ -661,7 +659,7 @@ test('rejects cross-owner indexing between Gizmo and team graphs', () => {
   );
   const gizmoFinding = {
     code: CortexStructureFindingCode.InvalidIndexEntry,
-    file: '.cortex/gizmo-prime/knowledge-graph.md',
+    file: '.cortex/gizmo-prime/index.md',
   };
   expect(
     CortexDocumentMapCortexDocumentStructureScenario.hasFinding(
@@ -682,7 +680,7 @@ test('rejects cross-owner indexing between Gizmo and team graphs', () => {
   );
   const teamFinding = {
     code: CortexStructureFindingCode.InvalidIndexEntry,
-    file: '.cortex/teams/dev-core/knowledge-graph.md',
+    file: '.cortex/teams/dev-core/index.md',
   };
   expect(
     CortexDocumentMapCortexDocumentStructureScenario.hasFinding(
@@ -692,25 +690,29 @@ test('rejects cross-owner indexing between Gizmo and team graphs', () => {
   ).toBe(true);
 });
 
-test('accepts k-graph.md as an alias for the centralized knowledge graph', () => {
-  const kGraphDocArgs: MakeDocumentArgs = {
-    path: '.cortex/k-graph.md',
-    content: INDEX_DOC_ARGS.content,
-  };
-  const kGraphDoc =
-    CortexDocumentMapCortexDocumentStructureScenario.makeDocument(
-      kGraphDocArgs,
-    );
-  expect(
-    CortexDocumentMapCortexDocumentStructureScenario.audit([
-      kGraphDoc,
+test.each(['knowledge-graph.md', 'k-graph.md', 'INDEX.md'])(
+  'requires index.md instead of the retired %s navigation filename',
+  (filename) => {
+    const retiredIndexArgs: MakeDocumentArgs = {
+      path: `.cortex/${filename}`,
+      content: INDEX_DOC_ARGS.content,
+    };
+    const retiredIndex =
+      CortexDocumentMapCortexDocumentStructureScenario.makeDocument(
+        retiredIndexArgs,
+      );
+    const findings = CortexDocumentMapCortexDocumentStructureScenario.audit([
+      retiredIndex,
       DOCUMENT_A,
       DOCUMENT_B,
-    ]),
-  ).toEqual([]);
-});
+    ]);
+    expect(findings.map((finding) => finding.code)).toContain(
+      CortexStructureFindingCode.MissingIndex,
+    );
+  },
+);
 
-test('reports missing knowledge-graph.md when centralized index is absent', () => {
+test('reports missing index.md when centralized index is absent', () => {
   const findings = CortexDocumentMapCortexDocumentStructureScenario.audit([
     DOCUMENT_A,
     DOCUMENT_B,
@@ -721,8 +723,8 @@ test('reports missing knowledge-graph.md when centralized index is absent', () =
 
 test('rejects index links pointing to non-existent documents', () => {
   const badIndexArgs: MakeDocumentArgs = {
-    path: '.cortex/knowledge-graph.md',
-    content: `# Cortex Knowledge Graph & Navigation Map
+    path: '.cortex/index.md',
+    content: `# Cortex Index & Navigation Map
 
 - [Missing](missing-file.md)
 `,
@@ -738,8 +740,8 @@ test('rejects index links pointing to non-existent documents', () => {
 
 test('rejects index links pointing to missing heading fragments', () => {
   const badIndexArgs: MakeDocumentArgs = {
-    path: '.cortex/knowledge-graph.md',
-    content: `# Cortex Knowledge Graph & Navigation Map
+    path: '.cortex/index.md',
+    content: `# Cortex Index & Navigation Map
 
 - [A](a.md)
   - [Broken Anchor](a.md#non-existent-section)
@@ -757,10 +759,10 @@ test('rejects index links pointing to missing heading fragments', () => {
   expect(codes).toContain(CortexStructureFindingCode.BrokenFragment);
 });
 
-test('reports unindexed documents missing from knowledge-graph.md', () => {
+test('reports unindexed documents missing from index.md', () => {
   const incompleteIndexArgs: MakeDocumentArgs = {
-    path: '.cortex/knowledge-graph.md',
-    content: `# Cortex Knowledge Graph & Navigation Map
+    path: '.cortex/index.md',
+    content: `# Cortex Index & Navigation Map
 
 - [A](a.md)
   - [Overview](a.md#overview)

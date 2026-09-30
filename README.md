@@ -425,28 +425,28 @@ encrypted event log under `nook-log/v1/events/` in a private repository.
 
 Delivery uses one Gizmo context and five Cortex engineering team domains:
 
-- [Gizmo Prime](.cortex/gizmo-prime/knowledge-graph.md) owns coordination, integration,
+- [Gizmo Prime](.cortex/gizmo-prime/index.md) owns coordination, integration,
   lifecycle state, and the final integrated PR verdict.
 
-- [AI](.cortex/teams/ai/knowledge-graph.md) owns Cortex, Loom, agent skills,
+- [AI](.cortex/teams/ai/index.md) owns Cortex, Loom, agent skills,
   expert routing, self-improvement, and deterministic AI automation.
 
-- [Development core](.cortex/teams/dev-core/knowledge-graph.md) owns portable Rust,
+- [Development core](.cortex/teams/dev-core/index.md) owns portable Rust,
   Rust/WASM domain contracts, security logic, and core product specifications.
-- [Security](.cortex/teams/security/knowledge-graph.md) owns security
+- [Security](.cortex/teams/security/index.md) owns security
   architecture, cryptographic policy, trust boundaries, and security
   acceptance.
-- [SRE](.cortex/teams/sre/knowledge-graph.md) owns CI/CD, runners, containers, k0s,
+- [SRE](.cortex/teams/sre/index.md) owns CI/CD, runners, containers, k0s,
   Kubernetes, deployments, and provider operations.
-- [Web development](.cortex/teams/web-dev/knowledge-graph.md) owns browser apps,
+- [Web development](.cortex/teams/web-dev/index.md) owns browser apps,
   extension presentation, Svelte/TypeScript interaction behavior, browser
   evidence, and repository-wide TypeScript/Svelte engineering practices.
 
-The [root Cortex graph](.cortex/knowledge-graph.md) routes delivery control to
+The [root Cortex graph](.cortex/index.md) routes delivery control to
 Gizmo and implementation to one functional team owner. That owner may request
 a bounded unit from another implementation team as an expertise provider.
 Gizmo is never an expertise provider. Each worker loads only its own team graph
-and the explicit expertise contract. [Shared knowledge](.cortex/shared/knowledge-graph.md)
+and the explicit expertise contract. [Shared knowledge](.cortex/shared/index.md)
 is loaded only for a named cross-team dependency. It is not an implementation
 team.
 

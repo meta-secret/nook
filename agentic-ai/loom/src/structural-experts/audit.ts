@@ -374,7 +374,7 @@ const EXPECTED_PROFILES = [
     skillPath: '.cortex/teams/ai/dynamic-skills/code-refactoring-expert.md',
     requiredContextPaths: [
       '.cortex/AGENTS.md',
-      '.cortex/knowledge-graph.md',
+      '.cortex/index.md',
       '.cortex/teams/ai/architecture/refactoring-experts.md',
       '.cortex/teams/ai/workflows/structural-refactoring.md',
       '.cortex/gizmo-prime/workflows/subagent-delegation.md',
@@ -415,7 +415,7 @@ const EXPECTED_PROFILES = [
     skillPath: '.cortex/teams/ai/dynamic-skills/cortex-refactoring-expert.md',
     requiredContextPaths: [
       '.cortex/AGENTS.md',
-      '.cortex/knowledge-graph.md',
+      '.cortex/index.md',
       '.cortex/teams/ai/architecture/refactoring-experts.md',
       '.cortex/teams/ai/workflows/structural-refactoring.md',
       '.cortex/gizmo-prime/workflows/subagent-delegation.md',

@@ -124,18 +124,13 @@ export class CortexDocumentMapVerifier {
         return [catalogPath, document] as const;
       }),
     );
-    const [root = false] = [
-      ['.cortex/knowledge-graph.md', '.cortex/k-graph.md', '.cortex/INDEX.md']
-        .map((path) => catalog.get(path))
-        .find(Boolean),
-    ];
+    const [root = false] = [catalog.get('.cortex/index.md')];
     if (root === false) {
       this.add(args.findings)({
         code: CortexStructureFindingCode.MissingIndex,
-        file: '.cortex/knowledge-graph.md',
+        file: '.cortex/index.md',
         line: 1,
-        message:
-          'Centralized Cortex knowledge graph `.cortex/knowledge-graph.md` is missing.',
+        message: 'Centralized Cortex index `.cortex/index.md` is missing.',
       });
     } else {
       this.deriveGraphFindings({ ...args, catalog, root });
@@ -181,7 +176,7 @@ export class CortexDocumentMapVerifier {
             code: CortexStructureFindingCode.MissingIndex,
             file: graphPath,
             line: 1,
-            message: `Required owner knowledge graph is missing: ${graphPath}`,
+            message: `Required owner index is missing: ${graphPath}`,
           });
         } else graphDocuments.set(graphPath, graph);
       }
@@ -224,7 +219,7 @@ export class CortexDocumentMapVerifier {
           code: CortexStructureFindingCode.InvalidIndexEntry,
           file: graphPath,
           line: 1,
-          message: `Knowledge graphs must index each non-graph document once: ${indexedPath}`,
+          message: `Indexes must index each non-graph document once: ${indexedPath}`,
         });
       }
     }
@@ -235,13 +230,13 @@ export class CortexDocumentMapVerifier {
         documentPath,
       ).owningKnowledgeGraphPath();
       const graphPath =
-        ownerGraph === '.cortex/knowledge-graph.md' ? rootPath : ownerGraph;
+        ownerGraph === '.cortex/index.md' ? rootPath : ownerGraph;
       if (indexedByGraph.get(graphPath)?.has(documentPath)) continue;
       this.add(args.findings)({
         code: CortexStructureFindingCode.MissingFromIndex,
         file: graphPath,
         line: 1,
-        message: `Document is not indexed in its owning knowledge graph ${graphPath}: ${documentPath}`,
+        message: `Document is not indexed in its owning index ${graphPath}: ${documentPath}`,
       });
     }
     if (!distributed) return;
@@ -252,7 +247,7 @@ export class CortexDocumentMapVerifier {
         code: CortexStructureFindingCode.MissingFromIndex,
         file: rootPath,
         line: 1,
-        message: `Root knowledge graph must link the owner graph: ${graphPath}`,
+        message: `Root index must link the owner graph: ${graphPath}`,
       });
     }
     for (const graphPath of OWNER_GRAPHS) {
@@ -265,7 +260,7 @@ export class CortexDocumentMapVerifier {
           code: CortexStructureFindingCode.InvalidIndexEntry,
           file: graphPath,
           line: 1,
-          message: `Owning knowledge graph cannot index another context's document: ${indexedPath}`,
+          message: `Owning index cannot index another context's document: ${indexedPath}`,
         });
       }
     }
@@ -280,7 +275,7 @@ export class CortexDocumentMapVerifier {
         code: CortexStructureFindingCode.InvalidIndexEntry,
         file: rootPath,
         line: 1,
-        message: `Root knowledge graph must route through owner graphs instead of indexing owned documents directly: ${indexedPath}`,
+        message: `Root index must route through owner graphs instead of indexing owned documents directly: ${indexedPath}`,
       });
     }
   }
@@ -300,7 +295,7 @@ export class CortexDocumentMapVerifier {
         code: CortexStructureFindingCode.InvalidTitle,
         file: args.graph.relativePath,
         line: this.line(firstH1),
-        message: 'Knowledge graph must begin with exactly one H1 title.',
+        message: 'Index must begin with exactly one H1 title.',
       });
     }
     const counts = new Map<string, number>();
@@ -336,7 +331,7 @@ export class CortexDocumentMapVerifier {
           code: CortexStructureFindingCode.InvalidIndexEntry,
           file: args.graph.relativePath,
           line: this.line(link),
-          message: `Child knowledge graph may link only its own directory or explicit read-only authorities: ${resolved.target}`,
+          message: `Child index may link only its own directory or explicit read-only authorities: ${resolved.target}`,
         });
       }
       args.indexed.add(resolved.target);
@@ -355,7 +350,7 @@ export class CortexDocumentMapVerifier {
         code: CortexStructureFindingCode.InvalidIndexEntry,
         file: args.graph.relativePath,
         line: this.line(link),
-        message: `Knowledge graphs route at document level and must not duplicate section links: ${resolved.target}#${resolved.fragment}`,
+        message: `Indexes route at document level and must not duplicate section links: ${resolved.target}#${resolved.fragment}`,
       });
     }
     for (const [target, count] of counts) {
@@ -364,7 +359,7 @@ export class CortexDocumentMapVerifier {
         code: CortexStructureFindingCode.InvalidIndexEntry,
         file: args.graph.relativePath,
         line: 1,
-        message: `Knowledge graph must index each document once: ${target}`,
+        message: `Index must index each document once: ${target}`,
       });
     }
   }

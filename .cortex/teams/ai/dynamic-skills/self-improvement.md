@@ -46,7 +46,7 @@ speculation, stale observations, and facts evident from nearby code ephemeral.
 When evidence conflicts or is weak, resolve it with upstream
 [bounded review](../../../../.meta-cortex/teams/ai-team/agents/tech-writer/skills/context-engineering/practices/consistency.md#bounded-review)
 or keep the candidate ephemeral. Use the
-[root graph](../../../knowledge-graph.md) and owning team graph to find the
+[root graph](../../../index.md) and owning team graph to find the
 Nook authority; update a graph only when ownership, path, or discoverability
 changes. Correct inaccurate Nook guidance from implementation evidence and
 report code that violates an active requirement.
@@ -86,7 +86,7 @@ for bounded delegation and shared-edit ownership.
 
 ### Loom extraction procedure
 
-1. Find the owning Nook authority in the root and team knowledge graphs.
+1. Find the owning Nook authority in the root and team indexes.
 2. Keep semantic policy there; put only deterministic assertions in Nook Loom or Task tooling.
 3. Validate the changed policy through hosted PR checks.
 

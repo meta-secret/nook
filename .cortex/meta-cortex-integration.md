@@ -104,7 +104,7 @@ When upgrading an older configuration, remove obsolete per-role `mode` and
 Meta-Cortex owns generic roles, skills, programming requirements, and authoring
 practices. Nook owns product architecture, product security, delivery
 constraints, and Nook-specific tooling. The root [Nook routing contract](AGENTS.md)
-and selected [team context](teams/ai/knowledge-graph.md) route those project
+and selected [team context](teams/ai/index.md) route those project
 requirements.
 
 Nook's Prime and Team Gizmo documents adapt the upstream roles. The Nook

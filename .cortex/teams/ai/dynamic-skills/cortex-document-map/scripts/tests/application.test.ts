@@ -30,7 +30,7 @@ export class CortexDocumentMapApplicationScenario {
       kind: CortexDocumentMapContractKind.Request,
       documents: [
         {
-          relativePath: '.cortex/knowledge-graph.md',
+          relativePath: '.cortex/index.md',
           content: args.content,
         },
       ],
@@ -106,7 +106,7 @@ test('validates Cortex links and delegates other repository links to the host', 
         ? [
             {
               code: CortexStructureFindingCode.InvalidIndexEntry,
-              file: '.cortex/knowledge-graph.md',
+              file: '.cortex/index.md',
               line: 3,
               message: `Index link points to non-existent document: ${localLink.target}`,
             },
@@ -145,7 +145,7 @@ test('keeps excluded transient documents in syntax enforcement only', () => {
     kind: CortexDocumentMapContractKind.Request,
     documents: [
       {
-        relativePath: '.cortex/knowledge-graph.md',
+        relativePath: '.cortex/index.md',
         content: '# Cortex Context Router\n',
       },
       { relativePath: excluded, content: '# Temporary\n' },
@@ -165,7 +165,7 @@ test('does not suppress persistent links to excluded transient documents', () =>
     kind: CortexDocumentMapContractKind.Request,
     documents: [
       {
-        relativePath: '.cortex/knowledge-graph.md',
+        relativePath: '.cortex/index.md',
         content: '# Cortex Context Router\n\n- [Transient](.session/note.md)\n',
       },
       { relativePath: excluded, content: '# Temporary\n' },
@@ -180,7 +180,7 @@ test('does not suppress persistent links to excluded transient documents', () =>
     ok([
       {
         code: CortexStructureFindingCode.InvalidIndexEntry,
-        file: '.cortex/knowledge-graph.md',
+        file: '.cortex/index.md',
         line: 3,
         message:
           'Index link points to non-existent document: .cortex/.session/note.md',

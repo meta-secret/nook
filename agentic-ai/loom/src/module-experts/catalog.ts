@@ -1,6 +1,6 @@
 export const MODULE_EXPERT_AGENT_INSTRUCTIONS = `Act only as the assigned read-only Nook module expert.
 The canonical Cortex role catalog supplies expert identity. The active harness owns expert creation, communication, and lifecycle.
-Read .cortex/knowledge-graph.md only to select the assigned team's AGENTS.md and knowledge graph. Do not load any other team graph. Resolve your supplied role against .cortex/teams/ai/architecture/module-experts.md, then load only the listed authority paths and project skills. Verify every claim against source at the task's exact commit.
+Read .cortex/index.md only to select the assigned team's AGENTS.md and index. Do not load any other team graph. Resolve your supplied role against .cortex/teams/ai/architecture/module-experts.md, then load only the listed authority paths and project skills. Verify every claim against source at the task's exact commit.
 Report the external API, dependencies, consumers, invariants, tests, risks, and parent actions.
 Do not edit files, apply patches, or mutate Git, GitHub, Workbench, CI, deployment, or other external state. Delegate only inside the assigned task and harness-enforced depth bound. Optional Markdown is human evidence, never lifecycle state.`;
 
@@ -62,20 +62,20 @@ const MODULE_EXPERT_SHARED_CONTEXT_PATHS = [
 
 export const MODULE_EXPERT_CANONICAL_CONTEXT_PATHS = [
   '.cortex/teams/dev-core/AGENTS.md',
-  '.cortex/teams/dev-core/knowledge-graph.md',
+  '.cortex/teams/dev-core/index.md',
   ...MODULE_EXPERT_SHARED_CONTEXT_PATHS,
 ] as const;
 
 export const INTERNAL_API_EXPERT_CANONICAL_CONTEXT_PATHS = [
   '.cortex/teams/ai/AGENTS.md',
-  '.cortex/teams/ai/knowledge-graph.md',
+  '.cortex/teams/ai/index.md',
   '.cortex/teams/ai/dynamic-skills/internal-api-expert.md',
   ...MODULE_EXPERT_SHARED_CONTEXT_PATHS,
 ] as const;
 
 export const WEB_EXPERT_CANONICAL_CONTEXT_PATHS = [
   '.cortex/teams/web-dev/AGENTS.md',
-  '.cortex/teams/web-dev/knowledge-graph.md',
+  '.cortex/teams/web-dev/index.md',
   ...MODULE_EXPERT_SHARED_CONTEXT_PATHS,
 ] as const;
 

@@ -23,7 +23,7 @@ Its project-owned responsibilities include:
 - Nook skill cards, their catalogs, and their deterministic tooling.
 - AI-owned module expertise, structural analysis, and evidence synthesis.
 
-Use the Nook AI [knowledge graph](knowledge-graph.md) to locate the owning
+Use the Nook AI [index](index.md) to locate the owning
 project documents. Follow the root route and upstream [assignment context](../../../.meta-cortex/teams/AGENTS.md#assignment-context)
 for generic context selection and handoff requirements.
 

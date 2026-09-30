@@ -56,7 +56,7 @@ future Vale upgrade can be evaluated without repeating lossy prototypes.
   - **Contract:** In persistent non-graph Cortex documents, case-sensitive H2
     headings named exactly `Relationships` or `Document map` produce one alert
     at each heading line. H3 headings, case variants, prose, code, canonical
-    knowledge graphs, executable-skill `scripts/`, `.session/`, and root
+    indexes, executable-skill `scripts/`, `.session/`, and root
     `node_modules/` are excluded.
   - **Vale fit:** Exact native `heading.h2` existence rule with fixture-proven
     discovery, line, and cardinality.
@@ -67,7 +67,7 @@ future Vale upgrade can be evaluated without repeating lossy prototypes.
     `../agentic-ai/loom/src/lib/changed-cortex-density.ts`, and
     `../agentic-ai/loom/src/commands/cortex-audit.ts`.
   - **Contract:** The explicitly enabled full audit checks every admitted
-    persistent Cortex document, including canonical knowledge graphs and
+    persistent Cortex document, including canonical indexes and
     excluding documents rejected for authored HTML. Changed-density checks
     exact changed admitted files and retains alerts whose native line is added.
   - **Vale-native deltas:** Vale 3.19 owns sentence segmentation, alert line,

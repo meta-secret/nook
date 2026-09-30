@@ -94,20 +94,20 @@ test('reports each exact prohibited H2 through the Vale rule', () => {
       Check: 'Nook.CortexNavigation',
       Line: 3,
       Message:
-        'Inline `## Relationships` is prohibited; navigation is centralized in `.cortex/knowledge-graph.md`.',
+        'Inline `## Relationships` is prohibited; navigation is centralized in `.cortex/index.md`.',
       Severity: 'error',
     },
     {
       Check: 'Nook.CortexNavigation',
       Line: 7,
       Message:
-        'Inline `## Document map` is prohibited; navigation is centralized in `.cortex/knowledge-graph.md`.',
+        'Inline `## Document map` is prohibited; navigation is centralized in `.cortex/index.md`.',
       Severity: 'error',
     },
   ]);
 });
 
-test('does not exempt an ordinary nested knowledge-graph document', () => {
+test('does not exempt an ordinary nested index document', () => {
   const result =
     CortexDocumentMapValeNavigationScenario.runOrdinaryGraphFixture();
   expect(result.exitCode).not.toBe(0);

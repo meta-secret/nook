@@ -312,7 +312,7 @@ entirely from declared inputs.
 Examples include:
 
 - path and link existence;
-- heading and knowledge-graph coverage;
+- heading and index coverage;
 - canonical skill-card registration and harness-mirror absence;
 - exact duplicate blocks;
 - source-size and closed-vocabulary checks;

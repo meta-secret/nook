@@ -95,7 +95,7 @@ Does not apply to:
       repository TypeScript configuration;
   - keep dependencies in the shared `.cortex` Bun workspace and its frozen
     lockfile;
-  - update `.cortex/teams/ai/dynamic-skills/index.md` and the owning knowledge graph if
+  - update `.cortex/teams/ai/dynamic-skills/index.md` and the owning index if
     Loom did not.
 - Run `task loom:cortex-audit` in the required hosted PR validation stage after
   the card and registry agree. A local diagnostic follows the root

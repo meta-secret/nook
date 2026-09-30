@@ -52,7 +52,7 @@ task loom:run CONFIG=path/to/cortex-audit-density.yaml
 ```
 
 The enabled full audit runs density checks only after Cortex admission. It
-checks exact persistent documents, including canonical knowledge graphs, and
+checks exact persistent documents, including canonical indexes, and
 excludes documents rejected for authored HTML. Typed findings retain the
 `and`-join behavior above. Semicolon and length alerts retain Vale's native
 sentence boundary, line, check, message, severity, cardinality, and Unicode

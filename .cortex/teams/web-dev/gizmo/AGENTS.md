@@ -4,7 +4,7 @@
 
 Use the [Nook Team Gizmo wrapper](../../../gizmo-prime/team-gizmo/AGENTS.md).
 This path supplies the web-dev context to the feature's existing coordinator.
-The assignment carries this team's contract and relevant knowledge-graph entries.
+The assignment carries this team's contract and relevant index entries.
 
 ## Prohibited actions
 

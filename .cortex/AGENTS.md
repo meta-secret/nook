@@ -6,7 +6,7 @@ Read [the circuit breaker](CIRCUIT-BREAKER.md) before every other Cortex documen
 Then enforce the Meta-Cortex integration
 [required bootstrap](meta-cortex-integration.md#required-bootstrap). Do not
 plan, edit, validate, or launch agents until the bootstrap succeeds. After it
-succeeds, read the [root knowledge graph](knowledge-graph.md).
+succeeds, read the [root index](index.md).
 Load the [upstream entry point](../.meta-cortex/AGENTS.md) with those project
 constraints. Explicit user instructions determine task scope and stopping point.
 
@@ -72,6 +72,18 @@ Cortex after moving its authority into `nook-app/`.
 
 **Preferred:** load [nook-app architecture](../nook-app/.cortex/docs/architecture/index.md)
 for application work and link to shared requirements that remain at the root.
+
+### Navigation indexes
+
+Use `index.md` as the sole navigation filename in each Cortex directory.
+Keep topic summaries and links in that index. When consolidating navigation,
+preserve its content and update document links, catalogs, and tooling callers.
+
+**Prohibited:** maintain a separate navigation document or filename alias
+beside an existing `index.md`.
+
+**Preferred:** route from the [root index](index.md) to the owning team's or
+project's `index.md`, then to the relevant document.
 
 ## Nook assignment context
 

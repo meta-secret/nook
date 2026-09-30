@@ -17,8 +17,7 @@ import { CortexDocumentMapContractKind } from '../src/domain.ts';
 
 const REPO_ROOT = path.resolve(import.meta.dir, '../../../../../../../');
 
-export const PIPELINE_GRAPH_PATH =
-  '.cortex/teams/delivery-pipeline/knowledge-graph.md';
+export const PIPELINE_GRAPH_PATH = '.cortex/teams/delivery-pipeline/index.md';
 
 export type MakeDocumentArgs = {
   readonly path: string;
@@ -95,46 +94,46 @@ export class CortexDocumentMapCortexDocumentStructureScenario {
     },
   ): CortexDocumentSource[] {
     const rootDocumentArgs: MakeDocumentArgs = {
-      path: '.cortex/knowledge-graph.md',
-      content: `# Cortex Knowledge Graph
+      path: '.cortex/index.md',
+      content: `# Cortex Index
 
-- [AI](teams/ai/knowledge-graph.md)
-- [Development core](teams/dev-core/knowledge-graph.md)
-- [Delivery Pipeline](teams/delivery-pipeline/knowledge-graph.md)
-- [Security](teams/security/knowledge-graph.md)
-- [SRE](teams/sre/knowledge-graph.md)
-- [Web development](teams/web-dev/knowledge-graph.md)
-- [Shared](shared/knowledge-graph.md)
-- [Gizmo Prime](gizmo-prime/knowledge-graph.md)
+- [AI](teams/ai/index.md)
+- [Development core](teams/dev-core/index.md)
+- [Delivery Pipeline](teams/delivery-pipeline/index.md)
+- [Security](teams/security/index.md)
+- [SRE](teams/sre/index.md)
+- [Web development](teams/web-dev/index.md)
+- [Shared](shared/index.md)
+- [Gizmo Prime](gizmo-prime/index.md)
 ${args.rootExtra}`,
     };
     const aiGraphArgs: MakeDocumentArgs = {
-      path: '.cortex/teams/ai/knowledge-graph.md',
-      content: '# AI Knowledge Graph\n',
+      path: '.cortex/teams/ai/index.md',
+      content: '# AI Index\n',
     };
     const devGraphArgs: MakeDocumentArgs = {
-      path: '.cortex/teams/dev-core/knowledge-graph.md',
-      content: `# Development Core Knowledge Graph\n\n- [Core policy](${args.devTarget})\n`,
+      path: '.cortex/teams/dev-core/index.md',
+      content: `# Development Core Index\n\n- [Core policy](${args.devTarget})\n`,
     };
     const sreGraphArgs: MakeDocumentArgs = {
-      path: '.cortex/teams/sre/knowledge-graph.md',
-      content: '# SRE Knowledge Graph\n',
+      path: '.cortex/teams/sre/index.md',
+      content: '# SRE Index\n',
     };
     const securityGraphArgs: MakeDocumentArgs = {
-      path: '.cortex/teams/security/knowledge-graph.md',
-      content: '# Security Knowledge Graph\n',
+      path: '.cortex/teams/security/index.md',
+      content: '# Security Index\n',
     };
     const webGraphArgs: MakeDocumentArgs = {
-      path: '.cortex/teams/web-dev/knowledge-graph.md',
-      content: '# Web Development Knowledge Graph\n',
+      path: '.cortex/teams/web-dev/index.md',
+      content: '# Web Development Index\n',
     };
     const sharedGraphArgs: MakeDocumentArgs = {
-      path: '.cortex/shared/knowledge-graph.md',
-      content: '# Shared Knowledge Graph\n',
+      path: '.cortex/shared/index.md',
+      content: '# Shared Index\n',
     };
     const gizmoGraphArgs: MakeDocumentArgs = {
-      path: '.cortex/gizmo-prime/knowledge-graph.md',
-      content: `# Gizmo Prime Knowledge Graph\n\n- [Gizmo policy](${args.gizmoTarget})\n`,
+      path: '.cortex/gizmo-prime/index.md',
+      content: `# Gizmo Prime Index\n\n- [Gizmo policy](${args.gizmoTarget})\n`,
     };
     const corePolicyArgs: MakeDocumentArgs = {
       path: '.cortex/teams/dev-core/policy.md',
@@ -148,7 +147,7 @@ ${args.rootExtra}`,
       this.makeDocument(rootDocumentArgs),
       this.makeDocument({
         path: PIPELINE_GRAPH_PATH,
-        content: '# Delivery Pipeline Knowledge Graph\n',
+        content: '# Delivery Pipeline Index\n',
       }),
       this.makeDocument(aiGraphArgs),
       this.makeDocument(devGraphArgs),
@@ -168,26 +167,26 @@ ${args.rootExtra}`,
         ? {
             ...document,
             content: `${document.content}
-- [Team Gizmo](gizmo/knowledge-graph.md)
-- [PR Lifecycle Agent](pr-lifecycle/knowledge-graph.md)
+- [Team Gizmo](gizmo/index.md)
+- [PR Lifecycle Agent](pr-lifecycle/index.md)
 `,
           }
         : document,
     );
     documents.push(
       this.makeDocument({
-        path: '.cortex/teams/delivery-pipeline/gizmo/knowledge-graph.md',
+        path: '.cortex/teams/delivery-pipeline/gizmo/index.md',
         content:
-          '# Delivery Pipeline Team Gizmo Knowledge Graph\n\n- [Policy](policy.md)\n- [Gizmo authority](../../../gizmo-prime/policy.md)\n',
+          '# Delivery Pipeline Team Gizmo Index\n\n- [Policy](policy.md)\n- [Gizmo authority](../../../gizmo-prime/policy.md)\n',
       }),
       this.makeDocument({
         path: '.cortex/teams/delivery-pipeline/gizmo/policy.md',
         content: '# Team Gizmo Policy\n',
       }),
       this.makeDocument({
-        path: '.cortex/teams/delivery-pipeline/pr-lifecycle/knowledge-graph.md',
+        path: '.cortex/teams/delivery-pipeline/pr-lifecycle/index.md',
         content:
-          '# Delivery Pipeline PR Lifecycle Knowledge Graph\n\n- [Policy](workflows/policy.md)\n- [Gizmo authority](../../../gizmo-prime/policy.md)\n',
+          '# Delivery Pipeline PR Lifecycle Index\n\n- [Policy](workflows/policy.md)\n- [Gizmo authority](../../../gizmo-prime/policy.md)\n',
       }),
       this.makeDocument({
         path: '.cortex/teams/delivery-pipeline/pr-lifecycle/workflows/policy.md',

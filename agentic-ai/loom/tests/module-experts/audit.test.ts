@@ -154,20 +154,20 @@ describe('module expert audit', () => {
   test('requires exact canonical context, web skills, and Rust boundary scope', () => {
     expect(MODULE_EXPERT_CANONICAL_CONTEXT_PATHS).toEqual([
       '.cortex/teams/dev-core/AGENTS.md',
-      '.cortex/teams/dev-core/knowledge-graph.md',
+      '.cortex/teams/dev-core/index.md',
       '.cortex/teams/ai/dynamic-skills/module-expert.md',
       '.cortex/gizmo-prime/workflows/module-oriented-development.md',
     ]);
     expect(INTERNAL_API_EXPERT_CANONICAL_CONTEXT_PATHS).toEqual([
       '.cortex/teams/ai/AGENTS.md',
-      '.cortex/teams/ai/knowledge-graph.md',
+      '.cortex/teams/ai/index.md',
       '.cortex/teams/ai/dynamic-skills/internal-api-expert.md',
       '.cortex/teams/ai/dynamic-skills/module-expert.md',
       '.cortex/gizmo-prime/workflows/module-oriented-development.md',
     ]);
     expect(WEB_EXPERT_CANONICAL_CONTEXT_PATHS).toEqual([
       '.cortex/teams/web-dev/AGENTS.md',
-      '.cortex/teams/web-dev/knowledge-graph.md',
+      '.cortex/teams/web-dev/index.md',
       '.cortex/teams/ai/dynamic-skills/module-expert.md',
       '.cortex/gizmo-prime/workflows/module-oriented-development.md',
     ]);

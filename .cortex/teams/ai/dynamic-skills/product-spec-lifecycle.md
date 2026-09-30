@@ -46,7 +46,7 @@ Before planning or editing code for any product feature:
 
 1. Select the responsible team through
    [Engineering team ownership](../../../gizmo-prime/architecture/team-ownership.md).
-2. Search that team's knowledge graph and the global [product catalog](../../../shared/product-specs/index.md).
+2. Search that team's index and the global [product catalog](../../../shared/product-specs/index.md).
 3. Read the owning specification for the feature, item type, or workflow.
 4. Understand existing invariants, user flows, and acceptance criteria.
 5. Align the task plan with the specification before making changes.
@@ -68,7 +68,7 @@ If no specification exists for a new feature or item type:
 2. Follow [cortex-writer.md](cortex-writer.md) and
    [cortex-article-structure/SKILL.md](cortex-article-structure/SKILL.md).
 3. Register the new specification in [`.cortex/shared/product-specs/index.md`](../../../shared/product-specs/index.md).
-4. Update navigation entries in the owning team knowledge graph.
+4. Update navigation entries in the owning team index.
 
 ### 3. Maintain specification status and consistency
 

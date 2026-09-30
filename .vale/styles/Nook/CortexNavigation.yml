@@ -1,5 +1,5 @@
 extends: existence
-message: "Inline `## %s` is prohibited; navigation is centralized in `.cortex/knowledge-graph.md`."
+message: "Inline `## %s` is prohibited; navigation is centralized in `.cortex/index.md`."
 level: error
 scope: heading.h2
 nonword: true

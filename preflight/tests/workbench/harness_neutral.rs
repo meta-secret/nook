@@ -279,8 +279,8 @@ fn root_agents_routes_every_worker_to_cortex() {
 
     assert!(
         root_agents.contains("[`.cortex/AGENTS.md`](.cortex/AGENTS.md)")
-            && root_agents.contains("[`.cortex/knowledge-graph.md`](.cortex/knowledge-graph.md)"),
-        "root AGENTS.md must route every worker to the Cortex entry contract and knowledge graph"
+            && root_agents.contains("[`.cortex/index.md`](.cortex/index.md)"),
+        "root AGENTS.md must route every worker to the Cortex entry contract and index"
     );
 }
 

@@ -7,7 +7,7 @@ to verify or initialize `.meta-cortex/`. Stop all repository work and report
 the exact blocker if the bootstrap does not succeed.
 
 After the bootstrap succeeds, read [`.cortex/AGENTS.md`](.cortex/AGENTS.md)
-and [`.cortex/knowledge-graph.md`](.cortex/knowledge-graph.md) before making
+and [`.cortex/index.md`](.cortex/index.md) before making
 changes in this repository. Nook context composes with
 [Meta-Cortex](.meta-cortex/AGENTS.md) through the
 [integration contract](.cortex/meta-cortex-integration.md). Meta-Cortex owns

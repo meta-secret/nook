@@ -56,7 +56,7 @@ export const SYSTEM_COHERENCE_BEHAVIOR_CONTRACT = [
 
 const COMMON_CONTEXT = [
   '.cortex/AGENTS.md',
-  '.cortex/knowledge-graph.md',
+  '.cortex/index.md',
   '.cortex/teams/ai/architecture/refactoring-experts.md',
   '.cortex/teams/ai/workflows/structural-refactoring.md',
   '.cortex/gizmo-prime/workflows/subagent-delegation.md',

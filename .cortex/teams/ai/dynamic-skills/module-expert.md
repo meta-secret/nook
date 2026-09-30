@@ -60,7 +60,7 @@ Do not use this skill to:
 
 ## Application procedure
 
-1. Read `.cortex/knowledge-graph.md` and the assigned team's knowledge graph.
+1. Read `.cortex/index.md` and the assigned team's index.
 2. Resolve one role contract in `architecture/module-experts.md`.
 3. Select the smallest allowed authority and skill context for the task.
 4. Verify the role contract and selection against the exact source commit.

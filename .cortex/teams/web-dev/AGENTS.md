@@ -26,7 +26,7 @@ ownership of portable domain and security behavior.
 ## Nook context authorities
 
 Follow Meta-Cortex [assignment context](../../../.meta-cortex/teams/AGENTS.md#assignment-context)
-for generic context selection. The Nook [web development graph](knowledge-graph.md)
+for generic context selection. The Nook [web development graph](index.md)
 catalogs the product specifications, design, frontend skills, and references
 used by this context.
 

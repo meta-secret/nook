@@ -405,7 +405,7 @@ describe('provider-neutral executable skill YAML host', () => {
   audit:
     kind: cortex-document-map-audit-v1
     documents:
-      - relativePath: .cortex/knowledge-graph.md
+      - relativePath: .cortex/index.md
         content: "# Router\\n\\n- [Transient](.session/note.md)\\n"
       - relativePath: .cortex/.session/note.md
         content: "# Temporary\\n"
@@ -420,7 +420,7 @@ describe('provider-neutral executable skill YAML host', () => {
     ).toEqual([
       {
         code: 'invalid-index-entry',
-        file: '.cortex/knowledge-graph.md',
+        file: '.cortex/index.md',
         line: 3,
         message:
           'Index link points to non-existent document: .cortex/.session/note.md',
