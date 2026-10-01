@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Effect, Fiber } from 'effect'
   import { err } from 'neverthrow'
   import {
     VaultStorageFailure,
@@ -34,7 +35,13 @@
   import {
     ExtensionIdentityRequestSource,
     extensionConnectionBrowser as connectionBrowser,
+    type PairedExtensionIdentityDiscovery,
   } from '$lib/extension/connect'
+  import {
+    LoginVaultExtensionPairingStatusKind,
+    LoginVaultExtensionPairingStatusProjection,
+    type LoginVaultExtensionPairingStatusEntry,
+  } from '$lib/components/login/login-vault-extension-pairing-status'
   import {
     ExtensionSetupOfferKind,
     type ExtensionSetupOffer,
@@ -123,6 +130,9 @@
     },
   }
   const routeCoordinator = new VaultAppRouteCoordinator(routeCoordinatorRequest)
+  let extensionConnectPairingStatusEntries = $state<
+    LoginVaultExtensionPairingStatusEntry[]
+  >([])
   let extensionBackedVaultSession = $state(false)
   let extensionDiscoveryStoreId = $state('')
   let extensionSetupStateValue = $state<ExtensionSetupOffer>({
@@ -131,6 +141,62 @@
   let extensionInstallBusy = $state(false)
   let extensionConnectError = $state(false)
   const EXTENSION_LOCKED_RETRY_MS = 3_000
+  $effect(() => {
+    const localVaults = vault.localVaults
+    switch (routeCoordinator.extensionConnectRoute) {
+      case false:
+        extensionConnectPairingStatusEntries = []
+        return
+      case true:
+        switch (vault.isAuthenticated) {
+          case true:
+            extensionConnectPairingStatusEntries = []
+            return
+          case false:
+            extensionConnectPairingStatusEntries = localVaults.map(
+              (entry) => ({
+                storeId: entry.storeId,
+                kind: LoginVaultExtensionPairingStatusKind.Checking,
+                connectedVaultStoreId: undefined,
+                connectedVaultName: undefined,
+              }),
+            )
+            const discoveryEffects = localVaults.map((entry) =>
+              Effect.map(
+                Effect.promise(() =>
+                  connectionBrowser.discoverPairedExtensionIdentity(
+                    entry.storeId,
+                  ),
+                ),
+                (discovery: PairedExtensionIdentityDiscovery) => {
+                  const projection = new LoginVaultExtensionPairingStatusProjection(
+                    discovery,
+                  )
+                  return {
+                    storeId: entry.storeId,
+                    kind: projection.kind,
+                    connectedVaultStoreId: projection.connectedVaultStoreId,
+                    connectedVaultName: projection.connectedVaultName,
+                  }
+                },
+              ),
+            )
+            const discoveryFiber = Effect.runFork(
+              Effect.gen(function* () {
+                const discoveries = yield* Effect.all(discoveryEffects, {
+                  concurrency: 'unbounded',
+                })
+                yield* Effect.sync(() => {
+                  extensionConnectPairingStatusEntries = discoveries
+                })
+              }),
+            )
+            return () => {
+              Effect.runFork(Fiber.interrupt(discoveryFiber))
+            }
+        }
+    }
+  })
   $effect(() => {
     if (!vault.isAuthenticated || !('window' in globalThis)) return
     const workspaceRoute = new WorkspacePath(window.location.pathname).route
@@ -872,6 +938,7 @@
     ).isSentinelParticipantResponsePending(),
     sentinelParticipantResponse: routeCoordinator.sentinelParticipantResponse,
     sentinelOnboardingPackage: routeCoordinator.sentinelOnboardingPackage,
+    extensionConnectPairingStatusEntries,
     onUnlock: handleUnlock,
     onUseEnrollmentCode: handleUseEnrollmentCode,
     onAcceptSentinelOnboardingPackage: handleAcceptSentinelOnboarding,

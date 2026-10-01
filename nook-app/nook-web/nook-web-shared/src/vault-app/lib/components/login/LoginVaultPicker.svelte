@@ -6,12 +6,17 @@
   import LoginVaultNameForm from '$lib/components/login/LoginVaultNameForm.svelte'
   import LoginVaultWorkflowNav from '$lib/components/login/LoginVaultWorkflowNav.svelte'
   import { LoginVaultWorkflow } from '$lib/components/login/login-unlock-state'
+  import {
+    LoginVaultExtensionPairingStatusLookup,
+    type LoginVaultExtensionPairingStatusEntry,
+  } from '$lib/components/login/login-vault-extension-pairing-status'
   import type { VaultState } from '$lib/vault.svelte'
   import type { NookLocalVaultEntry } from '$app-wasm'
 
   let {
     vault,
     vaults,
+    extensionConnectPairingStatusEntries,
     isVerifying,
     isInitializing,
     onChooseVault,
@@ -20,6 +25,7 @@
   }: {
     vault: VaultState
     vaults: NookLocalVaultEntry[]
+    extensionConnectPairingStatusEntries: LoginVaultExtensionPairingStatusEntry[]
     isVerifying: boolean
     isInitializing: boolean
     onChooseVault: (storeId: string) => void | Promise<void>
@@ -28,6 +34,11 @@
   } = $props()
 
   const isBusy = $derived(isVerifying || isInitializing)
+  const pairingStatusLookup = $derived(
+    new LoginVaultExtensionPairingStatusLookup({
+      entries: extensionConnectPairingStatusEntries,
+    }),
+  )
   let workflow = $state<LoginVaultWorkflow>(LoginVaultWorkflow.Open)
 
   function selectWorkflow(selected: LoginVaultWorkflow): void {
@@ -65,7 +76,14 @@
               disabled={isBusy}
               onclick={() => onChooseVault(entry.storeId)}
             >
-              <LoginVaultCard {vault} {entry} interactive />
+              <LoginVaultCard
+                {vault}
+                {entry}
+                interactive
+                extensionPairingStatus={pairingStatusLookup.forStore(entry.storeId)}
+                connectedVaultStoreId={pairingStatusLookup.entryForStore(entry.storeId)?.connectedVaultStoreId}
+                connectedVaultName={pairingStatusLookup.entryForStore(entry.storeId)?.connectedVaultName}
+              />
             </button>
           </li>
         {/each}
