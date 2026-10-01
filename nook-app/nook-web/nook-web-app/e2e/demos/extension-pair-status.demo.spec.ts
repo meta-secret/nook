@@ -69,11 +69,9 @@ test('show paired and unpaired vault status before extension unlock', async ({
   await page.getByTestId('vault-admin-create-input').fill('Vault B')
   await page.getByTestId('vault-admin-create-btn').click()
   await expect
-    .poll(
-      async () =>
-        parseStoreId(await readLocalVaultYamlFromIdb(page)),
-      { timeout: UI_TIMEOUT_MS },
-    )
+    .poll(async () => parseStoreId(await readLocalVaultYamlFromIdb(page)), {
+      timeout: UI_TIMEOUT_MS,
+    })
     .not.toBe(pairedVaultStoreId)
   const unpairedVaultStoreId = parseStoreId(
     await readLocalVaultYamlFromIdb(page),
@@ -158,14 +156,10 @@ test('show paired and unpaired vault status before extension unlock', async ({
     `[data-testid="login-vault-card"][data-store-id="${unpairedVaultStoreId}"]`,
   )
   await expect(
-    selectedUnpairedVault.getByTestId(
-      'login-vault-extension-pairing-status',
-    ),
+    selectedUnpairedVault.getByTestId('login-vault-extension-pairing-status'),
   ).toHaveText('Not paired with this extension')
   await expect(
-    selectedUnpairedVault.getByTestId(
-      'login-vault-extension-connected-vault',
-    ),
+    selectedUnpairedVault.getByTestId('login-vault-extension-connected-vault'),
   ).toContainText(pairedVaultName)
   await expect(
     page.getByTestId('login-vault-extension-pairing-purpose'),

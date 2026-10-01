@@ -1,5 +1,6 @@
 import type { PairedExtensionIdentityDiscovery } from '$lib/extension/connect'
 import { ExtensionPairedVaultIdentityStatusMessageStatus } from '$web-shared/extension/paired-vault-identity-status'
+import { LoginVaultEntryKind, type LoginVaultEntry } from './login-unlock-state'
 
 export enum LoginVaultExtensionPairingStatusKind {
   NotShown = 'not-shown',
@@ -32,11 +33,12 @@ export type LoginVaultNotPairedExtensionPairingStatus = Extract<
   { readonly kind: LoginVaultExtensionPairingStatusKind.NotPaired }
 >
 
-export type LoginVaultExtensionPairingStatusEntry =
-  { readonly storeId: string } & (
-    | { readonly kind: LoginVaultExtensionPairingStatusKind.Checking }
-    | LoginVaultExtensionResolvedPairingStatus
-  )
+export type LoginVaultExtensionPairingStatusEntry = {
+  readonly storeId: string
+} & (
+  | { readonly kind: LoginVaultExtensionPairingStatusKind.Checking }
+  | LoginVaultExtensionResolvedPairingStatus
+)
 
 export type LoginVaultExtensionPairingStatusLookupRequest = {
   readonly entries: readonly LoginVaultExtensionPairingStatusEntry[]
@@ -75,7 +77,9 @@ export class LoginVaultExtensionPairingStatusLookup {
   }
 
   statusForStore(storeId: string): LoginVaultExtensionPairingStatus {
-    const entry = this.entries.find((candidate) => candidate.storeId === storeId)
+    const entry = this.entries.find(
+      (candidate) => candidate.storeId === storeId,
+    )
     if (!entry) return { kind: LoginVaultExtensionPairingStatusKind.NotShown }
 
     switch (entry.kind) {
@@ -85,4 +89,16 @@ export class LoginVaultExtensionPairingStatusLookup {
         return { kind: entry.kind }
     }
   }
+}
+
+export function statusForLoginVault(
+  activeLoginVault: LoginVaultEntry,
+  entries: readonly LoginVaultExtensionPairingStatusEntry[],
+): LoginVaultExtensionPairingStatus {
+  if (activeLoginVault.kind !== LoginVaultEntryKind.Available) {
+    return { kind: LoginVaultExtensionPairingStatusKind.NotShown }
+  }
+  return new LoginVaultExtensionPairingStatusLookup({ entries }).statusForStore(
+    activeLoginVault.entry.storeId,
+  )
 }

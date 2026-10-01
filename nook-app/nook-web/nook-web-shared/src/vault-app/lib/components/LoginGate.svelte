@@ -65,8 +65,7 @@
   import LoginCreateVaultChooser from "$lib/components/login/LoginCreateVaultChooser.svelte";
   import type { SentinelGenesisParticipation } from "$lib/components/login/login-create-vault-chooser-contract";
   import {
-    LoginVaultExtensionPairingStatusLookup,
-    LoginVaultExtensionPairingStatusKind,
+    statusForLoginVault,
     type LoginVaultExtensionPairingStatusEntry,
   } from "$lib/components/login/login-vault-extension-pairing-status";
   import LoginVaultPicker from "$lib/components/login/LoginVaultPicker.svelte";
@@ -453,19 +452,9 @@
     }
     return { kind: LoginVaultEntryKind.Unavailable };
   });
-  const extensionPairingStatusLookup = $derived(
-    new LoginVaultExtensionPairingStatusLookup({
-      entries: extensionConnectPairingStatusEntries,
-    }),
+  const activeVaultExtensionPairingStatus = $derived(
+    statusForLoginVault(activeLoginVault, extensionConnectPairingStatusEntries),
   );
-  const activeVaultExtensionPairingStatus = $derived.by(() => {
-    if (activeLoginVault.kind !== LoginVaultEntryKind.Available) {
-      return { kind: LoginVaultExtensionPairingStatusKind.NotShown };
-    }
-    return extensionPairingStatusLookup.statusForStore(
-      activeLoginVault.entry.storeId,
-    );
-  });
   const showQrOnboarding = $derived(
     Boolean(
       enrollmentFromUrlPending && prefillEnrollmentCode && onUseEnrollmentCode,

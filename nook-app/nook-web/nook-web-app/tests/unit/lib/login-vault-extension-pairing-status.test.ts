@@ -27,10 +27,14 @@ describe('LoginVaultExtensionPairingStatusProjection', () => {
       },
     }
 
-    expect(new LoginVaultExtensionPairingStatusProjection(locked).status).toEqual({
+    expect(
+      new LoginVaultExtensionPairingStatusProjection(locked).status,
+    ).toEqual({
       kind: LoginVaultExtensionPairingStatusKind.Paired,
     })
-    expect(new LoginVaultExtensionPairingStatusProjection(unlocked).status).toEqual({
+    expect(
+      new LoginVaultExtensionPairingStatusProjection(unlocked).status,
+    ).toEqual({
       kind: LoginVaultExtensionPairingStatusKind.Paired,
     })
   })
@@ -42,7 +46,9 @@ describe('LoginVaultExtensionPairingStatusProjection', () => {
       connectedVaultName: 'Personal vault',
     }
 
-    expect(new LoginVaultExtensionPairingStatusProjection(discovery).status).toEqual({
+    expect(
+      new LoginVaultExtensionPairingStatusProjection(discovery).status,
+    ).toEqual({
       kind: LoginVaultExtensionPairingStatusKind.NotPaired,
       connectedVault: {
         storeId: 'paired-store-id',
@@ -56,7 +62,9 @@ describe('LoginVaultExtensionPairingStatusProjection', () => {
       status: ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable,
     }
 
-    expect(new LoginVaultExtensionPairingStatusProjection(discovery).status).toEqual({
+    expect(
+      new LoginVaultExtensionPairingStatusProjection(discovery).status,
+    ).toEqual({
       kind: LoginVaultExtensionPairingStatusKind.Unavailable,
     })
   })
