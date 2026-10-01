@@ -47,7 +47,7 @@ class DemoBootstrapSignal {
   }
 }
 
-test('saves a confirmed authenticator without website success evidence', async ({
+test('keeps landing artwork out of enrollment and saves only a confirmed authenticator', async ({
   page,
 }) => {
   const bootstrapErrors: Error[] = []
@@ -99,7 +99,7 @@ test('saves a confirmed authenticator without website success evidence', async (
   await page.setContent(`<!doctype html>
     <html>
       <head>
-        <title>Authenticator setup</title>
+        <title>Skykoi</title>
         <style>
           :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
           body {
@@ -140,22 +140,16 @@ test('saves a confirmed authenticator without website success evidence', async (
       <body>
         <main id="app" data-bootstrap-sentinel="replacement-root">
           <span data-bootstrap-sentinel-child hidden></span>
-          <h1>Authenticator setup</h1>
-          <p>Scan this authenticator QR code to finish 2FA enrollment.</p>
+          <h1>Skykoi</h1>
+          <p>Discover your next adventure.</p>
           <img
-            data-testid="demo-totp-qr"
-            alt="Authenticator QR code"
+            data-testid="demo-landing-artwork"
+            alt="Featured artwork"
             width="220"
             height="220"
-            data-nook-otpauth-uri="${otpauthUri}"
-            src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Crect width='220' height='220' fill='%23fff'/%3E%3Crect x='20' y='20' width='40' height='40' fill='%23000'/%3E%3Crect x='160' y='20' width='40' height='40' fill='%23000'/%3E%3Crect x='20' y='160' width='40' height='40' fill='%23000'/%3E%3C/svg%3E"
+            src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Crect width='220' height='220' fill='%23223755'/%3E%3Ccircle cx='110' cy='110' r='65' fill='%236ba2bb'/%3E%3C/svg%3E"
           />
-          <form id="verify-form">
-            <label>Verification code
-              <input autocomplete="one-time-code" name="Code" type="text" />
-            </label>
-            <button type="submit">Verify</button>
-          </form>
+          <button type="button">Sign in</button>
         </main>
       </body>
     </html>`)
@@ -171,6 +165,35 @@ test('saves a confirmed authenticator without website success evidence', async (
   })
 
   const widget = page.locator('#nook-auth-widget')
+  await expect(page.getByTestId('demo-landing-artwork')).toBeVisible()
+  await demoBeat(page)
+  await expect(widget).toHaveCount(0)
+  await expect(
+    page.getByRole('button', { name: 'Sign in', exact: true }),
+  ).toHaveText('Sign in')
+  expect(
+    await page
+      .locator('[data-bootstrap-sentinel="replacement-root"]')
+      .evaluate((root) => root.children.length),
+  ).toBe(replacementChildCount)
+
+  await page.locator('#app').evaluate((root, uri) => {
+    root.innerHTML = `
+      <span data-bootstrap-sentinel-child hidden></span>
+      <h1>Authenticator setup</h1>
+      <p>Scan this QR code with your authenticator app.</p>
+      <img data-testid="demo-totp-qr" alt="Authenticator QR code" width="220" height="220"
+        data-nook-otpauth-uri="${uri}"
+        src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Crect width='220' height='220' fill='%23fff'/%3E%3Crect x='20' y='20' width='40' height='40' fill='%23000'/%3E%3Crect x='160' y='20' width='40' height='40' fill='%23000'/%3E%3Crect x='20' y='160' width='40' height='40' fill='%23000'/%3E%3C/svg%3E"/>
+      <form id="verify-form">
+        <label>Verification code <input autocomplete="one-time-code" name="Code" type="text" /></label>
+        <button type="submit">Verify</button>
+      </form>
+    `
+  }, otpauthUri)
+  const setupChildCount = await page
+    .locator('[data-bootstrap-sentinel="replacement-root"]')
+    .evaluate((root) => root.children.length)
   await expect(
     widget.getByRole('button', { name: 'Add 2FA from this page' }),
   ).toBeVisible()
@@ -184,7 +207,7 @@ test('saves a confirmed authenticator without website success evidence', async (
     await page
       .locator('[data-bootstrap-sentinel="replacement-root"]')
       .evaluate((root) => root.children.length),
-  ).toBe(replacementChildCount)
+  ).toBe(setupChildCount)
   await demoBeat(page)
 
   await widget.getByRole('button', { name: 'Add 2FA from this page' }).click()
