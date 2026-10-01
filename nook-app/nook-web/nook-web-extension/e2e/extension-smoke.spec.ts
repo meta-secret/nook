@@ -522,9 +522,13 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
 
     await simplePage.getByTestId('header-lock-vault-btn').click()
-    await expect(simplePage.getByTestId('login-local-unlock-step')).toBeVisible()
+    await expect(
+      simplePage.getByTestId('login-local-unlock-step'),
+    ).toBeVisible()
     await simplePage.getByTestId('login-vault-workflow-create').click()
-    await simplePage.getByTestId('login-vault-name-input').fill('Second local vault')
+    await simplePage
+      .getByTestId('login-vault-name-input')
+      .fill('Second local vault')
     await simplePage.getByTestId('login-create-additional-vault-btn').click()
     await authorizeDeviceProtection(simplePage)
     await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
@@ -539,9 +543,10 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     const pairingPagePromise = context.waitForEvent('page', { timeout: 30_000 })
     await pairingPopupPage.getByTestId('pair-another-vault-btn').click()
     const pairingPage = await pairingPagePromise
-    await expect(pairingPage).toHaveURL((url) =>
-      belongs_to_simple_vault(simpleVaultBaseUrl, url.toString()) &&
-      url.pathname === '/extension-connect',
+    await expect(pairingPage).toHaveURL(
+      (url) =>
+        belongs_to_simple_vault(simpleVaultBaseUrl, url.toString()) &&
+        url.pathname === '/extension-connect',
     )
 
     const pairedVaultOption = pairingPage
@@ -562,7 +567,9 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     ).toContainText('Unpair test vault')
     await unpairedVaultOption.click()
 
-    await expect(pairingPage.getByTestId('login-local-unlock-step')).toBeVisible()
+    await expect(
+      pairingPage.getByTestId('login-local-unlock-step'),
+    ).toBeVisible()
     const selectedVaultCard = pairingPage
       .getByTestId('login-vault-card')
       .filter({ hasText: 'Second local vault' })
