@@ -1,3 +1,4 @@
+import type { AuthenticationAuthenticatorSetupObservation } from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
   revalidate_approved_authentication_workflow,
   type ApprovedAuthenticationWorkflowDecision,
@@ -26,13 +27,13 @@ export type ClassifiedAuthenticationWorkflowObservation = {
 
 type ClassifiedAuthenticationWorkflowRequest = {
   workflowForms: PasswordFormObservation[];
-  authenticatorSetupHint: boolean;
+  authenticatorSetupHint: AuthenticationAuthenticatorSetupObservation;
   backupCodesHint: boolean;
 };
 
 type LiveApprovedAuthenticationWorkflowRequest = {
   approved: ClassifiedAuthenticationWorkflowObservation;
-  authenticatorSetupHint: boolean;
+  authenticatorSetupHint: AuthenticationAuthenticatorSetupObservation;
   backupCodesHint: boolean;
 };
 

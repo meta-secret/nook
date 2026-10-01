@@ -164,3 +164,9 @@ mod tests {
         }
     }
 }
+
+mod setup_context;
+pub use setup_context::{
+    AuthenticationAuthenticatorSetupCopy, AuthenticationAuthenticatorSetupCopyError,
+    AuthenticationAuthenticatorSetupEvidence, AuthenticationQrMediaObservation,
+};

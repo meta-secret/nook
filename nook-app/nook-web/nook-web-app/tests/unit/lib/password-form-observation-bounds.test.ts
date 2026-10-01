@@ -78,7 +78,7 @@ describe('authentication observation bounds', () => {
 
     const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(facts.detailedAdvanceControl).toMatchObject({
@@ -102,7 +102,7 @@ describe('authentication observation bounds', () => {
 
     const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     const detailed = facts.detailedAdvanceControl
@@ -137,7 +137,7 @@ describe('authentication observation bounds', () => {
     const classified = new AuthenticationWorkflowClassification({
       workflowForms:
         passwordFormInteraction.summarizeAuthenticationWorkflowForms(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     }).observations
     expect(classified).toHaveLength(1)
@@ -163,7 +163,7 @@ describe('authentication observation bounds', () => {
 
     const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     const formIdentity = facts.ceremony.authenticationContext?.formIdentity
@@ -192,7 +192,7 @@ describe('authentication observation bounds', () => {
 
     const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(facts.detailedAdvanceControl).toMatchObject({
@@ -217,7 +217,7 @@ describe('authentication observation bounds', () => {
 
     const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     const advance = detailedAdvance(facts)
@@ -256,7 +256,7 @@ describe('authentication observation bounds', () => {
 
     const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(handlerSignals(facts).length).toBe(
@@ -283,7 +283,7 @@ describe('authentication observation bounds', () => {
 
     const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(handlerSignals(facts)[0]).toBe('oninput=this.form.submit()')
@@ -300,7 +300,7 @@ describe('authentication observation bounds', () => {
 
     const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(facts.ceremony.oneTimeCodeHandlerSignals).toEqual([
@@ -335,7 +335,7 @@ describe('authentication observation bounds', () => {
     >[0] = {
       workflowForms:
         passwordFormInteraction.summarizeAuthenticationWorkflowForms(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     }
     const classified = new AuthenticationWorkflowClassification(
@@ -396,7 +396,7 @@ describe('authentication observation bounds', () => {
     >[0] = {
       workflowForms:
         passwordFormInteraction.summarizeAuthenticationWorkflowForms(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     }
     const classified = new AuthenticationWorkflowClassification(
@@ -439,7 +439,7 @@ describe('authentication observation bounds', () => {
     >[0] = {
       workflowForms:
         passwordFormInteraction.summarizeAuthenticationWorkflowForms(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     }
     const classified = new AuthenticationWorkflowClassification(
@@ -466,7 +466,7 @@ describe('authentication observation bounds', () => {
     >[0] = {
       workflowForms:
         passwordFormInteraction.summarizeAuthenticationWorkflowForms(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     }
     const first = new AuthenticationWorkflowClassification(classifiedRequest)
@@ -482,7 +482,7 @@ describe('authentication observation bounds', () => {
     >[0] = {
       workflowForms:
         passwordFormInteraction.summarizeAuthenticationWorkflowForms(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     }
     const refreshed = new AuthenticationWorkflowClassification(refreshedRequest)
@@ -494,14 +494,14 @@ describe('authentication observation bounds', () => {
       typeof LiveApprovedAuthenticationWorkflow
     >[0] = {
       approved: first,
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     }
     const refreshedCheck: ConstructorParameters<
       typeof LiveApprovedAuthenticationWorkflow
     >[0] = {
       approved: refreshed,
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     }
     expect(new LiveApprovedAuthenticationWorkflow(staleCheck).disposition).toBe(
@@ -532,7 +532,7 @@ describe('authentication observation bounds', () => {
     >[0] = {
       workflowForms:
         passwordFormInteraction.summarizeAuthenticationWorkflowForms(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     }
     const approved = new AuthenticationWorkflowClassification(classifiedRequest)
@@ -554,7 +554,7 @@ describe('authentication observation bounds', () => {
       typeof LiveApprovedAuthenticationWorkflow
     >[0] = {
       approved,
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     }
     expect(new LiveApprovedAuthenticationWorkflow(liveCheck).disposition).toBe(

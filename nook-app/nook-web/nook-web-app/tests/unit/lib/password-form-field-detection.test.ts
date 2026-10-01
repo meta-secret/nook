@@ -344,7 +344,7 @@ describe('authentication field detection', () => {
     expect(observation.summary.passwordFieldCount).toBe(1)
     const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation,
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(facts.detailedAdvanceControl).toMatchObject({
@@ -387,7 +387,7 @@ describe('authentication field detection', () => {
     if (observation) {
       const facts = passwordFormInteraction.authenticationPageObservationFacts({
         observation,
-        authenticatorSetupHint: false,
+        authenticatorSetupHint: 'absent',
         backupCodesHint: false,
       })
       expect(facts.fields.usernameFieldCount).toBe(0)
@@ -484,7 +484,7 @@ describe('authentication field detection', () => {
 
     const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
@@ -509,7 +509,7 @@ describe('authentication field detection', () => {
 
     const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
@@ -592,7 +592,7 @@ describe('authentication field detection', () => {
     expect(observation.summary.passwordFieldCount).toBe(1)
     const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation,
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     const detailed = facts.detailedAdvanceControl
@@ -612,7 +612,7 @@ describe('authentication field detection', () => {
     expect(observation.summary.passwordFieldCount).toBe(1)
     const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation,
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     const detailed = facts.detailedAdvanceControl

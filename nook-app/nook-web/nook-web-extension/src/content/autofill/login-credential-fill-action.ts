@@ -189,7 +189,7 @@ export class LoginCredentialFillAction {
       const companionPoliciesRequest: Parameters<
         typeof passwordFormInteraction.prepareCompanionWorkflowPolicies
       >[0] = {
-        authenticatorSetupHint: false,
+        authenticatorSetupHint: 'absent',
         backupCodesHint: false,
       }
       await passwordFormInteraction.prepareCompanionWorkflowPolicies(

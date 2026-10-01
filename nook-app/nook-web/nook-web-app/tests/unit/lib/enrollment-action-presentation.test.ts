@@ -11,7 +11,7 @@ describe('Rust-selected enrollment presentation', () => {
       new SelectedEnrollmentPresentation(
         AuthenticationWorkflowAction.SaveBackupCodes,
       ).hints,
-    ).toEqual({ qr: false, backupCodes: true })
+    ).toEqual({ qr: 'absent', backupCodes: true })
   })
 
   test('does not duplicate a Rust-selected enrollment action', () => {
@@ -22,9 +22,9 @@ describe('Rust-selected enrollment presentation', () => {
       expect(
         new SupplementalEnrollmentPresentation({
           action,
-          detected: { qr: true, backupCodes: true },
+          detected: { qr: 'present', backupCodes: true },
         }).hints,
-      ).toEqual({ qr: false, backupCodes: false })
+      ).toEqual({ qr: 'absent', backupCodes: false })
     }
   })
 })

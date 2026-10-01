@@ -35,7 +35,7 @@ describe('unowned localized login activation', () => {
     if (!workflow) throw new Error('expected localized login workflow')
     const facts = forms.authenticationPageObservationFacts({
       observation: workflow,
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
     })
     const detailedAdvanceControl = facts.detailedAdvanceControl
     const approvedAdvanceControls =

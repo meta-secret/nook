@@ -191,7 +191,7 @@ export function simulateDomAuthentication({
     typeof AuthenticationWorkflowClassification
   >[0] = {
     workflowForms,
-    authenticatorSetupHint: false,
+    authenticatorSetupHint: 'absent',
     backupCodesHint: false,
   }
   const classified = new AuthenticationWorkflowClassification(classifiedRequest)
@@ -302,7 +302,7 @@ export function simulateDomAuthentication({
       typeof LiveApprovedAuthenticationWorkflow
     >[0] = {
       approved: selected,
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     }
     return (

@@ -214,7 +214,7 @@ describe('Booking.com DOM-backed authentication simulation', () => {
 
     const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation,
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(facts.fields).toMatchObject({
@@ -234,7 +234,7 @@ describe('Booking.com DOM-backed authentication simulation', () => {
     expect(
       new AuthenticationWorkflowClassification({
         workflowForms: observations,
-        authenticatorSetupHint: false,
+        authenticatorSetupHint: 'absent',
         backupCodesHint: false,
       }).observations,
     ).toHaveLength(1)

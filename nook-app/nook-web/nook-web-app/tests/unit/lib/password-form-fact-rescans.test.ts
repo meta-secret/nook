@@ -224,7 +224,7 @@ describe('authentication fact rescans', () => {
     `
     const before = passwordFormInteraction.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(before.detailedAdvanceControl).toMatchObject({ kind: 'observed' })
@@ -239,7 +239,7 @@ describe('authentication fact rescans', () => {
 
     const after = passwordFormInteraction.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(after.detailedAdvanceControl).toMatchObject({ kind: 'observed' })
@@ -352,7 +352,7 @@ describe('authentication fact rescans', () => {
 
     const before = passwordFormInteraction.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(before.ceremony.oneTimeCodeHandlerSignals).toEqual([])
@@ -362,7 +362,7 @@ describe('authentication fact rescans', () => {
     const afterAdd = passwordFormInteraction.authenticationPageObservationFacts(
       {
         observation: observedAuthenticationWorkflow(),
-        authenticatorSetupHint: false,
+        authenticatorSetupHint: 'absent',
         backupCodesHint: false,
       },
     )
@@ -376,7 +376,7 @@ describe('authentication fact rescans', () => {
     const afterRemove =
       passwordFormInteraction.authenticationPageObservationFacts({
         observation: observedAuthenticationWorkflow(),
-        authenticatorSetupHint: false,
+        authenticatorSetupHint: 'absent',
         backupCodesHint: false,
       })
     expect(afterRemove.ceremony.oneTimeCodeHandlerSignals).toEqual([])
@@ -392,7 +392,7 @@ describe('authentication fact rescans', () => {
     `
     const before = passwordFormInteraction.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     const beforeControl = before.detailedAdvanceControl
@@ -410,7 +410,7 @@ describe('authentication fact rescans', () => {
     document.querySelector('form')?.setAttribute('method', 'post')
     const after = passwordFormInteraction.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     const afterControl = after.detailedAdvanceControl
@@ -435,7 +435,7 @@ describe('authentication fact rescans', () => {
     const identifier =
       passwordFormInteraction.authenticationPageObservationFacts({
         observation: observedAuthenticationWorkflow(),
-        authenticatorSetupHint: false,
+        authenticatorSetupHint: 'absent',
         backupCodesHint: false,
       })
     expect(identifier.fields.usernameFieldCount).toBe(1)
@@ -457,7 +457,7 @@ describe('authentication fact rescans', () => {
     const ambiguous =
       passwordFormInteraction.authenticationPageObservationFacts({
         observation: observedAuthenticationWorkflow(),
-        authenticatorSetupHint: false,
+        authenticatorSetupHint: 'absent',
         backupCodesHint: false,
       })
     expect(ambiguous.fields.usernameFieldCount).toBe(2)
@@ -479,7 +479,7 @@ describe('authentication fact rescans', () => {
     }
     const before = passwordFormInteraction.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(before.detailedAdvanceControl).toMatchObject({ kind: 'observed' })
@@ -497,7 +497,7 @@ describe('authentication fact rescans', () => {
     expect(rescans).toBe(1)
     const after = passwordFormInteraction.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(after.detailedAdvanceControl).toMatchObject({ kind: 'observed' })

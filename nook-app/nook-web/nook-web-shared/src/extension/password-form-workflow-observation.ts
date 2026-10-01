@@ -1,3 +1,4 @@
+import type { AuthenticationAuthenticatorSetupObservation } from "./nook-companion-wasm/nook_companion_wasm.js";
 /* eslint-disable @typescript-eslint/no-restricted-types, nook-typed-api/no-raw-object-arguments, max-params -- DOM policy collection uses browser-owned object contracts and callback shapes at this boundary. */
 import { PasswordFormSummaryObservation } from "./password-form-summary-observation";
 import {
@@ -88,7 +89,7 @@ export type PasswordFormObservation = {
 
 export type AuthenticationObservationFactsRequest = {
   observation: PasswordFormObservation;
-  authenticatorSetupHint: boolean;
+  authenticatorSetupHint: AuthenticationAuthenticatorSetupObservation;
   backupCodesHint?: boolean;
   backupCodesCopy?: string;
 };
@@ -114,7 +115,7 @@ type PasskeyCandidateSafetyRequest = {
 };
 
 type PrepareCompanionWorkflowPoliciesRequest = {
-  authenticatorSetupHint: boolean;
+  authenticatorSetupHint: AuthenticationAuthenticatorSetupObservation;
   backupCodesHint: boolean;
 };
 
@@ -131,7 +132,7 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
         passwordDisclosureControls: AuthenticationAdvanceControlObservation[];
         passkeyCandidates: AuthenticationDetailedPasskeyControlCandidateObservation[];
         pageFacts: AuthenticationPageObservationFacts[];
-        authenticatorSetupHint: boolean;
+        authenticatorSetupHint: AuthenticationAuthenticatorSetupObservation;
         backupCodesHint: boolean;
       }
     | false = false;
@@ -378,7 +379,7 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
       (observation): AuthenticationImplicitSubmitActuationObservation => {
         const facts = this.authenticationPageObservationFacts({
           observation,
-          authenticatorSetupHint: false,
+          authenticatorSetupHint: "absent",
         });
         return {
           fields: facts.fields,
@@ -439,7 +440,7 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
       observation,
       authenticatorSetupHint: preparedHints
         ? preparedHints.authenticatorSetupHint
-        : false,
+        : "absent",
       backupCodesCopy:
         preparedHints && preparedHints.backupCodesHint
           ? "Save backup codes"
@@ -964,7 +965,7 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
           : "absent",
       },
       authenticator: {
-        authenticatorSetup: authenticatorSetupHint ? "present" : "absent",
+        authenticatorSetup: authenticatorSetupHint,
         backupCodesCopy: ((
           ...[v = backupCodesHint ? "Save backup codes" : ""]
         ) => v)(backupCodesCopy),

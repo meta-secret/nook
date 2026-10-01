@@ -73,6 +73,12 @@ Page QR and backup code enrollment uses explicit Pilot actions
 It uses local decode/extract, WASM validation, and confirmation before any vault
 write.
 It is never silent page scraping or background scanning.
+**Add 2FA from this page** follows the
+[authenticator enrollment eligibility contract](../../dev-core/product-specs/authenticator-items.md#browser-enrollment-capture).
+The content script supplies visible media and nearby visible setup instructions
+to the `nook-companion-core` classifier through `nook-companion-wasm`.
+Square media or QR labels alone do not enable the action.
+QR decoding begins only after the trusted action click.
 
 "No vault UI in the extension" means no second vault-management UI. The shared
 authentication tab contains the standard one-time device-protection widget

@@ -80,7 +80,7 @@ vi.mock(
 vi.mock('../../../../nook-web-extension/src/content/enrollment-flow', () => ({
   authenticatorEnrollmentInteraction: {
     detectEnrollmentHints: () => ({
-      qr: false,
+      qr: 'absent',
       backupCodes: false,
     }),
     renderEnrollmentActions: vi.fn(),

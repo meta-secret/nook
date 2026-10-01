@@ -185,7 +185,8 @@ export class RevalidatedAuthenticationAction {
         selectedIndex = 0
       }
       if (selectedIndex < 0) return false
-      const authenticatorSetupHint = pageQrCapture.pageHasQrEnrollmentHint()
+      const authenticatorSetupHint =
+        pageQrCapture.authenticationAuthenticatorSetupObservation()
       const backupCodesHint =
         recoveryCopyObservation.pageHasDocumentBackupCodeHint()
       const observations = candidates.map((candidate) => {

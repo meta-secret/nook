@@ -36,7 +36,7 @@ function observedAuthenticationWorkflow(): PasswordFormObservation {
 function classifiedObservedAuthenticationWorkflow(): AuthenticationWorkflowClassification['observations'][number] {
   const classified = new AuthenticationWorkflowClassification({
     workflowForms: [observedAuthenticationWorkflow()],
-    authenticatorSetupHint: false,
+    authenticatorSetupHint: 'absent',
     backupCodesHint: false,
   }).observations[0]
   if (!classified) throw new Error('expected an approved workflow')
@@ -47,7 +47,7 @@ function approvedWorkflowDisposition(
 ): LiveAuthenticationWorkflowDisposition {
   return new LiveApprovedAuthenticationWorkflow({
     approved,
-    authenticatorSetupHint: false,
+    authenticatorSetupHint: 'absent',
     backupCodesHint: false,
   }).disposition
 }
@@ -85,13 +85,13 @@ describe('authentication workflow ranking', () => {
     expect(
       forms.authenticationPageObservationFacts({
         observation: password,
-        authenticatorSetupHint: false,
+        authenticatorSetupHint: 'absent',
         backupCodesHint: false,
       }).authenticator.detailedPasskeyControl,
     ).toEqual({ kind: 'absent' })
     const passkeyControl = forms.authenticationPageObservationFacts({
       observation: passkey,
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     }).authenticator.detailedPasskeyControl
     expect(passkeyControl).toMatchObject({
@@ -274,7 +274,7 @@ describe('authentication workflow ranking', () => {
 
     const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(facts.detailedAdvanceControl).toMatchObject({ kind: 'observed' })
@@ -327,7 +327,7 @@ describe('authentication workflow ranking', () => {
 
     const passkeyControl = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     }).authenticator.detailedPasskeyControl
     expect(passkeyControl).toMatchObject({ kind: 'candidates' })
@@ -410,7 +410,7 @@ describe('authentication workflow ranking', () => {
     expect(selected.summary.passkeyControlPresent).toBe(true)
     const passkeyControl = forms.authenticationPageObservationFacts({
       observation: selected,
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     }).authenticator.detailedPasskeyControl
     expect(passkeyControl).toMatchObject({

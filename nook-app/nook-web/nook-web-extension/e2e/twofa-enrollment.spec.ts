@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test'
 import { readExtensionPairingStorage } from './helpers/extension-pairing-storage'
-import { launchPairedPinExtension } from './helpers/paired-pin-extension'
+import {
+  launchPairedPinExtension,
+  saveVaultLogin,
+} from './helpers/paired-pin-extension'
 import { startMockAuthServer } from './mock-auth'
 import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
 import { WebsiteAuthenticatorBackupAttachMessageMode } from '../src/lib/enrollment-messages'
@@ -323,6 +326,91 @@ const twoFactorEnrollmentScenario = new TwoFactorEnrollmentScenario()
 
 test.describe('Browser 2FA enrollment', () => {
   test.describe.configure({ timeout: 180_000 })
+
+  test('landing square artwork keeps Sign in without Add 2FA', async ({
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+    const mockAuth = await startMockAuthServer()
+    const paired = await launchPairedPinExtension(testInfo, {
+      vaultName: 'Landing artwork vault',
+    })
+    try {
+      const page = await paired.context.newPage()
+      await page.route(`${mockAuth.origin}/landing-artwork`, (route) =>
+        route.fulfill({
+          contentType: 'text/html',
+          body: '<!doctype html><html><body><main><h1>Skykoi</h1><p>Discover your next adventure</p><img alt="Featured artwork" width="220" height="220" src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22220%22 height=%22220%22%3E%3Crect width=%22220%22 height=%22220%22 fill=%22navy%22/%3E%3C/svg%3E"/><button>Sign in</button></main></body></html>',
+        }),
+      )
+      await page.goto(`${mockAuth.origin}/landing-artwork`)
+      await expect(
+        page.getByRole('img', { name: 'Featured artwork' }),
+      ).toBeVisible()
+      await expect(
+        page.getByRole('button', { name: 'Sign in', exact: true }),
+      ).toBeVisible()
+      await page.waitForLoadState('networkidle')
+      await expect(page.locator('#nook-auth-widget')).toHaveCount(0)
+      await expect(
+        page
+          .locator('#nook-auth-widget')
+          .getByRole('button', { name: 'Add 2FA from this page' }),
+      ).toHaveCount(0)
+      await expect(
+        page.getByRole('button', { name: 'Sign in', exact: true }),
+      ).toHaveText('Sign in')
+    } finally {
+      await paired.context.close()
+      await mockAuth.close()
+    }
+  })
+
+  test('landing artwork with a genuine login form keeps Pilot without Add 2FA', async ({
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+    const mockAuth = await startMockAuthServer()
+    const paired = await launchPairedPinExtension(testInfo, {
+      vaultName: 'Landing login artwork vault',
+    })
+    try {
+      await saveVaultLogin(
+        paired.vaultPage,
+        mockAuth.origin,
+        'alice@nook.test',
+        'extension-fill-password',
+      )
+      const page = await paired.context.newPage()
+      await page.route(`${mockAuth.origin}/landing-artwork`, (route) =>
+        route.fulfill({
+          contentType: 'text/html',
+          body: '<!doctype html><html><body><main><h1>Skykoi</h1><p>Discover your next adventure</p><img alt="Featured artwork" width="220" height="220" src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22220%22 height=%22220%22%3E%3Crect width=%22220%22 height=%22220%22 fill=%22navy%22/%3E%3C/svg%3E"/><form id="login-form" method="post" action="/auth/login"><label>Email<input type="email" name="username" autocomplete="username"/></label><label>Password<input type="password" name="password" autocomplete="current-password"/></label><button type="submit">Sign in</button></form></main></body></html>',
+        }),
+      )
+      await page.goto(`${mockAuth.origin}/landing-artwork`)
+      await expect(
+        page.getByRole('img', { name: 'Featured artwork' }),
+      ).toBeVisible()
+      await expect(
+        page.getByRole('button', { name: 'Sign in', exact: true }),
+      ).toBeVisible()
+      await expect(page.locator('#nook-auth-widget')).toBeVisible({
+        timeout: 15_000,
+      })
+      await expect(
+        page
+          .locator('#nook-auth-widget')
+          .getByRole('button', { name: 'Add 2FA from this page' }),
+      ).toHaveCount(0)
+      await expect(
+        page.getByRole('button', { name: 'Sign in', exact: true }),
+      ).toHaveText('Sign in')
+    } finally {
+      await paired.context.close()
+      await mockAuth.close()
+    }
+  })
 
   test('cancels QR preview without vault write', async ({
     browserName,

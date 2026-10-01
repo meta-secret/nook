@@ -28,7 +28,7 @@ function classifyRenderedScenario(): CompanionAuthenticationWorkflowMatchKind {
   const observations = new AuthenticationWorkflowClassification({
     workflowForms:
       passwordFormInteraction.summarizeAuthenticationWorkflowForms(),
-    authenticatorSetupHint: false,
+    authenticatorSetupHint: 'absent',
     backupCodesHint: false,
   }).observations.map(({ facts }) => facts)
   return companion_authentication_workflow_match_kind(
