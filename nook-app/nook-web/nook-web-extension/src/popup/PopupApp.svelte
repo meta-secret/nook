@@ -2,6 +2,7 @@
   type RunDeviceActionArgs = {
     action: () => Promise<ExtensionSessionDeviceWire>
     fallbackKey?: I18nKey
+    dismissPanelOnSuccess?: boolean
   }
 
   type ErrorMessageArgs = {
@@ -22,6 +23,10 @@
     extensionLocaleCatalog,
   } from '../lib/i18n'
   import { OpenCompanionLauncherIntent } from '../../../nook-web-shared/src/extension/companion-launcher-message'
+  import {
+    DismissAuthSidePanelMessageType,
+    type DismissAuthSidePanelMessageWire,
+  } from '../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
   import {
     DeviceMode,
     DeviceProtectionStatus,
@@ -73,6 +78,8 @@
   let setupWorkflow = $state(DeviceProtectionSetupWorkflow.Authenticate)
   let pin = $state('')
   let pinConfirm = $state('')
+  const isSidePanelSurface =
+    new URLSearchParams(window.location.search).get('surface') === 'side-panel'
   let pairingCandidate = $state<PairingCandidate>({
     kind: PairingCandidateKind.NotSelected,
   })
@@ -258,6 +265,14 @@
     void loadSecretCount(device)
   }
 
+  async function dismissSidePanelAfterUnlock(): Promise<void> {
+    if (!isSidePanelSurface) return
+    const dismissalMessage: DismissAuthSidePanelMessageWire = {
+      type: DismissAuthSidePanelMessageType.NookDismissAuthSidePanel,
+    }
+    await chrome.runtime.sendMessage(dismissalMessage).catch(() => undefined)
+  }
+
   $effect(() => {
     if (activeSessionDevice.kind !== ExtensionSessionDeviceStateKind.Active)
       return
@@ -271,6 +286,11 @@
     error = ''
     try {
       const device = await action()
+      if (args.dismissPanelOnSuccess && isSidePanelSurface) {
+        await dismissSidePanelAfterUnlock()
+        busy = false
+        return
+      }
       enterToolbarMenu(device)
     } catch (caught) {
       busy = false
@@ -325,6 +345,7 @@
       action:
         extensionWasmRuntime.unlockExtensionPasskey.bind(extensionWasmRuntime),
       fallbackKey: I18N_KEYS.DeviceProtectionPasskeyUnlockNotAllowed,
+      dismissPanelOnSuccess: true,
     }
     void runDeviceAction(args)
   }
@@ -345,6 +366,7 @@
     const args: Parameters<typeof runDeviceAction>[0] = {
       action: () => extensionWasmRuntime.unlockExtensionPin(pin),
       fallbackKey: I18N_KEYS.DeviceProtectionPinUnlockFailed,
+      dismissPanelOnSuccess: true,
     }
     void runDeviceAction(args)
   }

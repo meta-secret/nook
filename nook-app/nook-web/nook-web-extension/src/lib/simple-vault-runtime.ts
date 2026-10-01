@@ -28,6 +28,14 @@ class SimpleVaultRuntime {
       return false
     }
   }
+  isRuntimeSimpleVaultUrlIfReady(candidateUrl: string): boolean | undefined {
+    if (!companionWasmReadiness.isReadySynchronously()) return undefined
+    try {
+      return belongs_to_simple_vault(this.baseUrl(), candidateUrl)
+    } catch {
+      return false
+    }
+  }
   async isRuntimeNookVaultAppUrl(candidateUrl: string): Promise<boolean> {
     const delivery = await sendCompanionWasmRuntimeMessage(globalThis, {
       type: CompanionWasmSessionMessageType.IsNookVaultAppUrl,

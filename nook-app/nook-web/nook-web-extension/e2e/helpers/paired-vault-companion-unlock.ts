@@ -1,5 +1,8 @@
 import { expect, type BrowserContext, type Page } from '@playwright/test'
-import { EXTENSION_UNLOCK_TIMEOUT_MS } from './extension-smoke-runtime'
+import {
+  EXTENSION_UNLOCK_TIMEOUT_MS,
+  getServiceWorker,
+} from './extension-smoke-runtime'
 
 export enum PairedVaultCompanionUnlockKind {
   Optional = 'optional',
@@ -44,16 +47,38 @@ type OwnedCompanionPopupOpen = {
   readonly context: BrowserContext
   readonly extensionId: string
   readonly ignoredPages: readonly Page[]
+  readonly sidePanelSurface?: boolean
 }
 
 function companionPopupUrl(extensionId: string): string {
   return `chrome-extension://${extensionId}/popup/index.html`
 }
 
+function companionSidePanelUrl(extensionId: string): string {
+  return `${companionPopupUrl(extensionId)}?surface=side-panel`
+}
+
 function isOwnedCompanionPopup(page: Page, extensionId: string): boolean {
   return (
     !page.isClosed() && page.url().startsWith(companionPopupUrl(extensionId))
   )
+}
+
+async function hasOwnedSidePanelContext(
+  context: BrowserContext,
+  extensionId: string,
+): Promise<boolean> {
+  const serviceWorker = await getServiceWorker(context)
+  return await serviceWorker.evaluate(async (expectedUrl) => {
+    const contexts = await chrome.runtime.getContexts({
+      contextTypes: [chrome.runtime.ContextType.SIDE_PANEL],
+    })
+    return contexts.some(
+      (extensionContext) =>
+        extensionContext.documentUrl === expectedUrl &&
+        extensionContext.contextType === chrome.runtime.ContextType.SIDE_PANEL,
+    )
+  }, companionSidePanelUrl(extensionId))
 }
 
 function captureCompanionPopupDiagnostics(
@@ -186,7 +211,11 @@ async function openOwnedCompanionPopup(
     popupPage,
     request.extensionId,
   )
-  await popupPage.goto(companionPopupUrl(request.extensionId))
+  await popupPage.goto(
+    request.sidePanelSurface
+      ? companionSidePanelUrl(request.extensionId)
+      : companionPopupUrl(request.extensionId),
+  )
   return { page: popupPage, closeAfterUse: true, diagnostics }
 }
 
@@ -223,6 +252,7 @@ async function waitForOwnedCompanionPopup(
 
 async function completeCompanionPopupUnlock(
   request: CompanionPopupUnlock,
+  authSidePanelSurface = false,
 ): Promise<void> {
   const { page, diagnostics } = request
   const deviceSetup = page.getByTestId('extension-device-setup')
@@ -268,6 +298,10 @@ async function completeCompanionPopupUnlock(
     )
   }
   await unlockButton.click()
+  if (authSidePanelSurface) {
+    await expect(companionHome).toHaveCount(0)
+    return
+  }
   await expect(companionHome).toBeVisible({
     timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
   })
@@ -337,13 +371,32 @@ export async function unlockPairedVaultThroughCompanion(
         }
       }
     } else {
-      const companionPopup = await waitForOwnedCompanionPopup({
+      await expect
+        .poll(() => hasOwnedSidePanelContext(context, extensionId), {
+          timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+        })
+        .toBe(true)
+      expect(
+        context
+          .pages()
+          .filter(
+            (page) =>
+              !existingCompanionPages.includes(page) &&
+              isOwnedCompanionPopup(page, extensionId),
+          ),
+      ).toHaveLength(0)
+
+      // Playwright does not expose Chrome's browser-owned side panel as a Page.
+      // The real website click must first open the side panel; this extension
+      // page then drives the same packaged auth UI for the passkey ceremony.
+      const companionPopup = await openOwnedCompanionPopup({
         context,
         extensionId,
-        ignoredPages: existingCompanionPages,
+        ignoredPages: context.pages(),
+        sidePanelSurface: true,
       })
       try {
-        await completeCompanionPopupUnlock(companionPopup)
+        await completeCompanionPopupUnlock(companionPopup, true)
       } finally {
         if (companionPopup.closeAfterUse && !companionPopup.page.isClosed()) {
           await companionPopup.page.close()

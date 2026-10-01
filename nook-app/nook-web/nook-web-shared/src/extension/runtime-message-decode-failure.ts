@@ -3,6 +3,7 @@ import * as ParseResult from "effect/ParseResult";
 export enum RuntimeMessageDecodeFailureKind {
   OpenCompanionLauncher = "open-companion-launcher",
   OpenSimpleVault = "open-simple-vault",
+  DismissAuthSidePanel = "dismiss-auth-side-panel",
   BeginExtensionPairing = "begin-extension-pairing",
   ExtensionEventLogRecord = "extension-event-log-record",
   ExtensionLocalEventLogUpdated = "extension-local-event-log-updated",

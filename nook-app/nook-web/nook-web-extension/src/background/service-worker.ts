@@ -10,6 +10,7 @@ import {
 import { NormalizedOpenCompanionLauncherMessage as NormalizedOpenCompanionLauncherMessageSchema } from '../../../nook-web-shared/src/extension/companion-launcher-message'
 import {
   BeginExtensionPairingMessage as BeginExtensionPairingMessageSchema,
+  DismissAuthSidePanelMessage,
   ExtensionLocalEventLogUpdatedMessage as ExtensionLocalEventLogUpdatedMessageSchema,
   OpenSimpleVaultMessage as OpenSimpleVaultMessageSchema,
 } from '../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
@@ -88,6 +89,10 @@ import {
 } from './service-worker/login-operations'
 import { extensionPairingIdentity } from './service-worker/pairing-identity'
 import {
+  dismissAuthSidePanelFromSender,
+  type AuthSidePanelDismissalRequest,
+} from './service-worker/auth-side-panel-dismissal'
+import {
   importLocalEventLogUpdate,
   importPairingAfterCompanionReady,
 } from './service-worker/pairing-import'
@@ -104,6 +109,7 @@ import {
   type ExternalCompanionMessage,
   type ExternalCompanionRoutingRequest,
 } from './service-worker/external-companion-routing'
+import { ExternalSenderTrustPolicy } from './service-worker/routing-trust'
 import {
   authenticationPasskeyEvidenceIsSafe,
   authenticationWorkflowMessageResponse,
@@ -236,6 +242,8 @@ const externalCompanionRoutingDependencies: ExternalCompanionRoutingRequest['dep
       ExtensionPairedVaultUnlockRequestMessageSchema.decode,
     decodeOpenCompanionLauncherMessage:
       NormalizedOpenCompanionLauncherMessageSchema.decode,
+    admitsUnlockSenderSynchronously:
+      ExternalSenderTrustPolicy.admitsSynchronouslyIfReady,
     openCompanionLauncher: extensionSessionLifecycle.openCompanionLauncher.bind(
       extensionSessionLifecycle,
     ),
@@ -465,6 +473,19 @@ class BackgroundRuntimeMessageRouter {
     const lifecycleResult = routeExtensionLifecycleMessage(lifecycleRoutingArgs)
     if (lifecycleResult !== ExtensionLifecycleRoutingResult.Unhandled) {
       return lifecycleResult
+    }
+
+    const authSidePanelDismissal = Effect.runSync(
+      Effect.either(DismissAuthSidePanelMessage.decode(message)),
+    )
+    if (Either.isRight(authSidePanelDismissal)) {
+      const dismissalRequest: AuthSidePanelDismissalRequest = { sender }
+      void dismissAuthSidePanelFromSender(dismissalRequest)
+        .then(sendResponse)
+        .catch(() =>
+          sendResponse({ ok: false, reason: 'side-panel-dismiss-failed' }),
+        )
+      return true
     }
 
     const schemaRoutingRequest: AdmittedRuntimeMessageRoutingRequest = {

@@ -268,6 +268,16 @@
       return
     }
     let activeStoreId = existingVaultImportLifecycle.unlockStoreId
+    let pairedExtensionUnlockDelivery: Promise<boolean> | undefined
+    if (
+      !skipExtensionDiscovery &&
+      SUPPORTS_EXTENSION &&
+      (vault.localVaultPresent || existingVaultImport) &&
+      activeStoreId
+    ) {
+      pairedExtensionUnlockDelivery =
+        connectionBrowser.requestPairedExtensionUnlock(activeStoreId)
+    }
     if (existingVaultImport) {
       const discovered = await vault.discoverStagedVaultStoreId()
       if (discovered.isErr()) {
@@ -343,7 +353,19 @@
           discoveryStatus ===
           ExtensionPairedVaultIdentityStatusMessageStatus.Locked
         ) {
-          await connectionBrowser.requestPairedExtensionUnlock(activeStoreId)
+          if (!pairedExtensionUnlockDelivery) {
+            vault.errorMsg = vault.t(
+              I18N_KEYS.ExtensionConnectMessagingUnavailable,
+            )
+            return
+          }
+          const pairedUnlockRequested = await pairedExtensionUnlockDelivery
+          if (!pairedUnlockRequested) {
+            vault.errorMsg = vault.t(
+              I18N_KEYS.ExtensionConnectMessagingUnavailable,
+            )
+            return
+          }
         }
         const pairedExtensionUnlockRequest: Parameters<
           typeof waitForPairedExtensionUnlock

@@ -112,6 +112,16 @@ describe('extension origin isolation', () => {
     expect(defaultManifest().permissions).toContain(ExtensionPermission.Storage)
   })
 
+  test('opens paired website authentication in the browser side panel', () => {
+    const manifest = defaultManifest()
+
+    expect(manifest.min_chrome_version).toBe('141')
+    expect(manifest.permissions).toContain(ExtensionPermission.SidePanel)
+    expect(manifest.side_panel).toEqual({
+      default_path: 'popup/index.html?surface=side-panel',
+    })
+  })
+
   test('exposes the icon, host, and companion WASM to in-page content scripts', () => {
     expect(defaultManifest().web_accessible_resources).toEqual([
       {

@@ -18,6 +18,7 @@ import type {
   ExternalCompanionMessage,
   ExternalCompanionRoutingDependencies,
 } from '../src/background/service-worker/external-companion-routing'
+import { ExternalSenderTrustPolicy } from '../src/background/service-worker/routing-trust'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import {
   AccountPickerAuthorizationLifecycle,
@@ -230,6 +231,8 @@ const externalDependencies: ExternalCompanionRoutingDependencies = {
     ExtensionPairedVaultUnlockRequestMessage.decode,
   decodeOpenCompanionLauncherMessage:
     NormalizedOpenCompanionLauncherMessageSchema.decode,
+  admitsUnlockSenderSynchronously:
+    ExternalSenderTrustPolicy.admitsSynchronouslyIfReady,
   openCompanionLauncher,
   refreshAuthenticationSurfaces,
   requestPairedVaultUnlock: unusedAsyncDependency,

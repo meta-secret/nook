@@ -1,8 +1,10 @@
-import { describe, expect, mock, test } from 'bun:test'
+import { describe, expect, mock, spyOn, test } from 'bun:test'
 import {
   OpenCompanionLauncherIntent,
   OpenCompanionLauncherMessageType,
 } from '../../nook-web-shared/src/extension/companion-launcher-message'
+import { ExtensionPairedVaultUnlockRequestMessageType } from '../../nook-web-shared/src/extension/runtime-messages'
+import { ExternalSenderTrustPolicy } from '../src/background/service-worker/routing-trust'
 import type { ExternalCompanionRoutingDependencies } from '../src/background/service-worker/external-companion-routing'
 import {
   externalDependencies,
@@ -12,7 +14,144 @@ import {
   openCompanionLauncher,
 } from './service-worker-routing-test-support'
 
+function pairedVaultUnlockSender(): chrome.runtime.MessageSender {
+  return {
+    url: 'https://simple.example.test/',
+    tab: {
+      id: 3,
+      index: 0,
+      pinned: false,
+      highlighted: true,
+      windowId: 42,
+      active: true,
+      frozen: false,
+      incognito: false,
+      selected: true,
+      discarded: false,
+      autoDiscardable: true,
+      groupId: -1,
+      lastAccessed: 0,
+    },
+  }
+}
+
 describe('external companion routing', () => {
+  test('opens the trusted paired-unlock side panel synchronously from its sender window', async () => {
+    const operations: string[] = []
+    const open = mock(() => {
+      operations.push('open-panel')
+      return Promise.resolve()
+    })
+    const close = mock(() => Promise.resolve())
+    Object.assign(chrome, { sidePanel: { open, close } })
+    const admitSynchronously = mock(() => {
+      operations.push('admit-sender')
+      return true
+    })
+    const requestPairedVaultUnlock = mock(
+      async ({
+        message,
+      }: Parameters<
+        typeof externalDependencies.requestPairedVaultUnlock
+      >[0]) => {
+        operations.push('request-vault-unlock')
+        return {
+          ok: true as const,
+          requestId: message.payload.requestId,
+          vaultStoreId: message.payload.vaultStoreId,
+        }
+      },
+    )
+    const asyncAdmission = spyOn(
+      ExternalSenderTrustPolicy,
+      'admits',
+    ).mockImplementation(async () => {
+      operations.push('async-admit')
+      return false
+    })
+    const dependencies: ExternalCompanionRoutingDependencies = {
+      ...externalDependencies,
+      admitsUnlockSenderSynchronously: admitSynchronously,
+      requestPairedVaultUnlock,
+    }
+    const { ExternalCompanionRouter } =
+      await import('../src/background/service-worker/external-companion-routing')
+    const sendResponse = mock(() => {})
+    const message = {
+      type: ExtensionPairedVaultUnlockRequestMessageType.NookExtensionPairedVaultUnlockRequest,
+      payload: { requestId: 'request-1', vaultStoreId: 'store_abcdefghijk' },
+    }
+    try {
+      const route = new ExternalCompanionRouter({
+        dependencies,
+        message,
+        sender: pairedVaultUnlockSender(),
+        sendResponse,
+      }).route()
+
+      expect(open).toHaveBeenCalledWith({ windowId: 42 })
+      expect(operations).toEqual([
+        'admit-sender',
+        'open-panel',
+        'request-vault-unlock',
+      ])
+      expect(await route).toBe(true)
+      await flushResponses()
+      expect(sendResponse).toHaveBeenCalledWith({
+        ok: true,
+        requestId: 'request-1',
+        vaultStoreId: 'store_abcdefghijk',
+      })
+      expect(asyncAdmission).not.toHaveBeenCalled()
+    } finally {
+      asyncAdmission.mockRestore()
+    }
+  })
+
+  test('fails closed before opening a panel when synchronous trust is not ready', async () => {
+    const open = mock(() => Promise.resolve())
+    const close = mock(() => Promise.resolve())
+    Object.assign(chrome, { sidePanel: { open, close } })
+    const admitSynchronously = mock(() => undefined)
+    const decodeUnlock = mock(
+      externalDependencies.decodeExtensionPairedVaultUnlockRequestMessage,
+    )
+    const requestPairedVaultUnlock = mock(
+      externalDependencies.requestPairedVaultUnlock,
+    )
+    const dependencies: ExternalCompanionRoutingDependencies = {
+      ...externalDependencies,
+      admitsUnlockSenderSynchronously: admitSynchronously,
+      decodeExtensionPairedVaultUnlockRequestMessage: decodeUnlock,
+      requestPairedVaultUnlock,
+    }
+    const { ExternalCompanionRouter } =
+      await import('../src/background/service-worker/external-companion-routing')
+    const sendResponse = mock(() => {})
+
+    expect(
+      await new ExternalCompanionRouter({
+        dependencies,
+        message: {
+          type: ExtensionPairedVaultUnlockRequestMessageType.NookExtensionPairedVaultUnlockRequest,
+          payload: {
+            requestId: 'request-2',
+            vaultStoreId: 'store_abcdefghijk',
+          },
+        },
+        sender: pairedVaultUnlockSender(),
+        sendResponse,
+      }).route(),
+    ).toBe(false)
+    expect(sendResponse).toHaveBeenCalledWith({
+      ok: false,
+      reason: 'unlock-trust-policy-not-ready',
+    })
+    expect(open).not.toHaveBeenCalled()
+    expect(decodeUnlock).not.toHaveBeenCalled()
+    expect(requestPairedVaultUnlock).not.toHaveBeenCalled()
+  })
+
   test('passes the decoded new-device identity handoff wire request unchanged', async () => {
     const createIdentityHandoff = mock(() =>
       Promise.resolve({
