@@ -212,6 +212,7 @@ class SentinelFinalizationFixture {
       ? render(LoginGate, {
           ...props,
           appKind: VaultApplication.UnifiedDevelopment,
+          extensionConnectPairingStatusEntries: [],
           providers: [],
           loginSetup: { kind: LoginSetupKind.Inactive },
           githubPat: '',
