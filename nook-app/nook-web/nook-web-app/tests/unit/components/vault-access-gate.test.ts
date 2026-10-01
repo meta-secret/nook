@@ -15,6 +15,7 @@ describe('vault access gate', () => {
     const props = {
       vault,
       showAccessGate: false,
+      extensionConnectPairingStatusEntries: [],
       existingVaultNeedsDeviceUnlock: false,
       usesExtensionDeviceIdentity: false,
       showPasskeyOverlay: false,

@@ -26,6 +26,7 @@
   } from '$lib/app/workspace-route'
   import type { VaultState } from '$lib/vault.svelte'
   import type { ProviderSetupRequest } from '$lib/auth/providers'
+  import type { LoginVaultExtensionPairingStatusEntry } from '$lib/components/login/login-vault-extension-pairing-status'
 
   const APP_KIND = configured_vault_application()
 
@@ -55,6 +56,7 @@
     onSwitchVault,
     onSentinelUnlocked,
     onCreateDeviceVault,
+    extensionConnectPairingStatusEntries,
     onStartSentinelGenesis,
     onCreateSentinelParticipantKey,
     onCreateSentinelParticipantResponse,
@@ -76,6 +78,7 @@
     onSwitchVault: () => Promise<void>
     onSentinelUnlocked: () => Promise<void>
     onCreateDeviceVault: (label: string) => Promise<void>
+    extensionConnectPairingStatusEntries: LoginVaultExtensionPairingStatusEntry[]
     onStartSentinelGenesis: (args: StartSentinelGenesisArgs) => Promise<boolean>
     onCreateSentinelParticipantKey: () => Promise<SentinelActionResult<string>>
     onCreateSentinelParticipantResponse: (
@@ -144,6 +147,7 @@
         {onSwitchVault}
         {onSentinelUnlocked}
         {onCreateDeviceVault}
+        {extensionConnectPairingStatusEntries}
         {onStartSentinelGenesis}
         onCreateSentinelGenesisPublicKeyAnnouncement={onCreateSentinelParticipantKey}
         onCreateSentinelGenesisParticipantResponse={onCreateSentinelParticipantResponse}

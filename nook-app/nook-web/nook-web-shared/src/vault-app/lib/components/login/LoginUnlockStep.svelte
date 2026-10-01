@@ -18,6 +18,10 @@
   import LoginVaultCard from "$lib/components/login/LoginVaultCard.svelte";
   import LoginVaultNameForm from "$lib/components/login/LoginVaultNameForm.svelte";
   import LoginVaultWorkflowNav from "$lib/components/login/LoginVaultWorkflowNav.svelte";
+  import {
+    LoginVaultExtensionPairingStatusKind,
+    type LoginVaultExtensionPairingStatus,
+  } from "$lib/components/login/login-vault-extension-pairing-status";
   import SentinelCeremonyPanel from "$lib/components/login/SentinelCeremonyPanel.svelte";
   import type { VaultState } from "$lib/vault.svelte";
   import {
@@ -48,6 +52,7 @@
   let {
     vault,
     vaultEntry,
+    extensionPairingStatus = { kind: LoginVaultExtensionPairingStatusKind.NotShown },
     hasMultipleVaults = false,
     passwordEntries = [] as PasswordEntrySummary[],
     selectedPasswordEntry,
@@ -64,6 +69,7 @@
   }: {
     vault: VaultState;
     vaultEntry: LoginVaultEntry;
+    extensionPairingStatus?: LoginVaultExtensionPairingStatus;
     hasMultipleVaults?: boolean;
     passwordEntries?: PasswordEntrySummary[];
     selectedPasswordEntry: PasswordEntrySelection;
@@ -188,7 +194,20 @@
         >
           {vault.t(I18N_KEYS.LoginVaultOnDevice)}
         </h3>
-        <LoginVaultCard {vault} entry={vaultEntry.entry} active />
+        <LoginVaultCard
+          {vault}
+          entry={vaultEntry.entry}
+          active
+          {extensionPairingStatus}
+        />
+        {#if extensionPairingStatus.kind !== LoginVaultExtensionPairingStatusKind.NotShown}
+          <p
+            class="text-sm text-pretty text-muted-foreground"
+            data-testid="login-vault-extension-pairing-purpose"
+          >
+            {vault.t(I18N_KEYS.LoginVaultPickerExtensionPairingPurpose)}
+          </p>
+        {/if}
         {#if hasMultipleVaults}
           <button
             type="button"

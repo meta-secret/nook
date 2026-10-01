@@ -3,18 +3,38 @@
   import { FolderKey } from '@lucide/svelte'
   import type { NookLocalVaultEntry } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
+  import {
+    LoginVaultExtensionPairingStatusKind,
+    type LoginVaultExtensionPairingStatus,
+    type LoginVaultNotPairedExtensionPairingStatus,
+  } from '$lib/components/login/login-vault-extension-pairing-status'
 
   let {
     vault,
     entry,
     active = false,
     interactive = false,
+    extensionPairingStatus = { kind: LoginVaultExtensionPairingStatusKind.NotShown },
   }: {
     vault: VaultState
     entry: NookLocalVaultEntry
     active?: boolean
     interactive?: boolean
+    extensionPairingStatus?: LoginVaultExtensionPairingStatus
   } = $props()
+
+  function connectedVaultDescription(
+    pairingStatus: LoginVaultNotPairedExtensionPairingStatus,
+  ): string {
+    const tArgs: Parameters<typeof vault.t>[0] = {
+      key: I18N_KEYS.ExtensionSetupConnectedVault,
+      replacements: {
+        vault: pairingStatus.connectedVault.name,
+        store: pairingStatus.connectedVault.storeId,
+      },
+    }
+    return vault.t(tArgs)
+  }
 </script>
 
 <div
@@ -38,5 +58,42 @@
     <span class="block truncate font-mono text-xs text-muted-foreground">
       {entry.storeId}
     </span>
+    {#if extensionPairingStatus.kind === LoginVaultExtensionPairingStatusKind.Checking}
+      <span
+        class="block text-xs text-muted-foreground"
+        data-testid="login-vault-extension-pairing-status"
+      >
+        {vault.t(I18N_KEYS.LoginVaultPickerExtensionPairingChecking)}
+      </span>
+    {:else if extensionPairingStatus.kind === LoginVaultExtensionPairingStatusKind.Paired}
+      <span
+        class="block text-xs text-muted-foreground"
+        data-testid="login-vault-extension-pairing-status"
+      >
+        {vault.t(I18N_KEYS.LoginVaultPickerExtensionPaired)}
+      </span>
+    {:else if extensionPairingStatus.kind === LoginVaultExtensionPairingStatusKind.NotPaired}
+      <span
+        class="block text-xs text-muted-foreground"
+        data-testid="login-vault-extension-pairing-status"
+      >
+        {vault.t(I18N_KEYS.LoginVaultPickerExtensionNotPaired)}
+      </span>
+    {:else if extensionPairingStatus.kind === LoginVaultExtensionPairingStatusKind.Unavailable}
+      <span
+        class="block text-xs text-muted-foreground"
+        data-testid="login-vault-extension-pairing-status"
+      >
+        {vault.t(I18N_KEYS.LoginVaultPickerExtensionPairingUnavailable)}
+      </span>
+    {/if}
+    {#if extensionPairingStatus.kind === LoginVaultExtensionPairingStatusKind.NotPaired}
+      <span
+        class="block text-xs text-muted-foreground"
+        data-testid="login-vault-extension-connected-vault"
+      >
+        {connectedVaultDescription(extensionPairingStatus)}
+      </span>
+    {/if}
   </span>
 </div>
