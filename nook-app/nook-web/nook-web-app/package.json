@@ -103,5 +103,8 @@
     "@tailwindcss/oxide-linux-x64-gnu": "4.3.3",
     "lightningcss-darwin-arm64": "1.33.0",
     "lightningcss-linux-x64-gnu": "1.33.0"
+  },
+  "overrides": {
+    "devalue": "5.9.3"
   }
 }
