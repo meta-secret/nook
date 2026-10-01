@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test'
 import { readExtensionPairingStorage } from './helpers/extension-pairing-storage'
-import { launchPairedPinExtension } from './helpers/paired-pin-extension'
+import {
+  launchPairedPinExtension,
+  saveVaultLogin,
+} from './helpers/paired-pin-extension'
 import { startMockAuthServer } from './mock-auth'
 import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
 import { WebsiteAuthenticatorBackupAttachMessageMode } from '../src/lib/enrollment-messages'
@@ -372,11 +375,17 @@ test.describe('Browser 2FA enrollment', () => {
       vaultName: 'Landing login artwork vault',
     })
     try {
+      await saveVaultLogin(
+        paired.vaultPage,
+        mockAuth.origin,
+        'alice@nook.test',
+        'extension-fill-password',
+      )
       const page = await paired.context.newPage()
       await page.route(`${mockAuth.origin}/landing-artwork`, (route) =>
         route.fulfill({
           contentType: 'text/html',
-          body: '<!doctype html><html><body><main><h1>Skykoi</h1><p>Discover your next adventure</p><img alt="Featured artwork" width="220" height="220" src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22220%22 height=%22220%22%3E%3Crect width=%22220%22 height=%22220%22 fill=%22navy%22/%3E%3C/svg%3E"/><form><input type="email" name="username" autocomplete="username"/><input type="password" name="password" autocomplete="current-password"/><button type="submit">Sign in</button></form></main></body></html>',
+          body: '<!doctype html><html><body><main><h1>Skykoi</h1><p>Discover your next adventure</p><img alt="Featured artwork" width="220" height="220" src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22220%22 height=%22220%22%3E%3Crect width=%22220%22 height=%22220%22 fill=%22navy%22/%3E%3C/svg%3E"/><form id="login-form" method="post" action="/auth/login"><label>Email<input type="email" name="username" autocomplete="username"/></label><label>Password<input type="password" name="password" autocomplete="current-password"/></label><button type="submit">Sign in</button></form></main></body></html>',
         }),
       )
       await page.goto(`${mockAuth.origin}/landing-artwork`)
