@@ -64,6 +64,10 @@
   } from "$lib/components/login/login-unlock-state";
   import LoginCreateVaultChooser from "$lib/components/login/LoginCreateVaultChooser.svelte";
   import type { SentinelGenesisParticipation } from "$lib/components/login/login-create-vault-chooser-contract";
+  import {
+    statusForActiveVault,
+    type LoginVaultExtensionPairingStatusEntry,
+  } from "$lib/components/login/login-vault-extension-pairing-status";
   import LoginVaultPicker from "$lib/components/login/LoginVaultPicker.svelte";
   import LoginProviderManagement from "$lib/components/login/LoginProviderManagement.svelte";
   import { LoginProviderManagementVariant } from "$lib/components/login/login-provider-management-state";
@@ -131,6 +135,7 @@
     sentinelParticipantResponsePending = false,
     sentinelParticipantResponse = "",
     sentinelOnboardingPackage = "",
+    extensionConnectPairingStatusEntries,
     onAcceptSentinelOnboardingPackage,
   }: {
     vault: VaultState;
@@ -171,6 +176,7 @@
     sentinelParticipantResponsePending?: boolean;
     sentinelParticipantResponse?: string;
     sentinelOnboardingPackage?: string;
+    extensionConnectPairingStatusEntries: LoginVaultExtensionPairingStatusEntry[];
     onAcceptSentinelOnboardingPackage?: (
       packageJson: string,
     ) => void | Promise<void>;
@@ -446,6 +452,9 @@
     }
     return { kind: LoginVaultEntryKind.Unavailable };
   });
+  const activeVaultExtensionPairingStatus = $derived(
+    statusForActiveVault(extensionConnectPairingStatusEntries)(activeLoginVault),
+  );
   const showQrOnboarding = $derived(
     Boolean(
       enrollmentFromUrlPending && prefillEnrollmentCode && onUseEnrollmentCode,
@@ -816,6 +825,7 @@
             <LoginVaultPicker
               {vault}
               vaults={vault.localVaults}
+              {extensionConnectPairingStatusEntries}
               {isVerifying}
               {isInitializing}
               onChooseVault={(
@@ -831,6 +841,7 @@
             <LoginUnlockStep
               {vault}
               vaultEntry={activeLoginVault}
+              extensionPairingStatus={activeVaultExtensionPairingStatus}
               hasMultipleVaults={vault.hasMultipleLocalVaults}
               passwordEntries={vault.passwordEntries.length > 0
                 ? vault.passwordEntries

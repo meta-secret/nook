@@ -1684,6 +1684,14 @@ pub const LOGIN_VAULT_NAME_PLACEHOLDER: &str = "login.vault_name_placeholder";
 pub const LOGIN_VAULT_NAME_REQUIRED: &str = "login.vault_name_required";
 pub const LOGIN_VAULT_ON_DEVICE: &str = "login.vault_on_device";
 pub const LOGIN_VAULT_PICKER_CREATE_NEW: &str = "login.vault_picker_create_new";
+pub const LOGIN_VAULT_PICKER_EXTENSION_NOT_PAIRED: &str = "login.vault_picker_extension_not_paired";
+pub const LOGIN_VAULT_PICKER_EXTENSION_PAIRED: &str = "login.vault_picker_extension_paired";
+pub const LOGIN_VAULT_PICKER_EXTENSION_PAIRING_CHECKING: &str =
+    "login.vault_picker_extension_pairing_checking";
+pub const LOGIN_VAULT_PICKER_EXTENSION_PAIRING_PURPOSE: &str =
+    "login.vault_picker_extension_pairing_purpose";
+pub const LOGIN_VAULT_PICKER_EXTENSION_PAIRING_UNAVAILABLE: &str =
+    "login.vault_picker_extension_pairing_unavailable";
 pub const LOGIN_VAULT_PICKER_HINT: &str = "login.vault_picker_hint";
 pub const LOGIN_VAULT_PICKER_IMPORT: &str = "login.vault_picker_import";
 pub const LOGIN_VAULT_PICKER_ON_DEVICE: &str = "login.vault_picker_on_device";
