@@ -9,42 +9,59 @@ export enum LoginVaultExtensionPairingStatusKind {
   Unavailable = 'unavailable',
 }
 
-export type LoginVaultExtensionPairingStatusEntry = {
+export type LoginVaultConnectedExtensionIdentity = {
   readonly storeId: string
-  readonly kind: LoginVaultExtensionPairingStatusKind
-  readonly connectedVaultStoreId: string | undefined
-  readonly connectedVaultName: string | undefined
+  readonly name: string
 }
+
+export type LoginVaultExtensionResolvedPairingStatus =
+  | { readonly kind: LoginVaultExtensionPairingStatusKind.Paired }
+  | {
+      readonly kind: LoginVaultExtensionPairingStatusKind.NotPaired
+      readonly connectedVault: LoginVaultConnectedExtensionIdentity
+    }
+  | { readonly kind: LoginVaultExtensionPairingStatusKind.Unavailable }
+
+export type LoginVaultExtensionPairingStatus =
+  | { readonly kind: LoginVaultExtensionPairingStatusKind.NotShown }
+  | { readonly kind: LoginVaultExtensionPairingStatusKind.Checking }
+  | LoginVaultExtensionResolvedPairingStatus
+
+export type LoginVaultNotPairedExtensionPairingStatus = Extract<
+  LoginVaultExtensionPairingStatus,
+  { readonly kind: LoginVaultExtensionPairingStatusKind.NotPaired }
+>
+
+export type LoginVaultExtensionPairingStatusEntry =
+  { readonly storeId: string } & (
+    | { readonly kind: LoginVaultExtensionPairingStatusKind.Checking }
+    | LoginVaultExtensionResolvedPairingStatus
+  )
 
 export type LoginVaultExtensionPairingStatusLookupRequest = {
   readonly entries: readonly LoginVaultExtensionPairingStatusEntry[]
 }
 
 export class LoginVaultExtensionPairingStatusProjection {
-  readonly kind: LoginVaultExtensionPairingStatusKind
-  readonly connectedVaultStoreId: string | undefined
-  readonly connectedVaultName: string | undefined
+  readonly status: LoginVaultExtensionResolvedPairingStatus
 
   constructor(discovery: PairedExtensionIdentityDiscovery) {
-    this.connectedVaultStoreId =
-      discovery.status === ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault
-        ? discovery.connectedVaultStoreId
-        : undefined
-    this.connectedVaultName =
-      discovery.status === ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault
-        ? discovery.connectedVaultName
-        : undefined
-
     switch (discovery.status) {
       case ExtensionPairedVaultIdentityStatusMessageStatus.Locked:
       case ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked:
-        this.kind = LoginVaultExtensionPairingStatusKind.Paired
+        this.status = { kind: LoginVaultExtensionPairingStatusKind.Paired }
         break
       case ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault:
-        this.kind = LoginVaultExtensionPairingStatusKind.NotPaired
+        this.status = {
+          kind: LoginVaultExtensionPairingStatusKind.NotPaired,
+          connectedVault: {
+            storeId: discovery.connectedVaultStoreId,
+            name: discovery.connectedVaultName,
+          },
+        }
         break
       case ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable:
-        this.kind = LoginVaultExtensionPairingStatusKind.Unavailable
+        this.status = { kind: LoginVaultExtensionPairingStatusKind.Unavailable }
         break
     }
   }
@@ -57,17 +74,15 @@ export class LoginVaultExtensionPairingStatusLookup {
     this.entries = request.entries
   }
 
-  forStore(storeId: string): LoginVaultExtensionPairingStatusKind {
-    const entry = this.entryForStore(storeId)
-    switch (entry) {
-      case undefined:
-        return LoginVaultExtensionPairingStatusKind.NotShown
-      default:
-        return entry.kind
-    }
-  }
+  statusForStore(storeId: string): LoginVaultExtensionPairingStatus {
+    const entry = this.entries.find((candidate) => candidate.storeId === storeId)
+    if (!entry) return { kind: LoginVaultExtensionPairingStatusKind.NotShown }
 
-  entryForStore(storeId: string): LoginVaultExtensionPairingStatusEntry | undefined {
-    return this.entries.find((candidate) => candidate.storeId === storeId)
+    switch (entry.kind) {
+      case LoginVaultExtensionPairingStatusKind.NotPaired:
+        return { kind: entry.kind, connectedVault: entry.connectedVault }
+      default:
+        return { kind: entry.kind }
+    }
   }
 }

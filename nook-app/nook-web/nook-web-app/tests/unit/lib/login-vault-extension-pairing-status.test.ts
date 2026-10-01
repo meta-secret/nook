@@ -27,12 +27,12 @@ describe('LoginVaultExtensionPairingStatusProjection', () => {
       },
     }
 
-    expect(new LoginVaultExtensionPairingStatusProjection(locked).kind).toBe(
-      LoginVaultExtensionPairingStatusKind.Paired,
-    )
-    expect(new LoginVaultExtensionPairingStatusProjection(unlocked).kind).toBe(
-      LoginVaultExtensionPairingStatusKind.Paired,
-    )
+    expect(new LoginVaultExtensionPairingStatusProjection(locked).status).toEqual({
+      kind: LoginVaultExtensionPairingStatusKind.Paired,
+    })
+    expect(new LoginVaultExtensionPairingStatusProjection(unlocked).status).toEqual({
+      kind: LoginVaultExtensionPairingStatusKind.Paired,
+    })
   })
 
   test('marks a different vault as not paired and preserves its typed identity', () => {
@@ -42,10 +42,12 @@ describe('LoginVaultExtensionPairingStatusProjection', () => {
       connectedVaultName: 'Personal vault',
     }
 
-    expect(new LoginVaultExtensionPairingStatusProjection(discovery)).toEqual({
+    expect(new LoginVaultExtensionPairingStatusProjection(discovery).status).toEqual({
       kind: LoginVaultExtensionPairingStatusKind.NotPaired,
-      connectedVaultStoreId: 'paired-store-id',
-      connectedVaultName: 'Personal vault',
+      connectedVault: {
+        storeId: 'paired-store-id',
+        name: 'Personal vault',
+      },
     })
   })
 
@@ -54,10 +56,8 @@ describe('LoginVaultExtensionPairingStatusProjection', () => {
       status: ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable,
     }
 
-    expect(new LoginVaultExtensionPairingStatusProjection(discovery)).toEqual({
+    expect(new LoginVaultExtensionPairingStatusProjection(discovery).status).toEqual({
       kind: LoginVaultExtensionPairingStatusKind.Unavailable,
-      connectedVaultStoreId: undefined,
-      connectedVaultName: undefined,
     })
   })
 })
@@ -69,29 +69,30 @@ describe('LoginVaultExtensionPairingStatusLookup', () => {
         {
           storeId: 'paired-store',
           kind: LoginVaultExtensionPairingStatusKind.Paired,
-          connectedVaultStoreId: undefined,
-          connectedVaultName: undefined,
         },
         {
           storeId: 'other-store',
           kind: LoginVaultExtensionPairingStatusKind.NotPaired,
-          connectedVaultStoreId: 'paired-store',
-          connectedVaultName: 'Personal vault',
+          connectedVault: {
+            storeId: 'paired-store',
+            name: 'Personal vault',
+          },
         },
       ],
     })
 
-    expect(lookup.forStore('paired-store')).toBe(
-      LoginVaultExtensionPairingStatusKind.Paired,
-    )
-    expect(lookup.entryForStore('other-store')).toEqual({
-      storeId: 'other-store',
-      kind: LoginVaultExtensionPairingStatusKind.NotPaired,
-      connectedVaultStoreId: 'paired-store',
-      connectedVaultName: 'Personal vault',
+    expect(lookup.statusForStore('paired-store')).toEqual({
+      kind: LoginVaultExtensionPairingStatusKind.Paired,
     })
-    expect(lookup.forStore('unknown-store')).toBe(
-      LoginVaultExtensionPairingStatusKind.NotShown,
-    )
+    expect(lookup.statusForStore('other-store')).toEqual({
+      kind: LoginVaultExtensionPairingStatusKind.NotPaired,
+      connectedVault: {
+        storeId: 'paired-store',
+        name: 'Personal vault',
+      },
+    })
+    expect(lookup.statusForStore('unknown-store')).toEqual({
+      kind: LoginVaultExtensionPairingStatusKind.NotShown,
+    })
   })
 })

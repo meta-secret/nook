@@ -458,18 +458,14 @@
       entries: extensionConnectPairingStatusEntries,
     }),
   );
-  const activeVaultExtensionPairingStatusEntry = $derived.by(() => {
+  const activeVaultExtensionPairingStatus = $derived.by(() => {
     if (activeLoginVault.kind !== LoginVaultEntryKind.Available) {
-      return undefined;
+      return { kind: LoginVaultExtensionPairingStatusKind.NotShown };
     }
-    return extensionPairingStatusLookup.entryForStore(
+    return extensionPairingStatusLookup.statusForStore(
       activeLoginVault.entry.storeId,
     );
   });
-  const activeVaultExtensionPairingStatus = $derived(
-    activeVaultExtensionPairingStatusEntry?.kind ??
-      LoginVaultExtensionPairingStatusKind.NotShown,
-  );
   const showQrOnboarding = $derived(
     Boolean(
       enrollmentFromUrlPending && prefillEnrollmentCode && onUseEnrollmentCode,
@@ -857,8 +853,6 @@
               {vault}
               vaultEntry={activeLoginVault}
               extensionPairingStatus={activeVaultExtensionPairingStatus}
-              connectedVaultStoreId={activeVaultExtensionPairingStatusEntry?.connectedVaultStoreId}
-              connectedVaultName={activeVaultExtensionPairingStatusEntry?.connectedVaultName}
               hasMultipleVaults={vault.hasMultipleLocalVaults}
               passwordEntries={vault.passwordEntries.length > 0
                 ? vault.passwordEntries

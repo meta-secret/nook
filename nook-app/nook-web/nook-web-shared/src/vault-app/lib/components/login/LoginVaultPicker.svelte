@@ -80,9 +80,7 @@
                 {vault}
                 {entry}
                 interactive
-                extensionPairingStatus={pairingStatusLookup.forStore(entry.storeId)}
-                connectedVaultStoreId={pairingStatusLookup.entryForStore(entry.storeId)?.connectedVaultStoreId}
-                connectedVaultName={pairingStatusLookup.entryForStore(entry.storeId)?.connectedVaultName}
+                extensionPairingStatus={pairingStatusLookup.statusForStore(entry.storeId)}
               />
             </button>
           </li>

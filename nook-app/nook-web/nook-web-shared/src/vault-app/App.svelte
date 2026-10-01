@@ -157,8 +157,6 @@
               (entry) => ({
                 storeId: entry.storeId,
                 kind: LoginVaultExtensionPairingStatusKind.Checking,
-                connectedVaultStoreId: undefined,
-                connectedVaultName: undefined,
               }),
             )
             const discoveryEffects = localVaults.map((entry) =>
@@ -174,9 +172,7 @@
                   )
                   return {
                     storeId: entry.storeId,
-                    kind: projection.kind,
-                    connectedVaultStoreId: projection.connectedVaultStoreId,
-                    connectedVaultName: projection.connectedVaultName,
+                    ...projection.status,
                   }
                 },
               ),
