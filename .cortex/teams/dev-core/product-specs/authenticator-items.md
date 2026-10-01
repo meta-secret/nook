@@ -68,8 +68,18 @@ silent page scraping.
 ## Browser enrollment capture
 
 - **Add 2FA from this page** appears only as a user-initiated Pilot action on
-  pages that look like authenticator setup. Nook discovers visible QR
-  images/canvases and decodes them locally only after that trusted click.
+  authenticator setup pages. A visible media candidate requires nearby visible
+  instructions to scan it with an authenticator app or use an authenticator
+  setup key. Square image/canvas geometry and QR labels alone are insufficient.
+- Landing-page artwork, app-download QR codes, sign-in QR codes, payment QR
+  codes, and generic security marketing do not qualify as authenticator setup.
+- Content scripts report bounded non-secret media and instruction observations.
+  `nook-companion-core` owns the portable enrollment classification exposed through
+  `nook-companion-wasm`. Its additive classification is ephemeral; it introduces no
+  persisted schema change or storage migration.
+- Nook decodes visible QR images/canvases locally only after the trusted
+  **Add 2FA from this page** click. Eligibility detection never decodes a QR
+  payload or reads a setup key.
 - Only bounded `otpauth://totp/...` payloads are accepted. Rust/WASM validates
   and canonicalizes the URI; the Pilot preview shows service, account, page
   origin, and protocol parameters before save. The shared secret never appears
@@ -81,3 +91,11 @@ silent page scraping.
   attached to a named authenticator through typed replace/merge policy in
   Rust/WASM. Ambiguous page text cannot be saved without choosing the target
   authenticator.
+
+**Prohibited:** show **Add 2FA from this page** for a square landing-page image,
+an image labeled “QR code,” or an app-download QR beside generic security text.
+
+**Required:** offer the action for visible candidate media beside “Scan this QR
+code with your authenticator app” or “Scan this QR code with Google
+Authenticator.” Nearby instructions to enter an authenticator setup key also
+qualify. Decode only after the user clicks the action.
