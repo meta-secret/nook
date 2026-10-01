@@ -13,7 +13,7 @@ intent matches the requested action; it leaves an open tab with another intent
 untouched and opens the requested intent in a separate tab in that window.
 When a user explicitly chooses **Unlock** on a paired Simple Vault website and
 the extension is locked, the website request opens that extension-owned
-authentication UI in the browser's right-side panel in the same normal window.
+authentication UI in the browser side panel in the same normal window.
 This site-launched panel is distinct from toolbar and Pilot tab launches.
 After the extension device exists, the tab sends its public keys directly to the
 configured Simple Vault deployment, which remains the only surface for creating,
@@ -58,7 +58,7 @@ application capability checks enforce the vault-type boundary.
     guidance for Pilot
 - **Paired website Unlock action**
   - **Responsibility:** Open the extension-owned authentication UI in the
-    right-side browser panel in the initiating normal window when the paired
+    browser side panel in the initiating normal window when the paired
     extension is locked; passkey or PIN success continues the website unlock
     and dismisses the panel without a second action
 - **Extension background/WASM runtime**
@@ -489,7 +489,7 @@ When both devices exist, unlock selection is deterministic:
    - A locked website app key must not block re-adopting that unlocked
      companion identity.
 2. if the extension is locked, an explicit website **Unlock** opens the shared
-   extension authentication UI in the browser's right-side panel; successful
+   extension authentication UI in the browser side panel; successful
    passkey or PIN authorization automatically continues the website unlock and
    dismisses the panel. The website must not attempt an extension-origin
    WebAuthn ceremony or require a second Unlock action;

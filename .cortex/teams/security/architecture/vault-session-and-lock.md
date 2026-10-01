@@ -241,7 +241,7 @@ discovered again.
 
 When the user explicitly chooses **Unlock**:
 
-- a paired locked extension opens its own right-side browser panel in the same
+- a paired locked extension opens its own browser side panel in the same
   normal window; successful passkey or PIN authorization continues the website
   unlock and dismisses the panel without a second user action;
 - the website waits for the extension's memory-only identity handoff; and
