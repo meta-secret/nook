@@ -152,7 +152,7 @@ class AuthenticatorEnrollmentInteraction {
     recoveryCopy: string,
   ): EnrollmentPageHints {
     return {
-      qr: pageQrCapture.pageHasQrEnrollmentHint(),
+      qr: pageQrCapture.authenticationAuthenticatorSetupObservation(),
       backupCodes:
         recoveryCopyObservation.recoveryCopyHasBackupCodeHint(recoveryCopy),
     }
@@ -702,7 +702,7 @@ class AuthenticatorEnrollmentInteraction {
 
   renderEnrollmentActions({ host, hints }: RenderEnrollmentActionsArgs): void {
     if (this.enrollmentSavePending) return
-    if (!hints.qr && !hints.backupCodes) {
+    if (hints.qr === 'absent' && !hints.backupCodes) {
       enrollmentFlowRenderer.clearEnrollmentSection(host.panel)
       return
     }
@@ -710,7 +710,7 @@ class AuthenticatorEnrollmentInteraction {
     const section = enrollmentFlowRenderer.createEnrollmentSection(host.panel)
     const buttons: HTMLButtonElement[] = []
 
-    if (hints.qr) {
+    if (hints.qr === 'present') {
       const nookTypedArgs1_10: Parameters<
         typeof enrollmentFlowRenderer.createSecondaryButton
       >[0] = {

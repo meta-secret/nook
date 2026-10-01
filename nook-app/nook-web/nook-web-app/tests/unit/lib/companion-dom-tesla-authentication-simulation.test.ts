@@ -229,7 +229,7 @@ describe('Tesla DOM-backed authentication simulation', () => {
     if (!observation) throw new Error('expected Tesla password observation')
     const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation,
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     const workflow = classify_companion_authentication_workflow_facts({
@@ -290,7 +290,7 @@ describe('Tesla DOM-backed authentication simulation', () => {
 
     const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation,
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     const detailedAdvanceControl = facts.detailedAdvanceControl
@@ -336,7 +336,7 @@ describe('Tesla DOM-backed authentication simulation', () => {
     const refreshedFacts =
       passwordFormInteraction.authenticationPageObservationFacts({
         observation: refreshedObservation,
-        authenticatorSetupHint: false,
+        authenticatorSetupHint: 'absent',
         backupCodesHint: false,
       })
     const refreshedAdvanceControl = refreshedFacts.detailedAdvanceControl

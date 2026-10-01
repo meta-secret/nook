@@ -63,7 +63,7 @@ describe('Amazon DOM-backed authentication simulation', () => {
       throw new Error('expected Amazon authentication observation')
     const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation,
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(facts.fields).toMatchObject({

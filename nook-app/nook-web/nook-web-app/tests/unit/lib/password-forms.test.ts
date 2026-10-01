@@ -42,7 +42,7 @@ describe('website one-time-code fields', () => {
     const observation = observedAuthenticationWorkflow()
     const facts = forms.authenticationPageObservationFacts({
       observation,
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesCopy: '',
     })
     const detailed = facts.detailedAdvanceControl
@@ -70,7 +70,7 @@ describe('website one-time-code fields', () => {
 
     const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesCopy: '',
     })
     expect(facts.detailedAdvanceControl).toMatchObject({ kind: 'observed' })
@@ -87,7 +87,7 @@ describe('website one-time-code fields', () => {
 
     const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesCopy: '',
     })
     expect(facts.detailedAdvanceControl).toEqual({ kind: 'absent' })
@@ -103,7 +103,7 @@ describe('website one-time-code fields', () => {
     `
     const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(facts.ceremony.advanceControl).toBe('absent')
@@ -132,7 +132,7 @@ describe('website one-time-code fields', () => {
     `
     const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(facts.ceremony.advanceControl).toBe('absent')
@@ -168,7 +168,7 @@ describe('website one-time-code fields', () => {
 
     const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(facts.detailedAdvanceControl).toMatchObject({
@@ -197,7 +197,7 @@ describe('website one-time-code fields', () => {
 
     const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(facts.detailedAdvanceControl).toMatchObject({
@@ -220,7 +220,7 @@ describe('website one-time-code fields', () => {
     `
     const before = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(before.detailedAdvanceControl).toMatchObject({
@@ -232,7 +232,7 @@ describe('website one-time-code fields', () => {
     document.querySelector('#panel')?.setAttribute('inert', '')
     const after = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(after.detailedAdvanceControl).toMatchObject({
@@ -252,7 +252,7 @@ describe('website one-time-code fields', () => {
     `
     const before = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(before.detailedAdvanceControl).toMatchObject({
@@ -264,7 +264,7 @@ describe('website one-time-code fields', () => {
     document.querySelector('#panel')?.setAttribute('aria-disabled', 'true')
     const after = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(after.detailedAdvanceControl).toMatchObject({
@@ -278,7 +278,7 @@ describe('website one-time-code fields', () => {
     document.body.innerHTML = `<form method="post" action="/auth/login"><input autocomplete="username" /><button type="submit" disabled>Sign in</button></form>`
     const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(facts.detailedAdvanceControl).toMatchObject({
@@ -295,7 +295,7 @@ describe('website one-time-code fields', () => {
       ?.addEventListener('submit', (event) => event.preventDefault())
     const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(facts.detailedAdvanceControl).toMatchObject({ kind: 'observed' })
@@ -314,7 +314,7 @@ describe('website one-time-code fields', () => {
 
     const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesCopy: '',
     })
     expect(facts.ceremony.authenticationContext).toMatchObject({
@@ -331,7 +331,7 @@ describe('website one-time-code fields', () => {
     document.querySelector('form')?.removeAttribute('action')
     const defaultDestination = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesCopy: '',
     })
     const defaultAuthenticationContext =
@@ -355,7 +355,7 @@ describe('website one-time-code fields', () => {
 
     const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     const observation = facts.detailedAdvanceControl
@@ -379,7 +379,7 @@ describe('website one-time-code fields', () => {
 
     const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
@@ -409,7 +409,7 @@ describe('website one-time-code fields', () => {
 
     const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(facts.detailedAdvanceControl).toMatchObject({
@@ -457,7 +457,7 @@ describe('website one-time-code fields', () => {
 
     const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesCopy: '',
     })
     const authenticationContext = facts.ceremony.authenticationContext
@@ -480,7 +480,7 @@ describe('website one-time-code fields', () => {
 
     const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesCopy: '',
     })
     expect(facts.detailedAdvanceControl).toMatchObject({
@@ -513,7 +513,7 @@ describe('website one-time-code fields', () => {
 
     const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(facts.detailedAdvanceControl).toMatchObject({
@@ -534,7 +534,7 @@ describe('website one-time-code fields', () => {
 
     const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
@@ -559,7 +559,7 @@ describe('website one-time-code fields', () => {
 
     const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
@@ -580,7 +580,7 @@ describe('website one-time-code fields', () => {
 
     const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
@@ -601,7 +601,7 @@ describe('website one-time-code fields', () => {
 
     const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
@@ -620,7 +620,7 @@ describe('website one-time-code fields', () => {
 
     const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesCopy: '',
     })
     expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
@@ -663,7 +663,7 @@ describe('website one-time-code fields', () => {
     }
     const facts = forms.authenticationPageObservationFacts({
       observation,
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(facts.authenticator.detailedPasskeyControl).toEqual({
@@ -685,7 +685,7 @@ describe('website one-time-code fields', () => {
 
     const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesCopy: '',
     })
     expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
@@ -733,14 +733,14 @@ describe('website one-time-code fields', () => {
     expect(
       forms.authenticationPageObservationFacts({
         observation: login,
-        authenticatorSetupHint: false,
+        authenticatorSetupHint: 'absent',
         backupCodesHint: false,
       }).authenticator.detailedPasskeyControl,
     ).toEqual({ kind: 'absent' })
     expect(
       forms.authenticationPageObservationFacts({
         observation: signup,
-        authenticatorSetupHint: false,
+        authenticatorSetupHint: 'absent',
         backupCodesHint: false,
       }).authenticator.detailedPasskeyControl,
     ).toEqual({ kind: 'absent' })
@@ -758,7 +758,7 @@ describe('website one-time-code fields', () => {
 
     const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(facts.detailedAdvanceControl).toMatchObject({ kind: 'observed' })

@@ -1,3 +1,4 @@
+import type { AuthenticationAuthenticatorSetupObservation } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { AuthenticatorEnrollmentPreview } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 import {
@@ -13,7 +14,7 @@ export type EnrollmentFlowViewHost = {
 }
 
 export type EnrollmentPageHints = {
-  qr: boolean
+  qr: AuthenticationAuthenticatorSetupObservation
   backupCodes: boolean
 }
 
@@ -70,14 +71,24 @@ class EnrollmentFlowRenderer {
   constructor(private readonly browser: typeof globalThis) {}
 
   resetEnrollmentHeadline({ host, hints }: ResetEnrollmentHeadlineArgs): void {
-    const titleKey = hints.qr
-      ? BROWSER_MESSAGE_KEYS.WidgetEnrollTitle
-      : BROWSER_MESSAGE_KEYS.WidgetBackupTitle
-    const descriptionKey = hints.qr
-      ? BROWSER_MESSAGE_KEYS.WidgetEnrollDescription
-      : BROWSER_MESSAGE_KEYS.WidgetBackupDescription
-    host.title.textContent = host.translatedMessage(titleKey)
-    host.description.textContent = host.translatedMessage(descriptionKey)
+    switch (hints.qr) {
+      case 'present':
+        host.title.textContent = host.translatedMessage(
+          BROWSER_MESSAGE_KEYS.WidgetEnrollTitle,
+        )
+        host.description.textContent = host.translatedMessage(
+          BROWSER_MESSAGE_KEYS.WidgetEnrollDescription,
+        )
+        return
+      case 'absent':
+        host.title.textContent = host.translatedMessage(
+          BROWSER_MESSAGE_KEYS.WidgetBackupTitle,
+        )
+        host.description.textContent = host.translatedMessage(
+          BROWSER_MESSAGE_KEYS.WidgetBackupDescription,
+        )
+        return
+    }
   }
 
   clearEnrollmentSection(panel: HTMLElement): void {

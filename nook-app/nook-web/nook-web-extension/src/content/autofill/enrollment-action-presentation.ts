@@ -10,9 +10,18 @@ export class SelectedEnrollmentPresentation {
   constructor(private readonly request: AuthenticationWorkflowAction) {}
   get hints(): EnrollmentPageHints {
     const action = this.request
-    return {
-      qr: action === AuthenticationWorkflowAction.EnrollAuthenticator,
-      backupCodes: action === AuthenticationWorkflowAction.SaveBackupCodes,
+    switch (action) {
+      case AuthenticationWorkflowAction.EnrollAuthenticator:
+        return { qr: 'present', backupCodes: false }
+      case AuthenticationWorkflowAction.SaveBackupCodes:
+        return { qr: 'absent', backupCodes: true }
+      case AuthenticationWorkflowAction.ContinueWithNook:
+      case AuthenticationWorkflowAction.GeneratePassword:
+      case AuthenticationWorkflowAction.FillTotp:
+      case AuthenticationWorkflowAction.UsePasskey:
+      case AuthenticationWorkflowAction.CreatePasskey:
+      case AuthenticationWorkflowAction.TakeOver:
+        return { qr: 'absent', backupCodes: false }
     }
   }
 }
@@ -20,9 +29,17 @@ export class SupplementalEnrollmentPresentation {
   constructor(private readonly request: SupplementalEnrollmentHintsRequest) {}
   get hints(): EnrollmentPageHints {
     const { action, detected } = this.request
-    return action === AuthenticationWorkflowAction.SaveBackupCodes ||
-      action === AuthenticationWorkflowAction.EnrollAuthenticator
-      ? { qr: false, backupCodes: false }
-      : detected
+    switch (action) {
+      case AuthenticationWorkflowAction.SaveBackupCodes:
+      case AuthenticationWorkflowAction.EnrollAuthenticator:
+        return { qr: 'absent', backupCodes: false }
+      case AuthenticationWorkflowAction.ContinueWithNook:
+      case AuthenticationWorkflowAction.GeneratePassword:
+      case AuthenticationWorkflowAction.FillTotp:
+      case AuthenticationWorkflowAction.UsePasskey:
+      case AuthenticationWorkflowAction.CreatePasskey:
+      case AuthenticationWorkflowAction.TakeOver:
+        return detected
+    }
   }
 }

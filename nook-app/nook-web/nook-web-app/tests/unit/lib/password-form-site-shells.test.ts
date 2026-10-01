@@ -31,7 +31,7 @@ describe('popular-site login shells', () => {
 
     const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation,
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
     })
     const match = classify_companion_authentication_workflow_facts({
       observations: [facts],
@@ -62,7 +62,7 @@ describe('popular-site login shells', () => {
 
     const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation,
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
     })
     expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
       kind: 'absent',
@@ -331,7 +331,7 @@ describe('popular-site login shells', () => {
     expect(observation.summary.manualCheckpointPresent).toBe(true)
     const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation,
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
     })
     const match = classify_companion_authentication_workflow_facts({
       observations: [facts],

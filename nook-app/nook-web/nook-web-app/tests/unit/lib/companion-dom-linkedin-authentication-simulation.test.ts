@@ -143,7 +143,7 @@ describe('LinkedIn DOM-backed authentication simulation', () => {
     expect(observation.formScope.kind).toBe(PasswordFormScopeKind.Unowned)
     const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation,
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(facts.fields).toMatchObject({

@@ -18,7 +18,7 @@ function didSubmit(): boolean {
   const facts = workflow
     ? forms.authenticationPageObservationFacts({
         observation: workflow,
-        authenticatorSetupHint: false,
+        authenticatorSetupHint: 'absent',
       })
     : false
   const detailedAdvanceControl = facts ? facts.detailedAdvanceControl : false

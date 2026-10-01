@@ -400,15 +400,17 @@ class AuthenticationWidgetShell {
   }
 
   enrollmentCopy(hints: EnrollmentPageHints): WorkflowCopy {
-    if (hints.qr) {
-      return {
-        titleKey: BROWSER_MESSAGE_KEYS.WidgetEnrollTitle,
-        descriptionKey: BROWSER_MESSAGE_KEYS.WidgetEnrollDescription,
-      }
-    }
-    return {
-      titleKey: BROWSER_MESSAGE_KEYS.WidgetBackupTitle,
-      descriptionKey: BROWSER_MESSAGE_KEYS.WidgetBackupDescription,
+    switch (hints.qr) {
+      case 'present':
+        return {
+          titleKey: BROWSER_MESSAGE_KEYS.WidgetEnrollTitle,
+          descriptionKey: BROWSER_MESSAGE_KEYS.WidgetEnrollDescription,
+        }
+      case 'absent':
+        return {
+          titleKey: BROWSER_MESSAGE_KEYS.WidgetBackupTitle,
+          descriptionKey: BROWSER_MESSAGE_KEYS.WidgetBackupDescription,
+        }
     }
   }
 

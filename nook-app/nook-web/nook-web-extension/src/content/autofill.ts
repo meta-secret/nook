@@ -230,14 +230,15 @@ class AuthenticationScanRenderLifecycle {
     // of an active OTP challenge so Rust can keep code fill as the primary action,
     // while a direct backup-code-only page still exposes the save ceremony.
     if (
-      (enrollmentHints.qr || enrollmentHints.backupCodes) &&
+      (enrollmentHints.qr === 'present' || enrollmentHints.backupCodes) &&
       workflowForms.length === 0
     ) {
       const enrollmentMatchDelivery =
         await authenticationRuntimeTransport.sendCompanionWasmRuntimeMessage({
           type: CompanionWasmSessionMessageType.AuthenticationEnrollmentWorkflowMatch,
           payload: {
-            authenticatorSetupHint: enrollmentHints.qr,
+            // This existing generated enrollment ABI requires a boolean scalar.
+            authenticatorSetupHint: enrollmentHints.qr === 'present',
             backupCodesCopy: recoveryCopy,
             manualCheckpointPresent:
               passwordFieldDiscovery.pageHasManualCheckpoint(document),

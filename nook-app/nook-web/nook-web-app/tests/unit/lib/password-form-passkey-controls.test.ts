@@ -106,7 +106,7 @@ describe('passkey control detection', () => {
     const workflow = observedAuthenticationWorkflow()
     const approved = new AuthenticationWorkflowClassification({
       workflowForms: [workflow],
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     }).observations[0]
     if (!approved) throw new Error('expected an approved password workflow')
@@ -119,7 +119,7 @@ describe('passkey control detection', () => {
     expect(
       new LiveApprovedAuthenticationWorkflow({
         approved,
-        authenticatorSetupHint: false,
+        authenticatorSetupHint: 'absent',
         backupCodesHint: false,
       }).disposition,
     ).toBe(LiveAuthenticationWorkflowDisposition.Changed)
@@ -134,7 +134,7 @@ describe('passkey control detection', () => {
     const workflow = observedAuthenticationWorkflow()
     const classified = new AuthenticationWorkflowClassification({
       workflowForms: [workflow],
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     }).observations[0]
     if (!classified) throw new Error('expected an approved passkey workflow')
@@ -157,7 +157,7 @@ describe('passkey control detection', () => {
     expect(
       new LiveApprovedAuthenticationWorkflow({
         approved,
-        authenticatorSetupHint: false,
+        authenticatorSetupHint: 'absent',
         backupCodesHint: false,
       }).disposition,
     ).toBe(LiveAuthenticationWorkflowDisposition.Changed)

@@ -124,7 +124,7 @@ function expectFailClosed(html: string): void {
   if (!observation) throw new Error('expected rejected Netflix observation')
   const facts = passwordFormInteraction.authenticationPageObservationFacts({
     observation,
-    authenticatorSetupHint: false,
+    authenticatorSetupHint: 'absent',
     backupCodesHint: false,
   })
   const detailedAdvanceControl = facts.detailedAdvanceControl
@@ -219,7 +219,7 @@ describe('Netflix DOM-backed authentication simulation', () => {
     if (!observation) throw new Error('expected Netflix observation')
     const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation,
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(facts.fields).toMatchObject({

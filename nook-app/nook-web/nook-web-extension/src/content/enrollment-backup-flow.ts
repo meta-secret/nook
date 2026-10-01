@@ -116,7 +116,7 @@ class EnrollmentBackupInteraction {
 
   private detectEnrollmentHints(): EnrollmentPageHints {
     return {
-      qr: pageQrCapture.pageHasQrEnrollmentHint(),
+      qr: pageQrCapture.authenticationAuthenticatorSetupObservation(),
       backupCodes: recoveryCopyObservation.pageHasDocumentBackupCodeHint(),
     }
   }

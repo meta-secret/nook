@@ -372,7 +372,7 @@ describe('DOM-backed companion authentication simulation', () => {
     const chatGptFacts =
       passwordFormInteraction.authenticationPageObservationFacts({
         observation: chatGptObservation,
-        authenticatorSetupHint: false,
+        authenticatorSetupHint: 'absent',
         backupCodesHint: false,
       })
     const chatGptDetailed = chatGptFacts.detailedAdvanceControl
@@ -456,7 +456,7 @@ describe('DOM-backed companion authentication simulation', () => {
     const openAiFacts =
       passwordFormInteraction.authenticationPageObservationFacts({
         observation: openAiObservation,
-        authenticatorSetupHint: false,
+        authenticatorSetupHint: 'absent',
         backupCodesHint: false,
       })
     const openAiDetailed = openAiFacts.detailedAdvanceControl
@@ -555,7 +555,7 @@ describe('DOM-backed companion authentication simulation', () => {
     if (!observation) throw new Error('expected X authentication observation')
     const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation,
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     const detailedAdvanceControl = facts.detailedAdvanceControl
@@ -646,7 +646,7 @@ describe('DOM-backed companion authentication simulation', () => {
     }
     const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation,
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(facts.ceremony.advanceControl).toBe('absent')

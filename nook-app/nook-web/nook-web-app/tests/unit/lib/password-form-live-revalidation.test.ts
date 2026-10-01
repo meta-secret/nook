@@ -26,7 +26,7 @@ describe('authentication workflow live revalidation', () => {
     if (!observation) throw new Error('expected an authentication workflow')
     const approved = new AuthenticationWorkflowClassification({
       workflowForms: [observation],
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     }).observations[0]
     if (!approved) throw new Error('expected an approved workflow')
@@ -59,7 +59,7 @@ describe('authentication workflow live revalidation', () => {
     await expect(
       new LiveApprovedAuthenticationWorkflow({
         approved,
-        authenticatorSetupHint: false,
+        authenticatorSetupHint: 'absent',
         backupCodesHint: false,
       }).extensionDisposition(globalThis),
     ).resolves.toBe(LiveAuthenticationWorkflowDisposition.Changed)

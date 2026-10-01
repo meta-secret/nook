@@ -22,7 +22,7 @@ function observedAuthenticationWorkflow() {
 function authenticationFacts() {
   return passwordFormInteraction.authenticationPageObservationFacts({
     observation: observedAuthenticationWorkflow(),
-    authenticatorSetupHint: false,
+    authenticatorSetupHint: 'absent',
     backupCodesHint: false,
   })
 }

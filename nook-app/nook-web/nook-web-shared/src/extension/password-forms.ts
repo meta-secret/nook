@@ -56,9 +56,7 @@ export {
   passwordFieldDiscovery,
 } from "./password-form-fields";
 
-export type {
-  PasskeyControlLookup,
-} from "./password-form-fields";
+export type { PasskeyControlLookup } from "./password-form-fields";
 export type { PasswordFormScope };
 
 export { passwordFormCredentialInteraction } from "./password-form-field-actions";
@@ -148,10 +146,9 @@ class PasswordFormInteraction extends PasswordFormWorkflowObservation {
         scriptedGetSubmitter,
       ),
     );
-    const scriptedGetFormScope: PasswordFormScope | false =
-      passwordForm
-        ? { kind: PasswordFormScopeKind.Owned, owner: passwordForm }
-        : false;
+    const scriptedGetFormScope: PasswordFormScope | false = passwordForm
+      ? { kind: PasswordFormScopeKind.Owned, owner: passwordForm }
+      : false;
     const scriptedGetDestinationRequest:
       | Parameters<
           typeof authenticationSubmissionControls.controlDestinationIdentity
@@ -559,7 +556,7 @@ class PasswordFormInteraction extends PasswordFormWorkflowObservation {
         factsForObservation: (observation) => {
           const factsRequest: AuthenticationObservationFactsRequest = {
             observation,
-            authenticatorSetupHint: false,
+            authenticatorSetupHint: "absent",
           };
           return this.authenticationPageObservationFacts(factsRequest);
         },

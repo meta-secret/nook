@@ -1,3 +1,9 @@
+import {
+  AuthenticationAuthenticatorSetupRequest,
+  AuthenticationQrMediaObservation,
+  type AuthenticationAuthenticatorSetupObservation,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+
 const OTPAUTH_TOTP_PREFIX = 'otpauth://totp/'
 
 const MAX_QR_CANDIDATES = 8
@@ -38,6 +44,11 @@ type BarcodeDetectorAvailability =
       kind: BarcodeDetectorAvailabilityKind.Available
       Detector: BarcodeDetectorConstructor
     }
+
+enum InstructionElementCapture {
+  Excluded = 'excluded',
+  Visible = 'visible',
+}
 
 enum QrBitmapCaptureKind {
   Captured = 'captured',
@@ -116,14 +127,146 @@ class PageQrCapture {
     return ratio > 0.75 && ratio < 1.35
   }
 
-  pageHasQrEnrollmentHint(): boolean {
-    const media = [
-      ...this.browser.document.querySelectorAll('canvas, img, svg'),
-    ].flatMap((element) => (element instanceof HTMLElement ? [element] : []))
-    return media.some(
-      (element) =>
-        this.isVisibleElement(element) && this.looksLikeQrMedia(element),
+  authenticationAuthenticatorSetupObservation(): AuthenticationAuthenticatorSetupObservation {
+    for (const media of this.collectQrMedia()) {
+      const request = new AuthenticationAuthenticatorSetupRequest(
+        this.nearbyInstructionCopy(media),
+        AuthenticationQrMediaObservation.Present,
+      )
+      try {
+        switch (
+          request.classify_authentication_authenticator_setup_observation()
+        ) {
+          case 'present':
+            return 'present'
+          case 'absent':
+            break
+        }
+      } finally {
+        request.free()
+      }
+    }
+    const request = new AuthenticationAuthenticatorSetupRequest(
+      '',
+      AuthenticationQrMediaObservation.Absent,
     )
+    try {
+      return request.classify_authentication_authenticator_setup_observation()
+    } finally {
+      request.free()
+    }
+  }
+
+  private nearbyInstructionCopy(media: HTMLElement): string {
+    let copy = ''
+    for (const paragraph of this.nearbyInstructionElements(media)) {
+      switch (this.instructionElementVisibility(paragraph)) {
+        case InstructionElementCapture.Excluded:
+          continue
+        case InstructionElementCapture.Visible:
+          break
+      }
+      copy = this.boundedInstructionCopy(`${copy}\n${paragraph.innerText}`)
+    }
+    return copy
+  }
+
+  private nearbyInstructionElements(media: HTMLElement): HTMLElement[] {
+    const scopeSelector = 'section, article, form, [role="group"]'
+    const scopes = [media.closest(scopeSelector)].filter(
+      (element) => element instanceof HTMLElement,
+    )
+    for (const scope of scopes) {
+      return Array.from(scope.querySelectorAll('h1,h2,h3,h4,h5,h6,p'))
+        .filter((element) => element instanceof HTMLElement)
+        .filter((element) => element.closest(scopeSelector) === scope)
+    }
+    return [media.previousElementSibling, media.nextElementSibling]
+      .filter((element) => element instanceof HTMLElement)
+      .filter((element) => element.matches('h1,h2,h3,h4,h5,h6,p'))
+  }
+
+  private instructionElementVisibility(
+    element: Element,
+  ): InstructionElementCapture {
+    switch (element instanceof HTMLElement) {
+      case false:
+        return InstructionElementCapture.Excluded
+      case true:
+        break
+    }
+    const forbidden =
+      'input,textarea,select,button,code,pre,kbd,samp,[hidden],[aria-hidden="true"],[data-nook-otpauth-uri],[data-nook-backup-codes],[data-nook-backup-code],[data-secret],[data-setup-key]'
+    switch (
+      element.matches(forbidden) ||
+      element.querySelector(forbidden) instanceof Element ||
+      element.closest(forbidden) instanceof Element
+    ) {
+      case true:
+        return InstructionElementCapture.Excluded
+      case false:
+        break
+    }
+    const rect = element.getBoundingClientRect()
+    switch (
+      rect.width > 0 &&
+      rect.height > 0 &&
+      rect.bottom > 0 &&
+      rect.right > 0 &&
+      rect.top < this.browser.window.innerHeight &&
+      rect.left < this.browser.window.innerWidth
+    ) {
+      case false:
+        return InstructionElementCapture.Excluded
+      case true:
+        break
+    }
+    for (
+      let ancestor: HTMLElement | Element = element;
+      ancestor instanceof HTMLElement;
+    ) {
+      const style = this.browser.window.getComputedStyle(ancestor)
+      switch (
+        ancestor.hasAttribute('hidden') ||
+        ancestor.getAttribute('aria-hidden') === 'true' ||
+        style.display === 'none' ||
+        style.visibility === 'hidden' ||
+        style.opacity === '0'
+      ) {
+        case true:
+          return InstructionElementCapture.Excluded
+        case false:
+          break
+      }
+      const parents: HTMLElement[] = [ancestor.parentElement].filter(
+        (element) => element instanceof HTMLElement,
+      )
+      for (const parent of parents) ancestor = parent
+      switch (parents.length) {
+        case 0:
+          return InstructionElementCapture.Visible
+        default:
+          break
+      }
+    }
+    return InstructionElementCapture.Excluded
+  }
+
+  private boundedInstructionCopy(text: string): string {
+    let copy = ''
+    let bytes = 0
+    const encoder = new TextEncoder()
+    for (const character of text) {
+      bytes += encoder.encode(character).length
+      switch (bytes > 512) {
+        case true:
+          return copy
+        case false:
+          copy += character
+          break
+      }
+    }
+    return copy
   }
 
   private async bitmapFromElement(

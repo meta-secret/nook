@@ -211,7 +211,7 @@ describe('Airbnb DOM-backed authentication simulation', () => {
     if (!observation) throw new Error('expected Airbnb homepage observation')
     const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation,
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     const advance = facts.detailedAdvanceControl
@@ -267,7 +267,7 @@ describe('Airbnb DOM-backed authentication simulation', () => {
 
     const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation,
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     expect(facts.fields).toMatchObject({
@@ -367,7 +367,7 @@ describe('Airbnb DOM-backed authentication simulation', () => {
     if (!observation) throw new Error('expected ambiguous Airbnb observation')
     const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation,
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesHint: false,
     })
     const advance = facts.detailedAdvanceControl

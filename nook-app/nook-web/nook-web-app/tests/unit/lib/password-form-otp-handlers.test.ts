@@ -29,7 +29,7 @@ describe('OTP handler observation transport', () => {
     const observation = observedAuthenticationWorkflow()
     const facts = forms.authenticationPageObservationFacts({
       observation,
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesCopy: '',
     })
     expect(facts.ceremony.oneTimeCodeHandlerSignals).toEqual([
@@ -46,7 +46,7 @@ describe('OTP handler observation transport', () => {
 
     const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
+      authenticatorSetupHint: 'absent',
       backupCodesCopy: '',
     })
     expect(facts.ceremony.oneTimeCodeHandlerSignals).toEqual([

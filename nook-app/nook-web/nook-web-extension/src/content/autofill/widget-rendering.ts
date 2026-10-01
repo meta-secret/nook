@@ -90,7 +90,7 @@ class AuthenticationWidgetRenderer {
       snapshot.action,
       snapshot.currentStep,
       snapshot.totalSteps,
-      hints.qr ? 'qr' : '',
+      hints.qr,
       hints.backupCodes ? 'backup' : '',
       vaultPresentation.kind,
     ].join(':')
@@ -466,7 +466,7 @@ class AuthenticationWidgetRenderer {
     const supplementalHints = new SupplementalEnrollmentPresentation(
       supplementalHintsRequest,
     ).hints
-    if (supplementalHints.qr || supplementalHints.backupCodes) {
+    if (supplementalHints.qr === 'present' || supplementalHints.backupCodes) {
       const nookTypedArgs0_9: Parameters<
         typeof authenticationWidgetShell.buildEnrollmentFlowHost
       >[0] = {
