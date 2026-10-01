@@ -144,21 +144,26 @@
   $effect(() => {
     const localVaults = vault.localVaults
     switch (routeCoordinator.extensionConnectRoute) {
-      case false:
+      case false: {
         extensionConnectPairingStatusEntries = []
         return
-      case true:
+      }
+      case true: {
         switch (vault.isAuthenticated) {
-          case true:
+          case true: {
             extensionConnectPairingStatusEntries = []
             return
-          case false:
+          }
+          case false: {
             extensionConnectPairingStatusEntries = localVaults.map(
               (entry) => ({
                 storeId: entry.storeId,
                 kind: LoginVaultExtensionPairingStatusKind.Checking,
               }),
             )
+            const discoveryOptions: { concurrency: 'unbounded' } = {
+              concurrency: 'unbounded',
+            }
             const discoveryEffects = localVaults.map((entry) =>
               Effect.map(
                 Effect.promise(() =>
@@ -179,9 +184,10 @@
             )
             const discoveryFiber = Effect.runFork(
               Effect.gen(function* () {
-                const discoveries = yield* Effect.all(discoveryEffects, {
-                  concurrency: 'unbounded',
-                })
+                const discoveries = yield* Effect.all(
+                  discoveryEffects,
+                  discoveryOptions,
+                )
                 yield* Effect.sync(() => {
                   extensionConnectPairingStatusEntries = discoveries
                 })
@@ -190,7 +196,9 @@
             return () => {
               Effect.runFork(Fiber.interrupt(discoveryFiber))
             }
+          }
         }
+      }
     }
   })
   $effect(() => {

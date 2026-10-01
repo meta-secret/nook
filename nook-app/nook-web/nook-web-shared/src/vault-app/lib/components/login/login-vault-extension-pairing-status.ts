@@ -43,10 +43,6 @@ export type LoginVaultExtensionPairingStatusEntry = {
   | LoginVaultExtensionResolvedPairingStatus
 );
 
-export type LoginVaultExtensionPairingStatusLookupRequest = {
-  readonly entries: readonly LoginVaultExtensionPairingStatusEntry[];
-};
-
 export class LoginVaultExtensionPairingStatusProjection {
   readonly status: LoginVaultExtensionResolvedPairingStatus;
 
@@ -77,8 +73,8 @@ export class LoginVaultExtensionPairingStatusProjection {
 export class LoginVaultExtensionPairingStatusLookup {
   private readonly entries: readonly LoginVaultExtensionPairingStatusEntry[];
 
-  constructor(request: LoginVaultExtensionPairingStatusLookupRequest) {
-    this.entries = request.entries;
+  constructor(entries: readonly LoginVaultExtensionPairingStatusEntry[]) {
+    this.entries = entries;
   }
 
   statusForStore(storeId: string): LoginVaultExtensionPairingStatus {
@@ -88,22 +84,26 @@ export class LoginVaultExtensionPairingStatusLookup {
     if (!entry) return { kind: LoginVaultExtensionPairingStatusKind.NotShown };
 
     switch (entry.kind) {
+      case LoginVaultExtensionPairingStatusKind.Checking:
+        return { kind: LoginVaultExtensionPairingStatusKind.Checking };
+      case LoginVaultExtensionPairingStatusKind.Paired:
+        return { kind: LoginVaultExtensionPairingStatusKind.Paired };
       case LoginVaultExtensionPairingStatusKind.NotPaired:
         return { kind: entry.kind, connectedVault: entry.connectedVault };
-      default:
-        return { kind: entry.kind };
+      case LoginVaultExtensionPairingStatusKind.Unavailable:
+        return { kind: LoginVaultExtensionPairingStatusKind.Unavailable };
     }
   }
 }
 
-export function statusForLoginVault(
-  activeLoginVault: LoginVaultEntry,
+export function statusForActiveVault(
   entries: readonly LoginVaultExtensionPairingStatusEntry[],
-): LoginVaultExtensionPairingStatus {
-  if (activeLoginVault.kind !== LoginVaultEntryKind.Available) {
-    return { kind: LoginVaultExtensionPairingStatusKind.NotShown };
-  }
-  return new LoginVaultExtensionPairingStatusLookup({ entries }).statusForStore(
-    activeLoginVault.entry.storeId,
-  );
+): (activeLoginVault: LoginVaultEntry) => LoginVaultExtensionPairingStatus {
+  const lookup = new LoginVaultExtensionPairingStatusLookup(entries);
+  return (activeLoginVault) => {
+    if (activeLoginVault.kind !== LoginVaultEntryKind.Available) {
+      return { kind: LoginVaultExtensionPairingStatusKind.NotShown };
+    }
+    return lookup.statusForStore(activeLoginVault.entry.storeId);
+  };
 }

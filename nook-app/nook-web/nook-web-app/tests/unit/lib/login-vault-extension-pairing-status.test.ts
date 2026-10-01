@@ -6,6 +6,7 @@ import {
   LoginVaultExtensionPairingStatusKind,
   LoginVaultExtensionPairingStatusLookup,
   LoginVaultExtensionPairingStatusProjection,
+  type LoginVaultExtensionPairingStatusEntry,
 } from '../../../../nook-web-shared/src/vault-app/lib/components/login/login-vault-extension-pairing-status'
 
 describe('LoginVaultExtensionPairingStatusProjection', () => {
@@ -72,22 +73,21 @@ describe('LoginVaultExtensionPairingStatusProjection', () => {
 
 describe('LoginVaultExtensionPairingStatusLookup', () => {
   test('returns status only for the matching local vault store', () => {
-    const lookup = new LoginVaultExtensionPairingStatusLookup({
-      entries: [
-        {
+    const entries: LoginVaultExtensionPairingStatusEntry[] = [
+      {
+        storeId: 'paired-store',
+        kind: LoginVaultExtensionPairingStatusKind.Paired,
+      },
+      {
+        storeId: 'other-store',
+        kind: LoginVaultExtensionPairingStatusKind.NotPaired,
+        connectedVault: {
           storeId: 'paired-store',
-          kind: LoginVaultExtensionPairingStatusKind.Paired,
+          name: 'Personal vault',
         },
-        {
-          storeId: 'other-store',
-          kind: LoginVaultExtensionPairingStatusKind.NotPaired,
-          connectedVault: {
-            storeId: 'paired-store',
-            name: 'Personal vault',
-          },
-        },
-      ],
-    })
+      },
+    ]
+    const lookup = new LoginVaultExtensionPairingStatusLookup(entries)
 
     expect(lookup.statusForStore('paired-store')).toEqual({
       kind: LoginVaultExtensionPairingStatusKind.Paired,

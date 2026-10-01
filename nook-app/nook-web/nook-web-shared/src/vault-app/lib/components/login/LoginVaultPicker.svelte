@@ -35,9 +35,9 @@
 
   const isBusy = $derived(isVerifying || isInitializing)
   const pairingStatusLookup = $derived(
-    new LoginVaultExtensionPairingStatusLookup({
-      entries: extensionConnectPairingStatusEntries,
-    }),
+    new LoginVaultExtensionPairingStatusLookup(
+      extensionConnectPairingStatusEntries,
+    ),
   )
   let workflow = $state<LoginVaultWorkflow>(LoginVaultWorkflow.Open)
 

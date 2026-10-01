@@ -65,7 +65,7 @@
   import LoginCreateVaultChooser from "$lib/components/login/LoginCreateVaultChooser.svelte";
   import type { SentinelGenesisParticipation } from "$lib/components/login/login-create-vault-chooser-contract";
   import {
-    statusForLoginVault,
+    statusForActiveVault,
     type LoginVaultExtensionPairingStatusEntry,
   } from "$lib/components/login/login-vault-extension-pairing-status";
   import LoginVaultPicker from "$lib/components/login/LoginVaultPicker.svelte";
@@ -453,7 +453,7 @@
     return { kind: LoginVaultEntryKind.Unavailable };
   });
   const activeVaultExtensionPairingStatus = $derived(
-    statusForLoginVault(activeLoginVault, extensionConnectPairingStatusEntries),
+    statusForActiveVault(extensionConnectPairingStatusEntries)(activeLoginVault),
   );
   const showQrOnboarding = $derived(
     Boolean(
