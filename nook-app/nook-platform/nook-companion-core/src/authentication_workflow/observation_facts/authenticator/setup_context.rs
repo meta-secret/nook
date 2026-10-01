@@ -55,6 +55,19 @@ impl AuthenticationAuthenticatorSetupObservation {
     }
 }
 
+enum SetupQrPurpose {
+    Excluded,
+    NotExcluded,
+}
+enum AuthenticatorReference {
+    Mentioned,
+    NotMentioned,
+}
+enum EnrollmentInstruction {
+    Recognized,
+    Unrecognized,
+}
+
 impl AuthenticationAuthenticatorSetupCopy {
     fn classify_setup_instructions(&self) -> AuthenticationAuthenticatorSetupObservation {
         let Self(value) = self;
@@ -67,6 +80,30 @@ impl AuthenticationAuthenticatorSetupCopy {
     ) -> AuthenticationAuthenticatorSetupObservation {
         let Self(value) = self;
         let text = crate::AuthenticationControlText::new(value);
+        match Self::recognize_excluded_purpose(&text) {
+            SetupQrPurpose::Excluded => return AuthenticationAuthenticatorSetupObservation::Absent,
+            SetupQrPurpose::NotExcluded => {}
+        }
+        match Self::recognize_authenticator_reference(&text) {
+            AuthenticatorReference::NotMentioned => {
+                return AuthenticationAuthenticatorSetupObservation::Absent;
+            }
+            AuthenticatorReference::Mentioned => {}
+        }
+        match Self::recognize_enrollment_instruction(&text) {
+            EnrollmentInstruction::Recognized => {
+                AuthenticationAuthenticatorSetupObservation::Present
+            }
+            EnrollmentInstruction::Unrecognized => {
+                AuthenticationAuthenticatorSetupObservation::Absent
+            }
+        }
+    }
+    #[allow(
+        clippy::match_bool,
+        reason = "Convert the mechanical predicate directly into named recognition outcomes before choosing behavior"
+    )]
+    fn recognize_excluded_purpose(text: &crate::AuthenticationControlText<'_>) -> SetupQrPurpose {
         match text.contains_any_word(&[
             "sign in",
             "sign-in",
@@ -83,21 +120,37 @@ impl AuthenticationAuthenticatorSetupCopy {
             "scan qr code to download",
             "scan qr to download",
         ]) {
-            true => return AuthenticationAuthenticatorSetupObservation::Absent,
-            false => {}
+            true => SetupQrPurpose::Excluded,
+            false => SetupQrPurpose::NotExcluded,
         }
+    }
+    #[allow(
+        clippy::match_bool,
+        reason = "Convert the mechanical predicate directly into named recognition outcomes before choosing behavior"
+    )]
+    fn recognize_authenticator_reference(
+        text: &crate::AuthenticationControlText<'_>,
+    ) -> AuthenticatorReference {
         match text.contains_any_word(&["authenticator", "authentication app", "totp app"]) {
-            false => return AuthenticationAuthenticatorSetupObservation::Absent,
-            true => {}
+            true => AuthenticatorReference::Mentioned,
+            false => AuthenticatorReference::NotMentioned,
         }
+    }
+    #[allow(
+        clippy::match_bool,
+        reason = "Convert the mechanical predicate directly into named recognition outcomes before choosing behavior"
+    )]
+    fn recognize_enrollment_instruction(
+        text: &crate::AuthenticationControlText<'_>,
+    ) -> EnrollmentInstruction {
         match (text.contains_word_phrase("scan")
             && text.contains_word_phrase("qr")
             && text.contains_any_word(&["with", "using", "in", "connect", "set up", "setup"]))
             || (text.contains_word_phrase("enter")
                 && text.contains_any_word(&["setup key", "secret key", "manual key"]))
         {
-            true => AuthenticationAuthenticatorSetupObservation::Present,
-            false => AuthenticationAuthenticatorSetupObservation::Absent,
+            true => EnrollmentInstruction::Recognized,
+            false => EnrollmentInstruction::Unrecognized,
         }
     }
 }
