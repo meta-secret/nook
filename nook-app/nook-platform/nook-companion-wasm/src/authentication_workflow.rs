@@ -403,3 +403,8 @@ mod tests {
 ) -> nook_companion_core::ApprovedAuthenticationWorkflowDecision {
     request.revalidate()
 }
+
+mod setup_context;
+pub use setup_context::{
+    AuthenticationAuthenticatorSetupRequest, AuthenticationQrMediaObservation,
+};

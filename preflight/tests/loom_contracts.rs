@@ -482,9 +482,9 @@ fn preflight_initializes_released_meta_cortex_with_only_default_tool_policies() 
     );
     assert!(
         dockerfile.contains(
-            "https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/download/v0.9.2/meta-cortex-installer.sh"
+            "https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/download/v0.11.0/meta-cortex-installer.sh"
         ),
-        "Meta-Cortex installation must use the official v0.9.2 release"
+        "Meta-Cortex installation must use the official v0.11.0 release"
     );
     assert!(
         dockerfile.contains(
@@ -505,7 +505,7 @@ fn repository_policy_pins_meta_cortex_library_to_the_selected_commit() {
     let root = RepositoryFixture::repository_root();
     let workflow = root.read(".github/workflows/repository-policy.yml");
     let taskfile = root.read(".task/ci-workflows.yml");
-    let expected_commit = "bdd02072bb7ddf03930b27516925bf62502ff056";
+    let expected_commit = "edd48afcbd92256cf2745c3db316c3240683f590";
     let workflow_checkout = format!(
         "          repository: ai-ai-ai-ai-ai-ai-ai/meta-cortex\n          ref: {expected_commit}\n          path: .meta-cortex-source"
     );
