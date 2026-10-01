@@ -22,16 +22,19 @@ pub use observation_binding::{
     AuthenticationObservationBindingError, AuthenticationObservationBindingToken,
 };
 pub use observation_facts::{
-    AuthenticationAuthenticatorObservationFacts, AuthenticationAuthenticatorSetupObservation,
-    AuthenticationBackupCodesObservation, AuthenticationCeremonyContextObservation,
-    AuthenticationCeremonyObservationFacts, AuthenticationCredentialSubmissionFacts,
-    AuthenticationCredentialSubmissionObservation, AuthenticationDetailedAdvanceControlObservation,
+    AuthenticationAuthenticatorObservationFacts, AuthenticationAuthenticatorSetupCopy,
+    AuthenticationAuthenticatorSetupCopyError, AuthenticationAuthenticatorSetupEvidence,
+    AuthenticationAuthenticatorSetupObservation, AuthenticationBackupCodesObservation,
+    AuthenticationCeremonyContextObservation, AuthenticationCeremonyObservationFacts,
+    AuthenticationCredentialSubmissionFacts, AuthenticationCredentialSubmissionObservation,
+    AuthenticationDetailedAdvanceControlObservation,
     AuthenticationDetailedPasskeyControlCandidateObservation,
     AuthenticationDetailedPasskeyControlObservation, AuthenticationDisclosureControlDecision,
     AuthenticationDisclosureObservationSchemaVersion, AuthenticationFieldObservationFacts,
     AuthenticationImplicitSubmitActuationObservation, AuthenticationPageObservationFacts,
     AuthenticationPageObservationFactsBatch, AuthenticationPasskeyAccountAvailability,
-    AuthenticationPasskeyControlObservation, CurrentAuthenticationDisclosureControlRequest,
+    AuthenticationPasskeyControlObservation, AuthenticationQrMediaObservation,
+    CurrentAuthenticationDisclosureControlRequest,
     VersionedAuthenticationDisclosureControlObservation,
 };
 pub use observation_validation::{
