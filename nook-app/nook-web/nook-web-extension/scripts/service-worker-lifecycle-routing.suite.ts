@@ -1,4 +1,4 @@
-import { ExtensionPairingRejectionReason } from '../../../nook-web-shared/src/vault-app/lib/extension/extension-pairing-delivery'
+import { ExtensionPairingRejectionReason } from '../../nook-web-shared/src/vault-app/lib/extension/extension-pairing-delivery'
 import { err, ok } from 'neverthrow'
 import {
   ExtensionSessionTransportFailure,
