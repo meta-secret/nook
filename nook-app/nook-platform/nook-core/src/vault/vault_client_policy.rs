@@ -9,7 +9,12 @@ use nook_app_common::TranslationCatalog;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 mod connection;
+mod startup_unlock;
 mod sync_policy;
+
+pub use startup_unlock::{
+    VaultCompanionUnlockDecision, VaultStartupUnlockDecision, VaultStartupUnlockRequest,
+};
 
 pub use connection::{
     ActiveVaultStore, JoinEnrollmentState, RemoteVaultAssessDecision, RemoteVaultRecoveryState,

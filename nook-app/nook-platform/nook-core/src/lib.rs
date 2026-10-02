@@ -346,8 +346,9 @@ pub use vault_client_policy::{
     ProviderSyncFailureHandling, ProviderSyncFreshness, ProviderSyncVisibility,
     RemoteVaultAssessDecision, RemoteVaultRecoveryState, SentinelVaultUnlockState,
     UnauthenticatedSyncDecision, VaultAccessObservation, VaultClientPolicy,
-    VaultConnectGateDecision, VaultConnectProbeDecision, VaultEditDecision, VaultEditMessage,
-    VaultEditTranslation, VaultStorageSyncDecision, VaultSwitchDecision,
+    VaultCompanionUnlockDecision, VaultConnectGateDecision, VaultConnectProbeDecision,
+    VaultEditDecision, VaultEditMessage, VaultEditTranslation, VaultStartupUnlockDecision,
+    VaultStartupUnlockRequest, VaultStorageSyncDecision, VaultSwitchDecision,
     VaultSyncTimerStartDecision, VaultSyncTimerTickDecision,
 };
 pub use vault_connect::{
