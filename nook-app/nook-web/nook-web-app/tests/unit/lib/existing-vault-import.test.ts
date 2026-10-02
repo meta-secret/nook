@@ -1,6 +1,11 @@
 import { ok } from 'neverthrow'
 import { describe, expect, test, vi } from 'vitest'
-import { JoinEnrollmentState, NookLocalVaultUnlockState } from '$app-wasm'
+import {
+  JoinEnrollmentState,
+  NookLocalVaultUnlockState,
+  VaultStartupUnlockDecision,
+} from '$app-wasm'
+import { extensionConnectionBrowser } from '$lib/extension/connect'
 import { LOCAL_PROVIDER_TYPE } from '$lib/auth/providers'
 import { ExistingVaultImportQueueKind } from '$lib/vault/creation-queue'
 import { ExistingVaultImportLifecycle } from '$lib/vault/existing-vault-import.svelte'
@@ -82,6 +87,40 @@ function lifecycleHarness(authenticated = false) {
     beginLoginVaultPicker,
   }
 }
+
+describe('known import companion discovery policy', () => {
+  test.each([false, true])(
+    'uses actual provider presence without inventing a local vault (installed=%s)',
+    (installed) => {
+      const { state } = lifecycleHarness()
+      state.localVaultPresent = false
+      state.loginRequiresExistingVault = true
+      const lifecycle = new ExistingVaultImportLifecycle(state)
+      if (installed)
+        document.documentElement.setAttribute(
+          'data-nook-extension-runtime-id',
+          'extension-123',
+        )
+      try {
+        const presence = extensionConnectionBrowser.companionProviderPresence()
+        expect(state.startupUnlockDecision(presence)).toBe(
+          VaultStartupUnlockDecision.WebsiteDevice,
+        )
+        expect(lifecycle.unlockDecision(presence)).toBe(
+          installed
+            ? VaultStartupUnlockDecision.DiscoverCompanion
+            : VaultStartupUnlockDecision.WebsiteDevice,
+        )
+        expect(state.localVaultPresent).toBe(false)
+        expect(state.errorMsg).toBe('')
+      } finally {
+        document.documentElement.removeAttribute(
+          'data-nook-extension-runtime-id',
+        )
+      }
+    },
+  )
+})
 
 describe('ExistingVaultImportLifecycle', () => {
   test('resumes a protected import and activates it after password unlock', async () => {

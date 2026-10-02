@@ -303,12 +303,14 @@
         return
       }
     }
+    const companionProvider = connectionBrowser.companionProviderPresence()
+    const discoveryDecision = existingVaultImport
+      ? existingVaultImportLifecycle.unlockDecision(companionProvider)
+      : vault.startupUnlockDecision(companionProvider)
     if (
       !skipExtensionDiscovery &&
       SUPPORTS_EXTENSION &&
-      vault.startupUnlockDecision(
-        connectionBrowser.companionProviderPresence(),
-      ) === VaultStartupUnlockDecision.DiscoverCompanion &&
+      discoveryDecision === VaultStartupUnlockDecision.DiscoverCompanion &&
       (vault.localVaultPresent || existingVaultImport) &&
       activeStoreId
     ) {
