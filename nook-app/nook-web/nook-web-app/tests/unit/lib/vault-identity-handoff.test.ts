@@ -7,6 +7,15 @@ import {
   type MockInstance,
 } from 'vitest'
 import { err, ok, type Result } from 'neverthrow'
+
+vi.mock('$app-wasm', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('$app-wasm')>()),
+  // Node's global is not a web_sys Window; retain the fixture's storage state.
+  is_vault_session_locked: () => {
+    const stored = sessionStorage.getItem('nook_vault_session_locked')
+    return stored === '1' || stored === 'true'
+  },
+}))
 import {
   DeviceProtectionStatus,
   DeviceProtectionDeviceModeState,
