@@ -34,6 +34,7 @@ import {
   installForcePinDeviceProtection,
 } from './helpers/pin-device'
 import { lockExtensionSession } from './helpers/paired-pin-extension'
+import { unlockExtensionThroughCompanion } from './helpers/paired-vault-companion-unlock'
 import { ExtensionSessionMessageType } from '../src/offscreen/session-message-dispatch'
 import { ExtensionPairingApprovedMessageType } from '../../nook-web-shared/src/extension/runtime-messages'
 import { authorizeDeviceProtection } from '../../nook-web-app/e2e/helpers/settings-auth'
@@ -521,7 +522,13 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     await expect(simplePage).toHaveURL((url) => url.pathname.endsWith('/vault'))
     await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
 
+    // Independent local creation requires a locked companion: an unlocked
+    // paired identity automatically reopens its vault after the website locks.
+    await lockExtensionSession(context)
     await simplePage.getByTestId('header-lock-vault-btn').click()
+    // Reload releases the transient extension handoff before authorizing
+    // the website device for independent local creation.
+    await simplePage.reload()
     await expect(
       simplePage.getByTestId('login-local-unlock-step'),
     ).toBeVisible()
@@ -530,31 +537,52 @@ test('keeps the extension vault independent and switches after valid re-pairing'
       .getByTestId('login-vault-name-input')
       .fill('Second local vault')
     await simplePage.getByTestId('login-create-additional-vault-btn').click()
+    await expect(simplePage.getByTestId('passkey-auth-overlay')).toBeVisible()
     await authorizeDeviceProtection(simplePage)
     await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
 
+    const companionUnlock: Parameters<
+      typeof unlockExtensionThroughCompanion
+    >[0] = { context, extensionId }
+    await unlockExtensionThroughCompanion(companionUnlock)
     const pairingPopupPage = await context.newPage()
     await pairingPopupPage.goto(
       `chrome-extension://${extensionId}/popup/index.html?intent=pair`,
     )
     await expect(
-      pairingPopupPage.getByTestId('pair-another-vault-btn'),
+      pairingPopupPage.getByRole('button', {
+        name: 'Pair another vault',
+        exact: true,
+      }),
     ).toBeVisible()
     const pairingPagePromise = context.waitForEvent('page', { timeout: 30_000 })
-    await pairingPopupPage.getByTestId('pair-another-vault-btn').click()
+    await pairingPopupPage
+      .getByRole('button', { name: 'Pair another vault', exact: true })
+      .click()
     const pairingPage = await pairingPagePromise
     await expect(pairingPage).toHaveURL(
       (url) =>
         belongs_to_simple_vault(simpleVaultBaseUrl, url.toString()) &&
         url.pathname === '/extension-connect',
     )
+    // The vault picker requires an explicit lock in this tab's session storage.
+    // Enter consent without approving pairing, then lock this fresh tab.
+    await authorizeDeviceProtection(pairingPage)
+    await expect(
+      pairingPage.getByTestId('extension-connect-consent'),
+    ).toBeVisible()
+    await pairingPage.getByTestId('header-lock-vault-btn').click()
 
     const pairedVaultOption = pairingPage
       .getByTestId('login-vault-option')
-      .filter({ hasText: 'Unpair test vault' })
+      .filter({
+        has: pairingPage.getByText('Unpair test vault', { exact: true }),
+      })
     const unpairedVaultOption = pairingPage
       .getByTestId('login-vault-option')
-      .filter({ hasText: 'Second local vault' })
+      .filter({
+        has: pairingPage.getByText('Second local vault', { exact: true }),
+      })
     await expect(pairingPage.getByTestId('login-vault-option')).toHaveCount(2)
     await expect(
       pairedVaultOption.getByTestId('login-vault-extension-pairing-status'),
@@ -572,7 +600,9 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     ).toBeVisible()
     const selectedVaultCard = pairingPage
       .getByTestId('login-vault-card')
-      .filter({ hasText: 'Second local vault' })
+      .filter({
+        has: pairingPage.getByText('Second local vault', { exact: true }),
+      })
     await expect(
       selectedVaultCard.getByTestId('login-vault-extension-pairing-status'),
     ).toHaveText('Not paired with this extension')

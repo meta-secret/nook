@@ -39,8 +39,8 @@ import {
 import { handleCompanionWasmMessage } from './session-companion-wasm-operations'
 import {
   CompanionVaultDiscovery,
+  freshCompanionDiscoveryEndpoint,
   CompanionDiscoveryEndpointKind,
-  type CompanionDiscoveryEndpoint,
 } from './session-vault-operations'
 import { decode_companion_identity_discovery_observation } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { CompanionVaultDiscoveryArgs } from './session-vault-operations'
@@ -324,19 +324,21 @@ async function handleCompanionIdentityDiscovery(
     companionEndpointAvailability = {
       kind: CompanionEndpointAvailabilityKind.Inactive,
     }
-    const endpoint: CompanionDiscoveryEndpoint =
-      prior.kind === CompanionEndpointAvailabilityKind.Active
-        ? {
-            kind: CompanionDiscoveryEndpointKind.Discovered,
-            endpoint: prior.endpoint,
-          }
-        : {
-            kind: CompanionDiscoveryEndpointKind.Initial,
-            endpoint: candidate,
-          }
-    if (prior.kind === CompanionEndpointAvailabilityKind.Active) {
-      candidate.free()
+    const initial = {
+      kind: CompanionDiscoveryEndpointKind.Initial,
+      endpoint: candidate,
+    } as const
+    const replacement: Parameters<typeof freshCompanionDiscoveryEndpoint>[0] = {
+      previous:
+        prior.kind === CompanionEndpointAvailabilityKind.Active
+          ? {
+              kind: CompanionDiscoveryEndpointKind.Discovered,
+              endpoint: prior.endpoint,
+            }
+          : initial,
+      candidate: initial,
     }
+    const endpoint = freshCompanionDiscoveryEndpoint(replacement)
 
     try {
       const companionDiscoveryArgs: CompanionVaultDiscoveryArgs = {

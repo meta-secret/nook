@@ -5,7 +5,12 @@ import {
   VaultStorageFailureKind,
   NativeVaultStorageFailure,
 } from "$lib/runtime/storage-failure";
-import type { NookAdoptedExtensionIdentityHandoff } from "$app-wasm";
+import { CompanionProviderPresence } from "$app-wasm";
+import type {
+  NookAdoptedExtensionIdentityHandoff,
+  CompanionIdentityStatus,
+} from "$app-wasm";
+import { I18N_KEYS } from "../../../generated/i18n-keys";
 type ExtensionPairingApprovalDelivery = {
   readonly request: ExtensionConnectRequest;
   readonly message: ExtensionPairingApprovedMessage;
@@ -131,6 +136,35 @@ export type ExtensionConnectRequest =
 export type PairedExtensionIdentityDiscovery =
   PairedExtensionIdentityDiscoveryFor<ExtensionConnectRequest>;
 
+export enum PairedExtensionDiscoveryFailureKind {
+  NotInstalled = "not-installed",
+  Delivery = "delivery",
+  Decode = "decode",
+  Admission = "admission",
+}
+
+export class PairedExtensionDiscoveryFailure extends Error {
+  get translationKey() {
+    return this.kind === PairedExtensionDiscoveryFailureKind.NotInstalled ||
+      this.kind === PairedExtensionDiscoveryFailureKind.Delivery
+      ? I18N_KEYS.ExtensionConnectMessagingUnavailable
+      : I18N_KEYS.ExtensionConnectStartFailed;
+  }
+  constructor(readonly kind: PairedExtensionDiscoveryFailureKind) {
+    super(I18N_KEYS.ErrorsVaultGeneric);
+  }
+}
+
+export type AdmittedPairedExtensionIdentityDiscovery = {
+  readonly discovery: PairedExtensionIdentityDiscovery;
+  readonly canonicalStatus: CompanionIdentityStatus;
+};
+
+export type PairedExtensionIdentityDiscoveryResult = Result<
+  AdmittedPairedExtensionIdentityDiscovery,
+  PairedExtensionDiscoveryFailure
+>;
+
 export type ExtensionIdentityAdoption = {
   manager: NookVaultManager;
   request: ExtensionConnectRequest;
@@ -255,6 +289,13 @@ class ExtensionConnectionBrowser {
     );
   }
 
+  companionProviderPresence(): CompanionProviderPresence {
+    return this.readInstalledExtensionRuntimeId().kind ===
+      InstalledExtensionRuntimeKind.Installed
+      ? CompanionProviderPresence.Present
+      : CompanionProviderPresence.Absent;
+  }
+
   readInstalledExtensionRuntimeId(): InstalledExtensionRuntime {
     const extensionRuntimeId = this.browser.document.documentElement
       .getAttribute(extensionRuntimeIdAttribute)
@@ -322,18 +363,16 @@ class ExtensionConnectionBrowser {
 
   private async discoverPairedExtensionIdentityOnce(
     vaultStoreId: string,
-  ): Promise<
-    | { kind: ExtensionMessageDeliveryKind.Unavailable }
-    | {
-        kind: ExtensionMessageDeliveryKind.Received;
-        discovery: PairedExtensionIdentityDiscovery;
-      }
-  > {
+  ): Promise<PairedExtensionIdentityDiscoveryResult> {
     const installedExtension = this.readInstalledExtensionRuntimeId();
     if (
       installedExtension.kind === InstalledExtensionRuntimeKind.NotInstalled
     ) {
-      return { kind: ExtensionMessageDeliveryKind.Unavailable };
+      return err(
+        new PairedExtensionDiscoveryFailure(
+          PairedExtensionDiscoveryFailureKind.NotInstalled,
+        ),
+      );
     }
 
     const discoveryRequestId = this.requestId();
@@ -363,14 +402,22 @@ class ExtensionConnectionBrowser {
     };
     const delivery = await this.messageChannel.send(sendExtensionMessageArgs2);
     if (delivery.kind !== ExtensionMessageDeliveryKind.Received)
-      return delivery;
+      return err(
+        new PairedExtensionDiscoveryFailure(
+          PairedExtensionDiscoveryFailureKind.Delivery,
+        ),
+      );
     const decoded = Effect.runSync(
       Effect.either(
         companionResponseDecoder.decodeIdentityDiscovery(delivery.response),
       ),
     );
     if (decoded._tag === "Left") {
-      return { kind: ExtensionMessageDeliveryKind.Unavailable };
+      return err(
+        new PairedExtensionDiscoveryFailure(
+          PairedExtensionDiscoveryFailureKind.Decode,
+        ),
+      );
     }
     let admission: ReturnType<typeof admit_companion_identity_status>;
     try {
@@ -383,10 +430,18 @@ class ExtensionConnectionBrowser {
       };
       admission = admit_companion_identity_status(admissionRequest);
     } catch {
-      return { kind: ExtensionMessageDeliveryKind.Unavailable };
+      return err(
+        new PairedExtensionDiscoveryFailure(
+          PairedExtensionDiscoveryFailureKind.Admission,
+        ),
+      );
     }
     if (admission.kind !== "accepted") {
-      return { kind: ExtensionMessageDeliveryKind.Unavailable };
+      return err(
+        new PairedExtensionDiscoveryFailure(
+          PairedExtensionDiscoveryFailureKind.Admission,
+        ),
+      );
     }
     const transaction = admission.transaction;
     const status = transaction.status;
@@ -397,8 +452,8 @@ class ExtensionConnectionBrowser {
         status.status ===
         ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault
       ) {
-        return {
-          kind: ExtensionMessageDeliveryKind.Received,
+        const admitted: AdmittedPairedExtensionIdentityDiscovery = {
+          canonicalStatus: status,
           discovery: {
             status:
               ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault,
@@ -406,15 +461,17 @@ class ExtensionConnectionBrowser {
             connectedVaultName: status.connected_vault_name,
           },
         };
+        return ok(admitted);
       }
-      return {
-        kind: ExtensionMessageDeliveryKind.Received,
+      const admitted: AdmittedPairedExtensionIdentityDiscovery = {
+        canonicalStatus: status,
         discovery: { status: status.status },
       };
+      return ok(admitted);
     }
     const unlockedAppKey = status.app_key;
-    return {
-      kind: ExtensionMessageDeliveryKind.Received,
+    const admitted: AdmittedPairedExtensionIdentityDiscovery = {
+      canonicalStatus: status,
       discovery: {
         status: ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked,
         request: {
@@ -431,38 +488,39 @@ class ExtensionConnectionBrowser {
         },
       },
     };
+    return ok(admitted);
+  }
+
+  async discoverAdmittedPairedExtensionIdentity(
+    vaultStoreId: string,
+  ): Promise<PairedExtensionIdentityDiscoveryResult> {
+    for (let attempt = 0; ; attempt += 1) {
+      const result =
+        await this.discoverPairedExtensionIdentityOnce(vaultStoreId);
+      if (result.isErr()) return result;
+      if (
+        result.value.discovery.status !==
+          ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable ||
+        attempt === 2
+      )
+        return result;
+      // Retain the existing retry only for admitted semantic unavailability.
+      await new Promise<void>((resolve) => {
+        this.browser.window.setTimeout(
+          resolve,
+          PAIRED_IDENTITY_UNAVAILABLE_RETRY_MS,
+        );
+      });
+    }
   }
 
   async discoverPairedExtensionIdentity(
     vaultStoreId: string,
   ): Promise<PairedExtensionIdentityDiscovery> {
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const result =
-        await this.discoverPairedExtensionIdentityOnce(vaultStoreId);
-      if (result.kind === ExtensionMessageDeliveryKind.Received) {
-        if (
-          result.discovery.status !==
-            ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable ||
-          attempt === 2
-        ) {
-          return result.discovery;
-        }
-      }
-      if (attempt < 2) {
-        // The service worker can answer while its offscreen session is still
-        // starting. Retry its transient unavailable status before leaving a
-        // paired vault on its local unlock screen.
-        await new Promise<void>((resolve) => {
-          this.browser.window.setTimeout(
-            resolve,
-            PAIRED_IDENTITY_UNAVAILABLE_RETRY_MS,
-          );
-        });
-      }
-    }
-    return {
-      status: ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable,
-    };
+    const result =
+      await this.discoverAdmittedPairedExtensionIdentity(vaultStoreId);
+    if (result.isErr()) throw result.error;
+    return result.value.discovery;
   }
 
   async requestPairedExtensionUnlock(vaultStoreId: string): Promise<boolean> {

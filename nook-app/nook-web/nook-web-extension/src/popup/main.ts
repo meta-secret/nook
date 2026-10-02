@@ -15,6 +15,7 @@ import {
 import { retryClosedExtensionSessionOnce } from '../lib/extension-runtime-retry'
 import PopupApp from './PopupApp.svelte'
 import PopupInitializationFailure from './PopupInitializationFailure.svelte'
+import { PopupInitializationPhase } from './popup-app-state'
 import AuthenticatorPicker from './AuthenticatorPicker.svelte'
 import LoginPicker from './LoginPicker.svelte'
 import './popup.css'
@@ -84,12 +85,15 @@ async function main() {
       break
   }
 
+  let initializationPhase = PopupInitializationPhase.PairingState
   try {
     const vaultConnection = await loadCompanionVaultConnection()
     const { protectionStatus, activeSessionDevice } =
       await retryClosedExtensionSessionOnce(async () => {
+        initializationPhase = PopupInitializationPhase.DeviceProtectionStatus
         const protectionStatus =
           await extensionWasmRuntime.extensionDeviceProtectionStatus()
+        initializationPhase = PopupInitializationPhase.ActiveSessionDevice
         const activeSessionDevice: ExtensionSessionDeviceState =
           protectionStatus === DeviceProtectionStatus.Unlocked
             ? await extensionWasmRuntime.extensionSessionDevice()
@@ -113,13 +117,14 @@ async function main() {
         activeSessionDevice,
       },
     }
+    initializationPhase = PopupInitializationPhase.AppMount
     mount(PopupApp, nookTypedArgs0_2)
   } catch {
     const failureMountOptions: MountOptions<
       ComponentProps<typeof PopupInitializationFailure>
     > = {
       target,
-      props: { i18n },
+      props: { i18n, phase: initializationPhase },
     }
     mount(PopupInitializationFailure, failureMountOptions)
   }

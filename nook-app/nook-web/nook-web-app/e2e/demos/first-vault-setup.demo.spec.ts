@@ -42,6 +42,44 @@ test('open an empty local vault without a browser-data reload alert', async ({
   await expect(page.getByTestId('vault-error')).toHaveCount(0)
   await page.waitForTimeout(DEMO_BEAT_MS)
 
+  const websiteDeviceId = await page.evaluate(() => {
+    const vault = window.__nookVault
+    if (!vault) throw new Error('Vault debug hooks are unavailable')
+    return vault.deviceId
+  })
+  await expect(page.locator('html')).not.toHaveAttribute(
+    'data-nook-extension-runtime-id',
+  )
+
+  // A new manager must finish startup before automatically reopening this vault.
+  await page.reload()
+  await expect(page.getByTestId('vault-panel')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const vault = window.__nookVault
+          return Boolean(
+            vault && !vault.isInitializing && vault.isAuthenticated,
+          )
+        }),
+      { timeout: UI_TIMEOUT_MS },
+    )
+    .toBe(true)
+  await expect(page.getByTestId('vault-error')).toHaveCount(0)
+  await page.waitForTimeout(DEMO_BEAT_MS)
+
+  // With no companion provider, startup retains the website device identity.
+  expect(await page.evaluate(() => window.__nookVault?.deviceId)).toBe(
+    websiteDeviceId,
+  )
+  await expect(page.getByTestId('vault-switcher-trigger')).toHaveAttribute(
+    'data-extension-connected',
+    'false',
+  )
+
   const languageSelect = page.getByTestId('header-language-select')
   await languageSelect.click()
   await page.getByTestId('header-language-option-ru').click()

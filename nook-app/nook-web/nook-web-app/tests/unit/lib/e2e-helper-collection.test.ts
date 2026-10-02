@@ -11,6 +11,7 @@ import { LogLevel } from '$lib/runtime/log-level'
 import {
   deviceProtectionAuthorizationGateState,
   DeviceProtectionAuthorizationGateState,
+  deviceProtectionAuthenticatedSurface,
   DeviceProtectionPostUnlockGate,
 } from '../../../e2e/helpers/settings-auth'
 
@@ -123,6 +124,20 @@ describe('Playwright collection imports', () => {
     ).toBe(DeviceProtectionAuthorizationGateState.Unlocked)
   })
 
+  test('recognizes authenticated consent without a workspace shell or unlock control', () => {
+    expect(
+      deviceProtectionAuthorizationGateState({
+        overlayVisible: false,
+        unlockReady: false,
+        pickerVisible: false,
+        lockedAccessVisible: false,
+        authorizeReady: false,
+        vaultAuthenticated: true,
+        workspaceUnlocked: false,
+      }),
+    ).toBe(DeviceProtectionAuthorizationGateState.Unlocked)
+  })
+
   test('waits through the passkey overlay while login unlock hands off device authorization', () => {
     const gate = new DeviceProtectionPostUnlockGate({
       loginGateVisible: true,
@@ -138,7 +153,7 @@ describe('Playwright collection imports', () => {
     expect(gate.state()).toBe(DeviceProtectionAuthorizationGateState.Waiting)
   })
 
-  test('keeps an error-only transient post-unlock observation waiting', () => {
+  test('stops at the first visible post-unlock error', () => {
     const gate = new DeviceProtectionPostUnlockGate({
       loginGateVisible: true,
       authenticatedShellVisible: false,
@@ -150,7 +165,7 @@ describe('Playwright collection imports', () => {
       errorVisible: true,
     })
 
-    expect(gate.state()).toBe(DeviceProtectionAuthorizationGateState.Waiting)
+    expect(gate.state()).toBe(DeviceProtectionAuthorizationGateState.Error)
   })
 
   test('recognizes the terminal post-unlock states around device authorization', () => {
@@ -189,7 +204,7 @@ describe('Playwright collection imports', () => {
         pickerVisible: false,
         errorVisible: false,
       }).state(),
-    ).toBe(DeviceProtectionAuthorizationGateState.Unlock)
+    ).toBe(DeviceProtectionAuthorizationGateState.Waiting)
     expect(
       new DeviceProtectionPostUnlockGate({
         loginGateVisible: true,
@@ -201,7 +216,7 @@ describe('Playwright collection imports', () => {
         pickerVisible: true,
         errorVisible: false,
       }).state(),
-    ).toBe(DeviceProtectionAuthorizationGateState.Picker)
+    ).toBe(DeviceProtectionAuthorizationGateState.Waiting)
     expect(
       new DeviceProtectionPostUnlockGate({
         loginGateVisible: true,
@@ -213,7 +228,7 @@ describe('Playwright collection imports', () => {
         pickerVisible: false,
         errorVisible: true,
       }).state(),
-    ).toBe(DeviceProtectionAuthorizationGateState.Unlock)
+    ).toBe(DeviceProtectionAuthorizationGateState.Error)
     expect(
       new DeviceProtectionPostUnlockGate({
         loginGateVisible: true,
@@ -288,5 +303,14 @@ describe('Playwright collection imports', () => {
     expect(result.signal).toBe('')
     expect(result.exitCode).toBe(0)
     expect(result.stderr).not.toContain("Cannot find package '$app-wasm'")
+  })
+})
+
+describe('authenticated device protection surfaces', () => {
+  test('accepts a workspace or authenticated visible extension consent', () => {
+    expect(deviceProtectionAuthenticatedSurface(true, false, false)).toBe(true)
+    expect(deviceProtectionAuthenticatedSurface(false, true, true)).toBe(true)
+    expect(deviceProtectionAuthenticatedSurface(false, false, true)).toBe(false)
+    expect(deviceProtectionAuthenticatedSurface(false, true, false)).toBe(false)
   })
 })

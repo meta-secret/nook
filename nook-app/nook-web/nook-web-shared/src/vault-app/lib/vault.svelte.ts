@@ -8,6 +8,9 @@ import type { NookAdoptedExtensionIdentityHandoff } from "$app-wasm";
 import { VaultAccessStatus, type NookVaultSyncResult } from "$lib/nook";
 import {
   DeviceIdentityInitializationMode,
+  LocalVaultPresence,
+  type CompanionProviderPresence,
+  type NookVaultStartupUnlockRequest,
   ExternalDeviceIdentityAuthorizationMode,
   is_vault_session_locked,
   ProviderSyncFreshness,
@@ -225,6 +228,16 @@ export class VaultState extends VaultRuntimeState {
 
   async refreshArchitectureSecretCreationAllowed() {
     return this.architectureActions.refreshArchitectureSecretCreationAllowed();
+  }
+
+  startupUnlockDecision(companionProvider: CompanionProviderPresence) {
+    const request: NookVaultStartupUnlockRequest = {
+      local_vault_present: this.localVaultPresent
+        ? LocalVaultPresence.Present
+        : LocalVaultPresence.Absent,
+      companion_provider_present: companionProvider,
+    };
+    return this.clientPolicy.startup_unlock_decision(request);
   }
 
   shouldAutoUnlock(): boolean {
@@ -887,18 +900,7 @@ export class VaultState extends VaultRuntimeState {
   }
 
   async refreshSentinelUnlockStatus() {
-    const status =
-      await this.sentinelUnlockActions.refreshSentinelUnlockStatus();
-    if (status.isErr()) {
-      this.errorMsg = this.t(status.error.translationKey);
-      return status;
-    }
-    const permission = await this.refreshArchitectureSecretCreationAllowed();
-    if (permission.isErr()) {
-      this.errorMsg = this.t(permission.error.translationKey);
-      return err(permission.error);
-    }
-    return status;
+    return this.sentinelUnlockActions.refreshUnlockPresentation();
   }
 
   /**

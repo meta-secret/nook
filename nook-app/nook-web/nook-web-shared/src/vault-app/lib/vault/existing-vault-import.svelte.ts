@@ -1,6 +1,7 @@
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import {
   JoinEnrollmentState,
+  type CompanionProviderPresence,
   NookExistingVaultProviderReadiness,
 } from "$app-wasm";
 import {
@@ -35,6 +36,12 @@ export class ExistingVaultImportLifecycle {
   });
 
   constructor(private readonly vault: VaultState) {}
+
+  unlockDecision(companionProvider: CompanionProviderPresence) {
+    return this.vault.clientPolicy.existing_vault_import_unlock_decision(
+      companionProvider,
+    );
+  }
 
   get unlockStoreId(): string {
     const vault = this.vault;

@@ -1,3 +1,4 @@
+import { ExtensionPairingRejectionReason } from '../../nook-web-shared/src/vault-app/lib/extension/extension-pairing-delivery'
 import { err, ok } from 'neverthrow'
 import {
   ExtensionSessionTransportFailure,
@@ -435,108 +436,128 @@ describe('service worker routing', () => {
   })
 
   test.each([
-    { ok: true as const, eventCount: 1 },
-    { ok: false as const, reason: LocalEventLogUpdateFailure.VaultNotPaired },
-  ])('preserves the warm session for %j', async (response) => {
-    const events: string[] = []
-    const closeSession = mock(() =>
-      Promise.resolve(
-        ok<
-          ExtensionSessionDocumentStateKind.Closed,
-          ExtensionSessionTransportFailure
-        >(ExtensionSessionDocumentStateKind.Closed),
-      ),
-    )
-    const clearPickers = mock(() => Promise.resolve())
-    const clearEnrollments = mock(() => {})
-    const dependencies: ExtensionLifecycleRoutingDependencies = {
-      ...lifecycleDependencies,
-      closeExtensionSessionDocument: closeSession,
-      clearPendingAccountPickers: clearPickers,
-      clearStagedAuthenticatorEnrollments: clearEnrollments,
-      beginAccountPickerAuthorizationCleanup: () =>
-        Promise.resolve({
-          authorizationGeneration: 'epoch-15',
-          markerStatus: AccountPickerCleanupMarkerStatus.Persisted,
-        }),
-      importLocalEventLogUpdate: () => Promise.resolve(response),
-      rebindStagedAuthenticatorEnrollmentsAuthorization: (generation) => {
-        events.push(`enrollments-rebound-${generation}`)
+    { response: { ok: true as const, eventCount: 1 }, refreshRejected: false },
+    { response: { ok: true as const, eventCount: 1 }, refreshRejected: true },
+    {
+      response: {
+        ok: false as const,
+        reason: LocalEventLogUpdateFailure.VaultNotPaired,
       },
-      completeAccountPickerAuthorizationCleanup: ({
-        authorizationGeneration,
-      }) => {
-        events.push(`authorization-restored-${authorizationGeneration}`)
-        return Promise.resolve(completedCleanup)
-      },
-      refreshAuthenticationSurfaces: () => {
-        events.push('authentication-surfaces-refreshed')
-        return Promise.resolve()
-      },
-    }
-    const { routeExtensionLifecycleMessage } =
-      await import('../src/background/service-worker/extension-lifecycle-routing')
-    const completedResponse = new Promise<unknown>((sendResponse) => {
-      routeExtensionLifecycleMessage({
-        dependencies,
-        message: {
-          type: 'nook:extension-local-event-log-updated',
-          payload: {
-            vaultStoreId: 'store_abcdefghijk',
-            eventLogRecords: [
-              {
-                eventId: 'event-1',
-                path: 'events/1',
-                event: routedVaultEvent,
-              },
-            ],
-          },
+      refreshRejected: false,
+    },
+  ])(
+    'preserves the warm session for %j',
+    async ({ response, refreshRejected }) => {
+      const events: string[] = []
+      const closeSession = mock(() =>
+        Promise.resolve(
+          ok<
+            ExtensionSessionDocumentStateKind.Closed,
+            ExtensionSessionTransportFailure
+          >(ExtensionSessionDocumentStateKind.Closed),
+        ),
+      )
+      const clearPickers = mock(() => Promise.resolve())
+      const clearEnrollments = mock(() => {})
+      const dependencies: ExtensionLifecycleRoutingDependencies = {
+        ...lifecycleDependencies,
+        closeExtensionSessionDocument: closeSession,
+        clearPendingAccountPickers: clearPickers,
+        clearStagedAuthenticatorEnrollments: clearEnrollments,
+        beginAccountPickerAuthorizationCleanup: () =>
+          Promise.resolve({
+            authorizationGeneration: 'epoch-15',
+            markerStatus: AccountPickerCleanupMarkerStatus.Persisted,
+          }),
+        importLocalEventLogUpdate: () => Promise.resolve(response),
+        rebindStagedAuthenticatorEnrollmentsAuthorization: (generation) => {
+          events.push(`enrollments-rebound-${generation}`)
         },
-        sender: { id: 'nook-extension', url: 'https://simple.example.test/' },
-        sendResponse,
+        completeAccountPickerAuthorizationCleanup: ({
+          authorizationGeneration,
+        }) => {
+          events.push(`authorization-restored-${authorizationGeneration}`)
+          return Promise.resolve(completedCleanup)
+        },
+        refreshAuthenticationSurfaces: () => {
+          events.push('authentication-surfaces-refreshed')
+          return refreshRejected
+            ? Promise.reject(new Error('notification delivery rejected'))
+            : Promise.resolve()
+        },
+      }
+      const { routeExtensionLifecycleMessage } =
+        await import('../src/background/service-worker/extension-lifecycle-routing')
+      const completedResponse = new Promise<unknown>((sendResponse) => {
+        routeExtensionLifecycleMessage({
+          dependencies,
+          message: {
+            type: 'nook:extension-local-event-log-updated',
+            payload: {
+              vaultStoreId: 'store_abcdefghijk',
+              eventLogRecords: [
+                {
+                  eventId: 'event-1',
+                  path: 'events/1',
+                  event: routedVaultEvent,
+                },
+              ],
+            },
+          },
+          sender: { id: 'nook-extension', url: 'https://simple.example.test/' },
+          sendResponse,
+        })
       })
-    })
-    const actualResponse = await completedResponse
+      const actualResponse = await completedResponse
 
-    expect(events).toEqual([
-      'enrollments-rebound-epoch-15',
-      'authorization-restored-epoch-15',
-      ...(response.ok ? ['authentication-surfaces-refreshed'] : []),
-    ])
-    expect(actualResponse).toEqual(response)
-    expect(closeSession).not.toHaveBeenCalled()
-    expect(clearPickers).not.toHaveBeenCalled()
-    expect(clearEnrollments).not.toHaveBeenCalled()
-    events.length = 0
-    const release = mock(() => {})
-    const rejectedDependencies: ExtensionLifecycleRoutingDependencies = {
-      ...dependencies,
-      completeAccountPickerAuthorizationCleanup: () =>
-        Promise.resolve(rejectedCleanup),
-      releaseAccountPickerAuthorizationCleanup: release,
-    }
-    const rejectedResponse = await new Promise<unknown>((sendResponse) => {
-      routeExtensionLifecycleMessage({
-        dependencies: rejectedDependencies,
-        message: {
-          type: 'nook:extension-local-event-log-updated',
-          payload: {
-            vaultStoreId: 'store_abcdefghijk',
-            eventLogRecords: [
-              {
-                eventId: 'event-1',
-                path: 'events/1',
-                event: routedVaultEvent,
-              },
-            ],
+      expect(events).toEqual([
+        'enrollments-rebound-epoch-15',
+        'authorization-restored-epoch-15',
+        ...(response.ok ? ['authentication-surfaces-refreshed'] : []),
+      ])
+      expect(actualResponse).toEqual(
+        refreshRejected
+          ? {
+              ok: false,
+              reason:
+                ExtensionPairingRejectionReason.AuthenticationSurfaceRefreshFailed,
+            }
+          : response,
+      )
+      expect(closeSession).not.toHaveBeenCalled()
+      expect(clearPickers).not.toHaveBeenCalled()
+      expect(clearEnrollments).not.toHaveBeenCalled()
+      events.length = 0
+      const release = mock(() => {})
+      const rejectedDependencies: ExtensionLifecycleRoutingDependencies = {
+        ...dependencies,
+        completeAccountPickerAuthorizationCleanup: () =>
+          Promise.resolve(rejectedCleanup),
+        releaseAccountPickerAuthorizationCleanup: release,
+      }
+      const rejectedResponse = await new Promise<unknown>((sendResponse) => {
+        routeExtensionLifecycleMessage({
+          dependencies: rejectedDependencies,
+          message: {
+            type: 'nook:extension-local-event-log-updated',
+            payload: {
+              vaultStoreId: 'store_abcdefghijk',
+              eventLogRecords: [
+                {
+                  eventId: 'event-1',
+                  path: 'events/1',
+                  event: routedVaultEvent,
+                },
+              ],
+            },
           },
-        },
-        sender: { id: 'nook-extension', url: 'https://simple.example.test/' },
-        sendResponse,
+          sender: { id: 'nook-extension', url: 'https://simple.example.test/' },
+          sendResponse,
+        })
       })
-    })
-    expect(events).toEqual(['enrollments-rebound-epoch-15'])
-    expect(rejectedResponse).toEqual(response)
-    expect(release).not.toHaveBeenCalled()
-  })
+      expect(events).toEqual(['enrollments-rebound-epoch-15'])
+      expect(rejectedResponse).toEqual(response)
+      expect(release).not.toHaveBeenCalled()
+    },
+  )
 })

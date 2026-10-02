@@ -1,3 +1,4 @@
+import { ExtensionPairingRejectionReason } from '../../../../nook-web-shared/src/vault-app/lib/extension/extension-pairing-delivery'
 import { Effect, Either } from 'effect'
 import type { ExtensionSessionTransportFailure } from './session-document'
 import * as RuntimeMessages from '../../../../nook-web-shared/src/extension/runtime-messages'
@@ -666,8 +667,9 @@ export function routeExtensionLifecycleMessage({
                 cleanup: cleanupStart,
               },
             }
+            let response: Awaited<ReturnType<typeof importLocalEventLogUpdate>>
             try {
-              const response = await importLocalEventLogUpdate(importArgs)
+              response = await importLocalEventLogUpdate(importArgs)
               if (
                 !response.ok &&
                 response.reason !== LocalEventLogUpdateFailure.VaultNotPaired
@@ -702,9 +704,7 @@ export function routeExtensionLifecycleMessage({
                   )
                 // Preserve the import outcome without refreshing a rejected generation.
                 if ('error' in outcome) return response
-                if (response.ok) await refreshAuthenticationSurfaces()
               }
-              return response
             } catch {
               try {
                 const cleanup = await Effect.runPromise(
@@ -725,6 +725,18 @@ export function routeExtensionLifecycleMessage({
                 reason: LocalEventLogUpdateFailure.EventLogImportFailed,
               }
             }
+            if (response.ok) {
+              try {
+                await refreshAuthenticationSurfaces()
+              } catch {
+                return {
+                  ok: false,
+                  reason:
+                    ExtensionPairingRejectionReason.AuthenticationSurfaceRefreshFailed,
+                }
+              }
+            }
+            return response
           })
           .then(sendResponse)
       })

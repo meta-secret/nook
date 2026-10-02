@@ -36,7 +36,10 @@ import {
 import { belongs_to_simple_vault } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
 import { OpenCompanionLauncherIntent } from '../../nook-web-shared/src/extension/companion-launcher-message'
-import { createLocalVaultOnLogin } from '../../nook-web-app/e2e/helpers'
+import {
+  authorizeDeviceProtection,
+  createLocalVaultOnLogin,
+} from '../../nook-web-app/e2e/helpers'
 
 const chromiumExecutablePath = ((v) => (v ? v : ''))(
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim(),
@@ -824,16 +827,10 @@ test('re-approves an existing local vault after reload without event-log-access-
     await expect(consent.or(unlockStep)).toBeVisible({
       timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
     })
-    if (await unlockStep.isVisible()) {
-      await connectPage.getByTestId('unlock-vault-btn').click()
-      const passkeyOverlay = connectPage.getByTestId('passkey-auth-overlay')
-      if (await passkeyOverlay.isVisible()) {
-        await connectPage.getByTestId('device-protection-unlock-btn').click()
-      }
-      await expect(consent).toBeVisible({
-        timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
-      })
-    }
+    await authorizeDeviceProtection(connectPage)
+    await expect(consent).toBeVisible({
+      timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+    })
 
     await connectPage.getByTestId('approve-extension-device-btn').click()
     await waitForExtensionPairingReady(

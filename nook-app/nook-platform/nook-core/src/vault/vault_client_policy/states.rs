@@ -1,5 +1,10 @@
 //! Independent observations and intents for vault client policy.
 
+use serde::de::Error as _;
+use serde::{Deserialize, Deserializer};
+use thiserror::Error;
+use wasm_bindgen::prelude::wasm_bindgen;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VaultSyncConflictState {
     Clear,
@@ -60,11 +65,26 @@ impl From<bool> for VaultSessionLockIntent {
     }
 }
 
+#[wasm_bindgen]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LocalVaultPresence {
     Absent,
     Present,
 }
+#[derive(Debug, Error)]
+#[error("invalid local vault presence")]
+pub struct InvalidLocalVaultPresence;
+
+impl<'de> Deserialize<'de> for LocalVaultPresence {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        match u32::deserialize(deserializer)? {
+            value if value == Self::Absent as u32 => Ok(Self::Absent),
+            value if value == Self::Present as u32 => Ok(Self::Present),
+            _ => Err(D::Error::custom(InvalidLocalVaultPresence)),
+        }
+    }
+}
+
 impl From<bool> for LocalVaultPresence {
     fn from(observed: bool) -> Self {
         if observed {

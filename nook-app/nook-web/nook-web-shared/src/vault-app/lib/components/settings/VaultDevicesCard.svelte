@@ -25,7 +25,10 @@
   } from "@lucide/svelte";
   import { configured_vault_application_supports_extension } from "$app-wasm";
   import { Button } from "$lib/components/ui/button";
-  import { extensionConnectionBrowser } from "$lib/extension/connect";
+  import {
+    extensionConnectionBrowser,
+    PairedExtensionDiscoveryFailure,
+  } from "$lib/extension/connect";
   import {
     ExtensionSetupStatus,
     extensionInstallationBrowser,
@@ -95,19 +98,24 @@
 
   async function refreshExtensionSetupStatus() {
     if (!SUPPORTS_EXTENSION) return;
-    const state = await extensionInstallationBrowser.resolveExtensionSetupState(
-      vault.activeVault,
-    );
-    extensionSetupState = (() => {
-      const shouldOfferExtensionSetupArgs: Parameters<
-        typeof extensionInstallationBrowser.shouldOfferExtensionSetup
-      >[0] = { status: state.status, environment: navigator };
-      return extensionInstallationBrowser.shouldOfferExtensionSetup(
-        shouldOfferExtensionSetupArgs,
+    try {
+      const state = await extensionInstallationBrowser.resolveExtensionSetupState(
+        vault.activeVault,
       );
-    })()
-      ? { kind: ExtensionSetupOfferKind.Visible, setup: state }
-      : { kind: ExtensionSetupOfferKind.Hidden };
+      extensionSetupState = (() => {
+        const shouldOfferExtensionSetupArgs: Parameters<
+          typeof extensionInstallationBrowser.shouldOfferExtensionSetup
+        >[0] = { status: state.status, environment: navigator };
+        return extensionInstallationBrowser.shouldOfferExtensionSetup(
+          shouldOfferExtensionSetupArgs,
+        );
+      })()
+        ? { kind: ExtensionSetupOfferKind.Visible, setup: state }
+        : { kind: ExtensionSetupOfferKind.Hidden };
+    } catch (failure) {
+      if (!(failure instanceof PairedExtensionDiscoveryFailure)) throw failure;
+      vault.errorMsg = vault.t(failure.translationKey);
+    }
   }
 
   async function handleExtensionInstall() {

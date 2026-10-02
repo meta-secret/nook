@@ -85,8 +85,8 @@ pub use types::{
     NookSyncConflictReviewState, NookTotpCode, NookVaultAccessReport, NookVaultArchitecture,
     NookVaultClientPolicy, NookVaultEpochHistoryDiagnostic, NookVaultEventAccessDiagnostic,
     NookVaultLastSync, NookVaultLastSyncState, NookVaultMember, NookVaultSecretAccessDiagnostic,
-    NookVaultSecurityRecommendations, NookVaultSyncResult, NookWebsiteLoginSaveDecision,
-    NookWebsiteLoginSavePlan,
+    NookVaultSecurityRecommendations, NookVaultStartupUnlockRequest, NookVaultSyncResult,
+    NookWebsiteLoginSaveDecision, NookWebsiteLoginSavePlan,
 };
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 

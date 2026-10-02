@@ -4,10 +4,17 @@ import {
   VaultStorageFailure,
   VaultStorageFailureKind,
 } from "$lib/runtime/storage-failure";
+export class PairedExtensionDiscoveryFailure extends Error {
+  readonly translationKey =
+    I18N_KEYS.ErrorsValidationSentinelExtensionForbidden;
+}
+
 export const EXTENSION_CONNECT_PATH = "/extension-connect";
 
+import { CompanionProviderPresence } from "$app-wasm";
 import type {
   NookVaultManager,
+  CompanionIdentityStatus,
   NookAdoptedExtensionIdentityHandoff,
 } from "$app-wasm";
 import type {
@@ -81,6 +88,10 @@ export const extensionConnectRequestFromLocation: (
   kind: ExtensionConnectRequestStateKind.Absent,
 });
 
+export function companionProviderPresence(): CompanionProviderPresence {
+  return CompanionProviderPresence.Absent;
+}
+
 export function readInstalledExtensionRuntimeId(): InstalledExtensionRuntime {
   return { kind: InstalledExtensionRuntimeKind.NotInstalled };
 }
@@ -96,6 +107,21 @@ export async function discoverPairedExtensionIdentity(
   return {
     status: ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable,
   };
+}
+
+export async function discoverAdmittedPairedExtensionIdentity(
+  _vaultStoreId: string,
+): Promise<
+  Result<
+    {
+      readonly discovery: PairedExtensionIdentityDiscovery;
+      readonly canonicalStatus: CompanionIdentityStatus;
+    },
+    PairedExtensionDiscoveryFailure
+  >
+> {
+  void _vaultStoreId;
+  return err(new PairedExtensionDiscoveryFailure());
 }
 
 export async function requestPairedExtensionUnlock(
@@ -123,8 +149,10 @@ export const extensionConnectionBrowser = {
   isExtensionConnectPath,
   extensionConnectRequestFromLocation,
   readInstalledExtensionRuntimeId,
+  companionProviderPresence,
   openInstalledExtension,
   discoverPairedExtensionIdentity,
+  discoverAdmittedPairedExtensionIdentity,
   requestPairedExtensionUnlock,
   adoptExtensionIdentity,
   async deliverExtensionPairingApproval(

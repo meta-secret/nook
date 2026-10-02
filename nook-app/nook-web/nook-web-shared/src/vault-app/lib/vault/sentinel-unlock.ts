@@ -167,6 +167,21 @@ export class SentinelUnlockActions {
     });
   }
 
+  async refreshUnlockPresentation() {
+    const status = await this.refreshSentinelUnlockStatus();
+    if (status.isErr()) {
+      this.state.errorMsg = this.state.t(status.error.translationKey);
+      return status;
+    }
+    const permission =
+      await this.state.refreshArchitectureSecretCreationAllowed();
+    if (permission.isErr()) {
+      this.state.errorMsg = this.state.t(permission.error.translationKey);
+      return storageErr(permission.error);
+    }
+    return status;
+  }
+
   async refreshSentinelUnlockStatus(): Promise<
     SentinelActionResult<SentinelVaultUnlockState>
   > {

@@ -1,11 +1,19 @@
-import { extensionConnectionBrowser } from "$lib/extension/connect";
+import { err, ok, type Result } from "neverthrow";
+import type { VaultState } from "$lib/vault.svelte";
+import {
+  LoginVaultExtensionPairingStatusKind,
+  LoginVaultExtensionPairingStatusProjection,
+  type LoginVaultExtensionPairingStatusEntry,
+} from "$lib/components/login/login-vault-extension-pairing-status";
+import {
+  extensionConnectionBrowser,
+  PairedExtensionDiscoveryFailure,
+} from "$lib/extension/connect";
 
 import {
   type ExtensionSetupState,
   extensionInstallationBrowser,
 } from "$lib/extension/install";
-
-import type { ActiveVault } from "$lib/vault/state/provider.svelte";
 
 export enum ExtensionSetupOfferKind {
   Hidden = "hidden",
@@ -16,26 +24,59 @@ export type ExtensionSetupOffer =
   | { kind: ExtensionSetupOfferKind.Hidden }
   | { kind: ExtensionSetupOfferKind.Visible; setup: ExtensionSetupState };
 
+export type ExtensionPairingStatusRequest = {
+  readonly storeId: string;
+  readonly vault: VaultState;
+};
+
 /** Owns this browser host’s resources and interaction lifecycle. */
 class ExtensionSetupBrowser {
   constructor(private readonly browser: typeof globalThis) {}
 
-  async loadExtensionSetupOffer(
-    activeVault: ActiveVault,
-  ): Promise<ExtensionSetupOffer> {
-    const setup =
-      await extensionInstallationBrowser.resolveExtensionSetupState(
-        activeVault,
+  async discoverPairingStatus({
+    storeId,
+    vault,
+  }: ExtensionPairingStatusRequest): Promise<LoginVaultExtensionPairingStatusEntry> {
+    const admission =
+      await extensionConnectionBrowser.discoverAdmittedPairedExtensionIdentity(
+        storeId,
       );
-    const offerRequest: Parameters<
-      typeof extensionInstallationBrowser.shouldOfferExtensionSetup
-    >[0] = {
-      status: setup.status,
-      environment: this.browser.navigator,
+    if (admission.isErr()) {
+      vault.errorMsg = vault.t(admission.error.translationKey);
+      return { storeId, kind: LoginVaultExtensionPairingStatusKind.Checking };
+    }
+    return {
+      storeId,
+      ...new LoginVaultExtensionPairingStatusProjection(
+        admission.value.discovery,
+      ).status,
     };
-    return extensionInstallationBrowser.shouldOfferExtensionSetup(offerRequest)
-      ? { kind: ExtensionSetupOfferKind.Visible, setup }
-      : { kind: ExtensionSetupOfferKind.Hidden };
+  }
+
+  async loadExtensionSetupOffer(
+    vault: VaultState,
+  ): Promise<Result<ExtensionSetupOffer, PairedExtensionDiscoveryFailure>> {
+    try {
+      const setup =
+        await extensionInstallationBrowser.resolveExtensionSetupState(
+          vault.activeVault,
+        );
+      const offerRequest: Parameters<
+        typeof extensionInstallationBrowser.shouldOfferExtensionSetup
+      >[0] = {
+        status: setup.status,
+        environment: this.browser.navigator,
+      };
+      const offer: ExtensionSetupOffer =
+        extensionInstallationBrowser.shouldOfferExtensionSetup(offerRequest)
+          ? { kind: ExtensionSetupOfferKind.Visible, setup }
+          : { kind: ExtensionSetupOfferKind.Hidden };
+      return ok(offer);
+    } catch (failure) {
+      if (!(failure instanceof PairedExtensionDiscoveryFailure)) throw failure;
+      vault.errorMsg = vault.t(failure.translationKey);
+      return err(failure);
+    }
   }
 
   async openExtensionInstaller(): Promise<void> {
