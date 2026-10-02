@@ -306,6 +306,9 @@
     if (
       !skipExtensionDiscovery &&
       SUPPORTS_EXTENSION &&
+      vault.startupUnlockDecision(
+        connectionBrowser.companionProviderPresence(),
+      ) === VaultStartupUnlockDecision.DiscoverCompanion &&
       (vault.localVaultPresent || existingVaultImport) &&
       activeStoreId
     ) {

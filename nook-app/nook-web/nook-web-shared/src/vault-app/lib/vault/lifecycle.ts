@@ -821,14 +821,12 @@ class DeviceInitializationContinuation {
     >
   > {
     const state = this.state;
-    if (startupDecision === VaultStartupUnlockDecision.DiscoverCompanion) {
-      log.info("app init finished");
-      return storageOk(DeviceInitializationCompletionOutcome.Completed);
-    }
-
     const hasPendingEnrollment =
       state.enrollmentLinkState.kind === EnrollmentLinkKind.Pending;
-    const autoUnlock = !hasPendingEnrollment && state.shouldAutoUnlock();
+    const autoUnlock =
+      !hasPendingEnrollment &&
+      startupDecision === VaultStartupUnlockDecision.WebsiteDevice &&
+      state.shouldAutoUnlock();
     if (autoUnlock) {
       await state.loadDb();
       if (

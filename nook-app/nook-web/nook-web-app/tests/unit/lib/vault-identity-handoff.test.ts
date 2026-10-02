@@ -18,8 +18,6 @@ vi.mock('$app-wasm', async (importOriginal) => ({
 }))
 import {
   DeviceProtectionStatus,
-  configure_vault_application,
-  VaultApplication,
   DeviceProtectionDeviceModeState,
   ExternalDeviceIdentityAuthorizationMode,
   NookClientRunModeUtil,
@@ -45,10 +43,12 @@ import { TranslationMessage } from '$lib/vault/translation'
 import { VaultManagerStartup } from '$lib/runtime/wasm-bootstrap'
 import { unselectedVaultScope } from '$lib/auth/providers'
 import { LocaleUpdateOutcome } from '$lib/vault/locale'
+import { extensionConnectionBrowser } from '$lib/extension/connect'
+import { VaultStartupUnlockDecision } from '$app-wasm'
 
 /** Only the native boundary is doubled; browser lifecycle and handle ownership are real. */
 class IdentityHandoffFixture {
-  readonly manager: NookVaultManager
+  readonly manager = new NookVaultManager()
   readonly state: VaultState
   readonly lifecycle: VaultInitializationActions
   readonly clearUnlockedSession: MockInstance<
@@ -75,11 +75,7 @@ class IdentityHandoffFixture {
   } satisfies NookAdoptedExtensionIdentityHandoff
   private storageAdmission: Result<void, VaultStorageFailure> = ok()
 
-  constructor(
-    application: VaultApplication = VaultApplication.UnifiedDevelopment,
-  ) {
-    configure_vault_application(application)
-    this.manager = new NookVaultManager()
+  constructor() {
     const browserWindow = globalThis.window
     Reflect.deleteProperty(globalThis, 'window')
     try {
@@ -156,12 +152,28 @@ class IdentityHandoffFixture {
 
 afterEach(() => {
   document.documentElement.removeAttribute('data-nook-extension-runtime-id')
-  configure_vault_application(VaultApplication.UnifiedDevelopment)
   sessionStorage.removeItem('nook_vault_session_locked')
   vi.restoreAllMocks()
 })
 
 describe('external browser identity handoff commit ownership', () => {
+  test('keeps an explicitly locked website vault on the website unlock route without a provider', () => {
+    const fixture = new IdentityHandoffFixture()
+    try {
+      fixture.state.localVaultPresent = true
+      sessionStorage.setItem('nook_vault_session_locked', 'true')
+      expect(
+        fixture.state.startupUnlockDecision(
+          extensionConnectionBrowser.companionProviderPresence(),
+        ),
+      ).toBe(VaultStartupUnlockDecision.WebsiteDevice)
+      expect(fixture.state.shouldAutoUnlock()).toBe(false)
+      expect(fixture.state.errorMsg).toBe('')
+    } finally {
+      fixture.dispose()
+    }
+  })
+
   test('defers device synchronization until pending enrollment is admitted', async () => {
     const fixture = new IdentityHandoffFixture()
     try {
@@ -238,7 +250,7 @@ describe('external browser identity handoff commit ownership', () => {
   })
 
   test('auto-unlocks a persisted local vault only after initialization is ready', async () => {
-    const fixture = new IdentityHandoffFixture(VaultApplication.Sentinel)
+    const fixture = new IdentityHandoffFixture()
     try {
       fixture.state.clearManager()
       fixture.state.localVaultPresent = true
@@ -296,68 +308,88 @@ describe('external browser identity handoff commit ownership', () => {
     }
   })
 
-  test('defers website unlock for a persisted Simple vault until companion discovery', async () => {
-    document.documentElement.setAttribute(
-      'data-nook-extension-runtime-id',
-      'extension-123',
-    )
-    const fixture = new IdentityHandoffFixture(VaultApplication.Simple)
-    try {
-      fixture.state.clearManager()
-      fixture.state.localVaultPresent = true
-      fixture.state.runtimeConfig = new NookRuntimeConfig(
-        NookClientRunModeUtil.parse('production'),
-        true,
+  test.each([false, true])(
+    'defers website unlock until companion discovery (pending enrollment=%s)',
+    async (pendingEnrollment) => {
+      document.documentElement.setAttribute(
+        'data-nook-extension-runtime-id',
+        'extension-123',
       )
-      sessionStorage.removeItem('nook_vault_session_locked')
-      vi.spyOn(VaultManagerStartup.prototype, 'open').mockResolvedValue(
-        ok(fixture.manager),
-      )
-      vi.spyOn(fixture.state, 'updateLocale').mockResolvedValue(
-        ok(LocaleUpdateOutcome.Updated),
-      )
-      vi.spyOn(fixture.state, 'refreshLocalVaultCatalog').mockResolvedValue(
-        ok(fixture.state.localVaultCatalog),
-      )
-      vi.spyOn(fixture.manager, 'device_protection_status').mockResolvedValue(
-        DeviceProtectionStatus.Unlocked,
-      )
-      vi.spyOn(
-        fixture.manager,
-        'device_protection_device_mode',
-      ).mockResolvedValue(DeviceProtectionDeviceModeState.Standard)
-      vi.spyOn(
-        fixture.lifecycle,
-        'continueInitializationAfterDeviceUnlock',
-      ).mockImplementation(async () => {
-        expect(fixture.state.isInitializing).toBe(true)
-        return ok({
-          deviceId: 'persisted-device',
-          devicePublicKey: 'persisted-public-key',
+      const fixture = new IdentityHandoffFixture()
+      try {
+        fixture.state.clearManager()
+        fixture.state.localVaultPresent = true
+        if (pendingEnrollment)
+          fixture.state.pendingEnrollmentFromUrl = 'pending-enrollment'
+        const clearEnrollmentUrl = vi.spyOn(
+          fixture.state,
+          'clearPendingEnrollmentFromUrl',
+        )
+        vi.spyOn(fixture.state, 'refreshDeviceState').mockResolvedValue(ok())
+        fixture.state.runtimeConfig = new NookRuntimeConfig(
+          NookClientRunModeUtil.parse('production'),
+          true,
+        )
+        sessionStorage.removeItem('nook_vault_session_locked')
+        vi.spyOn(VaultManagerStartup.prototype, 'open').mockResolvedValue(
+          ok(fixture.manager),
+        )
+        vi.spyOn(fixture.state, 'updateLocale').mockResolvedValue(
+          ok(LocaleUpdateOutcome.Updated),
+        )
+        vi.spyOn(fixture.state, 'refreshLocalVaultCatalog').mockResolvedValue(
+          ok(fixture.state.localVaultCatalog),
+        )
+        vi.spyOn(fixture.manager, 'device_protection_status').mockResolvedValue(
+          DeviceProtectionStatus.Unlocked,
+        )
+        vi.spyOn(
+          fixture.manager,
+          'device_protection_device_mode',
+        ).mockResolvedValue(DeviceProtectionDeviceModeState.Standard)
+        vi.spyOn(
+          fixture.lifecycle,
+          'continueInitializationAfterDeviceUnlock',
+        ).mockImplementation(async () => {
+          expect(fixture.state.isInitializing).toBe(true)
+          return ok({
+            deviceId: 'persisted-device',
+            devicePublicKey: 'persisted-public-key',
+          })
         })
-      })
-      const loadDb = vi
-        .spyOn(fixture.state, 'loadDb')
-        .mockImplementation(async () => {
-          expect(fixture.state.isInitializing).toBe(false)
-          expect(fixture.state.deviceAuthorizationInProgress).toBe(false)
-          fixture.state.isAuthenticated = true
-        })
-      vi.spyOn(fixture.state, 'runFanOutSyncAfterLocalSave').mockResolvedValue(
-        ok({ publishedEventRecordCount: 0, outboxFlushes: [] }),
-      )
-      vi.spyOn(fixture.state, 'startVaultSync').mockImplementation(() => {})
+        const loadDb = vi
+          .spyOn(fixture.state, 'loadDb')
+          .mockImplementation(async () => {
+            expect(fixture.state.isInitializing).toBe(false)
+            expect(fixture.state.deviceAuthorizationInProgress).toBe(false)
+            fixture.state.isAuthenticated = true
+          })
+        vi.spyOn(
+          fixture.state,
+          'runFanOutSyncAfterLocalSave',
+        ).mockResolvedValue(
+          ok({ publishedEventRecordCount: 0, outboxFlushes: [] }),
+        )
+        vi.spyOn(fixture.state, 'startVaultSync').mockImplementation(() => {})
 
-      await fixture.lifecycle.initOnce()
+        await fixture.lifecycle.initOnce()
 
-      expect(fixture.state.errorMsg).toBe('')
-      expect(fixture.state.isInitializing).toBe(false)
-      expect(loadDb).not.toHaveBeenCalled()
-      expect(fixture.state.isAuthenticated).toBe(false)
-    } finally {
-      fixture.dispose()
-    }
-  })
+        expect(fixture.state.errorMsg).toBe('')
+        expect(fixture.state.isInitializing).toBe(false)
+        expect(loadDb).not.toHaveBeenCalled()
+        expect(fixture.state.isAuthenticated).toBe(false)
+        expect(fixture.state.enrollmentFromUrlPending).toBe(pendingEnrollment)
+        expect(fixture.state.prefillEnrollmentCode).toBe(
+          pendingEnrollment ? 'pending-enrollment' : '',
+        )
+        expect(clearEnrollmentUrl).toHaveBeenCalledTimes(
+          Number(pendingEnrollment),
+        )
+      } finally {
+        fixture.dispose()
+      }
+    },
+  )
 
   test('relocks automatic authorization when typed initialization continuation fails', async () => {
     const fixture = new IdentityHandoffFixture()
@@ -417,7 +449,7 @@ describe('external browser identity handoff commit ownership', () => {
   })
 
   test('preserves the original relock and error surface when completion throws', async () => {
-    const fixture = new IdentityHandoffFixture(VaultApplication.Sentinel)
+    const fixture = new IdentityHandoffFixture()
     try {
       const completionFailure = new Error('completion policy failed')
       fixture.state.clearManager()
