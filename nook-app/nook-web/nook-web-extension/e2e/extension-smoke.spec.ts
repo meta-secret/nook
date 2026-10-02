@@ -565,6 +565,13 @@ test('keeps the extension vault independent and switches after valid re-pairing'
         belongs_to_simple_vault(simpleVaultBaseUrl, url.toString()) &&
         url.pathname === '/extension-connect',
     )
+    // The vault picker requires an explicit lock in this tab's session storage.
+    // Enter consent without approving pairing, then lock this fresh tab.
+    await authorizeDeviceProtection(pairingPage)
+    await expect(
+      pairingPage.getByTestId('extension-connect-consent'),
+    ).toBeVisible()
+    await pairingPage.getByTestId('header-lock-vault-btn').click()
 
     const pairedVaultOption = pairingPage
       .getByTestId('login-vault-option')
