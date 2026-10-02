@@ -168,7 +168,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
   context.on('console', (message) => {
     const record = message.text()
     if (
-      /^\[nook-session-evidence\] (?:popup-status:[0-9]|website-status:[0-9]|cleanup:(?:close-session|preserve-session)|owner-(?:open|close):(?:unobserved|observation-failed|closed|creating|open|closing|closure-failed)|context:(?:present|missing))$/.test(
+      /^\[nook-session-evidence\] (?:popup-status:[0-9]|website-status:[0-9]|cleanup:(?:close-session|preserve-session)|cleanup-origin:(?:explicit-lock|session-expiry|interrupted-cleanup|local-import-rejected|local-import-exception)|owner-(?:open|close):(?:unobserved|observation-failed|closed|creating|open|closing|closure-failed)|context:(?:present|missing))$/.test(
         record,
       )
     ) {

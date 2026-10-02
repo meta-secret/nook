@@ -431,6 +431,7 @@ export function recoverInterruptedAuthorizationCleanup(
         cleanup,
       },
     }
+    console.info('[nook-session-evidence] cleanup-origin:interrupted-cleanup')
     return yield* new AuthorizationCleanupLifecycle(cleanupArgs).clear()
   })
 }
@@ -548,6 +549,7 @@ export function routeExtensionLifecycleMessage({
       sessionDisposition: AuthorizationCleanupSessionDisposition.Close,
       cleanupStart: { kind: AuthorizationCleanupStartKind.Begin },
     }
+    console.info('[nook-session-evidence] cleanup-origin:explicit-lock')
     void Effect.runPromise(
       Effect.either(new AuthorizationCleanupLifecycle(cleanupArgs).clear()),
     )
@@ -584,6 +586,7 @@ export function routeExtensionLifecycleMessage({
       sessionDisposition: AuthorizationCleanupSessionDisposition.Close,
       cleanupStart: { kind: AuthorizationCleanupStartKind.Begin },
     }
+    console.info('[nook-session-evidence] cleanup-origin:session-expiry')
     void Effect.runPromise(
       Effect.either(new AuthorizationCleanupLifecycle(cleanupArgs).clear()),
     )
@@ -674,6 +677,9 @@ export function routeExtensionLifecycleMessage({
                 response.reason !== LocalEventLogUpdateFailure.VaultNotPaired
               ) {
                 try {
+                  console.info(
+                    '[nook-session-evidence] cleanup-origin:local-import-rejected',
+                  )
                   const cleanup = await Effect.runPromise(
                     Effect.either(
                       new AuthorizationCleanupLifecycle(cleanupArgs).clear(),
@@ -708,6 +714,9 @@ export function routeExtensionLifecycleMessage({
               return response
             } catch {
               try {
+                console.info(
+                  '[nook-session-evidence] cleanup-origin:local-import-exception',
+                )
                 const cleanup = await Effect.runPromise(
                   Effect.either(
                     new AuthorizationCleanupLifecycle(cleanupArgs).clear(),
