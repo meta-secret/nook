@@ -1,21 +1,22 @@
 import { expect, test, type Route } from '../fixtures'
-import { Effect } from 'effect'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { demoBeat } from './pilot-demo-helpers'
 import { DeviceProtectionStatus } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import {
-  AuthenticatorPickerQueryMessage,
   AuthenticatorPickerQueryMessageType,
   AuthenticatorPickerSelectMessageType,
 } from '../../../nook-web-extension/src/lib/authenticator-picker-messages'
 import { LoginPickerQueryMessageType } from '../../../nook-web-extension/src/lib/login-picker-messages'
+import { DismissAuthSidePanelMessageType } from '../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
 const demoDir = path.dirname(fileURLToPath(import.meta.url))
 const extensionDist = path.resolve(demoDir, '../../../nook-web-extension/dist')
 const extensionRoutePrefix = '/__extension-popup/'
 type PopupDemoSession = {
   queryMessageType: LoginPickerQueryMessageType
   authenticatorQueryMessageType: AuthenticatorPickerQueryMessageType
+  authenticatorSelectMessageType: AuthenticatorPickerSelectMessageType
+  dismissAuthSidePanelMessageType?: DismissAuthSidePanelMessageType
   firstStatus: DeviceProtectionStatus
   followingStatus: DeviceProtectionStatus
   hasVaultConnection?: boolean
@@ -42,46 +43,57 @@ function installPopupDemoRuntime(session: PopupDemoSession): void {
     getURL: (resource: string) =>
       `${globalThis.location.origin}/__extension-popup/${resource}`,
     sendMessage: (
-      message: { readonly type: string },
+      message: { readonly type: string; readonly payload?: unknown },
       callback: (response: unknown) => void,
     ) => {
+      if (message.type === session.dismissAuthSidePanelMessageType) {
+        document.documentElement.setAttribute(
+          'data-auth-side-panel-dismissed',
+          'true',
+        )
+        callback({ ok: true })
+        return
+      }
       switch (message.type) {
         case session.queryMessageType:
           callback({ ok: false, reason: 'login-picker-expired' })
           return
         case session.authenticatorQueryMessageType:
           {
-            const decodedQuery = Effect.runSync(
-              Effect.either(AuthenticatorPickerQueryMessage.decode(message)),
-            )
+            const payload = message.payload
+            const queryRecord =
+              payload && typeof payload === 'object' && !Array.isArray(payload)
+                ? payload
+                : false
+            const queryValue =
+              queryRecord && 'query' in queryRecord ? queryRecord.query : false
+            const query = typeof queryValue === 'string' ? queryValue : ''
             callback({
               ok: true,
               origin: 'https://accounts.example.test',
               accounts:
-                decodedQuery._tag === 'Right'
-                  ? decodedQuery.right.payload.query.trim().length === 0
-                    ? [
-                        {
-                          vaultStoreId: 'popup-demo-store',
-                          vaultName: 'Personal vault',
-                          secretId: 'popup-demo-authenticator',
-                          issuer: 'Example',
-                          account: 'demo@example.test',
-                        },
-                      ]
-                    : []
+                query.trim().length === 0
+                  ? [
+                      {
+                        vaultStoreId: 'popup-demo-store',
+                        vaultName: 'Personal vault',
+                        secretId: 'popup-demo-authenticator',
+                        issuer: 'Example',
+                        account: 'demo@example.test',
+                      },
+                    ]
                   : [],
             })
           }
           return
-        case AuthenticatorPickerSelectMessageType.NookAuthenticatorPickerSelect:
+        case session.authenticatorSelectMessageType:
           callback({ ok: true })
           return
         case 'nook:extension-pairing-state-query':
           callback(
             session.hasVaultConnection === false
-              ? { ok: false, reason: 'vault-not-connected' }
-              : { ok: true, setup },
+              ? { ok: true, setupState: 'not-connected' }
+              : { ok: true, setupState: 'ready', setup },
           )
           return
         case 'nook:extension-session-status':
@@ -127,6 +139,8 @@ test('keeps mixed session status safe and actionable', async ({ page }) => {
     queryMessageType: LoginPickerQueryMessageType.NookLoginPickerQuery,
     authenticatorQueryMessageType:
       AuthenticatorPickerQueryMessageType.NookAuthenticatorPickerQuery,
+    authenticatorSelectMessageType:
+      AuthenticatorPickerSelectMessageType.NookAuthenticatorPickerSelect,
     firstStatus: DeviceProtectionStatus.Unlocked,
     followingStatus: DeviceProtectionStatus.Passkey,
   }
@@ -138,6 +152,37 @@ test('keeps mixed session status safe and actionable', async ({ page }) => {
   await demoBeat(page)
 })
 
+test('dismisses side-panel authentication after PIN unlock without opening the toolbar menu', async ({
+  page,
+}) => {
+  const session: PopupDemoSession = {
+    queryMessageType: LoginPickerQueryMessageType.NookLoginPickerQuery,
+    authenticatorQueryMessageType:
+      AuthenticatorPickerQueryMessageType.NookAuthenticatorPickerQuery,
+    authenticatorSelectMessageType:
+      AuthenticatorPickerSelectMessageType.NookAuthenticatorPickerSelect,
+    dismissAuthSidePanelMessageType:
+      DismissAuthSidePanelMessageType.NookDismissAuthSidePanel,
+    firstStatus: DeviceProtectionStatus.Pin,
+    followingStatus: DeviceProtectionStatus.Pin,
+  }
+  await page.addInitScript(installPopupDemoRuntime, session)
+  await page.goto(`${extensionRoutePrefix}popup/index.html?surface=side-panel`)
+
+  await expect(page.getByTestId('extension-device-setup')).toBeVisible()
+  await page.getByTestId('device-protection-pin-unlock-input').fill('123456')
+  await page.getByTestId('device-protection-pin-unlock-btn').click()
+
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-auth-side-panel-dismissed',
+    'true',
+  )
+  await expect(page.getByTestId('extension-toolbar-menu')).toHaveCount(0)
+  await expect(page.getByTestId('companion-done-btn')).toHaveCount(0)
+  await expect(page.getByTestId('open-simple-vault-btn')).toHaveCount(0)
+  await demoBeat(page)
+})
+
 test('restores the paired companion home after a restart unlock and popup reopen', async ({
   page,
 }) => {
@@ -145,6 +190,8 @@ test('restores the paired companion home after a restart unlock and popup reopen
     queryMessageType: LoginPickerQueryMessageType.NookLoginPickerQuery,
     authenticatorQueryMessageType:
       AuthenticatorPickerQueryMessageType.NookAuthenticatorPickerQuery,
+    authenticatorSelectMessageType:
+      AuthenticatorPickerSelectMessageType.NookAuthenticatorPickerSelect,
     firstStatus: DeviceProtectionStatus.Pin,
     followingStatus: DeviceProtectionStatus.Pin,
   }
@@ -198,6 +245,8 @@ test('explains the next step when the protected identity has no vault', async ({
     queryMessageType: LoginPickerQueryMessageType.NookLoginPickerQuery,
     authenticatorQueryMessageType:
       AuthenticatorPickerQueryMessageType.NookAuthenticatorPickerQuery,
+    authenticatorSelectMessageType:
+      AuthenticatorPickerSelectMessageType.NookAuthenticatorPickerSelect,
     firstStatus: DeviceProtectionStatus.Unlocked,
     followingStatus: DeviceProtectionStatus.Unlocked,
     hasVaultConnection: false,
@@ -231,6 +280,8 @@ test('shows no account choices when cleanup has invalidated the picker', async (
     queryMessageType: LoginPickerQueryMessageType.NookLoginPickerQuery,
     authenticatorQueryMessageType:
       AuthenticatorPickerQueryMessageType.NookAuthenticatorPickerQuery,
+    authenticatorSelectMessageType:
+      AuthenticatorPickerSelectMessageType.NookAuthenticatorPickerSelect,
     firstStatus: DeviceProtectionStatus.Unlocked,
     followingStatus: DeviceProtectionStatus.Passkey,
   }
@@ -255,6 +306,8 @@ test('searches the authenticator picker without losing account context', async (
     queryMessageType: LoginPickerQueryMessageType.NookLoginPickerQuery,
     authenticatorQueryMessageType:
       AuthenticatorPickerQueryMessageType.NookAuthenticatorPickerQuery,
+    authenticatorSelectMessageType:
+      AuthenticatorPickerSelectMessageType.NookAuthenticatorPickerSelect,
     firstStatus: DeviceProtectionStatus.Unlocked,
     followingStatus: DeviceProtectionStatus.Passkey,
   }
