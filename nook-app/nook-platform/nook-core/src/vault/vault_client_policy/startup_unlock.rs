@@ -2,12 +2,46 @@
 
 use crate::{LocalVaultPresence, VaultApplication, VaultClientPolicy};
 use nook_companion_core::CompanionIdentityStatus;
+use thiserror::Error;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[derive(Clone, Copy, Debug)]
 pub struct VaultStartupUnlockRequest {
     pub application: VaultApplication,
     pub local_vault_present: LocalVaultPresence,
+    pub companion_provider_present: CompanionProviderPresence,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct VaultExistingImportUnlockRequest {
+    pub application: VaultApplication,
+    pub companion_provider_present: CompanionProviderPresence,
+}
+
+/// Physical installed-provider capability observed before any discovery request.
+/// Transport, decoding, and admission failures never mean absence.
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
+#[serde(try_from = "u32")]
+pub enum CompanionProviderPresence {
+    Absent,
+    Present,
+}
+
+#[derive(Debug, Error)]
+#[error("invalid companion provider presence")]
+pub struct InvalidCompanionProviderPresence;
+
+impl TryFrom<u32> for CompanionProviderPresence {
+    type Error = InvalidCompanionProviderPresence;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
+            value if value == Self::Absent as u32 => Ok(Self::Absent),
+            value if value == Self::Present as u32 => Ok(Self::Present),
+            _ => Err(InvalidCompanionProviderPresence),
+        }
+    }
 }
 
 #[wasm_bindgen]
@@ -29,9 +63,35 @@ impl VaultClientPolicy {
     pub const fn startup_unlock_decision(
         request: VaultStartupUnlockRequest,
     ) -> VaultStartupUnlockDecision {
+        if matches!(
+            request.companion_provider_present,
+            CompanionProviderPresence::Absent
+        ) {
+            return VaultStartupUnlockDecision::WebsiteDevice;
+        }
         match request.local_vault_present {
             LocalVaultPresence::Absent => VaultStartupUnlockDecision::WebsiteDevice,
             LocalVaultPresence::Present => match request.application {
+                VaultApplication::Simple | VaultApplication::UnifiedDevelopment => {
+                    VaultStartupUnlockDecision::DiscoverCompanion
+                }
+                VaultApplication::Sentinel | VaultApplication::Extension => {
+                    VaultStartupUnlockDecision::WebsiteDevice
+                }
+            },
+        }
+    }
+}
+
+/// Existing staged imports discover an installed companion even without a local vault.
+impl VaultClientPolicy {
+    #[must_use]
+    pub const fn existing_vault_import_unlock_decision(
+        request: VaultExistingImportUnlockRequest,
+    ) -> VaultStartupUnlockDecision {
+        match request.companion_provider_present {
+            CompanionProviderPresence::Absent => VaultStartupUnlockDecision::WebsiteDevice,
+            CompanionProviderPresence::Present => match request.application {
                 VaultApplication::Simple | VaultApplication::UnifiedDevelopment => {
                     VaultStartupUnlockDecision::DiscoverCompanion
                 }
@@ -79,6 +139,7 @@ pub mod tests {
                 VaultClientPolicy::startup_unlock_decision(VaultStartupUnlockRequest {
                     application,
                     local_vault_present: LocalVaultPresence::Present,
+                    companion_provider_present: CompanionProviderPresence::Present,
                 }),
                 VaultStartupUnlockDecision::DiscoverCompanion
             );
@@ -92,6 +153,7 @@ pub mod tests {
                 VaultClientPolicy::startup_unlock_decision(VaultStartupUnlockRequest {
                     application,
                     local_vault_present: LocalVaultPresence::Present,
+                    companion_provider_present: CompanionProviderPresence::Present,
                 }),
                 VaultStartupUnlockDecision::WebsiteDevice
             );
@@ -106,7 +168,63 @@ pub mod tests {
                 VaultClientPolicy::startup_unlock_decision(VaultStartupUnlockRequest {
                     application,
                     local_vault_present: LocalVaultPresence::Absent,
+                    companion_provider_present: CompanionProviderPresence::Present,
                 }),
+                VaultStartupUnlockDecision::WebsiteDevice
+            );
+        }
+    }
+
+    #[test]
+    fn absent_provider_preserves_local_browser_startup() {
+        for application in [
+            VaultApplication::Simple,
+            VaultApplication::UnifiedDevelopment,
+        ] {
+            assert_eq!(
+                VaultClientPolicy::startup_unlock_decision(VaultStartupUnlockRequest {
+                    application,
+                    local_vault_present: LocalVaultPresence::Present,
+                    companion_provider_present: CompanionProviderPresence::Absent,
+                }),
+                VaultStartupUnlockDecision::WebsiteDevice
+            );
+        }
+    }
+
+    #[test]
+    fn existing_import_discovers_companion_without_fabricating_local_presence() {
+        for application in [
+            VaultApplication::Simple,
+            VaultApplication::UnifiedDevelopment,
+        ] {
+            assert_eq!(
+                VaultClientPolicy::existing_vault_import_unlock_decision(
+                    VaultExistingImportUnlockRequest {
+                        application,
+                        companion_provider_present: CompanionProviderPresence::Present
+                    }
+                ),
+                VaultStartupUnlockDecision::DiscoverCompanion
+            );
+            assert_eq!(
+                VaultClientPolicy::existing_vault_import_unlock_decision(
+                    VaultExistingImportUnlockRequest {
+                        application,
+                        companion_provider_present: CompanionProviderPresence::Absent
+                    }
+                ),
+                VaultStartupUnlockDecision::WebsiteDevice
+            );
+        }
+        for application in [VaultApplication::Sentinel, VaultApplication::Extension] {
+            assert_eq!(
+                VaultClientPolicy::existing_vault_import_unlock_decision(
+                    VaultExistingImportUnlockRequest {
+                        application,
+                        companion_provider_present: CompanionProviderPresence::Present
+                    }
+                ),
                 VaultStartupUnlockDecision::WebsiteDevice
             );
         }
@@ -167,6 +285,14 @@ pub mod tests {
 
     #[test]
     fn website_selection_preserves_explicit_session_lock() {
+        assert_eq!(
+            VaultClientPolicy::startup_unlock_decision(VaultStartupUnlockRequest {
+                application: VaultApplication::Simple,
+                local_vault_present: LocalVaultPresence::Present,
+                companion_provider_present: CompanionProviderPresence::Absent,
+            }),
+            VaultStartupUnlockDecision::WebsiteDevice
+        );
         let unavailable = CompanionIdentityStatus::Unavailable {
             request_id: "startup-discovery".to_owned(),
             vault_store_id: "store_startup".to_owned(),

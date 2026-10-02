@@ -1,5 +1,6 @@
 //! Independent observations and intents for vault client policy.
 
+use thiserror::Error;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,11 +64,28 @@ impl From<bool> for VaultSessionLockIntent {
 }
 
 #[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
+#[serde(try_from = "u32")]
 pub enum LocalVaultPresence {
     Absent,
     Present,
 }
+#[derive(Debug, Error)]
+#[error("invalid local vault presence")]
+pub struct InvalidLocalVaultPresence;
+
+impl TryFrom<u32> for LocalVaultPresence {
+    type Error = InvalidLocalVaultPresence;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
+            value if value == Self::Absent as u32 => Ok(Self::Absent),
+            value if value == Self::Present as u32 => Ok(Self::Present),
+            _ => Err(InvalidLocalVaultPresence),
+        }
+    }
+}
+
 impl From<bool> for LocalVaultPresence {
     fn from(observed: bool) -> Self {
         if observed {
