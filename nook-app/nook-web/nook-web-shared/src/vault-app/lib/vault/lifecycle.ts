@@ -115,203 +115,230 @@ export class VaultInitializationActions {
       DeviceIdentityAuthorizationState.NotStarted;
     if (!state.isVerifying) state.errorMsg = "";
     try {
-      const savedLocale = new VaultLocaleActions(state).savedAppLocale();
-      if (savedLocale.isErr()) {
-        state.errorMsg = state.t(savedLocale.error.translationKey);
-        return;
-      }
-      const localeState = savedLocale.value;
-      const browserLocale = state.browserLocale.app_locale();
-      const locale =
-        localeState.kind === SavedAppLocaleKind.Supported
-          ? localeState.locale
-          : browserLocale;
-      const initialLocaleArgs: Parameters<typeof state.updateLocale>[0] = {
-        newLocale: locale,
-        catalogSource: LocaleCatalogSource.Bundled,
-      };
-      const initialLocale = await state.updateLocale(initialLocaleArgs);
-      if (initialLocale.isErr()) {
-        state.errorMsg = state.t(initialLocale.error.translationKey);
-        return;
-      }
-      const catalogRefresh1 = await state.refreshLocalVaultCatalog();
-      if (catalogRefresh1.isErr()) {
-        state.errorMsg = state.t(catalogRefresh1.error.translationKey);
-        return;
-      }
-      const manager = await new VaultManagerRuntime().open();
-      if (manager.isErr()) {
-        state.deviceProtectionStatus = DeviceProtectionStatus.Error;
-        state.errorMsg = state.t(I18N_KEYS.ErrorsEngineUnavailable);
-        return;
-      }
-      state.openManager(manager.value);
-      const configuredApplication = configured_vault_application();
-      if (manager.value.vaultApplication !== configuredApplication) {
-        const tArgs: Parameters<typeof state.t>[0] = {
-          key: I18N_KEYS.AppCapabilityMismatch,
-          replacements: {
-            app: String(configuredApplication),
-            wasm: String(manager.value.vaultApplication),
-          },
+      try {
+        const savedLocale = new VaultLocaleActions(state).savedAppLocale();
+        if (savedLocale.isErr()) {
+          state.errorMsg = state.t(savedLocale.error.translationKey);
+          return;
+        }
+        const localeState = savedLocale.value;
+        const browserLocale = state.browserLocale.app_locale();
+        const locale =
+          localeState.kind === SavedAppLocaleKind.Supported
+            ? localeState.locale
+            : browserLocale;
+        const initialLocaleArgs: Parameters<typeof state.updateLocale>[0] = {
+          newLocale: locale,
+          catalogSource: LocaleCatalogSource.Bundled,
         };
-        state.errorMsg = state.t(tArgs);
-        state.deviceProtectionStatus = DeviceProtectionStatus.Error;
-        return;
-      }
-      const updateLocaleArgs: Parameters<typeof state.updateLocale>[0] = {
-        newLocale: locale,
-        catalogSource: LocaleCatalogSource.Engine,
-      };
-      const updatedLocale = await state.updateLocale(updateLocaleArgs);
-      if (updatedLocale.isErr()) {
-        state.errorMsg = state.t(updatedLocale.error.translationKey);
-        return;
-      }
-      const protectionStatus = await state.enqueueStorage(async () => {
-        const admitted = state.admitManager();
-        if (admitted.isErr()) return storageErr(admitted.error);
-        try {
-          return storageOk(await admitted.value.device_protection_status());
-        } catch (failure) {
-          return storageErr(new NativeVaultStorageFailure(failure));
+        const initialLocale = await state.updateLocale(initialLocaleArgs);
+        if (initialLocale.isErr()) {
+          state.errorMsg = state.t(initialLocale.error.translationKey);
+          return;
         }
-      });
-      if (protectionStatus.isErr()) {
-        state.deviceProtectionStatus = DeviceProtectionStatus.Error;
-        state.errorMsg = state.t(protectionStatus.error.translationKey);
-        return;
-      }
-      state.deviceProtectionStatus = protectionStatus.value;
-      const protectionMode = await state.enqueueStorage(async () => {
-        const admitted = state.admitManager();
-        if (admitted.isErr()) return storageErr(admitted.error);
-        try {
-          return storageOk(
-            await admitted.value.device_protection_device_mode(),
-          );
-        } catch (failure) {
-          return storageErr(new NativeVaultStorageFailure(failure));
+        const catalogRefresh1 = await state.refreshLocalVaultCatalog();
+        if (catalogRefresh1.isErr()) {
+          state.errorMsg = state.t(catalogRefresh1.error.translationKey);
+          return;
         }
-      });
-      if (protectionMode.isErr()) {
-        state.errorMsg = state.t(protectionMode.error.translationKey);
-        return;
-      }
-      const persistedDeviceMode = protectionMode.value;
-      if (persistedDeviceMode === DeviceProtectionDeviceModeState.Standard) {
-        state.draftDeviceMode = DeviceMode.Standard;
-      } else if (
-        persistedDeviceMode === DeviceProtectionDeviceModeState.AntiHacker
-      ) {
-        state.draftDeviceMode = DeviceMode.AntiHacker;
-      }
-      if (state.deviceProtectionStatus === DeviceProtectionStatus.Pin) {
-        state.deviceProtectionLockedStatus = DeviceProtectionStatus.Pin;
-      } else if (
-        state.deviceProtectionStatus === DeviceProtectionStatus.Passkey
-      ) {
-        state.deviceProtectionLockedStatus = DeviceProtectionStatus.Passkey;
-      }
-
-      const autoAuthorizeE2ePolicy: E2eAutoAuthorizationPolicy = {
-        e2eExposeVault: state.runtimeConfig.e2eExposeVault,
-        manualPasskey:
-          localStorage.getItem("nook_e2e_manual_passkey") === "true",
-        sessionLocked:
-          typeof window === "object" &&
-          (window.sessionStorage.getItem("nook_vault_session_locked") === "1" ||
-            window.sessionStorage.getItem("nook_vault_session_locked") ===
-              "true"),
-      };
-      const autoAuthorizeE2e = shouldAutoAuthorizeE2e(autoAuthorizeE2ePolicy);
-      if (!state.deviceProtectionReady && autoAuthorizeE2e) {
-        if (state.deviceProtectionStatus === DeviceProtectionStatus.Passkey) {
-          const authorization = await state.enqueueStorage(
-            async (): Promise<
-              Result<
-                DeviceIdentityAuthorizationState,
-                PasskeyCeremonyFailure | StorageOperationFailure
-              >
-            > => {
-              const manager = state.admitManager();
-              if (manager.isErr()) return storageErr(manager.error);
-              return (await unlockDeviceProtection(manager.value)).map(
-                () => DeviceIdentityAuthorizationState.PasskeyUnlocked,
-              );
+        const manager = await new VaultManagerRuntime().open();
+        if (manager.isErr()) {
+          state.deviceProtectionStatus = DeviceProtectionStatus.Error;
+          state.errorMsg = state.t(I18N_KEYS.ErrorsEngineUnavailable);
+          return;
+        }
+        state.openManager(manager.value);
+        const configuredApplication = configured_vault_application();
+        if (manager.value.vaultApplication !== configuredApplication) {
+          const tArgs: Parameters<typeof state.t>[0] = {
+            key: I18N_KEYS.AppCapabilityMismatch,
+            replacements: {
+              app: String(configuredApplication),
+              wasm: String(manager.value.vaultApplication),
             },
-          );
-          if (authorization.isErr()) {
-            state.errorMsg = state.t(authorization.error.translationKey);
-            return;
+          };
+          state.errorMsg = state.t(tArgs);
+          state.deviceProtectionStatus = DeviceProtectionStatus.Error;
+          return;
+        }
+        const updateLocaleArgs: Parameters<typeof state.updateLocale>[0] = {
+          newLocale: locale,
+          catalogSource: LocaleCatalogSource.Engine,
+        };
+        const updatedLocale = await state.updateLocale(updateLocaleArgs);
+        if (updatedLocale.isErr()) {
+          state.errorMsg = state.t(updatedLocale.error.translationKey);
+          return;
+        }
+        const protectionStatus = await state.enqueueStorage(async () => {
+          const admitted = state.admitManager();
+          if (admitted.isErr()) return storageErr(admitted.error);
+          try {
+            return storageOk(await admitted.value.device_protection_status());
+          } catch (failure) {
+            return storageErr(new NativeVaultStorageFailure(failure));
           }
-          deviceIdentityAuthorization = authorization.value;
-          state.deviceAuthorizationInProgress = true;
+        });
+        if (protectionStatus.isErr()) {
+          state.deviceProtectionStatus = DeviceProtectionStatus.Error;
+          state.errorMsg = state.t(protectionStatus.error.translationKey);
+          return;
+        }
+        state.deviceProtectionStatus = protectionStatus.value;
+        const protectionMode = await state.enqueueStorage(async () => {
+          const admitted = state.admitManager();
+          if (admitted.isErr()) return storageErr(admitted.error);
+          try {
+            return storageOk(
+              await admitted.value.device_protection_device_mode(),
+            );
+          } catch (failure) {
+            return storageErr(new NativeVaultStorageFailure(failure));
+          }
+        });
+        if (protectionMode.isErr()) {
+          state.errorMsg = state.t(protectionMode.error.translationKey);
+          return;
+        }
+        const persistedDeviceMode = protectionMode.value;
+        if (persistedDeviceMode === DeviceProtectionDeviceModeState.Standard) {
+          state.draftDeviceMode = DeviceMode.Standard;
         } else if (
-          state.deviceProtectionStatus === DeviceProtectionStatus.Pin
+          persistedDeviceMode === DeviceProtectionDeviceModeState.AntiHacker
         ) {
-          return;
-        } else if (!state.localVaultPresent) {
-          // A surviving local vault must not mint a replacement app key. That
-          // key is not on the roster, and backup-password recovery would fail.
-          const authorization = await state.enqueueStorage(
-            async (): Promise<
-              Result<
-                DeviceIdentityAuthorizationState,
-                PasskeyCeremonyFailure | StorageOperationFailure
-              >
-            > => {
-              const manager = state.admitManager();
-              if (manager.isErr()) return storageErr(manager.error);
-              const protectionRequest: Parameters<
-                typeof setupDeviceProtection
-              >[0] = {
-                manager: manager.value,
-                passkeyLabel: "",
-                deviceMode: state.draftDeviceMode,
-              };
-              return (await setupDeviceProtection(protectionRequest)).map(
-                () => DeviceIdentityAuthorizationState.ProtectionConfigured,
-              );
-            },
-          );
-          if (authorization.isErr()) {
-            state.errorMsg = state.t(authorization.error.translationKey);
+          state.draftDeviceMode = DeviceMode.AntiHacker;
+        }
+        if (state.deviceProtectionStatus === DeviceProtectionStatus.Pin) {
+          state.deviceProtectionLockedStatus = DeviceProtectionStatus.Pin;
+        } else if (
+          state.deviceProtectionStatus === DeviceProtectionStatus.Passkey
+        ) {
+          state.deviceProtectionLockedStatus = DeviceProtectionStatus.Passkey;
+        }
+
+        const autoAuthorizeE2ePolicy: E2eAutoAuthorizationPolicy = {
+          e2eExposeVault: state.runtimeConfig.e2eExposeVault,
+          manualPasskey:
+            localStorage.getItem("nook_e2e_manual_passkey") === "true",
+          sessionLocked:
+            typeof window === "object" &&
+            (window.sessionStorage.getItem("nook_vault_session_locked") ===
+              "1" ||
+              window.sessionStorage.getItem("nook_vault_session_locked") ===
+                "true"),
+        };
+        const autoAuthorizeE2e = shouldAutoAuthorizeE2e(autoAuthorizeE2ePolicy);
+        if (!state.deviceProtectionReady && autoAuthorizeE2e) {
+          if (state.deviceProtectionStatus === DeviceProtectionStatus.Passkey) {
+            const authorization = await state.enqueueStorage(
+              async (): Promise<
+                Result<
+                  DeviceIdentityAuthorizationState,
+                  PasskeyCeremonyFailure | StorageOperationFailure
+                >
+              > => {
+                const manager = state.admitManager();
+                if (manager.isErr()) return storageErr(manager.error);
+                return (await unlockDeviceProtection(manager.value)).map(
+                  () => DeviceIdentityAuthorizationState.PasskeyUnlocked,
+                );
+              },
+            );
+            if (authorization.isErr()) {
+              state.errorMsg = state.t(authorization.error.translationKey);
+              return;
+            }
+            deviceIdentityAuthorization = authorization.value;
+            state.deviceAuthorizationInProgress = true;
+          } else if (
+            state.deviceProtectionStatus === DeviceProtectionStatus.Pin
+          ) {
+            return;
+          } else if (!state.localVaultPresent) {
+            // A surviving local vault must not mint a replacement app key. That
+            // key is not on the roster, and backup-password recovery would fail.
+            const authorization = await state.enqueueStorage(
+              async (): Promise<
+                Result<
+                  DeviceIdentityAuthorizationState,
+                  PasskeyCeremonyFailure | StorageOperationFailure
+                >
+              > => {
+                const manager = state.admitManager();
+                if (manager.isErr()) return storageErr(manager.error);
+                const protectionRequest: Parameters<
+                  typeof setupDeviceProtection
+                >[0] = {
+                  manager: manager.value,
+                  passkeyLabel: "",
+                  deviceMode: state.draftDeviceMode,
+                };
+                return (await setupDeviceProtection(protectionRequest)).map(
+                  () => DeviceIdentityAuthorizationState.ProtectionConfigured,
+                );
+              },
+            );
+            if (authorization.isErr()) {
+              state.errorMsg = state.t(authorization.error.translationKey);
+              return;
+            }
+            deviceIdentityAuthorization = authorization.value;
+            state.deviceAuthorizationInProgress = true;
+          }
+        }
+
+        if (
+          !state.deviceProtectionReady &&
+          deviceIdentityAuthorization ===
+            DeviceIdentityAuthorizationState.NotStarted
+        ) {
+          const enrollment = state.enrollmentLinkState;
+          if (enrollment.kind === EnrollmentLinkKind.Pending) {
+            state.clearPendingEnrollmentFromUrl();
+            state.prefillEnrollmentCode = enrollment.payload;
+            state.enrollmentFromUrlPending = true;
+          }
+          // A backup password opens only its vault keys. Do not create a new app
+          // key merely because this browser still has a local vault: that key has
+          // not been granted membership and password recovery must remain usable
+          // without altering identity ownership.
+          if (state.localVaultPresent) {
+            state.storageMode = LOCAL_PROVIDER_TYPE;
+            await state.prepareLocalLogin();
             return;
           }
-          deviceIdentityAuthorization = authorization.value;
-          state.deviceAuthorizationInProgress = true;
-        }
-      }
-
-      if (
-        !state.deviceProtectionReady &&
-        deviceIdentityAuthorization ===
-          DeviceIdentityAuthorizationState.NotStarted
-      ) {
-        const enrollment = state.enrollmentLinkState;
-        if (enrollment.kind === EnrollmentLinkKind.Pending) {
-          state.clearPendingEnrollmentFromUrl();
-          state.prefillEnrollmentCode = enrollment.payload;
-          state.enrollmentFromUrlPending = true;
-        }
-        // A backup password opens only its vault keys. Do not create a new app
-        // key merely because this browser still has a local vault: that key has
-        // not been granted membership and password recovery must remain usable
-        // without altering identity ownership.
-        if (state.localVaultPresent) {
-          state.storageMode = LOCAL_PROVIDER_TYPE;
-          await state.prepareLocalLogin();
+          if (state.localVaults.length === 0) {
+            state.initializePristineDeviceProviders();
+          }
           return;
         }
-        if (state.localVaults.length === 0) {
-          state.initializePristineDeviceProviders();
+        const continued = await this.continueInitializationAfterDeviceUnlock();
+        if (continued.isErr()) {
+          if (
+            deviceIdentityAuthorization !==
+            DeviceIdentityAuthorizationState.NotStarted
+          ) {
+            const locked = await state.lockDeviceProtection();
+            if (locked.isErr()) {
+              state.errorMsg = state.t(locked.error.translationKey);
+              return;
+            }
+          }
+          state.errorMsg = state.t(continued.error.translationKey);
+          return;
         }
+        state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked;
+      } finally {
+        state.deviceAuthorizationInProgress = false;
+        state.isInitializing = false;
+      }
+      const continuation = DeviceInitializationContinuation.admit(state);
+      if (continuation.isErr()) {
+        state.errorMsg = state.t(continuation.error.translationKey);
         return;
       }
-      const continued = await this.continueInitializationAfterDeviceUnlock();
-      if (continued.isErr()) {
+      const completed = await continuation.value.complete();
+      if (completed.isErr()) {
         if (
           deviceIdentityAuthorization !==
           DeviceIdentityAuthorizationState.NotStarted
@@ -322,10 +349,8 @@ export class VaultInitializationActions {
             return;
           }
         }
-        state.errorMsg = state.t(continued.error.translationKey);
-        return;
+        state.errorMsg = state.t(completed.error.translationKey);
       }
-      state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked;
     } catch (error) {
       if (
         state.deviceProtectionStatus === DeviceProtectionStatus.Unlocked ||
@@ -346,28 +371,6 @@ export class VaultInitializationActions {
           ? error.message
           : "Failed to initialize Nook Session Manager.";
       return;
-    } finally {
-      state.deviceAuthorizationInProgress = false;
-      state.isInitializing = false;
-    }
-    const continuation = DeviceInitializationContinuation.admit(state);
-    if (continuation.isErr()) {
-      state.errorMsg = state.t(continuation.error.translationKey);
-      return;
-    }
-    const completed = await continuation.value.complete();
-    if (completed.isErr()) {
-      if (
-        deviceIdentityAuthorization !==
-        DeviceIdentityAuthorizationState.NotStarted
-      ) {
-        const locked = await state.lockDeviceProtection();
-        if (locked.isErr()) {
-          state.errorMsg = state.t(locked.error.translationKey);
-          return;
-        }
-      }
-      state.errorMsg = state.t(completed.error.translationKey);
     }
   }
 

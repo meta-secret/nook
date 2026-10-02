@@ -336,6 +336,73 @@ describe('external browser identity handoff commit ownership', () => {
     }
   })
 
+  test('preserves the original relock and error surface when completion throws', async () => {
+    const fixture = new IdentityHandoffFixture()
+    try {
+      const completionFailure = new Error('completion policy failed')
+      fixture.state.clearManager()
+      fixture.state.runtimeConfig = new NookRuntimeConfig(
+        NookClientRunModeUtil.parse('production'),
+        true,
+      )
+      localStorage.removeItem('nook_e2e_manual_passkey')
+      sessionStorage.removeItem('nook_vault_session_locked')
+      vi.spyOn(VaultManagerStartup.prototype, 'open').mockResolvedValue(
+        ok(fixture.manager),
+      )
+      vi.spyOn(fixture.state, 'updateLocale').mockResolvedValue(
+        ok(LocaleUpdateOutcome.Updated),
+      )
+      vi.spyOn(fixture.state, 'refreshLocalVaultCatalog').mockResolvedValue(
+        ok(fixture.state.localVaultCatalog),
+      )
+      vi.spyOn(fixture.manager, 'device_protection_status').mockResolvedValue(
+        DeviceProtectionStatus.Passkey,
+      )
+      vi.spyOn(
+        fixture.manager,
+        'device_protection_device_mode',
+      ).mockResolvedValue(DeviceProtectionDeviceModeState.Standard)
+      vi.spyOn(
+        fixture.manager,
+        'unlock_device_protection_with_passkey',
+      ).mockImplementation(async () => {})
+      vi.spyOn(
+        fixture.lifecycle,
+        'continueInitializationAfterDeviceUnlock',
+      ).mockResolvedValue(
+        ok({ deviceId: 'ready-device', devicePublicKey: 'ready-public-key' }),
+      )
+      vi.spyOn(fixture.state, 'shouldAutoUnlock').mockImplementation(() => {
+        expect(fixture.state.isInitializing).toBe(false)
+        throw completionFailure
+      })
+      const lockDeviceProtection = vi
+        .spyOn(fixture.state, 'lockDeviceProtection')
+        .mockImplementation(async () => {
+          fixture.state.deviceProtectionStatus = DeviceProtectionStatus.Passkey
+          return ok(DeviceProtectionLockOutcome.Locked)
+        })
+
+      const loadDb = vi.spyOn(fixture.state, 'loadDb')
+      await fixture.lifecycle.initOnce()
+      expect(loadDb).not.toHaveBeenCalled()
+      expect(fixture.state.isInitializing).toBe(false)
+
+      await vi.waitFor(() =>
+        expect(lockDeviceProtection).toHaveBeenCalledOnce(),
+      )
+      expect(fixture.state.deviceProtectionStatus).not.toBe(
+        DeviceProtectionStatus.Unlocked,
+      )
+      expect(fixture.state.errorMsg).toBe(completionFailure.message)
+      expect(fixture.state.isAuthenticated).toBe(false)
+      expect(fixture.state.deviceAuthorizationInProgress).toBe(false)
+    } finally {
+      fixture.dispose()
+    }
+  })
+
   test('does not auto-authorize after an idle session lock', () => {
     const lockedPolicy: E2eAutoAuthorizationPolicy = {
       e2eExposeVault: true,
