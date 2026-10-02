@@ -1,5 +1,7 @@
 //! Independent observations and intents for vault client policy.
 
+use wasm_bindgen::prelude::wasm_bindgen;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VaultSyncConflictState {
     Clear,
@@ -60,6 +62,7 @@ impl From<bool> for VaultSessionLockIntent {
     }
 }
 
+#[wasm_bindgen]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LocalVaultPresence {
     Absent,

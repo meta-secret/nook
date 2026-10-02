@@ -14,6 +14,7 @@ mod runtime;
 mod runtime_policy;
 mod secret_data;
 mod sentinel;
+mod startup_unlock_policy;
 mod store_id;
 mod sync;
 mod sync_state;
