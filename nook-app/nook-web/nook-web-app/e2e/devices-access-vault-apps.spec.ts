@@ -2,7 +2,11 @@ import { expect, test } from './fixtures'
 import type { Browser, BrowserContext, Page } from '@playwright/test'
 import { Effect } from 'effect'
 import { DevicesAccessScenario } from './devices-access-spec-helpers'
-import { connectLocalVault, UI_TIMEOUT_MS } from './helpers'
+import {
+  authorizeDeviceProtection,
+  connectLocalVault,
+  UI_TIMEOUT_MS,
+} from './helpers'
 import { installMockPasskeyRuntime } from './passkey-mock'
 
 interface ExtensionInventoryDevice {
@@ -27,7 +31,13 @@ class BrowserInventoryDevice {
             throw new Error(failure.translationKey)
           },
         )
-      default:
+      case 'string':
+      case 'number':
+      case 'bigint':
+      case 'boolean':
+      case 'symbol':
+      case 'undefined':
+      case 'function':
         throw new Error('Vault debug hooks are unavailable')
     }
   }
@@ -99,6 +109,7 @@ class VaultAppsInventoryScenario {
     yield* Effect.promise(() =>
       page.goto(`/extension-connect?${query.toString()}`),
     )
+    yield* Effect.promise(() => authorizeDeviceProtection(page))
     yield* Effect.promise(() =>
       expect(page.getByTestId('extension-connect-consent')).toBeVisible({
         timeout: UI_TIMEOUT_MS,
@@ -144,6 +155,11 @@ class VaultAppsInventoryScenario {
     )
 
     yield* Effect.promise(() => page.reload())
+    yield* Effect.promise(() =>
+      expect(page.getByTestId('login-gate')).toBeVisible({
+        timeout: UI_TIMEOUT_MS,
+      }),
+    )
     yield* Effect.promise(() =>
       expect(page.getByTestId('devices-access-key-inventory')).toBeVisible({
         timeout: UI_TIMEOUT_MS,
