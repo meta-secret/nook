@@ -138,7 +138,7 @@ describe('Playwright collection imports', () => {
     expect(gate.state()).toBe(DeviceProtectionAuthorizationGateState.Waiting)
   })
 
-  test('keeps an error-only transient post-unlock observation waiting', () => {
+  test('stops at the first visible post-unlock error', () => {
     const gate = new DeviceProtectionPostUnlockGate({
       loginGateVisible: true,
       authenticatedShellVisible: false,
@@ -150,7 +150,7 @@ describe('Playwright collection imports', () => {
       errorVisible: true,
     })
 
-    expect(gate.state()).toBe(DeviceProtectionAuthorizationGateState.Waiting)
+    expect(gate.state()).toBe(DeviceProtectionAuthorizationGateState.Error)
   })
 
   test('recognizes the terminal post-unlock states around device authorization', () => {
@@ -189,7 +189,7 @@ describe('Playwright collection imports', () => {
         pickerVisible: false,
         errorVisible: false,
       }).state(),
-    ).toBe(DeviceProtectionAuthorizationGateState.Unlock)
+    ).toBe(DeviceProtectionAuthorizationGateState.Waiting)
     expect(
       new DeviceProtectionPostUnlockGate({
         loginGateVisible: true,
@@ -201,7 +201,7 @@ describe('Playwright collection imports', () => {
         pickerVisible: true,
         errorVisible: false,
       }).state(),
-    ).toBe(DeviceProtectionAuthorizationGateState.Picker)
+    ).toBe(DeviceProtectionAuthorizationGateState.Waiting)
     expect(
       new DeviceProtectionPostUnlockGate({
         loginGateVisible: true,
@@ -213,7 +213,7 @@ describe('Playwright collection imports', () => {
         pickerVisible: false,
         errorVisible: true,
       }).state(),
-    ).toBe(DeviceProtectionAuthorizationGateState.Unlock)
+    ).toBe(DeviceProtectionAuthorizationGateState.Error)
     expect(
       new DeviceProtectionPostUnlockGate({
         loginGateVisible: true,

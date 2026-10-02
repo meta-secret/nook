@@ -44,6 +44,7 @@ export enum DeviceProtectionAuthorizationGateState {
   Authorize = 'authorize',
   Unlocked = 'unlocked',
   Waiting = 'waiting',
+  Error = 'error',
 }
 
 export type DeviceProtectionPostUnlockObservation = {
@@ -74,23 +75,11 @@ export class DeviceProtectionPostUnlockGate {
     ) {
       return DeviceProtectionAuthorizationGateState.Unlocked
     }
+    if (this.observation.errorVisible) {
+      return DeviceProtectionAuthorizationGateState.Error
+    }
     if (this.observation.authorizeReady) {
       return DeviceProtectionAuthorizationGateState.Authorize
-    }
-    if (this.observation.pickerVisible) {
-      return DeviceProtectionAuthorizationGateState.Picker
-    }
-    if (this.observation.unlockReady) {
-      return DeviceProtectionAuthorizationGateState.Unlock
-    }
-    if (this.observation.overlayVisible) {
-      return DeviceProtectionAuthorizationGateState.Waiting
-    }
-    // The shared vault error surface also reports transient engine and sync
-    // diagnostics while the login gate is still advancing. It is evidence for
-    // a stalled timeout, not a terminal authorization state.
-    if (this.observation.errorVisible) {
-      return DeviceProtectionAuthorizationGateState.Waiting
     }
     return DeviceProtectionAuthorizationGateState.Waiting
   }
@@ -680,78 +669,84 @@ export async function authorizeDeviceProtection(
     await unlockVaultButton.click()
   }
   let lastPostUnlockObservationText = 'unavailable'
+  let firstVisibleVaultError = ''
+  const postUnlockDeadline = Date.now() + ENROLLMENT_UNLOCK_TIMEOUT_MS
+  const observePostUnlock = async () => {
+    const observation = await page.evaluate(() => {
+      const isVisible = (testId: string) => {
+        const element = document.querySelector(`[data-testid="${testId}"]`)
+        if (!(element instanceof HTMLElement)) return false
+        return (
+          element.getClientRects().length > 0 &&
+          window.getComputedStyle(element).visibility !== 'hidden'
+        )
+      }
+      const isEnabled = (testId: string) => {
+        const element = document.querySelector(`[data-testid="${testId}"]`)
+        if (!(element instanceof HTMLButtonElement)) return false
+        return (
+          isVisible(testId) &&
+          !element.disabled &&
+          element.getAttribute('aria-disabled') !== 'true'
+        )
+      }
+      const visibleVaultError = document.querySelector(
+        '[data-testid="vault-error"]',
+      )
+      return {
+        loginGateVisible: isVisible('login-gate'),
+        authenticatedShellVisible: isVisible('authenticated-shell'),
+        vaultAuthenticated: window.__nookVault?.isAuthenticated === true,
+        overlayVisible: isVisible('passkey-auth-overlay'),
+        authorizeReady: isEnabled('device-protection-unlock-btn'),
+        unlockReady: isEnabled('unlock-vault-btn'),
+        pickerVisible: isVisible('login-vault-picker'),
+        errorVisible: isVisible('vault-error'),
+        errorText:
+          visibleVaultError instanceof HTMLElement && isVisible('vault-error')
+            ? visibleVaultError.innerText.trim()
+            : '',
+      }
+    })
+    lastPostUnlockObservationText = JSON.stringify(observation)
+    const state = new DeviceProtectionPostUnlockGate(observation).state()
+    if (state === DeviceProtectionAuthorizationGateState.Error) {
+      firstVisibleVaultError = observation.errorText
+    }
+    return state
+  }
+  const postUnlock = { state: DeviceProtectionAuthorizationGateState.Waiting }
   try {
     await expect
       .poll(
         async () => {
-          const observation = await page.evaluate(() => {
-            const isVisible = (testId: string) => {
-              const element = document.querySelector(
-                `[data-testid="${testId}"]`,
-              )
-              if (!(element instanceof HTMLElement)) return false
-              return (
-                element.getClientRects().length > 0 &&
-                window.getComputedStyle(element).visibility !== 'hidden'
-              )
-            }
-            const isEnabled = (testId: string) => {
-              const element = document.querySelector(
-                `[data-testid="${testId}"]`,
-              )
-              if (!(element instanceof HTMLButtonElement)) return false
-              return (
-                isVisible(testId) &&
-                !element.disabled &&
-                element.getAttribute('aria-disabled') !== 'true'
-              )
-            }
-            return {
-              loginGateVisible: isVisible('login-gate'),
-              authenticatedShellVisible: isVisible('authenticated-shell'),
-              vaultAuthenticated: window.__nookVault?.isAuthenticated === true,
-              overlayVisible: isVisible('passkey-auth-overlay'),
-              authorizeReady: isEnabled('device-protection-unlock-btn'),
-              unlockReady: isEnabled('unlock-vault-btn'),
-              pickerVisible: isVisible('login-vault-picker'),
-              errorVisible: isVisible('vault-error'),
-            }
-          })
-          lastPostUnlockObservationText = JSON.stringify(observation)
-          const state = new DeviceProtectionPostUnlockGate({
-            ...observation,
-          }).state()
-          if (state === DeviceProtectionAuthorizationGateState.Picker) {
-            const option = opts?.storeId
-              ? page.locator(
-                  `[data-testid="login-vault-option"][data-store-id="${opts.storeId}"]`,
-                )
-              : page.getByTestId('login-vault-option').first()
-            await option.click()
-            return DeviceProtectionAuthorizationGateState.Waiting
-          }
-          if (state === DeviceProtectionAuthorizationGateState.Unlock) {
-            await unlockVaultButton.click()
-            return DeviceProtectionAuthorizationGateState.Waiting
-          }
-          if (state === DeviceProtectionAuthorizationGateState.Authorize) {
-            await button.click()
-            return DeviceProtectionAuthorizationGateState.Waiting
-          }
-          return state
+          postUnlock.state = await observePostUnlock()
+          return postUnlock.state
         },
         { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
       )
-      .toBe(DeviceProtectionAuthorizationGateState.Unlocked)
+      .not.toBe(DeviceProtectionAuthorizationGateState.Waiting)
+    if (postUnlock.state === DeviceProtectionAuthorizationGateState.Authorize) {
+      await button.click()
+      await expect
+        .poll(
+          async () => {
+            postUnlock.state = await observePostUnlock()
+            return [
+              DeviceProtectionAuthorizationGateState.Unlocked,
+              DeviceProtectionAuthorizationGateState.Error,
+            ].includes(postUnlock.state)
+          },
+          { timeout: Math.max(1, postUnlockDeadline - Date.now()) },
+        )
+        .toBe(true)
+    }
+    if (postUnlock.state === DeviceProtectionAuthorizationGateState.Error) {
+      throw new Error(`Vault authorization failed: ${firstVisibleVaultError}`)
+    }
   } catch (failure) {
-    const diagnostic = (await vaultError.isVisible())
-      ? (await vaultError.innerText()).trim()
-      : ''
-    const lastObservation = lastPostUnlockObservationText
     throw new Error(
-      diagnostic
-        ? `Vault authorization did not settle. Current visible vault error: ${diagnostic}. Last observed gate state: ${lastObservation}`
-        : `Vault authorization did not settle without a visible vault error. Last observed gate state: ${lastObservation}`,
+      `Vault authorization did not settle. First visible vault error: ${firstVisibleVaultError}. Last observed gate state: ${lastPostUnlockObservationText}`,
       { cause: failure },
     )
   }
