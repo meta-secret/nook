@@ -10,8 +10,10 @@
     popupInitializationFailureKey,
   } from './popup-app-state'
 
-  let { i18n, phase }: { i18n: ExtensionI18n; phase: PopupInitializationPhase } =
-    $props()
+  let {
+    i18n,
+    phase,
+  }: { i18n: ExtensionI18n; phase: PopupInitializationPhase } = $props()
 
   function translatePlain(key: I18nKey): string {
     return i18n.t(extensionLocaleCatalog.plainExtensionTranslation(key))
