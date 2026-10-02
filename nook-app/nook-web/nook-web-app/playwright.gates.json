@@ -6,6 +6,7 @@
     "device-identity-recovery.spec.ts",
     "devices-access-passkey-inventory.spec.ts",
     "devices-access-identity-cancellation.spec.ts",
+    "devices-access-vault-apps.spec.ts",
     "devices-access.spec.ts",
     "pre-vault-identity-access.spec.ts",
     "local-vault-apple-safari-imports.spec.ts",

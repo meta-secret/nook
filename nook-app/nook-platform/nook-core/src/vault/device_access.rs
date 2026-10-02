@@ -20,6 +20,10 @@ use crate::{DeviceId, IsoTimestamp, StoreId};
 mod actions;
 mod credential_profile;
 pub use credential_profile::*;
+mod identity_app_inventory;
+pub use identity_app_inventory::{
+    IdentityAppInventory, IdentityAppInventoryError, IdentityVaultAppInventoryRequest,
+};
 mod passkey_keeper;
 mod passkey_observation;
 
