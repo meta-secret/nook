@@ -20,9 +20,11 @@ import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
 import type { DeviceIdentityInitializationSnapshot } from "$lib/vault/action-contexts";
 import { VaultManagerRuntime } from "$lib/nook";
+import { extensionConnectionBrowser } from "$lib/extension/connect";
 import { browserLogRuntime } from "$lib/runtime/log";
 import {
   DeviceMode,
+  VaultStartupUnlockDecision,
   DeviceIdentityInitializationMode,
   DeviceProtectionDeviceModeState,
   DeviceProtectionStatus,
@@ -337,7 +339,10 @@ export class VaultInitializationActions {
         state.errorMsg = state.t(continuation.error.translationKey);
         return;
       }
-      const completed = await continuation.value.complete();
+      const startupDecision = state.startupUnlockDecision(
+        extensionConnectionBrowser.companionProviderPresence(),
+      );
+      const completed = await continuation.value.complete(startupDecision);
       if (completed.isErr()) {
         if (
           deviceIdentityAuthorization !==
@@ -807,13 +812,20 @@ class DeviceInitializationContinuation {
     return storageOk(initialized.value);
   }
 
-  async complete(): Promise<
+  async complete(
+    startupDecision: VaultStartupUnlockDecision = VaultStartupUnlockDecision.WebsiteDevice,
+  ): Promise<
     Result<
       DeviceInitializationCompletionOutcome,
       StorageOperationFailure | OAuthFailure
     >
   > {
     const state = this.state;
+    if (startupDecision === VaultStartupUnlockDecision.DiscoverCompanion) {
+      log.info("app init finished");
+      return storageOk(DeviceInitializationCompletionOutcome.Completed);
+    }
+
     const hasPendingEnrollment =
       state.enrollmentLinkState.kind === EnrollmentLinkKind.Pending;
     const autoUnlock = !hasPendingEnrollment && state.shouldAutoUnlock();

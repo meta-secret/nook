@@ -1,7 +1,14 @@
-import { describe, expect, test } from 'vitest'
+import type { ExtensionPairedVaultIdentityDiscoveryMessage } from '../../../../nook-web-shared/src/extension/runtime-messages'
+import { describe, expect, test, vi } from 'vitest'
 import { Effect } from 'effect'
-import { NookExtensionIdentityHandoffProviderOutcomeState } from '$app-wasm'
 import {
+  NookExtensionIdentityHandoffProviderOutcomeState,
+  NookVaultClientPolicy,
+  VaultCompanionUnlockDecision,
+} from '$app-wasm'
+import {
+  extensionConnectionBrowser,
+  PairedExtensionDiscoveryFailureKind,
   IdentityHandoffResponseDecodeFailureKind,
   identityHandoffResponseDecoder,
   companionResponseDecoder,
@@ -148,5 +155,120 @@ describe('extension runtime response decoding', () => {
       requestId: 'request-1',
       vaultStoreId: 'store_abcdefghijk',
     })
+  })
+})
+
+describe('admitted companion startup discovery', () => {
+  test('preserves provider absence separately from delivery failure', async () => {
+    const absent =
+      await extensionConnectionBrowser.discoverAdmittedPairedExtensionIdentity(
+        'store_test',
+      )
+    expect(absent.isErr()).toBe(true)
+    if (absent.isErr())
+      expect(absent.error.kind).toBe(
+        PairedExtensionDiscoveryFailureKind.NotInstalled,
+      )
+    document.documentElement.setAttribute(
+      'data-nook-extension-runtime-id',
+      'extension-123',
+    )
+    const sendMessage = vi.fn(
+      (...args: [string, unknown, (response?: unknown) => void]) => args[2](),
+    )
+    vi.stubGlobal('chrome', { runtime: { sendMessage } })
+    const failed =
+      await extensionConnectionBrowser.discoverAdmittedPairedExtensionIdentity(
+        'store_test',
+      )
+    expect(failed.isErr()).toBe(true)
+    if (failed.isErr())
+      expect(failed.error.kind).toBe(
+        PairedExtensionDiscoveryFailureKind.Delivery,
+      )
+    expect(sendMessage).toHaveBeenCalledOnce()
+  })
+
+  test('does not reinterpret malformed or unbound responses as semantic absence', async () => {
+    document.documentElement.setAttribute(
+      'data-nook-extension-runtime-id',
+      'extension-123',
+    )
+    const sendMessage = vi.fn(
+      (...args: [string, unknown, (response?: unknown) => void]) =>
+        args[2]({ ok: true, status: 'malformed' }),
+    )
+    vi.stubGlobal('chrome', { runtime: { sendMessage } })
+    const malformed =
+      await extensionConnectionBrowser.discoverAdmittedPairedExtensionIdentity(
+        'store_test',
+      )
+    expect(malformed.isErr()).toBe(true)
+    if (malformed.isErr())
+      expect(malformed.error.kind).toBe(
+        PairedExtensionDiscoveryFailureKind.Decode,
+      )
+    sendMessage.mockImplementation((...args) =>
+      args[2]({
+        ok: true,
+        status: {
+          status: 'locked',
+          request_id: 'wrong-request',
+          vault_store_id: 'store_test',
+        },
+      }),
+    )
+    const rejected =
+      await extensionConnectionBrowser.discoverAdmittedPairedExtensionIdentity(
+        'store_test',
+      )
+    expect(rejected.isErr()).toBe(true)
+    if (rejected.isErr())
+      expect(rejected.error.kind).toBe(
+        PairedExtensionDiscoveryFailureKind.Admission,
+      )
+    expect(sendMessage).toHaveBeenCalledTimes(2)
+  })
+
+  test('preserves canonical locked status for the real Rust unlock decision', async () => {
+    document.documentElement.setAttribute(
+      'data-nook-extension-runtime-id',
+      'extension-123',
+    )
+    const sendMessage = vi.fn(
+      (
+        ...args: [
+          string,
+          ExtensionPairedVaultIdentityDiscoveryMessage,
+          (response?: unknown) => void,
+        ]
+      ) => {
+        const request = args[1].payload.request
+        args[2]({
+          ok: true,
+          status: {
+            status: 'locked',
+            request_id: request.requestId,
+            vault_store_id: request.vaultStoreId,
+          },
+        })
+      },
+    )
+    vi.stubGlobal('chrome', { runtime: { sendMessage } })
+    const admitted =
+      await extensionConnectionBrowser.discoverAdmittedPairedExtensionIdentity(
+        'store_test',
+      )
+    expect(admitted.isOk()).toBe(true)
+    if (admitted.isOk()) {
+      expect(admitted.value.canonicalStatus.status).toBe('locked')
+      expect(
+        new NookVaultClientPolicy().companion_unlock_decision(
+          admitted.value.canonicalStatus,
+        ),
+      ).toBe(VaultCompanionUnlockDecision.CompanionDevice)
+      expect(admitted.value.discovery.status).toBe('locked')
+    }
+    expect(sendMessage).toHaveBeenCalledOnce()
   })
 })

@@ -1,11 +1,18 @@
-import { extensionConnectionBrowser } from "$lib/extension/connect";
+import type { VaultState } from "$lib/vault.svelte";
+import {
+  LoginVaultExtensionPairingStatusKind,
+  LoginVaultExtensionPairingStatusProjection,
+  type LoginVaultExtensionPairingStatusEntry,
+} from "$lib/components/login/login-vault-extension-pairing-status";
+import {
+  extensionConnectionBrowser,
+  PairedExtensionDiscoveryFailure,
+} from "$lib/extension/connect";
 
 import {
   type ExtensionSetupState,
   extensionInstallationBrowser,
 } from "$lib/extension/install";
-
-import type { ActiveVault } from "$lib/vault/state/provider.svelte";
 
 export enum ExtensionSetupOfferKind {
   Hidden = "hidden",
@@ -20,22 +27,50 @@ export type ExtensionSetupOffer =
 class ExtensionSetupBrowser {
   constructor(private readonly browser: typeof globalThis) {}
 
-  async loadExtensionSetupOffer(
-    activeVault: ActiveVault,
-  ): Promise<ExtensionSetupOffer> {
-    const setup =
-      await extensionInstallationBrowser.resolveExtensionSetupState(
-        activeVault,
+  async discoverPairingStatus(
+    storeId: string,
+    vault: VaultState,
+  ): Promise<LoginVaultExtensionPairingStatusEntry> {
+    const admission =
+      await extensionConnectionBrowser.discoverAdmittedPairedExtensionIdentity(
+        storeId,
       );
-    const offerRequest: Parameters<
-      typeof extensionInstallationBrowser.shouldOfferExtensionSetup
-    >[0] = {
-      status: setup.status,
-      environment: this.browser.navigator,
+    if (admission.isErr()) {
+      vault.errorMsg = vault.t(admission.error.translationKey);
+      return { storeId, kind: LoginVaultExtensionPairingStatusKind.Checking };
+    }
+    return {
+      storeId,
+      ...new LoginVaultExtensionPairingStatusProjection(
+        admission.value.discovery,
+      ).status,
     };
-    return extensionInstallationBrowser.shouldOfferExtensionSetup(offerRequest)
-      ? { kind: ExtensionSetupOfferKind.Visible, setup }
-      : { kind: ExtensionSetupOfferKind.Hidden };
+  }
+
+  async loadExtensionSetupOffer(
+    vault: VaultState,
+  ): Promise<ExtensionSetupOffer | undefined> {
+    try {
+      const setup =
+        await extensionInstallationBrowser.resolveExtensionSetupState(
+          vault.activeVault,
+        );
+      const offerRequest: Parameters<
+        typeof extensionInstallationBrowser.shouldOfferExtensionSetup
+      >[0] = {
+        status: setup.status,
+        environment: this.browser.navigator,
+      };
+      return extensionInstallationBrowser.shouldOfferExtensionSetup(
+        offerRequest,
+      )
+        ? { kind: ExtensionSetupOfferKind.Visible, setup }
+        : { kind: ExtensionSetupOfferKind.Hidden };
+    } catch (failure) {
+      if (!(failure instanceof PairedExtensionDiscoveryFailure)) throw failure;
+      vault.errorMsg = vault.t(failure.translationKey);
+      return;
+    }
   }
 
   async openExtensionInstaller(): Promise<void> {

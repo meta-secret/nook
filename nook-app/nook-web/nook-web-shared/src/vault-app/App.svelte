@@ -11,12 +11,12 @@
   import { VaultState } from '$lib/vault.svelte'
   import {
     DeviceProtectionStatus,
+    VaultCompanionUnlockDecision,
+    VaultStartupUnlockDecision,
     ExternalDeviceIdentityAuthorizationMode,
     type StartSentinelGenesisArgs,
   } from '$app-wasm'
-  import {
-    ExtensionConnectIntentKind,
-  } from '$lib/app/route-state'
+  import { ExtensionConnectIntentKind } from '$lib/app/route-state'
   import { ColorMode, browserColorMode } from '$lib/app/theme'
   import {
     type EnrollmentSubmitQueue,
@@ -35,11 +35,9 @@
   import {
     ExtensionIdentityRequestSource,
     extensionConnectionBrowser as connectionBrowser,
-    type PairedExtensionIdentityDiscovery,
   } from '$lib/extension/connect'
   import {
     LoginVaultExtensionPairingStatusKind,
-    LoginVaultExtensionPairingStatusProjection,
     type LoginVaultExtensionPairingStatusEntry,
   } from '$lib/components/login/login-vault-extension-pairing-status'
   import {
@@ -103,10 +101,7 @@
     secretsAddOpen = open
   }
   const vaultSecurityRecommendations = $derived(
-    assess_vault_security(
-      vault.syncProviders.length,
-      vault.vaultMembers.length,
-    ),
+    assess_vault_security(vault.syncProviders.length, vault.vaultMembers.length),
   )
   let colorMode = $state<ColorMode>(browserColorMode.systemColorMode())
   let followsSystemColorMode = $state(true)
@@ -155,31 +150,16 @@
             return
           }
           case false: {
-            extensionConnectPairingStatusEntries = localVaults.map(
-              (entry) => ({
-                storeId: entry.storeId,
-                kind: LoginVaultExtensionPairingStatusKind.Checking,
-              }),
-            )
+            extensionConnectPairingStatusEntries = localVaults.map((entry) => ({
+              storeId: entry.storeId,
+              kind: LoginVaultExtensionPairingStatusKind.Checking,
+            }))
             const discoveryOptions: { concurrency: 'unbounded' } = {
               concurrency: 'unbounded',
             }
             const discoveryEffects = localVaults.map((entry) =>
-              Effect.map(
-                Effect.promise(() =>
-                  connectionBrowser.discoverPairedExtensionIdentity(
-                    entry.storeId,
-                  ),
-                ),
-                (discovery: PairedExtensionIdentityDiscovery) => {
-                  const projection = new LoginVaultExtensionPairingStatusProjection(
-                    discovery,
-                  )
-                  return {
-                    storeId: entry.storeId,
-                    ...projection.status,
-                  }
-                },
+              Effect.promise(() =>
+                extensionSetupBrowser.discoverPairingStatus(entry.storeId, vault),
               ),
             )
             const discoveryFiber = Effect.runFork(
@@ -233,9 +213,7 @@
       },
       syncRoute: routeCoordinator.syncRoute,
     }
-    return vaultBrowserLifecycle.mountBrowserLifecycle(
-      mountBrowserLifecycleArgs,
-    )
+    return vaultBrowserLifecycle.mountBrowserLifecycle(mountBrowserLifecycleArgs)
   })
   $effect(() => {
     const applicationDocumentUpdate: Parameters<
@@ -291,7 +269,8 @@
       !vault.isVerifying &&
       !vault.deviceAuthorizationInProgress
     ) {
-      const connectRequest = routeCoordinator.extensionIdentityRequestState.request
+      const connectRequest =
+        routeCoordinator.extensionIdentityRequestState.request
       const authorizeWithExternalDeviceIdentityArgs: Parameters<
         typeof vault.authorizeWithExternalDeviceIdentity
       >[0] = {
@@ -332,7 +311,7 @@
     ) {
       extensionDiscoveryStoreId = ''
       const discoveryStatus = await resumePairedExtensionVault(activeStoreId)
-      if (vault.isAuthenticated) return
+      if (!discoveryStatus || vault.isAuthenticated) return
       if (
         discoveryStatus ===
           ExtensionPairedVaultIdentityStatusMessageStatus.Locked ||
@@ -351,7 +330,7 @@
           storeId: activeStoreId,
         }
         await waitForPairedExtensionUnlock(pairedExtensionUnlockRequest)
-        if (vault.isAuthenticated) return
+        return
       }
     }
     if (skipExtensionDiscovery) {
@@ -362,13 +341,12 @@
         routeCoordinator.extensionIdentityRequestState.kind ===
         ExtensionConnectIntentKind.Requested
       ) {
-        const connectRequest = routeCoordinator.extensionIdentityRequestState.request
+        const connectRequest =
+          routeCoordinator.extensionIdentityRequestState.request
         const extensionIdentityCanUnlock =
-          (connectRequest.source !==
-            ExtensionIdentityRequestSource.PairedVault ||
+          (connectRequest.source !== ExtensionIdentityRequestSource.PairedVault ||
             connectRequest.vaultStoreId === activeStoreId) &&
-          (connectRequest.source ===
-            ExtensionIdentityRequestSource.PairedVault ||
+          (connectRequest.source === ExtensionIdentityRequestSource.PairedVault ||
             extensionBackedVaultSession ||
             vault.deviceProtectionStatus === DeviceProtectionStatus.Missing)
         if (extensionIdentityCanUnlock) {
@@ -443,8 +421,7 @@
   }
   const appVersion = APP_VERSION
   const shellWidth = $derived(
-    vault.settingsOpen &&
-      vault.settingsSection === SettingsSection.DevicesAccess
+    vault.settingsOpen && vault.settingsSection === SettingsSection.DevicesAccess
       ? APP_SHELL_WIDTH_WIDE
       : APP_SHELL_WIDTH,
   )
@@ -481,8 +458,8 @@
     kind: EnrollmentSubmitQueueKind.Idle,
   })
   const showPasskeyOverlay = $derived(
-    pendingVaultCreationState.kind ===
-      VaultCreationQueueKind.WaitingForDevice && !vault.deviceProtectionReady,
+    pendingVaultCreationState.kind === VaultCreationQueueKind.WaitingForDevice &&
+      !vault.deviceProtectionReady,
   )
   const showExistingVaultPasskeyOverlay = $derived(
     pendingExistingVaultUnlock && existingVaultNeedsDeviceUnlock,
@@ -523,13 +500,22 @@
     | typeof ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable
     | typeof ExtensionPairedVaultIdentityStatusMessageStatus.Locked
     | typeof ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked
+    | undefined
   > {
     const discoveringStagedImport =
       vault.loginRequiresExistingVault &&
       vault.loginSetup.kind === LoginSetupKind.Active
     extensionDiscoveryStoreId = storeId
-    const discovery =
-      await connectionBrowser.discoverPairedExtensionIdentity(storeId)
+    const admission =
+      await connectionBrowser.discoverAdmittedPairedExtensionIdentity(storeId)
+    if (admission.isErr()) {
+      vault.errorMsg = vault.t(admission.error.translationKey)
+      return
+    }
+    const discovery = admission.value.discovery
+    const decision = vault.clientPolicy.companion_unlock_decision(
+      admission.value.canonicalStatus,
+    )
     const openVaultIsDifferentStore =
       vault.activeVault.kind === ActiveVaultKind.Open &&
       vault.activeVault.storeId !== storeId
@@ -545,9 +531,13 @@
         ? ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable
         : discovery.status
     }
+    if (decision === VaultCompanionUnlockDecision.WebsiteDevice) {
+      if (vault.deviceProtectionReady && vault.shouldAutoUnlock())
+        await vault.loadDb()
+      return ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable
+    }
     if (
-      discovery.status ===
-      ExtensionPairedVaultIdentityStatusMessageStatus.Locked
+      discovery.status === ExtensionPairedVaultIdentityStatusMessageStatus.Locked
     ) {
       const discoveryRetryRequest: Parameters<
         typeof schedulePairedExtensionDiscoveryRetry
@@ -592,7 +582,8 @@
           window.setTimeout(resolve, PAIRED_EXTENSION_UNLOCK_RETRY_MS)
         })
       }
-      await resumePairedExtensionVault(request.storeId)
+      const discoveryStatus = await resumePairedExtensionVault(request.storeId)
+      if (!discoveryStatus) return
       if (vault.isAuthenticated) {
         return
       }
@@ -618,9 +609,11 @@
     if (
       routeCoordinator.extensionIdentityRequestState.kind ===
         ExtensionConnectIntentKind.Requested &&
-      vault.deviceId !== routeCoordinator.extensionIdentityRequestState.request.deviceId
+      vault.deviceId !==
+        routeCoordinator.extensionIdentityRequestState.request.deviceId
     ) {
-      const connectRequest = routeCoordinator.extensionIdentityRequestState.request
+      const connectRequest =
+        routeCoordinator.extensionIdentityRequestState.request
       const authorizationRequest: Parameters<
         typeof vault.authorizeWithExternalDeviceIdentity
       >[0] = {
@@ -752,8 +745,8 @@
       extensionSetupStateValue = { kind: ExtensionSetupOfferKind.Hidden }
       return
     }
-    extensionSetupStateValue =
-      await extensionSetupBrowser.loadExtensionSetupOffer(vault.activeVault)
+    const offer = await extensionSetupBrowser.loadExtensionSetupOffer(vault)
+    if (offer) extensionSetupStateValue = offer
   }
 
   async function handleExtensionInstall() {
@@ -832,7 +825,8 @@
       routeCoordinator.extensionIdentityRequestState.request.source ===
         ExtensionIdentityRequestSource.PairedVault &&
       storeId &&
-      routeCoordinator.extensionIdentityRequestState.request.vaultStoreId !== storeId
+      routeCoordinator.extensionIdentityRequestState.request.vaultStoreId !==
+        storeId
     ) {
       routeCoordinator.extensionIdentityRequestState = {
         kind: ExtensionConnectIntentKind.Absent,
@@ -854,6 +848,14 @@
     ) {
       return
     }
+    const startupDecision = vault.startupUnlockDecision(
+      connectionBrowser.companionProviderPresence(),
+    )
+    if (
+      vault.localVaultPresent &&
+      startupDecision === VaultStartupUnlockDecision.WebsiteDevice
+    )
+      return
     void resumePairedExtensionVault(storeId)
   })
 
