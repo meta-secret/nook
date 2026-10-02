@@ -1,3 +1,5 @@
+import type { ExtensionPairedVaultIdentityStatusMessageStatus } from "$web-shared/extension/paired-vault-identity-status";
+
 export enum PairedExtensionUnlockDeliveryKind {
   NotRequested = "not-requested",
   Requested = "requested",
@@ -23,7 +25,9 @@ export type PairedExtensionUnlockDeliveryRequest = {
 export type PairedExtensionUnlockPollRequest = {
   readonly storeId: string;
   readonly isAuthenticated: () => boolean;
-  readonly resumePairedVault: (storeId: string) => Promise<unknown>;
+  readonly resumePairedVault: (
+    storeId: string,
+  ) => Promise<ExtensionPairedVaultIdentityStatusMessageStatus>;
 };
 
 const PAIRED_EXTENSION_UNLOCK_TIMEOUT_MS = 30_000;
