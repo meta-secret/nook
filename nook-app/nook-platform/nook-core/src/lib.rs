@@ -32,12 +32,14 @@ pub use device_access::{
     DeviceAccessIdentityObservation, DeviceAccessIdentityState, DeviceAccessProfile,
     DeviceAccessProfileDecodeResult, DeviceAccessProfileTransitionError,
     DeviceAccessProfileVersion, DeviceAccessProtectionKind, DeviceAccessProviderLabelError,
-    DeviceCredentialProfile, DiscardedClientEnvironment, IdentityVaultAppGrant,
-    IdentityVaultAppGrantKind, IdentityVaultLinks, IdentityVaultLinksRequest, PasskeyAccessProfile,
-    PasskeyAuthenticatorAttachment, PasskeyBackupState, PasskeyBrowserObservation,
-    PasskeyCreatedAtEvidence, PasskeyCreationCeremony, PasskeyKeeperKind,
-    PasskeyLastUsedAtEvidence, PasskeyMetadataUnrecorded, PasskeyObservedBrowser,
-    PasskeyObservedPlatform, PasskeyTransport, PersistedDeviceIdentityState, VerifiedVaultAccess,
+    DeviceCredentialProfile, DiscardedClientEnvironment, IdentityAppInventory,
+    IdentityAppInventoryError, IdentityVaultAppGrant, IdentityVaultAppGrantKind,
+    IdentityVaultAppInventoryRequest, IdentityVaultLinks, IdentityVaultLinksRequest,
+    PasskeyAccessProfile, PasskeyAuthenticatorAttachment, PasskeyBackupState,
+    PasskeyBrowserObservation, PasskeyCreatedAtEvidence, PasskeyCreationCeremony,
+    PasskeyKeeperKind, PasskeyLastUsedAtEvidence, PasskeyMetadataUnrecorded,
+    PasskeyObservedBrowser, PasskeyObservedPlatform, PasskeyTransport,
+    PersistedDeviceIdentityState, VerifiedVaultAccess,
 };
 pub use nook_auth2::MemberLabelState;
 pub use nook_auth2::RecordTypeDeclaration;

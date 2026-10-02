@@ -20,7 +20,9 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 mod identity_directory_projection;
 mod snapshot_scope;
+mod vault_app_inventory;
 use snapshot_scope::{CurrentAppIdentity, SnapshotVaultSelection, VaultSnapshotScope};
+use vault_app_inventory::BrowserIdentityVaultAppInventory;
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -515,7 +517,13 @@ impl NookIdentityDirectorySnapshot {
         let mut identities = Vec::new();
         for record in selected_identities {
             let mut snapshot =
-                NookIdentitySnapshot::from_record(record, &current_app, &local_protections);
+                NookIdentitySnapshot::from_record(record, &current_app, &local_protections)
+                    .with_vault_app_inventory(BrowserIdentityVaultAppInventory {
+                        identity: record,
+                        current_app: &current_app,
+                        local_protections: &local_protections,
+                    })
+                    .await?;
             snapshot.vaults = NookDeviceVaultAccess::device_vault_access_for_identity(
                 BrowserDeviceVaultAccessForIdentity {
                     identity: record,
