@@ -1,16 +1,4 @@
 <script lang="ts">
-  enum PairedExtensionUnlockDeliveryKind {
-    NotRequested = 'not-requested',
-    Requested = 'requested',
-  }
-
-  type PairedExtensionUnlockDeliveryState =
-    | { readonly kind: PairedExtensionUnlockDeliveryKind.NotRequested }
-    | {
-        readonly kind: PairedExtensionUnlockDeliveryKind.Requested
-        readonly delivery: Promise<boolean>
-      }
-
   import { Effect, Fiber } from 'effect'
   import { err } from 'neverthrow'
   import {
@@ -42,7 +30,6 @@
   import type {
     EnrollmentCodeUseRequest,
     PairedExtensionDiscoveryRetry,
-    PairedExtensionUnlockPoll,
   } from '$lib/app/app-interaction-types'
   import {
     ExtensionIdentityRequestSource,
@@ -93,6 +80,11 @@
     VaultAppRouteCoordinator,
     type VaultAppRouteCoordinatorRequest,
   } from '$lib/app/vault-app-route-coordinator.svelte'
+  import {
+    pairedExtensionUnlockWasAccepted,
+    requestPairedExtensionUnlockIfEligible,
+    waitForPairedExtensionUnlock,
+  } from '$lib/app/paired-extension-unlock-delivery'
 
   const IS_SIMPLE_APP = configured_vault_application_is_simple()
   const IS_SENTINEL_APP = configured_vault_application_is_sentinel()
@@ -280,21 +272,15 @@
       return
     }
     let activeStoreId = existingVaultImportLifecycle.unlockStoreId
-    let pairedExtensionUnlockDelivery: PairedExtensionUnlockDeliveryState = {
-      kind: PairedExtensionUnlockDeliveryKind.NotRequested,
-    }
-    if (
-      !skipExtensionDiscovery &&
-      SUPPORTS_EXTENSION &&
-      (vault.localVaultPresent || existingVaultImport) &&
-      activeStoreId
-    ) {
-      pairedExtensionUnlockDelivery = {
-        kind: PairedExtensionUnlockDeliveryKind.Requested,
-        delivery:
-          connectionBrowser.requestPairedExtensionUnlock(activeStoreId),
-      }
-    }
+    const pairedExtensionUnlockDelivery =
+      requestPairedExtensionUnlockIfEligible({
+        shouldRequest:
+          !skipExtensionDiscovery &&
+          SUPPORTS_EXTENSION &&
+          (vault.localVaultPresent || existingVaultImport),
+        ...(activeStoreId ? { storeId: activeStoreId } : {}),
+        requester: connectionBrowser,
+      })
     if (existingVaultImport) {
       const discovered = await vault.discoverStagedVaultStoreId()
       if (discovered.isErr()) {
@@ -370,28 +356,20 @@
           discoveryStatus ===
           ExtensionPairedVaultIdentityStatusMessageStatus.Locked
         ) {
-          if (
-            pairedExtensionUnlockDelivery.kind ===
-            PairedExtensionUnlockDeliveryKind.NotRequested
-          ) {
-            vault.errorMsg = vault.t(
-              I18N_KEYS.ExtensionConnectMessagingUnavailable,
-            )
-            return
-          }
-          const pairedUnlockRequested =
-            await pairedExtensionUnlockDelivery.delivery
-          if (!pairedUnlockRequested) {
+          const pairedUnlockAccepted = await pairedExtensionUnlockWasAccepted(
+            pairedExtensionUnlockDelivery,
+          )
+          if (!pairedUnlockAccepted) {
             vault.errorMsg = vault.t(
               I18N_KEYS.ExtensionConnectMessagingUnavailable,
             )
             return
           }
         }
-        const pairedExtensionUnlockRequest: Parameters<
-          typeof waitForPairedExtensionUnlock
-        >[0] = {
+        const pairedExtensionUnlockRequest = {
           storeId: activeStoreId,
+          isAuthenticated: () => vault.isAuthenticated,
+          resumePairedVault: resumePairedExtensionVault,
         }
         await waitForPairedExtensionUnlock(pairedExtensionUnlockRequest)
         if (vault.isAuthenticated) return
@@ -620,26 +598,6 @@
     }
     await handleUnlock(true)
     return ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked
-  }
-
-  const PAIRED_EXTENSION_UNLOCK_TIMEOUT_MS = 30_000
-  const PAIRED_EXTENSION_UNLOCK_RETRY_MS = 350
-
-  async function waitForPairedExtensionUnlock(
-    request: PairedExtensionUnlockPoll,
-  ): Promise<void> {
-    const deadline = Date.now() + PAIRED_EXTENSION_UNLOCK_TIMEOUT_MS
-    for (let attempt = 0; Date.now() < deadline; attempt += 1) {
-      if (attempt > 0) {
-        await new Promise<void>((resolve) => {
-          window.setTimeout(resolve, PAIRED_EXTENSION_UNLOCK_RETRY_MS)
-        })
-      }
-      await resumePairedExtensionVault(request.storeId)
-      if (vault.isAuthenticated) {
-        return
-      }
-    }
   }
 
   function schedulePairedExtensionDiscoveryRetry(
