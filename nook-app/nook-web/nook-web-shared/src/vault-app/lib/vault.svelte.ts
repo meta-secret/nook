@@ -900,18 +900,7 @@ export class VaultState extends VaultRuntimeState {
   }
 
   async refreshSentinelUnlockStatus() {
-    const status =
-      await this.sentinelUnlockActions.refreshSentinelUnlockStatus();
-    if (status.isErr()) {
-      this.errorMsg = this.t(status.error.translationKey);
-      return status;
-    }
-    const permission = await this.refreshArchitectureSecretCreationAllowed();
-    if (permission.isErr()) {
-      this.errorMsg = this.t(permission.error.translationKey);
-      return err(permission.error);
-    }
-    return status;
+    return this.sentinelUnlockActions.refreshUnlockPresentation();
   }
 
   /**

@@ -1,3 +1,4 @@
+import { ProviderSyncOutcome } from '$lib/vault/provider-sync.svelte'
 import {
   afterEach,
   describe,
@@ -325,7 +326,9 @@ describe('external browser identity handoff commit ownership', () => {
           fixture.state,
           'clearPendingEnrollmentFromUrl',
         )
-        vi.spyOn(fixture.state, 'refreshDeviceState').mockResolvedValue(ok())
+        vi.spyOn(fixture.state, 'refreshDeviceState').mockResolvedValue(
+          ok(ProviderSyncOutcome.Synced),
+        )
         fixture.state.runtimeConfig = new NookRuntimeConfig(
           NookClientRunModeUtil.parse('production'),
           true,

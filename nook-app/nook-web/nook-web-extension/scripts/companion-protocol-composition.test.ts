@@ -361,6 +361,36 @@ afterAll(() => {
 })
 
 describe('generated companion protocol composition', () => {
+  test('issues fresh discovery after an unlocked endpoint and authorizes the latest request', async () => {
+    const previous = beginHandoff('fresh-discovery-prior')
+    expect(previous.endpoint.status.status).toBe('unlocked')
+    previous.endpoint.free()
+    const latest = beginHandoff('fresh-discovery-latest')
+    const response = await latest.endpoint.authorize_and_seal(
+      extension,
+      structuredClone(latest.authorization),
+    )
+    expect(response.request.transaction.discovery.request.requestId).toBe(
+      'fresh-discovery-latest',
+    )
+    expect(extension.vaultStoreId).toBe(presence.vault_store_id)
+  })
+
+  test('rejects the prior transaction at a freshly issued endpoint', async () => {
+    const previous = beginHandoff('fresh-reject-prior')
+    previous.endpoint.free()
+    const latest = beginHandoff('fresh-reject-latest')
+    await rejects(
+      latest.endpoint.authorize_and_seal(
+        extension,
+        structuredClone(previous.authorization),
+      ),
+      Error,
+    )
+    throws(() => latest.endpoint.status)
+    expect(extension.vaultStoreId).toBe(presence.vault_store_id)
+  })
+
   test('validates fresh presence without consuming a discovered endpoint', () => {
     const initial = new NookCompanionExtensionEndpoint(
       structuredClone(presence),

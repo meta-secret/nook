@@ -2,6 +2,7 @@ import type { ExtensionPairedVaultIdentityDiscoveryMessage } from '../../../../n
 import { describe, expect, test, vi } from 'vitest'
 import { Effect } from 'effect'
 import {
+  decode_companion_identity_discovery_observation,
   NookExtensionIdentityHandoffProviderOutcomeState,
   NookVaultClientPolicy,
   VaultCompanionUnlockDecision,
@@ -243,7 +244,9 @@ describe('admitted companion startup discovery', () => {
           (response?: unknown) => void,
         ]
       ) => {
-        const request = args[1].payload.request
+        const request = decode_companion_identity_discovery_observation(
+          args[1].payload,
+        ).request
         args[2]({
           ok: true,
           status: {

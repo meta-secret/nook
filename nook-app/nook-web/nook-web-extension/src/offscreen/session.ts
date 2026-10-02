@@ -320,22 +320,10 @@ async function handleCompanionIdentityDiscovery(
       message.payload.presence,
     )
     const presence = candidate.presence
-    const prior = companionEndpointAvailability
-    companionEndpointAvailability = {
-      kind: CompanionEndpointAvailabilityKind.Inactive,
-    }
-    const endpoint: CompanionDiscoveryEndpoint =
-      prior.kind === CompanionEndpointAvailabilityKind.Active
-        ? {
-            kind: CompanionDiscoveryEndpointKind.Discovered,
-            endpoint: prior.endpoint,
-          }
-        : {
-            kind: CompanionDiscoveryEndpointKind.Initial,
-            endpoint: candidate,
-          }
-    if (prior.kind === CompanionEndpointAvailabilityKind.Active) {
-      candidate.free()
+    releaseCompanionEndpoint()
+    const endpoint: CompanionDiscoveryEndpoint = {
+      kind: CompanionDiscoveryEndpointKind.Initial,
+      endpoint: candidate,
     }
 
     try {
