@@ -144,7 +144,12 @@ export enum PairedExtensionDiscoveryFailureKind {
 }
 
 export class PairedExtensionDiscoveryFailure extends Error {
-  readonly translationKey = I18N_KEYS.ErrorsVaultGeneric;
+  get translationKey() {
+    return this.kind === PairedExtensionDiscoveryFailureKind.NotInstalled ||
+      this.kind === PairedExtensionDiscoveryFailureKind.Delivery
+      ? I18N_KEYS.ExtensionConnectMessagingUnavailable
+      : I18N_KEYS.ExtensionConnectStartFailed;
+  }
   constructor(readonly kind: PairedExtensionDiscoveryFailureKind) {
     super(I18N_KEYS.ErrorsVaultGeneric);
   }
