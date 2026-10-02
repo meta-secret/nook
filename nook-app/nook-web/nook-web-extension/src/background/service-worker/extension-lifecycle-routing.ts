@@ -218,6 +218,7 @@ class AuthorizationCleanupLifecycle {
       const moduleSucceedRequest: ModuleSucceedRequest = {
         kind: AuthorizationCleanupCloseKind.Skipped,
       }
+      console.info(`[nook-session-evidence] cleanup:${sessionDisposition}`)
       const closeOperation: Effect.Effect<
         AuthorizationCleanupClose,
         AuthorizationCleanupFailure

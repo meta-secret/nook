@@ -918,6 +918,7 @@ class ExtensionPairingIdentity {
     const status = statusDelivery.value
     await companionWasmReady
     const sessionStatus = this.websiteSessionStatusTransport(status)
+    console.info(`[nook-session-evidence] website-status:${sessionStatus}`)
     if (openLockedCompanion) {
       if (sessionStatus !== ExtensionSessionStatusAvailability.Unlocked) {
         const launcherRequest: Parameters<
