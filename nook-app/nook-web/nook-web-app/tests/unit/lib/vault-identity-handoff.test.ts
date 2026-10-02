@@ -270,10 +270,10 @@ describe('external browser identity handoff commit ownership', () => {
 
       await fixture.lifecycle.initOnce()
 
-      expect(loadDb).toHaveBeenCalledOnce()
-      expect(fixture.state.isAuthenticated).toBe(true)
       expect(fixture.state.errorMsg).toBe('')
       expect(fixture.state.isInitializing).toBe(false)
+      expect(loadDb).toHaveBeenCalledOnce()
+      expect(fixture.state.isAuthenticated).toBe(true)
     } finally {
       fixture.dispose()
     }

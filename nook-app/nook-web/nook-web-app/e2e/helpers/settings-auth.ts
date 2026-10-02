@@ -593,7 +593,10 @@ export async function authorizeDeviceProtection(
     )
     .not.toBe('waiting')
 
-  if (await isAuthenticatedWorkspace()) {
+  if (
+    (await authorizationGateState()) ===
+    DeviceProtectionAuthorizationGateState.Unlocked
+  ) {
     await waitForVaultOperationsIdle(page)
     return
   }

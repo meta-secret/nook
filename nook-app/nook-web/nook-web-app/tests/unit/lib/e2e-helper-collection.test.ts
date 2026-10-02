@@ -123,6 +123,20 @@ describe('Playwright collection imports', () => {
     ).toBe(DeviceProtectionAuthorizationGateState.Unlocked)
   })
 
+  test('recognizes authenticated consent without a workspace shell or unlock control', () => {
+    expect(
+      deviceProtectionAuthorizationGateState({
+        overlayVisible: false,
+        unlockReady: false,
+        pickerVisible: false,
+        lockedAccessVisible: false,
+        authorizeReady: false,
+        vaultAuthenticated: true,
+        workspaceUnlocked: false,
+      }),
+    ).toBe(DeviceProtectionAuthorizationGateState.Unlocked)
+  })
+
   test('waits through the passkey overlay while login unlock hands off device authorization', () => {
     const gate = new DeviceProtectionPostUnlockGate({
       loginGateVisible: true,
