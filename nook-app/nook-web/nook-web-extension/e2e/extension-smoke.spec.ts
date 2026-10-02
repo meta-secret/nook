@@ -575,10 +575,14 @@ test('keeps the extension vault independent and switches after valid re-pairing'
 
     const pairedVaultOption = pairingPage
       .getByTestId('login-vault-option')
-      .filter({ hasText: 'Unpair test vault' })
+      .filter({
+        has: pairingPage.getByText('Unpair test vault', { exact: true }),
+      })
     const unpairedVaultOption = pairingPage
       .getByTestId('login-vault-option')
-      .filter({ hasText: 'Second local vault' })
+      .filter({
+        has: pairingPage.getByText('Second local vault', { exact: true }),
+      })
     await expect(pairingPage.getByTestId('login-vault-option')).toHaveCount(2)
     await expect(
       pairedVaultOption.getByTestId('login-vault-extension-pairing-status'),
@@ -596,7 +600,9 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     ).toBeVisible()
     const selectedVaultCard = pairingPage
       .getByTestId('login-vault-card')
-      .filter({ hasText: 'Second local vault' })
+      .filter({
+        has: pairingPage.getByText('Second local vault', { exact: true }),
+      })
     await expect(
       selectedVaultCard.getByTestId('login-vault-extension-pairing-status'),
     ).toHaveText('Not paired with this extension')
