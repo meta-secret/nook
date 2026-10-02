@@ -11,6 +11,7 @@ import { LogLevel } from '$lib/runtime/log-level'
 import {
   deviceProtectionAuthorizationGateState,
   DeviceProtectionAuthorizationGateState,
+  deviceProtectionAuthenticatedSurface,
   DeviceProtectionPostUnlockGate,
 } from '../../../e2e/helpers/settings-auth'
 
@@ -302,5 +303,14 @@ describe('Playwright collection imports', () => {
     expect(result.signal).toBe('')
     expect(result.exitCode).toBe(0)
     expect(result.stderr).not.toContain("Cannot find package '$app-wasm'")
+  })
+})
+
+describe('authenticated device protection surfaces', () => {
+  test('accepts a workspace or authenticated visible extension consent', () => {
+    expect(deviceProtectionAuthenticatedSurface(true, false, false)).toBe(true)
+    expect(deviceProtectionAuthenticatedSurface(false, true, true)).toBe(true)
+    expect(deviceProtectionAuthenticatedSurface(false, false, true)).toBe(false)
+    expect(deviceProtectionAuthenticatedSurface(false, true, false)).toBe(false)
   })
 })

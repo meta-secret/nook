@@ -1,3 +1,4 @@
+import { err, ok, type Result } from "neverthrow";
 import type { VaultState } from "$lib/vault.svelte";
 import {
   LoginVaultExtensionPairingStatusKind,
@@ -49,7 +50,7 @@ class ExtensionSetupBrowser {
 
   async loadExtensionSetupOffer(
     vault: VaultState,
-  ): Promise<ExtensionSetupOffer | undefined> {
+  ): Promise<Result<ExtensionSetupOffer, PairedExtensionDiscoveryFailure>> {
     try {
       const setup =
         await extensionInstallationBrowser.resolveExtensionSetupState(
@@ -61,15 +62,15 @@ class ExtensionSetupBrowser {
         status: setup.status,
         environment: this.browser.navigator,
       };
-      return extensionInstallationBrowser.shouldOfferExtensionSetup(
-        offerRequest,
-      )
-        ? { kind: ExtensionSetupOfferKind.Visible, setup }
-        : { kind: ExtensionSetupOfferKind.Hidden };
+      return ok(
+        extensionInstallationBrowser.shouldOfferExtensionSetup(offerRequest)
+          ? { kind: ExtensionSetupOfferKind.Visible, setup }
+          : { kind: ExtensionSetupOfferKind.Hidden },
+      );
     } catch (failure) {
       if (!(failure instanceof PairedExtensionDiscoveryFailure)) throw failure;
       vault.errorMsg = vault.t(failure.translationKey);
-      return;
+      return err(failure);
     }
   }
 

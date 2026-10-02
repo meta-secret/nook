@@ -58,6 +58,14 @@ export type DeviceProtectionPostUnlockObservation = {
   readonly errorVisible: boolean
 }
 
+export function deviceProtectionAuthenticatedSurface(
+  workspaceUnlocked: boolean,
+  vaultAuthenticated: boolean,
+  consentVisible: boolean,
+): boolean {
+  return workspaceUnlocked || (vaultAuthenticated && consentVisible)
+}
+
 export class DeviceProtectionPostUnlockGate {
   constructor(
     private readonly observation: DeviceProtectionPostUnlockObservation,
@@ -520,7 +528,6 @@ export async function authorizeDeviceProtection(
   const lockedAccessDashboard = loginGate.getByTestId(
     'devices-access-dashboard',
   )
-  const authenticatedShell = page.getByTestId('authenticated-shell')
   const button = page.getByTestId('device-protection-unlock-btn')
 
   const isAuthenticatedWorkspace = async () => {
@@ -606,9 +613,19 @@ export async function authorizeDeviceProtection(
     await expect(loginGate).toBeHidden({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await expect(authenticatedShell).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
+    await expect
+      .poll(
+        async () =>
+          deviceProtectionAuthenticatedSurface(
+            await isAuthenticatedWorkspace(),
+            await page.evaluate(() =>
+              Boolean(window.__nookVault?.isAuthenticated),
+            ),
+            await page.getByTestId('approve-extension-device-btn').isVisible(),
+          ),
+        { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+      )
+      .toBe(true)
     await waitForVaultOperationsIdle(page)
     return
   }
@@ -756,9 +773,19 @@ export async function authorizeDeviceProtection(
   await expect(loginGate).toBeHidden({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-  await expect(authenticatedShell).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
+  await expect
+    .poll(
+      async () =>
+        deviceProtectionAuthenticatedSurface(
+          await isAuthenticatedWorkspace(),
+          await page.evaluate(() =>
+            Boolean(window.__nookVault?.isAuthenticated),
+          ),
+          await page.getByTestId('approve-extension-device-btn').isVisible(),
+        ),
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
+    .toBe(true)
 
   if (restoreDevicesAccess) {
     await page.evaluate(() => {
