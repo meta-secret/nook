@@ -8,6 +8,7 @@ import {
   UI_TIMEOUT_MS,
 } from './helpers'
 import { installMockPasskeyRuntime } from './passkey-mock'
+import type { ExtensionPairingApprovedMessage } from '../../nook-web-shared/src/extension/runtime-messages'
 
 interface ExtensionInventoryDevice {
   readonly deviceId: string
@@ -76,10 +77,16 @@ class VaultAppsInventoryScenario {
             runtime: {
               sendMessage(
                 _extensionId: string,
-                _message: { readonly type: string },
-                callback: (response: { readonly ok: true }) => void,
+                message: ExtensionPairingApprovedMessage,
+                callback: (response: {
+                  readonly ok: true
+                  readonly eventCount: number
+                }) => void,
               ): void {
-                callback({ ok: true })
+                callback({
+                  ok: true,
+                  eventCount: message.eventLogRecords.length,
+                })
               },
             },
           },
