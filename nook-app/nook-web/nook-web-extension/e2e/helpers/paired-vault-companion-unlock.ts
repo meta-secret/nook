@@ -1,5 +1,6 @@
 import { expect, type BrowserContext, type Page } from '@playwright/test'
 import { EXTENSION_UNLOCK_TIMEOUT_MS } from './extension-smoke-runtime'
+import { CompanionStartupRuntimeDiagnostics } from './companion-startup-runtime-diagnostics'
 
 export enum PairedVaultCompanionUnlockKind {
   Optional = 'optional',
@@ -186,6 +187,7 @@ async function openOwnedCompanionPopup(
     popupPage,
     request.extensionId,
   )
+  await popupPage.addInitScript(new CompanionStartupRuntimeDiagnostics().install)
   await popupPage.goto(companionPopupUrl(request.extensionId))
   return { page: popupPage, closeAfterUse: true, diagnostics }
 }

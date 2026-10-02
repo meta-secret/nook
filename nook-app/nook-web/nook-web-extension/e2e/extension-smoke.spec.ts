@@ -34,6 +34,7 @@ import {
   installForcePinDeviceProtection,
 } from './helpers/pin-device'
 import { lockExtensionSession } from './helpers/paired-pin-extension'
+import { unlockExtensionThroughCompanion } from './helpers/paired-vault-companion-unlock'
 import { ExtensionSessionMessageType } from '../src/offscreen/session-message-dispatch'
 import { ExtensionPairingApprovedMessageType } from '../../nook-web-shared/src/extension/runtime-messages'
 import { authorizeDeviceProtection } from '../../nook-web-app/e2e/helpers/settings-auth'
@@ -521,6 +522,9 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     await expect(simplePage).toHaveURL((url) => url.pathname.endsWith('/vault'))
     await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
 
+    // Independent local creation requires a locked companion: an unlocked
+    // paired identity automatically reopens its vault after the website locks.
+    await lockExtensionSession(context)
     await simplePage.getByTestId('header-lock-vault-btn').click()
     await expect(
       simplePage.getByTestId('login-local-unlock-step'),
@@ -533,6 +537,10 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     await authorizeDeviceProtection(simplePage)
     await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
 
+    const companionUnlock: Parameters<
+      typeof unlockExtensionThroughCompanion
+    >[0] = { context, extensionId }
+    await unlockExtensionThroughCompanion(companionUnlock)
     const pairingPopupPage = await context.newPage()
     await pairingPopupPage.goto(
       `chrome-extension://${extensionId}/popup/index.html?intent=pair`,
