@@ -14,7 +14,7 @@ pub(super) struct BrowserIdentityVaultAppInventory<'a> {
 }
 
 impl NookIdentitySnapshot {
-    #[must_use]
+    #[must_use = "Use the snapshot containing the locally recorded vault apps"]
     pub(super) async fn with_vault_app_inventory(
         mut self,
         request: BrowserIdentityVaultAppInventory<'_>,

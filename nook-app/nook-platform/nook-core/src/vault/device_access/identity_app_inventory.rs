@@ -46,7 +46,7 @@ impl<'a> IdentityAppInventory<'a> {
     }
 
     /// Include active apps from a linked vault without changing identity grants.
-    #[must_use]
+    #[must_use = "Use the updated app inventory after including this vault"]
     pub fn include_vault(
         mut self,
         request: &IdentityVaultAppInventoryRequest<'_>,
@@ -88,9 +88,13 @@ impl VaultAppRoster {
         request: &IdentityVaultAppInventoryRequest<'_>,
     ) -> Result<Self, IdentityAppInventoryError> {
         let graph = request.graph;
-        match graph.pending_events().is_empty() && graph.quarantined().is_empty() {
-            true => {}
-            false => return Err(IdentityAppInventoryError::IncompleteHistory),
+        match graph.pending_events().as_slice() {
+            [] => {}
+            [_, ..] => return Err(IdentityAppInventoryError::IncompleteHistory),
+        }
+        match graph.quarantined().values().next() {
+            None => {}
+            Some(_) => return Err(IdentityAppInventoryError::IncompleteHistory),
         }
         let mut roster = Self::default();
         for event_id in graph.topological_order()? {
@@ -120,7 +124,7 @@ impl VaultAppRoster {
         VaultIdentityAppLink::Unlinked
     }
 
-    #[must_use]
+    #[must_use = "Use the roster with the applied vault operation"]
     fn apply(mut self, operation: &VaultOperation) -> Result<Self, IdentityAppInventoryError> {
         match operation {
             VaultOperation::JoinApproved {
@@ -136,9 +140,9 @@ impl VaultAppRoster {
                 signing_public_key,
                 label,
             } => {
-                match encryption_public_key.try_app_id()? == *device_id {
-                    true => {}
-                    false => {
+                match encryption_public_key.try_app_id()? {
+                    observed if observed == *device_id => {}
+                    _ => {
                         return Err(MultiDeviceError::InvalidDeviceIdentity(
                             "Vault app id does not match its public key".to_owned(),
                         )
@@ -194,8 +198,9 @@ impl VaultAppRoster {
 pub mod tests {
     use super::*;
     use crate::{
-        AppKey, AuthEnvelopes, EventGraphInsert, EventGraphRejection, EventId, IsoTimestamp,
-        Sha256Hex, SigningIdentity, VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultKeys,
+        AppKey, AuthEnvelopes, EventGraphInsert, EventGraphRejection, EventId,
+        IdentityRecordRejection, IsoTimestamp, Sha256Hex, SigningIdentity, VaultEvent,
+        VaultEventBody, VaultEventSchemaVersion, VaultKeys,
     };
 
     struct InventoryFixture {
@@ -218,7 +223,7 @@ pub mod tests {
                 MemberLabelState::Unnamed,
             )?
             .generate_vault_dek(store_id.clone())
-            .map_err(|rejected| rejected.into_cause())?;
+            .map_err(IdentityRecordRejection::into_cause)?;
             let (signing, signing_seed) = SigningIdentity::generate()?;
             drop(signing_seed);
             let fixture = Self {
@@ -254,7 +259,7 @@ pub mod tests {
             })
         }
 
-        #[must_use]
+        #[must_use = "Use the fixture with the appended signed event"]
         fn append(mut self, operations: Vec<VaultOperation>) -> anyhow::Result<Self> {
             let event = VaultEvent::sign(
                 VaultEventBody {
@@ -376,7 +381,7 @@ pub mod tests {
             MemberLabelState::Unnamed,
         )?
         .generate_vault_dek(fixture.store_id.clone())
-        .map_err(|rejected| rejected.into_cause())?;
+        .map_err(IdentityRecordRejection::into_cause)?;
         let inventory = IdentityAppInventory::new(&unrelated.identity)
             .include_vault(&IdentityVaultAppInventoryRequest {
                 store_id: &fixture.store_id,
@@ -442,7 +447,7 @@ pub mod tests {
             .identity
             .clone()
             .generate_vault_dek(other_store.clone())
-            .map_err(|rejected| rejected.into_cause())?;
+            .map_err(IdentityRecordRejection::into_cause)?;
         assert!(matches!(
             IdentityAppInventory::new(&identity.identity).include_vault(
                 &IdentityVaultAppInventoryRequest {
