@@ -284,15 +284,15 @@ function beginHandoff(
     kind: CompanionDiscoveryEndpointKind.Initial,
     endpoint: initial,
   } as const
-  const request: Parameters<typeof freshCompanionDiscoveryEndpoint>[0] = {
+  const replacement: Parameters<typeof freshCompanionDiscoveryEndpoint>[0] = {
     previous: previous
       ? { kind: CompanionDiscoveryEndpointKind.Discovered, endpoint: previous }
       : candidate,
     candidate,
   }
-  const endpoint = freshCompanionDiscoveryEndpoint(request).endpoint.discover(
-    structuredClone(observation),
-  )
+  const endpoint = freshCompanionDiscoveryEndpoint(
+    replacement,
+  ).endpoint.discover(structuredClone(observation))
   const status = endpoint.status
   const admissionRequest = {
     discovery: structuredClone(observation),
