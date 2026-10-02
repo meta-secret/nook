@@ -2,6 +2,8 @@
 
 use crate::{LocalVaultPresence, VaultApplication, VaultClientPolicy};
 use nook_companion_core::CompanionIdentityStatus;
+use serde::de::Error as _;
+use serde::{Deserialize, Deserializer};
 use thiserror::Error;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -21,8 +23,7 @@ pub struct VaultExistingImportUnlockRequest {
 /// Physical installed-provider capability observed before any discovery request.
 /// Transport, decoding, and admission failures never mean absence.
 #[wasm_bindgen]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
-#[serde(try_from = "u32")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CompanionProviderPresence {
     Absent,
     Present,
@@ -32,14 +33,12 @@ pub enum CompanionProviderPresence {
 #[error("invalid companion provider presence")]
 pub struct InvalidCompanionProviderPresence;
 
-impl TryFrom<u32> for CompanionProviderPresence {
-    type Error = InvalidCompanionProviderPresence;
-
-    fn try_from(value: u32) -> Result<Self, Self::Error> {
-        match value {
+impl<'de> Deserialize<'de> for CompanionProviderPresence {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        match u32::deserialize(deserializer)? {
             value if value == Self::Absent as u32 => Ok(Self::Absent),
             value if value == Self::Present as u32 => Ok(Self::Present),
-            _ => Err(InvalidCompanionProviderPresence),
+            _ => Err(D::Error::custom(InvalidCompanionProviderPresence)),
         }
     }
 }
