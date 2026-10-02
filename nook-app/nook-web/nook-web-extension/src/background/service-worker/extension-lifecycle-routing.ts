@@ -129,6 +129,13 @@ type AuthorizationCleanupStart =
       cleanup: AccountPickers.AccountPickerAuthorizationCleanupStart
     }
 
+enum LocalImportEvidencePhase {
+  Import = 'import',
+  Rebind = 'rebind',
+  CompleteAuthorization = 'complete-authorization',
+  RefreshSurfaces = 'refresh-surfaces',
+}
+
 enum AuthorizationCleanupSessionDisposition {
   Close = 'close-session',
   Preserve = 'preserve-session',
@@ -670,6 +677,7 @@ export function routeExtensionLifecycleMessage({
                 cleanup: cleanupStart,
               },
             }
+            let phase = LocalImportEvidencePhase.Import
             try {
               const response = await importLocalEventLogUpdate(importArgs)
               if (
@@ -694,6 +702,7 @@ export function routeExtensionLifecycleMessage({
                   // Authorization remains invalid while browser cleanup is retried.
                 }
               } else {
+                phase = LocalImportEvidencePhase.Rebind
                 rebindStagedAuthenticatorEnrollmentsAuthorization(
                   cleanupStart.authorizationGeneration,
                 )
@@ -703,19 +712,26 @@ export function routeExtensionLifecycleMessage({
                   authorizationGeneration: cleanupStart.authorizationGeneration,
                   evidence: CleanupEvidence.Partial,
                 }
+                phase = LocalImportEvidencePhase.CompleteAuthorization
                 const outcome =
                   await completeAccountPickerAuthorizationCleanup(
                     completionRequest,
                   )
                 // Preserve the import outcome without refreshing a rejected generation.
                 if ('error' in outcome) return response
-                if (response.ok) await refreshAuthenticationSurfaces()
+                if (response.ok) {
+                  phase = LocalImportEvidencePhase.RefreshSurfaces
+                  await refreshAuthenticationSurfaces()
+                }
               }
               return response
             } catch {
               try {
                 console.info(
                   '[nook-session-evidence] cleanup-origin:local-import-exception',
+                )
+                console.info(
+                  `[nook-session-evidence] local-import-phase:${phase}`,
                 )
                 const cleanup = await Effect.runPromise(
                   Effect.either(
