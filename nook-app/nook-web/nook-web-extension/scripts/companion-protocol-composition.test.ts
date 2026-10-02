@@ -1,3 +1,7 @@
+import {
+  freshCompanionDiscoveryEndpoint,
+  CompanionDiscoveryEndpointKind,
+} from '../src/offscreen/session-vault-operations'
 import 'fake-indexeddb/auto'
 import { rejects, throws } from 'node:assert/strict'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
@@ -270,10 +274,25 @@ function discovery(requestId: string): CompanionIdentityDiscoveryObservation {
   } satisfies CompanionIdentityDiscoveryObservation
 }
 
-function beginHandoff(requestId: string) {
+function beginHandoff(
+  requestId: string,
+  previous?: ReturnType<NookCompanionExtensionEndpoint['discover']>,
+) {
   const initial = new NookCompanionExtensionEndpoint(structuredClone(presence))
   const observation = discovery(requestId)
-  const endpoint = initial.discover(structuredClone(observation))
+  const candidate = {
+    kind: CompanionDiscoveryEndpointKind.Initial,
+    endpoint: initial,
+  } as const
+  const request: Parameters<typeof freshCompanionDiscoveryEndpoint>[0] = {
+    previous: previous
+      ? { kind: CompanionDiscoveryEndpointKind.Discovered, endpoint: previous }
+      : candidate,
+    candidate,
+  }
+  const endpoint = freshCompanionDiscoveryEndpoint(request).endpoint.discover(
+    structuredClone(observation),
+  )
   const status = endpoint.status
   const admissionRequest = {
     discovery: structuredClone(observation),
@@ -364,8 +383,8 @@ describe('generated companion protocol composition', () => {
   test('issues fresh discovery after an unlocked endpoint and authorizes the latest request', async () => {
     const previous = beginHandoff('fresh-discovery-prior')
     expect(previous.endpoint.status.status).toBe('unlocked')
-    previous.endpoint.free()
-    const latest = beginHandoff('fresh-discovery-latest')
+    const latest = beginHandoff('fresh-discovery-latest', previous.endpoint)
+    throws(() => previous.endpoint.status)
     const response = await latest.endpoint.authorize_and_seal(
       extension,
       structuredClone(latest.authorization),
@@ -378,8 +397,8 @@ describe('generated companion protocol composition', () => {
 
   test('rejects the prior transaction at a freshly issued endpoint', async () => {
     const previous = beginHandoff('fresh-reject-prior')
-    previous.endpoint.free()
-    const latest = beginHandoff('fresh-reject-latest')
+    const latest = beginHandoff('fresh-reject-latest', previous.endpoint)
+    throws(() => previous.endpoint.status)
     await rejects(
       latest.endpoint.authorize_and_seal(
         extension,

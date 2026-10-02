@@ -344,6 +344,23 @@ export async function openPasskeyVault({
   }
 }
 
+export type FreshCompanionDiscoveryRequest = {
+  readonly previous: CompanionDiscoveryEndpoint
+  readonly candidate: Extract<
+    CompanionDiscoveryEndpoint,
+    { kind: CompanionDiscoveryEndpointKind.Initial }
+  >
+}
+
+export function freshCompanionDiscoveryEndpoint({
+  previous,
+  candidate,
+}: FreshCompanionDiscoveryRequest) {
+  if (previous.kind === CompanionDiscoveryEndpointKind.Discovered)
+    previous.endpoint.free()
+  return candidate
+}
+
 enum CompanionDiscoveryUse {
   Pending = 'pending',
   Consumed = 'consumed',
