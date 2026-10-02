@@ -11,6 +11,10 @@ The toolbar and locked Pilot action use the same extension authentication
 component in the initiating normal window. A launcher reuses only a tab whose
 intent matches the requested action; it leaves an open tab with another intent
 untouched and opens the requested intent in a separate tab in that window.
+When a user explicitly chooses **Unlock** on a paired Simple Vault website and
+the extension is locked, the website request opens that extension-owned
+authentication UI in the browser side panel in the same normal window.
+This site-launched panel is distinct from toolbar and Pilot tab launches.
 After the extension device exists, the tab sends its public keys directly to the
 configured Simple Vault deployment, which remains the only surface for creating,
 importing, unlocking, browsing, editing, recovering, and administering vaults.
@@ -52,6 +56,11 @@ application capability checks enforce the vault-type boundary.
   - **Responsibility:** Open or focus the shared extension-owned authentication
     tab; create or unlock the extension device there and show localized return
     guidance for Pilot
+- **Paired website Unlock action**
+  - **Responsibility:** Open the extension-owned authentication UI in the
+    browser side panel in the initiating normal window when the paired
+    extension is locked; passkey or PIN success continues the website unlock
+    and dismisses the panel without a second action
 - **Extension background/WASM runtime**
   - **Responsibility:** Local device key, selected identity, encrypted state, sync, domain matching, and fill authorization
 - **In-page auth gate**
@@ -81,8 +90,9 @@ Square media or QR labels alone do not enable the action.
 QR decoding begins only after the trusted action click.
 
 "No vault UI in the extension" means no second vault-management UI. The shared
-authentication tab contains the standard one-time device-protection widget
-because WebAuthn needs an extension-owned document and a user gesture. A bounded
+extension-owned authentication UI, in its toolbar tab or paired website side
+panel, contains the standard one-time device-protection widget because WebAuthn
+needs an extension-owned document and a user gesture. A bounded
 extension-owned authenticator picker may show searchable non-secret 2FA
 metadata for one explicit fill choice; it cannot create, reveal, edit, delete,
 recover, or administer vault items.
@@ -478,9 +488,11 @@ When both devices exist, unlock selection is deterministic:
      Unlocked or Locked for that vault.
    - A locked website app key must not block re-adopting that unlocked
      companion identity.
-2. if the extension is locked, the user may unlock it from the shared extension
-   authentication tab and retry; the website must not attempt an extension-origin
-   WebAuthn ceremony;
+2. if the extension is locked, an explicit website **Unlock** opens the shared
+   extension authentication UI in the browser side panel; successful
+   passkey or PIN authorization automatically continues the website unlock and
+   dismisses the panel. The website must not attempt an extension-origin
+   WebAuthn ceremony or require a second Unlock action;
 3. if the extension is locked, unavailable, revoked, or cannot unlock, offer
    the website's protected device as the fallback when one exists;
 4. if no independent website device or recovery method exists, explain that the
@@ -520,7 +532,7 @@ re-sealed for the extension device before leaving the approving vault session.
 
 ## Revocation And Failure
 
-- Closing the authentication tab does not lock or unpair the extension. The
+- Closing the authentication tab or side panel does not lock or unpair the extension. The
   decrypted offscreen identity uses a 15-minute renewable lease: successful
   identity handoffs renew it, while status/read/retry operations and tab
   close/reopen do not. Reopening during a live lease remains unlocked. Lease

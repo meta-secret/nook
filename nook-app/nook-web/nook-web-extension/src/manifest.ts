@@ -31,11 +31,13 @@ enum ContentScriptWorld {
 export enum ExtensionPermission {
   ActiveTab = 'activeTab',
   Offscreen = 'offscreen',
+  SidePanel = 'sidePanel',
   Storage = 'storage',
 }
 
 export type ExtensionManifest = {
   manifest_version: 3
+  min_chrome_version: '141'
   default_locale: 'en'
   name: string
   short_name: string
@@ -53,6 +55,9 @@ export type ExtensionManifest = {
   }
   content_security_policy: {
     extension_pages: string
+  }
+  side_panel: {
+    default_path: string
   }
   content_scripts: Array<{
     matches: string[]
@@ -120,6 +125,7 @@ export function createManifest(
     nook_vault_app_exclude_match_patterns(simpleVaultBaseUrl)
   const manifest: ExtensionManifest = {
     manifest_version: 3,
+    min_chrome_version: '141',
     default_locale: 'en',
     name:
       args.kind === ExtensionManifestBuildKind.StoreRelease
@@ -143,6 +149,9 @@ export function createManifest(
     content_security_policy: {
       extension_pages:
         "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'",
+    },
+    side_panel: {
+      default_path: 'popup/index.html?surface=side-panel',
     },
     content_scripts: [
       {
@@ -191,6 +200,7 @@ export function createManifest(
     permissions: [
       ExtensionPermission.ActiveTab,
       ExtensionPermission.Offscreen,
+      ExtensionPermission.SidePanel,
       ExtensionPermission.Storage,
     ],
     host_permissions: ['<all_urls>'],

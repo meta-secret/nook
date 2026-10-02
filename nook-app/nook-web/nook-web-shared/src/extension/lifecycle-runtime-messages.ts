@@ -27,6 +27,44 @@ function decodeRuntimeMessage<DecodedMessage, WireMessage>(
   );
 }
 
+export enum DismissAuthSidePanelMessageType {
+  NookDismissAuthSidePanel = "nook:dismiss-auth-side-panel",
+}
+
+export type DismissAuthSidePanelMessageWire = {
+  readonly type: DismissAuthSidePanelMessageType.NookDismissAuthSidePanel;
+};
+
+const dismissAuthSidePanelTypeSchema = Schema.Literal(
+  DismissAuthSidePanelMessageType.NookDismissAuthSidePanel,
+);
+type DismissAuthSidePanelMessageFields = {
+  readonly type: typeof dismissAuthSidePanelTypeSchema;
+};
+
+/** Requests dismissal from the extension document that completed vault unlock. */
+export class DismissAuthSidePanelMessage {
+  private constructor() {}
+  declare readonly type: DismissAuthSidePanelMessageType.NookDismissAuthSidePanel;
+
+  static decode<WireMessage>(
+    message: WireMessage,
+  ): Effect.Effect<DismissAuthSidePanelMessage, RuntimeMessageDecodeFailure> {
+    const schemaFields: DismissAuthSidePanelMessageFields = {
+      type: dismissAuthSidePanelTypeSchema,
+    };
+    const request: RuntimeMessageDecodeRequest<
+      DismissAuthSidePanelMessage,
+      WireMessage
+    > = {
+      schema: Schema.Struct(schemaFields),
+      value: message,
+      kind: RuntimeMessageDecodeFailureKind.DismissAuthSidePanel,
+    };
+    return decodeRuntimeMessage(request);
+  }
+}
+
 export enum OpenSimpleVaultMessageType {
   NookOpenSimpleVault = "nook:open-simple-vault",
 }

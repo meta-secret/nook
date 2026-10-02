@@ -60,6 +60,7 @@ import type {
 import { extensionPairingGrantPolicyReady } from '../pairing-grants'
 import {
   SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS,
+  CompanionLauncherSourceKind,
   extensionSessionLifecycle,
   ExtensionSessionLifecycle,
 } from './session-lifecycle'
@@ -752,14 +753,14 @@ class ExtensionPairingIdentity {
       if (statusDelivery.isErr())
         return { ...statusDelivery.error.response, requestId, vaultStoreId }
       const statusResponse = statusDelivery.value
-      if (!extensionSessionLifecycle.isUnlockedSessionStatus(statusResponse)) {
-        const launcherRequest: Parameters<
-          typeof extensionSessionLifecycle.openCompanionLauncher
-        >[0] = {
-          intent: OpenCompanionLauncherIntent.Default,
-          source,
+      if (
+        extensionSessionLifecycle.isUnlockedSessionStatus(statusResponse) &&
+        source.kind === CompanionLauncherSourceKind.SourceWindow
+      ) {
+        const sidePanelCloseOptions: chrome.sidePanel.CloseOptions = {
+          windowId: source.windowId,
         }
-        await extensionSessionLifecycle.openCompanionLauncher(launcherRequest)
+        await chrome.sidePanel.close(sidePanelCloseOptions)
       }
       return { ok: true, requestId, vaultStoreId }
     } catch {
