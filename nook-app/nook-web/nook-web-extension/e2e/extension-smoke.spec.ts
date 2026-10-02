@@ -37,6 +37,7 @@ import { lockExtensionSession } from './helpers/paired-pin-extension'
 import { unlockExtensionThroughCompanion } from './helpers/paired-vault-companion-unlock'
 import { ExtensionSessionMessageType } from '../src/offscreen/session-message-dispatch'
 import { ExtensionPairingApprovedMessageType } from '../../nook-web-shared/src/extension/runtime-messages'
+import { authorizeDeviceProtection } from '../../nook-web-app/e2e/helpers/settings-auth'
 
 const chromiumExecutablePath = ((v) => (v ? v : ''))(
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim(),
@@ -525,8 +526,8 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     // paired identity automatically reopens its vault after the website locks.
     await lockExtensionSession(context)
     await simplePage.getByTestId('header-lock-vault-btn').click()
-    // Extension-first creation has no website-protected key. Reload releases
-    // the transient extension handoff before explicitly enrolling a website key.
+    // Reload releases the transient extension handoff before authorizing
+    // the website device for independent local creation.
     await simplePage.reload()
     await expect(
       simplePage.getByTestId('login-local-unlock-step'),
@@ -537,8 +538,7 @@ test('keeps the extension vault independent and switches after valid re-pairing'
       .fill('Second local vault')
     await simplePage.getByTestId('login-create-additional-vault-btn').click()
     await expect(simplePage.getByTestId('passkey-auth-overlay')).toBeVisible()
-    await simplePage.getByTestId('device-protection-create-new-choice').click()
-    await simplePage.getByTestId('device-protection-setup-btn').click()
+    await authorizeDeviceProtection(simplePage)
     await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
 
     const companionUnlock: Parameters<
