@@ -1,3 +1,4 @@
+import { ExtensionPairingRejectionReason } from '../../../../nook-web-shared/src/vault-app/lib/extension/extension-pairing-delivery'
 import { Effect, Either } from 'effect'
 import type { ExtensionSessionTransportFailure } from './session-document'
 import * as RuntimeMessages from '../../../../nook-web-shared/src/extension/runtime-messages'
@@ -129,13 +130,6 @@ type AuthorizationCleanupStart =
       cleanup: AccountPickers.AccountPickerAuthorizationCleanupStart
     }
 
-enum LocalImportEvidencePhase {
-  Import = 'import',
-  Rebind = 'rebind',
-  CompleteAuthorization = 'complete-authorization',
-  RefreshSurfaces = 'refresh-surfaces',
-}
-
 enum AuthorizationCleanupSessionDisposition {
   Close = 'close-session',
   Preserve = 'preserve-session',
@@ -225,7 +219,6 @@ class AuthorizationCleanupLifecycle {
       const moduleSucceedRequest: ModuleSucceedRequest = {
         kind: AuthorizationCleanupCloseKind.Skipped,
       }
-      console.info(`[nook-session-evidence] cleanup:${sessionDisposition}`)
       const closeOperation: Effect.Effect<
         AuthorizationCleanupClose,
         AuthorizationCleanupFailure
@@ -438,7 +431,6 @@ export function recoverInterruptedAuthorizationCleanup(
         cleanup,
       },
     }
-    console.info('[nook-session-evidence] cleanup-origin:interrupted-cleanup')
     return yield* new AuthorizationCleanupLifecycle(cleanupArgs).clear()
   })
 }
@@ -556,7 +548,6 @@ export function routeExtensionLifecycleMessage({
       sessionDisposition: AuthorizationCleanupSessionDisposition.Close,
       cleanupStart: { kind: AuthorizationCleanupStartKind.Begin },
     }
-    console.info('[nook-session-evidence] cleanup-origin:explicit-lock')
     void Effect.runPromise(
       Effect.either(new AuthorizationCleanupLifecycle(cleanupArgs).clear()),
     )
@@ -593,7 +584,6 @@ export function routeExtensionLifecycleMessage({
       sessionDisposition: AuthorizationCleanupSessionDisposition.Close,
       cleanupStart: { kind: AuthorizationCleanupStartKind.Begin },
     }
-    console.info('[nook-session-evidence] cleanup-origin:session-expiry')
     void Effect.runPromise(
       Effect.either(new AuthorizationCleanupLifecycle(cleanupArgs).clear()),
     )
@@ -677,17 +667,14 @@ export function routeExtensionLifecycleMessage({
                 cleanup: cleanupStart,
               },
             }
-            let phase = LocalImportEvidencePhase.Import
+            let response: Awaited<ReturnType<typeof importLocalEventLogUpdate>>
             try {
-              const response = await importLocalEventLogUpdate(importArgs)
+              response = await importLocalEventLogUpdate(importArgs)
               if (
                 !response.ok &&
                 response.reason !== LocalEventLogUpdateFailure.VaultNotPaired
               ) {
                 try {
-                  console.info(
-                    '[nook-session-evidence] cleanup-origin:local-import-rejected',
-                  )
                   const cleanup = await Effect.runPromise(
                     Effect.either(
                       new AuthorizationCleanupLifecycle(cleanupArgs).clear(),
@@ -702,7 +689,6 @@ export function routeExtensionLifecycleMessage({
                   // Authorization remains invalid while browser cleanup is retried.
                 }
               } else {
-                phase = LocalImportEvidencePhase.Rebind
                 rebindStagedAuthenticatorEnrollmentsAuthorization(
                   cleanupStart.authorizationGeneration,
                 )
@@ -712,27 +698,15 @@ export function routeExtensionLifecycleMessage({
                   authorizationGeneration: cleanupStart.authorizationGeneration,
                   evidence: CleanupEvidence.Partial,
                 }
-                phase = LocalImportEvidencePhase.CompleteAuthorization
                 const outcome =
                   await completeAccountPickerAuthorizationCleanup(
                     completionRequest,
                   )
                 // Preserve the import outcome without refreshing a rejected generation.
                 if ('error' in outcome) return response
-                if (response.ok) {
-                  phase = LocalImportEvidencePhase.RefreshSurfaces
-                  await refreshAuthenticationSurfaces()
-                }
               }
-              return response
             } catch {
               try {
-                console.info(
-                  '[nook-session-evidence] cleanup-origin:local-import-exception',
-                )
-                console.info(
-                  `[nook-session-evidence] local-import-phase:${phase}`,
-                )
                 const cleanup = await Effect.runPromise(
                   Effect.either(
                     new AuthorizationCleanupLifecycle(cleanupArgs).clear(),
@@ -751,6 +725,18 @@ export function routeExtensionLifecycleMessage({
                 reason: LocalEventLogUpdateFailure.EventLogImportFailed,
               }
             }
+            if (response.ok) {
+              try {
+                await refreshAuthenticationSurfaces()
+              } catch {
+                return {
+                  ok: false,
+                  reason:
+                    ExtensionPairingRejectionReason.AuthenticationSurfaceRefreshFailed,
+                }
+              }
+            }
+            return response
           })
           .then(sendResponse)
       })

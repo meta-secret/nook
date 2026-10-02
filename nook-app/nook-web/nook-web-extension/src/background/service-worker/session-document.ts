@@ -459,10 +459,8 @@ export class ExtensionSessionDocumentOwner {
           context.documentUrl === documentUrl,
       )
     ) {
-      console.info('[nook-session-evidence] context:present')
       return ok(document)
     }
-    console.info('[nook-session-evidence] context:missing')
     document.revoke()
     this.readiness = { kind: SessionReadinessKind.Idle }
     return this.create()
@@ -472,7 +470,6 @@ export class ExtensionSessionDocumentOwner {
     ExtensionSessionTransportResult<ExtensionSessionTransport>
   > {
     const state = this.state
-    console.info(`[nook-session-evidence] owner-open:${state.kind}`)
     switch (state.kind) {
       case ExtensionSessionDocumentStateKind.Closing: {
         const closed = await state.operation
@@ -602,7 +599,6 @@ export class ExtensionSessionDocumentOwner {
     ExtensionSessionTransportResult<ExtensionSessionDocumentStateKind.Closed>
   > {
     const state = this.state
-    console.info(`[nook-session-evidence] owner-close:${state.kind}`)
     if (state.kind === ExtensionSessionDocumentStateKind.Closed)
       return Promise.resolve(ok(ExtensionSessionDocumentStateKind.Closed))
     if (state.kind === ExtensionSessionDocumentStateKind.Closing)

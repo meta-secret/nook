@@ -165,16 +165,6 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     testInfo.outputPath('chromium-profile')
   const context = await test.step('launch extension session', () =>
     launchExtensionContext(userDataDir))
-  context.on('console', (message) => {
-    const record = message.text()
-    if (
-      /^\[nook-session-evidence\] (?:popup-status:[0-9]|website-status:[0-9]|cleanup:(?:close-session|preserve-session)|cleanup-origin:(?:explicit-lock|session-expiry|interrupted-cleanup|local-import-rejected|local-import-exception)|local-import-phase:(?:import|rebind|complete-authorization|refresh-surfaces)|owner-(?:open|close):(?:unobserved|observation-failed|closed|creating|open|closing|closure-failed)|context:(?:present|missing))$/.test(
-        record,
-      )
-    ) {
-      console.log(record)
-    }
-  })
   const loginServer = await test.step('start credential fixture', () =>
     startLoginServer())
   const website: WebsitePageState = isHostedSmoke

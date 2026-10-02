@@ -445,7 +445,6 @@ class ExtensionWasmRuntime {
       deviceStatus === ExtensionSessionDeviceProtectionStatusWire.Pin ||
       deviceStatus === ExtensionSessionDeviceProtectionStatusWire.Unlocked
     ) {
-      console.info(`[nook-session-evidence] popup-status:${deviceStatus}`)
       return deviceStatus
     }
     if (
