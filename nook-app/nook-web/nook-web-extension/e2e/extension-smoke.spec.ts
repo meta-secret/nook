@@ -550,10 +550,15 @@ test('keeps the extension vault independent and switches after valid re-pairing'
       `chrome-extension://${extensionId}/popup/index.html?intent=pair`,
     )
     await expect(
-      pairingPopupPage.getByTestId('pair-another-vault-btn'),
+      pairingPopupPage.getByRole('button', {
+        name: 'Pair another vault',
+        exact: true,
+      }),
     ).toBeVisible()
     const pairingPagePromise = context.waitForEvent('page', { timeout: 30_000 })
-    await pairingPopupPage.getByTestId('pair-another-vault-btn').click()
+    await pairingPopupPage
+      .getByRole('button', { name: 'Pair another vault', exact: true })
+      .click()
     const pairingPage = await pairingPagePromise
     await expect(pairingPage).toHaveURL(
       (url) =>
