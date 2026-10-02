@@ -341,15 +341,16 @@ pub use vault_architecture::{
     VaultType,
 };
 pub use vault_client_policy::{
-    ActiveVaultStore, DeviceIdentityInitializationMode, DeviceProtectionStatus,
-    ExternalDeviceIdentityAuthorizationMode, InvalidDeviceProtectionStatus, JoinEnrollmentState,
-    ProviderSyncFailureHandling, ProviderSyncFreshness, ProviderSyncVisibility,
-    RemoteVaultAssessDecision, RemoteVaultRecoveryState, SentinelVaultUnlockState,
-    UnauthenticatedSyncDecision, VaultAccessObservation, VaultClientPolicy,
-    VaultCompanionUnlockDecision, VaultConnectGateDecision, VaultConnectProbeDecision,
-    VaultEditDecision, VaultEditMessage, VaultEditTranslation, VaultStartupUnlockDecision,
-    VaultStartupUnlockRequest, VaultStorageSyncDecision, VaultSwitchDecision,
-    VaultSyncTimerStartDecision, VaultSyncTimerTickDecision,
+    ActiveVaultStore, CompanionProviderPresence, DeviceIdentityInitializationMode,
+    DeviceProtectionStatus, ExternalDeviceIdentityAuthorizationMode, InvalidDeviceProtectionStatus,
+    JoinEnrollmentState, ProviderSyncFailureHandling, ProviderSyncFreshness,
+    ProviderSyncVisibility, RemoteVaultAssessDecision, RemoteVaultRecoveryState,
+    SentinelVaultUnlockState, UnauthenticatedSyncDecision, VaultAccessObservation,
+    VaultClientPolicy, VaultCompanionUnlockDecision, VaultConnectGateDecision,
+    VaultConnectProbeDecision, VaultEditDecision, VaultEditMessage, VaultEditTranslation,
+    VaultExistingImportUnlockRequest, VaultStartupUnlockDecision, VaultStartupUnlockRequest,
+    VaultStorageSyncDecision, VaultSwitchDecision, VaultSyncTimerStartDecision,
+    VaultSyncTimerTickDecision,
 };
 pub use vault_connect::{
     LoadedVault, UnlockedVault, UnlockedVaultMaterial, VaultAccessStatus, VaultContent,

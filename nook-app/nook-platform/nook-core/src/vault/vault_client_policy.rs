@@ -13,7 +13,8 @@ mod startup_unlock;
 mod sync_policy;
 
 pub use startup_unlock::{
-    VaultCompanionUnlockDecision, VaultStartupUnlockDecision, VaultStartupUnlockRequest,
+    CompanionProviderPresence, VaultCompanionUnlockDecision, VaultExistingImportUnlockRequest,
+    VaultStartupUnlockDecision, VaultStartupUnlockRequest,
 };
 
 pub use connection::{

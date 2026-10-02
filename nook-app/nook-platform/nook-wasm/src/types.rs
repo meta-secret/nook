@@ -28,6 +28,7 @@ pub use runtime::*;
 pub use runtime_policy::*;
 pub use secret_data::*;
 pub use sentinel::*;
+pub use startup_unlock_policy::NookVaultStartupUnlockRequest;
 pub use store_id::*;
 pub use sync::*;
 pub use sync_state::*;
