@@ -42,6 +42,26 @@ test('open an empty local vault without a browser-data reload alert', async ({
   await expect(page.getByTestId('vault-error')).toHaveCount(0)
   await page.waitForTimeout(DEMO_BEAT_MS)
 
+  // A new manager must finish startup before automatically reopening this vault.
+  await page.reload()
+  await expect(page.getByTestId('vault-panel')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const vault = window.__nookVault
+          return Boolean(
+            vault && !vault.isInitializing && vault.isAuthenticated,
+          )
+        }),
+      { timeout: UI_TIMEOUT_MS },
+    )
+    .toBe(true)
+  await expect(page.getByTestId('vault-error')).toHaveCount(0)
+  await page.waitForTimeout(DEMO_BEAT_MS)
+
   const languageSelect = page.getByTestId('header-language-select')
   await languageSelect.click()
   await page.getByTestId('header-language-option-ru').click()
