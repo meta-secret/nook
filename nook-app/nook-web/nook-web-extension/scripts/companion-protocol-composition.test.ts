@@ -392,7 +392,9 @@ describe('generated companion protocol composition', () => {
     expect(response.request.transaction.discovery.request.requestId).toBe(
       'fresh-discovery-latest',
     )
-    expect(extension.vaultStoreId).toBe(presence.vault_store_id)
+    expect(extension.vaultStoreId).toBe(
+      latest.request.transaction.discovery.request.vaultStoreId,
+    )
   })
 
   test('rejects the prior transaction at a freshly issued endpoint', async () => {
@@ -407,7 +409,9 @@ describe('generated companion protocol composition', () => {
       Error,
     )
     throws(() => latest.endpoint.status)
-    expect(extension.vaultStoreId).toBe(presence.vault_store_id)
+    expect(extension.vaultStoreId).toBe(
+      latest.request.transaction.discovery.request.vaultStoreId,
+    )
   })
 
   test('validates fresh presence without consuming a discovered endpoint', () => {

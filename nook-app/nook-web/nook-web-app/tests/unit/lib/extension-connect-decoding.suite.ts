@@ -1,8 +1,8 @@
+import { decode_companion_identity_discovery_observation } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { ExtensionPairedVaultIdentityDiscoveryMessage } from '../../../../nook-web-shared/src/extension/runtime-messages'
 import { describe, expect, test, vi } from 'vitest'
 import { Effect } from 'effect'
 import {
-  decode_companion_identity_discovery_observation,
   NookExtensionIdentityHandoffProviderOutcomeState,
   NookVaultClientPolicy,
   VaultCompanionUnlockDecision,
