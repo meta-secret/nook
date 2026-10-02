@@ -452,7 +452,7 @@ class ExtensionConnectionBrowser {
         status.status ===
         ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault
       ) {
-        return ok({
+        const admitted: AdmittedPairedExtensionIdentityDiscovery = {
           canonicalStatus: status,
           discovery: {
             status:
@@ -460,15 +460,17 @@ class ExtensionConnectionBrowser {
             connectedVaultStoreId: status.connected_vault_store_id,
             connectedVaultName: status.connected_vault_name,
           },
-        });
+        };
+        return ok(admitted);
       }
-      return ok({
+      const admitted: AdmittedPairedExtensionIdentityDiscovery = {
         canonicalStatus: status,
         discovery: { status: status.status },
-      });
+      };
+      return ok(admitted);
     }
     const unlockedAppKey = status.app_key;
-    return ok({
+    const admitted: AdmittedPairedExtensionIdentityDiscovery = {
       canonicalStatus: status,
       discovery: {
         status: ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked,
@@ -485,7 +487,8 @@ class ExtensionConnectionBrowser {
           protocolTransaction: transaction,
         },
       },
-    });
+    };
+    return ok(admitted);
   }
 
   async discoverAdmittedPairedExtensionIdentity(

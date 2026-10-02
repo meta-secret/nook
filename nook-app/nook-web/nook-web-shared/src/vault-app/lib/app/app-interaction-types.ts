@@ -18,3 +18,8 @@ export type PairedExtensionDiscoveryRetry = {
 export type PairedExtensionUnlockPoll = {
   readonly storeId: string;
 };
+
+export type ExistingVaultPasswordUnlock = {
+  readonly entryId: string;
+  readonly password: string;
+};

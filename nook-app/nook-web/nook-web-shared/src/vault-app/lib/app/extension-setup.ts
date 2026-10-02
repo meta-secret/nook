@@ -24,14 +24,19 @@ export type ExtensionSetupOffer =
   | { kind: ExtensionSetupOfferKind.Hidden }
   | { kind: ExtensionSetupOfferKind.Visible; setup: ExtensionSetupState };
 
+export type ExtensionPairingStatusRequest = {
+  readonly storeId: string;
+  readonly vault: VaultState;
+};
+
 /** Owns this browser host’s resources and interaction lifecycle. */
 class ExtensionSetupBrowser {
   constructor(private readonly browser: typeof globalThis) {}
 
-  async discoverPairingStatus(
-    storeId: string,
-    vault: VaultState,
-  ): Promise<LoginVaultExtensionPairingStatusEntry> {
+  async discoverPairingStatus({
+    storeId,
+    vault,
+  }: ExtensionPairingStatusRequest): Promise<LoginVaultExtensionPairingStatusEntry> {
     const admission =
       await extensionConnectionBrowser.discoverAdmittedPairedExtensionIdentity(
         storeId,
@@ -62,11 +67,11 @@ class ExtensionSetupBrowser {
         status: setup.status,
         environment: this.browser.navigator,
       };
-      return ok(
+      const offer: ExtensionSetupOffer =
         extensionInstallationBrowser.shouldOfferExtensionSetup(offerRequest)
           ? { kind: ExtensionSetupOfferKind.Visible, setup }
-          : { kind: ExtensionSetupOfferKind.Hidden },
-      );
+          : { kind: ExtensionSetupOfferKind.Hidden };
+      return ok(offer);
     } catch (failure) {
       if (!(failure instanceof PairedExtensionDiscoveryFailure)) throw failure;
       vault.errorMsg = vault.t(failure.translationKey);

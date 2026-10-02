@@ -29,6 +29,7 @@
   import AppSurface from '$lib/components/app/AppSurface.svelte'
   import type {
     EnrollmentCodeUseRequest,
+    ExistingVaultPasswordUnlock,
     PairedExtensionDiscoveryRetry,
     PairedExtensionUnlockPoll,
     PairedExtensionResumeStatus,
@@ -87,11 +88,6 @@
   const SUPPORTS_EXTENSION = configured_vault_application_supports_extension()
   const vault = new VaultState()
   const existingVaultImportLifecycle = new ExistingVaultImportLifecycle(vault)
-
-  type ExistingVaultPasswordUnlock = {
-    readonly entryId: string
-    readonly password: string
-  }
 
   function unlockExistingVaultWithPassword(
     request: ExistingVaultPasswordUnlock,
@@ -159,11 +155,14 @@
             const discoveryOptions: { concurrency: 'unbounded' } = {
               concurrency: 'unbounded',
             }
-            const discoveryEffects = localVaults.map((entry) =>
-              Effect.promise(() =>
-                extensionSetupBrowser.discoverPairingStatus(entry.storeId, vault),
-              ),
-            )
+            const discoveryEffects = localVaults.map((entry) => {
+              const request: Parameters<
+                typeof extensionSetupBrowser.discoverPairingStatus
+              >[0] = { storeId: entry.storeId, vault }
+              return Effect.promise(() =>
+                extensionSetupBrowser.discoverPairingStatus(request),
+              )
+            })
             const discoveryFiber = Effect.runFork(
               Effect.gen(function* () {
                 const discoveries = yield* Effect.all(
@@ -504,7 +503,9 @@
 
   async function resumePairedExtensionVault(
     storeId: string,
-  ): Promise<Result<PairedExtensionResumeStatus, PairedExtensionDiscoveryFailure>> {
+  ): Promise<
+    Result<PairedExtensionResumeStatus, PairedExtensionDiscoveryFailure>
+  > {
     const discoveringStagedImport =
       vault.loginRequiresExistingVault &&
       vault.loginSetup.kind === LoginSetupKind.Active
