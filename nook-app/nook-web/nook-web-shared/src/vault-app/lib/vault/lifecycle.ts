@@ -65,6 +65,10 @@ type DeviceIdentityInitialization = {
   readonly mode: DeviceIdentityInitializationMode;
 };
 
+enum DeviceInitializationCompletionOutcome {
+  Completed,
+}
+
 enum DeviceIdentityAuthorizationState {
   NotStarted,
   PasskeyUnlocked,
@@ -341,9 +345,29 @@ export class VaultInitializationActions {
         error instanceof Error
           ? error.message
           : "Failed to initialize Nook Session Manager.";
+      return;
     } finally {
       state.deviceAuthorizationInProgress = false;
       state.isInitializing = false;
+    }
+    const continuation = DeviceInitializationContinuation.admit(state);
+    if (continuation.isErr()) {
+      state.errorMsg = state.t(continuation.error.translationKey);
+      return;
+    }
+    const completed = await continuation.value.complete();
+    if (completed.isErr()) {
+      if (
+        deviceIdentityAuthorization !==
+        DeviceIdentityAuthorizationState.NotStarted
+      ) {
+        const locked = await state.lockDeviceProtection();
+        if (locked.isErr()) {
+          state.errorMsg = state.t(locked.error.translationKey);
+          return;
+        }
+      }
+      state.errorMsg = state.t(completed.error.translationKey);
     }
   }
 
@@ -355,7 +379,13 @@ export class VaultInitializationActions {
   > {
     const continuation = DeviceInitializationContinuation.admit(this.state);
     if (continuation.isErr()) return storageErr(continuation.error);
-    return continuation.value.continue();
+    const initialized = await continuation.value.continue();
+    if (initialized.isErr()) return storageErr(initialized.error);
+    if (!this.state.isInitializing) {
+      const completed = await continuation.value.complete();
+      if (completed.isErr()) return storageErr(completed.error);
+    }
+    return initialized;
   }
 
   async initDeviceIdentity({
@@ -762,8 +792,6 @@ class DeviceInitializationContinuation {
     } else {
       state.applyActiveProviderCredentials();
     }
-    const hasPendingEnrollment =
-      state.enrollmentLinkState.kind === EnrollmentLinkKind.Pending;
     if (state.localVaultPresent) {
       state.storageMode = LOCAL_PROVIDER_TYPE;
       const passwordRefresh1 = await state.refreshPasswordEntriesList();
@@ -773,6 +801,18 @@ class DeviceInitializationContinuation {
       const presentation = await new LoginUnlockPresentation(state).refresh();
       if (presentation.isErr()) return storageErr(presentation.error);
     }
+    return storageOk(initialized.value);
+  }
+
+  async complete(): Promise<
+    Result<
+      DeviceInitializationCompletionOutcome,
+      StorageOperationFailure | OAuthFailure
+    >
+  > {
+    const state = this.state;
+    const hasPendingEnrollment =
+      state.enrollmentLinkState.kind === EnrollmentLinkKind.Pending;
     const autoUnlock = !hasPendingEnrollment && state.shouldAutoUnlock();
     if (autoUnlock) {
       await state.loadDb();
@@ -807,6 +847,6 @@ class DeviceInitializationContinuation {
       state.startVaultSync();
     }
     log.info("app init finished");
-    return storageOk(initialized.value);
+    return storageOk(DeviceInitializationCompletionOutcome.Completed);
   }
 }
