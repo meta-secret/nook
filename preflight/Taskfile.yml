@@ -90,13 +90,15 @@ tasks:
         trap 'rm -rf "$metadata"' EXIT
         # Reconstruct portable Git metadata without checkout credentials, hooks,
         # alternates, or absolute worktree pointers from the runner.
-        git clone --quiet --no-local --no-checkout --depth 1 '{{.REPO_ROOT}}' "$metadata/repository"
-        test "$(git -C "$metadata/repository" rev-parse HEAD)" = "$(git -C '{{.REPO_ROOT}}' rev-parse HEAD)"
-        git -C "$metadata/repository" remote remove origin
-        git -C "$metadata/repository" read-tree HEAD
+        git clone --quiet --no-local --bare --depth 1 '{{.REPO_ROOT}}' "$metadata/git"
+        test "$(git --git-dir="$metadata/git" rev-parse HEAD)" = "$(git -C '{{.REPO_ROOT}}' rev-parse HEAD)"
+        git --git-dir="$metadata/git" remote remove origin
+        # Docker installs this directory as the consuming checkout's .git.
+        git --git-dir="$metadata/git" config core.bare false
+        git --git-dir="$metadata/git" read-tree HEAD
         printf '{}' > "$metadata/event.json"
         baseline="$(git -C '{{.REPO_ROOT}}' rev-parse refs/remotes/origin/main)"
-        git -C "$metadata/repository" fetch --quiet --no-tags --depth 1 '{{.REPO_ROOT}}' "$baseline:refs/remotes/origin/main"
+        git --git-dir="$metadata/git" fetch --quiet --no-tags --depth 1 '{{.REPO_ROOT}}' "$baseline:refs/remotes/origin/main"
         case '{{.POLICY_STAGE}}' in
           repository-policy|repository-policy-untrusted|pr-verification)
             event_path="${NOOK_GITHUB_EVENT_PATH:-${GITHUB_EVENT_PATH:-}}"
@@ -104,13 +106,11 @@ tasks:
               jq '{pull_request: {base: {sha: .pull_request.base.sha}}, before: .before}' "$event_path" > "$metadata/event.json"
               event_base="$(jq -r '.pull_request.base.sha // .before // empty' "$metadata/event.json")"
               if [ -n "$event_base" ] && [ "$event_base" != 0000000000000000000000000000000000000000 ]; then
-                git -C "$metadata/repository" fetch --quiet --no-tags --depth 1 '{{.REPO_ROOT}}' "$event_base"
+                git --git-dir="$metadata/git" fetch --quiet --no-tags --depth 1 '{{.REPO_ROOT}}' "$event_base"
               fi
             fi
             ;;
         esac
-        mv "$metadata/repository/.git" "$metadata/git"
-        rmdir "$metadata/repository"
         status=0
         PREFLIGHT_SOURCE_CONTEXT="{{.PREFLIGHT_SOURCE_ROOT}}" \
           {{.DOCKER}} buildx bake \
