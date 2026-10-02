@@ -5,7 +5,13 @@
   } from '../../../nook-web-shared/src/generated/i18n-keys'
   import { type ExtensionI18n, extensionLocaleCatalog } from '../lib/i18n'
 
-  let { i18n }: { i18n: ExtensionI18n } = $props()
+  import {
+    PopupInitializationPhase,
+    popupInitializationFailureKey,
+  } from './popup-app-state'
+
+  let { i18n, phase }: { i18n: ExtensionI18n; phase: PopupInitializationPhase } =
+    $props()
 
   function translatePlain(key: I18nKey): string {
     return i18n.t(extensionLocaleCatalog.plainExtensionTranslation(key))
@@ -15,6 +21,6 @@
 <main class="device-setup" data-testid="extension-device-setup">
   <h1>{translatePlain(I18N_KEYS.DeviceProtectionTitle)}</h1>
   <p class="error-message" role="alert" data-testid="extension-runtime-error">
-    {translatePlain(I18N_KEYS.ErrorsEngineUnavailable)}
+    {translatePlain(popupInitializationFailureKey(phase))}
   </p>
 </main>

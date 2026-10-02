@@ -2072,6 +2072,12 @@
       "found_password_fields": "Nook found password fields on this page.",
       "no_password_fields": "No password fields detected on this page.",
       "suggested_password": "Suggested password"
+    },
+    "popup_initialization": {
+      "pairing_state_failed": "The browser connection state could not be loaded.",
+      "device_status_failed": "The extension device protection status could not be loaded.",
+      "session_device_failed": "The active extension device could not be loaded.",
+      "app_mount_failed": "The extension interface could not be started."
     }
   },
   "app": {

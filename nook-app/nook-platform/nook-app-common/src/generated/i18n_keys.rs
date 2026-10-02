@@ -1006,6 +1006,14 @@ pub const EXTENSION_POPUP_SCAN: &str = "extension.popup.scan";
 pub const EXTENSION_POPUP_SCAN_ACTIVE_TAB: &str = "extension.popup.scan_active_tab";
 pub const EXTENSION_POPUP_SCANNING_ACTIVE_TAB: &str = "extension.popup.scanning_active_tab";
 pub const EXTENSION_POPUP_SUGGESTED_PASSWORD: &str = "extension.popup.suggested_password";
+pub const EXTENSION_POPUP_INITIALIZATION_APP_MOUNT_FAILED: &str =
+    "extension.popup_initialization.app_mount_failed";
+pub const EXTENSION_POPUP_INITIALIZATION_DEVICE_STATUS_FAILED: &str =
+    "extension.popup_initialization.device_status_failed";
+pub const EXTENSION_POPUP_INITIALIZATION_PAIRING_STATE_FAILED: &str =
+    "extension.popup_initialization.pairing_state_failed";
+pub const EXTENSION_POPUP_INITIALIZATION_SESSION_DEVICE_FAILED: &str =
+    "extension.popup_initialization.session_device_failed";
 pub const EXTENSION_SETUP_BROWSER_ACCESS_DESCRIPTION: &str =
     "extension.setup.browser_access_description";
 pub const EXTENSION_SETUP_BROWSER_ACCESS_TITLE: &str = "extension.setup.browser_access_title";
