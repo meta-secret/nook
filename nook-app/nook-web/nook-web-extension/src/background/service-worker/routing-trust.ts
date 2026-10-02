@@ -1,4 +1,13 @@
-import { simpleVaultRuntime } from '../../lib/simple-vault-runtime'
+import {
+  SimpleVaultUrlAdmissionKind,
+  simpleVaultRuntime,
+} from '../../lib/simple-vault-runtime'
+
+export enum ExternalSenderTrustDecision {
+  NotReady = 'not-ready',
+  Admitted = 'admitted',
+  Rejected = 'rejected',
+}
 
 /** Trust only messages issued by this installed extension runtime. */
 export function isExtensionRuntimeSender(
@@ -16,9 +25,19 @@ export class ExternalSenderTrustPolicy {
    */
   static admitsSynchronouslyIfReady(
     sender: chrome.runtime.MessageSender,
-  ): boolean | undefined {
-    if (!sender.url) return false
-    return simpleVaultRuntime.isRuntimeSimpleVaultUrlIfReady(sender.url)
+  ): ExternalSenderTrustDecision {
+    if (!sender.url) return ExternalSenderTrustDecision.Rejected
+    const admission = simpleVaultRuntime.isRuntimeSimpleVaultUrlIfReady(
+      sender.url,
+    )
+    switch (admission) {
+      case SimpleVaultUrlAdmissionKind.NotReady:
+        return ExternalSenderTrustDecision.NotReady
+      case SimpleVaultUrlAdmissionKind.Admitted:
+        return ExternalSenderTrustDecision.Admitted
+      case SimpleVaultUrlAdmissionKind.Rejected:
+        return ExternalSenderTrustDecision.Rejected
+    }
   }
 
   static async admits(sender: chrome.runtime.MessageSender): Promise<boolean> {

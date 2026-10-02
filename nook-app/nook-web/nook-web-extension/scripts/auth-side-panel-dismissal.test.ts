@@ -1,5 +1,6 @@
 import { describe, expect, mock, test } from 'bun:test'
 import {
+  AuthSidePanelDismissalFailureReason,
   dismissAuthSidePanelFromSender,
   type AuthSidePanelDismissalRuntime,
 } from '../src/background/service-worker/auth-side-panel-dismissal'
@@ -84,7 +85,10 @@ describe('auth side panel dismissal', () => {
     const request = { sender: { documentId: 'popup-document' }, runtime }
     const response = await dismissAuthSidePanelFromSender(request)
 
-    expect(response).toEqual({ ok: false, reason: 'not-side-panel-document' })
+    expect(response).toEqual({
+      ok: false,
+      reason: AuthSidePanelDismissalFailureReason.NotSidePanelDocument,
+    })
     expect(close).not.toHaveBeenCalled()
   })
 
@@ -95,7 +99,10 @@ describe('auth side panel dismissal', () => {
     const request = { sender: {}, runtime }
     const response = await dismissAuthSidePanelFromSender(request)
 
-    expect(response).toEqual({ ok: false, reason: 'not-side-panel-document' })
+    expect(response).toEqual({
+      ok: false,
+      reason: AuthSidePanelDismissalFailureReason.NotSidePanelDocument,
+    })
     expect(runtime.getContexts).not.toHaveBeenCalled()
     expect(close).not.toHaveBeenCalled()
   })

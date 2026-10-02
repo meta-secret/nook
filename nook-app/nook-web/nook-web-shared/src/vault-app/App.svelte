@@ -1,4 +1,16 @@
 <script lang="ts">
+  enum PairedExtensionUnlockDeliveryKind {
+    NotRequested = 'not-requested',
+    Requested = 'requested',
+  }
+
+  type PairedExtensionUnlockDeliveryState =
+    | { readonly kind: PairedExtensionUnlockDeliveryKind.NotRequested }
+    | {
+        readonly kind: PairedExtensionUnlockDeliveryKind.Requested
+        readonly delivery: Promise<boolean>
+      }
+
   import { Effect, Fiber } from 'effect'
   import { err } from 'neverthrow'
   import {
@@ -268,15 +280,20 @@
       return
     }
     let activeStoreId = existingVaultImportLifecycle.unlockStoreId
-    let pairedExtensionUnlockDelivery: Promise<boolean> | undefined
+    let pairedExtensionUnlockDelivery: PairedExtensionUnlockDeliveryState = {
+      kind: PairedExtensionUnlockDeliveryKind.NotRequested,
+    }
     if (
       !skipExtensionDiscovery &&
       SUPPORTS_EXTENSION &&
       (vault.localVaultPresent || existingVaultImport) &&
       activeStoreId
     ) {
-      pairedExtensionUnlockDelivery =
-        connectionBrowser.requestPairedExtensionUnlock(activeStoreId)
+      pairedExtensionUnlockDelivery = {
+        kind: PairedExtensionUnlockDeliveryKind.Requested,
+        delivery:
+          connectionBrowser.requestPairedExtensionUnlock(activeStoreId),
+      }
     }
     if (existingVaultImport) {
       const discovered = await vault.discoverStagedVaultStoreId()
@@ -353,13 +370,17 @@
           discoveryStatus ===
           ExtensionPairedVaultIdentityStatusMessageStatus.Locked
         ) {
-          if (!pairedExtensionUnlockDelivery) {
+          if (
+            pairedExtensionUnlockDelivery.kind ===
+            PairedExtensionUnlockDeliveryKind.NotRequested
+          ) {
             vault.errorMsg = vault.t(
               I18N_KEYS.ExtensionConnectMessagingUnavailable,
             )
             return
           }
-          const pairedUnlockRequested = await pairedExtensionUnlockDelivery
+          const pairedUnlockRequested =
+            await pairedExtensionUnlockDelivery.delivery
           if (!pairedUnlockRequested) {
             vault.errorMsg = vault.t(
               I18N_KEYS.ExtensionConnectMessagingUnavailable,

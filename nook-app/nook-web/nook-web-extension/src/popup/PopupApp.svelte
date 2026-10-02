@@ -129,19 +129,8 @@
   }
 
   function connectedDescription(): string {
-    switch (typeof vaultName) {
-      case 'string':
-        return readyDescription(vaultName)
-      case 'undefined':
-        return connectDescription()
-      case 'number':
-      case 'bigint':
-      case 'boolean':
-      case 'symbol':
-      case 'object':
-      case 'function':
-        throw new Error('vault name has an invalid runtime type')
-    }
+    if (typeof vaultName === 'string') return readyDescription(vaultName)
+    return connectDescription()
   }
 
   function companionDescription(): string {
@@ -270,7 +259,11 @@
     const dismissalMessage: DismissAuthSidePanelMessageWire = {
       type: DismissAuthSidePanelMessageType.NookDismissAuthSidePanel,
     }
-    await chrome.runtime.sendMessage(dismissalMessage).catch(() => undefined)
+    try {
+      await chrome.runtime.sendMessage(dismissalMessage)
+    } catch {
+      return
+    }
   }
 
   $effect(() => {

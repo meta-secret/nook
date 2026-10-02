@@ -5,6 +5,16 @@ export type AuthSidePanelContext = Pick<
 
 const sidePanelContextType = 'SIDE_PANEL' as const
 
+export enum AuthSidePanelWindowLookupKind {
+  Found = 'found',
+  NotFound = 'not-found',
+}
+
+export enum AuthSidePanelDismissalFailureReason {
+  NotSidePanelDocument = 'not-side-panel-document',
+  SidePanelCloseFailed = 'side-panel-close-failed',
+}
+
 export type AuthSidePanelDismissalRuntime = {
   readonly extensionUrl: (path: string) => string
   readonly getContexts: (
@@ -17,9 +27,16 @@ export type AuthSidePanelDismissalRuntime = {
 
 export type AuthSidePanelWindowIdLookup = {
   readonly contexts: readonly AuthSidePanelContext[]
-  readonly documentId: string | undefined
+  readonly documentId: string
   readonly documentUrl: string
 }
+
+export type AuthSidePanelWindowLookupResult =
+  | {
+      readonly kind: AuthSidePanelWindowLookupKind.Found
+      readonly windowId: number
+    }
+  | { readonly kind: AuthSidePanelWindowLookupKind.NotFound }
 
 export type AuthSidePanelDismissalRequest = {
   readonly sender: Pick<chrome.runtime.MessageSender, 'documentId'>
@@ -30,14 +47,13 @@ export type AuthSidePanelDismissalResponse =
   | { readonly ok: true }
   | {
       readonly ok: false
-      readonly reason: 'not-side-panel-document' | 'side-panel-close-failed'
+      readonly reason: AuthSidePanelDismissalFailureReason
     }
 
 export function authSidePanelWindowIdForDocument(
   request: AuthSidePanelWindowIdLookup,
-): number | undefined {
+): AuthSidePanelWindowLookupResult {
   const { contexts, documentId, documentUrl } = request
-  if (documentId === undefined) return undefined
   const context = contexts.find(
     (candidate) =>
       candidate.contextType === sidePanelContextType &&
@@ -45,21 +61,29 @@ export function authSidePanelWindowIdForDocument(
       candidate.documentUrl === documentUrl &&
       candidate.windowId >= 0,
   )
-  return context?.windowId
+  return context
+    ? { kind: AuthSidePanelWindowLookupKind.Found, windowId: context.windowId }
+    : { kind: AuthSidePanelWindowLookupKind.NotFound }
 }
 
 export async function dismissAuthSidePanelFromSender(
   request: AuthSidePanelDismissalRequest,
 ): Promise<AuthSidePanelDismissalResponse> {
-  const runtime: AuthSidePanelDismissalRuntime = request.runtime ?? {
-    extensionUrl: chrome.runtime.getURL,
-    getContexts: (filter) => chrome.runtime.getContexts(filter),
-    close: (options) => chrome.sidePanel.close(options),
-  }
+  const runtime: AuthSidePanelDismissalRuntime =
+    'runtime' in request
+      ? request.runtime
+      : {
+          extensionUrl: chrome.runtime.getURL,
+          getContexts: (filter) => chrome.runtime.getContexts(filter),
+          close: (options) => chrome.sidePanel.close(options),
+        }
   const sender = request.sender
   const { documentId } = sender
-  if (documentId === undefined) {
-    return { ok: false, reason: 'not-side-panel-document' }
+  if (!documentId) {
+    return {
+      ok: false,
+      reason: AuthSidePanelDismissalFailureReason.NotSidePanelDocument,
+    }
   }
   const documentUrl = runtime.extensionUrl(
     'popup/index.html?surface=side-panel',
@@ -74,17 +98,23 @@ export async function dismissAuthSidePanelFromSender(
     documentId,
     documentUrl,
   }
-  const windowId = authSidePanelWindowIdForDocument(windowLookup)
-  if (windowId === undefined) {
-    return { ok: false, reason: 'not-side-panel-document' }
+  const windowLookupResult = authSidePanelWindowIdForDocument(windowLookup)
+  if (windowLookupResult.kind === AuthSidePanelWindowLookupKind.NotFound) {
+    return {
+      ok: false,
+      reason: AuthSidePanelDismissalFailureReason.NotSidePanelDocument,
+    }
   }
   try {
     const closeRequest: Parameters<typeof chrome.sidePanel.close>[0] = {
-      windowId,
+      windowId: windowLookupResult.windowId,
     }
     await runtime.close(closeRequest)
     return { ok: true }
   } catch {
-    return { ok: false, reason: 'side-panel-close-failed' }
+    return {
+      ok: false,
+      reason: AuthSidePanelDismissalFailureReason.SidePanelCloseFailed,
+    }
   }
 }

@@ -4,7 +4,10 @@ import {
   OpenCompanionLauncherMessageType,
 } from '../../nook-web-shared/src/extension/companion-launcher-message'
 import { ExtensionPairedVaultUnlockRequestMessageType } from '../../nook-web-shared/src/extension/runtime-messages'
-import { ExternalSenderTrustPolicy } from '../src/background/service-worker/routing-trust'
+import {
+  ExternalSenderTrustDecision,
+  ExternalSenderTrustPolicy,
+} from '../src/background/service-worker/routing-trust'
 import type { ExternalCompanionRoutingDependencies } from '../src/background/service-worker/external-companion-routing'
 import {
   externalDependencies,
@@ -46,7 +49,7 @@ describe('external companion routing', () => {
     Object.assign(chrome, { sidePanel: { open, close } })
     const admitSynchronously = mock(() => {
       operations.push('admit-sender')
-      return true
+      return ExternalSenderTrustDecision.Admitted
     })
     const requestPairedVaultUnlock = mock(
       async ({
@@ -112,7 +115,7 @@ describe('external companion routing', () => {
     const open = mock(() => Promise.resolve())
     const close = mock(() => Promise.resolve())
     Object.assign(chrome, { sidePanel: { open, close } })
-    const admitSynchronously = mock(() => undefined)
+    const admitSynchronously = mock(() => ExternalSenderTrustDecision.NotReady)
     const decodeUnlock = mock(
       externalDependencies.decodeExtensionPairedVaultUnlockRequestMessage,
     )

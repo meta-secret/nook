@@ -10,6 +10,12 @@ import {
 } from '../../../nook-web-shared/src/extension/companion-wasm-runtime-transport'
 import { companionWasmReadiness } from '../content/autofill/companion-wasm-readiness'
 
+export enum SimpleVaultUrlAdmissionKind {
+  NotReady = 'not-ready',
+  Admitted = 'admitted',
+  Rejected = 'rejected',
+}
+
 /** Browser requests await canonical policy without delaying listener registration. */
 class SimpleVaultRuntime {
   private baseUrl(): string {
@@ -28,12 +34,18 @@ class SimpleVaultRuntime {
       return false
     }
   }
-  isRuntimeSimpleVaultUrlIfReady(candidateUrl: string): boolean | undefined {
-    if (!companionWasmReadiness.isReadySynchronously()) return undefined
+  isRuntimeSimpleVaultUrlIfReady(
+    candidateUrl: string,
+  ): SimpleVaultUrlAdmissionKind {
+    if (!companionWasmReadiness.isReadySynchronously()) {
+      return SimpleVaultUrlAdmissionKind.NotReady
+    }
     try {
       return belongs_to_simple_vault(this.baseUrl(), candidateUrl)
+        ? SimpleVaultUrlAdmissionKind.Admitted
+        : SimpleVaultUrlAdmissionKind.Rejected
     } catch {
-      return false
+      return SimpleVaultUrlAdmissionKind.Rejected
     }
   }
   async isRuntimeNookVaultAppUrl(candidateUrl: string): Promise<boolean> {
