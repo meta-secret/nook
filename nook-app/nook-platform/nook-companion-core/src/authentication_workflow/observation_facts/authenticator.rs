@@ -168,7 +168,6 @@ mod tests {
 mod setup_context;
 pub use setup_context::{
     AuthenticationAuthenticatorSetupBatch, AuthenticationAuthenticatorSetupBatchError,
-    AuthenticationAuthenticatorSetupBatchMedia, AuthenticationAuthenticatorSetupCopy,
-    AuthenticationAuthenticatorSetupCopyError, AuthenticationAuthenticatorSetupEvidence,
-    AuthenticationQrMediaObservation,
+    AuthenticationAuthenticatorSetupCopy, AuthenticationAuthenticatorSetupCopyError,
+    AuthenticationAuthenticatorSetupEvidence, AuthenticationQrMediaObservation,
 };

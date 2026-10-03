@@ -294,5 +294,4 @@ pub mod tests {
 mod batch;
 pub use batch::{
     AuthenticationAuthenticatorSetupBatch, AuthenticationAuthenticatorSetupBatchError,
-    AuthenticationAuthenticatorSetupBatchMedia,
 };

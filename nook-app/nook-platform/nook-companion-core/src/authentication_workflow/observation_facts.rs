@@ -17,11 +17,10 @@ mod revalidation;
 mod submission;
 pub use authenticator::{
     AuthenticationAuthenticatorObservationFacts, AuthenticationAuthenticatorSetupBatch,
-    AuthenticationAuthenticatorSetupBatchError, AuthenticationAuthenticatorSetupBatchMedia,
-    AuthenticationAuthenticatorSetupCopy, AuthenticationAuthenticatorSetupCopyError,
-    AuthenticationAuthenticatorSetupEvidence, AuthenticationAuthenticatorSetupObservation,
-    AuthenticationBackupCodesObservation, AuthenticationPasskeyAccountAvailability,
-    AuthenticationQrMediaObservation,
+    AuthenticationAuthenticatorSetupBatchError, AuthenticationAuthenticatorSetupCopy,
+    AuthenticationAuthenticatorSetupCopyError, AuthenticationAuthenticatorSetupEvidence,
+    AuthenticationAuthenticatorSetupObservation, AuthenticationBackupCodesObservation,
+    AuthenticationPasskeyAccountAvailability, AuthenticationQrMediaObservation,
 };
 pub use batch::AuthenticationPageObservationFactsBatch;
 pub use ceremony::{
