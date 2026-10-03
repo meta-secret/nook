@@ -28,6 +28,30 @@ explicit handoff.
 - Verify GitHub's actual merged state and the squash result on `origin/main`.
 - Delete the remote feature branch after merge.
 
+## Optional manual Windows Edge evidence
+
+The separate `e2e-windows.yml` workflow supports an authorized manual Windows
+Edge run for a same-repository PR or source ref. CI/CD owns dispatch and
+observation under the existing delivery handshake.
+Its Linux producer and native Windows consumer use the same resolved source SHA.
+See [CI operations](../../teams/sre/workflows/ci-operations.md#manual-windows-edge-lane)
+for inputs, production artifacts, and failure diagnostics.
+
+### Required actions
+
+- Supply exactly one of `pr_number` or `source_ref` for the manual lane.
+- Select `all`, `stable`, or `unstable`; narrow with optional `spec` when useful.
+- Report the tested source SHA and terminal Windows result.
+- Keep every existing required PR check for the current feature head.
+- Preserve Linux, nightly, extension, and credentialed live-suite policy.
+
+**Prohibited:** use a successful manual Edge run to bypass a failed required
+PR check or report an unexecuted Windows run as passing.
+
+**Required:** report “Windows Edge stable passed for the recorded PR head” only
+after the native job succeeds. Continue observing all required PR checks before
+readiness.
+
 ## Prohibited actions
 
 - Do not use an integration `dev` branch.

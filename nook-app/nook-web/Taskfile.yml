@@ -643,3 +643,25 @@ tasks:
       VITE_BASE: "{{.VITE_BASE}}"
     cmds:
       - cd "{{.WEB_ROOT}}" && bun run dev -- --host 0.0.0.0
+
+  web:e2e:windows:artifact:
+    desc: Export production E2E preview and WASM for the native Windows job.
+    dir: '{{.REPO_ROOT}}'
+    deps:
+      - sccache:ensure
+      - registry-cache:ensure
+    env:
+      WASM_BUILD_MODE: '{{.WASM_BUILD_MODE}}'
+    cmds:
+      - |
+        set -eu
+        output="${WINDOWS_E2E_ARTIFACT_DIR:?WINDOWS_E2E_ARTIFACT_DIR is required}"
+        wasm_artifacts="$(mktemp -d)"
+        trap 'rm -rf "$wasm_artifacts"' EXIT
+        {{.DOCKER}} buildx bake --allow="fs.write=$wasm_artifacts" {{.NOOK_BAKE_FILES}} \
+          --set "focused-web-artifacts.output=type=local,dest=$wasm_artifacts" \
+          --set "focused-web-artifacts.args.WASM_BUILD_MODE=$WASM_BUILD_MODE" \
+          --set "web-deps.output=type=cacheonly" focused-web-artifacts web-deps
+        WEB_ARTIFACTS_CONTEXT="$wasm_artifacts" {{.DOCKER}} buildx bake \
+          --allow="fs.read=$wasm_artifacts" --allow="fs.write=$output" {{.NOOK_BAKE_FILES}} \
+          --set "windows-edge-web-artifacts.output=type=local,dest=$output" windows-edge-web-artifacts
