@@ -8,7 +8,7 @@
 
 use super::AuthenticationUsernameEvidence;
 use super::control_identity::AuthenticationControlIdentity;
-use super::destination_identity::CanonicalControlDestination;
+use super::destination_identity::{CanonicalControlDestination, MicrosoftConsumerLoginDestination};
 use super::form_identity::AuthenticationRouteIdentity;
 use crate::AuthenticationControlText;
 use crate::ControlDestinationEvidence;
@@ -136,7 +136,12 @@ impl AuthenticationAdvanceControlObservation {
                     destination_identity: &self.destination_identity,
                 },
             )
-            .is_ok_and(|destination| destination.is_microsoft_consumer_login_root)
+            .is_ok_and(|destination| {
+                matches!(
+                    destination.microsoft_consumer_login_destination(),
+                    MicrosoftConsumerLoginDestination::IdentifierEntry
+                )
+            })
     }
 
     pub(crate) fn is_microsoft_consumer_root_identifier_advance(&self) -> bool {
@@ -148,10 +153,10 @@ impl AuthenticationAdvanceControlObservation {
         ) else {
             return false;
         };
-        destination.is_microsoft_consumer_login_root
-            && destination.path_identity == "/"
-            && destination.route_identity == "/"
-            && self.form_identity.is_empty()
+        matches!(
+            destination.microsoft_consumer_login_destination(),
+            MicrosoftConsumerLoginDestination::IdentifierEntry
+        ) && self.form_identity.is_empty()
             && matches!(self.actionability, PageControlActionability::Actionable)
             && matches!(
                 self.ownership,
@@ -329,7 +334,7 @@ impl CheckedAuthenticationControl<'_> {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
     use crate::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES;
 
@@ -452,7 +457,7 @@ mod tests {
             observation.password_field_count = 0.into();
             observation.source_origin = "https://login.live.com".to_owned();
             observation.form_identity.clear();
-            observation.destination_identity = "https://login.live.com/".to_owned();
+            observation.destination_identity = "https://login.live.com/oauth20_authorize.srf?client_id=mock-client&scope=openid+profile+offline_access&response_type=code&redirect_uri=https%3A%2F%2Fexample.test%2Fcallback".to_owned();
             observation.label = "Next".to_owned();
             observation.submission_method = PageControlSubmissionMethod::Post;
             observation
@@ -742,12 +747,17 @@ mod tests {
     }
 
     #[test]
-    fn exact_microsoft_consumer_root_identifier_advance_is_safe() {
-        let observation =
+    fn exact_microsoft_consumer_authorization_identifier_advance_is_safe() {
+        let mut observation =
             AuthenticationAdvanceControlObservation::microsoft_consumer_identifier_advance();
+        observation.destination_identity = "https://login.live.com/".to_owned();
         assert!(observation.authentication_advance_control_is_safe());
 
         let mut locally_scoped = observation;
+        locally_scoped.destination_identity = "https://login.live.com/oauth20_authorize.srf?client_id=mock-client&scope=openid+profile+offline_access&response_type=code&redirect_uri=https%3A%2F%2Fexample.test%2Fcallback".to_owned();
+        locally_scoped.submission_destination_source =
+            PageControlSubmissionDestinationSource::Omitted;
+        assert!(locally_scoped.authentication_advance_control_is_safe());
         locally_scoped.ownership = PageControlOwnership::LocallyScoped;
         assert!(locally_scoped.authentication_advance_control_is_safe());
 

@@ -116,7 +116,7 @@ impl AuthenticationPageObservationFacts {
 
 #[cfg(test)]
 #[allow(clippy::items_after_test_module)]
-mod tests {
+pub mod tests {
     use super::*;
     use crate::{
         AuthenticationAdvanceControlObservation, AuthenticationUsernameEvidence,
@@ -225,7 +225,7 @@ mod tests {
     }
 
     #[test]
-    fn microsoft_consumer_root_requires_exactly_one_bound_username_field() {
+    fn microsoft_consumer_authorization_requires_exactly_one_bound_username_field() {
         let mut facts = password_login();
         facts.fields.current_password_field_count = 0.into();
         facts.fields.actionable_password_field_count = 0.into();
@@ -241,7 +241,7 @@ mod tests {
         control.password_field_count = 0.into();
         control.source_origin = "https://login.live.com".to_owned();
         control.form_identity.clear();
-        control.destination_identity = "https://login.live.com/".to_owned();
+        control.destination_identity = "https://login.live.com/oauth20_authorize.srf?client_id=mock-client&scope=openid+profile+offline_access&response_type=code&redirect_uri=https%3A%2F%2Fexample.test%2Fcallback".to_owned();
         control.label = "Next".to_owned();
         control.submission_method = PageControlSubmissionMethod::Post;
         assert!(matches!(
