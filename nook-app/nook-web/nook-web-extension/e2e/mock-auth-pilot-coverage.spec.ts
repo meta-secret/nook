@@ -53,19 +53,36 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       // session immediately before the website asks the extension to open its
       // picker so this test covers picker routing rather than lock recovery.
       await unlockExtensionPopupPin(paired.context, paired.extensionId)
-      const loginPickerPromise = paired.context.waitForEvent('page')
+      const pageCount = paired.context.pages().length
+      const worker = paired.context.serviceWorkers()[0]
+      await worker.evaluate(() => {
+        chrome.windows.create = () => {
+          throw new Error('Login selection must stay in the inline panel')
+        }
+      })
       await widget.getByRole('button', { name: 'Continue with Nook' }).click()
-      await expect(widget).toContainText(
-        'Choose a saved username in the Nook window. Matching logins for this site are listed there.',
-      )
       await expect(widget.getByText('alice@nook.test')).toHaveCount(0)
       await expect(widget.getByText('bob@nook.test')).toHaveCount(0)
-      const loginPicker = await loginPickerPromise
-      await loginPicker.waitForURL(/intent=login-picker/)
+      const iframe = widget.getByTestId('nook-inline-login-picker')
+      await expect(iframe).toBeVisible()
+      await expect(iframe).toHaveAttribute('src', `chrome-extension://${paired.extensionId}/login-picker/index.html`)
+      const loginPicker = iframe.contentFrame()
       await expect(loginPicker.getByText('alice@nook.test')).toBeVisible({
         timeout: 20_000,
       })
       await expect(loginPicker.getByText('bob@nook.test')).toBeVisible()
+      await expect(loginPicker.getByTestId('login-search')).toBeFocused()
+      expect(paired.context.pages()).toHaveLength(pageCount)
+      expect(await loginPage.evaluate(() => {
+        const host = document.getElementById('nook-auth-widget')
+        const frame = host?.shadowRoot?.querySelector('iframe')
+        return frame instanceof HTMLIFrameElement && !(frame.contentDocument instanceof Document)
+      })).toBe(true)
+      await loginPicker.getByTestId('login-search').fill('bob')
+      await expect(loginPicker.getByText('alice@nook.test')).toHaveCount(0)
+      await expect(loginPicker.getByText('bob@nook.test')).toBeVisible()
+      await loginPicker.getByTestId('login-search').fill('')
+      await expect(loginPicker.getByText('alice@nook.test')).toBeVisible()
       await loginPicker
         .getByRole('button', { name: /alice@nook\.test/ })
         .click()
@@ -73,7 +90,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
         'Authentication complete',
         { timeout: 20_000 },
       )
-      await expect.poll(() => loginPicker.isClosed()).toBe(true)
+      await expect(iframe).toHaveCount(0)
     } finally {
       await paired.context.close()
       await mockAuth.close()

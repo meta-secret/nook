@@ -116,6 +116,14 @@ const WIDGET_PANEL_STYLES = `
       display: grid;
       gap: 12px;
     }
+    .inline-login-picker {
+      width: 100%;
+      height: min(420px, calc(100vh - 260px));
+      min-height: 180px;
+      border: 0;
+      border-radius: 6px;
+      color-scheme: dark;
+    }
     .site-context {
       width: fit-content;
       max-width: 100%;
@@ -636,6 +644,7 @@ class AuthenticationWidgetShell {
     }
 
     collapseButton.addEventListener('click', () => {
+      loginPasskeyInteraction.cancelPendingLoginPickerRequest()
       this.ui.widgetState.collapsed = true
       applyCollapsedState()
     })
