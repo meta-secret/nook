@@ -47,6 +47,17 @@ pub struct ControlDestinationEvidence<'a> {
 pub struct InvalidControlDestination;
 
 impl CanonicalControlDestination {
+    fn microsoft_authorization_query_evidence(destination: &Url) -> String {
+        destination
+            .query_pairs()
+            .map(|(key, value)| match key.as_ref() {
+                "scope" => format!("{key}={}", Self::microsoft_scope_policy_value(&value)),
+                _ => format!("{key}={value}"),
+            })
+            .collect::<Vec<_>>()
+            .join("&")
+    }
+
     fn microsoft_scope_policy_value(scope: &str) -> String {
         scope
             .split_whitespace()
@@ -362,14 +373,7 @@ impl CanonicalControlDestination {
             ("https", Some("login.live.com"), Some(443), "/oauth20_authorize.srf", None) => {
                 // OAuth's profile scope is metadata, not an account-management action.
                 // Every other scope token and query field remains policy evidence.
-                let query_evidence = destination
-                    .query_pairs()
-                    .map(|(key, value)| match key.as_ref() {
-                        "scope" => format!("{key}={}", Self::microsoft_scope_policy_value(&value)),
-                        _ => format!("{key}={value}"),
-                    })
-                    .collect::<Vec<_>>()
-                    .join("&");
+                let query_evidence = Self::microsoft_authorization_query_evidence(&destination);
                 authentication_policy_route_identity = match destination.query() {
                     Some(_) => format!("/?{query_evidence}"),
                     None => "/".to_owned(),
