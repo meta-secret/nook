@@ -407,4 +407,5 @@ mod tests {
 mod setup_context;
 pub use setup_context::{
     AuthenticationAuthenticatorSetupRequest, AuthenticationQrMediaObservation,
+    classify_authentication_authenticator_setup_batch,
 };

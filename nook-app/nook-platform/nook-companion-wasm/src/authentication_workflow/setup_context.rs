@@ -1,6 +1,7 @@
 //! Thin generated class boundary for pre-consent, non-secret setup observations.
 use nook_companion_core::{
-    AuthenticationAuthenticatorSetupEvidence, AuthenticationAuthenticatorSetupObservation,
+    AuthenticationAuthenticatorSetupBatch, AuthenticationAuthenticatorSetupEvidence,
+    AuthenticationAuthenticatorSetupObservation,
 };
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -45,6 +46,36 @@ impl AuthenticationAuthenticatorSetupRequest {
 #[cfg(test)]
 pub mod tests {
     use super::*;
+
+    #[test]
+    fn setup_batch_bridge_preserves_typed_instruction_metadata() -> serde_json::Result<()> {
+        for (copies, media, expected) in [
+            (
+                vec!["Sign in", "Scan this QR code with your authenticator app"],
+                "present",
+                AuthenticationAuthenticatorSetupObservation::Present,
+            ),
+            (
+                vec!["Scan this QR code with your authenticator app"],
+                "absent",
+                AuthenticationAuthenticatorSetupObservation::Absent,
+            ),
+            (
+                vec![],
+                "absent",
+                AuthenticationAuthenticatorSetupObservation::Absent,
+            ),
+        ] {
+            let input = serde_json::from_value::<AuthenticationAuthenticatorSetupBatch>(
+                serde_json::json!({"visibleInstructionCopies":copies,"qrMedia":media}),
+            )?;
+            assert_eq!(
+                classify_authentication_authenticator_setup_batch(input),
+                expected
+            );
+        }
+        Ok(())
+    }
 
     #[test]
     fn setup_bridge_preserves_portable_context_decision() -> Result<(), JsError> {
@@ -96,4 +127,14 @@ pub mod wasm_tests {
             .is_err()
         );
     }
+}
+
+/// Typed remote classification for a browser scan's bounded, non-secret metadata.
+#[wasm_bindgen]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn classify_authentication_authenticator_setup_batch(
+    input: AuthenticationAuthenticatorSetupBatch,
+) -> AuthenticationAuthenticatorSetupObservation {
+    input.classify()
 }

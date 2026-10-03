@@ -290,3 +290,9 @@ pub mod tests {
         Ok(())
     }
 }
+
+mod batch;
+pub use batch::{
+    AuthenticationAuthenticatorSetupBatch, AuthenticationAuthenticatorSetupBatchError,
+    AuthenticationAuthenticatorSetupBatchMedia,
+};

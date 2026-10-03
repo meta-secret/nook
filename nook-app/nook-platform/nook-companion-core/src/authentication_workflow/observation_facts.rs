@@ -16,10 +16,12 @@ mod passkey;
 mod revalidation;
 mod submission;
 pub use authenticator::{
-    AuthenticationAuthenticatorObservationFacts, AuthenticationAuthenticatorSetupCopy,
-    AuthenticationAuthenticatorSetupCopyError, AuthenticationAuthenticatorSetupEvidence,
-    AuthenticationAuthenticatorSetupObservation, AuthenticationBackupCodesObservation,
-    AuthenticationPasskeyAccountAvailability, AuthenticationQrMediaObservation,
+    AuthenticationAuthenticatorObservationFacts, AuthenticationAuthenticatorSetupBatch,
+    AuthenticationAuthenticatorSetupBatchError, AuthenticationAuthenticatorSetupBatchMedia,
+    AuthenticationAuthenticatorSetupCopy, AuthenticationAuthenticatorSetupCopyError,
+    AuthenticationAuthenticatorSetupEvidence, AuthenticationAuthenticatorSetupObservation,
+    AuthenticationBackupCodesObservation, AuthenticationPasskeyAccountAvailability,
+    AuthenticationQrMediaObservation,
 };
 pub use batch::AuthenticationPageObservationFactsBatch;
 pub use ceremony::{
