@@ -158,3 +158,11 @@ target "nook-web-focused" {
   cache-from = web_cache_from
   cache-to   = web_cache_to
 }
+
+// Same source/WASM preparation as Linux; portable outputs for native Edge.
+target "windows-edge-web-artifacts" {
+  inherits = ["_nook-web-base"]
+  target = "windows-edge-web-artifacts"
+  output = ["type=cacheonly"]
+  cache-from = web_cache_from
+}
