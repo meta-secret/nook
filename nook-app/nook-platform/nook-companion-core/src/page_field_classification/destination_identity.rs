@@ -26,6 +26,13 @@ pub struct CanonicalControlDestination {
 enum AuthenticationPolicyDestination {
     Default,
     TeslaAccountAuthorization,
+    MicrosoftConsumerAuthorization,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum MicrosoftConsumerLoginDestination {
+    IdentifierEntry,
+    Unrelated,
 }
 
 /// Named values required by `CanonicalControlDestination::canonicalize_control_destination`.
@@ -40,6 +47,52 @@ pub struct ControlDestinationEvidence<'a> {
 pub struct InvalidControlDestination;
 
 impl CanonicalControlDestination {
+    fn microsoft_authorization_policy_route(destination: &Url) -> String {
+        let query_evidence = destination
+            .query_pairs()
+            .map(|(key, value)| match key.as_ref() {
+                "scope" => format!("{key}={}", Self::microsoft_scope_policy_value(&value)),
+                _ => format!("{key}={value}"),
+            })
+            .collect::<Vec<_>>()
+            .join("&");
+        match destination.query() {
+            Some(_) => format!("/?{query_evidence}"),
+            None => "/".to_owned(),
+        }
+    }
+
+    fn microsoft_scope_policy_value(scope: &str) -> String {
+        scope
+            .split_whitespace()
+            .filter(|token| *token != "profile")
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    pub(crate) fn microsoft_consumer_login_destination(&self) -> MicrosoftConsumerLoginDestination {
+        match (
+            &self.authentication_policy_destination,
+            self.route_identity.as_str(),
+        ) {
+            (AuthenticationPolicyDestination::MicrosoftConsumerAuthorization, _) => {
+                MicrosoftConsumerLoginDestination::IdentifierEntry
+            }
+            (
+                AuthenticationPolicyDestination::Default
+                | AuthenticationPolicyDestination::TeslaAccountAuthorization,
+                "/",
+            ) if self.is_microsoft_consumer_login_root => {
+                MicrosoftConsumerLoginDestination::IdentifierEntry
+            }
+            (
+                AuthenticationPolicyDestination::Default
+                | AuthenticationPolicyDestination::TeslaAccountAuthorization,
+                _,
+            ) => MicrosoftConsumerLoginDestination::Unrelated,
+        }
+    }
+
     fn is_http_url(url: &Url) -> bool {
         matches!(url.scheme(), "http" | "https")
             && url.username().is_empty()
@@ -308,12 +361,31 @@ impl CanonicalControlDestination {
 
         let tesla_account_authorization_route =
             CanonicalControlDestination::tesla_account_authorization_route(&destination);
-        let authentication_policy_route_identity = tesla_account_authorization_route
+        let mut authentication_policy_route_identity = tesla_account_authorization_route
             .clone()
             .or_else(|| {
                 CanonicalControlDestination::amazon_claim_authentication_route(&destination)
             })
             .unwrap_or_else(|| route_identity.clone());
+        let authentication_policy_destination = match (
+            destination.scheme(),
+            destination.host_str(),
+            destination.port_or_known_default(),
+            destination.path(),
+            destination.fragment(),
+        ) {
+            ("https", Some("login.live.com"), Some(443), "/oauth20_authorize.srf", None) => {
+                // OAuth's profile scope is metadata, not an account-management action.
+                // Every other scope token and query field remains policy evidence.
+                authentication_policy_route_identity =
+                    Self::microsoft_authorization_policy_route(&destination);
+                AuthenticationPolicyDestination::MicrosoftConsumerAuthorization
+            }
+            _ => match tesla_account_authorization_route {
+                Some(_) => AuthenticationPolicyDestination::TeslaAccountAuthorization,
+                None => AuthenticationPolicyDestination::Default,
+            },
+        };
         Ok(CanonicalControlDestination {
             path_identity,
             route_identity,
@@ -333,18 +405,125 @@ impl CanonicalControlDestination {
                 }),
             is_microsoft_consumer_login_root,
             authentication_policy_route_identity,
-            authentication_policy_destination: if tesla_account_authorization_route.is_some() {
-                AuthenticationPolicyDestination::TeslaAccountAuthorization
-            } else {
-                AuthenticationPolicyDestination::Default
-            },
+            authentication_policy_destination,
         })
     }
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
+    use crate::{
+        AuthenticationAdvanceControlDecision, AuthenticationAdvanceControlObservation,
+        AuthenticationUsernameEvidence, PageControlActionability, PageControlOwnership,
+        PageControlSemantics, PageControlSubmissionDestinationSource, PageControlSubmissionMethod,
+    };
+
+    #[test]
+    fn microsoft_authorization_query_keeps_control_classification_fail_closed() {
+        for destination_identity in [
+            "https://login.live.com/oauth20_authorize.srf?provider=google",
+            "https://login.live.com/oauth20_authorize.srf?action=%64elete-account",
+            "https://login.live.com/oauth20_authorize.srf?scope=passkey",
+            "https://login.live.com/oauth20_authorize.srf?action=profile",
+            "https://login.live.com/oauth20_authorize.srf?scope=profile&action=profile",
+            "https://login.live.com/oauth20_authorize.srf?scope=profile+passkey",
+        ] {
+            let observation = AuthenticationAdvanceControlObservation {
+                actionability: PageControlActionability::Actionable,
+                ownership: PageControlOwnership::OwnedForm,
+                semantics: PageControlSemantics::SemanticSubmit,
+                authentication_username: AuthenticationUsernameEvidence::Explicit,
+                password_field_count: 0.into(),
+                new_password_field_count: 0.into(),
+                one_time_code_field_count: 0.into(),
+                semantic_submit_control_count: 1.into(),
+                source_origin: "https://login.live.com".to_owned(),
+                form_identity: String::new(),
+                destination_identity: destination_identity.to_owned(),
+                label: "Next".to_owned(),
+                machine_identity: String::new(),
+                submission_method: PageControlSubmissionMethod::Post,
+                submission_destination_source: PageControlSubmissionDestinationSource::Omitted,
+            };
+            assert_eq!(
+                observation.classify(),
+                AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication,
+                "{destination_identity}"
+            );
+        }
+    }
+
+    #[test]
+    fn microsoft_authorization_destination_preserves_query_veto_evidence() -> anyhow::Result<()> {
+        let destination = CanonicalControlDestination::canonicalize_control_destination(
+            ControlDestinationEvidence {
+                source_origin: "https://login.live.com",
+                destination_identity: "https://login.live.com/oauth20_authorize.srf?client_id=mock-client&scope=openid+profile+offline_access&action=%64elete-account&other=profile",
+            },
+        )?;
+        assert_eq!(
+            destination.microsoft_consumer_login_destination(),
+            MicrosoftConsumerLoginDestination::IdentifierEntry
+        );
+        assert_eq!(
+            destination.authentication_policy_route_identity(),
+            "/?client_id=mock-client&scope=openid offline_access&action=delete-account&other=profile"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn microsoft_authorization_destination_requires_exact_https_authority_and_path()
+    -> anyhow::Result<()> {
+        for (source_origin, destination_identity) in [
+            (
+                "http://login.live.com",
+                "http://login.live.com/oauth20_authorize.srf",
+            ),
+            (
+                "https://login.live.com:8443",
+                "https://login.live.com:8443/oauth20_authorize.srf",
+            ),
+            (
+                "https://nested.login.live.com",
+                "https://nested.login.live.com/oauth20_authorize.srf",
+            ),
+            (
+                "https://login.live.com.evil.example",
+                "https://login.live.com.evil.example/oauth20_authorize.srf",
+            ),
+            (
+                "https://accounts.google.com",
+                "https://accounts.google.com/oauth20_authorize.srf",
+            ),
+            (
+                "https://login.live.com",
+                "https://login.live.com/oauth20_authorize.srf/unrelated",
+            ),
+            (
+                "https://login.live.com",
+                "https://login.live.com/%6Fauth20_authorize.srf",
+            ),
+            (
+                "https://login.live.com",
+                "https://login.live.com/oauth20_authorize.srf#login",
+            ),
+        ] {
+            let destination = CanonicalControlDestination::canonicalize_control_destination(
+                ControlDestinationEvidence {
+                    source_origin,
+                    destination_identity,
+                },
+            )?;
+            assert_eq!(
+                destination.microsoft_consumer_login_destination(),
+                MicrosoftConsumerLoginDestination::Unrelated,
+                "{destination_identity}"
+            );
+        }
+        Ok(())
+    }
 
     #[test]
     fn accepts_browser_resolved_same_origin_destinations() {
