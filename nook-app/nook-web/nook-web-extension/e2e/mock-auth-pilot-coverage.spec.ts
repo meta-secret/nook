@@ -43,7 +43,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       ).toHaveText('Matching saved logins: 2')
       await expect(
         widget.getByText(
-          'Multiple saved logins match this site. Continue opens the Nook picker. Nook fills and submits only after you choose one.',
+          'Multiple saved logins match this site. Continue shows the choices here. Nook fills and submits only after you choose one.',
         ),
       ).toBeVisible()
       await expect(widget.getByText('Mock auth chooser vault')).toHaveCount(0)
