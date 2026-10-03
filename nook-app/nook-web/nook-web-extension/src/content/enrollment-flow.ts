@@ -136,6 +136,11 @@ type StartBackupCodeEnrollmentArgs = {
   section?: HTMLElement
 }
 
+type EnrollmentHintsObservationRequest = {
+  readonly recoveryCopy: string
+  readonly authenticatorSetupObservation: EnrollmentPageHints['qr']
+}
+
 /** Owns the browser runtime resources shared by these interactions. */
 class AuthenticatorEnrollmentInteraction {
   private holdEnrollmentWidgetAfterSave = false
@@ -158,10 +163,7 @@ class AuthenticatorEnrollmentInteraction {
   detectEnrollmentHintsFromRecoveryCopy({
     recoveryCopy,
     authenticatorSetupObservation,
-  }: {
-    readonly recoveryCopy: string
-    readonly authenticatorSetupObservation: EnrollmentPageHints['qr']
-  }): EnrollmentPageHints {
+  }: EnrollmentHintsObservationRequest): EnrollmentPageHints {
     return {
       qr: authenticatorSetupObservation,
       backupCodes:
