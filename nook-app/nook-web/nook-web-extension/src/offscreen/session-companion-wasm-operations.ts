@@ -13,6 +13,7 @@ import {
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import {
   NookLoginContextObservation,
+  classify_authentication_authenticator_setup_batch,
   NookPageInputFieldObservation,
   AuthenticationWorkflowActivity,
   authentication_page_observation_facts_match_binding,
@@ -155,6 +156,10 @@ export async function handleCompanionWasmMessage(
   try {
     await companionWasmReady
     switch (message.type) {
+      case CompanionWasmSessionMessageType.AuthenticationAuthenticatorSetupObservation:
+        return ok(
+          classify_authentication_authenticator_setup_batch(message.payload),
+        )
       case CompanionWasmSessionMessageType.AuthenticationWorkflowPilotPresentationCapability:
         return ok(
           authentication_workflow_pilot_presentation_capability(

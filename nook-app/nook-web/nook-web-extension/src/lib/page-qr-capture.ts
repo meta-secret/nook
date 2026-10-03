@@ -1,8 +1,29 @@
 import {
-  AuthenticationAuthenticatorSetupRequest,
-  AuthenticationQrMediaObservation,
+  type AuthenticationAuthenticatorSetupBatch,
   type AuthenticationAuthenticatorSetupObservation,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { CompanionWasmSessionMessageType } from '../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
+import {
+  CompanionWasmRuntimeDeliveryKind,
+  sendCompanionWasmRuntimeMessage,
+} from '../../../nook-web-shared/src/extension/companion-wasm-runtime-transport'
+import { Effect, Schema } from 'effect'
+
+const authenticatorSetupObservationResponse: Schema.Schema<AuthenticationAuthenticatorSetupObservation> =
+  Schema.Literal('present', 'absent')
+
+enum SetupObservationPreparationKind {
+  Unprepared = 'unprepared',
+  Prepared = 'prepared',
+}
+
+type SetupObservationPreparation =
+  | { readonly kind: SetupObservationPreparationKind.Unprepared }
+  | {
+      readonly kind: SetupObservationPreparationKind.Prepared
+      readonly metadataKey: string
+      readonly observation: AuthenticationAuthenticatorSetupObservation
+    }
 
 const OTPAUTH_TOTP_PREFIX = 'otpauth://totp/'
 
@@ -70,6 +91,9 @@ type DecodedOtpauthCandidates = DecodedOtpauthCandidate[]
 
 /** Owns this browser host’s resources and interaction lifecycle. */
 class PageQrCapture {
+  private setupObservation: SetupObservationPreparation = {
+    kind: SetupObservationPreparationKind.Unprepared,
+  }
   constructor(private readonly browser: BarcodeDetectorGlobal) {}
 
   private barcodeDetectorConstructor(): BarcodeDetectorAvailability {
@@ -127,33 +151,73 @@ class PageQrCapture {
     return ratio > 0.75 && ratio < 1.35
   }
 
-  authenticationAuthenticatorSetupObservation(): AuthenticationAuthenticatorSetupObservation {
-    for (const media of this.collectQrMedia()) {
-      const request = new AuthenticationAuthenticatorSetupRequest(
-        this.nearbyInstructionCopy(media),
-        AuthenticationQrMediaObservation.Present,
-      )
-      try {
-        switch (
-          request.classify_authentication_authenticator_setup_observation()
-        ) {
-          case 'present':
-            return 'present'
-          case 'absent':
-            break
-        }
-      } finally {
-        request.free()
-      }
-    }
-    const request = new AuthenticationAuthenticatorSetupRequest(
-      '',
-      AuthenticationQrMediaObservation.Absent,
+  private authenticatorSetupMetadata(): AuthenticationAuthenticatorSetupBatch {
+    const visibleInstructionCopies = this.collectQrMedia().map((media) =>
+      this.nearbyInstructionCopy(media),
     )
-    try {
-      return request.classify_authentication_authenticator_setup_observation()
-    } finally {
-      request.free()
+    switch (visibleInstructionCopies.length === 0) {
+      case true:
+        return { visibleInstructionCopies, qrMedia: 'absent' }
+      case false:
+        return { visibleInstructionCopies, qrMedia: 'present' }
+    }
+  }
+
+  prepareAuthenticationAuthenticatorSetupObservation(): Promise<void> {
+    const owner = this
+    return Effect.runPromise(
+      Effect.gen(function* () {
+        owner.setupObservation = {
+          kind: SetupObservationPreparationKind.Unprepared,
+        }
+        const metadata = owner.authenticatorSetupMetadata()
+        const delivery = yield* Effect.promise(() =>
+          sendCompanionWasmRuntimeMessage(owner.browser, {
+            type: CompanionWasmSessionMessageType.AuthenticationAuthenticatorSetupObservation,
+            payload: metadata,
+            origin: owner.browser.location.origin,
+          }),
+        )
+        switch (delivery.kind) {
+          case CompanionWasmRuntimeDeliveryKind.Unavailable:
+            return yield* Effect.fail(
+              new Error('Authenticator setup runtime unavailable.'),
+            )
+          case CompanionWasmRuntimeDeliveryKind.Delivered: {
+            const observation = yield* Schema.decodeUnknown(
+              authenticatorSetupObservationResponse,
+            )(delivery.response).pipe(
+              Effect.mapError(
+                () =>
+                  new Error('Authenticator setup runtime response rejected.'),
+              ),
+            )
+            owner.setupObservation = {
+              kind: SetupObservationPreparationKind.Prepared,
+              metadataKey: JSON.stringify(metadata),
+              observation,
+            }
+            return
+          }
+        }
+      }),
+    )
+  }
+
+  authenticationAuthenticatorSetupObservation(): AuthenticationAuthenticatorSetupObservation {
+    switch (this.setupObservation.kind) {
+      case SetupObservationPreparationKind.Unprepared:
+        throw new Error('Authenticator setup observation is not prepared.')
+      case SetupObservationPreparationKind.Prepared:
+        switch (
+          this.setupObservation.metadataKey ===
+          JSON.stringify(this.authenticatorSetupMetadata())
+        ) {
+          case true:
+            return this.setupObservation.observation
+          case false:
+            throw new Error('Authenticator setup observation is stale.')
+        }
     }
   }
 

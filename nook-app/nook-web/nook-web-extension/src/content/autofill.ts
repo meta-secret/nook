@@ -23,6 +23,7 @@ import {
   NamecheapWidgetDisplayGate,
 } from '../lib/auth-widget-policy'
 import { recoveryCopyObservation } from '../lib/backup-code-candidates'
+import { pageQrCapture } from '../lib/page-qr-capture'
 import {
   AuthenticationWorkflowSnapshotMessageType,
   MAX_AUTHENTICATION_WORKFLOW_TRANSPORT_OBSERVATIONS,
@@ -198,6 +199,7 @@ class AuthenticationScanRenderLifecycle {
     }
     await passwordFieldDiscovery.prepareCompanionClassification(document)
     await recoveryCopyObservation.prepareAuthenticationRecoveryEvidence()
+    await pageQrCapture.prepareAuthenticationAuthenticatorSetupObservation()
     const { copy: recoveryCopy, hint: backupCodesHint } =
       recoveryCopyObservation.authenticationRecoveryEvidence()
     const enrollmentHints =

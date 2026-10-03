@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-restricted-types, no-restricted-syntax -- This dedicated untrusted-input decoder narrows browser transport values immediately. */
 import type {
+  AuthenticationAuthenticatorSetupBatch,
+  AuthenticationAuthenticatorSetupObservation,
   AuthenticationObservationBindingToken,
   AuthenticationPageObservationFactsBatch,
   AuthenticationPilotPresentationCapability,
@@ -22,6 +24,7 @@ import type {
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 
 export enum CompanionWasmSessionMessageType {
+  AuthenticationAuthenticatorSetupObservation = "nook:extension-session-authentication-authenticator-setup-observation",
   AuthenticationWorkflowPilotPresentationCapability = "nook:extension-session-authentication-workflow-pilot-presentation-capability",
   PasswordWorkflowActivity = "nook:extension-session-project-password-workflow-activity",
   BindAuthenticationPageObservationFacts = "nook:extension-session-bind-authentication-page-observation-facts",
@@ -91,6 +94,10 @@ export type CompanionWasmLabelRequest = {
 };
 
 export type CompanionWasmSessionMessage =
+  | {
+      readonly type: CompanionWasmSessionMessageType.AuthenticationAuthenticatorSetupObservation;
+      readonly payload: AuthenticationAuthenticatorSetupBatch;
+    }
   | {
       readonly type: CompanionWasmSessionMessageType.AuthenticationWorkflowPilotPresentationCapability;
       readonly payload: { readonly snapshot: AuthenticationWorkflowSnapshot };
@@ -204,6 +211,7 @@ export type CompanionWasmSessionMessage =
     };
 
 export type CompanionWasmSessionResponse =
+  | AuthenticationAuthenticatorSetupObservation
   | AuthenticationPilotPresentationCapability
   | PasswordWorkflowActivityPresentation
   | AuthenticationObservationBindingToken
