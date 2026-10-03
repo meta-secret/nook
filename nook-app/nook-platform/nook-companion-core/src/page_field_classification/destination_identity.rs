@@ -47,11 +47,31 @@ pub struct ControlDestinationEvidence<'a> {
 pub struct InvalidControlDestination;
 
 impl CanonicalControlDestination {
+    fn microsoft_authorization_route(destination: &Url) -> Option<String> {
+        match (
+            destination.scheme(),
+            destination.host_str(),
+            destination.port_or_known_default(),
+            destination.path(),
+            destination.fragment(),
+        ) {
+            (
+                "https",
+                Some("login.live.com"),
+                Some(443),
+                "/oauth20_authorize.srf",
+                None | Some(""),
+            ) => Some(Self::microsoft_authorization_policy_route(destination)),
+            _ => None,
+        }
+    }
+
     fn microsoft_authorization_policy_route(destination: &Url) -> String {
         let query_evidence = destination
             .query_pairs()
-            .map(|(key, value)| match key.as_ref() {
-                "scope" => format!("{key}={}", Self::microsoft_scope_policy_value(&value)),
+            .map(|(key, value)| match (key.as_ref(), value.as_ref()) {
+                ("scope", _) => format!("{key}={}", Self::microsoft_scope_policy_value(&value)),
+                ("response_mode", "form_post") => format!("{key}="),
                 _ => format!("{key}={value}"),
             })
             .collect::<Vec<_>>()
@@ -90,6 +110,18 @@ impl CanonicalControlDestination {
                 | AuthenticationPolicyDestination::TeslaAccountAuthorization,
                 _,
             ) => MicrosoftConsumerLoginDestination::Unrelated,
+        }
+    }
+
+    pub(crate) fn microsoft_authorization_destination(&self) -> MicrosoftConsumerLoginDestination {
+        match self.authentication_policy_destination {
+            AuthenticationPolicyDestination::MicrosoftConsumerAuthorization => {
+                MicrosoftConsumerLoginDestination::IdentifierEntry
+            }
+            AuthenticationPolicyDestination::Default
+            | AuthenticationPolicyDestination::TeslaAccountAuthorization => {
+                MicrosoftConsumerLoginDestination::Unrelated
+            }
         }
     }
 
@@ -367,25 +399,17 @@ impl CanonicalControlDestination {
                 CanonicalControlDestination::amazon_claim_authentication_route(&destination)
             })
             .unwrap_or_else(|| route_identity.clone());
-        let authentication_policy_destination = match (
-            destination.scheme(),
-            destination.host_str(),
-            destination.port_or_known_default(),
-            destination.path(),
-            destination.fragment(),
-        ) {
-            ("https", Some("login.live.com"), Some(443), "/oauth20_authorize.srf", None) => {
-                // OAuth's profile scope is metadata, not an account-management action.
-                // Every other scope token and query field remains policy evidence.
-                authentication_policy_route_identity =
-                    Self::microsoft_authorization_policy_route(&destination);
-                AuthenticationPolicyDestination::MicrosoftConsumerAuthorization
-            }
-            _ => match tesla_account_authorization_route {
-                Some(_) => AuthenticationPolicyDestination::TeslaAccountAuthorization,
-                None => AuthenticationPolicyDestination::Default,
-            },
-        };
+        let authentication_policy_destination =
+            match Self::microsoft_authorization_route(&destination) {
+                Some(route) => {
+                    authentication_policy_route_identity = route;
+                    AuthenticationPolicyDestination::MicrosoftConsumerAuthorization
+                }
+                None => match tesla_account_authorization_route {
+                    Some(_) => AuthenticationPolicyDestination::TeslaAccountAuthorization,
+                    None => AuthenticationPolicyDestination::Default,
+                },
+            };
         Ok(CanonicalControlDestination {
             path_identity,
             route_identity,

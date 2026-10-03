@@ -14,7 +14,9 @@ impl AuthenticationAdvanceControlObservation {
             && self.destination_identity.len()
                 <= super::super::MAX_AUTHENTICATION_DESTINATION_TEXT_BYTES
             && self.label.len() <= super::super::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
-            && self.machine_identity.len() <= super::super::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
+            && (self.machine_identity.len() <= super::super::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
+                || self.microsoft_authorization_admission()
+                    == super::microsoft::MicrosoftAuthorizationAdmission::IdentifierAdvance)
             && [
                 self.password_field_count,
                 self.new_password_field_count,
