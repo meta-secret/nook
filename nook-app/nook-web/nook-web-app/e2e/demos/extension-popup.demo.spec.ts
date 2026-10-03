@@ -10,6 +10,7 @@ import {
   AuthenticatorPickerSelectMessageType,
 } from '../../../nook-web-extension/src/lib/authenticator-picker-messages'
 import { LoginPickerQueryMessageType } from '../../../nook-web-extension/src/lib/login-picker-messages'
+import { InlineLoginPickerMessageType } from '../../../nook-web-extension/src/lib/inline-login-picker'
 const demoDir = path.dirname(fileURLToPath(import.meta.url))
 const extensionDist = path.resolve(demoDir, '../../../nook-web-extension/dist')
 const extensionRoutePrefix = '/__extension-popup/'
@@ -222,11 +223,11 @@ test('explains the next step when the protected identity has no vault', async ({
   await demoBeat(page)
 })
 
-test('shows no account choices when cleanup has invalidated the picker', async ({
+test('shows compact inline error when cleanup has invalidated the picker', async ({
   page,
 }) => {
-  // The real popup renders the denied query projection. Consuming WASM handles
-  // and cleanup overlap are exercised by account-picker-lock.test.ts.
+  // This routed demo shows presentation only. The extension browser gate owns
+  // real cross-origin iframe isolation and successful account selection.
   const session: PopupDemoSession = {
     queryMessageType: LoginPickerQueryMessageType.NookLoginPickerQuery,
     authenticatorQueryMessageType:
@@ -235,16 +236,36 @@ test('shows no account choices when cleanup has invalidated the picker', async (
     followingStatus: DeviceProtectionStatus.Passkey,
   }
   await page.addInitScript(installPopupDemoRuntime, session)
-  await page.goto(
-    `${extensionRoutePrefix}popup/index.html?intent=login-picker&request=cleanup-blocked`,
-  )
-  await expect(page.getByTestId('login-picker')).toBeVisible()
-  await expect(page.getByRole('alert')).toBeVisible()
-  await expect(page.getByTestId('login-results')).toHaveCount(0)
-  await expect(page.getByTestId('login-destination')).toHaveCount(0)
-  await page.getByTestId('login-search').fill('another account')
-  await expect(page.getByRole('alert')).toBeVisible()
-  await expect(page.getByTestId('login-results')).toHaveCount(0)
+  await page.setViewportSize({ width: 360, height: 740 })
+  await page.goto('/')
+  await page.setContent(`<iframe
+    src="${extensionRoutePrefix}login-picker/index.html"
+    style="width:292px;height:320px;border:0;color-scheme:dark"
+  ></iframe>`)
+  const frame = page.locator('iframe')
+  await frame.contentFrame().locator('#app').waitFor({ state: 'attached' })
+  await expect.poll(() => frame.contentFrame().locator('#app').evaluate(() => document.readyState))
+    .toBe('complete')
+  await frame.evaluate((element, messageType) => {
+    switch (element instanceof HTMLIFrameElement) {
+      case true:
+        element.contentWindow?.postMessage({
+          type: messageType,
+          requestId: 'cleanup-blocked', origin: location.origin,
+        }, location.origin)
+        break
+      case false:
+        throw new Error('Inline demo frame is unavailable')
+    }
+  }, InlineLoginPickerMessageType.Initialize)
+  const picker = frame.contentFrame()
+  await expect(picker.getByTestId('login-picker')).toBeVisible()
+  await expect(picker.getByRole('alert')).toBeVisible()
+  await expect(picker.getByTestId('login-results')).toHaveCount(0)
+  await expect(picker.getByTestId('login-destination')).toHaveCount(0)
+  await picker.getByTestId('login-search').fill('another account')
+  await expect(picker.getByRole('alert')).toBeVisible()
+  await expect(picker.getByTestId('login-results')).toHaveCount(0)
   await demoBeat(page)
 })
 

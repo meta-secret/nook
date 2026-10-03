@@ -118,11 +118,15 @@ const WIDGET_PANEL_STYLES = `
     }
     .inline-login-picker {
       width: 100%;
-      height: min(420px, calc(100vh - 260px));
-      min-height: 180px;
+      height: max(80px, min(420px, calc(100dvh - 460px)));
+      min-width: 0;
       border: 0;
       border-radius: 6px;
-      color-scheme: dark;
+      color-scheme: light dark;
+    }
+    .inline-login-picker-cancel {
+      min-height: 44px;
+      margin: 0 auto;
     }
     .site-context {
       width: fit-content;

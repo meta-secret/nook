@@ -18,7 +18,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
 
     const mockAuth = await startMockAuthServer()
     const paired = await launchPairedPinExtension(testInfo, {
-      vaultName: 'Mock auth chooser vault',
+      vaultName: 'Mock auth chooser vault with a long account collection label',
     })
     try {
       await saveVaultLogin(
@@ -72,6 +72,34 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       })
       await expect(loginPicker.getByText('bob@nook.test')).toBeVisible()
       await expect(loginPicker.getByTestId('login-search')).toBeFocused()
+      const layouts = [
+        { width: 1280, height: 900, colorScheme: 'light' as const },
+        { width: 1280, height: 900, colorScheme: 'dark' as const },
+        { width: 360, height: 740, colorScheme: 'light' as const },
+        { width: 360, height: 740, colorScheme: 'dark' as const },
+      ]
+      for (const layout of layouts) {
+        await loginPage.setViewportSize({ width: layout.width, height: layout.height })
+        await loginPage.emulateMedia({ colorScheme: layout.colorScheme })
+        const bounds = await widget.evaluate((element) => {
+          const rect = element.getBoundingClientRect()
+          return { left: rect.left, right: rect.right, bottom: rect.bottom }
+        })
+        expect(bounds.left).toBeGreaterThanOrEqual(0)
+        expect(bounds.right).toBeLessThanOrEqual(layout.width)
+        expect(bounds.bottom).toBeLessThanOrEqual(layout.height)
+        const surface = loginPicker.getByTestId('login-picker')
+        expect(await surface.evaluate(() => document.documentElement.scrollWidth))
+          .toBeLessThanOrEqual(await surface.evaluate(() => window.innerWidth))
+        expect(await surface.evaluate(() => getComputedStyle(document.documentElement).colorScheme))
+          .toBe(layout.colorScheme)
+        await loginPicker.getByTestId('login-search').focus()
+        await loginPicker.getByTestId('login-search').press('Tab')
+        await expect(loginPicker.getByRole('button', { name: /alice@nook\.test/ })).toBeFocused()
+        await testInfo.attach(`inline-login-${layout.width}-${layout.colorScheme}`, {
+          body: await widget.screenshot(), contentType: 'image/png',
+        })
+      }
       expect(paired.context.pages()).toHaveLength(pageCount)
       expect(await loginPage.evaluate(() => {
         const host = document.getElementById('nook-auth-widget')
