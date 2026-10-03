@@ -1,32 +1,66 @@
 import { rejects } from 'node:assert/strict'
-import { describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, test } from 'bun:test'
+import { companionWasmReadiness } from '../src/content/autofill/companion-wasm-readiness'
+import {
+  CompanionWasmSessionMessageType,
+  type CompanionWasmRuntimeMessage,
+} from '../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 
 import {
   queueSubmitCaptureUntilCompanionWasmReady,
   runAfterCompanionWasmReady,
 } from '../src/content/autofill/companion-wasm-gate'
 
-type Deferred = {
-  readonly promise: Promise<void>
-  readonly resolve: () => void
-  readonly reject: (reason: Error) => void
-}
+class ExtensionClassificationStartupFixture {
+  private readonly chromeDescriptor = Object.getOwnPropertyDescriptor(
+    globalThis,
+    'chrome',
+  )
+  private readonly locationDescriptor = Object.getOwnPropertyDescriptor(
+    globalThis,
+    'location',
+  )
+  private respond: ((response: unknown) => void) | false = false
 
-function deferred(): Deferred {
-  let resolvePromise: () => void = () => {}
-  let rejectPromise: (reason: Error) => void = () => {}
-  const promise = new Promise<void>((resolve, reject) => {
-    resolvePromise = resolve
-    rejectPromise = (reason) => reject(reason)
-  })
-  return {
-    promise,
-    resolve: resolvePromise,
-    reject: rejectPromise,
+  install(): void {
+    Object.assign(globalThis, {
+      location: { origin: 'https://login.live.com' },
+      chrome: {
+        runtime: {
+          sendMessage: (
+            message: CompanionWasmRuntimeMessage,
+            respond: (response: unknown) => void,
+          ): void => {
+            expect(message).toEqual({
+              type: CompanionWasmSessionMessageType.ClassifyPageInputs,
+              origin: 'https://login.live.com',
+              payload: { fields: [], labels: [] },
+            })
+            this.respond = respond
+          },
+        },
+      },
+    })
+  }
+
+  deliver(response: unknown): void {
+    if (!this.respond) throw new Error('No classification request pending.')
+    this.respond(response)
+  }
+
+  uninstall(): void {
+    if (this.chromeDescriptor)
+      Object.defineProperty(globalThis, 'chrome', this.chromeDescriptor)
+    else Reflect.deleteProperty(globalThis, 'chrome')
+    if (this.locationDescriptor)
+      Object.defineProperty(globalThis, 'location', this.locationDescriptor)
+    else Reflect.deleteProperty(globalThis, 'location')
   }
 }
 
 describe('companion WASM startup gate', () => {
+  const fixture = new ExtensionClassificationStartupFixture()
+  afterEach(() => fixture.uninstall())
   test('queues submit events until runtime-backed classification is ready', () => {
     const events: Event[] = []
     const capture = queueSubmitCaptureUntilCompanionWasmReady((event) =>
@@ -46,11 +80,12 @@ describe('companion WASM startup gate', () => {
     expect(events).toEqual([firstSubmit, secondSubmit])
   })
 
-  test('holds the first Pilot startup until companion WASM is ready', async () => {
-    const readiness = deferred()
+  test('holds the first Pilot startup until extension-owned classification responds', async () => {
+    fixture.install()
     const events: string[] = []
     const startup = runAfterCompanionWasmReady({
-      companionWasmReady: readiness.promise,
+      companionWasmReady:
+        companionWasmReadiness.waitForExtensionClassification(),
       start: async () => {
         events.push('pilot-started')
       },
@@ -59,24 +94,48 @@ describe('companion WASM startup gate', () => {
     await Promise.resolve()
     expect(events).toEqual([])
 
-    readiness.resolve()
+    fixture.deliver({
+      ok: true,
+      result: {
+        fields: [],
+        labels: [],
+        strongestAuthenticationUsernameEvidence: 'absent',
+      },
+    })
     await startup
     expect(events).toEqual(['pilot-started'])
   })
 
-  test('does not start Pilot and preserves companion WASM rejection', async () => {
-    const readiness = deferred()
-    const events: string[] = []
-    const failure = new Error('companion WASM failed')
-    const startup = runAfterCompanionWasmReady({
-      companionWasmReady: readiness.promise,
-      start: async () => {
-        events.push('pilot-started')
+  test.each([
+    { ok: false },
+    { ok: true, result: { fields: [], labels: [] } },
+    {
+      ok: true,
+      result: {
+        fields: [],
+        labels: [],
+        strongestAuthenticationUsernameEvidence: 'explicit',
       },
-    })
+    },
+  ])(
+    'does not start Pilot on unavailable or invalid classification readiness: %j',
+    async (response) => {
+      fixture.install()
+      const events: string[] = []
+      const startup = runAfterCompanionWasmReady({
+        companionWasmReady:
+          companionWasmReadiness.waitForExtensionClassification(),
+        start: async () => {
+          events.push('pilot-started')
+        },
+      })
 
-    readiness.reject(failure)
-    await rejects(startup, (error: unknown) => error === failure)
-    expect(events).toEqual([])
-  })
+      fixture.deliver(response)
+      await rejects(
+        startup,
+        /Extension companion classification runtime unavailable/u,
+      )
+      expect(events).toEqual([])
+    },
+  )
 })

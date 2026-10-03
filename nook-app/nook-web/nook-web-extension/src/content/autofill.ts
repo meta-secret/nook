@@ -8,7 +8,7 @@ import {
   authenticationFactObserverOptions,
   authenticationFactObserver,
 } from '../../../nook-web-shared/src/extension/authentication-fact-attributes'
-import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
+import { companionWasmReadiness } from './autofill/companion-wasm-readiness'
 import { AuthenticationWorkflowSnapshotResponseKind } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { CompanionWasmSessionMessageType } from '../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 import { AuthenticationWorkflowClassification } from '../../../nook-web-shared/src/extension/password-form-classified-observations'
@@ -639,7 +639,7 @@ const queuedSubmitCapture = queueSubmitCaptureUntilCompanionWasmReady(
 document.addEventListener('submit', queuedSubmitCapture.capture, true)
 
 void runAfterCompanionWasmReady({
-  companionWasmReady,
+  companionWasmReady: companionWasmReadiness.waitForExtensionClassification(),
   start: async () => {
     if (await simpleVaultRuntime.isRuntimeNookVaultAppUrl(location.href)) {
       document.removeEventListener('submit', queuedSubmitCapture.capture, true)
