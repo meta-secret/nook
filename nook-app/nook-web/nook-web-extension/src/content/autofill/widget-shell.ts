@@ -56,6 +56,7 @@ const WIDGET_PANEL_STYLES = `
       display: none !important;
     }
     .panel {
+      box-sizing: border-box;
       position: relative;
       width: min(320px, calc(100vw - 36px));
       display: grid;

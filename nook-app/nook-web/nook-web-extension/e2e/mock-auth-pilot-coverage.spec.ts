@@ -7,15 +7,12 @@ import {
 } from './helpers/paired-pin-extension'
 import { MOCK_AUTH_SECOND_TOTP_SECRET, startMockAuthServer } from './mock-auth'
 import { MockAuthProviderScenarios } from './mock-auth-provider-scenarios'
-
 test.describe('PIN Pilot mock-auth coverage', () => {
   test.describe.configure({ timeout: 180_000 })
-
   test('shows extension-owned login picker usernames and completes plain success', async ({
     browserName,
   }, testInfo) => {
     test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
-
     const mockAuth = await startMockAuthServer()
     const paired = await launchPairedPinExtension(testInfo, {
       vaultName: 'Mock auth chooser vault with a long account collection label',
@@ -33,7 +30,6 @@ test.describe('PIN Pilot mock-auth coverage', () => {
         'bob@nook.test',
         'second-extension-password',
       )
-
       const loginPage = await paired.context.newPage()
       await loginPage.goto(`${mockAuth.origin}/plain/login`)
       const widget = loginPage.locator('#nook-auth-widget')
@@ -49,9 +45,6 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await expect(widget.getByText('Mock auth chooser vault')).toHaveCount(0)
       await expect(loginPage.locator('input[name="username"]')).toHaveValue('')
       await expect(loginPage.locator('input[name="password"]')).toHaveValue('')
-      // Saving two entries can cross the short e2e idle timeout. Refresh the
-      // session immediately before the website asks the extension to open its
-      // picker so this test covers picker routing rather than lock recovery.
       await unlockExtensionPopupPin(paired.context, paired.extensionId)
       const pageCount = paired.context.pages().length
       const worker = paired.context.serviceWorkers()[0]
@@ -65,8 +58,12 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await expect(widget.getByText('bob@nook.test')).toHaveCount(0)
       const iframe = widget.getByTestId('nook-inline-login-picker')
       await expect(iframe).toBeVisible()
-      await expect(iframe).toHaveAttribute('src', `chrome-extension://${paired.extensionId}/login-picker/index.html`)
+      await expect(iframe).toHaveAttribute(
+        'src',
+        `chrome-extension://${paired.extensionId}/login-picker/index.html`,
+      )
       const loginPicker = iframe.contentFrame()
+      const firstRow = loginPicker.getByRole('button').first()
       await expect(loginPicker.getByText('alice@nook.test')).toBeVisible({
         timeout: 20_000,
       })
@@ -79,7 +76,10 @@ test.describe('PIN Pilot mock-auth coverage', () => {
         { width: 360, height: 740, colorScheme: 'dark' as const },
       ]
       for (const layout of layouts) {
-        await loginPage.setViewportSize({ width: layout.width, height: layout.height })
+        await loginPage.setViewportSize({
+          width: layout.width,
+          height: layout.height,
+        })
         await loginPage.emulateMedia({ colorScheme: layout.colorScheme })
         const bounds = await widget.evaluate((element) => {
           const rect = element.getBoundingClientRect()
@@ -90,25 +90,48 @@ test.describe('PIN Pilot mock-auth coverage', () => {
         expect(bounds.bottom).toBeLessThanOrEqual(layout.height)
         const surface = loginPicker.getByTestId('login-picker')
         await surface.evaluate(() => window.scrollTo(0, 0))
-        expect(await surface.evaluate(() => document.documentElement.scrollWidth))
-          .toBeLessThanOrEqual(await surface.evaluate(() => window.innerWidth))
-        expect(await surface.evaluate(() => getComputedStyle(document.documentElement).colorScheme))
-          .toBe('dark')
-        await expect(loginPicker.getByRole('button', { name: /alice@nook\.test/ }))
-          .toBeInViewport({ ratio: 1 })
-        await testInfo.attach(`inline-login-${layout.width}-${layout.colorScheme}`, {
-          body: await widget.screenshot(), contentType: 'image/png',
-        })
+        expect(
+          await surface.evaluate(() => document.documentElement.scrollWidth),
+        ).toBeLessThanOrEqual(await surface.evaluate(() => window.innerWidth))
+        expect(
+          await surface.evaluate(
+            () => getComputedStyle(document.documentElement).colorScheme,
+          ),
+        ).toBe('dark')
+        await testInfo.attach(
+          `inline-login-${layout.width}-${layout.colorScheme}`,
+          {
+            body: await loginPage.screenshot({
+              caret: 'initial',
+              path: testInfo.outputPath(
+                `inline-login-${layout.width}-${layout.colorScheme}.png`,
+              ),
+            }),
+            contentType: 'image/png',
+          },
+        )
+        await expect(firstRow).toBeInViewport({ ratio: 1 })
         await loginPicker.getByTestId('login-search').focus()
         await loginPicker.getByTestId('login-search').press('Tab')
-        await expect(loginPicker.getByRole('button', { name: /alice@nook\.test/ })).toBeFocused()
+        await expect(firstRow).toBeFocused()
+        await loginPicker.getByTestId('login-results').hover()
+        await loginPage.mouse.wheel(0, 120)
+        await expect(iframe).toBeVisible()
+        await expect(loginPicker.getByTestId('login-search')).toBeInViewport({
+          ratio: 1,
+        })
       }
       expect(paired.context.pages()).toHaveLength(pageCount)
-      expect(await loginPage.evaluate(() => {
-        const host = document.getElementById('nook-auth-widget')
-        const frame = host?.shadowRoot?.querySelector('iframe')
-        return frame instanceof HTMLIFrameElement && !(frame.contentDocument instanceof Document)
-      })).toBe(true)
+      expect(
+        await loginPage.evaluate(() => {
+          const host = document.getElementById('nook-auth-widget')
+          const frame = host?.shadowRoot?.querySelector('iframe')
+          return (
+            frame instanceof HTMLIFrameElement &&
+            !(frame.contentDocument instanceof Document)
+          )
+        }),
+      ).toBe(true)
       await loginPicker.getByTestId('login-search').fill('bob')
       await expect(loginPicker.getByText('alice@nook.test')).toHaveCount(0)
       await expect(loginPicker.getByText('bob@nook.test')).toBeVisible()
