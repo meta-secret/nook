@@ -46,6 +46,7 @@ import {
   type AuthenticationObservationBinding,
 } from './workflow-revalidation'
 import { loginCredentialFillAction } from './login-credential-fill-action'
+import { InlineLoginPicker } from './inline-login-picker'
 import type {
   ContinueWithNookArgs,
   FillAndSubmitAccountArgs,
@@ -235,6 +236,7 @@ class LoginPasskeyInteraction {
         const taken = pickerState.takeLogin(requestId)
         if (taken.kind !== PendingPickerTakeKind.Taken) return
         const pending = taken.request
+        this.cancelLoginPickerRequest(requestId)
         const authenticationStatusRequest7: Parameters<
           typeof authenticationWorkflowUi.setStatus
         >[0] = {
@@ -255,6 +257,18 @@ class LoginPasskeyInteraction {
       },
       Math.max(0, response.expiresAt - Date.now()),
     )
+    const surfaceRequest: Parameters<typeof InlineLoginPicker.mount>[0] = {
+      requestId,
+      continueButton,
+      description,
+      title: workflowUi.translatedMessage(
+        BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
+      ),
+      cancelLabel: workflowUi.translatedMessage(
+        BROWSER_MESSAGE_KEYS.WidgetEnrollCancel,
+      ),
+      cancel: this.cancelPendingLoginPickerRequest.bind(this),
+    }
     const pendingLoginRequest1: Parameters<typeof pickerState.openLogin>[0] = {
       requestId,
       workflow,
@@ -263,6 +277,7 @@ class LoginPasskeyInteraction {
       description,
       continueButton,
       timeoutId,
+      surface: InlineLoginPicker.mount(surfaceRequest),
       approval: {
         workflowKey: approval.workflowKey,
         facts: approval.facts,
@@ -310,6 +325,15 @@ class LoginPasskeyInteraction {
     const pending = pickerState.login.request
     pickerState.clearPendingLogin()
     window.clearTimeout(pending.timeoutId)
+    const status: Parameters<typeof authenticationWorkflowUi.setStatus>[0] = {
+      description: pending.description,
+      continueButton: pending.continueButton,
+      text: workflowUi.translatedMessage(
+        BROWSER_MESSAGE_KEYS.WidgetLoginPickerCanceled,
+      ),
+      enableContinue: true,
+    }
+    authenticationWorkflowUi.setStatus(status)
     this.cancelLoginPickerRequest(pending.requestId)
   }
 

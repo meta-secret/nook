@@ -7,6 +7,7 @@ import type { ExtensionSessionTransportFailure } from './session-document'
 import {
   accountPickerSessionCodec,
   type PendingAuthenticatorPicker,
+  type PendingLoginPicker,
   type SessionAccount,
 } from './account-picker-session-codec'
 import type { ExtensionSessionStorageValue } from './pairing-identity'
@@ -51,8 +52,6 @@ export type {
   PendingAuthenticatorPicker,
   SessionAccount,
 } from './account-picker-session-codec'
-
-type PendingLoginPicker = PendingAuthenticatorPicker
 
 export const AUTHENTICATOR_PICKER_TTL_MS = 5 * 60 * 1000
 
@@ -946,7 +945,7 @@ class AccountPickerSessions {
       }
       const stored = storedEntry[1]
       const decoded = runConcreteDecoder(
-        accountPickerSessionCodec.decodePendingAuthenticatorPicker.bind(
+        accountPickerSessionCodec.decodePendingLoginPicker.bind(
           accountPickerSessionCodec,
         ),
         stored,
@@ -974,10 +973,6 @@ class AccountPickerSessions {
       request,
       authorizationGeneration,
     }
-  }
-
-  isLoginPickerSender(sender: chrome.runtime.MessageSender): boolean {
-    return this.isAuthenticatorPickerSender(sender)
   }
 }
 

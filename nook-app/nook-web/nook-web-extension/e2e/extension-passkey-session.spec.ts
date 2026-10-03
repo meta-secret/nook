@@ -23,7 +23,6 @@ import {
   startLoginServer,
   waitForExtensionPairingReady,
   waitForNewPage,
-  waitForPageUrl,
   withE2eDeadline,
   type WebsitePasskeyAssertionBrowserFlow,
 } from './helpers/extension-smoke-runtime'
@@ -487,17 +486,20 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       await fillLoginPage.goto(`${loginServer.origin}/login`)
       const fillWidget = fillLoginPage.locator('#nook-auth-widget')
       await expect(fillWidget).toBeVisible()
-      const [loginPicker] = await Promise.all([
-        waitForNewPage(context, 'website login picker'),
-        fillWidget.getByRole('button', { name: 'Continue with Nook' }).click(),
-      ])
+      const pageCount = context.pages().length
+      await fillWidget
+        .getByRole('button', { name: 'Continue with Nook' })
+        .click()
+      const inlinePicker = fillWidget.getByTestId('nook-inline-login-picker')
+      await expect(inlinePicker).toBeVisible()
+      const loginPicker = inlinePicker.contentFrame()
       await expect(fillWidget.getByText('alice@nook.test')).toHaveCount(0)
       await expect(fillWidget.getByText('bob@nook.test')).toHaveCount(0)
-      await loginPicker.waitForURL(/intent=login-picker/)
       await expect(loginPicker.getByText('alice@nook.test')).toBeVisible({
         timeout: 20_000,
       })
       await expect(loginPicker.getByText('bob@nook.test')).toBeVisible()
+      expect(context.pages()).toHaveLength(pageCount)
       await loginPicker
         .getByRole('button', { name: /alice@nook\.test/ })
         .click()
@@ -535,7 +537,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         email: 'alice@nook.test',
         password: 'extension-fill-password',
       })
-      await expect.poll(() => loginPicker.isClosed()).toBe(true)
+      await expect(inlinePicker).toHaveCount(0)
       await expect(fillWidget.getByText('Nook Pilot · 3/3')).toBeVisible()
       await expect(fillWidget.getByText('Verifying sign-in')).toBeVisible()
       await expect(
@@ -633,26 +635,23 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         'wait for widget after companion-unlock reload',
       )
       console.log('[extension e2e] widget wait complete')
-      const websiteLoginPickerPromise = waitForNewPage(
-        context,
-        'post-unlock website login picker',
-      )
+      const pageCount = context.pages().length
       await websiteWidget
         .getByRole('button', { name: 'Continue with Nook' })
         .click()
       console.log('[extension e2e] Continue click complete')
-      const websiteLoginPicker = await websiteLoginPickerPromise
-      await waitForPageUrl(
-        websiteLoginPicker,
-        context,
-        /intent=login-picker/,
-        'post-unlock website login picker',
-      )
+      const inlinePicker = websiteWidget.getByTestId('nook-inline-login-picker')
+      await expect(inlinePicker).toBeVisible()
+      const websiteLoginPicker = inlinePicker.contentFrame()
       await expect(websiteLoginPicker.getByText('alice@nook.test')).toBeVisible(
         { timeout: 20_000 },
       )
       console.log('[extension e2e] post-unlock login picker loaded')
-      await websiteLoginPicker.close()
+      expect(context.pages()).toHaveLength(pageCount)
+      await websiteWidget
+        .getByRole('button', { name: 'Cancel', exact: true })
+        .click()
+      await expect(inlinePicker).toHaveCount(0)
       await withE2eDeadline(
         websiteAfterUnlock.page.reload(),
         'reload website after login picker',

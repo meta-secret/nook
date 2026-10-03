@@ -1,4 +1,8 @@
 import { Schema } from 'effect'
+import {
+  LoginPickerFrameBindingKind,
+  type LoginPickerFrameBinding,
+} from '../../lib/inline-login-picker'
 import type { ExtensionSessionStorageValue } from './pairing-identity-storage'
 
 export type PendingAuthenticatorPicker = {
@@ -8,6 +12,11 @@ export type PendingAuthenticatorPicker = {
   frameId: number
   allowedVaultStoreIds: readonly string[]
   expiresAt: number
+}
+
+export type PendingLoginPicker = PendingAuthenticatorPicker & {
+  readonly parentDocumentId: string
+  pickerDocument: LoginPickerFrameBinding
 }
 
 type SessionAuthenticatorAccount = {
@@ -99,6 +108,26 @@ const pendingAuthenticatorPickerSchema = Schema.Struct(
   pendingAuthenticatorPickerSchemaFields,
 ) satisfies Schema.Schema<PendingAuthenticatorPicker>
 
+class LoginPickerSessionSchema {
+  private static readonly awaitingFields = {
+    kind: Schema.Literal(LoginPickerFrameBindingKind.AwaitingDocument),
+  } satisfies Schema.Struct.Fields
+  private static readonly boundFields = {
+    kind: Schema.Literal(LoginPickerFrameBindingKind.Bound),
+    frameId: Schema.Number.pipe(Schema.int(), Schema.positive()),
+    documentId: Schema.String.pipe(Schema.minLength(1)),
+  } satisfies Schema.Struct.Fields
+  private static readonly fields = {
+    ...pendingAuthenticatorPickerSchemaFields,
+    parentDocumentId: Schema.String.pipe(Schema.minLength(1)),
+    pickerDocument: Schema.Union(
+      Schema.Struct(LoginPickerSessionSchema.awaitingFields),
+      Schema.Struct(LoginPickerSessionSchema.boundFields),
+    ),
+  } satisfies Schema.Struct.Fields
+  static readonly value = Schema.Struct(LoginPickerSessionSchema.fields)
+}
+
 class AccountPickerSessionCodec {
   decodeSessionAccounts(value: SessionAccountWireValue) {
     return Schema.decodeUnknown(sessionAccountsSchema)(value)
@@ -106,6 +135,10 @@ class AccountPickerSessionCodec {
 
   decodePendingAuthenticatorPicker(value: ExtensionSessionStorageValue) {
     return Schema.decodeUnknown(pendingAuthenticatorPickerSchema)(value)
+  }
+
+  decodePendingLoginPicker(value: ExtensionSessionStorageValue) {
+    return Schema.decodeUnknown(LoginPickerSessionSchema.value)(value)
   }
 }
 

@@ -41,7 +41,11 @@ describe('login picker runtime messages', () => {
         Effect.either(
           LoginPickerQueryMessageSchema.decode({
             type: 'nook:login-picker-query',
-            payload: { requestId: 'req-1', query: 'alice' },
+            payload: {
+              requestId: 'req-1',
+              query: 'alice',
+              parentOrigin: 'https://example.test',
+            },
           }),
         ),
       )._tag,
@@ -54,6 +58,7 @@ describe('login picker runtime messages', () => {
             payload: {
               requestId: 'req-1',
               query: 'a'.repeat(MAX_LOGIN_SEARCH_LENGTH + 1),
+              parentOrigin: 'https://example.test',
             },
           }),
         ),

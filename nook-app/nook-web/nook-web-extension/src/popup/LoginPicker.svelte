@@ -1,231 +1,103 @@
 <script lang="ts">
-  import {
-    I18N_KEYS,
-    type I18nKey,
-  } from '../../../nook-web-shared/src/generated/i18n-keys'
+  import { I18N_KEYS } from '../../../nook-web-shared/src/generated/i18n-keys'
   import { Search } from '@lucide/svelte'
   import { onMount } from 'svelte'
-  import NookIcon from '../../../nook-web-shared/src/components/NookIcon.svelte'
-  import type { WebsiteLoginAccountOption } from '../lib/login-fill-messages'
+  import type { ExtensionI18n } from '../lib/i18n'
   import {
-    ConcreteDecoderResultKind,
-    runConcreteDecoder,
-  } from '../lib/concrete-decoder'
-  import {
-    LoginPickerCancelMessageType,
-    LoginPickerQueryMessageType,
-    LoginPickerQueryResponse,
-    LoginPickerRuntimeResponseKind,
-    LoginPickerSelectMessageType,
-    LoginPickerSelectResponse,
-    type LoginPickerCancelMessage,
-    type LoginPickerQueryMessage,
-    type LoginPickerRequestMessage,
-    type LoginPickerRuntimeResponse,
-    type LoginPickerSelectMessage,
-  } from '../lib/login-picker-messages'
-  type LoginPickerRuntimeMessage =
-    | LoginPickerQueryMessage
-    | LoginPickerSelectMessage
-    | LoginPickerCancelMessage
-  import {
-    ExtensionTranslationRequestKind,
-    type ExtensionI18n,
-    type ExtensionTranslationRequest,
-    extensionLocaleCatalog,
-  } from '../lib/i18n'
+    LoginPickerActivity,
+    LoginPickerController,
+  } from './login-picker-controller.svelte'
 
   let {
     i18n,
     requestId,
+    parentOrigin,
   }: {
     i18n: ExtensionI18n
     requestId: string
+    parentOrigin: string
   } = $props()
+  const documentRequest: ConstructorParameters<
+    typeof LoginPickerController
+  >[0] = { i18n, requestId, parentOrigin }
+  const picker = new LoginPickerController(documentRequest)
 
-  function translatePlain(key: I18nKey): string {
-    return i18n.t(extensionLocaleCatalog.plainExtensionTranslation(key))
-  }
-
-  let query = $state('')
-  let accounts = $state<WebsiteLoginAccountOption[]>([])
-  let destinationOrigin = $state('')
-  let loading = $state(true)
-  let busy = $state(false)
-  let error = $state('')
-  let querySequence = 0
-  let completed = false
-
-  function sendRuntimeMessage(
-    message: LoginPickerRequestMessage,
-  ): Promise<LoginPickerRuntimeResponse> {
-    return new Promise((resolve) => {
-      chrome.runtime.sendMessage(message, (response: unknown) => {
-        if (message.type === LoginPickerQueryMessageType.NookLoginPickerQuery) {
-          const decoded = runConcreteDecoder(
-            LoginPickerQueryResponse.decode,
-            response,
-          )
-          const queryResponse: LoginPickerRuntimeResponse =
-            decoded.kind === ConcreteDecoderResultKind.Decoded
-              ? {
-                  kind: LoginPickerRuntimeResponseKind.Query,
-                  response: decoded.value,
-                }
-              : { kind: LoginPickerRuntimeResponseKind.Rejected }
-          resolve(queryResponse)
-          return
-        }
-        const decoded = runConcreteDecoder(
-          LoginPickerSelectResponse.decode,
-          response,
-        )
-        const selectionResponse: LoginPickerRuntimeResponse =
-          decoded.kind === ConcreteDecoderResultKind.Decoded
-            ? { kind: LoginPickerRuntimeResponseKind.Selected }
-            : { kind: LoginPickerRuntimeResponseKind.Rejected }
-        resolve(selectionResponse)
-      })
-    })
-  }
-
-  function accountPrimaryLabel(account: WebsiteLoginAccountOption): string {
-    const username = account.username.trim()
-    if (username.length > 0) return username
-    const host = account.websiteHost.trim()
-    if (host.length > 0) return host
-    return translatePlain(I18N_KEYS.ExtensionLoginPickerUnnamed)
-  }
-
-  function destinationLabel(origin: string): string {
-    const request: ExtensionTranslationRequest = {
-      kind: ExtensionTranslationRequestKind.WithReplacements,
-      key: I18N_KEYS.ExtensionLoginPickerDestination,
-      replacements: { origin },
-    }
-    return i18n.t(request)
-  }
-
-  async function loadAccounts(searchQuery: string): Promise<void> {
-    const sequence = ++querySequence
-    loading = true
-    error = ''
-    const message: Parameters<typeof sendRuntimeMessage>[0] = {
-      type: LoginPickerQueryMessageType.NookLoginPickerQuery,
-      payload: { requestId, query: searchQuery },
-    }
-    const response = await sendRuntimeMessage(message)
-    if (sequence !== querySequence) return
-    loading = false
-    if (response.kind !== LoginPickerRuntimeResponseKind.Query) {
-      accounts = []
-      destinationOrigin = ''
-      error = translatePlain(I18N_KEYS.ExtensionLoginPickerFailed)
-      return
-    }
-    destinationOrigin = response.response.origin
-    accounts = response.response.accounts
-  }
-
-  async function choose(account: WebsiteLoginAccountOption): Promise<void> {
-    if (busy) return
-    busy = true
-    error = ''
-    const message: Parameters<typeof sendRuntimeMessage>[0] = {
-      type: LoginPickerSelectMessageType.NookLoginPickerSelect,
-      payload: {
-        requestId,
-        vaultStoreId: account.vaultStoreId,
-        secretId: account.secretId,
-      },
-    }
-    const response = await sendRuntimeMessage(message)
-    if (response.kind === LoginPickerRuntimeResponseKind.Selected) {
-      completed = true
-      window.close()
-      return
-    }
-    busy = false
-    error = translatePlain(I18N_KEYS.ExtensionLoginPickerFailed)
-  }
-
-  $effect(() => {
-    void loadAccounts(query)
-  })
+  $effect(() => picker.load(picker.query))
 
   onMount(() => {
     const searchInput = document.getElementById('login-search')
-    if (searchInput instanceof HTMLInputElement) searchInput.focus()
-    const cancelPendingPicker = () => {
-      if (completed) return
-      completed = true
-      const message: LoginPickerRuntimeMessage = {
-        type: LoginPickerCancelMessageType.NookLoginPickerCancel,
-        payload: { requestId },
-      }
-      void chrome.runtime.sendMessage(message)
+    if (searchInput instanceof HTMLInputElement) {
+      searchInput.focus()
     }
-    window.addEventListener('pagehide', cancelPendingPicker)
-    return () => window.removeEventListener('pagehide', cancelPendingPicker)
+    const close = picker.close.bind(picker)
+    window.addEventListener('pagehide', close)
+    return () => {
+      window.removeEventListener('pagehide', close)
+      picker.close()
+    }
   })
 </script>
 
-<main class="authenticator-picker" data-testid="login-picker">
-  <p class="step-label">
-    {translatePlain(I18N_KEYS.ExtensionLoginPickerStepLabel)}
-  </p>
-  <NookIcon src="../icons/nook.png" alt="" class="popup-logo companion-logo" />
-  <h1>{translatePlain(I18N_KEYS.ExtensionLoginPickerTitle)}</h1>
-  <p class="description">
-    {translatePlain(I18N_KEYS.ExtensionLoginPickerDescription)}
-  </p>
-  {#if destinationOrigin}
-    <p class="destination-origin" data-testid="login-destination">
-      {destinationLabel(destinationOrigin)}
-    </p>
-  {/if}
+<main
+  class="authenticator-picker login-picker"
+  data-testid="login-picker"
+  aria-busy={picker.activity === LoginPickerActivity.Selecting}
+>
+  <header class="login-picker-header">
+    <h1>{picker.translate(I18N_KEYS.ExtensionLoginPickerTitle)}</h1>
+    {#if picker.destinationOrigin}
+      <p class="destination-origin" data-testid="login-destination">
+        {picker.destinationLabel(picker.destinationOrigin)}
+      </p>
+    {/if}
+  </header>
 
-  <div class="picker-filter">
-    <Search aria-hidden="true" size={18} />
-    <label for="login-search">
-      {translatePlain(I18N_KEYS.ExtensionLoginPickerSearchLabel)}
-    </label>
-    <input
-      id="login-search"
-      data-testid="login-search"
-      type="search"
-      bind:value={query}
-      maxlength="200"
-      autocomplete="off"
-      placeholder={translatePlain(
-        I18N_KEYS.ExtensionLoginPickerSearchPlaceholder,
-      )}
-    />
+  <div class="login-picker-search">
+    <div class="picker-filter">
+      <Search aria-hidden="true" size={18} />
+      <label for="login-search">
+        {picker.translate(I18N_KEYS.ExtensionLoginPickerSearchLabel)}
+      </label>
+      <input
+        id="login-search"
+        data-testid="login-search"
+        type="search"
+        bind:value={picker.query}
+        disabled={picker.activity === LoginPickerActivity.Selecting}
+        maxlength="200"
+        autocomplete="off"
+        placeholder={picker.translate(
+          I18N_KEYS.ExtensionLoginPickerSearchPlaceholder,
+        )}
+      />
+    </div>
+    <p class="filter-chip">
+      {picker.translate(I18N_KEYS.ExtensionLoginPickerFilterLabel)}
+    </p>
   </div>
-  <p class="filter-chip">
-    {translatePlain(I18N_KEYS.ExtensionLoginPickerFilterLabel)}
-  </p>
 
-  {#if error}
-    <p class="error-message" role="alert">{error}</p>
-  {:else if loading}
-    <p class="picker-status">
-      {translatePlain(I18N_KEYS.ExtensionLoginPickerLoading)}
+  {#if picker.activity === LoginPickerActivity.Failed}
+    <p class="error-message" role="alert">
+      {picker.translate(I18N_KEYS.ExtensionLoginPickerFailed)}
     </p>
-  {:else if accounts.length === 0}
-    <p class="picker-status">
-      {translatePlain(I18N_KEYS.ExtensionLoginPickerNoResults)}
+  {:else if picker.activity === LoginPickerActivity.Loading}
+    <p class="picker-status" role="status">
+      {picker.translate(I18N_KEYS.ExtensionLoginPickerLoading)}
+    </p>
+  {:else if picker.accounts.length === 0}
+    <p class="picker-status" role="status">
+      {picker.translate(I18N_KEYS.ExtensionLoginPickerNoResults)}
     </p>
   {:else}
     <div class="authenticator-results" data-testid="login-results">
-      {#each accounts as account (account.vaultStoreId + account.secretId)}
+      {#each picker.accounts as account (account.vaultStoreId + account.secretId)}
         <button
           type="button"
           class="authenticator-result secondary-button"
-          disabled={busy}
-          onclick={() => choose(account)}
+          disabled={picker.activity === LoginPickerActivity.Selecting}
+          onclick={() => picker.choose(account)}
         >
-          <strong>{accountPrimaryLabel(account)}</strong>
+          <strong>{picker.primaryLabel(account)}</strong>
           <span>{account.websiteHost}</span>
           <small>{account.vaultName}</small>
         </button>

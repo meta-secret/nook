@@ -1,4 +1,5 @@
 import type { AuthenticationPageObservationFacts } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import type { InlineLoginPickerSurface } from './inline-login-picker'
 import {
   PasswordFormScopeKind,
   type PasswordFormObservation,
@@ -22,7 +23,9 @@ type PendingAuthenticatorPicker = {
   approval: AuthenticationWorkflowApproval
 }
 
-type PendingLoginPicker = PendingAuthenticatorPicker
+type PendingLoginPicker = PendingAuthenticatorPicker & {
+  readonly surface: InlineLoginPickerSurface
+}
 export enum ScanScheduleKind {
   Idle = 'idle',
   Scheduled = 'scheduled',
@@ -404,6 +407,13 @@ class PickerState {
     this.authenticatorState = { kind: AuthenticatorPickerKind.Closed }
   }
   clearPendingLogin(): void {
+    switch (this.loginState.kind) {
+      case LoginPickerKind.Open:
+        this.loginState.request.surface.close()
+        break
+      case LoginPickerKind.Closed:
+        break
+    }
     this.loginState = { kind: LoginPickerKind.Closed }
   }
 }

@@ -215,6 +215,7 @@ test('delivers cleanup cancellation through the content-script router', async ()
   }
   const step = document.createElement('p')
   const title = document.createElement('h2')
+  const closeSurface = mock(() => {})
   pickerState.openLogin({
     requestId: 'login-request',
     workflow,
@@ -223,6 +224,7 @@ test('delivers cleanup cancellation through the content-script router', async ()
     description,
     continueButton,
     timeoutId: 7,
+    surface: { close: closeSurface },
     approval: pickerApproval(),
   })
   const sendResponse = mock(() => {})
@@ -240,6 +242,7 @@ test('delivers cleanup cancellation through the content-script router', async ()
   )
 
   expect(pickerState.login.kind).toBe(LoginPickerKind.Closed)
+  expect(closeSurface).toHaveBeenCalledTimes(1)
   expect(description.textContent).toBe('Picker canceled')
   expect(continueButton.disabled).toBe(false)
   expect(sendResponse).toHaveBeenCalledWith({ ok: true })

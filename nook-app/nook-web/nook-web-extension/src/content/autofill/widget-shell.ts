@@ -56,6 +56,7 @@ const WIDGET_PANEL_STYLES = `
       display: none !important;
     }
     .panel {
+      box-sizing: border-box;
       position: relative;
       width: min(320px, calc(100vw - 36px));
       display: grid;
@@ -115,6 +116,18 @@ const WIDGET_PANEL_STYLES = `
     .body {
       display: grid;
       gap: 12px;
+    }
+    .inline-login-picker {
+      width: 100%;
+      height: max(80px, min(420px, calc(100dvh - 360px)));
+      min-width: 0;
+      border: 0;
+      border-radius: 6px;
+      color-scheme: dark;
+    }
+    .inline-login-picker-cancel {
+      min-height: 44px;
+      margin: 0 auto;
     }
     .site-context {
       width: fit-content;
@@ -636,6 +649,7 @@ class AuthenticationWidgetShell {
     }
 
     collapseButton.addEventListener('click', () => {
+      loginPasskeyInteraction.cancelPendingLoginPickerRequest()
       this.ui.widgetState.collapsed = true
       applyCollapsedState()
     })

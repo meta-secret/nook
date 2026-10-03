@@ -36,6 +36,7 @@
     "../nook-web-extension/src/background/service-worker.ts",
     "../nook-web-extension/src/content/{authentication-route-page,autofill,companion-wasm-host,simple-vault-bridge,webauthn-content,webauthn-page}.ts",
     "../nook-web-extension/src/offscreen/session.ts",
+    "../nook-web-extension/src/login-picker/main.ts",
     "../nook-web-extension/src/popup/main.ts"
   ],
   "project": [

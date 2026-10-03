@@ -783,7 +783,7 @@ void test("one PR job avoids telemetry and registry handoffs", () => {
 });
 
 void test(
-  "failed FULL_E2E PR validation preserves only extension Playwright diagnostics",
+  "authentication PR validation preserves extension Playwright diagnostics and screenshots",
   () => {
     const workflow = fs.readFileSync(".github/workflows/pr.yml", "utf8");
     const stepStart = workflow.indexOf(
@@ -810,7 +810,7 @@ void test(
 
     assert.match(
       step,
-      /^ {8}if: failure\(\) && inputs\.full_e2e_requested$/m,
+      /^ {8}if: always\(\) && \(inputs\.full_e2e_requested \|\| steps\.browser-scope\.outputs\.auth == 'true'\)$/m,
     );
     assert.match(step, /^ {8}uses: actions\/upload-artifact@v7$/m);
     assert.match(
@@ -825,6 +825,7 @@ void test(
     assert.deepEqual(pathEntries.trimEnd().split("\n"), [
       "            ${{ runner.temp }}/nook-pr-artifacts/runtime/nook-app/nook-web/nook-web-extension/test-results/**/trace.zip",
       "            ${{ runner.temp }}/nook-pr-artifacts/runtime/nook-app/nook-web/nook-web-extension/test-results/**/error-context.md",
+      "            ${{ runner.temp }}/nook-pr-artifacts/runtime/nook-app/nook-web/nook-web-extension/test-results/**/*.png",
     ]);
     assert.match(
       validationStep,
