@@ -182,7 +182,7 @@ describe('authentication observation bounds', () => {
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         <button
-          id="${'n'.repeat(500)}"
+          id="${'n'.repeat(1024)}"
           name="action"
           value="delete-account"
           type="submit"

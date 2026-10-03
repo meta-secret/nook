@@ -1,10 +1,11 @@
-import { afterEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import {
   AuthenticationWorkflowAction,
   AuthenticationWorkflowKind,
   AuthenticationWorkflowSnapshotResponseKind,
   AuthenticationWorkflowStage,
   bind_authentication_page_observation_facts,
+  classify_authentication_authenticator_setup_batch,
   type AuthenticationApprovalRequirement,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
@@ -13,6 +14,12 @@ import {
   passwordFormInteraction,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 import type { AuthenticationWorkflowSnapshotMessage } from '../../../../nook-web-extension/src/lib/auth-workflow-messages'
+import { pageQrCapture } from '../../../../nook-web-extension/src/lib/page-qr-capture'
+import {
+  CompanionWasmSessionMessageType,
+  type CompanionWasmRuntimeMessage,
+  type CompanionWasmAuthenticatorSetupResponse,
+} from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 
 const runtime = vi.hoisted(() => ({ sendSnapshot: vi.fn() }))
 
@@ -121,9 +128,39 @@ function enrichedMatchedDelivery(
   }
 }
 
+type PreparedSetupRuntimeResponse = {
+  readonly ok: true
+  readonly result: CompanionWasmAuthenticatorSetupResponse
+}
+
+beforeEach(async () => {
+  vi.stubGlobal('chrome', {
+    runtime: {
+      sendMessage(
+        message: CompanionWasmRuntimeMessage,
+        respond: (response: PreparedSetupRuntimeResponse) => void,
+      ): void {
+        if (
+          message.type !==
+          CompanionWasmSessionMessageType.AuthenticationAuthenticatorSetupObservation
+        )
+          throw new Error('Expected authenticator setup metadata.')
+        const result: CompanionWasmAuthenticatorSetupResponse = {
+          authenticatorSetupObservation:
+            classify_authentication_authenticator_setup_batch(message.payload),
+        }
+        const response: Parameters<typeof respond>[0] = { ok: true, result }
+        respond(response)
+      },
+    },
+  })
+  await pageQrCapture.prepareAuthenticationAuthenticatorSetupObservation()
+})
+
 afterEach(() => {
   document.body.replaceChildren()
   runtime.sendSnapshot.mockReset()
+  vi.unstubAllGlobals()
 })
 
 describe('credential-bearing workflow revalidation', () => {
