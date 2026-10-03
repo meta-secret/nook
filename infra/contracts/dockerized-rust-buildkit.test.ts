@@ -59,7 +59,7 @@ class DockerizedRustBuildKitContract {
       "Preserve failed extension Playwright diagnostics",
     );
     expect(diagnosticsStep).toMatch(
-      /^ {8}if: failure\(\) && inputs\.full_e2e_requested$/m,
+      /^ {8}if: always\(\) && \(inputs\.full_e2e_requested \|\| steps\.browser-scope\.outputs\.auth == 'true'\)$/m,
     );
     expect(diagnosticsStep).toMatch(
       /^ {8}uses: actions\/upload-artifact@v7$/m,
@@ -70,6 +70,7 @@ class DockerizedRustBuildKitContract {
     expect(diagnosticPaths?.[1]?.trimEnd().split("\n")).toEqual([
       "            ${{ runner.temp }}/nook-pr-artifacts/runtime/nook-app/nook-web/nook-web-extension/test-results/**/trace.zip",
       "            ${{ runner.temp }}/nook-pr-artifacts/runtime/nook-app/nook-web/nook-web-extension/test-results/**/error-context.md",
+      "            ${{ runner.temp }}/nook-pr-artifacts/runtime/nook-app/nook-web/nook-web-extension/test-results/**/*.png",
     ]);
     expect(workflow.match(/uses: actions\/upload-artifact@[^\s]+/g)).toEqual([
       "uses: actions/upload-artifact@v7",
