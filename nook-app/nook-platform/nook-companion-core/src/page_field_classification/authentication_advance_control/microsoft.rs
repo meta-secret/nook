@@ -106,7 +106,19 @@ impl AuthenticationAdvanceControlObservation {
                 "next",
                 MicrosoftIdentifierSubmitShape::IdentifierSubmit,
             ) => MicrosoftAuthorizationAdmission::IdentifierAdvance,
-            _ => MicrosoftAuthorizationAdmission::Unrelated,
+            (MicrosoftConsumerLoginDestination::Unrelated, _, _, _, _, _)
+            | (_, MicrosoftTextBound::ExceedsLimit, _, _, _, _)
+            | (_, _, MicrosoftTextBound::ExceedsLimit, _, _, _)
+            | (_, _, _, PageControlSubmissionDestinationSource::Authored, _, _)
+            | (_, _, _, _, _, MicrosoftIdentifierSubmitShape::Unrelated)
+            | (
+                MicrosoftConsumerLoginDestination::IdentifierEntry,
+                MicrosoftTextBound::WithinLimit,
+                MicrosoftTextBound::WithinLimit,
+                PageControlSubmissionDestinationSource::Omitted,
+                _,
+                MicrosoftIdentifierSubmitShape::IdentifierSubmit,
+            ) => MicrosoftAuthorizationAdmission::Unrelated,
         }
     }
 
@@ -133,7 +145,48 @@ impl AuthenticationAdvanceControlObservation {
                 true,
                 true,
             ) => MicrosoftIdentifierSubmitShape::IdentifierSubmit,
-            _ => MicrosoftIdentifierSubmitShape::Unrelated,
+            (PageControlActionability::Inert, _, _, _, _, _, _, _, _)
+            | (_, PageControlOwnership::Unowned, _, _, _, _, _, _, _)
+            | (_, _, PageControlSemantics::Activation, _, _, _, _, _, _)
+            | (
+                _,
+                _,
+                _,
+                PageControlSubmissionMethod::Absent
+                | PageControlSubmissionMethod::Get
+                | PageControlSubmissionMethod::Dialog,
+                _,
+                _,
+                _,
+                _,
+                _,
+            )
+            | (
+                _,
+                _,
+                _,
+                _,
+                AuthenticationUsernameEvidence::Absent
+                | AuthenticationUsernameEvidence::Generic
+                | AuthenticationUsernameEvidence::StandardsBasedEmail
+                | AuthenticationUsernameEvidence::MixedPhoneOrEmail
+                | AuthenticationUsernameEvidence::WebAuthnEmail,
+                _,
+                _,
+                _,
+                _,
+            )
+            | (
+                PageControlActionability::Actionable,
+                PageControlOwnership::OwnedForm | PageControlOwnership::LocallyScoped,
+                PageControlSemantics::SemanticSubmit,
+                PageControlSubmissionMethod::Post,
+                AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit,
+                _,
+                _,
+                _,
+                _,
+            ) => MicrosoftIdentifierSubmitShape::Unrelated,
         }
     }
 
