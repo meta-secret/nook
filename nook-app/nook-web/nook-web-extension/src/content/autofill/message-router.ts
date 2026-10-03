@@ -1,4 +1,7 @@
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
+import { Schema } from 'effect'
+import { LoginPickerPageVerification } from '../../lib/inline-login-picker'
+import { LoginPickerPageVerificationReceiver } from './login-picker-page-verification'
 import {
   ConcreteDecoderResultKind,
   runConcreteDecoder,
@@ -53,6 +56,15 @@ export const routeAutofillMessage: AutofillMessageListener = (
 ) => {
   if (!runtimeMessage || typeof runtimeMessage !== 'object') return false
   const message = runtimeMessage
+  const verification = Schema.decodeUnknownEither(LoginPickerPageVerification)(message)
+  switch (verification._tag) {
+    case 'Left':
+      break
+    case 'Right': {
+      const delivery: Parameters<LoginPickerPageVerificationReceiver["receive"]>[0] = { message: verification.right, sender, sendResponse }
+      return new LoginPickerPageVerificationReceiver().receive(delivery)
+    }
+  }
   if (
     sender.id === chrome.runtime.id &&
     'type' in message &&

@@ -17,7 +17,6 @@ import PopupApp from './PopupApp.svelte'
 import PopupInitializationFailure from './PopupInitializationFailure.svelte'
 import { PopupInitializationPhase } from './popup-app-state'
 import AuthenticatorPicker from './AuthenticatorPicker.svelte'
-import LoginPicker from './LoginPicker.svelte'
 import './popup.css'
 
 async function loadCompanionVaultConnection(): Promise<
@@ -57,17 +56,6 @@ async function main() {
       },
     }
     mount(AuthenticatorPicker, nookTypedArgs0_0)
-    return
-  }
-  if (searchParams.get('intent') === 'login-picker') {
-    const nookTypedArgs0_1: MountOptions<ComponentProps<typeof LoginPicker>> = {
-      target,
-      props: {
-        i18n,
-        requestId: ((v) => (v ? v : ''))(searchParams.get('request')),
-      },
-    }
-    mount(LoginPicker, nookTypedArgs0_1)
     return
   }
 

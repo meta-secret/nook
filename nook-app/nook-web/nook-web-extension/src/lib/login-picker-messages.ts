@@ -43,6 +43,7 @@ export class LoginPickerQueryMessage {
   declare readonly payload: {
     requestId: string
     query: string
+    parentOrigin: string
   }
   static decode(message: unknown) {
     return Schema.decodeUnknown(loginPickerQueryMessageSchema)(message)
@@ -231,11 +232,13 @@ const websiteLoginPickerOpenMessageSchema = Schema.Struct(
 type LoginPickerQueryMessagePayloadSchemaFields = {
   requestId: Schema.filter<typeof Schema.String>
   query: Schema.filter<typeof Schema.String>
+  parentOrigin: Schema.filter<typeof Schema.String>
 }
 const loginPickerQueryMessagePayloadSchemaFields: LoginPickerQueryMessagePayloadSchemaFields =
   {
     requestId: loginPickerNonEmptyStringSchema,
     query: Schema.String.pipe(Schema.maxLength(MAX_LOGIN_SEARCH_LENGTH)),
+    parentOrigin: loginPickerNonEmptyStringSchema,
   }
 
 type LoginPickerQueryMessageSchemaFields = {
@@ -243,6 +246,7 @@ type LoginPickerQueryMessageSchemaFields = {
   payload: Schema.Struct<{
     requestId: Schema.filter<typeof Schema.String>
     query: Schema.filter<typeof Schema.String>
+    parentOrigin: Schema.filter<typeof Schema.String>
   }>
 }
 const loginPickerQueryMessageSchemaFields: LoginPickerQueryMessageSchemaFields =

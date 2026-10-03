@@ -1,3 +1,4 @@
+import { loginPickerOperations } from './service-worker/login-picker-operations'
 /* eslint-disable nook-typed-api/no-raw-object-arguments, @typescript-eslint/no-unsafe-type-assertion -- Chrome runtime messages are narrowed at this external transport boundary. */
 import {
   GeneratePasswordRequestType,
@@ -76,10 +77,6 @@ import {
 } from './service-worker/account-pickers'
 import { authenticatorEnrollmentOperations } from './service-worker/authenticator-operations'
 import {
-  cancelLoginPicker,
-  openWebsiteLoginPicker,
-  queryLoginPicker,
-  selectLoginPicker,
   websiteLoginFill,
   websiteLoginSaveCommit,
   websiteLoginSaveDismiss,
@@ -251,16 +248,16 @@ const externalCompanionRoutingDependencies: ExternalCompanionRoutingRequest['dep
 
 const schemaRuntimeMessageRoutes: BackgroundRuntimeMessageRoutes = [
   SchemaRuntimeMessageRoute.matching(WebsiteLoginPickerOpenMessageSchema)
-    .respondWith(openWebsiteLoginPicker)
+    .respondWith(loginPickerOperations.openWebsiteLoginPicker.bind(loginPickerOperations))
     .onRejected(() => ({ ok: false, reason: 'login-picker-open-failed' })),
   SchemaRuntimeMessageRoute.matching(LoginPickerQueryMessageSchema)
-    .respondWith(queryLoginPicker)
+    .respondWith(loginPickerOperations.queryLoginPicker.bind(loginPickerOperations))
     .onRejected(() => ({ ok: false, reason: 'login-picker-query-failed' })),
   SchemaRuntimeMessageRoute.matching(LoginPickerSelectMessageSchema)
-    .respondWith(selectLoginPicker)
+    .respondWith(loginPickerOperations.selectLoginPicker.bind(loginPickerOperations))
     .onRejected(() => ({ ok: false, reason: 'login-picker-select-failed' })),
   SchemaRuntimeMessageRoute.matching(LoginPickerCancelMessageSchema)
-    .respondWith(cancelLoginPicker)
+    .respondWith(loginPickerOperations.cancelLoginPicker.bind(loginPickerOperations))
     .onRejected(() => ({ ok: false, reason: 'login-picker-cancel-failed' })),
   SchemaRuntimeMessageRoute.matching(
     WebsiteAuthenticatorPickerOpenMessageSchema,
