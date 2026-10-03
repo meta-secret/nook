@@ -15,7 +15,7 @@ export type RunCortexValeArgs = {
 };
 
 /** Owns the cortex vale invocation registry and its capability transitions. */
-const REQUIRED_VALE_VERSION = 'vale version 3.19.0';
+const REQUIRED_VALE_VERSION = 'vale version 3.22.0';
 export class CortexValeInvocation {
   constructor(private readonly request: RunCortexValeArgs) {}
   execute(): Result<void, ValeFailure> {
@@ -41,7 +41,7 @@ export class CortexValeInvocation {
     ) {
       return err({
         code: LoomFailureCode.CortexAuditFailed,
-        message: 'Vale 3.19.0 is required for Cortex Markdown linting.',
+        message: 'Vale 3.22.0 is required for Cortex Markdown linting.',
       });
     }
     const markdownFiles =
