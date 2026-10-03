@@ -137,10 +137,11 @@ impl AuthenticationAdvanceControlObservation {
                 },
             )
             .is_ok_and(|destination| {
-                matches!(
-                    destination.microsoft_consumer_login_destination(),
-                    MicrosoftConsumerLoginDestination::IdentifierEntry
-                )
+                destination.is_microsoft_consumer_login_root
+                    || matches!(
+                        destination.microsoft_consumer_login_destination(),
+                        MicrosoftConsumerLoginDestination::IdentifierEntry
+                    )
             })
     }
 

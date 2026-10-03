@@ -47,6 +47,14 @@ pub struct ControlDestinationEvidence<'a> {
 pub struct InvalidControlDestination;
 
 impl CanonicalControlDestination {
+    fn microsoft_scope_policy_value(scope: &str) -> String {
+        scope
+            .split_whitespace()
+            .filter(|token| *token != "profile")
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
     pub(crate) fn microsoft_consumer_login_destination(&self) -> MicrosoftConsumerLoginDestination {
         match (
             &self.authentication_policy_destination,
@@ -352,9 +360,20 @@ impl CanonicalControlDestination {
             destination.fragment(),
         ) {
             ("https", Some("login.live.com"), Some(443), "/oauth20_authorize.srf", None) => {
-                // The provider path names OAuth, but its query remains action/provider evidence.
-                authentication_policy_route_identity =
-                    route_identity.replacen("/oauth20_authorize.srf", "/", 1);
+                // OAuth's profile scope is metadata, not an account-management action.
+                // Every other scope token and query field remains policy evidence.
+                let query_evidence = destination
+                    .query_pairs()
+                    .map(|(key, value)| match key.as_ref() {
+                        "scope" => format!("{key}={}", Self::microsoft_scope_policy_value(&value)),
+                        _ => format!("{key}={value}"),
+                    })
+                    .collect::<Vec<_>>()
+                    .join("&");
+                authentication_policy_route_identity = match destination.query() {
+                    Some(_) => format!("/?{query_evidence}"),
+                    None => "/".to_owned(),
+                };
                 AuthenticationPolicyDestination::MicrosoftConsumerAuthorization
             }
             _ => match tesla_account_authorization_route {
@@ -401,6 +420,9 @@ pub mod tests {
             "https://login.live.com/oauth20_authorize.srf?provider=google",
             "https://login.live.com/oauth20_authorize.srf?action=%64elete-account",
             "https://login.live.com/oauth20_authorize.srf?scope=passkey",
+            "https://login.live.com/oauth20_authorize.srf?action=profile",
+            "https://login.live.com/oauth20_authorize.srf?scope=profile&action=profile",
+            "https://login.live.com/oauth20_authorize.srf?scope=profile+passkey",
         ] {
             let observation = AuthenticationAdvanceControlObservation {
                 actionability: PageControlActionability::Actionable,
@@ -432,7 +454,7 @@ pub mod tests {
         let destination = CanonicalControlDestination::canonicalize_control_destination(
             ControlDestinationEvidence {
                 source_origin: "https://login.live.com",
-                destination_identity: "https://login.live.com/oauth20_authorize.srf?client_id=mock-client&scope=openid+profile&action=%64elete-account",
+                destination_identity: "https://login.live.com/oauth20_authorize.srf?client_id=mock-client&scope=openid+profile+offline_access&action=%64elete-account&other=profile",
             },
         )?;
         assert_eq!(
@@ -441,7 +463,7 @@ pub mod tests {
         );
         assert_eq!(
             destination.authentication_policy_route_identity(),
-            "/?client_id=mock-client&scope=openid profile&action=delete-account"
+            "/?client_id=mock-client&scope=openid offline_access&action=delete-account&other=profile"
         );
         Ok(())
     }
