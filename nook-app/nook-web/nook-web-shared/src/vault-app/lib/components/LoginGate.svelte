@@ -78,10 +78,7 @@
   import LoginEnrollmentPanel from "$lib/components/login/LoginEnrollmentPanel.svelte";
   import EnrollmentQrOnboardCard from "$lib/components/login/EnrollmentQrOnboardCard.svelte";
   import SentinelCeremonyPanel from "$lib/components/login/SentinelCeremonyPanel.svelte";
-  import {
-    SentinelUnlockActions,
-    SentinelCeremonyVisibility,
-  } from "$lib/vault/sentinel-unlock";
+  import { LoginVaultPresentation } from "$lib/components/login/login-vault-presentation.svelte";
   import RemoteVaultRecoveryPanel from "$lib/components/login/RemoteVaultRecoveryPanel.svelte";
   import * as sentinelGenesisActions from "$lib/vault/sentinel-genesis";
   import {
@@ -410,18 +407,18 @@
   const showVaultPicker = $derived(
     vault.showLoginVaultPicker && !showProviderSetupLink,
   );
-  const sentinelVisibility = $derived(
-    new SentinelUnlockActions(vault).ceremonyVisibility(),
-  );
-  const showSentinelCeremony = $derived(
-    sentinelVisibility.isOk() &&
-      sentinelVisibility.value === SentinelCeremonyVisibility.Visible,
-  );
+  const presentation = $derived(new LoginVaultPresentation(vault));
+  const showSentinelCeremony = $derived(presentation.showSentinelCeremony);
   $effect(() => {
-    if (sentinelVisibility.isErr()) {
-      const message = vault.t(sentinelVisibility.error.translationKey);
-      if (untrack(() => vault.errorMsg) !== message) vault.errorMsg = message;
-    }
+    void vault.hasManager;
+    void vault.isAuthenticated;
+    void vault.sentinelUnlockStatus;
+    void vault.sentinelCeremonyPrompt;
+    void vault.vaultArchitecture.vault_type;
+    void vault.sentinelUnlockSession.active;
+    const current = presentation;
+    untrack(() => void current.refresh());
+    return () => current.release();
   });
   const hasKnownLocalVault = $derived(
     vault.localVaultPresent || vault.localVaults.length > 0,
@@ -453,7 +450,9 @@
     return { kind: LoginVaultEntryKind.Unavailable };
   });
   const activeVaultExtensionPairingStatus = $derived(
-    statusForActiveVault(extensionConnectPairingStatusEntries)(activeLoginVault),
+    statusForActiveVault(extensionConnectPairingStatusEntries)(
+      activeLoginVault,
+    ),
   );
   const showQrOnboarding = $derived(
     Boolean(
