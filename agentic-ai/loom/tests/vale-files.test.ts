@@ -111,7 +111,7 @@ const INVALID_INLINE_LENGTH_FIXTURE = path.join(
 const REAL_TEMP_DIRECTORY = realpathSync(tmpdir());
 
 const VALID_NATIVE_ALERT =
-  '{"Action":{"Name":"","Params":null},"Span":[3,15],"Check":"Nook.CortexNavigation","Description":"","Link":"","Message":"Navigation is prohibited.","Severity":"error","Match":"Relationships","Line":3}';
+  '{"Action":{"Name":"","Params":null},"Suggestions":[],"Span":[3,15],"Check":"Nook.CortexNavigation","Description":"","Link":"","Message":"Navigation is prohibited.","Severity":"error","Match":"Relationships","Line":3}';
 
 type ValeReportJsonArgs = {
   readonly alert: string;
@@ -237,7 +237,7 @@ test('uses Vale-native character counting and cardinality for sentence length', 
   ]);
 });
 
-test('pins Vale 3.19 structural boundaries for residual Markdown checks', () => {
+test('pins Vale 3.22 structural boundaries for residual Markdown checks', () => {
   const valeResult5 = new ValeFileDiagnostics({
     configPath: CAPABILITIES_CONFIG_PATH,
     files: [TABLE_CAPABILITIES_FIXTURE],
@@ -364,7 +364,7 @@ test('rejects an in-repository path through a symlinked ancestor', () => {
     ok({
       exitCode: 0,
       signaled: false,
-      stdout: 'vale version 3.19.0',
+      stdout: 'vale version 3.22.0',
       stderr: '',
     }),
   );
@@ -398,7 +398,7 @@ test('requires the pinned Vale version before linting', () => {
       exitCode: 0,
       signaled: false,
       stderr: '',
-      stdout: 'vale version 3.19.0\n',
+      stdout: 'vale version 3.22.0\n',
     }).admission(),
   ).toBe(ValeVersionAdmission.Admitted);
   for (const output of [
@@ -406,7 +406,7 @@ test('requires the pinned Vale version before linting', () => {
       exitCode: 0,
       signaled: false,
       stderr: '',
-      stdout: 'vale version 3.18.0\n',
+      stdout: 'vale version 3.19.0\n',
     },
     {
       exitCode: 1,
@@ -422,6 +422,12 @@ test('requires the pinned Vale version before linting', () => {
 });
 
 test('fails closed on invalid JSON and native alert schema', () => {
+  const numericSuggestions: ValeReportJsonArgs = {
+    alert: VALID_NATIVE_ALERT.replace('"Suggestions":[]', '"Suggestions":[1]'),
+  };
+  const missingSuggestions: ValeReportJsonArgs = {
+    alert: VALID_NATIVE_ALERT.replace('"Suggestions":[],', ''),
+  };
   for (const stdout of [
     '{',
     '[]',
@@ -449,6 +455,8 @@ test('fails closed on invalid JSON and native alert schema', () => {
     ValeFilesScenario.valeReportJson({
       alert: VALID_NATIVE_ALERT.replace(',"Link":""', ''),
     }),
+    ValeFilesScenario.valeReportJson(numericSuggestions),
+    ValeFilesScenario.valeReportJson(missingSuggestions),
     JSON.stringify({
       [VALID_FIXTURE]: [
         {
@@ -482,7 +490,7 @@ test('returns decoded Vale alerts without nesting the Result', () => {
         ok({
           exitCode: 0,
           signaled: false,
-          stdout: 'vale version 3.19.0',
+          stdout: 'vale version 3.22.0',
           stderr: '',
         }),
       );
@@ -527,7 +535,7 @@ test('propagates malformed Vale output as a decoding failure', () => {
       ok({
         exitCode: 0,
         signaled: false,
-        stdout: 'vale version 3.19.0',
+        stdout: 'vale version 3.22.0',
         stderr: '',
       }),
     );
@@ -554,7 +562,7 @@ test('rejects invalid requests and external config before starting Vale', () => 
     ok({
       exitCode: 0,
       signaled: false,
-      stdout: 'vale version 3.19.0',
+      stdout: 'vale version 3.22.0',
       stderr: '',
     }),
   );
