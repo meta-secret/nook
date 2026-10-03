@@ -21,9 +21,12 @@ beforeEach(() => {
         )
         callback({
           ok: true,
-          result: classify_authentication_authenticator_setup_batch(
-            message.payload,
-          ),
+          result: {
+            authenticatorSetupObservation:
+              classify_authentication_authenticator_setup_batch(
+                message.payload,
+              ),
+          },
         })
       },
     },
@@ -164,6 +167,28 @@ describe('page QR otpauth capture', () => {
     })
     await expect(fixture.prepare()).rejects.toThrow('unavailable')
     expect(() => fixture.observation).toThrow('not prepared')
+  })
+
+  test('requires the typed setup observation field in a delivered runtime envelope', async () => {
+    const fixture = new PageQrObservationFixture('<section><img/></section>')
+    for (const result of [
+      'absent',
+      {},
+      { authenticatorSetupObservation: 'unsupported' },
+    ]) {
+      vi.stubGlobal('chrome', {
+        runtime: {
+          sendMessage(
+            _message: CompanionWasmRuntimeMessage,
+            callback: (response: object) => void,
+          ) {
+            callback({ ok: true, result })
+          },
+        },
+      })
+      await expect(fixture.prepare()).rejects.toThrow('response rejected')
+      expect(() => fixture.observation).toThrow('not prepared')
+    }
   })
 
   test('prefers visible data-nook-otpauth-uri without BarcodeDetector', async () => {
