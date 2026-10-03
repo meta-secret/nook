@@ -544,12 +544,6 @@ button:disabled {
   text-align: left;
 }
 
-.login-picker .description {
-  margin: 0;
-  font-size: 12px;
-  text-align: left;
-}
-
 .login-picker .destination-origin {
   padding: 8px 10px;
   border-radius: var(--radius);
@@ -628,24 +622,4 @@ button:disabled {
 .login-picker[aria-busy='true'] .authenticator-results {
   border-left: 2px solid var(--muted-foreground);
   padding-left: 6px;
-}
-
-@media (prefers-color-scheme: light) {
-  :root:has(.login-picker) {
-    /* Existing vault-app light tokens; other popup surfaces retain their theme. */
-    --background: oklch(0.985 0.001 286.375);
-    --foreground: oklch(0.141 0.005 285.823);
-    --card: oklch(1 0 0);
-    --muted-foreground: oklch(0.48 0.014 285.938);
-    --primary: oklch(0.21 0.006 285.885);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.955 0.002 286.375);
-    --secondary-foreground: oklch(0.21 0.006 285.885);
-    --border: rgb(211 214 220 / 72%);
-    --input: rgb(191 196 205 / 84%);
-    --ring: rgb(118 124 137 / 65%);
-    --destructive-bg: oklch(0.97 0.015 25);
-    --destructive-fg: oklch(0.45 0.12 25);
-    color-scheme: light;
-  }
 }
