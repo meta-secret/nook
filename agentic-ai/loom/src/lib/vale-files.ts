@@ -61,7 +61,7 @@ type ParseAlertArgs = {
 
 /** Owns the vale file diagnostics registry and its capability transitions. */
 const VALE_ALERT_EXIT_CODE = 1;
-const REQUIRED_VALE_VERSION = 'vale version 3.19.0';
+const REQUIRED_VALE_VERSION = 'vale version 3.22.0';
 export class ValeFileDiagnostics {
   constructor(private readonly request: RunValeFilesArgs) {}
   execute(): Result<ValeFilesResult, ValeFailure> {
@@ -83,7 +83,7 @@ export class ValeFileDiagnostics {
     ) {
       return err({
         code: LoomFailureCode.CortexAuditFailed,
-        message: 'Vale 3.19.0 is required for exact-file linting.',
+        message: 'Vale 3.22.0 is required for exact-file linting.',
       });
     }
     const commandArgs: RepositoryCommandRequest = {
@@ -310,6 +310,7 @@ const VALE_ALERT_SCHEMA = z.strictObject({
     Name: z.string(),
     Params: z.custom<UntrustedYamlNode>().refine(YamlNullBoundary.matches),
   }),
+  Suggestions: z.array(z.string()),
   Span: z.tuple([z.int().positive(), z.int().positive()]),
   Check: z.string().min(1),
   Line: z.int().positive(),

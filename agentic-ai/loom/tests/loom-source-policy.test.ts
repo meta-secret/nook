@@ -89,7 +89,7 @@ test('wires canonical state and Cortex gates into Loom check', async () => {
   );
   for (const required of [
     '0.15.2',
-    'c8f9d6c8055442bc7e9c121b2498e6f0e3fb670f4665e6ee577f1897f7665cf6',
+    '52f5cd0314a1b7384cac6aa102a68193977312f6ba9c9f3ae001b5deec8e3a10',
     '02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239',
     'c70d2b5e2828f4c90c36a3b9185b5d4405b0751e9fc7c43231c78711e047a306',
     'busybox_UNXZ',

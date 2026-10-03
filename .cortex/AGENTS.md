@@ -85,13 +85,6 @@ beside an existing `index.md`.
 **Preferred:** route from the [root index](index.md) to the owning team's or
 project's `index.md`, then to the relevant document.
 
-## Nook assignment context
-
-Follow the upstream [assignment context](../.meta-cortex/teams/AGENTS.md#assignment-context).
-Select the owning Nook context from the root graph and include its product,
-security, delivery, and validation requirements when they apply. Workers use
-the assigned context directly.
-
 ## Context routes
 
 - [AI](teams/ai/AGENTS.md): Cortex, Loom, executable skills, and agent tooling.
