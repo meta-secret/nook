@@ -244,20 +244,33 @@ test('shows compact inline error when cleanup has invalidated the picker', async
   ></iframe>`)
   const frame = page.locator('iframe')
   await frame.contentFrame().locator('#app').waitFor({ state: 'attached' })
-  await expect.poll(() => frame.contentFrame().locator('#app').evaluate(() => document.readyState))
+  await expect
+    .poll(() =>
+      frame
+        .contentFrame()
+        .locator('#app')
+        .evaluate(() => document.readyState),
+    )
     .toBe('complete')
-  await frame.evaluate((element, messageType) => {
-    switch (element instanceof HTMLIFrameElement) {
-      case true:
-        element.contentWindow?.postMessage({
-          type: messageType,
-          requestId: 'cleanup-blocked', origin: location.origin,
-        }, location.origin)
-        break
-      case false:
-        throw new Error('Inline demo frame is unavailable')
-    }
-  }, InlineLoginPickerMessageType.Initialize)
+  await frame.evaluate(
+    (element, messageType) => {
+      switch (element instanceof HTMLIFrameElement) {
+        case true:
+          element.contentWindow?.postMessage(
+            {
+              type: messageType,
+              requestId: 'cleanup-blocked',
+              origin: location.origin,
+            },
+            location.origin,
+          )
+          break
+        case false:
+          throw new Error('Inline demo frame is unavailable')
+      }
+    },
+    InlineLoginPickerMessageType.Initialize,
+  )
   const picker = frame.contentFrame()
   await expect(picker.getByTestId('login-picker')).toBeVisible()
   await expect(picker.getByRole('alert')).toBeVisible()
