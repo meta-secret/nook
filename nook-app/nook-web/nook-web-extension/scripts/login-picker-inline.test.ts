@@ -1,10 +1,18 @@
-import { describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { LoginPickerFrameBindingKind } from '../src/lib/inline-login-picker'
 import {
   LoginPickerFrameAdmission,
   LoginPickerFrameTarget,
 } from '../src/background/service-worker/login-picker-frame-target'
 import type { PendingLoginPicker } from '../src/background/service-worker/account-picker-session-codec'
+
+let previousChrome: typeof chrome = globalThis.chrome
+beforeEach(() => {
+  previousChrome = globalThis.chrome
+})
+afterEach(() => {
+  globalThis.chrome = previousChrome
+})
 
 class InlinePickerFixture {
   readonly tab: chrome.tabs.Tab = {

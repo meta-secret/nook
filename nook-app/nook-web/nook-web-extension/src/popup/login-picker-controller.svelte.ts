@@ -1,4 +1,5 @@
 import { Effect, Schema } from 'effect'
+import type { BrowserRuntimeMessageValue } from '../lib/browser-runtime-message'
 import {
   I18N_KEYS,
   type I18nKey,
@@ -40,19 +41,31 @@ interface LoginPickerDocumentRequest {
   readonly i18n: ExtensionI18n
 }
 
+const transportFailureFields: Readonly<Record<never, never>> = {}
+
 class LoginPickerTransportFailure extends Schema.TaggedError<LoginPickerTransportFailure>()(
   'LoginPickerTransportFailure',
-  {},
+  transportFailureFields,
 ) {}
 
 interface LoginPickerRuntimeCall {
-  readonly try: () => Promise<unknown>
+  readonly try: () => Promise<BrowserRuntimeMessageValue>
   readonly catch: () => LoginPickerTransportFailure
 }
 
 interface LoginPickerCancellationCall {
   readonly try: () => Promise<void>
   readonly catch: () => LoginPickerTransportFailure
+}
+
+interface LoginPickerQueryMatcher {
+  readonly onFailure: () => void
+  readonly onSuccess: (response: LoginPickerQueryResponse) => void
+}
+
+interface LoginPickerSelectionMatcher {
+  readonly onFailure: () => void
+  readonly onSuccess: () => void
 }
 
 /** Owns the immediate extension-document metadata and its interaction lifetime. */
@@ -133,12 +146,14 @@ export class LoginPickerController {
         parentOrigin: this.request.parentOrigin,
       },
     }
-    const load = this.sendQuery(message).pipe(
-      Effect.match({
-        onFailure: () => this.loadedFailure(sequence),
-        onSuccess: (response) => this.loaded({ sequence, response }),
-      }),
-    )
+    const match: LoginPickerQueryMatcher = {
+      onFailure: () => this.loadedFailure(sequence),
+      onSuccess: (response) => {
+        const loaded: LoginPickerLoaded = { sequence, response }
+        this.loaded(loaded)
+      },
+    }
+    const load = this.sendQuery(message).pipe(Effect.match(match))
     void Effect.runPromise(load)
   }
 
@@ -190,12 +205,11 @@ export class LoginPickerController {
         secretId: account.secretId,
       },
     }
-    const selection = this.sendSelection(message).pipe(
-      Effect.match({
-        onFailure: () => this.loadedFailure(this.sequence),
-        onSuccess: () => this.complete(),
-      }),
-    )
+    const match: LoginPickerSelectionMatcher = {
+      onFailure: () => this.loadedFailure(this.sequence),
+      onSuccess: () => this.complete(),
+    }
+    const selection = this.sendSelection(message).pipe(Effect.match(match))
     void Effect.runPromise(selection)
   }
 

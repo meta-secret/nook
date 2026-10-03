@@ -24,6 +24,7 @@ import {
   LOGIN_PICKER_TTL_MS,
 } from './account-pickers'
 import { extensionPairingIdentity } from './pairing-identity'
+import type { BrowserRuntimeMessageValue } from '../../lib/browser-runtime-message'
 import type { AccountPickerPageMessage } from './account-picker-page-target'
 import {
   isLoginPickerPageAcknowledgement,
@@ -190,11 +191,12 @@ class LoginPickerOperations {
       documentId: request.parentDocumentId,
     }
     try {
-      const parentResponse: unknown = await chrome.tabs.sendMessage(
-        request.tabId,
-        verification,
-        targetOptions,
-      )
+      const parentResponse: BrowserRuntimeMessageValue =
+        await chrome.tabs.sendMessage(
+          request.tabId,
+          verification,
+          targetOptions,
+        )
       switch (isLoginPickerPageAcknowledgement(parentResponse)) {
         case false:
           return { ok: false, reason: 'login-picker-page-unavailable' }

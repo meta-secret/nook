@@ -23,7 +23,6 @@ import {
   startLoginServer,
   waitForExtensionPairingReady,
   waitForNewPage,
-  waitForPageUrl,
   withE2eDeadline,
   type WebsitePasskeyAssertionBrowserFlow,
 } from './helpers/extension-smoke-runtime'

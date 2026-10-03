@@ -3,6 +3,7 @@ import { mount, type ComponentProps, type MountOptions } from 'svelte'
 import LoginPicker from '../popup/LoginPicker.svelte'
 import { extensionLocaleCatalog } from '../lib/i18n'
 import { InlineLoginPickerInitialization } from '../lib/inline-login-picker'
+import type { BrowserRuntimeMessageValue } from '../lib/browser-runtime-message'
 import '../popup/popup.css'
 
 /** Receives one request directly from the parent and renders only the login chooser. */
@@ -14,7 +15,7 @@ enum InlineLoginPickerDocumentPhase {
 class InlineLoginPickerDocument {
   private state = InlineLoginPickerDocumentPhase.Waiting
 
-  receive(event: MessageEvent<unknown>): void {
+  receive(event: MessageEvent<BrowserRuntimeMessageValue>): void {
     switch (event.source === window.parent && window.parent !== window) {
       case false:
         return
@@ -47,21 +48,17 @@ class InlineLoginPickerDocument {
   private render(initialization: InlineLoginPickerInitialization) {
     return Effect.promise(async () => {
       const target = document.getElementById('app')
-      switch (target instanceof HTMLElement) {
-        case false:
-          return
-        case true: {
-          const i18n = await extensionLocaleCatalog.initializeExtensionI18n()
-          const options: MountOptions<ComponentProps<typeof LoginPicker>> = {
-            target,
-            props: {
-              i18n,
-              requestId: initialization.requestId,
-              parentOrigin: initialization.origin,
-            },
-          }
-          mount(LoginPicker, options)
+      if (target instanceof HTMLElement) {
+        const i18n = await extensionLocaleCatalog.initializeExtensionI18n()
+        const options: MountOptions<ComponentProps<typeof LoginPicker>> = {
+          target,
+          props: {
+            i18n,
+            requestId: initialization.requestId,
+            parentOrigin: initialization.origin,
+          },
         }
+        mount(LoginPicker, options)
       }
     })
   }
@@ -71,8 +68,9 @@ class InlineLoginPickerDocument {
 const picker = new InlineLoginPickerDocument()
 const receive = picker.receive.bind(picker)
 window.addEventListener('message', receive)
+const pageHideOptions: AddEventListenerOptions = { once: true }
 window.addEventListener(
   'pagehide',
   () => window.removeEventListener('message', receive),
-  { once: true },
+  pageHideOptions,
 )

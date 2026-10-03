@@ -56,7 +56,8 @@ export class InlineLoginPicker implements InlineLoginPickerSurface {
         }
       }
     }
-    frame.addEventListener('load', initialize, { once: true })
+    const loadOptions: AddEventListenerOptions = { once: true }
+    frame.addEventListener('load', initialize, loadOptions)
     return new InlineLoginPicker(() => {
       frame.removeEventListener('load', initialize)
       frame.remove()

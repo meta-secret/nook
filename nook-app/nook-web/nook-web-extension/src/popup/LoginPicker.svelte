@@ -26,12 +26,8 @@
 
   onMount(() => {
     const searchInput = document.getElementById('login-search')
-    switch (searchInput instanceof HTMLInputElement) {
-      case true:
-        searchInput.focus()
-        break
-      case false:
-        break
+    if (searchInput instanceof HTMLInputElement) {
+      searchInput.focus()
     }
     const close = picker.close.bind(picker)
     window.addEventListener('pagehide', close)

@@ -109,20 +109,23 @@ const pendingAuthenticatorPickerSchema = Schema.Struct(
 ) satisfies Schema.Schema<PendingAuthenticatorPicker>
 
 class LoginPickerSessionSchema {
-  static readonly value = Schema.Struct({
+  private static readonly awaitingFields = {
+    kind: Schema.Literal(LoginPickerFrameBindingKind.AwaitingDocument),
+  } satisfies Schema.Struct.Fields
+  private static readonly boundFields = {
+    kind: Schema.Literal(LoginPickerFrameBindingKind.Bound),
+    frameId: Schema.Number.pipe(Schema.int(), Schema.positive()),
+    documentId: Schema.String.pipe(Schema.minLength(1)),
+  } satisfies Schema.Struct.Fields
+  private static readonly fields = {
     ...pendingAuthenticatorPickerSchemaFields,
     parentDocumentId: Schema.String.pipe(Schema.minLength(1)),
     pickerDocument: Schema.Union(
-      Schema.Struct({
-        kind: Schema.Literal(LoginPickerFrameBindingKind.AwaitingDocument),
-      }),
-      Schema.Struct({
-        kind: Schema.Literal(LoginPickerFrameBindingKind.Bound),
-        frameId: Schema.Number.pipe(Schema.int(), Schema.positive()),
-        documentId: Schema.String.pipe(Schema.minLength(1)),
-      }),
+      Schema.Struct(LoginPickerSessionSchema.awaitingFields),
+      Schema.Struct(LoginPickerSessionSchema.boundFields),
     ),
-  })
+  } satisfies Schema.Struct.Fields
+  static readonly value = Schema.Struct(LoginPickerSessionSchema.fields)
 }
 
 class AccountPickerSessionCodec {

@@ -67,7 +67,13 @@ export class LoginPickerFrameTarget {
     switch (typeof sender.documentId) {
       case 'string':
         break
-      default:
+      case 'number':
+      case 'bigint':
+      case 'boolean':
+      case 'symbol':
+      case 'undefined':
+      case 'object':
+      case 'function':
         return LoginPickerFrameAdmission.Forbidden
     }
     switch (typeof sender.frameId) {
@@ -78,7 +84,13 @@ export class LoginPickerFrameTarget {
           documentId: sender.documentId,
         }
         return LoginPickerFrameAdmission.Accepted
-      default:
+      case 'string':
+      case 'bigint':
+      case 'boolean':
+      case 'symbol':
+      case 'undefined':
+      case 'object':
+      case 'function':
         return LoginPickerFrameAdmission.Forbidden
     }
   }

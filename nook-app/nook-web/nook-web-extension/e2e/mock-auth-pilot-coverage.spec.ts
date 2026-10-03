@@ -7,6 +7,7 @@ import {
 } from './helpers/paired-pin-extension'
 import { MOCK_AUTH_SECOND_TOTP_SECRET, startMockAuthServer } from './mock-auth'
 import { MockAuthProviderScenarios } from './mock-auth-provider-scenarios'
+import { getServiceWorker } from './helpers/extension-smoke-runtime'
 test.describe('PIN Pilot mock-auth coverage', () => {
   test.describe.configure({ timeout: 180_000 })
   test('shows extension-owned login picker usernames and completes plain success', async ({
@@ -47,7 +48,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await expect(loginPage.locator('input[name="password"]')).toHaveValue('')
       await unlockExtensionPopupPin(paired.context, paired.extensionId)
       const pageCount = paired.context.pages().length
-      const worker = paired.context.serviceWorkers()[0]
+      const worker = await getServiceWorker(paired.context)
       await worker.evaluate(() => {
         chrome.windows.create = () => {
           throw new Error('Login selection must stay in the inline panel')
