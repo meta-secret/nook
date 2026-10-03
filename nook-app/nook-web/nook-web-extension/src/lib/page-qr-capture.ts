@@ -272,6 +272,22 @@ class PageQrCapture {
       .filter((element) => element.matches('h1,h2,h3,h4,h5,h6,p'))
   }
 
+  authenticationAuthenticatorSetupMutationRequiresScan(
+    record: MutationRecord,
+  ): boolean {
+    if (record.type !== 'childList' && record.type !== 'characterData')
+      return false
+    return this.collectQrMedia().some((media) =>
+      this.nearbyInstructionElements(media).some(
+        (instruction) =>
+          this.instructionElementVisibility(instruction) ===
+            InstructionElementCapture.Visible &&
+          (instruction === record.target ||
+            instruction.contains(record.target)),
+      ),
+    )
+  }
+
   private instructionElementVisibility(
     element: Element,
   ): InstructionElementCapture {

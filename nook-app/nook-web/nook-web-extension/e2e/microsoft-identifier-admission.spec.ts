@@ -159,7 +159,10 @@ for (const authentication of [true, false]) {
         ).toBeVisible()
         await expect(page.getByTestId('nook-auth-gate')).toHaveCount(0)
       }
-      await page.screenshot({ path: testInfo.outputPath('shell.png') })
+      await page.screenshot({
+        path: testInfo.outputPath('shell.png'),
+        caret: 'initial',
+      })
       if (authentication) {
         await expect(page.getByTestId('nook-auth-gate')).toBeVisible()
         await expect(page.getByTestId('nook-auth-gate')).toBeInViewport()

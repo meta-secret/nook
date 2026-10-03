@@ -4,6 +4,7 @@ import {
   passwordFieldDiscovery,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 import { recoveryCopyObservation } from '../../lib/backup-code-candidates'
+import { pageQrCapture } from '../../lib/page-qr-capture'
 
 export const AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER = [
   'aria-disabled',
@@ -391,6 +392,10 @@ class AuthenticationSurfaceObservation {
   }
 
   mutationCanChangeAuthenticationWorkflows(record: MutationRecord): boolean {
+    if (
+      pageQrCapture.authenticationAuthenticatorSetupMutationRequiresScan(record)
+    )
+      return true
     if (
       authenticationFactObserver.authenticationFactMutationTouchesLabelDependency(
         record,

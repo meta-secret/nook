@@ -122,6 +122,53 @@ afterEach(() => {
 })
 
 describe('authentication surface mutation filtering', () => {
+  test('schedules a fresh scan for visible QR instruction text but ignores unrelated and widget text', () => {
+    document.body.innerHTML = `
+      <section><p id="instructions">Use your Microsoft account</p><canvas width="120" height="120"></canvas></section>
+      <p id="unrelated">Account details</p>
+      <aside id="nook-auth-widget"><p id="widget-copy">Ready to sign in</p></aside>
+    `
+    const instructions = document.querySelector('#instructions')
+    const canvas = document.querySelector('canvas')
+    const unrelated = document.querySelector('#unrelated')
+    const host = document.querySelector<HTMLElement>('#nook-auth-widget')
+    const widgetCopy = document.querySelector('#widget-copy')
+    if (!instructions || !canvas || !unrelated || !host || !widgetCopy)
+      throw new Error('expected instruction mutation fixture')
+    for (const element of [instructions, canvas]) {
+      Object.defineProperty(element, 'getBoundingClientRect', {
+        value: () => new DOMRect(10, 10, 120, 120),
+      })
+    }
+    const text = instructions.firstChild
+    if (!(text instanceof Text)) throw new Error('expected instruction text')
+    for (const record of [
+      childListMutation(instructions, [text]),
+      new TestMutationRecord({ type: 'characterData', target: text }),
+    ]) {
+      const request: Parameters<
+        typeof authenticationSurfaceObservation.authenticationMutationImpact
+      >[0] = { records: [record], mountedHost: host, renderedWorkflow: false }
+      expect(
+        authenticationSurfaceObservation.authenticationMutationImpact(request)
+          .shouldScheduleScan,
+      ).toBe(true)
+    }
+    for (const target of [unrelated, widgetCopy]) {
+      const request: Parameters<
+        typeof authenticationSurfaceObservation.authenticationMutationImpact
+      >[0] = {
+        records: [childListMutation(target, [...target.childNodes])],
+        mountedHost: host,
+        renderedWorkflow: false,
+      }
+      expect(
+        authenticationSurfaceObservation.authenticationMutationImpact(request)
+          .shouldScheduleScan,
+      ).toBe(false)
+    }
+  })
+
   test('ignores mutations owned entirely by the mounted extension widget', () => {
     const host = document.createElement('section')
     const child = document.createElement('button')
