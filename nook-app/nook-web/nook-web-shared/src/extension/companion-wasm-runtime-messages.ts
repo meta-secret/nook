@@ -215,8 +215,11 @@ export type CompanionWasmAuthenticatorSetupResponse = {
   readonly authenticatorSetupObservation: AuthenticationAuthenticatorSetupObservation;
 };
 
-const companionWasmAuthenticatorSetupResponseFields = {
-  authenticatorSetupObservation: Schema.Literal("present", "absent"),
+const authenticatorSetupObservationSchema = Schema.Literal("present", "absent");
+const companionWasmAuthenticatorSetupResponseFields: {
+  readonly authenticatorSetupObservation: typeof authenticatorSetupObservationSchema;
+} = {
+  authenticatorSetupObservation: authenticatorSetupObservationSchema,
 };
 export const CompanionWasmAuthenticatorSetupResponseDecoder: Schema.Schema<CompanionWasmAuthenticatorSetupResponse> =
   Schema.Struct(companionWasmAuthenticatorSetupResponseFields);
