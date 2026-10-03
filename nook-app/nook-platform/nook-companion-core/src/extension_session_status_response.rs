@@ -73,7 +73,7 @@ impl ExtensionSessionDeviceWire {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-#[tsify(from_wasm_abi)]
+
 pub struct ExtensionSessionStatusResponseWire {
     ok: bool,
     #[serde(default)]
@@ -123,13 +123,13 @@ impl ExtensionSessionStatusAvailability {
 
 /// Concrete success payload owned by the extension-session protocol.
 #[derive(Debug, Clone, Serialize, Tsify)]
-#[tsify(into_wasm_abi)]
+
 pub struct ExtensionSessionDeviceResponse {
     pub device: ExtensionSessionDeviceWire,
 }
 #[derive(Debug, Clone, Serialize, Tsify)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
-#[tsify(into_wasm_abi)]
+
 pub enum ExtensionSessionStatus {
     Inactive {
         status: ExtensionSessionDeviceProtectionStatusWire,
@@ -164,7 +164,7 @@ enum SessionFailureDiagnostic {
 /// Unknown browser responses are admitted before any success value is projected.
 #[derive(Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(from_wasm_abi)]
+
 pub struct ExtensionSessionOperationResponseWire {
     ok: bool,
     #[serde(default)]

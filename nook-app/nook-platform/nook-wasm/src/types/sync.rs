@@ -57,15 +57,23 @@ impl NookEnrollmentProvider {
 
     #[wasm_bindgen(getter, js_name = "type")]
     #[must_use]
-    pub fn provider_type(&self) -> nook_core::StorageProviderType {
-        match &self.0 {
-            EnrollmentProvider::PersonalCredentialTransfer(provider) => match provider.data() {
-                PersonalEnrollmentProviderData::Local => StorageProviderType::Local,
-                PersonalEnrollmentProviderData::Github { .. } => StorageProviderType::Github,
-                PersonalEnrollmentProviderData::OauthFile { .. } => StorageProviderType::OauthFile,
-            },
-            EnrollmentProvider::SharedProviderGrant(_) => StorageProviderType::OauthFile,
-        }
+    pub fn provider_type(
+        &self,
+    ) -> Result<tsify::Ts<nook_core::StorageProviderType>, wasm_bindgen::JsError> {
+        let result = {
+            match &self.0 {
+                EnrollmentProvider::PersonalCredentialTransfer(provider) => match provider.data() {
+                    PersonalEnrollmentProviderData::Local => StorageProviderType::Local,
+                    PersonalEnrollmentProviderData::Github { .. } => StorageProviderType::Github,
+                    PersonalEnrollmentProviderData::OauthFile { .. } => {
+                        StorageProviderType::OauthFile
+                    }
+                },
+                EnrollmentProvider::SharedProviderGrant(_) => StorageProviderType::OauthFile,
+            }
+        };
+        tsify::Tsify::into_ts(&result)
+            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
     }
 
     #[wasm_bindgen(getter, js_name = isSharedProviderGrant)]
@@ -448,14 +456,20 @@ impl NookVaultSyncResult {
 impl NookEnrollmentProvider {
     pub fn oauth_configuration(
         &self,
-        defaults: nook_core::OAuthFileConfigData,
-    ) -> Result<nook_core::OAuthFileConfigData, JsError> {
-        nook_core::EnrollmentOAuthConfigurationRequest {
+        defaults: tsify::Ts<nook_core::OAuthFileConfigData>,
+    ) -> Result<tsify::Ts<nook_core::OAuthFileConfigData>, wasm_bindgen::JsError> {
+        let defaults = defaults
+            .to_rust()
+            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+
+        let result = nook_core::EnrollmentOAuthConfigurationRequest {
             provider: &self.0,
             defaults,
         }
         .project()
-        .map_err(|error| JsError::new(&error.to_string()))
+        .map_err(|error| JsError::new(&error.to_string()))?;
+        tsify::Tsify::into_ts(&result)
+            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
     }
 }
 

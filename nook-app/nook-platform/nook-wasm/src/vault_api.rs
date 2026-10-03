@@ -37,30 +37,62 @@ pub enum NookProviderSaveOutcomeState {
 
 #[wasm_bindgen]
 #[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn existing_provider_save_setup() -> nook_core::ProviderSaveSetup {
-    ProviderSaveSetup::Existing
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn existing_provider_save_setup()
+-> Result<tsify::Ts<nook_core::ProviderSaveSetup>, wasm_bindgen::JsError> {
+    let result = { ProviderSaveSetup::Existing };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
 }
 
 #[wasm_bindgen]
 #[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn new_provider_save_setup(
-    provider_type: nook_core::StorageProviderType,
-) -> nook_core::ProviderSaveSetup {
-    ProviderSaveSetup::New(provider_type)
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn new_provider_save_setup(
+    provider_type: tsify::Ts<nook_core::StorageProviderType>,
+) -> Result<tsify::Ts<nook_core::ProviderSaveSetup>, wasm_bindgen::JsError> {
+    let provider_type = provider_type
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result = { ProviderSaveSetup::New(provider_type) };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
 #[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn inactive_provider_login_setup() -> nook_core::ActiveProviderLoginSetup {
-    ActiveProviderLoginSetup::Inactive
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn inactive_provider_login_setup()
+-> Result<tsify::Ts<nook_core::ActiveProviderLoginSetup>, wasm_bindgen::JsError> {
+    let result = { ActiveProviderLoginSetup::Inactive };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
 #[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn active_provider_login_setup(
-    provider_type: nook_core::StorageProviderType,
-) -> nook_core::ActiveProviderLoginSetup {
-    ActiveProviderLoginSetup::Active(provider_type)
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn active_provider_login_setup(
+    provider_type: tsify::Ts<nook_core::StorageProviderType>,
+) -> Result<tsify::Ts<nook_core::ActiveProviderLoginSetup>, wasm_bindgen::JsError> {
+    let provider_type = provider_type
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result = { ActiveProviderLoginSetup::Active(provider_type) };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
@@ -81,25 +113,31 @@ impl NookProviderSaveOutcome {
     }
 
     #[wasm_bindgen(getter)]
-    pub fn snapshot(&self) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
-        match &self.0 {
+    pub fn snapshot(
+        &self,
+    ) -> Result<tsify::Ts<nook_core::AuthProvidersSnapshotData>, wasm_bindgen::JsError> {
+        let result = match &self.0 {
             ProviderSaveOutcome::Saved { snapshot, .. } => Ok(snapshot.clone()),
             _ => Err(JsError::new(
                 "provider save outcome does not contain a snapshot",
             )),
-        }
+        }?;
+        tsify::Tsify::into_ts(&result)
+            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
     }
 
     #[wasm_bindgen(getter, js_name = oauthFile)]
     pub fn oauth_file(
         &self,
-    ) -> Result<nook_core::StoredOAuthFileConfiguration, wasm_bindgen::JsError> {
-        match &self.0 {
+    ) -> Result<tsify::Ts<nook_core::StoredOAuthFileConfiguration>, wasm_bindgen::JsError> {
+        let result = match &self.0 {
             ProviderSaveOutcome::Saved { oauth_file, .. } => Ok((**oauth_file).clone()),
             _ => Err(JsError::new(
                 "provider save outcome does not contain an OAuth configuration",
             )),
-        }
+        }?;
+        tsify::Tsify::into_ts(&result)
+            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
     }
 }
 
@@ -108,10 +146,18 @@ impl NookProviderSaveOutcome {
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn apply_provider_save_policy(
-    request: nook_core::ProviderSaveRequest,
-) -> NookProviderSaveOutcome {
-    NookProviderSaveOutcome(request.apply())
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn apply_provider_save_policy(
+    request: tsify::Ts<nook_core::ProviderSaveRequest>,
+) -> Result<NookProviderSaveOutcome, wasm_bindgen::JsError> {
+    let request = request
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result = { NookProviderSaveOutcome(request.apply()) };
+    Ok(result)
 }
 
 /// Project the active provider into a portable credential draft. Browser and
@@ -119,10 +165,19 @@ impl NookProviderSaveOutcome {
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn active_provider_credentials_projection(
-    request: nook_core::ActiveProviderCredentialsRequest,
-) -> nook_core::ActiveProviderCredentialsProjection {
-    request.project()
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn active_provider_credentials_projection(
+    request: tsify::Ts<nook_core::ActiveProviderCredentialsRequest>,
+) -> Result<tsify::Ts<nook_core::ActiveProviderCredentialsProjection>, wasm_bindgen::JsError> {
+    let request = request
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result = { request.project() };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
@@ -134,10 +189,12 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn load_auth_providers_snapshot(
         &self,
-    ) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
+    ) -> Result<tsify::Ts<nook_core::AuthProvidersSnapshotData>, wasm_bindgen::JsError> {
         let identity = self.device_identity()?;
         let loaded = AuthProviderDatabase::load_auth_providers(&identity).await?;
-        Ok(loaded.snapshot)
+        let result = Ok::<_, wasm_bindgen::JsError>(loaded.snapshot)?;
+        tsify::Tsify::into_ts(&result)
+            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
     }
 
     /// Load providers and ensure this browser's local vault has a provider row.
@@ -146,12 +203,17 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn load_auth_providers_with_local_row(
         &self,
-    ) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
+    ) -> Result<tsify::Ts<nook_core::AuthProvidersSnapshotData>, wasm_bindgen::JsError> {
         let identity = self.device_identity()?;
         let loaded = AuthProviderDatabase::load_auth_providers(&identity).await?;
         let snapshot = loaded.snapshot;
-        if !has_local_vault().await? {
-            return Ok(snapshot);
+        match nook_core::LocalVaultPresence::from(has_local_vault().await?) {
+            nook_core::LocalVaultPresence::Absent => {
+                return tsify::Tsify::into_ts(&snapshot).map_err(|_| {
+                    wasm_bindgen::JsError::new("Typed WASM output could not be encoded.")
+                });
+            }
+            nook_core::LocalVaultPresence::Present => {}
         }
         let new_id = nook_core::CompactToken::generate()?.to_string();
         let created_at: String = Date::new_0().to_iso_string().into();
@@ -161,15 +223,20 @@ impl NookVaultManager {
                 new_id: &new_id,
                 created_at: &created_at,
             });
-        if change == nook_core::LocalProviderRowChange::Inserted {
-            ProviderSnapshotPublication {
-                identity: &identity,
-                snapshot: &snapshot,
+        match change {
+            nook_core::LocalProviderRowChange::Inserted => {
+                ProviderSnapshotPublication {
+                    identity: &identity,
+                    snapshot: &snapshot,
+                }
+                .save()
+                .await?;
             }
-            .save()
-            .await?;
+            nook_core::LocalProviderRowChange::Present => {}
         }
-        Ok(snapshot)
+        let result = snapshot;
+        tsify::Tsify::into_ts(&result)
+            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
     }
 
     /// Ensure a caller's current provider snapshot contains this browser's
@@ -177,10 +244,19 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn ensure_local_auth_provider_snapshot(
         &self,
-        snapshot: nook_core::AuthProvidersSnapshotData,
-    ) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
-        if !has_local_vault().await? {
-            return Ok(snapshot);
+        snapshot: tsify::Ts<nook_core::AuthProvidersSnapshotData>,
+    ) -> Result<tsify::Ts<nook_core::AuthProvidersSnapshotData>, wasm_bindgen::JsError> {
+        let snapshot = snapshot
+            .to_rust()
+            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+
+        match nook_core::LocalVaultPresence::from(has_local_vault().await?) {
+            nook_core::LocalVaultPresence::Absent => {
+                return tsify::Tsify::into_ts(&snapshot).map_err(|_| {
+                    wasm_bindgen::JsError::new("Typed WASM output could not be encoded.")
+                });
+            }
+            nook_core::LocalVaultPresence::Present => {}
         }
         let identity = self.device_identity()?;
         let new_id = nook_core::CompactToken::generate()?.to_string();
@@ -191,15 +267,20 @@ impl NookVaultManager {
                 new_id: &new_id,
                 created_at: &created_at,
             });
-        if change == nook_core::LocalProviderRowChange::Inserted {
-            ProviderSnapshotPublication {
-                identity: &identity,
-                snapshot: &snapshot,
+        match change {
+            nook_core::LocalProviderRowChange::Inserted => {
+                ProviderSnapshotPublication {
+                    identity: &identity,
+                    snapshot: &snapshot,
+                }
+                .save()
+                .await?;
             }
-            .save()
-            .await?;
+            nook_core::LocalProviderRowChange::Present => {}
         }
-        Ok(snapshot)
+        let result = snapshot;
+        tsify::Tsify::into_ts(&result)
+            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
     }
 
     /// Seal credential fields with the device key and persist the snapshot to
@@ -207,8 +288,12 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn save_auth_providers_snapshot(
         &self,
-        snapshot: nook_core::AuthProvidersSnapshotData,
+        snapshot: tsify::Ts<nook_core::AuthProvidersSnapshotData>,
     ) -> Result<(), wasm_bindgen::JsError> {
+        let snapshot = snapshot
+            .to_rust()
+            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+
         let identity = self.device_identity()?;
         ProviderSnapshotPublication {
             identity: &identity,
@@ -216,7 +301,7 @@ impl NookVaultManager {
         }
         .save()
         .await?;
-        Ok(())
+        Ok::<_, wasm_bindgen::JsError>(())
     }
 
     /// Replace the complete sync-provider grant set for the incoming active
@@ -224,8 +309,12 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn replace_auth_providers_for_vault(
         &self,
-        snapshot: nook_core::AuthProvidersSnapshotData,
+        snapshot: tsify::Ts<nook_core::AuthProvidersSnapshotData>,
     ) -> Result<(), wasm_bindgen::JsError> {
+        let snapshot = snapshot
+            .to_rust()
+            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+
         let identity = self.device_identity()?;
         let existing = AuthProviderDatabase::load_auth_providers(&identity)
             .await?
@@ -237,7 +326,7 @@ impl NookVaultManager {
         }
         .save()
         .await?;
-        Ok(())
+        Ok::<_, wasm_bindgen::JsError>(())
     }
 
     /// Persist already-sealed provider credentials without unlocking the device.
@@ -248,8 +337,12 @@ impl NookVaultManager {
     pub async fn save_presealed_auth_providers_snapshot(
         &self,
         app_id: &str,
-        snapshot: nook_core::AuthProvidersSnapshotData,
+        snapshot: tsify::Ts<nook_core::AuthProvidersSnapshotData>,
     ) -> Result<(), wasm_bindgen::JsError> {
+        let snapshot = snapshot
+            .to_rust()
+            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+
         let app_id = AppId::parse(app_id)?;
         if matches!(
             NookDatabase::load_entry_for_app_id(&app_id).await?,
@@ -265,7 +358,7 @@ impl NookVaultManager {
         }
         .save()
         .await?;
-        Ok(())
+        Ok::<_, wasm_bindgen::JsError>(())
     }
 }
 
@@ -273,15 +366,16 @@ impl NookVaultManager {
 /// persisting. Used by extension pairing before handing granted provider rows
 /// to the extension's own storage.
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn seal_auth_providers_for_device_public_key(
-    device_public_key: &str,
-    mut snapshot: nook_core::AuthProvidersSnapshotData,
-) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn seal_auth_providers_for_device_public_key(device_public_key: &str,
+snapshot: tsify::Ts<nook_core::AuthProvidersSnapshotData>) -> Result<tsify::Ts<nook_core::AuthProvidersSnapshotData>, wasm_bindgen::JsError> {
+let mut snapshot = snapshot.to_rust().map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+
     let public_key = DevicePublicKey::parse(device_public_key)?;
     snapshot = snapshot
         .seal_credentials_for(&public_key)
         .map_err(ProviderCredentialRejection::into_cause)?;
-    Ok(snapshot)
+let result = Ok::<_, wasm_bindgen::JsError>(snapshot)?;
+tsify::Tsify::into_ts(&result).map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
 }
 
 /// Delete the `nook_auth` `IndexedDB` database (used on full sign-out / reset).
@@ -293,18 +387,32 @@ impl NookVaultManager {
 
 /// Read all extension pairing metadata from extension-origin Rexie storage.
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn read_extension_pairing_state()
--> Result<nook_companion_core::ExtensionPairingState, wasm_bindgen::JsError> {
-    Ok(ExtensionPairingDatabase::read_all().await?)
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub async fn read_extension_pairing_state()
+-> Result<tsify::Ts<nook_companion_core::ExtensionPairingState>, wasm_bindgen::JsError> {
+    let result = Ok::<_, wasm_bindgen::JsError>(ExtensionPairingDatabase::read_all().await?)?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 /// Persist extension pairing metadata in extension-origin Rexie storage.
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn write_extension_pairing_state(
-    state: nook_companion_core::ExtensionPairingState,
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub async fn write_extension_pairing_state(
+    state: tsify::Ts<nook_companion_core::ExtensionPairingState>,
 ) -> Result<(), wasm_bindgen::JsError> {
+    let state = state
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
     ExtensionPairingDatabase::write_all(&state).await?;
-    Ok(())
+    Ok::<_, wasm_bindgen::JsError>(())
 }
 
 /// Remove extension pairing metadata from extension-origin Rexie storage.
@@ -318,59 +426,106 @@ impl NookVaultManager {
 
 /// Atomically remove and persist extension pairing metadata in Rexie storage.
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn reconcile_extension_pairing_state(
-    state: nook_companion_core::ExtensionPairingState,
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub async fn reconcile_extension_pairing_state(
+    state: tsify::Ts<nook_companion_core::ExtensionPairingState>,
     removed_keys: Vec<String>,
 ) -> Result<(), wasm_bindgen::JsError> {
+    let state = state
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
     ExtensionPairingDatabase::reconcile(ExtensionPairingReconciliation {
         state: &state,
         removed_keys: &removed_keys,
     })
     .await?;
-    Ok(())
+    Ok::<_, wasm_bindgen::JsError>(())
 }
 
 /// Find an existing provider whose sync target matches `candidate`.
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn find_duplicate_sync_provider(
-    snapshot: nook_core::AuthProvidersSnapshotData,
-    candidate: nook_core::StorageProviderData,
-) -> nook_core::DuplicateSyncProvider {
-    DuplicateProviderSelection {
-        providers: &snapshot.providers,
-        candidate: &candidate,
-        policy: DuplicateCandidatePolicy::IncludeAll,
-    }
-    .find()
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn find_duplicate_sync_provider(
+    snapshot: tsify::Ts<nook_core::AuthProvidersSnapshotData>,
+    candidate: tsify::Ts<nook_core::StorageProviderData>,
+) -> Result<tsify::Ts<nook_core::DuplicateSyncProvider>, wasm_bindgen::JsError> {
+    let snapshot = snapshot
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+    let candidate = candidate
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+
+    let result = {
+        DuplicateProviderSelection {
+            providers: &snapshot.providers,
+            candidate: &candidate,
+            policy: DuplicateCandidatePolicy::IncludeAll,
+        }
+        .find()
+    };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 /// Find a duplicate while editing an existing provider.
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn find_duplicate_sync_provider_excluding(
-    snapshot: nook_core::AuthProvidersSnapshotData,
-    candidate: nook_core::StorageProviderData,
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn find_duplicate_sync_provider_excluding(
+    snapshot: tsify::Ts<nook_core::AuthProvidersSnapshotData>,
+    candidate: tsify::Ts<nook_core::StorageProviderData>,
+
     exclude_id: &str,
-) -> nook_core::DuplicateSyncProvider {
-    DuplicateProviderSelection {
-        providers: &snapshot.providers,
-        candidate: &candidate,
-        policy: DuplicateCandidatePolicy::Exclude(exclude_id.into()),
-    }
-    .find()
+) -> Result<tsify::Ts<nook_core::DuplicateSyncProvider>, wasm_bindgen::JsError> {
+    let snapshot = snapshot
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+    let candidate = candidate
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+
+    let result = {
+        DuplicateProviderSelection {
+            providers: &snapshot.providers,
+            candidate: &candidate,
+            policy: DuplicateCandidatePolicy::Exclude(exclude_id.into()),
+        }
+        .find()
+    };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 /// Ensure a `local` provider row exists for the active vault, prepending one
 /// (with a fresh id/timestamp) when missing. Returns the updated snapshot.
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn ensure_local_provider_row(
-    snapshot: nook_core::AuthProvidersSnapshotData,
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn ensure_local_provider_row(
+    snapshot: tsify::Ts<nook_core::AuthProvidersSnapshotData>,
     active_store_id: &str,
-) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
+) -> Result<tsify::Ts<nook_core::AuthProvidersSnapshotData>, wasm_bindgen::JsError> {
+    let snapshot = snapshot
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+
     let new_id = nook_core::CompactToken::generate()?.to_string();
     let created_at: String = Date::new_0().to_iso_string().into();
     let nook_core::LocalProviderRowOutcome { snapshot: next, .. } =
@@ -379,7 +534,9 @@ impl NookVaultManager {
             new_id: &new_id,
             created_at: &created_at,
         });
-    Ok(next)
+    let result = Ok::<_, wasm_bindgen::JsError>(next)?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
 }
 
 /// Approve an extension join through a manager whose Rust-owned application
@@ -438,8 +595,12 @@ impl NookVaultManager {
     /// Persist one provider draft using Rust-owned reconciliation and identity sealing.
     pub async fn persist_auth_providers_snapshot(
         &self,
-        request: nook_core::AuthProviderPersistenceRequest,
-    ) -> Result<nook_core::AuthProvidersSnapshotData, JsError> {
+        request: tsify::Ts<nook_core::AuthProviderPersistenceRequest>,
+    ) -> Result<tsify::Ts<nook_core::AuthProvidersSnapshotData>, wasm_bindgen::JsError> {
+        let request = request
+            .to_rust()
+            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+
         use nook_core::AuthProviderPersistenceMode;
         let identity = self.device_identity()?;
         let snapshot = match request.mode {
@@ -461,7 +622,9 @@ impl NookVaultManager {
         }
         .save()
         .await?;
-        Ok(snapshot)
+        let result = Ok::<_, wasm_bindgen::JsError>(snapshot)?;
+        tsify::Tsify::into_ts(&result)
+            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
     }
 }
 

@@ -25,7 +25,7 @@ pub struct AuthenticatorBackupAttachRejectedWire {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(untagged)]
-#[tsify(from_wasm_abi)]
+
 pub enum AuthenticatorBackupAttachResponseWire {
     Completed(AuthenticatorBackupAttachCompletedWire),
     Rejected(AuthenticatorBackupAttachRejectedWire),
@@ -49,7 +49,7 @@ impl Serialize for AuthenticatorBackupAttachResponseKind {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
 #[serde(untagged)]
-#[tsify(into_wasm_abi)]
+
 pub enum AuthenticatorBackupAttachResponse {
     Completed {
         kind: AuthenticatorBackupAttachResponseKind,

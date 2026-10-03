@@ -9,7 +9,7 @@ const MAX_SAFE_INTEGER_MILLISECONDS_NUMBER: f64 = 9_007_199_254_740_991.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "number", into_wasm_abi, from_wasm_abi)]
+#[tsify(type = "number")]
 pub struct ExtensionPairingApprovalEpochMilliseconds(u64);
 
 #[derive(Deserialize)]

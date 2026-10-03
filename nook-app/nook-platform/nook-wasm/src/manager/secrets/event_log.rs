@@ -19,8 +19,13 @@ pub struct NookEventLogRecords(Vec<EventLogStorageRecord>);
 #[wasm_bindgen]
 impl NookEventLogRecords {
     #[wasm_bindgen]
-    pub fn to_array(&self) -> Vec<EventLogStorageRecord> {
-        self.0.clone()
+    pub fn to_array(&self) -> Result<Vec<tsify::Ts<EventLogStorageRecord>>, wasm_bindgen::JsError> {
+        let result = { self.0.clone() };
+        result
+            .iter()
+            .map(tsify::Tsify::into_ts)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
     }
 }
 
@@ -30,8 +35,16 @@ pub struct NookExternalEventLogRecords(pub(in crate::manager) Vec<ExternalEventL
 #[wasm_bindgen]
 impl NookExternalEventLogRecords {
     #[wasm_bindgen]
-    pub fn from_array(records: Vec<ExternalEventLogRecord>) -> Self {
-        Self(records)
+    pub fn from_array(
+        records: Vec<tsify::Ts<ExternalEventLogRecord>>,
+    ) -> Result<Self, wasm_bindgen::JsError> {
+        let records = records
+            .into_iter()
+            .map(|value| value.to_rust())
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+        let result = { Self(records) };
+        Ok(result)
     }
 }
 
@@ -41,7 +54,9 @@ pub struct NookExtensionEventLogImportStatus(ExtensionEventLogImportStatus);
 #[wasm_bindgen]
 impl NookExtensionEventLogImportStatus {
     #[wasm_bindgen]
-    pub fn to_object(&self) -> Result<nook_core::ImportedExtensionEventLog, JsError> {
+    pub fn to_object(
+        &self,
+    ) -> Result<tsify::Ts<nook_core::ImportedExtensionEventLog>, wasm_bindgen::JsError> {
         let evidence = nook_core::ImportedExtensionEventLog {
             vault_store_id: nook_core::StoreId::parse(&self.0.vault_store_id)
                 .map_err(|error| JsError::new(&error.to_string()))?,
@@ -51,9 +66,11 @@ impl NookExtensionEventLogImportStatus {
             heads: self.0.heads.clone(),
             access_granted: self.0.access_granted,
         };
-        evidence
+        let result = evidence
             .admit()
-            .map_err(|error| JsError::new(&error.to_string()))
+            .map_err(|error| JsError::new(&error.to_string()))?;
+        tsify::Tsify::into_ts(&result)
+            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
     }
 }
 

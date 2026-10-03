@@ -28,14 +28,14 @@ pub const EXTENSION_GRANT_KEY_PREFIX: &str = "nook:extension-pairing-grant:";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub enum ExtensionReadySetupStatus {
     Ready,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub struct StoredExtensionPairingGrant {
     pub vault_type: ExtensionPairingVaultType,
     pub device_id: String,
@@ -54,7 +54,7 @@ pub struct StoredExtensionPairingGrant {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub struct ExtensionPairingGrantApproval {
     pub vault_type: ExtensionPairingVaultType,
     pub device_id: String,
@@ -70,7 +70,7 @@ pub struct ExtensionPairingGrantApproval {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub struct CreateExtensionPairingStateInput {
     pub grant: ExtensionPairingGrantApproval,
     pub imported: ImportedExtensionEventLog,
@@ -79,7 +79,7 @@ pub struct CreateExtensionPairingStateInput {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub struct RefreshExtensionPairingGrantInput {
     pub grant: StoredExtensionPairingGrant,
     pub imported: ImportedExtensionEventLog,
@@ -90,7 +90,7 @@ pub struct RefreshExtensionPairingGrantInput {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub struct ExtensionPairingGrantRemovalInput {
     pub state: ExtensionPairingState,
     pub removed_vault_store_id: StoreId,
@@ -98,7 +98,7 @@ pub struct ExtensionPairingGrantRemovalInput {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub struct ExtensionReadySetup {
     pub status: ExtensionReadySetupStatus,
     pub device_label: String,
@@ -113,7 +113,7 @@ pub struct ExtensionReadySetup {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, Tsify)]
 #[serde(untagged)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub enum ExtensionPairingRecord {
     Grant(StoredExtensionPairingGrant),
     Setup(ExtensionReadySetup),
@@ -121,14 +121,14 @@ pub enum ExtensionPairingRecord {
 
 /// Compare the typed records before deciding whether a legacy write is complete.
 #[derive(Debug, Deserialize, Serialize, Tsify)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub struct ExtensionPairingRecordComparisonRequest {
     pub current: ExtensionPairingRecord,
     pub migrated: ExtensionPairingRecord,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Tsify)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub enum ExtensionPairingRecordComparison {
     Equivalent,
     Different,
@@ -147,7 +147,7 @@ impl ExtensionPairingRecordComparisonRequest {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub struct ExtensionPairingEntry {
     pub key: String,
     pub record: ExtensionPairingRecord,
@@ -155,14 +155,14 @@ pub struct ExtensionPairingEntry {
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub struct ExtensionPairingState {
     pub entries: Vec<ExtensionPairingEntry>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, Tsify)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub enum SelectedExtensionPairingGrant {
     NotSelected,
     Selected {
@@ -172,7 +172,7 @@ pub enum SelectedExtensionPairingGrant {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, Tsify)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub enum ExtensionSetupAfterRemoval {
     NoPairedVault,
     Ready { setup: ExtensionReadySetup },

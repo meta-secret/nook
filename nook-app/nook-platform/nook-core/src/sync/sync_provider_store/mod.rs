@@ -74,7 +74,7 @@ pub use storage_args::{ProviderLabelLabels, ProviderStorageDetailLabels, Storage
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Tsify, Deserialize)]
 #[serde(from = "OAuthFileConfigWire")]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub struct OAuthFileConfig {
     pub preset: OAuthFilePreset,
     pub access_token: StoredOAuthAccessCredential,
@@ -148,7 +148,7 @@ pub type OAuthFileConfigData = OAuthFileConfig;
 /// Owned credential snapshot returned to the browser for immediate use.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
-#[tsify(into_wasm_abi)]
+
 pub enum OAuthAccessToken {
     Missing,
     Available { token: String },
@@ -166,7 +166,7 @@ impl From<OAuthAccessTokenRef<'_>> for OAuthAccessToken {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
 #[serde(tag = "state", rename_all = "kebab-case")]
-#[tsify(into_wasm_abi)]
+
 pub enum DuplicateSyncProvider {
     Unique,
     Duplicate { provider: Box<StorageProvider> },
@@ -204,7 +204,7 @@ impl OAuthFileConfigData {
 /// Browser-local File System Access folder handle metadata.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub struct LocalFolderConfig {
     pub directory_name: StoredLocalFolderDirectory,
     pub handle_id: StoredLocalFolderHandle,
@@ -214,7 +214,7 @@ pub type LocalFolderConfigData = LocalFolderConfig;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub enum ProviderSyncCheckpoint {
     #[default]
     NeverSynced,
@@ -228,7 +228,7 @@ pub enum ProviderSyncCheckpoint {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "version", rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub enum ProviderSyncedVaultVersion {
     #[default]
     Unknown,
@@ -237,7 +237,7 @@ pub enum ProviderSyncedVaultVersion {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "revision", rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub enum ProviderSyncRevision {
     #[default]
     Unknown,
@@ -259,7 +259,7 @@ pub enum ManagerStoreScopeRef<'a> {
 /// One persisted sync provider row.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub struct StorageProvider {
     pub id: String,
     #[serde(rename = "type")]
@@ -298,7 +298,7 @@ pub type StorageProviderData = StorageProvider;
 /// The full persisted snapshot: provider rows plus the active vault scope.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub struct AuthProvidersSnapshot {
     pub providers: Vec<StorageProvider>,
     pub active_vault_store_id: ActiveVaultScope,

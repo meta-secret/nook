@@ -154,7 +154,7 @@ pub(crate) enum LogPageLimit {
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize, tsify::Tsify)]
-#[tsify(into_wasm_abi)]
+
 pub struct LogEntry {
     ts: nook_core::IsoTimestamp,
     level: String,
@@ -171,8 +171,13 @@ pub struct NookLogEntries(Vec<LogEntry>);
 #[wasm_bindgen]
 impl NookLogEntries {
     #[wasm_bindgen]
-    pub fn to_array(&self) -> Vec<LogEntry> {
-        self.0.clone()
+    pub fn to_array(&self) -> Result<Vec<tsify::Ts<LogEntry>>, wasm_bindgen::JsError> {
+        let result = { self.0.clone() };
+        result
+            .iter()
+            .map(tsify::Tsify::into_ts)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
     }
 }
 

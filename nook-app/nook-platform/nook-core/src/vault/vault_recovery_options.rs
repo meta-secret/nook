@@ -21,7 +21,7 @@ use tsify::Tsify;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub struct VaultRecoveryDevice {
     #[tsify(type = "string")]
     pub device_id: DeviceId,
@@ -51,7 +51,7 @@ impl VaultRecoveryDevice {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub struct VaultRecoveryPassword {
     pub id: String,
     pub label: String,
@@ -74,7 +74,7 @@ pub struct VaultRecoveryProjectionRequest<'a> {
 /// Safe, Rust-owned recovery DTO returned across the WASM boundary.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub struct VaultRecoverySummary {
     #[tsify(type = "StoreId")]
     pub store_id: StoreId,

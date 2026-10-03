@@ -5,16 +5,27 @@ use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct AuthenticatorCodeAdmission(nook_companion_core::AuthenticatorCodeResponseWire);
 
 /// Decode the complete ephemeral authenticator-code response contract.
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_authenticator_code_response(
-    response: AuthenticatorCodeAdmission,
-) -> Result<nook_companion_core::AuthenticatorCodeResponse, JsError> {
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_authenticator_code_response(
+    response: tsify::Ts<AuthenticatorCodeAdmission>,
+) -> Result<tsify::Ts<nook_companion_core::AuthenticatorCodeResponse>, wasm_bindgen::JsError> {
+    let response = response
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
     let AuthenticatorCodeAdmission(response) = response;
-    AuthenticatorCodeResponse::from_wire(response).map_err(|error| JsError::new(&error.to_string()))
+    let result = AuthenticatorCodeResponse::from_wire(response)
+        .map_err(|error| JsError::new(&error.to_string()))?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[cfg(test)]

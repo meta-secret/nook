@@ -8,7 +8,7 @@ use tsify::Tsify;
 /// Effective credential-submission route observed for an authentication scope.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub struct AuthenticationCredentialSubmissionFacts {
     pub actionability: PageControlActionability,
     pub method: PageControlSubmissionMethod,
@@ -34,7 +34,7 @@ impl AuthenticationCredentialSubmissionFacts {
 /// Whether a scope has an effective browser submission route to bind.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
 #[serde(tag = "kind", content = "facts", rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub enum AuthenticationCredentialSubmissionObservation {
     #[default]
     Absent,

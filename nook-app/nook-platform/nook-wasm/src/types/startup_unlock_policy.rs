@@ -13,7 +13,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 #[derive(Clone, Copy, Debug, Deserialize, Tsify)]
 #[serde(deny_unknown_fields)]
-#[tsify(from_wasm_abi)]
+
 pub struct NookVaultStartupUnlockRequest {
     pub local_vault_present: LocalVaultPresence,
     pub companion_provider_present: CompanionProviderPresence,
@@ -24,13 +24,19 @@ impl NookVaultClientPolicy {
     #[must_use]
     pub fn startup_unlock_decision(
         &self,
-        request: NookVaultStartupUnlockRequest,
-    ) -> VaultStartupUnlockDecision {
-        VaultClientPolicy::startup_unlock_decision(VaultStartupUnlockRequest {
-            application: ConfiguredVaultApplication::configured_vault_application(),
-            local_vault_present: request.local_vault_present,
-            companion_provider_present: request.companion_provider_present,
-        })
+        request: tsify::Ts<NookVaultStartupUnlockRequest>,
+    ) -> Result<VaultStartupUnlockDecision, wasm_bindgen::JsError> {
+        let request = request
+            .to_rust()
+            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+        let result = {
+            VaultClientPolicy::startup_unlock_decision(VaultStartupUnlockRequest {
+                application: ConfiguredVaultApplication::configured_vault_application(),
+                local_vault_present: request.local_vault_present,
+                companion_provider_present: request.companion_provider_present,
+            })
+        };
+        Ok(result)
     }
 
     #[must_use]
@@ -49,9 +55,13 @@ impl NookVaultClientPolicy {
     #[must_use]
     pub fn companion_unlock_decision(
         &self,
-        status: &CompanionIdentityStatus,
-    ) -> VaultCompanionUnlockDecision {
-        VaultClientPolicy::companion_unlock_decision(status)
+        status: tsify::Ts<CompanionIdentityStatus>,
+    ) -> Result<VaultCompanionUnlockDecision, wasm_bindgen::JsError> {
+        let status = status
+            .to_rust()
+            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+        let result = { VaultClientPolicy::companion_unlock_decision(&status) };
+        Ok(result)
     }
 }
 

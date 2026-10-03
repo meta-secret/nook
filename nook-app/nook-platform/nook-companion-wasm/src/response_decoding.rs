@@ -15,92 +15,92 @@ use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct WebsiteLoginOptionsAdmission(
     pub(crate) nook_companion_core::WebsiteLoginOptionsWireValue,
 );
 
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct WebsiteLoginSaveOfferAdmission(nook_companion_core::WebsiteLoginSaveOfferResponse);
 
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct WebsiteLoginSavePendingAdmission(nook_companion_core::WebsiteLoginSavePendingResponse);
 
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct WebsiteLoginSaveActionAdmission(nook_companion_core::WebsiteLoginSaveActionResponse);
 
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct LoginPickerOpenAdmission(nook_companion_core::LoginPickerOpenResponseWire);
 
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct AuthenticatorPickerOpenAdmission(
     nook_companion_core::AuthenticatorPickerOpenResponseWire,
 );
 
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct AuthenticationOutcomeAdmission(nook_companion_core::AuthenticationOutcomeResponseWire);
 
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct AuthenticatorBackupAttachAdmission(
     nook_companion_core::AuthenticatorBackupAttachResponseWire,
 );
 
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct AuthenticatorEnrollmentStageAdmission(
     nook_companion_core::AuthenticatorEnrollmentStageResponseWire,
 );
 
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct AuthenticatorEnrollmentConfirmAdmission(
     nook_companion_core::AuthenticatorEnrollmentConfirmResponseWire,
 );
 
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct GeneratedPasswordAdmission(nook_companion_core::GeneratedPasswordResponseWire);
 
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct AuthenticatorOptionsAdmission(nook_companion_core::AuthenticatorOptionsResponseWire);
 
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct AuthenticatorPreviewAdmission(nook_companion_core::AuthenticatorPreviewResponseWire);
 
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct ExtensionSessionStatusAdmission(nook_companion_core::ExtensionSessionStatusResponseWire);
 
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct ExtensionSessionRequestAdmission(nook_companion_core::ExtensionSessionRequestWire);
 
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct ExtensionEventLogRecordAdmission(nook_companion_core::ExtensionEventLogRecord);
 
 #[cfg(test)]
@@ -135,169 +135,360 @@ mod session_request_admission_tests {
 
 #[wasm_bindgen]
 #[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn validate_extension_session_request(
-    request: ExtensionSessionRequestAdmission,
-) -> nook_companion_core::ExtensionSessionRequestValidation {
-    let ExtensionSessionRequestAdmission(request) = request;
-    drop(request);
-    nook_companion_core::ExtensionSessionRequestValidation::Accepted
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn validate_extension_session_request(
+    request: tsify::Ts<ExtensionSessionRequestAdmission>,
+) -> Result<nook_companion_core::ExtensionSessionRequestValidation, wasm_bindgen::JsError> {
+    let request = request
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result = {
+        let ExtensionSessionRequestAdmission(request) = request;
+        drop(request);
+        nook_companion_core::ExtensionSessionRequestValidation::Accepted
+    };
+    Ok(result)
 }
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_extension_session_request(
-    request: ExtensionSessionRequestAdmission,
-) -> nook_companion_core::ExtensionSessionRequest {
-    let ExtensionSessionRequestAdmission(request) = request;
-    request.decoded()
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_extension_session_request(
+    request: tsify::Ts<ExtensionSessionRequestAdmission>,
+) -> Result<tsify::Ts<nook_companion_core::ExtensionSessionRequest>, wasm_bindgen::JsError> {
+    let request = request
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result = {
+        let ExtensionSessionRequestAdmission(request) = request;
+        request.decoded()
+    };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_extension_event_log_record(
-    record: ExtensionEventLogRecordAdmission,
-) -> nook_companion_core::ExtensionEventLogRecord {
-    let ExtensionEventLogRecordAdmission(record) = record;
-    record
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_extension_event_log_record(
+    record: tsify::Ts<ExtensionEventLogRecordAdmission>,
+) -> Result<tsify::Ts<nook_companion_core::ExtensionEventLogRecord>, wasm_bindgen::JsError> {
+    let record = record
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result = {
+        let ExtensionEventLogRecordAdmission(record) = record;
+        record
+    };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)] // wasm-bindgen owns the decoded ABI value.
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_extension_session_status_response(
-    response: ExtensionSessionStatusAdmission,
-) -> nook_companion_core::ExtensionSessionStatusAvailability {
-    let ExtensionSessionStatusAdmission(response) = response;
-    ExtensionSessionStatusAvailability::decode_extension_session_status_response(&response)
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_extension_session_status_response(
+    response: tsify::Ts<ExtensionSessionStatusAdmission>,
+) -> Result<nook_companion_core::ExtensionSessionStatusAvailability, wasm_bindgen::JsError> {
+    let response = response
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result = {
+        let ExtensionSessionStatusAdmission(response) = response;
+        ExtensionSessionStatusAvailability::decode_extension_session_status_response(&response)
+    };
+    Ok(result)
 }
 
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_website_login_options(
-    response: WebsiteLoginOptionsAdmission,
-) -> Result<nook_companion_core::WebsiteLoginOptions, JsError> {
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_website_login_options(
+    response: tsify::Ts<WebsiteLoginOptionsAdmission>,
+) -> Result<tsify::Ts<nook_companion_core::WebsiteLoginOptions>, wasm_bindgen::JsError> {
+    let response = response
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
     let WebsiteLoginOptionsAdmission(response) = response;
-    WebsiteLoginOptions::from_wire(response).map_err(|error| JsError::new(&error.to_string()))
+    let result = WebsiteLoginOptions::from_wire(response)
+        .map_err(|error| JsError::new(&error.to_string()))?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
 #[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_website_passkey_account_list(
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_website_passkey_account_list(
     response: wasm_bindgen::JsValue,
-) -> nook_companion_core::WebsitePasskeyAccountList {
-    serde_wasm_bindgen::from_value(response).map_or_else(
-        |_| WebsitePasskeyAccountList::invalid(),
-        WebsitePasskeyAccountList::from_wire,
-    )
+) -> Result<tsify::Ts<nook_companion_core::WebsitePasskeyAccountList>, wasm_bindgen::JsError> {
+    let result = {
+        serde_wasm_bindgen::from_value(response).map_or_else(
+            |_| WebsitePasskeyAccountList::invalid(),
+            WebsitePasskeyAccountList::from_wire,
+        )
+    };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_website_login_save_offer_response(
-    response: WebsiteLoginSaveOfferAdmission,
-) -> Result<nook_companion_core::WebsiteLoginSaveOfferResponse, JsError> {
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_website_login_save_offer_response(
+    response: tsify::Ts<WebsiteLoginSaveOfferAdmission>,
+) -> Result<tsify::Ts<nook_companion_core::WebsiteLoginSaveOfferResponse>, wasm_bindgen::JsError> {
+    let response = response
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
     let WebsiteLoginSaveOfferAdmission(response) = response;
-    response
+    let result = response
         .validate()
-        .map_err(|error| JsError::new(&error.to_string()))
+        .map_err(|error| JsError::new(&error.to_string()))?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_website_login_save_pending_response(
-    response: WebsiteLoginSavePendingAdmission,
-) -> Result<nook_companion_core::WebsiteLoginSavePendingResponse, JsError> {
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_website_login_save_pending_response(
+    response: tsify::Ts<WebsiteLoginSavePendingAdmission>,
+) -> Result<tsify::Ts<nook_companion_core::WebsiteLoginSavePendingResponse>, wasm_bindgen::JsError>
+{
+    let response = response
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
     let WebsiteLoginSavePendingAdmission(response) = response;
-    response
+    let result = response
         .validate()
-        .map_err(|error| JsError::new(&error.to_string()))
+        .map_err(|error| JsError::new(&error.to_string()))?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_website_login_save_action_response(
-    response: WebsiteLoginSaveActionAdmission,
-) -> Result<nook_companion_core::WebsiteLoginSaveActionResponse, JsError> {
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_website_login_save_action_response(
+    response: tsify::Ts<WebsiteLoginSaveActionAdmission>,
+) -> Result<tsify::Ts<nook_companion_core::WebsiteLoginSaveActionResponse>, wasm_bindgen::JsError> {
+    let response = response
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
     let WebsiteLoginSaveActionAdmission(response) = response;
-    response
+    let result = response
         .validate()
-        .map_err(|error| JsError::new(&error.to_string()))
+        .map_err(|error| JsError::new(&error.to_string()))?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_login_picker_open_response(
-    response: LoginPickerOpenAdmission,
-) -> Result<nook_companion_core::LoginPickerOpenResponse, wasm_bindgen::JsError> {
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_login_picker_open_response(
+    response: tsify::Ts<LoginPickerOpenAdmission>,
+) -> Result<tsify::Ts<nook_companion_core::LoginPickerOpenResponse>, wasm_bindgen::JsError> {
+    let response = response
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
     let LoginPickerOpenAdmission(response) = response;
-    LoginPickerOpenResponse::decode_login_picker_open_response(response)
-        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+    let result = LoginPickerOpenResponse::decode_login_picker_open_response(response)
+        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_authenticator_picker_open_response(
-    response: AuthenticatorPickerOpenAdmission,
-) -> Result<nook_companion_core::AuthenticatorPickerOpenResponse, JsError> {
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_authenticator_picker_open_response(
+    response: tsify::Ts<AuthenticatorPickerOpenAdmission>,
+) -> Result<tsify::Ts<nook_companion_core::AuthenticatorPickerOpenResponse>, wasm_bindgen::JsError>
+{
+    let response = response
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
     let AuthenticatorPickerOpenAdmission(response) = response;
-    AuthenticatorPickerOpenResponse::from_wire(response)
-        .map_err(|error| JsError::new(&error.to_string()))
+    let result = AuthenticatorPickerOpenResponse::from_wire(response)
+        .map_err(|error| JsError::new(&error.to_string()))?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_authentication_outcome_response(
-    response: AuthenticationOutcomeAdmission,
-) -> Result<nook_companion_core::AuthenticationOutcomeResponse, wasm_bindgen::JsError> {
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_authentication_outcome_response(
+    response: tsify::Ts<AuthenticationOutcomeAdmission>,
+) -> Result<tsify::Ts<nook_companion_core::AuthenticationOutcomeResponse>, wasm_bindgen::JsError> {
+    let response = response
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
     let AuthenticationOutcomeAdmission(response) = response;
-    AuthenticationOutcomeResponse::decode_authentication_outcome_response(response)
-        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+    let result = AuthenticationOutcomeResponse::decode_authentication_outcome_response(response)
+        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_authenticator_backup_attach_response(
-    response: AuthenticatorBackupAttachAdmission,
-) -> Result<nook_companion_core::AuthenticatorBackupAttachResponse, JsError> {
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_authenticator_backup_attach_response(
+    response: tsify::Ts<AuthenticatorBackupAttachAdmission>,
+) -> Result<tsify::Ts<nook_companion_core::AuthenticatorBackupAttachResponse>, wasm_bindgen::JsError>
+{
+    let response = response
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
     let AuthenticatorBackupAttachAdmission(response) = response;
-    AuthenticatorBackupAttachResponse::from_wire(response)
-        .map_err(|error| JsError::new(&error.to_string()))
+    let result = AuthenticatorBackupAttachResponse::from_wire(response)
+        .map_err(|error| JsError::new(&error.to_string()))?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_authenticator_enrollment_stage_response(
-    response: AuthenticatorEnrollmentStageAdmission,
-) -> Result<nook_companion_core::AuthenticatorEnrollmentStageResponse, JsError> {
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_authenticator_enrollment_stage_response(
+    response: tsify::Ts<AuthenticatorEnrollmentStageAdmission>,
+) -> Result<
+    tsify::Ts<nook_companion_core::AuthenticatorEnrollmentStageResponse>,
+    wasm_bindgen::JsError,
+> {
+    let response = response
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
     let AuthenticatorEnrollmentStageAdmission(response) = response;
-    AuthenticatorEnrollmentStageResponse::from_wire(response)
-        .map_err(|error| JsError::new(&error.to_string()))
+    let result = AuthenticatorEnrollmentStageResponse::from_wire(response)
+        .map_err(|error| JsError::new(&error.to_string()))?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_authenticator_enrollment_confirm_response(
-    response: AuthenticatorEnrollmentConfirmAdmission,
-) -> Result<nook_companion_core::AuthenticatorEnrollmentConfirmResponse, JsError> {
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_authenticator_enrollment_confirm_response(
+    response: tsify::Ts<AuthenticatorEnrollmentConfirmAdmission>,
+) -> Result<
+    tsify::Ts<nook_companion_core::AuthenticatorEnrollmentConfirmResponse>,
+    wasm_bindgen::JsError,
+> {
+    let response = response
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
     let AuthenticatorEnrollmentConfirmAdmission(response) = response;
-    AuthenticatorEnrollmentConfirmResponse::from_wire(response)
-        .map_err(|error| JsError::new(&error.to_string()))
+    let result = AuthenticatorEnrollmentConfirmResponse::from_wire(response)
+        .map_err(|error| JsError::new(&error.to_string()))?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_generated_password_response(
-    response: GeneratedPasswordAdmission,
-) -> Result<nook_companion_core::GeneratedPasswordResponse, JsError> {
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_generated_password_response(
+    response: tsify::Ts<GeneratedPasswordAdmission>,
+) -> Result<tsify::Ts<nook_companion_core::GeneratedPasswordResponse>, wasm_bindgen::JsError> {
+    let response = response
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
     let GeneratedPasswordAdmission(response) = response;
-    GeneratedPasswordResponse::from_wire(response).map_err(|error| JsError::new(&error.to_string()))
+    let result = GeneratedPasswordResponse::from_wire(response)
+        .map_err(|error| JsError::new(&error.to_string()))?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_authenticator_options_response(
-    response: AuthenticatorOptionsAdmission,
-) -> Result<nook_companion_core::AuthenticatorOptionsResponse, JsError> {
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_authenticator_options_response(
+    response: tsify::Ts<AuthenticatorOptionsAdmission>,
+) -> Result<tsify::Ts<nook_companion_core::AuthenticatorOptionsResponse>, wasm_bindgen::JsError> {
+    let response = response
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
     let AuthenticatorOptionsAdmission(response) = response;
-    AuthenticatorOptionsResponse::from_wire(response)
-        .map_err(|error| JsError::new(&error.to_string()))
+    let result = AuthenticatorOptionsResponse::from_wire(response)
+        .map_err(|error| JsError::new(&error.to_string()))?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_authenticator_preview_response(
-    response: AuthenticatorPreviewAdmission,
-) -> Result<nook_companion_core::AuthenticatorPreviewResponse, JsError> {
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_authenticator_preview_response(
+    response: tsify::Ts<AuthenticatorPreviewAdmission>,
+) -> Result<tsify::Ts<nook_companion_core::AuthenticatorPreviewResponse>, wasm_bindgen::JsError> {
+    let response = response
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
     let AuthenticatorPreviewAdmission(response) = response;
-    AuthenticatorPreviewResponse::from_wire(response)
-        .map_err(|error| JsError::new(&error.to_string()))
+    let result = AuthenticatorPreviewResponse::from_wire(response)
+        .map_err(|error| JsError::new(&error.to_string()))?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[cfg(test)]
@@ -653,42 +844,77 @@ mod wasm_tests {
 }
 
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_authenticator_code_session_response(
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_authenticator_code_session_response(
     value: wasm_bindgen::JsValue,
-) -> Result<nook_companion_core::AuthenticatorCodeSessionResponse, JsError> {
+) -> Result<tsify::Ts<nook_companion_core::AuthenticatorCodeSessionResponse>, wasm_bindgen::JsError>
+{
     let wire: nook_companion_core::AuthenticatorCodeSessionWire =
         serde_wasm_bindgen::from_value(value)
             .map_err(|_| JsError::new("Extension session returned an invalid response."))?;
-    nook_companion_core::AuthenticatorCodeSessionResponse::try_from(wire).map_err(JsError::new)
+    let result = nook_companion_core::AuthenticatorCodeSessionResponse::try_from(wire)
+        .map_err(JsError::new)?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_authenticator_preview_session_response(
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_authenticator_preview_session_response(
     value: wasm_bindgen::JsValue,
-) -> Result<nook_companion_core::AuthenticatorPreviewSessionResponse, JsError> {
+) -> Result<
+    tsify::Ts<nook_companion_core::AuthenticatorPreviewSessionResponse>,
+    wasm_bindgen::JsError,
+> {
     let wire: nook_companion_core::AuthenticatorPreviewSessionWire =
         serde_wasm_bindgen::from_value(value)
             .map_err(|_| JsError::new("Extension session returned an invalid response."))?;
-    nook_companion_core::AuthenticatorPreviewSessionResponse::try_from(wire).map_err(JsError::new)
+    let result = nook_companion_core::AuthenticatorPreviewSessionResponse::try_from(wire)
+        .map_err(JsError::new)?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_authenticator_secret_session_response(
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_authenticator_secret_session_response(
     value: wasm_bindgen::JsValue,
-) -> Result<nook_companion_core::AuthenticatorSecretSessionResponse, JsError> {
+) -> Result<tsify::Ts<nook_companion_core::AuthenticatorSecretSessionResponse>, wasm_bindgen::JsError>
+{
     let wire: nook_companion_core::AuthenticatorSecretSessionWire =
         serde_wasm_bindgen::from_value(value)
             .map_err(|_| JsError::new("Extension session returned an invalid response."))?;
-    nook_companion_core::AuthenticatorSecretSessionResponse::try_from(wire).map_err(JsError::new)
+    let result = nook_companion_core::AuthenticatorSecretSessionResponse::try_from(wire)
+        .map_err(JsError::new)?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_authenticator_backup_verification_session_response(
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_authenticator_backup_verification_session_response(
     value: wasm_bindgen::JsValue,
-) -> Result<nook_companion_core::VerifiedAuthenticatorBackupAttachResponse, JsError> {
+) -> Result<
+    tsify::Ts<nook_companion_core::VerifiedAuthenticatorBackupAttachResponse>,
+    wasm_bindgen::JsError,
+> {
     let wire: nook_companion_core::AuthenticatorBackupVerificationSessionWire =
         serde_wasm_bindgen::from_value(value)
             .map_err(|_| JsError::new("Extension session returned an invalid response."))?;
-    nook_companion_core::VerifiedAuthenticatorBackupAttachResponse::try_from(wire)
-        .map_err(JsError::new)
+    let result = nook_companion_core::VerifiedAuthenticatorBackupAttachResponse::try_from(wire)
+        .map_err(JsError::new)?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }

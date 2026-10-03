@@ -1,5 +1,13 @@
 //! Typed WASM bindings for portable page-field and password-form policy.
 
+mod passkey_control;
+
+pub use passkey_control::{
+    authentication_passkey_control_candidate_is_safe,
+    authentication_passkey_control_evidence_is_safe, looks_like_passkey_control_label,
+    looks_like_passkey_enrollment_or_management_label,
+};
+
 use nook_companion_core::AuthenticationAdvanceControlObservation;
 use nook_companion_core::AuthenticationControlText;
 use nook_companion_core::AuthenticationRouteActuation;
@@ -102,20 +110,6 @@ impl NookLoginContextObservation {
 
 #[wasm_bindgen]
 #[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn looks_like_passkey_control_label(label: &str) -> bool {
-    AuthenticationAdvanceControlObservation::looks_like_passkey_control_label(label)
-}
-
-#[wasm_bindgen]
-#[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn looks_like_passkey_enrollment_or_management_label(label: &str) -> bool {
-    AuthenticationAdvanceControlObservation::looks_like_passkey_enrollment_or_management_label(
-        label,
-    )
-}
-
-#[wasm_bindgen]
-#[must_use]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn looks_like_manual_checkpoint_label(label: &str) -> bool {
     AuthenticationAdvanceControlObservation::looks_like_manual_checkpoint_label(label)
 }
@@ -183,24 +177,6 @@ impl NookLoginContextObservation {
 
 #[wasm_bindgen]
 #[must_use]
-#[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authentication_passkey_control_candidate_is_safe(
-    candidate: nook_companion_core::AuthenticationDetailedPasskeyControlCandidateObservation,
-) -> bool {
-    candidate.authentication_passkey_control_candidate_is_safe()
-}
-
-#[wasm_bindgen]
-#[must_use]
-#[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authentication_passkey_control_evidence_is_safe(
-    evidence: nook_companion_core::AuthenticationDetailedPasskeyControlObservation,
-) -> bool {
-    evidence.authentication_passkey_control_evidence_is_safe()
-}
-
-#[wasm_bindgen]
-#[must_use]
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
     expect(
@@ -208,12 +184,22 @@ impl NookLoginContextObservation {
         reason = "FFI boundary: exposes the authentication observation priority to JavaScript"
     )
 )]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authentication_form_observation_priority(
-    observation: nook_companion_core::AuthenticationPageObservation,
-) -> u8 {
-    (observation)
-        .authentication_form_observation_priority()
-        .into()
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn authentication_form_observation_priority(
+    observation: tsify::Ts<nook_companion_core::AuthenticationPageObservation>,
+) -> Result<u8, wasm_bindgen::JsError> {
+    let observation = observation
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result = {
+        (observation)
+            .authentication_form_observation_priority()
+            .into()
+    };
+    Ok(result)
 }
 
 #[wasm_bindgen]
@@ -226,12 +212,22 @@ impl NookLoginContextObservation {
         reason = "FFI boundary: exposes the authentication facts priority to JavaScript"
     )
 )]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authentication_page_observation_facts_priority(
-    facts: nook_companion_core::AuthenticationPageObservationFacts,
-) -> u8 {
-    (facts)
-        .authentication_page_observation_facts_priority()
-        .into()
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn authentication_page_observation_facts_priority(
+    facts: tsify::Ts<nook_companion_core::AuthenticationPageObservationFacts>,
+) -> Result<u8, wasm_bindgen::JsError> {
+    let facts = facts
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result = {
+        (facts)
+            .authentication_page_observation_facts_priority()
+            .into()
+    };
+    Ok(result)
 }
 
 #[wasm_bindgen]

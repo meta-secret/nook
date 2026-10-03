@@ -13,7 +13,7 @@ pub enum AppLocale {
 
 /// Locale that can be selected and persisted by the application.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, tsify::Tsify)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub enum SupportedAppLocale {
     #[serde(rename = "en")]
     English,

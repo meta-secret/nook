@@ -26,7 +26,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 /// Typed command for starting a Sentinel genesis ceremony.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub struct StartSentinelGenesisArgs {
     pub label: String,
     #[tsify(type = "number")]

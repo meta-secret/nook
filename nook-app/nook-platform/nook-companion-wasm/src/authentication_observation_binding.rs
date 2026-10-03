@@ -4,24 +4,51 @@ use wasm_bindgen::prelude::wasm_bindgen;
 /// Bind the exact ordered browser facts through Rust's canonical representation.
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)] // wasm-bindgen owns the decoded ABI value.
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn bind_authentication_page_observation_facts(
-    facts: nook_companion_core::AuthenticationPageObservationFactsBatch,
-) -> Result<nook_companion_core::AuthenticationObservationBindingToken, wasm_bindgen::JsError> {
-    AuthenticationObservationBindingToken::bind_authentication_page_observation_facts(&facts)
-        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn bind_authentication_page_observation_facts(
+    facts: tsify::Ts<nook_companion_core::AuthenticationPageObservationFactsBatch>,
+) -> Result<
+    tsify::Ts<nook_companion_core::AuthenticationObservationBindingToken>,
+    wasm_bindgen::JsError,
+> {
+    let facts = facts
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
+    let result =
+        AuthenticationObservationBindingToken::bind_authentication_page_observation_facts(&facts)
+            .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 /// Require current browser facts to equal the exact Rust-issued binding.
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)] // wasm-bindgen owns the decoded ABI values.
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authentication_page_observation_facts_match_binding(
-    binding: nook_companion_core::AuthenticationObservationBindingToken,
-    facts: nook_companion_core::AuthenticationPageObservationFactsBatch,
-) -> bool {
-    AuthenticationObservationBindingToken::authentication_page_observation_facts_match_binding(
-        &binding, &facts,
-    )
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn authentication_page_observation_facts_match_binding(
+    binding: tsify::Ts<nook_companion_core::AuthenticationObservationBindingToken>,
+    facts: tsify::Ts<nook_companion_core::AuthenticationPageObservationFactsBatch>,
+) -> Result<bool, wasm_bindgen::JsError> {
+    let binding = binding
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let facts = facts
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result = {
+        AuthenticationObservationBindingToken::authentication_page_observation_facts_match_binding(
+            &binding, &facts,
+        )
+    };
+    Ok(result)
 }
 
 #[cfg(all(test, target_arch = "wasm32"))]

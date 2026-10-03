@@ -27,7 +27,7 @@ pub use submission_destination_source::PageControlSubmissionDestinationSource;
 /// Whether a browser-observed control can currently receive user activation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub enum PageControlActionability {
     Inert,
     Actionable,
@@ -36,7 +36,7 @@ pub enum PageControlActionability {
 /// The authentication scope that owns a browser-observed control.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub enum PageControlOwnership {
     Unowned,
     OwnedForm,
@@ -46,7 +46,7 @@ pub enum PageControlOwnership {
 /// The browser activation semantics exposed by a control.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub enum PageControlSemantics {
     Activation,
     SemanticSubmit,
@@ -55,7 +55,7 @@ pub enum PageControlSemantics {
 /// The effective HTML submission method for one observed activation control.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub enum PageControlSubmissionMethod {
     #[default]
     Absent,
@@ -96,7 +96,7 @@ pub enum PageControlSubmissionMethod {
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub struct AuthenticationAdvanceControlObservation {
     pub actionability: PageControlActionability,
     pub ownership: PageControlOwnership,
@@ -122,7 +122,7 @@ pub struct AuthenticationAdvanceControlObservation {
 /// Portable outcome for one observed authentication advance control.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub enum AuthenticationAdvanceControlDecision {
     AdvancesAuthentication,
     DoesNotAdvanceAuthentication,

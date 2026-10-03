@@ -5,19 +5,28 @@ use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 #[wasm_bindgen]
 impl NookVaultManager {
-    pub fn active_extension_vault_scope(&self) -> Result<ExtensionActiveVaultScope, JsError> {
+    pub fn active_extension_vault_scope(
+        &self,
+    ) -> Result<tsify::Ts<ExtensionActiveVaultScope>, wasm_bindgen::JsError> {
         let VaultCryptoState::Unlocked(_) = &self.vault.crypto else {
-            return Ok(ExtensionActiveVaultScope::NoActiveVault);
+            return tsify::Tsify::into_ts(&ExtensionActiveVaultScope::NoActiveVault).map_err(
+                |_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."),
+            );
         };
-        if self.vault.store_id.trim().is_empty() {
-            return Err(JsError::new(
-                "Active extension vault identity is unavailable",
-            ));
+        match self.vault.store_id.trim() {
+            "" => {
+                return Err(JsError::new(
+                    "Active extension vault identity is unavailable",
+                ));
+            }
+            _ => {}
         }
-        Ok(ExtensionActiveVaultScope::Active(ActiveExtensionVault {
+        let result = ExtensionActiveVaultScope::Active(ActiveExtensionVault {
             vault_store_id: nook_core::StoreId::parse(&self.vault.store_id)
                 .map_err(|error| JsError::new(&error.to_string()))?,
-        }))
+        });
+        tsify::Tsify::into_ts(&result)
+            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
     }
 }
 

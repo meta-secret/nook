@@ -20,30 +20,50 @@ pub enum NookActiveProviderCredentialsProjectionState {
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn active_provider_credentials_projection_state(
-    projection: nook_core::ActiveProviderCredentialsProjection,
-) -> NookActiveProviderCredentialsProjectionState {
-    match projection {
-        ActiveProviderCredentialsProjection::Unchanged => {
-            NookActiveProviderCredentialsProjectionState::Unchanged
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn active_provider_credentials_projection_state(
+    projection: tsify::Ts<nook_core::ActiveProviderCredentialsProjection>,
+) -> Result<NookActiveProviderCredentialsProjectionState, wasm_bindgen::JsError> {
+    let projection = projection
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+    let result = {
+        match projection {
+            ActiveProviderCredentialsProjection::Unchanged => {
+                NookActiveProviderCredentialsProjectionState::Unchanged
+            }
+            ActiveProviderCredentialsProjection::Apply(_) => {
+                NookActiveProviderCredentialsProjectionState::Apply
+            }
         }
-        ActiveProviderCredentialsProjection::Apply(_) => {
-            NookActiveProviderCredentialsProjectionState::Apply
-        }
-    }
+    };
+    Ok(result)
 }
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn active_provider_credentials_projection_draft(
-    projection: nook_core::ActiveProviderCredentialsProjection,
-) -> Result<nook_core::ActiveProviderCredentialDraft, wasm_bindgen::JsError> {
-    match projection {
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn active_provider_credentials_projection_draft(
+    projection: tsify::Ts<nook_core::ActiveProviderCredentialsProjection>,
+) -> Result<tsify::Ts<nook_core::ActiveProviderCredentialDraft>, wasm_bindgen::JsError> {
+    let projection = projection
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
+    let result = match projection {
         ActiveProviderCredentialsProjection::Unchanged => Err(JsError::new(
             "active provider credentials projection is unchanged",
         )),
         ActiveProviderCredentialsProjection::Apply(draft) => Ok(*draft),
-    }
+    }?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
@@ -56,17 +76,27 @@ pub enum NookStoredOAuthFileConfigurationState {
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn stored_oauth_file_configuration_state(
-    configuration: nook_core::StoredOAuthFileConfiguration,
-) -> NookStoredOAuthFileConfigurationState {
-    match configuration {
-        StoredOAuthFileConfiguration::NotApplicable => {
-            NookStoredOAuthFileConfigurationState::NotApplicable
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn stored_oauth_file_configuration_state(
+    configuration: tsify::Ts<nook_core::StoredOAuthFileConfiguration>,
+) -> Result<NookStoredOAuthFileConfigurationState, wasm_bindgen::JsError> {
+    let configuration = configuration
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+    let result = {
+        match configuration {
+            StoredOAuthFileConfiguration::NotApplicable => {
+                NookStoredOAuthFileConfigurationState::NotApplicable
+            }
+            StoredOAuthFileConfiguration::Configured(_) => {
+                NookStoredOAuthFileConfigurationState::Configured
+            }
         }
-        StoredOAuthFileConfiguration::Configured(_) => {
-            NookStoredOAuthFileConfigurationState::Configured
-        }
-    }
+    };
+    Ok(result)
 }
 
 #[wasm_bindgen]
@@ -79,17 +109,27 @@ pub enum NookStoredLocalFolderConfigurationState {
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn stored_local_folder_configuration_state(
-    configuration: nook_core::StoredLocalFolderConfiguration,
-) -> NookStoredLocalFolderConfigurationState {
-    match configuration {
-        StoredLocalFolderConfiguration::NotApplicable => {
-            NookStoredLocalFolderConfigurationState::NotApplicable
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn stored_local_folder_configuration_state(
+    configuration: tsify::Ts<nook_core::StoredLocalFolderConfiguration>,
+) -> Result<NookStoredLocalFolderConfigurationState, wasm_bindgen::JsError> {
+    let configuration = configuration
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+    let result = {
+        match configuration {
+            StoredLocalFolderConfiguration::NotApplicable => {
+                NookStoredLocalFolderConfigurationState::NotApplicable
+            }
+            StoredLocalFolderConfiguration::Configured(_) => {
+                NookStoredLocalFolderConfigurationState::Configured
+            }
         }
-        StoredLocalFolderConfiguration::Configured(_) => {
-            NookStoredLocalFolderConfigurationState::Configured
-        }
-    }
+    };
+    Ok(result)
 }
 
 #[wasm_bindgen]
@@ -112,14 +152,24 @@ impl From<nook_core::ExistingVaultProviderReadiness> for NookExistingVaultProvid
 
 #[wasm_bindgen]
 #[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn existing_vault_provider_readiness(
-    provider_type: nook_core::StorageProviderType,
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn existing_vault_provider_readiness(
+    provider_type: tsify::Ts<nook_core::StorageProviderType>,
     oauth_file_configured: bool,
     local_folder_configured: bool,
-) -> NookExistingVaultProviderReadiness {
-    provider_type
-        .readiness(oauth_file_configured, local_folder_configured)
-        .into()
+) -> Result<NookExistingVaultProviderReadiness, wasm_bindgen::JsError> {
+    let provider_type = provider_type
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+    let result = {
+        provider_type
+            .readiness(oauth_file_configured, local_folder_configured)
+            .into()
+    };
+    Ok(result)
 }
 
 #[wasm_bindgen]
@@ -128,13 +178,32 @@ impl From<nook_core::ExistingVaultProviderReadiness> for NookExistingVaultProvid
     clippy::needless_pass_by_value,
     reason = "wasm-bindgen requires the exported configuration value to be owned"
 )]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn oauth_access_token(config: nook_core::OAuthFileConfigData) -> nook_core::OAuthAccessToken {
-    config.usable_access_token().into()
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn oauth_access_token(
+    config: tsify::Ts<nook_core::OAuthFileConfigData>,
+) -> Result<tsify::Ts<nook_core::OAuthAccessToken>, wasm_bindgen::JsError> {
+    let config = config
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+
+    let result = { config.usable_access_token().into() };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 #[wasm_bindgen]
 #[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn missing_oauth_access_token() -> nook_core::OAuthAccessToken {
-    nook_core::OAuthAccessToken::Missing
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn missing_oauth_access_token()
+-> Result<tsify::Ts<nook_core::OAuthAccessToken>, wasm_bindgen::JsError> {
+    let result = { nook_core::OAuthAccessToken::Missing };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
@@ -232,13 +301,17 @@ impl NookOAuthRemoteConfigurationUpdate {
         }
     }
     #[wasm_bindgen(getter)]
-    pub fn config(&self) -> Result<nook_core::OAuthFileConfigData, wasm_bindgen::JsError> {
-        match &self.0 {
+    pub fn config(
+        &self,
+    ) -> Result<tsify::Ts<nook_core::OAuthFileConfigData>, wasm_bindgen::JsError> {
+        let result = match &self.0 {
             OAuthRemoteConfigurationUpdate::Updated(value) => Ok((**value).clone()),
             OAuthRemoteConfigurationUpdate::Unchanged => {
                 Err(JsError::new("OAuth remote reference was rejected"))
             }
-        }
+        }?;
+        tsify::Tsify::into_ts(&result)
+            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
     }
 }
 
@@ -269,13 +342,15 @@ impl NookStagedStorageArgs {
         }
     }
     #[wasm_bindgen(getter)]
-    pub fn args(&self) -> Result<NookStorageConnectArgs, wasm_bindgen::JsError> {
-        match &self.0 {
+    pub fn args(&self) -> Result<tsify::Ts<NookStorageConnectArgs>, wasm_bindgen::JsError> {
+        let result = match &self.0 {
             StagedStorageConnection::Ready(args) => Ok(args.clone()),
             StagedStorageConnection::Incomplete => {
                 Err(JsError::new("staged storage is incomplete"))
             }
-        }
+        }?;
+        tsify::Tsify::into_ts(&result)
+            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
     }
 }
 
@@ -322,58 +397,118 @@ impl NookGithubPatHint {
 
 #[wasm_bindgen]
 #[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn local_vault_storage_args() -> NookStorageConnectArgs {
-    StorageConnectArgs::local()
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn local_vault_storage_args() -> Result<tsify::Ts<NookStorageConnectArgs>, wasm_bindgen::JsError>
+{
+    let result = { StorageConnectArgs::local() };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
 }
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authenticated_vault_storage_args(
-    provider: nook_core::StorageProviderData,
-) -> Result<NookStorageConnectArgs, wasm_bindgen::JsError> {
-    Ok(provider.connection_args()?)
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn authenticated_vault_storage_args(
+    provider: tsify::Ts<nook_core::StorageProviderData>,
+) -> Result<tsify::Ts<NookStorageConnectArgs>, wasm_bindgen::JsError> {
+    let provider = provider
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+
+    let result = Ok::<_, wasm_bindgen::JsError>(provider.connection_args()?)?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
 }
 
 #[wasm_bindgen]
 #[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn draft_github_storage_args(github_pat: &str, github_repo: &str) -> NookStorageConnectArgs {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn draft_github_storage_args(github_pat: &str,
+github_repo: &str) -> Result<tsify::Ts<NookStorageConnectArgs>, wasm_bindgen::JsError> {
+
+let result = {
     DraftStorageConnection::Github(GithubStorageDraft {
         credential: &nook_core::StoredGithubPat::Token(github_pat.to_owned()),
         repository: &nook_core::StoredGithubRepository::Repository(github_repo.to_owned()),
     })
     .project()
+};
+tsify::Tsify::into_ts(&result).map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
 }
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 #[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn draft_oauth_storage_args(config: nook_core::OAuthFileConfigData, setup: ProviderSaveSetup) -> NookStorageConnectArgs {
-    let config = config.with_provider_save_setup(setup);
-    DraftStorageConnection::OAuth(OAuthStorageDraft {
-        preset: config.preset,
-        credential: &config.access_token,
-        remote_reference: config.remote_storage_ref(),
-        file_name: &config.file_name,
-        alternate_name: &nook_core::StoredOAuthRemoteFileName::Unresolved,
-    })
-    .project()
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn draft_oauth_storage_args(
+    config: tsify::Ts<nook_core::OAuthFileConfigData>,
+
+    setup: tsify::Ts<ProviderSaveSetup>,
+) -> Result<tsify::Ts<NookStorageConnectArgs>, wasm_bindgen::JsError> {
+    let config = config
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+
+    let setup = setup
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result = {
+        let config = config.with_provider_save_setup(setup);
+        DraftStorageConnection::OAuth(OAuthStorageDraft {
+            preset: config.preset,
+            credential: &config.access_token,
+            remote_reference: config.remote_storage_ref(),
+            file_name: &config.file_name,
+            alternate_name: &nook_core::StoredOAuthRemoteFileName::Unresolved,
+        })
+        .project()
+    };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
 }
 
 #[wasm_bindgen]
 #[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn draft_local_storage_args() -> NookStorageConnectArgs {
-    DraftStorageConnection::Local.project()
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn draft_local_storage_args() -> Result<tsify::Ts<NookStorageConnectArgs>, wasm_bindgen::JsError>
+{
+    let result = { DraftStorageConnection::Local.project() };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
 }
 
 /// Return a masked GitHub PAT hint without exposing the full credential.
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn mask_github_pat_hint(pat: nook_core::StoredGithubPat) -> NookGithubPatHint {
-    NookGithubPatHint::new(match pat {
-        nook_core::StoredGithubPat::Missing => GithubPatMask::NoToken,
-        nook_core::StoredGithubPat::Token(pat) => nook_core::GithubPat::mask(&pat),
-    })
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn mask_github_pat_hint(
+    pat: tsify::Ts<nook_core::StoredGithubPat>,
+) -> Result<NookGithubPatHint, wasm_bindgen::JsError> {
+    let pat = pat
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result = {
+        NookGithubPatHint::new(match pat {
+            nook_core::StoredGithubPat::Missing => GithubPatMask::NoToken,
+            nook_core::StoredGithubPat::Token(pat) => nook_core::GithubPat::mask(&pat),
+        })
+    };
+    Ok(result)
 }
 
 #[cfg(test)]

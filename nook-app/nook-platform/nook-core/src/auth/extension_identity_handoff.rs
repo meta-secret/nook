@@ -144,7 +144,7 @@ impl HandoffNonce<'_> {
 
 #[derive(Debug, Clone, Deserialize, tsify::Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(from_wasm_abi)]
+
 pub struct ExtensionIdentityHandoffSealRequest {
     pub recipient_public_key: String,
     pub nonce: String,

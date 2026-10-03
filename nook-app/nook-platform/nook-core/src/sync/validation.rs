@@ -121,7 +121,7 @@ pub const DRIVE_STORAGE_REF_SEP: char = '\t';
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub enum StorageProviderType {
     #[default]
     Local,
@@ -178,7 +178,7 @@ pub enum ExistingVaultProviderReadiness {
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub enum OAuthFilePreset {
     #[default]
     GoogleDrive,
@@ -195,7 +195,7 @@ pub type OauthFilePreset = OAuthFilePreset;
 /// folder shared through Google Drive ACLs.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub enum GoogleDriveMode {
     #[default]
     Private,
@@ -230,7 +230,7 @@ impl GoogleDriveMode {
 /// shared database with their own `CloudKit` web-auth token.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub enum ICloudMode {
     #[default]
     Private,
@@ -260,7 +260,7 @@ impl ICloudMode {
 /// Which `CloudKit` database exposes a shared record hierarchy to this account.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub enum ICloudShareRole {
     Owner,
     Participant,
@@ -274,7 +274,7 @@ pub enum ICloudShareRole {
 /// fields route `CloudKit` Web Services after the share has been accepted.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub struct ICloudSharedTarget {
     pub role: ICloudShareRole,
     pub zone_name: String,

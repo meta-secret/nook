@@ -6,19 +6,36 @@ use nook_companion_core::{
 use wasm_bindgen::{JsValue, prelude::wasm_bindgen};
 
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn admit_authentication_workflow_snapshot_message(
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn admit_authentication_workflow_snapshot_message(
     value: JsValue,
-) -> AuthenticationWorkflowTransportAdmission {
-    match serde_wasm_bindgen::from_value::<AuthenticationWorkflowSnapshotTransport>(value) {
-        Ok(message) => message.admit(),
-        Err(_) => AuthenticationWorkflowTransportAdmission::Rejected,
-    }
+) -> Result<tsify::Ts<AuthenticationWorkflowTransportAdmission>, wasm_bindgen::JsError> {
+    let result = {
+        match serde_wasm_bindgen::from_value::<AuthenticationWorkflowSnapshotTransport>(value) {
+            Ok(message) => message.admit(),
+            Err(_) => AuthenticationWorkflowTransportAdmission::Rejected,
+        }
+    };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authentication_recovery_copy_evidence(
-    request: AuthenticationRecoveryCopyRequest,
-) -> AuthenticationRecoveryCopyEvidence {
-    request.project()
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn authentication_recovery_copy_evidence(
+    request: tsify::Ts<AuthenticationRecoveryCopyRequest>,
+) -> Result<tsify::Ts<AuthenticationRecoveryCopyEvidence>, wasm_bindgen::JsError> {
+    let request = request
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result = { request.project() };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[cfg(all(test, target_arch = "wasm32"))]

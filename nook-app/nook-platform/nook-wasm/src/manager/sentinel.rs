@@ -48,8 +48,12 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn start_sentinel_genesis(
         &mut self,
-        mut args: nook_core::StartSentinelGenesisArgs,
-    ) -> Result<NookSentinelGenesisStatus, JsError> {
+        args: tsify::Ts<nook_core::StartSentinelGenesisArgs>,
+    ) -> Result<NookSentinelGenesisStatus, wasm_bindgen::JsError> {
+        let mut args = args
+            .to_rust()
+            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
         let pending = NookDatabase::load_sentinel_genesis_finalization_pending().await;
         if let SentinelFinalizationJournal::Pending(_) =
             self.observe_sentinel_genesis_journal(pending)?
@@ -65,7 +69,7 @@ impl NookVaultManager {
         let session = args.start(&identity, &signing)?;
         self.sentinel_genesis_phase = SentinelGenesisPhase::from_session(&session);
         self.sentinel_genesis = CeremonyState::Active(session);
-        Ok(self.sentinel_genesis_status())
+        Ok::<_, wasm_bindgen::JsError>(self.sentinel_genesis_status())
     }
 
     /// Public pairing request rendered as QR/link/paste JSON by the web layer.

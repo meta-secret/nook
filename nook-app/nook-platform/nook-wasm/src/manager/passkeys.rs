@@ -475,9 +475,13 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn register_website_passkey(
         &mut self,
-        request: nook_core::PasskeyRegistrationRequest,
+        request: tsify::Ts<nook_core::PasskeyRegistrationRequest>,
         ceremony_active: &js_sys::Function,
-    ) -> Result<NookPasskeyRegistration, JsError> {
+    ) -> Result<NookPasskeyRegistration, wasm_bindgen::JsError> {
+        let request = request
+            .to_rust()
+            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
         NookVaultManager::ensure_ceremony_active(ceremony_active)?;
         self.ensure_passkey_extension_capability()?;
         self.ensure_vault_crypto_from_cache().await?;
@@ -504,15 +508,19 @@ impl NookVaultManager {
         NookVaultManager::ensure_ceremony_active(ceremony_active)?;
         self.append_vault_operations(vec![VaultOperation::SecretCreated { secret: encrypted }])
             .await?;
-        Ok(response)
+        Ok::<_, wasm_bindgen::JsError>(response)
     }
 
     #[wasm_bindgen]
     pub async fn assert_website_passkey(
         &mut self,
-        request: nook_core::WebsitePasskeyAssertionRequest,
+        request: tsify::Ts<nook_core::WebsitePasskeyAssertionRequest>,
         ceremony_active: &js_sys::Function,
-    ) -> Result<NookPasskeyAssertion, JsError> {
+    ) -> Result<NookPasskeyAssertion, wasm_bindgen::JsError> {
+        let request = request
+            .to_rust()
+            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+
         NookVaultManager::ensure_ceremony_active(ceremony_active)?;
         self.ensure_passkey_extension_capability()?;
         self.ensure_vault_crypto_from_cache().await?;
@@ -562,7 +570,7 @@ impl NookVaultManager {
         );
         NookVaultManager::ensure_ceremony_active(ceremony_active)?;
         self.append_vault_operations(operations).await?;
-        Ok(response)
+        Ok::<_, wasm_bindgen::JsError>(response)
     }
 }
 
@@ -574,8 +582,10 @@ impl NookVaultManager {
 )]
 pub fn decode_website_passkey_registration_request(
     json: &str,
-) -> Result<nook_core::PasskeyRegistrationRequest, JsError> {
-    serde_json::from_str(json).map_err(|_| JsError::new("passkey-invalid-request"))
+) -> Result<tsify::Ts<nook_core::PasskeyRegistrationRequest>, wasm_bindgen::JsError> {
+    let result = serde_json::from_str(json).map_err(|_| JsError::new("passkey-invalid-request"))?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 /// Decode the external JSON message exactly once into the canonical assertion request.
 #[wasm_bindgen]
@@ -585,6 +595,8 @@ pub fn decode_website_passkey_registration_request(
 )]
 pub fn decode_website_passkey_assertion_request(
     json: &str,
-) -> Result<nook_core::WebsitePasskeyAssertionRequest, JsError> {
-    serde_json::from_str(json).map_err(|_| JsError::new("passkey-invalid-request"))
+) -> Result<tsify::Ts<nook_core::WebsitePasskeyAssertionRequest>, wasm_bindgen::JsError> {
+    let result = serde_json::from_str(json).map_err(|_| JsError::new("passkey-invalid-request"))?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
 }

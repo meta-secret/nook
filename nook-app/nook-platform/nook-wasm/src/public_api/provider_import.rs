@@ -6,7 +6,7 @@ use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 /// Unknown Chrome pairing value decoded through the canonical provider schema.
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct ExtensionPairingStorageProviderAdmission(StorageProvider);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,7 +37,7 @@ impl Drop for ExtensionPairingStorageProviderAdmission {
 /// Generated provider payload returned to Web after Rust admission.
 #[derive(Serialize, Tsify)]
 #[serde(transparent)]
-#[tsify(into_wasm_abi)]
+
 pub struct ExtensionPairingStorageProviderPayload(StorageProvider);
 
 impl Drop for ExtensionPairingStorageProviderPayload {
@@ -49,12 +49,22 @@ impl Drop for ExtensionPairingStorageProviderPayload {
 /// Decode one extension-pairing provider and reject plaintext credentials.
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_extension_pairing_storage_provider(
-    admission: ExtensionPairingStorageProviderAdmission,
-) -> Result<ExtensionPairingStorageProviderPayload, JsError> {
-    admission.decode().map_err(|_| {
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_extension_pairing_storage_provider(
+    admission: tsify::Ts<ExtensionPairingStorageProviderAdmission>,
+) -> Result<tsify::Ts<ExtensionPairingStorageProviderPayload>, wasm_bindgen::JsError> {
+    let admission = admission
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
+    let result = admission.decode().map_err(|_| {
         JsError::new("Extension pairing provider credentials are not storage-safe.")
-    })
+    })?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 /// Decode external provider snapshots through the Rust-owned serde contract.
@@ -64,10 +74,19 @@ impl Drop for ExtensionPairingStorageProviderPayload {
 /// normalized by serde defaults before returning to TypeScript.
 #[wasm_bindgen]
 #[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_storage_providers(
-    snapshot: nook_core::AuthProvidersSnapshotData,
-) -> nook_core::AuthProvidersSnapshotData {
-    snapshot
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_storage_providers(
+    snapshot: tsify::Ts<nook_core::AuthProvidersSnapshotData>,
+) -> Result<tsify::Ts<nook_core::AuthProvidersSnapshotData>, wasm_bindgen::JsError> {
+    let snapshot = snapshot
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+    let result = { snapshot };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
 }
 
 #[cfg(all(test, target_arch = "wasm32"))]

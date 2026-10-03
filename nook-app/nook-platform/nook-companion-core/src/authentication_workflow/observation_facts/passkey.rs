@@ -14,7 +14,7 @@ use tsify::Tsify;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub enum AuthenticationPasskeyControlObservation {
     #[default]
     Absent,
@@ -24,7 +24,7 @@ pub enum AuthenticationPasskeyControlObservation {
 /// How the browser identified one bounded passkey control candidate.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "kind", content = "observation", rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub enum AuthenticationDetailedPasskeyControlCandidateObservation {
     Labeled(AuthenticationAdvanceControlObservation),
     ExplicitlyMarked(AuthenticationAdvanceControlObservation),
@@ -69,7 +69,7 @@ impl AuthenticationDetailedPasskeyControlObservation {
 /// Detailed browser evidence for the passkey control selected by the host.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
 #[serde(tag = "kind", content = "observation", rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub enum AuthenticationDetailedPasskeyControlObservation {
     #[default]
     Absent,

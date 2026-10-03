@@ -32,8 +32,11 @@ pub fn extension_pairing_setup_storage_key() -> String {
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
-pub fn extension_vault_access_scope() -> nook_companion_core::ExtensionConnectScope {
-    nook_companion_core::ExtensionConnectScope::VaultAccess
+pub fn extension_vault_access_scope()
+-> Result<tsify::Ts<nook_companion_core::ExtensionConnectScope>, wasm_bindgen::JsError> {
+    let result = { nook_companion_core::ExtensionConnectScope::VaultAccess };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
@@ -42,8 +45,11 @@ pub fn extension_vault_access_scope() -> nook_companion_core::ExtensionConnectSc
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
-pub fn extension_password_filling_scope() -> nook_companion_core::ExtensionConnectScope {
-    nook_companion_core::ExtensionConnectScope::PasswordFilling
+pub fn extension_password_filling_scope()
+-> Result<tsify::Ts<nook_companion_core::ExtensionConnectScope>, wasm_bindgen::JsError> {
+    let result = { nook_companion_core::ExtensionConnectScope::PasswordFilling };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
@@ -52,8 +58,11 @@ pub fn extension_password_filling_scope() -> nook_companion_core::ExtensionConne
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
-pub fn extension_passkey_management_scope() -> nook_companion_core::ExtensionConnectScope {
-    nook_companion_core::ExtensionConnectScope::PasskeyManagement
+pub fn extension_passkey_management_scope()
+-> Result<tsify::Ts<nook_companion_core::ExtensionConnectScope>, wasm_bindgen::JsError> {
+    let result = { nook_companion_core::ExtensionConnectScope::PasskeyManagement };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
@@ -62,8 +71,11 @@ pub fn extension_passkey_management_scope() -> nook_companion_core::ExtensionCon
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
-pub fn extension_sync_provider_credentials_scope() -> nook_companion_core::ExtensionConnectScope {
-    nook_companion_core::ExtensionConnectScope::SyncProviderCredentials
+pub fn extension_sync_provider_credentials_scope()
+-> Result<tsify::Ts<nook_companion_core::ExtensionConnectScope>, wasm_bindgen::JsError> {
+    let result = { nook_companion_core::ExtensionConnectScope::SyncProviderCredentials };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
@@ -83,9 +95,11 @@ pub fn is_extension_connect_scope(value: &str) -> bool {
 )]
 pub fn admit_extension_pairing_vault_type(
     value: &str,
-) -> Result<nook_companion_core::ExtensionPairingVaultType, JsError> {
-    nook_companion_core::ExtensionPairingVaultType::parse(value)
-        .map_err(|error| JsError::new(&error.to_string()))
+) -> Result<tsify::Ts<nook_companion_core::ExtensionPairingVaultType>, wasm_bindgen::JsError> {
+    let result = nook_companion_core::ExtensionPairingVaultType::parse(value)
+        .map_err(|error| JsError::new(&error.to_string()))?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
@@ -95,9 +109,16 @@ pub fn admit_extension_pairing_vault_type(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn create_extension_pairing_state(
-    input: nook_companion_core::CreateExtensionPairingStateInput,
-) -> Result<nook_companion_core::ExtensionPairingState, JsError> {
-    ExtensionPairingState::create(input).map_err(|error| JsError::new(&error.to_string()))
+    input: tsify::Ts<nook_companion_core::CreateExtensionPairingStateInput>,
+) -> Result<tsify::Ts<nook_companion_core::ExtensionPairingState>, wasm_bindgen::JsError> {
+    let input = input
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
+    let result =
+        ExtensionPairingState::create(input).map_err(|error| JsError::new(&error.to_string()))?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
@@ -107,9 +128,16 @@ pub fn create_extension_pairing_state(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn refresh_extension_pairing_grant(
-    input: nook_companion_core::RefreshExtensionPairingGrantInput,
-) -> Result<nook_companion_core::ExtensionPairingState, JsError> {
-    ExtensionPairingState::refresh_grant(input).map_err(|error| JsError::new(&error.to_string()))
+    input: tsify::Ts<nook_companion_core::RefreshExtensionPairingGrantInput>,
+) -> Result<tsify::Ts<nook_companion_core::ExtensionPairingState>, wasm_bindgen::JsError> {
+    let input = input
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
+    let result = ExtensionPairingState::refresh_grant(input)
+        .map_err(|error| JsError::new(&error.to_string()))?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
@@ -120,9 +148,18 @@ pub fn refresh_extension_pairing_grant(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn ordered_extension_pairing_grants(
-    state: nook_companion_core::ExtensionPairingState,
-) -> Vec<nook_companion_core::StoredExtensionPairingGrant> {
-    state.ordered_grants()
+    state: tsify::Ts<nook_companion_core::ExtensionPairingState>,
+) -> Result<Vec<tsify::Ts<nook_companion_core::StoredExtensionPairingGrant>>, wasm_bindgen::JsError>
+{
+    let state = state
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result = { state.ordered_grants() };
+    result
+        .iter()
+        .map(tsify::Tsify::into_ts)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
 }
 
 #[wasm_bindgen]
@@ -133,9 +170,14 @@ pub fn ordered_extension_pairing_grants(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn selected_extension_pairing_grant(
-    state: nook_companion_core::ExtensionPairingState,
-) -> nook_companion_core::SelectedExtensionPairingGrant {
-    state.selected_grant()
+    state: tsify::Ts<nook_companion_core::ExtensionPairingState>,
+) -> Result<tsify::Ts<nook_companion_core::SelectedExtensionPairingGrant>, wasm_bindgen::JsError> {
+    let state = state
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result = { state.selected_grant() };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
@@ -146,9 +188,14 @@ pub fn selected_extension_pairing_grant(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn first_extension_pairing_grant(
-    state: nook_companion_core::ExtensionPairingState,
-) -> nook_companion_core::SelectedExtensionPairingGrant {
-    state.first_grant()
+    state: tsify::Ts<nook_companion_core::ExtensionPairingState>,
+) -> Result<tsify::Ts<nook_companion_core::SelectedExtensionPairingGrant>, wasm_bindgen::JsError> {
+    let state = state
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result = { state.first_grant() };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
@@ -159,11 +206,18 @@ pub fn first_extension_pairing_grant(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn extension_setup_after_pairing_grant_removal(
-    input: nook_companion_core::ExtensionPairingGrantRemovalInput,
-) -> nook_companion_core::ExtensionSetupAfterRemoval {
-    input
-        .state
-        .setup_after_removal(&input.removed_vault_store_id)
+    input: tsify::Ts<nook_companion_core::ExtensionPairingGrantRemovalInput>,
+) -> Result<tsify::Ts<nook_companion_core::ExtensionSetupAfterRemoval>, wasm_bindgen::JsError> {
+    let input = input
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result = {
+        input
+            .state
+            .setup_after_removal(&input.removed_vault_store_id)
+    };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
@@ -193,9 +247,11 @@ pub fn is_extension_ready_setup_json(value: &str) -> bool {
 )]
 pub fn decode_stored_extension_pairing_grant_json(
     value: &str,
-) -> Result<StoredExtensionPairingGrant, JsError> {
-    StoredExtensionPairingGrant::decode_json(value)
-        .map_err(|error| JsError::new(&error.to_string()))
+) -> Result<tsify::Ts<StoredExtensionPairingGrant>, wasm_bindgen::JsError> {
+    let result = StoredExtensionPairingGrant::decode_json(value)
+        .map_err(|error| JsError::new(&error.to_string()))?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
@@ -203,8 +259,13 @@ pub fn decode_stored_extension_pairing_grant_json(
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
-pub fn decode_extension_ready_setup_json(value: &str) -> Result<ExtensionReadySetup, JsError> {
-    ExtensionReadySetup::decode_json(value).map_err(|error| JsError::new(&error.to_string()))
+pub fn decode_extension_ready_setup_json(
+    value: &str,
+) -> Result<tsify::Ts<ExtensionReadySetup>, wasm_bindgen::JsError> {
+    let result = ExtensionReadySetup::decode_json(value)
+        .map_err(|error| JsError::new(&error.to_string()))?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
@@ -214,9 +275,11 @@ pub fn decode_extension_ready_setup_json(value: &str) -> Result<ExtensionReadySe
 )]
 pub fn migrate_legacy_extension_pairing_state_json(
     value: &str,
-) -> Result<nook_companion_core::ExtensionPairingState, JsError> {
-    ExtensionPairingState::migrate_legacy_json(value)
-        .map_err(|error| JsError::new(&error.to_string()))
+) -> Result<tsify::Ts<nook_companion_core::ExtensionPairingState>, wasm_bindgen::JsError> {
+    let result = ExtensionPairingState::migrate_legacy_json(value)
+        .map_err(|error| JsError::new(&error.to_string()))?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[cfg(test)]

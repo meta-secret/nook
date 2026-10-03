@@ -6,7 +6,7 @@ use tsify::Tsify;
 
 #[derive(Debug, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub struct SharedGrantProviderRequest {
     pub snapshot: AuthProvidersSnapshotData,
     pub preset: OAuthFilePreset,
@@ -14,7 +14,7 @@ pub struct SharedGrantProviderRequest {
 }
 #[derive(Debug, Serialize, Deserialize, Tsify)]
 #[serde(tag = "kind", rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub enum SharedGrantProviderOutcome {
     AuthorizationRequired,
     Existing { provider: Box<StorageProviderData> },

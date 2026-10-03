@@ -26,7 +26,7 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn vault_recovery_options(
         &mut self,
-    ) -> Result<nook_core::VaultRecoverySummary, JsError> {
+    ) -> Result<tsify::Ts<nook_core::VaultRecoverySummary>, wasm_bindgen::JsError> {
         let raw_store_id = self.vault.store_id.trim();
         if raw_store_id.is_empty() {
             return Err(JsError::new("No staged vault is available."));
@@ -47,9 +47,11 @@ impl NookVaultManager {
                 nook_core::VaultStoreIdentity::default_name_for_store_id(store_id.as_str())
             }
         };
-        Ok(VaultRecoverySummary::from_options(
+        let result = Ok::<_, wasm_bindgen::JsError>(VaultRecoverySummary::from_options(
             store_id, vault_name, options,
-        ))
+        ))?;
+        tsify::Tsify::into_ts(&result)
+            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
     }
 
     #[wasm_bindgen]

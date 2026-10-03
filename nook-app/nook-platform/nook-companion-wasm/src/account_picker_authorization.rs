@@ -18,8 +18,10 @@ pub struct AccountPickerAuthorizationTransition {
 #[wasm_bindgen]
 impl AccountPickerAuthorizationTransition {
     #[must_use]
-    pub fn outcome(&self) -> CleanupTransitionOutcome {
-        self.inner.outcome()
+    pub fn outcome(&self) -> Result<tsify::Ts<CleanupTransitionOutcome>, wasm_bindgen::JsError> {
+        let result = { self.inner.outcome() };
+        tsify::Tsify::into_ts(&result)
+            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
     }
 
     #[must_use]

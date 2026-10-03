@@ -14,7 +14,7 @@ use tsify::Tsify;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "snake_case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub enum SharedJoinerIdentityKind {
     Email,
 }
@@ -30,7 +30,7 @@ impl SharedJoinerIdentityKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "preset", rename_all = "snake_case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub enum ProviderOauthPreset {
     NotApplicable,
     Preset(OAuthFilePreset),

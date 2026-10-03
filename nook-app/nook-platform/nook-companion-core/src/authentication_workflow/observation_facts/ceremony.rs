@@ -19,7 +19,7 @@ use tsify::Tsify;
 /// Detailed browser evidence for the control selected to advance authentication.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
 #[serde(tag = "kind", content = "observations", rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub enum AuthenticationDetailedAdvanceControlObservation {
     #[default]
     Absent,
@@ -64,7 +64,7 @@ impl AuthenticationDetailedAdvanceControlObservation {
 /// Authentication-scope evidence that remains available when an OTP auto-submits without a control.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub struct AuthenticationCeremonyContextObservation {
     pub authentication_username: AuthenticationUsernameEvidence,
     pub source_origin: String,
@@ -132,7 +132,7 @@ impl AuthenticationCeremonyContextObservation {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub struct AuthenticationCeremonyObservationFacts {
     /// Legacy reduced evidence retained for wire compatibility; ignored during conversion.
     pub one_time_code_progression: AuthenticationOneTimeCodeProgressionEvidence,
@@ -156,7 +156,7 @@ pub struct AuthenticationCeremonyObservationFacts {
 /// Final browser-actuation facts for an implicit authentication form submission.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub struct AuthenticationImplicitSubmitActuationObservation {
     pub fields: AuthenticationFieldObservationFacts,
     pub ceremony: AuthenticationCeremonyObservationFacts,

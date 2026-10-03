@@ -67,8 +67,12 @@ impl NookVaultManager {
         &self,
         request_json: &str,
         delivery_json: &str,
-        provider_snapshot: nook_core::AuthProvidersSnapshotData,
-    ) -> Result<String, JsError> {
+        provider_snapshot: tsify::Ts<nook_core::AuthProvidersSnapshotData>,
+    ) -> Result<String, wasm_bindgen::JsError> {
+        let provider_snapshot = provider_snapshot
+            .to_rust()
+            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+
         let request: nook_core::SentinelGenesisRequest = serde_json::from_str(request_json)
             .map_err(|error| NookError::Serialization(error.to_string()))?;
         let delivery: nook_core::SentinelGenesisShareDelivery = serde_json::from_str(delivery_json)

@@ -21,28 +21,52 @@ use wasm_bindgen::prelude::wasm_bindgen;
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn classify_extension_persistence_databases(
-    input: nook_companion_core::ExtensionPersistenceObservation,
-) -> nook_companion_core::ExtensionPersistenceDatabaseState {
-    input.area.classify_database_names(&input.observed_names)
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn classify_extension_persistence_databases(
+    input: tsify::Ts<nook_companion_core::ExtensionPersistenceObservation>,
+) -> Result<nook_companion_core::ExtensionPersistenceDatabaseState, wasm_bindgen::JsError> {
+    let input = input
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result = { input.area.classify_database_names(&input.observed_names) };
+    Ok(result)
 }
 
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn classify_extension_persistence_stores(
-    input: nook_companion_core::ExtensionPersistenceObservation,
-) -> nook_companion_core::ExtensionPersistenceStoreState {
-    input.area.classify_store_names(&input.observed_names)
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn classify_extension_persistence_stores(
+    input: tsify::Ts<nook_companion_core::ExtensionPersistenceObservation>,
+) -> Result<nook_companion_core::ExtensionPersistenceStoreState, wasm_bindgen::JsError> {
+    let input = input
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result = { input.area.classify_store_names(&input.observed_names) };
+    Ok(result)
 }
 
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn matching_extension_persistence_stores(
-    input: nook_companion_core::ExtensionPersistenceObservation,
-) -> Vec<String> {
-    input.area.matching_store_names(&input.observed_names)
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn matching_extension_persistence_stores(
+    input: tsify::Ts<nook_companion_core::ExtensionPersistenceObservation>,
+) -> Result<Vec<String>, wasm_bindgen::JsError> {
+    let input = input
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result = { input.area.matching_store_names(&input.observed_names) };
+    Ok(result)
 }
 
 #[cfg(test)]

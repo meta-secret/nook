@@ -11,27 +11,27 @@ use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct CompanionIdentityDiscoveryAdmission(CompanionIdentityDiscoveryObservation);
 
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct CompanionExtensionPresenceAdmission(CompanionExtensionPresence);
 
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct CompanionIdentityStatusRequestAdmission(CompanionIdentityStatusAdmissionRequest);
 
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct CompanionHandoffResponseValueAdmission(CompanionIdentityHandoffResponse);
 
 #[derive(Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct CompanionIdentityHandoffStatusAdmission {
     request: CompanionIdentityHandoffRequest,
     observed_at: CompanionEpochMilliseconds,
@@ -39,7 +39,7 @@ pub struct CompanionIdentityHandoffStatusAdmission {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, tag = "type", content = "payload")]
-#[tsify(into_wasm_abi)]
+
 pub enum CompanionIdentityDiscoverySessionTransportRequest {
     #[serde(rename = "nook:extension-session-discover-companion-identity")]
     DiscoverCompanionIdentity {
@@ -50,14 +50,14 @@ pub enum CompanionIdentityDiscoverySessionTransportRequest {
 
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct CompanionIdentityDiscoverySessionTransportAdmission(
     CompanionIdentityDiscoverySessionTransportRequest,
 );
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, tag = "type", content = "payload")]
-#[tsify(into_wasm_abi)]
+
 pub enum CompanionIdentityHandoffSessionTransportRequest {
     #[serde(rename = "nook:extension-session-authorize-companion-identity-handoff")]
     AuthorizeCompanionIdentityHandoff {
@@ -67,14 +67,14 @@ pub enum CompanionIdentityHandoffSessionTransportRequest {
 
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct CompanionIdentityHandoffSessionTransportAdmission(
     CompanionIdentityHandoffSessionTransportRequest,
 );
 
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct CompanionIdentityUnlockRequestAdmission(CompanionIdentityUnlockRequest);
 
 impl CompanionIdentityUnlockRequestAdmission {
@@ -88,12 +88,12 @@ impl CompanionIdentityUnlockRequestAdmission {
 
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct CompanionIdentityHandoffRequestAdmission(CompanionIdentityHandoffRequestPayload);
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(into_wasm_abi)]
+
 pub struct CompanionIdentityHandoffRequestPayload(CompanionIdentityHandoffRequest);
 
 impl CompanionIdentityHandoffRequestPayload {
@@ -120,7 +120,7 @@ impl Drop for CompanionIdentityHandoffRequestPayload {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, tag = "type", content = "payload")]
-#[tsify(into_wasm_abi)]
+
 pub enum ExtensionPairedVaultUnlockRequestMessage {
     #[serde(rename = "nook:extension-paired-vault-unlock-request")]
     Unlock(CompanionIdentityUnlockRequest),
@@ -128,7 +128,7 @@ pub enum ExtensionPairedVaultUnlockRequestMessage {
 
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct ExtensionPairedVaultUnlockRequestMessageAdmission(
     ExtensionPairedVaultUnlockRequestMessage,
 );
@@ -146,7 +146,7 @@ impl ExtensionPairedVaultUnlockRequestMessageAdmission {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, tag = "type", content = "payload")]
-#[tsify(into_wasm_abi)]
+
 pub enum ExtensionPairedVaultIdentityHandoffRequestMessage {
     #[serde(rename = "nook:extension-paired-vault-identity-handoff-request")]
     IdentityHandoff(CompanionIdentityHandoffRequestPayload),
@@ -162,7 +162,7 @@ impl ExtensionPairedVaultIdentityHandoffRequestMessage {
 
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct ExtensionPairedVaultIdentityHandoffRequestMessageAdmission(
     ExtensionPairedVaultIdentityHandoffRequestMessage,
 );
@@ -189,7 +189,13 @@ pub struct NookCompanionExtensionProtocol {
 impl NookCompanionExtensionProtocol {
     #[wasm_bindgen(constructor)]
     #[allow(clippy::needless_pass_by_value)]
-    pub fn new(presence: CompanionExtensionPresenceAdmission) -> Result<Self, JsError> {
+    pub fn new(
+        presence: tsify::Ts<CompanionExtensionPresenceAdmission>,
+    ) -> Result<Self, wasm_bindgen::JsError> {
+        let presence = presence
+            .to_rust()
+            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+
         let CompanionExtensionPresenceAdmission(presence) = presence;
         Ok(Self {
             inner: CompanionExtensionProtocol::new(presence)
@@ -200,105 +206,211 @@ impl NookCompanionExtensionProtocol {
     #[allow(clippy::needless_pass_by_value)]
     pub fn discover(
         &self,
-        observation: CompanionIdentityDiscoveryObservation,
-    ) -> Result<CompanionIdentityStatus, JsError> {
-        self.inner
+        observation: tsify::Ts<CompanionIdentityDiscoveryObservation>,
+    ) -> Result<tsify::Ts<CompanionIdentityStatus>, wasm_bindgen::JsError> {
+        let observation = observation
+            .to_rust()
+            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+
+        let result = self
+            .inner
             .discover(observation)
-            .map_err(|error| JsError::new(&error.to_string()))
+            .map_err(|error| JsError::new(&error.to_string()))?;
+        tsify::Tsify::into_ts(&result)
+            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
     }
 
     #[allow(clippy::needless_pass_by_value)]
     pub fn unlock(
         &self,
-        request: CompanionIdentityUnlockRequest,
-    ) -> Result<CompanionIdentityStatus, JsError> {
-        self.inner
+        request: tsify::Ts<CompanionIdentityUnlockRequest>,
+    ) -> Result<tsify::Ts<CompanionIdentityStatus>, wasm_bindgen::JsError> {
+        let request = request
+            .to_rust()
+            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+
+        let result = self
+            .inner
             .unlock(request)
-            .map_err(|error| JsError::new(&error.to_string()))
+            .map_err(|error| JsError::new(&error.to_string()))?;
+        tsify::Tsify::into_ts(&result)
+            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
     }
 }
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn admit_companion_identity_status(
-    request: CompanionIdentityStatusRequestAdmission,
-) -> CompanionIdentityStatusAdmission {
-    let CompanionIdentityStatusRequestAdmission(request) = request;
-    CompanionIdentityStatusAdmission::admit(request)
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn admit_companion_identity_status(
+    request: tsify::Ts<CompanionIdentityStatusRequestAdmission>,
+) -> Result<tsify::Ts<CompanionIdentityStatusAdmission>, wasm_bindgen::JsError> {
+    let request = request
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result = {
+        let CompanionIdentityStatusRequestAdmission(request) = request;
+        CompanionIdentityStatusAdmission::admit(request)
+    };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_companion_identity_discovery_observation(
-    observation: CompanionIdentityDiscoveryAdmission,
-) -> CompanionIdentityDiscoveryObservation {
-    let CompanionIdentityDiscoveryAdmission(observation) = observation;
-    observation
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_companion_identity_discovery_observation(
+    observation: tsify::Ts<CompanionIdentityDiscoveryAdmission>,
+) -> Result<tsify::Ts<CompanionIdentityDiscoveryObservation>, wasm_bindgen::JsError> {
+    let observation = observation
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result = {
+        let CompanionIdentityDiscoveryAdmission(observation) = observation;
+        observation
+    };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_companion_identity_discovery_session_transport_request(
-    request: CompanionIdentityDiscoverySessionTransportAdmission,
-) -> CompanionIdentityDiscoverySessionTransportRequest {
-    let CompanionIdentityDiscoverySessionTransportAdmission(request) = request;
-    request
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_companion_identity_discovery_session_transport_request(
+    request: tsify::Ts<CompanionIdentityDiscoverySessionTransportAdmission>,
+) -> Result<tsify::Ts<CompanionIdentityDiscoverySessionTransportRequest>, wasm_bindgen::JsError> {
+    let request = request
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result = {
+        let CompanionIdentityDiscoverySessionTransportAdmission(request) = request;
+        request
+    };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_companion_identity_handoff_session_transport_request(
-    request: CompanionIdentityHandoffSessionTransportAdmission,
-) -> CompanionIdentityHandoffSessionTransportRequest {
-    let CompanionIdentityHandoffSessionTransportAdmission(request) = request;
-    request
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_companion_identity_handoff_session_transport_request(
+    request: tsify::Ts<CompanionIdentityHandoffSessionTransportAdmission>,
+) -> Result<tsify::Ts<CompanionIdentityHandoffSessionTransportRequest>, wasm_bindgen::JsError> {
+    let request = request
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result = {
+        let CompanionIdentityHandoffSessionTransportAdmission(request) = request;
+        request
+    };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_companion_identity_unlock_request(
-    admission: CompanionIdentityUnlockRequestAdmission,
-) -> Result<CompanionIdentityUnlockRequest, JsError> {
-    admission
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_companion_identity_unlock_request(
+    admission: tsify::Ts<CompanionIdentityUnlockRequestAdmission>,
+) -> Result<tsify::Ts<CompanionIdentityUnlockRequest>, wasm_bindgen::JsError> {
+    let admission = admission
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
+    let result = admission
         .decode()
-        .map_err(|error| JsError::new(&error.to_string()))
+        .map_err(|error| JsError::new(&error.to_string()))?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_companion_identity_handoff_request(
-    admission: CompanionIdentityHandoffRequestAdmission,
-) -> Result<CompanionIdentityHandoffRequestPayload, JsError> {
-    admission
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_companion_identity_handoff_request(
+    admission: tsify::Ts<CompanionIdentityHandoffRequestAdmission>,
+) -> Result<tsify::Ts<CompanionIdentityHandoffRequestPayload>, wasm_bindgen::JsError> {
+    let admission = admission
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
+    let result = admission
         .decode()
-        .map_err(|error| JsError::new(&error.to_string()))
+        .map_err(|error| JsError::new(&error.to_string()))?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_extension_paired_vault_unlock_request_message(
-    admission: ExtensionPairedVaultUnlockRequestMessageAdmission,
-) -> Result<ExtensionPairedVaultUnlockRequestMessage, JsError> {
-    admission
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_extension_paired_vault_unlock_request_message(
+    admission: tsify::Ts<ExtensionPairedVaultUnlockRequestMessageAdmission>,
+) -> Result<tsify::Ts<ExtensionPairedVaultUnlockRequestMessage>, wasm_bindgen::JsError> {
+    let admission = admission
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
+    let result = admission
         .decode()
-        .map_err(|error| JsError::new(&error.to_string()))
+        .map_err(|error| JsError::new(&error.to_string()))?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_extension_paired_vault_identity_handoff_request_message(
-    admission: ExtensionPairedVaultIdentityHandoffRequestMessageAdmission,
-) -> Result<ExtensionPairedVaultIdentityHandoffRequestMessage, JsError> {
-    admission
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_extension_paired_vault_identity_handoff_request_message(
+    admission: tsify::Ts<ExtensionPairedVaultIdentityHandoffRequestMessageAdmission>,
+) -> Result<tsify::Ts<ExtensionPairedVaultIdentityHandoffRequestMessage>, wasm_bindgen::JsError> {
+    let admission = admission
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
+    let result = admission
         .decode()
-        .map_err(|error| JsError::new(&error.to_string()))
+        .map_err(|error| JsError::new(&error.to_string()))?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn admit_companion_handoff_identity_status(
-    admission: CompanionIdentityHandoffStatusAdmission,
-) -> Result<CompanionIdentityStatusAdmission, JsError> {
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn admit_companion_handoff_identity_status(
+    admission: tsify::Ts<CompanionIdentityHandoffStatusAdmission>,
+) -> Result<tsify::Ts<CompanionIdentityStatusAdmission>, wasm_bindgen::JsError> {
+    let admission = admission
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
     let CompanionIdentityHandoffStatusAdmission {
         request,
         observed_at,
@@ -307,22 +419,35 @@ impl NookCompanionExtensionProtocol {
         .validate()
         .map_err(|error| JsError::new(&error.to_string()))?;
     let transaction = request.transaction;
-    Ok(CompanionIdentityStatusAdmission::admit(
+    let result = Ok::<_, wasm_bindgen::JsError>(CompanionIdentityStatusAdmission::admit(
         CompanionIdentityStatusAdmissionRequest {
             discovery: transaction.discovery,
             status: transaction.status,
             observed_at,
         },
-    ))
+    ))?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn admit_companion_handoff_response(
-    response: CompanionHandoffResponseValueAdmission,
-) -> CompanionHandoffResponseAdmission {
-    let CompanionHandoffResponseValueAdmission(response) = response;
-    CompanionHandoffResponseAdmission::admit(response)
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn admit_companion_handoff_response(
+    response: tsify::Ts<CompanionHandoffResponseValueAdmission>,
+) -> Result<tsify::Ts<CompanionHandoffResponseAdmission>, wasm_bindgen::JsError> {
+    let response = response
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result = {
+        let CompanionHandoffResponseValueAdmission(response) = response;
+        CompanionHandoffResponseAdmission::admit(response)
+    };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[cfg(test)]

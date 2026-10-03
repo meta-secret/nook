@@ -38,8 +38,12 @@ impl AuthenticationAuthenticatorSetupRequest {
     #[must_use]
     pub fn classify_authentication_authenticator_setup_observation(
         &self,
-    ) -> AuthenticationAuthenticatorSetupObservation {
-        AuthenticationAuthenticatorSetupObservation::classify_authentication_authenticator_setup_observation(&self.evidence)
+    ) -> Result<tsify::Ts<AuthenticationAuthenticatorSetupObservation>, wasm_bindgen::JsError> {
+        let result = {
+            AuthenticationAuthenticatorSetupObservation::classify_authentication_authenticator_setup_observation(&self.evidence)
+        };
+        tsify::Tsify::into_ts(&result)
+            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
     }
 }
 
@@ -133,8 +137,17 @@ pub mod wasm_tests {
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn classify_authentication_authenticator_setup_batch(
-    input: AuthenticationAuthenticatorSetupBatch,
-) -> AuthenticationAuthenticatorSetupObservation {
-    input.classify()
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn classify_authentication_authenticator_setup_batch(
+    input: tsify::Ts<AuthenticationAuthenticatorSetupBatch>,
+) -> Result<tsify::Ts<AuthenticationAuthenticatorSetupObservation>, wasm_bindgen::JsError> {
+    let input = input
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result = { input.classify() };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }

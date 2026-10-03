@@ -27,13 +27,23 @@ impl NookPairingVaultId {
 }
 
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_extension_grant_authority_response(
-    response: nook_companion_core::GrantAuthorityResponseJson,
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_extension_grant_authority_response(
+    response: tsify::Ts<nook_companion_core::GrantAuthorityResponseJson>,
     requested: &NookPairingVaultId,
-) -> Result<ExtensionGrantAuthority, JsError> {
-    response
+) -> Result<tsify::Ts<ExtensionGrantAuthority>, wasm_bindgen::JsError> {
+    let response = response
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
+    let result = response
         .decode(requested.as_core())
-        .map_err(|error| JsError::new(&error.to_string()))
+        .map_err(|error| JsError::new(&error.to_string()))?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
@@ -43,9 +53,14 @@ impl NookPairingVaultId {
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn classify_extension_grant_authority(
-    request: ExtensionGrantAuthorityRequest,
-) -> ExtensionGrantAuthority {
-    request.classify()
+    request: tsify::Ts<ExtensionGrantAuthorityRequest>,
+) -> Result<tsify::Ts<ExtensionGrantAuthority>, wasm_bindgen::JsError> {
+    let request = request
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result = { request.classify() };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[cfg(all(test, target_arch = "wasm32"))]

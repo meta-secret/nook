@@ -255,13 +255,23 @@ impl NookAuthenticationWorkflowSnapshot {
     }
 
     #[wasm_bindgen(getter, js_name = approvalRequirement)]
-    pub fn approval_requirement(&self) -> nook_core::AuthenticationApprovalRequirement {
-        self.0.approval_requirement
+    pub fn approval_requirement(
+        &self,
+    ) -> Result<tsify::Ts<nook_core::AuthenticationApprovalRequirement>, wasm_bindgen::JsError>
+    {
+        let result = { self.0.approval_requirement };
+        tsify::Tsify::into_ts(&result)
+            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
     }
 
     #[wasm_bindgen(getter, js_name = savedLoginCapability)]
-    pub fn saved_login_capability(&self) -> nook_core::AuthenticationSavedLoginCapability {
-        self.0.saved_login_capability()
+    pub fn saved_login_capability(
+        &self,
+    ) -> Result<tsify::Ts<nook_core::AuthenticationSavedLoginCapability>, wasm_bindgen::JsError>
+    {
+        let result = { self.0.saved_login_capability() };
+        tsify::Tsify::into_ts(&result)
+            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
     }
 
     #[wasm_bindgen(getter, js_name = observationIndex)]

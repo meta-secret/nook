@@ -92,26 +92,54 @@ use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 #[wasm_bindgen]
 #[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn extension_vault_access_scope() -> nook_companion_core::ExtensionConnectScope {
-    ExtensionConnectScope::VaultAccess
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn extension_vault_access_scope()
+-> Result<tsify::Ts<nook_companion_core::ExtensionConnectScope>, wasm_bindgen::JsError> {
+    let result = { ExtensionConnectScope::VaultAccess };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
 #[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn extension_password_filling_scope() -> nook_companion_core::ExtensionConnectScope {
-    ExtensionConnectScope::PasswordFilling
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn extension_password_filling_scope()
+-> Result<tsify::Ts<nook_companion_core::ExtensionConnectScope>, wasm_bindgen::JsError> {
+    let result = { ExtensionConnectScope::PasswordFilling };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
 #[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn extension_passkey_management_scope() -> nook_companion_core::ExtensionConnectScope {
-    ExtensionConnectScope::PasskeyManagement
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn extension_passkey_management_scope()
+-> Result<tsify::Ts<nook_companion_core::ExtensionConnectScope>, wasm_bindgen::JsError> {
+    let result = { ExtensionConnectScope::PasskeyManagement };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
 #[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn extension_sync_provider_credentials_scope() -> nook_companion_core::ExtensionConnectScope {
-    ExtensionConnectScope::SyncProviderCredentials
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn extension_sync_provider_credentials_scope()
+-> Result<tsify::Ts<nook_companion_core::ExtensionConnectScope>, wasm_bindgen::JsError> {
+    let result = { ExtensionConnectScope::SyncProviderCredentials };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
@@ -122,9 +150,17 @@ use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn companion_pairing_provider_manifest_digest(
-    snapshot: nook_core::AuthProvidersSnapshotData,
-) -> Result<String, JsError> {
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn companion_pairing_provider_manifest_digest(
+    snapshot: tsify::Ts<nook_core::AuthProvidersSnapshotData>,
+) -> Result<String, wasm_bindgen::JsError> {
+    let snapshot = snapshot
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+
     Ok(snapshot
         .companion_pairing_manifest_digest()
         .map_err(|error| JsError::new(&error.to_string()))?

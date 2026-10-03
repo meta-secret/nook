@@ -40,7 +40,7 @@ pub struct WebsiteLoginSaveOffer {
     rename_all = "kebab-case",
     rename_all_fields = "camelCase"
 )]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub enum WebsiteLoginSaveOfferResponse {
     OfferAvailable { offer: WebsiteLoginSaveOffer },
     NotRequired {},
@@ -107,7 +107,7 @@ pub struct WebsiteLoginSavePendingRejected {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Tsify)]
 #[serde(untagged)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub enum WebsiteLoginSavePendingResponse {
     Available(WebsiteLoginSavePendingAvailable),
     Rejected(WebsiteLoginSavePendingRejected),
@@ -138,7 +138,7 @@ impl WebsiteLoginSavePendingResponse {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Tsify)]
 #[serde(deny_unknown_fields, tag = "kind", rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub enum WebsiteLoginSaveActionResponse {
     Completed {},
     Rejected { reason: String },

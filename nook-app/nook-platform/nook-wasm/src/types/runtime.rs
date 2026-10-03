@@ -59,8 +59,12 @@ impl NookBrowserLocale {
 
     #[wasm_bindgen]
     #[must_use]
-    pub fn app_locale(&self) -> NookAppLocale {
-        nook_core::SupportedAppLocale::resolve(self.language_tags.iter().map(String::as_str))
+    pub fn app_locale(&self) -> Result<tsify::Ts<NookAppLocale>, wasm_bindgen::JsError> {
+        let result = {
+            nook_core::SupportedAppLocale::resolve(self.language_tags.iter().map(String::as_str))
+        };
+        tsify::Tsify::into_ts(&result)
+            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
     }
 }
 

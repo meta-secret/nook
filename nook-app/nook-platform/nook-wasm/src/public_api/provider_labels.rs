@@ -28,10 +28,22 @@ use nook_core::{
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn wasm_storage_mode_for_provider(
-    provider_type: nook_core::StorageProviderType,
-    oauth_preset: nook_core::OauthFilePreset,
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn wasm_storage_mode_for_provider(
+    provider_type: tsify::Ts<nook_core::StorageProviderType>,
+    oauth_preset: tsify::Ts<nook_core::OauthFilePreset>,
 ) -> Result<String, wasm_bindgen::JsError> {
+    let oauth_preset = oauth_preset
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+
+    let provider_type = provider_type
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
     Ok(provider_type
         .storage_mode(ProviderOauthPreset::Preset(oauth_preset))
         .as_str()
@@ -40,11 +52,24 @@ use nook_core::{
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn provider_default_label(
-    provider_type: nook_core::StorageProviderType,
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn provider_default_label(
+    provider_type: tsify::Ts<nook_core::StorageProviderType>,
+
     detail: &str,
-    oauth_preset: nook_core::OauthFilePreset,
+    oauth_preset: tsify::Ts<nook_core::OauthFilePreset>,
 ) -> Result<String, wasm_bindgen::JsError> {
+    let oauth_preset = oauth_preset
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+
+    let provider_type = provider_type
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
     Ok(match provider_type {
         StorageProviderType::Local => ProviderLabel::Local.render(),
         StorageProviderType::LocalFolder => ProviderLabel::LocalFolder(
@@ -64,10 +89,22 @@ use nook_core::{
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn provider_default_label_without_detail(
-    provider_type: nook_core::StorageProviderType,
-    oauth_preset: nook_core::OauthFilePreset,
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn provider_default_label_without_detail(
+    provider_type: tsify::Ts<nook_core::StorageProviderType>,
+    oauth_preset: tsify::Ts<nook_core::OauthFilePreset>,
 ) -> Result<String, wasm_bindgen::JsError> {
+    let oauth_preset = oauth_preset
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+
+    let provider_type = provider_type
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
     Ok(match provider_type {
         StorageProviderType::Local => ProviderLabel::Local.render(),
         StorageProviderType::LocalFolder => {
@@ -85,9 +122,17 @@ use nook_core::{
 }
 
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn staged_local_provider_label(
-    provider_type: nook_core::StorageProviderType,
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn staged_local_provider_label(
+    provider_type: tsify::Ts<nook_core::StorageProviderType>,
 ) -> Result<String, wasm_bindgen::JsError> {
+    let provider_type = provider_type
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
     Ok(match provider_type {
         StorageProviderType::Local => ProviderLabel::Local.render(),
         StorageProviderType::LocalFolder => {
@@ -110,15 +155,16 @@ use nook_core::{
 }
 
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn staged_configured_oauth_provider_label(
-    oauth_file_name: &str,
-    oauth_preset: nook_core::OauthFilePreset,
-) -> Result<String, wasm_bindgen::JsError> {
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn staged_configured_oauth_provider_label(oauth_file_name: &str,
+oauth_preset: tsify::Ts<nook_core::OauthFilePreset>) -> Result<String, wasm_bindgen::JsError> {
+let oauth_preset = oauth_preset.to_rust().map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+
     Ok(ProviderLabel::OAuth(OAuthProviderLabel {
         preset: oauth_preset,
         file_name: &StoredOAuthRemoteFileName::FileName(oauth_file_name.to_owned()),
     })
     .render())
+
 }
 
 #[wasm_bindgen]

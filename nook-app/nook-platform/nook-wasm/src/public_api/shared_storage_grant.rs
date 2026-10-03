@@ -133,9 +133,17 @@ impl SharedDriveGrantPolicy {
 }
 
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn prepare_shared_storage_grant(
-    request: nook_core::SharedStorageGrantRequest,
-) -> Result<nook_core::SharedStorageGrantOutcome, wasm_bindgen::JsError> {
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub async fn prepare_shared_storage_grant(
+    request: tsify::Ts<nook_core::SharedStorageGrantRequest>,
+) -> Result<tsify::Ts<nook_core::SharedStorageGrantOutcome>, wasm_bindgen::JsError> {
+    let request = request
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
     let validated = request.prepare()?;
     let outcome = match validated {
         SharedStorageGrantOutcome::ManualGrantRequired {
@@ -189,17 +197,30 @@ impl SharedDriveGrantPolicy {
         }
         other => other,
     };
-    Ok(outcome)
+    let result = Ok::<_, wasm_bindgen::JsError>(outcome)?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
 #[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn should_flush_shared_storage_grant(
-    outcome: nook_core::SharedStorageGrantOutcome,
-    credential: nook_core::SharedStorageGrantCredential,
-) -> bool {
-    outcome.should_flush_with(&credential)
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn should_flush_shared_storage_grant(
+    outcome: tsify::Ts<nook_core::SharedStorageGrantOutcome>,
+    credential: tsify::Ts<nook_core::SharedStorageGrantCredential>,
+) -> Result<bool, wasm_bindgen::JsError> {
+    let outcome = outcome
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let credential = credential
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result = { outcome.should_flush_with(&credential) };
+    Ok(result)
 }
 
 /// Resolve a shared Drive folder id/URL and verify write access for the current

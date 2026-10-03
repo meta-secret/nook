@@ -14,7 +14,7 @@ pub const MAX_PASSWORD_LENGTH: PasswordCharacterCount = PasswordCharacterCount::
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub struct PasswordGenerationOptions {
     #[tsify(type = "number")]
     pub length: PasswordCharacterCount,
@@ -30,7 +30,6 @@ pub struct PasswordGenerationOptions {
 
 /// Whether a named password alphabet participates in generation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 #[serde(from = "bool", into = "bool")]
 pub enum PasswordCharacterSet {
     Included,

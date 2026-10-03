@@ -11,74 +11,139 @@ use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 /// Typed admission boundary for an untrusted Chrome setup response.
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct PasskeySetupMaterialAdmission(PasskeySetupMaterialResponse);
 
 /// Typed admission boundary for an untrusted Chrome unlock response.
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct PasskeyUnlockMaterialAdmission(PasskeyUnlockMaterialResponse);
 
 /// Typed admission boundary for an untrusted Chrome session response.
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct ExtensionSessionOperationAdmission(
     nook_companion_core::ExtensionSessionOperationResponseWire,
 );
 
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_passkey_setup_material_response(
-    value: PasskeySetupMaterialAdmission,
-) -> Result<PasskeySetupMaterial, JsError> {
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_passkey_setup_material_response(
+    value: tsify::Ts<PasskeySetupMaterialAdmission>,
+) -> Result<tsify::Ts<PasskeySetupMaterial>, wasm_bindgen::JsError> {
+    let value = value
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
     let PasskeySetupMaterialAdmission(value) = value;
-    match value.setup {
+    let result = match value.setup {
         PasskeySetupAvailability::Available(material) => Ok(material),
         PasskeySetupAvailability::Unavailable => Err(JsError::new(
             "Extension session returned a malformed setup response.",
         )),
-    }
+    }?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_passkey_unlock_material_response(
-    value: PasskeyUnlockMaterialAdmission,
-) -> Result<PasskeyUnlockMaterial, JsError> {
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_passkey_unlock_material_response(
+    value: tsify::Ts<PasskeyUnlockMaterialAdmission>,
+) -> Result<tsify::Ts<PasskeyUnlockMaterial>, wasm_bindgen::JsError> {
+    let value = value
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
     let PasskeyUnlockMaterialAdmission(value) = value;
-    match value.material {
+    let result = match value.material {
         PasskeyUnlockAvailability::Available(material) => Ok(material),
         PasskeyUnlockAvailability::Unavailable => Err(JsError::new(
             "Extension session returned a malformed unlock response.",
         )),
-    }
+    }?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn admit_passkey_byte_material(value: PasskeyByteMaterial) -> PasskeyByteMaterial {
-    value
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn admit_passkey_byte_material(
+    value: tsify::Ts<PasskeyByteMaterial>,
+) -> Result<tsify::Ts<PasskeyByteMaterial>, wasm_bindgen::JsError> {
+    let value = value
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result = { value };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 /// Admit the full session device response at the unknown Chrome message boundary.
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_extension_session_device_response(
-    value: ExtensionSessionOperationAdmission,
-) -> Result<nook_companion_core::ExtensionSessionDeviceResponse, JsError> {
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_extension_session_device_response(
+    value: tsify::Ts<ExtensionSessionOperationAdmission>,
+) -> Result<tsify::Ts<nook_companion_core::ExtensionSessionDeviceResponse>, wasm_bindgen::JsError> {
+    let value = value
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
     let ExtensionSessionOperationAdmission(value) = value;
-    value.into_device().map_err(|error| JsError::new(&error))
+    let result = value.into_device().map_err(|error| JsError::new(&error))?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn decode_extension_session_status_details(
-    value: ExtensionSessionOperationAdmission,
-) -> Result<nook_companion_core::ExtensionSessionStatus, JsError> {
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn decode_extension_session_status_details(
+    value: tsify::Ts<ExtensionSessionOperationAdmission>,
+) -> Result<tsify::Ts<nook_companion_core::ExtensionSessionStatus>, wasm_bindgen::JsError> {
+    let value = value
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+
     let ExtensionSessionOperationAdmission(value) = value;
-    value.into_status().map_err(|error| JsError::new(&error))
+    let result = value.into_status().map_err(|error| JsError::new(&error))?;
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 /// Full configurations, not the identity-only metadata request projection.
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn admit_extension_storage_providers(
-    value: Vec<nook_core::StorageProvider>,
-) -> Vec<nook_core::StorageProvider> {
-    value
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn admit_extension_storage_providers(
+    value: Vec<tsify::Ts<nook_core::StorageProvider>>,
+) -> Result<Vec<tsify::Ts<nook_core::StorageProvider>>, wasm_bindgen::JsError> {
+    let value = value
+        .into_iter()
+        .map(|value| value.to_rust())
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result = { value };
+    result
+        .iter()
+        .map(tsify::Tsify::into_ts)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
 }
 
 #[cfg(test)]

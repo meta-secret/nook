@@ -55,13 +55,24 @@ impl NookExtensionDeviceApproval {
     }
 
     #[wasm_bindgen(getter, js_name = approvedAt)]
-    pub fn approved_at(&self) -> nook_companion_core::ExtensionPairingApprovalEpochMilliseconds {
-        self.approved_at
+    pub fn approved_at(
+        &self,
+    ) -> Result<
+        tsify::Ts<nook_companion_core::ExtensionPairingApprovalEpochMilliseconds>,
+        wasm_bindgen::JsError,
+    > {
+        let result = { self.approved_at };
+        tsify::Tsify::into_ts(&result)
+            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
     }
 
     #[wasm_bindgen(getter, js_name = vaultType)]
-    pub fn vault_type(&self) -> ExtensionPairingVaultType {
-        self.vault_type
+    pub fn vault_type(
+        &self,
+    ) -> Result<tsify::Ts<ExtensionPairingVaultType>, wasm_bindgen::JsError> {
+        let result = { self.vault_type };
+        tsify::Tsify::into_ts(&result)
+            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
     }
 }
 
@@ -69,17 +80,24 @@ impl NookExtensionDeviceApproval {
 impl NookCompanionPairingExtensionEndpoint {
     #[wasm_bindgen(constructor)]
     #[allow(clippy::needless_pass_by_value)]
-    pub fn new(request: CompanionPairingRequest) -> Result<Self, JsError> {
+    pub fn new(request: tsify::Ts<CompanionPairingRequest>) -> Result<Self, wasm_bindgen::JsError> {
+        let request = request
+            .to_rust()
+            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+
         Ok(Self {
             inner: CompanionExtensionPairingEndpoint::issue(request)
                 .map_err(|error| JsError::new(&error.to_string()))?,
         })
     }
 
-    pub fn request(&self) -> Result<CompanionPairingRequest, JsError> {
-        self.inner
+    pub fn request(&self) -> Result<tsify::Ts<CompanionPairingRequest>, wasm_bindgen::JsError> {
+        let result = self
+            .inner
             .request()
-            .map_err(|error| JsError::new(&error.to_string()))
+            .map_err(|error| JsError::new(&error.to_string()))?;
+        tsify::Tsify::into_ts(&result)
+            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
     }
 
     pub fn take_authority(self) -> Result<NookCompanionPairingApprovalAuthority, JsError> {
@@ -103,10 +121,20 @@ impl NookCompanionPairingApprovalAuthority {
     #[allow(clippy::needless_pass_by_value)]
     pub fn prevalidate(
         self,
+
         manager: &NookVaultManager,
-        attempt: CompanionPairingApprovalAttempt,
-        providers: AuthProvidersSnapshotData,
-    ) -> Result<NookPrevalidatedCompanionPairingApproval, JsError> {
+
+        attempt: tsify::Ts<CompanionPairingApprovalAttempt>,
+        providers: tsify::Ts<AuthProvidersSnapshotData>,
+    ) -> Result<NookPrevalidatedCompanionPairingApproval, wasm_bindgen::JsError> {
+        let providers = providers
+            .to_rust()
+            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+
+        let attempt = attempt
+            .to_rust()
+            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+
         self.prevalidate_inner(manager, attempt, providers)
             .map_err(NookVaultManager::failure_js_error)
     }

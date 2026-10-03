@@ -9,7 +9,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 #[derive(Debug, Clone, Copy, Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi)]
+
 pub struct AuthenticationDisplayProgress {
     pub current_step: AuthenticationWorkflowCurrentStep,
     pub total_steps: AuthenticationWorkflowTotalSteps,
@@ -53,14 +53,14 @@ impl AuthenticationWorkflowActivity {
 }
 #[derive(Debug, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(from_wasm_abi)]
+
 pub struct PasswordWorkflowActivityEvidence {
     pub current_password_field_count: AuthenticationFieldCount,
     pub new_password_field_count: AuthenticationFieldCount,
 }
 #[derive(Debug, Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi)]
+
 pub struct PasswordWorkflowActivityPresentation {
     pub kind: AuthenticationWorkflowKind,
     pub generation_progress: AuthenticationDisplayProgress,

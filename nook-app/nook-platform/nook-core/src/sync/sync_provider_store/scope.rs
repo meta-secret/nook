@@ -488,7 +488,7 @@ mod tests {
 
 #[derive(Debug, Clone, serde::Deserialize, tsify::Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(from_wasm_abi)]
+
 pub struct RemoteEventFlushProviderRequest {
     pub snapshot: AuthProvidersSnapshotData,
     pub vault_store_id: String,

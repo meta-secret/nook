@@ -16,17 +16,24 @@ pub struct NookCompanionPairingExtensionProtocol {
 impl NookCompanionPairingExtensionProtocol {
     #[wasm_bindgen(constructor)]
     #[allow(clippy::needless_pass_by_value)]
-    pub fn new(request: CompanionPairingRequest) -> Result<Self, JsError> {
+    pub fn new(request: tsify::Ts<CompanionPairingRequest>) -> Result<Self, wasm_bindgen::JsError> {
+        let request = request
+            .to_rust()
+            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+
         Ok(Self {
             inner: CompanionExtensionPairingEndpoint::issue(request)
                 .map_err(|error| JsError::new(&error.to_string()))?,
         })
     }
 
-    pub fn request(&self) -> Result<CompanionPairingRequest, JsError> {
-        self.inner
+    pub fn request(&self) -> Result<tsify::Ts<CompanionPairingRequest>, wasm_bindgen::JsError> {
+        let result = self
+            .inner
             .request()
-            .map_err(|error| JsError::new(&error.to_string()))
+            .map_err(|error| JsError::new(&error.to_string()))?;
+        tsify::Tsify::into_ts(&result)
+            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
     }
 
     /// Request authority cannot be taken from a consumed protocol handle.
@@ -57,8 +64,12 @@ impl NookCompanionPairingApprovalAuthority {
     #[allow(clippy::needless_pass_by_value)]
     pub fn admit(
         self,
-        attempt: CompanionPairingApprovalAttempt,
-    ) -> Result<NookAdmittedCompanionPairingApproval, JsError> {
+        attempt: tsify::Ts<CompanionPairingApprovalAttempt>,
+    ) -> Result<NookAdmittedCompanionPairingApproval, wasm_bindgen::JsError> {
+        let attempt = attempt
+            .to_rust()
+            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+
         let authorized = self
             .inner
             .authorize_approval(attempt)
@@ -85,33 +96,52 @@ pub struct NookCompanionPairingWebsiteProtocol {
 impl NookCompanionPairingWebsiteProtocol {
     #[wasm_bindgen(constructor)]
     #[allow(clippy::needless_pass_by_value)]
-    pub fn new(observation: CompanionPairingRequestObservation) -> Result<Self, JsError> {
+    pub fn new(
+        observation: tsify::Ts<CompanionPairingRequestObservation>,
+    ) -> Result<Self, wasm_bindgen::JsError> {
+        let observation = observation
+            .to_rust()
+            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+
         Ok(Self {
             inner: CompanionWebsitePairingEndpoint::admit(observation)
                 .map_err(|error| JsError::new(&error.to_string()))?,
         })
     }
 
-    pub fn request(&self) -> Result<CompanionPairingRequest, JsError> {
-        self.inner
+    pub fn request(&self) -> Result<tsify::Ts<CompanionPairingRequest>, wasm_bindgen::JsError> {
+        let result = self
+            .inner
             .request()
-            .map_err(|error| JsError::new(&error.to_string()))
+            .map_err(|error| JsError::new(&error.to_string()))?;
+        tsify::Tsify::into_ts(&result)
+            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
     }
 
     #[allow(clippy::needless_pass_by_value)]
     pub fn authorize(
         self,
-        authorization: CompanionPairingWebsiteAuthorization,
-        provider_manifest_digest: CompanionPairingProviderManifestDigest,
-    ) -> CompanionPairingWebsiteAuthorizationOutcome {
-        match self.inner.authorize(authorization) {
-            Ok(authorized) => CompanionPairingWebsiteAuthorizationOutcome::Approved {
-                approval: Box::new(authorized.approve(provider_manifest_digest)),
-            },
-            Err(error) => CompanionPairingWebsiteAuthorizationOutcome::Rejected {
-                failure: error.into(),
-            },
-        }
+        authorization: tsify::Ts<CompanionPairingWebsiteAuthorization>,
+        provider_manifest_digest: tsify::Ts<CompanionPairingProviderManifestDigest>,
+    ) -> Result<tsify::Ts<CompanionPairingWebsiteAuthorizationOutcome>, wasm_bindgen::JsError> {
+        let authorization = authorization
+            .to_rust()
+            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+        let provider_manifest_digest = provider_manifest_digest
+            .to_rust()
+            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+        let result = {
+            match self.inner.authorize(authorization) {
+                Ok(authorized) => CompanionPairingWebsiteAuthorizationOutcome::Approved {
+                    approval: Box::new(authorized.approve(provider_manifest_digest)),
+                },
+                Err(error) => CompanionPairingWebsiteAuthorizationOutcome::Rejected {
+                    failure: error.into(),
+                },
+            }
+        };
+        tsify::Tsify::into_ts(&result)
+            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
     }
 }
 

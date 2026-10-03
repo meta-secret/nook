@@ -94,8 +94,10 @@ pub fn extract_backup_code_candidates(text: String) -> Vec<String> {
 )]
 pub fn authentication_username_evidence(
     field: &NookPageInputFieldObservation,
-) -> nook_companion_core::AuthenticationUsernameEvidence {
-    (field.as_core()).authentication_username_evidence()
+) -> Result<tsify::Ts<nook_companion_core::AuthenticationUsernameEvidence>, wasm_bindgen::JsError> {
+    let result = { (field.as_core()).authentication_username_evidence() };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
@@ -106,9 +108,17 @@ pub fn authentication_username_evidence(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn strongest_authentication_username_evidence(
-    evidence: Vec<nook_companion_core::AuthenticationUsernameEvidence>,
-) -> nook_companion_core::AuthenticationUsernameEvidence {
-    AuthenticationUsernameEvidence::strongest_authentication_username_evidence(&evidence)
+    evidence: Vec<tsify::Ts<nook_companion_core::AuthenticationUsernameEvidence>>,
+) -> Result<tsify::Ts<nook_companion_core::AuthenticationUsernameEvidence>, wasm_bindgen::JsError> {
+    let evidence = evidence
+        .into_iter()
+        .map(|value| value.to_rust())
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result =
+        { AuthenticationUsernameEvidence::strongest_authentication_username_evidence(&evidence) };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
@@ -118,12 +128,19 @@ pub fn strongest_authentication_username_evidence(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn classify_companion_authentication_outcome(
-    input: nook_companion_core::AuthenticationOutcomeClassification,
-) -> nook_companion_core::AuthenticationOutcomeDecision {
-    nook_companion_core::AuthenticationOutcomeDecision::classify(
-        input.observation,
-        input.timeout_ms,
-    )
+    input: tsify::Ts<nook_companion_core::AuthenticationOutcomeClassification>,
+) -> Result<tsify::Ts<nook_companion_core::AuthenticationOutcomeDecision>, wasm_bindgen::JsError> {
+    let input = input
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result = {
+        nook_companion_core::AuthenticationOutcomeDecision::classify(
+            input.observation,
+            input.timeout_ms,
+        )
+    };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
@@ -133,12 +150,19 @@ pub fn classify_companion_authentication_outcome(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn classify_companion_authentication_outcome_with_default_timeout(
-    observation: nook_companion_core::AuthenticationOutcomeObservation,
-) -> nook_companion_core::AuthenticationOutcomeDecision {
-    nook_companion_core::AuthenticationOutcomeDecision::classify(
-        observation,
-        nook_companion_core::DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS,
-    )
+    observation: tsify::Ts<nook_companion_core::AuthenticationOutcomeObservation>,
+) -> Result<tsify::Ts<nook_companion_core::AuthenticationOutcomeDecision>, wasm_bindgen::JsError> {
+    let observation = observation
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result = {
+        nook_companion_core::AuthenticationOutcomeDecision::classify(
+            observation,
+            nook_companion_core::DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS,
+        )
+    };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
@@ -148,9 +172,14 @@ pub fn classify_companion_authentication_outcome_with_default_timeout(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn validate_companion_authentication_outcome_decision(
-    decision: nook_companion_core::AuthenticationOutcomeDecision,
-) -> nook_companion_core::AuthenticationOutcomeDecision {
-    decision
+    decision: tsify::Ts<nook_companion_core::AuthenticationOutcomeDecision>,
+) -> Result<tsify::Ts<nook_companion_core::AuthenticationOutcomeDecision>, wasm_bindgen::JsError> {
+    let decision = decision
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result = { decision };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 #[cfg(test)]
@@ -689,9 +718,15 @@ mod wasm_tests {
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn compare_extension_pairing_records(
-    request: nook_companion_core::ExtensionPairingRecordComparisonRequest,
-) -> nook_companion_core::ExtensionPairingRecordComparison {
-    request.compare()
+    request: tsify::Ts<nook_companion_core::ExtensionPairingRecordComparisonRequest>,
+) -> Result<tsify::Ts<nook_companion_core::ExtensionPairingRecordComparison>, wasm_bindgen::JsError>
+{
+    let request = request
+        .to_rust()
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+    let result = { request.compare() };
+    tsify::Tsify::into_ts(&result)
+        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
 }
 
 mod browser_material_admission;

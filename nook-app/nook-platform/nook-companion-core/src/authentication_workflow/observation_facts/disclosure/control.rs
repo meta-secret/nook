@@ -49,9 +49,7 @@ pub struct CurrentAuthenticationDisclosureControlRequest {
 #[serde(try_from = "serde_json::Value")]
 #[serde(rename_all = "camelCase")]
 #[tsify(
-    type = "{ schemaVersion: 1; observation: AuthenticationAdvanceControlObservation; genericPasswordFieldCount: number }",
-    into_wasm_abi,
-    from_wasm_abi
+    type = "{ schemaVersion: 1; observation: AuthenticationAdvanceControlObservation; genericPasswordFieldCount: number }"
 )]
 pub struct VersionedAuthenticationDisclosureControlObservation {
     schema_version: AuthenticationDisclosureObservationSchemaVersion,
@@ -175,7 +173,7 @@ impl TryFrom<serde_json::Value> for VersionedAuthenticationDisclosureControlObse
 /// Typed classification of a versioned disclosure-control observation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+
 pub enum AuthenticationDisclosureControlDecision {
     AdvancesAuthentication,
     DoesNotAdvanceAuthentication,
