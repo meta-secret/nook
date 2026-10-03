@@ -5,6 +5,13 @@ import {
 import { handleCompanionWasmMessage } from '../../../nook-web-extension/src/offscreen/session-companion-wasm-operations'
 import { Effect } from 'effect'
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
+import {
+  decode_authentication_workflow_runtime_response,
+  authentication_workflow_pilot_presentation_capability,
+  bind_authentication_page_observation_facts,
+  saved_login_action_available,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm'
+import type { AuthenticationWorkflowRoutingResponse } from '../../../nook-web-extension/src/background/service-worker/authentication-workflow-routing'
 
 type DemoRuntimeMessage = { readonly type: string }
 type DemoRuntimeCallback = (response: object) => void
@@ -33,6 +40,15 @@ class PilotCompanionDemoRuntime {
     message: DemoRuntimeMessage,
     callback: DemoRuntimeCallback,
   ): void {
+    if (message.type === 'nook:authentication-workflow-snapshot') {
+      this.sendMessage(
+        message,
+        (response: AuthenticationWorkflowRoutingResponse) => {
+          this.projectWorkflowResponse(response, callback)
+        },
+      )
+      return
+    }
     switch (isCompanionWasmSessionMessageType(message.type)) {
       case false:
         this.sendMessage(message, callback)
@@ -41,6 +57,48 @@ class PilotCompanionDemoRuntime {
         this.deliver(message as CompanionWasmSessionMessage, callback)
         return
     }
+  }
+
+  private projectWorkflowResponse(
+    response: AuthenticationWorkflowRoutingResponse,
+    callback: DemoRuntimeCallback,
+  ): void {
+    Effect.runFork(
+      Effect.promise(async () => {
+        await companionWasmReady
+        const decoded =
+          decode_authentication_workflow_runtime_response(response)
+        if (
+          !('snapshot' in decoded.workflow) ||
+          decoded.selectedFacts.state !== 'selected'
+        ) {
+          callback(response)
+          return
+        }
+        const snapshot = decoded.workflow.snapshot
+        const bindingRequest: Parameters<
+          typeof bind_authentication_page_observation_facts
+        >[0] = {
+          observations: [decoded.selectedFacts.facts],
+        }
+        const actionRequest: Parameters<
+          typeof saved_login_action_available
+        >[0] = {
+          action: snapshot.action,
+          loginMatches: decoded.loginMatches,
+        }
+        const projected: AuthenticationWorkflowRoutingResponse = {
+          ...response,
+          pilotCapability:
+            authentication_workflow_pilot_presentation_capability(snapshot),
+          factsBindingToken:
+            bind_authentication_page_observation_facts(bindingRequest),
+          savedLoginActionAvailable:
+            saved_login_action_available(actionRequest),
+        }
+        callback(projected)
+      }),
+    )
   }
 
   private deliver(
