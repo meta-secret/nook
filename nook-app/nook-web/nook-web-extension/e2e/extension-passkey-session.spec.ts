@@ -536,7 +536,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         email: 'alice@nook.test',
         password: 'extension-fill-password',
       })
-      await expect.poll(() => loginPicker.isClosed()).toBe(true)
+      await expect(inlinePicker).toHaveCount(0)
       await expect(fillWidget.getByText('Nook Pilot · 3/3')).toBeVisible()
       await expect(fillWidget.getByText('Verifying sign-in')).toBeVisible()
       await expect(

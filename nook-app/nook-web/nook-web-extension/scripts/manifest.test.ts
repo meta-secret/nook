@@ -117,6 +117,8 @@ describe('extension origin isolation', () => {
       {
         resources: [
           'icons/nook.png',
+          'login-picker/index.html',
+          'login-picker/assets/*',
           'content/companion-wasm-host.html',
           'content/companion-wasm-host.js',
           'content/nook_companion_wasm_bg.wasm',

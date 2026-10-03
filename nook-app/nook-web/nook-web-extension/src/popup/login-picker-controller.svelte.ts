@@ -34,7 +34,8 @@ interface LoginPickerDocumentRequest {
 
 class LoginPickerTransportFailure extends Schema.TaggedError<LoginPickerTransportFailure>()(
   'LoginPickerTransportFailure',
-)({}) {}
+  {},
+) {}
 
 interface LoginPickerRuntimeCall {
   readonly try: () => Promise<unknown>

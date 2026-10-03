@@ -24,7 +24,7 @@ class InlinePickerFixture {
     tab: this.tab,
     frameId: 8,
     documentId: 'picker-document',
-    origin: 'chrome-extension://nook-extension',
+    origin: new URL('chrome-extension://nook-extension/').origin,
     url: 'chrome-extension://nook-extension/login-picker/index.html',
   }
 

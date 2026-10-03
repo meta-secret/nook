@@ -214,7 +214,12 @@ async function copyStaticFile(source: string, destination: string) {
   await copyFile(source, outputPath)
 }
 
-async function buildSveltePage(page: 'popup' | 'login-picker') {
+enum SveltePage {
+  Popup = 'popup',
+  LoginPicker = 'login-picker',
+}
+
+async function buildSveltePage(page: SveltePage) {
   const { build: viteBuild } = await extensionBuildDependencyLoader.importVite()
   const { svelte, vitePreprocess } =
     await extensionBuildDependencyLoader.importSvelte()
@@ -260,8 +265,8 @@ await Promise.all([
 ])
 
 await Promise.all([
-  buildSveltePage('popup'),
-  buildSveltePage('login-picker'),
+  buildSveltePage(SveltePage.Popup),
+  buildSveltePage(SveltePage.LoginPicker),
   buildChromeLocales({ appCommonLocalesRoot, distDir }),
 ])
 
