@@ -362,14 +362,40 @@ The gate must:
 - never request a vault password, recovery secret, or provider credential;
 - never silently fill or submit;
 - when more than one login matches the page origin, open an extension-owned
-  searchable login picker that shows usernames (and host/vault labels) only
-  inside the extension document; keep those labels out of the host-page DOM and
-  return only the selected opaque item identity to the content script;
+  searchable login picker inside the existing right-side Pilot panel, using the
+  dedicated extension-origin `login-picker/index.html` document;
+  - show usernames and host/vault labels only inside that document;
+  - keep those labels out of the host-page DOM;
+  - show explicit search, loading, empty-result, and error states;
+  - return only the selected opaque item identity to the content script;
+  - continue through the existing origin/workflow revalidation and explicit
+    fill/submit operation;
+  - preserve existing lock, expiry, cancellation, and teardown cleanup;
 - for OTP challenges, open the extension-owned searchable 2FA picker and keep
   issuer/account labels out of the host-page DOM;
 - open a browser-native or extension-controlled authorization surface when the
   extension is locked;
 - open Simple Vault for full search, creation, editing, and settings.
+
+The inline login picker keeps its existing `requestId` out of the iframe URL
+and host-page DOM. Initialization sends it only to the retained child window.
+The pending request binds the actual Chrome tab, parent frame/document, and
+picker frame/document identities.
+
+- **Prohibited:** put account labels or the request ID in host-page markup, or
+  open a separate native login chooser after Continue.
+- **Required:** embed the isolated login document in the current Pilot panel
+  and return the chosen opaque identity through the bound request.
+
+The temporary pending-login session shape now requires `parentDocumentId` and
+`pickerDocument` binding state. Previous process/version records missing these
+fields fail closed and are cleared by the existing session lifecycle.
+Expired requests remain unavailable. This change needs no durable vault schema
+migration and introduces no compatibility or recovery path.
+
+- **Prohibited:** accept an older pending record without its document bindings.
+- **Required:** reject and clear that record, then require a fresh Continue
+  interaction for a new bound request.
 
 An injected DOM widget is not a trusted place for primary authentication because
 the host page can imitate it. Passkey authorization stays browser-native or in
