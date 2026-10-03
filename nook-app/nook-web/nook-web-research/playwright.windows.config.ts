@@ -1,7 +1,7 @@
 import { defineConfig, type PlaywrightTestConfig } from '@playwright/test'
 import sharedConfig from './playwright.config'
 
-class WindowsAppConfig {
+class WindowsResearchConfig {
   static readonly value: PlaywrightTestConfig = {
     ...sharedConfig,
     workers: 2,
@@ -24,4 +24,4 @@ class WindowsAppConfig {
   }
 }
 
-export default defineConfig(WindowsAppConfig.value)
+export default defineConfig(WindowsResearchConfig.value)
