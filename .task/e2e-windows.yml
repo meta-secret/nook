@@ -27,6 +27,6 @@ tasks:
           "unstable" { $playwrightArguments += "--project=unstable" }
           default { throw "Unsupported deterministic suite: $env:E2E_SUITE" }
         };
-        if ($env:E2E_SPEC) { $playwrightArguments += @("--", $env:E2E_SPEC) };
+        if ($env:E2E_SPEC) { $playwrightArguments += $env:E2E_SPEC };
         & bun @playwrightArguments;
         exit $LASTEXITCODE'
