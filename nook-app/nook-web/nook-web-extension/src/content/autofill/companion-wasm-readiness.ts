@@ -1,4 +1,7 @@
-import { CompanionWasmSessionMessageType } from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
+import {
+  CompanionWasmSessionMessageType,
+  type CompanionWasmRuntimeMessage,
+} from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 import {
   CompanionWasmRuntimeDeliveryKind,
   sendCompanionWasmRuntimeMessage,
@@ -7,11 +10,12 @@ import {
 /** Owns extension runtime readiness and lazy legacy response decoder startup. */
 class CompanionWasmReadiness {
   async waitForExtensionClassification(): Promise<void> {
-    const delivery = await sendCompanionWasmRuntimeMessage(globalThis, {
+    const message: CompanionWasmRuntimeMessage = {
       type: CompanionWasmSessionMessageType.ClassifyPageInputs,
       origin: globalThis.location.origin,
       payload: { fields: [], labels: [] },
-    })
+    }
+    const delivery = await sendCompanionWasmRuntimeMessage(globalThis, message)
     if (delivery.kind === CompanionWasmRuntimeDeliveryKind.Delivered) {
       const response = delivery.response
       if (

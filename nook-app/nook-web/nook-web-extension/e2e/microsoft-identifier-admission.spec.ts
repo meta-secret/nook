@@ -64,7 +64,9 @@ class MicrosoftIdentifierShellFixture {
 }
 
 for (const authentication of [true, false]) {
-  test(`production extension ${authentication ? 'admits Microsoft identifier' : 'rejects unrelated email'} with live structural bounds and CSP`, async ({}, testInfo) => {
+  test(`production extension ${authentication ? 'admits Microsoft identifier' : 'rejects unrelated email'} with live structural bounds and CSP`, async ({
+    baseURL: _baseURL,
+  }, testInfo) => {
     const fixture = new MicrosoftIdentifierShellFixture()
     const manifest = await readFile(
       path.join(extensionDir, 'manifest.json'),

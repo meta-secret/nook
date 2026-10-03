@@ -5,6 +5,7 @@ import {
 import {
   CompanionWasmSessionMessageType,
   CompanionWasmAuthenticatorSetupResponseDecoder,
+  type CompanionWasmRuntimeMessage,
 } from '../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 import {
   CompanionWasmRuntimeDeliveryKind,
@@ -164,44 +165,48 @@ class PageQrCapture {
   }
 
   prepareAuthenticationAuthenticatorSetupObservation(): Promise<void> {
-    const owner = this
     return Effect.runPromise(
-      Effect.gen(function* () {
-        owner.setupObservation = {
-          kind: SetupObservationPreparationKind.Unprepared,
-        }
-        const metadata = owner.authenticatorSetupMetadata()
-        const delivery = yield* Effect.promise(() =>
-          sendCompanionWasmRuntimeMessage(owner.browser, {
+      Effect.gen(
+        function* prepareSetupObservation(this: PageQrCapture) {
+          this.setupObservation = {
+            kind: SetupObservationPreparationKind.Unprepared,
+          }
+          const metadata = this.authenticatorSetupMetadata()
+          const message: CompanionWasmRuntimeMessage = {
             type: CompanionWasmSessionMessageType.AuthenticationAuthenticatorSetupObservation,
             payload: metadata,
-            origin: owner.browser.location.origin,
-          }),
-        )
-        switch (delivery.kind) {
-          case CompanionWasmRuntimeDeliveryKind.Unavailable:
-            return yield* Effect.fail(
-              new Error('Authenticator setup runtime unavailable.'),
-            )
-          case CompanionWasmRuntimeDeliveryKind.Delivered: {
-            const { authenticatorSetupObservation: observation } =
-              yield* Schema.decodeUnknown(
-                CompanionWasmAuthenticatorSetupResponseDecoder,
-              )(delivery.response).pipe(
-                Effect.mapError(
-                  () =>
-                    new Error('Authenticator setup runtime response rejected.'),
-                ),
-              )
-            owner.setupObservation = {
-              kind: SetupObservationPreparationKind.Prepared,
-              metadataKey: JSON.stringify(metadata),
-              observation,
-            }
-            return
+            origin: this.browser.location.origin,
           }
-        }
-      }),
+          const delivery = yield* Effect.promise(() =>
+            sendCompanionWasmRuntimeMessage(this.browser, message),
+          )
+          switch (delivery.kind) {
+            case CompanionWasmRuntimeDeliveryKind.Unavailable:
+              return yield* Effect.fail(
+                new Error('Authenticator setup runtime unavailable.'),
+              )
+            case CompanionWasmRuntimeDeliveryKind.Delivered: {
+              const { authenticatorSetupObservation: observation } =
+                yield* Schema.decodeUnknown(
+                  CompanionWasmAuthenticatorSetupResponseDecoder,
+                )(delivery.response).pipe(
+                  Effect.mapError(
+                    () =>
+                      new Error(
+                        'Authenticator setup runtime response rejected.',
+                      ),
+                  ),
+                )
+              this.setupObservation = {
+                kind: SetupObservationPreparationKind.Prepared,
+                metadataKey: JSON.stringify(metadata),
+                observation,
+              }
+              return
+            }
+          }
+        }.bind(this),
+      ),
     )
   }
 
