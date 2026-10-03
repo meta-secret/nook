@@ -98,8 +98,8 @@ FROM registry.dev.nokey.sh/oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4
 
 FROM deps AS policy-tools
 COPY --from=policy-bun /usr/local/bin/bun /usr/local/bin/bun
-RUN curl -fsSL https://github.com/vale-cli/vale/releases/download/v3.19.0/vale_3.19.0_Linux_64-bit.tar.gz -o /tmp/vale.tar.gz \
-    && echo 'c8f9d6c8055442bc7e9c121b2498e6f0e3fb670f4665e6ee577f1897f7665cf6  /tmp/vale.tar.gz' | sha256sum -c - \
+RUN curl -fsSL https://github.com/vale-cli/vale/releases/download/v3.22.0/vale_3.22.0_Linux_64-bit.tar.gz -o /tmp/vale.tar.gz \
+    && echo '52f5cd0314a1b7384cac6aa102a68193977312f6ba9c9f3ae001b5deec8e3a10  /tmp/vale.tar.gz' | sha256sum -c - \
     && tar -xzf /tmp/vale.tar.gz -C /usr/local/bin vale \
     && rm /tmp/vale.tar.gz \
     && vale --version

@@ -171,7 +171,7 @@ export class RepositoryPolicyToolchain {
       environment.runnerTemp,
       'nook-native-toolchain',
     );
-    const valeDirectory = join(nativeDirectory, 'vale-3.19.0');
+    const valeDirectory = join(nativeDirectory, 'vale-3.22.0');
     const zigVersion = '0.15.2';
     const zigArchive = join(
       environment.runnerTemp,
@@ -187,7 +187,7 @@ export class RepositoryPolicyToolchain {
     );
     const valeArchive = join(
       environment.runnerTemp,
-      'vale_3.19.0_Linux_64-bit.tar.gz',
+      'vale_3.22.0_Linux_64-bit.tar.gz',
     );
     const decoder = join(nativeDirectory, 'unxz');
 
@@ -201,10 +201,10 @@ export class RepositoryPolicyToolchain {
     }
 
     const valeDownload = await this.download({
-      url: 'https://github.com/vale-cli/vale/releases/download/v3.19.0/vale_3.19.0_Linux_64-bit.tar.gz',
+      url: 'https://github.com/vale-cli/vale/releases/download/v3.22.0/vale_3.22.0_Linux_64-bit.tar.gz',
       path: valeArchive,
       sha256:
-        'c8f9d6c8055442bc7e9c121b2498e6f0e3fb670f4665e6ee577f1897f7665cf6',
+        '52f5cd0314a1b7384cac6aa102a68193977312f6ba9c9f3ae001b5deec8e3a10',
     });
     if (valeDownload.isErr()) return err(valeDownload.error);
 
@@ -235,10 +235,10 @@ export class RepositoryPolicyToolchain {
         message: 'Vale version check did not produce text output.',
       });
     }
-    if (valeVersion.value.toString('utf8').trim() !== 'vale version 3.19.0') {
+    if (valeVersion.value.toString('utf8').trim() !== 'vale version 3.22.0') {
       return err({
         kind: ToolchainFailureKind.Command,
-        message: 'Vale version did not match the pinned 3.19.0 release.',
+        message: 'Vale version did not match the pinned 3.22.0 release.',
       });
     }
 

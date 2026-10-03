@@ -393,8 +393,8 @@ fn preflight_initializes_released_meta_cortex_with_only_default_tool_policies() 
         .find(mise_install_path)
         .expect("Docker preflight must install mise executable at Meta-Cortex's expected path");
     let bun_image_pin = "registry.dev.nokey.sh/oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4";
-    let vale_asset_pin = "https://github.com/vale-cli/vale/releases/download/v3.19.0/vale_3.19.0_Linux_64-bit.tar.gz";
-    let vale_sha256 = "c8f9d6c8055442bc7e9c121b2498e6f0e3fb670f4665e6ee577f1897f7665cf6";
+    let vale_asset_pin = "https://github.com/vale-cli/vale/releases/download/v3.22.0/vale_3.22.0_Linux_64-bit.tar.gz";
+    let vale_sha256 = "52f5cd0314a1b7384cac6aa102a68193977312f6ba9c9f3ae001b5deec8e3a10";
     assert!(
         dockerfile.contains(bun_image_pin),
         "Docker preflight must stage Bun from the pinned 1.3.14 image"
@@ -402,7 +402,7 @@ fn preflight_initializes_released_meta_cortex_with_only_default_tool_policies() 
     assert!(
         dockerfile.contains(vale_asset_pin)
             && dockerfile.contains(&format!("{vale_sha256}  /tmp/vale.tar.gz")),
-        "Docker preflight must stage Vale from its pinned, checksum-verified 3.19.0 release"
+        "Docker preflight must stage Vale from its pinned, checksum-verified 3.22.0 release"
     );
     let bun_install_directory =
         "install -d -m 0755 /root/.meta-cortex/bun/bin /root/.meta-cortex/vale/bin";
