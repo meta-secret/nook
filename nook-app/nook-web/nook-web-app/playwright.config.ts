@@ -51,7 +51,7 @@ const SYNC_PROVIDER_SPECS = playwrightGates.unstable
 const SYNC_LIVE_SPECS = playwrightGates.manual
 
 const specPaths = (files: readonly string[]) =>
-  files.map((file) => path.join('**', file))
+  files.map((file) => `**/${file}`)
 
 const projectDefinitions: NonNullable<PlaywrightTestConfig['projects']> = [
   {
