@@ -41,7 +41,11 @@ describe('login picker runtime messages', () => {
         Effect.either(
           LoginPickerQueryMessageSchema.decode({
             type: 'nook:login-picker-query',
-            payload: { requestId: 'req-1', query: 'alice', parentOrigin: 'https://example.test' },
+            payload: {
+              requestId: 'req-1',
+              query: 'alice',
+              parentOrigin: 'https://example.test',
+            },
           }),
         ),
       )._tag,

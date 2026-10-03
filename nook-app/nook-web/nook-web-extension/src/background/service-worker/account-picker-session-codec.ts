@@ -1,5 +1,8 @@
 import { Schema } from 'effect'
-import { LoginPickerFrameBindingKind, type LoginPickerFrameBinding } from '../../lib/inline-login-picker'
+import {
+  LoginPickerFrameBindingKind,
+  type LoginPickerFrameBinding,
+} from '../../lib/inline-login-picker'
 import type { ExtensionSessionStorageValue } from './pairing-identity-storage'
 
 export type PendingAuthenticatorPicker = {
@@ -110,7 +113,9 @@ class LoginPickerSessionSchema {
     ...pendingAuthenticatorPickerSchemaFields,
     parentDocumentId: Schema.String.pipe(Schema.minLength(1)),
     pickerDocument: Schema.Union(
-      Schema.Struct({ kind: Schema.Literal(LoginPickerFrameBindingKind.AwaitingDocument) }),
+      Schema.Struct({
+        kind: Schema.Literal(LoginPickerFrameBindingKind.AwaitingDocument),
+      }),
       Schema.Struct({
         kind: Schema.Literal(LoginPickerFrameBindingKind.Bound),
         frameId: Schema.Number.pipe(Schema.int(), Schema.positive()),

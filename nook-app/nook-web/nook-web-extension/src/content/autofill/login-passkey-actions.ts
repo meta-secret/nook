@@ -261,8 +261,12 @@ class LoginPasskeyInteraction {
       requestId,
       continueButton,
       description,
-      title: workflowUi.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetLoginTitle),
-      cancelLabel: workflowUi.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollCancel),
+      title: workflowUi.translatedMessage(
+        BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
+      ),
+      cancelLabel: workflowUi.translatedMessage(
+        BROWSER_MESSAGE_KEYS.WidgetEnrollCancel,
+      ),
       cancel: this.cancelPendingLoginPickerRequest.bind(this),
     }
     const pendingLoginRequest1: Parameters<typeof pickerState.openLogin>[0] = {
@@ -324,7 +328,9 @@ class LoginPasskeyInteraction {
     const status: Parameters<typeof authenticationWorkflowUi.setStatus>[0] = {
       description: pending.description,
       continueButton: pending.continueButton,
-      text: workflowUi.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetLoginPickerCanceled),
+      text: workflowUi.translatedMessage(
+        BROWSER_MESSAGE_KEYS.WidgetLoginPickerCanceled,
+      ),
       enableContinue: true,
     }
     authenticationWorkflowUi.setStatus(status)

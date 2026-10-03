@@ -6,9 +6,7 @@ import {
   type WebsiteLoginSavePendingResponse,
 } from '../../lib/login-save-messages'
 import { OpenCompanionLauncherIntent } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
-import {
-  type WebsiteLoginFillResponse,
-} from '../../lib/login-fill-messages'
+import { type WebsiteLoginFillResponse } from '../../lib/login-fill-messages'
 import { SessionOperationFailureKind } from '../../lib/session-operation-queue'
 import { ExtensionSessionMessageType } from '../../lib/extension-session-message-type'
 import { backgroundVaultRuntime } from '../vault-runtime'

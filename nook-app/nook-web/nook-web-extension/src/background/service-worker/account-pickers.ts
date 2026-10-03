@@ -53,7 +53,6 @@ export type {
   SessionAccount,
 } from './account-picker-session-codec'
 
-
 export const AUTHENTICATOR_PICKER_TTL_MS = 5 * 60 * 1000
 
 export const LOGIN_PICKER_TTL_MS = 5 * 60 * 1000
@@ -975,7 +974,6 @@ class AccountPickerSessions {
       authorizationGeneration,
     }
   }
-
 }
 
 export const accountPickerSessions = new AccountPickerSessions()

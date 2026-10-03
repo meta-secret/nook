@@ -3,14 +3,23 @@
   import { Search } from '@lucide/svelte'
   import { onMount } from 'svelte'
   import type { ExtensionI18n } from '../lib/i18n'
-  import { LoginPickerActivity, LoginPickerController } from './login-picker-controller.svelte'
+  import {
+    LoginPickerActivity,
+    LoginPickerController,
+  } from './login-picker-controller.svelte'
 
-  let { i18n, requestId, parentOrigin }: {
+  let {
+    i18n,
+    requestId,
+    parentOrigin,
+  }: {
     i18n: ExtensionI18n
     requestId: string
     parentOrigin: string
   } = $props()
-  const documentRequest: ConstructorParameters<typeof LoginPickerController>[0] = { i18n, requestId, parentOrigin }
+  const documentRequest: ConstructorParameters<
+    typeof LoginPickerController
+  >[0] = { i18n, requestId, parentOrigin }
   const picker = new LoginPickerController(documentRequest)
 
   $effect(() => picker.load(picker.query))
@@ -32,7 +41,6 @@
     }
   })
 </script>
-
 
 <main
   class="authenticator-picker login-picker"
@@ -73,7 +81,9 @@
   </div>
 
   {#if picker.activity === LoginPickerActivity.Failed}
-    <p class="error-message" role="alert">{picker.translate(I18N_KEYS.ExtensionLoginPickerFailed)}</p>
+    <p class="error-message" role="alert">
+      {picker.translate(I18N_KEYS.ExtensionLoginPickerFailed)}
+    </p>
   {:else if picker.activity === LoginPickerActivity.Loading}
     <p class="picker-status" role="status">
       {picker.translate(I18N_KEYS.ExtensionLoginPickerLoading)}

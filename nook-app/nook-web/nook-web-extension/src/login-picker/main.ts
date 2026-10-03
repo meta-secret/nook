@@ -27,7 +27,9 @@ class InlineLoginPickerDocument {
       case InlineLoginPickerDocumentPhase.Waiting:
         break
     }
-    const admission = Schema.decodeUnknownEither(InlineLoginPickerInitialization)(event.data)
+    const admission = Schema.decodeUnknownEither(
+      InlineLoginPickerInitialization,
+    )(event.data)
     switch (admission._tag) {
       case 'Left':
         return
@@ -69,4 +71,8 @@ class InlineLoginPickerDocument {
 const picker = new InlineLoginPickerDocument()
 const receive = picker.receive.bind(picker)
 window.addEventListener('message', receive)
-window.addEventListener('pagehide', () => window.removeEventListener('message', receive), { once: true })
+window.addEventListener(
+  'pagehide',
+  () => window.removeEventListener('message', receive),
+  { once: true },
+)

@@ -18,9 +18,7 @@ export interface InlineLoginPickerSurface {
 
 /** Owns the mounted chooser and the exact window that receives its request nonce. */
 export class InlineLoginPicker implements InlineLoginPickerSurface {
-  private constructor(
-    private readonly release: () => void,
-  ) {}
+  private constructor(private readonly release: () => void) {}
 
   static mount(request: InlineLoginPickerMount): InlineLoginPicker {
     const frame = document.createElement('iframe')
@@ -42,7 +40,10 @@ export class InlineLoginPicker implements InlineLoginPickerSurface {
     frame.after(cancel)
     const targetWindow = frame.contentWindow
     const initialize = (): void => {
-      switch (targetWindow !== window && typeof targetWindow?.postMessage === 'function') {
+      switch (
+        targetWindow !== window &&
+        typeof targetWindow?.postMessage === 'function'
+      ) {
         case false:
           return
         case true: {

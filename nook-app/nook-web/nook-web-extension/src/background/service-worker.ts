@@ -248,16 +248,24 @@ const externalCompanionRoutingDependencies: ExternalCompanionRoutingRequest['dep
 
 const schemaRuntimeMessageRoutes: BackgroundRuntimeMessageRoutes = [
   SchemaRuntimeMessageRoute.matching(WebsiteLoginPickerOpenMessageSchema)
-    .respondWith(loginPickerOperations.openWebsiteLoginPicker.bind(loginPickerOperations))
+    .respondWith(
+      loginPickerOperations.openWebsiteLoginPicker.bind(loginPickerOperations),
+    )
     .onRejected(() => ({ ok: false, reason: 'login-picker-open-failed' })),
   SchemaRuntimeMessageRoute.matching(LoginPickerQueryMessageSchema)
-    .respondWith(loginPickerOperations.queryLoginPicker.bind(loginPickerOperations))
+    .respondWith(
+      loginPickerOperations.queryLoginPicker.bind(loginPickerOperations),
+    )
     .onRejected(() => ({ ok: false, reason: 'login-picker-query-failed' })),
   SchemaRuntimeMessageRoute.matching(LoginPickerSelectMessageSchema)
-    .respondWith(loginPickerOperations.selectLoginPicker.bind(loginPickerOperations))
+    .respondWith(
+      loginPickerOperations.selectLoginPicker.bind(loginPickerOperations),
+    )
     .onRejected(() => ({ ok: false, reason: 'login-picker-select-failed' })),
   SchemaRuntimeMessageRoute.matching(LoginPickerCancelMessageSchema)
-    .respondWith(loginPickerOperations.cancelLoginPicker.bind(loginPickerOperations))
+    .respondWith(
+      loginPickerOperations.cancelLoginPicker.bind(loginPickerOperations),
+    )
     .onRejected(() => ({ ok: false, reason: 'login-picker-cancel-failed' })),
   SchemaRuntimeMessageRoute.matching(
     WebsiteAuthenticatorPickerOpenMessageSchema,

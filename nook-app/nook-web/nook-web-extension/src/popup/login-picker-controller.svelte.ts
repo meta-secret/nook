@@ -1,5 +1,8 @@
 import { Effect, Schema } from 'effect'
-import { I18N_KEYS, type I18nKey } from '../../../nook-web-shared/src/generated/i18n-keys'
+import {
+  I18N_KEYS,
+  type I18nKey,
+} from '../../../nook-web-shared/src/generated/i18n-keys'
 import type { WebsiteLoginAccountOption } from '../lib/login-fill-messages'
 import {
   LoginPickerCancelMessageType,
@@ -11,7 +14,12 @@ import {
   type LoginPickerQueryMessage,
   type LoginPickerSelectMessage,
 } from '../lib/login-picker-messages'
-import { ExtensionTranslationRequestKind, extensionLocaleCatalog, type ExtensionI18n, type ExtensionTranslationRequest } from '../lib/i18n'
+import {
+  ExtensionTranslationRequestKind,
+  extensionLocaleCatalog,
+  type ExtensionI18n,
+  type ExtensionTranslationRequest,
+} from '../lib/i18n'
 
 export enum LoginPickerActivity {
   Loading = 'loading',
@@ -59,7 +67,9 @@ export class LoginPickerController {
   constructor(private readonly request: LoginPickerDocumentRequest) {}
 
   translate(key: I18nKey): string {
-    return this.request.i18n.t(extensionLocaleCatalog.plainExtensionTranslation(key))
+    return this.request.i18n.t(
+      extensionLocaleCatalog.plainExtensionTranslation(key),
+    )
   }
 
   primaryLabel(account: WebsiteLoginAccountOption): string {
@@ -91,7 +101,9 @@ export class LoginPickerController {
       try: () => chrome.runtime.sendMessage(message),
       catch: () => new LoginPickerTransportFailure(),
     }
-    return Effect.tryPromise(transport).pipe(Effect.flatMap(LoginPickerQueryResponse.decode))
+    return Effect.tryPromise(transport).pipe(
+      Effect.flatMap(LoginPickerQueryResponse.decode),
+    )
   }
 
   private sendSelection(message: LoginPickerSelectMessage) {
@@ -99,7 +111,9 @@ export class LoginPickerController {
       try: () => chrome.runtime.sendMessage(message),
       catch: () => new LoginPickerTransportFailure(),
     }
-    return Effect.tryPromise(transport).pipe(Effect.flatMap(LoginPickerSelectResponse.decode))
+    return Effect.tryPromise(transport).pipe(
+      Effect.flatMap(LoginPickerSelectResponse.decode),
+    )
   }
 
   load(searchQuery: string): void {
@@ -113,7 +127,11 @@ export class LoginPickerController {
     this.activity = LoginPickerActivity.Loading
     const message: LoginPickerQueryMessage = {
       type: LoginPickerQueryMessageType.NookLoginPickerQuery,
-      payload: { requestId: this.request.requestId, query: searchQuery, parentOrigin: this.request.parentOrigin },
+      payload: {
+        requestId: this.request.requestId,
+        query: searchQuery,
+        parentOrigin: this.request.parentOrigin,
+      },
     }
     const load = this.sendQuery(message).pipe(
       Effect.match({
@@ -125,7 +143,10 @@ export class LoginPickerController {
   }
 
   private loadedFailure(sequence: number): void {
-    switch (sequence === this.sequence && this.lifetime === LoginPickerLifetime.Active) {
+    switch (
+      sequence === this.sequence &&
+      this.lifetime === LoginPickerLifetime.Active
+    ) {
       case true:
         this.accounts = []
         this.destinationOrigin = ''
@@ -137,7 +158,10 @@ export class LoginPickerController {
   }
 
   private loaded(result: LoginPickerLoaded): void {
-    switch (result.sequence === this.sequence && this.lifetime === LoginPickerLifetime.Active) {
+    switch (
+      result.sequence === this.sequence &&
+      this.lifetime === LoginPickerLifetime.Active
+    ) {
       case false:
         return
       case true:
@@ -160,12 +184,18 @@ export class LoginPickerController {
     this.activity = LoginPickerActivity.Selecting
     const message: LoginPickerSelectMessage = {
       type: LoginPickerSelectMessageType.NookLoginPickerSelect,
-      payload: { requestId: this.request.requestId, vaultStoreId: account.vaultStoreId, secretId: account.secretId },
+      payload: {
+        requestId: this.request.requestId,
+        vaultStoreId: account.vaultStoreId,
+        secretId: account.secretId,
+      },
     }
-    const selection = this.sendSelection(message).pipe(Effect.match({
-      onFailure: () => this.loadedFailure(this.sequence),
-      onSuccess: () => this.complete(),
-    }))
+    const selection = this.sendSelection(message).pipe(
+      Effect.match({
+        onFailure: () => this.loadedFailure(this.sequence),
+        onSuccess: () => this.complete(),
+      }),
+    )
     void Effect.runPromise(selection)
   }
 
@@ -190,7 +220,9 @@ export class LoginPickerController {
       payload: { requestId: this.request.requestId },
     }
     const transport: LoginPickerCancellationCall = {
-      try: async () => { await chrome.runtime.sendMessage(message) },
+      try: async () => {
+        await chrome.runtime.sendMessage(message)
+      },
       catch: () => new LoginPickerTransportFailure(),
     }
     void Effect.runPromise(Effect.tryPromise(transport))
