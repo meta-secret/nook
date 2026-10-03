@@ -11,6 +11,14 @@ import {
   WebsiteAuthenticatorEnrollStageMessage as WebsiteAuthenticatorEnrollStageMessageSchema,
 } from '../src/lib/enrollment-messages'
 import { recoveryCopyObservation } from '../src/lib/backup-code-candidates'
+import { handleCompanionWasmMessage } from '../src/offscreen/session-companion-wasm-operations'
+import type {
+  CompanionWasmRuntimeMessage,
+  CompanionWasmSessionResponse,
+} from '../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
+
+type ExtractionRuntimeResponse =
+  { ok: true; result: CompanionWasmSessionResponse } | { ok: false }
 
 describe('enrollment message guards', () => {
   test('accepts bounded otpauth preview, stage, and confirm payloads', () => {
@@ -130,7 +138,27 @@ describe('enrollment message guards', () => {
 })
 
 describe('backup code candidate extraction', () => {
-  test('extracts recovery-looking lines and ignores prose', () => {
+  test('extracts recovery-looking lines through the actual offscreen owner and ignores prose', async () => {
+    const previousChrome = globalThis.chrome
+    const previousLocation = globalThis.location
+    Object.assign(globalThis, {
+      location: new URL('https://example.test/recovery'),
+      chrome: {
+        runtime: {
+          sendMessage: (
+            message: CompanionWasmRuntimeMessage,
+            callback: (response: ExtractionRuntimeResponse) => void,
+          ) => {
+            void handleCompanionWasmMessage(message).then((result) =>
+              result.match(
+                (value) => callback({ ok: true, result: value }),
+                () => callback({ ok: false }),
+              ),
+            )
+          },
+        },
+      },
+    })
     const text = [
       'Save your backup codes',
       'Keep these recovery codes safe.',
@@ -141,9 +169,16 @@ describe('backup code candidate extraction', () => {
       'alice@example.test',
     ].join('\n')
 
-    expect(
-      recoveryCopyObservation.extractDocumentBackupCodeCandidates(text),
-    ).toEqual(['A1B2-C3D4-E5F6', 'G7H8-I9J0-K1L2'])
+    try {
+      expect(
+        await recoveryCopyObservation.extractDocumentBackupCodeCandidates(text),
+      ).toEqual(['A1B2-C3D4-E5F6', 'G7H8-I9J0-K1L2'])
+    } finally {
+      Object.assign(globalThis, {
+        chrome: previousChrome,
+        location: previousLocation,
+      })
+    }
   })
 
   test('does not treat 2fa inside emails as a backup-code page hint', async () => {

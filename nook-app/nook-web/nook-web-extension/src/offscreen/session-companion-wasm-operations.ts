@@ -14,6 +14,19 @@ import { companionWasmReady } from '../../../nook-web-shared/src/extension/compa
 import {
   NookLoginContextObservation,
   classify_authentication_authenticator_setup_batch,
+  extract_authentication_backup_code_candidates,
+  project_authentication_navigation_path,
+  decode_website_login_save_offer_response,
+  decode_website_login_save_action_response,
+  decode_authentication_outcome_response,
+  decode_authenticator_preview_response,
+  decode_authenticator_backup_attach_response,
+  decode_authenticator_code_response,
+  decode_authenticator_enrollment_stage_response,
+  decode_authenticator_enrollment_confirm_response,
+  decode_authenticator_picker_open_response,
+  decode_generated_password_response,
+  decode_authenticator_options_response,
   NookPageInputFieldObservation,
   AuthenticationWorkflowActivity,
   authentication_page_observation_facts_match_binding,
@@ -320,6 +333,62 @@ export async function handleCompanionWasmMessage(
         )
       case CompanionWasmSessionMessageType.DecodeContentRuntimeResponse:
         switch (message.payload.kind) {
+          case CompanionWasmContentResponseKind.LoginSaveOffer:
+            return ok(
+              decode_website_login_save_offer_response(
+                message.payload.response,
+              ),
+            )
+          case CompanionWasmContentResponseKind.LoginSaveAction:
+            return ok(
+              decode_website_login_save_action_response(
+                message.payload.response,
+              ),
+            )
+          case CompanionWasmContentResponseKind.AuthenticationOutcome:
+            return ok(
+              decode_authentication_outcome_response(message.payload.response),
+            )
+          case CompanionWasmContentResponseKind.AuthenticatorPreview:
+            return ok(
+              decode_authenticator_preview_response(message.payload.response),
+            )
+          case CompanionWasmContentResponseKind.AuthenticatorBackupAttach:
+            return ok(
+              decode_authenticator_backup_attach_response(
+                message.payload.response,
+              ),
+            )
+          case CompanionWasmContentResponseKind.AuthenticatorCode:
+            return ok(
+              decode_authenticator_code_response(message.payload.response),
+            )
+          case CompanionWasmContentResponseKind.AuthenticatorEnrollmentStage:
+            return ok(
+              decode_authenticator_enrollment_stage_response(
+                message.payload.response,
+              ),
+            )
+          case CompanionWasmContentResponseKind.AuthenticatorEnrollmentConfirm:
+            return ok(
+              decode_authenticator_enrollment_confirm_response(
+                message.payload.response,
+              ),
+            )
+          case CompanionWasmContentResponseKind.AuthenticatorPickerOpen:
+            return ok(
+              decode_authenticator_picker_open_response(
+                message.payload.response,
+              ),
+            )
+          case CompanionWasmContentResponseKind.GeneratedPassword:
+            return ok(
+              decode_generated_password_response(message.payload.response),
+            )
+          case CompanionWasmContentResponseKind.AuthenticatorOptions:
+            return ok(
+              decode_authenticator_options_response(message.payload.response),
+            )
           case CompanionWasmContentResponseKind.LoginOptions:
             return ok(decode_website_login_options(message.payload.response))
           case CompanionWasmContentResponseKind.LoginPickerOpen:
@@ -333,6 +402,12 @@ export async function handleCompanionWasmMessage(
               ),
             )
         }
+      case CompanionWasmSessionMessageType.ExtractAuthenticationBackupCodeCandidates:
+        return ok(
+          extract_authentication_backup_code_candidates(message.payload),
+        )
+      case CompanionWasmSessionMessageType.ProjectAuthenticationNavigationPath:
+        return ok(project_authentication_navigation_path(message.payload))
     }
   } catch {
     return invalidRequest()

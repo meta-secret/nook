@@ -1,6 +1,7 @@
 import {
   isCompanionWasmSessionMessageType,
   type CompanionWasmSessionMessage,
+  type CompanionWasmSessionResponse,
 } from '../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 import { handleCompanionWasmMessage } from '../../../nook-web-extension/src/offscreen/session-companion-wasm-operations'
 import { Effect } from 'effect'
@@ -13,8 +14,14 @@ import {
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm'
 import type { AuthenticationWorkflowRoutingResponse } from '../../../nook-web-extension/src/background/service-worker/authentication-workflow-routing'
 
-type DemoRuntimeMessage = { readonly type: string }
-type DemoRuntimeCallback = (response: object) => void
+type DemoRuntimeMessage =
+  | CompanionWasmSessionMessage
+  | { readonly type: 'nook:authentication-workflow-snapshot' }
+type DemoRuntimeResponse =
+  | AuthenticationWorkflowRoutingResponse
+  | { readonly ok: true; readonly result: CompanionWasmSessionResponse }
+  | { readonly ok: false }
+type DemoRuntimeCallback = (response: DemoRuntimeResponse) => void
 
 /** UI demos use the owning Rust adapter; production E2E loads the real extension. */
 class PilotCompanionDemoRuntime {
@@ -54,7 +61,7 @@ class PilotCompanionDemoRuntime {
         this.sendMessage(message, callback)
         return
       case true:
-        this.deliver(message as CompanionWasmSessionMessage, callback)
+        this.deliver(message, callback)
         return
     }
   }

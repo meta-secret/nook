@@ -11,9 +11,18 @@ import {
   AuthenticationOutcomeResponseKind,
   AuthenticationWorkflowActivity,
   authentication_workflow_activity_progress,
-  is_authentication_navigation_path,
   AuthenticationOutcomeVerdict,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { Effect, Schema } from 'effect'
+import {
+  CompanionWasmSessionMessageType,
+  CompanionWasmNavigationPathDecoder,
+  type CompanionWasmRuntimeMessage,
+} from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
+import {
+  CompanionWasmRuntimeDeliveryKind,
+  sendCompanionWasmRuntimeMessage,
+} from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-transport'
 import { AuthenticationGesture } from '../../lib/auth-widget-policy'
 import {
   NookWebsiteLoginSaveDecision,
@@ -209,9 +218,7 @@ class LoginSaveInteraction {
         form.summary.oneTimeCodeFieldCount > 0,
     )
     return {
-      navigatedAwayFromAuthPath:
-        location.pathname !== authPath ||
-        !is_authentication_navigation_path(location.pathname),
+      navigatedAwayFromAuthPath: location.pathname !== authPath,
       authFieldsPresent,
       successMarkerPresent,
       errorMarkerPresent,
@@ -224,6 +231,11 @@ class LoginSaveInteraction {
   private async classifyOutcomeEvidence(
     observation: AuthenticationOutcomeObservationView,
   ): Promise<AuthenticationOutcomeRead> {
+    try {
+      await this.prepareOutcomeNavigationPath(observation)
+    } catch {
+      return { kind: AuthenticationOutcomeReadKind.Unavailable }
+    }
     const message: Parameters<
       typeof authenticationRuntimeTransport.sendAuthenticationOutcomeRuntimeMessage
     >[0] = {
@@ -251,6 +263,36 @@ class LoginSaveInteraction {
       kind: AuthenticationOutcomeReadKind.Available,
       verdict: delivery.response.verdict,
     }
+  }
+
+  private prepareOutcomeNavigationPath(
+    observation: AuthenticationOutcomeObservationView,
+  ): Promise<void> {
+    const pathname = location.pathname
+    const request: CompanionWasmRuntimeMessage = {
+      type: CompanionWasmSessionMessageType.ProjectAuthenticationNavigationPath,
+      origin: location.origin,
+      payload: { pathname },
+    }
+    return Effect.runPromise(
+      Effect.gen(function* () {
+        const delivery = yield* Effect.tryPromise(() =>
+          sendCompanionWasmRuntimeMessage(globalThis, request),
+        )
+        if (
+          delivery.kind !== CompanionWasmRuntimeDeliveryKind.Delivered ||
+          location.pathname !== pathname
+        )
+          return yield* Effect.fail(
+            new Error('Authentication navigation projection unavailable.'),
+          )
+        const projected = yield* Schema.decodeUnknown(
+          CompanionWasmNavigationPathDecoder,
+        )(delivery.response)
+        observation.navigatedAwayFromAuthPath ||=
+          projected.observation === 'Unrelated'
+      }),
+    )
   }
 
   async evaluatePendingSaveEvidence(): Promise<void> {
@@ -584,51 +626,66 @@ class LoginSaveInteraction {
         ),
       )
       evidence.elapsedMs = 0
-      const message: Parameters<
-        typeof authenticationRuntimeTransport.sendLoginSaveActionRuntimeMessage
-      >[0] = {
-        type: WebsiteLoginSaveCommitMessageType.NookWebsiteLoginSaveCommit,
-        payload: {
-          origin: location.origin,
-          offerId: offer.offerId,
-          evidence,
-        },
-      }
-      void authenticationRuntimeTransport
-        .sendLoginSaveActionRuntimeMessage(message)
-        .then((delivery) => {
-          if (
-            delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
-            delivery.response.kind !== 'completed'
-          ) {
-            description.textContent = workflowUi.translatedMessage(
-              BROWSER_MESSAGE_KEYS.WidgetSaveLoginFailed,
-            )
-            saveButton.disabled = false
-            return
+      Effect.runFork(
+        Effect.tryPromise(async () => {
+          await this.prepareOutcomeNavigationPath(evidence)
+          const message: Parameters<
+            typeof authenticationRuntimeTransport.sendLoginSaveActionRuntimeMessage
+          >[0] = {
+            type: WebsiteLoginSaveCommitMessageType.NookWebsiteLoginSaveCommit,
+            payload: {
+              origin: location.origin,
+              offerId: offer.offerId,
+              evidence,
+            },
           }
-          title.textContent = workflowUi.translatedMessage(
-            BROWSER_MESSAGE_KEYS.WidgetSaveLoginSavedTitle,
-          )
-          title.setAttribute('data-testid', 'nook-auth-gate-save-saved')
-          description.textContent = workflowUi.translatedMessage(
-            BROWSER_MESSAGE_KEYS.WidgetSaveLoginSavedDescription,
-          )
-          saveButton.hidden = true
-          notNowButton.hidden = true
-          saveOfferState.clearActiveOffer()
-          // Hold confirmation through the dismiss window so formless success
-          // pages cannot scan-away "Login saved" before the user sees it.
-          saveOfferState.confirmationActive = true
-          window.setTimeout(() => {
-            widgetState.dismissed = false
-            workflowUi.removeWidget()
-            scanState.schedule()
-          }, 1200)
-        })
-        .finally(() => {
-          widgetState.busy = false
-        })
+          await authenticationRuntimeTransport
+            .sendLoginSaveActionRuntimeMessage(message)
+            .then((delivery) => {
+              if (
+                delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
+                delivery.response.kind !== 'completed'
+              ) {
+                description.textContent = workflowUi.translatedMessage(
+                  BROWSER_MESSAGE_KEYS.WidgetSaveLoginFailed,
+                )
+                saveButton.disabled = false
+                return
+              }
+              title.textContent = workflowUi.translatedMessage(
+                BROWSER_MESSAGE_KEYS.WidgetSaveLoginSavedTitle,
+              )
+              title.setAttribute('data-testid', 'nook-auth-gate-save-saved')
+              description.textContent = workflowUi.translatedMessage(
+                BROWSER_MESSAGE_KEYS.WidgetSaveLoginSavedDescription,
+              )
+              saveButton.hidden = true
+              notNowButton.hidden = true
+              saveOfferState.clearActiveOffer()
+              // Hold confirmation through the dismiss window so formless success
+              // pages cannot scan-away "Login saved" before the user sees it.
+              saveOfferState.confirmationActive = true
+              window.setTimeout(() => {
+                widgetState.dismissed = false
+                workflowUi.removeWidget()
+                scanState.schedule()
+              }, 1200)
+            })
+            .finally(() => {
+              widgetState.busy = false
+            })
+        }).pipe(
+          Effect.catchAll(() =>
+            Effect.sync(() => {
+              description.textContent = workflowUi.translatedMessage(
+                BROWSER_MESSAGE_KEYS.WidgetSaveLoginFailed,
+              )
+              saveButton.disabled = false
+              widgetState.busy = false
+            }),
+          ),
+        ),
+      )
     })
 
     const notNowButton = document.createElement('button')

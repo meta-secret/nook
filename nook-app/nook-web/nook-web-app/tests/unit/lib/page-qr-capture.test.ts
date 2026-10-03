@@ -1,8 +1,25 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { pageQrCapture } from '../../../../nook-web-extension/src/lib/page-qr-capture'
 import { classify_authentication_authenticator_setup_batch } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm'
-import type { CompanionWasmRuntimeMessage } from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
+import type {
+  CompanionWasmRuntimeMessage,
+  CompanionWasmAuthenticatorSetupResponse,
+} from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 import { CompanionWasmSessionMessageType } from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
+
+const rejectedSetupMetadataResults = [
+  'absent',
+  {},
+  { authenticatorSetupObservation: 'unsupported' },
+]
+type SetupMetadataRuntimeResponse =
+  | {
+      readonly ok: true
+      readonly result:
+        | CompanionWasmAuthenticatorSetupResponse
+        | (typeof rejectedSetupMetadataResults)[number]
+    }
+  | { readonly ok: false }
 
 beforeEach(() => {
   vi.stubGlobal('chrome', {
@@ -14,7 +31,7 @@ beforeEach(() => {
             type: CompanionWasmSessionMessageType.AuthenticationAuthenticatorSetupObservation
           }
         >,
-        callback: (response: object) => void,
+        callback: (response: SetupMetadataRuntimeResponse) => void,
       ) {
         expect(message.type).toBe(
           CompanionWasmSessionMessageType.AuthenticationAuthenticatorSetupObservation,
@@ -74,7 +91,7 @@ type SetupMetadataRuntimeRequest = Extract<
 class DeferredSetupObservationFixture {
   private readonly requests: Array<{
     readonly message: SetupMetadataRuntimeRequest
-    readonly callback: (response: object) => void
+    readonly callback: (response: SetupMetadataRuntimeResponse) => void
   }> = []
 
   install(): void {
@@ -82,7 +99,7 @@ class DeferredSetupObservationFixture {
       runtime: {
         sendMessage: (
           message: SetupMetadataRuntimeRequest,
-          callback: (response: object) => void,
+          callback: (response: SetupMetadataRuntimeResponse) => void,
         ): void => {
           const request: (typeof this.requests)[number] = { message, callback }
           this.requests.push(request)
@@ -251,7 +268,7 @@ describe('page QR otpauth capture', () => {
       runtime: {
         sendMessage(
           _message: CompanionWasmRuntimeMessage,
-          callback: (response: object) => void,
+          callback: (response: SetupMetadataRuntimeResponse) => void,
         ) {
           callback({ ok: false })
         },
@@ -263,16 +280,12 @@ describe('page QR otpauth capture', () => {
 
   test('requires the typed setup observation field in a delivered runtime envelope', async () => {
     const fixture = new PageQrObservationFixture('<section><img/></section>')
-    for (const result of [
-      'absent',
-      {},
-      { authenticatorSetupObservation: 'unsupported' },
-    ]) {
+    for (const result of rejectedSetupMetadataResults) {
       vi.stubGlobal('chrome', {
         runtime: {
           sendMessage(
             _message: CompanionWasmRuntimeMessage,
-            callback: (response: object) => void,
+            callback: (response: SetupMetadataRuntimeResponse) => void,
           ) {
             callback({ ok: true, result })
           },

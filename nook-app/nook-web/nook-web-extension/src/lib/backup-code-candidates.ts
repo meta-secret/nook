@@ -1,10 +1,14 @@
 /* eslint-disable nook-typed-api/no-raw-object-arguments -- Candidate observations are assembled into a Rust-generated request at this adapter boundary. */
 import {
   authentication_recovery_copy_evidence,
-  extract_backup_code_candidates,
   type AuthenticationRecoveryCopyEvidence,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import { CompanionWasmSessionMessageType } from '../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
+import {
+  CompanionWasmSessionMessageType,
+  CompanionWasmBackupCodeExtractionDecoder,
+  type CompanionWasmRuntimeMessage,
+} from '../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
+import { Effect, Schema } from 'effect'
 import {
   CompanionWasmRuntimeDeliveryKind,
   sendCompanionWasmRuntimeMessage,
@@ -104,11 +108,32 @@ class RecoveryCopyObservation {
     return this.currentEvidence().hint === 'present'
   }
 
-  extractDocumentBackupCodeCandidates(sourceText?: string): string[] {
-    const text = ((v) => (v ? v : ''))(
-      ((...[v = this.browser.document.body?.innerText]) => v)(sourceText),
+  extractDocumentBackupCodeCandidates(sourceText?: string): Promise<string[]> {
+    const browser = this.browser
+    const request: CompanionWasmRuntimeMessage = {
+      type: CompanionWasmSessionMessageType.ExtractAuthenticationBackupCodeCandidates,
+      origin: this.browser.location.origin,
+      payload: {
+        text: ((...[text = this.recoveryTexts().join('\n')]) => text)(
+          sourceText,
+        ),
+      },
+    }
+    return Effect.runPromise(
+      Effect.gen(function* () {
+        const delivery = yield* Effect.tryPromise(() =>
+          sendCompanionWasmRuntimeMessage(browser, request),
+        )
+        if (delivery.kind !== CompanionWasmRuntimeDeliveryKind.Delivered)
+          return yield* Effect.fail(
+            new Error('Backup code extraction runtime unavailable.'),
+          )
+        const result = yield* Schema.decodeUnknown(
+          CompanionWasmBackupCodeExtractionDecoder,
+        )(delivery.response)
+        return result.codes
+      }),
     )
-    return extract_backup_code_candidates(text)
   }
 
   clearBackupCodeCandidates(codes: DocumentBackupCodeCandidates): void {

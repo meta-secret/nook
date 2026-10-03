@@ -20,6 +20,7 @@ import { handleCompanionWasmMessage } from '../src/offscreen/session-companion-w
 import {
   CompanionWasmSessionMessageType,
   CompanionWasmAuthenticatorSetupResponseDecoder,
+  CompanionWasmBackupCodeExtractionDecoder,
   type CompanionWasmSessionMessage,
 } from '../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 import { Effect, Schema } from 'effect'
@@ -213,6 +214,45 @@ class SessionDocumentFixture {
 }
 
 describe('extension session document ownership', () => {
+  test('delivers the actual bounded backup projection through object admission and the content decoder', async () => {
+    const fixture = new SessionDocumentFixture()
+    fixture.inheritDocument()
+    const document = (await fixture.owner.open()).match(
+      (opened) => opened,
+      () => {
+        throw new Error('Expected inherited session transport')
+      },
+    )
+    const message: CompanionWasmSessionMessage = {
+      type: CompanionWasmSessionMessageType.ExtractAuthenticationBackupCodeCandidates,
+      payload: { text: 'A1B2-C3D4-E5F6\nG7H8-I9J0-K1L2' },
+    }
+    const request: ExtensionSessionTransportDelivery = { message }
+    const delivery = document.sendMessage(request)
+    const result = await handleCompanionWasmMessage(message)
+    result.match(
+      (response) => expect(fixture.respond(response)).toEqual(ok()),
+      () => {
+        throw new Error('Expected Rust backup extraction response')
+      },
+    )
+    const admitted = (await delivery).match(
+      (response) => response,
+      () => {
+        throw new Error('Expected admitted backup extraction envelope')
+      },
+    )
+    const decoded = await Effect.runPromise(
+      Schema.decodeUnknown(CompanionWasmBackupCodeExtractionDecoder)(admitted),
+    )
+    expect(decoded.codes).toEqual(['A1B2-C3D4-E5F6', 'G7H8-I9J0-K1L2'])
+    const oversized: CompanionWasmSessionMessage = {
+      type: CompanionWasmSessionMessageType.ExtractAuthenticationBackupCodeCandidates,
+      payload: { text: 'x'.repeat(65_537) },
+    }
+    expect((await handleCompanionWasmMessage(oversized)).isErr()).toBe(true)
+  })
+
   test('admits the actual setup adapter object through the owned session transport', async () => {
     const fixture = new SessionDocumentFixture()
     fixture.inheritDocument()

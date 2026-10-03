@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test'
+import { Schema } from 'effect'
+import { handleCompanionWasmMessage } from '../src/offscreen/session-companion-wasm-operations'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import {
   AuthenticationOutcomeVerdict,
@@ -15,12 +17,12 @@ import {
   GeneratedPasswordResponseKind,
   LoginPickerOpenResponseKind,
   WebsiteLoginOptionsKind,
-  decode_authentication_workflow_runtime_response,
-  decode_login_picker_open_response,
-  decode_website_login_options,
-  decode_website_login_save_pending_response,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import { CompanionWasmSessionMessageType } from '../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
+import {
+  CompanionWasmSessionMessageType,
+  CompanionWasmContentResponseKind,
+  type CompanionWasmSessionMessage,
+} from '../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 import {
   RuntimeMessageDeliveryKind,
   authenticationRuntimeTransport,
@@ -87,16 +89,17 @@ function installRuntimeMock(mock: RuntimeMock): void {
         typeof message.payload === 'object' &&
         'response' in message.payload
       ) {
-        try {
-          callback({
-            ok: true,
-            result: decode_authentication_workflow_runtime_response(
-              message.payload.response,
-            ),
-          })
-        } catch {
-          callback({ ok: false })
+        const request: CompanionWasmSessionMessage = {
+          type: CompanionWasmSessionMessageType.DecodeAuthenticationWorkflowRuntimeResponse,
+          origin: 'https://example.test',
+          payload: { response: message.payload.response },
         }
+        void handleCompanionWasmMessage(request).then((result) =>
+          result.match(
+            (value) => callback({ ok: true, result: value }),
+            () => callback({ ok: false }),
+          ),
+        )
         return
       }
       if (
@@ -111,27 +114,20 @@ function installRuntimeMock(mock: RuntimeMock): void {
         'kind' in message.payload &&
         'response' in message.payload
       ) {
-        try {
-          const result = (() => {
-            switch (message.payload.kind) {
-              case 'login-options':
-                return decode_website_login_options(message.payload.response)
-              case 'login-picker-open':
-                return decode_login_picker_open_response(
-                  message.payload.response,
-                )
-              case 'login-save-pending':
-                return decode_website_login_save_pending_response(
-                  message.payload.response,
-                )
-              default:
-                throw new TypeError('unsupported decoder')
-            }
-          })()
-          callback({ ok: true, result })
-        } catch {
-          callback({ ok: false })
+        const kind = Schema.decodeUnknownSync(
+          Schema.Enums(CompanionWasmContentResponseKind),
+        )(message.payload.kind)
+        const request: CompanionWasmSessionMessage = {
+          type: CompanionWasmSessionMessageType.DecodeContentRuntimeResponse,
+          origin: 'https://example.test',
+          payload: { kind, response: message.payload.response },
         }
+        void handleCompanionWasmMessage(request).then((result) =>
+          result.match(
+            (value) => callback({ ok: true, result: value }),
+            () => callback({ ok: false }),
+          ),
+        )
         return
       }
       callback(response)
