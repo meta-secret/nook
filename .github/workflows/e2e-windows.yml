@@ -146,5 +146,5 @@ jobs:
       - name: Record tested source
         if: always()
         run: |
-          "Windows Edge source: ${{ needs.source.outputs.sha }}" >> $env:GITHUB_STEP_SUMMARY
-          "Suite: $env:E2E_SUITE; spec filter: $env:E2E_SPEC" >> $env:GITHUB_STEP_SUMMARY
+          Write-Output "Windows Edge source: ${{ needs.source.outputs.sha }}" >> $env:GITHUB_STEP_SUMMARY
+          Write-Output "Suite: $env:E2E_SUITE; spec filter: $env:E2E_SPEC" >> $env:GITHUB_STEP_SUMMARY
