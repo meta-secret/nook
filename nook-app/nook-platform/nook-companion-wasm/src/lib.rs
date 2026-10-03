@@ -23,6 +23,8 @@ use nook_companion_core::BackupCodeCandidatePresence;
 use nook_companion_core::BackupCodePageText;
 use wasm_bindgen::prelude::wasm_bindgen;
 
+mod authentication_action_projection;
+pub use authentication_action_projection::*;
 mod account_picker_authorization;
 mod authentication_control_actuation;
 mod authentication_observation_binding;
