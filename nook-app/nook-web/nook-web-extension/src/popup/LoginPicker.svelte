@@ -41,9 +41,6 @@
 >
   <header class="login-picker-header">
     <h1>{picker.translate(I18N_KEYS.ExtensionLoginPickerTitle)}</h1>
-    <p class="description">
-      {picker.translate(I18N_KEYS.ExtensionLoginPickerDescription)}
-    </p>
     {#if picker.destinationOrigin}
       <p class="destination-origin" data-testid="login-destination">
         {picker.destinationLabel(picker.destinationOrigin)}
