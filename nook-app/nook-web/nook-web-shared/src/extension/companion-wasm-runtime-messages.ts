@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-restricted-types, no-restricted-syntax -- This dedicated untrusted-input decoder narrows browser transport values immediately. */
+import { Schema } from "effect";
 import type {
   AuthenticationAuthenticatorSetupBatch,
   AuthenticationAuthenticatorSetupObservation,
@@ -210,8 +211,17 @@ export type CompanionWasmSessionMessage =
       };
     };
 
+export type CompanionWasmAuthenticatorSetupResponse = {
+  readonly authenticatorSetupObservation: AuthenticationAuthenticatorSetupObservation;
+};
+
+export const CompanionWasmAuthenticatorSetupResponseDecoder: Schema.Schema<CompanionWasmAuthenticatorSetupResponse> =
+  Schema.Struct({
+    authenticatorSetupObservation: Schema.Literal("present", "absent"),
+  });
+
 export type CompanionWasmSessionResponse =
-  | AuthenticationAuthenticatorSetupObservation
+  | CompanionWasmAuthenticatorSetupResponse
   | AuthenticationPilotPresentationCapability
   | PasswordWorkflowActivityPresentation
   | AuthenticationObservationBindingToken

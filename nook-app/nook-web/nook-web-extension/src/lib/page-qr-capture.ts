@@ -2,15 +2,15 @@ import {
   type AuthenticationAuthenticatorSetupBatch,
   type AuthenticationAuthenticatorSetupObservation,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import { CompanionWasmSessionMessageType } from '../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
+import {
+  CompanionWasmSessionMessageType,
+  CompanionWasmAuthenticatorSetupResponseDecoder,
+} from '../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 import {
   CompanionWasmRuntimeDeliveryKind,
   sendCompanionWasmRuntimeMessage,
 } from '../../../nook-web-shared/src/extension/companion-wasm-runtime-transport'
 import { Effect, Schema } from 'effect'
-
-const authenticatorSetupObservationResponse: Schema.Schema<AuthenticationAuthenticatorSetupObservation> =
-  Schema.Literal('present', 'absent')
 
 enum SetupObservationPreparationKind {
   Unprepared = 'unprepared',
@@ -184,14 +184,15 @@ class PageQrCapture {
               new Error('Authenticator setup runtime unavailable.'),
             )
           case CompanionWasmRuntimeDeliveryKind.Delivered: {
-            const observation = yield* Schema.decodeUnknown(
-              authenticatorSetupObservationResponse,
-            )(delivery.response).pipe(
-              Effect.mapError(
-                () =>
-                  new Error('Authenticator setup runtime response rejected.'),
-              ),
-            )
+            const { authenticatorSetupObservation: observation } =
+              yield* Schema.decodeUnknown(
+                CompanionWasmAuthenticatorSetupResponseDecoder,
+              )(delivery.response).pipe(
+                Effect.mapError(
+                  () =>
+                    new Error('Authenticator setup runtime response rejected.'),
+                ),
+              )
             owner.setupObservation = {
               kind: SetupObservationPreparationKind.Prepared,
               metadataKey: JSON.stringify(metadata),

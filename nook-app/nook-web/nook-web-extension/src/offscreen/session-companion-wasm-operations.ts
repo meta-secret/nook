@@ -157,9 +157,10 @@ export async function handleCompanionWasmMessage(
     await companionWasmReady
     switch (message.type) {
       case CompanionWasmSessionMessageType.AuthenticationAuthenticatorSetupObservation:
-        return ok(
-          classify_authentication_authenticator_setup_batch(message.payload),
-        )
+        return ok({
+          authenticatorSetupObservation:
+            classify_authentication_authenticator_setup_batch(message.payload),
+        })
       case CompanionWasmSessionMessageType.AuthenticationWorkflowPilotPresentationCapability:
         return ok(
           authentication_workflow_pilot_presentation_capability(
