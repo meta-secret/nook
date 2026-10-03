@@ -51,9 +51,9 @@ describe('Microsoft consumer authorization username-first shell', () => {
       submittedControlIdentity: 'Next',
     })
     expect(document.querySelectorAll('input[type="password"]')).toHaveLength(0)
-    expect(document.querySelector<HTMLInputElement>('#usernameEntry')?.value).toBe(
-      request.credentials.username,
-    )
+    expect(
+      document.querySelector<HTMLInputElement>('#usernameEntry')?.value,
+    ).toBe(request.credentials.username)
   })
 
   test('ignores an unrelated single email field on the same authority', () => {
@@ -81,7 +81,8 @@ describe('Microsoft consumer authorization username-first shell', () => {
       submittedControlIdentity: '',
     })
     expect(
-      document.querySelector<HTMLInputElement>('[name="newsletter-email"]')?.value,
+      document.querySelector<HTMLInputElement>('[name="newsletter-email"]')
+        ?.value,
     ).toBe('')
   })
 })
