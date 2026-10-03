@@ -30,6 +30,13 @@ export async function loadPilotMessages(): Promise<
 }
 
 export async function injectPilotAutofill(page: Page): Promise<void> {
+  page.on('pageerror', (error) =>
+    console.error('Pilot demo page error', error.message),
+  )
+  page.on('console', (message) => {
+    if (message.type() === 'error')
+      console.error('Pilot demo browser error', message.text())
+  })
   const companionWasmResponse: Parameters<Route['fulfill']>[0] = {
     path: path.join(extensionDist, 'content/nook_companion_wasm_bg.wasm'),
     contentType: 'application/wasm',
