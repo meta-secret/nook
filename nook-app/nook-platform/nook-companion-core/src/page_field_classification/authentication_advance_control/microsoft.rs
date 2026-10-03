@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use super::{
     AuthenticationAdvanceControlObservation, AuthenticationUsernameEvidence,
     PageControlActionability, PageControlOwnership, PageControlSemantics,
@@ -14,6 +16,22 @@ struct MicrosoftObservationByteLimit(usize);
 impl MicrosoftObservationByteLimit {
     const DESTINATION: Self = Self(4096);
     const MACHINE_IDENTITY: Self = Self(1024);
+
+    fn classify(&self, text: &str) -> MicrosoftTextBound {
+        match text.len().cmp(&self.0) {
+            Ordering::Less | Ordering::Equal => MicrosoftTextBound::WithinLimit,
+            Ordering::Greater => MicrosoftTextBound::ExceedsLimit,
+        }
+    }
+}
+
+enum MicrosoftTextBound {
+    WithinLimit,
+    ExceedsLimit,
+}
+enum MicrosoftIdentifierSubmitShape {
+    IdentifierSubmit,
+    Unrelated,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -71,66 +89,79 @@ impl AuthenticationAdvanceControlObservation {
         ) else {
             return MicrosoftAuthorizationAdmission::Unrelated;
         };
-        if matches!(
+        let label = AuthenticationControlText::new(&self.label).expand_identity_text();
+        match (
             destination.microsoft_authorization_destination(),
-            MicrosoftConsumerLoginDestination::IdentifierEntry
-        ) && self.destination_identity.len() <= MicrosoftObservationByteLimit::DESTINATION.0
-            && self.machine_identity.len() <= MicrosoftObservationByteLimit::MACHINE_IDENTITY.0
-            && matches!(
-                self.submission_destination_source,
-                PageControlSubmissionDestinationSource::Omitted
-            )
-            && AuthenticationControlText::new(&self.label).expand_identity_text() == "next"
-            && self.has_microsoft_identifier_submit_shape()
-        {
-            MicrosoftAuthorizationAdmission::IdentifierAdvance
-        } else {
-            MicrosoftAuthorizationAdmission::Unrelated
+            MicrosoftObservationByteLimit::DESTINATION.classify(&self.destination_identity),
+            MicrosoftObservationByteLimit::MACHINE_IDENTITY.classify(&self.machine_identity),
+            self.submission_destination_source,
+            label.as_str(),
+            self.microsoft_identifier_submit_shape(),
+        ) {
+            (
+                MicrosoftConsumerLoginDestination::IdentifierEntry,
+                MicrosoftTextBound::WithinLimit,
+                MicrosoftTextBound::WithinLimit,
+                PageControlSubmissionDestinationSource::Omitted,
+                "next",
+                MicrosoftIdentifierSubmitShape::IdentifierSubmit,
+            ) => MicrosoftAuthorizationAdmission::IdentifierAdvance,
+            _ => MicrosoftAuthorizationAdmission::Unrelated,
         }
     }
 
-    fn has_microsoft_identifier_submit_shape(&self) -> bool {
-        matches!(self.actionability, PageControlActionability::Actionable)
-            && matches!(
-                self.ownership,
-                PageControlOwnership::OwnedForm | PageControlOwnership::LocallyScoped
-            )
-            && matches!(self.semantics, PageControlSemantics::SemanticSubmit)
-            && matches!(self.submission_method, PageControlSubmissionMethod::Post)
-            && matches!(
-                self.authentication_username,
-                AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
-            )
-            && self.password_field_count.is_zero()
-            && self.new_password_field_count.is_zero()
-            && self.one_time_code_field_count.is_zero()
-            && self.semantic_submit_control_count.is_single()
+    fn microsoft_identifier_submit_shape(&self) -> MicrosoftIdentifierSubmitShape {
+        match (
+            self.actionability,
+            self.ownership,
+            self.semantics,
+            self.submission_method,
+            self.authentication_username,
+            self.password_field_count.is_zero(),
+            self.new_password_field_count.is_zero(),
+            self.one_time_code_field_count.is_zero(),
+            self.semantic_submit_control_count.is_single(),
+        ) {
+            (
+                PageControlActionability::Actionable,
+                PageControlOwnership::OwnedForm | PageControlOwnership::LocallyScoped,
+                PageControlSemantics::SemanticSubmit,
+                PageControlSubmissionMethod::Post,
+                AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit,
+                true,
+                true,
+                true,
+                true,
+            ) => MicrosoftIdentifierSubmitShape::IdentifierSubmit,
+            _ => MicrosoftIdentifierSubmitShape::Unrelated,
+        }
     }
 
     pub(crate) fn has_microsoft_consumer_identifier_context(&self) -> bool {
-        self.microsoft_authorization_admission()
-            == MicrosoftAuthorizationAdmission::IdentifierAdvance
-            || self.form_identity.is_empty()
-                && CanonicalControlDestination::canonicalize_control_destination(
-                    ControlDestinationEvidence {
-                        source_origin: &self.source_origin,
-                        destination_identity: &self.destination_identity,
-                    },
-                )
-                .is_ok_and(|destination| {
-                    destination.is_microsoft_consumer_login_root
-                        || matches!(
-                            destination.microsoft_consumer_login_destination(),
-                            MicrosoftConsumerLoginDestination::IdentifierEntry
-                        )
-                })
+        match self.microsoft_authorization_admission() {
+            MicrosoftAuthorizationAdmission::IdentifierAdvance => return true,
+            MicrosoftAuthorizationAdmission::Unrelated => {}
+        }
+        self.form_identity.is_empty()
+            && CanonicalControlDestination::canonicalize_control_destination(
+                ControlDestinationEvidence {
+                    source_origin: &self.source_origin,
+                    destination_identity: &self.destination_identity,
+                },
+            )
+            .is_ok_and(|destination| {
+                destination.is_microsoft_consumer_login_root
+                    || matches!(
+                        destination.microsoft_consumer_login_destination(),
+                        MicrosoftConsumerLoginDestination::IdentifierEntry
+                    )
+            })
     }
 
     pub(crate) fn is_microsoft_consumer_root_identifier_advance(&self) -> bool {
-        if self.microsoft_authorization_admission()
-            == MicrosoftAuthorizationAdmission::IdentifierAdvance
-        {
-            return true;
+        match self.microsoft_authorization_admission() {
+            MicrosoftAuthorizationAdmission::IdentifierAdvance => return true,
+            MicrosoftAuthorizationAdmission::Unrelated => {}
         }
         let Ok(destination) = CanonicalControlDestination::canonicalize_control_destination(
             ControlDestinationEvidence {

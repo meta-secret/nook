@@ -22,6 +22,12 @@ pub struct CanonicalControlDestination {
     authentication_policy_destination: AuthenticationPolicyDestination,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum MicrosoftAuthorizationRoute {
+    Verified(String),
+    Unrelated,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AuthenticationPolicyDestination {
     Default,
@@ -47,7 +53,7 @@ pub struct ControlDestinationEvidence<'a> {
 pub struct InvalidControlDestination;
 
 impl CanonicalControlDestination {
-    fn microsoft_authorization_route(destination: &Url) -> Option<String> {
+    fn microsoft_authorization_route(destination: &Url) -> MicrosoftAuthorizationRoute {
         match (
             destination.scheme(),
             destination.host_str(),
@@ -61,8 +67,10 @@ impl CanonicalControlDestination {
                 Some(443),
                 "/oauth20_authorize.srf",
                 None | Some(""),
-            ) => Some(Self::microsoft_authorization_policy_route(destination)),
-            _ => None,
+            ) => MicrosoftAuthorizationRoute::Verified(Self::microsoft_authorization_policy_route(
+                destination,
+            )),
+            _ => MicrosoftAuthorizationRoute::Unrelated,
         }
     }
 
@@ -401,11 +409,11 @@ impl CanonicalControlDestination {
             .unwrap_or_else(|| route_identity.clone());
         let authentication_policy_destination =
             match Self::microsoft_authorization_route(&destination) {
-                Some(route) => {
+                MicrosoftAuthorizationRoute::Verified(route) => {
                     authentication_policy_route_identity = route;
                     AuthenticationPolicyDestination::MicrosoftConsumerAuthorization
                 }
-                None => match tesla_account_authorization_route {
+                MicrosoftAuthorizationRoute::Unrelated => match tesla_account_authorization_route {
                     Some(_) => AuthenticationPolicyDestination::TeslaAccountAuthorization,
                     None => AuthenticationPolicyDestination::Default,
                 },
