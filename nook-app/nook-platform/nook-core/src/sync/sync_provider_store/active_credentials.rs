@@ -15,7 +15,6 @@ use crate::{DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, StorageProvider
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "providerType", rename_all = "camelCase")]
-
 pub enum ActiveProviderLoginSetup {
     Inactive,
     Active(StorageProviderType),
@@ -23,7 +22,6 @@ pub enum ActiveProviderLoginSetup {
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-
 pub struct ActiveProviderCredentialsRequest {
     pub local_vault_present: bool,
     pub login_setup: ActiveProviderLoginSetup,
@@ -37,7 +35,6 @@ pub struct ActiveProviderCredentialsRequest {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-
 pub struct ActiveProviderCredentialDraft {
     pub storage_mode: StorageProviderType,
     pub github_pat: String,
@@ -60,7 +57,6 @@ impl ActiveProviderCredentialDraft {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "draft", rename_all = "camelCase")]
-
 pub enum ActiveProviderCredentialsProjection {
     Unchanged,
     Apply(Box<ActiveProviderCredentialDraft>),

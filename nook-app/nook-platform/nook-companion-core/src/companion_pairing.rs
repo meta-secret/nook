@@ -35,7 +35,6 @@ pub enum CompanionPairingError {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-
 pub enum CompanionPairingFailure {
     InvalidValue,
     RequestExpired,
@@ -84,7 +83,6 @@ impl CompanionPairingEpochMilliseconds {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(transparent)]
-
 pub struct CompanionPairingProviderManifestDigest(String);
 
 impl CompanionPairingProviderManifestDigest {
@@ -107,7 +105,6 @@ impl CompanionPairingProviderManifestDigest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-
 pub struct CompanionPairingInstallation {
     pub extension_runtime_id: String,
     pub app_id: String,
@@ -136,7 +133,6 @@ impl CompanionPairingInstallation {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-
 pub struct CompanionPairingRequest {
     pub request_id: String,
     pub nonce: String,
@@ -149,7 +145,6 @@ pub struct CompanionPairingRequest {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-
 pub struct CompanionPairingIssue {
     pub request_id: String,
     pub nonce: String,
@@ -255,7 +250,6 @@ impl CompanionPairingRequest {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-
 pub struct CompanionPairingRequestObservation {
     pub request: CompanionPairingRequest,
     pub observed_at: CompanionPairingEpochMilliseconds,
@@ -269,7 +263,6 @@ impl CompanionPairingRequestObservation {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-
 pub struct CompanionPairingWebsiteAuthorization {
     pub request: CompanionPairingRequest,
     pub observed_at: CompanionPairingEpochMilliseconds,
@@ -294,7 +287,6 @@ impl CompanionPairingWebsiteAuthorization {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-
 pub struct CompanionPairingApproval {
     pub request: CompanionPairingRequest,
     pub vault_store_id: StoreId,
@@ -305,7 +297,6 @@ pub struct CompanionPairingApproval {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
-
 pub enum CompanionPairingWebsiteAuthorizationOutcome {
     Approved {
         approval: Box<CompanionPairingApproval>,
@@ -345,7 +336,6 @@ impl CompanionPairingApproval {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-
 pub struct CompanionPairingApprovalAttempt {
     pub approval: CompanionPairingApproval,
     pub observed_at: CompanionPairingEpochMilliseconds,

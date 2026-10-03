@@ -71,7 +71,6 @@ pub struct AuthenticationWorkflowRejectedResponseWire {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(untagged, rename_all_fields = "camelCase")]
-
 pub enum AuthenticationWorkflowSnapshotResponseWire {
     Matched(AuthenticationWorkflowMatchedResponseWire),
     Rejected(AuthenticationWorkflowRejectedResponseWire),
@@ -80,7 +79,6 @@ pub enum AuthenticationWorkflowSnapshotResponseWire {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
 #[serde(untagged)]
-
 pub enum AuthenticationWorkflowSnapshotResponse {
     Matched {
         kind: AuthenticationWorkflowSnapshotResponseKind,
@@ -105,7 +103,6 @@ pub enum AuthenticationWorkflowSnapshotResponseKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-
 pub enum WebsiteLoginMatchAvailabilityKind {
     Ready,
     Locked,
@@ -127,7 +124,6 @@ pub struct WebsiteLoginMatchAvailabilityWithoutCountWire {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(untagged)]
-
 pub enum WebsiteLoginMatchAvailabilityWire {
     WithCount(WebsiteLoginMatchAvailabilityWithCountWire),
     WithoutCount(WebsiteLoginMatchAvailabilityWithoutCountWire),
@@ -135,7 +131,6 @@ pub enum WebsiteLoginMatchAvailabilityWire {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Tsify)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
-
 pub enum WebsiteLoginMatchAvailability {
     Ready {
         count: AuthenticationSavedLoginAccountCount,
@@ -146,7 +141,6 @@ pub enum WebsiteLoginMatchAvailability {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-
 pub struct AuthenticationWorkflowRuntimeResponseWire {
     workflow: AuthenticationWorkflowSnapshotResponseWire,
     login_matches: WebsiteLoginMatchAvailabilityWire,
@@ -154,7 +148,6 @@ pub struct AuthenticationWorkflowRuntimeResponseWire {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-
 pub struct AuthenticationWorkflowRuntimeResponse {
     pub workflow: AuthenticationWorkflowSnapshotResponse,
     pub login_matches: WebsiteLoginMatchAvailability,
@@ -162,7 +155,6 @@ pub struct AuthenticationWorkflowRuntimeResponse {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(tag = "state", rename_all = "camelCase")]
-
 pub enum AuthenticationWorkflowSelectedFactsWire {
     Selected {
         facts: Box<AuthenticationPageObservationFacts>,
@@ -172,7 +164,6 @@ pub enum AuthenticationWorkflowSelectedFactsWire {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
 #[serde(tag = "state", rename_all = "camelCase")]
-
 pub enum AuthenticationWorkflowSelectedFacts {
     Selected {
         facts: Box<AuthenticationPageObservationFacts>,
@@ -182,7 +173,6 @@ pub enum AuthenticationWorkflowSelectedFacts {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-
 pub struct AuthenticationWorkflowRoutingResponseWire {
     workflow: AuthenticationWorkflowSnapshotResponseWire,
     login_matches: WebsiteLoginMatchAvailabilityWire,
@@ -191,7 +181,6 @@ pub struct AuthenticationWorkflowRoutingResponseWire {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-
 pub struct AuthenticationWorkflowRoutingResponse {
     pub workflow: AuthenticationWorkflowSnapshotResponse,
     pub login_matches: WebsiteLoginMatchAvailability,
@@ -693,7 +682,6 @@ impl WebsiteLoginMatchAvailability {
 }
 #[derive(Debug, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-
 pub struct SavedLoginActionPresentationRequest {
     pub action: AuthenticationWorkflowAction,
     pub login_matches: WebsiteLoginMatchAvailabilityWire,

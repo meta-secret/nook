@@ -1,4 +1,6 @@
+use nook_companion_core::PairingVaultId;
 use nook_companion_core::{ExtensionGrantAuthority, ExtensionGrantAuthorityRequest};
+use tsify::Tsify;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 #[wasm_bindgen]
@@ -15,7 +17,7 @@ impl NookPairingVaultId {
 impl NookPairingVaultId {
     #[wasm_bindgen(constructor)]
     pub fn new(value: &str) -> Result<Self, JsError> {
-        nook_companion_core::PairingVaultId::parse(value)
+        PairingVaultId::parse(value)
             .map(Self)
             .map_err(|error| JsError::new(&error.to_string()))
     }
@@ -32,18 +34,17 @@ impl NookPairingVaultId {
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn decode_extension_grant_authority_response(
-    response: tsify::Ts<nook_companion_core::GrantAuthorityResponseJson>,
+    response: &tsify::Ts<nook_companion_core::GrantAuthorityResponseJson>,
     requested: &NookPairingVaultId,
 ) -> Result<tsify::Ts<ExtensionGrantAuthority>, wasm_bindgen::JsError> {
     let response = response
         .to_rust()
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
 
     let result = response
         .decode(requested.as_core())
         .map_err(|error| JsError::new(&error.to_string()))?;
-    tsify::Tsify::into_ts(&result)
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
@@ -53,26 +54,32 @@ pub fn decode_extension_grant_authority_response(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn classify_extension_grant_authority(
-    request: tsify::Ts<ExtensionGrantAuthorityRequest>,
+    request: &tsify::Ts<ExtensionGrantAuthorityRequest>,
 ) -> Result<tsify::Ts<ExtensionGrantAuthority>, wasm_bindgen::JsError> {
     let request = request
         .to_rust()
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
     let result = { request.classify() };
-    tsify::Tsify::into_ts(&result)
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
     use super::*;
+    #[cfg(all(test, target_arch = "wasm32"))]
+    #[cfg(all(test, target_arch = "wasm32"))]
+    use nook_companion_core::ExtensionActiveVaultScope;
+    #[cfg(all(test, target_arch = "wasm32"))]
+    #[cfg(all(test, target_arch = "wasm32"))]
+    use nook_companion_core::StoreId;
     use serde::Serialize;
+    use wasm_bindgen::JsError;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
     fn generated_decoder_preserves_missing_active_authority() -> Result<(), wasm_bindgen::JsValue> {
         let result = decode_extension_grant_authority_response(
-            r#"{"kind":"MissingActiveAuthority"}"#.to_owned().into(),
+            &r#"{"kind":"MissingActiveAuthority"}"#.to_owned().into(),
             &NookPairingVaultId::new("store_abcdefghijk")?,
         )?;
         assert_eq!(result, ExtensionGrantAuthority::MissingActiveAuthority);
@@ -93,7 +100,7 @@ mod tests {
         let requested = NookPairingVaultId::new("store_abcdefghijk")?;
         assert!(
             decode_extension_grant_authority_response(
-                r#"{"kind":"Unknown"}"#.to_owned().into(),
+                &r#"{"kind":"Unknown"}"#.to_owned().into(),
                 &requested,
             )
             .is_err()
@@ -104,12 +111,12 @@ mod tests {
     #[wasm_bindgen_test]
     fn generated_classifier_accepts_pairing_id_and_manager_scope() {
         assert_eq!(
-            classify_extension_grant_authority(ExtensionGrantAuthorityRequest {
+            classify_extension_grant_authority(&ExtensionGrantAuthorityRequest {
                 stored_json: "{}".to_owned().into(),
-                vault_store_id: nook_companion_core::StoreId::before_genesis_placeholder(),
-                active_vault: nook_companion_core::ExtensionActiveVaultScope::Active(
+                vault_store_id: StoreId::before_genesis_placeholder(),
+                active_vault: ExtensionActiveVaultScope::Active(
                     nook_companion_core::ActiveExtensionVault {
-                        vault_store_id: nook_companion_core::StoreId::before_genesis_placeholder(),
+                        vault_store_id: StoreId::before_genesis_placeholder(),
                     },
                 ),
             },),
@@ -128,11 +135,11 @@ mod tests {
             },
         })
         .serialize(&serde_wasm_bindgen::Serializer::json_compatible())
-        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
+        .map_err(|error| JsError::new(&error.to_string()))?;
         let request: ExtensionGrantAuthorityRequest = serde_wasm_bindgen::from_value(valid)
-            .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
+            .map_err(|error| JsError::new(&error.to_string()))?;
         assert_eq!(
-            classify_extension_grant_authority(request),
+            classify_extension_grant_authority(&request),
             ExtensionGrantAuthority::MissingActiveAuthority,
         );
 
@@ -142,7 +149,7 @@ mod tests {
             "active_vault": { "kind": "NoActiveVault" },
         })
         .serialize(&serde_wasm_bindgen::Serializer::json_compatible())
-        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
+        .map_err(|error| JsError::new(&error.to_string()))?;
         assert!(
             serde_wasm_bindgen::from_value::<ExtensionGrantAuthorityRequest>(malformed).is_err()
         );

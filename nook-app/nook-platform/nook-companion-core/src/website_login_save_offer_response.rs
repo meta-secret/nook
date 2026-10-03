@@ -3,7 +3,6 @@
     dylint_lib = "nook_domain_api",
     forbid(invalid_unowned_function_suppression)
 )]
-
 //! Typed service-worker response boundary for website login-save offers.
 
 use serde::{Deserialize, Serialize};
@@ -40,7 +39,6 @@ pub struct WebsiteLoginSaveOffer {
     rename_all = "kebab-case",
     rename_all_fields = "camelCase"
 )]
-
 pub enum WebsiteLoginSaveOfferResponse {
     OfferAvailable { offer: WebsiteLoginSaveOffer },
     NotRequired {},
@@ -107,7 +105,6 @@ pub struct WebsiteLoginSavePendingRejected {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Tsify)]
 #[serde(untagged)]
-
 pub enum WebsiteLoginSavePendingResponse {
     Available(WebsiteLoginSavePendingAvailable),
     Rejected(WebsiteLoginSavePendingRejected),
@@ -138,7 +135,6 @@ impl WebsiteLoginSavePendingResponse {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Tsify)]
 #[serde(deny_unknown_fields, tag = "kind", rename_all = "kebab-case")]
-
 pub enum WebsiteLoginSaveActionResponse {
     Completed {},
     Rejected { reason: String },

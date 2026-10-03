@@ -3,6 +3,8 @@ use nook_companion_core::{
     AccountPickerAuthorizationTransition as CoreTransition, CleanupEvidence,
     CleanupTransitionOutcome,
 };
+use tsify::Tsify;
+use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
@@ -17,11 +19,9 @@ pub struct AccountPickerAuthorizationTransition {
 
 #[wasm_bindgen]
 impl AccountPickerAuthorizationTransition {
-    #[must_use]
     pub fn outcome(&self) -> Result<tsify::Ts<CleanupTransitionOutcome>, wasm_bindgen::JsError> {
         let result = { self.inner.outcome() };
-        tsify::Tsify::into_ts(&result)
-            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
+        Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
     }
 
     #[must_use]
@@ -93,23 +93,26 @@ mod tests {
     fn wrapper_returns_the_successor_after_activation_and_rejection() {
         let active = AccountPickerAuthorizationLifecycle::new("opening".to_owned());
         let started = active.begin_cleanup("cleanup".to_owned());
-        assert_eq!(started.outcome(), CleanupTransitionOutcome::Started);
+        assert_eq!(started.inner.outcome(), CleanupTransitionOutcome::Started);
         let cleaning = started.into_lifecycle();
         assert!(!cleaning.is_current("opening"));
         let rejected = cleaning.complete_cleanup("stale", CleanupEvidence::Full);
         assert_eq!(
-            rejected.outcome(),
+            rejected.inner.outcome(),
             CleanupTransitionOutcome::Rejected(CleanupTransitionError::StaleEpoch)
         );
         let cleaning = rejected.into_lifecycle();
         assert_eq!(cleaning.snapshot(), "cleanup");
         let completed = cleaning.complete_cleanup("cleanup", CleanupEvidence::Partial);
-        assert_eq!(completed.outcome(), CleanupTransitionOutcome::Activated);
+        assert_eq!(
+            completed.inner.outcome(),
+            CleanupTransitionOutcome::Activated
+        );
         let active = completed.into_lifecycle();
         assert!(active.is_current("cleanup"));
         let rejected = active.release_cleanup("cleanup");
         assert_eq!(
-            rejected.outcome(),
+            rejected.inner.outcome(),
             CleanupTransitionOutcome::Rejected(CleanupTransitionError::NotCleaning)
         );
         assert!(rejected.into_lifecycle().is_current("cleanup"));
@@ -124,21 +127,24 @@ mod tests {
         assert!(cleaning.is_final_cleanup("cleanup", CleanupEvidence::Partial));
 
         let released = cleaning.release_cleanup("cleanup");
-        assert_eq!(released.outcome(), CleanupTransitionOutcome::Released);
+        assert_eq!(released.inner.outcome(), CleanupTransitionOutcome::Released);
         let cleaning = released.into_lifecycle();
         assert_eq!(cleaning.snapshot(), "cleanup");
         assert!(!cleaning.is_final_cleanup("cleanup", CleanupEvidence::Partial));
         assert!(!cleaning.is_final_cleanup("cleanup", CleanupEvidence::Full));
 
         let restarted = cleaning.begin_cleanup("ignored".to_owned());
-        assert_eq!(restarted.outcome(), CleanupTransitionOutcome::Started);
+        assert_eq!(restarted.inner.outcome(), CleanupTransitionOutcome::Started);
         let cleaning = restarted.into_lifecycle();
         assert_eq!(cleaning.snapshot(), "cleanup");
         assert!(!cleaning.is_final_cleanup("cleanup", CleanupEvidence::Partial));
         assert!(cleaning.is_final_cleanup("cleanup", CleanupEvidence::Full));
 
         let completed = cleaning.complete_cleanup("cleanup", CleanupEvidence::Full);
-        assert_eq!(completed.outcome(), CleanupTransitionOutcome::Activated);
+        assert_eq!(
+            completed.inner.outcome(),
+            CleanupTransitionOutcome::Activated
+        );
         assert!(completed.into_lifecycle().is_current("cleanup"));
     }
 }

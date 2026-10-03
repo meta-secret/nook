@@ -19,12 +19,11 @@ impl AuthenticationBackupCodeText {
 impl TryFrom<String> for AuthenticationBackupCodeText {
     type Error = AuthenticationBackupCodeTextError;
     fn try_from(mut value: String) -> Result<Self, Self::Error> {
-        match value.len() {
-            0..=Self::MAX_BYTES => Ok(Self(value)),
-            _ => {
-                value.zeroize();
-                Err(AuthenticationBackupCodeTextError)
-            }
+        if value.len() <= Self::MAX_BYTES {
+            Ok(Self(value))
+        } else {
+            value.zeroize();
+            Err(AuthenticationBackupCodeTextError)
         }
     }
 }
@@ -82,14 +81,29 @@ mod tests {
             serde_json::from_str(&serde_json::to_string(&request)?)?;
         let result = decoded.extract();
         assert_eq!(result.codes.len(), 64);
-        assert_eq!(result.codes[0].0, "CODE-0000");
+        assert_eq!(
+            result
+                .codes
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("expected first extracted code"))?
+                .0,
+            "CODE-0000"
+        );
         let text = ["1".repeat(64), "2".repeat(65), "ordinary prose".to_owned()].join("\n");
         let result = AuthenticationBackupCodeExtractionRequest {
             text: text.try_into()?,
         }
         .extract();
         assert_eq!(result.codes.len(), 1);
-        assert_eq!(result.codes[0].0.len(), 64);
+        assert_eq!(
+            result
+                .codes
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("expected first extracted code"))?
+                .0
+                .len(),
+            64
+        );
         Ok(())
     }
     #[test]

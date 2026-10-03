@@ -49,7 +49,6 @@ pub struct AuthenticatorOptionsRejectedWire {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(untagged)]
-
 pub enum AuthenticatorOptionsResponseWire {
     Available(AuthenticatorOptionsAvailableWire),
     Rejected(AuthenticatorOptionsRejectedWire),
@@ -75,7 +74,6 @@ impl Serialize for AuthenticatorOptionsResponseKind {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-
 pub struct WebsiteAuthenticatorOption {
     pub vault_store_id: String,
     pub vault_name: String,
@@ -86,7 +84,6 @@ pub struct WebsiteAuthenticatorOption {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
 #[serde(untagged)]
-
 pub enum AuthenticatorOptionsResponse {
     Ready {
         kind: AuthenticatorOptionsResponseKind,

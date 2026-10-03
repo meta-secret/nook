@@ -21,7 +21,6 @@ pub const DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS: AuthenticationOutcomeTimeoutMilli
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-
 pub struct AuthenticationOutcomeObservation {
     /// Document URL left a login/signup/password-change-like path.
     pub navigated_away_from_auth_path: bool,
@@ -41,7 +40,6 @@ pub struct AuthenticationOutcomeObservation {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-
 pub struct AuthenticationOutcomeClassification {
     pub observation: AuthenticationOutcomeObservation,
     pub timeout_ms: AuthenticationOutcomeTimeoutMilliseconds,
@@ -50,7 +48,6 @@ pub struct AuthenticationOutcomeClassification {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Tsify, Deserialize)]
 #[serde(try_from = "DecisionWire")]
 #[serde(rename_all = "camelCase")]
-
 pub struct AuthenticationOutcomeDecision {
     pub verdict: AuthenticationOutcomeVerdict,
     pub allows_credential_commit: bool,

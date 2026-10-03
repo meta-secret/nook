@@ -3,6 +3,10 @@
 use super::{NookVaultManager, VaultNameState};
 use crate::NookDatabase;
 use nook_core::LocalEventBytes;
+use nook_core::VaultProjection;
+use nook_core::VaultRecoveryOptions;
+use nook_core::VaultStoreIdentity;
+use tsify::Tsify;
 
 use crate::types::NookVaultAccessReport;
 use nook_core::VaultEvent;
@@ -35,23 +39,22 @@ impl NookVaultManager {
             StoreId::parse(raw_store_id).map_err(|error| JsError::new(&error.to_string()))?;
         let store = NookDatabase::load_local_event_store(store_id.as_str()).await?;
         let graph = store.load_graph(store_id.as_str())?;
-        let options = nook_core::VaultRecoveryOptions::from_request(
-            &nook_core::VaultRecoveryProjectionRequest {
+        let options =
+            VaultRecoveryOptions::from_request(&nook_core::VaultRecoveryProjectionRequest {
                 graph: &graph,
                 store_id: &store_id,
-            },
-        )?;
+            })?;
         let vault_name = match &self.vault.vault_name {
             VaultNameState::Named(name) => name.clone(),
             VaultNameState::Unnamed => {
-                nook_core::VaultStoreIdentity::default_name_for_store_id(store_id.as_str())
+                VaultStoreIdentity::default_name_for_store_id(store_id.as_str())
             }
         };
         let result = Ok::<_, wasm_bindgen::JsError>(VaultRecoverySummary::from_options(
             store_id, vault_name, options,
         ))?;
-        tsify::Tsify::into_ts(&result)
-            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
+        Tsify::into_ts(&result)
+            .map_err(|_| JsError::new("Typed WASM value could not be converted."))
     }
 
     #[wasm_bindgen]
@@ -65,7 +68,7 @@ impl NookVaultManager {
         if !self.vault.store_id.trim().is_empty() {
             let store = NookDatabase::load_local_event_store(&self.vault.store_id).await?;
             let graph = store.load_graph(&self.vault.store_id)?;
-            projection = DiagnosticProjection::Loaded(nook_core::VaultProjection::from_graph(
+            projection = DiagnosticProjection::Loaded(VaultProjection::from_graph(
                 &graph,
                 &self.vault.store_id,
             )?);
@@ -106,6 +109,9 @@ impl NookVaultManager {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
+    #[cfg(all(test, target_arch = "wasm32"))]
+    #[cfg(all(test, target_arch = "wasm32"))]
+    use nook_core::DeviceIdentity;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -119,7 +125,7 @@ mod browser_tests {
 
     #[wasm_bindgen_test]
     async fn diagnostics_reject_malformed_staged_store_ids() -> Result<(), JsError> {
-        let identity = nook_core::DeviceIdentity::generate()?;
+        let identity = DeviceIdentity::generate()?;
         let mut manager = NookVaultManager::new();
         manager.device.identity_private_key = identity.secret_string().into_inner();
         manager.vault.store_id = "not-a-store!".to_owned();

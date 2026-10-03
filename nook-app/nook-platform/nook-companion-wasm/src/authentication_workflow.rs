@@ -1,8 +1,10 @@
 use nook_companion_core::AuthenticationBackupCodesEvidence;
 use nook_companion_core::AuthenticationBackupCodesObservation;
 use nook_companion_core::AuthenticationEnrollmentObservation;
+use nook_companion_core::AuthenticationNavigationPath;
 use nook_companion_core::AuthenticationWorkflowMatch;
 use nook_companion_core::BackupCodeCandidatePresence;
+use nook_companion_core::WebsiteLoginMatchAvailability;
 use nook_companion_core::{
     AuthenticationWorkflowRoutingResponse, AuthenticationWorkflowSnapshotResponse,
     WebsiteLoginOptions,
@@ -25,22 +27,21 @@ pub struct AuthenticationWorkflowRoutingAdmission(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn decode_authentication_workflow_snapshot_response(
-    response: tsify::Ts<nook_companion_core::AuthenticationWorkflowSnapshotResponseWire>,
+    response: &tsify::Ts<nook_companion_core::AuthenticationWorkflowSnapshotResponseWire>,
 ) -> Result<
     tsify::Ts<nook_companion_core::AuthenticationWorkflowSnapshotResponse>,
     wasm_bindgen::JsError,
 > {
     let response = response
         .to_rust()
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
 
     let result =
         AuthenticationWorkflowSnapshotResponse::decode_authentication_workflow_snapshot_response(
             response,
         )
-        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
-    tsify::Tsify::into_ts(&result)
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
+        .map_err(|error| JsError::new(&error.to_string()))?;
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
@@ -49,23 +50,22 @@ pub fn decode_authentication_workflow_snapshot_response(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn decode_authentication_workflow_runtime_response(
-    response: tsify::Ts<AuthenticationWorkflowRoutingAdmission>,
+    response: &tsify::Ts<AuthenticationWorkflowRoutingAdmission>,
 ) -> Result<
     tsify::Ts<nook_companion_core::AuthenticationWorkflowRoutingResponse>,
     wasm_bindgen::JsError,
 > {
     let response = response
         .to_rust()
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
 
     let AuthenticationWorkflowRoutingAdmission(response) = response;
     let result =
         AuthenticationWorkflowRoutingResponse::decode_authentication_workflow_routing_response(
             response,
         )
-        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
-    tsify::Tsify::into_ts(&result)
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
+        .map_err(|error| JsError::new(&error.to_string()))?;
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 
 #[cfg(test)]
@@ -85,86 +85,80 @@ mod routing_admission_tests {
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn decode_website_login_match_availability(
-    response: tsify::Ts<crate::WebsiteLoginOptionsAdmission>,
+    response: &tsify::Ts<crate::WebsiteLoginOptionsAdmission>,
 ) -> Result<tsify::Ts<nook_companion_core::WebsiteLoginMatchAvailability>, wasm_bindgen::JsError> {
     let response = response
         .to_rust()
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
 
     let crate::WebsiteLoginOptionsAdmission(response) = response;
     let result = WebsiteLoginOptions::from_wire(response)
         .and_then(WebsiteLoginOptions::into_match_availability)
         .map_err(|error| JsError::new(&error.to_string()))?;
-    tsify::Tsify::into_ts(&result)
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 
-#[wasm_bindgen]#[must_use]
+#[wasm_bindgen]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn unavailable_website_login_match_availability(
 ) -> Result<tsify::Ts<nook_companion_core::WebsiteLoginMatchAvailability>, wasm_bindgen::JsError> {
 
 let result = {
-    nook_companion_core::WebsiteLoginMatchAvailability::unavailable()
+    WebsiteLoginMatchAvailability::unavailable()
 };
-tsify::Tsify::into_ts(&result).map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
+Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
-#[must_use]
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn authentication_workflow_saved_login_capability(
-    snapshot: tsify::Ts<nook_companion_core::AuthenticationWorkflowSnapshot>,
+    snapshot: &tsify::Ts<nook_companion_core::AuthenticationWorkflowSnapshot>,
 ) -> Result<tsify::Ts<nook_companion_core::AuthenticationSavedLoginCapability>, wasm_bindgen::JsError>
 {
     let snapshot = snapshot
         .to_rust()
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
     let result = { snapshot.saved_login_capability() };
-    tsify::Tsify::into_ts(&result)
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
-#[must_use]
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn authentication_workflow_requires_login_match_availability(
-    snapshot: tsify::Ts<nook_companion_core::AuthenticationWorkflowSnapshot>,
+    snapshot: &tsify::Ts<nook_companion_core::AuthenticationWorkflowSnapshot>,
 ) -> Result<bool, wasm_bindgen::JsError> {
     let snapshot = snapshot
         .to_rust()
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
     let result = { snapshot.requires_login_match_availability() };
     Ok(result)
 }
 
 #[wasm_bindgen]
-#[must_use]
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn authentication_workflow_pilot_presentation_capability(
-    snapshot: tsify::Ts<nook_companion_core::AuthenticationWorkflowSnapshot>,
+    snapshot: &tsify::Ts<nook_companion_core::AuthenticationWorkflowSnapshot>,
 ) -> Result<
     tsify::Ts<nook_companion_core::AuthenticationPilotPresentationCapability>,
     wasm_bindgen::JsError,
 > {
     let snapshot = snapshot
         .to_rust()
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
     let result = { snapshot.pilot_presentation_capability() };
-    tsify::Tsify::into_ts(&result)
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
-#[must_use]
+
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn classify_authentication_backup_codes_observation(text: &str,
 candidate_present: bool) -> Result<tsify::Ts<nook_companion_core::AuthenticationBackupCodesObservation>, wasm_bindgen::JsError> {
 
@@ -181,11 +175,11 @@ let result = {
         },
     )
 };
-tsify::Tsify::into_ts(&result).map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
+Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
-#[must_use]
+
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authentication_enrollment_workflow_match(authenticator_setup_hint: bool,
 backup_codes_copy: &str,
 manual_checkpoint_present: bool) -> Result<tsify::Ts<nook_companion_core::AuthenticationWorkflowMatch>, wasm_bindgen::JsError> {
@@ -199,62 +193,57 @@ let result = {
         },
     )
 };
-tsify::Tsify::into_ts(&result).map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
+Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
-#[must_use]
 #[allow(clippy::needless_pass_by_value)]
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn classify_companion_authentication_workflow(
-    input: tsify::Ts<nook_companion_core::AuthenticationPageObservations>,
+    input: &tsify::Ts<nook_companion_core::AuthenticationPageObservations>,
 ) -> Result<tsify::Ts<nook_companion_core::AuthenticationWorkflowMatch>, wasm_bindgen::JsError> {
     let input = input
         .to_rust()
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
     let result = {
         AuthenticationWorkflowMatch::classify_authentication_workflow_candidates(
             &input.observations,
         )
     };
-    tsify::Tsify::into_ts(&result)
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
-#[must_use]
 #[allow(clippy::needless_pass_by_value)]
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn classify_companion_authentication_workflow_facts(
-    input: tsify::Ts<nook_companion_core::AuthenticationPageObservationFactsBatch>,
+    input: &tsify::Ts<nook_companion_core::AuthenticationPageObservationFactsBatch>,
 ) -> Result<tsify::Ts<nook_companion_core::AuthenticationWorkflowMatch>, wasm_bindgen::JsError> {
     let input = input
         .to_rust()
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
     let result = { input.classify() };
-    tsify::Tsify::into_ts(&result)
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
-#[must_use]
 #[allow(clippy::needless_pass_by_value)]
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn authentication_page_observation_facts_is_admissible(
-    input: tsify::Ts<nook_companion_core::AuthenticationPageObservationFacts>,
+    input: &tsify::Ts<nook_companion_core::AuthenticationPageObservationFacts>,
 ) -> Result<bool, wasm_bindgen::JsError> {
     let input = input
         .to_rust()
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
     let result = { input.authentication_page_observation_facts_is_admissible() };
     Ok(result)
 }
@@ -268,27 +257,26 @@ pub enum CompanionAuthenticationWorkflowMatchKind {
 }
 
 #[wasm_bindgen]
-#[must_use]
 #[allow(clippy::needless_pass_by_value)]
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn companion_authentication_workflow_match_kind(
-    workflow_match: tsify::Ts<nook_companion_core::AuthenticationWorkflowMatch>,
+    workflow_match: &tsify::Ts<nook_companion_core::AuthenticationWorkflowMatch>,
 ) -> Result<CompanionAuthenticationWorkflowMatchKind, wasm_bindgen::JsError> {
     let workflow_match = workflow_match
         .to_rust()
-        .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
     let result = {
         match workflow_match {
-            nook_companion_core::AuthenticationWorkflowMatch::NoMatch => {
+            AuthenticationWorkflowMatch::NoMatch => {
                 CompanionAuthenticationWorkflowMatchKind::NoMatch
             }
-            nook_companion_core::AuthenticationWorkflowMatch::Rejected => {
+            AuthenticationWorkflowMatch::Rejected => {
                 CompanionAuthenticationWorkflowMatchKind::Rejected
             }
-            nook_companion_core::AuthenticationWorkflowMatch::Matched(_) => {
+            AuthenticationWorkflowMatch::Matched(_) => {
                 CompanionAuthenticationWorkflowMatchKind::Matched
             }
         }
@@ -298,8 +286,23 @@ pub fn companion_authentication_workflow_match_kind(
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
+    #[cfg(all(test, target_arch = "wasm32"))]
+    #[cfg(all(test, target_arch = "wasm32"))]
+    use nook_companion_core::ApprovedAuthenticationWorkflowDecision;
+    use nook_companion_core::AuthenticationBackupCodesObservation;
+    #[cfg(all(test, target_arch = "wasm32"))]
+    #[cfg(all(test, target_arch = "wasm32"))]
+    use nook_companion_core::AuthenticationWorkflowActivity;
+    #[cfg(all(test, target_arch = "wasm32"))]
+    #[cfg(all(test, target_arch = "wasm32"))]
+    use nook_companion_core::AuthenticationWorkflowKind;
+    use nook_companion_core::AuthenticationWorkflowSnapshotResponse;
+    #[cfg(all(test, target_arch = "wasm32"))]
+    #[cfg(all(test, target_arch = "wasm32"))]
+    use nook_companion_core::PageControlSubmissionMethod;
     use nook_companion_core::{AuthenticationEnrollmentObservation, AuthenticationWorkflowMatch};
     use serde::Serialize;
+    use tsify::{Ts, Tsify};
     use wasm_bindgen::{JsError, JsValue};
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -309,11 +312,11 @@ mod tests {
 
     fn js_wire(
         value: serde_json::Value,
-    ) -> Result<nook_companion_core::AuthenticationWorkflowSnapshotResponseWire, JsError> {
+    ) -> Result<Ts<nook_companion_core::AuthenticationWorkflowSnapshotResponseWire>, JsError> {
         let value = value
             .serialize(&serde_wasm_bindgen::Serializer::json_compatible())
             .map_err(js_error)?;
-        serde_wasm_bindgen::from_value(value).map_err(js_error)
+        Ok(Ts::new_unchecked(value))
     }
 
     fn js_value(value: serde_json::Value) -> Result<JsValue, JsError> {
@@ -323,14 +326,14 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn match_kind_preserves_every_closed_workflow_variant() {
+    fn match_kind_preserves_every_closed_workflow_variant() -> Result<(), JsError> {
         for (workflow_match, expected) in [
             (
-                nook_companion_core::AuthenticationWorkflowMatch::NoMatch,
+                AuthenticationWorkflowMatch::NoMatch,
                 super::CompanionAuthenticationWorkflowMatchKind::NoMatch,
             ),
             (
-                nook_companion_core::AuthenticationWorkflowMatch::Rejected,
+                AuthenticationWorkflowMatch::Rejected,
                 super::CompanionAuthenticationWorkflowMatchKind::Rejected,
             ),
             (
@@ -340,104 +343,129 @@ mod tests {
                         backup_codes_copy: "Save these recovery codes",
                         manual_checkpoint_present: false.into(),
                     },
-                ),
+                )
+                .map_err(|_| JsError::new("Typed test operation failed."))?
+                .to_rust()
+                .map_err(|_| JsError::new("Typed test output could not be decoded."))?,
                 super::CompanionAuthenticationWorkflowMatchKind::Matched,
             ),
         ] {
             assert_eq!(
-                super::companion_authentication_workflow_match_kind(workflow_match),
+                super::companion_authentication_workflow_match_kind(
+                    &(workflow_match)
+                        .into_ts()
+                        .map_err(|_| JsError::new("Typed test input could not be encoded."))?
+                )
+                .map_err(|_| JsError::new("Typed test operation failed."))?,
                 expected
             );
         }
+
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    fn workflow_bridge_preserves_recovery_activity_and_transport_policy() {
+    fn workflow_bridge_preserves_recovery_activity_and_transport_policy() -> Result<(), JsError> {
         assert_eq!(
             super::classify_authentication_backup_codes_observation(
                 "Save your recovery codes",
                 false,
-            ),
-            nook_companion_core::AuthenticationBackupCodesObservation::Present
+            )
+            .map_err(|_| JsError::new("Typed test operation failed."))?
+            .to_rust()
+            .map_err(|_| JsError::new("Typed test output could not be decoded."))?,
+            AuthenticationBackupCodesObservation::Present
         );
         assert!(matches!(
             super::authentication_enrollment_workflow_match(
                 true,
                 "Save your recovery codes",
                 false,
-            ),
+            )
+            .map_err(|_| JsError::new("Typed test operation failed."))?
+            .to_rust()
+            .map_err(|_| JsError::new("Typed test output could not be decoded."))?,
             AuthenticationWorkflowMatch::Matched(_)
         ));
         for (current_password_field_count, new_password_field_count, expected) in [
-            (0, 0, nook_companion_core::AuthenticationWorkflowKind::Login),
-            (
-                0,
-                1,
-                nook_companion_core::AuthenticationWorkflowKind::Signup,
-            ),
-            (
-                1,
-                1,
-                nook_companion_core::AuthenticationWorkflowKind::PasswordChange,
-            ),
+            (0, 0, AuthenticationWorkflowKind::Login),
+            (0, 1, AuthenticationWorkflowKind::Signup),
+            (1, 1, AuthenticationWorkflowKind::PasswordChange),
         ] {
             assert_eq!(
                 super::project_password_workflow_activity(
-                    nook_companion_core::PasswordWorkflowActivityEvidence {
+                    &(nook_companion_core::PasswordWorkflowActivityEvidence {
                         current_password_field_count: current_password_field_count.into(),
                         new_password_field_count: new_password_field_count.into(),
-                    },
+                    })
+                    .into_ts()
+                    .map_err(|_| JsError::new("Typed test input could not be encoded."))?,
                 )
+                .map_err(|_| JsError::new("Typed test operation failed."))?
+                .to_rust()
+                .map_err(|_| JsError::new("Typed test output could not be decoded."))?
                 .kind,
                 expected
             );
         }
         for activity in [
-            nook_companion_core::AuthenticationWorkflowActivity::ReadyLogin,
-            nook_companion_core::AuthenticationWorkflowActivity::FillingLogin,
-            nook_companion_core::AuthenticationWorkflowActivity::VerifyingLogin,
-            nook_companion_core::AuthenticationWorkflowActivity::FillingAuthenticator,
-            nook_companion_core::AuthenticationWorkflowActivity::SaveOffer,
+            AuthenticationWorkflowActivity::ReadyLogin,
+            AuthenticationWorkflowActivity::FillingLogin,
+            AuthenticationWorkflowActivity::VerifyingLogin,
+            AuthenticationWorkflowActivity::FillingAuthenticator,
+            AuthenticationWorkflowActivity::SaveOffer,
         ] {
-            let progress = super::authentication_workflow_activity_progress(activity);
-            assert!(u8::from(progress.current_step) <= u8::from(progress.total_steps));
+            let progress = super::authentication_workflow_activity_progress(activity)?;
+            let progress: serde_json::Value =
+                serde_wasm_bindgen::from_value(progress.js_value()).map_err(js_error)?;
+            assert!(progress["currentStep"].as_u64() <= progress["totalSteps"].as_u64());
         }
-        assert!(super::authentication_control_transportable(
-            nook_companion_core::AuthenticationControlTransportability {
-                submission_method: nook_companion_core::PageControlSubmissionMethod::Post,
-                username_field_count: 0.into(),
-                password_field_count: 0.into(),
-            }
-        ));
-        assert!(!super::authentication_control_transportable(
-            nook_companion_core::AuthenticationControlTransportability {
-                submission_method: nook_companion_core::PageControlSubmissionMethod::Dialog,
-                username_field_count: 1.into(),
-                password_field_count: 0.into(),
-            }
-        ));
+        assert!(
+            super::authentication_control_transportable(
+                &(nook_companion_core::AuthenticationControlTransportability {
+                    submission_method: PageControlSubmissionMethod::Post,
+                    username_field_count: 0.into(),
+                    password_field_count: 0.into(),
+                })
+                .into_ts()
+                .map_err(|_| JsError::new("Typed test input could not be encoded."))?
+            )
+            .map_err(|_| JsError::new("Typed test operation failed."))?
+        );
+        assert!(
+            !super::authentication_control_transportable(
+                &(nook_companion_core::AuthenticationControlTransportability {
+                    submission_method: PageControlSubmissionMethod::Dialog,
+                    username_field_count: 1.into(),
+                    password_field_count: 0.into(),
+                })
+                .into_ts()
+                .map_err(|_| JsError::new("Typed test input could not be encoded."))?
+            )
+            .map_err(|_| JsError::new("Typed test operation failed."))?
+        );
         assert!(super::is_authentication_navigation_path("/account/login"));
         assert!(!super::is_authentication_navigation_path(
             "/settings/profile"
         ));
         assert!(matches!(
-            super::revalidate_approved_authentication_workflow(
-                nook_companion_core::ApprovedAuthenticationWorkflowRevalidation {
-                    approved: Default::default(),
-                    live: nook_companion_core::AuthenticationPageObservationFactsBatch {
-                        observations: Vec::new(),
-                    },
-                }
-            ),
-            nook_companion_core::ApprovedAuthenticationWorkflowDecision::Rejected
+            super::revalidate_approved_authentication_workflow(&Ts::new_unchecked(js_value(
+                serde_json::json!({"approved":{"observations":[]},"live":{"observations":[]}})
+            )?))
+            .map_err(|_| JsError::new("Typed test operation failed."))?
+            .to_rust()
+            .map_err(|_| JsError::new("Typed test output could not be decoded."))?,
+            ApprovedAuthenticationWorkflowDecision::Rejected
         ));
+
+        Ok(())
     }
 
     #[wasm_bindgen_test]
     fn snapshot_decoder_and_saved_login_availability_preserve_typed_boundaries()
     -> Result<(), JsError> {
         let matched =
-            super::decode_authentication_workflow_snapshot_response(js_wire(serde_json::json!({
+            super::decode_authentication_workflow_snapshot_response(&js_wire(serde_json::json!({
                 "ok": true,
                 "snapshot": {
                     "kind": 0,
@@ -449,22 +477,31 @@ mod tests {
                     "savedLoginCapability": "fill-saved-login",
                     "observationIndex": 0
                 }
-            }))?)?;
+            }))?)
+            .map_err(|_| JsError::new("Typed test operation failed."))?
+            .to_rust()
+            .map_err(|_| JsError::new("Typed test output could not be decoded."))?;
         assert!(matches!(
             matched,
-            nook_companion_core::AuthenticationWorkflowSnapshotResponse::Matched { .. }
+            AuthenticationWorkflowSnapshotResponse::Matched { .. }
         ));
         assert!(matches!(
-            super::decode_authentication_workflow_snapshot_response(js_wire(
+            super::decode_authentication_workflow_snapshot_response(&js_wire(
                 serde_json::json!({"ok": true}),
-            )?)?,
-            nook_companion_core::AuthenticationWorkflowSnapshotResponse::NoMatch { .. }
+            )?)
+            .map_err(|_| JsError::new("Typed test operation failed."))?
+            .to_rust()
+            .map_err(|_| JsError::new("Typed test output could not be decoded."))?,
+            AuthenticationWorkflowSnapshotResponse::NoMatch { .. }
         ));
         assert!(matches!(
-            super::decode_authentication_workflow_snapshot_response(js_wire(
+            super::decode_authentication_workflow_snapshot_response(&js_wire(
                 serde_json::json!({"ok": false, "reason": "rejected"}),
-            )?)?,
-            nook_companion_core::AuthenticationWorkflowSnapshotResponse::Rejected { .. }
+            )?)
+            .map_err(|_| JsError::new("Typed test operation failed."))?
+            .to_rust()
+            .map_err(|_| JsError::new("Typed test output could not be decoded."))?,
+            AuthenticationWorkflowSnapshotResponse::Rejected { .. }
         ));
 
         let ready: nook_companion_core::SavedLoginActionPresentationRequest =
@@ -473,14 +510,28 @@ mod tests {
                 "loginMatches": {"kind": "ready", "count": 1}
             }))?)
             .map_err(js_error)?;
-        assert!(super::saved_login_action_available(ready));
+        assert!(
+            super::saved_login_action_available(
+                &(ready)
+                    .into_ts()
+                    .map_err(|_| JsError::new("Typed test input could not be encoded."))?
+            )
+            .map_err(|_| JsError::new("Typed test operation failed."))?
+        );
         let unavailable: nook_companion_core::SavedLoginActionPresentationRequest =
             serde_wasm_bindgen::from_value(js_value(serde_json::json!({
                 "action": 0,
                 "loginMatches": {"kind": "ready", "count": 1}
             }))?)
             .map_err(js_error)?;
-        assert!(!super::saved_login_action_available(unavailable));
+        assert!(
+            !super::saved_login_action_available(
+                &(unavailable)
+                    .into_ts()
+                    .map_err(|_| JsError::new("Typed test input could not be encoded."))?
+            )
+            .map_err(|_| JsError::new("Typed test operation failed."))?
+        );
         Ok(())
     }
 }
@@ -491,17 +542,16 @@ mod tests {
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn project_password_workflow_activity(
-    evidence: tsify::Ts<nook_companion_core::PasswordWorkflowActivityEvidence>,
+    evidence: &tsify::Ts<nook_companion_core::PasswordWorkflowActivityEvidence>,
 ) -> Result<
     tsify::Ts<nook_companion_core::PasswordWorkflowActivityPresentation>,
     wasm_bindgen::JsError,
 > {
     let evidence = evidence
         .to_rust()
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
     let result = { evidence.project() };
-    tsify::Tsify::into_ts(&result)
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 #[wasm_bindgen]
 #[cfg_attr(
@@ -512,8 +562,7 @@ pub fn authentication_workflow_activity_progress(
     activity: nook_companion_core::AuthenticationWorkflowActivity,
 ) -> Result<tsify::Ts<nook_companion_core::AuthenticationDisplayProgress>, wasm_bindgen::JsError> {
     let result = { activity.progress() };
-    tsify::Tsify::into_ts(&result)
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 #[wasm_bindgen]
 #[cfg_attr(
@@ -521,11 +570,11 @@ pub fn authentication_workflow_activity_progress(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn saved_login_action_available(
-    request: tsify::Ts<nook_companion_core::SavedLoginActionPresentationRequest>,
+    request: &tsify::Ts<nook_companion_core::SavedLoginActionPresentationRequest>,
 ) -> Result<bool, wasm_bindgen::JsError> {
     let request = request
         .to_rust()
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
     let result = { request.is_available() };
     Ok(result)
 }
@@ -535,17 +584,17 @@ pub fn saved_login_action_available(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn authentication_control_transportable(
-    request: tsify::Ts<nook_companion_core::AuthenticationControlTransportability>,
+    request: &tsify::Ts<nook_companion_core::AuthenticationControlTransportability>,
 ) -> Result<bool, wasm_bindgen::JsError> {
     let request = request
         .to_rust()
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
     let result = { request.is_transportable() };
     Ok(result)
 }
 #[wasm_bindgen]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn is_authentication_navigation_path(pathname: &str) -> bool {
-    nook_companion_core::AuthenticationNavigationPath::from(pathname).has_authentication_segment()
+    AuthenticationNavigationPath::from(pathname).has_authentication_segment()
 }
 
 #[wasm_bindgen]
@@ -554,17 +603,16 @@ pub fn authentication_control_transportable(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn revalidate_approved_authentication_workflow(
-    request: tsify::Ts<nook_companion_core::ApprovedAuthenticationWorkflowRevalidation>,
+    request: &tsify::Ts<nook_companion_core::ApprovedAuthenticationWorkflowRevalidation>,
 ) -> Result<
     tsify::Ts<nook_companion_core::ApprovedAuthenticationWorkflowDecision>,
     wasm_bindgen::JsError,
 > {
     let request = request
         .to_rust()
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
     let result = { request.revalidate() };
-    tsify::Tsify::into_ts(&result)
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 
 mod setup_context;

@@ -14,7 +14,6 @@ pub const MAX_PASSWORD_LENGTH: PasswordCharacterCount = PasswordCharacterCount::
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-
 pub struct PasswordGenerationOptions {
     #[tsify(type = "number")]
     pub length: PasswordCharacterCount,

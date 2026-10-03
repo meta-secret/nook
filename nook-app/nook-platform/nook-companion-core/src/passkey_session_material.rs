@@ -4,7 +4,6 @@ use tsify::Tsify;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(transparent)]
-
 pub struct PasskeyByteMaterial(Vec<u8>);
 impl PasskeyByteMaterial {
     #[cfg_attr(
@@ -21,14 +20,12 @@ impl PasskeyByteMaterial {
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-
 pub struct PasskeySetupMaterial {
     pub user_handle: PasskeyByteMaterial,
     pub prf_input: PasskeyByteMaterial,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-
 pub struct PasskeyUnlockMaterial {
     pub credential_id: PasskeyByteMaterial,
     pub prf_input: PasskeyByteMaterial,
@@ -48,13 +45,11 @@ pub enum PasskeyUnlockAvailability {
     Unavailable,
 }
 #[derive(Debug, Deserialize, Tsify)]
-
 pub struct PasskeySetupMaterialResponse {
     #[serde(default)]
     pub setup: PasskeySetupAvailability,
 }
 #[derive(Debug, Deserialize, Tsify)]
-
 pub struct PasskeyUnlockMaterialResponse {
     #[serde(default)]
     pub material: PasskeyUnlockAvailability,

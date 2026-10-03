@@ -47,7 +47,6 @@ pub struct AuthenticatorPickerOpenRejectedWire {
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(untagged)]
-
 pub enum AuthenticatorPickerOpenResponseWire {
     Available(AuthenticatorPickerOpenAvailableWire),
     Rejected(AuthenticatorPickerOpenRejectedWire),
@@ -73,7 +72,6 @@ impl Serialize for AuthenticatorPickerOpenResponseKind {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Tsify)]
 #[serde(untagged, rename_all_fields = "camelCase")]
-
 pub enum AuthenticatorPickerOpenResponse {
     Ready {
         kind: AuthenticatorPickerOpenResponseKind,

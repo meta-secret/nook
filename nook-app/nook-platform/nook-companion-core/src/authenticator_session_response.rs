@@ -13,7 +13,6 @@ pub struct AuthenticatorCodeSessionWire {
 }
 #[derive(Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-
 pub struct AuthenticatorCodeSessionResponse {
     #[tsify(type = "true")]
     ok: bool,
@@ -40,7 +39,6 @@ pub struct AuthenticatorPreviewSessionWire {
     preview: AuthenticatorEnrollmentPreview,
 }
 #[derive(Serialize, Tsify)]
-
 pub struct AuthenticatorPreviewSessionResponse {
     #[tsify(type = "true")]
     ok: bool,
@@ -67,7 +65,6 @@ pub struct AuthenticatorSecretSessionWire {
 }
 #[derive(Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-
 pub struct AuthenticatorSecretSessionResponse {
     #[tsify(type = "true")]
     ok: bool,
@@ -97,7 +94,6 @@ pub struct AuthenticatorBackupVerificationSessionWire {
 /// Receipt of existing persisted verification, not a live grant or authority.
 #[derive(Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-
 pub struct VerifiedAuthenticatorBackupAttachResponse {
     #[tsify(type = "true")]
     ok: bool,

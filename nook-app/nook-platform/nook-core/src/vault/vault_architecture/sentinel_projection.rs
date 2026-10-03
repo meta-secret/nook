@@ -45,7 +45,6 @@ impl SentinelPolicy {
 
 /// Browser numeric draft; finite integer admission precedes typed policy evaluation.
 #[derive(Debug, Deserialize, Tsify)]
-
 pub struct SentinelPolicyDraft {
     pub participants: SentinelParticipantDraftValue,
     pub threshold: SentinelThresholdDraftValue,
@@ -64,7 +63,6 @@ pub enum SentinelPolicyDraftAdmission {
 }
 #[derive(Debug, Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-
 pub struct SentinelPolicyDraftEvaluation {
     pub admission: SentinelPolicyDraftAdmission,
     #[tsify(type = "number[]")]

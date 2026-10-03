@@ -1,6 +1,9 @@
 //! Passkey-PRF setup, unlock, and recovery orchestration.
 
+use nook_core::ExtensionIdentityHandoffSourceBinding;
+use nook_core::PasskeyAccessProfile;
 use std::rc::Rc;
+use wasm_bindgen::JsError;
 
 use super::NookVaultManager;
 use crate::BrowserPasskeyClient;
@@ -44,7 +47,6 @@ use nook_core::{
     WebAuthnPrfInput, WebAuthnPrfOutput, WebAuthnUserHandle, WrappedDeviceIdentity, i18n_keys,
 };
 use std::mem;
-use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 use zeroize::{Zeroize, Zeroizing};
 
@@ -115,12 +117,13 @@ pub(in crate::manager) struct PendingExtensionIdentityHandoff {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nook_core::StoreId;
     use nook_core::{AppKey, SigningIdentity};
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
     fn retry_reset_preserves_the_staged_handoff_signer() -> Result<(), NookError> {
-        let staged_store_id = nook_core::StoreId::generate()?;
+        let staged_store_id = StoreId::generate()?;
         let authorizer = AppKey::generate()?;
         let (signing, signing_seed) = SigningIdentity::generate()?;
         let mut manager = NookVaultManager::new();
@@ -181,7 +184,7 @@ mod tests {
     -> Result<(), NookError> {
         let context = NookExtensionIdentityHandoffContext {
             value: ExtensionIdentityHandoffContextValue::PairedVault {
-                store_id: nook_core::StoreId::generate()?,
+                store_id: StoreId::generate()?,
             },
         };
 
@@ -216,7 +219,7 @@ mod tests {
             }
         ));
 
-        let store_id = nook_core::StoreId::generate()?;
+        let store_id = StoreId::generate()?;
         let paired = NookExtensionIdentityHandoffContext {
             value: ExtensionIdentityHandoffContextValue::PairedVault {
                 store_id: store_id.clone(),
@@ -393,11 +396,11 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn seal_extension_identity_handoff(
         &mut self,
-        request: tsify::Ts<nook_core::ExtensionIdentityHandoffSealRequest>,
+        request: &tsify::Ts<nook_core::ExtensionIdentityHandoffSealRequest>,
     ) -> Result<String, wasm_bindgen::JsError> {
         let request = request
             .to_rust()
-            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+            .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
 
         // The caller's prior status observation cannot authorize a later seal.
         self.ensure_device_identity()?;
@@ -409,7 +412,7 @@ impl NookVaultManager {
         };
         if matches!(
             source.binding(&request),
-            nook_core::ExtensionIdentityHandoffSourceBinding::DifferentIdentity
+            ExtensionIdentityHandoffSourceBinding::DifferentIdentity
         ) {
             return Err(JsError::new(
                 "Extension identity request does not match this device.",
@@ -612,7 +615,7 @@ impl NookVaultManager {
             };
             let device_id = self.save_passkey_material(&material).await?;
             let credential_fingerprint =
-                nook_core::PasskeyAccessProfile::credential_identifier(credential_id.as_ref());
+                PasskeyAccessProfile::credential_identifier(credential_id.as_ref());
             drop(
                 device_access::AppPasskeyCreation {
                     app_id: &device_id,
@@ -721,8 +724,7 @@ impl NookVaultManager {
         let credential = BrowserPasskeyClient::get_credential(&request_options).await?;
         let observation = BrowserPasskeyObservation::new(&credential).observe_assertion();
         let credential_id = BrowserPasskeyClient::credential_id(&credential)?;
-        let credential_fingerprint =
-            nook_core::PasskeyAccessProfile::credential_identifier(&credential_id);
+        let credential_fingerprint = PasskeyAccessProfile::credential_identifier(&credential_id);
         let user_handle = BrowserPasskeyClient::assertion_user_handle(&credential)?;
         let prf_output = BrowserPasskeyClient::require_prf_output(&credential)?;
         self.recover_device_protection_with_passkey_material(
@@ -832,8 +834,7 @@ impl NookVaultManager {
         let credential = BrowserPasskeyClient::get_credential(&request_options).await?;
         let observation = BrowserPasskeyObservation::new(&credential).observe_assertion();
         let credential_id = BrowserPasskeyClient::credential_id(&credential)?;
-        let credential_fingerprint =
-            nook_core::PasskeyAccessProfile::credential_identifier(&credential_id);
+        let credential_fingerprint = PasskeyAccessProfile::credential_identifier(&credential_id);
         let prf_output = BrowserPasskeyClient::require_prf_output(&credential)?;
         self.unlock_device_identity(prf_output).await?;
         let app_id = self.device.public_app_id();

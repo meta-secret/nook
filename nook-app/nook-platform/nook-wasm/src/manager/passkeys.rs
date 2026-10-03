@@ -2,6 +2,12 @@
 
 use super::NookVaultManager;
 use crate::NookDatabase;
+use nook_core::CheckedPasskeyAssertion;
+use nook_core::CheckedPasskeyRegistration;
+use nook_core::EncryptedSecretPayload;
+use nook_core::SecretId;
+use nook_core::VaultSecretSession;
+use tsify::Tsify;
 
 use crate::{NookError, NookPasskeyAccount, NookPasskeyAssertion, NookPasskeyRegistration};
 use js_sys::Object;
@@ -67,6 +73,20 @@ impl NookVaultManager {
 mod tests {
     use super::NookVaultManager;
     use crate::manager::VaultCryptoState;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_core::DeviceIdentity;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_core::DeviceMode;
+    use nook_core::SecretId;
+    use nook_core::VaultApplication;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_core::VaultCrypto;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_core::VaultKeys;
     use nook_core::{
         PasskeyAuthenticatorError, SecretType, StoredRecordPayload, VaultArchitecture,
     };
@@ -134,13 +154,13 @@ mod tests {
         let locked = NookVaultManager::new();
         assert!(locked.ensure_passkey_extension_capability().is_err());
 
-        let identity = nook_core::DeviceIdentity::generate()?;
+        let identity = DeviceIdentity::generate()?;
         let mut ready = NookVaultManager::new();
         ready.device.identity_private_key = identity.secret_string().into_inner();
         assert!(ready.ensure_passkey_extension_capability().is_ok());
 
         ready.vault.architecture = VaultArchitecture::sentinel_personal(
-            nook_core::DeviceMode::Standard,
+            DeviceMode::Standard,
             nook_core::SentinelPolicy {
                 threshold: 2.into(),
                 required_participants: 2.into(),
@@ -149,15 +169,15 @@ mod tests {
         );
         assert!(ready.ensure_passkey_extension_capability().is_err());
         ready.vault.architecture = VaultArchitecture::default();
-        ready.application = nook_core::VaultApplication::Simple;
+        ready.application = VaultApplication::Simple;
         assert!(ready.ensure_passkey_extension_capability().is_err());
         Ok(())
     }
 
     #[wasm_bindgen_test]
     fn passkey_crypto_round_trip_decrypts_only_passkey_records() -> anyhow::Result<()> {
-        let keys = nook_core::VaultKeys::generate()?;
-        let crypto = nook_core::VaultCrypto::new(&keys.secrets_key)?;
+        let keys = VaultKeys::generate()?;
+        let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let mut manager = NookVaultManager::new();
         manager.vault.secrets_key = keys.secrets_key.as_str().to_owned();
         manager.vault.crypto = VaultCryptoState::Unlocked(crypto);
@@ -178,11 +198,11 @@ mod tests {
             .map_err(|error| anyhow::anyhow!("prepare failed: {error:?}"))?
             .generate()
             .map_err(|error| anyhow::anyhow!("generate failed: {error:?}"))?;
-        let id = nook_core::SecretId::generate()?;
+        let id = SecretId::generate()?;
         let encrypted = manager.encrypt_passkey_secret(&id, &registration.credential)?;
         manager.vault.meta.apply_record(&encrypted.to_stored())?;
         manager.vault.meta.secrets.insert(
-            nook_core::SecretId::generate()?,
+            SecretId::generate()?,
             (
                 SecretType::SecureNote,
                 StoredRecordPayload::from_trusted("not decrypted".to_owned()),
@@ -208,6 +228,13 @@ mod tests {
 mod browser_tests {
     use super::*;
     use js_sys::Function;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_core::DeviceIdentity;
+    use nook_core::StoreId;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_core::VaultKeys;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -226,7 +253,7 @@ mod browser_tests {
 
     #[wasm_bindgen_test]
     async fn website_passkey_origin_validation_rejects_malformed_input() -> Result<(), JsError> {
-        let identity = nook_core::DeviceIdentity::generate()?;
+        let identity = DeviceIdentity::generate()?;
         let mut manager = NookVaultManager::new();
         manager.device.identity_private_key = identity.secret_string().into_inner();
         assert!(
@@ -240,8 +267,8 @@ mod browser_tests {
 
     #[wasm_bindgen_test]
     async fn website_passkey_accounts_return_empty_for_an_unmatched_rp() -> Result<(), JsError> {
-        let identity = nook_core::DeviceIdentity::generate()?;
-        let keys = nook_core::VaultKeys::generate()?;
+        let identity = DeviceIdentity::generate()?;
+        let keys = VaultKeys::generate()?;
         let mut manager = NookVaultManager::new();
         manager.device.identity_private_key = identity.secret_string().into_inner();
         manager.apply_vault_keys(
@@ -270,13 +297,13 @@ mod browser_tests {
 
         assert!(
             manager
-                .register_website_passkey(super::decode_website_passkey_registration_request(r#"{"origin":"https://example.com","challenge":"challenge","relyingParty":{"id":"example.com","name":"Example"},"user":{"id":"user","name":"User","displayName":"User"},"algorithms":[-7],"residentKeyRequired":true,"userVerificationRequired":true}"#)?, &inactive)
+                .register_website_passkey(&super::decode_website_passkey_registration_request(r#"{"origin":"https://example.com","challenge":"challenge","relyingParty":{"id":"example.com","name":"Example"},"user":{"id":"user","name":"User","displayName":"User"},"algorithms":[-7],"residentKeyRequired":true,"userVerificationRequired":true}"#)?, &inactive)
                 .await
                 .is_err()
         );
         assert!(
             manager
-                .assert_website_passkey(super::decode_website_passkey_assertion_request(r#"{"origin":"https://example.com","challenge":"challenge","rpId":"example.com","userVerificationRequired":true}"#)?, &inactive)
+                .assert_website_passkey(&super::decode_website_passkey_assertion_request(r#"{"origin":"https://example.com","challenge":"challenge","rpId":"example.com","userVerificationRequired":true}"#)?, &inactive)
                 .await
                 .is_err()
         );
@@ -286,8 +313,8 @@ mod browser_tests {
     #[wasm_bindgen_test]
     async fn opening_passkey_vault_rejects_malformed_grants_before_storage() -> Result<(), JsError>
     {
-        let identity = nook_core::DeviceIdentity::generate()?;
-        let store_id = nook_core::StoreId::generate()?.to_string();
+        let identity = DeviceIdentity::generate()?;
+        let store_id = StoreId::generate()?.to_string();
         let mut manager = NookVaultManager::new();
         manager.device.identity_private_key = identity.secret_string().into_inner();
 
@@ -405,7 +432,7 @@ impl NookVaultManager {
                 continue;
             }
             let mut record =
-                nook_core::VaultSecretSession::new(&self.vault.meta.secrets, crypto).decrypt(id)?;
+                VaultSecretSession::new(&self.vault.meta.secrets, crypto).decrypt(id)?;
             if let SecretValue::Passkey(passkey) = &record.data {
                 passkeys.push((id.clone(), passkey.clone()));
             }
@@ -427,7 +454,7 @@ impl NookVaultManager {
         let ciphertext = self.vault.crypto.get()?.encrypt_value(yaml.as_str())?;
         yaml.zeroize_plaintext();
         value.zeroize_plaintext();
-        Ok(nook_core::EncryptedSecretPayload::from_armored(
+        Ok(EncryptedSecretPayload::from_armored(
             id,
             SecretType::Passkey,
             ciphertext.as_str(),
@@ -475,12 +502,12 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn register_website_passkey(
         &mut self,
-        request: tsify::Ts<nook_core::PasskeyRegistrationRequest>,
+        request: &tsify::Ts<nook_core::PasskeyRegistrationRequest>,
         ceremony_active: &js_sys::Function,
     ) -> Result<NookPasskeyRegistration, wasm_bindgen::JsError> {
         let request = request
             .to_rust()
-            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+            .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
 
         NookVaultManager::ensure_ceremony_active(ceremony_active)?;
         self.ensure_passkey_extension_capability()?;
@@ -495,9 +522,9 @@ impl NookVaultManager {
         );
         let mut result = request
             .prepare(&existing_values)
-            .and_then(nook_core::CheckedPasskeyRegistration::generate)
+            .and_then(CheckedPasskeyRegistration::generate)
             .map_err(|error| NookVaultManager::passkey_error(&error))?;
-        let id = nook_core::SecretId::generate()?;
+        let id = SecretId::generate()?;
         let encrypted = self.encrypt_passkey_secret(&id, &result.credential)?;
         let response = NookPasskeyRegistration::new(
             result.credential.credential_id.clone(),
@@ -514,12 +541,12 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn assert_website_passkey(
         &mut self,
-        request: tsify::Ts<nook_core::WebsitePasskeyAssertionRequest>,
+        request: &tsify::Ts<nook_core::WebsitePasskeyAssertionRequest>,
         ceremony_active: &js_sys::Function,
     ) -> Result<NookPasskeyAssertion, wasm_bindgen::JsError> {
         let request = request
             .to_rust()
-            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
 
         NookVaultManager::ensure_ceremony_active(ceremony_active)?;
         self.ensure_passkey_extension_capability()?;
@@ -534,7 +561,7 @@ impl NookVaultManager {
         );
         let mut result = request
             .prepare(&values)
-            .and_then(nook_core::CheckedPasskeyAssertion::sign)
+            .and_then(CheckedPasskeyAssertion::sign)
             .map_err(|error| NookVaultManager::passkey_error(&error))?;
         let old_id = passkeys
             .rows
@@ -549,7 +576,7 @@ impl NookVaultManager {
             .filter(|(id, value)| id != &old_id && value.credential_id == result.credential_id)
             .map(|(id, _)| id.clone())
             .collect::<Vec<_>>();
-        let new_id = nook_core::SecretId::generate()?;
+        let new_id = SecretId::generate()?;
         let encrypted = self.encrypt_passkey_secret(&new_id, &result.updated_credential)?;
         result.updated_credential.zeroize_plaintext();
         let response = NookPasskeyAssertion::new(
@@ -584,8 +611,7 @@ pub fn decode_website_passkey_registration_request(
     json: &str,
 ) -> Result<tsify::Ts<nook_core::PasskeyRegistrationRequest>, wasm_bindgen::JsError> {
     let result = serde_json::from_str(json).map_err(|_| JsError::new("passkey-invalid-request"))?;
-    tsify::Tsify::into_ts(&result)
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 /// Decode the external JSON message exactly once into the canonical assertion request.
 #[wasm_bindgen]
@@ -597,6 +623,5 @@ pub fn decode_website_passkey_assertion_request(
     json: &str,
 ) -> Result<tsify::Ts<nook_core::WebsitePasskeyAssertionRequest>, wasm_bindgen::JsError> {
     let result = serde_json::from_str(json).map_err(|_| JsError::new("passkey-invalid-request"))?;
-    tsify::Tsify::into_ts(&result)
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
 }

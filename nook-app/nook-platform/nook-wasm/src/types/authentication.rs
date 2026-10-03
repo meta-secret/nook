@@ -2,6 +2,7 @@ use super::wasm_bindgen;
 use nook_core::{
     AuthenticationWorkflowMatch, LoginSecret, SecretId, WebsiteHost, WebsiteLoginSaveDecision,
 };
+use tsify::Tsify;
 use wasm_bindgen::JsError;
 
 #[wasm_bindgen]
@@ -260,8 +261,7 @@ impl NookAuthenticationWorkflowSnapshot {
     ) -> Result<tsify::Ts<nook_core::AuthenticationApprovalRequirement>, wasm_bindgen::JsError>
     {
         let result = { self.0.approval_requirement };
-        tsify::Tsify::into_ts(&result)
-            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
+        Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
     }
 
     #[wasm_bindgen(getter, js_name = savedLoginCapability)]
@@ -270,8 +270,7 @@ impl NookAuthenticationWorkflowSnapshot {
     ) -> Result<tsify::Ts<nook_core::AuthenticationSavedLoginCapability>, wasm_bindgen::JsError>
     {
         let result = { self.0.saved_login_capability() };
-        tsify::Tsify::into_ts(&result)
-            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
+        Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
     }
 
     #[wasm_bindgen(getter, js_name = observationIndex)]
@@ -420,6 +419,7 @@ impl NookWebsiteLoginSavePlan {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
+    use nook_core::WebsiteLoginSaveDecision;
     use nook_core::{
         AuthenticationApprovalRequirement, AuthenticationOutcomeVerdict,
         AuthenticationSavedLoginCapability, AuthenticationWorkflowAction,
@@ -533,24 +533,24 @@ mod browser_tests {
 
         for (decision, expected, has_id) in [
             (
-                nook_core::WebsiteLoginSaveDecision::Create,
+                WebsiteLoginSaveDecision::Create,
                 NookWebsiteLoginSaveDecision::Create,
                 false,
             ),
             (
-                nook_core::WebsiteLoginSaveDecision::Invalid,
+                WebsiteLoginSaveDecision::Invalid,
                 NookWebsiteLoginSaveDecision::Invalid,
                 false,
             ),
             (
-                nook_core::WebsiteLoginSaveDecision::Update {
+                WebsiteLoginSaveDecision::Update {
                     secret_id: id.clone(),
                 },
                 NookWebsiteLoginSaveDecision::Update,
                 true,
             ),
             (
-                nook_core::WebsiteLoginSaveDecision::AlreadySaved {
+                WebsiteLoginSaveDecision::AlreadySaved {
                     secret_id: id.clone(),
                 },
                 NookWebsiteLoginSaveDecision::AlreadySaved,

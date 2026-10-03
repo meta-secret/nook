@@ -28,17 +28,15 @@ impl TryFrom<String> for AuthenticationOutcomePathname {
             0..=Self::MAX_BYTES => {}
             _ => return Err(AuthenticationOutcomePathnameError::TooLong),
         }
-        match (value.starts_with('/'), value.contains(['?', '#'])) {
-            (true, false) => Ok(Self {
-                segments: value
-                    .split('/')
-                    .map(|segment| AuthenticationOutcomePathSegment(segment.to_owned()))
-                    .collect(),
-            }),
-            (false, false) | (false, true) | (true, true) => {
-                Err(AuthenticationOutcomePathnameError::NotPathname)
-            }
+        if !value.starts_with('/') || value.contains(['?', '#']) {
+            return Err(AuthenticationOutcomePathnameError::NotPathname);
         }
+        Ok(Self {
+            segments: value
+                .split('/')
+                .map(|segment| AuthenticationOutcomePathSegment(segment.to_owned()))
+                .collect(),
+        })
     }
 }
 impl From<AuthenticationOutcomePathname> for String {
@@ -63,9 +61,10 @@ pub enum AuthenticationNavigationPathObservation {
 }
 impl From<bool> for AuthenticationNavigationPathObservation {
     fn from(value: bool) -> Self {
-        match value {
-            true => Self::Authentication,
-            false => Self::Unrelated,
+        if value {
+            Self::Authentication
+        } else {
+            Self::Unrelated
         }
     }
 }
@@ -111,8 +110,7 @@ mod tests {
         Ok(())
     }
     #[test]
-    fn action_projection_navigation_rejects_oversize_utf8_query_and_fragment() -> anyhow::Result<()>
-    {
+    fn action_projection_navigation_rejects_oversize_utf8_query_and_fragment() {
         let exact = format!("/{}a", "é".repeat(2047));
         assert_eq!(exact.len(), 4096);
         assert!(AuthenticationOutcomePathname::try_from(exact.clone()).is_ok());
@@ -136,6 +134,5 @@ mod tests {
             )
             .is_err()
         );
-        Ok(())
     }
 }

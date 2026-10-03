@@ -48,7 +48,6 @@ pub use submission::{
 /// Raw browser facts grouped by the authentication domains that own their conversion.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-
 pub struct AuthenticationPageObservationFacts {
     pub fields: AuthenticationFieldObservationFacts,
     pub ceremony: AuthenticationCeremonyObservationFacts,

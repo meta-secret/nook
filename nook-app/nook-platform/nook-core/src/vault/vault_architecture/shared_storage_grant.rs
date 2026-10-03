@@ -17,7 +17,6 @@ use tsify::Tsify;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "hint", rename_all = "camelCase")]
-
 pub enum SharedStorageTargetHint {
     #[default]
     Unspecified,
@@ -26,7 +25,6 @@ pub enum SharedStorageTargetHint {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "storageTargetId", rename_all = "camelCase")]
-
 pub enum SharedStorageTargetSelection {
     #[default]
     Create,
@@ -35,7 +33,6 @@ pub enum SharedStorageTargetSelection {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "accessToken", rename_all = "camelCase")]
-
 pub enum SharedStorageGrantCredential {
     #[default]
     Unavailable,
@@ -45,7 +42,6 @@ pub enum SharedStorageGrantCredential {
 /// Request to grant shared provider storage to a joiner identity.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-
 pub struct SharedStorageGrantRequest {
     pub provider_type: StorageProviderType,
     pub oauth_preset: ProviderOauthPreset,
@@ -61,7 +57,6 @@ pub struct SharedStorageGrantRequest {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", rename_all = "camelCase")]
-
 pub enum SharedStorageGrantTarget {
     #[default]
     Unavailable,
@@ -88,7 +83,6 @@ pub enum SharedStorageGrantTarget {
 /// token lacks `drive.file`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "kind")]
-
 pub enum SharedStorageGrantOutcome {
     #[serde(rename = "granted")]
     Granted {

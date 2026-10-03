@@ -5,6 +5,12 @@ use crate::storage::local_folder::LocalFolderHandles;
 use crate::types::{NookManagerStoreScope, NookProviderSyncRevision};
 use crate::{BrowserCredentialCreationOptions, BrowserCredentialRequestOptions};
 use crate::{BrowserPasskeyClient, BrowserPasskeyCreationOptions, NookTotpCode};
+use nook_core::CompactToken;
+use nook_core::PasswordPolicy;
+use nook_core::ProviderCredentialEvidence;
+use nook_core::ProviderCredentialReadiness;
+use nook_core::SecretId;
+use nook_core::StorageProviderData;
 use nook_core::{PasswordGenerationOptions, TotpAlgorithm, TotpDigits, TotpPeriod, TotpSecret};
 use nook_core::{
     ProviderSaveSetup, StagedGithubConnection, StagedOAuthConnection, StagedRemoteConnection,
@@ -13,6 +19,7 @@ use nook_core::{
     StoredGithubPat, StoredGithubRepository, StoredLocalFolderHandle, StoredOAuthAccessCredential,
     StoredOAuthFileConfiguration, StoredOAuthRemoteFileName,
 };
+use tsify::Tsify;
 use wasm_bindgen::JsError;
 
 mod localization;
@@ -73,7 +80,7 @@ pub use shared_storage_grant::*;
 
 #[wasm_bindgen]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn generate_id() -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_core::CompactToken::generate()?.to_string())
+    Ok(CompactToken::generate()?.to_string())
 }
 
 #[wasm_bindgen]
@@ -131,13 +138,12 @@ pub use shared_storage_grant::*;
 
 #[wasm_bindgen]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn generate_secret_id() -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_core::SecretId::generate()?.to_string())
+    Ok(SecretId::generate()?.to_string())
 }
 
 /// Cryptographically secure password generation — free function so the UI can
 /// call it while the vault manager is borrowed by an in-flight `&mut self` op.
 #[wasm_bindgen]
-#[must_use]
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
@@ -145,8 +151,7 @@ pub use shared_storage_grant::*;
 pub fn default_password_generation_options()
 -> Result<tsify::Ts<nook_core::PasswordGenerationOptions>, wasm_bindgen::JsError> {
     let result = { PasswordGenerationOptions::default() };
-    tsify::Tsify::into_ts(&result)
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
@@ -156,11 +161,11 @@ pub fn default_password_generation_options()
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn generate_password(
-    options: tsify::Ts<nook_core::PasswordGenerationOptions>,
+    options: &tsify::Ts<nook_core::PasswordGenerationOptions>,
 ) -> Result<String, wasm_bindgen::JsError> {
     let options = options
         .to_rust()
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
 
     Ok::<_, wasm_bindgen::JsError>(PasswordGenerationOptions::generate(options)?)
 }
@@ -247,7 +252,7 @@ impl NookTotpCode {
     )
 )]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn vault_password_min_length() -> u32 {
-    u32::try_from(usize::from(nook_core::PasswordPolicy::min_length())).unwrap_or(u32::MAX)
+    u32::try_from(usize::from(PasswordPolicy::min_length())).unwrap_or(u32::MAX)
 }
 
 #[wasm_bindgen]
@@ -261,7 +266,7 @@ impl NookTotpCode {
 )]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn vault_password_recommended_min_length() -> u32 {
     u32::try_from(usize::from(
-        nook_core::PasswordPolicy::recommended_min_length(),
+        PasswordPolicy::recommended_min_length(),
     ))
     .unwrap_or(u32::MAX)
 }
@@ -269,41 +274,41 @@ impl NookTotpCode {
 #[wasm_bindgen]
 #[must_use]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn is_vault_password_long_enough(password: &str) -> bool {
-    nook_core::PasswordPolicy::is_long_enough(password)
+    PasswordPolicy::is_long_enough(password)
 }
 
 #[wasm_bindgen]
 #[must_use]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn is_vault_password_recommended_length(password: &str) -> bool {
-    nook_core::PasswordPolicy::is_recommended_length(password)
+    PasswordPolicy::is_recommended_length(password)
 }
 
 #[wasm_bindgen]
 #[must_use]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn has_github_credentials(pat: &str) -> bool {
-    nook_core::ProviderCredentialEvidence::Github(&StoredGithubPat::Token(pat.to_owned()))
+    ProviderCredentialEvidence::Github(&StoredGithubPat::Token(pat.to_owned()))
         .readiness()
-        == nook_core::ProviderCredentialReadiness::Ready
+        == ProviderCredentialReadiness::Ready
 }
 
 #[wasm_bindgen]
 #[must_use]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn has_oauth_credentials(access_token: &str) -> bool {
-    nook_core::ProviderCredentialEvidence::OAuth(&StoredOAuthAccessCredential::AccessToken(
+    ProviderCredentialEvidence::OAuth(&StoredOAuthAccessCredential::AccessToken(
         access_token.to_owned(),
     ))
     .readiness()
-        == nook_core::ProviderCredentialReadiness::Ready
+        == ProviderCredentialReadiness::Ready
 }
 
 #[wasm_bindgen]
 #[must_use]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn has_local_folder_credentials(handle_id: &str) -> bool {
-    nook_core::ProviderCredentialEvidence::LocalFolder(&StoredLocalFolderHandle::HandleId(
+    ProviderCredentialEvidence::LocalFolder(&StoredLocalFolderHandle::HandleId(
         handle_id.to_owned(),
     ))
     .readiness()
-        == nook_core::ProviderCredentialReadiness::Ready
+        == ProviderCredentialReadiness::Ready
 }
 
 #[wasm_bindgen]
@@ -313,7 +318,7 @@ impl NookTotpCode {
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn provider_storage_detail(
-    provider: tsify::Ts<nook_core::StorageProviderData>,
+    provider: &tsify::Ts<nook_core::StorageProviderData>,
     this_device_desc: String,
     no_token_saved: String,
     google_signed_in: String,
@@ -324,7 +329,7 @@ pub fn provider_storage_detail(
 ) -> Result<String, wasm_bindgen::JsError> {
     let provider = provider
         .to_rust()
-        .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
 
     let labels = nook_core::ProviderStorageDetailLabels {
         this_device_desc,
@@ -365,11 +370,11 @@ pub fn provider_storage_detail(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn oauth_remote_storage_ref(
-    config: tsify::Ts<nook_core::OAuthFileConfigData>,
+    config: &tsify::Ts<nook_core::OAuthFileConfigData>,
 ) -> Result<NookOAuthRemoteStorageReference, wasm_bindgen::JsError> {
     let config = config
         .to_rust()
-        .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
     let result = { NookOAuthRemoteStorageReference::new(config.remote_storage_ref()) };
     Ok(result)
 }
@@ -381,19 +386,19 @@ pub fn oauth_remote_storage_ref(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn update_oauth_remote_ref(
-    config: tsify::Ts<nook_core::OAuthFileConfigData>,
+    config: &tsify::Ts<nook_core::OAuthFileConfigData>,
 
-    setup: tsify::Ts<ProviderSaveSetup>,
+    setup: &tsify::Ts<ProviderSaveSetup>,
 
     remote_ref: &str,
 ) -> Result<NookOAuthRemoteConfigurationUpdate, wasm_bindgen::JsError> {
     let config = config
         .to_rust()
-        .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
 
     let setup = setup
         .to_rust()
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
     let result = {
         NookOAuthRemoteConfigurationUpdate::new(
             config
@@ -425,17 +430,17 @@ pub fn update_oauth_remote_ref(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn staged_oauth_remote_storage_args(
-    oauth_file: tsify::Ts<nook_core::OAuthFileConfigData>,
+    oauth_file: &tsify::Ts<nook_core::OAuthFileConfigData>,
 
-    setup: tsify::Ts<ProviderSaveSetup>,
+    setup: &tsify::Ts<ProviderSaveSetup>,
 ) -> Result<NookStagedStorageArgs, wasm_bindgen::JsError> {
     let oauth_file = oauth_file
         .to_rust()
-        .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
 
     let setup = setup
         .to_rust()
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
 
     Ok(NookStagedStorageArgs::new(
         StagedRemoteConnection::OAuth(StagedOAuthConnection {
@@ -461,7 +466,7 @@ pub fn staged_oauth_remote_storage_args(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn update_provider_sync_metadata(
-    snapshot: tsify::Ts<nook_core::AuthProvidersSnapshotData>,
+    snapshot: &tsify::Ts<nook_core::AuthProvidersSnapshotData>,
     provider_id: &str,
     vault_yaml: &str,
     revision: &NookProviderSyncRevision,
@@ -470,9 +475,9 @@ pub fn update_provider_sync_metadata(
 ) -> Result<tsify::Ts<nook_core::AuthProvidersSnapshotData>, wasm_bindgen::JsError> {
     let mut snapshot = snapshot
         .to_rust()
-        .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
 
-    snapshot.providers = nook_core::StorageProviderData::update_sync_metadata(
+    snapshot.providers = StorageProviderData::update_sync_metadata(
         &snapshot.providers,
         provider_id,
         vault_yaml,
@@ -481,13 +486,33 @@ pub fn update_provider_sync_metadata(
         synced_at,
     );
     let result = Ok::<_, wasm_bindgen::JsError>(snapshot)?;
-    tsify::Tsify::into_ts(&result)
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
 }
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
+    #[cfg(all(test, target_arch = "wasm32"))]
+    #[cfg(all(test, target_arch = "wasm32"))]
+    use nook_core::AuthProvidersSnapshotData;
+    #[cfg(all(test, target_arch = "wasm32"))]
+    #[cfg(all(test, target_arch = "wasm32"))]
+    use nook_core::ICloudShareRole;
+    #[cfg(all(test, target_arch = "wasm32"))]
+    #[cfg(all(test, target_arch = "wasm32"))]
+    use nook_core::ICloudSharedTarget;
+    #[cfg(all(test, target_arch = "wasm32"))]
+    #[cfg(all(test, target_arch = "wasm32"))]
+    use nook_core::OAuthFileConfigData;
+    #[cfg(all(test, target_arch = "wasm32"))]
+    #[cfg(all(test, target_arch = "wasm32"))]
+    use nook_core::ProviderOauthPreset;
+    #[cfg(all(test, target_arch = "wasm32"))]
+    #[cfg(all(test, target_arch = "wasm32"))]
+    use nook_core::SharedGrantProviderOutcome;
+    #[cfg(all(test, target_arch = "wasm32"))]
+    #[cfg(all(test, target_arch = "wasm32"))]
+    use nook_core::SharedStorageTargetSelection;
     use nook_core::{
         GoogleDriveMode, ICloudMode, OauthFilePreset, ProviderSyncCheckpoint, ProviderVaultScope,
         ReplicationType, StorageProviderData, StorageProviderType, StoredGithubPat,
@@ -542,8 +567,8 @@ mod browser_tests {
                 folder_id: StoredGoogleDriveFolder::Root,
                 icloud_mode: ICloudMode::Shared,
                 icloud_share_target: StoredICloudShareTarget::SharedTarget(
-                    nook_core::ICloudSharedTarget::new(
-                        nook_core::ICloudShareRole::Owner,
+                    ICloudSharedTarget::new(
+                        ICloudShareRole::Owner,
                         "zone",
                         "owner-record",
                         "root-record",
@@ -569,7 +594,7 @@ mod browser_tests {
         assert!(generate_id().unwrap().len() > 10);
         assert!(generate_secret_id().unwrap().len() > 10);
         let options = default_password_generation_options();
-        let password = generate_password(options).unwrap();
+        let password = generate_password(&options).unwrap();
         assert!(!password.is_empty());
         assert!(vault_password_min_length() > 0);
         assert!(vault_password_recommended_min_length() >= vault_password_min_length());
@@ -591,7 +616,7 @@ mod browser_tests {
 
         let provider = github_provider();
         let detail = provider_storage_detail(
-            provider.clone(),
+            &provider.clone(),
             "This device".into(),
             "No token".into(),
             "Google signed in".into(),
@@ -614,43 +639,46 @@ mod browser_tests {
             ),
             "GitHub"
         );
-        assert_eq!(provider_wasm_args(provider.clone()).unwrap().mode, "github");
+        assert_eq!(
+            provider_wasm_args(&provider.clone()).unwrap().mode,
+            "github"
+        );
 
-        let empty = nook_core::AuthProvidersSnapshotData::default();
+        let empty = AuthProvidersSnapshotData::default();
         let unscoped = NookManagerStoreScope::unscoped();
         assert!(
-            active_vault_providers(empty.clone(), &unscoped)
+            active_vault_providers(&empty.clone(), &unscoped)
                 .unwrap()
                 .providers
                 .is_empty()
         );
         assert!(
-            sync_providers_for_active_vault(empty.clone(), &unscoped)
+            sync_providers_for_active_vault(&empty.clone(), &unscoped)
                 .unwrap()
                 .providers
                 .is_empty()
         );
         assert!(
-            local_provider_for_active_vault(empty.clone(), &unscoped)
+            local_provider_for_active_vault(&empty.clone(), &unscoped)
                 .unwrap()
                 .provider_id()
                 .is_err()
         );
         assert_eq!(
-            provider_label_by_id(empty.clone(), "missing").unwrap(),
+            provider_label_by_id(&empty.clone(), "missing").unwrap(),
             "missing"
         );
         assert!(
-            providers_visible_while_device_locked(empty)
+            providers_visible_while_device_locked(&empty)
                 .providers
                 .is_empty()
         );
 
-        let oauth = nook_core::OAuthFileConfigData::default();
-        let remote = oauth_remote_storage_ref(oauth.clone());
+        let oauth = OAuthFileConfigData::default();
+        let remote = oauth_remote_storage_ref(&oauth.clone());
         assert!(remote.value().is_err());
         assert!(
-            update_oauth_remote_ref(oauth.clone(), ProviderSaveSetup::Existing, "file-1")
+            update_oauth_remote_ref(&oauth.clone(), &ProviderSaveSetup::Existing, "file-1")
                 .config()
                 .is_ok()
         );
@@ -665,7 +693,7 @@ mod browser_tests {
             NookStagedStorageArgsState::Incomplete
         );
         assert_eq!(
-            staged_oauth_remote_storage_args(oauth.clone(), ProviderSaveSetup::Existing)
+            staged_oauth_remote_storage_args(&oauth.clone(), &ProviderSaveSetup::Existing)
                 .unwrap()
                 .state(),
             NookStagedStorageArgsState::Incomplete
@@ -674,7 +702,7 @@ mod browser_tests {
         let revision = NookProviderSyncRevision::untracked();
         assert!(
             update_provider_sync_metadata(
-                nook_core::AuthProvidersSnapshotData::default(),
+                &AuthProvidersSnapshotData::default(),
                 "provider-1",
                 "not yaml",
                 &revision,
@@ -692,19 +720,21 @@ mod browser_tests {
         assert!(validate_vault_architecture(&architecture).is_ok());
         assert!(vault_architecture_onboarding_type(&architecture).is_ok());
         assert!(vault_architecture_can_create_secret(&architecture).unwrap());
-        assert!(provider_onboarding_type(provider.clone(), &architecture).is_ok());
+        assert!(provider_onboarding_type(&provider.clone(), &architecture).is_ok());
         assert_eq!(
-            provider_oauth_preset_for_provider(provider.clone()),
-            nook_core::ProviderOauthPreset::NotApplicable
+            provider_oauth_preset_for_provider(&provider.clone()),
+            ProviderOauthPreset::NotApplicable
         );
         assert!(matches!(
-            provider_oauth_preset_for_config(nook_core::OAuthFileConfigData::default()),
-            nook_core::ProviderOauthPreset::Preset(_)
+            provider_oauth_preset_for_config(&OAuthFileConfigData::default()),
+            ProviderOauthPreset::Preset(_)
         ));
-        assert!(provider_replication_capability(provider.clone()).is_ok());
-        assert!(validate_provider_replication(provider.clone(), ReplicationType::Personal).is_ok());
+        assert!(provider_replication_capability(&provider.clone()).is_ok());
         assert!(
-            provider_supports_replication(provider.clone(), ReplicationType::Personal).unwrap()
+            validate_provider_replication(&provider.clone(), ReplicationType::Personal).is_ok()
+        );
+        assert!(
+            provider_supports_replication(&provider.clone(), ReplicationType::Personal).unwrap()
         );
 
         let snapshot = nook_core::AuthProvidersSnapshotData {
@@ -712,14 +742,14 @@ mod browser_tests {
             ..Default::default()
         };
         assert_eq!(
-            first_compatible_provider_id(snapshot.clone(), ReplicationType::Personal)
+            first_compatible_provider_id(&snapshot.clone(), ReplicationType::Personal)
                 .provider_id()
                 .unwrap(),
             "provider-1"
         );
         assert_eq!(
             first_compatible_provider_id_preferred(
-                snapshot.clone(),
+                &snapshot.clone(),
                 ReplicationType::Personal,
                 "provider-1"
             )
@@ -728,25 +758,22 @@ mod browser_tests {
             "provider-1"
         );
         assert!(matches!(
-            select_shared_grant_provider(nook_core::SharedGrantProviderRequest {
+            select_shared_grant_provider(&nook_core::SharedGrantProviderRequest {
                 snapshot,
                 preset: OauthFilePreset::GoogleDrive,
-                target: nook_core::SharedStorageTargetSelection::Create,
+                target: SharedStorageTargetSelection::Create,
             }),
-            nook_core::SharedGrantProviderOutcome::AuthorizationRequired
+            SharedGrantProviderOutcome::AuthorizationRequired
         ));
 
         let updated_drive = set_google_drive_provider_mode(
-            nook_core::OAuthFileConfigData::default(),
-            GoogleDriveMode::Shared,
+            &OAuthFileConfigData::default(),
+            &GoogleDriveMode::Shared,
         )
         .unwrap();
         assert_eq!(updated_drive.drive_mode, GoogleDriveMode::Shared);
-        let updated_icloud = set_icloud_provider_mode(
-            nook_core::OAuthFileConfigData::default(),
-            ICloudMode::Shared,
-        )
-        .unwrap();
+        let updated_icloud =
+            set_icloud_provider_mode(&OAuthFileConfigData::default(), &ICloudMode::Shared).unwrap();
         assert_eq!(updated_icloud.icloud_mode, ICloudMode::Shared);
 
         let target = create_icloud_shared_storage_target(
@@ -765,14 +792,13 @@ mod browser_tests {
         );
         assert!(create_icloud_shared_storage_target("unknown", "", "", "", "").is_err());
         assert!(
-            bind_google_drive_shared_folder(nook_core::OAuthFileConfigData::default(), "folder-1")
-                .is_ok()
+            bind_google_drive_shared_folder(&OAuthFileConfigData::default(), "folder-1").is_ok()
         );
 
         let google = google_oauth_tokens_to_config(
             "access-token",
             "2030-01-01T00:00:00Z",
-            StoredOAuthFileConfiguration::NotApplicable,
+            &StoredOAuthFileConfiguration::NotApplicable,
         )
         .unwrap();
         assert!(matches!(
@@ -781,8 +807,8 @@ mod browser_tests {
         ));
         let icloud = icloud_oauth_tokens_to_config(
             "access-token",
-            StoredOAuthAccountIdentity::Email("alice@example.test".into()),
-            StoredOAuthFileConfiguration::NotApplicable,
+            &StoredOAuthAccountIdentity::Email("alice@example.test".into()),
+            &StoredOAuthFileConfiguration::NotApplicable,
         )
         .unwrap();
         assert!(matches!(
@@ -791,7 +817,7 @@ mod browser_tests {
         ));
 
         let github_enrollment =
-            enrollment_provider_for_architecture(provider.clone(), &architecture).unwrap();
+            enrollment_provider_for_architecture(&provider.clone(), &architecture).unwrap();
         assert_eq!(
             github_enrollment.provider_type(),
             StorageProviderType::Github
@@ -802,7 +828,7 @@ mod browser_tests {
         );
         assert_eq!(github_enrollment.github_repo().unwrap(), "work-vault");
         let shared = enrollment_shared_provider_for_architecture(
-            shared_oauth_provider(),
+            &shared_oauth_provider(),
             &architecture,
             "alice@example.test",
             "target-1",
@@ -810,7 +836,7 @@ mod browser_tests {
         .unwrap();
         assert!(shared.is_shared_provider_grant());
         let icloud_shared = enrollment_icloud_shared_provider_for_architecture(
-            shared_icloud_provider(),
+            &shared_icloud_provider(),
             &architecture,
             "target-2",
         )

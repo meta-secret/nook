@@ -481,7 +481,6 @@ impl AuthenticationAdvanceControlObservation {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-
 pub enum AuthenticationUsernameEvidence {
     Absent,
     Generic,

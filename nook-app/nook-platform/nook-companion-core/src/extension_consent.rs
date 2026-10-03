@@ -5,7 +5,6 @@ use tsify::Tsify;
 /// Browser reactivity remains responsible for producing the current fact.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-
 pub enum ExtensionConsentVaultReadiness {
     ManagerUnavailable,
     Locked,
@@ -18,7 +17,6 @@ pub enum ExtensionConsentVaultReadiness {
 /// presentation status are deliberately orthogonal to this phase.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
-
 pub enum ExtensionConsentPhase {
     AwaitingAuthorization,
     Authorizing,
@@ -28,7 +26,6 @@ pub enum ExtensionConsentPhase {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
-
 pub enum ExtensionConsentApprovalAvailability {
     Available,
     ManagerUnavailable,
@@ -41,7 +38,6 @@ pub enum ExtensionConsentApprovalAvailability {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-
 pub struct ExtensionConsentObservation {
     pub vault: ExtensionConsentVaultReadiness,
     pub phase: ExtensionConsentPhase,
@@ -85,7 +81,6 @@ impl ExtensionConsentObservation {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
-
 pub enum ExtensionConsentEvent {
     AuthorizationStarted,
     AuthorizationFailed,
@@ -94,7 +89,6 @@ pub enum ExtensionConsentEvent {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-
 pub struct ExtensionConsentTransitionRequest {
     pub phase: ExtensionConsentPhase,
     pub event: ExtensionConsentEvent,
@@ -102,14 +96,12 @@ pub struct ExtensionConsentTransitionRequest {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-
 pub enum ExtensionConsentTransitionFailure {
     InvalidTransition,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
-
 pub enum ExtensionConsentTransitionOutcome {
     Transitioned {
         phase: ExtensionConsentPhase,

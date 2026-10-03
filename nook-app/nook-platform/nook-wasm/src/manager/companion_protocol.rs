@@ -71,17 +71,16 @@ impl NookVaultManager {
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn admit_companion_identity_status(
-    request: tsify::Ts<CompanionIdentityStatusRequestAdmission>,
+    request: &tsify::Ts<CompanionIdentityStatusRequestAdmission>,
 ) -> Result<tsify::Ts<CompanionIdentityStatusAdmission>, wasm_bindgen::JsError> {
     let request = request
         .to_rust()
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
     let result = {
         let CompanionIdentityStatusRequestAdmission(request) = request;
         CompanionIdentityStatusAdmission::admit(request)
     };
-    tsify::Tsify::into_ts(&result)
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
@@ -91,17 +90,16 @@ pub fn admit_companion_identity_status(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn admit_companion_handoff_response(
-    response: tsify::Ts<CompanionHandoffResponseValueAdmission>,
+    response: &tsify::Ts<CompanionHandoffResponseValueAdmission>,
 ) -> Result<tsify::Ts<CompanionHandoffResponseAdmission>, wasm_bindgen::JsError> {
     let response = response
         .to_rust()
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
     let result = {
         let CompanionHandoffResponseValueAdmission(response) = response;
         CompanionHandoffResponseAdmission::admit(response)
     };
-    tsify::Tsify::into_ts(&result)
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 
 pub(in crate::manager) struct PendingCompanionWebsiteHandoff {
@@ -161,11 +159,11 @@ impl NookCompanionExtensionEndpoint {
     #[wasm_bindgen(constructor)]
     #[allow(clippy::needless_pass_by_value)]
     pub fn new(
-        presence: tsify::Ts<CompanionExtensionPresenceAdmission>,
+        presence: &tsify::Ts<CompanionExtensionPresenceAdmission>,
     ) -> Result<Self, wasm_bindgen::JsError> {
         let presence = presence
             .to_rust()
-            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
 
         let CompanionExtensionPresenceAdmission(presence) = presence;
         Self::from_presence(presence).map_err(|error| NookVaultManager::companion_js_error(&error))
@@ -174,18 +172,17 @@ impl NookCompanionExtensionEndpoint {
     #[wasm_bindgen(getter)]
     pub fn presence(&self) -> Result<tsify::Ts<CompanionExtensionPresence>, wasm_bindgen::JsError> {
         let result = { self.inner.presence() };
-        tsify::Tsify::into_ts(&result)
-            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
+        Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
     }
 
     #[allow(clippy::needless_pass_by_value)]
     pub fn discover(
         self,
-        discovery: tsify::Ts<CompanionIdentityDiscoveryObservation>,
+        discovery: &tsify::Ts<CompanionIdentityDiscoveryObservation>,
     ) -> Result<NookDiscoveredCompanionExtensionEndpoint, wasm_bindgen::JsError> {
         let discovery = discovery
             .to_rust()
-            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
 
         let inner = self
             .inner
@@ -216,21 +213,15 @@ impl NookDiscoveredCompanionExtensionEndpoint {
     #[wasm_bindgen(getter)]
     pub fn status(&self) -> Result<tsify::Ts<CompanionIdentityStatus>, wasm_bindgen::JsError> {
         let result = { self.inner.status() };
-        tsify::Tsify::into_ts(&result)
-            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
+        Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
     }
-
-    #[expect(
-        clippy::needless_pass_by_value,
-        reason = "wasm-bindgen owns the exported observation argument"
-    )]
     pub fn rediscover(
         self,
-        discovery: tsify::Ts<CompanionIdentityDiscoveryObservation>,
+        discovery: &tsify::Ts<CompanionIdentityDiscoveryObservation>,
     ) -> Result<Self, wasm_bindgen::JsError> {
         let discovery = discovery
             .to_rust()
-            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
 
         let inner = self
             .inner
@@ -243,11 +234,11 @@ impl NookDiscoveredCompanionExtensionEndpoint {
     pub async fn authorize_and_seal(
         self,
         manager: &mut NookVaultManager,
-        authorization: tsify::Ts<CompanionHandoffAuthorizationAdmission>,
+        authorization: &tsify::Ts<CompanionHandoffAuthorizationAdmission>,
     ) -> Result<tsify::Ts<CompanionIdentityHandoffResponse>, wasm_bindgen::JsError> {
         let authorization = authorization
             .to_rust()
-            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
 
         let CompanionHandoffAuthorizationAdmission(authorization) = authorization;
         let authorized = self
@@ -266,8 +257,7 @@ impl NookDiscoveredCompanionExtensionEndpoint {
             },
         )
         .map_err(|error| NookVaultManager::companion_js_error(&error))?;
-        tsify::Tsify::into_ts(&result)
-            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
+        Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
     }
 }
 
@@ -371,11 +361,11 @@ impl NookVaultManager {
     #[allow(clippy::needless_pass_by_value)]
     pub fn begin_companion_identity_handoff(
         &mut self,
-        begin: tsify::Ts<CompanionWebsiteHandoffBegin>,
+        begin: &tsify::Ts<CompanionWebsiteHandoffBegin>,
     ) -> Result<NookPendingCompanionIdentityHandoff, wasm_bindgen::JsError> {
         let begin = begin
             .to_rust()
-            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
 
         let request = self
             .begin_companion_identity_handoff_inner(begin)
@@ -448,17 +438,16 @@ impl NookPendingCompanionIdentityHandoff {
         &self,
     ) -> Result<tsify::Ts<CompanionIdentityHandoffRequest>, wasm_bindgen::JsError> {
         let result = { self.request.clone() };
-        tsify::Tsify::into_ts(&result)
-            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
+        Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
     }
     pub async fn finish(
         self,
         manager: &mut NookVaultManager,
-        response: tsify::Ts<CompanionIdentityHandoffResponse>,
+        response: &tsify::Ts<CompanionIdentityHandoffResponse>,
     ) -> Result<NookAdoptedExtensionIdentityHandoff, wasm_bindgen::JsError> {
         let response = response
             .to_rust()
-            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
 
         self.binding.check(manager)?;
         match manager.finish_companion_identity_handoff(response).await {

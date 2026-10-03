@@ -36,7 +36,6 @@ pub struct LoginPickerOpenFailedWire {
 /// Concrete service-worker response presented to the content-script boundary.
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(untagged)]
-
 pub enum LoginPickerOpenResponseWire {
     Available(LoginPickerOpenAvailableWire),
     Failed(LoginPickerOpenFailedWire),
@@ -44,7 +43,6 @@ pub enum LoginPickerOpenResponseWire {
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, Tsify)]
 #[serde(untagged, rename_all_fields = "camelCase")]
-
 pub enum LoginPickerOpenResponse {
     Failed {
         kind: LoginPickerOpenResponseKind,

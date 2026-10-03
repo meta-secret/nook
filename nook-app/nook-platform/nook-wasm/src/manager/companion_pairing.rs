@@ -4,8 +4,10 @@ use nook_companion_core::{
     CompanionPairingApprovalAttempt, CompanionPairingFailure, CompanionPairingRequest,
     ConsumedCompanionPairingAuthority, ExtensionConnectScope, ExtensionPairingVaultType,
 };
+use nook_core::StoreId;
 use nook_core::{ActiveVaultScope, ProviderVaultScope};
 use nook_core::{AuthProvidersSnapshotData, SigningIdentity, VaultApplication, VaultType};
+use tsify::Tsify;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 mod activation;
@@ -31,7 +33,7 @@ pub struct NookExtensionDeviceApproval {
 impl NookExtensionDeviceApproval {
     pub(crate) fn for_manager(manager: &NookVaultManager) -> Result<Self, JsError> {
         Ok(Self {
-            store_id: nook_core::StoreId::parse(&manager.vault.store_id)
+            store_id: StoreId::parse(&manager.vault.store_id)
                 .map_err(|error| JsError::new(&error.to_string()))?,
             approved_at: serde_json::from_str(&js_sys::Date::now().to_string())
                 .map_err(|error| JsError::new(&error.to_string()))?,
@@ -62,8 +64,7 @@ impl NookExtensionDeviceApproval {
         wasm_bindgen::JsError,
     > {
         let result = { self.approved_at };
-        tsify::Tsify::into_ts(&result)
-            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
+        Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
     }
 
     #[wasm_bindgen(getter, js_name = vaultType)]
@@ -71,8 +72,7 @@ impl NookExtensionDeviceApproval {
         &self,
     ) -> Result<tsify::Ts<ExtensionPairingVaultType>, wasm_bindgen::JsError> {
         let result = { self.vault_type };
-        tsify::Tsify::into_ts(&result)
-            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
+        Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
     }
 }
 
@@ -80,10 +80,12 @@ impl NookExtensionDeviceApproval {
 impl NookCompanionPairingExtensionEndpoint {
     #[wasm_bindgen(constructor)]
     #[allow(clippy::needless_pass_by_value)]
-    pub fn new(request: tsify::Ts<CompanionPairingRequest>) -> Result<Self, wasm_bindgen::JsError> {
+    pub fn new(
+        request: &tsify::Ts<CompanionPairingRequest>,
+    ) -> Result<Self, wasm_bindgen::JsError> {
         let request = request
             .to_rust()
-            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
 
         Ok(Self {
             inner: CompanionExtensionPairingEndpoint::issue(request)
@@ -96,8 +98,7 @@ impl NookCompanionPairingExtensionEndpoint {
             .inner
             .request()
             .map_err(|error| JsError::new(&error.to_string()))?;
-        tsify::Tsify::into_ts(&result)
-            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
+        Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
     }
 
     pub fn take_authority(self) -> Result<NookCompanionPairingApprovalAuthority, JsError> {
@@ -124,16 +125,16 @@ impl NookCompanionPairingApprovalAuthority {
 
         manager: &NookVaultManager,
 
-        attempt: tsify::Ts<CompanionPairingApprovalAttempt>,
-        providers: tsify::Ts<AuthProvidersSnapshotData>,
+        attempt: &tsify::Ts<CompanionPairingApprovalAttempt>,
+        providers: &tsify::Ts<AuthProvidersSnapshotData>,
     ) -> Result<NookPrevalidatedCompanionPairingApproval, wasm_bindgen::JsError> {
         let providers = providers
             .to_rust()
-            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
 
         let attempt = attempt
             .to_rust()
-            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
 
         self.prevalidate_inner(manager, attempt, providers)
             .map_err(NookVaultManager::failure_js_error)
@@ -219,11 +220,20 @@ pub struct NookPrevalidatedCompanionPairingApproval {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_companion_core::ExtensionPairingApprovalEpochMilliseconds;
     use nook_companion_core::{
         CompanionPairingApproval, CompanionPairingEpochMilliseconds, CompanionPairingInstallation,
         CompanionPairingProviderManifestDigest,
     };
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_core::ProviderCredentialRejection;
+    use nook_core::StoreId;
     use nook_core::{ActiveVaultScope, DeviceIdentity, ProviderVaultScope, StorageProviderData};
+    use tsify::Tsify;
+    use wasm_bindgen::JsError;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     struct PairingFixture {
@@ -243,7 +253,7 @@ mod tests {
             let (signing, signing_seed) = SigningIdentity::generate()?;
             let mut manager = NookVaultManager::new();
             manager.application = VaultApplication::Extension;
-            manager.vault.store_id = nook_core::StoreId::before_genesis_placeholder().into_inner();
+            manager.vault.store_id = StoreId::before_genesis_placeholder().into_inner();
             manager.vault.vault_name = VaultNameState::Named("Personal".to_owned());
             manager.device.id = identity.device_id().as_str().to_owned();
             manager.device.identity_private_key = identity.secret_string().into_inner();
@@ -252,7 +262,7 @@ mod tests {
             let mut providers = AuthProvidersSnapshotData {
                 providers: Vec::new(),
                 active_vault_store_id: ActiveVaultScope::StoreId(
-                    nook_core::StoreId::before_genesis_placeholder().into_inner(),
+                    StoreId::before_genesis_placeholder().into_inner(),
                 ),
             };
             let mut scopes = vec![ExtensionConnectScope::VaultAccess];
@@ -264,13 +274,12 @@ mod tests {
                     "nook",
                     "2026-09-07T00:00:00Z",
                 );
-                provider.store_id = ProviderVaultScope::StoreId(
-                    nook_core::StoreId::before_genesis_placeholder().into_inner(),
-                );
+                provider.store_id =
+                    ProviderVaultScope::StoreId(StoreId::before_genesis_placeholder().into_inner());
                 providers.providers.push(provider);
                 providers = providers
                     .seal_credentials_for(&identity.public_key())
-                    .map_err(nook_core::ProviderCredentialRejection::into_cause)?;
+                    .map_err(ProviderCredentialRejection::into_cause)?;
                 scopes.push(ExtensionConnectScope::SyncProviderCredentials);
             }
             let request = CompanionPairingRequest {
@@ -290,7 +299,7 @@ mod tests {
             };
             let approval = CompanionPairingApproval {
                 request: request.clone(),
-                vault_store_id: nook_core::StoreId::before_genesis_placeholder(),
+                vault_store_id: StoreId::before_genesis_placeholder(),
                 vault_name: "Personal".to_owned(),
                 approved_at: serde_json::from_str("100")?,
                 provider_manifest_digest: CompanionPairingProviderManifestDigest::parse(
@@ -355,11 +364,14 @@ mod tests {
             },
             scopes: vec![ExtensionConnectScope::VaultAccess],
         };
-        let endpoint = NookCompanionPairingExtensionEndpoint::new(request.clone())
+        let endpoint = NookCompanionPairingExtensionEndpoint::new(&(request.clone()).into_ts()?)
             .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         assert_eq!(
             endpoint
                 .request()
+                .and_then(|value| value
+                    .to_rust()
+                    .map_err(|_| JsError::new("Typed test output could not be decoded.")))
                 .map_err(|error| anyhow::anyhow!("{error:?}"))?,
             request
         );
@@ -373,18 +385,17 @@ mod tests {
     #[wasm_bindgen_test]
     fn extension_device_approval_owns_typed_grant_facts() -> Result<(), JsError> {
         let mut manager = NookVaultManager::new();
-        manager.vault.store_id = nook_core::StoreId::before_genesis_placeholder().into_inner();
+        manager.vault.store_id = StoreId::before_genesis_placeholder().into_inner();
         manager.vault.architecture.vault_type = VaultType::Simple;
 
         let approval = NookExtensionDeviceApproval::for_manager(&manager)?;
 
         assert_eq!(approval.store_id().value(), manager.vault.store_id);
-        let vault_type: ExtensionPairingVaultType = approval.vault_type();
+        let vault_type: ExtensionPairingVaultType = approval.vault_type()?.to_rust()?;
         assert_eq!(vault_type, ExtensionPairingVaultType::Simple);
-        assert!(approval.approved_at().validate().is_ok());
+        assert!(approval.approved_at()?.to_rust()?.validate().is_ok());
         assert!(
-            approval.approved_at()
-                > nook_companion_core::ExtensionPairingApprovalEpochMilliseconds::MINIMUM
+            approval.approved_at()?.to_rust()? > ExtensionPairingApprovalEpochMilliseconds::MINIMUM
         );
         Ok(())
     }
@@ -393,26 +404,26 @@ mod tests {
     fn real_manager_prevalidates_exact_empty_and_sealed_provider_approvals() -> anyhow::Result<()> {
         for with_provider in [false, true] {
             let fixture = PairingFixture::new(with_provider)?;
-            let endpoint = NookCompanionPairingExtensionEndpoint::new(fixture.request.clone())
-                .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+            let endpoint =
+                NookCompanionPairingExtensionEndpoint::new(&(fixture.request.clone()).into_ts()?)
+                    .map_err(|error| anyhow::anyhow!("{error:?}"))?;
             let authority = endpoint
                 .take_authority()
                 .map_err(|error| anyhow::anyhow!("{error:?}"))?;
             let admitted = authority
                 .prevalidate(
                     &fixture.manager,
-                    CompanionPairingApprovalAttempt {
+                    &(CompanionPairingApprovalAttempt {
                         approval: fixture.approval,
                         observed_at: PairingFixture::epoch("150")?,
-                    },
-                    fixture.providers,
+                    })
+                    .into_ts()?,
+                    &(fixture.providers).into_ts()?,
                 )
                 .map_err(|error| anyhow::anyhow!("unexpected rejection: {error:?}"))?;
             assert_eq!(
                 admitted.providers.active_vault_store_id,
-                ActiveVaultScope::StoreId(
-                    nook_core::StoreId::before_genesis_placeholder().into_inner()
-                )
+                ActiveVaultScope::StoreId(StoreId::before_genesis_placeholder().into_inner())
             );
             assert_eq!(
                 admitted.providers.providers.len(),
@@ -551,19 +562,18 @@ mod tests {
                 "2026-09-07T00:00:00Z",
             )],
             active_vault_store_id: ActiveVaultScope::StoreId(
-                nook_core::StoreId::before_genesis_placeholder().into_inner(),
+                StoreId::before_genesis_placeholder().into_inner(),
             ),
         };
         replacement
             .providers
             .first_mut()
             .ok_or_else(|| anyhow::anyhow!("replacement provider must be present"))?
-            .store_id = ProviderVaultScope::StoreId(
-            nook_core::StoreId::before_genesis_placeholder().into_inner(),
-        );
+            .store_id =
+            ProviderVaultScope::StoreId(StoreId::before_genesis_placeholder().into_inner());
         replacement = replacement
             .seal_credentials_for(&other.public_key())
-            .map_err(nook_core::ProviderCredentialRejection::into_cause)?;
+            .map_err(ProviderCredentialRejection::into_cause)?;
         fixture.providers = replacement;
         fixture.refresh_manifest()?;
         assert!(matches!(

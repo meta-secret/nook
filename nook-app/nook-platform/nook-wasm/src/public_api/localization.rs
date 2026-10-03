@@ -5,7 +5,9 @@ use crate::{
     NookVaultSecurityRecommendations,
 };
 use nook_core::AuthenticationWorkflowMatch;
+use nook_core::SupportedAppLocale;
 use nook_core::VaultSecurityAssessment;
+use nook_core::VaultSecurityRecommendations;
 use nook_core::{AppLocale, VaultRecoveryErrorKind};
 use nook_core::{
     LookupTranslationRequest, MergeTranslationCatalogsRequest, ResolveErrorMessageRequest,
@@ -13,6 +15,7 @@ use nook_core::{
     TranslateWithReplacementsRequest, TranslationCatalog,
 };
 use nook_core::{TranslationCatalogSource, TranslationLookup};
+use tsify::Tsify;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -69,7 +72,7 @@ impl From<nook_core::AppLocale> for NookAppLocaleParse {
     enrolled_device_count: u32,
 ) -> NookVaultSecurityRecommendations {
     NookVaultSecurityRecommendations::from_core(
-        nook_core::VaultSecurityRecommendations::assess_vault_security(VaultSecurityAssessment {
+        VaultSecurityRecommendations::assess_vault_security(VaultSecurityAssessment {
             sync_provider_count: (sync_provider_count as usize).into(),
             enrolled_device_count: (enrolled_device_count as usize).into(),
         }),
@@ -130,7 +133,6 @@ impl From<nook_core::AppLocale> for NookAppLocaleParse {
 }
 
 #[wasm_bindgen]
-#[must_use]
 #[allow(clippy::needless_pass_by_value)]
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
@@ -139,9 +141,8 @@ impl From<nook_core::AppLocale> for NookAppLocaleParse {
 pub fn resolve_app_locale_from_tags(
     tags: Vec<String>,
 ) -> Result<tsify::Ts<NookAppLocale>, wasm_bindgen::JsError> {
-    let result = { nook_core::SupportedAppLocale::resolve(tags.iter().map(String::as_str)) };
-    tsify::Tsify::into_ts(&result)
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
+    let result = { SupportedAppLocale::resolve(tags.iter().map(String::as_str)) };
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
 }
 
 #[wasm_bindgen]
@@ -153,14 +154,13 @@ pub fn supported_app_locale_code(
     locale: NookAppLocaleParse,
 ) -> Result<tsify::Ts<NookAppLocale>, wasm_bindgen::JsError> {
     let result = match locale {
-        NookAppLocaleParse::English => Ok(nook_core::SupportedAppLocale::English),
-        NookAppLocaleParse::Russian => Ok(nook_core::SupportedAppLocale::Russian),
+        NookAppLocaleParse::English => Ok(SupportedAppLocale::English),
+        NookAppLocaleParse::Russian => Ok(SupportedAppLocale::Russian),
         NookAppLocaleParse::Unsupported => Err(JsError::new(
             "unsupported locale does not have an application locale code",
         )),
     }?;
-    tsify::Tsify::into_ts(&result)
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
 }
 
 #[wasm_bindgen]
@@ -254,6 +254,7 @@ pub fn supported_app_locale_code(
 #[allow(unused_imports)]
 mod tests {
     use super::*;
+    use wasm_bindgen::JsError;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[cfg(target_arch = "wasm32")]
@@ -271,22 +272,38 @@ mod tests {
             NookAppLocaleParse::Russian
         );
         assert_eq!(
-            resolve_app_locale_from_tags(vec!["xx".into(), "ru".into()]).code(),
+            resolve_app_locale_from_tags(vec!["xx".into(), "ru".into()])
+                .and_then(|value| value
+                    .to_rust()
+                    .map_err(|_| JsError::new("Typed test output could not be decoded.")))
+                .code(),
             "ru"
         );
         assert_eq!(
             supported_app_locale_code(NookAppLocaleParse::English)
+                .and_then(|value| value
+                    .to_rust()
+                    .map_err(|_| JsError::new("Typed test output could not be decoded.")))
                 .unwrap()
                 .code(),
             "en"
         );
         assert_eq!(
             supported_app_locale_code(NookAppLocaleParse::Russian)
+                .and_then(|value| value
+                    .to_rust()
+                    .map_err(|_| JsError::new("Typed test output could not be decoded.")))
                 .unwrap()
                 .code(),
             "ru"
         );
-        assert!(supported_app_locale_code(NookAppLocaleParse::Unsupported).is_err());
+        assert!(
+            supported_app_locale_code(NookAppLocaleParse::Unsupported)
+                .and_then(|value| value
+                    .to_rust()
+                    .map_err(|_| JsError::new("Typed test output could not be decoded.")))
+                .is_err()
+        );
 
         let catalog = get_translation_catalog("en");
         assert!(!catalog.is_empty());

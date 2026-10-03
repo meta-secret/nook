@@ -37,6 +37,8 @@ use tracing_subscriber::fmt::format::DefaultFields;
 use tracing_subscriber::layer::{Context, SubscriberExt};
 use tracing_subscriber::registry::Registry;
 use tracing_subscriber::reload::Layer as ReloadLayer;
+use tsify::Tsify;
+use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 const LOG_DB_NAME: &str = "nook_logs";
@@ -154,7 +156,6 @@ pub(crate) enum LogPageLimit {
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize, tsify::Tsify)]
-
 pub struct LogEntry {
     ts: nook_core::IsoTimestamp,
     level: String,
@@ -175,9 +176,9 @@ impl NookLogEntries {
         let result = { self.0.clone() };
         result
             .iter()
-            .map(tsify::Tsify::into_ts)
+            .map(Tsify::into_ts)
             .collect::<Result<Vec<_>, _>>()
-            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
+            .map_err(|_| JsError::new("Typed WASM output could not be encoded."))
     }
 }
 

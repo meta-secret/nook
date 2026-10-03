@@ -19,7 +19,6 @@ enum AccountPickerAuthorizationPhase {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Tsify)]
 #[serde(tag = "kind", content = "error", rename_all = "camelCase")]
-
 pub enum CleanupTransitionOutcome {
     Started,
     Pending,

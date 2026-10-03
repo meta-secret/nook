@@ -3,7 +3,6 @@ use tsify::Tsify;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-
 pub enum ExtensionConnectScope {
     VaultAccess,
     PasswordFilling,
@@ -39,7 +38,6 @@ impl ExtensionConnectScope {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-
 pub enum ExtensionPairingVaultType {
     Simple,
 }

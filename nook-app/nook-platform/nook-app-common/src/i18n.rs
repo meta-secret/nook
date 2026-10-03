@@ -13,7 +13,6 @@ pub enum AppLocale {
 
 /// Locale that can be selected and persisted by the application.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, tsify::Tsify)]
-
 pub enum SupportedAppLocale {
     #[serde(rename = "en")]
     English,

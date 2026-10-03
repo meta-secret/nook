@@ -5,7 +5,6 @@ use super::{LocalFolderConfig, OAuthFileConfig};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "value", rename_all = "camelCase")]
-
 pub enum StoredOAuthRefreshCredential {
     #[default]
     NotIssued,
@@ -14,7 +13,6 @@ pub enum StoredOAuthRefreshCredential {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "value", rename_all = "camelCase")]
-
 pub enum StoredOAuthAccessCredential {
     #[default]
     SignedOut,
@@ -23,7 +21,6 @@ pub enum StoredOAuthAccessCredential {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "value", rename_all = "camelCase")]
-
 pub enum StoredOAuthTokenExpiry {
     #[default]
     Unknown,
@@ -32,7 +29,6 @@ pub enum StoredOAuthTokenExpiry {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "value", rename_all = "camelCase")]
-
 pub enum StoredOAuthRemoteFileId {
     #[default]
     Unresolved,
@@ -41,7 +37,6 @@ pub enum StoredOAuthRemoteFileId {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "value", rename_all = "camelCase")]
-
 pub enum StoredOAuthRemoteFileName {
     #[default]
     Unresolved,
@@ -50,7 +45,6 @@ pub enum StoredOAuthRemoteFileName {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "value", rename_all = "camelCase")]
-
 pub enum StoredOAuthAccountIdentity {
     #[default]
     Unknown,
@@ -59,7 +53,6 @@ pub enum StoredOAuthAccountIdentity {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "value", rename_all = "camelCase")]
-
 pub enum StoredGoogleDriveFolder {
     #[default]
     Root,
@@ -73,7 +66,6 @@ pub enum StoredGoogleDriveFolder {
 /// resolves or creates a named child folder, then persist its stable Drive ID.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "value", rename_all = "camelCase")]
-
 pub enum StoredGoogleDrivePrivateTarget {
     #[default]
     LegacyAppDataFolder,
@@ -83,7 +75,6 @@ pub enum StoredGoogleDrivePrivateTarget {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "value", rename_all = "camelCase")]
-
 pub enum StoredICloudShareTarget {
     #[default]
     Personal,
@@ -92,7 +83,6 @@ pub enum StoredICloudShareTarget {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "value", rename_all = "camelCase")]
-
 pub enum StoredLocalFolderDirectory {
     #[default]
     Unnamed,
@@ -101,7 +91,6 @@ pub enum StoredLocalFolderDirectory {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "value", rename_all = "camelCase")]
-
 pub enum StoredLocalFolderHandle {
     #[default]
     Unbound,
@@ -110,7 +99,6 @@ pub enum StoredLocalFolderHandle {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "value", rename_all = "camelCase")]
-
 pub enum StoredGithubPat {
     #[default]
     Missing,
@@ -119,7 +107,6 @@ pub enum StoredGithubPat {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "value", rename_all = "camelCase")]
-
 pub enum StoredGithubRepository {
     #[default]
     DefaultRepository,
@@ -128,7 +115,6 @@ pub enum StoredGithubRepository {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "value", rename_all = "camelCase")]
-
 pub enum ProviderVaultScope {
     #[default]
     Unscoped,
@@ -137,7 +123,6 @@ pub enum ProviderVaultScope {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "value", rename_all = "camelCase")]
-
 pub enum ActiveVaultScope {
     #[default]
     Unselected,
@@ -146,7 +131,6 @@ pub enum ActiveVaultScope {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "config", rename_all = "camelCase")]
-
 pub enum StoredOAuthFileConfiguration {
     #[default]
     NotApplicable,
@@ -162,7 +146,6 @@ impl StoredOAuthFileConfiguration {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "config", rename_all = "camelCase")]
-
 pub enum StoredLocalFolderConfiguration {
     #[default]
     NotApplicable,

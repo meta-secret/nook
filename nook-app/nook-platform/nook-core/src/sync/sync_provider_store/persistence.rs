@@ -6,14 +6,12 @@ use tsify::Tsify;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-
 pub enum AuthProviderPersistenceMode {
     Replace,
     PreserveUnlistedSyncProviders,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-
 pub struct AuthProviderPersistenceRequest {
     pub snapshot: AuthProvidersSnapshotData,
     pub mode: AuthProviderPersistenceMode,

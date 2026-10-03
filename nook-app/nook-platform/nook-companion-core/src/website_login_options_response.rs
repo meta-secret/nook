@@ -55,12 +55,10 @@ pub enum WebsiteLoginOptionsWire {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(transparent)]
-
 pub struct WebsiteLoginOptionsWireValue(WebsiteLoginOptionsWire);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-
 pub struct WebsiteLoginAccountOption {
     pub vault_store_id: String,
     pub vault_name: String,
@@ -72,7 +70,6 @@ pub struct WebsiteLoginAccountOption {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
 #[serde(untagged, rename_all_fields = "camelCase")]
-
 pub enum WebsiteLoginOptions {
     Ready {
         kind: WebsiteLoginOptionsKind,

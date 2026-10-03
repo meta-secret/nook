@@ -26,7 +26,6 @@ use super::{AuthProvidersSnapshotData, OAuthFileConfigData, StorageProviderData}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "providerType", rename_all = "camelCase")]
-
 pub enum ProviderSaveSetup {
     Existing,
     New(StorageProviderType),
@@ -47,7 +46,6 @@ impl ProviderSaveSetup {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-
 pub struct ProviderSaveRequest {
     pub snapshot: AuthProvidersSnapshotData,
     pub provider_store_id: ProviderVaultScope,
@@ -65,7 +63,6 @@ pub struct ProviderSaveRequest {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Tsify)]
 #[serde(tag = "state", rename_all = "camelCase")]
-
 pub enum ProviderSaveOutcome {
     Saved {
         snapshot: AuthProvidersSnapshotData,

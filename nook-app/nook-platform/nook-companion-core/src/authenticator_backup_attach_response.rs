@@ -25,7 +25,6 @@ pub struct AuthenticatorBackupAttachRejectedWire {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(untagged)]
-
 pub enum AuthenticatorBackupAttachResponseWire {
     Completed(AuthenticatorBackupAttachCompletedWire),
     Rejected(AuthenticatorBackupAttachRejectedWire),
@@ -49,7 +48,6 @@ impl Serialize for AuthenticatorBackupAttachResponseKind {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
 #[serde(untagged)]
-
 pub enum AuthenticatorBackupAttachResponse {
     Completed {
         kind: AuthenticatorBackupAttachResponseKind,

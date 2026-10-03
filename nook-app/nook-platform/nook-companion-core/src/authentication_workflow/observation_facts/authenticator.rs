@@ -11,7 +11,6 @@ use tsify::Tsify;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-
 pub enum AuthenticationAuthenticatorSetupObservation {
     #[default]
     Absent,
@@ -20,7 +19,6 @@ pub enum AuthenticationAuthenticatorSetupObservation {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-
 pub enum AuthenticationBackupCodesObservation {
     #[default]
     Absent,
@@ -30,7 +28,6 @@ pub enum AuthenticationBackupCodesObservation {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-
 pub enum AuthenticationPasskeyAccountAvailability {
     #[default]
     Unavailable,
@@ -58,7 +55,6 @@ impl AuthenticationBackupCodesObservation {
 /// Raw, non-secret authenticator and passkey facts for one authentication scope.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-
 pub struct AuthenticationAuthenticatorObservationFacts {
     pub authenticator_setup: AuthenticationAuthenticatorSetupObservation,
     /// Bounded, non-secret heading/action copy; recovery candidates are never transported here.

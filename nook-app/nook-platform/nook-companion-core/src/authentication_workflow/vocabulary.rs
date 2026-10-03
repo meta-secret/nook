@@ -134,7 +134,6 @@ pub enum AuthenticationWorkflowAction {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-
 pub enum AuthenticationSavedLoginCapability {
     Unavailable,
     FillSavedLogin,
@@ -142,7 +141,6 @@ pub enum AuthenticationSavedLoginCapability {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-
 pub enum AuthenticationPilotPresentationCapability {
     Hidden,
     ProposeAction,

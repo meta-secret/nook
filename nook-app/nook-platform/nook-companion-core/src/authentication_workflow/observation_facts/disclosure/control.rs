@@ -173,7 +173,6 @@ impl TryFrom<serde_json::Value> for VersionedAuthenticationDisclosureControlObse
 /// Typed classification of a versioned disclosure-control observation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-
 pub enum AuthenticationDisclosureControlDecision {
     AdvancesAuthentication,
     DoesNotAdvanceAuthentication,

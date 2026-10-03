@@ -37,7 +37,6 @@ impl Drop for ExtensionPairingStorageProviderAdmission {
 /// Generated provider payload returned to Web after Rust admission.
 #[derive(Serialize, Tsify)]
 #[serde(transparent)]
-
 pub struct ExtensionPairingStorageProviderPayload(StorageProvider);
 
 impl Drop for ExtensionPairingStorageProviderPayload {
@@ -54,17 +53,16 @@ impl Drop for ExtensionPairingStorageProviderPayload {
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn decode_extension_pairing_storage_provider(
-    admission: tsify::Ts<ExtensionPairingStorageProviderAdmission>,
+    admission: &tsify::Ts<ExtensionPairingStorageProviderAdmission>,
 ) -> Result<tsify::Ts<ExtensionPairingStorageProviderPayload>, wasm_bindgen::JsError> {
     let admission = admission
         .to_rust()
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))?;
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
 
     let result = admission.decode().map_err(|_| {
         JsError::new("Extension pairing provider credentials are not storage-safe.")
     })?;
-    tsify::Tsify::into_ts(&result)
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM value could not be converted."))
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 
 /// Decode external provider snapshots through the Rust-owned serde contract.
@@ -73,20 +71,18 @@ pub fn decode_extension_pairing_storage_provider(
 /// runs. Invalid nested variants fail at that boundary. Valid legacy rows are
 /// normalized by serde defaults before returning to TypeScript.
 #[wasm_bindgen]
-#[must_use]
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn decode_storage_providers(
-    snapshot: tsify::Ts<nook_core::AuthProvidersSnapshotData>,
+    snapshot: &tsify::Ts<nook_core::AuthProvidersSnapshotData>,
 ) -> Result<tsify::Ts<nook_core::AuthProvidersSnapshotData>, wasm_bindgen::JsError> {
     let snapshot = snapshot
         .to_rust()
-        .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
     let result = { snapshot };
-    tsify::Tsify::into_ts(&result)
-        .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
 }
 
 #[cfg(all(test, target_arch = "wasm32"))]
@@ -140,7 +136,7 @@ mod wasm_tests {
     fn provider_decoder_normalizes_legacy_javascript_snapshot() -> Result<(), wasm_bindgen::JsError>
     {
         let snapshot = decode_snapshot_json(LEGACY_PROVIDER_SNAPSHOT)?;
-        let decoded = decode_storage_providers(snapshot);
+        let decoded = decode_storage_providers(&snapshot);
 
         assert_eq!(
             decoded.providers[0].sync_checkpoint,
@@ -184,7 +180,8 @@ mod extension_pairing_provider_tests {
         let admission = serde_json::from_str::<ExtensionPairingStorageProviderAdmission>(
             &ProviderFixture::json(ARMORED_SECRET),
         )?;
-        let payload = decode_extension_pairing_storage_provider(admission)
+        let payload = admission
+            .decode()
             .map_err(|_| anyhow::anyhow!("armored provider must be admitted"))?;
         assert!(matches!(&payload.0.github_pat, StoredGithubPat::Token(_)));
         Ok(())

@@ -10,7 +10,6 @@ use tsify::Tsify;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-
 pub struct ImportedExtensionEventLog {
     pub vault_store_id: StoreId,
     pub event_count: ExtensionEventCount,

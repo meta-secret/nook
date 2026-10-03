@@ -26,7 +26,6 @@ pub struct AuthenticatorEnrollmentRejectedWire {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(untagged)]
-
 pub enum AuthenticatorEnrollmentStageResponseWire {
     Staged(AuthenticatorEnrollmentStagedWire),
     Rejected(AuthenticatorEnrollmentRejectedWire),
@@ -50,7 +49,6 @@ impl Serialize for AuthenticatorEnrollmentStageResponseKind {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
 #[serde(untagged, rename_all_fields = "camelCase")]
-
 pub enum AuthenticatorEnrollmentStageResponse {
     Staged {
         kind: AuthenticatorEnrollmentStageResponseKind,
@@ -71,7 +69,6 @@ pub struct AuthenticatorEnrollmentCompletedWire {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(untagged)]
-
 pub enum AuthenticatorEnrollmentConfirmResponseWire {
     Completed(AuthenticatorEnrollmentCompletedWire),
     Rejected(AuthenticatorEnrollmentRejectedWire),
@@ -95,7 +92,6 @@ impl Serialize for AuthenticatorEnrollmentConfirmResponseKind {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
 #[serde(untagged, rename_all_fields = "camelCase")]
-
 pub enum AuthenticatorEnrollmentConfirmResponse {
     Completed {
         kind: AuthenticatorEnrollmentConfirmResponseKind,

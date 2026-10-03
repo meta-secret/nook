@@ -4,6 +4,7 @@ use crate::NookDatabase;
 use crate::SentinelDbLoadSentinelGenesisShareDelivery;
 use crate::SentinelDbSaveSentinelGenesisShareDelivery;
 use crate::storage::indexed_db::StoredSentinelShareDelivery;
+use nook_core::CheckedSentinelGenesisDelivery;
 use nook_core::{
     SentinelOnboardingIssuance, SentinelOnboardingPackage, SentinelOnboardingRecipient,
 };
@@ -47,7 +48,7 @@ impl NookSentinelStoredDeliveriesRequest {
                     expected_request: &stored.request,
                     identity: &self.identity,
                 })
-                .and_then(nook_core::CheckedSentinelGenesisDelivery::into_record)?;
+                .and_then(CheckedSentinelGenesisDelivery::into_record)?;
             summaries.push(NookSentinelStoredDeliverySummary::from_delivery(
                 entry.store_id,
                 &stored.delivery,
@@ -67,11 +68,11 @@ impl NookVaultManager {
         &self,
         request_json: &str,
         delivery_json: &str,
-        provider_snapshot: tsify::Ts<nook_core::AuthProvidersSnapshotData>,
+        provider_snapshot: &tsify::Ts<nook_core::AuthProvidersSnapshotData>,
     ) -> Result<String, wasm_bindgen::JsError> {
         let provider_snapshot = provider_snapshot
             .to_rust()
-            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
 
         let request: nook_core::SentinelGenesisRequest = serde_json::from_str(request_json)
             .map_err(|error| NookError::Serialization(error.to_string()))?;
@@ -163,7 +164,7 @@ impl NookVaultManager {
                 expected_request: &stored.request,
                 identity: &identity,
             })
-            .and_then(nook_core::CheckedSentinelGenesisDelivery::into_record)?;
+            .and_then(CheckedSentinelGenesisDelivery::into_record)?;
         self.install_accepted_sentinel_delivery(&stored.delivery, &record)?;
         Ok(serde_json::to_string(&record)
             .map_err(|error| NookError::Serialization(error.to_string()))?)
@@ -196,6 +197,15 @@ impl NookVaultManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_core::CheckedSentinelGenesisResponse;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_core::StoreId;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_core::VaultType;
     use nook_core::{
         DeviceIdentity, SentinelGenesisDeliveryRecipient, SentinelGenesisRequest,
         SentinelGenesisResponder, SentinelGenesisShareDelivery, SigningIdentity,
@@ -225,10 +235,10 @@ mod tests {
                 signing_key: member_signing.signing_key(),
                 label: "Member".to_owned(),
             })
-            .and_then(nook_core::CheckedSentinelGenesisResponse::sign)?;
+            .and_then(CheckedSentinelGenesisResponse::sign)?;
         let session = session.collect(response)?;
         let request = session.request().clone();
-        let store_id = nook_core::StoreId::generate()?;
+        let store_id = StoreId::generate()?;
         let issued = session
             .prepare(owner_signing.signing_key())?
             .issue(&store_id)?;
@@ -255,10 +265,7 @@ mod tests {
         manager.install_accepted_sentinel_delivery(&delivery, &record)?;
 
         assert_eq!(manager.vault.store_id, delivery.store_id.as_str());
-        assert_eq!(
-            manager.vault.architecture.vault_type,
-            nook_core::VaultType::Sentinel
-        );
+        assert_eq!(manager.vault.architecture.vault_type, VaultType::Sentinel);
         assert_eq!(manager.vault.meta.sentinel_shares.len(), 1);
         let policy = manager.vault.architecture.sentinel.policy()?;
         assert_eq!(policy.threshold, delivery.policy.threshold);
@@ -274,6 +281,7 @@ mod tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
+    use wasm_bindgen::JsError;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -290,7 +298,7 @@ mod browser_tests {
 
         assert!(
             manager
-                .create_sentinel_onboarding_package(&request_json, "{}", Default::default())
+                .create_sentinel_onboarding_package(&request_json, "{}", &Default::default())
                 .is_err()
         );
         assert!(
@@ -298,7 +306,7 @@ mod browser_tests {
                 .create_sentinel_onboarding_package(
                     &request_json,
                     &delivery_json,
-                    Default::default()
+                    &Default::default()
                 )
                 .is_err()
         );

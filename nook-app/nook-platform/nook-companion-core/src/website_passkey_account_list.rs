@@ -27,7 +27,6 @@ pub struct WebsitePasskeyAccountListWire {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-
 pub struct WebsitePasskeyAccount {
     pub credential_id: String,
     pub user_name: String,
@@ -36,7 +35,6 @@ pub struct WebsitePasskeyAccount {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
 #[serde(untagged, rename_all_fields = "camelCase")]
-
 pub enum WebsitePasskeyAccountList {
     Ready {
         kind: WebsitePasskeyAccountListKind,

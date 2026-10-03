@@ -49,7 +49,6 @@ pub struct GeneratedPasswordRejectedWire {
 
 #[derive(Debug, Deserialize, Tsify)]
 #[serde(untagged)]
-
 pub enum GeneratedPasswordResponseWire {
     Generated(GeneratedPasswordWire),
     Rejected(GeneratedPasswordRejectedWire),
@@ -73,7 +72,6 @@ impl Serialize for GeneratedPasswordResponseKind {
 
 #[derive(Debug, Serialize, Tsify)]
 #[serde(untagged)]
-
 pub enum GeneratedPasswordResponse {
     Generated {
         kind: GeneratedPasswordResponseKind,

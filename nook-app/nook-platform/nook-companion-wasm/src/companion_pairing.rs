@@ -5,6 +5,7 @@ use nook_companion_core::{
     CompanionPairingWebsiteAuthorization, CompanionPairingWebsiteAuthorizationOutcome,
     CompanionWebsitePairingEndpoint, ConsumedCompanionPairingAuthority,
 };
+use tsify::Tsify;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 #[wasm_bindgen]
@@ -16,10 +17,12 @@ pub struct NookCompanionPairingExtensionProtocol {
 impl NookCompanionPairingExtensionProtocol {
     #[wasm_bindgen(constructor)]
     #[allow(clippy::needless_pass_by_value)]
-    pub fn new(request: tsify::Ts<CompanionPairingRequest>) -> Result<Self, wasm_bindgen::JsError> {
+    pub fn new(
+        request: &tsify::Ts<CompanionPairingRequest>,
+    ) -> Result<Self, wasm_bindgen::JsError> {
         let request = request
             .to_rust()
-            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
 
         Ok(Self {
             inner: CompanionExtensionPairingEndpoint::issue(request)
@@ -32,8 +35,7 @@ impl NookCompanionPairingExtensionProtocol {
             .inner
             .request()
             .map_err(|error| JsError::new(&error.to_string()))?;
-        tsify::Tsify::into_ts(&result)
-            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
+        Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
     }
 
     /// Request authority cannot be taken from a consumed protocol handle.
@@ -64,11 +66,11 @@ impl NookCompanionPairingApprovalAuthority {
     #[allow(clippy::needless_pass_by_value)]
     pub fn admit(
         self,
-        attempt: tsify::Ts<CompanionPairingApprovalAttempt>,
+        attempt: &tsify::Ts<CompanionPairingApprovalAttempt>,
     ) -> Result<NookAdmittedCompanionPairingApproval, wasm_bindgen::JsError> {
         let attempt = attempt
             .to_rust()
-            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
 
         let authorized = self
             .inner
@@ -97,11 +99,11 @@ impl NookCompanionPairingWebsiteProtocol {
     #[wasm_bindgen(constructor)]
     #[allow(clippy::needless_pass_by_value)]
     pub fn new(
-        observation: tsify::Ts<CompanionPairingRequestObservation>,
+        observation: &tsify::Ts<CompanionPairingRequestObservation>,
     ) -> Result<Self, wasm_bindgen::JsError> {
         let observation = observation
             .to_rust()
-            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
 
         Ok(Self {
             inner: CompanionWebsitePairingEndpoint::admit(observation)
@@ -114,22 +116,21 @@ impl NookCompanionPairingWebsiteProtocol {
             .inner
             .request()
             .map_err(|error| JsError::new(&error.to_string()))?;
-        tsify::Tsify::into_ts(&result)
-            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
+        Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
     }
 
     #[allow(clippy::needless_pass_by_value)]
     pub fn authorize(
         self,
-        authorization: tsify::Ts<CompanionPairingWebsiteAuthorization>,
-        provider_manifest_digest: tsify::Ts<CompanionPairingProviderManifestDigest>,
+        authorization: &tsify::Ts<CompanionPairingWebsiteAuthorization>,
+        provider_manifest_digest: &tsify::Ts<CompanionPairingProviderManifestDigest>,
     ) -> Result<tsify::Ts<CompanionPairingWebsiteAuthorizationOutcome>, wasm_bindgen::JsError> {
         let authorization = authorization
             .to_rust()
-            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
         let provider_manifest_digest = provider_manifest_digest
             .to_rust()
-            .map_err(|_| wasm_bindgen::JsError::new("Invalid typed WASM input."))?;
+            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
         let result = {
             match self.inner.authorize(authorization) {
                 Ok(authorized) => CompanionPairingWebsiteAuthorizationOutcome::Approved {
@@ -140,8 +141,7 @@ impl NookCompanionPairingWebsiteProtocol {
                 },
             }
         };
-        tsify::Tsify::into_ts(&result)
-            .map_err(|_| wasm_bindgen::JsError::new("Typed WASM output could not be encoded."))
+        Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
     }
 }
 
@@ -152,12 +152,16 @@ mod tests {
         CompanionPairingApproval, CompanionPairingEpochMilliseconds, CompanionPairingInstallation,
         ExtensionConnectScope, ExtensionPairingVaultType, PairingVaultId,
     };
+    use tsify::Tsify;
+    use wasm_bindgen::JsError;
+    #[cfg(all(test, target_arch = "wasm32"))]
+    #[cfg(all(test, target_arch = "wasm32"))]
+    use wasm_bindgen::JsValue;
 
     struct PairingProtocolFixture;
     impl PairingProtocolFixture {
         fn epoch(value: &str) -> Result<CompanionPairingEpochMilliseconds, wasm_bindgen::JsValue> {
-            serde_json::from_str(value)
-                .map_err(|error| wasm_bindgen::JsValue::from_str(&error.to_string()))
+            serde_json::from_str(value).map_err(|error| JsValue::from_str(&error.to_string()))
         }
 
         fn approval_timestamp(
@@ -166,8 +170,7 @@ mod tests {
             nook_companion_core::ExtensionPairingApprovalEpochMilliseconds,
             wasm_bindgen::JsValue,
         > {
-            serde_json::from_str(value)
-                .map_err(|error| wasm_bindgen::JsValue::from_str(&error.to_string()))
+            serde_json::from_str(value).map_err(|error| JsValue::from_str(&error.to_string()))
         }
 
         fn request() -> Result<CompanionPairingRequest, wasm_bindgen::JsValue> {
@@ -197,7 +200,7 @@ mod tests {
                 provider_manifest_digest: CompanionPairingProviderManifestDigest::parse(
                     &"a".repeat(64),
                 )
-                .map_err(|error| wasm_bindgen::JsValue::from_str(&error.to_string()))?,
+                .map_err(|error| JsValue::from_str(&error.to_string()))?,
             })
         }
     }
@@ -207,20 +210,34 @@ mod tests {
     {
         let mut request = PairingProtocolFixture::request()?;
         request.expires_at = PairingProtocolFixture::epoch("100")?;
-        assert!(NookCompanionPairingExtensionProtocol::new(request).is_err());
+        assert!(
+            NookCompanionPairingExtensionProtocol::new(
+                &(request)
+                    .into_ts()
+                    .map_err(|_| JsError::new("Typed test input could not be encoded."))?
+            )
+            .is_err()
+        );
         Ok(())
     }
 
     #[wasm_bindgen_test::wasm_bindgen_test]
     fn generated_authority_is_one_use_and_returns_opaque_admission()
     -> Result<(), wasm_bindgen::JsValue> {
-        let protocol =
-            NookCompanionPairingExtensionProtocol::new(PairingProtocolFixture::request()?)?;
+        let protocol = NookCompanionPairingExtensionProtocol::new(
+            &(PairingProtocolFixture::request()?)
+                .into_ts()
+                .map_err(|_| JsError::new("Typed test input could not be encoded."))?,
+        )?;
         let authority = protocol.take_authority()?;
-        let admission = authority.admit(CompanionPairingApprovalAttempt {
-            approval: PairingProtocolFixture::approval()?,
-            observed_at: PairingProtocolFixture::epoch("150")?,
-        })?;
+        let admission = authority.admit(
+            &(CompanionPairingApprovalAttempt {
+                approval: PairingProtocolFixture::approval()?,
+                observed_at: PairingProtocolFixture::epoch("150")?,
+            })
+            .into_ts()
+            .map_err(|_| JsError::new("Typed test input could not be encoded."))?,
+        )?;
         drop(admission);
         Ok(())
     }
@@ -229,26 +246,55 @@ mod tests {
     fn generated_pairing_protocols_preserve_request_and_website_authorization()
     -> Result<(), wasm_bindgen::JsValue> {
         let request = PairingProtocolFixture::request()?;
-        let extension = NookCompanionPairingExtensionProtocol::new(request.clone())?;
-        assert_eq!(extension.request()?.request_id, request.request_id);
+        let extension = NookCompanionPairingExtensionProtocol::new(
+            &(request.clone())
+                .into_ts()
+                .map_err(|_| JsError::new("Typed test input could not be encoded."))?,
+        )?;
+        assert_eq!(
+            extension
+                .request()?
+                .to_rust()
+                .map_err(|_| JsError::new("Typed test output could not be decoded."))?
+                .request_id,
+            request.request_id
+        );
 
-        let website =
-            NookCompanionPairingWebsiteProtocol::new(CompanionPairingRequestObservation {
+        let website = NookCompanionPairingWebsiteProtocol::new(
+            &(CompanionPairingRequestObservation {
                 request: request.clone(),
                 observed_at: PairingProtocolFixture::epoch("150")?,
-            })?;
-        assert_eq!(website.request()?.nonce, request.nonce);
-        let outcome = website.authorize(
-            CompanionPairingWebsiteAuthorization {
-                request,
-                observed_at: PairingProtocolFixture::epoch("175")?,
-                vault_store_id: PairingVaultId::before_genesis_placeholder(),
-                vault_name: "Personal".to_owned(),
-                approved_at: PairingProtocolFixture::approval_timestamp("175")?,
-            },
-            CompanionPairingProviderManifestDigest::parse(&"b".repeat(64))
-                .map_err(|error| wasm_bindgen::JsValue::from_str(&error.to_string()))?,
+            })
+            .into_ts()
+            .map_err(|_| JsError::new("Typed test input could not be encoded."))?,
+        )?;
+        assert_eq!(
+            website
+                .request()?
+                .to_rust()
+                .map_err(|_| JsError::new("Typed test output could not be decoded."))?
+                .nonce,
+            request.nonce
         );
+        let outcome = website
+            .authorize(
+                &(CompanionPairingWebsiteAuthorization {
+                    request,
+                    observed_at: PairingProtocolFixture::epoch("175")?,
+                    vault_store_id: PairingVaultId::before_genesis_placeholder(),
+                    vault_name: "Personal".to_owned(),
+                    approved_at: PairingProtocolFixture::approval_timestamp("175")?,
+                })
+                .into_ts()
+                .map_err(|_| JsError::new("Typed test input could not be encoded."))?,
+                &(CompanionPairingProviderManifestDigest::parse(&"b".repeat(64))
+                    .map_err(|error| JsValue::from_str(&error.to_string()))?)
+                .into_ts()
+                .map_err(|_| JsError::new("Typed test input could not be encoded."))?,
+            )
+            .map_err(|_| JsError::new("Typed test operation failed."))?
+            .to_rust()
+            .map_err(|_| JsError::new("Typed test output could not be decoded."))?;
         assert!(matches!(
             outcome,
             CompanionPairingWebsiteAuthorizationOutcome::Approved { .. }
@@ -257,45 +303,67 @@ mod tests {
         let mut expired = PairingProtocolFixture::request()?;
         expired.expires_at = PairingProtocolFixture::epoch("100")?;
         assert!(
-            NookCompanionPairingWebsiteProtocol::new(CompanionPairingRequestObservation {
-                request: expired,
-                observed_at: PairingProtocolFixture::epoch("150")?,
-            })
+            NookCompanionPairingWebsiteProtocol::new(
+                &(CompanionPairingRequestObservation {
+                    request: expired,
+                    observed_at: PairingProtocolFixture::epoch("150")?,
+                })
+                .into_ts()
+                .map_err(|_| JsError::new("Typed test input could not be encoded."))?
+            )
             .is_err()
         );
 
-        let rejected_website =
-            NookCompanionPairingWebsiteProtocol::new(CompanionPairingRequestObservation {
+        let rejected_website = NookCompanionPairingWebsiteProtocol::new(
+            &(CompanionPairingRequestObservation {
                 request: PairingProtocolFixture::request()?,
                 observed_at: PairingProtocolFixture::epoch("150")?,
-            })?;
-        let rejected = rejected_website.authorize(
-            CompanionPairingWebsiteAuthorization {
-                request: PairingProtocolFixture::request()?,
-                observed_at: PairingProtocolFixture::epoch("149")?,
-                vault_store_id: PairingVaultId::before_genesis_placeholder(),
-                vault_name: "Personal".to_owned(),
-                approved_at: PairingProtocolFixture::approval_timestamp("149")?,
-            },
-            CompanionPairingProviderManifestDigest::parse(&"b".repeat(64))
-                .map_err(|error| wasm_bindgen::JsValue::from_str(&error.to_string()))?,
-        );
+            })
+            .into_ts()
+            .map_err(|_| JsError::new("Typed test input could not be encoded."))?,
+        )?;
+        let rejected = rejected_website
+            .authorize(
+                &(CompanionPairingWebsiteAuthorization {
+                    request: PairingProtocolFixture::request()?,
+                    observed_at: PairingProtocolFixture::epoch("149")?,
+                    vault_store_id: PairingVaultId::before_genesis_placeholder(),
+                    vault_name: "Personal".to_owned(),
+                    approved_at: PairingProtocolFixture::approval_timestamp("149")?,
+                })
+                .into_ts()
+                .map_err(|_| JsError::new("Typed test input could not be encoded."))?,
+                &(CompanionPairingProviderManifestDigest::parse(&"b".repeat(64))
+                    .map_err(|error| JsValue::from_str(&error.to_string()))?)
+                .into_ts()
+                .map_err(|_| JsError::new("Typed test input could not be encoded."))?,
+            )
+            .map_err(|_| JsError::new("Typed test operation failed."))?
+            .to_rust()
+            .map_err(|_| JsError::new("Typed test output could not be decoded."))?;
         assert!(matches!(
             rejected,
             CompanionPairingWebsiteAuthorizationOutcome::Rejected { .. }
         ));
 
-        let protocol =
-            NookCompanionPairingExtensionProtocol::new(PairingProtocolFixture::request()?)?;
+        let protocol = NookCompanionPairingExtensionProtocol::new(
+            &(PairingProtocolFixture::request()?)
+                .into_ts()
+                .map_err(|_| JsError::new("Typed test input could not be encoded."))?,
+        )?;
         let authority = protocol.take_authority()?;
         let mut invalid_approval = PairingProtocolFixture::approval()?;
         invalid_approval.request.request_id = "different-request".to_owned();
         assert!(
             authority
-                .admit(CompanionPairingApprovalAttempt {
-                    approval: invalid_approval,
-                    observed_at: PairingProtocolFixture::epoch("150")?,
-                })
+                .admit(
+                    &(CompanionPairingApprovalAttempt {
+                        approval: invalid_approval,
+                        observed_at: PairingProtocolFixture::epoch("150")?,
+                    })
+                    .into_ts()
+                    .map_err(|_| JsError::new("Typed test input could not be encoded."))?
+                )
                 .is_err()
         );
         Ok(())

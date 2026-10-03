@@ -93,7 +93,6 @@ pub enum ExtensionPersistenceStoreState {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-
 pub struct ExtensionPersistenceObservation {
     pub area: ExtensionPersistenceArea,
     pub observed_names: Vec<String>,

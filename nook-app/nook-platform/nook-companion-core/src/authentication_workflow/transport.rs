@@ -10,7 +10,6 @@ pub enum AuthenticationWorkflowTransportType {
     Snapshot,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-
 pub struct AuthenticationWorkflowSnapshotTransport {
     #[serde(rename = "type")]
     pub message_type: AuthenticationWorkflowTransportType,
@@ -23,7 +22,6 @@ pub struct AuthenticationWorkflowTransportPayload {
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "kind", rename_all = "camelCase")]
-
 pub enum AuthenticationWorkflowTransportAdmission {
     Rejected,
     Accepted {
@@ -50,12 +48,10 @@ impl AuthenticationWorkflowSnapshotTransport {
 }
 
 #[derive(Debug, Serialize, Deserialize, Tsify)]
-
 pub struct AuthenticationRecoveryCopyRequest {
     pub texts: Vec<String>,
 }
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-
 pub struct AuthenticationRecoveryCopyEvidence {
     pub copy: String,
     pub hint: AuthenticationBackupCodesObservation,

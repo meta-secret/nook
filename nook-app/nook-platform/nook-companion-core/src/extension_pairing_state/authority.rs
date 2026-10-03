@@ -20,7 +20,6 @@ pub use response::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Tsify)]
 #[serde(transparent)]
-
 pub struct PairingStorageJson(String);
 
 impl From<String> for PairingStorageJson {
@@ -34,14 +33,12 @@ pub use nook_auth2::{StoreId, StoreId as PairingVaultId};
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Tsify)]
 #[serde(deny_unknown_fields)]
-
 pub struct ActiveExtensionVault {
     pub vault_store_id: StoreId,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Tsify)]
 #[serde(tag = "kind", deny_unknown_fields)]
-
 pub enum ExtensionActiveVaultScope {
     NoActiveVault,
     Active(ActiveExtensionVault),
@@ -49,7 +46,6 @@ pub enum ExtensionActiveVaultScope {
 
 #[derive(Debug, Deserialize, Tsify)]
 #[serde(deny_unknown_fields)]
-
 pub struct ExtensionGrantAuthorityRequest {
     pub stored_json: PairingStorageJson,
     pub vault_store_id: StoreId,
@@ -58,14 +54,12 @@ pub struct ExtensionGrantAuthorityRequest {
 
 /// Validated stored metadata, not proof of current event-log access or unlock.
 #[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
-
 pub struct AuthorizedExtensionGrant {
     grant: StoredExtensionPairingGrant,
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
 #[serde(tag = "kind")]
-
 pub enum ExtensionGrantAuthority {
     NoMatchingAuthority,
     MissingActiveAuthority,
