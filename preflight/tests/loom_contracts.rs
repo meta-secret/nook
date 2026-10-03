@@ -350,9 +350,14 @@ fn meta_cortex_integration_documents_host_native_execution_and_storage_contracts
         "each role's configured model",
         "and `reasoning_effort`",
         "no `mode` or `service_tier` fields",
-        "storage version 3",
-        "storage version 1 and 2 feature databases are imported transactionally and only once",
-        "Legacy databases and their sidecars are preserved as backups.",
+        "../.meta-cortex/teams/gizmo-team/docs/agent-ledger.md#storage-and-ownership",
+        "../.meta-cortex/teams/gizmo-team/docs/agent-ledger.md#storage-migration-and-supported-readers",
+        "Stop all older ledger writers before upgrading.",
+        "Preserve a consistent database backup with its engine-managed sidecars.",
+        "Preserve `.meta-cortex/repository-id` from the actual Git main checkout.",
+        "Restore that exact UUID to the replacement main-checkout installation before\n  initializing features or linked worktrees.",
+        "Verify that the UUID selects the existing shared repository data directory.",
+        "Reapply the prior role models and reasoning efforts to the newly generated\nconfiguration.",
     ] {
         assert!(
             integration.contains(required),
