@@ -10,6 +10,9 @@ import {
 import { SkillProviderShellTokenizerScenario } from './skill-provider-shell-tokenizer.ts';
 
 export class SkillProviderWorkflowCommandsScenario {
+  private static readonly STANDARD_WORKFLOW_SHELLS: ReadonlySet<string> =
+    new Set(['bash', 'sh', 'pwsh']);
+
   private constructor(private readonly request: WorkflowCommandRequest) {}
 
   static workflowCommandSources(
@@ -203,7 +206,9 @@ export class SkillProviderWorkflowCommandsScenario {
       );
     if (typeof shell !== 'string' || shell.includes('${{'))
       throw new Error('Dynamic workflow shell is forbidden.');
-    if (!STANDARD_WORKFLOW_SHELLS.has(shell))
+    if (
+      !SkillProviderWorkflowCommandsScenario.STANDARD_WORKFLOW_SHELLS.has(shell)
+    )
       throw new Error(`Custom workflow shell is forbidden: ${shell}`);
   }
 
@@ -280,7 +285,5 @@ type StaticEnvironmentRequest = {
   readonly inherited: ReadonlyMap<string, string> | false;
   readonly node: ConfigurationMapping;
 };
-
-const STANDARD_WORKFLOW_SHELLS = new Set(['bash', 'sh']);
 
 const EXECUTION_ENVIRONMENT_NAMES = new Set(['BASH_ENV', 'NODE_OPTIONS']);

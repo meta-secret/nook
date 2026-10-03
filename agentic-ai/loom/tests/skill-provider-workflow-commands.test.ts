@@ -72,8 +72,8 @@ test('rejects execution environment mutations through GITHUB_ENV', () => {
   }
 });
 
-test('rejects workflow shells without a matching command parser', () => {
-  for (const shell of ['cmd', 'powershell', 'pwsh']) {
+test('accepts built-in workflow shells and rejects custom invocations', () => {
+  for (const shell of ['cmd', 'powershell', 'pwsh -File {0}']) {
     const document: ConfigurationNode = {
       jobs: { audit: { steps: [{ run: 'echo safe', shell }] } },
     };
@@ -84,7 +84,7 @@ test('rejects workflow shells without a matching command parser', () => {
       shell,
     ).toThrow(`Custom workflow shell is forbidden: ${shell}`);
   }
-  for (const shell of ['bash', 'sh']) {
+  for (const shell of ['bash', 'sh', 'pwsh']) {
     const document: ConfigurationNode = {
       jobs: { audit: { steps: [{ run: 'echo safe', shell }] } },
     };
