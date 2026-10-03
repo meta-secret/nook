@@ -10,9 +10,39 @@ import {
   WebsiteLoginOptionsKind,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm'
 
+import {
+  ExtensionPairingStateLoader,
+  ExtensionSetupLoadKind,
+} from '../../../../nook-web-extension/src/lib/pairing-state'
+
 afterEach(() => vi.unstubAllGlobals())
 
 describe('Pilot demo runtime wire contract', () => {
+  test('paired and disconnected demo replies pass the owning structural setup decoder', async () => {
+    for (const unavailableLoginPilotFlow of [false, true]) {
+      vi.stubGlobal('chrome', {})
+      const args: DemoChromeStubArgs = {
+        ...demoDomainEnumArgs,
+        localizedMessages: {},
+        unavailableLoginPilotFlow,
+      }
+      installDemoChromeStub(args)
+      const loaderArgs: ConstructorParameters<
+        typeof ExtensionPairingStateLoader
+      >[0] = {
+        browser: globalThis,
+      }
+      const result = await new ExtensionPairingStateLoader(
+        loaderArgs,
+      ).loadExtensionSetupState()
+      expect(result.kind).toBe(
+        unavailableLoginPilotFlow
+          ? ExtensionSetupLoadKind.NotConnected
+          : ExtensionSetupLoadKind.Ready,
+      )
+      vi.unstubAllGlobals()
+    }
+  })
   test('initial pending-save replies from every Pilot flow pass the actual Rust decoder', async () => {
     for (const flow of [
       {},
