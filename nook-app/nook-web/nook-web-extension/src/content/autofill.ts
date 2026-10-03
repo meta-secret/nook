@@ -199,12 +199,26 @@ class AuthenticationScanRenderLifecycle {
     }
     await passwordFieldDiscovery.prepareCompanionClassification(document)
     await recoveryCopyObservation.prepareAuthenticationRecoveryEvidence()
-    await pageQrCapture.prepareAuthenticationAuthenticatorSetupObservation()
+    const setupSnapshot =
+      await pageQrCapture.prepareAuthenticationAuthenticatorSetupObservation()
+    if (
+      sequence !== this.request.scanState.sequence ||
+      !pageQrCapture.authenticationAuthenticatorSetupSnapshotIsCurrent(
+        setupSnapshot,
+      )
+    )
+      return AuthenticationScanOutcome.Stale
     const { copy: recoveryCopy, hint: backupCodesHint } =
       recoveryCopyObservation.authenticationRecoveryEvidence()
+    const enrollmentHintsRequest: Parameters<
+      typeof authenticatorEnrollmentInteraction.detectEnrollmentHintsFromRecoveryCopy
+    >[0] = {
+      recoveryCopy,
+      authenticatorSetupObservation: setupSnapshot.observation,
+    }
     const enrollmentHints =
       authenticatorEnrollmentInteraction.detectEnrollmentHintsFromRecoveryCopy(
-        recoveryCopy,
+        enrollmentHintsRequest,
       )
     enrollmentHints.backupCodes = backupCodesHint === 'present'
     const companionPoliciesRequest: Parameters<

@@ -59,6 +59,18 @@ class MicrosoftIdentifierShellFixture {
         <button type="submit" class="${this.machineIdentity}">${authentication ? 'Next' : 'Subscribe'}</button>
       </form>
       <form method="post" action=""></form>
+      <section><p id="setup-copy">Continue with email</p><canvas width="120" height="120"></canvas></section>
+      <script nonce="fixture">
+        let mutationFrame = 0;
+        function changeVisibleMetadata() {
+          const paragraph = document.getElementById('setup-copy');
+          paragraph.textContent = mutationFrame % 2 === 0 ? 'Continue with email' : 'Use your Microsoft account';
+          mutationFrame += 1;
+          if (mutationFrame < 48) requestAnimationFrame(changeVisibleMetadata);
+          else document.documentElement.dataset.setupMetadataSettled = 'true';
+        }
+        requestAnimationFrame(changeVisibleMetadata);
+      </script>
     </main></body></html>`
   }
 }
@@ -82,6 +94,11 @@ for (const authentication of [true, false]) {
     expect(new TextEncoder().encode(fixture.machineIdentity)).toHaveLength(581)
     expect(new TextEncoder().encode(fixture.destination())).toHaveLength(2141)
     const context = await launchExtensionContext(testInfo.outputPath('profile'))
+    const setupFailures: string[] = []
+    context.on('weberror', (event) => {
+      if (event.error().message.includes('Authenticator setup observation'))
+        setupFailures.push(event.error().message)
+    })
     await context.tracing.start({ screenshots: true, snapshots: true })
     try {
       await getServiceWorker(context)
@@ -99,7 +116,32 @@ for (const authentication of [true, false]) {
       await expect(
         page.getByRole('button', { name: 'Next', exact: true }),
       ).toBeVisible()
+      await expect(page.locator('html')).toHaveAttribute(
+        'data-setup-metadata-settled',
+        'true',
+      )
       await expect(page.getByTestId('nook-auth-gate')).toBeVisible()
+      await expect(page.getByTestId('nook-auth-gate')).toBeInViewport()
+      await expect(page.getByTestId('nook-auth-gate')).toHaveCSS('opacity', '1')
+      await page.getByTestId('nook-auth-gate').evaluate(async (panel) => {
+        for (let frame = 0; frame < 4; frame++) {
+          await new Promise<void>((resolve) =>
+            requestAnimationFrame(() => resolve()),
+          )
+          const rect = panel.getBoundingClientRect()
+          if (
+            !panel.isConnected ||
+            rect.width === 0 ||
+            rect.height === 0 ||
+            rect.right <= 0 ||
+            rect.bottom <= 0 ||
+            rect.left >= innerWidth ||
+            rect.top >= innerHeight
+          )
+            throw new Error('Pilot HUD did not remain painted in the viewport.')
+        }
+      })
+      expect(setupFailures).toEqual([])
       if (!authentication) {
         // Replace only the form after real startup and classification succeeded.
         // Removing the separately mounted HUD then requires a new negative scan.

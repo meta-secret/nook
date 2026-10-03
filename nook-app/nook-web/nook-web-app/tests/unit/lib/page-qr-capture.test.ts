@@ -64,7 +64,99 @@ class PageQrObservationFixture {
   }
 }
 
+type SetupMetadataRuntimeRequest = Extract<
+  CompanionWasmRuntimeMessage,
+  {
+    type: CompanionWasmSessionMessageType.AuthenticationAuthenticatorSetupObservation
+  }
+>
+
+class DeferredSetupObservationFixture {
+  private readonly requests: Array<{
+    readonly message: SetupMetadataRuntimeRequest
+    readonly callback: (response: object) => void
+  }> = []
+
+  install(): void {
+    vi.stubGlobal('chrome', {
+      runtime: {
+        sendMessage: (
+          message: SetupMetadataRuntimeRequest,
+          callback: (response: object) => void,
+        ): void => {
+          const request: (typeof this.requests)[number] = { message, callback }
+          this.requests.push(request)
+        },
+      },
+    })
+  }
+
+  deliver(index: number): void {
+    const request = this.requests[index]
+    if (!request) throw new Error('Setup metadata request is missing.')
+    request.callback({
+      ok: true,
+      result: {
+        authenticatorSetupObservation:
+          classify_authentication_authenticator_setup_batch(
+            request.message.payload,
+          ),
+      },
+    })
+  }
+}
+
 describe('page QR otpauth capture', () => {
+  test('keeps each scan snapshot when overlapping responses finish in reverse order', async () => {
+    const runtime = new DeferredSetupObservationFixture()
+    runtime.install()
+    new PageQrObservationFixture(
+      '<section><p>Scan this QR code with your authenticator app</p><img/></section>',
+    )
+    const firstPreparation =
+      pageQrCapture.prepareAuthenticationAuthenticatorSetupObservation()
+    new PageQrObservationFixture('<form><p>Sign in</p></form>')
+    const secondPreparation =
+      pageQrCapture.prepareAuthenticationAuthenticatorSetupObservation()
+    runtime.deliver(1)
+    const second = await secondPreparation
+    runtime.deliver(0)
+    const first = await firstPreparation
+
+    expect(Object.isFrozen(first)).toBe(true)
+    expect(Object.isFrozen(second)).toBe(true)
+    expect(first.observation).toBe('present')
+    expect(second.observation).toBe('absent')
+    expect(
+      pageQrCapture.authenticationAuthenticatorSetupSnapshotIsCurrent(first),
+    ).toBe(false)
+    expect(
+      pageQrCapture.authenticationAuthenticatorSetupSnapshotIsCurrent(second),
+    ).toBe(true)
+    expect(() =>
+      pageQrCapture.authenticationAuthenticatorSetupObservation(),
+    ).toThrow('stale')
+  })
+
+  test('rejects a snapshot whose DOM metadata changes while its response is pending', async () => {
+    const runtime = new DeferredSetupObservationFixture()
+    runtime.install()
+    new PageQrObservationFixture('<section><p>Sign in</p><img/></section>')
+    const preparation =
+      pageQrCapture.prepareAuthenticationAuthenticatorSetupObservation()
+    const paragraph = document.querySelector('p')
+    if (!paragraph) throw new Error('Fixture instruction is missing.')
+    paragraph.textContent = 'Scan this QR code with your authenticator app'
+    runtime.deliver(0)
+    const snapshot = await preparation
+    expect(
+      pageQrCapture.authenticationAuthenticatorSetupSnapshotIsCurrent(snapshot),
+    ).toBe(false)
+    expect(() =>
+      pageQrCapture.authenticationAuthenticatorSetupObservation(),
+    ).toThrow('stale')
+  })
+
   test('nearby visible setup instructions admit generic media', async () => {
     const fixture = new PageQrObservationFixture(
       '<section><h1>Authenticator setup</h1><p>Scan this QR code with your authenticator app</p><img alt="Code"/></section>',

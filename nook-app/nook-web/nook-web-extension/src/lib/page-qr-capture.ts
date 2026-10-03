@@ -18,6 +18,11 @@ enum SetupObservationPreparationKind {
   Prepared = 'prepared',
 }
 
+export type AuthenticationAuthenticatorSetupSnapshot = {
+  readonly metadataKey: string
+  readonly observation: AuthenticationAuthenticatorSetupObservation
+}
+
 type SetupObservationPreparation =
   | { readonly kind: SetupObservationPreparationKind.Unprepared }
   | {
@@ -164,7 +169,7 @@ class PageQrCapture {
     }
   }
 
-  prepareAuthenticationAuthenticatorSetupObservation(): Promise<void> {
+  prepareAuthenticationAuthenticatorSetupObservation(): Promise<AuthenticationAuthenticatorSetupSnapshot> {
     return Effect.runPromise(
       Effect.gen(
         function* prepareSetupObservation(this: PageQrCapture) {
@@ -197,16 +202,27 @@ class PageQrCapture {
                       ),
                   ),
                 )
-              this.setupObservation = {
-                kind: SetupObservationPreparationKind.Prepared,
+              const snapshot: AuthenticationAuthenticatorSetupSnapshot = {
                 metadataKey: JSON.stringify(metadata),
                 observation,
               }
-              return
+              this.setupObservation = {
+                kind: SetupObservationPreparationKind.Prepared,
+                ...snapshot,
+              }
+              return Object.freeze(snapshot)
             }
           }
         }.bind(this),
       ),
+    )
+  }
+
+  authenticationAuthenticatorSetupSnapshotIsCurrent(
+    snapshot: AuthenticationAuthenticatorSetupSnapshot,
+  ): boolean {
+    return (
+      snapshot.metadataKey === JSON.stringify(this.authenticatorSetupMetadata())
     )
   }
 
