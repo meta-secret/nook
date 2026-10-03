@@ -13,11 +13,12 @@ on:
         type: string
         required: false
       suite:
-        description: Shared deterministic Playwright projects
+        description: Automated browser surface (all excludes demonstration videos)
         type: choice
         required: true
         default: all
-        options: [all, stable, unstable]
+        options:
+          [all, stable, unstable, sync-live, isolation, extension, research]
       spec:
         description: Optional Playwright spec path filter
         type: string
@@ -101,8 +102,12 @@ jobs:
           retention-days: 3
 
   edge:
-    name: Native Windows Edge (${{ inputs.suite }})
+    name: Native Windows Edge (${{ matrix.surface.label }})
     needs: [source, artifact]
+    strategy:
+      fail-fast: false
+      matrix:
+        surface: ${{ inputs.suite == 'all' && fromJSON('[{"suite":"stable","provider":"file","label":"stable"},{"suite":"unstable","provider":"file","label":"unstable-file"},{"suite":"unstable","provider":"github","label":"unstable-github"},{"suite":"sync-live","provider":"github","label":"sync-live"},{"suite":"isolation","provider":"file","label":"isolation"},{"suite":"extension","provider":"file","label":"extension"},{"suite":"research","provider":"file","label":"research"}]') || inputs.suite == 'unstable' && fromJSON('[{"suite":"unstable","provider":"file","label":"unstable-file"},{"suite":"unstable","provider":"github","label":"unstable-github"}]') || fromJSON(format('[{{"suite":"{0}","provider":"{1}","label":"{0}"}}]', inputs.suite, inputs.suite == 'sync-live' && 'github' || 'file')) }}
     runs-on: windows-latest
     timeout-minutes: 180
     defaults:
@@ -110,9 +115,8 @@ jobs:
         shell: pwsh
     env:
       CI: "true"
-      E2E_SUITE: ${{ inputs.suite }}
+      E2E_SUITE: ${{ matrix.surface.suite }}
       E2E_SPEC: ${{ inputs.spec }}
-      NOOK_E2E_SKIP_GITHUB_CLEANUP: "1"
     steps:
       - uses: actions/checkout@v7
         with:
@@ -131,16 +135,52 @@ jobs:
           path: nook-app
       - name: Install native web dependencies
         run: task --taskfile .task/e2e-windows.yml web:e2e:windows:install
+      - name: Select installed Microsoft Edge for persistent extension contexts
+        run: |
+          $edge = Join-Path ${env:ProgramFiles(x86)} 'Microsoft/Edge/Application/msedge.exe'
+          if (!(Test-Path $edge)) { throw "Installed Microsoft Edge is required: $edge" }
+          "PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=$edge" >> $env:GITHUB_ENV
       - name: Run shared specs on installed Microsoft Edge
         run: task --taskfile .task/e2e-windows.yml web:e2e:windows
+        env:
+          NOOK_E2E_SYNC_PROVIDER: ${{ matrix.surface.provider }}
+          NOOK_GITHUB_PAT: ${{ matrix.surface.suite == 'sync-live' && secrets.NOOK_GITHUB_PAT || '' }}
+          NOOK_GITHUB_E2E_REPO: nook-e2e-windows-${{ github.run_id }}-${{ github.run_attempt }}
+          NOOK_GITHUB_POLL_MS: "3000"
+          NOOK_GITHUB_SYNC_TIMEOUT_MS: "15000"
+          NOOK_GITHUB_CONNECT_TIMEOUT_MS: "30000"
+          NOOK_GOOGLE_E2E_ACCESS_TOKEN: ${{ matrix.surface.suite == 'sync-live' && secrets.NOOK_GOOGLE_E2E_ACCESS_TOKEN || '' }}
+          NOOK_GOOGLE_E2E_JOINER_EMAIL: ${{ matrix.surface.suite == 'sync-live' && secrets.NOOK_GOOGLE_E2E_JOINER_EMAIL || '' }}
+          NOOK_GOOGLE_E2E_JOINER_ACCESS_TOKEN: ${{ matrix.surface.suite == 'sync-live' && secrets.NOOK_GOOGLE_E2E_JOINER_ACCESS_TOKEN || '' }}
+      - name: Clean up live-sync test repository
+        if: always() && matrix.surface.suite == 'sync-live'
+        uses: actions/github-script@v9
+        env:
+          NOOK_GITHUB_E2E_REPO: nook-e2e-windows-${{ github.run_id }}-${{ github.run_attempt }}
+        with:
+          github-token: ${{ secrets.NOOK_GITHUB_PAT }}
+          script: |
+            const repo = process.env.NOOK_GITHUB_E2E_REPO
+            const { data: user } = await github.rest.users.getAuthenticated()
+            try {
+              await github.rest.repos.delete({ owner: user.login, repo })
+              core.info(`Deleted live-sync test repository: ${user.login}/${repo}`)
+            } catch (error) {
+              if (error.status !== 404) throw error
+              core.info(`Live-sync test repository already absent: ${user.login}/${repo}`)
+            }
       - name: Preserve Playwright reports and failure diagnostics
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: windows-edge-playwright-${{ github.run_id }}-${{ github.run_attempt }}
+          name: windows-edge-playwright-${{ matrix.surface.label }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             nook-app/nook-web/nook-web-app/playwright-report
             nook-app/nook-web/nook-web-app/test-results
+            nook-app/nook-web/nook-web-extension/playwright-report
+            nook-app/nook-web/nook-web-extension/test-results
+            nook-app/nook-web/nook-web-research/playwright-report
+            nook-app/nook-web/nook-web-research/test-results
           if-no-files-found: warn
           retention-days: 15
       - name: Record tested source
