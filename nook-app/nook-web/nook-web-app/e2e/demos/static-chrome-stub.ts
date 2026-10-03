@@ -223,6 +223,9 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     if (message.type && message.type in responsesByType) {
       return responsesByType[message.type]
     }
+    if (message.type === 'nook:website-login-save-pending' && !savePilotFlow) {
+      return { ok: true, state: loginSaveResponses.pendingUnavailable }
+    }
     if (message.type === 'nook:extension-pairing-state-query') {
       if (unavailableLoginPilotFlow) return { ok: false }
       return { ok: true, setup: demoExtensionSetup }
