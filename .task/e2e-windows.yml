@@ -1,0 +1,32 @@
+version: "3"
+
+# Standalone native entry point: the root Taskfile owns POSIX/Docker setup.
+tasks:
+  web:e2e:windows:install:
+    desc: Install native Windows web dependencies without the POSIX postinstall.
+    dir: "{{.TASKFILE_DIR}}/../nook-app/nook-web/nook-web-app"
+    platforms: [windows]
+    cmds:
+      - bun install --frozen-lockfile --ignore-scripts
+      - >-
+        pwsh -NoProfile -Command '$ErrorActionPreference = "Stop";
+        New-Item -ItemType Junction -Path ../node_modules -Target (Join-Path (Get-Location) node_modules) | Out-Null'
+
+  web:e2e:windows:
+    desc: Run shared deterministic specs in real native Microsoft Edge.
+    dir: "{{.TASKFILE_DIR}}/../nook-app/nook-web/nook-web-app"
+    platforms: [windows]
+    cmds:
+      - >-
+        pwsh -NoProfile -Command '$ErrorActionPreference = "Stop";
+        if (!(Test-Path dist/index.html)) { throw "Linux production preview artifact is required" };
+        $playwrightArguments = @("x", "--no-install", "playwright", "test", "--config=playwright.windows.config.ts");
+        switch ($env:E2E_SUITE) {
+          "all" { $playwrightArguments += @("--project=stable", "--project=unstable") }
+          "stable" { $playwrightArguments += "--project=stable" }
+          "unstable" { $playwrightArguments += "--project=unstable" }
+          default { throw "Unsupported deterministic suite: $env:E2E_SUITE" }
+        };
+        if ($env:E2E_SPEC) { $playwrightArguments += @("--", $env:E2E_SPEC) };
+        & bun @playwrightArguments;
+        exit $LASTEXITCODE'

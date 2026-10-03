@@ -150,3 +150,13 @@ COPY --from=nook-web-verify /opt/nook/web-verified /opt/nook/web-verified
 
 # No ENTRYPOINT: the image is sealed (source + web deps + generated WASM baked in), so `docker run`
 # invokes the task command directly (e.g. `docker run <img> task check`).
+
+# Native Windows consumes only portable production preview/WASM outputs.
+# Keep Linux dependencies in BuildKit; Windows installs its own native modules.
+FROM nook-web-source AS windows-edge-web-build
+RUN task _web:build:parallel:e2e
+
+FROM scratch AS windows-edge-web-artifacts
+COPY --from=windows-edge-web-build /meta-secret/nook/nook-app/nook-web/nook-web-app/dist /nook-app/nook-web/nook-web-app/dist
+COPY --from=nook-web-source /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm /nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm
+COPY --from=nook-web-source /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm /nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm
