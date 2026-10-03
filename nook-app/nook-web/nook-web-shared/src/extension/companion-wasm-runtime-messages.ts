@@ -260,15 +260,24 @@ const companionWasmAuthenticatorSetupResponseFields: {
 export const CompanionWasmAuthenticatorSetupResponseDecoder: Schema.Schema<CompanionWasmAuthenticatorSetupResponse> =
   Schema.Struct(companionWasmAuthenticatorSetupResponseFields);
 
-const backupCodeExtractionFields = {
-  codes: Schema.mutable(Schema.Array(Schema.String)),
-} satisfies Schema.Struct.Fields;
+const backupCodeArraySchema = Schema.mutable(Schema.Array(Schema.String));
+const backupCodeExtractionFields: {
+  readonly codes: typeof backupCodeArraySchema;
+} = {
+  codes: backupCodeArraySchema,
+};
 export const CompanionWasmBackupCodeExtractionDecoder: Schema.Schema<AuthenticationBackupCodeExtraction> =
   Schema.Struct(backupCodeExtractionFields);
 
-const authenticationNavigationPathFields = {
-  observation: Schema.Literal("Authentication", "Unrelated"),
-} satisfies Schema.Struct.Fields;
+const authenticationNavigationObservationSchema = Schema.Literal(
+  "Authentication",
+  "Unrelated",
+);
+const authenticationNavigationPathFields: {
+  readonly observation: typeof authenticationNavigationObservationSchema;
+} = {
+  observation: authenticationNavigationObservationSchema,
+};
 export const CompanionWasmNavigationPathDecoder: Schema.Schema<AuthenticationNavigationPathProjection> =
   Schema.Struct(authenticationNavigationPathFields);
 

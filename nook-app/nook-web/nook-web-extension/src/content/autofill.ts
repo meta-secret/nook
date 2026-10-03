@@ -446,7 +446,6 @@ class AuthenticationScanRenderLifecycle {
     try {
       await this.performScanAndRender()
     } finally {
-      authenticationSurfaceObservation.recordAuthenticationRecoveryEvidenceState()
     }
   }
 

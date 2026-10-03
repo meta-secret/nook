@@ -1,5 +1,4 @@
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
-import type { AuthenticationRecoveryCopyEvidence } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 await companionWasmReady
 import { describe, expect, test } from 'bun:test'
@@ -12,9 +11,11 @@ import {
 } from '../src/lib/enrollment-messages'
 import { recoveryCopyObservation } from '../src/lib/backup-code-candidates'
 import { handleCompanionWasmMessage } from '../src/offscreen/session-companion-wasm-operations'
-import type {
-  CompanionWasmRuntimeMessage,
-  CompanionWasmSessionResponse,
+import {
+  CompanionWasmSessionMessageType,
+  type CompanionWasmSessionMessage,
+  type CompanionWasmRuntimeMessage,
+  type CompanionWasmSessionResponse,
 } from '../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 
 type ExtractionRuntimeResponse =
@@ -181,65 +182,37 @@ describe('backup code candidate extraction', () => {
     }
   })
 
-  test('does not treat 2fa inside emails as a backup-code page hint', async () => {
-    // happy-dom/document unavailable in bun unit tests — exercise the regex
-    // through the same exported helper with a stubbed body when present.
-    const documentWasPresent = 'document' in globalThis
-    const previous = globalThis.document
-    const body = { innerText: 'Email: alice-2fa@nook.test\nPassword: secret' }
-    Object.defineProperty(globalThis, 'document', {
-      configurable: true,
-      value: { body },
-    })
-    Object.assign(globalThis, {
-      location: new URL('https://example.test/backup-codes'),
-      chrome: {
-        runtime: {
-          sendMessage: (
-            message: { payload: { texts: string[] } },
-            callback: (response: {
-              ok: true
-              result: AuthenticationRecoveryCopyEvidence
-            }) => void,
-          ) => {
-            const copy = message.payload.texts.join('\n')
-            callback({
-              ok: true,
-              result: {
-                copy,
-                hint:
-                  copy.includes('Save your backup codes') &&
-                  copy.includes('A1B2-C3D4-E5F6')
-                    ? 'present'
-                    : 'absent',
-              },
-            })
-          },
-        },
-      },
-    })
-    try {
-      await recoveryCopyObservation.prepareAuthenticationRecoveryEvidence()
-      expect(recoveryCopyObservation.pageHasDocumentBackupCodeHint()).toBe(
-        false,
-      )
-      body.innerText = 'Save your backup codes\nA1B2-C3D4-E5F6'
-      await recoveryCopyObservation.prepareAuthenticationRecoveryEvidence()
-      expect(recoveryCopyObservation.pageHasDocumentBackupCodeHint()).toBe(true)
-      body.innerText = 'Enable 2FA codes for your account'
-      await recoveryCopyObservation.prepareAuthenticationRecoveryEvidence()
-      expect(recoveryCopyObservation.pageHasDocumentBackupCodeHint()).toBe(
-        false,
-      )
-    } finally {
-      if (!documentWasPresent) {
-        Reflect.deleteProperty(globalThis, 'document')
-      } else {
-        Object.defineProperty(globalThis, 'document', {
-          configurable: true,
-          value: previous,
-        })
+  test('keeps recovery metadata strict through the actual offscreen projection', async () => {
+    for (const copy of [
+      'Email: alice-2fa@nook.test',
+      'Enable 2FA codes for your account',
+    ]) {
+      const request: CompanionWasmSessionMessage = {
+        type: CompanionWasmSessionMessageType.AuthenticationRecoveryCopyEvidence,
+        payload: { texts: [copy] },
       }
+      const result = await handleCompanionWasmMessage(request)
+      result.match(
+        (response) => expect(response).toEqual({ copy: '', hint: 'absent' }),
+        () => {
+          throw new Error('Expected admitted recovery metadata')
+        },
+      )
     }
+    const request: CompanionWasmSessionMessage = {
+      type: CompanionWasmSessionMessageType.AuthenticationRecoveryCopyEvidence,
+      payload: { texts: ['Save your backup codes'] },
+    }
+    const result = await handleCompanionWasmMessage(request)
+    result.match(
+      (response) =>
+        expect(response).toEqual({
+          copy: 'Save your backup codes',
+          hint: 'present',
+        }),
+      () => {
+        throw new Error('Expected admitted preservation instruction')
+      },
+    )
   })
 })

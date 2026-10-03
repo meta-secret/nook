@@ -11,7 +11,14 @@ import {
   launchExtensionContext,
 } from './helpers/extension-smoke-runtime'
 
-type BackupExtractionOperationObservation = { readonly type?: string }
+type RecoveryInstructionPayloadObservation = {
+  readonly texts?: string[]
+  readonly visibleInstructionCopies?: string[]
+}
+type BackupExtractionOperationObservation = {
+  readonly type?: string
+  readonly payload?: RecoveryInstructionPayloadObservation
+}
 
 /** Retains the live shell's structural evidence without OAuth session values. */
 class MicrosoftIdentifierShellFixture {
@@ -65,12 +72,12 @@ class MicrosoftIdentifierShellFixture {
         <button type="submit" class="${this.machineIdentity}">${authentication ? 'Next' : 'Subscribe'}</button>
       </form>
       <form method="post" action=""></form>
-      <section><p id="setup-copy">Continue with email</p><canvas width="120" height="120"></canvas></section>
+      <section><h2 id="setup-copy">Continue with email</h2><canvas width="120" height="120"></canvas></section>
       <script nonce="fixture">
         let mutationFrame = 0;
         function changeVisibleMetadata() {
-          const paragraph = document.getElementById('setup-copy');
-          paragraph.textContent = mutationFrame % 2 === 0 ? 'Continue with email' : 'Use your Microsoft account';
+          const instruction = document.getElementById('setup-copy');
+          instruction.textContent = mutationFrame % 2 === 0 ? 'Continue with email' : 'Use your Microsoft account';
           mutationFrame += 1;
           if (mutationFrame < 48) requestAnimationFrame(changeVisibleMetadata);
           else document.documentElement.dataset.setupMetadataSettled = 'true';
@@ -91,6 +98,7 @@ for (const locked of [false, true]) {
     const context = paired
       ? paired.context
       : await launchExtensionContext(testInfo.outputPath('profile'))
+    await context.tracing.start({ screenshots: true, snapshots: true })
     try {
       if (paired) await lockExtensionSession(context)
       const fixture = new MicrosoftIdentifierShellFixture()
@@ -99,6 +107,7 @@ for (const locked of [false, true]) {
         if (route.request().method() === 'POST') submitted = true
         await route.fulfill({
           contentType: 'text/html',
+          headers: { 'Content-Security-Policy': fixture.contentSecurityPolicy },
           body: fixture.html(true),
         })
       })
@@ -122,7 +131,16 @@ for (const locked of [false, true]) {
         await expect(
           popup.getByTestId('device-protection-pin-unlock-btn'),
         ).toBeVisible()
+      await page.screenshot({
+        path: testInfo.outputPath('continue-site.png'),
+        caret: 'initial',
+      })
+      await popup.screenshot({
+        path: testInfo.outputPath('continue-nook.png'),
+        caret: 'initial',
+      })
     } finally {
+      await context.tracing.stop({ path: testInfo.outputPath('trace.zip') })
       await context.close()
     }
   })
@@ -133,22 +151,63 @@ test('production backup review extracts only after consent and clears on cancel'
 }, testInfo) => {
   void baseURL
   const context = await launchExtensionContext(testInfo.outputPath('profile'))
+  await context.tracing.start({ screenshots: true, snapshots: true })
   try {
     const worker = await getServiceWorker(context)
     await worker.evaluate(() => {
       Reflect.set(globalThis, 'nookTestBackupExtractionCount', 0)
+      Reflect.set(globalThis, 'nookTestRecoveryInstructionObserved', false)
+      Reflect.set(
+        globalThis,
+        'nookTestInitialRecoveryContainsFixtureCode',
+        false,
+      )
       chrome.runtime.onMessage.addListener(
         (message: BackupExtractionOperationObservation) => {
           if (
             message.type ===
-            'nook:extension-session-extract-authentication-backup-code-candidates'
+            'nook:extension-session-authentication-recovery-copy-evidence'
+          ) {
+            Reflect.set(globalThis, 'nookTestRecoveryInstructionObserved', true)
+            if (
+              message.payload?.texts?.some(
+                (copy) =>
+                  copy.includes('A1B2-C3D4-E5F6') ||
+                  copy.includes('G7H8-I9J0-K1L2'),
+              )
+            )
+              Reflect.set(
+                globalThis,
+                'nookTestInitialRecoveryContainsFixtureCode',
+                true,
+              )
+          }
+          if (
+            message.type ===
+              'nook:extension-session-authentication-authenticator-setup-observation' &&
+            message.payload?.visibleInstructionCopies?.some(
+              (copy) =>
+                copy.includes('A1B2-C3D4-E5F6') ||
+                copy.includes('G7H8-I9J0-K1L2'),
+            )
           )
             Reflect.set(
               globalThis,
-              'nookTestBackupExtractionCount',
-              Number(Reflect.get(globalThis, 'nookTestBackupExtractionCount')) +
-                1,
+              'nookTestInitialRecoveryContainsFixtureCode',
+              true,
             )
+          if (
+            message.type ===
+            'nook:extension-session-extract-authentication-backup-code-candidates'
+          ) {
+            const count = Reflect.get(
+              globalThis,
+              'nookTestBackupExtractionCount',
+            )
+            if (typeof count !== 'number')
+              throw new Error('Expected backup extraction counter')
+            Reflect.set(globalThis, 'nookTestBackupExtractionCount', count + 1)
+          }
           return false
         },
       )
@@ -156,7 +215,11 @@ test('production backup review extracts only after consent and clears on cancel'
     await context.route('https://example.test/recovery', async (route) => {
       await route.fulfill({
         contentType: 'text/html',
-        body: '<main><h1>Account recovery details</h1><p>Save these recovery codes somewhere secure.</p><ul><li>A1B2-C3D4-E5F6</li><li>G7H8-I9J0-K1L2</li></ul></main>',
+        headers: {
+          'Content-Security-Policy': new MicrosoftIdentifierShellFixture()
+            .contentSecurityPolicy,
+        },
+        body: '<main><h1>Save your recovery codes</h1><p>Save these recovery codes somewhere secure.</p><p>Save your recovery codes: A1B2-C3D4-E5F6</p><ul><li>A1B2-C3D4-E5F6</li><li>G7H8-I9J0-K1L2</li></ul></main>',
       })
     })
     const page = await context.newPage()
@@ -166,22 +229,53 @@ test('production backup review extracts only after consent and clears on cancel'
     await expect(save).toBeVisible()
     await expect(widget.getByText('A1B2-C3D4-E5F6')).toHaveCount(0)
     expect(
-      await worker.evaluate(() =>
-        Reflect.get(globalThis, 'nookTestBackupExtractionCount'),
+      await worker.evaluate(
+        () =>
+          Reflect.get(globalThis, 'nookTestRecoveryInstructionObserved') ===
+          true,
       ),
+    ).toBe(true)
+    expect(
+      await worker.evaluate(
+        () =>
+          Reflect.get(
+            globalThis,
+            'nookTestInitialRecoveryContainsFixtureCode',
+          ) === true,
+      ),
+    ).toBe(false)
+    expect(
+      await worker.evaluate(() => {
+        const count = Reflect.get(globalThis, 'nookTestBackupExtractionCount')
+        if (typeof count !== 'number')
+          throw new Error('Expected backup extraction counter')
+        return count
+      }),
     ).toBe(0)
     await save.click()
     await expect(widget.getByText('A1B2-C3D4-E5F6')).toBeVisible()
     await expect(widget.getByText('G7H8-I9J0-K1L2')).toBeVisible()
     expect(
-      await worker.evaluate(() =>
-        Reflect.get(globalThis, 'nookTestBackupExtractionCount'),
-      ),
+      await worker.evaluate(() => {
+        const count = Reflect.get(globalThis, 'nookTestBackupExtractionCount')
+        if (typeof count !== 'number')
+          throw new Error('Expected backup extraction counter')
+        return count
+      }),
     ).toBe(1)
+    await page.screenshot({
+      path: testInfo.outputPath('backup-approved.png'),
+      caret: 'initial',
+    })
     await widget.getByRole('button', { name: 'Cancel', exact: true }).click()
     await expect(widget.getByText('A1B2-C3D4-E5F6')).toHaveCount(0)
     await expect(widget.getByText('G7H8-I9J0-K1L2')).toHaveCount(0)
+    await page.screenshot({
+      path: testInfo.outputPath('backup-cancelled.png'),
+      caret: 'initial',
+    })
   } finally {
+    await context.tracing.stop({ path: testInfo.outputPath('trace.zip') })
     await context.close()
   }
 })

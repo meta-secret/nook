@@ -24,6 +24,16 @@ type RecoveryCopyTexts = string[]
 
 type RecoveryCopyEvidence = AuthenticationRecoveryCopyEvidence
 
+enum RecoveryCopyCollectionScope {
+  Instructions = 'instructions',
+  ApprovedExcerpt = 'approved-excerpt',
+}
+
+type RecoveryCopyCollectionRequest = { scope: RecoveryCopyCollectionScope }
+
+const recoverySecretElementSelector =
+  'p, code, pre, kbd, samp, li, [role="listitem"], input, textarea, select, button, [role="textbox"], [contenteditable], [hidden], [aria-hidden="true"], [data-nook-otpauth-uri], [data-nook-backup-codes], [data-nook-backup-code], [data-secret], [data-setup-key]'
+
 export type DocumentBackupCodeCandidates = string[]
 
 /** Owns this browser host’s resources and interaction lifecycle. */
@@ -45,19 +55,25 @@ class RecoveryCopyObservation {
     return true
   }
 
-  private recoveryTexts(): RecoveryCopyTexts {
-    if (typeof this.browser.document.querySelectorAll !== 'function') {
-      return ((v) => (v ? v : ''))(this.browser.document.body?.innerText).split(
-        /[\r\n]+/,
-      )
-    }
+  private recoveryTexts({
+    scope,
+  }: RecoveryCopyCollectionRequest): RecoveryCopyTexts {
     const texts: RecoveryCopyTexts = []
-    const elements = this.browser.document.querySelectorAll<HTMLElement>(
-      'h1, h2, h3, h4, h5, h6, [role="heading"], p, label, legend, button, li, code, pre',
-    )
+    const selector =
+      scope === RecoveryCopyCollectionScope.Instructions
+        ? 'h1, h2, h3, h4, h5, h6, [role="heading"], label, legend'
+        : 'h1, h2, h3, h4, h5, h6, [role="heading"], p, label, legend, button, li, code, pre'
+    const elements =
+      this.browser.document.querySelectorAll<HTMLElement>(selector)
     for (const element of elements) {
       if (texts.length >= MAX_RECOVERY_COPY_ELEMENTS) break
       if (!this.isVisibleRecoveryCopy(element)) continue
+      if (
+        scope === RecoveryCopyCollectionScope.Instructions &&
+        (element.closest(recoverySecretElementSelector) ||
+          element.querySelector(recoverySecretElementSelector))
+      )
+        continue
       const text = ((v) => (v ? v : ''))(element.textContent)
       if (text.length > MAX_RECOVERY_SOURCE_TEXT_UNITS) continue
       texts.push(text)
@@ -66,9 +82,12 @@ class RecoveryCopyObservation {
   }
 
   async prepareAuthenticationRecoveryEvidence(): Promise<void> {
+    const collection: RecoveryCopyCollectionRequest = {
+      scope: RecoveryCopyCollectionScope.Instructions,
+    }
     const delivery = await sendCompanionWasmRuntimeMessage(this.browser, {
       type: CompanionWasmSessionMessageType.AuthenticationRecoveryCopyEvidence,
-      payload: { texts: this.recoveryTexts() },
+      payload: { texts: this.recoveryTexts(collection) },
       origin: this.browser.location.origin,
     })
     if (
@@ -79,15 +98,20 @@ class RecoveryCopyObservation {
       'hint' in delivery.response
     ) {
       this.evidence = delivery.response
+      return
     }
+    throw new Error('Recovery instruction observation runtime unavailable.')
   }
 
   private currentEvidence(): RecoveryCopyEvidence {
     if (typeof chrome === 'object' && Boolean(chrome.runtime?.id)) {
       return this.evidence
     }
+    const collection: RecoveryCopyCollectionRequest = {
+      scope: RecoveryCopyCollectionScope.Instructions,
+    }
     return authentication_recovery_copy_evidence({
-      texts: this.recoveryTexts(),
+      texts: this.recoveryTexts(collection),
     })
   }
 
@@ -110,11 +134,14 @@ class RecoveryCopyObservation {
 
   extractDocumentBackupCodeCandidates(sourceText?: string): Promise<string[]> {
     const browser = this.browser
+    const collection: RecoveryCopyCollectionRequest = {
+      scope: RecoveryCopyCollectionScope.ApprovedExcerpt,
+    }
     const request: CompanionWasmRuntimeMessage = {
       type: CompanionWasmSessionMessageType.ExtractAuthenticationBackupCodeCandidates,
       origin: this.browser.location.origin,
       payload: {
-        text: ((...[text = this.recoveryTexts().join('\n')]) => text)(
+        text: ((...[text = this.recoveryTexts(collection).join('\n')]) => text)(
           sourceText,
         ),
       },

@@ -258,7 +258,7 @@ test('approve backup-code extraction only after a fresh Pilot decision', async (
       <head><title>Recovery codes</title></head>
       <body>
         <main>
-          <h1>${'Account recovery details '.repeat(8)}</h1>
+          <h1>Save your recovery codes</h1>
           <p>Save these recovery codes somewhere secure.</p>
           <ul>
             <li>A1B2-C3D4-E5F6</li>
