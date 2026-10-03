@@ -607,8 +607,12 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
       observation.sourceOrigin,
       observation.formIdentity,
       observation.label,
-      authenticationSubmissionControls.controlMachineIdentity(request.control),
-    ])
+    ]) &&
+      authenticationFactBounds.machineIdentityFits(
+        authenticationSubmissionControls.controlMachineIdentity(
+          request.control,
+        ),
+      )
       ? [observation]
       : [];
   }
