@@ -70,6 +70,53 @@ E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_I
   re-enable.
 - Browser E2E remains an independent validation path.
 
+## Manual Windows Edge lane
+
+`e2e-windows.yml` is a separate `workflow_dispatch` lane for native Windows
+browser evidence. Existing Linux PR, Main, nightly, extension, and credentialed
+live-suite policies retain their owning workflows.
+
+### Required actions
+
+1. Route an authorized dispatch through CI/CD with Nook SRE context.
+   - Supply exactly one of `pr_number` or `source_ref`.
+   - A PR must belong to this repository and must not be authored by Dependabot.
+   - Select `suite: all`, `stable`, or `unstable`. The default is `all`.
+   - Use optional `spec` as a positional Playwright spec filter.
+2. Observe the Linux production-artifact job before the Windows consumer.
+   - Source resolution records one immutable SHA for both checkouts.
+   - `task web:e2e:windows:artifact` reuses focused web dependency layers.
+   - It exports production `dist/` with generated WASM through Docker/Bake.
+   - The build uses the existing fast E2E flags.
+   - The Windows job depends on that producer and downloads its run artifact.
+3. Observe the native `windows-latest` job's installed Microsoft Edge run.
+   - Windows dependencies are installed separately with Bun's frozen lockfile.
+   - The standalone Taskfile skips package scripts and uses a PowerShell junction
+     for the parent `node_modules` path.
+   - Shared deterministic specs run with Playwright channel `msedge`.
+   - Credentialed `sync-live` is excluded.
+4. Inspect the terminal result and retained diagnostics.
+   - `windows-edge-web-<run>-<attempt>` contains the production browser artifact.
+   - `windows-edge-playwright-<run>-<attempt>` contains HTML and JSON reports.
+   - Line output remains in job logs.
+   - Screenshots are captured only on failure. Traces are retained on failure.
+   - Analyze app-log attachments under the existing E2E failure policy above.
+
+**Prohibited:** dispatch with both source inputs, then report a Linux Chromium
+run as native Windows Edge validation. Start Windows with another source's
+artifact before its producer succeeds. Ignore retained diagnostics after a
+Windows failure.
+
+**Required:** dispatch with `pr_number: 123`, `suite: stable`, and
+`spec: e2e/connect.spec.ts` when validating that PR's matching stable specs.
+Consume matching production `dist/` and WASM only after the Linux producer
+succeeds. Report its source SHA and actual Windows terminal result. If Windows
+fails, inspect its retained report, failure trace, screenshot, and app-log
+attachments before diagnosing the defect.
+
+Native command context is documented in
+[browser validation](browser-validation.md#native-windows-entry-point).
+
 ## Registry transport performance
 
 Main finishes repository preflight before native Rust verification begins.
@@ -191,7 +238,7 @@ assume per-PR Cloudflare preview hosts can be covered by wildcards. See
 - Feature teams author tests and finish scoped worker branches.
 - Feature Gizmos route those branches through the upstream integration agent and
   wait for its feature branch, integration outcome, and checks.
-- Feature Gizmos request only the required required PR-check capability.
+- Feature Gizmos request only the required PR-check capability.
 - The Feature Gizmo alone requests the full slow feature pull request checks.
 - Missing build-only tooling is a visible runtime prerequisite.
 - Repairs return through the feature path and serialized feature pull-request delivery.
