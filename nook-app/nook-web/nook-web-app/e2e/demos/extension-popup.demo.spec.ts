@@ -253,19 +253,17 @@ test('shows compact inline error when cleanup has invalidated the picker', async
     )
     .toBe('complete')
   await frame.evaluate((element, messageType) => {
-    switch (element instanceof HTMLIFrameElement) {
-      case true:
-        element.contentWindow?.postMessage(
-          {
-            type: messageType,
-            requestId: 'cleanup-blocked',
-            origin: location.origin,
-          },
-          location.origin,
-        )
-        break
-      case false:
-        throw new Error('Inline demo frame is unavailable')
+    if (element instanceof HTMLIFrameElement) {
+      element.contentWindow?.postMessage(
+        {
+          type: messageType,
+          requestId: 'cleanup-blocked',
+          origin: location.origin,
+        },
+        location.origin,
+      )
+    } else {
+      throw new Error('Inline demo frame is unavailable')
     }
   }, InlineLoginPickerMessageType.Initialize)
   const picker = frame.contentFrame()
