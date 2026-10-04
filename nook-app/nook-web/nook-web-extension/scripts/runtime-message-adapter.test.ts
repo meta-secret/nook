@@ -91,7 +91,6 @@ function installRuntimeMock(mock: RuntimeMock): void {
       ) {
         const request: CompanionWasmSessionMessage = {
           type: CompanionWasmSessionMessageType.DecodeAuthenticationWorkflowRuntimeResponse,
-          origin: 'https://example.test',
           payload: { response: message.payload.response },
         }
         void handleCompanionWasmMessage(request).then((result) =>
@@ -119,7 +118,6 @@ function installRuntimeMock(mock: RuntimeMock): void {
         )(message.payload.kind)
         const request: CompanionWasmSessionMessage = {
           type: CompanionWasmSessionMessageType.DecodeContentRuntimeResponse,
-          origin: 'https://example.test',
           payload: { kind, response: message.payload.response },
         }
         void handleCompanionWasmMessage(request).then((result) =>
