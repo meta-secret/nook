@@ -622,7 +622,7 @@ mod secret_import_browser_tests {
         let before = crate::NookDatabase::load_local_event_store(&store_id)
             .await?
             .event_ids();
-        js(manager.ensure_vault_crypto_from_cache().await)?;
+        manager.ensure_vault_crypto_from_cache().await?;
         let secrets_key = SymmetricKey::parse(&manager.vault.secrets_key)?;
         let dedup_state = manager.live_secret_dedup_state().await?;
         let prepared = {
