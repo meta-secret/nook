@@ -4,7 +4,8 @@ import { tick, type ComponentProps } from 'svelte'
 import { ok } from 'neverthrow'
 import SecretVault from '$lib/components/SecretVault.svelte'
 import type { VaultState } from '$lib/vault.svelte'
-import { SecretType, secret_type_name, type NookSecretRecord } from '$lib/nook'
+import { SecretType, type NookSecretRecord } from '$lib/nook'
+import { secret_type_name } from '$app-wasm'
 import { SecretMutationOutcome } from '$lib/vault/secret-operation-failure'
 import type { SecretPageRefreshSnapshot } from '$lib/vault/action-contexts'
 import {
@@ -17,15 +18,57 @@ import { VaultStateTestFixture } from '../vault-state-test-fixture'
 type SecretPageResult = Awaited<ReturnType<VaultState['loadSecretPage']>>
 type SecretDecryptionResult = Awaited<ReturnType<VaultState['decryptSecret']>>
 
+enum SecretOperationResolverKind {
+  Waiting = 'waiting',
+  Available = 'available',
+}
+
+type SecretOperationResolver<Value> =
+  | { readonly kind: SecretOperationResolverKind.Waiting }
+  | {
+      readonly kind: SecretOperationResolverKind.Available
+      readonly resolve: (value: Value) => void
+    }
+
+type DeferredSecretOperation<Value> = {
+  readonly promise: Promise<Value>
+  readonly resolve: (value: Value) => void
+}
+
 /** Controls the existing browser search/decrypt boundaries without replacing exposure ownership. */
 class SecretVaultSearchFixture {
   readonly vault = VaultStateTestFixture.create()
-  readonly search = Promise.withResolvers<SecretPageResult>()
-  readonly filterPage = Promise.withResolvers<SecretPageResult>()
-  readonly decryption = Promise.withResolvers<SecretDecryptionResult>()
+  readonly search = this.deferred<SecretPageResult>()
+  readonly filterPage = this.deferred<SecretPageResult>()
+  readonly decryption = this.deferred<SecretDecryptionResult>()
   readonly record: NookSecretRecord
   readonly loadPage = vi.spyOn(this.vault, 'loadSecretPage')
   readonly decrypt = vi.spyOn(this.vault, 'decryptSecret')
+
+  private deferred<Value>(): DeferredSecretOperation<Value> {
+    let resolver: SecretOperationResolver<Value> = {
+      kind: SecretOperationResolverKind.Waiting,
+    }
+    const promise = new Promise<Value>((resolve) => {
+      const available: SecretOperationResolver<Value> = {
+        kind: SecretOperationResolverKind.Available,
+        resolve,
+      }
+      resolver = available
+    })
+    const operation: DeferredSecretOperation<Value> = {
+      promise,
+      resolve: (value) => {
+        switch (resolver.kind) {
+          case SecretOperationResolverKind.Waiting:
+            throw new Error('Secret operation resolver was not initialized')
+          case SecretOperationResolverKind.Available:
+            resolver.resolve(value)
+        }
+      },
+    }
+    return operation
+  }
 
   constructor() {
     const recordFields: Parameters<
