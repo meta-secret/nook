@@ -1,14 +1,6 @@
 import { Effect, Schema } from "effect";
 import type { RuntimeMessage } from "$web-shared/extension/runtime-messages";
 import type { ExtensionRuntimeResponseObject } from "./extension-response-decoders";
-import { browserLogRuntime } from "$lib/runtime/log";
-
-enum ExtensionMessageDeliveryFailure {
-  RuntimeAbsent = "extension message delivery: runtime absent",
-  NativeLastError = "extension message delivery: native lastError",
-  ResponseAbsent = "extension message delivery: response absent",
-  BoundedExpiry = "extension message delivery: bounded expiry",
-}
 
 export type ChromeExtensionRuntimeResponse = ExtensionRuntimeResponseObject;
 
@@ -86,7 +78,7 @@ class PendingExtensionResponse {
         timer: {
           kind: ExtensionMessageResponseTimerKind.Scheduled,
           handle: request.browser.window.setTimeout(
-            () => this.unavailable(ExtensionMessageDeliveryFailure.BoundedExpiry),
+            () => this.unavailable(),
             request.wait.timeoutMs,
           ),
         },
@@ -103,15 +95,7 @@ class PendingExtensionResponse {
     this.request.resolve(delivery);
   }
 
-  unavailable(failure: ExtensionMessageDeliveryFailure): void {
-    switch (this.state.kind) {
-      case ExtensionResponsePhase.Settled:
-        return;
-      case ExtensionResponsePhase.Pending:
-        browserLogRuntime
-          .createLogger("extension-message-channel")
-          .warn(failure);
-    }
+  unavailable(): void {
     const unavailableDelivery: ExtensionMessageDelivery = {
       kind: ExtensionMessageDeliveryKind.Unavailable,
     };
@@ -194,9 +178,6 @@ export class ExtensionMessageChannel {
         const unavailableDelivery: ExtensionMessageDelivery = {
           kind: ExtensionMessageDeliveryKind.Unavailable,
         };
-        browserLogRuntime
-          .createLogger("extension-message-channel")
-          .warn(ExtensionMessageDeliveryFailure.RuntimeAbsent);
         resolve(unavailableDelivery);
         return;
       }
@@ -212,11 +193,11 @@ export class ExtensionMessageChannel {
           this.chromeRuntimeLastError(runtime).kind ===
           ChromeRuntimeLastErrorStateKind.Present
         ) {
-          pending.unavailable(ExtensionMessageDeliveryFailure.NativeLastError);
+          pending.unavailable();
           return;
         }
         if (!response) {
-          pending.unavailable(ExtensionMessageDeliveryFailure.ResponseAbsent);
+          pending.unavailable();
           return;
         }
         pending.receive(response);
