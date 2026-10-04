@@ -53,6 +53,10 @@ tasks:
           $env:PLAYWRIGHT_HTML_OUTPUT_DIR = "playwright-report/$suite";
           $env:PLAYWRIGHT_JSON_OUTPUT_NAME = "test-results/$suite.json";
           $env:PLAYWRIGHT_OUTPUT_DIR = "test-results/$suite";
+          if ($suite -eq "extension") {
+            if (!$env:RUNNER_TEMP) { throw "RUNNER_TEMP is required for short native extension profile paths" };
+            $env:PLAYWRIGHT_OUTPUT_DIR = Join-Path $env:RUNNER_TEMP "nook-extension-results"
+          };
           & bun @arguments;
           if ($LASTEXITCODE -ne 0) { $failed = $true; Write-Output "Windows Edge suite failed: $suite" };
         };

@@ -180,6 +180,7 @@ jobs:
             nook-app/nook-web/nook-web-extension/test-results
             nook-app/nook-web/nook-web-research/playwright-report
             nook-app/nook-web/nook-web-research/test-results
+            ${{ runner.temp }}/nook-extension-results
           if-no-files-found: warn
           retention-days: 15
       - name: Record tested source
