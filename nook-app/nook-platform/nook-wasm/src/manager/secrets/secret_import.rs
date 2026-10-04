@@ -11,7 +11,7 @@ use nook_core::{
     OnePasswordExport, ProtonPassImportInput,
 };
 use nook_core::{ChromePasswordsCsvInput, KeePassXcCsvInput, LastPassCsvInput};
-use nook_core::{SecretImportUnsupportedRecordCount, SecretValue, SymmetricKey, VaultOperation};
+use nook_core::{SecretImportUnsupportedRecordCount, SymmetricKey, VaultOperation};
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 use zeroize::Zeroizing;
@@ -508,7 +508,7 @@ mod prepared_page_tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod secret_import_browser_tests {
     use super::*;
-    use nook_core::DeviceIdentity;
+    use nook_core::{DeviceIdentity, SecretValue};
     use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 
     wasm_bindgen_test_configure!(run_in_browser);

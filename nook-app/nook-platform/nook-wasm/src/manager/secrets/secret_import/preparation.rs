@@ -12,9 +12,8 @@ impl BrowserImportBatchOffset {
     const ITEMS_PER_TASK: usize = 16;
 
     async fn yield_browser_task(self) {
-        match self.0 % Self::ITEMS_PER_TASK {
-            0 => future::sleep(Duration::ZERO).await,
-            _ => {}
+        if let 0 = self.0 % Self::ITEMS_PER_TASK {
+            future::sleep(Duration::ZERO).await;
         }
     }
 }
