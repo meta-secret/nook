@@ -242,10 +242,23 @@ test('keeps reveal disabled when a pending filter supersedes the search page', a
   await fireEvent.input(view.getByTestId('search-secrets'), inputEvent)
   await vi.advanceTimersByTimeAsync(200)
   expect(fixture.loadPage).toHaveBeenCalledTimes(1)
-  await fireEvent.click(view.getByTestId('secret-type-filter'))
+  const openFilterEvent: Parameters<typeof fireEvent.keyDown>[1] = {
+    key: 'Enter',
+  }
+  await fireEvent.keyDown(
+    view.getByTestId('secret-type-filter'),
+    openFilterEvent,
+  )
+  expect(
+    view.getByTestId('secret-type-filter').getAttribute('aria-expanded'),
+  ).toBe('true')
   const loginType: Parameters<typeof secret_type_name>[0] = SecretType.Login
-  await fireEvent.click(
+  const selectFilterEvent: Parameters<typeof fireEvent.pointerUp>[1] = {
+    pointerType: 'mouse',
+  }
+  await fireEvent.pointerUp(
     view.getByTestId(`secret-type-filter-${secret_type_name(loginType)}`),
+    selectFilterEvent,
   )
   expect(fixture.loadPage).toHaveBeenCalledTimes(2)
   const reveal = view.getByTestId('reveal-secret-btn')
