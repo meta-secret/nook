@@ -773,13 +773,13 @@ impl LoggerState {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
+    use wasm_bindgen::JsError;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
 
     #[wasm_bindgen_test]
-    async fn logger_persists_filters_pages_and_clears_entries() -> Result<(), wasm_bindgen::JsError>
-    {
+    async fn logger_persists_filters_pages_and_clears_entries() -> Result<(), JsError> {
         log_clear().await?;
         log_set_level("debug");
         assert_eq!(log_get_level(), "debug");
@@ -790,14 +790,14 @@ mod browser_tests {
         log_flush().await?;
 
         assert_eq!(log_count().await?, 2);
-        let entries = log_dump().await?.to_array();
+        let entries = log_dump().await?.to_array()?;
         assert_eq!(entries.len(), 2);
-        assert_eq!(entries[0].level, "info");
-        assert_eq!(entries[1].level, "warn");
+        assert_eq!(entries[0].to_rust()?.level, "info");
+        assert_eq!(entries[1].to_rust()?.level, "warn");
 
-        let page = log_dump_page("warn".to_owned(), 1, 0).await?.to_array();
+        let page = log_dump_page("warn".to_owned(), 1, 0).await?.to_array()?;
         assert_eq!(page.len(), 1);
-        assert_eq!(page[0].message, "retrying");
+        assert_eq!(page[0].to_rust()?.message, "retrying");
 
         log_clear().await?;
         assert_eq!(log_count().await?, 0);
