@@ -7,6 +7,7 @@ import {
 } from "$lib/components/login/login-vault-extension-pairing-status";
 import {
   extensionConnectionBrowser,
+  InstalledExtensionRuntimeKind,
   PairedExtensionDiscoveryFailure,
 } from "$lib/extension/connect";
 
@@ -37,6 +38,12 @@ class ExtensionSetupBrowser {
     storeId,
     vault,
   }: ExtensionPairingStatusRequest): Promise<LoginVaultExtensionPairingStatusEntry> {
+    switch (extensionConnectionBrowser.readInstalledExtensionRuntimeId().kind) {
+      case InstalledExtensionRuntimeKind.NotInstalled:
+        return { storeId, kind: LoginVaultExtensionPairingStatusKind.NotShown };
+      case InstalledExtensionRuntimeKind.Installed:
+        break;
+    }
     const admission =
       await extensionConnectionBrowser.discoverAdmittedPairedExtensionIdentity(
         storeId,
