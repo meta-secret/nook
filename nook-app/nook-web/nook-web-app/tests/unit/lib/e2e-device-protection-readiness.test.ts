@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-environment happy-dom
 
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { deviceProtectionButtonReady } from '../../../e2e/helpers/settings-auth'
@@ -15,7 +15,12 @@ describe('device protection control readiness', () => {
     document.body.append(button)
     vi.spyOn(button, 'getClientRects').mockReturnValue({
       length: 1,
-    } as DOMRectList)
+      item: () => new DOMRect(),
+      0: new DOMRect(),
+      [Symbol.iterator]: function* () {
+        yield new DOMRect()
+      },
+    })
     expect(deviceProtectionButtonReady('unlock-vault-btn')).toBe(true)
     await Promise.resolve()
     button.remove()
@@ -28,11 +33,20 @@ describe('device protection control readiness', () => {
     document.body.append(button)
     vi.spyOn(button, 'getClientRects').mockReturnValue({
       length: 1,
-    } as DOMRectList)
+      item: () => new DOMRect(),
+      0: new DOMRect(),
+      [Symbol.iterator]: function* () {
+        yield new DOMRect()
+      },
+    })
     button.disabled = true
-    expect(deviceProtectionButtonReady('device-protection-unlock-btn')).toBe(false)
+    expect(deviceProtectionButtonReady('device-protection-unlock-btn')).toBe(
+      false,
+    )
     button.disabled = false
     button.style.visibility = 'hidden'
-    expect(deviceProtectionButtonReady('device-protection-unlock-btn')).toBe(false)
+    expect(deviceProtectionButtonReady('device-protection-unlock-btn')).toBe(
+      false,
+    )
   })
 })

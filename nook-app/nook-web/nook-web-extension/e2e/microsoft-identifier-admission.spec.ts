@@ -13,6 +13,9 @@ import {
   launchExtensionContext,
 } from './helpers/extension-smoke-runtime'
 
+// These persistent contexts retain their own trace.zip in each test's finally.
+test.use({ trace: 'off' })
+
 type RecoveryInstructionPayloadObservation = {
   readonly texts?: string[]
   readonly visibleInstructionCopies?: string[]

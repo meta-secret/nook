@@ -569,7 +569,10 @@ export async function authorizeDeviceProtection(
   }
 
   const authorizeButtonReady = async () => {
-    return page.evaluate(deviceProtectionButtonReady, 'device-protection-unlock-btn')
+    return page.evaluate(
+      deviceProtectionButtonReady,
+      'device-protection-unlock-btn',
+    )
   }
 
   const unlockButtonReady = async () => {
