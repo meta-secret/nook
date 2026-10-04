@@ -17,6 +17,28 @@ type NativeMessageArguments = readonly [
   callback: (response?: ChromeExtensionRuntimeResponse) => void,
 ]
 
+interface ExtensionChannelMalformedRuntimeFixture {
+  readonly id: string
+}
+
+interface ExtensionChannelMessagingRuntimeFixture {
+  readonly sendMessage: (...request: NativeMessageArguments) => void
+}
+
+interface ExtensionChannelNativeFailureRuntimeFixture
+  extends ExtensionChannelMessagingRuntimeFixture {
+  readonly lastError: Pick<chrome.runtime.LastError, 'message'>
+}
+
+type ExtensionChannelRuntimeFixture =
+  | ExtensionChannelMalformedRuntimeFixture
+  | ExtensionChannelMessagingRuntimeFixture
+  | ExtensionChannelNativeFailureRuntimeFixture
+
+interface ExtensionChannelBrowserHostFixture {
+  readonly runtime: ExtensionChannelRuntimeFixture
+}
+
 class ExtensionChannelDiagnosticFixture {
   readonly warn = vi.fn()
   readonly sendMessage = vi.fn<(...request: NativeMessageArguments) => void>()
@@ -71,7 +93,9 @@ afterEach(() => {
 describe('extension message delivery diagnostics', () => {
   test('records an absent browser runtime without request data', () => {
     const fixture = new ExtensionChannelDiagnosticFixture()
-    const chromeHost = { runtime: { id: 'diagnostic-extension' } }
+    const chromeHost: ExtensionChannelBrowserHostFixture = {
+      runtime: { id: 'diagnostic-extension' },
+    }
     vi.stubGlobal('chrome', chromeHost)
     fixture.send()
     fixture.assertCategory('extension message delivery: runtime absent')
@@ -79,7 +103,7 @@ describe('extension message delivery diagnostics', () => {
 
   test('records native failure without native error text or request data', () => {
     const fixture = new ExtensionChannelDiagnosticFixture()
-    const chromeHost = {
+    const chromeHost: ExtensionChannelBrowserHostFixture = {
       runtime: {
         sendMessage: fixture.sendMessage,
         lastError: { message: 'private-native-error-marker' },
@@ -97,7 +121,9 @@ describe('extension message delivery diagnostics', () => {
 
   test('records an absent response without request data', () => {
     const fixture = new ExtensionChannelDiagnosticFixture()
-    const chromeHost = { runtime: { sendMessage: fixture.sendMessage } }
+    const chromeHost: ExtensionChannelBrowserHostFixture = {
+      runtime: { sendMessage: fixture.sendMessage },
+    }
     vi.stubGlobal('chrome', chromeHost)
     fixture.sendMessage.mockImplementation(
       (...request: NativeMessageArguments) => {
@@ -111,7 +137,9 @@ describe('extension message delivery diagnostics', () => {
   test('records the current bounded expiry without request data', () => {
     vi.useFakeTimers()
     const fixture = new ExtensionChannelDiagnosticFixture()
-    const chromeHost = { runtime: { sendMessage: fixture.sendMessage } }
+    const chromeHost: ExtensionChannelBrowserHostFixture = {
+      runtime: { sendMessage: fixture.sendMessage },
+    }
     vi.stubGlobal('chrome', chromeHost)
     fixture.send()
     vi.advanceTimersByTime(5_000)
@@ -121,7 +149,9 @@ describe('extension message delivery diagnostics', () => {
   test('does not record failure after a successful response', () => {
     vi.useFakeTimers()
     const fixture = new ExtensionChannelDiagnosticFixture()
-    const chromeHost = { runtime: { sendMessage: fixture.sendMessage } }
+    const chromeHost: ExtensionChannelBrowserHostFixture = {
+      runtime: { sendMessage: fixture.sendMessage },
+    }
     vi.stubGlobal('chrome', chromeHost)
     fixture.sendMessage.mockImplementation(
       (...request: NativeMessageArguments) => {
