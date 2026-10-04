@@ -39,6 +39,7 @@ export type LoginVaultNotPairedExtensionPairingStatus = Extract<
 export type LoginVaultExtensionPairingStatusEntry = {
   readonly storeId: string;
 } & (
+  | { readonly kind: LoginVaultExtensionPairingStatusKind.NotShown }
   | { readonly kind: LoginVaultExtensionPairingStatusKind.Checking }
   | LoginVaultExtensionResolvedPairingStatus
 );
@@ -84,6 +85,8 @@ export class LoginVaultExtensionPairingStatusLookup {
     if (!entry) return { kind: LoginVaultExtensionPairingStatusKind.NotShown };
 
     switch (entry.kind) {
+      case LoginVaultExtensionPairingStatusKind.NotShown:
+        return { kind: LoginVaultExtensionPairingStatusKind.NotShown };
       case LoginVaultExtensionPairingStatusKind.Checking:
         return { kind: LoginVaultExtensionPairingStatusKind.Checking };
       case LoginVaultExtensionPairingStatusKind.Paired:
