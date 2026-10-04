@@ -478,24 +478,32 @@ test.describe('passkey device-key protection', () => {
     await expect(
       page.getByTestId('sentinel-genesis-participant-fields'),
     ).toHaveCount(0)
+    const ceremonyReadinessOptions: { timeout: number } = {
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    }
     await expect(
       page.getByTestId('sentinel-genesis-ceremony-step'),
-    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    ).toBeVisible(ceremonyReadinessOptions)
+    await expect(page.getByTestId('sentinel-genesis-progress')).toContainText(
+      '3 / 3',
+      ceremonyReadinessOptions,
+    )
     await expect(page.getByTestId('sentinel-genesis-finalize')).toBeEnabled()
     await expect(
       page.getByTestId('sentinel-onboarding-progress').locator('li').nth(3),
     ).toHaveAttribute('data-current', 'step')
     await page.getByTestId('sentinel-genesis-finalize').click()
+    await expect(page.getByTestId('sentinel-genesis-deliveries')).toBeVisible(
+      ceremonyReadinessOptions,
+    )
     await expect(
       page.getByTestId('sentinel-genesis-ceremony-step'),
-    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-    await expect(page.getByTestId('sentinel-genesis-progress')).toContainText(
-      '3 / 3',
-      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    ).toHaveCount(0)
+    await expect(page.getByTestId('sentinel-genesis-progress')).toHaveCount(0)
+    await expect(page.getByTestId('sentinel-genesis-delivery')).toHaveCount(
+      2,
+      ceremonyReadinessOptions,
     )
-    await expect(page.getByTestId('sentinel-genesis-deliveries')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
 
     await participantOne.context.close()
     await participantTwo.context.close()
