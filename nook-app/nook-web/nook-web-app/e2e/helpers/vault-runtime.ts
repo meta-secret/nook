@@ -11,6 +11,12 @@ import { assertNoVaultErrors } from './github-sync'
 import { openLoginProviderSetup } from './vault-setup'
 
 export async function clearBrowserVault(page: Page) {
+  const appMountReadinessOptions: { timeout: number } = {
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  }
+  await expect(page.getByTestId('app-shell-content')).toBeAttached(
+    appMountReadinessOptions,
+  )
   await expect
     .poll(() => page.evaluate(() => '__nookVault' in window), {
       timeout: UI_TIMEOUT_MS,
