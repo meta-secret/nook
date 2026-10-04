@@ -493,7 +493,9 @@ test('guide a login through the Nook Pilot control plane', async ({ page }) => {
   )
   await expect(widget.getByText('Nook Pilot · 3/3')).toBeVisible()
   await expect(widget.getByText('Verifying sign-in')).toBeVisible()
-  await expect(page.getByRole('status')).toHaveText('Secure sign-in submitted')
+  await expect(page.locator('#site-status')).toHaveText(
+    'Secure sign-in submitted',
+  )
   await demoBeat(page)
 })
 
