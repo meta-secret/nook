@@ -44,18 +44,14 @@ import {
 const chromiumExecutablePath = ((v) => (v ? v : ''))(
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim(),
 )
-
 test.use({ trace: 'retain-on-failure' })
-
 enum WebsitePageStateKind {
   Skipped = 'skipped',
   Opened = 'opened',
 }
-
 type WebsitePageState =
   | { kind: WebsitePageStateKind.Skipped }
   | { kind: WebsitePageStateKind.Opened; page: Page }
-
 enum ExtensionConnectionParameter {
   DeviceId = 'device_id',
   DevicePublicKey = 'device_public_key',
@@ -717,7 +713,11 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       const restartedLogOptions: Parameters<typeof attachNookLogsForTest>[2] = {
         attachmentName: NookAppLogAttachmentName.RestartedExtension,
       }
-      await attachNookLogsForTest(lockedVaultPage, testInfo, restartedLogOptions)
+      await attachNookLogsForTest(
+        lockedVaultPage,
+        testInfo,
+        restartedLogOptions,
+      )
       console.log('[extension e2e] closing restarted context')
       await withE2eDeadline(
         restartedContext.close(),

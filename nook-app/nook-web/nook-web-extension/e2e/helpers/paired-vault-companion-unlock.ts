@@ -337,7 +337,9 @@ export async function unlockPairedVaultThroughCompanion(
         })
         try {
           await completeCompanionPopupUnlock(companionPopup)
-          await expect(authenticatedShell).toBeVisible(adoptionVisibilityOptions)
+          await expect(authenticatedShell).toBeVisible(
+            adoptionVisibilityOptions,
+          )
         } finally {
           if (companionPopup.closeAfterUse && !companionPopup.page.isClosed()) {
             await companionPopup.page.close()
