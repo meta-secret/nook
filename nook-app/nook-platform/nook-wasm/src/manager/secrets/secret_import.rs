@@ -508,6 +508,7 @@ mod prepared_page_tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod secret_import_browser_tests {
     use super::*;
+    use crate::NookDatabase;
     use nook_core::{DeviceIdentity, SecretValue};
     use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 
@@ -619,7 +620,7 @@ mod secret_import_browser_tests {
         use std::time::Duration;
         let mut manager = ready_manager().await?;
         let store_id = manager.vault.store_id.clone();
-        let before = crate::NookDatabase::load_local_event_store(&store_id)
+        let before = NookDatabase::load_local_event_store(&store_id)
             .await?
             .event_ids();
         manager.ensure_vault_crypto_from_cache().await?;
@@ -649,7 +650,7 @@ mod secret_import_browser_tests {
                     // A yielded import has prepared data in memory only. The
                     // persisted event set is unchanged until its single commit.
                     assert_eq!(
-                        crate::NookDatabase::load_local_event_store(&store_id)
+                        NookDatabase::load_local_event_store(&store_id)
                             .await?
                             .event_ids(),
                         before
@@ -669,7 +670,7 @@ mod secret_import_browser_tests {
             )
             .await)?;
         assert_eq!(result.imported(), 33);
-        let after = crate::NookDatabase::load_local_event_store(&store_id)
+        let after = NookDatabase::load_local_event_store(&store_id)
             .await?
             .event_ids();
         assert_eq!(after.len(), before.len() + 1);
@@ -690,7 +691,7 @@ mod secret_import_browser_tests {
         assert_eq!(duplicate.imported(), 0);
         assert_eq!(duplicate.skipped_duplicates(), 33);
         assert_eq!(
-            crate::NookDatabase::load_local_event_store(&store_id)
+            NookDatabase::load_local_event_store(&store_id)
                 .await?
                 .event_ids(),
             after
