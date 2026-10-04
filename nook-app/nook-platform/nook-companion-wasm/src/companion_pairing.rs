@@ -150,30 +150,27 @@ mod tests {
     use super::*;
     use nook_companion_core::{
         CompanionPairingApproval, CompanionPairingEpochMilliseconds, CompanionPairingInstallation,
-        ExtensionConnectScope, ExtensionPairingVaultType, PairingVaultId,
+        ExtensionConnectScope, ExtensionPairingApprovalEpochMilliseconds,
+        ExtensionPairingVaultType, PairingVaultId,
     };
     use tsify::Tsify;
     use wasm_bindgen::JsError;
-    #[cfg(all(test, target_arch = "wasm32"))]
-    #[cfg(all(test, target_arch = "wasm32"))]
-    use wasm_bindgen::JsValue;
 
     struct PairingProtocolFixture;
     impl PairingProtocolFixture {
-        fn epoch(value: &str) -> Result<CompanionPairingEpochMilliseconds, wasm_bindgen::JsValue> {
-            serde_json::from_str(value).map_err(|error| JsValue::from_str(&error.to_string()))
+        fn epoch(value: &str) -> Result<CompanionPairingEpochMilliseconds, JsError> {
+            serde_json::from_str(value)
+                .map_err(|_| JsError::new("Pairing fixture could not be decoded."))
         }
 
         fn approval_timestamp(
             value: &str,
-        ) -> Result<
-            nook_companion_core::ExtensionPairingApprovalEpochMilliseconds,
-            wasm_bindgen::JsValue,
-        > {
-            serde_json::from_str(value).map_err(|error| JsValue::from_str(&error.to_string()))
+        ) -> Result<ExtensionPairingApprovalEpochMilliseconds, JsError> {
+            serde_json::from_str(value)
+                .map_err(|_| JsError::new("Pairing fixture could not be decoded."))
         }
 
-        fn request() -> Result<CompanionPairingRequest, wasm_bindgen::JsValue> {
+        fn request() -> Result<CompanionPairingRequest, JsError> {
             Ok(CompanionPairingRequest {
                 request_id: "request-1".to_owned(),
                 nonce: "nonce-1".to_owned(),
@@ -191,7 +188,7 @@ mod tests {
             })
         }
 
-        fn approval() -> Result<CompanionPairingApproval, wasm_bindgen::JsValue> {
+        fn approval() -> Result<CompanionPairingApproval, JsError> {
             Ok(CompanionPairingApproval {
                 request: Self::request()?,
                 vault_store_id: PairingVaultId::before_genesis_placeholder(),
@@ -200,14 +197,13 @@ mod tests {
                 provider_manifest_digest: CompanionPairingProviderManifestDigest::parse(
                     &"a".repeat(64),
                 )
-                .map_err(|error| JsValue::from_str(&error.to_string()))?,
+                .map_err(|_| JsError::new("Pairing fixture could not be decoded."))?,
             })
         }
     }
 
     #[wasm_bindgen_test::wasm_bindgen_test]
-    fn generated_pairing_endpoint_rejects_an_expired_request() -> Result<(), wasm_bindgen::JsValue>
-    {
+    fn generated_pairing_endpoint_rejects_an_expired_request() -> Result<(), JsError> {
         let mut request = PairingProtocolFixture::request()?;
         request.expires_at = PairingProtocolFixture::epoch("100")?;
         assert!(
@@ -222,8 +218,7 @@ mod tests {
     }
 
     #[wasm_bindgen_test::wasm_bindgen_test]
-    fn generated_authority_is_one_use_and_returns_opaque_admission()
-    -> Result<(), wasm_bindgen::JsValue> {
+    fn generated_authority_is_one_use_and_returns_opaque_admission() -> Result<(), JsError> {
         let protocol = NookCompanionPairingExtensionProtocol::new(
             &(PairingProtocolFixture::request()?)
                 .into_ts()
@@ -244,7 +239,7 @@ mod tests {
 
     #[wasm_bindgen_test::wasm_bindgen_test]
     fn generated_pairing_protocols_preserve_request_and_website_authorization()
-    -> Result<(), wasm_bindgen::JsValue> {
+    -> Result<(), JsError> {
         let request = PairingProtocolFixture::request()?;
         let extension = NookCompanionPairingExtensionProtocol::new(
             &(request.clone())
@@ -288,7 +283,7 @@ mod tests {
                 .into_ts()
                 .map_err(|_| JsError::new("Typed test input could not be encoded."))?,
                 &(CompanionPairingProviderManifestDigest::parse(&"b".repeat(64))
-                    .map_err(|error| JsValue::from_str(&error.to_string()))?)
+                    .map_err(|_| JsError::new("Pairing fixture could not be decoded."))?)
                 .into_ts()
                 .map_err(|_| JsError::new("Typed test input could not be encoded."))?,
             )
@@ -334,7 +329,7 @@ mod tests {
                 .into_ts()
                 .map_err(|_| JsError::new("Typed test input could not be encoded."))?,
                 &(CompanionPairingProviderManifestDigest::parse(&"b".repeat(64))
-                    .map_err(|error| JsValue::from_str(&error.to_string()))?)
+                    .map_err(|_| JsError::new("Pairing fixture could not be decoded."))?)
                 .into_ts()
                 .map_err(|_| JsError::new("Typed test input could not be encoded."))?,
             )
