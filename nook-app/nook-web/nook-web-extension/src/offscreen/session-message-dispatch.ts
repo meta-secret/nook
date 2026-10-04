@@ -597,7 +597,6 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
         return true
       }
       if (message.type === COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE) {
-        console.info('extension discovery: offscreen received')
         if (!serviceWorkerSender) {
           const forbiddenResponse: Parameters<typeof sendResponse>[0] = {
             ok: false,
@@ -619,28 +618,16 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
             sendResponse(forbiddenResponse)
             return
           }
-          console.info('extension discovery: offscreen admitted')
           void this.enqueueCompanionIdentityDiscovery(decoded.value).then(
-            (result) => {
-              console.info('extension discovery: offscreen completed')
+            (result) =>
               result.match(sendResponse, (failure) => {
                 const response: Parameters<typeof sendResponse>[0] = {
                   ok: false,
                   error: failure.message,
                 }
                 sendResponse(response)
-              })
-              console.info('extension discovery: offscreen responded')
-            },
-            (failure) => {
-              console.info('extension discovery: offscreen completion rejected')
-              throw failure
-            },
+              }),
           )
-        },
-        (failure) => {
-          console.info('extension discovery: offscreen readiness rejected')
-          throw failure
         })
         return true
       }

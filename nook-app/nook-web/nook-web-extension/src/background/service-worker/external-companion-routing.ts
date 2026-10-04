@@ -139,22 +139,12 @@ export class ExternalCompanionRouter {
       message,
     )
     if (identityDiscovery.kind === ConcreteDecoderResultKind.Decoded) {
-      console.info('extension discovery: worker received')
       if (!(await ExternalSenderTrustPolicy.admits(sender))) {
         sendResponse(forbiddenSenderResponse)
         return false
       }
-      console.info('extension discovery: worker admitted')
       void discoverPairedVaultIdentity(identityDiscovery.value).then(
-        (response) => {
-          console.info('extension discovery: worker completed')
-          sendResponse(response)
-          console.info('extension discovery: worker responded')
-        },
-        (failure) => {
-          console.info('extension discovery: worker completion rejected')
-          throw failure
-        },
+        sendResponse,
       )
       return true
     }

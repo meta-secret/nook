@@ -330,6 +330,9 @@ export async function unlockPairedVaultThroughCompanion(
         })
         try {
           await completeCompanionPopupUnlock(companionPopup)
+          await expect(authenticatedShell).toBeVisible({
+            timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+          })
         } finally {
           if (companionPopup.closeAfterUse && !companionPopup.page.isClosed()) {
             await companionPopup.page.close()
@@ -344,6 +347,9 @@ export async function unlockPairedVaultThroughCompanion(
       })
       try {
         await completeCompanionPopupUnlock(companionPopup)
+        await expect(authenticatedShell).toBeVisible({
+          timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+        })
       } finally {
         if (companionPopup.closeAfterUse && !companionPopup.page.isClosed()) {
           await companionPopup.page.close()
