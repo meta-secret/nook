@@ -8,6 +8,7 @@ import SecretDetailRow from '$lib/components/SecretDetailRow.svelte'
 import { SecretMutationOutcome } from '$lib/vault/secret-operation-failure'
 import { ok } from 'neverthrow'
 import { SecretComponentTestFixture } from './secret-component-test-fixture'
+import { SecretPageInteractionKind } from '$lib/components/secret-vault-state'
 
 const vault = VaultStateTestFixture.create()
 vi.spyOn(vault, 't').mockImplementation((request) =>
@@ -48,6 +49,7 @@ describe('passkey item discovery', () => {
       item,
       index: 0,
       expanded: true,
+      pageInteraction: SecretPageInteractionKind.Ready,
       onToggleExpand: vi.fn(),
       onToggleReveal: vi.fn(async () => {}),
       onEditItem: vi.fn(async () => {}),

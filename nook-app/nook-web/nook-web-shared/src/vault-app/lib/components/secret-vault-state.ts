@@ -1,5 +1,12 @@
 import type { AuthenticatorCodeView, NookSecretRecord } from "$lib/nook";
 
+export enum SecretPageInteractionKind {
+  Ready = "ready",
+  Debouncing = "debouncing",
+  Loading = "loading",
+  Failed = "failed",
+}
+
 export enum SecretRevealKind {
   Hidden = "hidden",
   Revealed = "revealed",

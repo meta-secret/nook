@@ -1,12 +1,9 @@
 import { test, expect, type Page } from './fixtures'
 import {
   addSecret,
-  clearBrowserVault,
-  connectLocalVault,
   deleteSecret,
   assertVaultReady,
   reconnectSyncVault,
-  reloadUnlockWithSyncProvider,
   revealSecretInRow,
   installPasskeyMock,
   uniqueSecretKey,
@@ -14,11 +11,11 @@ import {
 } from './helpers'
 import {
   createSyncTarget,
+  connectSyncGenesisDevice,
   e2eSyncProviderDef,
-  E2eSyncProviderId,
   installSyncRemote,
   resolveE2eSyncProvider,
-  type OAuthFileSyncE2eTarget,
+  type SyncE2eTarget,
 } from './sync-provider'
 
 const providerId = resolveE2eSyncProvider()
@@ -28,38 +25,14 @@ test.describe(`${providerLabel} vault`, () => {
   test.describe.configure({ mode: 'serial' })
 
   let vaultPage: Page
-  let target: OAuthFileSyncE2eTarget
+  let target: SyncE2eTarget
 
   test.beforeAll(async ({ browser }) => {
-    const syncTarget = createSyncTarget('', 'sync-vault', providerId)
-    if (
-      syncTarget.providerId !== E2eSyncProviderId.File &&
-      syncTarget.providerId !== E2eSyncProviderId.Local &&
-      syncTarget.providerId !== E2eSyncProviderId.GoogleDrive
-    ) {
-      throw new Error(
-        `sync-vault requires an OAuth file provider, received ${syncTarget.providerId}`,
-      )
-    }
-    target = syncTarget
+    target = createSyncTarget('', 'sync-vault', providerId)
     vaultPage = await browser.newPage()
     await installPasskeyMock(vaultPage)
     await installSyncRemote(vaultPage, target)
-    await vaultPage.goto('/app/')
-    await clearBrowserVault(vaultPage)
-    await vaultPage.reload()
-    await connectLocalVault(vaultPage)
-    await reloadUnlockWithSyncProvider(vaultPage, {
-      providers: [
-        {
-          id: 'e2e-sync-vault',
-          label: 'File',
-          fileName: target.repoName,
-          accessToken: target.pat,
-        },
-      ],
-      sharedStub: target.stub,
-    })
+    await connectSyncGenesisDevice(vaultPage, target)
     await waitForLoadedSyncProviders(vaultPage)
   })
 

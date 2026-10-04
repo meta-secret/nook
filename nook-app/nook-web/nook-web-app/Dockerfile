@@ -155,8 +155,21 @@ COPY --from=nook-web-verify /opt/nook/web-verified /opt/nook/web-verified
 # Keep Linux dependencies in BuildKit; Windows installs its own native modules.
 FROM nook-web-source AS windows-edge-web-build
 RUN task _web:build:parallel:e2e
+RUN cd nook-app/nook-web/nook-vault-simple \
+    && VITE_E2E_EXPOSE_VAULT=true VITE_VAULT_IDLE_TIMEOUT_MS=300000 VITE_VAULT_IDLE_WARNING_MS=0 bun run build \
+    && cd ../nook-vault-sentinel \
+    && VITE_E2E_EXPOSE_VAULT=true VITE_VAULT_IDLE_TIMEOUT_MS=300000 VITE_VAULT_IDLE_WARNING_MS=0 bun run build
+RUN cd nook-app/nook-web/nook-web-extension \
+    && NOOK_SIMPLE_VAULT_URL=http://127.0.0.1:5174/ bun run build \
+    && bun run e2e:mock-auth:build
+RUN cd nook-app/nook-web/nook-web-research && bun run build
 
 FROM scratch AS windows-edge-web-artifacts
 COPY --from=windows-edge-web-build /meta-secret/nook/nook-app/nook-web/nook-web-app/dist /nook-app/nook-web/nook-web-app/dist
+COPY --from=windows-edge-web-build /meta-secret/nook/nook-app/nook-web/nook-vault-simple/dist /nook-app/nook-web/nook-vault-simple/dist
+COPY --from=windows-edge-web-build /meta-secret/nook/nook-app/nook-web/nook-vault-sentinel/dist /nook-app/nook-web/nook-vault-sentinel/dist
+COPY --from=windows-edge-web-build /meta-secret/nook/nook-app/nook-web/nook-web-extension/dist /nook-app/nook-web/nook-web-extension/dist
+COPY --from=windows-edge-web-build /meta-secret/nook/nook-app/nook-web/nook-web-extension/e2e/mock-auth/dist /nook-app/nook-web/nook-web-extension/e2e/mock-auth/dist
+COPY --from=windows-edge-web-build /meta-secret/nook/nook-app/nook-web/nook-web-research/dist /nook-app/nook-web/nook-web-research/dist
 COPY --from=nook-web-source /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm /nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm
 COPY --from=nook-web-source /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm /nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm

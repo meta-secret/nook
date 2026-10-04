@@ -580,37 +580,48 @@ export async function reloadUnlockLocalVaultWithSync(
     )
   }
 
-  await expect(page.getByTestId('login-gate')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
-  await ensureLoginLocalUnlockReady(page)
-  await selectLoginUnlockMethod(page, UnlockMethod.Keys)
-  await page.getByTestId('unlock-vault-btn').click()
-  await expect(
-    page.getByTestId('vault-panel').or(page.getByTestId('vault-admin-panel')),
-  ).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-  await dismissSyncConflictIfVisible(page)
-  await expect
-    .poll(
-      () => page.evaluate(() => window.__nookVault?.isVerifying === false),
-      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
-    )
-    .toBe(true)
-  await disableVaultIdleLock(page)
-  await waitForVaultOperationsIdle(page)
-  await forceVaultQuiescentForE2e(page)
-  await waitForLoadedSyncProviders(page)
-  await waitForVaultSyncIdle(page)
-  if (sharedStub) {
-    await flushRemoteEventsToSyncProviders(page)
+  await keepVaultIdleLockDisabled(page)
+  try {
+    await expect(page.getByTestId('login-gate')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await ensureLoginLocalUnlockReady(page)
+    await selectLoginUnlockMethod(page, UnlockMethod.Keys)
+    await page.getByTestId('unlock-vault-btn').click()
+    await expect(
+      page.getByTestId('vault-panel').or(page.getByTestId('vault-admin-panel')),
+    ).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await dismissSyncConflictIfVisible(page)
     await expect
-      .poll(() => sharedStub.getEventFileCount(), {
-        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-      })
-      .toBeGreaterThan(0)
-    sharedStub.setVaultYaml('')
+      .poll(
+        () => page.evaluate(() => window.__nookVault?.isVerifying === false),
+        { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+      )
+      .toBe(true)
+    await disableVaultIdleLock(page)
+    await waitForVaultOperationsIdle(page)
+    await forceVaultQuiescentForE2e(page)
+    await waitForLoadedSyncProviders(page)
+    await waitForVaultSyncIdle(page)
+    if (typeof sharedStub === 'object') {
+      await flushRemoteEventsToSyncProviders(page)
+      await expect
+        .poll(() => sharedStub.getEventFileCount(), {
+          timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+        })
+        .toBeGreaterThan(0)
+      sharedStub.setVaultYaml('')
+    }
+  } finally {
+    await page.evaluate(() => {
+      const w = window as Window & { __nookE2eIdleGuard?: number }
+      if (typeof w.__nookE2eIdleGuard === 'number') {
+        window.clearInterval(w.__nookE2eIdleGuard)
+        delete w.__nookE2eIdleGuard
+      }
+    })
   }
 }
 

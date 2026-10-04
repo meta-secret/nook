@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { untrack } from "svelte";
-  import { err } from "neverthrow";
+  import { Effect } from "effect";
+  import { VaultType } from "$lib/vault/architecture-model";
   type VaultPasswordUnlock = {
     readonly entryId: string;
     readonly password: string;
@@ -24,7 +24,11 @@
   } from "$lib/components/login/login-vault-extension-pairing-status";
   import SentinelCeremonyPanel from "$lib/components/login/SentinelCeremonyPanel.svelte";
   import type { VaultState } from "$lib/vault.svelte";
-  import { LoginVaultPresentation } from "$lib/components/login/login-vault-presentation.svelte";
+  import { SentinelCeremonyVisibility } from "$lib/vault/sentinel-unlock";
+  import {
+    SentinelLoginPresentationReader,
+    SentinelLoginPresentationKind,
+  } from "$lib/vault/sentinel-login-presentation.svelte";
   import type { PasswordEntrySelection } from "$lib/vault/state/session.svelte";
   import {
     DeviceKeysUnlockCapabilityKind,
@@ -90,20 +94,23 @@
   function selectWorkflow(selected: LoginVaultWorkflow): void {
     workflow = selected;
   }
-  const presentation = $derived(new LoginVaultPresentation(vault));
-  const showSentinelCeremony = $derived(presentation.showSentinelCeremony);
-  const hidePasswordUnlock = $derived(presentation.hidePasswordUnlock);
-  $effect(() => {
-    void vault.hasManager;
-    void vault.isAuthenticated;
-    void vault.sentinelUnlockStatus;
-    void vault.sentinelCeremonyPrompt;
-    void vault.vaultArchitecture.vault_type;
-    void vault.sentinelUnlockSession.active;
-    const current = presentation;
-    untrack(() => void current.refresh());
-    return () => current.release();
-  });
+  const sentinelPresentation = $derived(
+    new SentinelLoginPresentationReader(vault),
+  );
+  $effect(() => sentinelPresentation.start());
+  const showSentinelCeremony = $derived(
+    sentinelPresentation.presentation.kind ===
+      SentinelLoginPresentationKind.Ready &&
+      sentinelPresentation.presentation.projection.ceremonyVisibility ===
+        SentinelCeremonyVisibility.Visible,
+  );
+  const hidePasswordUnlock = $derived(
+    showSentinelCeremony ||
+      sentinelPresentation.presentation.kind !==
+        SentinelLoginPresentationKind.Ready ||
+      sentinelPresentation.presentation.projection.vaultType ===
+        VaultType.Sentinel,
+  );
   const passwordUnlock = $derived<PasswordUnlockCapability>(
     hidePasswordUnlock
       ? { kind: PasswordUnlockCapabilityKind.Unavailable }
@@ -129,27 +136,42 @@
       return;
     }
 
+    const manager = vault.admitManager();
+    if (manager.isErr()) {
+      identityContext = { kind: LoginVaultIdentityContextKind.Failed };
+      return;
+    }
     const storeId = vaultEntry.entry.storeId;
     const generation = ++identityContextLoadGeneration;
     identityContext = { kind: LoginVaultIdentityContextKind.Loading };
-    void vault
-      .enqueueStorage(() => {
-        return vault.admitManager().match(
-          (manager) => {
-            const request: ConstructorParameters<
-              typeof LoginVaultIdentityReader
-            >[0] = { manager, storeId };
-            return new LoginVaultIdentityReader(request).execute();
-          },
-          (error) => Promise.resolve(err(error)),
-        );
-      })
-      .then((context) => {
-        if (generation !== identityContextLoadGeneration) return;
-        identityContext = context.isOk()
-          ? context.value
-          : { kind: LoginVaultIdentityContextKind.Failed };
-      });
+    const identityContextRequest: ConstructorParameters<
+      typeof LoginVaultIdentityReader
+    >[0] = {
+      manager: manager.value,
+      storeId,
+    };
+    void Effect.runPromise(
+      new LoginVaultIdentityReader(identityContextRequest).executeQueued(vault),
+    ).then(
+      (context) => {
+        switch (generation) {
+          case identityContextLoadGeneration:
+            identityContext = context;
+            break;
+          default:
+            return;
+        }
+      },
+      () => {
+        switch (generation) {
+          case identityContextLoadGeneration:
+            identityContext = { kind: LoginVaultIdentityContextKind.Failed };
+            break;
+          default:
+            return;
+        }
+      },
+    );
 
     return () => {
       if (generation === identityContextLoadGeneration) {

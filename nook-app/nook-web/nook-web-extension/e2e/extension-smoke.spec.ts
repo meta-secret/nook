@@ -302,7 +302,9 @@ test('sets up the extension device first and sends its public keys to Simple Vau
 
     const openedVault = context.waitForEvent('page')
     await widget.getByRole('button', { name: 'Open vault' }).click()
-    await expect(await openedVault).toHaveURL(simpleVaultBaseUrl)
+    await expect(await openedVault).toHaveURL(
+      simple_vault_url(simpleVaultBaseUrl, 'vault'),
+    )
 
     const signupPage = await context.newPage()
     await signupPage.goto(`${loginServer.origin}/signup`)
