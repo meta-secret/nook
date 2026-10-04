@@ -163,7 +163,104 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+type PendingSetupReply = {
+  readonly respond: (response: PreparedSetupRuntimeResponse) => void
+  readonly response: PreparedSetupRuntimeResponse
+}
+
 describe('credential-bearing workflow revalidation', () => {
+  test.each([false, true])(
+    'owns setup metadata across overlapping scan preparation with changed controls %s',
+    async (replaceControls) => {
+      document.body.innerHTML =
+        '<form action="/login" method="post"><input autocomplete="username" /><input type="password" autocomplete="current-password" /><button type="submit">Sign in</button></form>'
+      const workflow = firstWorkflow()
+      const pending: PendingSetupReply[] = []
+      vi.stubGlobal('chrome', {
+        runtime: {
+          sendMessage(
+            message: CompanionWasmRuntimeMessage,
+            respond: (response: PreparedSetupRuntimeResponse) => void,
+          ) {
+            if (
+              message.type !==
+              CompanionWasmSessionMessageType.AuthenticationAuthenticatorSetupObservation
+            )
+              throw new Error('Expected setup metadata only.')
+            const result: CompanionWasmAuthenticatorSetupResponse = {
+              authenticatorSetupObservation:
+                classify_authentication_authenticator_setup_batch(
+                  message.payload,
+                ),
+            }
+            pending.push({ respond, response: { ok: true, result } })
+          },
+        },
+      })
+      const scans: ReturnType<
+        typeof pageQrCapture.prepareAuthenticationAuthenticatorSetupObservation
+      >[] = []
+      runtime.sendSnapshot
+        .mockImplementationOnce(
+          async (message: AuthenticationWorkflowSnapshotMessage) => {
+            scans.push(
+              pageQrCapture.prepareAuthenticationAuthenticatorSetupObservation(),
+            )
+            await vi.waitFor(() => expect(pending).toHaveLength(2))
+            return matchedDeliveryWithSelectedFacts(
+              message,
+              AuthenticationWorkflowAction.ContinueWithNook,
+            )
+          },
+        )
+        .mockImplementation(
+          async (message: AuthenticationWorkflowSnapshotMessage) =>
+            matchedDeliveryWithSelectedFacts(
+              message,
+              AuthenticationWorkflowAction.ContinueWithNook,
+            ),
+        )
+      const act = vi.fn(() => ({
+        kind: RevalidatedAuthenticationActResultKind.Acted,
+      }))
+      const request: ConstructorParameters<
+        typeof RevalidatedAuthenticationAction
+      >[0] = {
+        workflow,
+        expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
+        observationBinding: {
+          kind: AuthenticationObservationBindingKind.Unbound,
+        },
+        approvalIsActive: () => true,
+        act,
+      }
+      const action = new RevalidatedAuthenticationAction(request).execute()
+      await vi.waitFor(() => expect(pending).toHaveLength(1))
+      if (replaceControls) {
+        const password = document.querySelector('input[type="password"]')
+        if (!password) throw new Error('Expected password control.')
+        password.replaceWith(password.cloneNode())
+      }
+      const first = pending[0]
+      if (!first) throw new Error('Expected action setup request.')
+      first.respond(first.response)
+      await expect(action).resolves.toEqual({
+        kind: replaceControls
+          ? RevalidatedAuthenticationActionOutcomeKind.Rejected
+          : RevalidatedAuthenticationActionOutcomeKind.Acted,
+      })
+      expect(act).toHaveBeenCalledTimes(replaceControls ? 0 : 1)
+      expect(runtime.sendSnapshot).toHaveBeenCalledTimes(
+        replaceControls ? 0 : 2,
+      )
+      if (!replaceControls) {
+        const second = pending[1]
+        if (!second) throw new Error('Expected concurrent scan request.')
+        second.respond(second.response)
+        await Promise.all(scans)
+      }
+    },
+  )
   test('rejects a matched verdict whose selected facts are not applicable', async () => {
     document.body.innerHTML = `
       <form action="/login" method="post">

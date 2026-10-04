@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import {
   AuthenticationWorkflowAction,
+  classify_authentication_authenticator_setup_batch,
+  type AuthenticationAuthenticatorSetupBatch,
   type AuthenticationPageObservationFacts,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { PasswordFormScopeKind } from '../../../../nook-web-shared/src/extension/password-form-fields'
@@ -79,6 +81,15 @@ const approvedFacts: AuthenticationPageObservationFacts = {
   },
   credentialSubmission: { kind: 'absent' },
 }
+const emptySetupMetadata: AuthenticationAuthenticatorSetupBatch = {
+  visibleInstructionCopies: [],
+  qrMedia: 'absent',
+}
+const authenticatorSetupSnapshot = {
+  metadataKey: JSON.stringify(emptySetupMetadata),
+  observation:
+    classify_authentication_authenticator_setup_batch(emptySetupMetadata),
+}
 beforeEach(() => vi.clearAllMocks())
 describe('backup-code workflow action', () => {
   function connectedHost() {
@@ -95,6 +106,7 @@ describe('backup-code workflow action', () => {
         kind: RuntimeMessageDeliveryKind.Unavailable,
       })
     const host: EnrollmentFlowHost = {
+      authenticatorSetupSnapshot,
       panel,
       title,
       description,
@@ -144,6 +156,7 @@ describe('backup-code workflow action', () => {
   test('starts extraction only inside a fresh Rust-approved action', async () => {
     mocks.revalidate.mockImplementation(async (request) => {
       const result = request.act({
+        authenticatorSetupSnapshot,
         currentWorkflow: workflow,
         observationBindingToken: 'approved-observation',
         approvedFacts,

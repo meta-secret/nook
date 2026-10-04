@@ -10,6 +10,7 @@ import {
   AuthenticatorPreviewResponseKind,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
+  type AuthenticationAuthenticatorSetupSnapshot,
   type DecodedOtpauthCandidate,
   pageQrCapture,
 } from '../lib/page-qr-capture'
@@ -39,6 +40,7 @@ import {
   type BackupEnrollmentHost,
   enrollmentBackupInteraction,
 } from './enrollment-backup-flow'
+import type { RevalidatedAuthenticationActRequest } from './autofill/workflow-revalidation'
 import { RevalidatedEnrollmentAction } from './autofill/backup-code-workflow-action'
 
 export type { EnrollmentPageHints } from './enrollment-flow-view'
@@ -49,6 +51,7 @@ type TranslatedMessageWithSubstitutionArgs = {
 }
 
 export type EnrollmentFlowHost = EnrollmentFlowViewHost & {
+  readonly authenticatorSetupSnapshot: AuthenticationAuthenticatorSetupSnapshot
   step: HTMLParagraphElement
   continueButton: HTMLButtonElement
   openVaultButton: HTMLButtonElement
@@ -122,6 +125,7 @@ type ShowQrCandidatePickerArgs = {
 }
 
 type StartQrEnrollmentArgs = {
+  approval: RevalidatedAuthenticationActRequest
   host: EnrollmentFlowHost
   section: HTMLElement
 }
@@ -132,6 +136,7 @@ type RenderEnrollmentActionsArgs = {
 }
 
 type StartBackupCodeEnrollmentArgs = {
+  approval: RevalidatedAuthenticationActRequest
   host: EnrollmentFlowHost
   section?: HTMLElement
 }
@@ -145,15 +150,20 @@ type EnrollmentHintsObservationRequest = {
 class AuthenticatorEnrollmentInteraction {
   private holdEnrollmentWidgetAfterSave = false
   private enrollmentSavePending = false
-  detectEnrollmentHints(): EnrollmentPageHints {
+  detectEnrollmentHints(
+    snapshot: AuthenticationAuthenticatorSetupSnapshot,
+  ): EnrollmentPageHints {
+    if (
+      !pageQrCapture.authenticationAuthenticatorSetupSnapshotIsCurrent(snapshot)
+    )
+      throw new Error('Authenticator setup observation is stale.')
     const { copy, hint } =
       recoveryCopyObservation.authenticationRecoveryEvidence()
     const hintsRequest: Parameters<
       typeof this.detectEnrollmentHintsFromRecoveryCopy
     >[0] = {
       recoveryCopy: copy,
-      authenticatorSetupObservation:
-        pageQrCapture.authenticationAuthenticatorSetupObservation(),
+      authenticatorSetupObservation: snapshot.observation,
     }
     const hints = this.detectEnrollmentHintsFromRecoveryCopy(hintsRequest)
     hints.backupCodes = hint === 'present'
@@ -211,12 +221,14 @@ class AuthenticatorEnrollmentInteraction {
         text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollSaved),
       }
       enrollmentFlowRenderer.setHostDescription(nookTypedArgs0_1)
-      if (this.detectEnrollmentHints().backupCodes) {
+      if (
+        this.detectEnrollmentHints(host.authenticatorSetupSnapshot).backupCodes
+      ) {
         const nookTypedArgs0_2: Parameters<
           typeof this.renderEnrollmentActions
         >[0] = {
           host,
-          hints: this.detectEnrollmentHints(),
+          hints: this.detectEnrollmentHints(host.authenticatorSetupSnapshot),
         }
         this.renderEnrollmentActions(nookTypedArgs0_2)
       }
@@ -296,7 +308,7 @@ class AuthenticatorEnrollmentInteraction {
         typeof this.renderEnrollmentActions
       >[0] = {
         host,
-        hints: this.detectEnrollmentHints(),
+        hints: this.detectEnrollmentHints(host.authenticatorSetupSnapshot),
       }
       this.enrollmentSavePending = false
       this.renderEnrollmentActions(nookTypedArgs0_11)
@@ -319,7 +331,7 @@ class AuthenticatorEnrollmentInteraction {
         typeof this.renderEnrollmentActions
       >[0] = {
         host,
-        hints: this.detectEnrollmentHints(),
+        hints: this.detectEnrollmentHints(host.authenticatorSetupSnapshot),
       }
       this.enrollmentSavePending = false
       this.renderEnrollmentActions(nookTypedArgs0_13)
@@ -398,7 +410,7 @@ class AuthenticatorEnrollmentInteraction {
           typeof this.renderEnrollmentActions
         >[0] = {
           host,
-          hints: this.detectEnrollmentHints(),
+          hints: this.detectEnrollmentHints(host.authenticatorSetupSnapshot),
         }
         this.renderEnrollmentActions(nookTypedArgs0_21)
         this.clearOtpauthUri(otpauthUri)
@@ -419,7 +431,7 @@ class AuthenticatorEnrollmentInteraction {
           typeof this.renderEnrollmentActions
         >[0] = {
           host,
-          hints: this.detectEnrollmentHints(),
+          hints: this.detectEnrollmentHints(host.authenticatorSetupSnapshot),
         }
         this.renderEnrollmentActions(nookTypedArgs0_23)
         this.clearOtpauthUri(otpauthUri)
@@ -487,13 +499,25 @@ class AuthenticatorEnrollmentInteraction {
           if (!new AuthenticationGesture(event).trusted || host.isBusy()) return
           this.clearOtpauthUri(otpauthUri)
           this.clearCandidate(candidate)
+          if (
+            !pageQrCapture.authenticationAuthenticatorSetupSnapshotIsCurrent(
+              host.authenticatorSetupSnapshot,
+            )
+          )
+            return
           const nookTypedArgs0_29: Parameters<
             typeof enrollmentFlowRenderer.resetEnrollmentHeadline
-          >[0] = { host, hints: this.detectEnrollmentHints() }
+          >[0] = {
+            host,
+            hints: this.detectEnrollmentHints(host.authenticatorSetupSnapshot),
+          }
           enrollmentFlowRenderer.resetEnrollmentHeadline(nookTypedArgs0_29)
           const nookTypedArgs0_30: Parameters<
             typeof this.renderEnrollmentActions
-          >[0] = { host, hints: this.detectEnrollmentHints() }
+          >[0] = {
+            host,
+            hints: this.detectEnrollmentHints(host.authenticatorSetupSnapshot),
+          }
           this.renderEnrollmentActions(nookTypedArgs0_30)
         },
       }
@@ -555,18 +579,24 @@ class AuthenticatorEnrollmentInteraction {
       onClick: (event) => {
         if (!new AuthenticationGesture(event).trusted || host.isBusy()) return
         candidates.forEach((candidate) => this.clearCandidate(candidate))
+        if (
+          !pageQrCapture.authenticationAuthenticatorSetupSnapshotIsCurrent(
+            host.authenticatorSetupSnapshot,
+          )
+        )
+          return
         const nookTypedArgs0_34: Parameters<
           typeof enrollmentFlowRenderer.resetEnrollmentHeadline
         >[0] = {
           host,
-          hints: this.detectEnrollmentHints(),
+          hints: this.detectEnrollmentHints(host.authenticatorSetupSnapshot),
         }
         enrollmentFlowRenderer.resetEnrollmentHeadline(nookTypedArgs0_34)
         const nookTypedArgs0_35: Parameters<
           typeof this.renderEnrollmentActions
         >[0] = {
           host,
-          hints: this.detectEnrollmentHints(),
+          hints: this.detectEnrollmentHints(host.authenticatorSetupSnapshot),
         }
         this.renderEnrollmentActions(nookTypedArgs0_35)
       },
@@ -577,9 +607,20 @@ class AuthenticatorEnrollmentInteraction {
   }
 
   async startQrEnrollment({
+    approval,
     host,
     section,
   }: StartQrEnrollmentArgs): Promise<void> {
+    const { authenticatorSetupSnapshot } = approval
+    if (
+      !approval.revalidateCurrentWorkflow() ||
+      !host.panel.isConnected ||
+      !pageQrCapture.authenticationAuthenticatorSetupSnapshotIsCurrent(
+        authenticatorSetupSnapshot,
+      )
+    )
+      return
+    host = { ...host, authenticatorSetupSnapshot }
     this.releaseEnrollmentWidgetHold()
     host.title.textContent = host.translatedMessage(
       BROWSER_MESSAGE_KEYS.WidgetEnrollTitle,
@@ -596,6 +637,10 @@ class AuthenticatorEnrollmentInteraction {
 
     try {
       const result = await pageQrCapture.decodeVisibleOtpauthCandidates()
+      if (!approval.revalidateCurrentWorkflow() || !host.panel.isConnected) {
+        result.candidates.forEach((candidate) => this.clearCandidate(candidate))
+        return
+      }
       if (result.status === 'unsupported') {
         const nookTypedArgs0_37: Parameters<
           typeof enrollmentFlowRenderer.setHostDescription
@@ -610,7 +655,7 @@ class AuthenticatorEnrollmentInteraction {
           typeof this.renderEnrollmentActions
         >[0] = {
           host,
-          hints: this.detectEnrollmentHints(),
+          hints: this.detectEnrollmentHints(host.authenticatorSetupSnapshot),
         }
         this.renderEnrollmentActions(nookTypedArgs0_38)
         return
@@ -627,7 +672,7 @@ class AuthenticatorEnrollmentInteraction {
           typeof this.renderEnrollmentActions
         >[0] = {
           host,
-          hints: this.detectEnrollmentHints(),
+          hints: this.detectEnrollmentHints(host.authenticatorSetupSnapshot),
         }
         this.renderEnrollmentActions(nookTypedArgs0_40)
         return
@@ -656,7 +701,7 @@ class AuthenticatorEnrollmentInteraction {
           typeof this.renderEnrollmentActions
         >[0] = {
           host,
-          hints: this.detectEnrollmentHints(),
+          hints: this.detectEnrollmentHints(host.authenticatorSetupSnapshot),
         }
         this.renderEnrollmentActions(nookTypedArgs0_43)
         return
@@ -687,19 +732,38 @@ class AuthenticatorEnrollmentInteraction {
     this.holdEnrollmentWidgetAfterSave = false
   }
 
-  startBackupCodeEnrollment({
+  async startBackupCodeEnrollment({
+    approval,
     host,
     section = enrollmentFlowRenderer.createEnrollmentSection(host.panel),
-  }: StartBackupCodeEnrollmentArgs): void {
+  }: StartBackupCodeEnrollmentArgs): Promise<void> {
+    const { authenticatorSetupSnapshot } = approval
+    if (
+      !approval.revalidateCurrentWorkflow() ||
+      !host.panel.isConnected ||
+      !pageQrCapture.authenticationAuthenticatorSetupSnapshotIsCurrent(
+        authenticatorSetupSnapshot,
+      )
+    )
+      return
+    host = { ...host, authenticatorSetupSnapshot }
     this.releaseEnrollmentWidgetHold()
     const backupHost: BackupEnrollmentHost = {
       ...host,
+      actionIsCurrent: () => Boolean(approval.revalidateCurrentWorkflow()),
       returnToActions: () => {
+        if (
+          !host.panel.isConnected ||
+          !pageQrCapture.authenticationAuthenticatorSetupSnapshotIsCurrent(
+            host.authenticatorSetupSnapshot,
+          )
+        )
+          return
         const actionsContext: Parameters<
           typeof this.renderEnrollmentActions
         >[0] = {
           host,
-          hints: this.detectEnrollmentHints(),
+          hints: this.detectEnrollmentHints(host.authenticatorSetupSnapshot),
         }
         this.renderEnrollmentActions(actionsContext)
       },
@@ -714,6 +778,13 @@ class AuthenticatorEnrollmentInteraction {
   }
 
   renderEnrollmentActions({ host, hints }: RenderEnrollmentActionsArgs): void {
+    if (
+      !host.panel.isConnected ||
+      !pageQrCapture.authenticationAuthenticatorSetupSnapshotIsCurrent(
+        host.authenticatorSetupSnapshot,
+      )
+    )
+      return
     if (this.enrollmentSavePending) return
     if (hints.qr === 'absent' && !hints.backupCodes) {
       enrollmentFlowRenderer.clearEnrollmentSection(host.panel)
@@ -736,9 +807,10 @@ class AuthenticatorEnrollmentInteraction {
           >[0] = {
             host,
             action: AuthenticationWorkflowAction.EnrollAuthenticator,
-            start: () => {
+            start: (approval) => {
               const startRequest: Parameters<typeof this.startQrEnrollment>[0] =
                 {
+                  approval,
                   host,
                   section,
                 }
@@ -766,11 +838,11 @@ class AuthenticatorEnrollmentInteraction {
           >[0] = {
             host,
             action: AuthenticationWorkflowAction.SaveBackupCodes,
-            start: () => {
+            start: (approval) => {
               const startRequest: Parameters<
                 typeof this.startBackupCodeEnrollment
-              >[0] = { host, section }
-              this.startBackupCodeEnrollment(startRequest)
+              >[0] = { approval, host, section }
+              void this.startBackupCodeEnrollment(startRequest)
             },
           }
           void new RevalidatedEnrollmentAction(backupRequest).execute()

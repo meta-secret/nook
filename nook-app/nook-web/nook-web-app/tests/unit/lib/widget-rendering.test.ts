@@ -3,6 +3,8 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import {
   AuthenticationWorkflowAction,
+  classify_authentication_authenticator_setup_batch,
+  type AuthenticationAuthenticatorSetupBatch,
   type AuthenticationPageObservationFacts,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
@@ -263,6 +265,7 @@ async function renderPasskeyWidget({
 }: RenderPasskeyWidgetArgs): Promise<void> {
   const args: Parameters<typeof authenticationWidgetRenderer.renderWidget>[0] =
     {
+      authenticatorSetupSnapshot,
       snapshot,
       workflow,
       facts,
@@ -286,6 +289,15 @@ function savedLoginButton(): HTMLButtonElement | false {
   )
 }
 
+const emptySetupMetadata: AuthenticationAuthenticatorSetupBatch = {
+  visibleInstructionCopies: [],
+  qrMedia: 'absent',
+}
+const authenticatorSetupSnapshot = {
+  metadataKey: JSON.stringify(emptySetupMetadata),
+  observation:
+    classify_authentication_authenticator_setup_batch(emptySetupMetadata),
+}
 beforeEach(() => {
   document.body.replaceChildren()
   vi.clearAllMocks()
@@ -354,6 +366,7 @@ describe('authenticator enrollment workflow', () => {
     const args: Parameters<
       typeof authenticationWidgetRenderer.renderWidget
     >[0] = {
+      authenticatorSetupSnapshot,
       snapshot: enrollmentSnapshot,
       workflow,
       facts,
