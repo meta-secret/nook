@@ -14,8 +14,11 @@ afterEach(() => vi.restoreAllMocks())
 describe('login projection during pending device authorization', () => {
   test('navigation queues manager reads until the credential operation settles', async () => {
     const queue = new SerialOperationQueue()
-    const credential = Promise.withResolvers<void>()
-    const pending = queue.enqueue(() => credential.promise)
+    let resolveCredential!: () => void
+    const credential = new Promise<void>((resolve) => {
+      resolveCredential = resolve
+    })
+    const pending = queue.enqueue(() => credential)
     const vault = VaultStateTestFixture.create()
     vault.enqueueStorage = <Value, Failure>(
       operation: () => Result<Value, Failure> | Promise<Result<Value, Failure>>,
@@ -35,7 +38,7 @@ describe('login projection during pending device authorization', () => {
     expect(visibility).not.toHaveBeenCalled()
     expect(vaultType).not.toHaveBeenCalled()
     expect(remounted.hidePasswordUnlock).toBe(true)
-    credential.resolve()
+    resolveCredential()
     await pending
     await Promise.all([oldRead, newRead])
     expect(remounted.hidePasswordUnlock).toBe(false)
