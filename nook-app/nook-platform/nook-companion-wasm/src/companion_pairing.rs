@@ -153,7 +153,9 @@ mod tests {
         ExtensionConnectScope, ExtensionPairingApprovalEpochMilliseconds,
         ExtensionPairingVaultType, PairingVaultId,
     };
-    use tsify::Tsify;
+    use serde::Serialize;
+    use serde_wasm_bindgen::Serializer;
+    use tsify::{Ts, Tsify};
     use wasm_bindgen::JsError;
 
     struct PairingProtocolFixture;
@@ -200,6 +202,124 @@ mod tests {
                 .map_err(|_| JsError::new("Pairing fixture could not be decoded."))?,
             })
         }
+    }
+
+    impl PairingProtocolFixture {
+        fn malformed<T: Tsify>() -> Result<Ts<T>, JsError> {
+            Ok(Ts::new_unchecked(
+                serde_json::json!({"unexpected":true})
+                    .serialize(&Serializer::json_compatible())
+                    .map_err(|_| JsError::new("Malformed pairing fixture could not be encoded."))?,
+            ))
+        }
+    }
+
+    #[wasm_bindgen_test::wasm_bindgen_test]
+    fn pairing_rejection_preserves_borrowed_request_and_observation() -> Result<(), JsError> {
+        let mut expired = PairingProtocolFixture::request()?;
+        expired.expires_at = PairingProtocolFixture::epoch("100")?;
+        let expired_wire = expired
+            .into_ts()
+            .map_err(|_| JsError::new("Request could not be encoded."))?;
+        assert!(NookCompanionPairingExtensionProtocol::new(&expired_wire).is_err());
+        assert_eq!(
+            expired_wire
+                .to_rust()
+                .map_err(|_| JsError::new("Request could not be decoded."))?,
+            expired
+        );
+        let observation = CompanionPairingRequestObservation {
+            request: PairingProtocolFixture::request()?,
+            observed_at: PairingProtocolFixture::epoch("201")?,
+        };
+        let observation_wire = observation
+            .into_ts()
+            .map_err(|_| JsError::new("Observation could not be encoded."))?;
+        assert!(NookCompanionPairingWebsiteProtocol::new(&observation_wire).is_err());
+        assert_eq!(
+            observation_wire
+                .to_rust()
+                .map_err(|_| JsError::new("Observation could not be decoded."))?,
+            observation
+        );
+        let valid = PairingProtocolFixture::request()?;
+        let valid_wire = valid
+            .into_ts()
+            .map_err(|_| JsError::new("Request could not be encoded."))?;
+        let protocol = NookCompanionPairingExtensionProtocol::new(&valid_wire)?;
+        assert_eq!(
+            protocol
+                .request()?
+                .to_rust()
+                .map_err(|_| JsError::new("Request could not be decoded."))?,
+            valid
+        );
+        assert_eq!(
+            valid_wire
+                .to_rust()
+                .map_err(|_| JsError::new("Request could not be decoded."))?,
+            valid
+        );
+        Ok(())
+    }
+
+    #[wasm_bindgen_test::wasm_bindgen_test]
+    fn malformed_pairing_values_cannot_construct_or_authorize_protocols() -> Result<(), JsError> {
+        assert!(
+            NookCompanionPairingExtensionProtocol::new(&PairingProtocolFixture::malformed()?)
+                .is_err()
+        );
+        assert!(
+            NookCompanionPairingWebsiteProtocol::new(&PairingProtocolFixture::malformed()?)
+                .is_err()
+        );
+        let request = PairingProtocolFixture::request()?
+            .into_ts()
+            .map_err(|_| JsError::new("Request could not be encoded."))?;
+        let authority = NookCompanionPairingExtensionProtocol::new(&request)?.take_authority()?;
+        assert!(
+            authority
+                .admit(&PairingProtocolFixture::malformed()?)
+                .is_err()
+        );
+        let observation = CompanionPairingRequestObservation {
+            request: PairingProtocolFixture::request()?,
+            observed_at: PairingProtocolFixture::epoch("150")?,
+        }
+        .into_ts()
+        .map_err(|_| JsError::new("Observation could not be encoded."))?;
+        let digest = CompanionPairingProviderManifestDigest::parse(&"b".repeat(64))?
+            .into_ts()
+            .map_err(|_| JsError::new("Digest could not be encoded."))?;
+        let website = NookCompanionPairingWebsiteProtocol::new(&observation)?;
+        assert!(
+            website
+                .authorize(&PairingProtocolFixture::malformed()?, &digest)
+                .is_err()
+        );
+        let authorization = CompanionPairingWebsiteAuthorization {
+            request: PairingProtocolFixture::request()?,
+            observed_at: PairingProtocolFixture::epoch("175")?,
+            vault_store_id: PairingVaultId::before_genesis_placeholder(),
+            vault_name: "Personal".to_owned(),
+            approved_at: PairingProtocolFixture::approval_timestamp("175")?,
+        }
+        .into_ts()
+        .map_err(|_| JsError::new("Authorization could not be encoded."))?;
+        let website = NookCompanionPairingWebsiteProtocol::new(&observation)?;
+        assert!(
+            website
+                .authorize(&authorization, &PairingProtocolFixture::malformed()?)
+                .is_err()
+        );
+        let authorization_after = authorization
+            .to_rust()
+            .map_err(|_| JsError::new("Authorization could not be decoded."))?;
+        assert_eq!(
+            authorization_after.request,
+            PairingProtocolFixture::request()?
+        );
+        Ok(())
     }
 
     #[wasm_bindgen_test::wasm_bindgen_test]

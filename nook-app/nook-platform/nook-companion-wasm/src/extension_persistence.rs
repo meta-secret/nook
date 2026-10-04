@@ -113,4 +113,57 @@ mod tests {
             vec!["pairing"]
         );
     }
+    #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen_test::wasm_bindgen_test]
+    fn typed_persistence_observations_classify_matching_names_and_reject_invalid_ingress()
+    -> Result<(), JsError> {
+        use nook_companion_core::ExtensionPersistenceObservation;
+        use tsify::{Ts, Tsify};
+        use wasm_bindgen::JsValue;
+        let databases = ExtensionPersistenceObservation {
+            area: ExtensionPersistenceArea::EventLog,
+            observed_names: vec!["nook_db".to_owned(), "unrelated".to_owned()],
+        }
+        .into_ts()?;
+        assert_eq!(
+            classify_extension_persistence_databases(&databases)?,
+            ExtensionPersistenceDatabaseState::Present
+        );
+        let stores = ExtensionPersistenceObservation {
+            area: ExtensionPersistenceArea::EventLog,
+            observed_names: vec!["events".to_owned(), "unrelated".to_owned()],
+        }
+        .into_ts()?;
+        assert_eq!(
+            classify_extension_persistence_stores(&stores)?,
+            ExtensionPersistenceStoreState::Present
+        );
+        assert_eq!(
+            matching_extension_persistence_stores(&stores)?,
+            vec!["events"]
+        );
+        let absent = ExtensionPersistenceObservation {
+            area: ExtensionPersistenceArea::Pairing,
+            observed_names: vec!["unrelated".to_owned()],
+        }
+        .into_ts()?;
+        assert_eq!(
+            classify_extension_persistence_databases(&absent)?,
+            ExtensionPersistenceDatabaseState::Absent
+        );
+        assert_eq!(
+            classify_extension_persistence_stores(&absent)?,
+            ExtensionPersistenceStoreState::Absent
+        );
+        assert!(matching_extension_persistence_stores(&absent)?.is_empty());
+        let malformed = Ts::new_unchecked(JsValue::from_str("invalid"));
+        assert!(classify_extension_persistence_databases(&malformed).is_err());
+        assert!(classify_extension_persistence_stores(&malformed).is_err());
+        assert!(matching_extension_persistence_stores(&malformed).is_err());
+        assert_eq!(
+            matching_extension_persistence_stores(&stores)?,
+            vec!["events"]
+        );
+        Ok(())
+    }
 }

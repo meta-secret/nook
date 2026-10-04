@@ -405,4 +405,115 @@ mod tests {
         assert!(admit_extension_pairing_vault_type("sentinel").is_err());
         assert!(admit_extension_pairing_vault_type("external-value").is_err());
     }
+    #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen_test::wasm_bindgen_test]
+    fn typed_pairing_exports_preserve_state_across_round_trip_and_rejection() -> Result<(), JsError>
+    {
+        use nook_companion_core::{
+            CreateExtensionPairingStateInput, ExtensionPairingGrantRemovalInput,
+            RefreshExtensionPairingGrantInput,
+        };
+        use tsify::{Ts, Tsify};
+        use wasm_bindgen::JsValue;
+        let input = CreateExtensionPairingStateInput {
+            grant: PairingFixture::approval(),
+            imported: PairingFixture::imported_event_log(2),
+            observed_at: "2026-09-05T00:00:01.000Z".to_owned(),
+        };
+        let state = create_extension_pairing_state(&input.into_ts()?)?;
+        let original = state.to_rust()?;
+        let grant = ordered_extension_pairing_grants(&state)?
+            .into_iter()
+            .next()
+            .ok_or_else(|| JsError::new("created pairing state has no grant"))?
+            .to_rust()?;
+        assert_eq!(grant.event_count, 2.into());
+        assert_eq!(
+            first_extension_pairing_grant(&state)?.to_rust()?,
+            SelectedExtensionPairingGrant::Selected {
+                grant: Box::new(grant.clone())
+            }
+        );
+        assert_eq!(
+            selected_extension_pairing_grant(&state)?.to_rust()?,
+            SelectedExtensionPairingGrant::Selected {
+                grant: Box::new(grant.clone())
+            }
+        );
+        let grant_json = serde_json::to_string(&grant)?;
+        assert_eq!(
+            decode_stored_extension_pairing_grant_json(&grant_json)?.to_rust()?,
+            grant
+        );
+        let setup = original
+            .entries
+            .iter()
+            .find_map(|entry| match &entry.record {
+                ExtensionPairingRecord::Setup(setup) => Some(setup.clone()),
+                ExtensionPairingRecord::Grant(_) => None,
+            })
+            .ok_or_else(|| JsError::new("created pairing state has no setup"))?;
+        let setup_json = serde_json::to_string(&setup)?;
+        assert!(is_extension_ready_setup_json(&setup_json));
+        assert_eq!(
+            decode_extension_ready_setup_json(&setup_json)?.to_rust()?,
+            setup
+        );
+        let refreshed = refresh_extension_pairing_grant(
+            &RefreshExtensionPairingGrantInput {
+                grant,
+                imported: PairingFixture::imported_event_log(4),
+                observed_at: "2026-09-05T00:00:04.000Z".to_owned(),
+                select: true,
+            }
+            .into_ts()?,
+        )?;
+        let refreshed_grant = ordered_extension_pairing_grants(&refreshed)?
+            .into_iter()
+            .next()
+            .ok_or_else(|| JsError::new("refreshed pairing state has no grant"))?
+            .to_rust()?;
+        assert_eq!(refreshed_grant.event_count, 4.into());
+        assert_eq!(
+            extension_setup_after_pairing_grant_removal(
+                &ExtensionPairingGrantRemovalInput {
+                    state: refreshed.to_rust()?,
+                    removed_vault_store_id: PairingVaultId::before_genesis_placeholder(),
+                }
+                .into_ts()?
+            )?
+            .to_rust()?,
+            ExtensionSetupAfterRemoval::NoPairedVault
+        );
+        assert!(
+            create_extension_pairing_state(&Ts::new_unchecked(JsValue::from_str("invalid")))
+                .is_err()
+        );
+        assert!(
+            refresh_extension_pairing_grant(&Ts::new_unchecked(JsValue::from_str("invalid")))
+                .is_err()
+        );
+        assert!(
+            ordered_extension_pairing_grants(&Ts::new_unchecked(JsValue::from_str("invalid")))
+                .is_err()
+        );
+        assert!(
+            selected_extension_pairing_grant(&Ts::new_unchecked(JsValue::from_str("invalid")))
+                .is_err()
+        );
+        assert!(
+            first_extension_pairing_grant(&Ts::new_unchecked(JsValue::from_str("invalid")))
+                .is_err()
+        );
+        assert!(
+            extension_setup_after_pairing_grant_removal(&Ts::new_unchecked(JsValue::from_str(
+                "invalid"
+            )))
+            .is_err()
+        );
+        assert!(decode_stored_extension_pairing_grant_json("{}").is_err());
+        assert!(decode_extension_ready_setup_json("{}").is_err());
+        assert_eq!(state.to_rust()?, original);
+        Ok(())
+    }
 }
