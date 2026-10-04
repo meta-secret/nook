@@ -734,6 +734,14 @@ export class VaultSyncActions {
         const applied = await this.synchronizeStorage(state.wasmStorageArgs());
         if (applied.isErr()) return storageErr(applied.error);
       }
+      // Join approval can synchronize the encrypted roster before a vault session exists.
+      switch (state.isAuthenticated) {
+        case false:
+          state.markSynced(Date.now());
+          return storageOk(ProviderSyncOutcome.Synced);
+        case true:
+          break;
+      }
       const refreshed = await state.refreshSecretsFromSession();
       if (refreshed.isErr()) return storageErr(refreshed.error);
       state.markSynced(Date.now());

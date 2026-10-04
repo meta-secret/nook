@@ -3,7 +3,7 @@ import sharedConfig from './playwright.config'
 
 type WindowsOutputDirectoryConfig = Pick<PlaywrightTestConfig, 'outputDir'>
 
-class WindowsAppConfig {
+class WindowsExtensionConfig {
   constructor(private readonly environment: NodeJS.ProcessEnv) {}
 
   buildOutputDirectory(): WindowsOutputDirectoryConfig {
@@ -14,8 +14,8 @@ class WindowsAppConfig {
 
   static readonly value: PlaywrightTestConfig = {
     ...sharedConfig,
-    workers: 2,
-    ...new WindowsAppConfig(process.env).buildOutputDirectory(),
+    workers: 1,
+    ...new WindowsExtensionConfig(process.env).buildOutputDirectory(),
     reporter: [['line'], ['html', { open: 'never' }], ['json']],
     use: {
       ...sharedConfig.use,
@@ -24,14 +24,17 @@ class WindowsAppConfig {
       screenshot: 'only-on-failure',
       launchOptions: {},
     },
+    // Persistent extension contexts use the installed Edge executable supplied
+    // through PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH by the native Windows Task.
     webServer: {
       command:
-        'bun x --no-install vite preview --host 127.0.0.1 --port 5173 --strictPort',
-      url: 'http://127.0.0.1:5173',
+        'bun x --no-install vite preview --host 127.0.0.1 --port 5174 --strictPort',
+      cwd: '../nook-vault-simple',
+      url: 'http://127.0.0.1:5174',
       reuseExistingServer: false,
       timeout: 120_000,
     },
   }
 }
 
-export default defineConfig(WindowsAppConfig.value)
+export default defineConfig(WindowsExtensionConfig.value)

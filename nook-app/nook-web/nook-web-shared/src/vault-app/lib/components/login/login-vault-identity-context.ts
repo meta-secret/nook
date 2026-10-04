@@ -1,4 +1,6 @@
 import { err, ok, type Result } from "neverthrow";
+import { Effect } from "effect";
+import type { VaultState } from "$lib/vault.svelte";
 import {
   NativeVaultStorageFailure,
   type VaultStorageFailure,
@@ -24,6 +26,22 @@ type LoadLoginVaultIdentityContextArgs = {
   readonly storeId: string;
 };
 
+type NativeLoginIdentityFailure = ConstructorParameters<
+  typeof NativeVaultStorageFailure
+>[0];
+
+interface LoginVaultIdentityReadAttempt {
+  readonly try: () => Promise<
+    Result<LoginVaultIdentityContext, VaultStorageFailure>
+  >;
+  readonly catch: (failure: NativeLoginIdentityFailure) => VaultStorageFailure;
+}
+
+type QueuedLoginVaultIdentityRead = Effect.Effect<
+  LoginVaultIdentityContext,
+  VaultStorageFailure
+>;
+
 export type LoginVaultIdentityContext =
   | { readonly kind: LoginVaultIdentityContextKind.Loading }
   | { readonly kind: LoginVaultIdentityContextKind.Failed }
@@ -40,6 +58,19 @@ export type LoginVaultIdentityContext =
 
 export class LoginVaultIdentityReader {
   constructor(private readonly request: LoadLoginVaultIdentityContextArgs) {}
+
+  executeQueued(state: VaultState): QueuedLoginVaultIdentityRead {
+    const attempt: LoginVaultIdentityReadAttempt = {
+      try: () => state.enqueueStorage(() => this.execute()),
+      catch: (failure) => new NativeVaultStorageFailure(failure),
+    };
+    return Effect.tryPromise(attempt).pipe(
+      Effect.flatMap((result) =>
+        result.match<QueuedLoginVaultIdentityRead>(Effect.succeed, Effect.fail),
+      ),
+    );
+  }
+
   async execute(): Promise<
     Result<LoginVaultIdentityContext, VaultStorageFailure>
   > {

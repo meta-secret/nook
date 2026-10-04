@@ -1,4 +1,5 @@
 import { expect, test } from '../fixtures'
+import type { Locator } from '@playwright/test'
 import {
   connectLocalVault,
   expandSettingsSection,
@@ -146,6 +147,23 @@ test('search a paginated vault through encrypted metadata', async ({
     page.getByTestId('secret-row').filter({ hasText: 'demo-user-59' }),
   ).toBeVisible({ timeout: UI_TIMEOUT_MS })
   await expect(page.getByTestId('secret-pagination')).toHaveCount(0)
+  const searchedRowFilter: Parameters<Locator['filter']>[0] = {
+    hasText: 'demo-user-59',
+  }
+  const searchedRow: Locator = page
+    .getByTestId('secret-row')
+    .filter(searchedRowFilter)
+  const reveal: Locator = searchedRow.getByTestId('reveal-secret-btn')
+  await searchedRow.getByTestId('secret-row-toggle').click()
+  await expect(searchedRow.getByTestId('revealed-secret')).toContainText('••••')
+  await expect(reveal).toBeEnabled()
+  await reveal.click()
+  await expect(searchedRow.getByTestId('revealed-secret')).toContainText(
+    'private-password-59',
+  )
+  await page.waitForTimeout(DEMO_BEAT_MS)
+  await reveal.click()
+  await expect(searchedRow.getByTestId('revealed-secret')).toContainText('••••')
   await page.waitForTimeout(DEMO_BEAT_MS)
 
   const storedCatalog = await page.evaluate(

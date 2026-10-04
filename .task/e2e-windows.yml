@@ -3,30 +3,62 @@ version: "3"
 # Standalone native entry point: the root Taskfile owns POSIX/Docker setup.
 tasks:
   web:e2e:windows:install:
-    desc: Install native Windows web dependencies without the POSIX postinstall.
+    desc: Install native Windows dependencies without POSIX package scripts.
     dir: "{{.TASKFILE_DIR}}/../nook-app/nook-web/nook-web-app"
     platforms: [windows]
     cmds:
       - bun install --frozen-lockfile --ignore-scripts
       - >-
         pwsh -NoProfile -Command '$ErrorActionPreference = "Stop";
-        New-Item -ItemType Junction -Path ../node_modules -Target (Join-Path (Get-Location) node_modules) | Out-Null'
+        $dependencies = Join-Path (Get-Location) node_modules;
+        foreach ($location in @("../node_modules", "../nook-web-extension/node_modules", "../nook-vault-simple/node_modules", "../nook-vault-sentinel/node_modules")) {
+          New-Item -ItemType Junction -Path $location -Target $dependencies | Out-Null
+        }'
+      - bun install --cwd ../nook-web-research --frozen-lockfile --ignore-scripts
 
   web:e2e:windows:
-    desc: Run shared deterministic specs in real native Microsoft Edge.
+    desc: Run repository automated browser surfaces in native Microsoft Edge.
     dir: "{{.TASKFILE_DIR}}/../nook-app/nook-web/nook-web-app"
     platforms: [windows]
     cmds:
-      - >-
+      - |
         pwsh -NoProfile -Command '$ErrorActionPreference = "Stop";
-        if (!(Test-Path dist/index.html)) { throw "Linux production preview artifact is required" };
-        $playwrightArguments = @("x", "--no-install", "playwright", "test", "--config=playwright.windows.config.ts");
+        $webApp = Get-Location;
+        $failed = $false;
         switch ($env:E2E_SUITE) {
-          "all" { $playwrightArguments += @("--project=stable", "--project=unstable") }
-          "stable" { $playwrightArguments += "--project=stable" }
-          "unstable" { $playwrightArguments += "--project=unstable" }
-          default { throw "Unsupported deterministic suite: $env:E2E_SUITE" }
+          "all" { $suites = @("stable", "unstable", "sync-live", "isolation", "extension", "research") }
+          "stable" { $suites = @("stable") }
+          "unstable" { $suites = @("unstable") }
+          "sync-live" { $suites = @("sync-live") }
+          "isolation" { $suites = @("isolation") }
+          "extension" { $suites = @("extension") }
+          "research" { $suites = @("research") }
+          default { throw "Unsupported Windows suite: $env:E2E_SUITE" }
         };
-        if ($env:E2E_SPEC) { $playwrightArguments += $env:E2E_SPEC };
-        & bun @playwrightArguments;
-        exit $LASTEXITCODE'
+        foreach ($suite in $suites) {
+          Set-Location $webApp;
+          if ($suite -eq "sync-live") { $env:NOOK_E2E_SKIP_GITHUB_CLEANUP = "0" }
+          else { $env:NOOK_E2E_SKIP_GITHUB_CLEANUP = "1" };
+          $arguments = @("x", "--no-install", "playwright", "test");
+          switch ($suite) {
+            "stable" { $arguments += @("--config=playwright.windows.config.ts", "--project=stable") }
+            "unstable" { $arguments += @("--config=playwright.windows.config.ts", "--project=unstable") }
+            "sync-live" { $arguments += @("--config=playwright.windows.config.ts", "--project=sync-live") }
+            "isolation" { $arguments += "--config=playwright.isolation.windows.config.ts" }
+            "extension" { Set-Location ../nook-web-extension; $arguments += "--config=playwright.windows.config.ts" }
+            "research" { Set-Location ../nook-web-research; $arguments += "--config=playwright.windows.config.ts" }
+          };
+          if (!(Test-Path dist/index.html) -and $suite -ne "extension") { throw "Matching Linux production artifact is required for $suite" };
+          if ($env:E2E_SPEC) { $arguments += $env:E2E_SPEC };
+          $env:PLAYWRIGHT_HTML_OUTPUT_DIR = "playwright-report/$suite";
+          $env:PLAYWRIGHT_JSON_OUTPUT_NAME = "test-results/$suite.json";
+          $env:PLAYWRIGHT_OUTPUT_DIR = "test-results/$suite";
+          if ($suite -eq "extension") {
+            $env:NOOK_SIMPLE_VAULT_URL = "http://127.0.0.1:5174/";
+            if (!$env:RUNNER_TEMP) { throw "RUNNER_TEMP is required for short native extension profile paths" };
+            $env:PLAYWRIGHT_OUTPUT_DIR = Join-Path $env:RUNNER_TEMP "nook-extension-results"
+          };
+          & bun @arguments;
+          if ($LASTEXITCODE -ne 0) { $failed = $true; Write-Output "Windows Edge suite failed: $suite" };
+        };
+        if ($failed) { exit 1 }'

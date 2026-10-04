@@ -81,23 +81,39 @@ live-suite policies retain their owning workflows.
 1. Route an authorized dispatch through CI/CD with Nook SRE context.
    - Supply exactly one of `pr_number` or `source_ref`.
    - A PR must belong to this repository and must not be authored by Dependabot.
-   - Select `suite: all`, `stable`, or `unstable`. The default is `all`.
+   - Select `all`, `stable`, `unstable`, `sync-live`, `isolation`, `extension`,
+     or `research`. The default `all` runs these automated surfaces.
+   - Demonstration videos are excluded from `all`.
    - Use optional `spec` as a positional Playwright spec filter.
 2. Observe the Linux production-artifact job before the Windows consumer.
    - Source resolution records one immutable SHA for both checkouts.
    - `task web:e2e:windows:artifact` reuses focused web dependency layers.
-   - It exports production `dist/` with generated WASM through Docker/Bake.
+   - It exports production application artifacts with generated WASM through
+     Docker/Bake, including the extension, research, and isolation surfaces.
    - The build uses the existing fast E2E flags.
-   - The Windows job depends on that producer and downloads its run artifact.
-3. Observe the native `windows-latest` job's installed Microsoft Edge run.
+   - Each Windows matrix job depends on that producer and downloads its artifact.
+3. Observe each native `windows-latest` job's installed Microsoft Edge run.
+   - `all` creates seven independent jobs for six surfaces with `fail-fast: false`.
+   - `unstable` runs file and GitHub-stub provider variants in separate jobs.
+   - Each job records its own terminal result against the shared source SHA.
    - Windows dependencies are installed separately with Bun's frozen lockfile.
    - The standalone Taskfile skips package scripts and uses a PowerShell junction
      for the parent `node_modules` path.
-   - Shared deterministic specs run with Playwright channel `msedge`.
-   - Credentialed `sync-live` is excluded.
+   - Web specs use Playwright channel `msedge`.
+   - Persistent extension contexts use the installed Edge executable directly.
+   - Only the `sync-live` job receives live credentials.
+   - It uses the existing `NOOK_GITHUB_PAT` and a per-run disposable
+     GitHub repository. Cleanup is registered in the suite and runs after the
+     workflow test step even on failure.
+   - Google live tests use `NOOK_GOOGLE_E2E_ACCESS_TOKEN`,
+     `NOOK_GOOGLE_E2E_JOINER_EMAIL`, and `NOOK_GOOGLE_E2E_JOINER_ACCESS_TOKEN`.
+   - Load credentials only through the supported loader and supported names.
+     Missing Google credentials are an external blocker, never passing evidence.
 4. Inspect the terminal result and retained diagnostics.
    - `windows-edge-web-<run>-<attempt>` contains the production browser artifact.
-   - `windows-edge-playwright-<run>-<attempt>` contains HTML and JSON reports.
+   - `windows-edge-playwright-<surface-label>-<run>-<attempt>` contains HTML and JSON
+     reports from the web app, extension, and research packages.
+   - Unstable report labels are `unstable-file` and `unstable-github`.
    - Line output remains in job logs.
    - Screenshots are captured only on failure. Traces are retained on failure.
    - Analyze app-log attachments under the existing E2E failure policy above.
@@ -105,14 +121,17 @@ live-suite policies retain their owning workflows.
 **Prohibited:** dispatch with both source inputs, then report a Linux Chromium
 run as native Windows Edge validation. Start Windows with another source's
 artifact before its producer succeeds. Ignore retained diagnostics after a
-Windows failure.
+Windows failure. Substitute Chromium for an unsuccessful Edge extension run
+or describe missing live credentials as a passing live suite.
 
 **Required:** dispatch with `pr_number: 123`, `suite: stable`, and
 `spec: e2e/connect.spec.ts` when validating that PR's matching stable specs.
 Consume matching production `dist/` and WASM only after the Linux producer
 succeeds. Report its source SHA and actual Windows terminal result. If Windows
 fails, inspect its retained report, failure trace, screenshot, and app-log
-attachments before diagnosing the defect.
+attachments before diagnosing the defect. For `all`, report each suite's actual
+outcome and any credential blocker. Extension success requires an actual
+native Edge extension attempt.
 
 Native command context is documented in
 [browser validation](browser-validation.md#native-windows-entry-point).

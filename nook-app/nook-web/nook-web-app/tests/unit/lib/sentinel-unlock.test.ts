@@ -4,7 +4,7 @@ import { NativeVaultStorageFailure } from '$lib/runtime/storage-failure'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { describe, expect, test, vi } from 'vitest'
 import { fireEvent, render } from '@testing-library/svelte'
-import { tick } from 'svelte'
+import { tick, type ComponentProps } from 'svelte'
 import {
   NookSentinelUnlockSessionStatus,
   NookVaultManager,
@@ -32,10 +32,110 @@ import { unselectedVaultScope } from '$lib/auth/providers'
 import { RosterHydrationKind } from '$lib/vault/action-contexts'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import { requireButtonElement } from '../test-dom-helpers'
+import { Deferred, Effect } from 'effect'
+import { SerialOperationQueue } from '$lib/runtime/serial-operation-queue'
+import DeviceProtectionGate from '$lib/components/DeviceProtectionGate.svelte'
+import { DeviceProtectionGateFrame } from '$lib/components/device-protection-gate-state'
+import { DeviceProtectionActions } from '$lib/vault/device-protection.svelte'
+import { VaultType } from '$lib/vault/architecture-model'
 
 enum LoginSurface {
   Gate = 'gate',
   Step = 'step',
+}
+
+enum DelayedAuthorization {
+  Authorized = 'authorized',
+  Denied = 'denied',
+}
+
+type BorrowedPresentationOperation<Value, Failure> = () =>
+  Result<Value, Failure> | Promise<Result<Value, Failure>>
+
+interface DelayedLoginScenario {
+  readonly surface: LoginSurface
+  readonly outcome: DelayedAuthorization
+}
+
+class DelayedLoginPresentationFixture {
+  static readonly scenarios: readonly DelayedLoginScenario[] = [
+    { surface: LoginSurface.Gate, outcome: DelayedAuthorization.Authorized },
+    { surface: LoginSurface.Gate, outcome: DelayedAuthorization.Denied },
+    { surface: LoginSurface.Step, outcome: DelayedAuthorization.Authorized },
+    { surface: LoginSurface.Step, outcome: DelayedAuthorization.Denied },
+  ]
+  readonly login = new SentinelFinalizationFixture()
+  readonly completion = Effect.runSync(Deferred.make<DelayedAuthorization>())
+  readonly entered = Effect.runSync(Deferred.make<void>())
+  readonly queue = new SerialOperationQueue()
+  readonly ready = vi.fn()
+  readonly settled = vi.fn()
+  readonly statusRead = vi.fn(() => SentinelVaultUnlockState.NotSentinel)
+
+  constructor() {
+    this.login.state.vaultArchitecture = NookVaultArchitecture.draft(
+      DeviceMode.Standard,
+      VaultType.Simple,
+      ReplicationType.Personal,
+    )
+    this.login.state.sentinelUnlockStatus = SentinelVaultUnlockState.NotSentinel
+    this.login.state.sentinelCeremonyPrompt = false
+    this.login.state.deviceProtectionStatus = DeviceProtectionStatus.Passkey
+    this.login.manager.sentinel_unlock_status = this.statusRead
+    this.login.state.enqueueStorage = this.enqueue.bind(this)
+  }
+
+  enqueue<Value, Failure>(
+    operation: BorrowedPresentationOperation<Value, Failure>,
+  ): Promise<Result<Value, Failure>> {
+    return this.queue.enqueue(operation)
+  }
+
+  authorize(): Promise<void> {
+    this.login.state.isVerifying = true
+    this.statusRead.mockImplementation(() => {
+      throw new Error('recursive use of an object detected')
+    })
+    return this.queue.enqueue(() => Effect.runPromise(this.ceremony()))
+  }
+
+  private ceremony(): Effect.Effect<void> {
+    return Deferred.succeed(this.entered, void 0).pipe(
+      Effect.andThen(Deferred.await(this.completion)),
+      Effect.map(this.publishCeremonyOutcome.bind(this)),
+    )
+  }
+
+  private publishCeremonyOutcome(outcome: DelayedAuthorization): void {
+    this.statusRead.mockImplementation(
+      () => SentinelVaultUnlockState.NotSentinel,
+    )
+    switch (outcome) {
+      case DelayedAuthorization.Authorized:
+        this.login.state.deviceProtectionStatus =
+          DeviceProtectionStatus.Unlocked
+        break
+      case DelayedAuthorization.Denied:
+        this.login.state.errorMsg =
+          I18N_KEYS.DeviceProtectionPasskeyUnlockNotAllowed
+        break
+    }
+    this.login.state.isVerifying = false
+  }
+
+  renderProtection() {
+    const props: ComponentProps<typeof DeviceProtectionGate> = {
+      vault: this.login.state,
+      frame: DeviceProtectionGateFrame.HostSection,
+      creationOnly: false,
+      initializeSession: false,
+      recoveryAppId: '',
+      onBeforeProtectionAction: vi.fn(),
+      onProtectionActionSettled: this.settled,
+      onProtectionReady: this.ready,
+    }
+    return render(DeviceProtectionGate, props)
+  }
 }
 
 class SentinelFinalizationFixture {
@@ -250,6 +350,49 @@ class SentinelFinalizationFixture {
 }
 
 describe('Sentinel quorum completion presentation', () => {
+  test.each(DelayedLoginPresentationFixture.scenarios)(
+    'preserves $outcome authorization when navigation mounts $surface during a delayed native unlock',
+    async ({ outcome, surface }: DelayedLoginScenario) => {
+      const fixture = new DelayedLoginPresentationFixture()
+      const authorization = vi
+        .spyOn(DeviceProtectionActions.prototype, 'unlockDeviceProtection')
+        .mockImplementation(() => fixture.authorize())
+      const protection = fixture.renderProtection()
+      await fireEvent.click(
+        protection.getByTestId('device-protection-unlock-btn'),
+      )
+      await Effect.runPromise(Deferred.await(fixture.entered))
+
+      const login = fixture.login.renderLogin(surface)
+      await tick()
+      const errorDuringCeremony = fixture.login.state.errorMsg
+      const readyCallsDuringCeremony = fixture.ready.mock.calls.length
+
+      await Effect.runPromise(Deferred.succeed(fixture.completion, outcome))
+      await vi.waitFor(() => expect(fixture.settled).toHaveBeenCalledOnce())
+      login.unmount()
+      protection.unmount()
+      authorization.mockRestore()
+      fixture.login.dispose()
+      expect(errorDuringCeremony).toBe('')
+      expect(readyCallsDuringCeremony).toBe(0)
+      switch (outcome) {
+        case DelayedAuthorization.Authorized:
+          expect(fixture.ready).toHaveBeenCalledOnce()
+          expect(fixture.login.state.errorMsg).toBe('')
+          break
+        case DelayedAuthorization.Denied:
+          expect(fixture.ready).not.toHaveBeenCalled()
+          expect(fixture.login.state.errorMsg).toBe(
+            I18N_KEYS.DeviceProtectionPasskeyUnlockNotAllowed,
+          )
+          expect(fixture.login.state.deviceProtectionStatus).toBe(
+            DeviceProtectionStatus.Passkey,
+          )
+          break
+      }
+    },
+  )
   test.each([LoginSurface.Gate, LoginSurface.Step])(
     'does not rewrite the same sentinel error during status refresh in %s',
     async (surface) => {
@@ -271,7 +414,9 @@ describe('Sentinel quorum completion presentation', () => {
 
       await tick()
 
-      expect(fixture.state.errorMsg).toBe(I18N_KEYS.AuthStorageSyncFailed)
+      await vi.waitFor(() =>
+        expect(fixture.state.errorMsg).toBe(I18N_KEYS.AuthStorageSyncFailed),
+      )
       const revision = fixture.state.errorMsgRevision
 
       fixture.state.sentinelUnlockStatus = SentinelVaultUnlockState.Unlocked
@@ -558,7 +703,7 @@ describe('Sentinel quorum completion presentation', () => {
     fixture.expectNoAutomaticCeremony()
     for (const surface of [LoginSurface.Gate, LoginSurface.Step]) {
       const view = fixture.renderLogin(surface)
-      expect(view.getByTestId('sentinel-unlock-initiator')).toBeTruthy()
+      expect(await view.findByTestId('sentinel-unlock-initiator')).toBeTruthy()
       expect(view.queryAllByTestId('unlock-vault-btn')).toHaveLength(0)
       expect(view.queryAllByTestId('sentinel-unlock-start-btn')).toHaveLength(0)
       expect(fixture.openVault).not.toHaveBeenCalled()
@@ -577,8 +722,9 @@ describe('Sentinel quorum completion presentation', () => {
     for (const surface of [LoginSurface.Gate, LoginSurface.Step]) {
       const view = fixture.renderLogin(surface)
       expect(
-        requireButtonElement(view.getByTestId('sentinel-unlock-start-btn'))
-          .disabled,
+        requireButtonElement(
+          await view.findByTestId('sentinel-unlock-start-btn'),
+        ).disabled,
       ).toBe(true)
       expect(view.queryAllByTestId('unlock-vault-btn')).toHaveLength(0)
       expect(fixture.openVault).not.toHaveBeenCalled()

@@ -3,7 +3,7 @@ import sharedConfig from './playwright.config'
 
 type WindowsOutputDirectoryConfig = Pick<PlaywrightTestConfig, 'outputDir'>
 
-class WindowsAppConfig {
+class WindowsResearchConfig {
   constructor(private readonly environment: NodeJS.ProcessEnv) {}
 
   buildOutputDirectory(): WindowsOutputDirectoryConfig {
@@ -15,7 +15,7 @@ class WindowsAppConfig {
   static readonly value: PlaywrightTestConfig = {
     ...sharedConfig,
     workers: 2,
-    ...new WindowsAppConfig(process.env).buildOutputDirectory(),
+    ...new WindowsResearchConfig(process.env).buildOutputDirectory(),
     reporter: [['line'], ['html', { open: 'never' }], ['json']],
     use: {
       ...sharedConfig.use,
@@ -34,4 +34,4 @@ class WindowsAppConfig {
   }
 }
 
-export default defineConfig(WindowsAppConfig.value)
+export default defineConfig(WindowsResearchConfig.value)
