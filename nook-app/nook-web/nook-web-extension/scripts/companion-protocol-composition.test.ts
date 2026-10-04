@@ -325,58 +325,70 @@ function beginHandoff(
   return { authorization, endpoint, request, website, pending }
 }
 
-beforeAll(async () => {
-  Object.assign(globalThis, compositionIndexedDBRuntime)
-  const nookWasmBytes = await Bun.file(
-    new URL(
-      '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm_bg.wasm',
-      import.meta.url,
-    ),
-  ).arrayBuffer()
-  await Promise.all([
-    companionWasmReady,
-    initNookWasm({ module_or_path: nookWasmBytes }),
-  ])
-  configure_vault_application(VaultApplication.Extension)
-  extension = new NookVaultManager()
-  const setup = await extension.begin_device_protection()
-  try {
-    await extension.finish_device_protection(
-      new Uint8Array(32).fill(7),
-      setup.userHandle,
-      setup.prfInput,
-      new Uint8Array(32).fill(11),
-    )
-  } finally {
-    setup.free()
-  }
-  const records = await extension.connect_fresh('local', '', '')
-  for (const record of records) record.free()
-  await extension.set_vault_name('Composition Vault')
+let compositionSetup: Promise<void> | undefined
 
-  unlockedAppKey = {
-    extensionRuntimeId: 'composition-runtime',
-    appKey: {
-      appId: extension.device_id,
-      encryptionPublicKey: extension.device_public_key,
-      signingPublicKey: await extension.device_signing_public_key_js(),
-      installationLabel: 'Composition Extension',
-    },
-    nonce: 'composition-nonce',
-    scopes: ['vault-access'],
-  } satisfies CompanionUnlockedAppKey
-  presence = {
-    kind: 'unlocked',
-    vault_type: 'simple',
-    vault_store_id: extension.vaultStoreId,
-    vault_name: extension.vaultName,
-    app_key: unlockedAppKey,
-  } satisfies CompanionExtensionPresence
+beforeAll(() => {
+  compositionSetup = (async () => {
+    Object.assign(globalThis, compositionIndexedDBRuntime)
+    const nookWasmBytes = await Bun.file(
+      new URL(
+        '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm_bg.wasm',
+        import.meta.url,
+      ),
+    ).arrayBuffer()
+    await Promise.all([
+      companionWasmReady,
+      initNookWasm({ module_or_path: nookWasmBytes }),
+    ])
+    configure_vault_application(VaultApplication.Extension)
+    extension = new NookVaultManager()
+    const setup = await extension.begin_device_protection()
+    try {
+      await extension.finish_device_protection(
+        new Uint8Array(32).fill(7),
+        setup.userHandle,
+        setup.prfInput,
+        new Uint8Array(32).fill(11),
+      )
+    } finally {
+      setup.free()
+    }
+    const records = await extension.connect_fresh('local', '', '')
+    for (const record of records) record.free()
+    await extension.set_vault_name('Composition Vault')
+
+    unlockedAppKey = {
+      extensionRuntimeId: 'composition-runtime',
+      appKey: {
+        appId: extension.device_id,
+        encryptionPublicKey: extension.device_public_key,
+        signingPublicKey: await extension.device_signing_public_key_js(),
+        installationLabel: 'Composition Extension',
+      },
+      nonce: 'composition-nonce',
+      scopes: ['vault-access'],
+    } satisfies CompanionUnlockedAppKey
+    presence = {
+      kind: 'unlocked',
+      vault_type: 'simple',
+      vault_store_id: extension.vaultStoreId,
+      vault_name: extension.vaultName,
+      app_key: unlockedAppKey,
+    } satisfies CompanionExtensionPresence
+  })()
+  return compositionSetup
 })
 
-afterAll(() => {
-  extension.free()
-  Object.assign(globalThis, previousIndexedDBRuntime)
+afterAll(async () => {
+  try {
+    await compositionSetup
+  } finally {
+    try {
+      if (typeof extension !== 'undefined') extension.free()
+    } finally {
+      Object.assign(globalThis, previousIndexedDBRuntime)
+    }
+  }
 })
 
 describe('generated companion protocol composition', () => {

@@ -111,6 +111,21 @@ for (const locked of [false, true]) {
           body: fixture.html(true),
         })
       })
+      const worker = await getServiceWorker(context)
+      await worker.evaluate(() => {
+        Reflect.set(globalThis, 'nookTestLoginLookupCount', 0)
+        chrome.runtime.onMessage.addListener(
+          (message: BackupExtractionOperationObservation) => {
+            if (message.type !== 'nook:website-login-options') return
+            const count: unknown = Reflect.get(
+              globalThis,
+              'nookTestLoginLookupCount',
+            )
+            if (typeof count === 'number')
+              Reflect.set(globalThis, 'nookTestLoginLookupCount', count + 1)
+          },
+        )
+      })
       const page = await context.newPage()
       await page.goto(fixture.destination())
       const widget = page.locator('#nook-auth-widget')
@@ -122,6 +137,15 @@ for (const locked of [false, true]) {
       const popupPromise = context.waitForEvent('page')
       await widget.getByRole('button', { name: 'Continue with Nook' }).click()
       const popup = await popupPromise
+      expect(
+        await worker.evaluate(() => {
+          const count: unknown = Reflect.get(
+            globalThis,
+            'nookTestLoginLookupCount',
+          )
+          return count
+        }),
+      ).toBe(1)
       await expect(popup).toHaveURL(
         /chrome-extension:\/\/[^/]+\/popup\/index.html/u,
       )

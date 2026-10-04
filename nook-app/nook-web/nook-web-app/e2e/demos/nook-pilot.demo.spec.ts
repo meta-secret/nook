@@ -527,7 +527,8 @@ test('shows no matching credentials as a distinct Pilot state', async ({
     'data-state',
     'no-matching-credential',
   )
-  await expect(vaultStatus).toHaveText(
+  await expect(vaultStatus).toHaveText('Matching saved logins: 0')
+  await expect(widget.locator('p.description')).toHaveText(
     'No saved login matches this site yet. Open the vault to add one.',
   )
   await demoBeat(page)
