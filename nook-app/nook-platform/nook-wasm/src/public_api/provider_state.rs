@@ -494,32 +494,23 @@ pub fn mask_github_pat_hint(
     Ok(result)
 }
 
-#[cfg(test)]
-#[allow(unused_imports)]
+#[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
     use super::*;
     use nook_core::ActiveProviderCredentialsProjection;
-    #[cfg(test)]
-    #[cfg(test)]
     use nook_core::LocalFolderConfigData;
     use nook_core::OAuthAccessToken;
-    #[cfg(test)]
-    #[cfg(test)]
     use nook_core::OAuthFileConfigData;
     use nook_core::StorageConnectArgs;
-    #[cfg(target_arch = "wasm32")]
     use nook_core::StorageProviderType;
     use nook_core::StoredGithubPat;
-    #[cfg(test)]
-    #[cfg(test)]
     use nook_core::StoredOAuthAccessCredential;
     use tsify::Tsify;
     use wasm_bindgen::JsError;
     use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[cfg(target_arch = "wasm32")]
     #[wasm_bindgen_test]
-    fn provider_state_wrappers_project_success_and_rejection_variants() {
+    fn provider_state_wrappers_project_success_and_rejection_variants() -> Result<(), JsError> {
         let draft = nook_core::ActiveProviderCredentialDraft {
             storage_mode: StorageProviderType::Github,
             github_pat: "pat".into(),
@@ -530,13 +521,13 @@ mod tests {
         assert_eq!(
             active_provider_credentials_projection_state(&Tsify::into_ts(
                 &(ActiveProviderCredentialsProjection::Unchanged)
-            )?),
+            )?)?,
             NookActiveProviderCredentialsProjectionState::Unchanged
         );
         assert_eq!(
             active_provider_credentials_projection_state(&Tsify::into_ts(
                 &(ActiveProviderCredentialsProjection::Apply(Box::new(draft.clone())))
-            )?),
+            )?)?,
             NookActiveProviderCredentialsProjectionState::Apply
         );
         assert!(
@@ -555,32 +546,31 @@ mod tests {
             value
                 .to_rust()
                 .map_err(|_| JsError::new("Typed test output could not be decoded."))
-        })
-        .expect("apply projection keeps its draft");
+        })?;
         assert_eq!(projected.github_repo, "owner/repo");
 
         assert_eq!(
             stored_oauth_file_configuration_state(&Tsify::into_ts(
                 &(StoredOAuthFileConfiguration::NotApplicable)
-            )?),
+            )?)?,
             NookStoredOAuthFileConfigurationState::NotApplicable
         );
         assert_eq!(
             stored_oauth_file_configuration_state(&Tsify::into_ts(
                 &(StoredOAuthFileConfiguration::configured(OAuthFileConfigData::default(),))
-            )?),
+            )?)?,
             NookStoredOAuthFileConfigurationState::Configured
         );
         assert_eq!(
             stored_local_folder_configuration_state(&Tsify::into_ts(
                 &(StoredLocalFolderConfiguration::NotApplicable)
-            )?),
+            )?)?,
             NookStoredLocalFolderConfigurationState::NotApplicable
         );
         assert_eq!(
             stored_local_folder_configuration_state(&Tsify::into_ts(
                 &(StoredLocalFolderConfiguration::Configured(LocalFolderConfigData::default(),))
-            )?),
+            )?)?,
             NookStoredLocalFolderConfigurationState::Configured
         );
         assert_eq!(
@@ -588,7 +578,7 @@ mod tests {
                 &Tsify::into_ts(&(StorageProviderType::OauthFile))?,
                 false,
                 false
-            ),
+            )?,
             NookExistingVaultProviderReadiness::MissingOauthFile
         );
         assert_eq!(
@@ -596,7 +586,7 @@ mod tests {
                 &Tsify::into_ts(&(StorageProviderType::LocalFolder))?,
                 false,
                 false
-            ),
+            )?,
             NookExistingVaultProviderReadiness::MissingLocalFolder
         );
         assert_eq!(
@@ -604,32 +594,27 @@ mod tests {
                 &Tsify::into_ts(&(StorageProviderType::Github))?,
                 false,
                 false
-            ),
+            )?,
             NookExistingVaultProviderReadiness::Ready
         );
+        Ok(())
     }
 
-    #[cfg(target_arch = "wasm32")]
     #[wasm_bindgen_test]
-    fn provider_state_values_keep_secret_boundaries_and_defaults() {
-        let missing = missing_oauth_access_token().and_then(|value| {
-            value
-                .to_rust()
-                .map_err(|_| JsError::new("Typed test output could not be decoded."))
-        });
-        assert_eq!(missing, OAuthAccessToken::Missing);
+    fn provider_state_values_keep_secret_boundaries_and_defaults() -> Result<(), JsError> {
+        let missing: serde_json::Value =
+            serde_wasm_bindgen::from_value(missing_oauth_access_token()?.js_value())?;
+        assert_eq!(missing, serde_json::to_value(OAuthAccessToken::Missing)?);
         let mut config = OAuthFileConfigData::default();
         config.access_token = StoredOAuthAccessCredential::AccessToken(" token ".into());
-        let available = oauth_access_token(&Tsify::into_ts(&(config.clone()))?).and_then(|value| {
-            value
-                .to_rust()
-                .map_err(|_| JsError::new("Typed test output could not be decoded."))
-        });
+        let available: serde_json::Value = serde_wasm_bindgen::from_value(
+            oauth_access_token(&Tsify::into_ts(&(config.clone()))?)?.js_value(),
+        )?;
         assert_eq!(
             available,
-            OAuthAccessToken::Available {
+            serde_json::to_value(OAuthAccessToken::Available {
                 token: "token".to_owned()
-            }
+            })?
         );
 
         let missing_selection = NookProviderSelection(ProviderSelection::Unavailable);
@@ -640,7 +625,7 @@ mod tests {
         assert!(missing_selection.provider_id().is_err());
         let selected = NookProviderSelection(ProviderSelection::Selected("provider-1".into()));
         assert_eq!(selected.state(), NookProviderSelectionState::Selected);
-        assert_eq!(selected.provider_id().unwrap(), "provider-1");
+        assert_eq!(selected.provider_id()?, "provider-1");
 
         let unresolved =
             NookOAuthRemoteStorageReference::new(OAuthRemoteStorageReference::Unresolved);
@@ -656,7 +641,7 @@ mod tests {
             resolved.state(),
             NookOAuthRemoteStorageReferenceState::Resolved
         );
-        assert_eq!(resolved.value().unwrap(), "file-1");
+        assert_eq!(resolved.value()?, "file-1");
 
         let rejected =
             NookOAuthRemoteConfigurationUpdate::new(OAuthRemoteConfigurationUpdate::Unchanged);
@@ -672,7 +657,13 @@ mod tests {
             updated.state(),
             NookOAuthRemoteConfigurationUpdateState::Updated
         );
-        assert_eq!(updated.config().unwrap(), config);
+        assert_eq!(
+            updated
+                .config()?
+                .to_rust()
+                .map_err(|_| JsError::new("Typed test output could not be decoded."))?,
+            config
+        );
 
         let incomplete = NookStagedStorageArgs::new(StagedStorageConnection::Incomplete);
         assert_eq!(incomplete.state(), NookStagedStorageArgsState::Incomplete);
@@ -686,7 +677,7 @@ mod tests {
             local_vault_storage_args()
                 .and_then(|value| value
                     .to_rust()
-                    .map_err(|_| JsError::new("Typed test output could not be decoded.")))
+                    .map_err(|_| JsError::new("Typed test output could not be decoded.")))?
                 .mode,
             "local"
         );
@@ -694,7 +685,7 @@ mod tests {
             draft_local_storage_args()
                 .and_then(|value| value
                     .to_rust()
-                    .map_err(|_| JsError::new("Typed test output could not be decoded.")))
+                    .map_err(|_| JsError::new("Typed test output could not be decoded.")))?
                 .mode,
             "local"
         );
@@ -702,7 +693,7 @@ mod tests {
             value
                 .to_rust()
                 .map_err(|_| JsError::new("Typed test output could not be decoded."))
-        });
+        })?;
         assert_eq!(github_args.mode, "github");
         assert_eq!(github_args.pat, "pat");
         assert_eq!(github_args.repo, "owner/repo");
@@ -713,43 +704,34 @@ mod tests {
             )
             .and_then(|value| value
                 .to_rust()
-                .map_err(|_| JsError::new("Typed test output could not be decoded.")))
+                .map_err(|_| JsError::new("Typed test output could not be decoded.")))?
             .mode,
             "google-drive"
         );
 
-        let no_hint = mask_github_pat_hint(&Tsify::into_ts(&(StoredGithubPat::Missing))?);
+        let no_hint = mask_github_pat_hint(&Tsify::into_ts(&(StoredGithubPat::Missing))?)?;
         assert_eq!(no_hint.state(), NookGithubPatHintState::Missing);
         assert!(no_hint.value().is_err());
         let hint = mask_github_pat_hint(&Tsify::into_ts(
             &(StoredGithubPat::Token("ghp_1234567890ABCDEF".into())),
-        )?);
+        )?)?;
         assert_eq!(hint.state(), NookGithubPatHintState::Available);
-        assert_eq!(hint.value().unwrap(), "ghp_123456…");
+        assert_eq!(hint.value()?, "ghp_123456…");
+        Ok(())
     }
 }
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
-    use crate::public_api::{staged_oauth_remote_storage_args, update_oauth_remote_ref};
+    use crate::public_api;
     use nook_core::OAuthAccessToken;
-    #[cfg(all(test, target_arch = "wasm32"))]
-    #[cfg(all(test, target_arch = "wasm32"))]
     use nook_core::OauthFilePreset;
     use nook_core::StorageConnectArgs;
-    #[cfg(test)]
-    #[cfg(test)]
     use nook_core::StorageProviderType;
     use nook_core::StoredGithubPat;
-    #[cfg(all(test, target_arch = "wasm32"))]
-    #[cfg(all(test, target_arch = "wasm32"))]
     use nook_core::StoredGoogleDrivePrivateTarget;
-    #[cfg(test)]
-    #[cfg(test)]
     use nook_core::StoredOAuthAccessCredential;
-    #[cfg(all(test, target_arch = "wasm32"))]
-    #[cfg(all(test, target_arch = "wasm32"))]
     use nook_core::StoredOAuthRemoteFileId;
     use nook_core::StoredOAuthRemoteFileName;
     use tsify::Tsify;
@@ -759,14 +741,14 @@ mod browser_tests {
     wasm_bindgen_test_configure!(run_in_browser);
 
     #[wasm_bindgen_test]
-    fn provider_state_wrappers_cover_typed_getters_and_storage_drafts() {
+    fn provider_state_wrappers_cover_typed_getters_and_storage_drafts() -> Result<(), JsError> {
         let missing = OAuthAccessToken::Missing;
         assert_eq!(missing, OAuthAccessToken::Missing);
         assert_eq!(
-            missing_oauth_access_token().and_then(|value| value
-                .to_rust()
-                .map_err(|_| JsError::new("Typed test output could not be decoded."))),
-            OAuthAccessToken::Missing
+            serde_wasm_bindgen::from_value::<serde_json::Value>(
+                missing_oauth_access_token()?.js_value()
+            )?,
+            serde_json::to_value(OAuthAccessToken::Missing)?
         );
 
         let configured = nook_core::OAuthFileConfigData {
@@ -775,16 +757,14 @@ mod browser_tests {
             file_name: StoredOAuthRemoteFileName::FileName("Vault.yaml".into()),
             ..Default::default()
         };
-        let token = oauth_access_token(&Tsify::into_ts(&(configured.clone()))?).and_then(|value| {
-            value
-                .to_rust()
-                .map_err(|_| JsError::new("Typed test output could not be decoded."))
-        });
+        let token: serde_json::Value = serde_wasm_bindgen::from_value(
+            oauth_access_token(&Tsify::into_ts(&(configured.clone()))?)?.js_value(),
+        )?;
         assert_eq!(
             token,
-            OAuthAccessToken::Available {
+            serde_json::to_value(OAuthAccessToken::Available {
                 token: "token".to_owned()
-            }
+            })?
         );
 
         let missing_selection = NookProviderSelection(ProviderSelection::Unavailable);
@@ -795,7 +775,7 @@ mod browser_tests {
         assert!(missing_selection.provider_id().is_err());
         let selected = NookProviderSelection(ProviderSelection::Selected("provider-1".into()));
         assert_eq!(selected.state(), NookProviderSelectionState::Selected);
-        assert_eq!(selected.provider_id().unwrap(), "provider-1");
+        assert_eq!(selected.provider_id()?, "provider-1");
 
         let unresolved =
             NookOAuthRemoteStorageReference::new(OAuthRemoteStorageReference::Unresolved);
@@ -811,7 +791,7 @@ mod browser_tests {
             resolved.state(),
             NookOAuthRemoteStorageReferenceState::Resolved
         );
-        assert_eq!(resolved.value().unwrap(), "file-1");
+        assert_eq!(resolved.value()?, "file-1");
 
         let rejected =
             NookOAuthRemoteConfigurationUpdate::new(OAuthRemoteConfigurationUpdate::Unchanged);
@@ -827,7 +807,14 @@ mod browser_tests {
             updated.state(),
             NookOAuthRemoteConfigurationUpdateState::Updated
         );
-        assert_eq!(updated.config().unwrap().file_name, configured.file_name);
+        assert_eq!(
+            updated
+                .config()?
+                .to_rust()
+                .map_err(|_| JsError::new("Typed test output could not be decoded."))?
+                .file_name,
+            configured.file_name
+        );
 
         let incomplete = NookStagedStorageArgs::new(StagedStorageConnection::Incomplete);
         assert_eq!(incomplete.state(), NookStagedStorageArgsState::Incomplete);
@@ -835,22 +822,29 @@ mod browser_tests {
         let ready =
             NookStagedStorageArgs::new(StagedStorageConnection::Ready(StorageConnectArgs::local()));
         assert_eq!(ready.state(), NookStagedStorageArgsState::Ready);
-        assert_eq!(ready.args().unwrap().mode, "local");
+        assert_eq!(
+            ready
+                .args()?
+                .to_rust()
+                .map_err(|_| JsError::new("Typed test output could not be decoded."))?
+                .mode,
+            "local"
+        );
 
-        let no_hint = mask_github_pat_hint(&Tsify::into_ts(&(StoredGithubPat::Missing))?);
+        let no_hint = mask_github_pat_hint(&Tsify::into_ts(&(StoredGithubPat::Missing))?)?;
         assert_eq!(no_hint.state(), NookGithubPatHintState::Missing);
         assert!(no_hint.value().is_err());
         let hint = mask_github_pat_hint(&Tsify::into_ts(
             &(StoredGithubPat::Token("ghp_1234567890ABCDEF".into())),
-        )?);
+        )?)?;
         assert_eq!(hint.state(), NookGithubPatHintState::Available);
-        assert_eq!(hint.value().unwrap(), "ghp_123456…");
+        assert_eq!(hint.value()?, "ghp_123456…");
 
         assert_eq!(
             local_vault_storage_args()
                 .and_then(|value| value
                     .to_rust()
-                    .map_err(|_| JsError::new("Typed test output could not be decoded.")))
+                    .map_err(|_| JsError::new("Typed test output could not be decoded.")))?
                 .mode,
             "local"
         );
@@ -858,7 +852,7 @@ mod browser_tests {
             draft_local_storage_args()
                 .and_then(|value| value
                     .to_rust()
-                    .map_err(|_| JsError::new("Typed test output could not be decoded.")))
+                    .map_err(|_| JsError::new("Typed test output could not be decoded.")))?
                 .mode,
             "local"
         );
@@ -866,7 +860,7 @@ mod browser_tests {
             value
                 .to_rust()
                 .map_err(|_| JsError::new("Typed test output could not be decoded."))
-        });
+        })?;
         assert_eq!(github.mode, "github");
         assert_eq!(github.pat, "pat");
         assert_eq!(github.repo, "owner/repo");
@@ -878,7 +872,7 @@ mod browser_tests {
             value
                 .to_rust()
                 .map_err(|_| JsError::new("Typed test output could not be decoded."))
-        });
+        })?;
         assert_eq!(oauth.mode, "google-drive");
 
         let new_provider_setup = ProviderSaveSetup::New(StorageProviderType::OauthFile);
@@ -897,23 +891,29 @@ mod browser_tests {
             value
                 .to_rust()
                 .map_err(|_| JsError::new("Typed test output could not be decoded."))
-        });
+        })?;
         assert_eq!(draft_args.repo, "private-folder-v2:pending\tVault.yaml");
-        let staged_args = staged_oauth_remote_storage_args(
+        let staged_args = public_api::staged_oauth_remote_storage_args(
             &Tsify::into_ts(&(new_private.clone()))?,
             &Tsify::into_ts(&(new_provider_setup))?,
-        )
-        .unwrap();
+        )?;
         assert_eq!(
-            staged_args.args().unwrap().repo,
+            staged_args
+                .args()?
+                .to_rust()
+                .map_err(|_| JsError::new("Typed test output could not be decoded."))?
+                .repo,
             "private-folder-v2:pending\tVault.yaml"
         );
-        let updated_new_provider = update_oauth_remote_ref(
+        let updated_new_provider = public_api::update_oauth_remote_ref(
             &Tsify::into_ts(&(new_private.clone()))?,
             &Tsify::into_ts(&(new_provider_setup))?,
             "private-folder-v2:stable-folder-id",
-        );
-        let updated_config = updated_new_provider.config().unwrap();
+        )?;
+        let updated_config = updated_new_provider
+            .config()?
+            .to_rust()
+            .map_err(|_| JsError::new("Typed test output could not be decoded."))?;
         assert_eq!(
             updated_config.drive_private_target,
             StoredGoogleDrivePrivateTarget::FolderId("stable-folder-id".into())
@@ -923,12 +923,15 @@ mod browser_tests {
             StoredOAuthRemoteFileId::FileId("old-file-id".into())
         );
 
-        let updated_existing_provider = update_oauth_remote_ref(
+        let updated_existing_provider = public_api::update_oauth_remote_ref(
             &Tsify::into_ts(&(new_private.clone()))?,
             &Tsify::into_ts(&(ProviderSaveSetup::Existing))?,
             "file-1",
-        );
-        let updated_existing_config = updated_existing_provider.config().unwrap();
+        )?;
+        let updated_existing_config = updated_existing_provider
+            .config()?
+            .to_rust()
+            .map_err(|_| JsError::new("Typed test output could not be decoded."))?;
         assert_eq!(
             updated_existing_config.drive_private_target,
             StoredGoogleDrivePrivateTarget::LegacyAppDataFolder
@@ -938,14 +941,18 @@ mod browser_tests {
             StoredOAuthRemoteFileId::FileId("file-1".into())
         );
 
-        let existing_staged = staged_oauth_remote_storage_args(
+        let existing_staged = public_api::staged_oauth_remote_storage_args(
             &Tsify::into_ts(&(new_private))?,
             &Tsify::into_ts(&(ProviderSaveSetup::Existing))?,
-        )
-        .unwrap();
+        )?;
         assert_eq!(
-            existing_staged.args().unwrap().repo,
+            existing_staged
+                .args()?
+                .to_rust()
+                .map_err(|_| JsError::new("Typed test output could not be decoded."))?
+                .repo,
             "old-file-id\tVault.yaml"
         );
+        Ok(())
     }
 }
