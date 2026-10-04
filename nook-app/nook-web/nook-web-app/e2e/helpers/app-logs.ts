@@ -472,7 +472,7 @@ export async function attachNookLogsForTest(
   page: Page,
   testInfo: import('@playwright/test').TestInfo,
   options?: {
-    attachmentName?: NookAppLogAttachmentName
+    attachmentName?: string
     print?: boolean
   },
 ) {

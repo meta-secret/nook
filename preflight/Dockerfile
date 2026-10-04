@@ -97,6 +97,10 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
 FROM registry.dev.nokey.sh/oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 AS policy-bun
 
 FROM deps AS policy-tools
+# The released Meta-Cortex executable links GTK/WebKit even for headless commands.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgtk-3-0t64 libwebkit2gtk-4.1-0 \
+    && rm -rf /var/lib/apt/lists/*
 COPY --from=policy-bun /usr/local/bin/bun /usr/local/bin/bun
 RUN curl -fsSL https://github.com/vale-cli/vale/releases/download/v3.22.0/vale_3.22.0_Linux_64-bit.tar.gz -o /tmp/vale.tar.gz \
     && echo '52f5cd0314a1b7384cac6aa102a68193977312f6ba9c9f3ae001b5deec8e3a10  /tmp/vale.tar.gz' | sha256sum -c - \
@@ -130,7 +134,7 @@ RUN <<'EOF'
 set -eu
 test ! -e /meta-secret/nook/.meta-cortex
 curl --proto '=https' --tlsv1.2 -LsSf \
-  https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/download/v0.12.3/meta-cortex-installer.sh \
+  https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/download/v0.13.0/meta-cortex-installer.sh \
   --output /tmp/meta-cortex-installer.sh
 META_CORTEX_UNMANAGED_INSTALL=/usr/local/bin sh /tmp/meta-cortex-installer.sh
 rm /tmp/meta-cortex-installer.sh

@@ -43,30 +43,27 @@ import {
 const chromiumExecutablePath = ((v) => (v ? v : ''))(
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim(),
 )
-
 test.use({ trace: 'retain-on-failure' })
-
+enum ExtensionAppLogAttachmentName {
+  Restarted = 'restarted-extension-nook-app-logs.json',
+}
 enum WebsitePageStateKind {
   Skipped = 'skipped',
   Opened = 'opened',
 }
-
 type WebsitePageState =
   | { kind: WebsitePageStateKind.Skipped }
   | { kind: WebsitePageStateKind.Opened; page: Page }
-
 enum ExtensionConnectionParameter {
   DeviceId = 'device_id',
   DevicePublicKey = 'device_public_key',
   DeviceSigningPublicKey = 'device_signing_public_key',
   HandoffNonce = 'nonce',
 }
-
 enum ExtensionConnectionParametersParseKind {
   Valid = 'valid',
   Invalid = 'invalid',
 }
-
 type ExtensionConnectionParametersParseResult =
   | {
       kind: ExtensionConnectionParametersParseKind.Valid
@@ -691,12 +688,11 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       },
     )
     await restartedContext.addInitScript(installMockPasskeyRuntime)
+    const lockedVaultPage = await restartedContext.newPage()
     try {
       const restartedWorker = await getServiceWorker(restartedContext)
       const restartedExtensionId = new URL(restartedWorker.url()).host
       expect(restartedExtensionId).toBe(extensionId)
-
-      const lockedVaultPage = await restartedContext.newPage()
       await lockedVaultPage.goto(simpleVaultBaseUrl)
       await expect(
         lockedVaultPage.getByTestId('login-local-unlock-step'),
@@ -714,6 +710,14 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         lockedVaultPage.getByTestId('passkey-auth-overlay'),
       ).toHaveCount(0)
     } finally {
+      const restartedLogOptions: Parameters<typeof attachNookLogsForTest>[2] = {
+        attachmentName: ExtensionAppLogAttachmentName.Restarted,
+      }
+      await attachNookLogsForTest(
+        lockedVaultPage,
+        testInfo,
+        restartedLogOptions,
+      )
       console.log('[extension e2e] closing restarted context')
       await withE2eDeadline(
         restartedContext.close(),
