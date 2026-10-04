@@ -286,43 +286,40 @@ pub fn companion_authentication_workflow_match_kind(
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
-    #[cfg(all(test, target_arch = "wasm32"))]
-    #[cfg(all(test, target_arch = "wasm32"))]
-    use nook_companion_core::ApprovedAuthenticationWorkflowDecision;
     use nook_companion_core::AuthenticationBackupCodesObservation;
-    #[cfg(all(test, target_arch = "wasm32"))]
-    #[cfg(all(test, target_arch = "wasm32"))]
     use nook_companion_core::AuthenticationWorkflowActivity;
-    #[cfg(all(test, target_arch = "wasm32"))]
-    #[cfg(all(test, target_arch = "wasm32"))]
-    use nook_companion_core::AuthenticationWorkflowKind;
-    use nook_companion_core::AuthenticationWorkflowSnapshotResponse;
-    #[cfg(all(test, target_arch = "wasm32"))]
-    #[cfg(all(test, target_arch = "wasm32"))]
-    use nook_companion_core::PageControlSubmissionMethod;
+    use nook_companion_core::AuthenticationWorkflowSnapshotResponseKind;
+    use nook_companion_core::{
+        AuthenticationPageObservationFacts, AuthenticationPageObservationFactsBatch,
+    };
+    use nook_companion_core::{
+        AuthenticationWorkflowCurrentStep, AuthenticationWorkflowKind,
+        AuthenticationWorkflowTotalSteps,
+    };
+
+    use nook_companion_core::AuthenticationWorkflowSnapshotResponseWire;
     use nook_companion_core::{AuthenticationEnrollmentObservation, AuthenticationWorkflowMatch};
     use serde::Serialize;
+    use serde_wasm_bindgen::Serializer;
+    use std::fmt;
     use tsify::{Ts, Tsify};
-    use wasm_bindgen::{JsError, JsValue};
+    use wasm_bindgen::JsError;
     use wasm_bindgen_test::wasm_bindgen_test;
 
-    fn js_error(error: impl std::fmt::Display) -> JsError {
-        JsError::new(&error.to_string())
-    }
+    struct WorkflowBridgeFixture;
+    impl WorkflowBridgeFixture {
+        fn js_error(_error: impl fmt::Display) -> JsError {
+            JsError::new("Workflow fixture conversion failed.")
+        }
 
-    fn js_wire(
-        value: serde_json::Value,
-    ) -> Result<Ts<nook_companion_core::AuthenticationWorkflowSnapshotResponseWire>, JsError> {
-        let value = value
-            .serialize(&serde_wasm_bindgen::Serializer::json_compatible())
-            .map_err(js_error)?;
-        Ok(Ts::new_unchecked(value))
-    }
-
-    fn js_value(value: serde_json::Value) -> Result<JsValue, JsError> {
-        value
-            .serialize(&serde_wasm_bindgen::Serializer::json_compatible())
-            .map_err(js_error)
+        fn js_wire(
+            value: serde_json::Value,
+        ) -> Result<Ts<AuthenticationWorkflowSnapshotResponseWire>, JsError> {
+            let value = value
+                .serialize(&Serializer::json_compatible())
+                .map_err(WorkflowBridgeFixture::js_error)?;
+            Ok(Ts::new_unchecked(value))
+        }
     }
 
     #[wasm_bindgen_test]
@@ -343,10 +340,7 @@ mod tests {
                         backup_codes_copy: "Save these recovery codes",
                         manual_checkpoint_present: false.into(),
                     },
-                )
-                .map_err(|_| JsError::new("Typed test operation failed."))?
-                .to_rust()
-                .map_err(|_| JsError::new("Typed test output could not be decoded."))?,
+                ),
                 super::CompanionAuthenticationWorkflowMatchKind::Matched,
             ),
         ] {
@@ -392,20 +386,20 @@ mod tests {
             (0, 1, AuthenticationWorkflowKind::Signup),
             (1, 1, AuthenticationWorkflowKind::PasswordChange),
         ] {
+            let evidence = serde_json::json!({
+                "currentPasswordFieldCount": current_password_field_count,
+                "newPasswordFieldCount": new_password_field_count,
+            })
+            .serialize(&Serializer::json_compatible())
+            .map_err(WorkflowBridgeFixture::js_error)?;
+            let presentation =
+                super::project_password_workflow_activity(&Ts::new_unchecked(evidence))?;
+            let presentation: serde_json::Value =
+                serde_wasm_bindgen::from_value(presentation.js_value())
+                    .map_err(WorkflowBridgeFixture::js_error)?;
             assert_eq!(
-                super::project_password_workflow_activity(
-                    &(nook_companion_core::PasswordWorkflowActivityEvidence {
-                        current_password_field_count: current_password_field_count.into(),
-                        new_password_field_count: new_password_field_count.into(),
-                    })
-                    .into_ts()
-                    .map_err(|_| JsError::new("Typed test input could not be encoded."))?,
-                )
-                .map_err(|_| JsError::new("Typed test operation failed."))?
-                .to_rust()
-                .map_err(|_| JsError::new("Typed test output could not be decoded."))?
-                .kind,
-                expected
+                presentation["kind"],
+                serde_json::to_value(expected).map_err(WorkflowBridgeFixture::js_error)?
             );
         }
         for activity in [
@@ -416,47 +410,41 @@ mod tests {
             AuthenticationWorkflowActivity::SaveOffer,
         ] {
             let progress = super::authentication_workflow_activity_progress(activity)?;
-            let progress: serde_json::Value =
-                serde_wasm_bindgen::from_value(progress.js_value()).map_err(js_error)?;
-            assert!(progress["currentStep"].as_u64() <= progress["totalSteps"].as_u64());
+            let progress: serde_json::Value = serde_wasm_bindgen::from_value(progress.js_value())
+                .map_err(WorkflowBridgeFixture::js_error)?;
+            let current_step: AuthenticationWorkflowCurrentStep =
+                serde_json::from_value(progress["currentStep"].clone())
+                    .map_err(WorkflowBridgeFixture::js_error)?;
+            let total_steps: AuthenticationWorkflowTotalSteps =
+                serde_json::from_value(progress["totalSteps"].clone())
+                    .map_err(WorkflowBridgeFixture::js_error)?;
+            assert!(u8::from(current_step) <= u8::from(total_steps));
         }
-        assert!(
-            super::authentication_control_transportable(
-                &(nook_companion_core::AuthenticationControlTransportability {
-                    submission_method: PageControlSubmissionMethod::Post,
-                    username_field_count: 0.into(),
-                    password_field_count: 0.into(),
-                })
-                .into_ts()
-                .map_err(|_| JsError::new("Typed test input could not be encoded."))?
-            )
-            .map_err(|_| JsError::new("Typed test operation failed."))?
-        );
-        assert!(
-            !super::authentication_control_transportable(
-                &(nook_companion_core::AuthenticationControlTransportability {
-                    submission_method: PageControlSubmissionMethod::Dialog,
-                    username_field_count: 1.into(),
-                    password_field_count: 0.into(),
-                })
-                .into_ts()
-                .map_err(|_| JsError::new("Typed test input could not be encoded."))?
-            )
-            .map_err(|_| JsError::new("Typed test operation failed."))?
-        );
+        let post = serde_json::json!({"submissionMethod":"post","usernameFieldCount":0,"passwordFieldCount":0})
+            .serialize(&Serializer::json_compatible()).map_err(WorkflowBridgeFixture::js_error)?;
+        assert!(super::authentication_control_transportable(
+            &Ts::new_unchecked(post)
+        )?);
+        let dialog = serde_json::json!({"submissionMethod":"dialog","usernameFieldCount":1,"passwordFieldCount":0})
+            .serialize(&Serializer::json_compatible()).map_err(WorkflowBridgeFixture::js_error)?;
+        assert!(!super::authentication_control_transportable(
+            &Ts::new_unchecked(dialog)
+        )?);
         assert!(super::is_authentication_navigation_path("/account/login"));
         assert!(!super::is_authentication_navigation_path(
             "/settings/profile"
         ));
-        assert!(matches!(
-            super::revalidate_approved_authentication_workflow(&Ts::new_unchecked(js_value(
-                serde_json::json!({"approved":{"observations":[]},"live":{"observations":[]}})
-            )?))
-            .map_err(|_| JsError::new("Typed test operation failed."))?
-            .to_rust()
-            .map_err(|_| JsError::new("Typed test output could not be decoded."))?,
-            ApprovedAuthenticationWorkflowDecision::Rejected
-        ));
+        let request = serde_json::json!({
+            "approved": AuthenticationPageObservationFacts::default(),
+            "live": AuthenticationPageObservationFactsBatch { observations: vec![] },
+        })
+        .serialize(&Serializer::json_compatible())
+        .map_err(WorkflowBridgeFixture::js_error)?;
+        let rejected =
+            super::revalidate_approved_authentication_workflow(&Ts::new_unchecked(request))?;
+        let rejected: serde_json::Value = serde_wasm_bindgen::from_value(rejected.js_value())
+            .map_err(WorkflowBridgeFixture::js_error)?;
+        assert_eq!(rejected["kind"], "rejected");
 
         Ok(())
     }
@@ -464,74 +452,58 @@ mod tests {
     #[wasm_bindgen_test]
     fn snapshot_decoder_and_saved_login_availability_preserve_typed_boundaries()
     -> Result<(), JsError> {
-        let matched =
-            super::decode_authentication_workflow_snapshot_response(&js_wire(serde_json::json!({
+        let matched = super::decode_authentication_workflow_snapshot_response(
+            &WorkflowBridgeFixture::js_wire(serde_json::json!({
                 "ok": true,
                 "snapshot": {
-                    "kind": 0,
-                    "stage": 0,
-                    "action": 0,
-                    "currentStep": 1,
-                    "totalSteps": 3,
-                    "approvalRequirement": "explicit-user-approval",
-                    "savedLoginCapability": "fill-saved-login",
-                    "observationIndex": 0
+                    "kind": 0, "stage": 0, "action": 0, "currentStep": 1, "totalSteps": 3,
+                    "approvalRequirement": "explicit-user-approval", "savedLoginCapability": "fill-saved-login", "observationIndex": 0,
                 }
-            }))?)
-            .map_err(|_| JsError::new("Typed test operation failed."))?
-            .to_rust()
-            .map_err(|_| JsError::new("Typed test output could not be decoded."))?;
-        assert!(matches!(
-            matched,
-            AuthenticationWorkflowSnapshotResponse::Matched { .. }
-        ));
-        assert!(matches!(
-            super::decode_authentication_workflow_snapshot_response(&js_wire(
-                serde_json::json!({"ok": true}),
-            )?)
-            .map_err(|_| JsError::new("Typed test operation failed."))?
-            .to_rust()
-            .map_err(|_| JsError::new("Typed test output could not be decoded."))?,
-            AuthenticationWorkflowSnapshotResponse::NoMatch { .. }
-        ));
-        assert!(matches!(
-            super::decode_authentication_workflow_snapshot_response(&js_wire(
+            }))?,
+        )?;
+        let matched: serde_json::Value = serde_wasm_bindgen::from_value(matched.js_value())
+            .map_err(WorkflowBridgeFixture::js_error)?;
+        assert_eq!(
+            matched["kind"],
+            serde_json::to_value(AuthenticationWorkflowSnapshotResponseKind::Matched)
+                .map_err(WorkflowBridgeFixture::js_error)?
+        );
+        let no_match = super::decode_authentication_workflow_snapshot_response(
+            &WorkflowBridgeFixture::js_wire(serde_json::json!({"ok": true}))?,
+        )?;
+        let no_match: serde_json::Value = serde_wasm_bindgen::from_value(no_match.js_value())
+            .map_err(WorkflowBridgeFixture::js_error)?;
+        assert_eq!(
+            no_match["kind"],
+            serde_json::to_value(AuthenticationWorkflowSnapshotResponseKind::NoMatch)
+                .map_err(WorkflowBridgeFixture::js_error)?
+        );
+        let rejected = super::decode_authentication_workflow_snapshot_response(
+            &WorkflowBridgeFixture::js_wire(
                 serde_json::json!({"ok": false, "reason": "rejected"}),
-            )?)
-            .map_err(|_| JsError::new("Typed test operation failed."))?
-            .to_rust()
-            .map_err(|_| JsError::new("Typed test output could not be decoded."))?,
-            AuthenticationWorkflowSnapshotResponse::Rejected { .. }
-        ));
+            )?,
+        )?;
+        let rejected: serde_json::Value = serde_wasm_bindgen::from_value(rejected.js_value())
+            .map_err(WorkflowBridgeFixture::js_error)?;
+        assert_eq!(
+            rejected["kind"],
+            serde_json::to_value(AuthenticationWorkflowSnapshotResponseKind::Rejected)
+                .map_err(WorkflowBridgeFixture::js_error)?
+        );
 
-        let ready: nook_companion_core::SavedLoginActionPresentationRequest =
-            serde_wasm_bindgen::from_value(js_value(serde_json::json!({
-                "action": 4,
-                "loginMatches": {"kind": "ready", "count": 1}
-            }))?)
-            .map_err(js_error)?;
-        assert!(
-            super::saved_login_action_available(
-                &(ready)
-                    .into_ts()
-                    .map_err(|_| JsError::new("Typed test input could not be encoded."))?
-            )
-            .map_err(|_| JsError::new("Typed test operation failed."))?
-        );
-        let unavailable: nook_companion_core::SavedLoginActionPresentationRequest =
-            serde_wasm_bindgen::from_value(js_value(serde_json::json!({
-                "action": 0,
-                "loginMatches": {"kind": "ready", "count": 1}
-            }))?)
-            .map_err(js_error)?;
-        assert!(
-            !super::saved_login_action_available(
-                &(unavailable)
-                    .into_ts()
-                    .map_err(|_| JsError::new("Typed test input could not be encoded."))?
-            )
-            .map_err(|_| JsError::new("Typed test operation failed."))?
-        );
+        let ready = serde_json::json!({"action": 4, "loginMatches": {"kind": "ready", "count": 1}})
+            .serialize(&Serializer::json_compatible())
+            .map_err(WorkflowBridgeFixture::js_error)?;
+        assert!(super::saved_login_action_available(&Ts::new_unchecked(
+            ready
+        ))?);
+        let unavailable =
+            serde_json::json!({"action": 0, "loginMatches": {"kind": "ready", "count": 1}})
+                .serialize(&Serializer::json_compatible())
+                .map_err(WorkflowBridgeFixture::js_error)?;
+        assert!(!super::saved_login_action_available(&Ts::new_unchecked(
+            unavailable
+        ))?);
         Ok(())
     }
 }
