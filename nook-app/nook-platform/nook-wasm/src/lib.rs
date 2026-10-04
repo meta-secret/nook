@@ -232,21 +232,21 @@ mod browser_tests {
     }
 
     #[wasm_bindgen_test]
-    fn extension_scopes_and_sentinel_translation_are_typed() {
+    fn extension_scopes_and_sentinel_translation_are_typed() -> Result<(), JsError> {
         assert_eq!(
-            extension_vault_access_scope(),
+            extension_vault_access_scope()?.to_rust()?,
             ExtensionConnectScope::VaultAccess
         );
         assert_eq!(
-            extension_password_filling_scope(),
+            extension_password_filling_scope()?.to_rust()?,
             ExtensionConnectScope::PasswordFilling
         );
         assert_eq!(
-            extension_passkey_management_scope(),
+            extension_passkey_management_scope()?.to_rust()?,
             ExtensionConnectScope::PasskeyManagement
         );
         assert_eq!(
-            extension_sync_provider_credentials_scope(),
+            extension_sync_provider_credentials_scope()?.to_rust()?,
             ExtensionConnectScope::SyncProviderCredentials
         );
         for value in [
@@ -263,6 +263,7 @@ mod browser_tests {
             sentinel_genesis_phase_translation_key(phase),
             phase.translation_key()
         );
+        Ok(())
     }
 }
 

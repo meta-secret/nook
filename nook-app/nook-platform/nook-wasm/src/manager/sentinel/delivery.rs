@@ -281,6 +281,8 @@ mod tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
+    use nook_core::AuthProvidersSnapshotData;
+    use tsify::Tsify;
     use wasm_bindgen::JsError;
     use wasm_bindgen_test::*;
 
@@ -298,7 +300,11 @@ mod browser_tests {
 
         assert!(
             manager
-                .create_sentinel_onboarding_package(&request_json, "{}", &Default::default())
+                .create_sentinel_onboarding_package(
+                    &request_json,
+                    "{}",
+                    &AuthProvidersSnapshotData::default().into_ts()?
+                )
                 .is_err()
         );
         assert!(
@@ -306,7 +312,7 @@ mod browser_tests {
                 .create_sentinel_onboarding_package(
                     &request_json,
                     &delivery_json,
-                    &Default::default()
+                    &AuthProvidersSnapshotData::default().into_ts()?
                 )
                 .is_err()
         );

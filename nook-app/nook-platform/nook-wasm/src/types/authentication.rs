@@ -432,7 +432,7 @@ mod browser_tests {
     wasm_bindgen_test_configure!(run_in_browser);
 
     #[wasm_bindgen_test]
-    fn authentication_observation_and_snapshot_wrappers_project_fields() {
+    fn authentication_observation_and_snapshot_wrappers_project_fields() -> Result<(), JsError> {
         let observation =
             NookAuthenticationPageObservation::new(1, 1, 0, 0, 1, false, true, false, true, 2);
         let mut observations = NookAuthenticationPageObservations::new();
@@ -473,11 +473,11 @@ mod browser_tests {
         assert_eq!(snapshot.current_step(), 1);
         assert_eq!(snapshot.total_steps(), 3);
         assert_eq!(
-            snapshot.approval_requirement(),
+            snapshot.approval_requirement()?.to_rust()?,
             AuthenticationApprovalRequirement::ExplicitUserApproval
         );
         assert_eq!(
-            snapshot.saved_login_capability(),
+            snapshot.saved_login_capability()?.to_rust()?,
             AuthenticationSavedLoginCapability::FillSavedLogin
         );
         assert_eq!(snapshot.observation_index(), 1);
@@ -507,6 +507,7 @@ mod browser_tests {
             assert_eq!(projected.verdict(), verdict);
             assert_eq!(projected.allows_credential_commit(), allows);
         }
+        Ok(())
     }
 
     #[wasm_bindgen_test]

@@ -200,8 +200,7 @@ mod wasm_idb_tests {
     use super::*;
     use nook_companion_core::{
         EXTENSION_GRANT_KEY_PREFIX as GRANT_KEY_PREFIX, ExtensionConnectScope,
-        ExtensionPairingApprovalEpochMilliseconds, ExtensionPairingVaultType, PairingVaultId,
-        StoredExtensionPairingGrant,
+        ExtensionPairingVaultType, PairingVaultId, StoredExtensionPairingGrant,
     };
     use wasm_bindgen_test::*;
 

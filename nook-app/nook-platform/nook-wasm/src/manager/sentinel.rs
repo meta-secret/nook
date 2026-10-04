@@ -787,12 +787,14 @@ mod tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
+    use nook_core::AuthProvidersSnapshotData;
     #[cfg(test)]
     #[cfg(test)]
     use nook_core::SentinelShareVersion;
     use nook_core::{
         AgeArmoredCiphertext, DeviceId, DeviceIdentity, SentinelVaultUnlockState, SigningIdentity,
     };
+    use tsify::Tsify;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -954,7 +956,11 @@ mod browser_tests {
         assert!(manager.sentinel_genesis_request_json().is_ok());
         assert!(
             manager
-                .create_sentinel_onboarding_package("{}", "{}", &Default::default())
+                .create_sentinel_onboarding_package(
+                    "{}",
+                    "{}",
+                    &AuthProvidersSnapshotData::default().into_ts()?
+                )
                 .is_err()
         );
         Ok(())
