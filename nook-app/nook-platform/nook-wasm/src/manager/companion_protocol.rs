@@ -472,8 +472,9 @@ mod typed_boundary_tests {
         CompanionIdentityDiscoveryRequest, CompanionInstallationAppKey, CompanionUnlockedAppKey,
         ExtensionConnectScope, ExtensionPairingVaultType,
     };
+    use serde::Serialize;
+    use serde_wasm_bindgen::Serializer;
     use tsify::Ts;
-    use wasm_bindgen::JsValue;
     use wasm_bindgen_test::wasm_bindgen_test;
     use zeroize::Zeroizing;
 
@@ -624,13 +625,18 @@ mod typed_boundary_tests {
         assert!(
             scenario
                 .website
-                .begin_companion_identity_handoff(&Ts::new_unchecked(JsValue::NULL),)
+                .begin_companion_identity_handoff(&Ts::new_unchecked(
+                    Option::<bool>::None.serialize(&Serializer::json_compatible())?
+                ),)
                 .is_err()
         );
         assert!(scenario.pending_secret()? == key);
         assert!(
             pending
-                .finish(&mut scenario.website, &Ts::new_unchecked(JsValue::TRUE))
+                .finish(
+                    &mut scenario.website,
+                    &Ts::new_unchecked(serde_wasm_bindgen::to_value(&true)?)
+                )
                 .await
                 .is_err()
         );
@@ -639,20 +645,42 @@ mod typed_boundary_tests {
         assert!(
             scenario
                 .endpoint()?
-                .authorize_and_seal(&mut scenario.extension, &Ts::new_unchecked(JsValue::NULL),)
+                .authorize_and_seal(
+                    &mut scenario.extension,
+                    &Ts::new_unchecked(
+                        Option::<bool>::None.serialize(&Serializer::json_compatible())?
+                    ),
+                )
                 .await
                 .is_err()
         );
         assert!(scenario.extension.event_log.signing_seed == *signing_seed);
-        assert!(NookCompanionExtensionEndpoint::new(&Ts::new_unchecked(JsValue::TRUE)).is_err());
+        assert!(
+            NookCompanionExtensionEndpoint::new(&Ts::new_unchecked(serde_wasm_bindgen::to_value(
+                &true
+            )?))
+            .is_err()
+        );
         assert!(
             scenario
                 .endpoint()?
-                .rediscover(&Ts::new_unchecked(JsValue::NULL))
+                .rediscover(&Ts::new_unchecked(
+                    Option::<bool>::None.serialize(&Serializer::json_compatible())?
+                ))
                 .is_err()
         );
-        assert!(admit_companion_identity_status(&Ts::new_unchecked(JsValue::TRUE)).is_err());
-        assert!(admit_companion_handoff_response(&Ts::new_unchecked(JsValue::NULL)).is_err());
+        assert!(
+            admit_companion_identity_status(&Ts::new_unchecked(serde_wasm_bindgen::to_value(
+                &true
+            )?))
+            .is_err()
+        );
+        assert!(
+            admit_companion_handoff_response(&Ts::new_unchecked(
+                Option::<bool>::None.serialize(&Serializer::json_compatible())?
+            ))
+            .is_err()
+        );
         Ok(())
     }
 }

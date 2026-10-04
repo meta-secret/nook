@@ -507,6 +507,7 @@ mod browser_tests {
         StoredOAuthFileConfiguration, StoredOAuthRemoteFileName,
     };
     use serde::{Serialize, de::DeserializeOwned};
+    use serde_wasm_bindgen::Serializer;
     use tsify::{Ts, Tsify};
     use wasm_bindgen_test::*;
 
@@ -515,14 +516,18 @@ mod browser_tests {
     #[wasm_bindgen_test]
     fn malformed_typed_projection_inputs_do_not_replace_borrowed_oauth_configuration()
     -> Result<(), JsError> {
-        use wasm_bindgen::JsValue;
         let config = OAuthFileConfigData::default();
         let config_wire = ProviderFixture::wire(&config)?;
         let setup = ProviderFixture::wire(&ProviderSaveSetup::Existing)?;
-        assert!(super::generate_password(&Ts::new_unchecked(JsValue::NULL)).is_err());
+        assert!(
+            super::generate_password(&Ts::new_unchecked(
+                Option::<bool>::None.serialize(&Serializer::json_compatible())?
+            ))
+            .is_err()
+        );
         assert!(
             super::provider_storage_detail(
-                &Ts::new_unchecked(JsValue::TRUE),
+                &Ts::new_unchecked(serde_wasm_bindgen::to_value(&true)?),
                 "Device".to_owned(),
                 "No token".to_owned(),
                 "Google".to_owned(),
@@ -533,27 +538,39 @@ mod browser_tests {
             )
             .is_err()
         );
-        assert!(super::oauth_remote_storage_ref(&Ts::new_unchecked(JsValue::NULL)).is_err());
         assert!(
-            super::update_oauth_remote_ref(&Ts::new_unchecked(JsValue::TRUE), &setup, "unchanged")
-                .is_err()
+            super::oauth_remote_storage_ref(&Ts::new_unchecked(
+                Option::<bool>::None.serialize(&Serializer::json_compatible())?
+            ))
+            .is_err()
         );
         assert!(
             super::update_oauth_remote_ref(
-                &config_wire,
-                &Ts::new_unchecked(JsValue::NULL),
+                &Ts::new_unchecked(serde_wasm_bindgen::to_value(&true)?),
+                &setup,
                 "unchanged"
             )
             .is_err()
         );
         assert!(
-            super::staged_oauth_remote_storage_args(&Ts::new_unchecked(JsValue::NULL), &setup)
-                .is_err()
+            super::update_oauth_remote_ref(
+                &config_wire,
+                &Ts::new_unchecked(Option::<bool>::None.serialize(&Serializer::json_compatible())?),
+                "unchanged"
+            )
+            .is_err()
+        );
+        assert!(
+            super::staged_oauth_remote_storage_args(
+                &Ts::new_unchecked(Option::<bool>::None.serialize(&Serializer::json_compatible())?),
+                &setup
+            )
+            .is_err()
         );
         assert!(
             super::staged_oauth_remote_storage_args(
                 &config_wire,
-                &Ts::new_unchecked(JsValue::TRUE)
+                &Ts::new_unchecked(serde_wasm_bindgen::to_value(&true)?)
             )
             .is_err()
         );

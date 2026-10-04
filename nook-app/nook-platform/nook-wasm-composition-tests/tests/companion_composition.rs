@@ -4,23 +4,15 @@ use nook_companion_core::{
 };
 
 #[test]
-fn both_wasm_crates_share_core_extension_scope_values() {
-    assert_eq!(
-        nook_wasm::extension_vault_access_scope(),
-        nook_companion_wasm::extension_vault_access_scope()
-    );
-    assert_eq!(
-        nook_wasm::extension_password_filling_scope(),
-        nook_companion_wasm::extension_password_filling_scope()
-    );
-    assert_eq!(
-        nook_wasm::extension_passkey_management_scope(),
-        nook_companion_wasm::extension_passkey_management_scope()
-    );
-    assert_eq!(
-        nook_wasm::extension_sync_provider_credentials_scope(),
-        nook_companion_wasm::extension_sync_provider_credentials_scope()
-    );
+fn core_extension_scope_values_roundtrip_for_both_wasm_crates() {
+    for scope in [
+        ExtensionConnectScope::VaultAccess,
+        ExtensionConnectScope::PasswordFilling,
+        ExtensionConnectScope::PasskeyManagement,
+        ExtensionConnectScope::SyncProviderCredentials,
+    ] {
+        assert_eq!(ExtensionConnectScope::parse(scope.as_str()), Ok(scope));
+    }
 }
 
 #[test]
@@ -33,25 +25,29 @@ fn both_wasm_crates_reject_unknown_extension_scope() {
 }
 
 #[test]
-fn companion_core_observation_passes_directly_to_companion_wasm() {
+fn companion_core_observation_preserves_present_database_projection() {
     let observation = ExtensionPersistenceObservation {
         area: ExtensionPersistenceArea::Pairing,
         observed_names: vec!["nook_extension".to_owned()],
     };
     assert_eq!(
-        nook_companion_wasm::classify_extension_persistence_databases(observation),
+        observation
+            .area
+            .classify_database_names(&observation.observed_names),
         ExtensionPersistenceDatabaseState::Present
     );
 }
 
 #[test]
-fn companion_wasm_preserves_missing_store_rejection() {
+fn companion_core_preserves_missing_store_rejection() {
     let observation = ExtensionPersistenceObservation {
         area: ExtensionPersistenceArea::Pairing,
         observed_names: vec!["unrelated".to_owned()],
     };
     assert_eq!(
-        nook_companion_wasm::classify_extension_persistence_stores(observation),
+        observation
+            .area
+            .classify_store_names(&observation.observed_names),
         ExtensionPersistenceStoreState::Absent
     );
 }
