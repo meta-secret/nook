@@ -298,6 +298,11 @@ mod tests {
     };
 
     use nook_companion_core::AuthenticationWorkflowSnapshotResponseWire;
+    use nook_companion_core::{
+        AuthenticationApprovalRequirement, AuthenticationPageObservations,
+        AuthenticationPilotPresentationCapability, AuthenticationSavedLoginCapability,
+        AuthenticationWorkflowAction, AuthenticationWorkflowSnapshot, AuthenticationWorkflowStage,
+    };
     use nook_companion_core::{AuthenticationEnrollmentObservation, AuthenticationWorkflowMatch};
     use serde::Serialize;
     use serde_wasm_bindgen::Serializer;
@@ -320,6 +325,215 @@ mod tests {
                 .map_err(WorkflowBridgeFixture::js_error)?;
             Ok(Ts::new_unchecked(value))
         }
+    }
+
+    impl WorkflowBridgeFixture {
+        fn external<T: Tsify>(value: serde_json::Value) -> Result<Ts<T>, JsError> {
+            Ok(Ts::new_unchecked(
+                value
+                    .serialize(&Serializer::json_compatible())
+                    .map_err(Self::js_error)?,
+            ))
+        }
+
+        fn login_snapshot() -> AuthenticationWorkflowSnapshot {
+            AuthenticationWorkflowSnapshot {
+                kind: AuthenticationWorkflowKind::Login,
+                stage: AuthenticationWorkflowStage::Credentials,
+                action: AuthenticationWorkflowAction::ContinueWithNook,
+                current_step: 1.into(),
+                total_steps: 3.into(),
+                approval_requirement: AuthenticationApprovalRequirement::ExplicitUserApproval,
+                saved_login_capability: AuthenticationSavedLoginCapability::FillSavedLogin,
+                observation_index: 0.into(),
+            }
+        }
+    }
+
+    #[wasm_bindgen_test]
+    fn login_snapshot_projects_saved_login_and_pilot_capabilities() -> Result<(), JsError> {
+        let snapshot = WorkflowBridgeFixture::login_snapshot()
+            .into_ts()
+            .map_err(WorkflowBridgeFixture::js_error)?;
+        assert_eq!(
+            super::authentication_workflow_saved_login_capability(&snapshot)?
+                .to_rust()
+                .map_err(WorkflowBridgeFixture::js_error)?,
+            AuthenticationSavedLoginCapability::FillSavedLogin
+        );
+        assert!(super::authentication_workflow_requires_login_match_availability(&snapshot)?);
+        assert_eq!(
+            super::authentication_workflow_pilot_presentation_capability(&snapshot)?
+                .to_rust()
+                .map_err(WorkflowBridgeFixture::js_error)?,
+            AuthenticationPilotPresentationCapability::ProposeAction
+        );
+        let mut inconsistent = WorkflowBridgeFixture::login_snapshot();
+        inconsistent.approval_requirement = AuthenticationApprovalRequirement::TakeoverRequired;
+        let inconsistent = inconsistent
+            .into_ts()
+            .map_err(WorkflowBridgeFixture::js_error)?;
+        assert_eq!(
+            super::authentication_workflow_saved_login_capability(&inconsistent)?
+                .to_rust()
+                .map_err(WorkflowBridgeFixture::js_error)?,
+            AuthenticationSavedLoginCapability::Unavailable
+        );
+        assert!(!super::authentication_workflow_requires_login_match_availability(&inconsistent)?);
+        assert_eq!(
+            super::authentication_workflow_pilot_presentation_capability(&inconsistent)?
+                .to_rust()
+                .map_err(WorkflowBridgeFixture::js_error)?,
+            AuthenticationPilotPresentationCapability::Hidden
+        );
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn absent_workflows_and_login_availability_project_released_statuses() -> Result<(), JsError> {
+        let observations = AuthenticationPageObservations {
+            observations: vec![],
+        }
+        .into_ts()
+        .map_err(WorkflowBridgeFixture::js_error)?;
+        assert_eq!(
+            super::classify_companion_authentication_workflow(&observations)?
+                .to_rust()
+                .map_err(WorkflowBridgeFixture::js_error)?,
+            AuthenticationWorkflowMatch::Rejected
+        );
+        let facts = AuthenticationPageObservationFactsBatch {
+            observations: vec![],
+        }
+        .into_ts()
+        .map_err(WorkflowBridgeFixture::js_error)?;
+        assert_eq!(
+            super::classify_companion_authentication_workflow_facts(&facts)?
+                .to_rust()
+                .map_err(WorkflowBridgeFixture::js_error)?,
+            AuthenticationWorkflowMatch::Rejected
+        );
+        let default_facts = AuthenticationPageObservationFacts::default()
+            .into_ts()
+            .map_err(WorkflowBridgeFixture::js_error)?;
+        assert!(super::authentication_page_observation_facts_is_admissible(
+            &default_facts
+        )?);
+        let routing = super::decode_authentication_workflow_runtime_response(
+            &WorkflowBridgeFixture::external(
+                serde_json::json!({"workflow":{"ok":true},"loginMatches":{"kind":"unavailable"},"selectedFacts":{"state":"notApplicable"}}),
+            )?,
+        )?;
+        let routing: serde_json::Value = serde_wasm_bindgen::from_value(routing.js_value())
+            .map_err(WorkflowBridgeFixture::js_error)?;
+        assert_eq!(
+            routing["workflow"]["kind"],
+            serde_json::to_value(AuthenticationWorkflowSnapshotResponseKind::NoMatch)
+                .map_err(WorkflowBridgeFixture::js_error)?
+        );
+        assert_eq!(routing["loginMatches"]["kind"], "unavailable");
+        assert_eq!(routing["selectedFacts"]["state"], "notApplicable");
+        let locked = super::decode_website_login_match_availability(
+            &WorkflowBridgeFixture::external(serde_json::json!({"ok":true,"status":"locked"}))?,
+        )?;
+        let locked: serde_json::Value = serde_wasm_bindgen::from_value(locked.js_value())
+            .map_err(WorkflowBridgeFixture::js_error)?;
+        assert_eq!(locked["kind"], "locked");
+        let unavailable = super::unavailable_website_login_match_availability()?;
+        let unavailable: serde_json::Value = serde_wasm_bindgen::from_value(unavailable.js_value())
+            .map_err(WorkflowBridgeFixture::js_error)?;
+        assert_eq!(unavailable["kind"], "unavailable");
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn malformed_external_workflow_values_fail_closed() -> Result<(), JsError> {
+        let malformed = serde_json::json!({"unexpected":true});
+        assert!(
+            super::decode_authentication_workflow_snapshot_response(
+                &WorkflowBridgeFixture::external(malformed.clone())?
+            )
+            .is_err()
+        );
+        assert!(
+            super::decode_authentication_workflow_runtime_response(
+                &WorkflowBridgeFixture::external(malformed.clone())?
+            )
+            .is_err()
+        );
+        assert!(
+            super::decode_website_login_match_availability(&WorkflowBridgeFixture::external(
+                malformed.clone()
+            )?)
+            .is_err()
+        );
+        assert!(
+            super::authentication_workflow_saved_login_capability(
+                &WorkflowBridgeFixture::external(malformed.clone())?
+            )
+            .is_err()
+        );
+        assert!(
+            super::authentication_workflow_requires_login_match_availability(
+                &WorkflowBridgeFixture::external(malformed.clone())?
+            )
+            .is_err()
+        );
+        assert!(
+            super::authentication_workflow_pilot_presentation_capability(
+                &WorkflowBridgeFixture::external(malformed.clone())?
+            )
+            .is_err()
+        );
+        assert!(
+            super::classify_companion_authentication_workflow(&WorkflowBridgeFixture::external(
+                malformed.clone()
+            )?)
+            .is_err()
+        );
+        assert!(
+            super::classify_companion_authentication_workflow_facts(
+                &WorkflowBridgeFixture::external(malformed.clone())?
+            )
+            .is_err()
+        );
+        assert!(
+            super::authentication_page_observation_facts_is_admissible(
+                &WorkflowBridgeFixture::external(malformed.clone())?
+            )
+            .is_err()
+        );
+        assert!(
+            super::companion_authentication_workflow_match_kind(&WorkflowBridgeFixture::external(
+                malformed.clone()
+            )?)
+            .is_err()
+        );
+        assert!(
+            super::project_password_workflow_activity(&WorkflowBridgeFixture::external(
+                malformed.clone()
+            )?)
+            .is_err()
+        );
+        assert!(
+            super::saved_login_action_available(&WorkflowBridgeFixture::external(
+                malformed.clone()
+            )?)
+            .is_err()
+        );
+        assert!(
+            super::authentication_control_transportable(&WorkflowBridgeFixture::external(
+                malformed.clone()
+            )?)
+            .is_err()
+        );
+        assert!(
+            super::revalidate_approved_authentication_workflow(&WorkflowBridgeFixture::external(
+                malformed
+            )?)
+            .is_err()
+        );
+        Ok(())
     }
 
     #[wasm_bindgen_test]
