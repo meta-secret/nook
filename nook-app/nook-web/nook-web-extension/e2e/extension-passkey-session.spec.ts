@@ -38,6 +38,7 @@ import { OpenCompanionLauncherIntent } from '../../nook-web-shared/src/extension
 import {
   authorizeDeviceProtection,
   createLocalVaultOnLogin,
+  NookAppLogAttachmentName,
 } from '../../nook-web-app/e2e/helpers'
 
 const chromiumExecutablePath = ((v) => (v ? v : ''))(
@@ -691,12 +692,11 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       },
     )
     await restartedContext.addInitScript(installMockPasskeyRuntime)
+    const lockedVaultPage = await restartedContext.newPage()
     try {
       const restartedWorker = await getServiceWorker(restartedContext)
       const restartedExtensionId = new URL(restartedWorker.url()).host
       expect(restartedExtensionId).toBe(extensionId)
-
-      const lockedVaultPage = await restartedContext.newPage()
       await lockedVaultPage.goto(simpleVaultBaseUrl)
       await expect(
         lockedVaultPage.getByTestId('login-local-unlock-step'),
@@ -714,6 +714,10 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         lockedVaultPage.getByTestId('passkey-auth-overlay'),
       ).toHaveCount(0)
     } finally {
+      const restartedLogOptions: Parameters<typeof attachNookLogsForTest>[2] = {
+        attachmentName: NookAppLogAttachmentName.RestartedExtension,
+      }
+      await attachNookLogsForTest(lockedVaultPage, testInfo, restartedLogOptions)
       console.log('[extension e2e] closing restarted context')
       await withE2eDeadline(
         restartedContext.close(),

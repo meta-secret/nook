@@ -509,6 +509,7 @@ export async function attachNookLogsForTest(
 }
 
 export enum NookAppLogAttachmentName {
+  RestartedExtension = 'restarted-extension-nook-app-logs.json',
   Joiner = 'joiner-nook-app-logs.json',
   Primary = 'nook-app-logs.json',
   SentinelInitiator = 'sentinel-initiator-nook-app-logs.json',
