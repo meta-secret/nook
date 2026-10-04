@@ -695,7 +695,7 @@ mod wasm_tests {
         .map_err(js_error)?;
         let wire = Ts::new_unchecked(js_input);
         let decoded = super::decode_website_login_match_availability(&wire)?;
-        let js_output = serde_wasm_bindgen::to_value(&decoded).map_err(js_error)?;
+        let js_output = decoded.js_value();
         let result: LoginAvailabilityResult =
             serde_wasm_bindgen::from_value(js_output).map_err(js_error)?;
         assert_eq!(result.kind, "locked");

@@ -1,7 +1,6 @@
 use nook_companion_core::AuthenticatorCodeResponse;
 use serde::Deserialize;
 use tsify::Tsify;
-#[cfg(all(test, target_arch = "wasm32"))]
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 #[derive(Deserialize, Tsify)]

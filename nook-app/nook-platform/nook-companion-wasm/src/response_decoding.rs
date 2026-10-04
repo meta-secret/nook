@@ -500,18 +500,8 @@ mod admission_tests {
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod wasm_tests {
-    use nook_companion_core::AuthenticationOutcomeResponse;
-    use nook_companion_core::AuthenticatorBackupAttachResponse;
-    use nook_companion_core::AuthenticatorEnrollmentConfirmResponse;
-    use nook_companion_core::AuthenticatorEnrollmentStageResponse;
-    use nook_companion_core::AuthenticatorOptionsResponse;
-    use nook_companion_core::AuthenticatorPickerOpenResponse;
-    use nook_companion_core::AuthenticatorPreviewResponse;
     use nook_companion_core::ExtensionSessionRequestValidation;
     use nook_companion_core::ExtensionSessionStatusAvailability;
-    use nook_companion_core::GeneratedPasswordResponse;
-    use nook_companion_core::LoginPickerOpenResponse;
-    use nook_companion_core::WebsiteLoginOptions;
     #[cfg(all(test, target_arch = "wasm32"))]
     use nook_companion_core::WebsiteLoginSaveActionResponse;
     #[cfg(all(test, target_arch = "wasm32"))]
