@@ -19,11 +19,9 @@ import {
   IDBVersionChangeEvent,
 } from 'fake-indexeddb'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
+import * as nook_companion_wasm from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import * as nook_wasm from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm.js'
 import {
-  extension_vault_access_scope as companionVaultScope,
-  extension_password_filling_scope as companionPasswordScope,
-  extension_passkey_management_scope as companionPasskeyScope,
-  extension_sync_provider_credentials_scope as companionSyncScope,
   classify_extension_persistence_databases,
   classify_extension_persistence_stores,
   ExtensionPersistenceArea,
@@ -42,10 +40,6 @@ import {
   type CompanionUnlockedAppKey,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
-  extension_vault_access_scope as nookVaultScope,
-  extension_password_filling_scope as nookPasswordScope,
-  extension_passkey_management_scope as nookPasskeyScope,
-  extension_sync_provider_credentials_scope as nookSyncScope,
   default_password_generation_options,
   generate_password,
   default as initNookWasm,
@@ -415,15 +409,15 @@ afterAll(async () => {
 describe('generated companion protocol composition', () => {
   test('both generated packages project the same four canonical scopes', () => {
     expect([
-      companionVaultScope(),
-      companionPasswordScope(),
-      companionPasskeyScope(),
-      companionSyncScope(),
+      nook_companion_wasm.extension_vault_access_scope(),
+      nook_companion_wasm.extension_password_filling_scope(),
+      nook_companion_wasm.extension_passkey_management_scope(),
+      nook_companion_wasm.extension_sync_provider_credentials_scope(),
     ]).toEqual([
-      nookVaultScope(),
-      nookPasswordScope(),
-      nookPasskeyScope(),
-      nookSyncScope(),
+      nook_wasm.extension_vault_access_scope(),
+      nook_wasm.extension_password_filling_scope(),
+      nook_wasm.extension_passkey_management_scope(),
+      nook_wasm.extension_sync_provider_credentials_scope(),
     ])
   })
   test('generated companion persistence distinguishes present database and absent store', () => {
