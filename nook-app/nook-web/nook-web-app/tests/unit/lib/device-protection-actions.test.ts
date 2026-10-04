@@ -168,28 +168,36 @@ describe('device protection actions', () => {
     )
   })
   test('returns readiness after pending authorization despite a concurrent presentation error', async () => {
-    const pending =
-      Promise.withResolvers<
-        Result<PasskeyDeviceProtectionSuccess, PasskeyCeremonyFailure>
-      >()
-    authorizePasskeyProtection.mockReturnValue(pending.promise)
+    let resolveAuthorization!: (
+      result: Result<PasskeyDeviceProtectionSuccess, PasskeyCeremonyFailure>,
+    ) => void
+    const pending = new Promise<
+      Result<PasskeyDeviceProtectionSuccess, PasskeyCeremonyFailure>
+    >((resolve) => {
+      resolveAuthorization = resolve
+    })
+    authorizePasskeyProtection.mockReturnValue(pending)
     const state = DeviceProtectionTestState.create()
     const unlocking = new DeviceProtectionActions(state).unlockDeviceProtection(
       { initializeSession: true },
     )
     state.errorMsg = 'concurrent presentation failed'
-    pending.resolve(ok(PasskeyDeviceProtectionSuccess.Unlocked))
+    resolveAuthorization(ok(PasskeyDeviceProtectionSuccess.Unlocked))
     expect(await unlocking).toBe(DeviceProtectionActionOutcome.Ready)
     expect(state.deviceProtectionStatus).toBe(DeviceProtectionStatus.Unlocked)
     expect(state.continueInitializationAfterDeviceUnlock).toHaveBeenCalledOnce()
   })
 
   test('cancelled pending authorization never reports readiness', async () => {
-    const pending =
-      Promise.withResolvers<
-        Result<PasskeyDeviceProtectionSuccess, PasskeyCeremonyFailure>
-      >()
-    authorizePasskeyProtection.mockReturnValue(pending.promise)
+    let resolveAuthorization!: (
+      result: Result<PasskeyDeviceProtectionSuccess, PasskeyCeremonyFailure>,
+    ) => void
+    const pending = new Promise<
+      Result<PasskeyDeviceProtectionSuccess, PasskeyCeremonyFailure>
+    >((resolve) => {
+      resolveAuthorization = resolve
+    })
+    authorizePasskeyProtection.mockReturnValue(pending)
     const state = DeviceProtectionTestState.create()
     const unlocking = new DeviceProtectionActions(state).unlockDeviceProtection(
       { initializeSession: true },
@@ -197,7 +205,7 @@ describe('device protection actions', () => {
     const diagnostic = sanitizedPasskeyCeremonyData(
       new DOMException('Cancelled', 'NotAllowedError'),
     )
-    pending.resolve(
+    resolveAuthorization(
       err(
         new PasskeyCeremonyFailure({
           action: PasskeyCeremonyAction.Unlock,
