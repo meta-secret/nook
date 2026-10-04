@@ -505,7 +505,10 @@ mod tests {
             OAuthAccountIdentity, OAuthRefreshCredential, OAuthRemoteFile, OAuthTokenExpiry,
         };
         let local = NookEnrollmentProvider::local();
-        assert_eq!(local.provider_type(), StorageProviderType::Local);
+        assert_eq!(
+            local.provider_type()?.to_rust()?,
+            StorageProviderType::Local
+        );
         assert!(!local.is_shared_provider_grant());
         assert!(matches!(
             local.onboarding_type(),
@@ -514,7 +517,10 @@ mod tests {
         assert!(local.github_pat().is_err());
 
         let github = NookEnrollmentProvider::github("owner/repo".into(), "pat".into());
-        assert_eq!(github.provider_type(), StorageProviderType::Github);
+        assert_eq!(
+            github.provider_type()?.to_rust()?,
+            StorageProviderType::Github
+        );
         assert_eq!(github.github_repo()?, "owner/repo");
         assert_eq!(github.github_pat()?, "pat");
         assert!(github.oauth_preset().is_err());
@@ -532,10 +538,15 @@ mod tests {
                 OAuthAccountIdentity::Email("owner@example.com".into()),
             ),
         ));
-        assert_eq!(oauth.provider_type(), StorageProviderType::OauthFile);
+        assert_eq!(
+            oauth.provider_type()?.to_rust()?,
+            StorageProviderType::OauthFile
+        );
         assert_eq!(oauth.oauth_preset()?, "google-drive");
         assert_eq!(oauth.oauth_access_token()?, "access-token");
-        let config = oauth.oauth_configuration(&OAuthFileConfigData::default())?;
+        let config = oauth
+            .oauth_configuration(&OAuthFileConfigData::default().into_ts()?)?
+            .to_rust()?;
         assert_eq!(
             config.refresh_token,
             StoredOAuthRefreshCredential::Token(("refresh-token").to_owned())

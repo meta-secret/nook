@@ -664,10 +664,16 @@ mod projection_tests {
 
     #[cfg(target_arch = "wasm32")]
     #[wasm_bindgen_test]
-    fn vault_policy_helpers_project_intents_and_reject_invalid_content() {
-        assert!(vault_connect_intent_permits_empty_remote_genesis("create-new").unwrap());
-        assert!(vault_connect_intent_permits_empty_remote_genesis("add-sync-provider").unwrap());
-        assert!(!vault_connect_intent_permits_empty_remote_genesis("open-existing").unwrap());
+    fn vault_policy_helpers_project_intents_and_reject_invalid_content() -> Result<(), JsError> {
+        assert!(vault_connect_intent_permits_empty_remote_genesis(
+            "create-new"
+        )?);
+        assert!(vault_connect_intent_permits_empty_remote_genesis(
+            "add-sync-provider"
+        )?);
+        assert!(!vault_connect_intent_permits_empty_remote_genesis(
+            "open-existing"
+        )?);
         assert!(vault_connect_intent_permits_empty_remote_genesis("unknown").is_err());
 
         assert_eq!(read_vault_version("not yaml"), 0);
@@ -678,6 +684,7 @@ mod projection_tests {
         assert!(!configured_vault_application_is_simple());
         assert!(!configured_vault_application_is_sentinel());
         assert!(configured_vault_application_supports_extension());
+        Ok(())
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -702,32 +709,22 @@ mod projection_tests {
 
     #[cfg(target_arch = "wasm32")]
     #[wasm_bindgen_test]
-    fn provider_setup_and_outcome_wrappers_project_all_states() {
+    fn provider_setup_and_outcome_wrappers_project_all_states() -> Result<(), JsError> {
         assert_eq!(
-            existing_provider_save_setup().and_then(|value| value
-                .to_rust()
-                .map_err(|_| JsError::new("Typed test output could not be decoded."))),
+            existing_provider_save_setup()?.to_rust()?,
             ProviderSaveSetup::Existing
         );
         assert_eq!(
-            new_provider_save_setup(&Tsify::into_ts(&(StorageProviderType::Github))?).and_then(
-                |value| value
-                    .to_rust()
-                    .map_err(|_| JsError::new("Typed test output could not be decoded."))
-            ),
+            new_provider_save_setup(&Tsify::into_ts(&(StorageProviderType::Github))?)?.to_rust()?,
             ProviderSaveSetup::New(StorageProviderType::Github)
         );
         assert_eq!(
-            inactive_provider_login_setup().and_then(|value| value
-                .to_rust()
-                .map_err(|_| JsError::new("Typed test output could not be decoded."))),
+            inactive_provider_login_setup()?.to_rust()?,
             ActiveProviderLoginSetup::Inactive
         );
         assert_eq!(
-            active_provider_login_setup(&Tsify::into_ts(&(StorageProviderType::OauthFile))?)
-                .and_then(|value| value
-                    .to_rust()
-                    .map_err(|_| JsError::new("Typed test output could not be decoded."))),
+            active_provider_login_setup(&Tsify::into_ts(&(StorageProviderType::OauthFile))?)?
+                .to_rust()?,
             ActiveProviderLoginSetup::Active(StorageProviderType::OauthFile)
         );
 
@@ -751,13 +748,15 @@ mod projection_tests {
             oauth_file: Box::new(saved_oauth.clone()),
         });
         assert_eq!(saved.state(), NookProviderSaveOutcomeState::Saved);
-        assert_eq!(saved.snapshot().unwrap(), saved_snapshot);
-        assert_eq!(saved.oauth_file().unwrap(), saved_oauth);
+        assert_eq!(saved.snapshot()?.to_rust()?, saved_snapshot);
+        assert_eq!(saved.oauth_file()?.to_rust()?, saved_oauth);
+        Ok(())
     }
 
     #[cfg(target_arch = "wasm32")]
     #[wasm_bindgen_test]
-    fn duplicate_provider_and_local_vault_wrappers_project_empty_and_present_states() {
+    fn duplicate_provider_and_local_vault_wrappers_project_empty_and_present_states()
+    -> Result<(), JsError> {
         let provider = StorageProviderData::github(
             "provider-1",
             "GitHub",
@@ -770,37 +769,30 @@ mod projection_tests {
             ..Default::default()
         };
 
-        let duplicate = find_duplicate_sync_provider(
-            &Tsify::into_ts(&(snapshot.clone()))?,
-            &Tsify::into_ts(&(provider.clone()))?,
-        )
-        .and_then(|value| {
-            value
-                .to_rust()
-                .map_err(|_| JsError::new("Typed test output could not be decoded."))
-        });
-        assert!(
-            matches!(duplicate, DuplicateSyncProvider::Duplicate { provider } if provider.id == "provider-1")
+        let duplicate = find_duplicate_sync_provider(&snapshot.into_ts()?, &provider.into_ts()?)?;
+        // DuplicateSyncProvider deliberately exposes a Serialize-only outcome.
+        assert_eq!(
+            serde_wasm_bindgen::from_value::<serde_json::Value>(duplicate.js_value())?,
+            serde_json::to_value(DuplicateSyncProvider::Duplicate {
+                provider: Box::new(provider.clone())
+            })?,
         );
-
         let unique = find_duplicate_sync_provider_excluding(
-            &Tsify::into_ts(&(snapshot))?,
-            &Tsify::into_ts(&(provider.clone()))?,
+            &snapshot.into_ts()?,
+            &provider.into_ts()?,
             "provider-1",
-        )
-        .and_then(|value| {
-            value
-                .to_rust()
-                .map_err(|_| JsError::new("Typed test output could not be decoded."))
-        });
-        assert_eq!(unique, DuplicateSyncProvider::Unique);
+        )?;
+        assert_eq!(
+            serde_wasm_bindgen::from_value::<serde_json::Value>(unique.js_value())?,
+            serde_json::to_value(DuplicateSyncProvider::Unique)?,
+        );
 
         let empty = NookActiveVaultSelection(ActiveVaultScope::Unselected);
         assert_eq!(empty.state(), NookActiveVaultSelectionState::NotSelected);
         assert!(empty.store_id().is_err());
         let selected = NookActiveVaultSelection(ActiveVaultScope::StoreId("store-1".into()));
         assert_eq!(selected.state(), NookActiveVaultSelectionState::Selected);
-        assert_eq!(selected.store_id().unwrap(), "store-1");
+        assert_eq!(selected.store_id()?, "store-1");
 
         let never = NookLocalVaultEntry {
             store_id: "store-1".into(),
@@ -825,19 +817,24 @@ mod projection_tests {
         };
         assert_eq!(unlocked.display_label("Fallback"), "Vault");
         assert_eq!(unlocked.unlock_state(), NookLocalVaultUnlockState::Unlocked);
-        assert_eq!(unlocked.last_unlocked_at().unwrap(), "2026-01-01T00:00:00Z");
+        assert_eq!(unlocked.last_unlocked_at()?, "2026-01-01T00:00:00Z");
+        Ok(())
     }
 
     #[cfg(target_arch = "wasm32")]
     #[wasm_bindgen_test]
-    fn vault_projection_helpers_cover_sync_actions_and_invalid_inputs() {
+    fn vault_projection_helpers_cover_sync_actions_and_invalid_inputs() -> Result<(), JsError> {
         assert_eq!(simple_vault_app_url(""), "https://simple.nokey.sh/");
         assert_eq!(
             simple_vault_app_url(" https://example.test/// "),
             "https://example.test/"
         );
-        assert!(vault_connect_intent_permits_empty_remote_genesis("create-new").unwrap());
-        assert!(!vault_connect_intent_permits_empty_remote_genesis("open-existing").unwrap());
+        assert!(vault_connect_intent_permits_empty_remote_genesis(
+            "create-new"
+        )?);
+        assert!(!vault_connect_intent_permits_empty_remote_genesis(
+            "open-existing"
+        )?);
         assert!(vault_connect_intent_permits_empty_remote_genesis("bad").is_err());
         assert_eq!(read_vault_version("not yaml"), 0);
         assert!(compare_vault_sync("not yaml", "also not yaml").is_err());
@@ -846,9 +843,6 @@ mod projection_tests {
                 "not a public key",
                 &Tsify::into_ts(&(AuthProvidersSnapshotData::default()))?
             )
-            .and_then(|value| value
-                .to_rust()
-                .map_err(|_| JsError::new("Typed test output could not be decoded.")))
             .is_err()
         );
         assert!(validate_vault_content_for_application("not yaml").is_err());
@@ -862,6 +856,7 @@ mod projection_tests {
         assert!(!configured_vault_application_is_simple());
         assert!(!configured_vault_application_is_sentinel());
         assert!(configured_vault_application_supports_extension());
+        Ok(())
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -872,21 +867,13 @@ mod projection_tests {
         let sealed = seal_auth_providers_for_device_public_key(
             identity.public_key().as_str(),
             &Tsify::into_ts(&(snapshot.clone()))?,
-        )
-        .and_then(|value| {
-            value
-                .to_rust()
-                .map_err(|_| JsError::new("Typed test output could not be decoded."))
-        })?;
+        )?
+        .to_rust()?;
         assert_eq!(sealed, snapshot);
 
         let with_local =
-            ensure_local_provider_row(&Tsify::into_ts(&(snapshot))?, "store_valid_fixture")
-                .and_then(|value| {
-                    value
-                        .to_rust()
-                        .map_err(|_| JsError::new("Typed test output could not be decoded."))
-                })?;
+            ensure_local_provider_row(&Tsify::into_ts(&(snapshot))?, "store_valid_fixture")?
+                .to_rust()?;
         assert_eq!(with_local.providers.len(), 1);
         assert_eq!(
             with_local.providers[0].provider_type,
@@ -914,19 +901,19 @@ mod projection_tests {
         assert!(manager.load_auth_providers_with_local_row().await.is_err());
         assert!(
             manager
-                .save_auth_providers_snapshot(&empty_snapshot.clone())
+                .save_auth_providers_snapshot(&empty_snapshot.into_ts()?)
                 .await
                 .is_err()
         );
         assert!(
             manager
-                .replace_auth_providers_for_vault(&empty_snapshot.clone())
+                .replace_auth_providers_for_vault(&empty_snapshot.into_ts()?)
                 .await
                 .is_err()
         );
         assert!(
             manager
-                .save_presealed_auth_providers_snapshot("not-an-app-id", &empty_snapshot.clone())
+                .save_presealed_auth_providers_snapshot("not-an-app-id", &empty_snapshot.into_ts()?)
                 .await
                 .is_err()
         );
