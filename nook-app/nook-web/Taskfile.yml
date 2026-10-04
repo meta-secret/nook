@@ -656,6 +656,7 @@ tasks:
       - |
         set -eu
         output="${WINDOWS_E2E_ARTIFACT_DIR:?WINDOWS_E2E_ARTIFACT_DIR is required}"
+        mkdir -p "$output"
         wasm_artifacts="$(mktemp -d)"
         trap 'rm -rf "$wasm_artifacts"' EXIT
         {{.DOCKER}} buildx bake --allow="fs.write=$wasm_artifacts" {{.NOOK_BAKE_FILES}} \
