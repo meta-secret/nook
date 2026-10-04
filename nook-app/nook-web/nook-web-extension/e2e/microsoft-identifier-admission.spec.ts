@@ -273,7 +273,7 @@ test('production backup review extracts only after consent and clears on cancel'
       path: testInfo.outputPath('backup-approved.png'),
       caret: 'initial',
     })
-    await widget.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await widget.getByText('Cancel', { exact: true }).click()
     await expect(widget.getByText('A1B2-C3D4-E5F6')).toHaveCount(0)
     await expect(widget.getByText('G7H8-I9J0-K1L2')).toHaveCount(0)
     await page.screenshot({
