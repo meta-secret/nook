@@ -37,6 +37,8 @@ use tracing_subscriber::fmt::format::DefaultFields;
 use tracing_subscriber::layer::{Context, SubscriberExt};
 use tracing_subscriber::registry::Registry;
 use tracing_subscriber::reload::Layer as ReloadLayer;
+use tsify::Tsify;
+use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 const LOG_DB_NAME: &str = "nook_logs";
@@ -154,7 +156,6 @@ pub(crate) enum LogPageLimit {
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize, tsify::Tsify)]
-#[tsify(into_wasm_abi)]
 pub struct LogEntry {
     ts: nook_core::IsoTimestamp,
     level: String,
@@ -171,8 +172,13 @@ pub struct NookLogEntries(Vec<LogEntry>);
 #[wasm_bindgen]
 impl NookLogEntries {
     #[wasm_bindgen]
-    pub fn to_array(&self) -> Vec<LogEntry> {
-        self.0.clone()
+    pub fn to_array(&self) -> Result<Vec<tsify::Ts<LogEntry>>, wasm_bindgen::JsError> {
+        let result = { self.0.clone() };
+        result
+            .iter()
+            .map(Tsify::into_ts)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| JsError::new("Typed WASM output could not be encoded."))
     }
 }
 
@@ -767,13 +773,13 @@ impl LoggerState {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
+    use wasm_bindgen::JsError;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
 
     #[wasm_bindgen_test]
-    async fn logger_persists_filters_pages_and_clears_entries() -> Result<(), wasm_bindgen::JsError>
-    {
+    async fn logger_persists_filters_pages_and_clears_entries() -> Result<(), JsError> {
         log_clear().await?;
         log_set_level("debug");
         assert_eq!(log_get_level(), "debug");
@@ -784,14 +790,14 @@ mod browser_tests {
         log_flush().await?;
 
         assert_eq!(log_count().await?, 2);
-        let entries = log_dump().await?.to_array();
+        let entries = log_dump().await?.to_array()?;
         assert_eq!(entries.len(), 2);
-        assert_eq!(entries[0].level, "info");
-        assert_eq!(entries[1].level, "warn");
+        assert_eq!(entries[0].to_rust()?.level, "info");
+        assert_eq!(entries[1].to_rust()?.level, "warn");
 
-        let page = log_dump_page("warn".to_owned(), 1, 0).await?.to_array();
+        let page = log_dump_page("warn".to_owned(), 1, 0).await?.to_array()?;
         assert_eq!(page.len(), 1);
-        assert_eq!(page[0].message, "retrying");
+        assert_eq!(page[0].to_rust()?.message, "retrying");
 
         log_clear().await?;
         assert_eq!(log_count().await?, 0);

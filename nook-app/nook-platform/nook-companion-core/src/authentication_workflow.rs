@@ -57,7 +57,6 @@ use tsify::Tsify;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum AuthenticationManualCheckpoint {
     #[default]
     Absent,
@@ -66,7 +65,6 @@ pub enum AuthenticationManualCheckpoint {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum AuthenticationEnrollmentEvidence {
     #[default]
     Absent,
@@ -77,7 +75,6 @@ pub enum AuthenticationEnrollmentEvidence {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum AuthenticationAdvanceControlEvidence {
     #[default]
     Absent,
@@ -88,7 +85,6 @@ pub enum AuthenticationAdvanceControlEvidence {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum AuthenticationOneTimeCodeProgressionEvidence {
     #[default]
     AdvanceControlRequired,
@@ -101,7 +97,6 @@ pub enum AuthenticationOneTimeCodeProgressionEvidence {
     rename_all = "kebab-case",
     rename_all_fields = "camelCase"
 )]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum AuthenticationPasskeyEvidence {
     #[default]
     Absent,
@@ -116,7 +111,6 @@ pub enum AuthenticationPasskeyEvidence {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum AuthenticationApprovalRequirement {
     ExplicitUserApproval,
     TakeoverRequired,
@@ -140,7 +134,6 @@ impl AuthenticationWorkflowAction {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 #[allow(clippy::struct_excessive_bools)]
 pub struct AuthenticationPageObservation {
     pub username_field_count: AuthenticationFieldCount,
@@ -182,7 +175,6 @@ impl AuthenticationPageObservation {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct AuthenticationWorkflowSnapshot {
     pub kind: AuthenticationWorkflowKind,
     pub stage: AuthenticationWorkflowStage,
@@ -196,7 +188,6 @@ pub struct AuthenticationWorkflowSnapshot {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "kind", content = "snapshot", rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum AuthenticationWorkflowMatch {
     NoMatch,
     Rejected,
@@ -205,7 +196,6 @@ pub enum AuthenticationWorkflowMatch {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct AuthenticationPageObservations {
     pub observations: Vec<AuthenticationPageObservation>,
 }

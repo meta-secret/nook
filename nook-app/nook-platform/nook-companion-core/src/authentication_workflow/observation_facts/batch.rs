@@ -7,7 +7,6 @@ use tsify::Tsify;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct AuthenticationPageObservationFactsBatch {
     pub observations: Vec<AuthenticationPageObservationFacts>,
 }

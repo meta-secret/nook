@@ -208,11 +208,12 @@ mod tests {
         event_log::ExternalEventLogRecord,
     };
     use nook_companion_core::{
-        CompanionPairingApproval, CompanionPairingApprovalAttempt,
-        CompanionPairingEpochMilliseconds, CompanionPairingInstallation,
-        CompanionPairingProviderManifestDigest, CompanionPairingRequest, ExtensionConnectScope,
-        ExtensionPairingVaultType,
+        CompanionExtensionPairingEndpoint, CompanionPairingApproval,
+        CompanionPairingApprovalAttempt, CompanionPairingEpochMilliseconds,
+        CompanionPairingInstallation, CompanionPairingProviderManifestDigest,
+        CompanionPairingRequest, ExtensionConnectScope, ExtensionPairingVaultType,
     };
+    use nook_core::AppendEventInput;
     use nook_core::{
         ActiveVaultScope, AuthProvidersSnapshotData, DeviceIdentity, EpochMetadataState,
         EpochPasswordState, IsoTimestamp, MemberLabel, Sha256Hex, SigningIdentity, StoreId,
@@ -282,13 +283,14 @@ mod tests {
                     providers.companion_pairing_manifest_digest()?.as_str(),
                 )?,
             };
-            let endpoint = NookCompanionPairingExtensionEndpoint::new(request)
-                .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+            let endpoint = NookCompanionPairingExtensionEndpoint {
+                inner: CompanionExtensionPairingEndpoint::issue(request)?,
+            };
             let authority = endpoint
                 .take_authority()
                 .map_err(|error| anyhow::anyhow!("{error:?}"))?;
             let capability = authority
-                .prevalidate(
+                .prevalidate_inner(
                     &manager,
                     CompanionPairingApprovalAttempt {
                         approval,
@@ -319,7 +321,7 @@ mod tests {
             let vault_keys = VaultKeys::generate()?;
             let extension_signing =
                 SigningIdentity::from_seed_hex_stored(&manager.event_log.signing_seed)?;
-            let (event, _) = nook_core::AppendEventInput::build(nook_core::AppendEventInput {
+            let (event, _) = AppendEventInput::build(nook_core::AppendEventInput {
                 store_id: &store_id,
                 actor_id: &website_signing.actor_id()?,
                 signing_identity: &website_signing,
@@ -412,7 +414,7 @@ mod tests {
                 },
             )?;
             let store_id = StoreId::parse(&self.manager.vault.store_id)?;
-            let (event, _) = nook_core::AppendEventInput::build(nook_core::AppendEventInput {
+            let (event, _) = AppendEventInput::build(nook_core::AppendEventInput {
                 store_id: &store_id,
                 actor_id: &signing.actor_id()?,
                 signing_identity: &signing,
@@ -443,7 +445,7 @@ mod tests {
             } = request;
             let store_id = StoreId::parse(&manager.vault.store_id)?;
             let key_epoch = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?;
-            let (event, _) = nook_core::AppendEventInput::build(nook_core::AppendEventInput {
+            let (event, _) = AppendEventInput::build(nook_core::AppendEventInput {
                 store_id: &store_id,
                 actor_id: &signer.actor_id()?,
                 signing_identity: signer,

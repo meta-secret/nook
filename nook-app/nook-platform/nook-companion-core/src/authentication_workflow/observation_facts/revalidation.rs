@@ -8,7 +8,6 @@ use tsify::Tsify;
 
 #[derive(Debug, Clone, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(from_wasm_abi)]
 pub struct ApprovedAuthenticationWorkflowRevalidation {
     pub approved: AuthenticationPageObservationFacts,
     pub live: AuthenticationPageObservationFactsBatch,
@@ -16,7 +15,6 @@ pub struct ApprovedAuthenticationWorkflowRevalidation {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Tsify)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
-#[tsify(into_wasm_abi)]
 pub enum ApprovedAuthenticationWorkflowDecision {
     Rejected,
     Matched {

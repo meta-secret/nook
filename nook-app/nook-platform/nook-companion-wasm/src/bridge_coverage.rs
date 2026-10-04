@@ -1,6 +1,15 @@
 #[cfg(test)]
 mod tests {
     use crate::*;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_companion_core::BrowserOAuthProvider;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_companion_core::OAuthOriginUnsupportedReason;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_companion_core::PairingVaultId;
     #[cfg(not(target_arch = "wasm32"))]
     use nook_companion_core::VaultHostPolicy;
     use nook_companion_core::{
@@ -82,26 +91,22 @@ mod tests {
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn oauth_support_export_covers_supported_unavailable_and_preview_states() {
         let preview = resolve_oauth_origin_support(
-            nook_companion_core::BrowserOAuthProvider::GoogleDrive,
+            BrowserOAuthProvider::GoogleDrive,
             "https://pr-42.nokey-simple.pages.dev",
             "PR-42.NOKEY-SIMPLE.PAGES.DEV",
         );
         assert!(preview.is_unsupported());
         assert_eq!(
             preview.unsupported_reason(),
-            nook_companion_core::OAuthOriginUnsupportedReason::CloudflarePrPreview
+            OAuthOriginUnsupportedReason::CloudflarePrPreview
         );
         assert!(!preview.is_supported());
-        let unavailable = resolve_oauth_origin_support(
-            nook_companion_core::BrowserOAuthProvider::GoogleDrive,
-            "",
-            "",
-        );
+        let unavailable = resolve_oauth_origin_support(BrowserOAuthProvider::GoogleDrive, "", "");
         assert!(unavailable.is_supported());
         assert!(!unavailable.is_unsupported());
         assert!(unavailable.origin().is_empty());
         let supported = resolve_oauth_origin_support(
-            nook_companion_core::BrowserOAuthProvider::GoogleDrive,
+            BrowserOAuthProvider::GoogleDrive,
             "https://simple.nokey.sh",
             "simple.nokey.sh",
         );
@@ -109,7 +114,7 @@ mod tests {
         assert_eq!(supported.origin(), "https://simple.nokey.sh");
         assert_eq!(
             supported.unsupported_reason(),
-            nook_companion_core::OAuthOriginUnsupportedReason::UnregisteredOrigin
+            OAuthOriginUnsupportedReason::UnregisteredOrigin
         );
     }
 
@@ -121,8 +126,7 @@ mod tests {
             status: ExtensionReadySetupStatus::Ready,
             device_label: "Nook Extension".to_owned(),
             paired_vaults: vec!["store-test".to_owned()],
-            selected_vault_store_id:
-                nook_companion_core::PairingVaultId::before_genesis_placeholder(),
+            selected_vault_store_id: PairingVaultId::before_genesis_placeholder(),
             selected_vault_name: "Personal".to_owned(),
             sync_provider_count: ExtensionSyncProviderCount::from(1),
             event_count: ExtensionEventCount::from(2),
@@ -134,19 +138,21 @@ mod tests {
         assert!(!is_extension_ready_setup_json("{}"));
 
         assert_eq!(
-            compare_extension_pairing_records(ExtensionPairingRecordComparisonRequest {
+            (ExtensionPairingRecordComparisonRequest {
                 current: ExtensionPairingRecord::Setup(setup.clone()),
                 migrated: ExtensionPairingRecord::Setup(setup.clone()),
-            }),
+            })
+            .compare(),
             ExtensionPairingRecordComparison::Equivalent
         );
         let mut changed = setup.clone();
         changed.selected_vault_name = "Work".to_owned();
         assert_eq!(
-            compare_extension_pairing_records(ExtensionPairingRecordComparisonRequest {
+            (ExtensionPairingRecordComparisonRequest {
                 current: ExtensionPairingRecord::Setup(changed),
                 migrated: ExtensionPairingRecord::Setup(setup),
-            }),
+            })
+            .compare(),
             ExtensionPairingRecordComparison::Different
         );
         Ok(())

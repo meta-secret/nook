@@ -38,7 +38,7 @@ pbkdf2 = { version = "0.13.0", features = ["sha2"] }
 tracing = { version = "0.1.41", default-features = false, features = ["std", "attributes"] }
 zeroize = "1.9.0"
 wasm-bindgen = "0.2.127"
-tsify = { version = "0.5.6", default-features = false, features = ["js"] }
+tsify = { version = "0.5.8", default-features = false, features = ["js"] }
 percent-encoding = "2.3.2"
 flate2 = { version = "1.1", default-features = false, features = ["rust_backend"] }
 zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2"] }

@@ -41,7 +41,6 @@ impl From<AuthenticationQrMediaObservation> for AuthenticationQrMediaBatchWire {
     try_from = "AuthenticationAuthenticatorSetupBatchWire",
     into = "AuthenticationAuthenticatorSetupBatchWire"
 )]
-#[tsify(from_wasm_abi)]
 pub struct AuthenticationAuthenticatorSetupBatch {
     #[tsify(type = "string[]")]
     visible_instruction_copies: Vec<AuthenticationAuthenticatorSetupCopy>,

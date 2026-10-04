@@ -258,6 +258,7 @@ mod tests {
     use nook_core::{DeviceIdentity, StartSentinelGenesisArgs};
     use std::future::Future;
     use std::task::{Context, Poll, Waker};
+    use tsify::Tsify;
     use wasm_bindgen::convert::TryFromJsValue;
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -393,7 +394,7 @@ mod tests {
         ));
         fixture
             .manager
-            .start_sentinel_genesis(Fixture::args())
+            .start_sentinel_genesis(&Fixture::args().into_ts()?)
             .await
             .map_err(|_| anyhow::anyhow!("explicit start after confirmed absence failed"))?;
         assert_eq!(
@@ -494,7 +495,7 @@ mod tests {
         assert!(
             fixture
                 .manager
-                .start_sentinel_genesis(Fixture::args())
+                .start_sentinel_genesis(&Fixture::args().into_ts()?)
                 .await
                 .is_err()
         );
@@ -502,7 +503,7 @@ mod tests {
         let mut reloaded = NookVaultManager::new();
         assert!(
             reloaded
-                .start_sentinel_genesis(Fixture::args())
+                .start_sentinel_genesis(&Fixture::args().into_ts()?)
                 .await
                 .is_err()
         );

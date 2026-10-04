@@ -7,6 +7,7 @@ use nook_core::{
     PersonalEnrollmentProviderData, SharedEnrollmentProvider, SharedEnrollmentProviderData,
     StorageProviderType, SyncProviderTarget,
 };
+use tsify::Tsify;
 use wasm_bindgen::JsError;
 
 #[wasm_bindgen]
@@ -56,16 +57,23 @@ impl NookEnrollmentProvider {
     }
 
     #[wasm_bindgen(getter, js_name = "type")]
-    #[must_use]
-    pub fn provider_type(&self) -> nook_core::StorageProviderType {
-        match &self.0 {
-            EnrollmentProvider::PersonalCredentialTransfer(provider) => match provider.data() {
-                PersonalEnrollmentProviderData::Local => StorageProviderType::Local,
-                PersonalEnrollmentProviderData::Github { .. } => StorageProviderType::Github,
-                PersonalEnrollmentProviderData::OauthFile { .. } => StorageProviderType::OauthFile,
-            },
-            EnrollmentProvider::SharedProviderGrant(_) => StorageProviderType::OauthFile,
-        }
+
+    pub fn provider_type(
+        &self,
+    ) -> Result<tsify::Ts<nook_core::StorageProviderType>, wasm_bindgen::JsError> {
+        let result = {
+            match &self.0 {
+                EnrollmentProvider::PersonalCredentialTransfer(provider) => match provider.data() {
+                    PersonalEnrollmentProviderData::Local => StorageProviderType::Local,
+                    PersonalEnrollmentProviderData::Github { .. } => StorageProviderType::Github,
+                    PersonalEnrollmentProviderData::OauthFile { .. } => {
+                        StorageProviderType::OauthFile
+                    }
+                },
+                EnrollmentProvider::SharedProviderGrant(_) => StorageProviderType::OauthFile,
+            }
+        };
+        Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
     }
 
     #[wasm_bindgen(getter, js_name = isSharedProviderGrant)]
@@ -448,14 +456,19 @@ impl NookVaultSyncResult {
 impl NookEnrollmentProvider {
     pub fn oauth_configuration(
         &self,
-        defaults: nook_core::OAuthFileConfigData,
-    ) -> Result<nook_core::OAuthFileConfigData, JsError> {
-        nook_core::EnrollmentOAuthConfigurationRequest {
+        defaults: &tsify::Ts<nook_core::OAuthFileConfigData>,
+    ) -> Result<tsify::Ts<nook_core::OAuthFileConfigData>, wasm_bindgen::JsError> {
+        let defaults = defaults
+            .to_rust()
+            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+
+        let result = nook_core::EnrollmentOAuthConfigurationRequest {
             provider: &self.0,
             defaults,
         }
         .project()
-        .map_err(|error| JsError::new(&error.to_string()))
+        .map_err(|error| JsError::new(&error.to_string()))?;
+        Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
     }
 }
 
@@ -463,6 +476,26 @@ impl NookEnrollmentProvider {
 #[allow(unused_imports)]
 mod tests {
     use super::*;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_core::OAuthFileConfigData;
+    use nook_core::OnboardingType;
+    use nook_core::StorageProviderType;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_core::StoredOAuthAccountIdentity;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_core::StoredOAuthRefreshCredential;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_core::StoredOAuthRemoteFileId;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_core::StoredOAuthRemoteFileName;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_core::StoredOAuthTokenExpiry;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[cfg(target_arch = "wasm32")]
@@ -472,18 +505,21 @@ mod tests {
             OAuthAccountIdentity, OAuthRefreshCredential, OAuthRemoteFile, OAuthTokenExpiry,
         };
         let local = NookEnrollmentProvider::local();
-        assert_eq!(local.provider_type(), nook_core::StorageProviderType::Local);
+        assert_eq!(
+            local.provider_type()?.to_rust()?,
+            StorageProviderType::Local
+        );
         assert!(!local.is_shared_provider_grant());
         assert!(matches!(
             local.onboarding_type(),
-            nook_core::OnboardingType::PersonalCredentialTransfer
+            OnboardingType::PersonalCredentialTransfer
         ));
         assert!(local.github_pat().is_err());
 
         let github = NookEnrollmentProvider::github("owner/repo".into(), "pat".into());
         assert_eq!(
-            github.provider_type(),
-            nook_core::StorageProviderType::Github
+            github.provider_type()?.to_rust()?,
+            StorageProviderType::Github
         );
         assert_eq!(github.github_repo()?, "owner/repo");
         assert_eq!(github.github_pat()?, "pat");
@@ -503,31 +539,33 @@ mod tests {
             ),
         ));
         assert_eq!(
-            oauth.provider_type(),
-            nook_core::StorageProviderType::OauthFile
+            oauth.provider_type()?.to_rust()?,
+            StorageProviderType::OauthFile
         );
         assert_eq!(oauth.oauth_preset()?, "google-drive");
         assert_eq!(oauth.oauth_access_token()?, "access-token");
-        let config = oauth.oauth_configuration(nook_core::OAuthFileConfigData::default())?;
+        let config = oauth
+            .oauth_configuration(&OAuthFileConfigData::default().into_ts()?)?
+            .to_rust()?;
         assert_eq!(
             config.refresh_token,
-            nook_core::StoredOAuthRefreshCredential::Token(("refresh-token").to_owned())
+            StoredOAuthRefreshCredential::Token(("refresh-token").to_owned())
         );
         assert_eq!(
             config.expires_at,
-            nook_core::StoredOAuthTokenExpiry::ExpiresAt(("2030-01-01").to_owned())
+            StoredOAuthTokenExpiry::ExpiresAt(("2030-01-01").to_owned())
         );
         assert_eq!(
             config.file_id,
-            nook_core::StoredOAuthRemoteFileId::FileId(("file-1").to_owned())
+            StoredOAuthRemoteFileId::FileId(("file-1").to_owned())
         );
         assert_eq!(
             config.file_name,
-            nook_core::StoredOAuthRemoteFileName::FileName(("vault.json").to_owned())
+            StoredOAuthRemoteFileName::FileName(("vault.json").to_owned())
         );
         assert_eq!(
             config.account_email,
-            nook_core::StoredOAuthAccountIdentity::Email(("owner@example.com").to_owned())
+            StoredOAuthAccountIdentity::Email(("owner@example.com").to_owned())
         );
 
         let drive =
@@ -577,7 +615,7 @@ mod tests {
         assert_eq!(payload.issued_at(), "2026-01-03");
         assert!(matches!(
             payload.onboarding_type(),
-            nook_core::OnboardingType::PersonalCredentialTransfer
+            OnboardingType::PersonalCredentialTransfer
         ));
 
         let local = NookSyncProviderTarget::local();

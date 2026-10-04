@@ -15,7 +15,6 @@ use tsify::Tsify;
 
 #[derive(Debug, Deserialize, Serialize, Tsify)]
 #[serde(transparent)]
-#[tsify(from_wasm_abi)]
 pub struct GrantAuthorityResponseJson(String);
 
 impl From<String> for GrantAuthorityResponseJson {

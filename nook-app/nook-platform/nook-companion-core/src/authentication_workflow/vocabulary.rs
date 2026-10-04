@@ -134,7 +134,6 @@ pub enum AuthenticationWorkflowAction {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum AuthenticationSavedLoginCapability {
     Unavailable,
     FillSavedLogin,
@@ -142,7 +141,6 @@ pub enum AuthenticationSavedLoginCapability {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum AuthenticationPilotPresentationCapability {
     Hidden,
     ProposeAction,
