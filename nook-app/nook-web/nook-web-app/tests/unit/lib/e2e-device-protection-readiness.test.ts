@@ -17,9 +17,7 @@ describe('device protection control readiness', () => {
       length: 1,
       item: () => new DOMRect(),
       0: new DOMRect(),
-      [Symbol.iterator]: function* () {
-        yield new DOMRect()
-      },
+      [Symbol.iterator]: () => [new DOMRect()][Symbol.iterator](),
     })
     expect(deviceProtectionButtonReady('unlock-vault-btn')).toBe(true)
     await Promise.resolve()
@@ -35,9 +33,7 @@ describe('device protection control readiness', () => {
       length: 1,
       item: () => new DOMRect(),
       0: new DOMRect(),
-      [Symbol.iterator]: function* () {
-        yield new DOMRect()
-      },
+      [Symbol.iterator]: () => [new DOMRect()][Symbol.iterator](),
     })
     button.disabled = true
     expect(deviceProtectionButtonReady('device-protection-unlock-btn')).toBe(
