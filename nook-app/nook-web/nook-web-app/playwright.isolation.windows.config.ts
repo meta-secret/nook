@@ -1,11 +1,25 @@
 import { defineConfig, type PlaywrightTestConfig } from '@playwright/test'
 import sharedConfig from './playwright.isolation.config'
 
+type WindowsOutputDirectoryConfig = Pick<PlaywrightTestConfig, 'outputDir'>
+
 class WindowsIsolationConfig {
+  constructor(private readonly environment: NodeJS.ProcessEnv) {}
+
+  buildOutputDirectory(): WindowsOutputDirectoryConfig {
+    const outputDir = this.environment.PLAYWRIGHT_OUTPUT_DIR
+    switch (typeof outputDir) {
+      case 'string':
+        return { outputDir }
+      default:
+        return {}
+    }
+  }
+
   static readonly value: PlaywrightTestConfig = {
     ...sharedConfig,
     workers: 2,
-    outputDir: process.env.PLAYWRIGHT_OUTPUT_DIR,
+    ...new WindowsIsolationConfig(process.env).buildOutputDirectory(),
     reporter: [['line'], ['html', { open: 'never' }], ['json']],
     use: {
       ...sharedConfig.use,
