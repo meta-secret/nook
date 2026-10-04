@@ -21,9 +21,11 @@ import {
   CompanionWasmSessionMessageType,
   CompanionWasmAuthenticatorSetupResponseDecoder,
   CompanionWasmBackupCodeExtractionDecoder,
+  CompanionWasmActivityProgressDecoder,
   type CompanionWasmSessionMessage,
 } from '../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 import { Effect, Schema } from 'effect'
+import { AuthenticationWorkflowActivity } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 type RuntimeMessageListener = Parameters<
   typeof chrome.runtime.onMessage.addListener
@@ -298,6 +300,41 @@ describe('extension session document ownership', () => {
         ),
       ),
     )
+  })
+
+  test('admits actual Rust save progress through the object session envelope', async () => {
+    const fixture = new SessionDocumentFixture()
+    fixture.inheritDocument()
+    const document = (await fixture.owner.open()).match(
+      (opened) => opened,
+      () => {
+        throw new Error('Expected inherited session transport')
+      },
+    )
+    const message: CompanionWasmSessionMessage = {
+      type: CompanionWasmSessionMessageType.GetAuthenticationActivityProgress,
+      payload: { activity: AuthenticationWorkflowActivity.SaveOffer },
+    }
+    const request: ExtensionSessionTransportDelivery = { message }
+    const delivered = document.sendMessage(request)
+    const adapterResult = await handleCompanionWasmMessage(message)
+    adapterResult.match(
+      (response) => expect(fixture.respond(response)).toEqual(ok()),
+      () => {
+        throw new Error('Expected actual Rust save progress')
+      },
+    )
+    const response = (await delivered).match(
+      (value) => value,
+      () => {
+        throw new Error('Expected object progress envelope')
+      },
+    )
+    expect(
+      Schema.decodeUnknownSync(CompanionWasmActivityProgressDecoder)(response),
+    ).toEqual({
+      activityProgress: { currentStep: 4, totalSteps: 4 },
+    })
   })
 
   test('reuses the exact inherited session without creating another document', async () => {

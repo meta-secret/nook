@@ -20,6 +20,7 @@ import type {
   AuthenticationDetailedPasskeyControlCandidateObservation,
   AuthenticationPageObservationFacts,
   AuthenticationDisplayProgress,
+  AuthenticationWorkflowActivity,
   ApprovedAuthenticationWorkflowDecision,
   AuthenticationBackupCodeExtractionRequest,
   AuthenticationBackupCodeExtraction,
@@ -40,6 +41,7 @@ import type {
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 
 export enum CompanionWasmSessionMessageType {
+  GetAuthenticationActivityProgress = "nook:extension-session-get-authentication-activity-progress",
   ExtractAuthenticationBackupCodeCandidates = "nook:extension-session-extract-authentication-backup-code-candidates",
   ProjectAuthenticationNavigationPath = "nook:extension-session-project-authentication-navigation-path",
   AuthenticationAuthenticatorSetupObservation = "nook:extension-session-authentication-authenticator-setup-observation",
@@ -123,6 +125,10 @@ export type CompanionWasmLabelRequest = {
 };
 
 export type CompanionWasmSessionMessage =
+  | {
+      readonly type: CompanionWasmSessionMessageType.GetAuthenticationActivityProgress;
+      readonly payload: { readonly activity: AuthenticationWorkflowActivity };
+    }
   | {
       readonly type: CompanionWasmSessionMessageType.ExtractAuthenticationBackupCodeCandidates;
       readonly payload: AuthenticationBackupCodeExtractionRequest;
@@ -281,7 +287,25 @@ const authenticationNavigationPathFields: {
 export const CompanionWasmNavigationPathDecoder: Schema.Schema<AuthenticationNavigationPathProjection> =
   Schema.Struct(authenticationNavigationPathFields);
 
+const activityProgressFields: {
+  readonly currentStep: typeof Schema.Number;
+  readonly totalSteps: typeof Schema.Number;
+} = {
+  currentStep: Schema.Number,
+  totalSteps: Schema.Number,
+};
+const activityProgressSchema = Schema.Struct(activityProgressFields);
+const activityProgressResponseFields: {
+  readonly activityProgress: typeof activityProgressSchema;
+} = {
+  activityProgress: activityProgressSchema,
+};
+export const CompanionWasmActivityProgressDecoder: Schema.Schema<{
+  readonly activityProgress: AuthenticationDisplayProgress;
+}> = Schema.Struct(activityProgressResponseFields);
+
 export type CompanionWasmSessionResponse =
+  | { readonly activityProgress: AuthenticationDisplayProgress }
   | AuthenticationBackupCodeExtraction
   | AuthenticationNavigationPathProjection
   | AuthenticatorPickerOpenResponse

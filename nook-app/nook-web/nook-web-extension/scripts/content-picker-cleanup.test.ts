@@ -15,6 +15,7 @@ import type {
   WebsiteLoginSaveOfferView,
 } from '../src/lib/login-save-messages'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
+import { AuthenticationWorkflowActivity } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   AuthenticationWorkflowApproval,
   AuthenticationWorkflowSnapshotIngress,
@@ -326,6 +327,46 @@ test('delivers cleanup cancellation through the content-script router', async ()
   expect(continueButton.disabled).toBe(false)
   expect(sendResponse).toHaveBeenCalledWith({ ok: true })
 })
+
+for (const invalidateSequence of [true, false]) {
+  test(`rejects delayed save projection after ${invalidateSequence ? 'scan invalidation' : 'offer replacement'}`, async () => {
+    const { saveOfferState, scanState, widgetState } =
+      await import('../src/content/autofill/state')
+    const { loginSaveInteraction } =
+      await import('../src/content/autofill/login-save')
+    const offer: WebsiteLoginSaveOfferView = {
+      offerId: 'delayed-save',
+      decision: 0,
+      vaultStoreId: 'vault-store',
+      vaultName: 'Vault',
+    }
+    saveOfferState.showOffer(offer)
+    const priorHost = widgetState.host
+    const callbacks: RuntimeResponseCallback[] = []
+    sendMessage.mockImplementationOnce((_message, callback) => {
+      callbacks.push(callback)
+    })
+    const rendering = loginSaveInteraction.renderSaveOfferWidget(offer)
+    if (invalidateSequence) scanState.invalidatePendingScan()
+    else saveOfferState.showOffer({ ...offer })
+    const callback = callbacks.shift()
+    if (!callback) throw new Error('Expected delayed progress request')
+    const request: CompanionWasmSessionMessage = {
+      type: CompanionWasmSessionMessageType.GetAuthenticationActivityProgress,
+      payload: { activity: AuthenticationWorkflowActivity.SaveOffer },
+    }
+    const result = await handleCompanionWasmMessage(request)
+    result.match(
+      (value) => callback({ ok: true, result: value }),
+      () => {
+        throw new Error('Expected actual Rust progress')
+      },
+    )
+    expect(await rendering).toBe(false)
+    expect(widgetState.host).toBe(priorHost)
+    saveOfferState.clearActiveOffer()
+  })
+}
 
 test('refresh preserves dismissal while clearing stale surface state', async () => {
   useImmediateRuntimeResponse({

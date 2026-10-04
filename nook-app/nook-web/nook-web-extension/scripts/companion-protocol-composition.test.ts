@@ -53,6 +53,7 @@ import {
 } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm.js'
 
 let extension: NookVaultManager
+let extensionOwned = false
 let presence: CompanionExtensionPresence
 let unlockedAppKey: CompanionUnlockedAppKey
 const previousIndexedDBRuntime = {
@@ -325,7 +326,7 @@ function beginHandoff(
   return { authorization, endpoint, request, website, pending }
 }
 
-let compositionSetup: Promise<void> | undefined
+let compositionSetup: Promise<void> | false = false
 
 beforeAll(() => {
   compositionSetup = (async () => {
@@ -342,6 +343,7 @@ beforeAll(() => {
     ])
     configure_vault_application(VaultApplication.Extension)
     extension = new NookVaultManager()
+    extensionOwned = true
     const setup = await extension.begin_device_protection()
     try {
       await extension.finish_device_protection(
@@ -381,10 +383,13 @@ beforeAll(() => {
 
 afterAll(async () => {
   try {
-    await compositionSetup
+    if (compositionSetup) await compositionSetup
   } finally {
     try {
-      if (typeof extension !== 'undefined') extension.free()
+      if (extensionOwned) {
+        extension.free()
+        extensionOwned = false
+      }
     } finally {
       Object.assign(globalThis, previousIndexedDBRuntime)
     }
