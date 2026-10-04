@@ -758,3 +758,94 @@ mod browser_material_admission;
 pub use browser_material_admission::*;
 
 mod bridge_coverage;
+
+#[cfg(all(test, target_arch = "wasm32"))]
+mod ingress_tests {
+    use super::*;
+    use nook_companion_core::{
+        AuthenticationOutcomeClassification, AuthenticationOutcomeObservation,
+        AuthenticationOutcomeVerdict, AuthenticationUsernameEvidence, PageInputType,
+    };
+    use serde::Serialize;
+    use serde_wasm_bindgen::Serializer;
+    use tsify::{Ts, Tsify};
+    use wasm_bindgen::JsValue;
+    use wasm_bindgen_test::wasm_bindgen_test;
+    #[wasm_bindgen_test]
+    fn username_exports_preserve_field_evidence_and_reject_invalid_vector_members()
+    -> Result<(), JsError> {
+        let field = NookPageInputFieldObservation::new(
+            PageInputType::Email,
+            false,
+            false,
+            vec!["email".into()],
+            "account email".into(),
+            true,
+        );
+        assert_eq!(
+            authentication_username_evidence(&field)?.to_rust()?,
+            AuthenticationUsernameEvidence::Strong
+        );
+        let strong = AuthenticationUsernameEvidence::Strong;
+        let explicit = AuthenticationUsernameEvidence::Explicit;
+        assert_eq!(
+            strongest_authentication_username_evidence(vec![
+                strong.into_ts()?,
+                explicit.into_ts()?
+            ])?
+            .to_rust()?,
+            explicit
+        );
+        assert!(
+            strongest_authentication_username_evidence(vec![
+                strong.into_ts()?,
+                Ts::new_unchecked(JsValue::NULL)
+            ])
+            .is_err()
+        );
+        Ok(())
+    }
+    #[wasm_bindgen_test]
+    fn outcome_exports_preserve_success_and_reject_contradictory_external_decisions()
+    -> Result<(), JsError> {
+        let observation = AuthenticationOutcomeObservation {
+            success_marker_present: true,
+            ..Default::default()
+        };
+        let classification = AuthenticationOutcomeClassification {
+            observation,
+            timeout_ms: 1000u32.into(),
+        };
+        let decision =
+            classify_companion_authentication_outcome(&classification.into_ts()?)?.to_rust()?;
+        assert_eq!(decision.verdict, AuthenticationOutcomeVerdict::Sufficient);
+        assert!(decision.allows_credential_commit);
+        assert_eq!(
+            classify_companion_authentication_outcome_with_default_timeout(
+                &observation.into_ts()?
+            )?
+            .to_rust()?,
+            decision
+        );
+        assert_eq!(
+            validate_companion_authentication_outcome_decision(&decision.into_ts()?)?.to_rust()?,
+            decision
+        );
+        assert!(
+            classify_companion_authentication_outcome(&Ts::new_unchecked(JsValue::NULL)).is_err()
+        );
+        assert!(
+            classify_companion_authentication_outcome_with_default_timeout(&Ts::new_unchecked(
+                JsValue::TRUE
+            ))
+            .is_err()
+        );
+        let contradictory = serde_json::json!({"verdict": AuthenticationOutcomeVerdict::Sufficient,"allowsCredentialCommit":false});
+        let raw = contradictory.serialize(&Serializer::json_compatible())?;
+        assert!(
+            validate_companion_authentication_outcome_decision(&Ts::new_unchecked(raw)).is_err()
+        );
+        assert!(decision.allows_credential_commit);
+        Ok(())
+    }
+}

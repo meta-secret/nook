@@ -939,3 +939,25 @@ pub fn decode_authenticator_backup_verification_session_response(
     let result = VerifiedAuthenticatorBackupAttachResponse::try_from(wire).map_err(JsError::new)?;
     Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
+
+#[cfg(all(test, target_arch = "wasm32"))]
+mod primitive_ingress_tests {
+    use super::*;
+    use tsify::Ts;
+    use wasm_bindgen::JsValue;
+    use wasm_bindgen_test::wasm_bindgen_test;
+    #[wasm_bindgen_test]
+    fn absent_credential_and_outcome_envelopes_cannot_be_admitted() {
+        assert!(
+            decode_website_login_save_offer_response(&Ts::new_unchecked(JsValue::NULL)).is_err()
+        );
+        assert!(
+            decode_website_login_save_pending_response(&Ts::new_unchecked(JsValue::TRUE)).is_err()
+        );
+        assert!(
+            decode_website_login_save_action_response(&Ts::new_unchecked(JsValue::NULL)).is_err()
+        );
+        assert!(decode_authentication_outcome_response(&Ts::new_unchecked(JsValue::TRUE)).is_err());
+        assert!(decode_generated_password_response(&Ts::new_unchecked(JsValue::NULL)).is_err());
+    }
+}

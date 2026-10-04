@@ -81,3 +81,25 @@ pub fn decode_authenticator_enrollment_confirm_response(
         .map_err(|error| JsError::new(&error.to_string()))?;
     Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
+
+#[cfg(all(test, target_arch = "wasm32"))]
+mod tests {
+    use super::*;
+    use tsify::Ts;
+    use wasm_bindgen::JsValue;
+    use wasm_bindgen_test::wasm_bindgen_test;
+    #[wasm_bindgen_test]
+    fn missing_authenticator_mutation_envelopes_cannot_commit() {
+        assert!(
+            decode_authenticator_backup_attach_response(&Ts::new_unchecked(JsValue::NULL)).is_err()
+        );
+        assert!(
+            decode_authenticator_enrollment_stage_response(&Ts::new_unchecked(JsValue::TRUE))
+                .is_err()
+        );
+        assert!(
+            decode_authenticator_enrollment_confirm_response(&Ts::new_unchecked(JsValue::NULL))
+                .is_err()
+        );
+    }
+}
