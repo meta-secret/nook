@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from "svelte";
+  import { Effect } from "effect";
   import { VaultType } from "$lib/vault/architecture-model";
   type VaultPasswordUnlock = {
     readonly entryId: string;
@@ -24,10 +24,11 @@
   } from "$lib/components/login/login-vault-extension-pairing-status";
   import SentinelCeremonyPanel from "$lib/components/login/SentinelCeremonyPanel.svelte";
   import type { VaultState } from "$lib/vault.svelte";
+  import { SentinelCeremonyVisibility } from "$lib/vault/sentinel-unlock";
   import {
-    SentinelUnlockActions,
-    SentinelCeremonyVisibility,
-  } from "$lib/vault/sentinel-unlock";
+    SentinelLoginPresentationReader,
+    SentinelLoginPresentationKind,
+  } from "$lib/vault/sentinel-login-presentation.svelte";
   import type { PasswordEntrySelection } from "$lib/vault/state/session.svelte";
   import {
     DeviceKeysUnlockCapabilityKind,
@@ -52,7 +53,9 @@
   let {
     vault,
     vaultEntry,
-    extensionPairingStatus = { kind: LoginVaultExtensionPairingStatusKind.NotShown },
+    extensionPairingStatus = {
+      kind: LoginVaultExtensionPairingStatusKind.NotShown,
+    },
     hasMultipleVaults = false,
     passwordEntries = [] as PasswordEntrySummary[],
     selectedPasswordEntry,
@@ -91,33 +94,23 @@
   function selectWorkflow(selected: LoginVaultWorkflow): void {
     workflow = selected;
   }
-  const sentinelVisibility = $derived(
-    new SentinelUnlockActions(vault).ceremonyVisibility(),
+  const sentinelPresentation = $derived(
+    new SentinelLoginPresentationReader(vault),
   );
+  $effect(() => sentinelPresentation.start());
   const showSentinelCeremony = $derived(
-    sentinelVisibility.isOk() &&
-      sentinelVisibility.value === SentinelCeremonyVisibility.Visible,
-  );
-  $effect(() => {
-    if (sentinelVisibility.isErr()) {
-      const message = vault.t(sentinelVisibility.error.translationKey);
-      if (untrack(() => vault.errorMsg) !== message) vault.errorMsg = message;
-    }
-  });
-  const presentedVaultType = $derived(
-    new SentinelUnlockActions(vault).vaultType(),
+    sentinelPresentation.presentation.kind ===
+      SentinelLoginPresentationKind.Ready &&
+      sentinelPresentation.presentation.projection.ceremonyVisibility ===
+        SentinelCeremonyVisibility.Visible,
   );
   const hidePasswordUnlock = $derived(
     showSentinelCeremony ||
-      presentedVaultType.isErr() ||
-      presentedVaultType.value === VaultType.Sentinel,
+      sentinelPresentation.presentation.kind !==
+        SentinelLoginPresentationKind.Ready ||
+      sentinelPresentation.presentation.projection.vaultType ===
+        VaultType.Sentinel,
   );
-  $effect(() => {
-    if (presentedVaultType.isErr()) {
-      const message = vault.t(presentedVaultType.error.translationKey);
-      if (untrack(() => vault.errorMsg) !== message) vault.errorMsg = message;
-    }
-  });
   const passwordUnlock = $derived<PasswordUnlockCapability>(
     hidePasswordUnlock
       ? { kind: PasswordUnlockCapabilityKind.Unavailable }
@@ -157,14 +150,28 @@
       manager: manager.value,
       storeId,
     };
-    void new LoginVaultIdentityReader(identityContextRequest)
-      .execute()
-      .then((context) => {
-        if (generation !== identityContextLoadGeneration) return;
-        identityContext = context.isOk()
-          ? context.value
-          : { kind: LoginVaultIdentityContextKind.Failed };
-      });
+    void Effect.runPromise(
+      new LoginVaultIdentityReader(identityContextRequest).executeQueued(vault),
+    ).then(
+      (context) => {
+        switch (generation) {
+          case identityContextLoadGeneration:
+            identityContext = context;
+            break;
+          default:
+            return;
+        }
+      },
+      () => {
+        switch (generation) {
+          case identityContextLoadGeneration:
+            identityContext = { kind: LoginVaultIdentityContextKind.Failed };
+            break;
+          default:
+            return;
+        }
+      },
+    );
 
     return () => {
       if (generation === identityContextLoadGeneration) {
