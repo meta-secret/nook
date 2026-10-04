@@ -742,99 +742,82 @@ mod tests {
     use nook_companion_core::{
         CompanionEpochMilliseconds, CompanionExtensionPresence, CompanionIdentityDiscoveryRequest,
         CompanionIdentityHandoffRequest, CompanionIdentityHandoffResponse, CompanionIdentityStatus,
-        CompanionIdentityStatusAdmission, CompanionInstallationAppKey, CompanionUnlockedAppKey,
-        ExtensionConnectScope, ExtensionPairingVaultType,
+        CompanionIdentityStatusAdmission, CompanionIdentityUnlockRequest,
+        CompanionInstallationAppKey, CompanionUnlockedAppKey, ExtensionConnectScope,
+        ExtensionPairingVaultType,
     };
-    #[cfg(all(test, target_arch = "wasm32"))]
-    #[cfg(all(test, target_arch = "wasm32"))]
-    use wasm_bindgen::JsValue;
+    use tsify::{Ts, Tsify};
+    use wasm_bindgen::JsError;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    fn epoch(value: &str) -> Result<CompanionEpochMilliseconds, wasm_bindgen::JsValue> {
-        serde_json::from_str(value).map_err(|error| JsValue::from_str(&error.to_string()))
-    }
+    struct ProtocolFixture;
 
-    fn app_key() -> CompanionUnlockedAppKey {
-        CompanionUnlockedAppKey {
-            extension_runtime_id: "runtime-1".to_owned(),
-            app_key: CompanionInstallationAppKey {
-                app_id: "app-1".to_owned(),
-                encryption_public_key: "age1public".to_owned(),
-                signing_public_key: "signing-public".to_owned(),
-                installation_label: "Nook Extension".to_owned(),
-            },
-            nonce: "nonce-1".to_owned(),
-            scopes: vec![ExtensionConnectScope::VaultAccess],
+    impl ProtocolFixture {
+        fn epoch(value: &str) -> Result<CompanionEpochMilliseconds, JsError> {
+            Ok(serde_json::from_str(value)?)
         }
-    }
 
-    fn discovery() -> Result<CompanionIdentityDiscoveryObservation, wasm_bindgen::JsValue> {
-        Ok(CompanionIdentityDiscoveryObservation {
-            request: CompanionIdentityDiscoveryRequest {
-                request_id: "request-1".to_owned(),
-                vault_store_id: "store-1".to_owned(),
-                expires_at: epoch("200")?,
-            },
-            observed_at: epoch("100")?,
-        })
-    }
+        fn app_key() -> CompanionUnlockedAppKey {
+            CompanionUnlockedAppKey {
+                extension_runtime_id: "runtime-1".to_owned(),
+                app_key: CompanionInstallationAppKey {
+                    app_id: "app-1".to_owned(),
+                    encryption_public_key: "age1public".to_owned(),
+                    signing_public_key: "signing-public".to_owned(),
+                    installation_label: "Nook Extension".to_owned(),
+                },
+                nonce: "nonce-1".to_owned(),
+                scopes: vec![ExtensionConnectScope::VaultAccess],
+            }
+        }
 
-    #[wasm_bindgen_test::wasm_bindgen_test]
-    fn generated_admission_rejects_incomplete_status_without_assertions()
-    -> Result<(), wasm_bindgen::JsValue> {
-        let observed_at: CompanionEpochMilliseconds =
-            serde_json::from_str("100").map_err(|error| JsValue::from_str(&error.to_string()))?;
-        let expires_at: CompanionEpochMilliseconds =
-            serde_json::from_str("200").map_err(|error| JsValue::from_str(&error.to_string()))?;
-        let request = CompanionIdentityStatusAdmissionRequest {
-            discovery: CompanionIdentityDiscoveryObservation {
+        fn discovery() -> Result<CompanionIdentityDiscoveryObservation, JsError> {
+            Ok(CompanionIdentityDiscoveryObservation {
                 request: CompanionIdentityDiscoveryRequest {
                     request_id: "request-1".to_owned(),
                     vault_store_id: "store-1".to_owned(),
-                    expires_at,
+                    expires_at: Self::epoch("200")?,
                 },
-                observed_at,
-            },
+                observed_at: Self::epoch("100")?,
+            })
+        }
+    }
+
+    #[wasm_bindgen_test]
+    fn generated_admission_rejects_incomplete_status_without_assertions() -> Result<(), JsError> {
+        let observed_at = ProtocolFixture::epoch("100")?;
+        let request = CompanionIdentityStatusAdmissionRequest {
+            discovery: ProtocolFixture::discovery()?,
             status: CompanionIdentityStatus::Unlocked {
                 request_id: "request-1".to_owned(),
                 vault_store_id: "store-1".to_owned(),
                 app_key: CompanionUnlockedAppKey {
                     extension_runtime_id: String::new(),
-                    app_key: CompanionInstallationAppKey {
-                        app_id: "app-1".to_owned(),
-                        encryption_public_key: "age1public".to_owned(),
-                        signing_public_key: "signing-public".to_owned(),
-                        installation_label: "Nook Extension".to_owned(),
-                    },
-                    nonce: "nonce-1".to_owned(),
-                    scopes: vec![ExtensionConnectScope::VaultAccess],
+                    ..ProtocolFixture::app_key()
                 },
             },
             observed_at,
         };
-        let request = serde_json::from_value(
-            serde_json::to_value(request).map_err(|error| JsValue::from_str(&error.to_string()))?,
-        )
-        .map_err(|error| JsValue::from_str(&error.to_string()))?;
-        let result = admit_companion_identity_status(&request);
+        let request = Ts::new_unchecked(serde_wasm_bindgen::to_value(&request)?);
         assert!(matches!(
-            result,
+            admit_companion_identity_status(&request)?.to_rust()?,
             CompanionIdentityStatusAdmission::Rejected { .. }
         ));
         Ok(())
     }
 
-    #[wasm_bindgen_test::wasm_bindgen_test]
+    #[wasm_bindgen_test]
     fn generated_protocol_exports_preserve_discovery_unlock_and_handoff_admission()
-    -> Result<(), wasm_bindgen::JsValue> {
-        let key = app_key();
+    -> Result<(), JsError> {
+        let key = ProtocolFixture::app_key();
         assert!(
-            NookCompanionExtensionProtocol::new(CompanionExtensionPresenceAdmission(
-                CompanionExtensionPresence::Locked {
+            NookCompanionExtensionProtocol::new(&Ts::new_unchecked(serde_wasm_bindgen::to_value(
+                &CompanionExtensionPresence::Locked {
                     vault_type: ExtensionPairingVaultType::Simple,
                     vault_store_id: String::new(),
                     vault_name: String::new(),
-                },
-            ))
+                }
+            )?,))
             .is_err()
         );
         let presence = CompanionExtensionPresence::Unlocked {
@@ -843,77 +826,75 @@ mod tests {
             vault_name: "Personal".to_owned(),
             app_key: key.clone(),
         };
-        let presence_value = serde_wasm_bindgen::to_value(&presence)
-            .map_err(|error| JsValue::from_str(&error.to_string()))?;
-        let presence: CompanionExtensionPresenceAdmission =
-            serde_wasm_bindgen::from_value(presence_value)
-                .map_err(|error| JsValue::from_str(&error.to_string()))?;
-        let protocol = NookCompanionExtensionProtocol::new(presence)?;
-
-        let discovery_observation = discovery()?;
-        let discovery_value = serde_wasm_bindgen::to_value(&discovery_observation)
-            .map_err(|error| JsValue::from_str(&error.to_string()))?;
-        let discovery_admission: CompanionIdentityDiscoveryAdmission =
-            serde_wasm_bindgen::from_value(discovery_value)
-                .map_err(|error| JsValue::from_str(&error.to_string()))?;
+        let presence = Ts::new_unchecked(serde_wasm_bindgen::to_value(&presence)?);
+        let protocol = NookCompanionExtensionProtocol::new(&presence)?;
+        let discovery_observation = ProtocolFixture::discovery()?;
+        let discovery_admission =
+            Ts::new_unchecked(serde_wasm_bindgen::to_value(&discovery_observation)?);
         assert_eq!(
-            decode_companion_identity_discovery_observation(&discovery_admission),
+            decode_companion_identity_discovery_observation(&discovery_admission)?.to_rust()?,
             discovery_observation
         );
         assert!(matches!(
-            protocol.discover(&discovery_observation.clone())?,
+            protocol
+                .discover(&discovery_observation.into_ts()?)?
+                .to_rust()?,
             CompanionIdentityStatus::Unlocked { .. }
         ));
         assert!(matches!(
-            protocol.unlock(&nook_companion_core::CompanionIdentityUnlockRequest {
-                request_id: "request-1".to_owned(),
-                vault_store_id: "store-1".to_owned(),
-            })?,
+            protocol
+                .unlock(
+                    &CompanionIdentityUnlockRequest {
+                        request_id: "request-1".to_owned(),
+                        vault_store_id: "store-1".to_owned(),
+                    }
+                    .into_ts()?
+                )?
+                .to_rust()?,
             CompanionIdentityStatus::Unlocked { .. }
         ));
-        let mut invalid_discovery = discovery()?;
+        let mut invalid_discovery = ProtocolFixture::discovery()?;
         invalid_discovery.request.request_id.clear();
-        assert!(protocol.discover(&invalid_discovery).is_err());
+        assert!(protocol.discover(&invalid_discovery.into_ts()?).is_err());
         assert!(
             protocol
-                .unlock(&nook_companion_core::CompanionIdentityUnlockRequest {
-                    request_id: String::new(),
-                    vault_store_id: "store-1".to_owned(),
-                })
+                .unlock(
+                    &CompanionIdentityUnlockRequest {
+                        request_id: String::new(),
+                        vault_store_id: "store-1".to_owned(),
+                    }
+                    .into_ts()?
+                )
                 .is_err()
         );
-
-        let status = CompanionIdentityStatus::Unlocked {
-            request_id: "request-1".to_owned(),
-            vault_store_id: "store-1".to_owned(),
-            app_key: key,
-        };
         let status_request = CompanionIdentityStatusAdmissionRequest {
             discovery: discovery_observation,
-            status,
-            observed_at: epoch("100")?,
+            status: CompanionIdentityStatus::Unlocked {
+                request_id: "request-1".to_owned(),
+                vault_store_id: "store-1".to_owned(),
+                app_key: key,
+            },
+            observed_at: ProtocolFixture::epoch("100")?,
         };
-        let status_value = serde_wasm_bindgen::to_value(&status_request)
-            .map_err(|error| JsValue::from_str(&error.to_string()))?;
-        let status_request: CompanionIdentityStatusRequestAdmission =
-            serde_wasm_bindgen::from_value(status_value)
-                .map_err(|error| JsValue::from_str(&error.to_string()))?;
-        let transaction = match admit_companion_identity_status(&status_request) {
+        let status_request = Ts::new_unchecked(serde_wasm_bindgen::to_value(&status_request)?);
+        let transaction = match admit_companion_identity_status(&status_request)?.to_rust()? {
             CompanionIdentityStatusAdmission::Accepted { transaction } => *transaction,
             CompanionIdentityStatusAdmission::Rejected { .. } => {
-                return Err(JsValue::from_str("status admission rejected"));
+                return Err(JsError::new("status admission rejected"));
             }
         };
         let handoff_request = CompanionIdentityHandoffRequest {
             transaction,
             recipient_public_key: "age1recipient".to_owned(),
         };
-        let handoff_admission = CompanionIdentityHandoffStatusAdmission {
-            request: handoff_request.clone(),
-            observed_at: epoch("150")?,
-        };
+        // The Deserialize-only admission accepts an unknown JS object at the export edge.
+        let handoff_admission =
+            Ts::new_unchecked(serde_wasm_bindgen::to_value(&serde_json::json!({
+                "request": handoff_request,
+                "observedAt": ProtocolFixture::epoch("150")?,
+            }))?);
         assert!(matches!(
-            admit_companion_handoff_identity_status(&handoff_admission)?,
+            admit_companion_handoff_identity_status(&handoff_admission)?.to_rust()?,
             CompanionIdentityStatusAdmission::Accepted { .. }
         ));
         let response = CompanionIdentityHandoffResponse {
@@ -921,7 +902,10 @@ mod tests {
             encrypted_envelope: "sealed-envelope".to_owned(),
         };
         assert!(matches!(
-            admit_companion_handoff_response(&CompanionHandoffResponseValueAdmission(response)),
+            admit_companion_handoff_response(&Ts::new_unchecked(serde_wasm_bindgen::to_value(
+                &response
+            )?,))?
+            .to_rust()?,
             CompanionHandoffResponseAdmission::Accepted { .. }
         ));
         Ok(())

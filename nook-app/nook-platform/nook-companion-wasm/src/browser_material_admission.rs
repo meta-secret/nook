@@ -59,7 +59,7 @@ mod tests {
                 observations: vec![AuthenticationPageObservationFacts::default()],
             },
         };
-        let value = serde_wasm_bindgen::to_value(&message).expect("serialize transport fixture");
+        let value = serde_wasm_bindgen::to_value(&message)?;
         assert!(matches!(
             admit_authentication_workflow_snapshot_message(value)
                 .map_err(|_| JsError::new("Typed test operation failed."))?
