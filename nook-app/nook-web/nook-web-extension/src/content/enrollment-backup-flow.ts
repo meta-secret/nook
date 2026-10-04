@@ -5,7 +5,10 @@ import {
 
 import { recoveryCopyObservation } from '../lib/backup-code-candidates'
 
-import { pageQrCapture } from '../lib/page-qr-capture'
+import {
+  type AuthenticationAuthenticatorSetupSnapshot,
+  pageQrCapture,
+} from '../lib/page-qr-capture'
 import { Effect } from 'effect'
 
 import {
@@ -48,6 +51,8 @@ type TranslatedMessageWithSubstitutionArgs = {
 }
 
 export interface BackupEnrollmentHost extends EnrollmentFlowViewHost {
+  readonly actionIsCurrent: () => boolean
+  readonly authenticatorSetupSnapshot: AuthenticationAuthenticatorSetupSnapshot
   setBusy: (busy: boolean) => void
   isBusy: () => boolean
   sendDecodedRuntimeMessage: <Response>(
@@ -115,9 +120,15 @@ type StartBackupEnrollmentArgs = {
 class EnrollmentBackupInteraction {
   constructor(private readonly browser: typeof globalThis) {}
 
-  private detectEnrollmentHints(): EnrollmentPageHints {
+  private detectEnrollmentHints(
+    snapshot: AuthenticationAuthenticatorSetupSnapshot,
+  ): EnrollmentPageHints {
+    if (
+      !pageQrCapture.authenticationAuthenticatorSetupSnapshotIsCurrent(snapshot)
+    )
+      throw new Error('Authenticator setup observation is stale.')
     return {
-      qr: pageQrCapture.authenticationAuthenticatorSetupObservation(),
+      qr: snapshot.observation,
       backupCodes: recoveryCopyObservation.pageHasDocumentBackupCodeHint(),
     }
   }
@@ -271,11 +282,17 @@ class EnrollmentBackupInteraction {
       onClick: (event) => {
         if (!new AuthenticationGesture(event).trusted || host.isBusy()) return
         recoveryCopyObservation.clearBackupCodeCandidates(codes)
+        if (
+          !pageQrCapture.authenticationAuthenticatorSetupSnapshotIsCurrent(
+            host.authenticatorSetupSnapshot,
+          )
+        )
+          return
         const nookTypedArgs0_54: Parameters<
           typeof enrollmentFlowRenderer.resetEnrollmentHeadline
         >[0] = {
           host,
-          hints: this.detectEnrollmentHints(),
+          hints: this.detectEnrollmentHints(host.authenticatorSetupSnapshot),
         }
         enrollmentFlowRenderer.resetEnrollmentHeadline(nookTypedArgs0_54)
         host.returnToActions()
@@ -340,11 +357,17 @@ class EnrollmentBackupInteraction {
       onClick: (event) => {
         if (!new AuthenticationGesture(event).trusted || host.isBusy()) return
         recoveryCopyObservation.clearBackupCodeCandidates(codes)
+        if (
+          !pageQrCapture.authenticationAuthenticatorSetupSnapshotIsCurrent(
+            host.authenticatorSetupSnapshot,
+          )
+        )
+          return
         const nookTypedArgs0_58: Parameters<
           typeof enrollmentFlowRenderer.resetEnrollmentHeadline
         >[0] = {
           host,
-          hints: this.detectEnrollmentHints(),
+          hints: this.detectEnrollmentHints(host.authenticatorSetupSnapshot),
         }
         enrollmentFlowRenderer.resetEnrollmentHeadline(nookTypedArgs0_58)
         host.returnToActions()
@@ -648,11 +671,17 @@ class EnrollmentBackupInteraction {
       onClick: (event) => {
         if (!new AuthenticationGesture(event).trusted || host.isBusy()) return
         recoveryCopyObservation.clearBackupCodeCandidates(codes)
+        if (
+          !pageQrCapture.authenticationAuthenticatorSetupSnapshotIsCurrent(
+            host.authenticatorSetupSnapshot,
+          )
+        )
+          return
         const nookTypedArgs0_75: Parameters<
           typeof enrollmentFlowRenderer.resetEnrollmentHeadline
         >[0] = {
           host,
-          hints: this.detectEnrollmentHints(),
+          hints: this.detectEnrollmentHints(host.authenticatorSetupSnapshot),
         }
         enrollmentFlowRenderer.resetEnrollmentHeadline(nookTypedArgs0_75)
         host.returnToActions()
@@ -690,7 +719,7 @@ class EnrollmentBackupInteraction {
     try {
       const codes =
         await recoveryCopyObservation.extractDocumentBackupCodeCandidates()
-      if (!host.panel.isConnected) {
+      if (!host.panel.isConnected || !host.actionIsCurrent()) {
         recoveryCopyObservation.clearBackupCodeCandidates(codes)
         return
       }

@@ -1,3 +1,4 @@
+import type { AuthenticationAuthenticatorSetupSnapshot } from '../../lib/page-qr-capture'
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
@@ -51,12 +52,14 @@ import { WidgetVaultPresentationProjection } from './widget-presentation-state'
 import { authenticationWidgetWorkflowKey } from './widget-workflow-key'
 
 type RenderEnrollmentWidgetArgs = {
+  authenticatorSetupSnapshot: AuthenticationAuthenticatorSetupSnapshot
   hints: EnrollmentPageHints
   snapshot: AuthenticationWorkflowSnapshotView
   vaultConnection: PilotVaultConnection
 }
 
 type RenderWidgetArgs = {
+  authenticatorSetupSnapshot: AuthenticationAuthenticatorSetupSnapshot
   snapshot: AuthenticationWorkflowSnapshotView
   workflow: PasswordFormObservation
   facts: AuthenticationPageObservationFacts
@@ -75,6 +78,7 @@ class AuthenticationWidgetRenderer {
   constructor(private readonly ui: AuthenticationWidgetRendererContext) {}
 
   renderEnrollmentWidget({
+    authenticatorSetupSnapshot,
     hints,
     snapshot,
     vaultConnection,
@@ -142,6 +146,7 @@ class AuthenticationWidgetRenderer {
     const nookTypedArgs0_2: Parameters<
       typeof authenticationWidgetShell.buildEnrollmentFlowHost
     >[0] = {
+      authenticatorSetupSnapshot,
       panel: body,
       step,
       title,
@@ -159,6 +164,7 @@ class AuthenticationWidgetRenderer {
   }
 
   async renderWidget({
+    authenticatorSetupSnapshot,
     snapshot,
     workflow,
     facts,
@@ -313,6 +319,7 @@ class AuthenticationWidgetRenderer {
         const hostRequest: Parameters<
           typeof authenticationWidgetShell.buildEnrollmentFlowHost
         >[0] = {
+          authenticatorSetupSnapshot,
           panel: body,
           step,
           title,
@@ -328,14 +335,14 @@ class AuthenticationWidgetRenderer {
           workflow,
           host,
           action: snapshot.action,
-          start: () => {
+          start: (approval) => {
             if (
               snapshot.action === AuthenticationWorkflowAction.SaveBackupCodes
             ) {
               const startRequest: Parameters<
                 typeof authenticatorEnrollmentInteraction.startBackupCodeEnrollment
-              >[0] = { host }
-              authenticatorEnrollmentInteraction.startBackupCodeEnrollment(
+              >[0] = { approval, host }
+              void authenticatorEnrollmentInteraction.startBackupCodeEnrollment(
                 startRequest,
               )
             } else {
@@ -344,6 +351,7 @@ class AuthenticationWidgetRenderer {
               const startRequest: Parameters<
                 typeof authenticatorEnrollmentInteraction.startQrEnrollment
               >[0] = {
+                approval,
                 host,
                 section,
               }
@@ -455,7 +463,9 @@ class AuthenticationWidgetRenderer {
     authenticationWidgetShell.mountWidgetShell(nookTypedArgs0_8)
 
     const enrollmentHints =
-      authenticatorEnrollmentInteraction.detectEnrollmentHints()
+      authenticatorEnrollmentInteraction.detectEnrollmentHints(
+        authenticatorSetupSnapshot,
+      )
     const supplementalHintsRequest: ConstructorParameters<
       typeof SupplementalEnrollmentPresentation
     >[0] = { action: snapshot.action, detected: enrollmentHints }
@@ -466,6 +476,7 @@ class AuthenticationWidgetRenderer {
       const nookTypedArgs0_9: Parameters<
         typeof authenticationWidgetShell.buildEnrollmentFlowHost
       >[0] = {
+        authenticatorSetupSnapshot,
         panel: body,
         step,
         title,

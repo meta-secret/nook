@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import {
   AuthenticationWorkflowAction,
+  classify_authentication_authenticator_setup_batch,
+  type AuthenticationAuthenticatorSetupBatch,
   AuthenticatorCodeResponseKind,
   GeneratedPasswordResponseKind,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
@@ -288,6 +290,15 @@ function deferred<Value>() {
   }
 }
 
+const emptySetupMetadata: AuthenticationAuthenticatorSetupBatch = {
+  visibleInstructionCopies: [],
+  qrMedia: 'absent',
+}
+const authenticatorSetupSnapshot = {
+  metadataKey: JSON.stringify(emptySetupMetadata),
+  observation:
+    classify_authentication_authenticator_setup_batch(emptySetupMetadata),
+}
 beforeEach(() => {
   document.body.replaceChildren()
   vi.clearAllMocks()
@@ -295,6 +306,7 @@ beforeEach(() => {
   widgetState.credentialActuationInFlight = false
   actionMocks.performRevalidation.mockImplementation(async (request) => {
     const actResult = request.act({
+      authenticatorSetupSnapshot,
       currentWorkflow: workflow,
       observationBindingToken: 'approved-observation',
       approvedFacts: approvalFacts,
@@ -325,6 +337,7 @@ describe('revalidated authentication actions', () => {
         expect(ui.continueButton.disabled).toBe(false)
       }
       const actResult = request.act({
+        authenticatorSetupSnapshot,
         currentWorkflow: workflow,
         observationBindingToken: 'approved-observation',
         approvedFacts: approvalFacts,
@@ -534,6 +547,7 @@ describe('revalidated authentication actions', () => {
     })
     actionMocks.performRevalidation.mockImplementationOnce(async (request) => {
       const result = request.act({
+        authenticatorSetupSnapshot,
         currentWorkflow: workflow,
         observationBindingToken: 'approved-observation',
         approvedFacts: approvalFacts,
@@ -543,6 +557,7 @@ describe('revalidated authentication actions', () => {
     })
     actionMocks.performRevalidation.mockImplementationOnce(async (request) => {
       const result = request.act({
+        authenticatorSetupSnapshot,
         currentWorkflow: workflow,
         observationBindingToken: 'approved-observation',
         approvedFacts: approvalFacts,
@@ -586,6 +601,7 @@ describe('revalidated authentication actions', () => {
     })
     actionMocks.performRevalidation.mockImplementationOnce(async (request) => {
       const result = request.act({
+        authenticatorSetupSnapshot,
         currentWorkflow: workflow,
         observationBindingToken: 'approved-observation',
         approvedFacts: approvalFacts,
@@ -595,6 +611,7 @@ describe('revalidated authentication actions', () => {
     })
     actionMocks.performRevalidation.mockImplementationOnce(async (request) => {
       request.act({
+        authenticatorSetupSnapshot,
         currentWorkflow: workflow,
         observationBindingToken: 'approved-observation',
         approvedFacts: approvalFacts,
@@ -638,6 +655,7 @@ describe('revalidated authentication actions', () => {
         throw new Error('post-fill revalidation failed')
       }
       const result = request.act({
+        authenticatorSetupSnapshot,
         currentWorkflow: workflow,
         observationBindingToken: 'approved-observation',
         approvedFacts: approvalFacts,

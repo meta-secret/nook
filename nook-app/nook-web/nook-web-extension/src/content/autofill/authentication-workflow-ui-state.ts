@@ -1,4 +1,9 @@
 import {
+  AuthenticationControlIdentitySnapshot,
+  AuthenticationControlIdentityComparison,
+} from './workflow-revalidation'
+import { pageQrCapture } from '../../lib/page-qr-capture'
+import {
   AuthenticationWorkflowScopeComparison,
   AuthenticationWorkflowScopeDisposition,
   LiveAuthenticationWorkflowDisposition,
@@ -53,7 +58,30 @@ class AuthenticationWorkflowUi {
     ) {
       return LiveAuthenticationWorkflowDisposition.Changed
     }
-    const hints = authenticatorEnrollmentInteraction.detectEnrollmentHints()
+    const workflowIsAttached = () =>
+      workflow.root.isConnected &&
+      (workflow.root === document || workflow.root.ownerDocument === document)
+    if (!workflowIsAttached())
+      return LiveAuthenticationWorkflowDisposition.Changed
+    const controls = AuthenticationControlIdentitySnapshot.capture(workflow)
+    const setupSnapshot =
+      await pageQrCapture.prepareAuthenticationAuthenticatorSetupObservation()
+    const current = this.ui.widgetState.workflowAdmission()
+    if (
+      !workflowIsAttached() ||
+      controls.compare(
+        AuthenticationControlIdentitySnapshot.capture(workflow),
+      ) === AuthenticationControlIdentityComparison.Changed ||
+      current.kind !== WidgetWorkflowAdmissionKind.Assigned ||
+      current.observation !== rendered.observation ||
+      current.facts !== rendered.facts ||
+      !pageQrCapture.authenticationAuthenticatorSetupSnapshotIsCurrent(
+        setupSnapshot,
+      )
+    )
+      return LiveAuthenticationWorkflowDisposition.Changed
+    const hints =
+      authenticatorEnrollmentInteraction.detectEnrollmentHints(setupSnapshot)
     const liveRequest: ConstructorParameters<
       typeof LiveApprovedAuthenticationWorkflow
     >[0] = {
@@ -64,9 +92,24 @@ class AuthenticationWorkflowUi {
       authenticatorSetupHint: hints.qr,
       backupCodesHint: hints.backupCodes,
     }
-    return new LiveApprovedAuthenticationWorkflow(
+    const disposition = await new LiveApprovedAuthenticationWorkflow(
       liveRequest,
     ).extensionDisposition(globalThis)
+    const afterDecision = this.ui.widgetState.workflowAdmission()
+    if (
+      !workflowIsAttached() ||
+      afterDecision.kind !== WidgetWorkflowAdmissionKind.Assigned ||
+      afterDecision.observation !== rendered.observation ||
+      afterDecision.facts !== rendered.facts ||
+      controls.compare(
+        AuthenticationControlIdentitySnapshot.capture(workflow),
+      ) === AuthenticationControlIdentityComparison.Changed ||
+      !pageQrCapture.authenticationAuthenticatorSetupSnapshotIsCurrent(
+        setupSnapshot,
+      )
+    )
+      return LiveAuthenticationWorkflowDisposition.Changed
+    return disposition
   }
 }
 

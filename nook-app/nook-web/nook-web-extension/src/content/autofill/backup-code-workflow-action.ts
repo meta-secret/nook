@@ -3,6 +3,7 @@ import { documentAuthenticationObservation } from '../../../../nook-web-shared/s
 import { AuthenticationWorkflowAction } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { EnrollmentFlowHost } from '../enrollment-flow'
 import {
+  type RevalidatedAuthenticationActRequest,
   AuthenticationObservationBindingKind,
   RevalidatedAuthenticationAction,
   RevalidatedAuthenticationActionOutcomeKind,
@@ -13,7 +14,7 @@ type StartRevalidatedEnrollmentActionArgs = {
   workflow?: PasswordFormObservation
   host: EnrollmentFlowHost
   action: AuthenticationWorkflowAction
-  start: () => void
+  start: (approval: RevalidatedAuthenticationActRequest) => void
 }
 
 export class RevalidatedEnrollmentAction {
@@ -41,8 +42,8 @@ export class RevalidatedEnrollmentAction {
         expectedAction: action,
         observationBinding,
         approvalIsActive: () => host.isBusy() && host.panel.isConnected,
-        act: () => {
-          start()
+        act: (approval) => {
+          start(approval)
           started = true
           const result: ReturnType<
             ConstructorParameters<

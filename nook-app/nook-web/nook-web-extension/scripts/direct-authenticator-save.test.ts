@@ -75,7 +75,9 @@ const delivered = <Response>(response: Response) => ({
   response,
 })
 
-function enrollmentHost(confirmKind: number) {
+async function enrollmentHost(confirmKind: number) {
+  const authenticatorSetupSnapshot =
+    await pageQrCapture.prepareAuthenticationAuthenticatorSetupObservation()
   const order: string[] = []
   const code = mock(async () => {
     throw new Error('code polling must not run')
@@ -84,6 +86,7 @@ function enrollmentHost(confirmKind: number) {
     throw new Error('website outcome polling must not run')
   })
   const host: EnrollmentFlowHost = {
+    authenticatorSetupSnapshot,
     panel: document.createElement('div'),
     title: document.createElement('h2'),
     description: document.createElement('p'),
@@ -132,7 +135,7 @@ function enrollmentHost(confirmKind: number) {
 
 test('explicit authenticator confirmation saves immediately after staging', async () => {
   await pageQrCapture.prepareAuthenticationAuthenticatorSetupObservation()
-  const { code, host, order, outcome } = enrollmentHost(0)
+  const { code, host, order, outcome } = await enrollmentHost(0)
   const section = document.createElement('section')
   const uri = { value: 'otpauth://totp/Nook:test?secret=secret' }
   const candidate = { sourceLabel: 'Nook', otpauthUri: uri.value }
@@ -188,7 +191,7 @@ test('explicit authenticator confirmation saves immediately after staging', asyn
 })
 
 test('immediate authenticator save reports confirmation failure truthfully', async () => {
-  const { code, host, order, outcome } = enrollmentHost(1)
+  const { code, host, order, outcome } = await enrollmentHost(1)
   const section = document.createElement('section')
   const uri = { value: 'otpauth://totp/Nook:test?secret=secret' }
   const candidate = { sourceLabel: 'Nook', otpauthUri: uri.value }
