@@ -54,6 +54,7 @@ tasks:
           $env:PLAYWRIGHT_JSON_OUTPUT_NAME = "test-results/$suite.json";
           $env:PLAYWRIGHT_OUTPUT_DIR = "test-results/$suite";
           if ($suite -eq "extension") {
+            $env:NOOK_SIMPLE_VAULT_URL = "http://127.0.0.1:5174/";
             if (!$env:RUNNER_TEMP) { throw "RUNNER_TEMP is required for short native extension profile paths" };
             $env:PLAYWRIGHT_OUTPUT_DIR = Join-Path $env:RUNNER_TEMP "nook-extension-results"
           };
