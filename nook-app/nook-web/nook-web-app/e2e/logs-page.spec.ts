@@ -120,6 +120,16 @@ test.describe('application logging', () => {
 
     await page.goto('/logs')
     await expectLogsPageHasEntries(page)
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const vault = window.__nookVault
+            return Boolean(vault && !vault.isInitializing && !vault.isVerifying)
+          }),
+        { timeout: UI_TIMEOUT_MS * 2 },
+      )
+      .toBe(true)
     await forceVaultQuiescentForE2e(page)
 
     await page.getByTestId('logs-clear-btn').click()
