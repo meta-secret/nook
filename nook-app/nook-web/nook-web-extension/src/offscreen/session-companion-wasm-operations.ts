@@ -1,5 +1,6 @@
 /* eslint-disable nook-typed-api/no-raw-object-arguments, max-params -- This offscreen adapter maps Chrome session messages onto generated WASM calls. */
 import { err, ok, type Result } from 'neverthrow'
+import { Schema } from 'effect'
 import {
   CompanionWasmContentResponseKind,
   CompanionWasmLabelKind,
@@ -169,6 +170,14 @@ export async function handleCompanionWasmMessage(
   try {
     await companionWasmReady
     switch (message.type) {
+      case CompanionWasmSessionMessageType.GetAuthenticationActivityProgress:
+        return ok({
+          activityProgress: authentication_workflow_activity_progress(
+            Schema.decodeUnknownSync(
+              Schema.Enums(AuthenticationWorkflowActivity),
+            )(message.payload.activity),
+          ),
+        })
       case CompanionWasmSessionMessageType.AuthenticationAuthenticatorSetupObservation:
         return ok({
           authenticatorSetupObservation:

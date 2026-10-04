@@ -164,7 +164,9 @@ class AuthenticationScanRenderLifecycle {
         widgetState.workflowKey.kind !== WidgetWorkflowKeyKind.Assigned ||
         widgetState.workflowKey.key !== `save:${offer.offerId}`
       ) {
-        loginSaveInteraction.renderSaveOfferWidget(offer)
+        const rendered = await loginSaveInteraction.renderSaveOfferWidget(offer)
+        if (!rendered || sequence !== this.request.scanState.sequence)
+          return AuthenticationScanOutcome.Stale
       }
       const diagnostic: AuthenticationDiagnosticObservation = {
         gate: AuthenticationDiagnosticGate.WidgetRendering,

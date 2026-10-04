@@ -13,10 +13,13 @@ import {
   saved_login_action_available,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm'
 import type { AuthenticationWorkflowRoutingResponse } from '../../../nook-web-extension/src/background/service-worker/authentication-workflow-routing'
+import { AuthenticationWorkflowSnapshotMessageType } from '../../../nook-web-extension/src/lib/auth-workflow-messages'
 
 type DemoRuntimeMessage =
   | CompanionWasmSessionMessage
-  | { readonly type: 'nook:authentication-workflow-snapshot' }
+  | {
+      readonly type: AuthenticationWorkflowSnapshotMessageType.NookAuthenticationWorkflowSnapshot
+    }
 type DemoRuntimeResponse =
   | AuthenticationWorkflowRoutingResponse
   | { readonly ok: true; readonly result: CompanionWasmSessionResponse }
@@ -47,7 +50,10 @@ class PilotCompanionDemoRuntime {
     message: DemoRuntimeMessage,
     callback: DemoRuntimeCallback,
   ): void {
-    if (message.type === 'nook:authentication-workflow-snapshot') {
+    if (
+      message.type ===
+      AuthenticationWorkflowSnapshotMessageType.NookAuthenticationWorkflowSnapshot
+    ) {
       this.sendMessage(
         message,
         (response: AuthenticationWorkflowRoutingResponse) => {

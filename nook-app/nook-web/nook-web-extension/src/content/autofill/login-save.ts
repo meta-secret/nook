@@ -10,13 +10,14 @@ import { passwordFieldDiscovery } from '../../../../nook-web-shared/src/extensio
 import {
   AuthenticationOutcomeResponseKind,
   AuthenticationWorkflowActivity,
-  authentication_workflow_activity_progress,
+  type AuthenticationDisplayProgress,
   AuthenticationOutcomeVerdict,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { Effect, Schema } from 'effect'
 import {
   CompanionWasmSessionMessageType,
   CompanionWasmNavigationPathDecoder,
+  CompanionWasmActivityProgressDecoder,
   type CompanionWasmRuntimeMessage,
 } from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 import {
@@ -318,7 +319,7 @@ class LoginSaveInteraction {
       if (saveOfferState.dismissedOfferIds.has(watch.offer.offerId)) return
       widgetState.dismissed = false
       saveOfferState.showOffer(watch.offer)
-      this.renderSaveOfferWidget(watch.offer)
+      await this.renderSaveOfferWidget(watch.offer)
       return
     }
     if (
@@ -507,7 +508,45 @@ class LoginSaveInteraction {
     })
   }
 
-  renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
+  async renderSaveOfferWidget(
+    offer: WebsiteLoginSaveOfferView,
+  ): Promise<boolean> {
+    const sequence = scanState.sequence
+    const currentDisplay = saveOfferState.display
+    if (
+      currentDisplay.kind !== SaveOfferDisplayKind.Visible ||
+      currentDisplay.offer !== offer ||
+      saveOfferState.dismissedOfferIds.has(offer.offerId)
+    )
+      return false
+    const request: CompanionWasmRuntimeMessage = {
+      type: CompanionWasmSessionMessageType.GetAuthenticationActivityProgress,
+      origin: location.origin,
+      payload: { activity: AuthenticationWorkflowActivity.SaveOffer },
+    }
+    let activityProgress: AuthenticationDisplayProgress
+    try {
+      const delivery = await sendCompanionWasmRuntimeMessage(
+        globalThis,
+        request,
+      )
+      if (delivery.kind !== CompanionWasmRuntimeDeliveryKind.Delivered)
+        return false
+      activityProgress = Schema.decodeUnknownSync(
+        CompanionWasmActivityProgressDecoder,
+      )(delivery.response).activityProgress
+    } catch {
+      return false
+    }
+    const display = saveOfferState.display
+    if (
+      sequence !== scanState.sequence ||
+      display.kind !== SaveOfferDisplayKind.Visible ||
+      display.offer !== offer ||
+      display.offer.offerId !== offer.offerId ||
+      saveOfferState.dismissedOfferIds.has(offer.offerId)
+    )
+      return false
     workflowUi.removeWidget()
     saveOfferState.showOffer(offer)
     const host = document.createElement('div')
@@ -535,9 +574,7 @@ class LoginSaveInteraction {
     const step = document.createElement('p')
     step.className = 'step-label'
     const nookTypedArgs0_2: Parameters<typeof workflowUi.progressLabel>[0] = {
-      ...authentication_workflow_activity_progress(
-        AuthenticationWorkflowActivity.SaveOffer,
-      ),
+      ...activityProgress,
     }
     step.textContent = workflowUi.progressLabel(nookTypedArgs0_2)
 
@@ -841,6 +878,7 @@ class LoginSaveInteraction {
       }
       authenticationWidgetPosition.applyWidgetPosition(nookTypedArgs0_6)
     }
+    return true
   }
 }
 

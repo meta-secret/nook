@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
+import { Schema } from 'effect'
+import { extensionChannelIdentity } from '../scripts/channel-identity'
 import {
   launchPairedPinExtension,
   lockExtensionSession,
@@ -94,13 +96,12 @@ for (const locked of [false, true]) {
   }, testInfo) => {
     void baseURL
     test.setTimeout(180_000)
-    const paired = locked ? await launchPairedPinExtension(testInfo) : undefined
-    const context = paired
-      ? paired.context
+    const context = locked
+      ? (await launchPairedPinExtension(testInfo)).context
       : await launchExtensionContext(testInfo.outputPath('profile'))
     await context.tracing.start({ screenshots: true, snapshots: true })
     try {
-      if (paired) await lockExtensionSession(context)
+      if (locked) await lockExtensionSession(context)
       const fixture = new MicrosoftIdentifierShellFixture()
       let submitted = false
       await context.route('https://login.live.com/**', async (route) => {
@@ -321,7 +322,21 @@ for (const authentication of [true, false]) {
       path.join(extensionDir, 'manifest.json'),
       'utf8',
     )
-    expect(manifest).toMatch(/"version_name"\s*:\s*"[^"]*\(production,/u)
+    const deployment = extensionChannelIdentity(
+      process.env.NOOK_EXTENSION_CHANNEL?.trim() || 'production',
+    )
+    const commit = Schema.decodeUnknownSync(Schema.String)(
+      process.env.NOOK_EXTENSION_COMMIT,
+    ).trim()
+    expect(commit).toMatch(/^[a-f0-9]{40}$/u)
+    const manifestFields = { key: Schema.String, version_name: Schema.String }
+    const parsedManifest = Schema.decodeUnknownSync(
+      Schema.Struct(manifestFields),
+    )(JSON.parse(manifest))
+    expect(parsedManifest.key).toBe(deployment.manifestKey)
+    expect(parsedManifest.version_name).toContain(
+      `(${deployment.channel}, ${commit.slice(0, 12)})`,
+    )
     await testInfo.attach('production-extension-manifest', {
       body: manifest,
       contentType: 'application/json',
