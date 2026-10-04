@@ -100,11 +100,13 @@ purge_body="$(
     --arg sentinel "https://$DEV_DOMAIN/sentinel/" \
     --arg app "https://$DEV_DOMAIN/app/" \
     --arg extension "https://$DEV_DOMAIN/extension-connect.html" \
+    --arg extension_metadata "https://$DEV_DOMAIN/downloads/extension.json" \
+    --arg extension_zip "https://$DEV_DOMAIN/downloads/nook-passwords-dev.zip" \
     --arg simple_root "https://$SIMPLE_DOMAIN/" \
     --arg simple_extension "https://$SIMPLE_DOMAIN/extension-connect" \
     --arg sentinel_root "https://$SENTINEL_DOMAIN/" \
     --arg sentinel_extension "https://$SENTINEL_DOMAIN/extension-connect" \
-    '{files: [$root, $site, $simple, $sentinel, $app, $extension, $simple_root, $simple_extension, $sentinel_root, $sentinel_extension]}'
+    '{files: [$root, $site, $simple, $sentinel, $app, $extension, $extension_metadata, $extension_zip, $simple_root, $simple_extension, $sentinel_root, $sentinel_extension]}'
 )"
 
 root_body="$(mktemp)"
