@@ -59,6 +59,8 @@ const WIDGET_PANEL_STYLES = `
       box-sizing: border-box;
       position: relative;
       width: min(320px, calc(100vw - 36px));
+      max-height: calc(100dvh - 36px);
+      overflow-y: auto;
       display: grid;
       gap: 12px;
       padding: 14px 14px 16px;
