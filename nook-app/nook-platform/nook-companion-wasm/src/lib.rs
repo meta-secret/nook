@@ -290,16 +290,14 @@ mod tests {
             AuthenticationUsernameEvidence::MixedPhoneOrEmail
         );
         assert_eq!(
-            AuthenticationUsernameEvidence::strongest_authentication_username_evidence(
-                &(vec![
-                    AuthenticationUsernameEvidence::Absent,
-                    AuthenticationUsernameEvidence::StandardsBasedEmail,
-                    AuthenticationUsernameEvidence::MixedPhoneOrEmail,
-                    AuthenticationUsernameEvidence::WebAuthnEmail,
-                    AuthenticationUsernameEvidence::Explicit,
-                    AuthenticationUsernameEvidence::Strong,
-                ])
-            ),
+            AuthenticationUsernameEvidence::strongest_authentication_username_evidence(&[
+                AuthenticationUsernameEvidence::Absent,
+                AuthenticationUsernameEvidence::StandardsBasedEmail,
+                AuthenticationUsernameEvidence::MixedPhoneOrEmail,
+                AuthenticationUsernameEvidence::WebAuthnEmail,
+                AuthenticationUsernameEvidence::Explicit,
+                AuthenticationUsernameEvidence::Strong,
+            ]),
             AuthenticationUsernameEvidence::Explicit
         );
         assert_eq!(
