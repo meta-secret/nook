@@ -100,25 +100,27 @@ class DelayedLoginPresentationFixture {
   }
 
   private ceremony(): Effect.Effect<void> {
-    const fixture = this
-    return Effect.gen(function* () {
-      yield* Deferred.succeed(fixture.entered, void 0)
-      const outcome = yield* Deferred.await(fixture.completion)
-      fixture.statusRead.mockImplementation(
-        () => SentinelVaultUnlockState.NotSentinel,
-      )
-      switch (outcome) {
-        case DelayedAuthorization.Authorized:
-          fixture.login.state.deviceProtectionStatus =
-            DeviceProtectionStatus.Unlocked
-          break
-        case DelayedAuthorization.Denied:
-          fixture.login.state.errorMsg =
-            I18N_KEYS.DeviceProtectionPasskeyUnlockNotAllowed
-          break
-      }
-      fixture.login.state.isVerifying = false
-    })
+    return Deferred.succeed(this.entered, void 0).pipe(
+      Effect.andThen(Deferred.await(this.completion)),
+      Effect.map(this.publishCeremonyOutcome.bind(this)),
+    )
+  }
+
+  private publishCeremonyOutcome(outcome: DelayedAuthorization): void {
+    this.statusRead.mockImplementation(
+      () => SentinelVaultUnlockState.NotSentinel,
+    )
+    switch (outcome) {
+      case DelayedAuthorization.Authorized:
+        this.login.state.deviceProtectionStatus =
+          DeviceProtectionStatus.Unlocked
+        break
+      case DelayedAuthorization.Denied:
+        this.login.state.errorMsg =
+          I18N_KEYS.DeviceProtectionPasskeyUnlockNotAllowed
+        break
+    }
+    this.login.state.isVerifying = false
   }
 
   renderProtection() {

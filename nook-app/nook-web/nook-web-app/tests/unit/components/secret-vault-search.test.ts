@@ -93,12 +93,8 @@ class SecretVaultSearchFixture {
     this.vault.secretPageRequestOffset = 50
     this.vault.secretTotal = 55
     vi.spyOn(this.vault, 't').mockImplementation((request) => {
-      switch (typeof request) {
-        case 'string':
-          return request
-        default:
-          return request.key
-      }
+      if (typeof request === 'string') return request
+      return request.key
     })
     this.loadPage.mockImplementation((request) => {
       this.vault.secretQuery = request.query

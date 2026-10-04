@@ -599,25 +599,21 @@ export async function reloadUnlockLocalVaultWithSync(
     await forceVaultQuiescentForE2e(page)
     await waitForLoadedSyncProviders(page)
     await waitForVaultSyncIdle(page)
-    switch (typeof sharedStub) {
-      case 'object':
-        await flushRemoteEventsToSyncProviders(page)
-        await expect
-          .poll(() => sharedStub.getEventFileCount(), {
-            timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-          })
-          .toBeGreaterThan(0)
-        sharedStub.setVaultYaml('')
-        break
+    if (typeof sharedStub === 'object') {
+      await flushRemoteEventsToSyncProviders(page)
+      await expect
+        .poll(() => sharedStub.getEventFileCount(), {
+          timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+        })
+        .toBeGreaterThan(0)
+      sharedStub.setVaultYaml('')
     }
   } finally {
     await page.evaluate(() => {
       const w = window as Window & { __nookE2eIdleGuard?: number }
-      switch (typeof w.__nookE2eIdleGuard) {
-        case 'number':
-          window.clearInterval(w.__nookE2eIdleGuard)
-          delete w.__nookE2eIdleGuard
-          break
+      if (typeof w.__nookE2eIdleGuard === 'number') {
+        window.clearInterval(w.__nookE2eIdleGuard)
+        delete w.__nookE2eIdleGuard
       }
     })
   }
