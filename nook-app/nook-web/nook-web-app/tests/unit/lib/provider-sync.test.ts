@@ -5,6 +5,9 @@ import {
   NookVaultSyncAccessState,
   ProviderSyncFailureHandling,
   ProviderSyncVisibility,
+  ProviderSyncFreshness,
+  JoinEnrollmentState,
+  VaultStorageSyncDecision,
   type NookVaultSyncResult,
 } from '$app-wasm'
 import {
@@ -24,7 +27,10 @@ import {
   ProviderSyncActions,
   ProviderSyncOutcome,
 } from '$lib/vault/provider-sync.svelte'
-import { ProviderSyncMetadataUpdateOutcome } from '$lib/vault/sync.svelte'
+import {
+  ProviderSyncMetadataUpdateOutcome,
+  VaultSyncActions,
+} from '$lib/vault/sync.svelte'
 import type { VaultState } from '$lib/vault.svelte'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { VaultAccessStatus } from '$lib/nook'
@@ -127,6 +133,87 @@ afterEach(() => {
 })
 
 describe('provider synchronization', () => {
+  test('keeps the pending join open after unauthenticated storage sync without reading secrets', async () => {
+    const scenario = providerSyncScenario(false)
+    scenario.state.openActiveVault('joiner-store')
+    scenario.state.joinEnrollmentPrompt = JoinEnrollmentState.Pending
+    scenario.state.awaitingJoinApproval = true
+    scenario.state.applyVaultSyncResult = vi.fn<
+      VaultState['applyVaultSyncResult']
+    >((result) => {
+      result.free()
+      return ok({ kind: VaultSyncApplicationKind.JoinApprovalMarkedPending })
+    })
+    const storageSyncRequest: Parameters<
+      VaultSyncActions['syncFromStorage']
+    >[0] = {
+      freshness: ProviderSyncFreshness.Scheduled,
+    }
+    const synchronized = await new VaultSyncActions(
+      scenario.state,
+    ).syncFromStorage(storageSyncRequest)
+
+    expect(synchronized).toEqual(ok(ProviderSyncOutcome.Synced))
+    expect(VaultStorageSynchronization.prototype.run).toHaveBeenCalledOnce()
+    expect(scenario.secretRefresh).not.toHaveBeenCalled()
+    expect(scenario.state.joinEnrollmentPrompt).toBe(
+      JoinEnrollmentState.Pending,
+    )
+    expect(scenario.state.awaitingJoinApproval).toBe(true)
+    expect(scenario.state.isAuthenticated).toBe(false)
+    expect(scenario.state.errorMsg).toBe('')
+    expect(scenario.state.isSyncing).toBe(false)
+  })
+
+  test('preserves a provider failure while the join remains unauthenticated', async () => {
+    const scenario = providerSyncScenario(false)
+    scenario.state.openActiveVault('joiner-store')
+    scenario.state.joinEnrollmentPrompt = JoinEnrollmentState.Pending
+    const failure = new VaultStorageFailure(
+      VaultStorageFailureKind.OperationFailed,
+    )
+    vi.spyOn(VaultStorageSynchronization.prototype, 'run').mockResolvedValue(
+      err(failure),
+    )
+
+    const storageSyncRequest: Parameters<
+      VaultSyncActions['syncFromStorage']
+    >[0] = {
+      freshness: ProviderSyncFreshness.Scheduled,
+    }
+    const synchronized = await new VaultSyncActions(
+      scenario.state,
+    ).syncFromStorage(storageSyncRequest)
+
+    expect(synchronized).toEqual(err(failure))
+    expect(scenario.secretRefresh).not.toHaveBeenCalled()
+    expect(scenario.state.joinEnrollmentPrompt).toBe(
+      JoinEnrollmentState.Pending,
+    )
+    expect(scenario.state.isSyncing).toBe(false)
+  })
+
+  test('refreshes authenticated secrets after configured storage synchronization', async () => {
+    const scenario = providerSyncScenario(true)
+    vi.spyOn(
+      scenario.state.clientPolicy,
+      'vault_storage_sync_decision',
+    ).mockReturnValue(VaultStorageSyncDecision.SyncConfiguredStorage)
+
+    const storageSyncRequest: Parameters<
+      VaultSyncActions['syncFromStorage']
+    >[0] = {
+      freshness: ProviderSyncFreshness.Forced,
+    }
+    const synchronized = await new VaultSyncActions(
+      scenario.state,
+    ).syncFromStorage(storageSyncRequest)
+
+    expect(synchronized).toEqual(ok(ProviderSyncOutcome.Synced))
+    expect(scenario.secretRefresh).toHaveBeenCalledOnce()
+    expect(scenario.state.isSyncing).toBe(false)
+  })
+
   test('completes an approved unauthenticated join without hydrating locked secrets', async () => {
     const scenario = providerSyncScenario(false)
 
