@@ -319,6 +319,6 @@ describe('portable vault client policy', () => {
         invalidConfig,
         existing_provider_save_setup(),
       ),
-    ).toThrow('unknown variant ``, expected `google-drive` or `icloud`')
+    ).toThrow('Invalid typed WASM input.')
   })
 })
