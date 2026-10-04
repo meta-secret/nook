@@ -80,6 +80,42 @@ describe('companion WASM startup gate', () => {
     expect(events).toEqual([firstSubmit, secondSubmit])
   })
 
+  test('dispatches the initial observation before replaying a submit while later startup remains pending', async () => {
+    const phases: string[] = []
+    type PendingStartupOwner = { finish: (() => void) | false }
+    const pendingOwner: PendingStartupOwner = { finish: false }
+    const pending = new Promise<void>((resolve) => {
+      pendingOwner.finish = resolve
+    })
+    const capture = queueSubmitCaptureUntilCompanionWasmReady(() =>
+      phases.push('submit-captured'),
+    )
+    capture.capture(new Event('submit'))
+    const scan = async () => {
+      phases.push('field-request-dispatched')
+      await pending
+      phases.push('pending-step-completed')
+    }
+    const startup = runAfterCompanionWasmReady({
+      companionWasmReady: Promise.resolve(),
+      start: async () => {
+        const observation = scan()
+        capture.enable()
+        await observation
+      },
+    })
+    await Promise.resolve()
+    expect(phases).toEqual(['field-request-dispatched', 'submit-captured'])
+    if (!pendingOwner.finish) throw new Error('Missing pending startup owner')
+    pendingOwner.finish()
+    await startup
+    expect(phases).toEqual([
+      'field-request-dispatched',
+      'submit-captured',
+      'pending-step-completed',
+    ])
+  })
+
   test('holds the first Pilot startup until extension-owned classification responds', async () => {
     fixture.install()
     const events: string[] = []

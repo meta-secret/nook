@@ -20,6 +20,16 @@ import {
 } from 'fake-indexeddb'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import {
+  extension_vault_access_scope as companionVaultScope,
+  extension_password_filling_scope as companionPasswordScope,
+  extension_passkey_management_scope as companionPasskeyScope,
+  extension_sync_provider_credentials_scope as companionSyncScope,
+  classify_extension_persistence_databases,
+  classify_extension_persistence_stores,
+  ExtensionPersistenceArea,
+  ExtensionPersistenceDatabaseState,
+  ExtensionPersistenceStoreState,
+  type ExtensionPersistenceObservation,
   admit_companion_handoff_response,
   admit_companion_identity_status,
   NookCompanionPairingWebsiteProtocol,
@@ -32,6 +42,12 @@ import {
   type CompanionUnlockedAppKey,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
+  extension_vault_access_scope as nookVaultScope,
+  extension_password_filling_scope as nookPasswordScope,
+  extension_passkey_management_scope as nookPasskeyScope,
+  extension_sync_provider_credentials_scope as nookSyncScope,
+  default_password_generation_options,
+  generate_password,
   default as initNookWasm,
   companion_pairing_provider_manifest_digest,
   configure_vault_application,
@@ -397,6 +413,41 @@ afterAll(async () => {
 })
 
 describe('generated companion protocol composition', () => {
+  test('both generated packages project the same four canonical scopes', () => {
+    expect([
+      companionVaultScope(),
+      companionPasswordScope(),
+      companionPasskeyScope(),
+      companionSyncScope(),
+    ]).toEqual([
+      nookVaultScope(),
+      nookPasswordScope(),
+      nookPasskeyScope(),
+      nookSyncScope(),
+    ])
+  })
+  test('generated companion persistence distinguishes present database and absent store', () => {
+    const database: ExtensionPersistenceObservation = {
+      area: ExtensionPersistenceArea.Pairing,
+      observedNames: ['nook_extension'],
+    }
+    const stores: ExtensionPersistenceObservation = {
+      area: ExtensionPersistenceArea.Pairing,
+      observedNames: ['unrelated'],
+    }
+    expect(classify_extension_persistence_databases(database)).toBe(
+      ExtensionPersistenceDatabaseState.Present,
+    )
+    expect(classify_extension_persistence_stores(stores)).toBe(
+      ExtensionPersistenceStoreState.Absent,
+    )
+  })
+  test('generated default options produce a twenty-character password', () => {
+    expect(
+      generate_password(default_password_generation_options()),
+    ).toHaveLength(20)
+  })
+
   test('issues fresh discovery after an unlocked endpoint and authorizes the latest request', async () => {
     const previous = beginHandoff('fresh-discovery-prior')
     expect(previous.endpoint.status.status).toBe('unlocked')

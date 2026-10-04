@@ -186,6 +186,8 @@ class AuthenticationScanRenderLifecycle {
       this.recordDiagnostic(diagnostic)
       return AuthenticationScanOutcome.Watching
     }
+    const fieldClassification =
+      passwordFieldDiscovery.prepareCompanionClassification(document)
     const pendingOffer = await loginSaveInteraction.loadPendingSaveOffer()
     if (sequence !== this.request.scanState.sequence)
       return AuthenticationScanOutcome.Stale
@@ -199,7 +201,7 @@ class AuthenticationScanRenderLifecycle {
       this.recordDiagnostic(diagnostic)
       return AuthenticationScanOutcome.Watching
     }
-    await passwordFieldDiscovery.prepareCompanionClassification(document)
+    await fieldClassification
     await recoveryCopyObservation.prepareAuthenticationRecoveryEvidence()
     const setupSnapshot =
       await pageQrCapture.prepareAuthenticationAuthenticatorSetupObservation()
@@ -660,6 +662,7 @@ void runAfterCompanionWasmReady({
       queuedSubmitCapture.discard()
       return
     }
+    void authenticationScanRenderLifecycle.scanAndRender()
     queuedSubmitCapture.enable()
     document.addEventListener(
       'click',
@@ -672,7 +675,6 @@ void runAfterCompanionWasmReady({
       },
       true,
     )
-    void authenticationScanRenderLifecycle.scanAndRender()
 
     const observer = new MutationObserver(
       authenticationScanRenderLifecycle.handleMutations.bind(
