@@ -299,20 +299,77 @@ mod tests {
 
     use nook_companion_core::AuthenticationWorkflowSnapshotResponseWire;
     use nook_companion_core::{
+        ApprovedAuthenticationWorkflowDecision, AuthenticationWorkflowSelectedFactsWire,
+        WebsiteLoginMatchAvailabilityKind,
+    };
+    use nook_companion_core::{
         AuthenticationApprovalRequirement, AuthenticationPageObservations,
         AuthenticationPilotPresentationCapability, AuthenticationSavedLoginCapability,
         AuthenticationWorkflowAction, AuthenticationWorkflowSnapshot, AuthenticationWorkflowStage,
     };
     use nook_companion_core::{AuthenticationEnrollmentObservation, AuthenticationWorkflowMatch};
-    use serde::Serialize;
+    use serde::de::Error as DeserializeError;
+    use serde::{Deserialize, Deserializer, Serialize};
     use serde_wasm_bindgen::Serializer;
     use std::fmt;
     use tsify::{Ts, Tsify};
     use wasm_bindgen::JsError;
     use wasm_bindgen_test::wasm_bindgen_test;
 
+    #[derive(Deserialize)]
+    struct SnapshotKindProjection {
+        #[serde(deserialize_with = "WorkflowBridgeFixture::snapshot_kind")]
+        kind: AuthenticationWorkflowSnapshotResponseKind,
+    }
+    #[derive(Deserialize)]
+    struct LoginAvailabilityProjection {
+        kind: WebsiteLoginMatchAvailabilityKind,
+    }
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct RoutingProjection {
+        workflow: SnapshotKindProjection,
+        login_matches: LoginAvailabilityProjection,
+        selected_facts: AuthenticationWorkflowSelectedFactsWire,
+    }
+    #[derive(Deserialize)]
+    struct PasswordKindProjection {
+        kind: AuthenticationWorkflowKind,
+    }
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct DisplayProgressProjection {
+        current_step: AuthenticationWorkflowCurrentStep,
+        total_steps: AuthenticationWorkflowTotalSteps,
+    }
+    #[derive(Deserialize)]
+    struct RevalidationProjection {
+        #[serde(deserialize_with = "WorkflowBridgeFixture::rejected_decision")]
+        kind: ApprovedAuthenticationWorkflowDecision,
+    }
     struct WorkflowBridgeFixture;
     impl WorkflowBridgeFixture {
+        fn snapshot_kind<'de, Decoder: Deserializer<'de>>(
+            decoder: Decoder,
+        ) -> Result<AuthenticationWorkflowSnapshotResponseKind, Decoder::Error> {
+            match u8::deserialize(decoder)? {
+                0 => Ok(AuthenticationWorkflowSnapshotResponseKind::Matched),
+                1 => Ok(AuthenticationWorkflowSnapshotResponseKind::NoMatch),
+                2 => Ok(AuthenticationWorkflowSnapshotResponseKind::Rejected),
+                _ => Err(DeserializeError::custom("Unknown snapshot response kind.")),
+            }
+        }
+        fn rejected_decision<'de, Decoder: Deserializer<'de>>(
+            decoder: Decoder,
+        ) -> Result<ApprovedAuthenticationWorkflowDecision, Decoder::Error> {
+            match String::deserialize(decoder)?.as_str() {
+                "rejected" => Ok(ApprovedAuthenticationWorkflowDecision::Rejected),
+                _ => Err(DeserializeError::custom(
+                    "Expected rejected revalidation projection.",
+                )),
+            }
+        }
+
         fn js_error(_error: impl fmt::Display) -> JsError {
             JsError::new("Workflow fixture conversion failed.")
         }
@@ -424,25 +481,34 @@ mod tests {
                 serde_json::json!({"workflow":{"ok":true},"loginMatches":{"kind":"unavailable"},"selectedFacts":{"state":"notApplicable"}}),
             )?,
         )?;
-        let routing: serde_json::Value = serde_wasm_bindgen::from_value(routing.js_value())
+        let routing: RoutingProjection = serde_wasm_bindgen::from_value(routing.js_value())
             .map_err(WorkflowBridgeFixture::js_error)?;
         assert_eq!(
-            routing["workflow"]["kind"],
-            serde_json::to_value(AuthenticationWorkflowSnapshotResponseKind::NoMatch)
-                .map_err(WorkflowBridgeFixture::js_error)?
+            routing.workflow.kind,
+            AuthenticationWorkflowSnapshotResponseKind::NoMatch
         );
-        assert_eq!(routing["loginMatches"]["kind"], "unavailable");
-        assert_eq!(routing["selectedFacts"]["state"], "notApplicable");
+        assert_eq!(
+            routing.login_matches.kind,
+            WebsiteLoginMatchAvailabilityKind::Unavailable
+        );
+        assert!(matches!(
+            routing.selected_facts,
+            AuthenticationWorkflowSelectedFactsWire::NotApplicable
+        ));
         let locked = super::decode_website_login_match_availability(
             &WorkflowBridgeFixture::external(serde_json::json!({"ok":true,"status":"locked"}))?,
         )?;
-        let locked: serde_json::Value = serde_wasm_bindgen::from_value(locked.js_value())
+        let locked: LoginAvailabilityProjection = serde_wasm_bindgen::from_value(locked.js_value())
             .map_err(WorkflowBridgeFixture::js_error)?;
-        assert_eq!(locked["kind"], "locked");
+        assert_eq!(locked.kind, WebsiteLoginMatchAvailabilityKind::Locked);
         let unavailable = super::unavailable_website_login_match_availability()?;
-        let unavailable: serde_json::Value = serde_wasm_bindgen::from_value(unavailable.js_value())
-            .map_err(WorkflowBridgeFixture::js_error)?;
-        assert_eq!(unavailable["kind"], "unavailable");
+        let unavailable: LoginAvailabilityProjection =
+            serde_wasm_bindgen::from_value(unavailable.js_value())
+                .map_err(WorkflowBridgeFixture::js_error)?;
+        assert_eq!(
+            unavailable.kind,
+            WebsiteLoginMatchAvailabilityKind::Unavailable
+        );
         Ok(())
     }
 
@@ -608,13 +674,10 @@ mod tests {
             .map_err(WorkflowBridgeFixture::js_error)?;
             let presentation =
                 super::project_password_workflow_activity(&Ts::new_unchecked(evidence))?;
-            let presentation: serde_json::Value =
+            let presentation: PasswordKindProjection =
                 serde_wasm_bindgen::from_value(presentation.js_value())
                     .map_err(WorkflowBridgeFixture::js_error)?;
-            assert_eq!(
-                presentation["kind"],
-                serde_json::to_value(expected).map_err(WorkflowBridgeFixture::js_error)?
-            );
+            assert_eq!(presentation.kind, expected);
         }
         for activity in [
             AuthenticationWorkflowActivity::ReadyLogin,
@@ -624,15 +687,10 @@ mod tests {
             AuthenticationWorkflowActivity::SaveOffer,
         ] {
             let progress = super::authentication_workflow_activity_progress(activity)?;
-            let progress: serde_json::Value = serde_wasm_bindgen::from_value(progress.js_value())
-                .map_err(WorkflowBridgeFixture::js_error)?;
-            let current_step: AuthenticationWorkflowCurrentStep =
-                serde_json::from_value(progress["currentStep"].clone())
+            let progress: DisplayProgressProjection =
+                serde_wasm_bindgen::from_value(progress.js_value())
                     .map_err(WorkflowBridgeFixture::js_error)?;
-            let total_steps: AuthenticationWorkflowTotalSteps =
-                serde_json::from_value(progress["totalSteps"].clone())
-                    .map_err(WorkflowBridgeFixture::js_error)?;
-            assert!(u8::from(current_step) <= u8::from(total_steps));
+            assert!(u8::from(progress.current_step) <= u8::from(progress.total_steps));
         }
         let post = serde_json::json!({"submissionMethod":"post","usernameFieldCount":0,"passwordFieldCount":0})
             .serialize(&Serializer::json_compatible()).map_err(WorkflowBridgeFixture::js_error)?;
@@ -656,9 +714,12 @@ mod tests {
         .map_err(WorkflowBridgeFixture::js_error)?;
         let rejected =
             super::revalidate_approved_authentication_workflow(&Ts::new_unchecked(request))?;
-        let rejected: serde_json::Value = serde_wasm_bindgen::from_value(rejected.js_value())
+        let rejected: RevalidationProjection = serde_wasm_bindgen::from_value(rejected.js_value())
             .map_err(WorkflowBridgeFixture::js_error)?;
-        assert_eq!(rejected["kind"], "rejected");
+        assert!(matches!(
+            rejected.kind,
+            ApprovedAuthenticationWorkflowDecision::Rejected
+        ));
 
         Ok(())
     }
@@ -675,34 +736,31 @@ mod tests {
                 }
             }))?,
         )?;
-        let matched: serde_json::Value = serde_wasm_bindgen::from_value(matched.js_value())
+        let matched: SnapshotKindProjection = serde_wasm_bindgen::from_value(matched.js_value())
             .map_err(WorkflowBridgeFixture::js_error)?;
         assert_eq!(
-            matched["kind"],
-            serde_json::to_value(AuthenticationWorkflowSnapshotResponseKind::Matched)
-                .map_err(WorkflowBridgeFixture::js_error)?
+            matched.kind,
+            AuthenticationWorkflowSnapshotResponseKind::Matched
         );
         let no_match = super::decode_authentication_workflow_snapshot_response(
             &WorkflowBridgeFixture::js_wire(serde_json::json!({"ok": true}))?,
         )?;
-        let no_match: serde_json::Value = serde_wasm_bindgen::from_value(no_match.js_value())
+        let no_match: SnapshotKindProjection = serde_wasm_bindgen::from_value(no_match.js_value())
             .map_err(WorkflowBridgeFixture::js_error)?;
         assert_eq!(
-            no_match["kind"],
-            serde_json::to_value(AuthenticationWorkflowSnapshotResponseKind::NoMatch)
-                .map_err(WorkflowBridgeFixture::js_error)?
+            no_match.kind,
+            AuthenticationWorkflowSnapshotResponseKind::NoMatch
         );
         let rejected = super::decode_authentication_workflow_snapshot_response(
             &WorkflowBridgeFixture::js_wire(
                 serde_json::json!({"ok": false, "reason": "rejected"}),
             )?,
         )?;
-        let rejected: serde_json::Value = serde_wasm_bindgen::from_value(rejected.js_value())
+        let rejected: SnapshotKindProjection = serde_wasm_bindgen::from_value(rejected.js_value())
             .map_err(WorkflowBridgeFixture::js_error)?;
         assert_eq!(
-            rejected["kind"],
-            serde_json::to_value(AuthenticationWorkflowSnapshotResponseKind::Rejected)
-                .map_err(WorkflowBridgeFixture::js_error)?
+            rejected.kind,
+            AuthenticationWorkflowSnapshotResponseKind::Rejected
         );
 
         let ready = serde_json::json!({"action": 4, "loginMatches": {"kind": "ready", "count": 1}})

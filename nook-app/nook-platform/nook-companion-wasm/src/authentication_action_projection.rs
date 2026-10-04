@@ -62,9 +62,19 @@ mod tests {
 #[cfg(all(test, target_arch = "wasm32"))]
 mod wasm_tests {
     use super::*;
-    use serde::Serialize;
+    use serde::{Deserialize, Serialize};
     use serde_json::Value;
     use wasm_bindgen_test::wasm_bindgen_test;
+    use zeroize::Zeroize;
+    #[derive(Deserialize)]
+    struct BackupCodesProjection {
+        codes: Vec<String>,
+    }
+    impl Drop for BackupCodesProjection {
+        fn drop(&mut self) {
+            self.codes.zeroize();
+        }
+    }
     #[derive(Serialize)]
     struct BackupActionFixture<'a> {
         text: &'a str,
@@ -81,8 +91,8 @@ mod wasm_tests {
                 text: "A1B2-C3D4-E5F6",
             })?)?;
         let actual = extract_authentication_backup_code_candidates(&backup.into_ts()?)?;
-        let serialized: serde_json::Value = serde_wasm_bindgen::from_value(actual.js_value())?;
-        assert_eq!(serialized["codes"], serde_json::json!(["A1B2-C3D4-E5F6"]));
+        let serialized: BackupCodesProjection = serde_wasm_bindgen::from_value(actual.js_value())?;
+        assert!(serialized.codes == ["A1B2-C3D4-E5F6"]);
         let navigation: AuthenticationNavigationPathRequest =
             serde_json::from_str(&serde_json::to_string(&NavigationActionFixture {
                 pathname: "/account/login",
