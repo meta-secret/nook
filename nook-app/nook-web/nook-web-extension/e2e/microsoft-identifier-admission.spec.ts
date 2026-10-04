@@ -200,7 +200,7 @@ test('production backup review extracts only after consent and clears on cancel'
             message.type ===
             'nook:extension-session-extract-authentication-backup-code-candidates'
           ) {
-            const count = Reflect.get(
+            const count: unknown = Reflect.get(
               globalThis,
               'nookTestBackupExtractionCount',
             )
@@ -246,7 +246,10 @@ test('production backup review extracts only after consent and clears on cancel'
     ).toBe(false)
     expect(
       await worker.evaluate(() => {
-        const count = Reflect.get(globalThis, 'nookTestBackupExtractionCount')
+        const count: unknown = Reflect.get(
+          globalThis,
+          'nookTestBackupExtractionCount',
+        )
         if (typeof count !== 'number')
           throw new Error('Expected backup extraction counter')
         return count
@@ -257,7 +260,10 @@ test('production backup review extracts only after consent and clears on cancel'
     await expect(widget.getByText('G7H8-I9J0-K1L2')).toBeVisible()
     expect(
       await worker.evaluate(() => {
-        const count = Reflect.get(globalThis, 'nookTestBackupExtractionCount')
+        const count: unknown = Reflect.get(
+          globalThis,
+          'nookTestBackupExtractionCount',
+        )
         if (typeof count !== 'number')
           throw new Error('Expected backup extraction counter')
         return count

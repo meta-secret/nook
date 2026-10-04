@@ -402,6 +402,7 @@ export async function handleCompanionWasmMessage(
               ),
             )
         }
+        return invalidRequest()
       case CompanionWasmSessionMessageType.ExtractAuthenticationBackupCodeCandidates:
         return ok(
           extract_authentication_backup_code_candidates(message.payload),

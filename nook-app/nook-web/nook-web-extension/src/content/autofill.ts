@@ -443,10 +443,7 @@ class AuthenticationScanRenderLifecycle {
   }
 
   async scanAndRender(): Promise<void> {
-    try {
-      await this.performScanAndRender()
-    } finally {
-    }
+    await this.performScanAndRender()
   }
 
   schedule(mutations?: AuthenticationScanMutationBatch): void {
