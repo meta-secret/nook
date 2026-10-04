@@ -6,7 +6,12 @@
     VaultStorageFailure,
     VaultStorageFailureKind,
   } from "$lib/runtime/storage-failure";
-  import { VaultOperationStale } from "$lib/runtime/vault-operation-stale";
+  import {
+    VaultOperationStale,
+    VaultOperationStaleKind,
+  } from "$lib/runtime/vault-operation-stale";
+  import { Match } from "effect";
+  import type { SecretPageRefreshSnapshot } from "$lib/vault/action-contexts";
   type SecretFieldCopy = {
     readonly text: string;
     readonly id: string;
@@ -84,7 +89,7 @@
     type DecryptedSecrets,
     SecretExposure,
   } from "$lib/vault/secret-exposure";
-  import { onDestroy } from "svelte";
+  import { onDestroy, untrack } from "svelte";
   import {
     SecretTypeSelectionKind,
     type SecretTypeSelection,
@@ -94,6 +99,7 @@
     ClipboardNoticeKind,
     SecretEditorKind,
     SecretRevealKind,
+    SecretPageInteractionKind,
     type AuthenticatorCodePresentation,
     type ClipboardNotice,
     type SecretEditor,
@@ -132,6 +138,22 @@
     editRestriction.decision !== VaultEditDecision.Allowed,
   );
   let searchPattern = $derived(vault.secretQuery);
+  let pageInteraction = $state(SecretPageInteractionKind.Ready);
+  let searchLoadSequence = 0;
+  type SecretSearchCompletion = {
+    readonly sequence: number;
+    readonly result: Awaited<ReturnType<VaultState["loadSecretPage"]>>;
+  };
+  type SecretStalePagePattern = {
+    readonly kind: Match.SafeRefinement<
+      | VaultOperationStaleKind.RequestSuperseded
+      | VaultOperationStaleKind.ContextReplaced
+      | VaultOperationStaleKind.OwnerReleased
+    >;
+  };
+  type SecretCommittedPagePattern = {
+    readonly query: typeof Match.string;
+  };
   let decryptedSecrets = $state<DecryptedSecrets>({});
   const initialDecryptedSecrets: DecryptedSecrets = {};
   let secretExposure = new SecretExposure(initialDecryptedSecrets);
@@ -281,10 +303,7 @@
         query: searchPattern.trim(),
         requestedOffset: 0,
       };
-      void vault.loadSecretPage(pageRequest).then((result) => {
-        if (result.isErr())
-          vault.errorMsg = vault.t(result.error.translationKey);
-      });
+      loadInteractionPage(pageRequest);
       return;
     }
     const nextFilter = typeFilters.find(
@@ -296,10 +315,7 @@
       query: searchPattern.trim(),
       requestedOffset: 0,
     };
-    void vault.loadSecretPage(pageRequest).then((result) => {
-      if (result.isErr())
-        vault.errorMsg = vault.t(result.error.translationKey);
-    });
+    loadInteractionPage(pageRequest);
   }
 
   function resetTransientSecretViews() {
@@ -363,18 +379,84 @@
     }
   });
 
+  function settleSearchPage({
+    sequence,
+    result,
+  }: SecretSearchCompletion): void {
+    switch (sequence) {
+      case searchLoadSequence:
+        break;
+      default:
+        return;
+    }
+    result.match(settleCommittedSearchPage, (failure) => {
+      pageInteraction = SecretPageInteractionKind.Failed;
+      vault.errorMsg = vault.t(failure.translationKey);
+    });
+  }
+
+  function settleCommittedSearchPage(
+    snapshot: SecretPageRefreshSnapshot | VaultOperationStale,
+  ): void {
+    const stalePattern: SecretStalePagePattern = {
+      kind: Match.is(
+        VaultOperationStaleKind.RequestSuperseded,
+        VaultOperationStaleKind.ContextReplaced,
+        VaultOperationStaleKind.OwnerReleased,
+      ),
+    };
+    const committedPattern: SecretCommittedPagePattern = {
+      query: Match.string,
+    };
+    Match.value(snapshot).pipe(
+      Match.when(stalePattern, () => {
+        return;
+      }),
+      Match.when(committedPattern, () => {
+        pageInteraction = SecretPageInteractionKind.Ready;
+      }),
+      Match.exhaustive,
+    );
+  }
+
+  function loadInteractionPage(
+    request: Parameters<typeof vault.loadSecretPage>[0],
+  ): void {
+    const sequence = ++searchLoadSequence;
+    pageInteraction = SecretPageInteractionKind.Loading;
+    void vault.loadSecretPage(request).then((result) => {
+      const completion: SecretSearchCompletion = { sequence, result };
+      settleSearchPage(completion);
+    });
+  }
+
   $effect(() => {
     const query = searchPattern.trim();
-    if (query === vault.secretQuery) return;
+    switch (query) {
+      case untrack(() => vault.secretQuery):
+        switch (untrack(() => pageInteraction)) {
+          case SecretPageInteractionKind.Ready:
+          case SecretPageInteractionKind.Loading:
+            return;
+          case SecretPageInteractionKind.Debouncing:
+          case SecretPageInteractionKind.Failed:
+            break;
+        }
+    }
+    const sequence = ++searchLoadSequence;
+    pageInteraction = SecretPageInteractionKind.Debouncing;
     const timer = setTimeout(() => {
+      switch (sequence) {
+        case searchLoadSequence:
+          break;
+        default:
+          return;
+      }
       const pageRequest: Parameters<typeof vault.loadSecretPage>[0] = {
         query,
         requestedOffset: 0,
       };
-      void vault.loadSecretPage(pageRequest).then((result) => {
-        if (result.isErr())
-          vault.errorMsg = vault.t(result.error.translationKey);
-      });
+      loadInteractionPage(pageRequest);
     }, 200);
     return () => clearTimeout(timer);
   });
@@ -764,6 +846,7 @@
                   <SecretDetailRow
                     {item}
                     {index}
+                    {pageInteraction}
                     titleAsHeader={titleAsCardHeader}
                     expanded={Boolean(expandedSecrets[item.id])}
                     reveal={secretReveal(item.id)}

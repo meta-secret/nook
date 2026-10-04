@@ -40,6 +40,7 @@
     AuthenticatorCodePresentationKind,
     ClipboardNoticeKind,
     SecretRevealKind,
+    SecretPageInteractionKind,
     type AuthenticatorCodePresentation,
     type ClipboardNotice,
     type SecretReveal,
@@ -49,6 +50,7 @@
     item,
     index,
     expanded,
+    pageInteraction,
     reveal = { kind: SecretRevealKind.Hidden },
     authenticatorCode = { kind: AuthenticatorCodePresentationKind.Hidden },
     copiedNotice = { kind: ClipboardNoticeKind.Hidden },
@@ -65,6 +67,7 @@
     item: NookSecretListItem;
     index: number;
     expanded: boolean;
+    pageInteraction: SecretPageInteractionKind;
     reveal?: SecretReveal;
     authenticatorCode?: AuthenticatorCodePresentation;
     copiedNotice?: ClipboardNotice;
@@ -326,6 +329,7 @@
               : vault.t(I18N_KEYS.VaultShowValue)}
             aria-pressed={reveal.kind === SecretRevealKind.Revealed}
             data-testid="reveal-secret-btn"
+            disabled={pageInteraction !== SecretPageInteractionKind.Ready}
             class="rounded-md p-1.5 text-muted-foreground/80 hover:bg-accent hover:text-foreground transition-colors"
           >
             {#if reveal.kind === SecretRevealKind.Revealed}<EyeOff

@@ -7,6 +7,7 @@ import SecretDetailRow from '$lib/components/SecretDetailRow.svelte'
 import { SecretMutationOutcome } from '$lib/vault/secret-operation-failure'
 import {
   SecretRevealKind,
+  SecretPageInteractionKind,
   type SecretReveal,
 } from '$lib/components/secret-vault-state'
 import { ok } from 'neverthrow'
@@ -45,6 +46,7 @@ function authenticatorProps(
     item: authenticatorItem,
     index: 0,
     expanded: true,
+    pageInteraction: SecretPageInteractionKind.Ready,
     reveal,
     onToggleExpand: vi.fn(),
     onToggleReveal: vi.fn(async () => {}),
@@ -80,6 +82,7 @@ function renderLogin(item: NookSecretListItem) {
     item,
     index: 0,
     expanded: false,
+    pageInteraction: SecretPageInteractionKind.Ready,
     onToggleExpand: vi.fn(),
     onToggleReveal: vi.fn(async () => {}),
     onEditItem: vi.fn(async () => {}),
