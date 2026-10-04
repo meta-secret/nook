@@ -859,7 +859,7 @@ mod browser_tests {
             &architecture,
         )?;
         assert_eq!(
-            github_enrollment.provider_type(),
+            github_enrollment.provider_type()?.to_rust()?,
             StorageProviderType::Github
         );
         assert_eq!(github_enrollment.github_pat()?, "ghp_1234567890ABCDEF");
