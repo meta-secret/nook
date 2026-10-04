@@ -124,9 +124,6 @@ export type GoogleDriveSyncE2eTarget = {
   stub: ReturnType<typeof createLocalE2eGoogleDriveVaultStub>
 }
 
-export type OAuthFileSyncE2eTarget =
-  LocalFileSyncE2eTarget | GoogleDriveSyncE2eTarget
-
 export type ICloudSyncE2eTarget = {
   providerId: E2eSyncProviderId.ICloud
   pat: string

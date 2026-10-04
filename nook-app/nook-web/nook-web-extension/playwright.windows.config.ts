@@ -8,12 +8,8 @@ class WindowsExtensionConfig {
 
   buildOutputDirectory(): WindowsOutputDirectoryConfig {
     const outputDir = this.environment.PLAYWRIGHT_OUTPUT_DIR
-    switch (outputDir) {
-      case undefined:
-        return {}
-      default:
-        return { outputDir }
-    }
+    if (typeof outputDir === 'string') return { outputDir }
+    return {}
   }
 
   static readonly value: PlaywrightTestConfig = {
