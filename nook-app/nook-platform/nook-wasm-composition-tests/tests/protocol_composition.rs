@@ -4,10 +4,11 @@ use nook_companion_core::{
     CompanionExtensionHandoffEndpoint, CompanionExtensionPresence, CompanionExtensionProtocol,
     CompanionHandoffResponseAdmission, CompanionIdentityDiscoveryObservation,
     CompanionIdentityDiscoveryRequest, CompanionIdentityHandoffAuthorization,
-    CompanionIdentityHandoffContext, CompanionIdentityStatus, CompanionIdentityStatusAdmission,
-    CompanionIdentityStatusAdmissionRequest, CompanionIdentityUnlockRequest,
-    CompanionInstallationAppKey, CompanionProtocolError, CompanionUnlockedAppKey,
-    CompanionWebsiteHandoffBegin, ExtensionConnectScope, ExtensionPairingVaultType,
+    CompanionIdentityHandoffContext, CompanionIdentityHandoffResponse, CompanionIdentityStatus,
+    CompanionIdentityStatusAdmission, CompanionIdentityStatusAdmissionRequest,
+    CompanionIdentityUnlockRequest, CompanionInstallationAppKey, CompanionProtocolError,
+    CompanionUnlockedAppKey, CompanionWebsiteHandoffBegin, ExtensionConnectScope,
+    ExtensionPairingVaultType,
 };
 
 struct ProtocolComposition;
@@ -138,29 +139,24 @@ fn portable_protocol_preserves_unlock_correlation() -> Result<()> {
 }
 
 #[test]
-fn companion_wasm_protocol_accepts_core_presence_and_discovery() -> Result<()> {
+fn core_protocol_accepts_serialized_presence_and_discovery() -> Result<()> {
     let presence = serde_json::from_value(serde_json::to_value(
         ProtocolComposition::unlocked_presence(),
     )?)?;
-    let protocol = nook_companion_wasm::NookCompanionExtensionProtocol::new(presence)
-        .map_err(|_| anyhow::anyhow!("companion WASM rejected valid core presence"))?;
-    let status = protocol
-        .discover(ProtocolComposition::discovery()?)
-        .map_err(|_| anyhow::anyhow!("companion WASM rejected valid core discovery"))?;
+    let protocol = CompanionExtensionProtocol::new(presence)?;
+    let status = protocol.discover(ProtocolComposition::discovery()?)?;
     assert!(matches!(status, CompanionIdentityStatus::Unlocked { .. }));
     Ok(())
 }
 
 #[test]
-fn nook_wasm_endpoint_accepts_the_same_core_presence_and_discovery() -> Result<()> {
+fn core_endpoint_accepts_the_same_serialized_presence_and_discovery() -> Result<()> {
     let expected_presence = ProtocolComposition::unlocked_presence();
     let presence = serde_json::from_value(serde_json::to_value(&expected_presence)?)?;
-    let endpoint = nook_wasm::NookCompanionExtensionEndpoint::new(presence)
-        .map_err(|_| anyhow::anyhow!("vault WASM rejected valid core presence"))?;
+    let endpoint = CompanionExtensionHandoffEndpoint::new(presence)?;
     assert_eq!(endpoint.presence(), expected_presence);
     let status = endpoint
-        .discover(ProtocolComposition::discovery()?)
-        .map_err(|_| anyhow::anyhow!("vault WASM rejected valid core discovery"))?
+        .discover(ProtocolComposition::discovery()?)?
         .status();
     assert!(matches!(status, CompanionIdentityStatus::Unlocked { .. }));
     Ok(())
@@ -177,7 +173,7 @@ fn core_handoff_endpoint_rejects_invalid_presence_before_projection() {
 }
 
 #[test]
-fn both_wasm_adapters_return_the_same_accepted_transaction() -> Result<()> {
+fn serialized_admission_requests_return_the_same_accepted_transaction() -> Result<()> {
     let protocol = CompanionExtensionProtocol::new(ProtocolComposition::unlocked_presence())?;
     let discovery = ProtocolComposition::discovery()?;
     let request = CompanionIdentityStatusAdmissionRequest {
@@ -188,14 +184,14 @@ fn both_wasm_adapters_return_the_same_accepted_transaction() -> Result<()> {
     let companion_request = serde_json::from_value(serde_json::to_value(&request)?)?;
     let vault_request = serde_json::from_value(serde_json::to_value(request)?)?;
     assert_eq!(
-        nook_companion_wasm::admit_companion_identity_status(companion_request),
-        nook_wasm::admit_companion_identity_status(vault_request)
+        CompanionIdentityStatusAdmission::admit(companion_request),
+        CompanionIdentityStatusAdmission::admit(vault_request)
     );
     Ok(())
 }
 
 #[test]
-fn both_wasm_adapters_reject_mismatched_status_correlation() -> Result<()> {
+fn serialized_admission_requests_reject_mismatched_status_correlation() -> Result<()> {
     let request = CompanionIdentityStatusAdmissionRequest {
         discovery: ProtocolComposition::discovery()?,
         status: CompanionIdentityStatus::Unavailable {
@@ -206,8 +202,8 @@ fn both_wasm_adapters_reject_mismatched_status_correlation() -> Result<()> {
     };
     let companion_request = serde_json::from_value(serde_json::to_value(&request)?)?;
     let vault_request = serde_json::from_value(serde_json::to_value(request)?)?;
-    let companion = nook_companion_wasm::admit_companion_identity_status(companion_request);
-    let vault = nook_wasm::admit_companion_identity_status(vault_request);
+    let companion = CompanionIdentityStatusAdmission::admit(companion_request);
+    let vault = CompanionIdentityStatusAdmission::admit(vault_request);
     assert_eq!(companion, vault);
     assert!(matches!(
         companion,
@@ -265,7 +261,7 @@ fn handoff_context_rejects_a_different_store() -> Result<()> {
 }
 
 #[test]
-fn both_wasm_adapters_reject_an_empty_handoff_envelope() -> Result<()> {
+fn serialized_handoff_responses_reject_an_empty_envelope() -> Result<()> {
     let request = CompanionWebsiteHandoffBegin {
         transaction: ProtocolComposition::admitted_unlocked()?,
         context: CompanionIdentityHandoffContext::PairedVault {
@@ -273,14 +269,14 @@ fn both_wasm_adapters_reject_an_empty_handoff_envelope() -> Result<()> {
         },
     }
     .prepare("age1recipient".to_owned())?;
-    let response = nook_companion_core::CompanionIdentityHandoffResponse {
+    let response = CompanionIdentityHandoffResponse {
         request,
         encrypted_envelope: String::new(),
     };
     let companion_response = serde_json::from_value(serde_json::to_value(&response)?)?;
     let vault_response = serde_json::from_value(serde_json::to_value(response)?)?;
-    let companion = nook_companion_wasm::admit_companion_handoff_response(companion_response);
-    let vault = nook_wasm::admit_companion_handoff_response(vault_response);
+    let companion = CompanionHandoffResponseAdmission::admit(companion_response);
+    let vault = CompanionHandoffResponseAdmission::admit(vault_response);
     assert_eq!(companion, vault);
     assert!(matches!(
         companion,

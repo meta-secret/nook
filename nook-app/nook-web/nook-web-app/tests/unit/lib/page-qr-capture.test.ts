@@ -1,8 +1,58 @@
-import { afterEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { pageQrCapture } from '../../../../nook-web-extension/src/lib/page-qr-capture'
+import { classify_authentication_authenticator_setup_batch } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm'
+import type {
+  CompanionWasmRuntimeMessage,
+  CompanionWasmAuthenticatorSetupResponse,
+} from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
+import { CompanionWasmSessionMessageType } from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
+
+const rejectedSetupMetadataResults = [
+  'absent',
+  {},
+  { authenticatorSetupObservation: 'unsupported' },
+]
+type SetupMetadataRuntimeResponse =
+  | {
+      readonly ok: true
+      readonly result:
+        | CompanionWasmAuthenticatorSetupResponse
+        | (typeof rejectedSetupMetadataResults)[number]
+    }
+  | { readonly ok: false }
+
+beforeEach(() => {
+  vi.stubGlobal('chrome', {
+    runtime: {
+      sendMessage(
+        message: Extract<
+          CompanionWasmRuntimeMessage,
+          {
+            type: CompanionWasmSessionMessageType.AuthenticationAuthenticatorSetupObservation
+          }
+        >,
+        callback: (response: SetupMetadataRuntimeResponse) => void,
+      ) {
+        expect(message.type).toBe(
+          CompanionWasmSessionMessageType.AuthenticationAuthenticatorSetupObservation,
+        )
+        callback({
+          ok: true,
+          result: {
+            authenticatorSetupObservation:
+              classify_authentication_authenticator_setup_batch(
+                message.payload,
+              ),
+          },
+        })
+      },
+    },
+  })
+})
 
 afterEach(() => {
   document.body.replaceChildren()
+  vi.unstubAllGlobals()
 })
 
 class PageQrObservationFixture {
@@ -25,17 +75,114 @@ class PageQrObservationFixture {
   get observation() {
     return pageQrCapture.authenticationAuthenticatorSetupObservation()
   }
+
+  async prepare(): Promise<void> {
+    await pageQrCapture.prepareAuthenticationAuthenticatorSetupObservation()
+  }
+}
+
+type SetupMetadataRuntimeRequest = Extract<
+  CompanionWasmRuntimeMessage,
+  {
+    type: CompanionWasmSessionMessageType.AuthenticationAuthenticatorSetupObservation
+  }
+>
+
+class DeferredSetupObservationFixture {
+  private readonly requests: Array<{
+    readonly message: SetupMetadataRuntimeRequest
+    readonly callback: (response: SetupMetadataRuntimeResponse) => void
+  }> = []
+
+  install(): void {
+    vi.stubGlobal('chrome', {
+      runtime: {
+        sendMessage: (
+          message: SetupMetadataRuntimeRequest,
+          callback: (response: SetupMetadataRuntimeResponse) => void,
+        ): void => {
+          const request: (typeof this.requests)[number] = { message, callback }
+          this.requests.push(request)
+        },
+      },
+    })
+  }
+
+  deliver(index: number): void {
+    const request = this.requests[index]
+    if (!request) throw new Error('Setup metadata request is missing.')
+    request.callback({
+      ok: true,
+      result: {
+        authenticatorSetupObservation:
+          classify_authentication_authenticator_setup_batch(
+            request.message.payload,
+          ),
+      },
+    })
+  }
 }
 
 describe('page QR otpauth capture', () => {
-  test('nearby visible setup instructions admit generic media', () => {
+  test('keeps each scan snapshot when overlapping responses finish in reverse order', async () => {
+    const runtime = new DeferredSetupObservationFixture()
+    runtime.install()
+    new PageQrObservationFixture(
+      '<section><p>Scan this QR code with your authenticator app</p><img/></section>',
+    )
+    const firstPreparation =
+      pageQrCapture.prepareAuthenticationAuthenticatorSetupObservation()
+    new PageQrObservationFixture('<form><p>Sign in</p></form>')
+    const secondPreparation =
+      pageQrCapture.prepareAuthenticationAuthenticatorSetupObservation()
+    runtime.deliver(1)
+    const second = await secondPreparation
+    runtime.deliver(0)
+    const first = await firstPreparation
+
+    expect(Object.isFrozen(first)).toBe(true)
+    expect(Object.isFrozen(second)).toBe(true)
+    expect(first.observation).toBe('present')
+    expect(second.observation).toBe('absent')
+    expect(
+      pageQrCapture.authenticationAuthenticatorSetupSnapshotIsCurrent(first),
+    ).toBe(false)
+    expect(
+      pageQrCapture.authenticationAuthenticatorSetupSnapshotIsCurrent(second),
+    ).toBe(true)
+    expect(() =>
+      pageQrCapture.authenticationAuthenticatorSetupObservation(),
+    ).toThrow('stale')
+  })
+
+  test('rejects a snapshot whose DOM metadata changes while its response is pending', async () => {
+    const runtime = new DeferredSetupObservationFixture()
+    runtime.install()
+    new PageQrObservationFixture('<section><p>Sign in</p><img/></section>')
+    const preparation =
+      pageQrCapture.prepareAuthenticationAuthenticatorSetupObservation()
+    const paragraph = document.querySelector('p')
+    if (!paragraph) throw new Error('Fixture instruction is missing.')
+    paragraph.textContent = 'Scan this QR code with your authenticator app'
+    runtime.deliver(0)
+    const snapshot = await preparation
+    expect(
+      pageQrCapture.authenticationAuthenticatorSetupSnapshotIsCurrent(snapshot),
+    ).toBe(false)
+    expect(() =>
+      pageQrCapture.authenticationAuthenticatorSetupObservation(),
+    ).toThrow('stale')
+  })
+
+  test('nearby visible setup instructions admit generic media', async () => {
     const fixture = new PageQrObservationFixture(
       '<section><h1>Authenticator setup</h1><p>Scan this QR code with your authenticator app</p><img alt="Code"/></section>',
     )
+    await fixture.prepare()
     expect(fixture.observation).toBe('present')
   })
 
-  test('hidden, remote, and secret-bearing paragraphs do not supply instructions', () => {
+  test('hidden, remote, and secret-bearing paragraphs do not supply instructions', async () => {
     for (const markup of [
       '<section><p hidden>Scan this QR code with your authenticator app</p><img/></section>',
       '<section><p>Scan this QR code with your authenticator app</p></section><section><img/></section>',
@@ -45,18 +192,21 @@ describe('page QR otpauth capture', () => {
       '<section><input value="Scan this QR code with your authenticator app"/><img data-nook-otpauth-uri="otpauth://totp/Example?secret=JBSWY3DPEHPK3PXP"/></section>',
       '<section><p>Scan this QR code to download our app</p><img alt="Authenticator QR code"/></section>',
     ]) {
-      expect(new PageQrObservationFixture(markup).observation).toBe('absent')
+      const fixture = new PageQrObservationFixture(markup)
+      await fixture.prepare()
+      expect(fixture.observation).toBe('absent')
     }
   })
 
-  test('instruction copy stays within the generated UTF-8 byte bound', () => {
+  test('instruction copy stays within the generated UTF-8 byte bound', async () => {
     const fixture = new PageQrObservationFixture(
       `<section><p>${'é'.repeat(300)}</p><img/></section>`,
     )
+    await fixture.prepare()
     expect(fixture.observation).toBe('absent')
   })
 
-  test('omits secret-bearing paragraphs before reading their text', () => {
+  test('omits secret-bearing paragraphs before reading their text', async () => {
     const fixture = new PageQrObservationFixture(
       '<section><p>Scan this QR code with your authenticator app <code>setup key</code></p><img/></section>',
     )
@@ -67,10 +217,11 @@ describe('page QR otpauth capture', () => {
         },
       })
     }
+    await fixture.prepare()
     expect(fixture.observation).toBe('absent')
   })
 
-  test('square landing artwork does not suggest authenticator enrollment', () => {
+  test('square landing artwork does not suggest authenticator enrollment', async () => {
     document.body.innerHTML = `<main><h1>Skykoi</h1><p>Discover your next adventure</p><img alt="Featured artwork"/><button>Sign in</button></main>`
     const image = document.querySelector('img')
     switch (image instanceof HTMLImageElement) {
@@ -89,10 +240,60 @@ describe('page QR otpauth capture', () => {
       case false:
         throw new Error('Expected landing artwork')
     }
+    await pageQrCapture.prepareAuthenticationAuthenticatorSetupObservation()
     expect(pageQrCapture.authenticationAuthenticatorSetupObservation()).toBe(
       'absent',
     )
     expect(document.querySelector('button')?.textContent).toBe('Sign in')
+  })
+
+  test('rejects stale setup metadata until a fresh runtime projection is prepared', async () => {
+    const fixture = new PageQrObservationFixture(
+      '<section><p>Scan this QR code with your authenticator app</p><img/></section>',
+    )
+    await fixture.prepare()
+    expect(fixture.observation).toBe('present')
+    document.body.replaceChildren()
+    expect(() => fixture.observation).toThrow('stale')
+    await fixture.prepare()
+    expect(fixture.observation).toBe('absent')
+  })
+
+  test('runtime rejection clears the previous prepared projection', async () => {
+    const fixture = new PageQrObservationFixture(
+      '<section><p>Scan this QR code with your authenticator app</p><img/></section>',
+    )
+    await fixture.prepare()
+    vi.stubGlobal('chrome', {
+      runtime: {
+        sendMessage(
+          _message: CompanionWasmRuntimeMessage,
+          callback: (response: SetupMetadataRuntimeResponse) => void,
+        ) {
+          callback({ ok: false })
+        },
+      },
+    })
+    await expect(fixture.prepare()).rejects.toThrow('unavailable')
+    expect(() => fixture.observation).toThrow('not prepared')
+  })
+
+  test('requires the typed setup observation field in a delivered runtime envelope', async () => {
+    const fixture = new PageQrObservationFixture('<section><img/></section>')
+    for (const result of rejectedSetupMetadataResults) {
+      vi.stubGlobal('chrome', {
+        runtime: {
+          sendMessage(
+            _message: CompanionWasmRuntimeMessage,
+            callback: (response: SetupMetadataRuntimeResponse) => void,
+          ) {
+            callback({ ok: true, result })
+          },
+        },
+      })
+      await expect(fixture.prepare()).rejects.toThrow('response rejected')
+      expect(() => fixture.observation).toThrow('not prepared')
+    }
   })
 
   test('prefers visible data-nook-otpauth-uri without BarcodeDetector', async () => {

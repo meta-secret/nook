@@ -384,21 +384,31 @@ mod wasm_tests {
         CreditCardFields, CreditCardSecret, OauthFilePreset, SecretId, SecretValue,
         StorageProviderType,
     };
+    use tsify::Tsify;
+    use wasm_bindgen::JsError;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
     fn provider_storage_modes_round_trip_in_wasm() -> Result<(), wasm_bindgen::JsError> {
         assert_eq!(
             wasm_storage_mode_for_provider(
-                StorageProviderType::OauthFile,
-                OauthFilePreset::GoogleDrive,
+                &StorageProviderType::OauthFile
+                    .into_ts()
+                    .map_err(|_| JsError::new("Typed test input could not be encoded."))?,
+                &OauthFilePreset::GoogleDrive
+                    .into_ts()
+                    .map_err(|_| JsError::new("Typed test input could not be encoded."))?,
             )?,
             "google-drive"
         );
         assert_eq!(
             wasm_storage_mode_for_provider(
-                StorageProviderType::OauthFile,
-                OauthFilePreset::ICloud,
+                &StorageProviderType::OauthFile
+                    .into_ts()
+                    .map_err(|_| JsError::new("Typed test input could not be encoded."))?,
+                &OauthFilePreset::ICloud
+                    .into_ts()
+                    .map_err(|_| JsError::new("Typed test input could not be encoded."))?,
             )?,
             "icloud"
         );
@@ -441,7 +451,10 @@ mod wasm_tests {
         assert_eq!(snapshot.current_step(), 1);
         assert_eq!(snapshot.total_steps(), 3);
         assert_eq!(
-            snapshot.approval_requirement(),
+            snapshot
+                .approval_requirement()?
+                .to_rust()
+                .map_err(|_| JsError::new("Typed test output could not be decoded."))?,
             AuthenticationApprovalRequirement::ExplicitUserApproval
         );
         assert_eq!(snapshot.observation_index(), 0);

@@ -1,5 +1,6 @@
 /* eslint-disable nook-typed-api/no-raw-object-arguments, max-params -- This offscreen adapter maps Chrome session messages onto generated WASM calls. */
 import { err, ok, type Result } from 'neverthrow'
+import { Schema } from 'effect'
 import {
   CompanionWasmContentResponseKind,
   CompanionWasmLabelKind,
@@ -13,6 +14,20 @@ import {
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import {
   NookLoginContextObservation,
+  classify_authentication_authenticator_setup_batch,
+  extract_authentication_backup_code_candidates,
+  project_authentication_navigation_path,
+  decode_website_login_save_offer_response,
+  decode_website_login_save_action_response,
+  decode_authentication_outcome_response,
+  decode_authenticator_preview_response,
+  decode_authenticator_backup_attach_response,
+  decode_authenticator_code_response,
+  decode_authenticator_enrollment_stage_response,
+  decode_authenticator_enrollment_confirm_response,
+  decode_authenticator_picker_open_response,
+  decode_generated_password_response,
+  decode_authenticator_options_response,
   NookPageInputFieldObservation,
   AuthenticationWorkflowActivity,
   authentication_page_observation_facts_match_binding,
@@ -155,6 +170,19 @@ export async function handleCompanionWasmMessage(
   try {
     await companionWasmReady
     switch (message.type) {
+      case CompanionWasmSessionMessageType.GetAuthenticationActivityProgress:
+        return ok({
+          activityProgress: authentication_workflow_activity_progress(
+            Schema.decodeUnknownSync(
+              Schema.Enums(AuthenticationWorkflowActivity),
+            )(message.payload.activity),
+          ),
+        })
+      case CompanionWasmSessionMessageType.AuthenticationAuthenticatorSetupObservation:
+        return ok({
+          authenticatorSetupObservation:
+            classify_authentication_authenticator_setup_batch(message.payload),
+        })
       case CompanionWasmSessionMessageType.AuthenticationWorkflowPilotPresentationCapability:
         return ok(
           authentication_workflow_pilot_presentation_capability(
@@ -314,6 +342,62 @@ export async function handleCompanionWasmMessage(
         )
       case CompanionWasmSessionMessageType.DecodeContentRuntimeResponse:
         switch (message.payload.kind) {
+          case CompanionWasmContentResponseKind.LoginSaveOffer:
+            return ok(
+              decode_website_login_save_offer_response(
+                message.payload.response,
+              ),
+            )
+          case CompanionWasmContentResponseKind.LoginSaveAction:
+            return ok(
+              decode_website_login_save_action_response(
+                message.payload.response,
+              ),
+            )
+          case CompanionWasmContentResponseKind.AuthenticationOutcome:
+            return ok(
+              decode_authentication_outcome_response(message.payload.response),
+            )
+          case CompanionWasmContentResponseKind.AuthenticatorPreview:
+            return ok(
+              decode_authenticator_preview_response(message.payload.response),
+            )
+          case CompanionWasmContentResponseKind.AuthenticatorBackupAttach:
+            return ok(
+              decode_authenticator_backup_attach_response(
+                message.payload.response,
+              ),
+            )
+          case CompanionWasmContentResponseKind.AuthenticatorCode:
+            return ok(
+              decode_authenticator_code_response(message.payload.response),
+            )
+          case CompanionWasmContentResponseKind.AuthenticatorEnrollmentStage:
+            return ok(
+              decode_authenticator_enrollment_stage_response(
+                message.payload.response,
+              ),
+            )
+          case CompanionWasmContentResponseKind.AuthenticatorEnrollmentConfirm:
+            return ok(
+              decode_authenticator_enrollment_confirm_response(
+                message.payload.response,
+              ),
+            )
+          case CompanionWasmContentResponseKind.AuthenticatorPickerOpen:
+            return ok(
+              decode_authenticator_picker_open_response(
+                message.payload.response,
+              ),
+            )
+          case CompanionWasmContentResponseKind.GeneratedPassword:
+            return ok(
+              decode_generated_password_response(message.payload.response),
+            )
+          case CompanionWasmContentResponseKind.AuthenticatorOptions:
+            return ok(
+              decode_authenticator_options_response(message.payload.response),
+            )
           case CompanionWasmContentResponseKind.LoginOptions:
             return ok(decode_website_login_options(message.payload.response))
           case CompanionWasmContentResponseKind.LoginPickerOpen:
@@ -327,6 +411,13 @@ export async function handleCompanionWasmMessage(
               ),
             )
         }
+        return invalidRequest()
+      case CompanionWasmSessionMessageType.ExtractAuthenticationBackupCodeCandidates:
+        return ok(
+          extract_authentication_backup_code_candidates(message.payload),
+        )
+      case CompanionWasmSessionMessageType.ProjectAuthenticationNavigationPath:
+        return ok(project_authentication_navigation_path(message.payload))
     }
   } catch {
     return invalidRequest()

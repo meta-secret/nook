@@ -265,3 +265,9 @@ mod tests {
         ));
     }
 }
+
+mod extraction;
+pub use extraction::{
+    AuthenticationBackupCodeExtraction, AuthenticationBackupCodeExtractionRequest,
+    AuthenticationBackupCodeText, AuthenticationBackupCodeTextError,
+};

@@ -1,5 +1,7 @@
 use super::{wasm_bindgen, window};
+use nook_core::SupportedAppLocale;
 use nook_core::{ClientRunMode, RuntimeConfigValue, VaultRuntimePolicy};
+use tsify::Tsify;
 use wasm_bindgen::JsError;
 
 #[tsify::declare]
@@ -58,9 +60,10 @@ impl NookBrowserLocale {
     }
 
     #[wasm_bindgen]
-    #[must_use]
-    pub fn app_locale(&self) -> NookAppLocale {
-        nook_core::SupportedAppLocale::resolve(self.language_tags.iter().map(String::as_str))
+
+    pub fn app_locale(&self) -> Result<tsify::Ts<NookAppLocale>, wasm_bindgen::JsError> {
+        let result = { SupportedAppLocale::resolve(self.language_tags.iter().map(String::as_str)) };
+        Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
     }
 }
 
@@ -294,6 +297,9 @@ impl NookRuntimeConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_core::StorageConnectArgs;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
@@ -301,7 +307,7 @@ mod tests {
     -> Result<(), wasm_bindgen::JsError> {
         let locale = NookBrowserLocale::from_tags(vec!["ru-RU".to_owned(), "en-US".to_owned()]);
         assert_eq!(locale.language_tags(), vec!["ru-RU", "en-US"]);
-        assert_eq!(locale.app_locale().code(), "ru");
+        assert_eq!(locale.app_locale()?.to_rust()?.code(), "ru");
 
         assert_eq!(
             NookClientRunModeUtil::parse("local")?,
@@ -313,7 +319,7 @@ mod tests {
             NookClientRunMode::Prod
         );
 
-        let args = NookStorageConnectArgs::from(nook_core::StorageConnectArgs::local());
+        let args = NookStorageConnectArgs::from(StorageConnectArgs::local());
         assert_eq!(args.mode, "local");
         assert_eq!(args.pat, "");
         assert_eq!(args.repo, "");
@@ -368,10 +374,10 @@ mod browser_tests {
     wasm_bindgen_test_configure!(run_in_browser);
 
     #[wasm_bindgen_test]
-    fn runtime_adapters_project_all_modes_and_overrides_in_wasm() {
+    fn runtime_adapters_project_all_modes_and_overrides_in_wasm() -> Result<(), JsError> {
         let locale = NookBrowserLocale::from_tags(vec!["de-DE".into(), "ru-RU".into()]);
         assert_eq!(locale.language_tags(), vec!["de-DE", "ru-RU"]);
-        assert_eq!(locale.app_locale().code(), "ru");
+        assert_eq!(locale.app_locale()?.to_rust()?.code(), "ru");
 
         for (raw, expected) in [
             ("local", NookClientRunMode::Local),
@@ -416,5 +422,6 @@ mod browser_tests {
             let _ = config.resolve_vault_sync_interval_ms("500");
             let _ = config.resolve_default_vault_sync_interval_ms();
         }
+        Ok(())
     }
 }

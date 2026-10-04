@@ -36,7 +36,10 @@ import { Deferred, Effect } from 'effect'
 import { SerialOperationQueue } from '$lib/runtime/serial-operation-queue'
 import DeviceProtectionGate from '$lib/components/DeviceProtectionGate.svelte'
 import { DeviceProtectionGateFrame } from '$lib/components/device-protection-gate-state'
-import { DeviceProtectionActions } from '$lib/vault/device-protection.svelte'
+import {
+  DeviceProtectionActionOutcome,
+  DeviceProtectionActions,
+} from '$lib/vault/device-protection.svelte'
 import { VaultType } from '$lib/vault/architecture-model'
 
 enum LoginSurface {
@@ -91,7 +94,7 @@ class DelayedLoginPresentationFixture {
     return this.queue.enqueue(operation)
   }
 
-  authorize(): Promise<void> {
+  authorize(): Promise<DeviceProtectionActionOutcome> {
     this.login.state.isVerifying = true
     this.statusRead.mockImplementation(() => {
       throw new Error('recursive use of an object detected')
@@ -99,14 +102,16 @@ class DelayedLoginPresentationFixture {
     return this.queue.enqueue(() => Effect.runPromise(this.ceremony()))
   }
 
-  private ceremony(): Effect.Effect<void> {
+  private ceremony(): Effect.Effect<DeviceProtectionActionOutcome> {
     return Deferred.succeed(this.entered, void 0).pipe(
       Effect.andThen(Deferred.await(this.completion)),
       Effect.map(this.publishCeremonyOutcome.bind(this)),
     )
   }
 
-  private publishCeremonyOutcome(outcome: DelayedAuthorization): void {
+  private publishCeremonyOutcome(
+    outcome: DelayedAuthorization,
+  ): DeviceProtectionActionOutcome {
     this.statusRead.mockImplementation(
       () => SentinelVaultUnlockState.NotSentinel,
     )
@@ -114,13 +119,14 @@ class DelayedLoginPresentationFixture {
       case DelayedAuthorization.Authorized:
         this.login.state.deviceProtectionStatus =
           DeviceProtectionStatus.Unlocked
-        break
+        this.login.state.isVerifying = false
+        return DeviceProtectionActionOutcome.Ready
       case DelayedAuthorization.Denied:
         this.login.state.errorMsg =
           I18N_KEYS.DeviceProtectionPasskeyUnlockNotAllowed
-        break
+        this.login.state.isVerifying = false
+        return DeviceProtectionActionOutcome.Incomplete
     }
-    this.login.state.isVerifying = false
   }
 
   renderProtection() {

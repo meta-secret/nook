@@ -1,3 +1,14 @@
+import type {
+  PasswordFormObservation,
+  AuthenticationObservationFactsRequest,
+  PageControlObservationRequest,
+} from "./password-form-observation-types";
+export type {
+  PasswordFormSummary,
+  PasswordFormObservation,
+  AuthenticationObservationFactsRequest,
+  PageControlObservationRequest,
+} from "./password-form-observation-types";
 import type { AuthenticationAuthenticatorSetupObservation } from "./nook-companion-wasm/nook_companion_wasm.js";
 /* eslint-disable @typescript-eslint/no-restricted-types, nook-typed-api/no-raw-object-arguments, max-params -- DOM policy collection uses browser-owned object contracts and callback shapes at this boundary. */
 import { PasswordFormSummaryObservation } from "./password-form-summary-observation";
@@ -23,7 +34,6 @@ import type {
   AuthenticationCredentialSubmissionObservation,
   AuthenticationPageObservationFacts,
   AuthenticationPasskeyControlObservation,
-  AuthenticationUsernameEvidence,
   AuthenticationControlTransportability,
   AuthenticationDisplayProgress,
   AuthenticationImplicitSubmitActuationObservation,
@@ -39,7 +49,6 @@ import type {
   ControlObservationAssociationRequest,
   LocalOwnedFormAdjacencyRequest,
   PasskeyControlLookup,
-  PasswordFormScope,
 } from "./password-form-fields";
 import {
   authenticationAdvanceControlSelector,
@@ -68,41 +77,7 @@ const credentialSubmissionAbsent =
 const credentialSubmissionObserved =
   "observed" satisfies AuthenticationCredentialSubmissionObservation["kind"];
 
-export type PasswordFormSummary = {
-  passwordFieldCount: number;
-  currentPasswordFieldCount: number;
-  newPasswordFieldCount: number;
-  genericPasswordFieldCount: number;
-  usernameFieldCount: number;
-  oneTimeCodeFieldCount: number;
-  manualCheckpointPresent: boolean;
-  passkeyControlPresent: boolean;
-  formCount: number;
-  observedAt: number;
-};
-
-export type PasswordFormObservation = {
-  root: ParentNode;
-  formScope: PasswordFormScope;
-  summary: PasswordFormSummary;
-};
-
-export type AuthenticationObservationFactsRequest = {
-  observation: PasswordFormObservation;
-  authenticatorSetupHint: AuthenticationAuthenticatorSetupObservation;
-  backupCodesHint?: boolean;
-  backupCodesCopy?: string;
-};
-
 type SemanticSubmitControlPair = [LoginAdvanceControl, LoginAdvanceControl];
-
-export type PageControlObservationRequest = {
-  observation: PasswordFormObservation;
-  control: HTMLElement;
-  authenticationUsername: AuthenticationUsernameEvidence;
-  semanticSubmitControlCount: number;
-  explicitlyLocallyScoped?: boolean;
-};
 
 type CompleteAuthenticationAdvanceControlObservation =
   AuthenticationAdvanceControlObservation & {
@@ -607,8 +582,12 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
       observation.sourceOrigin,
       observation.formIdentity,
       observation.label,
-      authenticationSubmissionControls.controlMachineIdentity(request.control),
-    ])
+    ]) &&
+      authenticationFactBounds.machineIdentityFits(
+        authenticationSubmissionControls.controlMachineIdentity(
+          request.control,
+        ),
+      )
       ? [observation]
       : [];
   }

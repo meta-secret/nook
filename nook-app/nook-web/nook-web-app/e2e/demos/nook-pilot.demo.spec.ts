@@ -1,3 +1,4 @@
+import { Schema } from 'effect'
 import type { Page } from '@playwright/test'
 import { expect, test } from '../fixtures'
 import {
@@ -10,6 +11,14 @@ import {
   installDemoChromeStub,
   type ChromeMessage,
 } from './static-chrome-stub'
+
+type RequiredCatalogEntryFields = { readonly message: typeof Schema.String }
+const requiredCatalogEntryFields: RequiredCatalogEntryFields = {
+  message: Schema.String,
+}
+const requiredCatalogEntrySchema: Schema.Schema<ChromeMessage> = Schema.Struct(
+  requiredCatalogEntryFields,
+)
 
 function loginPilotStubArgs(messages: Record<string, ChromeMessage>) {
   return {
@@ -153,7 +162,7 @@ function installConnectedDemoRuntimeOverrides(noMatching: boolean): void {
   )
 }
 
-test('waits for companion WASM before the first Pilot scan', async ({
+test('waits for typed companion runtime readiness before the first Pilot scan', async ({
   page,
 }) => {
   const messages = await loadPilotMessages()
@@ -212,6 +221,39 @@ test('waits for companion WASM before the first Pilot scan', async ({
   await demoBeat(page)
 })
 
+test('detects the Microsoft username-first shell through the typed runtime', async ({
+  page,
+}) => {
+  const messages = await loadPilotMessages()
+  await page.route('https://login.live.com/oauth20_authorize.srf**', (route) =>
+    route.fulfill({
+      contentType: 'text/html',
+      body: `<!doctype html><html><body><main>
+      <h1>Sign in</h1><p>Use your Microsoft account</p>
+      <form class="___cqaz2i0 fly5x3f" method="post">
+        <label>Email or phone number<input id="usernameEntry" type="email" autocomplete="username webauthn"></label>
+        <button type="button">Forgot your username?</button>
+        <button type="submit">Next</button>
+      </form><form method="post" action=""></form>
+    </main></body></html>`,
+    }),
+  )
+  await page.goto(
+    'https://login.live.com/oauth20_authorize.srf?client_id=00000000-0000-0000-0000-000000000000&scope=openid%20profile&response_type=code&response_mode=form_post',
+  )
+  await page.evaluate(installDemoChromeStub, loginPilotStubArgs(messages))
+  await injectPilotAutofill(page)
+  await expect(
+    page.locator('#nook-auth-widget').getByText('Ready to sign in'),
+  ).toBeVisible()
+  await expect(page.locator('#usernameEntry')).toHaveValue('')
+  await expect(page.locator('input[type="password"]')).toHaveCount(0)
+  expect(
+    await page.evaluate(() => window.__nookDemoRuntimeMessageTypes),
+  ).toContain('nook:authentication-workflow-snapshot')
+  await demoBeat(page)
+})
+
 test('approve backup-code extraction only after a fresh Pilot decision', async ({
   page,
 }) => {
@@ -225,7 +267,7 @@ test('approve backup-code extraction only after a fresh Pilot decision', async (
       <head><title>Recovery codes</title></head>
       <body>
         <main>
-          <h1>${'Account recovery details '.repeat(8)}</h1>
+          <h1>Save your recovery codes</h1>
           <p>Save these recovery codes somewhere secure.</p>
           <ul>
             <li>A1B2-C3D4-E5F6</li>
@@ -440,11 +482,14 @@ test('guide a login through the Nook Pilot control plane', async ({ page }) => {
   await demoBeat(page)
 
   await widget.getByRole('button', { name: 'Continue with Nook' }).click()
-  await expect(
-    widget.getByText(
-      'Choose a saved username in the Nook window. Matching logins for this site are listed there.',
-    ),
-  ).toBeVisible()
+  await expect(widget.getByTestId('nook-inline-login-picker')).toBeVisible()
+  await expect(widget.locator('p.description')).toBeHidden()
+  const pickerOpenedMessage = Schema.decodeUnknownSync(
+    requiredCatalogEntrySchema,
+  )(messages.widgetLoginPickerOpened)
+  await expect(widget.locator('p.description')).toHaveText(
+    pickerOpenedMessage.message,
+  )
   // Epoch-bound login choices cross the browser boundary through Rust/WASM
   // response decoder. The page must never receive the account identifiers or
   // credentials that belong to the companion picker.
@@ -457,7 +502,9 @@ test('guide a login through the Nook Pilot control plane', async ({ page }) => {
   )
   await expect(widget.getByText('Nook Pilot · 3/3')).toBeVisible()
   await expect(widget.getByText('Verifying sign-in')).toBeVisible()
-  await expect(page.getByRole('status')).toHaveText('Secure sign-in submitted')
+  await expect(page.locator('#site-status')).toHaveText(
+    'Secure sign-in submitted',
+  )
   await demoBeat(page)
 })
 
@@ -494,8 +541,12 @@ test('shows no matching credentials as a distinct Pilot state', async ({
     'data-state',
     'no-matching-credential',
   )
-  await expect(vaultStatus).toHaveText(
-    'No saved login matches this site yet. Open the vault to add one.',
+  await expect(vaultStatus).toHaveText('Matching saved logins: 0')
+  const noMatchMessage = Schema.decodeUnknownSync(requiredCatalogEntrySchema)(
+    messages.widgetLoginNoMatchDescription,
+  )
+  await expect(widget.locator('p.description')).toHaveText(
+    noMatchMessage.message,
   )
   await demoBeat(page)
 })

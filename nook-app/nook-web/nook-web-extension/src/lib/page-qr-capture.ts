@@ -1,8 +1,35 @@
 import {
-  AuthenticationAuthenticatorSetupRequest,
-  AuthenticationQrMediaObservation,
+  type AuthenticationAuthenticatorSetupBatch,
   type AuthenticationAuthenticatorSetupObservation,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  CompanionWasmSessionMessageType,
+  CompanionWasmAuthenticatorSetupResponseDecoder,
+  type CompanionWasmRuntimeMessage,
+} from '../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
+import {
+  CompanionWasmRuntimeDeliveryKind,
+  sendCompanionWasmRuntimeMessage,
+} from '../../../nook-web-shared/src/extension/companion-wasm-runtime-transport'
+import { Effect, Schema } from 'effect'
+
+enum SetupObservationPreparationKind {
+  Unprepared = 'unprepared',
+  Prepared = 'prepared',
+}
+
+export type AuthenticationAuthenticatorSetupSnapshot = {
+  readonly metadataKey: string
+  readonly observation: AuthenticationAuthenticatorSetupObservation
+}
+
+type SetupObservationPreparation =
+  | { readonly kind: SetupObservationPreparationKind.Unprepared }
+  | {
+      readonly kind: SetupObservationPreparationKind.Prepared
+      readonly metadataKey: string
+      readonly observation: AuthenticationAuthenticatorSetupObservation
+    }
 
 const OTPAUTH_TOTP_PREFIX = 'otpauth://totp/'
 
@@ -70,6 +97,9 @@ type DecodedOtpauthCandidates = DecodedOtpauthCandidate[]
 
 /** Owns this browser host’s resources and interaction lifecycle. */
 class PageQrCapture {
+  private setupObservation: SetupObservationPreparation = {
+    kind: SetupObservationPreparationKind.Unprepared,
+  }
   constructor(private readonly browser: BarcodeDetectorGlobal) {}
 
   private barcodeDetectorConstructor(): BarcodeDetectorAvailability {
@@ -127,33 +157,89 @@ class PageQrCapture {
     return ratio > 0.75 && ratio < 1.35
   }
 
-  authenticationAuthenticatorSetupObservation(): AuthenticationAuthenticatorSetupObservation {
-    for (const media of this.collectQrMedia()) {
-      const request = new AuthenticationAuthenticatorSetupRequest(
-        this.nearbyInstructionCopy(media),
-        AuthenticationQrMediaObservation.Present,
-      )
-      try {
-        switch (
-          request.classify_authentication_authenticator_setup_observation()
-        ) {
-          case 'present':
-            return 'present'
-          case 'absent':
-            break
-        }
-      } finally {
-        request.free()
-      }
-    }
-    const request = new AuthenticationAuthenticatorSetupRequest(
-      '',
-      AuthenticationQrMediaObservation.Absent,
+  private authenticatorSetupMetadata(): AuthenticationAuthenticatorSetupBatch {
+    const visibleInstructionCopies = this.collectQrMedia().map((media) =>
+      this.nearbyInstructionCopy(media),
     )
-    try {
-      return request.classify_authentication_authenticator_setup_observation()
-    } finally {
-      request.free()
+    switch (visibleInstructionCopies.length === 0) {
+      case true:
+        return { visibleInstructionCopies, qrMedia: 'absent' }
+      case false:
+        return { visibleInstructionCopies, qrMedia: 'present' }
+    }
+  }
+
+  prepareAuthenticationAuthenticatorSetupObservation(): Promise<AuthenticationAuthenticatorSetupSnapshot> {
+    return Effect.runPromise(
+      Effect.gen(
+        function* prepareSetupObservation(this: PageQrCapture) {
+          this.setupObservation = {
+            kind: SetupObservationPreparationKind.Unprepared,
+          }
+          const metadata = this.authenticatorSetupMetadata()
+          const message: CompanionWasmRuntimeMessage = {
+            type: CompanionWasmSessionMessageType.AuthenticationAuthenticatorSetupObservation,
+            payload: metadata,
+            origin: this.browser.location.origin,
+          }
+          const delivery = yield* Effect.promise(() =>
+            sendCompanionWasmRuntimeMessage(this.browser, message),
+          )
+          switch (delivery.kind) {
+            case CompanionWasmRuntimeDeliveryKind.Unavailable:
+              return yield* Effect.fail(
+                new Error('Authenticator setup runtime unavailable.'),
+              )
+            case CompanionWasmRuntimeDeliveryKind.Delivered: {
+              const { authenticatorSetupObservation: observation } =
+                yield* Schema.decodeUnknown(
+                  CompanionWasmAuthenticatorSetupResponseDecoder,
+                )(delivery.response).pipe(
+                  Effect.mapError(
+                    () =>
+                      new Error(
+                        'Authenticator setup runtime response rejected.',
+                      ),
+                  ),
+                )
+              const snapshot: AuthenticationAuthenticatorSetupSnapshot = {
+                metadataKey: JSON.stringify(metadata),
+                observation,
+              }
+              this.setupObservation = {
+                kind: SetupObservationPreparationKind.Prepared,
+                ...snapshot,
+              }
+              return Object.freeze(snapshot)
+            }
+          }
+        }.bind(this),
+      ),
+    )
+  }
+
+  authenticationAuthenticatorSetupSnapshotIsCurrent(
+    snapshot: AuthenticationAuthenticatorSetupSnapshot,
+  ): boolean {
+    return (
+      snapshot.metadataKey === JSON.stringify(this.authenticatorSetupMetadata())
+    )
+  }
+
+  authenticationAuthenticatorSetupObservation(): AuthenticationAuthenticatorSetupObservation {
+    switch (this.setupObservation.kind) {
+      case SetupObservationPreparationKind.Unprepared:
+        throw new Error('Authenticator setup observation is not prepared.')
+      case SetupObservationPreparationKind.Prepared:
+        switch (
+          this.setupObservation.metadataKey ===
+          JSON.stringify(this.authenticatorSetupMetadata())
+        ) {
+          case true:
+            return this.setupObservation.observation
+          case false:
+            throw new Error('Authenticator setup observation is stale.')
+        }
     }
   }
 
@@ -184,6 +270,22 @@ class PageQrCapture {
     return [media.previousElementSibling, media.nextElementSibling]
       .filter((element) => element instanceof HTMLElement)
       .filter((element) => element.matches('h1,h2,h3,h4,h5,h6,p'))
+  }
+
+  authenticationAuthenticatorSetupMutationRequiresScan(
+    record: MutationRecord,
+  ): boolean {
+    if (record.type !== 'childList' && record.type !== 'characterData')
+      return false
+    return this.collectQrMedia().some((media) =>
+      this.nearbyInstructionElements(media).some(
+        (instruction) =>
+          this.instructionElementVisibility(instruction) ===
+            InstructionElementCapture.Visible &&
+          (instruction === record.target ||
+            instruction.contains(record.target)),
+      ),
+    )
   }
 
   private instructionElementVisibility(

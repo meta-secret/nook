@@ -171,7 +171,7 @@ fn production_vault_wasm_is_preloaded_size_optimized_and_budgeted() {
         "extension_vault_access_scope",
         "extension_password_filling_scope",
         "is_extension_connect_scope",
-        ") -> nook_companion_core::ExtensionConnectScope",
+        "-> Result<tsify::Ts<nook_companion_core::ExtensionConnectScope>, wasm_bindgen::JsError>",
     ] {
         assert!(vault_wasm.contains(required));
     }

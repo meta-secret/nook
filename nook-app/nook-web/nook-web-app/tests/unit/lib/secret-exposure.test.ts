@@ -189,6 +189,20 @@ describe('secret exposure lifecycle', () => {
         expect(result.value.kind).toBe(VaultOperationStaleKind.OwnerReleased)
     }
     expect(record.free).toHaveBeenCalledOnce()
+    const current = fakeRecord('current credential')
+    const committedPage = new SecretExposure({})
+    const explicitReveal = await committedPage.toggle({
+      id: 'secret-1',
+      load: async () => ok(current),
+    })
+    explicitReveal.match(
+      (value) => expect(value).toEqual({ 'secret-1': current }),
+      () => {
+        throw new Error('Current page reveal unexpectedly failed')
+      },
+    )
+    committedPage.free()
+    expect(current.free).toHaveBeenCalledOnce()
   })
 
   test('does not start a reveal after its presentation owner is released', async () => {

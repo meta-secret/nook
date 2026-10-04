@@ -8,6 +8,13 @@ import {
   type AuthenticatorEnrollmentStageResponse,
 } from '../src/content/autofill/runtime-message-adapter'
 import type { BrowserMessageKey } from '../src/lib/browser-message-keys'
+import {
+  CompanionWasmSessionMessageType,
+  type CompanionWasmRuntimeMessage,
+  type CompanionWasmAuthenticatorSetupResponse,
+} from '../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
+import { classify_authentication_authenticator_setup_batch } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { pageQrCapture } from '../src/lib/page-qr-capture'
 
 class AuthenticatorEnrollmentDocumentFixture {
   install(): void {
@@ -25,6 +32,36 @@ class AuthenticatorEnrollmentDocumentFixture {
         querySelectorAll: () => [],
       },
       location: { origin: 'https://example.test' },
+      chrome: {
+        ...globalThis.chrome,
+        runtime: {
+          ...globalThis.chrome.runtime,
+          sendMessage(
+            message: CompanionWasmRuntimeMessage,
+            respond: (response: {
+              readonly ok: true
+              readonly result: CompanionWasmAuthenticatorSetupResponse
+            }) => void,
+          ): void {
+            if (
+              message.type !==
+              CompanionWasmSessionMessageType.AuthenticationAuthenticatorSetupObservation
+            )
+              throw new Error('Expected authenticator setup metadata.')
+            const result: CompanionWasmAuthenticatorSetupResponse = {
+              authenticatorSetupObservation:
+                classify_authentication_authenticator_setup_batch(
+                  message.payload,
+                ),
+            }
+            const response: Parameters<typeof respond>[0] = {
+              ok: true,
+              result,
+            }
+            respond(response)
+          },
+        },
+      },
     })
   }
 }
@@ -94,6 +131,7 @@ function enrollmentHost(confirmKind: number) {
 }
 
 test('explicit authenticator confirmation saves immediately after staging', async () => {
+  await pageQrCapture.prepareAuthenticationAuthenticatorSetupObservation()
   const { code, host, order, outcome } = enrollmentHost(0)
   const section = document.createElement('section')
   const uri = { value: 'otpauth://totp/Nook:test?secret=secret' }

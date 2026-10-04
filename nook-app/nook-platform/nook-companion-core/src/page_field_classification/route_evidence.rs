@@ -75,7 +75,6 @@ impl From<PageLoginContext> for bool {
 /// payloads are unsupported and older shapes intentionally fail closed.
 #[derive(Debug, serde::Deserialize, tsify::Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(from_wasm_abi)]
 pub struct AuthenticationControlTransportability {
     pub submission_method: crate::PageControlSubmissionMethod,
     pub username_field_count: crate::AuthenticationFieldCount,

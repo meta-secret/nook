@@ -18,6 +18,7 @@
     "tests/**/*.{test,spec}.ts",
     "tests/unit/setup-wasm.ts",
     "e2e/**/*.spec.ts",
+    "e2e/demos/pilot-companion-runtime.ts",
     "e2e/cleanup-github-repos.ts",
     "e2e/global-teardown.ts",
     "playwright*.config.ts",

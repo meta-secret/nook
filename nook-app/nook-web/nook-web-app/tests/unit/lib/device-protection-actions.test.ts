@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 
 const createPasskeyProtection = vi.hoisted(() => vi.fn())
+const authorizePasskeyProtection = vi.hoisted(() => vi.fn())
 
 vi.mock('$lib/auth/passkey-device-protection', async (importOriginal) => {
   const actual =
@@ -10,6 +11,7 @@ vi.mock('$lib/auth/passkey-device-protection', async (importOriginal) => {
   return {
     ...actual,
     setupDeviceProtection: createPasskeyProtection,
+    unlockDeviceProtection: authorizePasskeyProtection,
   }
 })
 
@@ -34,6 +36,7 @@ import {
 import { VaultState } from '$lib/vault.svelte'
 import {
   DeviceProtectionActions,
+  DeviceProtectionActionOutcome,
   DeviceProtectionLockOutcome,
 } from '$lib/vault/device-protection.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
@@ -79,6 +82,9 @@ class DeviceProtectionTestState extends VaultState {
 describe('device protection actions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    authorizePasskeyProtection.mockResolvedValue(
+      ok(PasskeyDeviceProtectionSuccess.Unlocked),
+    )
     createPasskeyProtection.mockReturnValue(
       ok(PasskeyDeviceProtectionSuccess.Configured),
     )
@@ -160,5 +166,69 @@ describe('device protection actions', () => {
     expect(state.deviceProtectionStatus).not.toBe(
       DeviceProtectionStatus.Unlocked,
     )
+  })
+  test('returns readiness after pending authorization despite a concurrent presentation error', async () => {
+    let resolveAuthorization!: (
+      result: Result<PasskeyDeviceProtectionSuccess, PasskeyCeremonyFailure>,
+    ) => void
+    const pending = new Promise<
+      Result<PasskeyDeviceProtectionSuccess, PasskeyCeremonyFailure>
+    >((resolve) => {
+      resolveAuthorization = resolve
+    })
+    authorizePasskeyProtection.mockReturnValue(pending)
+    const state = DeviceProtectionTestState.create()
+    const unlocking = new DeviceProtectionActions(state).unlockDeviceProtection(
+      { initializeSession: true },
+    )
+    state.errorMsg = 'concurrent presentation failed'
+    resolveAuthorization(ok(PasskeyDeviceProtectionSuccess.Unlocked))
+    expect(await unlocking).toBe(DeviceProtectionActionOutcome.Ready)
+    expect(state.deviceProtectionStatus).toBe(DeviceProtectionStatus.Unlocked)
+    expect(state.continueInitializationAfterDeviceUnlock).toHaveBeenCalledOnce()
+  })
+
+  test('cancelled pending authorization never reports readiness', async () => {
+    let resolveAuthorization!: (
+      result: Result<PasskeyDeviceProtectionSuccess, PasskeyCeremonyFailure>,
+    ) => void
+    const pending = new Promise<
+      Result<PasskeyDeviceProtectionSuccess, PasskeyCeremonyFailure>
+    >((resolve) => {
+      resolveAuthorization = resolve
+    })
+    authorizePasskeyProtection.mockReturnValue(pending)
+    const state = DeviceProtectionTestState.create()
+    const unlocking = new DeviceProtectionActions(state).unlockDeviceProtection(
+      { initializeSession: true },
+    )
+    const diagnostic = sanitizedPasskeyCeremonyData(
+      new DOMException('Cancelled', 'NotAllowedError'),
+    )
+    resolveAuthorization(
+      err(
+        new PasskeyCeremonyFailure({
+          action: PasskeyCeremonyAction.Unlock,
+          diagnostic,
+        }),
+      ),
+    )
+    expect(await unlocking).toBe(DeviceProtectionActionOutcome.Incomplete)
+    expect(state.continueInitializationAfterDeviceUnlock).not.toHaveBeenCalled()
+    expect(state.deviceProtectionStatus).not.toBe(
+      DeviceProtectionStatus.Unlocked,
+    )
+  })
+
+  test('failed initialization never reports readiness after successful authorization', async () => {
+    const state = DeviceProtectionTestState.create(
+      err(new VaultStorageFailure(VaultStorageFailureKind.OperationFailed)),
+    )
+    expect(
+      await new DeviceProtectionActions(state).unlockDeviceProtection({
+        initializeSession: true,
+      }),
+    ).toBe(DeviceProtectionActionOutcome.Incomplete)
+    expect(state.lockDeviceProtection).toHaveBeenCalledOnce()
   })
 })

@@ -3,7 +3,7 @@ import {
   type PasswordFormObservation,
   passwordFieldDiscovery,
 } from '../../../../nook-web-shared/src/extension/password-forms'
-import { recoveryCopyObservation } from '../../lib/backup-code-candidates'
+import { pageQrCapture } from '../../lib/page-qr-capture'
 
 export const AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER = [
   'aria-disabled',
@@ -95,16 +95,7 @@ const AUTHENTICATION_WORKFLOW_MUTATION_SELECTOR = [
 ].join(',')
 
 const AUTHENTICATION_RECOVERY_MUTATION_SELECTOR =
-  'h1, h2, h3, h4, h5, h6, [role="heading"], p, li, code, pre'
-
-enum AuthenticationRecoveryEvidenceKind {
-  Absent = 'absent',
-  Present = 'present',
-}
-
-type AuthenticationRecoveryEvidenceState = {
-  kind: AuthenticationRecoveryEvidenceKind
-}
+  'h1, h2, h3, h4, h5, h6, [role="heading"], label, legend'
 
 type WorkflowLabelDependencyRequest = {
   record: MutationRecord
@@ -119,18 +110,6 @@ type PreviousIdentityDependencyRequest = {
 
 /** Owns the browser runtime resources shared by these interactions. */
 class AuthenticationSurfaceObservation {
-  private authenticationRecoveryEvidenceState: AuthenticationRecoveryEvidenceState =
-    {
-      kind: AuthenticationRecoveryEvidenceKind.Absent,
-    }
-  recordAuthenticationRecoveryEvidenceState(): void {
-    this.authenticationRecoveryEvidenceState = {
-      kind: recoveryCopyObservation.pageHasDocumentBackupCodeHint()
-        ? AuthenticationRecoveryEvidenceKind.Present
-        : AuthenticationRecoveryEvidenceKind.Absent,
-    }
-  }
-
   private mutationTouchesAuthenticationRecoveryCopy(
     record: MutationRecord,
   ): boolean {
@@ -139,6 +118,12 @@ class AuthenticationSurfaceObservation {
       (node.matches(AUTHENTICATION_RECOVERY_MUTATION_SELECTOR) ||
         Boolean(node.querySelector(AUTHENTICATION_RECOVERY_MUTATION_SELECTOR)))
     if (record.type === 'childList') {
+      const target =
+        record.target instanceof Element
+          ? record.target
+          : record.target.parentElement
+      if (target?.closest(AUTHENTICATION_RECOVERY_MUTATION_SELECTOR))
+        return true
       return [...record.addedNodes, ...record.removedNodes].some(
         containsRecoveryCopyElement,
       )
@@ -150,17 +135,6 @@ class AuthenticationSurfaceObservation {
       record.target.parentElement?.closest(
         AUTHENTICATION_RECOVERY_MUTATION_SELECTOR,
       ),
-    )
-  }
-
-  private mutationCanIntroduceAuthenticationRecoveryEvidence(
-    record: MutationRecord,
-  ): boolean {
-    if (!this.mutationTouchesAuthenticationRecoveryCopy(record)) return false
-    return (
-      recoveryCopyObservation.pageHasDocumentBackupCodeHint() ||
-      this.authenticationRecoveryEvidenceState.kind ===
-        AuthenticationRecoveryEvidenceKind.Present
     )
   }
 
@@ -392,14 +366,17 @@ class AuthenticationSurfaceObservation {
 
   mutationCanChangeAuthenticationWorkflows(record: MutationRecord): boolean {
     if (
+      pageQrCapture.authenticationAuthenticatorSetupMutationRequiresScan(record)
+    )
+      return true
+    if (
       authenticationFactObserver.authenticationFactMutationTouchesLabelDependency(
         record,
       )
     )
       return true
     if (this.mutationCanIntroduceManualCheckpoint(record)) return true
-    if (this.mutationCanIntroduceAuthenticationRecoveryEvidence(record))
-      return true
+    if (this.mutationTouchesAuthenticationRecoveryCopy(record)) return true
     const containsAuthenticationControl = (node: Node): boolean =>
       node instanceof Element &&
       (node.matches(AUTHENTICATION_WORKFLOW_MUTATION_SELECTOR) ||

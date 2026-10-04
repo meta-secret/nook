@@ -7,7 +7,7 @@ const OBSERVATION_BINDING_VERSION: &str = "nook-auth-observation-v1:";
 /// Opaque canonical Rust binding for one ordered, bounded browser observation batch.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "string", into_wasm_abi, from_wasm_abi)]
+#[tsify(type = "string")]
 pub struct AuthenticationObservationBindingToken(String);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]

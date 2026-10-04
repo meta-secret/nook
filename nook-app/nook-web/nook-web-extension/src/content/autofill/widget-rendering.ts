@@ -397,10 +397,6 @@ class AuthenticationWidgetRenderer {
         void loginPasskeyInteraction.continueWithNook(nookTypedArgs0_7)
       }
     }
-    continueButton.addEventListener('pointerdown', (event) => {
-      if (event.button !== 0) return
-      activateContinueButton(event)
-    })
     continueButton.addEventListener('click', activateContinueButton)
 
     const takeOverButton = document.createElement('button')

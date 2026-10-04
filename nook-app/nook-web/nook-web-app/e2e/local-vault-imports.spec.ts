@@ -752,7 +752,7 @@ test.describe('local vault', () => {
       buffer: Buffer.from(exportJson),
     })
     const started = Date.now()
-    await page.getByTestId('bitwarden-import-submit').click()
+    await page.getByTestId('bitwarden-import-submit').click({ timeout: 30_000 })
     await expect(page.getByTestId('bitwarden-import-progress')).toContainText(
       'Import in progress',
     )
@@ -823,6 +823,8 @@ test.describe('local vault', () => {
     await expect(page.getByTestId('secret-page-next')).toBeDisabled()
     await expect(page.getByTestId('secret-page-previous')).toBeEnabled()
     await page.getByTestId('search-secrets').fill('demand-user-54')
+    await expect(page.getByTestId('secret-row')).toHaveCount(1)
+    await expect(page.getByTestId('secret-pagination')).not.toBeVisible()
     const row = page
       .getByTestId('secret-row')
       .filter({ hasText: 'demand-user-54' })

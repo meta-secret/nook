@@ -1,5 +1,19 @@
 //! Typed WASM bindings for portable page-field and password-form policy.
 
+use nook_companion_core::PageInputType;
+mod observation_priority;
+mod passkey_control;
+
+pub use observation_priority::{
+    authentication_form_observation_priority, authentication_page_observation_facts_priority,
+};
+
+pub use passkey_control::{
+    authentication_passkey_control_candidate_is_safe,
+    authentication_passkey_control_evidence_is_safe, looks_like_passkey_control_label,
+    looks_like_passkey_enrollment_or_management_label,
+};
+
 use nook_companion_core::AuthenticationAdvanceControlObservation;
 use nook_companion_core::AuthenticationControlText;
 use nook_companion_core::AuthenticationRouteActuation;
@@ -102,20 +116,6 @@ impl NookLoginContextObservation {
 
 #[wasm_bindgen]
 #[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn looks_like_passkey_control_label(label: &str) -> bool {
-    AuthenticationAdvanceControlObservation::looks_like_passkey_control_label(label)
-}
-
-#[wasm_bindgen]
-#[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn looks_like_passkey_enrollment_or_management_label(label: &str) -> bool {
-    AuthenticationAdvanceControlObservation::looks_like_passkey_enrollment_or_management_label(
-        label,
-    )
-}
-
-#[wasm_bindgen]
-#[must_use]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn looks_like_manual_checkpoint_label(label: &str) -> bool {
     AuthenticationAdvanceControlObservation::looks_like_manual_checkpoint_label(label)
 }
@@ -183,73 +183,62 @@ impl NookLoginContextObservation {
 
 #[wasm_bindgen]
 #[must_use]
-#[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authentication_passkey_control_candidate_is_safe(
-    candidate: nook_companion_core::AuthenticationDetailedPasskeyControlCandidateObservation,
-) -> bool {
-    candidate.authentication_passkey_control_candidate_is_safe()
-}
-
-#[wasm_bindgen]
-#[must_use]
-#[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authentication_passkey_control_evidence_is_safe(
-    evidence: nook_companion_core::AuthenticationDetailedPasskeyControlObservation,
-) -> bool {
-    evidence.authentication_passkey_control_evidence_is_safe()
-}
-
-#[wasm_bindgen]
-#[must_use]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        raw_numeric_public_api,
-        reason = "FFI boundary: exposes the authentication observation priority to JavaScript"
-    )
-)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authentication_form_observation_priority(
-    observation: nook_companion_core::AuthenticationPageObservation,
-) -> u8 {
-    (observation)
-        .authentication_form_observation_priority()
-        .into()
-}
-
-#[wasm_bindgen]
-#[must_use]
-#[allow(clippy::needless_pass_by_value)]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        raw_numeric_public_api,
-        reason = "FFI boundary: exposes the authentication facts priority to JavaScript"
-    )
-)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn authentication_page_observation_facts_priority(
-    facts: nook_companion_core::AuthenticationPageObservationFacts,
-) -> u8 {
-    (facts)
-        .authentication_page_observation_facts_priority()
-        .into()
-}
-
-#[wasm_bindgen]
-#[must_use]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn parse_page_input_type(value: &str) -> nook_companion_core::PageInputType {
-    nook_companion_core::PageInputType::parse(value)
+    PageInputType::parse(value)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::authentication_control_actuation::*;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_companion_core::AuthenticationAdvanceControlEvidence;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_companion_core::AuthenticationDetailedAdvanceControlObservation;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_companion_core::AuthenticationDetailedPasskeyControlCandidateObservation;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_companion_core::AuthenticationDetailedPasskeyControlObservation;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_companion_core::AuthenticationPageObservationFacts;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_companion_core::AuthenticationUsernameEvidence;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_companion_core::AuthenticationWorkflowAction;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_companion_core::AuthenticationWorkflowKind;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_companion_core::AuthenticationWorkflowMatch;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_companion_core::PageControlActionability;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_companion_core::PageControlOwnership;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_companion_core::PageControlSemantics;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_companion_core::PageControlSubmissionDestinationSource;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_companion_core::PageControlSubmissionMethod;
+    use nook_companion_core::PageInputType;
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn page_form_wasm_exports_match_one_time_code_policy() {
         let otp = NookPageInputFieldObservation::new(
-            nook_companion_core::PageInputType::Text,
+            PageInputType::Text,
             false,
             false,
             Vec::new(),
@@ -275,7 +264,7 @@ mod tests {
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn page_form_wasm_exports_match_authentication_route_policy() {
         let username = NookPageInputFieldObservation::new(
-            nook_companion_core::PageInputType::Text,
+            PageInputType::Text,
             false,
             false,
             Vec::new(),
@@ -358,7 +347,7 @@ mod tests {
         );
         assert_eq!(
             u8::from(
-                (nook_companion_core::AuthenticationPageObservationFacts::default())
+                (AuthenticationPageObservationFacts::default())
                     .authentication_page_observation_facts_priority()
             ),
             1
@@ -370,10 +359,9 @@ mod tests {
                 actionable_password_field_count: 1.into(),
                 ..Default::default()
             },
-            detailed_advance_control:
-                nook_companion_core::AuthenticationDetailedAdvanceControlObservation::observed(
-                    login_advance_observation("https://login.example.test/auth/login", "Sign in"),
-                ),
+            detailed_advance_control: AuthenticationDetailedAdvanceControlObservation::observed(
+                login_advance_observation("https://login.example.test/auth/login", "Sign in"),
+            ),
             ..Default::default()
         };
         assert_eq!(
@@ -387,10 +375,10 @@ mod tests {
         label: &str,
     ) -> nook_companion_core::AuthenticationAdvanceControlObservation {
         nook_companion_core::AuthenticationAdvanceControlObservation {
-            actionability: nook_companion_core::PageControlActionability::Actionable,
-            ownership: nook_companion_core::PageControlOwnership::OwnedForm,
-            semantics: nook_companion_core::PageControlSemantics::SemanticSubmit,
-            authentication_username: nook_companion_core::AuthenticationUsernameEvidence::Explicit,
+            actionability: PageControlActionability::Actionable,
+            ownership: PageControlOwnership::OwnedForm,
+            semantics: PageControlSemantics::SemanticSubmit,
+            authentication_username: AuthenticationUsernameEvidence::Explicit,
             password_field_count: 1.into(),
             new_password_field_count: 0.into(),
             one_time_code_field_count: 0.into(),
@@ -400,48 +388,46 @@ mod tests {
             destination_identity: destination.to_owned(),
             label: label.to_owned(),
             machine_identity: String::new(),
-            submission_method: nook_companion_core::PageControlSubmissionMethod::Absent,
-            submission_destination_source:
-                nook_companion_core::PageControlSubmissionDestinationSource::Authored,
+            submission_method: PageControlSubmissionMethod::Absent,
+            submission_destination_source: PageControlSubmissionDestinationSource::Authored,
         }
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn authentication_advance_control_wasm_export_accepts_and_rejects_observations() {
-        assert!(authentication_advance_control_is_safe(
-            login_advance_observation("https://login.example.test/auth/login", "Sign in",)
-        ));
-        assert!(!authentication_advance_control_is_safe(
-            login_advance_observation("https://login.example.test/register", "Sign in",)
-        ));
+        assert!(
+            (login_advance_observation("https://login.example.test/auth/login", "Sign in",))
+                .authentication_advance_control_is_safe()
+        );
+        assert!(
+            !(login_advance_observation("https://login.example.test/register", "Sign in",))
+                .authentication_advance_control_is_safe()
+        );
         let mut identifier_get =
             login_advance_observation("https://login.example.test/auth/login", "Continue");
         identifier_get.password_field_count = 0.into();
-        identifier_get.submission_method = nook_companion_core::PageControlSubmissionMethod::Get;
+        identifier_get.submission_method = PageControlSubmissionMethod::Get;
         identifier_get.submission_destination_source =
-            nook_companion_core::PageControlSubmissionDestinationSource::Authored;
-        assert!(authentication_advance_control_is_safe(
-            identifier_get.clone()
-        ));
+            PageControlSubmissionDestinationSource::Authored;
+        assert!((identifier_get.clone()).authentication_advance_control_is_safe());
         identifier_get.submission_destination_source =
-            nook_companion_core::PageControlSubmissionDestinationSource::Omitted;
+            PageControlSubmissionDestinationSource::Omitted;
         identifier_get.form_identity.clear();
-        assert!(authentication_advance_control_is_safe(identifier_get));
+        assert!((identifier_get).authentication_advance_control_is_safe());
 
         let mut microsoft = login_advance_observation("https://login.live.com/", "Next");
-        microsoft.authentication_username =
-            nook_companion_core::AuthenticationUsernameEvidence::Explicit;
+        microsoft.authentication_username = AuthenticationUsernameEvidence::Explicit;
         microsoft.password_field_count = 0.into();
         microsoft.source_origin = "https://login.live.com".to_owned();
         microsoft.form_identity.clear();
-        microsoft.submission_method = nook_companion_core::PageControlSubmissionMethod::Post;
-        assert!(authentication_advance_control_is_safe(microsoft.clone()));
+        microsoft.submission_method = PageControlSubmissionMethod::Post;
+        assert!((microsoft.clone()).authentication_advance_control_is_safe());
 
         let mut non_default_port = microsoft.clone();
         non_default_port.source_origin = "https://login.live.com:8443".to_owned();
         non_default_port.destination_identity = "https://login.live.com:8443/".to_owned();
-        assert!(!authentication_advance_control_is_safe(non_default_port));
+        assert!(!(non_default_port).authentication_advance_control_is_safe());
 
         for destination in [
             "https://live.com/",
@@ -451,37 +437,36 @@ mod tests {
         ] {
             let mut rejected = microsoft.clone();
             rejected.destination_identity = destination.to_owned();
-            assert!(!authentication_advance_control_is_safe(rejected));
+            assert!(!(rejected).authentication_advance_control_is_safe());
         }
 
         microsoft.form_identity = "signup".to_owned();
-        assert!(!authentication_advance_control_is_safe(microsoft.clone()));
+        assert!(!(microsoft.clone()).authentication_advance_control_is_safe());
         microsoft.form_identity.clear();
         microsoft.password_field_count = 1.into();
-        assert!(!authentication_advance_control_is_safe(microsoft.clone()));
+        assert!(!(microsoft.clone()).authentication_advance_control_is_safe());
         microsoft.password_field_count = 0.into();
-        microsoft.submission_method = nook_companion_core::PageControlSubmissionMethod::Get;
-        assert!(!authentication_advance_control_is_safe(microsoft));
+        microsoft.submission_method = PageControlSubmissionMethod::Get;
+        assert!(!(microsoft).authentication_advance_control_is_safe());
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn authentication_advance_control_wasm_export_preserves_amazon_identifier_policy() {
         let mut amazon = login_advance_observation("https://www.amazon.com/ax/claim", "Continue");
-        amazon.authentication_username =
-            nook_companion_core::AuthenticationUsernameEvidence::Generic;
+        amazon.authentication_username = AuthenticationUsernameEvidence::Generic;
         amazon.password_field_count = 0.into();
         amazon.source_origin = "https://www.amazon.com".to_owned();
         amazon.form_identity = "ap_login_form signIn".to_owned();
-        amazon.submission_method = nook_companion_core::PageControlSubmissionMethod::Post;
-        assert!(authentication_advance_control_is_safe(amazon.clone()));
+        amazon.submission_method = PageControlSubmissionMethod::Post;
+        assert!((amazon.clone()).authentication_advance_control_is_safe());
 
         let mut cross_origin = amazon.clone();
         cross_origin.destination_identity = "https://attacker.example/ax/claim".to_owned();
-        assert!(!authentication_advance_control_is_safe(cross_origin));
+        assert!(!(cross_origin).authentication_advance_control_is_safe());
 
-        amazon.submission_method = nook_companion_core::PageControlSubmissionMethod::Get;
-        assert!(!authentication_advance_control_is_safe(amazon));
+        amazon.submission_method = PageControlSubmissionMethod::Get;
+        assert!(!(amazon).authentication_advance_control_is_safe());
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
@@ -490,16 +475,16 @@ mod tests {
         let mut linkedin = login_advance_observation("https://www.linkedin.com/login/", "Sign in");
         linkedin.source_origin = "https://www.linkedin.com".to_owned();
         linkedin.form_identity.clear();
-        linkedin.ownership = nook_companion_core::PageControlOwnership::LocallyScoped;
-        linkedin.semantics = nook_companion_core::PageControlSemantics::Activation;
+        linkedin.ownership = PageControlOwnership::LocallyScoped;
+        linkedin.semantics = PageControlSemantics::Activation;
         linkedin.semantic_submit_control_count = 0.into();
-        assert!(authentication_advance_control_is_safe(linkedin.clone()));
+        assert!((linkedin.clone()).authentication_advance_control_is_safe());
 
         let mut owned_form = linkedin.clone();
-        owned_form.ownership = nook_companion_core::PageControlOwnership::OwnedForm;
-        assert!(!authentication_advance_control_is_safe(owned_form.clone()));
+        owned_form.ownership = PageControlOwnership::OwnedForm;
+        assert!(!(owned_form.clone()).authentication_advance_control_is_safe());
         owned_form.form_identity = "login-form".to_owned();
-        assert!(authentication_advance_control_is_safe(owned_form));
+        assert!((owned_form).authentication_advance_control_is_safe());
 
         for label in [
             "Show password",
@@ -516,7 +501,10 @@ mod tests {
         ] {
             let mut rejected = linkedin.clone();
             rejected.label = label.to_owned();
-            assert!(!authentication_advance_control_is_safe(rejected), "{label}");
+            assert!(
+                !(rejected).authentication_advance_control_is_safe(),
+                "{label}"
+            );
         }
 
         for destination in [
@@ -528,7 +516,7 @@ mod tests {
             let mut rejected = linkedin.clone();
             rejected.destination_identity = destination.to_owned();
             assert!(
-                !authentication_advance_control_is_safe(rejected),
+                !(rejected).authentication_advance_control_is_safe(),
                 "{destination}"
             );
         }
@@ -537,7 +525,7 @@ mod tests {
             let mut rejected = linkedin.clone();
             rejected.form_identity = form_identity.to_owned();
             assert!(
-                !authentication_advance_control_is_safe(rejected),
+                !(rejected).authentication_advance_control_is_safe(),
                 "{form_identity}"
             );
         }
@@ -546,23 +534,23 @@ mod tests {
             let mut rejected = linkedin.clone();
             rejected.machine_identity = machine_identity.to_owned();
             assert!(
-                !authentication_advance_control_is_safe(rejected),
+                !(rejected).authentication_advance_control_is_safe(),
                 "{machine_identity}"
             );
         }
 
         let mut unowned = linkedin.clone();
-        unowned.ownership = nook_companion_core::PageControlOwnership::Unowned;
-        assert!(!authentication_advance_control_is_safe(unowned));
+        unowned.ownership = PageControlOwnership::Unowned;
+        assert!(!(unowned).authentication_advance_control_is_safe());
 
         let mut inert = linkedin.clone();
-        inert.actionability = nook_companion_core::PageControlActionability::Inert;
-        assert!(!authentication_advance_control_is_safe(inert));
+        inert.actionability = PageControlActionability::Inert;
+        assert!(!(inert).authentication_advance_control_is_safe());
 
-        linkedin.semantics = nook_companion_core::PageControlSemantics::SemanticSubmit;
+        linkedin.semantics = PageControlSemantics::SemanticSubmit;
         linkedin.semantic_submit_control_count = 2.into();
         linkedin.label = "Primary action".to_owned();
-        assert!(!authentication_advance_control_is_safe(linkedin));
+        assert!(!(linkedin).authentication_advance_control_is_safe());
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
@@ -570,28 +558,25 @@ mod tests {
     fn authentication_advance_control_wasm_export_preserves_tesla_webauthn_email_policy() {
         let mut tesla =
             login_advance_observation("https://auth.tesla.com/oauth2/v1/authorize", "Next");
-        tesla.authentication_username =
-            nook_companion_core::AuthenticationUsernameEvidence::WebAuthnEmail;
+        tesla.authentication_username = AuthenticationUsernameEvidence::WebAuthnEmail;
         tesla.password_field_count = 0.into();
         tesla.source_origin = "https://auth.tesla.com".to_owned();
         tesla.form_identity.clear();
-        tesla.submission_method = nook_companion_core::PageControlSubmissionMethod::Get;
-        tesla.submission_destination_source =
-            nook_companion_core::PageControlSubmissionDestinationSource::Omitted;
-        assert!(authentication_advance_control_is_safe(tesla.clone()));
+        tesla.submission_method = PageControlSubmissionMethod::Get;
+        tesla.submission_destination_source = PageControlSubmissionDestinationSource::Omitted;
+        assert!((tesla.clone()).authentication_advance_control_is_safe());
 
         let mut initial = tesla.clone();
-        initial.actionability = nook_companion_core::PageControlActionability::Inert;
-        assert!(!authentication_advance_control_is_safe(initial.clone()));
+        initial.actionability = PageControlActionability::Inert;
+        assert!(!(initial.clone()).authentication_advance_control_is_safe());
         let planning_facts = nook_companion_core::AuthenticationPageObservationFacts {
             fields: nook_companion_core::AuthenticationFieldObservationFacts {
                 username_field_count: 1.into(),
                 ..Default::default()
             },
-            detailed_advance_control:
-                nook_companion_core::AuthenticationDetailedAdvanceControlObservation::observed(
-                    initial,
-                ),
+            detailed_advance_control: AuthenticationDetailedAdvanceControlObservation::observed(
+                initial,
+            ),
             ..Default::default()
         };
         assert!(matches!(
@@ -599,30 +584,29 @@ mod tests {
                 observations: vec![planning_facts.clone()],
             }
             .classify(),
-            nook_companion_core::AuthenticationWorkflowMatch::Matched(snapshot)
-                if snapshot.kind == nook_companion_core::AuthenticationWorkflowKind::Login
+            AuthenticationWorkflowMatch::Matched(snapshot)
+                if snapshot.kind == AuthenticationWorkflowKind::Login
                     && snapshot.action
-                        == nook_companion_core::AuthenticationWorkflowAction::ContinueWithNook
+                        == AuthenticationWorkflowAction::ContinueWithNook
         ));
-        let wasm_workflow = crate::classify_companion_authentication_workflow_facts(
-            nook_companion_core::AuthenticationPageObservationFactsBatch {
-                observations: vec![planning_facts],
-            },
-        );
-        assert_eq!(
-            crate::companion_authentication_workflow_match_kind(wasm_workflow),
-            crate::CompanionAuthenticationWorkflowMatchKind::Matched
-        );
+        let wasm_workflow = (nook_companion_core::AuthenticationPageObservationFactsBatch {
+            observations: vec![planning_facts],
+        })
+        .classify();
+        assert!(matches!(
+            wasm_workflow,
+            AuthenticationWorkflowMatch::Matched(_)
+        ));
 
         for evidence in [
-            nook_companion_core::AuthenticationUsernameEvidence::Absent,
-            nook_companion_core::AuthenticationUsernameEvidence::Generic,
-            nook_companion_core::AuthenticationUsernameEvidence::StandardsBasedEmail,
-            nook_companion_core::AuthenticationUsernameEvidence::Strong,
+            AuthenticationUsernameEvidence::Absent,
+            AuthenticationUsernameEvidence::Generic,
+            AuthenticationUsernameEvidence::StandardsBasedEmail,
+            AuthenticationUsernameEvidence::Strong,
         ] {
             let mut rejected = tesla.clone();
             rejected.authentication_username = evidence;
-            assert!(!authentication_advance_control_is_safe(rejected));
+            assert!(!(rejected).authentication_advance_control_is_safe());
         }
 
         for destination in [
@@ -637,21 +621,21 @@ mod tests {
             let mut rejected = tesla.clone();
             rejected.destination_identity = destination.to_owned();
             assert!(
-                !authentication_advance_control_is_safe(rejected),
+                !(rejected).authentication_advance_control_is_safe(),
                 "{destination}"
             );
         }
 
         let mut ambiguous = tesla.clone();
         ambiguous.semantic_submit_control_count = 2.into();
-        assert!(!authentication_advance_control_is_safe(ambiguous));
+        assert!(!(ambiguous).authentication_advance_control_is_safe());
 
         let mut unowned = tesla.clone();
-        unowned.ownership = nook_companion_core::PageControlOwnership::Unowned;
-        assert!(!authentication_advance_control_is_safe(unowned));
+        unowned.ownership = PageControlOwnership::Unowned;
+        assert!(!(unowned).authentication_advance_control_is_safe());
 
-        tesla.actionability = nook_companion_core::PageControlActionability::Inert;
-        assert!(!authentication_advance_control_is_safe(tesla));
+        tesla.actionability = PageControlActionability::Inert;
+        assert!(!(tesla).authentication_advance_control_is_safe());
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
@@ -661,16 +645,15 @@ mod tests {
             "https://auth.tesla.com/oauth2/v1/authorize?response_type=code&client_id=accounts&redirect_uri=https%3A%2F%2Faccounts.tesla.com%2Foauth2%2Fcallback&scope=offline_access+user+profile+ou_code+email&locale=en-US",
             "Sign In",
         );
-        tesla.actionability = nook_companion_core::PageControlActionability::Inert;
-        tesla.authentication_username = nook_companion_core::AuthenticationUsernameEvidence::Absent;
+        tesla.actionability = PageControlActionability::Inert;
+        tesla.authentication_username = AuthenticationUsernameEvidence::Absent;
         tesla.password_field_count = 1.into();
         tesla.source_origin = "https://auth.tesla.com".to_owned();
         tesla.form_identity.clear();
         tesla.machine_identity = "tds-btn".to_owned();
-        tesla.submission_method = nook_companion_core::PageControlSubmissionMethod::Get;
-        tesla.submission_destination_source =
-            nook_companion_core::PageControlSubmissionDestinationSource::Omitted;
-        assert!(authentication_advance_control_allows_password_disclosure_planning(tesla.clone()));
+        tesla.submission_method = PageControlSubmissionMethod::Get;
+        tesla.submission_destination_source = PageControlSubmissionDestinationSource::Omitted;
+        assert!((tesla.clone()).allows_tesla_password_disclosure_planning());
 
         for mutate in [
             |control: &mut nook_companion_core::AuthenticationAdvanceControlObservation| {
@@ -686,7 +669,7 @@ mod tests {
         ] {
             let mut rejected = tesla.clone();
             mutate(&mut rejected);
-            assert!(!authentication_advance_control_allows_password_disclosure_planning(rejected));
+            assert!(!(rejected).allows_tesla_password_disclosure_planning());
         }
     }
 
@@ -695,17 +678,16 @@ mod tests {
     fn authentication_advance_control_wasm_export_preserves_claude_email_policy() {
         let mut claude =
             login_advance_observation("https://claude.ai/login", "Continue with email");
-        claude.authentication_username =
-            nook_companion_core::AuthenticationUsernameEvidence::StandardsBasedEmail;
+        claude.authentication_username = AuthenticationUsernameEvidence::StandardsBasedEmail;
         claude.password_field_count = 0.into();
         claude.source_origin = "https://claude.ai".to_owned();
         claude.form_identity.clear();
-        claude.submission_method = nook_companion_core::PageControlSubmissionMethod::Post;
-        assert!(authentication_advance_control_is_safe(claude.clone()));
+        claude.submission_method = PageControlSubmissionMethod::Post;
+        assert!((claude.clone()).authentication_advance_control_is_safe());
 
         let mut generic_email_get = claude.clone();
-        generic_email_get.submission_method = nook_companion_core::PageControlSubmissionMethod::Get;
-        assert!(!authentication_advance_control_is_safe(generic_email_get));
+        generic_email_get.submission_method = PageControlSubmissionMethod::Get;
+        assert!(!(generic_email_get).authentication_advance_control_is_safe());
 
         for label in [
             "Continue with Google",
@@ -715,7 +697,10 @@ mod tests {
         ] {
             let mut rejected = claude.clone();
             rejected.label = label.to_owned();
-            assert!(!authentication_advance_control_is_safe(rejected), "{label}");
+            assert!(
+                !(rejected).authentication_advance_control_is_safe(),
+                "{label}"
+            );
         }
 
         for destination in [
@@ -727,35 +712,33 @@ mod tests {
             let mut rejected = claude.clone();
             rejected.destination_identity = destination.to_owned();
             assert!(
-                !authentication_advance_control_is_safe(rejected),
+                !(rejected).authentication_advance_control_is_safe(),
                 "{destination}"
             );
         }
 
         let mut inert = claude.clone();
-        inert.actionability = nook_companion_core::PageControlActionability::Inert;
-        assert!(!authentication_advance_control_is_safe(inert));
+        inert.actionability = PageControlActionability::Inert;
+        assert!(!(inert).authentication_advance_control_is_safe());
 
         let mut unowned = claude.clone();
-        unowned.ownership = nook_companion_core::PageControlOwnership::Unowned;
-        assert!(!authentication_advance_control_is_safe(unowned));
+        unowned.ownership = PageControlOwnership::Unowned;
+        assert!(!(unowned).authentication_advance_control_is_safe());
 
-        claude.authentication_username =
-            nook_companion_core::AuthenticationUsernameEvidence::Strong;
+        claude.authentication_username = AuthenticationUsernameEvidence::Strong;
         claude.semantic_submit_control_count = 2.into();
-        assert!(!authentication_advance_control_is_safe(claude));
+        assert!(!(claude).authentication_advance_control_is_safe());
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn authentication_advance_control_wasm_export_preserves_netflix_post_login_policy() {
         let mut netflix = login_advance_observation("https://www.netflix.com/login", "Continue");
-        netflix.authentication_username =
-            nook_companion_core::AuthenticationUsernameEvidence::Strong;
+        netflix.authentication_username = AuthenticationUsernameEvidence::Strong;
         netflix.source_origin = "https://www.netflix.com".to_owned();
         netflix.form_identity.clear();
-        netflix.submission_method = nook_companion_core::PageControlSubmissionMethod::Post;
-        assert!(authentication_advance_control_is_safe(netflix.clone()));
+        netflix.submission_method = PageControlSubmissionMethod::Post;
+        assert!((netflix.clone()).authentication_advance_control_is_safe());
         let generic_password_facts = nook_companion_core::AuthenticationPageObservationFacts {
             fields: nook_companion_core::AuthenticationFieldObservationFacts {
                 username_field_count: 1.into(),
@@ -764,10 +747,9 @@ mod tests {
                 actionable_password_field_count: 1.into(),
                 ..Default::default()
             },
-            detailed_advance_control:
-                nook_companion_core::AuthenticationDetailedAdvanceControlObservation::observed(
-                    netflix.clone(),
-                ),
+            detailed_advance_control: AuthenticationDetailedAdvanceControlObservation::observed(
+                netflix.clone(),
+            ),
             ..Default::default()
         };
         assert_eq!(
@@ -776,12 +758,12 @@ mod tests {
         );
 
         for method in [
-            nook_companion_core::PageControlSubmissionMethod::Get,
-            nook_companion_core::PageControlSubmissionMethod::Dialog,
+            PageControlSubmissionMethod::Get,
+            PageControlSubmissionMethod::Dialog,
         ] {
             let mut rejected = netflix.clone();
             rejected.submission_method = method;
-            assert!(!authentication_advance_control_is_safe(rejected));
+            assert!(!(rejected).authentication_advance_control_is_safe());
         }
 
         for label in [
@@ -796,7 +778,10 @@ mod tests {
         ] {
             let mut rejected = netflix.clone();
             rejected.label = label.to_owned();
-            assert!(!authentication_advance_control_is_safe(rejected), "{label}");
+            assert!(
+                !(rejected).authentication_advance_control_is_safe(),
+                "{label}"
+            );
         }
 
         for destination in [
@@ -809,24 +794,24 @@ mod tests {
             let mut rejected = netflix.clone();
             rejected.destination_identity = destination.to_owned();
             assert!(
-                !authentication_advance_control_is_safe(rejected),
+                !(rejected).authentication_advance_control_is_safe(),
                 "{destination}"
             );
         }
 
         let mut unowned = netflix.clone();
-        unowned.ownership = nook_companion_core::PageControlOwnership::Unowned;
-        assert!(!authentication_advance_control_is_safe(unowned));
+        unowned.ownership = PageControlOwnership::Unowned;
+        assert!(!(unowned).authentication_advance_control_is_safe());
 
         let mut inert_help = netflix.clone();
-        inert_help.actionability = nook_companion_core::PageControlActionability::Inert;
-        inert_help.semantics = nook_companion_core::PageControlSemantics::Activation;
+        inert_help.actionability = PageControlActionability::Inert;
+        inert_help.semantics = PageControlSemantics::Activation;
         inert_help.label = "Get Help".to_owned();
-        assert!(!authentication_advance_control_is_safe(inert_help));
+        assert!(!(inert_help).authentication_advance_control_is_safe());
 
         netflix.semantic_submit_control_count = 2.into();
         netflix.label = "Primary action".to_owned();
-        assert!(!authentication_advance_control_is_safe(netflix));
+        assert!(!(netflix).authentication_advance_control_is_safe());
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
@@ -840,29 +825,23 @@ mod tests {
             ceremony: nook_companion_core::AuthenticationCeremonyObservationFacts {
                 authentication_context:
                     nook_companion_core::AuthenticationCeremonyContextObservation {
-                        authentication_username:
-                            nook_companion_core::AuthenticationUsernameEvidence::Explicit,
+                        authentication_username: AuthenticationUsernameEvidence::Explicit,
                         source_origin: "https://x.com".to_owned(),
                         form_identity: String::new(),
                         destination_identity: "https://x.com/i/jf/onboarding/web?mode=login"
                             .to_owned(),
                     },
-                advance_control:
-                    nook_companion_core::AuthenticationAdvanceControlEvidence::ImplicitSubmission,
-                implicit_submission_method: nook_companion_core::PageControlSubmissionMethod::Get,
+                advance_control: AuthenticationAdvanceControlEvidence::ImplicitSubmission,
+                implicit_submission_method: PageControlSubmissionMethod::Get,
                 ..Default::default()
             },
             ..Default::default()
         };
-        let workflow = crate::classify_companion_authentication_workflow_facts(
-            nook_companion_core::AuthenticationPageObservationFactsBatch {
-                observations: vec![facts],
-            },
-        );
-        assert_eq!(
-            crate::companion_authentication_workflow_match_kind(workflow),
-            crate::CompanionAuthenticationWorkflowMatchKind::Matched
-        );
+        let workflow = (nook_companion_core::AuthenticationPageObservationFactsBatch {
+            observations: vec![facts],
+        })
+        .classify();
+        assert!(matches!(workflow, AuthenticationWorkflowMatch::Matched(_)));
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
@@ -877,60 +856,50 @@ mod tests {
                 ceremony: nook_companion_core::AuthenticationCeremonyObservationFacts {
                     authentication_context:
                         nook_companion_core::AuthenticationCeremonyContextObservation {
-                            authentication_username:
-                                nook_companion_core::AuthenticationUsernameEvidence::Explicit,
+                            authentication_username: AuthenticationUsernameEvidence::Explicit,
                             source_origin: "https://x.com".to_owned(),
                             form_identity: String::new(),
-                            destination_identity:
-                                "https://x.com/i/jf/onboarding/web?mode=login".to_owned(),
+                            destination_identity: "https://x.com/i/jf/onboarding/web?mode=login"
+                                .to_owned(),
                         },
-                    advance_control: nook_companion_core::AuthenticationAdvanceControlEvidence::ImplicitSubmission,
-                    implicit_submission_method:
-                        nook_companion_core::PageControlSubmissionMethod::Get,
+                    advance_control: AuthenticationAdvanceControlEvidence::ImplicitSubmission,
+                    implicit_submission_method: PageControlSubmissionMethod::Get,
                     ..Default::default()
                 },
                 control_label: String::new(),
                 control_machine_identity: String::new(),
             };
-        assert!(authentication_implicit_submit_actuation_is_safe(
-            observation.clone()
-        ));
+        assert!((observation.clone()).is_safe());
 
         observation.ceremony.authentication_context.form_identity = "signup".to_owned();
-        assert!(!authentication_implicit_submit_actuation_is_safe(
-            observation.clone()
-        ));
+        assert!(!(observation.clone()).is_safe());
         observation
             .ceremony
             .authentication_context
             .form_identity
             .clear();
         observation.control_label = "Continue with Google".to_owned();
-        assert!(!authentication_implicit_submit_actuation_is_safe(
-            observation
-        ));
+        assert!(!(observation).is_safe());
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn authentication_passkey_control_wasm_export_accepts_and_rejects_candidates() {
-        let accepted =
-            nook_companion_core::AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(
-                login_advance_observation("https://login.example.test/auth/passkey", "Use passkey"),
-            );
+        let accepted = AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(
+            login_advance_observation("https://login.example.test/auth/passkey", "Use passkey"),
+        );
         assert!((accepted).authentication_passkey_control_candidate_is_safe());
 
-        let rejected =
-            nook_companion_core::AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(
-                login_advance_observation(
-                    "https://login.example.test/auth/passkey/enroll",
-                    "Use passkey",
-                ),
-            );
+        let rejected = AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(
+            login_advance_observation(
+                "https://login.example.test/auth/passkey/enroll",
+                "Use passkey",
+            ),
+        );
         assert!(!(rejected).authentication_passkey_control_candidate_is_safe());
 
         let security_key_enrollment =
-            nook_companion_core::AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(
+            AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(
                 login_advance_observation(
                     "https://login.example.test/auth/security-key/create",
                     "Use security key",
@@ -942,9 +911,7 @@ mod tests {
             login_advance_observation("https://login.example.test/auth/passkey", "Use passkey");
         signup.new_password_field_count = 1.into();
         let signup_candidate =
-            nook_companion_core::AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(
-                signup,
-            );
+            AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(signup);
         assert!(!(signup_candidate).authentication_passkey_control_candidate_is_safe());
     }
 
@@ -979,14 +946,10 @@ mod tests {
             "Check your email to continue"
         ));
 
-        let safe_passkey =
-            nook_companion_core::AuthenticationDetailedPasskeyControlObservation::ExplicitlyMarked(
-                login_advance_observation("https://login.example.test/auth/passkey", "Use passkey"),
-            );
-        assert!((safe_passkey).authentication_passkey_control_evidence_is_safe());
-        assert_eq!(
-            parse_page_input_type(" PASSWORD "),
-            nook_companion_core::PageInputType::Password
+        let safe_passkey = AuthenticationDetailedPasskeyControlObservation::ExplicitlyMarked(
+            login_advance_observation("https://login.example.test/auth/passkey", "Use passkey"),
         );
+        assert!((safe_passkey).authentication_passkey_control_evidence_is_safe());
+        assert_eq!(parse_page_input_type(" PASSWORD "), PageInputType::Password);
     }
 }

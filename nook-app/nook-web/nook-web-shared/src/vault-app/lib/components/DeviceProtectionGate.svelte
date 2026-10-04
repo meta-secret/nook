@@ -70,16 +70,17 @@
   }
 
   async function completeProtectionAction(
-    action: () => Promise<void>,
+    action: () => Promise<deviceProtectionActions.DeviceProtectionActionOutcome>,
   ): Promise<void> {
     onBeforeProtectionAction()
     try {
-      await action()
-      if (
-        !vault.errorMsg &&
-        vault.deviceProtectionStatus === DeviceProtectionStatus.Unlocked
-      ) {
-        onProtectionReady()
+      const outcome = await action()
+      switch (outcome) {
+        case deviceProtectionActions.DeviceProtectionActionOutcome.Ready:
+          onProtectionReady()
+          break
+        case deviceProtectionActions.DeviceProtectionActionOutcome.Incomplete:
+          break
       }
     } finally {
       onProtectionActionSettled?.()

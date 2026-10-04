@@ -26,22 +26,22 @@ use zeroize::Zeroize;
 
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct CompanionIdentityStatusRequestAdmission(CompanionIdentityStatusAdmissionRequest);
 
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct CompanionHandoffResponseValueAdmission(CompanionIdentityHandoffResponse);
 
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct CompanionExtensionPresenceAdmission(CompanionExtensionPresence);
 
 #[derive(Deserialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "unknown", from_wasm_abi)]
+#[tsify(type = "unknown")]
 pub struct CompanionHandoffAuthorizationAdmission(CompanionIdentityHandoffAuthorization);
 
 #[derive(Debug, thiserror::Error)]
@@ -71,10 +71,16 @@ impl NookVaultManager {
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn admit_companion_identity_status(
-    request: CompanionIdentityStatusRequestAdmission,
-) -> CompanionIdentityStatusAdmission {
-    let CompanionIdentityStatusRequestAdmission(request) = request;
-    CompanionIdentityStatusAdmission::admit(request)
+    request: &tsify::Ts<CompanionIdentityStatusRequestAdmission>,
+) -> Result<tsify::Ts<CompanionIdentityStatusAdmission>, wasm_bindgen::JsError> {
+    let request = request
+        .to_rust()
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+    let result = {
+        let CompanionIdentityStatusRequestAdmission(request) = request;
+        CompanionIdentityStatusAdmission::admit(request)
+    };
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
@@ -84,10 +90,16 @@ pub fn admit_companion_identity_status(
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn admit_companion_handoff_response(
-    response: CompanionHandoffResponseValueAdmission,
-) -> CompanionHandoffResponseAdmission {
-    let CompanionHandoffResponseValueAdmission(response) = response;
-    CompanionHandoffResponseAdmission::admit(response)
+    response: &tsify::Ts<CompanionHandoffResponseValueAdmission>,
+) -> Result<tsify::Ts<CompanionHandoffResponseAdmission>, wasm_bindgen::JsError> {
+    let response = response
+        .to_rust()
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+    let result = {
+        let CompanionHandoffResponseValueAdmission(response) = response;
+        CompanionHandoffResponseAdmission::admit(response)
+    };
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 
 pub(in crate::manager) struct PendingCompanionWebsiteHandoff {
@@ -146,21 +158,32 @@ struct CompanionAuthorizedSealOperation<'a> {
 impl NookCompanionExtensionEndpoint {
     #[wasm_bindgen(constructor)]
     #[allow(clippy::needless_pass_by_value)]
-    pub fn new(presence: CompanionExtensionPresenceAdmission) -> Result<Self, JsError> {
+    pub fn new(
+        presence: &tsify::Ts<CompanionExtensionPresenceAdmission>,
+    ) -> Result<Self, wasm_bindgen::JsError> {
+        let presence = presence
+            .to_rust()
+            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+
         let CompanionExtensionPresenceAdmission(presence) = presence;
         Self::from_presence(presence).map_err(|error| NookVaultManager::companion_js_error(&error))
     }
 
     #[wasm_bindgen(getter)]
-    pub fn presence(&self) -> CompanionExtensionPresence {
-        self.inner.presence()
+    pub fn presence(&self) -> Result<tsify::Ts<CompanionExtensionPresence>, wasm_bindgen::JsError> {
+        let result = { self.inner.presence() };
+        Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
     }
 
     #[allow(clippy::needless_pass_by_value)]
     pub fn discover(
         self,
-        discovery: CompanionIdentityDiscoveryObservation,
-    ) -> Result<NookDiscoveredCompanionExtensionEndpoint, JsError> {
+        discovery: &tsify::Ts<CompanionIdentityDiscoveryObservation>,
+    ) -> Result<NookDiscoveredCompanionExtensionEndpoint, wasm_bindgen::JsError> {
+        let discovery = discovery
+            .to_rust()
+            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+
         let inner = self
             .inner
             .discover(discovery)
@@ -188,18 +211,18 @@ pub struct NookDiscoveredCompanionExtensionEndpoint {
 #[wasm_bindgen]
 impl NookDiscoveredCompanionExtensionEndpoint {
     #[wasm_bindgen(getter)]
-    pub fn status(&self) -> CompanionIdentityStatus {
-        self.inner.status()
+    pub fn status(&self) -> Result<tsify::Ts<CompanionIdentityStatus>, wasm_bindgen::JsError> {
+        let result = { self.inner.status() };
+        Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
     }
-
-    #[expect(
-        clippy::needless_pass_by_value,
-        reason = "wasm-bindgen owns the exported observation argument"
-    )]
     pub fn rediscover(
         self,
-        discovery: CompanionIdentityDiscoveryObservation,
-    ) -> Result<Self, JsError> {
+        discovery: &tsify::Ts<CompanionIdentityDiscoveryObservation>,
+    ) -> Result<Self, wasm_bindgen::JsError> {
+        let discovery = discovery
+            .to_rust()
+            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+
         let inner = self
             .inner
             .observe(&discovery)
@@ -211,8 +234,12 @@ impl NookDiscoveredCompanionExtensionEndpoint {
     pub async fn authorize_and_seal(
         self,
         manager: &mut NookVaultManager,
-        authorization: CompanionHandoffAuthorizationAdmission,
-    ) -> Result<CompanionIdentityHandoffResponse, JsError> {
+        authorization: &tsify::Ts<CompanionHandoffAuthorizationAdmission>,
+    ) -> Result<tsify::Ts<CompanionIdentityHandoffResponse>, wasm_bindgen::JsError> {
+        let authorization = authorization
+            .to_rust()
+            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+
         let CompanionHandoffAuthorizationAdmission(authorization) = authorization;
         let authorized = self
             .inner
@@ -223,11 +250,14 @@ impl NookDiscoveredCompanionExtensionEndpoint {
         manager.ensure_signing_identity().await.map_err(|error| {
             NookVaultManager::companion_js_error(&CompanionOperationError::Manager(error))
         })?;
-        NookCompanionExtensionEndpoint::seal_authorized_loaded(CompanionAuthorizedSealOperation {
-            manager,
-            authorized,
-        })
-        .map_err(|error| NookVaultManager::companion_js_error(&error))
+        let result = NookCompanionExtensionEndpoint::seal_authorized_loaded(
+            CompanionAuthorizedSealOperation {
+                manager,
+                authorized,
+            },
+        )
+        .map_err(|error| NookVaultManager::companion_js_error(&error))?;
+        Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
     }
 }
 
@@ -331,12 +361,16 @@ impl NookVaultManager {
     #[allow(clippy::needless_pass_by_value)]
     pub fn begin_companion_identity_handoff(
         &mut self,
-        begin: CompanionWebsiteHandoffBegin,
-    ) -> Result<NookPendingCompanionIdentityHandoff, JsError> {
+        begin: &tsify::Ts<CompanionWebsiteHandoffBegin>,
+    ) -> Result<NookPendingCompanionIdentityHandoff, wasm_bindgen::JsError> {
+        let begin = begin
+            .to_rust()
+            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+
         let request = self
             .begin_companion_identity_handoff_inner(begin)
             .map_err(|error| NookVaultManager::companion_js_error(&error))?;
-        Ok(NookPendingCompanionIdentityHandoff {
+        Ok::<_, wasm_bindgen::JsError>(NookPendingCompanionIdentityHandoff {
             binding: HandoffBinding::new(self),
             request,
         })
@@ -400,17 +434,24 @@ pub struct NookPendingCompanionIdentityHandoff {
 #[wasm_bindgen]
 impl NookPendingCompanionIdentityHandoff {
     #[wasm_bindgen(getter)]
-    pub fn request(&self) -> CompanionIdentityHandoffRequest {
-        self.request.clone()
+    pub fn request(
+        &self,
+    ) -> Result<tsify::Ts<CompanionIdentityHandoffRequest>, wasm_bindgen::JsError> {
+        let result = { self.request.clone() };
+        Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
     }
     pub async fn finish(
         self,
         manager: &mut NookVaultManager,
-        response: CompanionIdentityHandoffResponse,
-    ) -> Result<NookAdoptedExtensionIdentityHandoff, JsError> {
+        response: &tsify::Ts<CompanionIdentityHandoffResponse>,
+    ) -> Result<NookAdoptedExtensionIdentityHandoff, wasm_bindgen::JsError> {
+        let response = response
+            .to_rust()
+            .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+
         self.binding.check(manager)?;
         match manager.finish_companion_identity_handoff(response).await {
-            Ok(adopted) => Ok(adopted),
+            Ok::<_, wasm_bindgen::JsError>(adopted) => Ok::<_, wasm_bindgen::JsError>(adopted),
             Err(error) => {
                 manager.rollback_extension_identity_handoff();
                 Err(error)
@@ -420,6 +461,226 @@ impl NookPendingCompanionIdentityHandoff {
     pub fn cancel(self, manager: &mut NookVaultManager) -> Result<(), JsError> {
         self.binding.check(manager)?;
         manager.rollback_extension_identity_handoff();
+        Ok(())
+    }
+}
+
+#[cfg(all(test, target_arch = "wasm32"))]
+mod typed_boundary_tests {
+    use super::*;
+    use nook_companion_core::{
+        CompanionIdentityDiscoveryRequest, CompanionInstallationAppKey, CompanionUnlockedAppKey,
+        ExtensionConnectScope, ExtensionPairingVaultType,
+    };
+    use serde::Serialize;
+    use serde_wasm_bindgen::Serializer;
+    use tsify::Ts;
+    use wasm_bindgen_test::wasm_bindgen_test;
+    use zeroize::Zeroizing;
+
+    struct PublicHandoffScenario {
+        website: NookVaultManager,
+        extension: NookVaultManager,
+        presence: CompanionExtensionPresence,
+        discovery: CompanionIdentityDiscoveryObservation,
+    }
+
+    impl PublicHandoffScenario {
+        fn new() -> Result<Self, JsError> {
+            let identity = DeviceIdentity::generate()?;
+            let (signing, signing_seed) = SigningIdentity::generate()?;
+            let mut extension = NookVaultManager::new();
+            extension.application = VaultApplication::Extension;
+            extension.vault.store_id = "public-boundary-store".to_owned();
+            extension.device.id = identity.device_id().as_str().to_owned();
+            extension.device.identity_private_key = identity.secret_string().into_inner();
+            extension.event_log.signing_seed = signing_seed.into_inner();
+            let presence = CompanionExtensionPresence::Unlocked {
+                vault_type: ExtensionPairingVaultType::Simple,
+                vault_store_id: extension.vault.store_id.clone(),
+                vault_name: "Personal".to_owned(),
+                app_key: CompanionUnlockedAppKey {
+                    extension_runtime_id: "public-boundary-runtime".to_owned(),
+                    app_key: CompanionInstallationAppKey {
+                        app_id: extension.device.id.clone(),
+                        encryption_public_key: identity.public_key().as_str().to_owned(),
+                        signing_public_key: signing.public_key().as_str().to_owned(),
+                        installation_label: "Nook Extension".to_owned(),
+                    },
+                    nonce: "public-boundary-nonce".to_owned(),
+                    scopes: vec![ExtensionConnectScope::VaultAccess],
+                },
+            };
+            let discovery = CompanionIdentityDiscoveryObservation {
+                request: CompanionIdentityDiscoveryRequest {
+                    request_id: "public-boundary-request".to_owned(),
+                    vault_store_id: extension.vault.store_id.clone(),
+                    expires_at: serde_json::from_str("200")?,
+                },
+                observed_at: serde_json::from_str("100")?,
+            };
+            Ok(Self {
+                website: NookVaultManager::new(),
+                extension,
+                presence,
+                discovery,
+            })
+        }
+
+        fn endpoint(&self) -> Result<NookDiscoveredCompanionExtensionEndpoint, JsError> {
+            let presence = self.presence.into_ts()?;
+            let endpoint =
+                NookCompanionExtensionEndpoint::new(&Ts::new_unchecked(presence.js_value()))?;
+            assert_eq!(endpoint.presence()?.to_rust()?, self.presence);
+            endpoint.discover(&self.discovery.into_ts()?)
+        }
+
+        fn pending_secret(&self) -> Result<Zeroizing<String>, JsError> {
+            match &self.website.device.extension_handoff_private_key {
+                ExtensionHandoffState::Companion(pending) => {
+                    Ok(Zeroizing::new(pending.recipient_secret.clone()))
+                }
+                ExtensionHandoffState::Idle | ExtensionHandoffState::Recipient(_) => {
+                    Err(JsError::new("Public fixture has no pending transaction."))
+                }
+            }
+        }
+
+        fn begin(&mut self) -> Result<NookPendingCompanionIdentityHandoff, JsError> {
+            let endpoint = self.endpoint()?.rediscover(&self.discovery.into_ts()?)?;
+            let admission = CompanionIdentityStatusAdmissionRequest {
+                discovery: self.discovery.clone(),
+                status: endpoint.status()?.to_rust()?,
+                observed_at: self.discovery.observed_at,
+            }
+            .into_ts()?;
+            let admitted =
+                admit_companion_identity_status(&Ts::new_unchecked(admission.js_value()))?
+                    .to_rust()?;
+            match admitted {
+                CompanionIdentityStatusAdmission::Accepted { transaction } => {
+                    self.website.begin_companion_identity_handoff(
+                        &CompanionWebsiteHandoffBegin {
+                            transaction: *transaction,
+                            context: CompanionIdentityHandoffContext::PairedVault {
+                                vault_store_id: self.extension.vault.store_id.clone(),
+                            },
+                        }
+                        .into_ts()?,
+                    )
+                }
+                CompanionIdentityStatusAdmission::Rejected { .. } => {
+                    Err(JsError::new("Public fixture was not admitted."))
+                }
+            }
+        }
+    }
+
+    #[wasm_bindgen_test]
+    async fn public_handoff_roundtrip_preserves_correlation_and_cancellation() -> Result<(), JsError>
+    {
+        let mut scenario = PublicHandoffScenario::new()?;
+        let pending = scenario.begin()?;
+        let request = pending.request()?.to_rust()?;
+        assert_eq!(request.transaction.discovery, scenario.discovery);
+        let authorization = CompanionIdentityHandoffAuthorization {
+            request: request.clone(),
+            observed_at: scenario.discovery.observed_at,
+            presence: scenario.presence.clone(),
+        }
+        .into_ts()?;
+        let endpoint = scenario.endpoint()?;
+        let response = endpoint
+            .authorize_and_seal(
+                &mut scenario.extension,
+                &Ts::new_unchecked(authorization.js_value()),
+            )
+            .await?;
+        let response_value = response.to_rust()?;
+        assert_eq!(response_value.request, request);
+        assert!(!response_value.encrypted_envelope.is_empty());
+        let admission =
+            admit_companion_handoff_response(&Ts::new_unchecked(response.js_value()))?.to_rust()?;
+        assert!(matches!(
+            admission,
+            CompanionHandoffResponseAdmission::Accepted { .. }
+        ));
+        pending.cancel(&mut scenario.website)?;
+        assert!(
+            scenario
+                .website
+                .device
+                .extension_handoff_private_key
+                .is_empty()
+        );
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn malformed_public_inputs_preserve_pending_manager_state() -> Result<(), JsError> {
+        let mut scenario = PublicHandoffScenario::new()?;
+        let pending = scenario.begin()?;
+        let key = scenario.pending_secret()?;
+        assert!(!key.is_empty());
+        assert!(
+            scenario
+                .website
+                .begin_companion_identity_handoff(&Ts::new_unchecked(
+                    Option::<bool>::None.serialize(&Serializer::json_compatible())?
+                ),)
+                .is_err()
+        );
+        assert!(scenario.pending_secret()? == key);
+        assert!(
+            pending
+                .finish(
+                    &mut scenario.website,
+                    &Ts::new_unchecked(serde_wasm_bindgen::to_value(&true)?)
+                )
+                .await
+                .is_err()
+        );
+        assert!(scenario.pending_secret()? == key);
+        let signing_seed = Zeroizing::new(scenario.extension.event_log.signing_seed.clone());
+        assert!(
+            scenario
+                .endpoint()?
+                .authorize_and_seal(
+                    &mut scenario.extension,
+                    &Ts::new_unchecked(
+                        Option::<bool>::None.serialize(&Serializer::json_compatible())?
+                    ),
+                )
+                .await
+                .is_err()
+        );
+        assert!(scenario.extension.event_log.signing_seed == *signing_seed);
+        assert!(
+            NookCompanionExtensionEndpoint::new(&Ts::new_unchecked(serde_wasm_bindgen::to_value(
+                &true
+            )?))
+            .is_err()
+        );
+        assert!(
+            scenario
+                .endpoint()?
+                .rediscover(&Ts::new_unchecked(
+                    Option::<bool>::None.serialize(&Serializer::json_compatible())?
+                ))
+                .is_err()
+        );
+        assert!(
+            admit_companion_identity_status(&Ts::new_unchecked(serde_wasm_bindgen::to_value(
+                &true
+            )?))
+            .is_err()
+        );
+        assert!(
+            admit_companion_handoff_response(&Ts::new_unchecked(
+                Option::<bool>::None.serialize(&Serializer::json_compatible())?
+            ))
+            .is_err()
+        );
         Ok(())
     }
 }

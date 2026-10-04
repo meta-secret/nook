@@ -593,8 +593,14 @@ export async function reloadUnlockLocalVaultWithSync(
     ).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await disableVaultIdleLock(page)
     await dismissSyncConflictIfVisible(page)
+    await expect
+      .poll(
+        () => page.evaluate(() => window.__nookVault?.isVerifying === false),
+        { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+      )
+      .toBe(true)
+    await disableVaultIdleLock(page)
     await waitForVaultOperationsIdle(page)
     await forceVaultQuiescentForE2e(page)
     await waitForLoadedSyncProviders(page)

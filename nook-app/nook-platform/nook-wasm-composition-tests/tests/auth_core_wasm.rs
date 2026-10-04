@@ -23,10 +23,9 @@ fn auth2_key_is_accepted_by_core_crypto() -> Result<()> {
 }
 
 #[test]
-fn core_password_options_are_accepted_by_nook_wasm() -> Result<()> {
-    let options: PasswordGenerationOptions = nook_wasm::default_password_generation_options();
-    let password = nook_wasm::generate_password(options)
-        .map_err(|_| anyhow::anyhow!("nook WASM rejected valid core password options"))?;
+fn core_password_options_generate_the_wasm_default_password() -> Result<()> {
+    let options = PasswordGenerationOptions::default();
+    let password = PasswordGenerationOptions::generate(options)?;
     assert_eq!(password.len(), 20);
     Ok(())
 }

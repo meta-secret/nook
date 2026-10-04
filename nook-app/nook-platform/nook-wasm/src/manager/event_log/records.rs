@@ -4,7 +4,6 @@ use nook_core::VaultEvent;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Deserialize, tsify::Tsify)]
-#[tsify(from_wasm_abi)]
 #[serde(rename_all = "camelCase")]
 pub struct ExternalEventLogRecord {
     pub event_id: String,
@@ -12,7 +11,7 @@ pub struct ExternalEventLogRecord {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, tsify::Tsify)]
-#[tsify(into_wasm_abi, hashmap_as_object)]
+#[tsify(hashmap_as_object)]
 #[serde(rename_all = "camelCase")]
 pub struct EventLogStorageRecord {
     pub event_id: String,

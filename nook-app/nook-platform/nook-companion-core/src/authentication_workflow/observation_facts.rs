@@ -16,7 +16,8 @@ mod passkey;
 mod revalidation;
 mod submission;
 pub use authenticator::{
-    AuthenticationAuthenticatorObservationFacts, AuthenticationAuthenticatorSetupCopy,
+    AuthenticationAuthenticatorObservationFacts, AuthenticationAuthenticatorSetupBatch,
+    AuthenticationAuthenticatorSetupBatchError, AuthenticationAuthenticatorSetupCopy,
     AuthenticationAuthenticatorSetupCopyError, AuthenticationAuthenticatorSetupEvidence,
     AuthenticationAuthenticatorSetupObservation, AuthenticationBackupCodesObservation,
     AuthenticationPasskeyAccountAvailability, AuthenticationQrMediaObservation,
@@ -47,7 +48,6 @@ pub use submission::{
 /// Raw browser facts grouped by the authentication domains that own their conversion.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct AuthenticationPageObservationFacts {
     pub fields: AuthenticationFieldObservationFacts,
     pub ceremony: AuthenticationCeremonyObservationFacts,

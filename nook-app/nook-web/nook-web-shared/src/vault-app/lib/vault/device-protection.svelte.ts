@@ -113,6 +113,11 @@ type PersistedProtectionStatusRequest = {
   readonly status: DeviceProtectionStatus;
 };
 
+export enum DeviceProtectionActionOutcome {
+  Ready = "ready",
+  Incomplete = "incomplete",
+}
+
 export enum DeviceProtectionLockOutcome {
   Locked = "locked",
 }
@@ -244,9 +249,10 @@ export class DeviceProtectionActions {
     passkeyLabel,
     deviceMode,
     initializeSession,
-  }: VaultDeviceProtectionSetupRequest): Promise<void> {
+  }: VaultDeviceProtectionSetupRequest): Promise<DeviceProtectionActionOutcome> {
     const state = this.state;
-    if (!state.hasManager || state.isVerifying) return;
+    if (!state.hasManager || state.isVerifying)
+      return DeviceProtectionActionOutcome.Incomplete;
     state.isVerifying = true;
     state.errorMsg = "";
     let deviceIdentityUnlocked = false;
@@ -278,7 +284,7 @@ export class DeviceProtectionActions {
       );
       if (ceremony.isErr()) {
         this.presentCeremonyFailure(ceremony.error);
-        return;
+        return DeviceProtectionActionOutcome.Incomplete;
       }
       deviceIdentityUnlocked = true;
       const finishAuthorizedInitializationArgs: Parameters<
@@ -293,8 +299,9 @@ export class DeviceProtectionActions {
         };
         this.lockFailedAuthorization(failedAuthorization);
         state.errorMsg = state.t(initialized.error.translationKey);
-        return;
+        return DeviceProtectionActionOutcome.Incomplete;
       }
+      return DeviceProtectionActionOutcome.Ready;
     } catch (error) {
       if (isPasskeyCeremonyNotAllowedError(error)) {
         const logPasskeyCeremonyArgs: Parameters<
@@ -307,7 +314,7 @@ export class DeviceProtectionActions {
         state.errorMsg = state.t(
           I18N_KEYS.DeviceProtectionPasskeyCreateNotAllowed,
         );
-        return;
+        return DeviceProtectionActionOutcome.Incomplete;
       }
       if (isPasskeyUnavailableError(error)) {
         const logPasskeyCeremonyArgs2: Parameters<
@@ -322,7 +329,7 @@ export class DeviceProtectionActions {
         state.errorMsg = state.t(
           I18N_KEYS.DeviceProtectionPasskeyUnavailablePinFallbackReady,
         );
-        return;
+        return DeviceProtectionActionOutcome.Incomplete;
       }
       if (isPasskeyPrfUnavailableError(error)) {
         const logPasskeyCeremonyArgs3: Parameters<
@@ -335,7 +342,7 @@ export class DeviceProtectionActions {
         this.logPasskeyCeremony(logPasskeyCeremonyArgs3);
         state.deviceProtectionStatus = DeviceProtectionStatus.PinSetup;
         state.errorMsg = state.t(I18N_KEYS.DeviceProtectionPinFallbackReady);
-        return;
+        return DeviceProtectionActionOutcome.Incomplete;
       }
       const logPasskeyCeremonyArgs4: Parameters<
         DeviceProtectionActions["logPasskeyCeremony"]
@@ -357,6 +364,7 @@ export class DeviceProtectionActions {
       state.isVerifying = false;
       state.isInitializing = false;
     }
+    return DeviceProtectionActionOutcome.Incomplete;
   }
 
   private presentCeremonyFailure(
@@ -375,9 +383,10 @@ export class DeviceProtectionActions {
     this.state.errorMsg = this.state.t(failure.translationKey);
   }
 
-  async recoverDeviceProtectionWithPasskey(): Promise<void> {
+  async recoverDeviceProtectionWithPasskey(): Promise<DeviceProtectionActionOutcome> {
     const state = this.state;
-    if (!state.hasManager || state.isVerifying) return;
+    if (!state.hasManager || state.isVerifying)
+      return DeviceProtectionActionOutcome.Incomplete;
     state.isVerifying = true;
     state.errorMsg = "";
     let deviceIdentityUnlocked = false;
@@ -399,7 +408,7 @@ export class DeviceProtectionActions {
       );
       if (ceremony.isErr()) {
         this.presentCeremonyFailure(ceremony.error);
-        return;
+        return DeviceProtectionActionOutcome.Incomplete;
       }
       deviceIdentityUnlocked = true;
       const finishAuthorizedInitializationArgs2: Parameters<
@@ -417,8 +426,9 @@ export class DeviceProtectionActions {
         };
         this.lockFailedAuthorization(failedAuthorization);
         state.errorMsg = state.t(initialized.error.translationKey);
-        return;
+        return DeviceProtectionActionOutcome.Incomplete;
       }
+      return DeviceProtectionActionOutcome.Ready;
     } catch (error) {
       if (isPasskeyCeremonyNotAllowedError(error)) {
         const logPasskeyCeremonyArgs5: Parameters<
@@ -431,7 +441,7 @@ export class DeviceProtectionActions {
         state.errorMsg = state.t(
           I18N_KEYS.DeviceProtectionPasskeyRecoveryNotAllowed,
         );
-        return;
+        return DeviceProtectionActionOutcome.Incomplete;
       }
       if (isPasskeyUnavailableError(error)) {
         const logPasskeyCeremonyArgs6: Parameters<
@@ -446,7 +456,7 @@ export class DeviceProtectionActions {
         state.errorMsg = state.t(
           I18N_KEYS.DeviceProtectionRecoveryPasskeyUnavailablePinFallbackReady,
         );
-        return;
+        return DeviceProtectionActionOutcome.Incomplete;
       }
       if (isPasskeyPrfUnavailableError(error)) {
         const logPasskeyCeremonyArgs7: Parameters<
@@ -461,7 +471,7 @@ export class DeviceProtectionActions {
         state.errorMsg = state.t(
           I18N_KEYS.DeviceProtectionRecoveryPinFallbackReady,
         );
-        return;
+        return DeviceProtectionActionOutcome.Incomplete;
       }
       const logPasskeyCeremonyArgs8: Parameters<
         DeviceProtectionActions["logPasskeyCeremony"]
@@ -483,22 +493,24 @@ export class DeviceProtectionActions {
       state.isVerifying = false;
       state.isInitializing = false;
     }
+    return DeviceProtectionActionOutcome.Incomplete;
   }
 
   async setupPinDeviceProtection({
     pin,
     confirmPin,
     initializeSession,
-  }: PinDeviceProtectionSetupRequest): Promise<void> {
+  }: PinDeviceProtectionSetupRequest): Promise<DeviceProtectionActionOutcome> {
     const state = this.state;
-    if (!state.hasManager || state.isVerifying) return;
+    if (!state.hasManager || state.isVerifying)
+      return DeviceProtectionActionOutcome.Incomplete;
     state.isVerifying = true;
     state.errorMsg = "";
     let deviceIdentityUnlocked = false;
     try {
       if (pin !== confirmPin) {
         state.errorMsg = state.t(I18N_KEYS.DeviceProtectionPinMismatch);
-        return;
+        return DeviceProtectionActionOutcome.Incomplete;
       }
       const authorization = await state.enqueueStorage(async () => {
         const admittedManager = state.admitManager();
@@ -512,7 +524,7 @@ export class DeviceProtectionActions {
       });
       if (authorization.isErr()) {
         state.errorMsg = state.t(authorization.error.translationKey);
-        return;
+        return DeviceProtectionActionOutcome.Incomplete;
       }
       deviceIdentityUnlocked = true;
       const finishAuthorizedInitializationArgs3: Parameters<
@@ -527,8 +539,9 @@ export class DeviceProtectionActions {
         };
         this.lockFailedAuthorization(failedAuthorization);
         state.errorMsg = state.t(initialized.error.translationKey);
-        return;
+        return DeviceProtectionActionOutcome.Incomplete;
       }
+      return DeviceProtectionActionOutcome.Ready;
     } catch (error) {
       log.warn("PIN device protection setup failed");
       if (initializeSession) {
@@ -544,13 +557,15 @@ export class DeviceProtectionActions {
       state.isVerifying = false;
       state.isInitializing = false;
     }
+    return DeviceProtectionActionOutcome.Incomplete;
   }
 
   async unlockDeviceProtection({
     initializeSession,
-  }: DeviceProtectionUnlockRequest): Promise<void> {
+  }: DeviceProtectionUnlockRequest): Promise<DeviceProtectionActionOutcome> {
     const state = this.state;
-    if (!state.hasManager || state.isVerifying) return;
+    if (!state.hasManager || state.isVerifying)
+      return DeviceProtectionActionOutcome.Incomplete;
     state.isVerifying = true;
     state.errorMsg = "";
     let deviceIdentityUnlocked = false;
@@ -572,7 +587,7 @@ export class DeviceProtectionActions {
       );
       if (ceremony.isErr()) {
         this.presentCeremonyFailure(ceremony.error);
-        return;
+        return DeviceProtectionActionOutcome.Incomplete;
       }
       deviceIdentityUnlocked = true;
       const finishAuthorizedInitializationArgs4: Parameters<
@@ -590,8 +605,9 @@ export class DeviceProtectionActions {
         };
         this.lockFailedAuthorization(failedAuthorization);
         state.errorMsg = state.t(initialized.error.translationKey);
-        return;
+        return DeviceProtectionActionOutcome.Incomplete;
       }
+      return DeviceProtectionActionOutcome.Ready;
     } catch (error) {
       if (isPasskeyCeremonyNotAllowedError(error)) {
         const logPasskeyCeremonyArgs9: Parameters<
@@ -604,7 +620,7 @@ export class DeviceProtectionActions {
         state.errorMsg = state.t(
           I18N_KEYS.DeviceProtectionPasskeyUnlockNotAllowed,
         );
-        return;
+        return DeviceProtectionActionOutcome.Incomplete;
       }
       const logPasskeyCeremonyArgs10: Parameters<
         DeviceProtectionActions["logPasskeyCeremony"]
@@ -626,14 +642,16 @@ export class DeviceProtectionActions {
       state.isVerifying = false;
       state.isInitializing = false;
     }
+    return DeviceProtectionActionOutcome.Incomplete;
   }
 
   async unlockPinDeviceProtection({
     pin,
     initializeSession,
-  }: PinDeviceProtectionUnlockRequest): Promise<void> {
+  }: PinDeviceProtectionUnlockRequest): Promise<DeviceProtectionActionOutcome> {
     const state = this.state;
-    if (!state.hasManager || state.isVerifying) return;
+    if (!state.hasManager || state.isVerifying)
+      return DeviceProtectionActionOutcome.Incomplete;
     state.isVerifying = true;
     state.errorMsg = "";
     let deviceIdentityUnlocked = false;
@@ -650,7 +668,7 @@ export class DeviceProtectionActions {
       });
       if (authorization.isErr()) {
         state.errorMsg = state.t(I18N_KEYS.DeviceProtectionPinUnlockFailed);
-        return;
+        return DeviceProtectionActionOutcome.Incomplete;
       }
       deviceIdentityUnlocked = true;
       const finishAuthorizedInitializationArgs5: Parameters<
@@ -668,8 +686,9 @@ export class DeviceProtectionActions {
         };
         this.lockFailedAuthorization(failedAuthorization);
         state.errorMsg = state.t(initialized.error.translationKey);
-        return;
+        return DeviceProtectionActionOutcome.Incomplete;
       }
+      return DeviceProtectionActionOutcome.Ready;
     } catch (error) {
       log.warn("PIN device protection unlock failed");
       const lockFailedAuthorizationArgs5: Parameters<
@@ -683,6 +702,7 @@ export class DeviceProtectionActions {
       state.isVerifying = false;
       state.isInitializing = false;
     }
+    return DeviceProtectionActionOutcome.Incomplete;
   }
 }
 

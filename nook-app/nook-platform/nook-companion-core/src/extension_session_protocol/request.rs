@@ -104,7 +104,6 @@ pub enum ExtensionStorageProviderType {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-#[tsify(into_wasm_abi)]
 pub struct ExtensionEventLogRecord {
     pub event_id: String,
     pub path: String,
@@ -385,7 +384,6 @@ pub struct PasskeyCeremonyPayload {
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Tsify)]
 #[serde(deny_unknown_fields, tag = "type", content = "payload")]
-#[tsify(into_wasm_abi)]
 pub enum ExtensionSessionRequest {
     #[serde(rename = "nook:extension-session-classify-grant-authority")]
     ClassifyGrantAuthority(ClassifyGrantAuthorityPayload),
@@ -461,7 +459,6 @@ pub enum ExtensionSessionRequest {
 /// responsible for clearing the projected transport value after staging.
 #[derive(Debug, Deserialize, Serialize, Tsify)]
 #[serde(transparent)]
-#[tsify(from_wasm_abi)]
 pub struct ExtensionSessionRequestWire(ExtensionSessionRequest);
 
 impl ExtensionSessionRequestWire {

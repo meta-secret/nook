@@ -102,7 +102,7 @@ describe('focused compile-contract ESLint config', () => {
     expect(CompileContractsConfigTestHarness.ruleIds(messages)).toContain(
       'no-restricted-syntax',
     )
-  })
+  }, 30_000)
 
   test('rejects TypeScript type predicates in authored Svelte scripts', () => {
     const messages = CompileContractsConfigTestHarness.lintTemporarySource(

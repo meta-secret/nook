@@ -19,7 +19,15 @@ import {
   IDBVersionChangeEvent,
 } from 'fake-indexeddb'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
+import * as nook_companion_wasm from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import * as nook_wasm from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm.js'
 import {
+  classify_extension_persistence_databases,
+  classify_extension_persistence_stores,
+  ExtensionPersistenceArea,
+  ExtensionPersistenceDatabaseState,
+  ExtensionPersistenceStoreState,
+  type ExtensionPersistenceObservation,
   admit_companion_handoff_response,
   admit_companion_identity_status,
   NookCompanionPairingWebsiteProtocol,
@@ -32,6 +40,8 @@ import {
   type CompanionUnlockedAppKey,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
+  default_password_generation_options,
+  generate_password,
   default as initNookWasm,
   companion_pairing_provider_manifest_digest,
   configure_vault_application,
@@ -53,6 +63,7 @@ import {
 } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm.js'
 
 let extension: NookVaultManager
+let extensionOwned = false
 let presence: CompanionExtensionPresence
 let unlockedAppKey: CompanionUnlockedAppKey
 const previousIndexedDBRuntime = {
@@ -325,61 +336,112 @@ function beginHandoff(
   return { authorization, endpoint, request, website, pending }
 }
 
-beforeAll(async () => {
-  Object.assign(globalThis, compositionIndexedDBRuntime)
-  const nookWasmBytes = await Bun.file(
-    new URL(
-      '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm_bg.wasm',
-      import.meta.url,
-    ),
-  ).arrayBuffer()
-  await Promise.all([
-    companionWasmReady,
-    initNookWasm({ module_or_path: nookWasmBytes }),
-  ])
-  configure_vault_application(VaultApplication.Extension)
-  extension = new NookVaultManager()
-  const setup = await extension.begin_device_protection()
-  try {
-    await extension.finish_device_protection(
-      new Uint8Array(32).fill(7),
-      setup.userHandle,
-      setup.prfInput,
-      new Uint8Array(32).fill(11),
-    )
-  } finally {
-    setup.free()
-  }
-  const records = await extension.connect_fresh('local', '', '')
-  for (const record of records) record.free()
-  await extension.set_vault_name('Composition Vault')
+let compositionSetup: Promise<void> | false = false
 
-  unlockedAppKey = {
-    extensionRuntimeId: 'composition-runtime',
-    appKey: {
-      appId: extension.device_id,
-      encryptionPublicKey: extension.device_public_key,
-      signingPublicKey: await extension.device_signing_public_key_js(),
-      installationLabel: 'Composition Extension',
-    },
-    nonce: 'composition-nonce',
-    scopes: ['vault-access'],
-  } satisfies CompanionUnlockedAppKey
-  presence = {
-    kind: 'unlocked',
-    vault_type: 'simple',
-    vault_store_id: extension.vaultStoreId,
-    vault_name: extension.vaultName,
-    app_key: unlockedAppKey,
-  } satisfies CompanionExtensionPresence
+beforeAll(() => {
+  compositionSetup = (async () => {
+    Object.assign(globalThis, compositionIndexedDBRuntime)
+    const nookWasmBytes = await Bun.file(
+      new URL(
+        '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm_bg.wasm',
+        import.meta.url,
+      ),
+    ).arrayBuffer()
+    await Promise.all([
+      companionWasmReady,
+      initNookWasm({ module_or_path: nookWasmBytes }),
+    ])
+    configure_vault_application(VaultApplication.Extension)
+    extension = new NookVaultManager()
+    extensionOwned = true
+    const setup = await extension.begin_device_protection()
+    try {
+      await extension.finish_device_protection(
+        new Uint8Array(32).fill(7),
+        setup.userHandle,
+        setup.prfInput,
+        new Uint8Array(32).fill(11),
+      )
+    } finally {
+      setup.free()
+    }
+    const records = await extension.connect_fresh('local', '', '')
+    for (const record of records) record.free()
+    await extension.set_vault_name('Composition Vault')
+
+    unlockedAppKey = {
+      extensionRuntimeId: 'composition-runtime',
+      appKey: {
+        appId: extension.device_id,
+        encryptionPublicKey: extension.device_public_key,
+        signingPublicKey: await extension.device_signing_public_key_js(),
+        installationLabel: 'Composition Extension',
+      },
+      nonce: 'composition-nonce',
+      scopes: ['vault-access'],
+    } satisfies CompanionUnlockedAppKey
+    presence = {
+      kind: 'unlocked',
+      vault_type: 'simple',
+      vault_store_id: extension.vaultStoreId,
+      vault_name: extension.vaultName,
+      app_key: unlockedAppKey,
+    } satisfies CompanionExtensionPresence
+  })()
+  return compositionSetup
 })
 
-afterAll(() => {
-  extension.free()
-  Object.assign(globalThis, previousIndexedDBRuntime)
+afterAll(async () => {
+  try {
+    if (compositionSetup) await compositionSetup
+  } finally {
+    try {
+      if (extensionOwned) {
+        extension.free()
+        extensionOwned = false
+      }
+    } finally {
+      Object.assign(globalThis, previousIndexedDBRuntime)
+    }
+  }
 })
 
 describe('generated companion protocol composition', () => {
+  test('both generated packages project the same four canonical scopes', () => {
+    expect([
+      nook_companion_wasm.extension_vault_access_scope(),
+      nook_companion_wasm.extension_password_filling_scope(),
+      nook_companion_wasm.extension_passkey_management_scope(),
+      nook_companion_wasm.extension_sync_provider_credentials_scope(),
+    ]).toEqual([
+      nook_wasm.extension_vault_access_scope(),
+      nook_wasm.extension_password_filling_scope(),
+      nook_wasm.extension_passkey_management_scope(),
+      nook_wasm.extension_sync_provider_credentials_scope(),
+    ])
+  })
+  test('generated companion persistence distinguishes present database and absent store', () => {
+    const database: ExtensionPersistenceObservation = {
+      area: ExtensionPersistenceArea.Pairing,
+      observedNames: ['nook_extension'],
+    }
+    const stores: ExtensionPersistenceObservation = {
+      area: ExtensionPersistenceArea.Pairing,
+      observedNames: ['unrelated'],
+    }
+    expect(classify_extension_persistence_databases(database)).toBe(
+      ExtensionPersistenceDatabaseState.Present,
+    )
+    expect(classify_extension_persistence_stores(stores)).toBe(
+      ExtensionPersistenceStoreState.Absent,
+    )
+  })
+  test('generated default options produce a twenty-character password', () => {
+    expect(
+      generate_password(default_password_generation_options()),
+    ).toHaveLength(20)
+  })
+
   test('issues fresh discovery after an unlocked endpoint and authorizes the latest request', async () => {
     const previous = beginHandoff('fresh-discovery-prior')
     expect(previous.endpoint.status.status).toBe('unlocked')

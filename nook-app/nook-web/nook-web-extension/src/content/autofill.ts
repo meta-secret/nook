@@ -8,7 +8,7 @@ import {
   authenticationFactObserverOptions,
   authenticationFactObserver,
 } from '../../../nook-web-shared/src/extension/authentication-fact-attributes'
-import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
+import { companionWasmReadiness } from './autofill/companion-wasm-readiness'
 import { AuthenticationWorkflowSnapshotResponseKind } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { CompanionWasmSessionMessageType } from '../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 import { AuthenticationWorkflowClassification } from '../../../nook-web-shared/src/extension/password-form-classified-observations'
@@ -23,6 +23,7 @@ import {
   NamecheapWidgetDisplayGate,
 } from '../lib/auth-widget-policy'
 import { recoveryCopyObservation } from '../lib/backup-code-candidates'
+import { pageQrCapture } from '../lib/page-qr-capture'
 import {
   AuthenticationWorkflowSnapshotMessageType,
   MAX_AUTHENTICATION_WORKFLOW_TRANSPORT_OBSERVATIONS,
@@ -163,7 +164,9 @@ class AuthenticationScanRenderLifecycle {
         widgetState.workflowKey.kind !== WidgetWorkflowKeyKind.Assigned ||
         widgetState.workflowKey.key !== `save:${offer.offerId}`
       ) {
-        loginSaveInteraction.renderSaveOfferWidget(offer)
+        const rendered = await loginSaveInteraction.renderSaveOfferWidget(offer)
+        if (!rendered || sequence !== this.request.scanState.sequence)
+          return AuthenticationScanOutcome.Stale
       }
       const diagnostic: AuthenticationDiagnosticObservation = {
         gate: AuthenticationDiagnosticGate.WidgetRendering,
@@ -183,6 +186,8 @@ class AuthenticationScanRenderLifecycle {
       this.recordDiagnostic(diagnostic)
       return AuthenticationScanOutcome.Watching
     }
+    const fieldClassification =
+      passwordFieldDiscovery.prepareCompanionClassification(document)
     const pendingOffer = await loginSaveInteraction.loadPendingSaveOffer()
     if (sequence !== this.request.scanState.sequence)
       return AuthenticationScanOutcome.Stale
@@ -196,13 +201,28 @@ class AuthenticationScanRenderLifecycle {
       this.recordDiagnostic(diagnostic)
       return AuthenticationScanOutcome.Watching
     }
-    await passwordFieldDiscovery.prepareCompanionClassification(document)
+    await fieldClassification
     await recoveryCopyObservation.prepareAuthenticationRecoveryEvidence()
+    const setupSnapshot =
+      await pageQrCapture.prepareAuthenticationAuthenticatorSetupObservation()
+    if (
+      sequence !== this.request.scanState.sequence ||
+      !pageQrCapture.authenticationAuthenticatorSetupSnapshotIsCurrent(
+        setupSnapshot,
+      )
+    )
+      return AuthenticationScanOutcome.Stale
     const { copy: recoveryCopy, hint: backupCodesHint } =
       recoveryCopyObservation.authenticationRecoveryEvidence()
+    const enrollmentHintsRequest: Parameters<
+      typeof authenticatorEnrollmentInteraction.detectEnrollmentHintsFromRecoveryCopy
+    >[0] = {
+      recoveryCopy,
+      authenticatorSetupObservation: setupSnapshot.observation,
+    }
     const enrollmentHints =
       authenticatorEnrollmentInteraction.detectEnrollmentHintsFromRecoveryCopy(
-        recoveryCopy,
+        enrollmentHintsRequest,
       )
     enrollmentHints.backupCodes = backupCodesHint === 'present'
     const companionPoliciesRequest: Parameters<
@@ -427,11 +447,7 @@ class AuthenticationScanRenderLifecycle {
   }
 
   async scanAndRender(): Promise<void> {
-    try {
-      await this.performScanAndRender()
-    } finally {
-      authenticationSurfaceObservation.recordAuthenticationRecoveryEvidenceState()
-    }
+    await this.performScanAndRender()
   }
 
   schedule(mutations?: AuthenticationScanMutationBatch): void {
@@ -639,13 +655,14 @@ const queuedSubmitCapture = queueSubmitCaptureUntilCompanionWasmReady(
 document.addEventListener('submit', queuedSubmitCapture.capture, true)
 
 void runAfterCompanionWasmReady({
-  companionWasmReady,
+  companionWasmReady: companionWasmReadiness.waitForExtensionClassification(),
   start: async () => {
     if (await simpleVaultRuntime.isRuntimeNookVaultAppUrl(location.href)) {
       document.removeEventListener('submit', queuedSubmitCapture.capture, true)
       queuedSubmitCapture.discard()
       return
     }
+    void authenticationScanRenderLifecycle.scanAndRender()
     queuedSubmitCapture.enable()
     document.addEventListener(
       'click',
@@ -658,7 +675,6 @@ void runAfterCompanionWasmReady({
       },
       true,
     )
-    void authenticationScanRenderLifecycle.scanAndRender()
 
     const observer = new MutationObserver(
       authenticationScanRenderLifecycle.handleMutations.bind(

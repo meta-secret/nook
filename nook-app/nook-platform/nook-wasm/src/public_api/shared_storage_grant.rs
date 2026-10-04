@@ -6,6 +6,8 @@ use nook_core::{
     OauthFilePreset, ProviderOauthPreset, SharedStorageGrantCredential, SharedStorageGrantOutcome,
     SharedStorageGrantTarget, SharedStorageTargetHint, StorageProviderType, i18n_keys,
 };
+use tsify::Tsify;
+use wasm_bindgen::JsError;
 
 impl DriveStorageClient<'_> {
     async fn grant_existing_drive_folder(
@@ -133,9 +135,17 @@ impl SharedDriveGrantPolicy {
 }
 
 #[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn prepare_shared_storage_grant(
-    request: nook_core::SharedStorageGrantRequest,
-) -> Result<nook_core::SharedStorageGrantOutcome, wasm_bindgen::JsError> {
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub async fn prepare_shared_storage_grant(
+    request: &tsify::Ts<nook_core::SharedStorageGrantRequest>,
+) -> Result<tsify::Ts<nook_core::SharedStorageGrantOutcome>, wasm_bindgen::JsError> {
+    let request = request
+        .to_rust()
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+
     let validated = request.prepare()?;
     let outcome = match validated {
         SharedStorageGrantOutcome::ManualGrantRequired {
@@ -189,17 +199,28 @@ impl SharedDriveGrantPolicy {
         }
         other => other,
     };
-    Ok(outcome)
+    let result = Ok::<_, wasm_bindgen::JsError>(outcome)?;
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-#[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn should_flush_shared_storage_grant(
-    outcome: nook_core::SharedStorageGrantOutcome,
-    credential: nook_core::SharedStorageGrantCredential,
-) -> bool {
-    outcome.should_flush_with(&credential)
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn should_flush_shared_storage_grant(
+    outcome: &tsify::Ts<nook_core::SharedStorageGrantOutcome>,
+    credential: &tsify::Ts<nook_core::SharedStorageGrantCredential>,
+) -> Result<bool, wasm_bindgen::JsError> {
+    let outcome = outcome
+        .to_rust()
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+    let credential = credential
+        .to_rust()
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+    let result = { outcome.should_flush_with(&credential) };
+    Ok(result)
 }
 
 /// Resolve a shared Drive folder id/URL and verify write access for the current
@@ -218,33 +239,29 @@ impl SharedDriveGrantPolicy {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
+    #[cfg(all(test, target_arch = "wasm32"))]
+    #[cfg(all(test, target_arch = "wasm32"))]
+    use nook_core::SharedJoinerIdentityKind;
+    #[cfg(all(test, target_arch = "wasm32"))]
+    #[cfg(all(test, target_arch = "wasm32"))]
+    use nook_core::SharedStorageTargetSelection;
     use wasm_bindgen::JsError;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
 
-    fn google_drive_request(
-        credential: SharedStorageGrantCredential,
-        target: nook_core::SharedStorageTargetSelection,
-    ) -> nook_core::SharedStorageGrantRequest {
-        nook_core::SharedStorageGrantRequest {
-            provider_type: StorageProviderType::OauthFile,
-            oauth_preset: ProviderOauthPreset::Preset(OauthFilePreset::GoogleDrive),
-            joiner_identity_kind: nook_core::SharedJoinerIdentityKind::Email,
-            joiner_identity: "joiner@example.com".to_owned(),
-            storage_target_hint: SharedStorageTargetHint::Unspecified,
-            storage_target: target,
-            credential,
-        }
-    }
-
     #[wasm_bindgen_test]
     async fn shared_grant_adapter_preserves_manual_and_unsupported_policy_paths()
     -> Result<(), JsError> {
-        let manual_request = google_drive_request(
-            SharedStorageGrantCredential::Unavailable,
-            nook_core::SharedStorageTargetSelection::Create,
-        );
+        let manual_request = nook_core::SharedStorageGrantRequest {
+            provider_type: StorageProviderType::OauthFile,
+            oauth_preset: ProviderOauthPreset::Preset(OauthFilePreset::GoogleDrive),
+            joiner_identity_kind: SharedJoinerIdentityKind::Email,
+            joiner_identity: "joiner@example.com".to_owned(),
+            storage_target_hint: SharedStorageTargetHint::Unspecified,
+            storage_target: SharedStorageTargetSelection::Create,
+            credential: SharedStorageGrantCredential::Unavailable,
+        };
         assert!(matches!(
             (SharedDriveGrantPolicy {
                 provider_type: manual_request.provider_type,
@@ -253,7 +270,9 @@ mod browser_tests {
             .automatic_grant_route(),
             AutomaticSharedGrantRoute::GoogleDrive
         ));
-        let manual = prepare_shared_storage_grant(manual_request).await?;
+        let manual = prepare_shared_storage_grant(&manual_request.into_ts()?)
+            .await?
+            .to_rust()?;
         assert!(matches!(
             manual,
             SharedStorageGrantOutcome::ManualGrantRequired {
@@ -262,19 +281,22 @@ mod browser_tests {
             }
         ));
         assert!(!should_flush_shared_storage_grant(
-            manual.clone(),
-            SharedStorageGrantCredential::Unavailable
-        ));
+            &manual.into_ts()?,
+            &SharedStorageGrantCredential::Unavailable.into_ts()?
+        )?);
         assert!(should_flush_shared_storage_grant(
-            manual,
-            SharedStorageGrantCredential::AccessToken(" owner-token ".to_owned())
-        ));
+            &manual.into_ts()?,
+            &SharedStorageGrantCredential::AccessToken(" owner-token ".to_owned()).into_ts()?
+        )?);
 
-        let existing = prepare_shared_storage_grant(google_drive_request(
-            SharedStorageGrantCredential::AccessToken("   ".to_owned()),
-            nook_core::SharedStorageTargetSelection::Existing(" folder-1 ".to_owned()),
-        ))
-        .await?;
+        let existing_request = nook_core::SharedStorageGrantRequest {
+            credential: SharedStorageGrantCredential::AccessToken("   ".to_owned()),
+            storage_target: SharedStorageTargetSelection::Existing(" folder-1 ".to_owned()),
+            ..manual_request.clone()
+        };
+        let existing = prepare_shared_storage_grant(&existing_request.into_ts()?)
+            .await?
+            .to_rust()?;
         assert!(matches!(
             existing,
             SharedStorageGrantOutcome::ManualGrantRequired {
@@ -286,10 +308,8 @@ mod browser_tests {
         let unsupported_request = nook_core::SharedStorageGrantRequest {
             provider_type: StorageProviderType::Github,
             oauth_preset: ProviderOauthPreset::NotApplicable,
-            ..google_drive_request(
-                SharedStorageGrantCredential::AccessToken("owner-token".to_owned()),
-                nook_core::SharedStorageTargetSelection::Create,
-            )
+            credential: SharedStorageGrantCredential::AccessToken("owner-token".to_owned()),
+            ..manual_request.clone()
         };
         assert!(!matches!(
             (SharedDriveGrantPolicy {
@@ -299,24 +319,27 @@ mod browser_tests {
             .automatic_grant_route(),
             AutomaticSharedGrantRoute::GoogleDrive
         ));
-        let unsupported = prepare_shared_storage_grant(unsupported_request).await?;
+        let unsupported = prepare_shared_storage_grant(&unsupported_request.into_ts()?)
+            .await?
+            .to_rust()?;
         assert!(matches!(
             unsupported,
             SharedStorageGrantOutcome::Unsupported { .. }
         ));
         assert!(!should_flush_shared_storage_grant(
-            unsupported,
-            SharedStorageGrantCredential::AccessToken("owner-token".to_owned())
-        ));
+            &unsupported.into_ts()?,
+            &SharedStorageGrantCredential::AccessToken("owner-token".to_owned()).into_ts()?
+        )?);
 
         let invalid = nook_core::SharedStorageGrantRequest {
             joiner_identity: "not-an-email".to_owned(),
-            ..google_drive_request(
-                SharedStorageGrantCredential::Unavailable,
-                nook_core::SharedStorageTargetSelection::Create,
-            )
+            ..manual_request
         };
-        assert!(prepare_shared_storage_grant(invalid).await.is_err());
+        assert!(
+            prepare_shared_storage_grant(&invalid.into_ts()?)
+                .await
+                .is_err()
+        );
         Ok(())
     }
 }

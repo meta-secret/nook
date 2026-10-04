@@ -16,3 +16,6 @@ export const extensionTestBrowserHost = {
 }
 
 Object.assign(globalThis, { chrome: extensionTestBrowserHost })
+
+// Register the owned session listener before tests install narrower Chrome hosts.
+await import('../src/background/service-worker/session-lifecycle')

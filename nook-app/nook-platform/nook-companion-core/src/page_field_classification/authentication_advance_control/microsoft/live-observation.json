@@ -1,0 +1,17 @@
+{
+  "actionability": "actionable",
+  "ownership": "owned-form",
+  "semantics": "semantic-submit",
+  "authenticationUsername": "explicit",
+  "passwordFieldCount": 0,
+  "newPasswordFieldCount": 0,
+  "oneTimeCodeFieldCount": 0,
+  "semanticSubmitControlCount": 1,
+  "sourceOrigin": "https://login.live.com",
+  "formIdentity": "___cqaz2i0 fly5x3f",
+  "destinationIdentity": "https://login.live.com/oauth20_authorize.srf?client_id=aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa&scope=openid+profile+offline_access&redirect_uri=https%3a%2f%2faaa.aaaaaaaaa.aaa%2faaaaaaaaaaa%2faaaaaaa%2faaaaaa-aaaa&response_type=code&state=aaaaaaaaaaaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaa-aaaaaaaaaaaaaaaaaaaaaaa-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-aa_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-aaaaaaaaaaaaaaaaaaaaaaaaaaaaa_a_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-aaaaaaaaaaaaaaaaaaaaaaaaaa_aaa_aaaaaaaaaaaaaa_aaaaa-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-aaaaaaaaaa_aaaa&response_mode=form_post&nonce=aaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&code_challenge=aaaaaaaaaaaa_aaaaaaaaaaaaaa_aaaaaaaaaaaaaaa&code_challenge_method=S256&x-client-SKU=aa_aaaa_a&x-client-Ver=a.aa.a.a&uaid=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&msproxy=a&issuer=mso&tenant=consumers&ui_locales=en-US&client_info=1&epctrc=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa%2f%2fa%2ba%3da%3aa%3aaaaaaa%3aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa%3d&epct=aaaaaaaaaaaaaaaaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-aaaaa_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaaaaa-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-aa_aaaa_aaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaaaaa-aaaaaaaaaaaa_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaaaaaaa-aa-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_aaaaaaaa_aaaaaaa-aaaaaa_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-aaaaaaaaaa_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-aaaaaaaaaaaaaaaaaaaaaaaaaaa&jshs=0&claims=%7b%22compact%22%3a%7b%22name%22%3a%7b%22essential%22%3atrue%7d%7d%7d#",
+  "label": "Next",
+  "machineIdentity": "fui-Button r1alrhcs ___ksj0r70 ffp7eso f1p3nwhy f11589ue f1q5o8ev f1pdflbu f1phragk f15wkkf3 f1s2uweq fr80ssc f1ukrpxl fecsdlb f1rq72xc fnp9lpt f1h0usnq fs4ktlq f16h9ulv fx2bmrt f1d6v5y2 f1nz3ub2 fag2qd2 fmvhcg7 f1o3dhpw f14bpyus fqc85l4 f1h3a8gf fkiggi6 f8gmj8i f1ap8nzx f1igan7k fjag8bx f1v3eptx fpelvsg f1r9enuy fdvt4n0 f1l34yyb f1grx941 fqfbdvs f14es27b f5b47ha fhx4nu fjodcmx f1kwiid1 f4db1ww ft85np5 fkhj508 fl43uef f1i3iumi f17t0x8g f194v5ow f1qgg65p fk7jm04 fhgccpy f32wu9k fu5nqqq f13prjl2 f1czftr5 f1nl83rv fixhny3 feygou5 f1b6alqh fk6fouc f22iagw f4d9j23 f6dzj5z fjksvth",
+  "submissionMethod": "post",
+  "submissionDestinationSource": "omitted"
+}

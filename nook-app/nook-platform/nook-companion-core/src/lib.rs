@@ -62,7 +62,8 @@ pub use authentication_outcome_response::{
 };
 pub use authentication_workflow::{
     AuthenticationAdvanceControlEvidence, AuthenticationApprovalRequirement,
-    AuthenticationAuthenticatorObservationFacts, AuthenticationAuthenticatorSetupCopy,
+    AuthenticationAuthenticatorObservationFacts, AuthenticationAuthenticatorSetupBatch,
+    AuthenticationAuthenticatorSetupBatchError, AuthenticationAuthenticatorSetupCopy,
     AuthenticationAuthenticatorSetupCopyError, AuthenticationAuthenticatorSetupEvidence,
     AuthenticationAuthenticatorSetupObservation, AuthenticationBackupCodesObservation,
     AuthenticationCeremonyContextObservation, AuthenticationCeremonyObservationFacts,
@@ -239,7 +240,10 @@ pub use authentication_workflow::{
     AuthenticationBackupCodesEvidence, AuthenticationEnrollmentObservation,
 };
 
-pub use backup_code_candidates::BackupCodePageText;
+pub use backup_code_candidates::{
+    AuthenticationBackupCodeExtraction, AuthenticationBackupCodeExtractionRequest,
+    AuthenticationBackupCodeText, AuthenticationBackupCodeTextError, BackupCodePageText,
+};
 
 pub use vault_host_policy::{
     SentinelVaultMatch, VaultAppBaseSelection, VaultHostObservation, VaultHostPolicy,
@@ -263,7 +267,11 @@ pub use page_field_classification::{
 };
 
 mod authentication_navigation_path;
-pub use authentication_navigation_path::AuthenticationNavigationPath;
+pub use authentication_navigation_path::{
+    AuthenticationNavigationPath, AuthenticationNavigationPathObservation,
+    AuthenticationNavigationPathProjection, AuthenticationNavigationPathRequest,
+    AuthenticationOutcomePathname, AuthenticationOutcomePathnameError,
+};
 pub use authentication_workflow::{
     AuthenticationDisplayProgress, AuthenticationWorkflowActivity, AuthenticationWorkflowProgress,
     AuthenticatorEnrollmentProgress, PasswordWorkflowActivityEvidence,

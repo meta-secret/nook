@@ -21,7 +21,6 @@ pub struct AuthenticationOutcomeRejectedWire {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(untagged)]
-#[tsify(from_wasm_abi)]
 pub enum AuthenticationOutcomeResponseWire {
     Completed(AuthenticationOutcomeCompletedWire),
     Rejected(AuthenticationOutcomeRejectedWire),
@@ -45,7 +44,6 @@ impl Serialize for AuthenticationOutcomeResponseKind {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
 #[serde(untagged)]
-#[tsify(into_wasm_abi)]
 pub enum AuthenticationOutcomeResponse {
     Completed {
         kind: AuthenticationOutcomeResponseKind,

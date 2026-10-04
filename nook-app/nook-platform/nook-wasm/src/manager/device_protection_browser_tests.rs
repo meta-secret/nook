@@ -7,6 +7,7 @@ use crate::storage::identity_record::HandoffAuthorization;
 use crate::storage::identity_record::{AuthorizerSigningUpdate, VaultCreationAuthority};
 use nook_core::{AppKey, SigningIdentity};
 use nook_core::{DeviceMode, DeviceProtectionStatus, PasskeyDeviceProtectionMode};
+use tsify::Ts;
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
@@ -115,13 +116,15 @@ async fn device_protection_handoff_guards_fail_closed_without_session_state() ->
     );
     assert!(
         manager
-            .seal_extension_identity_handoff(nook_core::ExtensionIdentityHandoffSealRequest {
-                recipient_public_key: "not-a-public-key".into(),
-                nonce: "nonce".into(),
-                expected_device_id: "not-a-device".into(),
-                expected_device_public_key: "not-a-key".into(),
-                expected_device_signing_public_key: "not-a-signing-key".into()
-            })
+            .seal_extension_identity_handoff(&Ts::new_unchecked(serde_wasm_bindgen::to_value(
+                &serde_json::json!({
+                    "recipientPublicKey": "not-a-public-key",
+                    "nonce": "nonce",
+                    "expectedDeviceId": "not-a-device",
+                    "expectedDevicePublicKey": "not-a-key",
+                    "expectedDeviceSigningPublicKey": "not-a-signing-key"
+                })
+            )?))
             .await
             .is_err()
     );
