@@ -144,6 +144,7 @@ pub fn admit_extension_storage_providers(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyhow::Error;
     #[cfg(test)]
     #[cfg(test)]
     use nook_companion_core::ExtensionSessionStatus;
@@ -188,7 +189,7 @@ mod tests {
             r#"{"ok":true,"status":1}"#,
         )?;
         assert!(matches!(
-            status.0.into_status().map_err(anyhow::Error::msg)?,
+            status.0.into_status().map_err(Error::msg)?,
             ExtensionSessionStatus::Inactive { .. }
         ));
         Ok(())

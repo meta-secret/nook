@@ -63,6 +63,7 @@ mod tests {
 mod wasm_tests {
     use super::*;
     use serde::Serialize;
+    use serde_json::Value;
     use wasm_bindgen_test::wasm_bindgen_test;
     #[derive(Serialize)]
     struct BackupActionFixture<'a> {
@@ -97,10 +98,7 @@ mod wasm_tests {
     #[wasm_bindgen_test]
     fn action_projection_typed_bridge_rejects_invalid_and_overbound_js_inputs()
     -> Result<(), JsError> {
-        for text in [
-            serde_json::Value::Bool(false),
-            serde_json::Value::String("é".repeat(32_769)),
-        ] {
+        for text in [Value::Bool(false), Value::String("é".repeat(32_769))] {
             let value = serde_wasm_bindgen::to_value(&serde_json::json!({"text": text}))?;
             assert!(
                 extract_authentication_backup_code_candidates(&Ts::new_unchecked(value)).is_err()
