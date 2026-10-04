@@ -470,7 +470,6 @@ mod tests {
 #[cfg(test)]
 mod prepared_page_tests {
     use super::*;
-    use crate::NookDatabase;
     use crate::NookSecretTypeFilter;
     use crate::manager::VaultCryptoState;
     use nook_core::DeviceIdentity;
@@ -509,6 +508,7 @@ mod prepared_page_tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod secret_import_browser_tests {
     use super::*;
+    use crate::NookDatabase;
     use nook_core::{DeviceIdentity, SecretValue};
     use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 
