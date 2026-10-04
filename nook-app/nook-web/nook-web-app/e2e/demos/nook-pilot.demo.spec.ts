@@ -473,11 +473,10 @@ test('guide a login through the Nook Pilot control plane', async ({ page }) => {
   await demoBeat(page)
 
   await widget.getByRole('button', { name: 'Continue with Nook' }).click()
-  await expect(
-    widget.getByText(
-      'Choose a saved username in the Nook window. Matching logins for this site are listed there.',
-    ),
-  ).toBeVisible()
+  await expect(widget.locator('p.description')).toBeVisible()
+  await expect(widget.locator('p.description')).toHaveText(
+    messages.widgetLoginPickerOpened.message,
+  )
   // Epoch-bound login choices cross the browser boundary through Rust/WASM
   // response decoder. The page must never receive the account identifiers or
   // credentials that belong to the companion picker.
@@ -529,7 +528,7 @@ test('shows no matching credentials as a distinct Pilot state', async ({
   )
   await expect(vaultStatus).toHaveText('Matching saved logins: 0')
   await expect(widget.locator('p.description')).toHaveText(
-    'No saved login matches this site yet. Open the vault to add one.',
+    messages.widgetLoginNoMatchDescription.message,
   )
   await demoBeat(page)
 })
