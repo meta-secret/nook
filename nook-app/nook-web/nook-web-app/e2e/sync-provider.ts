@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 import { expect } from './fixtures'
 import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
 import { createLocalE2eFileSyncVaultStub } from './file-sync-stub'
@@ -327,14 +327,17 @@ export async function connectSyncGenesisDevice(
       disableVaultIdleLock,
       ENROLLMENT_UNLOCK_TIMEOUT_MS,
     } = await import('./helpers')
+    const genesisReadiness: Locator = page
+      .getByTestId('login-create-vault-chooser')
+      .or(page.getByTestId('login-local-unlock-step'))
+    const genesisReadinessOptions: { timeout: number } = {
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    }
     await page.goto('/app/')
+    await expect(genesisReadiness).toBeVisible(genesisReadinessOptions)
     await clearBrowserVault(page)
     await page.reload()
-    await expect(
-      page
-        .getByTestId('login-create-vault-chooser')
-        .or(page.getByTestId('login-local-unlock-step')),
-    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await expect(genesisReadiness).toBeVisible(genesisReadinessOptions)
     const chooser = page.getByTestId('login-create-vault-chooser')
     if (await chooser.isVisible()) {
       await createLocalVaultOnLogin(page)
