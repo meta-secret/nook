@@ -223,9 +223,13 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     if (message.type && message.type in responsesByType) {
       return responsesByType[message.type]
     }
+    if (message.type === 'nook:website-login-save-pending' && !savePilotFlow) {
+      return { ok: true, state: loginSaveResponses.pendingUnavailable }
+    }
     if (message.type === 'nook:extension-pairing-state-query') {
-      if (unavailableLoginPilotFlow) return { ok: false }
-      return { ok: true, setup: demoExtensionSetup }
+      if (unavailableLoginPilotFlow)
+        return { ok: true, setupState: 'not-connected' }
+      return { ok: true, setupState: 'ready', setup: demoExtensionSetup }
     }
     if (
       authenticatorPickerFlow &&
@@ -283,6 +287,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
         case 'nook:extension-pairing-state-query':
           return {
             ok: true,
+            setupState: 'ready',
             setup: {
               status: 'ready',
               deviceLabel: 'Demo browser',

@@ -486,8 +486,8 @@ class AuthenticationSubmissionControls extends AuthenticationSubmissionSemantics
         sourceOrigin,
         formIdentity,
         controlLabel,
-        machineIdentity,
-      ])
+      ]) ||
+      !authenticationFactBounds.machineIdentityFits(machineIdentity)
     ) {
       return false;
     }
@@ -654,12 +654,15 @@ class AuthenticationSubmissionControls extends AuthenticationSubmissionSemantics
         submissionDestinationSource:
           AuthenticationSubmissionDestination.source(control),
       };
-      const transportable = authenticationFactBounds.controlTextsFit([
-        observation.sourceOrigin,
-        observation.formIdentity,
-        observation.label,
-        ((v) => (v ? v : ""))(observation.machineIdentity),
-      ]);
+      const transportable =
+        authenticationFactBounds.controlTextsFit([
+          observation.sourceOrigin,
+          observation.formIdentity,
+          observation.label,
+        ]) &&
+        authenticationFactBounds.machineIdentityFits(
+          ((v) => (v ? v : ""))(observation.machineIdentity),
+        );
       if (!transportable) return false;
       // The shortlist grants no action authority. In extension content worlds,
       // retain the candidate for the subsequent offscreen Rust policy batch.

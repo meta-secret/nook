@@ -1,4 +1,5 @@
 const MAX_AUTHENTICATION_CONTROL_TEXT_BYTES = 512;
+const MAX_AUTHENTICATION_MACHINE_IDENTITY_TRANSPORT_BYTES = 1024;
 type AuthenticationControlTexts = string[];
 
 class AuthenticationFactBounds {
@@ -12,6 +13,13 @@ class AuthenticationFactBounds {
 
   controlTextsFit(values: AuthenticationControlTexts): boolean {
     return values.every(this.controlTextFits.bind(this));
+  }
+
+  machineIdentityFits(value: string): boolean {
+    return (
+      this.utf8ByteLength(value) <=
+      MAX_AUTHENTICATION_MACHINE_IDENTITY_TRANSPORT_BYTES
+    );
   }
 }
 

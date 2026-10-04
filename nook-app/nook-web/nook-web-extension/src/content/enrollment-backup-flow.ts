@@ -6,6 +6,7 @@ import {
 import { recoveryCopyObservation } from '../lib/backup-code-candidates'
 
 import { pageQrCapture } from '../lib/page-qr-capture'
+import { Effect } from 'effect'
 
 import {
   AuthenticatorBackupAttachResponseKind,
@@ -562,22 +563,46 @@ class EnrollmentBackupInteraction {
       host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetBackupPaste),
     )
     pasteArea.addEventListener('input', () => {
-      const pasted =
-        recoveryCopyObservation.extractDocumentBackupCodeCandidates(
-          pasteArea.value,
-        )
-      if (pasted.length === 0) return
-      const nookTypedArgs0_72: Parameters<
-        typeof this.mergeBackupCandidates
-      >[0] = {
-        existing: codes,
-        incoming: pasted,
-      }
-      const merged = this.mergeBackupCandidates(nookTypedArgs0_72)
-      codes.length = 0
-      merged.forEach((code) => codes.push(code))
-      pasteArea.value = ''
-      renderCodeRows()
+      Effect.runFork(
+        Effect.tryPromise(async () => {
+          const sourceText = pasteArea.value
+          const pasted =
+            await recoveryCopyObservation.extractDocumentBackupCodeCandidates(
+              sourceText,
+            )
+          try {
+            if (
+              !pasteArea.isConnected ||
+              !host.panel.isConnected ||
+              pasteArea.value !== sourceText
+            )
+              return
+            if (pasted.length === 0) return
+            const mergeRequest: Parameters<
+              typeof this.mergeBackupCandidates
+            >[0] = {
+              existing: codes,
+              incoming: pasted,
+            }
+            const merged = this.mergeBackupCandidates(mergeRequest)
+            codes.length = 0
+            merged.forEach((code) => codes.push(code))
+            pasteArea.value = ''
+            renderCodeRows()
+          } finally {
+            recoveryCopyObservation.clearBackupCodeCandidates(pasted)
+          }
+        }).pipe(
+          Effect.catchAll(() =>
+            Effect.sync(() => {
+              if (host.panel.isConnected)
+                host.description.textContent = host.translatedMessage(
+                  BROWSER_MESSAGE_KEYS.WidgetBackupFailed,
+                )
+            }),
+          ),
+        ),
+      )
     })
 
     section.append(list, pasteLabel, pasteArea)
@@ -664,7 +689,11 @@ class EnrollmentBackupInteraction {
 
     try {
       const codes =
-        recoveryCopyObservation.extractDocumentBackupCodeCandidates()
+        await recoveryCopyObservation.extractDocumentBackupCodeCandidates()
+      if (!host.panel.isConnected) {
+        recoveryCopyObservation.clearBackupCodeCandidates(codes)
+        return
+      }
       if (codes.length === 0) {
         const nookTypedArgs0_79: Parameters<
           typeof enrollmentFlowRenderer.setHostDescription
@@ -682,6 +711,10 @@ class EnrollmentBackupInteraction {
         codes,
       }
       this.showBackupReview(nookTypedArgs0_81)
+    } catch {
+      host.description.textContent = host.translatedMessage(
+        BROWSER_MESSAGE_KEYS.WidgetBackupFailed,
+      )
     } finally {
       host.setBusy(false)
     }

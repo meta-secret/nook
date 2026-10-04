@@ -9,7 +9,6 @@ use tsify::Tsify;
 /// Raw, non-secret field facts observed inside one authentication scope.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct AuthenticationFieldObservationFacts {
     pub username_field_count: AuthenticationFieldCount,
     pub current_password_field_count: AuthenticationFieldCount,

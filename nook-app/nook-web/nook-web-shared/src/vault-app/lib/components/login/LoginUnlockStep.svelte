@@ -1,6 +1,6 @@
 <script lang="ts">
   import { untrack } from "svelte";
-  import { VaultType } from "$lib/vault/architecture-model";
+  import { err } from "neverthrow";
   type VaultPasswordUnlock = {
     readonly entryId: string;
     readonly password: string;
@@ -24,10 +24,7 @@
   } from "$lib/components/login/login-vault-extension-pairing-status";
   import SentinelCeremonyPanel from "$lib/components/login/SentinelCeremonyPanel.svelte";
   import type { VaultState } from "$lib/vault.svelte";
-  import {
-    SentinelUnlockActions,
-    SentinelCeremonyVisibility,
-  } from "$lib/vault/sentinel-unlock";
+  import { LoginVaultPresentation } from "$lib/components/login/login-vault-presentation.svelte";
   import type { PasswordEntrySelection } from "$lib/vault/state/session.svelte";
   import {
     DeviceKeysUnlockCapabilityKind,
@@ -52,7 +49,9 @@
   let {
     vault,
     vaultEntry,
-    extensionPairingStatus = { kind: LoginVaultExtensionPairingStatusKind.NotShown },
+    extensionPairingStatus = {
+      kind: LoginVaultExtensionPairingStatusKind.NotShown,
+    },
     hasMultipleVaults = false,
     passwordEntries = [] as PasswordEntrySummary[],
     selectedPasswordEntry,
@@ -91,32 +90,19 @@
   function selectWorkflow(selected: LoginVaultWorkflow): void {
     workflow = selected;
   }
-  const sentinelVisibility = $derived(
-    new SentinelUnlockActions(vault).ceremonyVisibility(),
-  );
-  const showSentinelCeremony = $derived(
-    sentinelVisibility.isOk() &&
-      sentinelVisibility.value === SentinelCeremonyVisibility.Visible,
-  );
+  const presentation = $derived(new LoginVaultPresentation(vault));
+  const showSentinelCeremony = $derived(presentation.showSentinelCeremony);
+  const hidePasswordUnlock = $derived(presentation.hidePasswordUnlock);
   $effect(() => {
-    if (sentinelVisibility.isErr()) {
-      const message = vault.t(sentinelVisibility.error.translationKey);
-      if (untrack(() => vault.errorMsg) !== message) vault.errorMsg = message;
-    }
-  });
-  const presentedVaultType = $derived(
-    new SentinelUnlockActions(vault).vaultType(),
-  );
-  const hidePasswordUnlock = $derived(
-    showSentinelCeremony ||
-      presentedVaultType.isErr() ||
-      presentedVaultType.value === VaultType.Sentinel,
-  );
-  $effect(() => {
-    if (presentedVaultType.isErr()) {
-      const message = vault.t(presentedVaultType.error.translationKey);
-      if (untrack(() => vault.errorMsg) !== message) vault.errorMsg = message;
-    }
+    void vault.hasManager;
+    void vault.isAuthenticated;
+    void vault.sentinelUnlockStatus;
+    void vault.sentinelCeremonyPrompt;
+    void vault.vaultArchitecture.vault_type;
+    void vault.sentinelUnlockSession.active;
+    const current = presentation;
+    untrack(() => void current.refresh());
+    return () => current.release();
   });
   const passwordUnlock = $derived<PasswordUnlockCapability>(
     hidePasswordUnlock
@@ -143,22 +129,21 @@
       return;
     }
 
-    const manager = vault.admitManager();
-    if (manager.isErr()) {
-      identityContext = { kind: LoginVaultIdentityContextKind.Failed };
-      return;
-    }
     const storeId = vaultEntry.entry.storeId;
     const generation = ++identityContextLoadGeneration;
     identityContext = { kind: LoginVaultIdentityContextKind.Loading };
-    const identityContextRequest: ConstructorParameters<
-      typeof LoginVaultIdentityReader
-    >[0] = {
-      manager: manager.value,
-      storeId,
-    };
-    void new LoginVaultIdentityReader(identityContextRequest)
-      .execute()
+    void vault
+      .enqueueStorage(() => {
+        return vault.admitManager().match(
+          (manager) => {
+            const request: ConstructorParameters<
+              typeof LoginVaultIdentityReader
+            >[0] = { manager, storeId };
+            return new LoginVaultIdentityReader(request).execute();
+          },
+          (error) => Promise.resolve(err(error)),
+        );
+      })
       .then((context) => {
         if (generation !== identityContextLoadGeneration) return;
         identityContext = context.isOk()

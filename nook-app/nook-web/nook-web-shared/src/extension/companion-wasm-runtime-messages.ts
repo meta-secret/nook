@@ -1,5 +1,8 @@
 /* eslint-disable @typescript-eslint/no-restricted-types, no-restricted-syntax -- This dedicated untrusted-input decoder narrows browser transport values immediately. */
+import { Schema } from "effect";
 import type {
+  AuthenticationAuthenticatorSetupBatch,
+  AuthenticationAuthenticatorSetupObservation,
   AuthenticationObservationBindingToken,
   AuthenticationPageObservationFactsBatch,
   AuthenticationPilotPresentationCapability,
@@ -18,10 +21,28 @@ import type {
   AuthenticationPageObservationFacts,
   AuthenticationDisplayProgress,
   ApprovedAuthenticationWorkflowDecision,
+  AuthenticationBackupCodeExtractionRequest,
+  AuthenticationBackupCodeExtraction,
+  AuthenticationNavigationPathRequest,
+  AuthenticationNavigationPathProjection,
+  AuthenticatorPickerOpenResponse,
+  AuthenticationOutcomeResponse,
+  AuthenticatorPreviewResponse,
+  AuthenticatorBackupAttachResponse,
+  AuthenticatorCodeResponse,
+  AuthenticatorEnrollmentStageResponse,
+  AuthenticatorEnrollmentConfirmResponse,
+  AuthenticatorOptionsResponse,
+  GeneratedPasswordResponse,
+  WebsiteLoginSaveActionResponse,
+  WebsiteLoginSaveOfferResponse,
   AuthenticationImplicitSubmitActuationObservation,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 
 export enum CompanionWasmSessionMessageType {
+  ExtractAuthenticationBackupCodeCandidates = "nook:extension-session-extract-authentication-backup-code-candidates",
+  ProjectAuthenticationNavigationPath = "nook:extension-session-project-authentication-navigation-path",
+  AuthenticationAuthenticatorSetupObservation = "nook:extension-session-authentication-authenticator-setup-observation",
   AuthenticationWorkflowPilotPresentationCapability = "nook:extension-session-authentication-workflow-pilot-presentation-capability",
   PasswordWorkflowActivity = "nook:extension-session-project-password-workflow-activity",
   BindAuthenticationPageObservationFacts = "nook:extension-session-bind-authentication-page-observation-facts",
@@ -52,6 +73,17 @@ export enum CompanionWasmLabelKind {
 }
 
 export enum CompanionWasmContentResponseKind {
+  LoginSaveOffer = "login-save-offer",
+  LoginSaveAction = "login-save-action",
+  AuthenticationOutcome = "authentication-outcome",
+  AuthenticatorPreview = "authenticator-preview",
+  AuthenticatorBackupAttach = "authenticator-backup-attach",
+  AuthenticatorCode = "authenticator-code",
+  AuthenticatorEnrollmentStage = "authenticator-enrollment-stage",
+  AuthenticatorEnrollmentConfirm = "authenticator-enrollment-confirm",
+  AuthenticatorPickerOpen = "authenticator-picker-open",
+  GeneratedPassword = "generated-password",
+  AuthenticatorOptions = "authenticator-options",
   LoginOptions = "login-options",
   LoginPickerOpen = "login-picker-open",
   LoginSavePending = "login-save-pending",
@@ -91,6 +123,18 @@ export type CompanionWasmLabelRequest = {
 };
 
 export type CompanionWasmSessionMessage =
+  | {
+      readonly type: CompanionWasmSessionMessageType.ExtractAuthenticationBackupCodeCandidates;
+      readonly payload: AuthenticationBackupCodeExtractionRequest;
+    }
+  | {
+      readonly type: CompanionWasmSessionMessageType.ProjectAuthenticationNavigationPath;
+      readonly payload: AuthenticationNavigationPathRequest;
+    }
+  | {
+      readonly type: CompanionWasmSessionMessageType.AuthenticationAuthenticatorSetupObservation;
+      readonly payload: AuthenticationAuthenticatorSetupBatch;
+    }
   | {
       readonly type: CompanionWasmSessionMessageType.AuthenticationWorkflowPilotPresentationCapability;
       readonly payload: { readonly snapshot: AuthenticationWorkflowSnapshot };
@@ -203,7 +247,55 @@ export type CompanionWasmSessionMessage =
       };
     };
 
+export type CompanionWasmAuthenticatorSetupResponse = {
+  readonly authenticatorSetupObservation: AuthenticationAuthenticatorSetupObservation;
+};
+
+const authenticatorSetupObservationSchema = Schema.Literal("present", "absent");
+const companionWasmAuthenticatorSetupResponseFields: {
+  readonly authenticatorSetupObservation: typeof authenticatorSetupObservationSchema;
+} = {
+  authenticatorSetupObservation: authenticatorSetupObservationSchema,
+};
+export const CompanionWasmAuthenticatorSetupResponseDecoder: Schema.Schema<CompanionWasmAuthenticatorSetupResponse> =
+  Schema.Struct(companionWasmAuthenticatorSetupResponseFields);
+
+const backupCodeArraySchema = Schema.mutable(Schema.Array(Schema.String));
+const backupCodeExtractionFields: {
+  readonly codes: typeof backupCodeArraySchema;
+} = {
+  codes: backupCodeArraySchema,
+};
+export const CompanionWasmBackupCodeExtractionDecoder: Schema.Schema<AuthenticationBackupCodeExtraction> =
+  Schema.Struct(backupCodeExtractionFields);
+
+const authenticationNavigationObservationSchema = Schema.Literal(
+  "Authentication",
+  "Unrelated",
+);
+const authenticationNavigationPathFields: {
+  readonly observation: typeof authenticationNavigationObservationSchema;
+} = {
+  observation: authenticationNavigationObservationSchema,
+};
+export const CompanionWasmNavigationPathDecoder: Schema.Schema<AuthenticationNavigationPathProjection> =
+  Schema.Struct(authenticationNavigationPathFields);
+
 export type CompanionWasmSessionResponse =
+  | AuthenticationBackupCodeExtraction
+  | AuthenticationNavigationPathProjection
+  | AuthenticatorPickerOpenResponse
+  | AuthenticationOutcomeResponse
+  | AuthenticatorPreviewResponse
+  | AuthenticatorBackupAttachResponse
+  | AuthenticatorCodeResponse
+  | AuthenticatorEnrollmentStageResponse
+  | AuthenticatorEnrollmentConfirmResponse
+  | AuthenticatorOptionsResponse
+  | GeneratedPasswordResponse
+  | WebsiteLoginSaveActionResponse
+  | WebsiteLoginSaveOfferResponse
+  | CompanionWasmAuthenticatorSetupResponse
   | AuthenticationPilotPresentationCapability
   | PasswordWorkflowActivityPresentation
   | AuthenticationObservationBindingToken

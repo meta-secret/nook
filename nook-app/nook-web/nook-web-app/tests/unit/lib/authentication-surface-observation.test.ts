@@ -118,10 +118,56 @@ function observation(
 
 afterEach(() => {
   document.body.replaceChildren()
-  authenticationSurfaceObservation.recordAuthenticationRecoveryEvidenceState()
 })
 
 describe('authentication surface mutation filtering', () => {
+  test('schedules a fresh scan for visible QR instruction text but ignores unrelated and widget text', () => {
+    document.body.innerHTML = `
+      <section><h2 id="instructions">Use your Microsoft account</h2><canvas width="120" height="120"></canvas></section>
+      <p id="unrelated">Account details</p>
+      <aside id="nook-auth-widget"><p id="widget-copy">Ready to sign in</p></aside>
+    `
+    const instructions = document.querySelector('#instructions')
+    const canvas = document.querySelector('canvas')
+    const unrelated = document.querySelector('#unrelated')
+    const host = document.querySelector<HTMLElement>('#nook-auth-widget')
+    const widgetCopy = document.querySelector('#widget-copy')
+    if (!instructions || !canvas || !unrelated || !host || !widgetCopy)
+      throw new Error('expected instruction mutation fixture')
+    for (const element of [instructions, canvas]) {
+      Object.defineProperty(element, 'getBoundingClientRect', {
+        value: () => new DOMRect(10, 10, 120, 120),
+      })
+    }
+    const text = instructions.firstChild
+    if (!(text instanceof Text)) throw new Error('expected instruction text')
+    for (const record of [
+      childListMutation(instructions, [text]),
+      new TestMutationRecord({ type: 'characterData', target: text }),
+    ]) {
+      const request: Parameters<
+        typeof authenticationSurfaceObservation.authenticationMutationImpact
+      >[0] = { records: [record], mountedHost: host, renderedWorkflow: false }
+      expect(
+        authenticationSurfaceObservation.authenticationMutationImpact(request)
+          .shouldScheduleScan,
+      ).toBe(true)
+    }
+    for (const target of [unrelated, widgetCopy]) {
+      const request: Parameters<
+        typeof authenticationSurfaceObservation.authenticationMutationImpact
+      >[0] = {
+        records: [childListMutation(target, [...target.childNodes])],
+        mountedHost: host,
+        renderedWorkflow: false,
+      }
+      expect(
+        authenticationSurfaceObservation.authenticationMutationImpact(request)
+          .shouldScheduleScan,
+      ).toBe(false)
+    }
+  })
+
   test('ignores mutations owned entirely by the mounted extension widget', () => {
     const host = document.createElement('section')
     const child = document.createElement('button')
@@ -414,14 +460,14 @@ describe('authentication surface mutation filtering', () => {
     ).toBe(true)
   })
 
-  test('rescans dynamically inserted backup-code evidence', () => {
+  test('rescans dynamically inserted instruction roles', () => {
     const heading = document.createElement('h2')
     heading.textContent = 'Recovery codes'
     const listItem = document.createElement('li')
     listItem.textContent = 'A1B2-C3D4-E5F6'
     const code = document.createElement('code')
     code.textContent = 'ABCD-EFGH-IJK1'
-    const paragraph = document.createElement('p')
+    const paragraph = document.createElement('legend')
     const paragraphText = document.createTextNode('Backup codes')
     paragraph.append(paragraphText)
     document.body.append(heading, listItem, code, paragraph)
@@ -447,6 +493,33 @@ describe('authentication surface mutation filtering', () => {
     }
   })
 
+  test('rescans admitted instruction text changes even when prior copy was unrelated', () => {
+    for (const tag of ['h2', 'label', 'legend']) {
+      const instruction = document.createElement(tag)
+      const copy = document.createTextNode('Account details')
+      instruction.append(copy)
+      document.body.append(instruction)
+      copy.data = 'Save your recovery codes'
+      for (const record of [
+        childListMutation(instruction, [copy]),
+        new TestMutationRecord({ type: 'characterData', target: copy }),
+      ]) {
+        const request: Parameters<
+          typeof authenticationSurfaceObservation.authenticationMutationImpact
+        >[0] = {
+          records: [record],
+          mountedHost: false,
+          renderedWorkflow: false,
+        }
+        expect(
+          authenticationSurfaceObservation.authenticationMutationImpact(request)
+            .shouldScheduleScan,
+        ).toBe(true)
+      }
+      instruction.remove()
+    }
+  })
+
   test('rescans when the last backup-code evidence disappears', () => {
     const heading = document.createElement('h2')
     heading.textContent = 'Backup codes'
@@ -455,7 +528,6 @@ describe('authentication surface mutation filtering', () => {
     const code = document.createElement('code')
     code.textContent = 'A1B2-C3D4-E5F6'
     document.body.append(heading, instructions, code)
-    authenticationSurfaceObservation.recordAuthenticationRecoveryEvidenceState()
     heading.remove()
     instructions.remove()
     code.remove()
@@ -475,7 +547,6 @@ describe('authentication surface mutation filtering', () => {
     ).toBe(true)
 
     document.body.append(heading, instructions, code)
-    authenticationSurfaceObservation.recordAuthenticationRecoveryEvidenceState()
     heading.hidden = true
     instructions.hidden = true
     code.hidden = true
@@ -495,7 +566,6 @@ describe('authentication surface mutation filtering', () => {
     heading.hidden = false
     instructions.hidden = false
     code.hidden = false
-    authenticationSurfaceObservation.recordAuthenticationRecoveryEvidenceState()
     const headingText = heading.firstChild
     if (!(headingText instanceof Text)) {
       throw new Error('expected recovery heading text')

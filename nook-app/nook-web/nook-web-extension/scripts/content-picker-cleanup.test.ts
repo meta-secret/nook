@@ -1,4 +1,11 @@
 import { expect, mock, test } from 'bun:test'
+import { Schema } from 'effect'
+import {
+  CompanionWasmContentResponseKind,
+  CompanionWasmSessionMessageType,
+  type CompanionWasmSessionMessage,
+} from '../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
+import { handleCompanionWasmMessage } from '../src/offscreen/session-companion-wasm-operations'
 import type { PasswordFormObservation } from '../../nook-web-shared/src/extension/password-forms'
 import { PasswordFormScopeKind } from '../../nook-web-shared/src/extension/password-forms'
 import type { LoginCredentials } from '../../nook-web-shared/src/extension/password-form-field-actions'
@@ -138,8 +145,80 @@ function resolveDeferredRuntimeResponse({
   callback(response)
 }
 
+function routeCompanionFixture(
+  message: unknown,
+  callback: RuntimeResponseCallback,
+): boolean {
+  if (
+    !message ||
+    typeof message !== 'object' ||
+    !('type' in message) ||
+    !('payload' in message) ||
+    !message.payload ||
+    typeof message.payload !== 'object'
+  )
+    return false
+  let request: CompanionWasmSessionMessage
+  switch (message.type) {
+    case CompanionWasmSessionMessageType.DecodeContentRuntimeResponse: {
+      if (!('kind' in message.payload) || !('response' in message.payload))
+        throw new Error('Invalid decoder fixture request')
+      const kind = Schema.decodeUnknownSync(
+        Schema.Enums(CompanionWasmContentResponseKind),
+      )(message.payload.kind)
+      request = {
+        type: message.type,
+        payload: { kind, response: message.payload.response },
+      }
+      break
+    }
+    case CompanionWasmSessionMessageType.ProjectAuthenticationNavigationPath: {
+      if (
+        !('pathname' in message.payload) ||
+        typeof message.payload.pathname !== 'string'
+      )
+        throw new Error('Invalid navigation fixture request')
+      request = {
+        type: message.type,
+        payload: { pathname: message.payload.pathname },
+      }
+      break
+    }
+    case CompanionWasmSessionMessageType.ExtractAuthenticationBackupCodeCandidates: {
+      if (
+        !('text' in message.payload) ||
+        typeof message.payload.text !== 'string'
+      )
+        throw new Error('Invalid extraction fixture request')
+      request = { type: message.type, payload: { text: message.payload.text } }
+      break
+    }
+    default:
+      return false
+  }
+  void handleCompanionWasmMessage(request).then((result) =>
+    result.match(
+      (value) => callback({ ok: true, result: value }),
+      () => callback({ ok: false }),
+    ),
+  )
+  return true
+}
+
+function isSaveActionCall(parameters: readonly unknown[]): boolean {
+  const message = parameters[0]
+  return Boolean(
+    message &&
+    typeof message === 'object' &&
+    'type' in message &&
+    typeof message.type === 'string' &&
+    message.type.startsWith('nook:website-login-save-'),
+  )
+}
+
 const sendMessage = mock(
   (_message: unknown, callback: RuntimeResponseCallback) => {
+    if (routeCompanionFixture(_message, callback)) return
     if (runtimeResponseState.kind === RuntimeResponseStateKind.Immediate) {
       callback(runtimeResponseState.response)
       return
@@ -164,7 +243,7 @@ Object.assign(globalThis, {
       sendMessage,
     },
   },
-  location: { origin: 'https://login.example.test' },
+  location: { origin: 'https://login.example.test', pathname: '/login' },
   window: { clearTimeout: mock(() => {}) },
 })
 
@@ -408,7 +487,7 @@ test('keeps a submitted login offer when the success page advances the scan', as
 
   expect(saveOfferState.watch.kind).toBe(SavePageWatchKind.Watching)
   expect(credentials).toEqual({ username: '', password: '' })
-  expect(sendMessage).toHaveBeenCalledTimes(1)
+  expect(sendMessage.mock.calls.filter(isSaveActionCall)).toHaveLength(1)
 
   loginSaveInteraction.stopPendingSaveWatch()
   Object.assign(globalThis, { MutationObserver: originalMutationObserver })
@@ -485,7 +564,7 @@ test('refresh dismisses an in-flight save offer before rescanning', async () => 
 
   expect(credentials).toEqual({ username: '', password: '' })
   expect(saveOfferState.watch.kind).toBe(SavePageWatchKind.Idle)
-  expect(sendMessage).toHaveBeenLastCalledWith(
+  expect(sendMessage.mock.calls.filter(isSaveActionCall).at(-1)).toEqual([
     {
       type: 'nook:website-login-save-dismiss',
       payload: {
@@ -494,7 +573,7 @@ test('refresh dismisses an in-flight save offer before rescanning', async () => 
       },
     },
     expect.any(Function),
-  )
+  ])
   expect(schedule).toHaveBeenCalledTimes(1)
   loginSaveInteraction.evaluatePendingSaveEvidence =
     originalEvaluatePendingSaveEvidence

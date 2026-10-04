@@ -50,7 +50,6 @@ pub struct AuthenticatorPreviewRejectedWire {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(untagged, rename_all_fields = "camelCase")]
-#[tsify(from_wasm_abi)]
 pub enum AuthenticatorPreviewResponseWire {
     Available(AuthenticatorPreviewAvailableWire),
     Rejected(AuthenticatorPreviewRejectedWire),
@@ -58,7 +57,6 @@ pub enum AuthenticatorPreviewResponseWire {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi)]
 pub struct AuthenticatorEnrollmentPreview {
     pub issuer: String,
     pub account: String,
@@ -87,7 +85,6 @@ impl Serialize for AuthenticatorPreviewResponseKind {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
 #[serde(untagged, rename_all_fields = "camelCase")]
-#[tsify(into_wasm_abi)]
 pub enum AuthenticatorPreviewResponse {
     Ready {
         kind: AuthenticatorPreviewResponseKind,

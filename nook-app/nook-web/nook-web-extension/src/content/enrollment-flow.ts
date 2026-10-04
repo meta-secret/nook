@@ -136,6 +136,11 @@ type StartBackupCodeEnrollmentArgs = {
   section?: HTMLElement
 }
 
+type EnrollmentHintsObservationRequest = {
+  readonly recoveryCopy: string
+  readonly authenticatorSetupObservation: EnrollmentPageHints['qr']
+}
+
 /** Owns the browser runtime resources shared by these interactions. */
 class AuthenticatorEnrollmentInteraction {
   private holdEnrollmentWidgetAfterSave = false
@@ -143,16 +148,24 @@ class AuthenticatorEnrollmentInteraction {
   detectEnrollmentHints(): EnrollmentPageHints {
     const { copy, hint } =
       recoveryCopyObservation.authenticationRecoveryEvidence()
-    const hints = this.detectEnrollmentHintsFromRecoveryCopy(copy)
+    const hintsRequest: Parameters<
+      typeof this.detectEnrollmentHintsFromRecoveryCopy
+    >[0] = {
+      recoveryCopy: copy,
+      authenticatorSetupObservation:
+        pageQrCapture.authenticationAuthenticatorSetupObservation(),
+    }
+    const hints = this.detectEnrollmentHintsFromRecoveryCopy(hintsRequest)
     hints.backupCodes = hint === 'present'
     return hints
   }
 
-  detectEnrollmentHintsFromRecoveryCopy(
-    recoveryCopy: string,
-  ): EnrollmentPageHints {
+  detectEnrollmentHintsFromRecoveryCopy({
+    recoveryCopy,
+    authenticatorSetupObservation,
+  }: EnrollmentHintsObservationRequest): EnrollmentPageHints {
     return {
-      qr: pageQrCapture.authenticationAuthenticatorSetupObservation(),
+      qr: authenticatorSetupObservation,
       backupCodes:
         recoveryCopyObservation.recoveryCopyHasBackupCodeHint(recoveryCopy),
     }

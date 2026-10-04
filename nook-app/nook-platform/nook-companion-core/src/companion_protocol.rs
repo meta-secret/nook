@@ -23,7 +23,6 @@ pub enum CompanionProtocolError {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum CompanionProtocolFailure {
     InvalidValue,
     DiscoveryExpired,
@@ -68,7 +67,6 @@ impl CompanionEpochMilliseconds {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct CompanionInstallationAppKey {
     pub app_id: String,
     pub encryption_public_key: String,
@@ -95,7 +93,6 @@ impl CompanionInstallationAppKey {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct CompanionIdentityDiscoveryRequest {
     pub request_id: String,
     pub vault_store_id: String,
@@ -104,7 +101,6 @@ pub struct CompanionIdentityDiscoveryRequest {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct CompanionIdentityDiscoveryObservation {
     pub request: CompanionIdentityDiscoveryRequest,
     pub observed_at: CompanionEpochMilliseconds,
@@ -112,7 +108,6 @@ pub struct CompanionIdentityDiscoveryObservation {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct CompanionIdentityStatusAdmissionRequest {
     pub discovery: CompanionIdentityDiscoveryObservation,
     pub status: CompanionIdentityStatus,
@@ -121,7 +116,6 @@ pub struct CompanionIdentityStatusAdmissionRequest {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct CompanionAdmittedIdentityDiscovery {
     pub discovery: CompanionIdentityDiscoveryObservation,
     pub status: CompanionIdentityStatus,
@@ -147,7 +141,6 @@ impl CompanionIdentityDiscoveryRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct CompanionIdentityUnlockRequest {
     pub request_id: String,
     pub vault_store_id: String,
@@ -164,7 +157,6 @@ impl CompanionIdentityUnlockRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct CompanionUnlockedAppKey {
     pub extension_runtime_id: String,
     pub app_key: CompanionInstallationAppKey,
@@ -189,7 +181,6 @@ impl CompanionUnlockedAppKey {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "status", deny_unknown_fields, rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum CompanionIdentityStatus {
     Unavailable {
         request_id: String,
@@ -304,7 +295,6 @@ impl CompanionAdmittedIdentityDiscovery {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "kind", deny_unknown_fields, rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum CompanionIdentityHandoffContext {
     VaultCreation { vault_store_id: String },
     PairedVault { vault_store_id: String },
@@ -330,7 +320,6 @@ impl CompanionIdentityHandoffContext {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct CompanionWebsiteHandoffBegin {
     pub transaction: CompanionAdmittedIdentityDiscovery,
     pub context: CompanionIdentityHandoffContext,
@@ -362,7 +351,6 @@ impl CompanionWebsiteHandoffBegin {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct CompanionIdentityHandoffRequest {
     pub transaction: CompanionAdmittedIdentityDiscovery,
     pub recipient_public_key: String,
@@ -431,7 +419,6 @@ impl CompanionIdentityHandoffRequest {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct CompanionIdentityHandoffAuthorization {
     pub request: CompanionIdentityHandoffRequest,
     pub observed_at: CompanionEpochMilliseconds,
@@ -448,7 +435,6 @@ impl CompanionIdentityHandoffAuthorization {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct CompanionIdentityHandoffResponse {
     pub request: CompanionIdentityHandoffRequest,
     pub encrypted_envelope: String,
@@ -466,7 +452,6 @@ impl CompanionIdentityHandoffResponse {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
-#[tsify(into_wasm_abi)]
 pub enum CompanionIdentityStatusAdmission {
     Accepted {
         transaction: Box<CompanionAdmittedIdentityDiscovery>,
@@ -492,7 +477,6 @@ impl CompanionIdentityStatusAdmission {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
-#[tsify(into_wasm_abi)]
 pub enum CompanionHandoffResponseAdmission {
     Accepted {
         response: Box<CompanionIdentityHandoffResponse>,
@@ -518,7 +502,6 @@ impl CompanionHandoffResponseAdmission {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "kind", deny_unknown_fields, rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum CompanionExtensionPresence {
     Unavailable,
     Locked {

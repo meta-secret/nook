@@ -8,7 +8,7 @@
 
 use super::AuthenticationUsernameEvidence;
 use super::control_identity::AuthenticationControlIdentity;
-use super::destination_identity::{CanonicalControlDestination, MicrosoftConsumerLoginDestination};
+use super::destination_identity::CanonicalControlDestination;
 use super::form_identity::AuthenticationRouteIdentity;
 use crate::AuthenticationControlText;
 use crate::ControlDestinationEvidence;
@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
 mod envelope;
+mod microsoft;
 mod policy;
 mod submission_destination_source;
 mod tesla;
@@ -26,7 +27,6 @@ pub use submission_destination_source::PageControlSubmissionDestinationSource;
 /// Whether a browser-observed control can currently receive user activation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum PageControlActionability {
     Inert,
     Actionable,
@@ -35,7 +35,6 @@ pub enum PageControlActionability {
 /// The authentication scope that owns a browser-observed control.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum PageControlOwnership {
     Unowned,
     OwnedForm,
@@ -45,7 +44,6 @@ pub enum PageControlOwnership {
 /// The browser activation semantics exposed by a control.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum PageControlSemantics {
     Activation,
     SemanticSubmit,
@@ -54,7 +52,6 @@ pub enum PageControlSemantics {
 /// The effective HTML submission method for one observed activation control.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum PageControlSubmissionMethod {
     #[default]
     Absent,
@@ -95,7 +92,6 @@ pub enum PageControlSubmissionMethod {
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct AuthenticationAdvanceControlObservation {
     pub actionability: PageControlActionability,
     pub ownership: PageControlOwnership,
@@ -121,62 +117,12 @@ pub struct AuthenticationAdvanceControlObservation {
 /// Portable outcome for one observed authentication advance control.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum AuthenticationAdvanceControlDecision {
     AdvancesAuthentication,
     DoesNotAdvanceAuthentication,
 }
 
 impl AuthenticationAdvanceControlObservation {
-    pub(crate) fn has_empty_microsoft_consumer_login_root(&self) -> bool {
-        self.form_identity.is_empty()
-            && CanonicalControlDestination::canonicalize_control_destination(
-                ControlDestinationEvidence {
-                    source_origin: &self.source_origin,
-                    destination_identity: &self.destination_identity,
-                },
-            )
-            .is_ok_and(|destination| {
-                destination.is_microsoft_consumer_login_root
-                    || matches!(
-                        destination.microsoft_consumer_login_destination(),
-                        MicrosoftConsumerLoginDestination::IdentifierEntry
-                    )
-            })
-    }
-
-    pub(crate) fn is_microsoft_consumer_root_identifier_advance(&self) -> bool {
-        let Ok(destination) = CanonicalControlDestination::canonicalize_control_destination(
-            ControlDestinationEvidence {
-                source_origin: &self.source_origin,
-                destination_identity: &self.destination_identity,
-            },
-        ) else {
-            return false;
-        };
-        matches!(
-            destination.microsoft_consumer_login_destination(),
-            MicrosoftConsumerLoginDestination::IdentifierEntry
-        ) && self.form_identity.is_empty()
-            && matches!(self.actionability, PageControlActionability::Actionable)
-            && matches!(
-                self.ownership,
-                PageControlOwnership::OwnedForm | PageControlOwnership::LocallyScoped
-            )
-            && matches!(self.semantics, PageControlSemantics::SemanticSubmit)
-            && matches!(self.submission_method, PageControlSubmissionMethod::Post)
-            && matches!(
-                self.authentication_username,
-                AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
-            )
-            && self.password_field_count.is_zero()
-            && self.new_password_field_count.is_zero()
-            && self.one_time_code_field_count.is_zero()
-            && self.semantic_submit_control_count.is_single()
-            && (AuthenticationControlText::new(&self.label).expand_identity_text() == "next"
-                || AuthenticationControlIdentity::new(&self.label).is_explicit_advance())
-    }
-
     /// Decide whether this DOM-extracted control can advance the observed ceremony.
     #[must_use]
     pub fn classify(&self) -> AuthenticationAdvanceControlDecision {
@@ -191,7 +137,11 @@ impl AuthenticationAdvanceControlObservation {
             || (self.destination_identity.len()
                 > super::MAX_AUTHENTICATION_POLICY_DESTINATION_TEXT_BYTES
                 && !self.is_extended_identifier_only_get_advance()
-                && !self.is_tesla_scripted_password_submit_shape())
+                && !self.is_tesla_scripted_password_submit_shape()
+                && match self.microsoft_authorization_admission() {
+                    microsoft::MicrosoftAuthorizationAdmission::IdentifierAdvance => false,
+                    microsoft::MicrosoftAuthorizationAdmission::Unrelated => true,
+                })
             || matches!(self.submission_method, PageControlSubmissionMethod::Dialog)
             || self.has_ambiguous_identifier_only_submit()
             || (matches!(self.submission_method, PageControlSubmissionMethod::Get)

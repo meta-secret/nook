@@ -16,13 +16,23 @@
     clippy::must_use_candidate,
     clippy::uninlined_format_args
 )]
+#[cfg(test)]
+#[cfg(test)]
+use nook_companion_core::ExtensionConnectScope;
+
+use nook_companion_core::AuthenticationOutcomeDecision;
+use tsify::Tsify;
+use wasm_bindgen::JsError;
 
 use nook_companion_core::AuthenticationUsernameEvidence;
+#[cfg(test)]
 #[cfg(test)]
 use nook_companion_core::BackupCodeCandidatePresence;
 use nook_companion_core::BackupCodePageText;
 use wasm_bindgen::prelude::wasm_bindgen;
 
+mod authentication_action_projection;
+pub use authentication_action_projection::*;
 mod account_picker_authorization;
 mod authentication_control_actuation;
 mod authentication_observation_binding;
@@ -85,75 +95,121 @@ pub fn extract_backup_code_candidates(text: String) -> Vec<String> {
 }
 
 #[wasm_bindgen]
-#[must_use]
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn authentication_username_evidence(
     field: &NookPageInputFieldObservation,
-) -> nook_companion_core::AuthenticationUsernameEvidence {
-    (field.as_core()).authentication_username_evidence()
+) -> Result<tsify::Ts<nook_companion_core::AuthenticationUsernameEvidence>, wasm_bindgen::JsError> {
+    let result = { (field.as_core()).authentication_username_evidence() };
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
-#[must_use]
 #[allow(clippy::needless_pass_by_value)]
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn strongest_authentication_username_evidence(
-    evidence: Vec<nook_companion_core::AuthenticationUsernameEvidence>,
-) -> nook_companion_core::AuthenticationUsernameEvidence {
-    AuthenticationUsernameEvidence::strongest_authentication_username_evidence(&evidence)
+    evidence: Vec<tsify::Ts<nook_companion_core::AuthenticationUsernameEvidence>>,
+) -> Result<tsify::Ts<nook_companion_core::AuthenticationUsernameEvidence>, wasm_bindgen::JsError> {
+    let evidence = evidence
+        .into_iter()
+        .map(|value| value.to_rust())
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+    let result =
+        { AuthenticationUsernameEvidence::strongest_authentication_username_evidence(&evidence) };
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
-#[must_use]
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn classify_companion_authentication_outcome(
-    input: nook_companion_core::AuthenticationOutcomeClassification,
-) -> nook_companion_core::AuthenticationOutcomeDecision {
-    nook_companion_core::AuthenticationOutcomeDecision::classify(
-        input.observation,
-        input.timeout_ms,
-    )
+    input: &tsify::Ts<nook_companion_core::AuthenticationOutcomeClassification>,
+) -> Result<tsify::Ts<nook_companion_core::AuthenticationOutcomeDecision>, wasm_bindgen::JsError> {
+    let input = input
+        .to_rust()
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+    let result = { AuthenticationOutcomeDecision::classify(input.observation, input.timeout_ms) };
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
-#[must_use]
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn classify_companion_authentication_outcome_with_default_timeout(
-    observation: nook_companion_core::AuthenticationOutcomeObservation,
-) -> nook_companion_core::AuthenticationOutcomeDecision {
-    nook_companion_core::AuthenticationOutcomeDecision::classify(
-        observation,
-        nook_companion_core::DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS,
-    )
+    observation: &tsify::Ts<nook_companion_core::AuthenticationOutcomeObservation>,
+) -> Result<tsify::Ts<nook_companion_core::AuthenticationOutcomeDecision>, wasm_bindgen::JsError> {
+    let observation = observation
+        .to_rust()
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+    let result = {
+        AuthenticationOutcomeDecision::classify(
+            observation,
+            nook_companion_core::DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS,
+        )
+    };
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
-#[must_use]
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn validate_companion_authentication_outcome_decision(
-    decision: nook_companion_core::AuthenticationOutcomeDecision,
-) -> nook_companion_core::AuthenticationOutcomeDecision {
-    decision
+    decision: &tsify::Ts<nook_companion_core::AuthenticationOutcomeDecision>,
+) -> Result<tsify::Ts<nook_companion_core::AuthenticationOutcomeDecision>, wasm_bindgen::JsError> {
+    let decision = decision
+        .to_rust()
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+    let result = { decision };
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_companion_core::AuthenticationApprovalRequirement;
+    use nook_companion_core::AuthenticationOutcomeDecision;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_companion_core::AuthenticationOutcomeObservation;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_companion_core::AuthenticationOutcomeVerdict;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_companion_core::AuthenticationPilotPresentationCapability;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_companion_core::AuthenticationSavedLoginCapability;
+    use nook_companion_core::AuthenticationUsernameEvidence;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_companion_core::AuthenticationWorkflowAction;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_companion_core::AuthenticationWorkflowKind;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_companion_core::AuthenticationWorkflowStage;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_companion_core::BrowserOAuthProvider;
+    #[cfg(test)]
+    #[cfg(test)]
+    use nook_companion_core::PageInputType;
     use nook_companion_core::{
         AuthenticationBackupCodesEvidence, AuthenticationBackupCodesObservation,
         AuthenticationEnrollmentObservation, AuthenticationWorkflowMatch,
@@ -169,12 +225,12 @@ mod tests {
                 ..Default::default()
             }],
         };
-        assert_eq!(
-            companion_authentication_workflow_match_kind(
-                classify_companion_authentication_workflow(input)
+        assert!(matches!(
+            AuthenticationWorkflowMatch::classify_authentication_workflow_candidates(
+                &(input).observations
             ),
-            CompanionAuthenticationWorkflowMatchKind::Rejected
-        );
+            AuthenticationWorkflowMatch::Rejected
+        ));
     }
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
@@ -189,18 +245,16 @@ mod tests {
                 ..Default::default()
             }],
         };
-        assert_eq!(
-            companion_authentication_workflow_match_kind(
-                classify_companion_authentication_workflow_facts(input)
-            ),
-            CompanionAuthenticationWorkflowMatchKind::Rejected
-        );
+        assert!(matches!(
+            (input).classify(),
+            AuthenticationWorkflowMatch::Rejected
+        ));
     }
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn username_evidence_exports_preserve_core_classification_and_ordering() {
         let field = NookPageInputFieldObservation::new(
-            nook_companion_core::PageInputType::Email,
+            PageInputType::Email,
             false,
             false,
             vec!["email".to_owned()],
@@ -208,11 +262,11 @@ mod tests {
             true,
         );
         assert_eq!(
-            authentication_username_evidence(&field),
-            nook_companion_core::AuthenticationUsernameEvidence::Strong
+            field.as_core().authentication_username_evidence(),
+            AuthenticationUsernameEvidence::Strong
         );
         let tesla = NookPageInputFieldObservation::new(
-            nook_companion_core::PageInputType::Text,
+            PageInputType::Text,
             false,
             false,
             vec!["email".to_owned(), "webauthn".to_owned()],
@@ -220,11 +274,11 @@ mod tests {
             false,
         );
         assert_eq!(
-            authentication_username_evidence(&tesla),
-            nook_companion_core::AuthenticationUsernameEvidence::WebAuthnEmail
+            tesla.as_core().authentication_username_evidence(),
+            AuthenticationUsernameEvidence::WebAuthnEmail
         );
         let airbnb = NookPageInputFieldObservation::new(
-            nook_companion_core::PageInputType::Text,
+            PageInputType::Text,
             false,
             false,
             vec!["tel-national".to_owned()],
@@ -232,74 +286,73 @@ mod tests {
             true,
         );
         assert_eq!(
-            authentication_username_evidence(&airbnb),
-            nook_companion_core::AuthenticationUsernameEvidence::MixedPhoneOrEmail
+            airbnb.as_core().authentication_username_evidence(),
+            AuthenticationUsernameEvidence::MixedPhoneOrEmail
         );
         assert_eq!(
-            strongest_authentication_username_evidence(vec![
-                nook_companion_core::AuthenticationUsernameEvidence::Absent,
-                nook_companion_core::AuthenticationUsernameEvidence::StandardsBasedEmail,
-                nook_companion_core::AuthenticationUsernameEvidence::MixedPhoneOrEmail,
-                nook_companion_core::AuthenticationUsernameEvidence::WebAuthnEmail,
-                nook_companion_core::AuthenticationUsernameEvidence::Explicit,
-                nook_companion_core::AuthenticationUsernameEvidence::Strong,
-            ]),
-            nook_companion_core::AuthenticationUsernameEvidence::Explicit
+            AuthenticationUsernameEvidence::strongest_authentication_username_evidence(
+                &(vec![
+                    AuthenticationUsernameEvidence::Absent,
+                    AuthenticationUsernameEvidence::StandardsBasedEmail,
+                    AuthenticationUsernameEvidence::MixedPhoneOrEmail,
+                    AuthenticationUsernameEvidence::WebAuthnEmail,
+                    AuthenticationUsernameEvidence::Explicit,
+                    AuthenticationUsernameEvidence::Strong,
+                ])
+            ),
+            AuthenticationUsernameEvidence::Explicit
         );
         assert_eq!(
-            strongest_authentication_username_evidence(Vec::new()),
-            nook_companion_core::AuthenticationUsernameEvidence::Absent
+            AuthenticationUsernameEvidence::strongest_authentication_username_evidence(
+                &(Vec::new())
+            ),
+            AuthenticationUsernameEvidence::Absent
         );
     }
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn saved_login_capability_export_preserves_classifier_contract() {
         let valid = nook_companion_core::AuthenticationWorkflowSnapshot {
-            kind: nook_companion_core::AuthenticationWorkflowKind::Login,
-            stage: nook_companion_core::AuthenticationWorkflowStage::Credentials,
-            action: nook_companion_core::AuthenticationWorkflowAction::ContinueWithNook,
+            kind: AuthenticationWorkflowKind::Login,
+            stage: AuthenticationWorkflowStage::Credentials,
+            action: AuthenticationWorkflowAction::ContinueWithNook,
             current_step: 1.into(),
             total_steps: 3.into(),
-            approval_requirement:
-                nook_companion_core::AuthenticationApprovalRequirement::ExplicitUserApproval,
-            saved_login_capability:
-                nook_companion_core::AuthenticationSavedLoginCapability::FillSavedLogin,
+            approval_requirement: AuthenticationApprovalRequirement::ExplicitUserApproval,
+            saved_login_capability: AuthenticationSavedLoginCapability::FillSavedLogin,
             observation_index: 0.into(),
         };
         assert_eq!(
-            authentication_workflow_saved_login_capability(valid),
-            nook_companion_core::AuthenticationSavedLoginCapability::FillSavedLogin
+            (valid).saved_login_capability(),
+            AuthenticationSavedLoginCapability::FillSavedLogin
         );
-        assert!(authentication_workflow_requires_login_match_availability(
-            valid
-        ));
-        assert!(authentication_workflow_requires_login_match_availability(
-            nook_companion_core::AuthenticationWorkflowSnapshot {
-                action: nook_companion_core::AuthenticationWorkflowAction::UsePasskey,
+        assert!((valid).requires_login_match_availability());
+        assert!(
+            (nook_companion_core::AuthenticationWorkflowSnapshot {
+                action: AuthenticationWorkflowAction::UsePasskey,
                 ..valid
-            }
-        ));
-        assert_eq!(
-            authentication_workflow_pilot_presentation_capability(valid),
-            nook_companion_core::AuthenticationPilotPresentationCapability::ProposeAction
+            })
+            .requires_login_match_availability()
         );
         assert_eq!(
-            authentication_workflow_saved_login_capability(
-                nook_companion_core::AuthenticationWorkflowSnapshot {
-                    stage: nook_companion_core::AuthenticationWorkflowStage::Recovery,
-                    ..valid
-                }
-            ),
-            nook_companion_core::AuthenticationSavedLoginCapability::Unavailable
+            (valid).pilot_presentation_capability(),
+            AuthenticationPilotPresentationCapability::ProposeAction
         );
         assert_eq!(
-            authentication_workflow_pilot_presentation_capability(
-                nook_companion_core::AuthenticationWorkflowSnapshot {
-                    stage: nook_companion_core::AuthenticationWorkflowStage::Recovery,
-                    ..valid
-                }
-            ),
-            nook_companion_core::AuthenticationPilotPresentationCapability::Hidden
+            (nook_companion_core::AuthenticationWorkflowSnapshot {
+                stage: AuthenticationWorkflowStage::Recovery,
+                ..valid
+            })
+            .saved_login_capability(),
+            AuthenticationSavedLoginCapability::Unavailable
+        );
+        assert_eq!(
+            (nook_companion_core::AuthenticationWorkflowSnapshot {
+                stage: AuthenticationWorkflowStage::Recovery,
+                ..valid
+            })
+            .pilot_presentation_capability(),
+            AuthenticationPilotPresentationCapability::Hidden
         );
     }
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
@@ -312,7 +365,7 @@ mod tests {
                     candidate_presence: BackupCodeCandidatePresence::Absent
                 }
             ),
-            nook_companion_core::AuthenticationBackupCodesObservation::Absent
+            AuthenticationBackupCodesObservation::Absent
         );
         assert_eq!(
             AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation(
@@ -321,13 +374,13 @@ mod tests {
                     candidate_presence: BackupCodeCandidatePresence::Absent
                 }
             ),
-            nook_companion_core::AuthenticationBackupCodesObservation::Present
+            AuthenticationBackupCodesObservation::Present
         );
     }
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn enrollment_match_bridge_preserves_selected_recovery_action() -> Result<(), String> {
-        let nook_companion_core::AuthenticationWorkflowMatch::Matched(snapshot) =
+        let AuthenticationWorkflowMatch::Matched(snapshot) =
             AuthenticationWorkflowMatch::authentication_enrollment_workflow_match(
                 AuthenticationEnrollmentObservation {
                     authenticator_setup_hint: true.into(),
@@ -340,36 +393,44 @@ mod tests {
         };
         assert_eq!(
             snapshot.action,
-            nook_companion_core::AuthenticationWorkflowAction::SaveBackupCodes
+            AuthenticationWorkflowAction::SaveBackupCodes
         );
         Ok(())
     }
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn remaining_export_families_preserve_closed_policy_and_url_boundaries() -> Result<(), String> {
-        let outcome = classify_companion_authentication_outcome(
-            nook_companion_core::AuthenticationOutcomeClassification {
+        let outcome = AuthenticationOutcomeDecision::classify(
+            (nook_companion_core::AuthenticationOutcomeClassification {
                 observation: nook_companion_core::AuthenticationOutcomeObservation {
                     success_marker_present: true,
                     error_marker_present: true,
                     ..Default::default()
                 },
                 timeout_ms: 1_000.into(),
-            },
+            })
+            .observation,
+            (nook_companion_core::AuthenticationOutcomeClassification {
+                observation: nook_companion_core::AuthenticationOutcomeObservation {
+                    success_marker_present: true,
+                    error_marker_present: true,
+                    ..Default::default()
+                },
+                timeout_ms: 1_000.into(),
+            })
+            .timeout_ms,
         );
-        assert_eq!(
-            outcome.verdict,
-            nook_companion_core::AuthenticationOutcomeVerdict::Conflicting
-        );
+        assert_eq!(outcome.verdict, AuthenticationOutcomeVerdict::Conflicting);
         assert!(!outcome.allows_credential_commit);
-        let validated = validate_companion_authentication_outcome_decision(outcome);
+        let validated = outcome;
         assert_eq!(validated, outcome);
         assert_eq!(
-            classify_companion_authentication_outcome_with_default_timeout(
-                nook_companion_core::AuthenticationOutcomeObservation::default()
+            AuthenticationOutcomeDecision::classify(
+                AuthenticationOutcomeObservation::default(),
+                nook_companion_core::DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS
             )
             .verdict,
-            nook_companion_core::AuthenticationOutcomeVerdict::Insufficient
+            AuthenticationOutcomeVerdict::Insufficient
         );
         assert_eq!(
             extension_pairing_grant_storage_key("store_abcdefghijk")
@@ -378,10 +439,10 @@ mod tests {
         );
         assert!(extension_pairing_setup_storage_key().ends_with("setup"));
         for scope in [
-            extension_vault_access_scope(),
-            extension_password_filling_scope(),
-            extension_passkey_management_scope(),
-            extension_sync_provider_credentials_scope(),
+            ExtensionConnectScope::VaultAccess,
+            ExtensionConnectScope::PasswordFilling,
+            ExtensionConnectScope::PasskeyManagement,
+            ExtensionConnectScope::SyncProviderCredentials,
         ] {
             assert!(is_extension_connect_scope(scope.as_str()));
         }
@@ -411,7 +472,7 @@ mod tests {
                 .is_err()
         );
         let preview = resolve_oauth_origin_support(
-            nook_companion_core::BrowserOAuthProvider::GoogleDrive,
+            BrowserOAuthProvider::GoogleDrive,
             "https://pr-42.nokey-simple.pages.dev",
             "PR-42.NOKEY-SIMPLE.PAGES.DEV",
         );
@@ -431,7 +492,16 @@ mod tests {
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod wasm_tests {
+    #[cfg(all(test, target_arch = "wasm32"))]
+    #[cfg(all(test, target_arch = "wasm32"))]
+    use nook_companion_core::AuthenticationWorkflowSelectedFacts;
+    #[cfg(all(test, target_arch = "wasm32"))]
+    #[cfg(all(test, target_arch = "wasm32"))]
+    use nook_companion_core::ExtensionSessionStatusAvailability;
     use std::fmt;
+    #[cfg(all(test, target_arch = "wasm32"))]
+    use tsify::Ts;
+    use wasm_bindgen::JsError;
 
     use nook_companion_core::{
         AuthenticationBackupCodesEvidence, AuthenticationBackupCodesObservation,
@@ -524,7 +594,7 @@ mod wasm_tests {
     }
 
     fn js_error(error: impl fmt::Display) -> wasm_bindgen::JsError {
-        wasm_bindgen::JsError::new(&error.to_string())
+        JsError::new(&error.to_string())
     }
 
     #[wasm_bindgen_test]
@@ -546,22 +616,10 @@ mod wasm_tests {
     fn session_status_bridge_classifies_supported_device_states()
     -> Result<(), wasm_bindgen::JsError> {
         for (status, expected) in [
-            (
-                0,
-                nook_companion_core::ExtensionSessionStatusAvailability::Unavailable,
-            ),
-            (
-                4,
-                nook_companion_core::ExtensionSessionStatusAvailability::Locked,
-            ),
-            (
-                5,
-                nook_companion_core::ExtensionSessionStatusAvailability::Unavailable,
-            ),
-            (
-                7,
-                nook_companion_core::ExtensionSessionStatusAvailability::Unavailable,
-            ),
+            (0, ExtensionSessionStatusAvailability::Unavailable),
+            (4, ExtensionSessionStatusAvailability::Locked),
+            (5, ExtensionSessionStatusAvailability::Unavailable),
+            (7, ExtensionSessionStatusAvailability::Unavailable),
         ] {
             let fixture = SessionStatusFixture {
                 ok: true,
@@ -569,9 +627,9 @@ mod wasm_tests {
                 device: SessionFixtureDevice::Omitted,
             };
             let js_input = serde_wasm_bindgen::to_value(&fixture).map_err(js_error)?;
-            let wire = serde_wasm_bindgen::from_value(js_input).map_err(js_error)?;
+            let wire = Ts::new_unchecked(js_input);
             assert_eq!(
-                super::decode_extension_session_status_response(wire),
+                super::decode_extension_session_status_response(&wire)?,
                 expected
             );
         }
@@ -585,10 +643,10 @@ mod wasm_tests {
             }),
         };
         let js_input = serde_wasm_bindgen::to_value(&unlocked).map_err(js_error)?;
-        let wire = serde_wasm_bindgen::from_value(js_input).map_err(js_error)?;
+        let wire = Ts::new_unchecked(js_input);
         assert_eq!(
-            super::decode_extension_session_status_response(wire),
-            nook_companion_core::ExtensionSessionStatusAvailability::Unlocked
+            super::decode_extension_session_status_response(&wire)?,
+            ExtensionSessionStatusAvailability::Unlocked
         );
         Ok(())
     }
@@ -613,14 +671,14 @@ mod wasm_tests {
                 kind: "ready",
                 count: 2,
             },
-            selected_facts: nook_companion_core::AuthenticationWorkflowSelectedFacts::Selected {
+            selected_facts: AuthenticationWorkflowSelectedFacts::Selected {
                 facts: Box::default(),
             },
         };
         let js_input = serde_wasm_bindgen::to_value(&fixture).map_err(js_error)?;
-        let wire = serde_wasm_bindgen::from_value(js_input).map_err(js_error)?;
-        let decoded = super::decode_authentication_workflow_runtime_response(wire)?;
-        let js_output = serde_wasm_bindgen::to_value(&decoded).map_err(js_error)?;
+        let wire = Ts::new_unchecked(js_input);
+        let decoded = super::decode_authentication_workflow_runtime_response(&wire)?;
+        let js_output = decoded.js_value();
         let result: RuntimeResponseResult =
             serde_wasm_bindgen::from_value(js_output).map_err(js_error)?;
         assert_eq!(result.login_matches.kind, "ready");
@@ -635,9 +693,9 @@ mod wasm_tests {
             status: "locked",
         })
         .map_err(js_error)?;
-        let wire = serde_wasm_bindgen::from_value(js_input).map_err(js_error)?;
-        let decoded = super::decode_website_login_match_availability(wire)?;
-        let js_output = serde_wasm_bindgen::to_value(&decoded).map_err(js_error)?;
+        let wire = Ts::new_unchecked(js_input);
+        let decoded = super::decode_website_login_match_availability(&wire)?;
+        let js_output = decoded.js_value();
         let result: LoginAvailabilityResult =
             serde_wasm_bindgen::from_value(js_output).map_err(js_error)?;
         assert_eq!(result.kind, "locked");
@@ -647,8 +705,8 @@ mod wasm_tests {
     #[wasm_bindgen_test]
     fn unavailable_login_match_bridge_returns_the_generated_typed_variant()
     -> Result<(), wasm_bindgen::JsError> {
-        let availability = super::unavailable_website_login_match_availability();
-        let js_output = serde_wasm_bindgen::to_value(&availability).map_err(js_error)?;
+        let availability = super::unavailable_website_login_match_availability()?;
+        let js_output = availability.js_value();
         let result: LoginAvailabilityResult =
             serde_wasm_bindgen::from_value(js_output).map_err(js_error)?;
 
@@ -681,18 +739,113 @@ mod wasm_tests {
 }
 
 #[wasm_bindgen]
-#[must_use]
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
 pub fn compare_extension_pairing_records(
-    request: nook_companion_core::ExtensionPairingRecordComparisonRequest,
-) -> nook_companion_core::ExtensionPairingRecordComparison {
-    request.compare()
+    request: &tsify::Ts<nook_companion_core::ExtensionPairingRecordComparisonRequest>,
+) -> Result<tsify::Ts<nook_companion_core::ExtensionPairingRecordComparison>, wasm_bindgen::JsError>
+{
+    let request = request
+        .to_rust()
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+    let result = { request.compare() };
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 
 mod browser_material_admission;
 pub use browser_material_admission::*;
 
 mod bridge_coverage;
+
+#[cfg(all(test, target_arch = "wasm32"))]
+mod ingress_tests {
+    use super::*;
+    use nook_companion_core::{
+        AuthenticationOutcomeClassification, AuthenticationOutcomeObservation,
+        AuthenticationOutcomeVerdict, AuthenticationUsernameEvidence, PageInputType,
+    };
+    use serde::Serialize;
+    use serde_wasm_bindgen::Serializer;
+    use tsify::{Ts, Tsify};
+    use wasm_bindgen::JsValue;
+    use wasm_bindgen_test::wasm_bindgen_test;
+    #[wasm_bindgen_test]
+    fn username_exports_preserve_field_evidence_and_reject_invalid_vector_members()
+    -> Result<(), JsError> {
+        let field = NookPageInputFieldObservation::new(
+            PageInputType::Email,
+            false,
+            false,
+            vec!["email".into()],
+            "account email".into(),
+            true,
+        );
+        assert_eq!(
+            authentication_username_evidence(&field)?.to_rust()?,
+            AuthenticationUsernameEvidence::Strong
+        );
+        let strong = AuthenticationUsernameEvidence::Strong;
+        let explicit = AuthenticationUsernameEvidence::Explicit;
+        assert_eq!(
+            strongest_authentication_username_evidence(vec![
+                strong.into_ts()?,
+                explicit.into_ts()?
+            ])?
+            .to_rust()?,
+            explicit
+        );
+        assert!(
+            strongest_authentication_username_evidence(vec![
+                strong.into_ts()?,
+                Ts::new_unchecked(JsValue::NULL)
+            ])
+            .is_err()
+        );
+        Ok(())
+    }
+    #[wasm_bindgen_test]
+    fn outcome_exports_preserve_success_and_reject_contradictory_external_decisions()
+    -> Result<(), JsError> {
+        let observation = AuthenticationOutcomeObservation {
+            success_marker_present: true,
+            ..Default::default()
+        };
+        let classification = AuthenticationOutcomeClassification {
+            observation,
+            timeout_ms: 1000u32.into(),
+        };
+        let decision =
+            classify_companion_authentication_outcome(&classification.into_ts()?)?.to_rust()?;
+        assert_eq!(decision.verdict, AuthenticationOutcomeVerdict::Sufficient);
+        assert!(decision.allows_credential_commit);
+        assert_eq!(
+            classify_companion_authentication_outcome_with_default_timeout(
+                &observation.into_ts()?
+            )?
+            .to_rust()?,
+            decision
+        );
+        assert_eq!(
+            validate_companion_authentication_outcome_decision(&decision.into_ts()?)?.to_rust()?,
+            decision
+        );
+        assert!(
+            classify_companion_authentication_outcome(&Ts::new_unchecked(JsValue::NULL)).is_err()
+        );
+        assert!(
+            classify_companion_authentication_outcome_with_default_timeout(&Ts::new_unchecked(
+                JsValue::TRUE
+            ))
+            .is_err()
+        );
+        let contradictory = serde_json::json!({"verdict": AuthenticationOutcomeVerdict::Sufficient,"allowsCredentialCommit":false});
+        let raw = contradictory.serialize(&Serializer::json_compatible())?;
+        assert!(
+            validate_companion_authentication_outcome_decision(&Ts::new_unchecked(raw)).is_err()
+        );
+        assert!(decision.allows_credential_commit);
+        Ok(())
+    }
+}

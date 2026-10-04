@@ -24,6 +24,8 @@
     clippy::items_after_statements
 )]
 
+use tsify::Tsify;
+
 use nook_companion_core::ExtensionConnectScope;
 mod application;
 mod conversion;
@@ -91,27 +93,47 @@ pub use types::{
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 #[wasm_bindgen]
-#[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn extension_vault_access_scope() -> nook_companion_core::ExtensionConnectScope {
-    ExtensionConnectScope::VaultAccess
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn extension_vault_access_scope()
+-> Result<tsify::Ts<nook_companion_core::ExtensionConnectScope>, wasm_bindgen::JsError> {
+    let result = { ExtensionConnectScope::VaultAccess };
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
-#[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn extension_password_filling_scope() -> nook_companion_core::ExtensionConnectScope {
-    ExtensionConnectScope::PasswordFilling
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn extension_password_filling_scope()
+-> Result<tsify::Ts<nook_companion_core::ExtensionConnectScope>, wasm_bindgen::JsError> {
+    let result = { ExtensionConnectScope::PasswordFilling };
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
-#[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn extension_passkey_management_scope() -> nook_companion_core::ExtensionConnectScope {
-    ExtensionConnectScope::PasskeyManagement
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn extension_passkey_management_scope()
+-> Result<tsify::Ts<nook_companion_core::ExtensionConnectScope>, wasm_bindgen::JsError> {
+    let result = { ExtensionConnectScope::PasskeyManagement };
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
-#[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn extension_sync_provider_credentials_scope() -> nook_companion_core::ExtensionConnectScope {
-    ExtensionConnectScope::SyncProviderCredentials
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn extension_sync_provider_credentials_scope()
+-> Result<tsify::Ts<nook_companion_core::ExtensionConnectScope>, wasm_bindgen::JsError> {
+    let result = { ExtensionConnectScope::SyncProviderCredentials };
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 
 #[wasm_bindgen]
@@ -122,9 +144,17 @@ use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn companion_pairing_provider_manifest_digest(
-    snapshot: nook_core::AuthProvidersSnapshotData,
-) -> Result<String, JsError> {
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn companion_pairing_provider_manifest_digest(
+    snapshot: &tsify::Ts<nook_core::AuthProvidersSnapshotData>,
+) -> Result<String, wasm_bindgen::JsError> {
+    let snapshot = snapshot
+        .to_rust()
+        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+
     Ok(snapshot
         .companion_pairing_manifest_digest()
         .map_err(|error| JsError::new(&error.to_string()))?
@@ -177,13 +207,20 @@ pub enum NookError {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
+    #[cfg(all(test, target_arch = "wasm32"))]
+    #[cfg(all(test, target_arch = "wasm32"))]
+    use nook_core::SentinelGenesisPhase;
+    #[cfg(all(test, target_arch = "wasm32"))]
+    #[cfg(all(test, target_arch = "wasm32"))]
+    use nook_core::StoreId;
+    use wasm_bindgen::JsError;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
 
     #[wasm_bindgen_test]
     fn typed_vault_identity_exports_are_available_at_the_crate_boundary() -> Result<(), JsError> {
-        let store_id = NookStoreId::from(nook_core::StoreId::before_genesis_placeholder());
+        let store_id = NookStoreId::from(StoreId::before_genesis_placeholder());
         assert_eq!(store_id.value(), "store_abcdefghijk");
         assert_eq!(
             NookStoreIdPresence::from_raw("")
@@ -195,21 +232,21 @@ mod browser_tests {
     }
 
     #[wasm_bindgen_test]
-    fn extension_scopes_and_sentinel_translation_are_typed() {
+    fn extension_scopes_and_sentinel_translation_are_typed() -> Result<(), JsError> {
         assert_eq!(
-            extension_vault_access_scope(),
+            extension_vault_access_scope()?.to_rust()?,
             ExtensionConnectScope::VaultAccess
         );
         assert_eq!(
-            extension_password_filling_scope(),
+            extension_password_filling_scope()?.to_rust()?,
             ExtensionConnectScope::PasswordFilling
         );
         assert_eq!(
-            extension_passkey_management_scope(),
+            extension_passkey_management_scope()?.to_rust()?,
             ExtensionConnectScope::PasskeyManagement
         );
         assert_eq!(
-            extension_sync_provider_credentials_scope(),
+            extension_sync_provider_credentials_scope()?.to_rust()?,
             ExtensionConnectScope::SyncProviderCredentials
         );
         for value in [
@@ -221,11 +258,12 @@ mod browser_tests {
             assert!(is_extension_connect_scope(value));
         }
         assert!(!is_extension_connect_scope("unknown"));
-        let phase = nook_core::SentinelGenesisPhase::Inactive;
+        let phase = SentinelGenesisPhase::Inactive;
         assert_eq!(
             sentinel_genesis_phase_translation_key(phase),
             phase.translation_key()
         );
+        Ok(())
     }
 }
 

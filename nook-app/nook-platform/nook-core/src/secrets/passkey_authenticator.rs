@@ -59,7 +59,6 @@ pub enum PasskeyAuthenticatorError {
 pub type PasskeyAuthenticatorResult<T> = Result<T, PasskeyAuthenticatorError>;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Tsify)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 #[serde(rename_all = "camelCase")]
 pub struct PasskeyRelyingParty {
     pub id: String,
@@ -67,7 +66,6 @@ pub struct PasskeyRelyingParty {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Tsify)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 #[serde(rename_all = "camelCase")]
 pub struct PasskeyUser {
     pub id: String,
@@ -76,14 +74,12 @@ pub struct PasskeyUser {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Tsify)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 #[serde(rename_all = "camelCase")]
 pub struct PasskeyCredentialDescriptor {
     pub id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Tsify)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 #[serde(rename_all = "camelCase")]
 pub struct PasskeyRegistrationRequest {
     pub origin: String,
@@ -105,7 +101,6 @@ pub struct PasskeyRegistrationRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Tsify)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 #[serde(rename_all = "camelCase")]
 pub struct PasskeyAssertionRequest {
     pub origin: String,

@@ -2,6 +2,7 @@ use super::wasm_bindgen;
 use nook_core::{
     AuthenticationWorkflowMatch, LoginSecret, SecretId, WebsiteHost, WebsiteLoginSaveDecision,
 };
+use tsify::Tsify;
 use wasm_bindgen::JsError;
 
 #[wasm_bindgen]
@@ -255,13 +256,21 @@ impl NookAuthenticationWorkflowSnapshot {
     }
 
     #[wasm_bindgen(getter, js_name = approvalRequirement)]
-    pub fn approval_requirement(&self) -> nook_core::AuthenticationApprovalRequirement {
-        self.0.approval_requirement
+    pub fn approval_requirement(
+        &self,
+    ) -> Result<tsify::Ts<nook_core::AuthenticationApprovalRequirement>, wasm_bindgen::JsError>
+    {
+        let result = { self.0.approval_requirement };
+        Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
     }
 
     #[wasm_bindgen(getter, js_name = savedLoginCapability)]
-    pub fn saved_login_capability(&self) -> nook_core::AuthenticationSavedLoginCapability {
-        self.0.saved_login_capability()
+    pub fn saved_login_capability(
+        &self,
+    ) -> Result<tsify::Ts<nook_core::AuthenticationSavedLoginCapability>, wasm_bindgen::JsError>
+    {
+        let result = { self.0.saved_login_capability() };
+        Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
     }
 
     #[wasm_bindgen(getter, js_name = observationIndex)]
@@ -410,6 +419,7 @@ impl NookWebsiteLoginSavePlan {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
+    use nook_core::WebsiteLoginSaveDecision;
     use nook_core::{
         AuthenticationApprovalRequirement, AuthenticationOutcomeVerdict,
         AuthenticationSavedLoginCapability, AuthenticationWorkflowAction,
@@ -422,7 +432,7 @@ mod browser_tests {
     wasm_bindgen_test_configure!(run_in_browser);
 
     #[wasm_bindgen_test]
-    fn authentication_observation_and_snapshot_wrappers_project_fields() {
+    fn authentication_observation_and_snapshot_wrappers_project_fields() -> Result<(), JsError> {
         let observation =
             NookAuthenticationPageObservation::new(1, 1, 0, 0, 1, false, true, false, true, 2);
         let mut observations = NookAuthenticationPageObservations::new();
@@ -463,11 +473,11 @@ mod browser_tests {
         assert_eq!(snapshot.current_step(), 1);
         assert_eq!(snapshot.total_steps(), 3);
         assert_eq!(
-            snapshot.approval_requirement(),
+            snapshot.approval_requirement()?.to_rust()?,
             AuthenticationApprovalRequirement::ExplicitUserApproval
         );
         assert_eq!(
-            snapshot.saved_login_capability(),
+            snapshot.saved_login_capability()?.to_rust()?,
             AuthenticationSavedLoginCapability::FillSavedLogin
         );
         assert_eq!(snapshot.observation_index(), 1);
@@ -497,6 +507,7 @@ mod browser_tests {
             assert_eq!(projected.verdict(), verdict);
             assert_eq!(projected.allows_credential_commit(), allows);
         }
+        Ok(())
     }
 
     #[wasm_bindgen_test]
@@ -523,24 +534,24 @@ mod browser_tests {
 
         for (decision, expected, has_id) in [
             (
-                nook_core::WebsiteLoginSaveDecision::Create,
+                WebsiteLoginSaveDecision::Create,
                 NookWebsiteLoginSaveDecision::Create,
                 false,
             ),
             (
-                nook_core::WebsiteLoginSaveDecision::Invalid,
+                WebsiteLoginSaveDecision::Invalid,
                 NookWebsiteLoginSaveDecision::Invalid,
                 false,
             ),
             (
-                nook_core::WebsiteLoginSaveDecision::Update {
+                WebsiteLoginSaveDecision::Update {
                     secret_id: id.clone(),
                 },
                 NookWebsiteLoginSaveDecision::Update,
                 true,
             ),
             (
-                nook_core::WebsiteLoginSaveDecision::AlreadySaved {
+                WebsiteLoginSaveDecision::AlreadySaved {
                     secret_id: id.clone(),
                 },
                 NookWebsiteLoginSaveDecision::AlreadySaved,

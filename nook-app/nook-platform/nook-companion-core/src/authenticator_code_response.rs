@@ -74,7 +74,6 @@ pub struct AuthenticatorCodeRejectedWire {
 
 #[derive(Debug, Deserialize, Tsify)]
 #[serde(untagged)]
-#[tsify(from_wasm_abi)]
 pub enum AuthenticatorCodeResponseWire {
     Ready(AuthenticatorCodeReadyWire),
     Rejected(AuthenticatorCodeRejectedWire),
@@ -98,7 +97,6 @@ impl Serialize for AuthenticatorCodeResponseKind {
 
 #[derive(Debug, Serialize, Tsify)]
 #[serde(untagged, rename_all_fields = "camelCase")]
-#[tsify(into_wasm_abi)]
 pub enum AuthenticatorCodeResponse {
     Ready {
         kind: AuthenticatorCodeResponseKind,

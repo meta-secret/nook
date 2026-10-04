@@ -10,7 +10,6 @@ use tsify::Tsify;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Tsify, Deserialize)]
 #[serde(try_from = "u8")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct AuthenticationFormObservationPriority(u8);
 
 impl AuthenticationFormObservationPriority {

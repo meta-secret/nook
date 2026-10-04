@@ -153,7 +153,7 @@ function installConnectedDemoRuntimeOverrides(noMatching: boolean): void {
   )
 }
 
-test('waits for companion WASM before the first Pilot scan', async ({
+test('waits for typed companion runtime readiness before the first Pilot scan', async ({
   page,
 }) => {
   const messages = await loadPilotMessages()
@@ -212,6 +212,39 @@ test('waits for companion WASM before the first Pilot scan', async ({
   await demoBeat(page)
 })
 
+test('detects the Microsoft username-first shell through the typed runtime', async ({
+  page,
+}) => {
+  const messages = await loadPilotMessages()
+  await page.route('https://login.live.com/oauth20_authorize.srf**', (route) =>
+    route.fulfill({
+      contentType: 'text/html',
+      body: `<!doctype html><html><body><main>
+      <h1>Sign in</h1><p>Use your Microsoft account</p>
+      <form class="___cqaz2i0 fly5x3f" method="post">
+        <label>Email or phone number<input id="usernameEntry" type="email" autocomplete="username webauthn"></label>
+        <button type="button">Forgot your username?</button>
+        <button type="submit">Next</button>
+      </form><form method="post" action=""></form>
+    </main></body></html>`,
+    }),
+  )
+  await page.goto(
+    'https://login.live.com/oauth20_authorize.srf?client_id=00000000-0000-0000-0000-000000000000&scope=openid%20profile&response_type=code&response_mode=form_post',
+  )
+  await page.evaluate(installDemoChromeStub, loginPilotStubArgs(messages))
+  await injectPilotAutofill(page)
+  await expect(
+    page.locator('#nook-auth-widget').getByText('Ready to sign in'),
+  ).toBeVisible()
+  await expect(page.locator('#usernameEntry')).toHaveValue('')
+  await expect(page.locator('input[type="password"]')).toHaveCount(0)
+  expect(
+    await page.evaluate(() => window.__nookDemoRuntimeMessageTypes),
+  ).toContain('nook:authentication-workflow-snapshot')
+  await demoBeat(page)
+})
+
 test('approve backup-code extraction only after a fresh Pilot decision', async ({
   page,
 }) => {
@@ -225,7 +258,7 @@ test('approve backup-code extraction only after a fresh Pilot decision', async (
       <head><title>Recovery codes</title></head>
       <body>
         <main>
-          <h1>${'Account recovery details '.repeat(8)}</h1>
+          <h1>Save your recovery codes</h1>
           <p>Save these recovery codes somewhere secure.</p>
           <ul>
             <li>A1B2-C3D4-E5F6</li>

@@ -89,3 +89,10 @@ mod tests {
         }
     }
 }
+
+mod projection;
+pub use projection::{
+    AuthenticationNavigationPathObservation, AuthenticationNavigationPathProjection,
+    AuthenticationNavigationPathRequest, AuthenticationOutcomePathname,
+    AuthenticationOutcomePathnameError,
+};
