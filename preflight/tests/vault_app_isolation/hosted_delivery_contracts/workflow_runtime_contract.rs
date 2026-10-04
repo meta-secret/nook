@@ -141,9 +141,9 @@ impl WorkflowRuntimeContract<'_> {
             .map(|(_, job)| job)
             .unwrap_or_else(|| panic!("rust ecosystem workflow must define its aggregated job"));
         assert!(
-            ecosystem_job.contains("timeout-minutes: 10")
+            ecosystem_job.contains("timeout-minutes: 15")
                 && ecosystem_job.contains("task docker:ecosystem:check"),
-            "concurrent ecosystem checks must retain their bounded ten-minute envelope"
+            "concurrent ecosystem checks must retain their bounded fifteen-minute envelope"
         );
     }
 

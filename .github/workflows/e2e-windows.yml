@@ -93,6 +93,8 @@ jobs:
         run: task web:e2e:windows:artifact
         env:
           WASM_BUILD_MODE: prod
+          NOOK_EXTENSION_CHANNEL: production
+          NOOK_EXTENSION_COMMIT: ${{ needs.source.outputs.sha }}
           WINDOWS_E2E_ARTIFACT_DIR: ${{ runner.temp }}/windows-edge-web
       - uses: actions/upload-artifact@v7
         with:
@@ -143,6 +145,8 @@ jobs:
         run: task --taskfile .task/e2e-windows.yml web:e2e:windows
         env:
           NOOK_E2E_SYNC_PROVIDER: ${{ matrix.surface.provider }}
+          NOOK_EXTENSION_CHANNEL: production
+          NOOK_EXTENSION_COMMIT: ${{ needs.source.outputs.sha }}
           NOOK_GITHUB_PAT: ${{ matrix.surface.suite == 'sync-live' && secrets.NOOK_GITHUB_PAT || '' }}
           NOOK_GITHUB_E2E_REPO: nook-e2e-windows-${{ github.run_id }}-${{ github.run_attempt }}
           NOOK_GITHUB_POLL_MS: "3000"

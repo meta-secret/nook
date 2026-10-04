@@ -415,6 +415,8 @@ jobs:
         env:
           CI: true
           E2E_SHARD: ${{ matrix.shard }}/2
+          NOOK_EXTENSION_CHANNEL: development
+          NOOK_EXTENSION_COMMIT: ${{ github.sha }}
 
   ui-demos:
     name: UI demos
