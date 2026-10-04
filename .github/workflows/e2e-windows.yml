@@ -137,9 +137,8 @@ jobs:
         run: task --taskfile .task/e2e-windows.yml web:e2e:windows:install
       - name: Select installed Microsoft Edge for persistent extension contexts
         run: |
-          $edge = Join-Path ${env:ProgramFiles(x86)} 'Microsoft/Edge/Application/msedge.exe'
-          if (!(Test-Path $edge)) { throw "Installed Microsoft Edge is required: $edge" }
-          "PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=$edge" >> $env:GITHUB_ENV
+          if (!(Test-Path "${env:ProgramFiles(x86)}/Microsoft/Edge/Application/msedge.exe")) { throw 'Installed Microsoft Edge is required' }
+          Write-Output "PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=${env:ProgramFiles(x86)}/Microsoft/Edge/Application/msedge.exe" >> $env:GITHUB_ENV
       - name: Run shared specs on installed Microsoft Edge
         run: task --taskfile .task/e2e-windows.yml web:e2e:windows
         env:
