@@ -746,6 +746,7 @@ mod tests {
         CompanionInstallationAppKey, CompanionUnlockedAppKey, ExtensionConnectScope,
         ExtensionPairingVaultType,
     };
+    use serde_wasm_bindgen::Serializer;
     use tsify::{Ts, Tsify};
     use wasm_bindgen::JsError;
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -888,11 +889,13 @@ mod tests {
             recipient_public_key: "age1recipient".to_owned(),
         };
         // The Deserialize-only admission accepts an unknown JS object at the export edge.
-        let handoff_admission =
-            Ts::new_unchecked(serde_wasm_bindgen::to_value(&serde_json::json!({
+        let handoff_admission = Ts::new_unchecked(
+            serde_json::json!({
                 "request": handoff_request,
                 "observedAt": ProtocolFixture::epoch("150")?,
-            }))?);
+            })
+            .serialize(&Serializer::json_compatible())?,
+        );
         assert!(matches!(
             admit_companion_handoff_identity_status(&handoff_admission)?.to_rust()?,
             CompanionIdentityStatusAdmission::Accepted { .. }
