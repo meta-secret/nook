@@ -402,7 +402,7 @@ mod tests {
     #[cfg(target_arch = "wasm32")]
     #[wasm_bindgen_test::wasm_bindgen_test]
     fn admission_rejects_vault_types_outside_the_companion_vocabulary() {
-        assert!(ExtensionPairingVaultType::try_from("sentinel").is_err());
-        assert!(ExtensionPairingVaultType::try_from("external-value").is_err());
+        assert!(admit_extension_pairing_vault_type("sentinel").is_err());
+        assert!(admit_extension_pairing_vault_type("external-value").is_err());
     }
 }
