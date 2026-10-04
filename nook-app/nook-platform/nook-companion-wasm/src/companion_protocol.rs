@@ -15,9 +15,9 @@ pub use envelope::{
 use nook_companion_core::{
     CompanionEpochMilliseconds, CompanionExtensionPresence, CompanionExtensionProtocol,
     CompanionHandoffResponseAdmission, CompanionIdentityDiscoveryObservation,
-    CompanionIdentityHandoffAuthorization, CompanionIdentityHandoffRequest,
-    CompanionIdentityHandoffResponse, CompanionIdentityStatus, CompanionIdentityStatusAdmission,
-    CompanionIdentityStatusAdmissionRequest, CompanionIdentityUnlockRequest,
+    CompanionIdentityHandoffRequest, CompanionIdentityHandoffResponse, CompanionIdentityStatus,
+    CompanionIdentityStatusAdmission, CompanionIdentityStatusAdmissionRequest,
+    CompanionIdentityUnlockRequest,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -422,7 +422,8 @@ mod tests {
     use super::*;
     use nook_companion_core::{
         CompanionEpochMilliseconds, CompanionExtensionPresence, CompanionIdentityDiscoveryRequest,
-        CompanionIdentityHandoffRequest, CompanionIdentityHandoffResponse, CompanionIdentityStatus,
+        CompanionIdentityHandoffAuthorization, CompanionIdentityHandoffRequest,
+        CompanionIdentityHandoffResponse, CompanionIdentityStatus,
         CompanionIdentityStatusAdmission, CompanionIdentityUnlockRequest,
         CompanionInstallationAppKey, CompanionUnlockedAppKey, ExtensionConnectScope,
         ExtensionPairingVaultType,

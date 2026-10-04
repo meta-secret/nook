@@ -2,8 +2,7 @@
 use super::CompanionIdentityHandoffRequestPayload;
 use nook_companion_core::{
     CompanionExtensionPresence, CompanionIdentityDiscoveryObservation,
-    CompanionIdentityHandoffAuthorization, CompanionIdentityHandoffRequest,
-    CompanionIdentityUnlockRequest,
+    CompanionIdentityHandoffAuthorization, CompanionIdentityUnlockRequest,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -180,7 +179,9 @@ pub fn decode_extension_paired_vault_identity_handoff_request_message(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nook_companion_core::{CompanionIdentityStatus, CompanionProtocolError};
+    use nook_companion_core::{
+        CompanionIdentityHandoffRequest, CompanionIdentityStatus, CompanionProtocolError,
+    };
     use serde::de::DeserializeOwned;
     struct EnvelopeFixture;
     impl EnvelopeFixture {
