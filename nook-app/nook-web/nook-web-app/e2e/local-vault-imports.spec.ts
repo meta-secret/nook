@@ -824,7 +824,7 @@ test.describe('local vault', () => {
     await expect(page.getByTestId('secret-page-previous')).toBeEnabled()
     await page.getByTestId('search-secrets').fill('demand-user-54')
     await expect(page.getByTestId('secret-row')).toHaveCount(1)
-    await expect(page.getByText('Page 1 of 1')).toBeVisible()
+    await expect(page.getByTestId('secret-pagination')).not.toBeVisible()
     const row = page
       .getByTestId('secret-row')
       .filter({ hasText: 'demand-user-54' })

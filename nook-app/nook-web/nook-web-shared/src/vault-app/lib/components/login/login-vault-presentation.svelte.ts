@@ -75,7 +75,14 @@ export class LoginVaultPresentation {
       },
       (error) => {
         this.state = { kind: LoginVaultPresentationKind.Failed };
-        this.vault.errorMsg = this.vault.t(error.translationKey);
+        const message = this.vault.t(error.translationKey);
+        switch (this.vault.errorMsg === message) {
+          case true:
+            break;
+          case false:
+            this.vault.errorMsg = message;
+            break;
+        }
       },
     );
   }

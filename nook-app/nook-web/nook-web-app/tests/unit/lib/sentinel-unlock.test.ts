@@ -558,7 +558,7 @@ describe('Sentinel quorum completion presentation', () => {
     fixture.expectNoAutomaticCeremony()
     for (const surface of [LoginSurface.Gate, LoginSurface.Step]) {
       const view = fixture.renderLogin(surface)
-      expect(view.getByTestId('sentinel-unlock-initiator')).toBeTruthy()
+      expect(await view.findByTestId('sentinel-unlock-initiator')).toBeTruthy()
       expect(view.queryAllByTestId('unlock-vault-btn')).toHaveLength(0)
       expect(view.queryAllByTestId('sentinel-unlock-start-btn')).toHaveLength(0)
       expect(fixture.openVault).not.toHaveBeenCalled()
@@ -577,8 +577,9 @@ describe('Sentinel quorum completion presentation', () => {
     for (const surface of [LoginSurface.Gate, LoginSurface.Step]) {
       const view = fixture.renderLogin(surface)
       expect(
-        requireButtonElement(view.getByTestId('sentinel-unlock-start-btn'))
-          .disabled,
+        requireButtonElement(
+          await view.findByTestId('sentinel-unlock-start-btn'),
+        ).disabled,
       ).toBe(true)
       expect(view.queryAllByTestId('unlock-vault-btn')).toHaveLength(0)
       expect(fixture.openVault).not.toHaveBeenCalled()
