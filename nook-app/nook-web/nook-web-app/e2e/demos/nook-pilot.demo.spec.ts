@@ -475,8 +475,11 @@ test('guide a login through the Nook Pilot control plane', async ({ page }) => {
   await widget.getByRole('button', { name: 'Continue with Nook' }).click()
   await expect(widget.getByTestId('nook-inline-login-picker')).toBeVisible()
   await expect(widget.locator('p.description')).toBeHidden()
+  const pickerOpenedMessage = messages.widgetLoginPickerOpened
+  if (pickerOpenedMessage === undefined)
+    throw new Error('Missing required Pilot picker catalog message.')
   await expect(widget.locator('p.description')).toHaveText(
-    messages.widgetLoginPickerOpened.message,
+    pickerOpenedMessage.message,
   )
   // Epoch-bound login choices cross the browser boundary through Rust/WASM
   // response decoder. The page must never receive the account identifiers or
@@ -528,8 +531,11 @@ test('shows no matching credentials as a distinct Pilot state', async ({
     'no-matching-credential',
   )
   await expect(vaultStatus).toHaveText('Matching saved logins: 0')
+  const noMatchMessage = messages.widgetLoginNoMatchDescription
+  if (noMatchMessage === undefined)
+    throw new Error('Missing required Pilot no-match catalog message.')
   await expect(widget.locator('p.description')).toHaveText(
-    messages.widgetLoginNoMatchDescription.message,
+    noMatchMessage.message,
   )
   await demoBeat(page)
 })
