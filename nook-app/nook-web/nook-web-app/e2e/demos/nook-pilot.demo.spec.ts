@@ -1,5 +1,6 @@
 import { Schema } from 'effect'
 import type { Page } from '@playwright/test'
+import { CompanionWasmSessionMessageType } from '../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 import { expect, test } from '../fixtures'
 import {
   demoBeat,
@@ -19,6 +20,48 @@ const requiredCatalogEntryFields: RequiredCatalogEntryFields = {
 const requiredCatalogEntrySchema: Schema.Schema<ChromeMessage> = Schema.Struct(
   requiredCatalogEntryFields,
 )
+
+type PendingDemoSetup = {
+  pending: boolean
+  release: () => void
+}
+declare global {
+  interface Window {
+    __nookSetupOverlap: PendingDemoSetup
+  }
+}
+
+function holdNextSetupObservation(messageType: string): void {
+  const runtime = chrome.runtime
+  const sendMessage = runtime.sendMessage.bind(runtime)
+  const state: PendingDemoSetup = { pending: false, release: () => {} }
+  window.__nookSetupOverlap = state
+  let holdNext = true
+  Reflect.set(
+    runtime,
+    'sendMessage',
+    (message: unknown, callback?: (response: unknown) => void): void => {
+      sendMessage(message, (response: unknown) => {
+        if (
+          holdNext &&
+          message &&
+          typeof message === 'object' &&
+          'type' in message &&
+          message.type === messageType
+        ) {
+          holdNext = false
+          state.pending = true
+          state.release = () => {
+            state.pending = false
+            callback?.(response)
+          }
+          return
+        }
+        callback?.(response)
+      })
+    },
+  )
+}
 
 function loginPilotStubArgs(messages: Record<string, ChromeMessage>) {
   return {
@@ -475,10 +518,34 @@ test('guide a login through the Nook Pilot control plane', async ({ page }) => {
     .not.toContain('nook:website-login-options')
   await demoBeat(page)
 
-  await widget.getByRole('button', { name: 'Continue with Nook' }).click()
-  await expect(widget.locator('p.description')).toHaveText(
-    'Unlock Nook in the Nook tab, return to the site, then select Continue with Nook again.',
+  await page.evaluate(
+    holdNextSetupObservation,
+    CompanionWasmSessionMessageType.AuthenticationAuthenticatorSetupObservation,
   )
+  await page
+    .getByRole('heading', { name: 'Welcome back', exact: true })
+    .evaluate((heading) => {
+      heading.append(' ')
+    })
+  await expect
+    .poll(() => page.evaluate(() => window.__nookSetupOverlap.pending))
+    .toBe(true)
+  try {
+    await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+    await expect(widget.locator('p.description')).toHaveText(
+      'Unlock Nook in the Nook tab, return to the site, then select Continue with Nook again.',
+    )
+    expect(
+      await page.evaluate(
+        () =>
+          window.__nookDemoRuntimeMessageTypes?.filter(
+            (type) => type === 'nook:website-login-options',
+          ).length,
+      ),
+    ).toBe(1)
+  } finally {
+    await page.evaluate(() => window.__nookSetupOverlap.release())
+  }
   await demoBeat(page)
 
   await widget.getByRole('button', { name: 'Continue with Nook' }).click()

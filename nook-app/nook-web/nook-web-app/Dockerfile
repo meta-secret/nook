@@ -159,8 +159,13 @@ RUN cd nook-app/nook-web/nook-vault-simple \
     && VITE_E2E_EXPOSE_VAULT=true VITE_VAULT_IDLE_TIMEOUT_MS=300000 VITE_VAULT_IDLE_WARNING_MS=0 bun run build \
     && cd ../nook-vault-sentinel \
     && VITE_E2E_EXPOSE_VAULT=true VITE_VAULT_IDLE_TIMEOUT_MS=300000 VITE_VAULT_IDLE_WARNING_MS=0 bun run build
+ARG NOOK_EXTENSION_CHANNEL=production
+ARG NOOK_EXTENSION_COMMIT=
 RUN cd nook-app/nook-web/nook-web-extension \
-    && NOOK_SIMPLE_VAULT_URL=http://127.0.0.1:5174/ bun run build \
+    && NOOK_SIMPLE_VAULT_URL=http://127.0.0.1:5174/ \
+    NOOK_EXTENSION_CHANNEL="${NOOK_EXTENSION_CHANNEL}" \
+    NOOK_EXTENSION_COMMIT="${NOOK_EXTENSION_COMMIT}" \
+    bun run build \
     && bun run e2e:mock-auth:build
 RUN cd nook-app/nook-web/nook-web-research && bun run build
 

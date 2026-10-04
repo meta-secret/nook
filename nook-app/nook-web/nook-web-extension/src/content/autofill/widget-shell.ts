@@ -1,3 +1,4 @@
+import type { AuthenticationAuthenticatorSetupSnapshot } from '../../lib/page-qr-capture'
 import {
   BROWSER_MESSAGE_KEYS,
   type BrowserMessageKey,
@@ -287,6 +288,7 @@ const WIDGET_PANEL_STYLES = `
   `
 
 type BuildEnrollmentFlowHostArgs = {
+  authenticatorSetupSnapshot: AuthenticationAuthenticatorSetupSnapshot
   panel: HTMLElement
   step: HTMLParagraphElement
   title: HTMLHeadingElement
@@ -354,6 +356,7 @@ class AuthenticationWidgetShell {
   }
 
   buildEnrollmentFlowHost({
+    authenticatorSetupSnapshot,
     panel,
     step,
     title,
@@ -362,6 +365,7 @@ class AuthenticationWidgetShell {
     openVaultButton,
   }: BuildEnrollmentFlowHostArgs): EnrollmentFlowHost {
     return {
+      authenticatorSetupSnapshot,
       panel,
       step,
       title,

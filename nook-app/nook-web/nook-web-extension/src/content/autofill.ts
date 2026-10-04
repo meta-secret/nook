@@ -299,6 +299,7 @@ class AuthenticationScanRenderLifecycle {
       const nookTypedArgs0_0: Parameters<
         typeof authenticationWidgetRenderer.renderEnrollmentWidget
       >[0] = {
+        authenticatorSetupSnapshot: setupSnapshot,
         hints: enrollmentHints,
         snapshot: enrollmentMatch.snapshot,
         vaultConnection,
@@ -428,6 +429,7 @@ class AuthenticationScanRenderLifecycle {
     const nookTypedArgs0_1: Parameters<
       typeof authenticationWidgetRenderer.renderWidget
     >[0] = {
+      authenticatorSetupSnapshot: setupSnapshot,
       snapshot,
       workflow: selected.observation,
       facts: response.selectedFacts.facts,

@@ -10,7 +10,10 @@ import {
   AuthenticationWorkflowScopeDisposition,
 } from '../../../../nook-web-shared/src/extension/password-form-classified-observations'
 import { recoveryCopyObservation } from '../../lib/backup-code-candidates'
-import { pageQrCapture } from '../../lib/page-qr-capture'
+import {
+  type AuthenticationAuthenticatorSetupSnapshot,
+  pageQrCapture,
+} from '../../lib/page-qr-capture'
 import {
   AuthenticationWorkflowSnapshotResponseKind,
   type AuthenticationWorkflowAction,
@@ -36,6 +39,7 @@ type RevalidatedAuthenticationActionArgs = {
 }
 
 export type RevalidatedAuthenticationActRequest = {
+  authenticatorSetupSnapshot: AuthenticationAuthenticatorSetupSnapshot
   currentWorkflow: PasswordFormObservation
   observationBindingToken: AuthenticationObservationBindingToken
   approvedFacts: AuthenticationPageObservationFacts
@@ -83,14 +87,14 @@ const boundAuthenticationControlSelector = [
   'a[href]',
 ].join(',')
 
-enum AuthenticationControlIdentityComparison {
+export enum AuthenticationControlIdentityComparison {
   Same = 'same',
   Changed = 'changed',
 }
 
 type AuthenticationControlList = Element[]
 
-class AuthenticationControlIdentitySnapshot {
+export class AuthenticationControlIdentitySnapshot {
   private readonly controls: AuthenticationControlList
 
   private constructor(controls: AuthenticationControlList) {
@@ -164,6 +168,11 @@ export class RevalidatedAuthenticationAction {
           workflow.formScope.owner.ownerDocument === document)
       )
     }
+    const originalControls =
+      AuthenticationControlIdentitySnapshot.capture(workflow)
+    if (!approvalIsActive()) return rejected()
+    const setupSnapshot =
+      await pageQrCapture.prepareAuthenticationAuthenticatorSetupObservation()
     const observeCurrentFacts = () => {
       if (!workflowIsAttachedToCurrentDocument()) return false
       let candidates =
@@ -185,8 +194,13 @@ export class RevalidatedAuthenticationAction {
         selectedIndex = 0
       }
       if (selectedIndex < 0) return false
-      const authenticatorSetupHint =
-        pageQrCapture.authenticationAuthenticatorSetupObservation()
+      if (
+        !pageQrCapture.authenticationAuthenticatorSetupSnapshotIsCurrent(
+          setupSnapshot,
+        )
+      )
+        return false
+      const authenticatorSetupHint = setupSnapshot.observation
       const backupCodesHint =
         recoveryCopyObservation.pageHasDocumentBackupCodeHint()
       const observations = candidates.map((candidate) => {
@@ -217,7 +231,11 @@ export class RevalidatedAuthenticationAction {
       return rejected()
     }
     const approvedObservation = observeCurrentFacts()
-    if (!approvedObservation) {
+    if (
+      !approvedObservation ||
+      originalControls.compare(approvedObservation.controlIdentities) ===
+        AuthenticationControlIdentityComparison.Changed
+    ) {
       return rejected()
     }
     const message: Parameters<
@@ -316,6 +334,7 @@ export class RevalidatedAuthenticationAction {
       return postActionObservation.currentWorkflow
     }
     const actRequest: RevalidatedAuthenticationActRequest = {
+      authenticatorSetupSnapshot: setupSnapshot,
       currentWorkflow: currentObservation.currentWorkflow,
       observationBindingToken: selectedObservationBindingToken,
       approvedFacts: currentDelivery.response.selectedFacts.facts,
