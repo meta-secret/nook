@@ -1,4 +1,9 @@
 import { describe, expect, test, vi } from 'vitest'
+import { Deferred, Effect, Fiber } from 'effect'
+import { SerialOperationQueue } from '$lib/runtime/serial-operation-queue'
+import { VaultStateTestFixture } from '../vault-state-test-fixture'
+import { NativeVaultStorageFailure } from '$lib/runtime/storage-failure'
+import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import {
   NookIdentityDirectorySelectionKind,
   NookIdentityLocalAccessKind,
@@ -6,6 +11,11 @@ import {
   NookVaultManager,
 } from '$app-wasm'
 import { LoginVaultIdentityReader } from '../../../../nook-web-shared/src/vault-app/lib/components/login/login-vault-identity-context'
+
+type LoginIdentityReadRequest = ConstructorParameters<
+  typeof LoginVaultIdentityReader
+>[0]
+type LoginIdentityContextFixture = Parameters<typeof managerWithContext>[0]
 
 function linkedIdentity(identityId: string, label: string) {
   return {
@@ -80,6 +90,62 @@ function managerWithContext({
 }
 
 describe('login vault identity context', () => {
+  test('preserves a native identity read failure in the queued Effect failure channel', async () => {
+    const scenario: LoginIdentityContextFixture = {
+      kind: NookSelectedVaultIdentityContextKind.Empty,
+      identities: [],
+    }
+    const { manager, selectedVaultRequest } = managerWithContext(scenario)
+    selectedVaultRequest.mockImplementation(() => {
+      throw new Error('native identity read rejected')
+    })
+    const state = VaultStateTestFixture.create()
+    const queue = new SerialOperationQueue()
+    state.enqueueStorage = queue.enqueue.bind(queue)
+    const request: LoginIdentityReadRequest = {
+      manager,
+      storeId: 'store_selectedvault',
+    }
+
+    const failure = await Effect.runPromise(
+      new LoginVaultIdentityReader(request)
+        .executeQueued(state)
+        .pipe(Effect.flip),
+    )
+
+    expect(failure).toBeInstanceOf(NativeVaultStorageFailure)
+    expect(failure.translationKey).toBe(I18N_KEYS.AuthStorageSyncFailed)
+  })
+  test('waits for an active device ceremony before constructing the native identity request', async () => {
+    const scenario: LoginIdentityContextFixture = {
+      kind: NookSelectedVaultIdentityContextKind.Empty,
+      identities: [],
+    }
+    const { manager, selectedVaultRequest } = managerWithContext(scenario)
+    const state = VaultStateTestFixture.create()
+    const queue = new SerialOperationQueue()
+    state.enqueueStorage = queue.enqueue.bind(queue)
+    const released = Effect.runSync(Deferred.make<void>())
+    const activeCeremony = queue.enqueue(() =>
+      Effect.runPromise(Deferred.await(released)),
+    )
+    const request: LoginIdentityReadRequest = {
+      manager,
+      storeId: 'store_selectedvault',
+    }
+    const read = Effect.runFork(
+      new LoginVaultIdentityReader(request).executeQueued(state),
+    )
+
+    await Effect.runPromise(Effect.yieldNow())
+    expect(selectedVaultRequest).not.toHaveBeenCalled()
+    await Effect.runPromise(Deferred.succeed(released, void 0))
+    await activeCeremony
+    const context = await Effect.runPromise(Fiber.join(read))
+
+    expect(selectedVaultRequest).toHaveBeenCalledWith('store_selectedvault')
+    expect(context.kind).toBe(NookSelectedVaultIdentityContextKind.Empty)
+  })
   test('loads the Rust-selected identities for the requested vault', async () => {
     const { manager, selectedVaultRequest } = managerWithContext({
       kind: NookSelectedVaultIdentityContextKind.LinkedWithCurrent,
