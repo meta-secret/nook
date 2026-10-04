@@ -38,13 +38,15 @@ import { OpenCompanionLauncherIntent } from '../../nook-web-shared/src/extension
 import {
   authorizeDeviceProtection,
   createLocalVaultOnLogin,
-  NookAppLogAttachmentName,
 } from '../../nook-web-app/e2e/helpers'
 
 const chromiumExecutablePath = ((v) => (v ? v : ''))(
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim(),
 )
 test.use({ trace: 'retain-on-failure' })
+enum ExtensionAppLogAttachmentName {
+  Restarted = 'restarted-extension-nook-app-logs.json',
+}
 enum WebsitePageStateKind {
   Skipped = 'skipped',
   Opened = 'opened',
@@ -58,12 +60,10 @@ enum ExtensionConnectionParameter {
   DeviceSigningPublicKey = 'device_signing_public_key',
   HandoffNonce = 'nonce',
 }
-
 enum ExtensionConnectionParametersParseKind {
   Valid = 'valid',
   Invalid = 'invalid',
 }
-
 type ExtensionConnectionParametersParseResult =
   | {
       kind: ExtensionConnectionParametersParseKind.Valid
@@ -711,7 +711,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       ).toHaveCount(0)
     } finally {
       const restartedLogOptions: Parameters<typeof attachNookLogsForTest>[2] = {
-        attachmentName: NookAppLogAttachmentName.RestartedExtension,
+        attachmentName: ExtensionAppLogAttachmentName.Restarted,
       }
       await attachNookLogsForTest(
         lockedVaultPage,
