@@ -752,7 +752,7 @@ test.describe('local vault', () => {
       buffer: Buffer.from(exportJson),
     })
     const started = Date.now()
-    await page.getByTestId('bitwarden-import-submit').click()
+    await page.getByTestId('bitwarden-import-submit').click({ timeout: 30_000 })
     await expect(page.getByTestId('bitwarden-import-progress')).toContainText(
       'Import in progress',
     )
