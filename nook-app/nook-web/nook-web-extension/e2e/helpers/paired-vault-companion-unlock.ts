@@ -18,6 +18,10 @@ type CompanionPopupUnlock = {
   readonly diagnostics: CompanionPopupDiagnostics
 }
 
+type CompanionAdoptionVisibilityOptions = {
+  readonly timeout: number
+}
+
 type CompanionPopupHandle = {
   readonly page: Page
   readonly closeAfterUse: boolean
@@ -300,6 +304,9 @@ export async function unlockPairedVaultThroughCompanion(
   const { context, vaultPage, companionUnlock, extensionId } = request
   const authenticatedShell = vaultPage.getByTestId('authenticated-shell')
   const unlockButton = vaultPage.getByTestId('unlock-vault-btn')
+  const adoptionVisibilityOptions: CompanionAdoptionVisibilityOptions = {
+    timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+  }
 
   await expect(authenticatedShell.or(unlockButton)).toBeVisible({
     timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
@@ -330,9 +337,7 @@ export async function unlockPairedVaultThroughCompanion(
         })
         try {
           await completeCompanionPopupUnlock(companionPopup)
-          await expect(authenticatedShell).toBeVisible({
-            timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
-          })
+          await expect(authenticatedShell).toBeVisible(adoptionVisibilityOptions)
         } finally {
           if (companionPopup.closeAfterUse && !companionPopup.page.isClosed()) {
             await companionPopup.page.close()
@@ -347,9 +352,7 @@ export async function unlockPairedVaultThroughCompanion(
       })
       try {
         await completeCompanionPopupUnlock(companionPopup)
-        await expect(authenticatedShell).toBeVisible({
-          timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
-        })
+        await expect(authenticatedShell).toBeVisible(adoptionVisibilityOptions)
       } finally {
         if (companionPopup.closeAfterUse && !companionPopup.page.isClosed()) {
           await companionPopup.page.close()
