@@ -622,8 +622,11 @@ mod secret_import_browser_tests {
         let before = crate::NookDatabase::load_local_event_store(&store_id)
             .await?
             .event_ids();
-        let result = {
-            let imported = manager.commit_secret_import(
+        js(manager.ensure_vault_crypto_from_cache().await)?;
+        let secrets_key = SymmetricKey::parse(&manager.vault.secrets_key)?;
+        let dedup_state = manager.live_secret_dedup_state().await?;
+        let prepared = {
+            let coalesced = CoalescedSecretImport::new(
                 (0..33)
                     .map(|index| {
                         SecretValue::SecureNote(nook_core::SecureNoteSecret {
@@ -632,14 +635,17 @@ mod secret_import_browser_tests {
                         })
                     })
                     .collect(),
-                SecretImportUnsupportedRecordCount::default(),
-                SecretImportSource::Bitwarden,
-            );
-            futures_util::pin_mut!(imported);
+                &secrets_key,
+            )?;
+            let preparation = coalesced.prepare(dedup_state, manager.vault.crypto.get()?);
+            futures_util::pin_mut!(preparation);
             let browser_task = future::sleep(Duration::ZERO);
             futures_util::pin_mut!(browser_task);
-            match select(imported, browser_task).await {
-                Either::Right(((), imported)) => {
+            match select(preparation, browser_task).await {
+                Either::Right(((), preparation)) => {
+                    // Storage reads finish before this race. Suspending a live
+                    // IndexedDB future while observing storage can miss its
+                    // transaction completion event.
                     // A yielded import has prepared data in memory only. The
                     // persisted event set is unchanged until its single commit.
                     assert_eq!(
@@ -648,13 +654,20 @@ mod secret_import_browser_tests {
                             .event_ids(),
                         before
                     );
-                    js(imported.await)?
+                    preparation.await?
                 }
                 Either::Left(_) => {
                     anyhow::bail!("Import finished before the browser could run a task")
                 }
             }
         };
+        let result = js(prepared
+            .commit(
+                &mut manager,
+                SecretImportSource::Bitwarden,
+                SecretImportUnsupportedRecordCount::default(),
+            )
+            .await)?;
         assert_eq!(result.imported(), 33);
         let after = crate::NookDatabase::load_local_event_store(&store_id)
             .await?
