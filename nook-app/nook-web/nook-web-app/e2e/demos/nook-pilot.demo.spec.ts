@@ -473,7 +473,8 @@ test('guide a login through the Nook Pilot control plane', async ({ page }) => {
   await demoBeat(page)
 
   await widget.getByRole('button', { name: 'Continue with Nook' }).click()
-  await expect(widget.locator('p.description')).toBeVisible()
+  await expect(widget.getByTestId('nook-inline-login-picker')).toBeVisible()
+  await expect(widget.locator('p.description')).toBeHidden()
   await expect(widget.locator('p.description')).toHaveText(
     messages.widgetLoginPickerOpened.message,
   )
