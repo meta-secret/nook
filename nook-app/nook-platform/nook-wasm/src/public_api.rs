@@ -512,6 +512,57 @@ mod browser_tests {
 
     wasm_bindgen_test_configure!(run_in_browser);
 
+    #[wasm_bindgen_test]
+    fn malformed_typed_projection_inputs_do_not_replace_borrowed_oauth_configuration()
+    -> Result<(), JsError> {
+        use wasm_bindgen::JsValue;
+        let config = OAuthFileConfigData::default();
+        let config_wire = ProviderFixture::wire(&config)?;
+        let setup = ProviderFixture::wire(&ProviderSaveSetup::Existing)?;
+        assert!(super::generate_password(&Ts::new_unchecked(JsValue::NULL)).is_err());
+        assert!(
+            super::provider_storage_detail(
+                &Ts::new_unchecked(JsValue::TRUE),
+                "Device".to_owned(),
+                "No token".to_owned(),
+                "Google".to_owned(),
+                "iCloud".to_owned(),
+                "Google unavailable".to_owned(),
+                "iCloud unavailable".to_owned(),
+                "Reconnect".to_owned(),
+            )
+            .is_err()
+        );
+        assert!(super::oauth_remote_storage_ref(&Ts::new_unchecked(JsValue::NULL)).is_err());
+        assert!(
+            super::update_oauth_remote_ref(&Ts::new_unchecked(JsValue::TRUE), &setup, "unchanged")
+                .is_err()
+        );
+        assert!(
+            super::update_oauth_remote_ref(
+                &config_wire,
+                &Ts::new_unchecked(JsValue::NULL),
+                "unchanged"
+            )
+            .is_err()
+        );
+        assert!(
+            super::staged_oauth_remote_storage_args(&Ts::new_unchecked(JsValue::NULL), &setup)
+                .is_err()
+        );
+        assert!(
+            super::staged_oauth_remote_storage_args(
+                &config_wire,
+                &Ts::new_unchecked(JsValue::TRUE)
+            )
+            .is_err()
+        );
+        assert!(config_wire.to_rust()? == config);
+        assert!(setup.to_rust()? == ProviderSaveSetup::Existing);
+        assert!(super::oauth_remote_storage_ref(&config_wire).is_ok());
+        Ok(())
+    }
+
     struct ProviderFixture;
     impl ProviderFixture {
         fn wire<T: Tsify + Serialize>(value: &T) -> Result<Ts<T>, JsError> {
