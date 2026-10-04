@@ -1,3 +1,4 @@
+import { Schema } from 'effect'
 import type { Page } from '@playwright/test'
 import { expect, test } from '../fixtures'
 import {
@@ -10,6 +11,14 @@ import {
   installDemoChromeStub,
   type ChromeMessage,
 } from './static-chrome-stub'
+
+type RequiredCatalogEntryFields = { readonly message: typeof Schema.String }
+const requiredCatalogEntryFields: RequiredCatalogEntryFields = {
+  message: Schema.String,
+}
+const requiredCatalogEntrySchema: Schema.Schema<ChromeMessage> = Schema.Struct(
+  requiredCatalogEntryFields,
+)
 
 function loginPilotStubArgs(messages: Record<string, ChromeMessage>) {
   return {
@@ -475,9 +484,9 @@ test('guide a login through the Nook Pilot control plane', async ({ page }) => {
   await widget.getByRole('button', { name: 'Continue with Nook' }).click()
   await expect(widget.getByTestId('nook-inline-login-picker')).toBeVisible()
   await expect(widget.locator('p.description')).toBeHidden()
-  const pickerOpenedMessage = messages.widgetLoginPickerOpened
-  if (pickerOpenedMessage === undefined)
-    throw new Error('Missing required Pilot picker catalog message.')
+  const pickerOpenedMessage = Schema.decodeUnknownSync(
+    requiredCatalogEntrySchema,
+  )(messages.widgetLoginPickerOpened)
   await expect(widget.locator('p.description')).toHaveText(
     pickerOpenedMessage.message,
   )
@@ -533,9 +542,9 @@ test('shows no matching credentials as a distinct Pilot state', async ({
     'no-matching-credential',
   )
   await expect(vaultStatus).toHaveText('Matching saved logins: 0')
-  const noMatchMessage = messages.widgetLoginNoMatchDescription
-  if (noMatchMessage === undefined)
-    throw new Error('Missing required Pilot no-match catalog message.')
+  const noMatchMessage = Schema.decodeUnknownSync(requiredCatalogEntrySchema)(
+    messages.widgetLoginNoMatchDescription,
+  )
   await expect(widget.locator('p.description')).toHaveText(
     noMatchMessage.message,
   )
