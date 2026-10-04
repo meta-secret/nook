@@ -66,8 +66,7 @@ impl NookVaultClientPolicy {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    #[cfg(test)]
-    #[cfg(test)]
+    #[cfg(not(target_arch = "wasm32"))]
     use nook_core::VaultApplication;
     #[cfg(not(target_arch = "wasm32"))]
     use std::thread;

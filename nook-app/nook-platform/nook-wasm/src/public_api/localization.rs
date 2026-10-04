@@ -259,7 +259,7 @@ mod tests {
 
     #[cfg(target_arch = "wasm32")]
     #[wasm_bindgen_test]
-    fn localization_adapters_project_locales_and_catalog_operations() {
+    fn localization_adapters_project_locales_and_catalog_operations() -> Result<(), JsError> {
         assert_eq!(parse_app_locale("en"), NookAppLocaleParse::English);
         assert_eq!(parse_app_locale("ru"), NookAppLocaleParse::Russian);
         assert_eq!(parse_app_locale("xx"), NookAppLocaleParse::Unsupported);
@@ -275,7 +275,7 @@ mod tests {
             resolve_app_locale_from_tags(vec!["xx".into(), "ru".into()])
                 .and_then(|value| value
                     .to_rust()
-                    .map_err(|_| JsError::new("Typed test output could not be decoded.")))
+                    .map_err(|_| JsError::new("Typed test output could not be decoded.")))?
                 .code(),
             "ru"
         );
@@ -283,8 +283,7 @@ mod tests {
             supported_app_locale_code(NookAppLocaleParse::English)
                 .and_then(|value| value
                     .to_rust()
-                    .map_err(|_| JsError::new("Typed test output could not be decoded.")))
-                .unwrap()
+                    .map_err(|_| JsError::new("Typed test output could not be decoded.")))?
                 .code(),
             "en"
         );
@@ -292,8 +291,7 @@ mod tests {
             supported_app_locale_code(NookAppLocaleParse::Russian)
                 .and_then(|value| value
                     .to_rust()
-                    .map_err(|_| JsError::new("Typed test output could not be decoded.")))
-                .unwrap()
+                    .map_err(|_| JsError::new("Typed test output could not be decoded.")))?
                 .code(),
             "ru"
         );
@@ -325,5 +323,6 @@ mod tests {
         assert!(resolve_translation_catalog("en", &catalog).is_ok());
         assert!(resolve_translation_catalog("en", "{").is_err());
         assert!(!default_translation_catalog("en").is_empty());
+        Ok(())
     }
 }

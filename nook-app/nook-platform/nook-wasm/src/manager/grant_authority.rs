@@ -38,19 +38,28 @@ mod tests {
         let mut manager = NookVaultManager::new();
         manager.vault.store_id = StoreId::before_genesis_placeholder().into_inner();
         assert_eq!(
-            manager.active_extension_vault_scope()?,
+            manager
+                .active_extension_vault_scope()?
+                .to_rust()
+                .map_err(|_| JsError::new("Typed test output could not be decoded."))?,
             ExtensionActiveVaultScope::NoActiveVault
         );
         manager.apply_vault_keys(&"a".repeat(64), &"b".repeat(64))?;
         assert_eq!(
-            manager.active_extension_vault_scope()?,
+            manager
+                .active_extension_vault_scope()?
+                .to_rust()
+                .map_err(|_| JsError::new("Typed test output could not be decoded."))?,
             ExtensionActiveVaultScope::Active(ActiveExtensionVault {
                 vault_store_id: StoreId::before_genesis_placeholder()
             })
         );
         manager.reset_vault_session();
         assert_eq!(
-            manager.active_extension_vault_scope()?,
+            manager
+                .active_extension_vault_scope()?
+                .to_rust()
+                .map_err(|_| JsError::new("Typed test output could not be decoded."))?,
             ExtensionActiveVaultScope::NoActiveVault
         );
         manager.apply_vault_keys(&"a".repeat(64), &"b".repeat(64))?;

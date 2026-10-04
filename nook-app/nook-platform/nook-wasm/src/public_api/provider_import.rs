@@ -90,6 +90,7 @@ mod wasm_tests {
     use super::*;
     use js_sys::JSON;
     use nook_core::ProviderSyncCheckpoint;
+    use tsify::Ts;
     use wasm_bindgen::JsError;
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -125,21 +126,26 @@ mod wasm_tests {
 
     fn decode_snapshot_json(
         input: &str,
-    ) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
+    ) -> Result<tsify::Ts<nook_core::AuthProvidersSnapshotData>, wasm_bindgen::JsError> {
         let value = JSON::parse(input).map_err(|_| JsError::new("provider fixture must parse"))?;
-        // Tsify's generated `from_wasm_abi` implementation delegates to this
-        // exact serde-wasm conversion for `AuthProvidersSnapshotData`.
-        serde_wasm_bindgen::from_value(value).map_err(|error| JsError::new(&error.to_string()))
+        // Preserve the actual JavaScript fixture for the typed owning export.
+        Ok(Ts::new_unchecked(value))
     }
 
     #[wasm_bindgen_test]
     fn provider_decoder_normalizes_legacy_javascript_snapshot() -> Result<(), wasm_bindgen::JsError>
     {
         let snapshot = decode_snapshot_json(LEGACY_PROVIDER_SNAPSHOT)?;
-        let decoded = decode_storage_providers(&snapshot);
+        let decoded = decode_storage_providers(&snapshot)?
+            .to_rust()
+            .map_err(|_| JsError::new("Typed test output could not be decoded."))?;
 
         assert_eq!(
-            decoded.providers[0].sync_checkpoint,
+            decoded
+                .providers
+                .first()
+                .ok_or_else(|| JsError::new("Expected decoded provider."))?
+                .sync_checkpoint,
             ProviderSyncCheckpoint::NeverSynced
         );
         Ok(())
@@ -148,7 +154,9 @@ mod wasm_tests {
     #[wasm_bindgen_test]
     fn provider_decoder_rejects_malformed_nested_javascript_variant()
     -> Result<(), wasm_bindgen::JsError> {
-        assert!(decode_snapshot_json(MALFORMED_PROVIDER_SNAPSHOT).is_err());
+        assert!(
+            decode_storage_providers(&decode_snapshot_json(MALFORMED_PROVIDER_SNAPSHOT)?).is_err()
+        );
         Ok(())
     }
 }
