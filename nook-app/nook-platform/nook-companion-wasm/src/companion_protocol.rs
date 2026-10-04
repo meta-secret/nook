@@ -748,7 +748,7 @@ mod tests {
     };
     use serde_wasm_bindgen::Serializer;
     use tsify::{Ts, Tsify};
-    use wasm_bindgen::JsError;
+    use wasm_bindgen::{JsError, JsValue};
     use wasm_bindgen_test::wasm_bindgen_test;
 
     struct ProtocolFixture;
@@ -869,7 +869,7 @@ mod tests {
                 .is_err()
         );
         let status_request = CompanionIdentityStatusAdmissionRequest {
-            discovery: discovery_observation,
+            discovery: discovery_observation.clone(),
             status: CompanionIdentityStatus::Unlocked {
                 request_id: "request-1".to_owned(),
                 vault_store_id: "store-1".to_owned(),
@@ -888,6 +888,113 @@ mod tests {
             transaction,
             recipient_public_key: "age1recipient".to_owned(),
         };
+        let unlock = CompanionIdentityUnlockRequest {
+            request_id: "request-1".to_owned(),
+            vault_store_id: "store-1".to_owned(),
+        };
+        assert_eq!(
+            decode_companion_identity_unlock_request(&Ts::new_unchecked(
+                unlock.into_ts()?.js_value(),
+            ))?
+            .to_rust()?,
+            unlock
+        );
+        let unlock_message = ExtensionPairedVaultUnlockRequestMessage::Unlock(unlock);
+        assert_eq!(
+            decode_extension_paired_vault_unlock_request_message(&Ts::new_unchecked(
+                unlock_message.into_ts()?.js_value(),
+            ))?
+            .to_rust()?,
+            unlock_message
+        );
+        let handoff_payload = CompanionIdentityHandoffRequestPayload(handoff_request.clone());
+        assert_eq!(
+            decode_companion_identity_handoff_request(&Ts::new_unchecked(
+                handoff_payload.into_ts()?.js_value(),
+            ))?
+            .to_rust()?,
+            handoff_payload
+        );
+        let handoff_message =
+            ExtensionPairedVaultIdentityHandoffRequestMessage::IdentityHandoff(handoff_payload);
+        assert_eq!(
+            decode_extension_paired_vault_identity_handoff_request_message(&Ts::new_unchecked(
+                handoff_message.into_ts()?.js_value()
+            ),)?
+            .to_rust()?,
+            handoff_message
+        );
+        let CompanionExtensionPresenceAdmission(presence) = presence.to_rust()?;
+        let session_discovery =
+            CompanionIdentityDiscoverySessionTransportRequest::DiscoverCompanionIdentity {
+                presence: presence.clone(),
+                discovery: discovery_observation.clone(),
+            };
+        assert_eq!(
+            decode_companion_identity_discovery_session_transport_request(&Ts::new_unchecked(
+                session_discovery.into_ts()?.js_value()
+            ),)?
+            .to_rust()?,
+            session_discovery
+        );
+        let session_handoff =
+            CompanionIdentityHandoffSessionTransportRequest::AuthorizeCompanionIdentityHandoff {
+                authorization: CompanionIdentityHandoffAuthorization {
+                    request: handoff_request.clone(),
+                    observed_at: ProtocolFixture::epoch("150")?,
+                    presence,
+                },
+            };
+        assert_eq!(
+            decode_companion_identity_handoff_session_transport_request(&Ts::new_unchecked(
+                session_handoff.into_ts()?.js_value()
+            ),)?
+            .to_rust()?,
+            session_handoff
+        );
+        // Invalid JS ingress cannot alter the retained protocol's unlocked presence.
+        assert!(
+            decode_companion_identity_unlock_request(&Ts::new_unchecked(JsValue::from_str(
+                "invalid"
+            ),))
+            .is_err()
+        );
+        assert!(
+            decode_companion_identity_handoff_request(&Ts::new_unchecked(JsValue::from_str(
+                "invalid"
+            ),))
+            .is_err()
+        );
+        assert!(
+            decode_extension_paired_vault_unlock_request_message(&Ts::new_unchecked(
+                JsValue::from_str("wrong-envelope"),
+            ))
+            .is_err()
+        );
+        assert!(
+            decode_extension_paired_vault_identity_handoff_request_message(&Ts::new_unchecked(
+                JsValue::from_str("wrong-envelope"),
+            ))
+            .is_err()
+        );
+        assert!(
+            decode_companion_identity_discovery_session_transport_request(&Ts::new_unchecked(
+                JsValue::from_str("wrong-session"),
+            ))
+            .is_err()
+        );
+        assert!(
+            decode_companion_identity_handoff_session_transport_request(&Ts::new_unchecked(
+                JsValue::from_str("wrong-session"),
+            ))
+            .is_err()
+        );
+        assert!(matches!(
+            protocol
+                .discover(&ProtocolFixture::discovery()?.into_ts()?)?
+                .to_rust()?,
+            CompanionIdentityStatus::Unlocked { .. }
+        ));
         // The Deserialize-only admission accepts an unknown JS object at the export edge.
         let handoff_admission = Ts::new_unchecked(
             serde_json::json!({
