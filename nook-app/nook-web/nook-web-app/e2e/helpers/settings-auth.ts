@@ -115,6 +115,19 @@ export function deviceProtectionAuthorizationGateState({
   return DeviceProtectionAuthorizationGateState.Waiting
 }
 
+/** Observe a disposable login control in one browser turn. */
+export function deviceProtectionButtonReady(testId: string): boolean {
+  const button = document.querySelector(`[data-testid="${testId}"]`)
+  if (!(button instanceof HTMLButtonElement)) return false
+  const style = window.getComputedStyle(button)
+  return (
+    button.getClientRects().length > 0 &&
+    style.visibility !== 'hidden' &&
+    style.visibility !== 'collapse' &&
+    !button.disabled
+  )
+}
+
 /** Expand the login enrollment accordion on the login gate. */
 export async function expandLoginEnrollmentPanel(page: Page) {
   const toggle = page.getByTestId('login-enrollment-toggle')
@@ -556,21 +569,14 @@ export async function authorizeDeviceProtection(
   }
 
   const authorizeButtonReady = async () => {
-    if (!(await button.isVisible())) return false
-    try {
-      return await button.isEnabled({ timeout: 0 })
-    } catch {
-      return false
-    }
+    return page.evaluate(
+      deviceProtectionButtonReady,
+      'device-protection-unlock-btn',
+    )
   }
 
   const unlockButtonReady = async () => {
-    if (!(await unlockVaultButton.isVisible())) return false
-    try {
-      return await unlockVaultButton.isEnabled({ timeout: 0 })
-    } catch {
-      return false
-    }
+    return page.evaluate(deviceProtectionButtonReady, 'unlock-vault-btn')
   }
 
   const authorizationGateState = async () => {

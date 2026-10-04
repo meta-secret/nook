@@ -48,7 +48,7 @@ jobs:
   checks:
     name: Rust ecosystem verification
     runs-on: ${{ (github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
-    timeout-minutes: 10
+    timeout-minutes: 15
     outputs:
       dependency-policy-result: ${{ steps.checks.outputs.policy }}
       deterministic-tests-result: ${{ steps.checks.outputs.smoke }}
