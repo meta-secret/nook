@@ -8,11 +8,11 @@ class WindowsAppConfig {
 
   buildOutputDirectory(): WindowsOutputDirectoryConfig {
     const outputDir = this.environment.PLAYWRIGHT_OUTPUT_DIR
-    switch (typeof outputDir) {
-      case 'string':
-        return { outputDir }
-      default:
+    switch (outputDir) {
+      case undefined:
         return {}
+      default:
+        return { outputDir }
     }
   }
 
