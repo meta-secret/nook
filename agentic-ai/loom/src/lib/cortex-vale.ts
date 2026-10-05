@@ -45,22 +45,26 @@ export class CortexValeInvocation {
         message: 'Vale 3.22.0 is required for Cortex Markdown linting.',
       });
     }
-    const markdownFiles = new CortexMarkdownInventory(args.repoRoot)
-      .repositoryFiles()
-      .filter((filePath) => {
-        const graphArgs: IsCanonicalKnowledgeGraphArgs = {
-          cortexRoot: args.cortexRoot,
-          filePath,
-        };
-        return (
-          !path
-            .relative(args.repoRoot, filePath)
-            .split(path.sep)
-            .includes('.session') &&
-          new CortexKnowledgeGraphPath(graphArgs).role() ===
-            CortexMarkdownRole.Article
-        );
-      });
+    const selectedFiles =
+      path.resolve(args.cortexRoot) === path.resolve(args.repoRoot, '.cortex')
+        ? new CortexMarkdownInventory(args.repoRoot).repositoryFiles()
+        : CortexMarkdownInventory.listPersistentCortexMarkdownFiles(
+            args.cortexRoot,
+          );
+    const markdownFiles = selectedFiles.filter((filePath) => {
+      const graphArgs: IsCanonicalKnowledgeGraphArgs = {
+        cortexRoot: args.cortexRoot,
+        filePath,
+      };
+      return (
+        !path
+          .relative(args.repoRoot, filePath)
+          .split(path.sep)
+          .includes('.session') &&
+        new CortexKnowledgeGraphPath(graphArgs).role() ===
+          CortexMarkdownRole.Article
+      );
+    });
     if (markdownFiles.length === 0) return ok();
     const lintArgs: RepositoryCommandRequest = {
       command: RepositoryCommandExecutable.Vale,
