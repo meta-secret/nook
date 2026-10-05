@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import { CortexStructureFindingCode } from '../src/cortex-document-structure.ts';
+import type { CortexStructureFinding } from '../src/cortex-document-structure.ts';
 import { CortexDocumentMapCortexDocumentStructureScenario } from './cortex-document-structure-scenario.ts';
 import type {
   DistributedDocumentsArgs,
@@ -101,4 +102,64 @@ test('routes retained global documents through their canonical subject index', (
   expect(
     CortexDocumentMapCortexDocumentStructureScenario.audit(documents),
   ).toEqual([]);
+});
+
+test('indexes retained shared architecture through its sole architecture catalog', () => {
+  const sharedIndexRequest: MakeDocumentArgs = {
+    path: '.cortex/shared/index.md',
+    content: '# Shared\n\n- [Architecture](architecture/index.md)\n',
+  };
+  const architectureIndexRequest: MakeDocumentArgs = {
+    path: '.cortex/shared/architecture/index.md',
+    content: '# Shared Architecture\n\n- [System](system.md)\n',
+  };
+  const systemRequest: MakeDocumentArgs = {
+    path: '.cortex/shared/architecture/system.md',
+    content: '# Shared System\n\n## Requirements\n\nShared policy.\n',
+  };
+  const documents =
+    CortexDocumentMapCortexDocumentStructureScenario.distributedDocuments().filter(
+      (document) => document.relativePath !== sharedIndexRequest.path,
+    );
+  documents.push(
+    CortexDocumentMapCortexDocumentStructureScenario.makeDocument(
+      sharedIndexRequest,
+    ),
+    CortexDocumentMapCortexDocumentStructureScenario.makeDocument(
+      architectureIndexRequest,
+    ),
+    CortexDocumentMapCortexDocumentStructureScenario.makeDocument(
+      systemRequest,
+    ),
+  );
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.audit(documents),
+  ).toEqual([]);
+
+  const missingSystemLink = documents.map((document) => ({
+    ...document,
+    content: document.content.replace('- [System](system.md)', ''),
+  }));
+  const missingSystemFinding: CortexStructureFinding = {
+    code: CortexStructureFindingCode.MissingFromIndex,
+    file: architectureIndexRequest.path,
+    line: 1,
+    message: `Document is not indexed in its owning index ${architectureIndexRequest.path}: ${systemRequest.path}`,
+  };
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.audit(missingSystemLink),
+  ).toContainEqual(missingSystemFinding);
+
+  const duplicateRootLeaf = documents.map((document) => ({
+    ...document,
+    content: document.content.replace(
+      '- [Architecture](architecture/index.md)',
+      '- [Architecture](architecture/index.md)\n- [System](architecture/system.md)',
+    ),
+  }));
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.audit(
+      duplicateRootLeaf,
+    ).map((finding) => finding.code),
+  ).toContain(CortexStructureFindingCode.InvalidIndexEntry);
 });

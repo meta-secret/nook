@@ -83,6 +83,7 @@ export class CortexDocumentPath {
   isScopedContextPath(): boolean {
     return (
       this.isProjectContextPath() ||
+      this.filePath.startsWith('.cortex/shared/architecture/') ||
       /^\.cortex\/(?:teams\/[^/]+|shared)\/docs\/(?:spec|architecture)\//u.test(
         this.filePath,
       )
