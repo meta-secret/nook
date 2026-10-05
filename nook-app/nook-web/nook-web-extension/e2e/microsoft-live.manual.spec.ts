@@ -76,6 +76,8 @@ class MicrosoftLiveIdentifierProof {
     await expect(popup).toHaveURL(
       /chrome-extension:\/\/[^/]+\/popup\/index.html/u,
     )
+    await expect(popup.getByTestId('extension-device-setup')).toBeVisible()
+    await expect(popup.getByTestId('extension-runtime-error')).toHaveCount(0)
     await expect(page.locator('#usernameEntry')).toHaveValue('')
     await popup.screenshot({
       path: screenshotPath.replace('.png', '-popup.png'),
