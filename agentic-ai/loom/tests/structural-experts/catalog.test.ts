@@ -18,7 +18,7 @@ export class StructuralExpertsCatalogFixture {
 
   static readonly REGISTRY_AUTHORITY_PATH = resolve(
     StructuralExpertsCatalogFixture.REPO_ROOT,
-    '.cortex/teams/ai/architecture/refactoring-experts.md',
+    '.cortex/teams/ai/docs/architecture/refactoring-experts.md',
   );
 
   static readonly SKILL_AUTHORITY_PATH = resolve(
@@ -56,7 +56,8 @@ export class StructuralExpertsCatalogFixture {
       await StructuralExpertsCatalogFixture.cortexAuthoritySources();
     const driftedAuthorities = [
       {
-        expectedPath: '.cortex/teams/ai/architecture/refactoring-experts.md',
+        expectedPath:
+          '.cortex/teams/ai/docs/architecture/refactoring-experts.md',
         request: {
           ...sources,
           registrySource: sources.registrySource.replace(
@@ -202,7 +203,7 @@ test('rejects drift between diagnostic and circuit-breaker handoff roles', async
       '`system_coherence_synthesizer` is an ordinary synthesis role.',
     ],
     [
-      'Team Gizmos and Team Agents follow the root\n[Agent Derailment Circuit Breaker](../../../CIRCUIT-BREAKER.md).',
+      'Team Gizmos and Team Agents follow the root\n[Agent Derailment Circuit Breaker](../../../../CIRCUIT-BREAKER.md).',
       'Team Gizmos and Team Agents use a local policy copy.',
     ],
   ] as const;

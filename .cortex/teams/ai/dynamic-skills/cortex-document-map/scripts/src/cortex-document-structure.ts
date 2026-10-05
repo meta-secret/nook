@@ -76,11 +76,29 @@ export class CortexDocumentPath {
     );
   }
 
+  isProjectContextPath(): boolean {
+    return /\/\.cortex\//u.test(this.filePath);
+  }
+
+  isScopedContextPath(): boolean {
+    return (
+      this.isProjectContextPath() ||
+      /^\.cortex\/(?:teams\/[^/]+|shared)\/docs\/(?:spec|architecture)\//u.test(
+        this.filePath,
+      )
+    );
+  }
+
+  isScopedGraphPath(): boolean {
+    return this.isScopedContextPath() && this.filePath.endsWith('/index.md');
+  }
+
   isKnowledgeGraphPath(): boolean {
     return (
       this.filePath === '.cortex/index.md' ||
       CORTEX_OWNER_GRAPH_PATHS.some((path) => path === this.filePath) ||
-      this.isChildGraphPath()
+      this.isChildGraphPath() ||
+      this.isScopedGraphPath()
     );
   }
 
@@ -89,6 +107,12 @@ export class CortexDocumentPath {
   }
 
   owningKnowledgeGraphPath(): string {
+    switch (this.isScopedContextPath()) {
+      case true:
+        return `${path.posix.dirname(this.filePath)}/index.md`;
+      case false:
+        break;
+    }
     const childDirectory = this.childDirectoryPath();
     if (childDirectory !== false) return `${childDirectory}/index.md`;
     if (this.filePath.startsWith('.cortex/gizmo-prime/')) {
@@ -106,6 +130,12 @@ export class CortexDocumentPath {
   }
 
   graphOwner(): string | false {
+    switch (this.isProjectContextPath()) {
+      case true:
+        return path.posix.dirname(this.filePath);
+      case false:
+        break;
+    }
     if (this.filePath.startsWith('.cortex/gizmo-prime/')) return 'gizmo-prime';
     if (this.filePath.startsWith('.cortex/shared/')) return 'shared';
     const childTeam = this.childGraphTeam();
@@ -141,7 +171,12 @@ export class CortexChildGraphPathCollection {
 
   execute(): string[] {
     return [...this.paths]
-      .filter((filePath) => new CortexDocumentPath(filePath).isChildGraphPath())
+      .filter((filePath) => {
+        const documentPath = new CortexDocumentPath(filePath);
+        return (
+          documentPath.isChildGraphPath() || documentPath.isScopedGraphPath()
+        );
+      })
       .sort();
   }
 }
@@ -160,6 +195,16 @@ export class CortexChildGraphReference {
   }
 
   isAllowed(): boolean {
+    switch (this.graphPath.isScopedGraphPath()) {
+      case true:
+        return (
+          this.indexedPath.isKnowledgeGraphPath() ||
+          !this.indexedPath.isScopedContextPath() ||
+          this.indexedPath.owningKnowledgeGraphPath() === this.graphPath.value()
+        );
+      case false:
+        break;
+    }
     if (!this.graphPath.isChildGraphPath()) return true;
     if (this.indexedPath.isCircuitBreakerPath()) return true;
     if (this.graphPath.ownsChildGraphPath(this.indexedPath.value())) {
@@ -193,6 +238,12 @@ export class CortexChildGraphReference {
   }
 
   isReadOnly(): boolean {
+    switch (this.graphPath.isScopedGraphPath()) {
+      case true:
+        return !this.indexedPath.isScopedContextPath();
+      case false:
+        break;
+    }
     if (!this.graphPath.isChildGraphPath()) return false;
     if (this.indexedPath.isCircuitBreakerPath()) return true;
     if (this.graphPath.ownsChildGraphPath(this.indexedPath.value())) {
@@ -371,6 +422,14 @@ export class CortexDocumentStructure {
             indexedByGraph.get(ownerGraphPath),
           ];
           for (const indexedPath of ownerIndexedFiles) {
+            switch (
+              new CortexDocumentPath(indexedPath).isKnowledgeGraphPath()
+            ) {
+              case true:
+                continue;
+              case false:
+                break;
+            }
             const indexedOwner = new CortexDocumentPath(
               indexedPath,
             ).graphOwner();
@@ -387,6 +446,8 @@ export class CortexDocumentStructure {
         }
         for (const indexedPath of rootIndexedFiles) {
           if (
+            (new CortexDocumentPath(indexedPath).isProjectContextPath() &&
+              !new CortexDocumentPath(indexedPath).isKnowledgeGraphPath()) ||
             ownerGraphPaths.some(
               (ownerGraphPath) =>
                 indexedPath.startsWith(
@@ -428,7 +489,12 @@ export class CortexDocumentStructure {
     if (normalized.startsWith('./.cortex/')) {
       return normalized.slice(2);
     }
-    return `.cortex/${normalized}`;
+    switch (new CortexDocumentPath(normalized).isProjectContextPath()) {
+      case true:
+        return normalized;
+      case false:
+        return `.cortex/${normalized}`;
+    }
   }
 
   private parseDocument(document: CortexDocumentSource): ParsedDocument {
@@ -495,7 +561,12 @@ export class CortexDocumentStructure {
 
       const targetDoc = args.catalog.get(resolved.targetRelativePath);
       // Repository links outside Cortex belong to the host's global link audit.
-      if (!resolved.targetRelativePath.startsWith('.cortex/')) {
+      if (
+        !resolved.targetRelativePath.startsWith('.cortex/') &&
+        !new CortexDocumentPath(
+          resolved.targetRelativePath,
+        ).isProjectContextPath()
+      ) {
         continue;
       }
       const reference = new CortexChildGraphReference({

@@ -23,7 +23,9 @@ export const CORTEX_ARTICLE_SAFE_PATH_SCHEMA = z
   .max(CORTEX_ARTICLE_PATH_LIMIT);
 
 export const CORTEX_ARTICLE_MARKDOWN_PATH_SCHEMA =
-  CORTEX_ARTICLE_SAFE_PATH_SCHEMA.startsWith('.cortex/').endsWith('.md');
+  CORTEX_ARTICLE_SAFE_PATH_SCHEMA.regex(
+    /^(?!\.meta-cortex\/)(?:[^/]+\/)*\.cortex\/[^/]+(?:\/[^/]+)*\.md$/u,
+  );
 
 export const CORTEX_ARTICLE_LINE_SCHEMA = z
   .number()

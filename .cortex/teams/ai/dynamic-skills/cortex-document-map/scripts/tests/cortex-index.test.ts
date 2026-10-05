@@ -18,9 +18,9 @@ class CortexContextRouterScenario {
 const TRUSTED_HANDOFF_DUPLICATION_SURFACES = [
   '.cortex/AGENTS.md',
   '.cortex/teams/ai/AGENTS.md',
-  '.cortex/teams/ai/architecture/refactoring-experts.md',
+  '.cortex/teams/ai/docs/architecture/refactoring-experts.md',
   '.cortex/teams/ai/workflows/structural-refactoring.md',
-  '.cortex/teams/ai/references/loom-tools.md',
+  'agentic-ai/loom/.cortex/docs/spec/loom-tools.md',
   '.cortex/teams/ai/dynamic-skills/code-refactoring-expert.md',
   '.cortex/teams/ai/dynamic-skills/cortex-refactoring-expert.md',
   '.cortex/teams/ai/dynamic-skills/module-expert.md',
@@ -47,8 +47,8 @@ Golden text.
 `,
     },
     {
-      absolutePath: '/repo/.cortex/shared/product-specs/spec-a.md',
-      relativePath: '.cortex/shared/product-specs/spec-a.md',
+      absolutePath: '/repo/.cortex/shared/docs/spec/spec-a.md',
+      relativePath: '.cortex/shared/docs/spec/spec-a.md',
       content: `# Spec A
 
 Spec intro.

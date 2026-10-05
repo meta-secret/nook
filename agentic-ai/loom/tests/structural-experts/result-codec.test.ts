@@ -284,7 +284,8 @@ export class StructuralExpertsResultCodecScenario {
     return {
       instructionId: 'instruction-policy',
       classification: StructuralInstructionClassificationKind.SemanticPolicy,
-      authorityPath: '.cortex/teams/ai/architecture/refactoring-experts.md',
+      authorityPath:
+        '.cortex/teams/ai/docs/architecture/refactoring-experts.md',
       summary: 'Ownership selection remains semantic policy.',
       evidence: StructuralExpertsResultCodecScenario.structuralFindingFor(
         StructuralFindingCategory.Architecture,

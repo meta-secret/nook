@@ -375,7 +375,7 @@ const EXPECTED_PROFILES = [
     requiredContextPaths: [
       '.cortex/AGENTS.md',
       '.cortex/index.md',
-      '.cortex/teams/ai/architecture/refactoring-experts.md',
+      '.cortex/teams/ai/docs/architecture/refactoring-experts.md',
       '.cortex/teams/ai/workflows/structural-refactoring.md',
       '.cortex/gizmo-prime/workflows/subagent-delegation.md',
     ],
@@ -416,7 +416,7 @@ const EXPECTED_PROFILES = [
     requiredContextPaths: [
       '.cortex/AGENTS.md',
       '.cortex/index.md',
-      '.cortex/teams/ai/architecture/refactoring-experts.md',
+      '.cortex/teams/ai/docs/architecture/refactoring-experts.md',
       '.cortex/teams/ai/workflows/structural-refactoring.md',
       '.cortex/gizmo-prime/workflows/subagent-delegation.md',
     ],
@@ -433,8 +433,32 @@ const EXPECTED_PROFILES = [
       '.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/tests/cortex-document-structure.test.ts',
       '.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/tests/cortex-index.test.ts',
     ],
-    allowedEvidenceDescendantRoots: ['.cortex', '.github/workflows', '.task'],
-    excludedPaths: ['.cortex/.session'],
+    allowedEvidenceDescendantRoots: [
+      'agentic-ai/loom/.cortex',
+      'nook-app/.cortex',
+      'nook-app/nook-platform/.cortex',
+      'nook-app/nook-platform/nook-auth2/.cortex',
+      'nook-app/nook-platform/nook-companion-core/.cortex',
+      'nook-app/nook-platform/nook-core/.cortex',
+      'nook-app/nook-platform/nook-event-log/.cortex',
+      'nook-app/nook-web/.cortex',
+      'nook-app/nook-web/nook-web-extension/.cortex',
+      '.cortex',
+      '.github/workflows',
+      '.task',
+    ],
+    excludedPaths: [
+      '.cortex/.session',
+      'agentic-ai/loom/.cortex/.session',
+      'nook-app/.cortex/.session',
+      'nook-app/nook-platform/.cortex/.session',
+      'nook-app/nook-platform/nook-auth2/.cortex/.session',
+      'nook-app/nook-platform/nook-companion-core/.cortex/.session',
+      'nook-app/nook-platform/nook-core/.cortex/.session',
+      'nook-app/nook-platform/nook-event-log/.cortex/.session',
+      'nook-app/nook-web/.cortex/.session',
+      'nook-app/nook-web/nook-web-extension/.cortex/.session',
+    ],
     runtimeBehaviorContract: '',
     validationSelectors: ['loom:cortex-audit', 'loom:verify'],
   },
@@ -459,7 +483,7 @@ const STRUCTURAL_EXPERT_CATALOG_PATH =
   'agentic-ai/loom/src/structural-experts/catalog.ts';
 
 const STRUCTURAL_EXPERT_CORTEX_AUTHORITY_PATH =
-  '.cortex/teams/ai/architecture/refactoring-experts.md';
+  '.cortex/teams/ai/docs/architecture/refactoring-experts.md';
 
 const SYSTEM_COHERENCE_SKILL_AUTHORITY_PATH =
   '.cortex/teams/ai/dynamic-skills/system-coherence-synthesizer.md';
@@ -475,7 +499,7 @@ const STRUCTURAL_EXPERT_REGISTRY_CONTRACT_SECTIONS: readonly MarkdownContractSec
         '`system_coherence_synthesizer` is the `loom-structural-experts` diagnostic role.',
         'It receives typed `Completed` and `Failed` structural observations from the active harness and does not inspect the repository.',
         'A failed observation remains failed. The aggregate is diagnostic output for the delivery owner.',
-        'Team Gizmos and Team Agents follow the root [Agent Derailment Circuit Breaker](../../../CIRCUIT-BREAKER.md).',
+        'Team Gizmos and Team Agents follow the root [Agent Derailment Circuit Breaker](../../../../CIRCUIT-BREAKER.md).',
         'This registry adds only its typed structural-observation fields.',
       ],
     },

@@ -127,10 +127,10 @@ export class ModuleDeliveryCortexPlanValidationScenario {
       team: TeamKey.Sre,
       write: [
         '.cortex/teams/sre/workflows/quality.md',
-        '.cortex/shared/product-specs/index.md',
+        '.cortex/shared/docs/spec/product-spec-lifecycle.md',
       ],
       selectedSkillPaths: [SRE_SKILL],
-      sharedWriteClaims: ['.cortex/shared/product-specs/index.md'],
+      sharedWriteClaims: ['.cortex/shared/docs/spec/product-spec-lifecycle.md'],
     };
     return ModuleDeliveryCortexPlanValidationScenario.cortexNode(request);
   }

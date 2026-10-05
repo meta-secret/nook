@@ -47,7 +47,7 @@ export const CORTEX_DOCUMENT_MAP_AUDIT_EXAMPLE = `cortexDocumentMap:
 `;
 
 const CORTEX_PATH_PATTERN =
-  '^\\.cortex/(?!\\.\\.?/)(?!.*\\/\\.\\.?(?:\\/|$))(?!.*\\\\)(?!.*[\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e-\\u200f\\u2028-\\u202e\\u2066-\\u206f])[^/]+(?:/[^/]+)*\\.md$';
+  '^(?!\\.meta-cortex/)(?!\\.\\.?/)(?!.*\\/\\.\\.?(?:\\/|$))(?!.*\\\\)(?!.*[\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e-\\u200f\\u2028-\\u202e\\u2066-\\u206f])(?:[^/]+/)*\\.cortex/[^/]+(?:/[^/]+)*\\.md$';
 
 export const CORTEX_DOCUMENT_MAP_AUDIT_SCHEMA = {
   type: 'object',
