@@ -1,17 +1,71 @@
 import {
+  chromium,
   expect,
   test,
   type BrowserContext,
   type ConsoleMessage,
+  type TestInfo,
 } from '@playwright/test'
-import { Effect } from 'effect'
+import { Effect, Schema } from 'effect'
+import { execFileSync } from 'node:child_process'
+import { mkdir, readFile } from 'node:fs/promises'
+import { fileURLToPath } from 'node:url'
 import { launchExtensionContext } from './helpers/extension-smoke-runtime'
 
 // Live providers are manual diagnostics, never part of the CI fixture gate.
+// CHANNEL=dev verifies the published ZIP through the official hosted installer.
 test.skip(
   process.env.E2E_SPEC !== 'microsoft-live.manual.spec.ts',
   'Select this manual spec explicitly to contact Microsoft.',
 )
+
+class MicrosoftLiveProofBuild {
+  constructor(private readonly testInfo: TestInfo) {}
+
+  async launch(): Promise<BrowserContext> {
+    const profile = this.testInfo.outputPath('profile')
+    switch (
+      Schema.decodeUnknownSync(Schema.Literal('', 'dev'))(process.env.CHANNEL)
+    ) {
+      case '':
+        return launchExtensionContext(profile)
+      case 'dev': {
+        const extension = execFileSync(
+          'bash',
+          [
+            fileURLToPath(
+              new URL('../scripts/hosted-extension.sh', import.meta.url),
+            ),
+            'install',
+          ],
+          {
+            encoding: 'utf8',
+            env: {
+              ...process.env,
+              NOOK_EXTENSION_RELEASE_DIR:
+                this.testInfo.outputPath('verified-release'),
+            },
+          },
+        ).trim()
+        await this.testInfo.attach('verified-published-dev-manifest', {
+          body: await readFile(`${extension}/manifest.json`),
+          contentType: 'application/json',
+        })
+        await mkdir(profile, { recursive: true })
+        return chromium.launchPersistentContext(profile, {
+          headless: false,
+          executablePath: Schema.decodeUnknownSync(Schema.NonEmptyString)(
+            process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
+          ),
+          args: [
+            `--disable-extensions-except=${extension}`,
+            `--load-extension=${extension}`,
+          ],
+        })
+      }
+    }
+  }
+}
 
 class MicrosoftLiveIdentifierProof {
   constructor(private readonly context: BrowserContext) {}
@@ -109,9 +163,7 @@ test('packaged extension detects the real Microsoft identifier page and opens No
   void baseURL
   test.setTimeout(120_000)
   const proof = Effect.acquireUseRelease(
-    Effect.tryPromise(() =>
-      launchExtensionContext(testInfo.outputPath('profile')),
-    ),
+    Effect.tryPromise(() => new MicrosoftLiveProofBuild(testInfo).launch()),
     (context) =>
       Effect.tryPromise(() =>
         new MicrosoftLiveIdentifierProof(context).verify(
