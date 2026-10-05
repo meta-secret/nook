@@ -4,34 +4,37 @@
 
 ### Required bootstrap
 
-Nook pins Meta-Cortex v0.13.0. Each consuming worktree has its own ignored
-`.meta-cortex/` installation. Creating a Git worktree does not install that
-framework. Never copy `.meta-cortex/` or a ledger database from another
-checkout. Use the consuming worktree's absolute path in every YAML request.
+Nook pins Meta-Cortex v0.15.0. Identify the consuming project root and the
+installed library root separately. Creating a Git worktree does not install
+the framework. An assignment may use the verified ignored `.meta-cortex/`
+library in the original checkout while its task worktree contains project work.
+Never copy the library or a ledger database into the task worktree.
+Use the consuming project's or assigned worktree's absolute path in every YAML
+request. Run framework scripts from the supplied library root.
 
 Resolve the CLI before normal repository work. `command -v meta-cortex` must
 select the intended executable, and `meta-cortex --version` must report
-`0.13.0`. If the command is missing or resolves to another version, install the
-Nook-pinned [v0.13.0 release](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/tag/v0.13.0)
+`0.15.0`. If the command is missing or resolves to another version, install the
+Nook-pinned [v0.15.0 release](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/tag/v0.15.0)
 and correct command resolution. Run `meta-cortex list` to inspect supported
 typed requests. The CLI upgrade and installed framework replacement are
-separate operations; use the upstream [v0.13.0 release notes](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/tag/v0.13.0)
-and [pinned project update procedure](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/blob/8d709d668da4869790ff4755330f8f2f3834f0a5/README.md#update-a-project).
+separate operations; use the upstream [v0.15.0 release notes](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/tag/v0.15.0)
+and [pinned project update procedure](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/blob/39d75633c1c32fc77aff436d1d3a2a90806fd170/README.md#update-a-project).
 
 ```sh
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/download/v0.13.0/meta-cortex-installer.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/download/v0.15.0/meta-cortex-installer.sh | sh
 ```
 
 On Windows x86-64, use the native PowerShell installer:
 
 ```powershell
-irm https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/download/v0.13.0/meta-cortex-installer.ps1 | iex
+irm https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/download/v0.15.0/meta-cortex-installer.ps1 | iex
 Get-Command meta-cortex
 meta-cortex --version
 meta-cortex list
 ```
 
-On Linux, install the pinned release’s [native runtime prerequisites](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/blob/8d709d668da4869790ff4755330f8f2f3834f0a5/CONTRIBUTING.md#native-dashboard-prerequisites)
+On Linux, install the pinned release’s [native runtime prerequisites](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/blob/39d75633c1c32fc77aff436d1d3a2a90806fd170/CONTRIBUTING.md#native-dashboard-prerequisites)
 before invoking the executable. GTK 3 and WebKitGTK 4.1 runtime libraries are
 required even for headless commands.
 
@@ -44,11 +47,13 @@ Windows initialization uses native tools and requires neither WSL nor Git Bash.
 Use `Get-Command meta-cortex` instead of `command -v` in PowerShell.
 Both shells must resolve the pinned CLI before proceeding.
 
-Before using the framework, confirm that `.meta-cortex/AGENTS.md` and
-`.meta-cortex/meta-cortex.toml` exist in the consuming worktree.
+Before using the framework, confirm that `AGENTS.md` and `meta-cortex.toml`
+exist in the resolved library root. For initial project setup, that root is
+the project's ignored `.meta-cortex/` directory.
 
-Initialize a worktree only when `.meta-cortex/` is absent. Keep the
-initializer's framework-tool defaults. Set `instructions: skip` because the
+Initialize a project installation only when `.meta-cortex/` is absent. A task
+worktree with a supplied verified library does not need another installation.
+Keep the initializer's framework-tool defaults. Set `instructions: skip` because the
 tracked root `AGENTS.md` owns Nook's harness instructions; initialization must
 leave those instructions unchanged.
 
@@ -123,26 +128,32 @@ operation:
 
 `Framework / Info` reports schema version 5. Continue only when
 `schema_version` is `5`, `cli_version` and `framework_version` both report
-`0.13.0`, and the Codex integration reports `Connected`. Then read the installed
-[Meta-Cortex circuit breaker](../.meta-cortex/CIRCUIT-BREAKER.md), followed by
+`0.15.0`, and the Codex integration reports `Connected` for the project owning
+the installation. Verify Info against that project when a task uses its shared
+library. Then read the installed [Meta-Cortex circuit breaker](../.meta-cortex/CIRCUIT-BREAKER.md), followed by
 its [entry point](../.meta-cortex/AGENTS.md). If the CLI cannot be installed,
 initialization fails, or Info cannot verify the framework, stop and report the
 exact failure or affected path.
 
+Run the upstream [library-root check](../.meta-cortex/AGENTS.md#project-context)
+from the resolved library root before framework commands. Use its managed Bun
+PATH in each new shell. Stop if that check fails.
+
 - **Prohibited:** Treat a fresh Git worktree as framework-ready or let
   initialization rewrite Nook's tracked root instructions.
-- **Required:** Initialize the worktree separately with an absolute project
-  path and `instructions: skip`, then verify the pinned CLI and framework.
+- **Required:** For initial setup, initialize the project with an absolute path
+  and `instructions: skip`, then verify the pinned CLI and framework. For an
+  assigned task worktree, carry the verified library root separately.
 
 ### Configuration and ownership
 
-Keep `.meta-cortex/meta-cortex.toml` in the ignored worktree installation.
+Keep `meta-cortex.toml` in the resolved ignored library installation.
 Meta-Cortex owns generic role configuration and launch procedure through its
 [agent configuration rules](../.meta-cortex/teams/gizmo-team/docs/agent-configuration.md).
-Read the active worktree's configuration and pass each role's configured model
+Read the supplied active library configuration and pass each role's configured model
 and `reasoning_effort`. Preserve those configured values during upgrades. Do not
 copy role settings from a canonical checkout or maintain Nook-specific
-overrides. Meta-Cortex v0.13.0 configures model and reasoning effort for
+overrides. Meta-Cortex v0.15.0 configures model and reasoning effort for
 each role. Its `[host]` section also declares `required_total_agents`.
 Preserve the newly generated configuration shape. Set the host requirement to
 Nook's configured total of `20` and follow upstream
@@ -183,14 +194,20 @@ and selected [team context](teams/ai/index.md) route those project
 requirements.
 
 Apply upstream [consuming project context](../.meta-cortex/teams/gizmo-team/docs/project-context.md)
-to the repository and each affected module’s ancestor directories. Load the
-applicable project instructions and relevant architecture, specifications, and
-requirements in full before assigned work. Keep the consuming worktree separate
+to the repository and each affected module's ancestor directories. Load the
+applicable project instructions and selected architecture, specifications, and
+requirements in full before assigned work. That upstream contract owns discovery,
+optional absences, required-context blockers, and refreshed assignment paths.
+Keep the consuming worktree separate
 from the installed library root.
 
 - **Prohibited:** change a nested Nook module after reading only the root context.
 - **Required:** inspect its ancestor scopes and load the applicable project
-  context before editing that module.
+  context before editing that module. For example, work in `nook-app/src/`
+  includes the root and `nook-app/` context before selecting the affected source
+  directory's instructions. Follow the upstream
+  [verifier context boundary](../.meta-cortex/teams/gizmo-team/docs/project-context.md#carry-and-refresh-assignment-context)
+  for operational project context and framework practice review.
 
 Nook's Prime and Team Gizmo documents adapt the upstream roles. The Nook
 [agent catalog](gizmo-prime/team-gizmo/role-catalog.md) maps project scopes to
@@ -206,21 +223,21 @@ tooling and graph topology; they do not redefine generic authoring rules.
 
 - **Prohibited:** Copy model or reasoning settings from another checkout, or
   restate generic authoring rules in a Nook audit card.
-- **Required:** Use the active worktree configuration and link Nook-specific
+- **Required:** Use the supplied active library configuration and link Nook-specific
   tooling to the owning upstream authoring rules.
 
 ### Release pin
 
-The [v0.13.0 release](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/tag/v0.13.0)
+The [v0.15.0 release](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/tag/v0.15.0)
 identifies upstream commit
-[`8d709d668da4869790ff4755330f8f2f3834f0a5`](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/commit/8d709d668da4869790ff4755330f8f2f3834f0a5).
+[`39d75633c1c32fc77aff436d1d3a2a90806fd170`](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/commit/39d75633c1c32fc77aff436d1d3a2a90806fd170).
 Use that release's installer and framework source together.
 
-The Nook CLI release pin is 0.13.0. `preflight/Dockerfile` pins the official
-v0.13.0 installer URL. `.github/workflows/repository-policy.yml` and
+The Nook CLI release pin is 0.15.0. `preflight/Dockerfile` pins the official
+v0.15.0 installer URL. `.github/workflows/repository-policy.yml` and
 `.task/ci-workflows.yml` pin the upstream library commit
-`8d709d668da4869790ff4755330f8f2f3834f0a5`. `preflight/tests/loom_contracts.rs`
-asserts the expected `v0.13.0` installer release. Future upgrades update this
+`39d75633c1c32fc77aff436d1d3a2a90806fd170`. `preflight/tests/loom_contracts.rs`
+asserts the expected `v0.15.0` installer release. Future upgrades update this
 contract, each source pin, and their owning policy and test contracts together.
 
 - **Prohibited:** Update only the installer URL or only the pinned library
@@ -235,6 +252,11 @@ and [storage migration and supported readers](../.meta-cortex/teams/gizmo-team/d
 for the current database and record contracts. Nook does not maintain a second
 copy of those formats.
 
+The framework Info schema `5` describes installation verification. It is
+separate from ledger database schema `6`. The upstream ledger protocol owns
+released request and task formats, migration behavior, and supported readers.
+Keep the existing per-feature database in the resolved repository data directory.
+
 - Stop all older ledger writers before upgrading.
 - Preserve a consistent database backup with its engine-managed sidecars.
 - Preserve `.meta-cortex/repository-id` from the actual Git main checkout.
@@ -243,6 +265,9 @@ copy of those formats.
 - Verify that the UUID selects the existing shared repository data directory.
 - Keep installation backups until the replacement and retained configuration
   are verified.
+- Validate storage migration on an isolated cloned ledger with older writers
+  stopped before rollout. Report an atomic migration failure without rewriting
+  recorded history.
 - Never reuse the UUID in an unrelated clone.
 - Do not manually copy, reset, or delete legacy databases, records, or sidecars.
 - Do not resume older writers against retained backups.
@@ -252,6 +277,8 @@ before restoring its repository UUID.
 
 **Required:** retain the UUID and existing shared ledger, initialize the new
 framework, then verify the repository data directory before feature work.
+For example, upgrade the CLI and replace the library before selecting the
+existing feature. Preserve its database and engine-managed sidecars together.
 
 ## Prohibited actions
 
