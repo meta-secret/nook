@@ -1,6 +1,6 @@
 export const MODULE_EXPERT_AGENT_INSTRUCTIONS = `Act only as the assigned read-only Nook module expert.
 The canonical Cortex role catalog supplies expert identity. The active harness owns expert creation, communication, and lifecycle.
-Read .cortex/index.md only to select the assigned team's AGENTS.md and index. Do not load any other team graph. Resolve your supplied role against .cortex/teams/ai/architecture/module-experts.md, then load only the listed authority paths and project skills. Verify every claim against source at the task's exact commit.
+Read .cortex/index.md only to select the assigned team's AGENTS.md and index. Do not load any other team graph. Resolve your supplied role against .cortex/teams/ai/docs/architecture/module-experts.md, then load only the listed authority paths and project skills. Verify every claim against source at the task's exact commit.
 Report the external API, dependencies, consumers, invariants, tests, risks, and parent actions.
 Do not edit files, apply patches, or mutate Git, GitHub, Workbench, CI, deployment, or other external state. Delegate only inside the assigned task and harness-enforced depth bound. Optional Markdown is human evidence, never lifecycle state.`;
 
@@ -36,7 +36,8 @@ export type ModuleExpertGeneratedMarker = {
 };
 
 const PACKAGE_AUTHORITY_PATH = 'nook-app/.cortex/docs/architecture/packages.md';
-const EXPERT_AUTHORITY_PATH = '.cortex/teams/ai/architecture/module-experts.md';
+const EXPERT_AUTHORITY_PATH =
+  '.cortex/teams/ai/docs/architecture/module-experts.md';
 const MODULE_EXPERT_SKILL_PATH =
   '.cortex/teams/ai/dynamic-skills/module-expert.md';
 const INTERNAL_API_SKILL_PATH =
@@ -100,17 +101,17 @@ export const WEB_EXPERT_AUTHORITY_PATHS = [
 ] as const;
 
 export const WEB_EXPERT_PRODUCT_SPEC_PATHS = [
-  '.cortex/teams/dev-core/product-specs/authenticator-items.md',
-  '.cortex/teams/web-dev/product-specs/browser-extension.md',
-  '.cortex/teams/dev-core/product-specs/credit-card-items.md',
-  '.cortex/teams/dev-core/product-specs/decentralized-auth.md',
-  '.cortex/teams/dev-core/product-specs/devices-and-access.md',
-  '.cortex/teams/dev-core/product-specs/file-attachments.md',
-  '.cortex/teams/dev-core/product-specs/password-envelope.md',
-  '.cortex/teams/dev-core/product-specs/password-manager.md',
-  '.cortex/teams/dev-core/product-specs/secure-notes.md',
-  '.cortex/teams/dev-core/product-specs/slip39-recovery.md',
-  '.cortex/teams/web-dev/product-specs/vault-app-isolation.md',
+  'nook-app/nook-platform/nook-core/.cortex/docs/spec/authenticator-items.md',
+  'nook-app/nook-web/nook-web-extension/.cortex/docs/spec/browser-extension.md',
+  'nook-app/nook-platform/nook-core/.cortex/docs/spec/credit-card-items.md',
+  'nook-app/nook-platform/nook-auth2/.cortex/docs/spec/decentralized-auth.md',
+  'nook-app/.cortex/docs/spec/devices-and-access.md',
+  'nook-app/nook-platform/nook-core/.cortex/docs/spec/file-attachments.md',
+  'nook-app/nook-platform/nook-auth2/.cortex/docs/spec/password-envelope.md',
+  'nook-app/.cortex/docs/spec/password-manager.md',
+  'nook-app/nook-platform/nook-core/.cortex/docs/spec/secure-notes.md',
+  'nook-app/nook-platform/nook-auth2/.cortex/docs/spec/slip39-recovery.md',
+  'nook-app/.cortex/docs/spec/vault-app-isolation.md',
 ] as const;
 
 export const WEB_EXPERT_RELEASE_AUTHORITY_PATHS = [

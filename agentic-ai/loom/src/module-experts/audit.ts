@@ -565,7 +565,7 @@ const MODULE_EXPERT_CATALOG_PATH =
   'agentic-ai/loom/src/module-experts/catalog.ts';
 
 const MODULE_EXPERT_CORTEX_AUTHORITY_PATH =
-  '.cortex/teams/ai/architecture/module-experts.md';
+  '.cortex/teams/ai/docs/architecture/module-experts.md';
 
 const PLATFORM_MANIFEST = 'nook-app/nook-platform/Cargo.toml';
 

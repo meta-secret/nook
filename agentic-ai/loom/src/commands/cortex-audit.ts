@@ -121,8 +121,9 @@ export class CortexAuditCommand {
       });
     }
 
-    const allMarkdownFiles =
-      CortexMarkdownInventory.listCortexMarkdownFiles(cortexRoot);
+    const allMarkdownFiles = new CortexMarkdownInventory(
+      repoRoot,
+    ).repositoryFiles();
     const proseLint = new CortexValeInvocation({
       cortexRoot,
       repoRoot,
@@ -511,10 +512,7 @@ export class CortexAuditCommand {
     args: IsPersistentCortexMarkdownFileArgs,
   ): boolean {
     const relativePath = path.relative(args.cortexRoot, args.filePath);
-    return (
-      relativePath !== '.session' &&
-      !relativePath.startsWith(`.session${path.sep}`)
-    );
+    return !relativePath.split(path.sep).includes('.session');
   }
 
   private static readCortexMarkdown(filePath: string): string {

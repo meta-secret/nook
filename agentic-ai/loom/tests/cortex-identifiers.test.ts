@@ -14,6 +14,7 @@ import {
   CortexIdentifierKind,
   CortexIdentifierCatalog,
 } from '../src/lib/cortex-identifiers.ts';
+import type { AuditCortexIdentifierStabilityArgs } from '../src/lib/cortex-identifiers.ts';
 import {
   CortexReferenceRelation,
   CortexIdentifierSyntax,
@@ -366,4 +367,53 @@ describe('Cortex identifiers', () => {
       await rm(repoRoot, CortexIdentifiersFixture.REMOVE_OPTIONS);
     }
   });
+});
+
+test('preserves published authority when a document and its item move to project-local Cortex', async () => {
+  const repository = await CortexIdentifiersFixture.fixtureRepository();
+  try {
+    const published =
+      CortexIdentifierCatalog.auditCortexIdentifierRegistry(
+        repository,
+      ).registry;
+    switch (published) {
+      case false:
+        throw new Error('Expected published identifier fixture.');
+      default:
+        break;
+    }
+    const owner = join(repository, 'agentic-ai/loom/.cortex/docs/spec');
+    await mkdir(owner, { recursive: true });
+    await writeFile(
+      join(owner, 'policy.md'),
+      '# Policy\n\n## Event evidence\n',
+    );
+    const current = {
+      ...published,
+      entries: published.entries.map((entry) => ({
+        ...entry,
+        locator: entry.locator.replace(
+          '.cortex/policy.md',
+          'agentic-ai/loom/.cortex/docs/spec/policy.md',
+        ),
+      })),
+    };
+    await writeFile(
+      join(repository, '.cortex/identifiers.json'),
+      JSON.stringify(current),
+    );
+    expect(
+      CortexIdentifierCatalog.auditCortexIdentifierRegistry(repository)
+        .findings,
+    ).toEqual([]);
+    const stabilityRequest: AuditCortexIdentifierStabilityArgs = {
+      current,
+      published,
+    };
+    expect(
+      CortexIdentifierCatalog.auditCortexIdentifierStability(stabilityRequest),
+    ).toEqual([]);
+  } finally {
+    await rm(repository, CortexIdentifiersFixture.REMOVE_OPTIONS);
+  }
 });

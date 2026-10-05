@@ -18,7 +18,7 @@ export class CortexConsistencyAuditScenario {
     '.cortex/teams/web-dev/dynamic-skills/ui-design-skills.md';
 
   static readonly RUST_POLICY =
-    '.cortex/teams/dev-core/design-docs/typed-newtypes.md';
+    '.cortex/teams/dev-core/docs/architecture/typed-newtypes.md';
 
   private constructor(private readonly request: readonly string[]) {}
 
@@ -107,7 +107,7 @@ export class CortexConsistencyAuditScenario {
 const AUTHORITY = CortexContextAuthorityDocument.Sre;
 
 const SCHEMA_POLICY =
-  '.cortex/teams/dev-core/design-docs/vault-schema-versioning.md';
+  'nook-app/nook-platform/nook-core/.cortex/docs/architecture/vault-schema-versioning.md';
 
 test('accepts a referenced imported policy', () => {
   expect(
@@ -462,7 +462,9 @@ test('requires compatibility evidence and a valid referenced schema authority', 
       CortexConsistencyAuditScenario.persistedRequest({
         schemaAuthority: SCHEMA_POLICY,
         evidence: [CortexCompatibilityEvidence.MigrationTest],
-        references: ['../design-docs/vault-schema-versioning.md'],
+        references: [
+          '../../../../../nook-app/nook-platform/nook-core/.cortex/docs/architecture/vault-schema-versioning.md',
+        ],
       }),
     ).execute(),
   ).toEqual([]);

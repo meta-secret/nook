@@ -228,6 +228,33 @@ export class CortexConsistencyContract {
       };
     }
     const owners: readonly (readonly [string, CortexContractTeam])[] = [
+      ['agentic-ai/loom/.cortex/docs/', CortexContractTeam.Ai],
+      ['nook-app/.cortex/docs/', CortexContractTeam.Shared],
+      [
+        'nook-app/nook-platform/.cortex/docs/',
+        CortexContractTeam.DevelopmentCore,
+      ],
+      [
+        'nook-app/nook-platform/nook-auth2/.cortex/docs/',
+        CortexContractTeam.DevelopmentCore,
+      ],
+      [
+        'nook-app/nook-platform/nook-core/.cortex/docs/',
+        CortexContractTeam.DevelopmentCore,
+      ],
+      [
+        'nook-app/nook-platform/nook-event-log/.cortex/docs/',
+        CortexContractTeam.DevelopmentCore,
+      ],
+      [
+        'nook-app/nook-platform/nook-companion-core/.cortex/docs/',
+        CortexContractTeam.DevelopmentCore,
+      ],
+      ['nook-app/nook-web/.cortex/docs/', CortexContractTeam.WebDevelopment],
+      [
+        'nook-app/nook-web/nook-web-extension/.cortex/docs/',
+        CortexContractTeam.WebDevelopment,
+      ],
       ['.cortex/gizmo-prime/', CortexContractTeam.GizmoPrime],
       ['.cortex/shared/', CortexContractTeam.Shared],
       ['.cortex/teams/ai/', CortexContractTeam.Ai],

@@ -87,11 +87,10 @@ test('treats vendored skills as dependencies rather than Nook graph ownership', 
   ).toEqual([]);
 });
 
-test('delegates links outside the root Cortex graph to the repository link audit', () => {
+test('delegates non-Cortex repository links to the repository link audit', () => {
   const graph = CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
     path: '.cortex/index.md',
-    content:
-      '# Nook graph\n\n- [Nook app architecture](../nook-app/.cortex/docs/architecture/index.md)\n',
+    content: '# Nook graph\n\n- [Nook app](../nook-app/README.md)\n',
   });
   expect(
     CortexDocumentMapCortexDocumentStructureScenario.audit([graph]),
@@ -100,8 +99,7 @@ test('delegates links outside the root Cortex graph to the repository link audit
   const missingArchitecture =
     CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
       path: '.cortex/index.md',
-      content:
-        '# Nook graph\n\n- [Missing architecture](../nook-app/.cortex/docs/architecture/missing.md)\n',
+      content: '# Nook graph\n\n- [Missing readme](../nook-app/missing.md)\n',
     });
   expect(
     CortexDocumentMapCortexDocumentStructureScenario.audit([
