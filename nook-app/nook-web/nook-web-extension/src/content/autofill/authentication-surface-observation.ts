@@ -1,3 +1,4 @@
+import { Match } from 'effect'
 import { authenticationFactObserver } from '../../../../nook-web-shared/src/extension/authentication-fact-attributes'
 import {
   type PasswordFormObservation,
@@ -402,6 +403,12 @@ class AuthenticationSurfaceObservation {
     renderedWorkflow,
   }: AuthenticationMutationImpactRequest): AuthenticationMutationImpact {
     const pageMutations = records.filter((record) => {
+      switch (this.mutationRetainsAttributeValue(record)) {
+        case true:
+          return false
+        case false:
+          break
+      }
       const mountedWidgetRequest: MountedWidgetMutationRequest = {
         record,
         mountedHost,
@@ -431,6 +438,29 @@ class AuthenticationSurfaceObservation {
     return {
       shouldRemountRenderedWorkflow,
       shouldScheduleScan: relevantMutations.length > 0,
+    }
+  }
+
+  private mutationRetainsAttributeValue(record: MutationRecord): boolean {
+    switch (record.type) {
+      case 'attributes':
+        return Match.value(record.target).pipe(
+          Match.when(Match.instanceOf(Element), (element) =>
+            Match.value(record.attributeName).pipe(
+              Match.when(
+                Match.string,
+                (attribute) =>
+                  element.getAttribute(attribute) === record.oldValue,
+              ),
+              Match.orElse(() => false),
+            ),
+          ),
+          Match.orElse(() => false),
+        )
+      case 'childList':
+        return false
+      case 'characterData':
+        return false
     }
   }
 }
