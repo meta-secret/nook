@@ -134,7 +134,7 @@ RUN <<'EOF'
 set -eu
 test ! -e /meta-secret/nook/.meta-cortex
 curl --proto '=https' --tlsv1.2 -LsSf \
-  https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/download/v0.13.0/meta-cortex-installer.sh \
+  https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/download/v0.15.0/meta-cortex-installer.sh \
   --output /tmp/meta-cortex-installer.sh
 META_CORTEX_UNMANAGED_INSTALL=/usr/local/bin sh /tmp/meta-cortex-installer.sh
 rm /tmp/meta-cortex-installer.sh
