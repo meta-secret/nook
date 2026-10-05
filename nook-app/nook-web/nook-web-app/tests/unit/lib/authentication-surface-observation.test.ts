@@ -121,6 +121,49 @@ afterEach(() => {
 })
 
 describe('authentication surface mutation filtering', () => {
+  test('retains the panel for identical adornment writes but invalidates a hidden input', () => {
+    const form = document.createElement('form')
+    const input = document.createElement('input')
+    input.type = 'email'
+    input.setAttribute('style', 'padding-right: 35px !important;')
+    form.append(input)
+    document.body.append(form)
+    const observer = new MutationObserver(() => {})
+    observer.observe(form, {
+      attributes: true,
+      attributeOldValue: true,
+      subtree: true,
+    })
+    input.setAttribute('style', 'padding-right: 35px !important;')
+    expect(
+      authenticationSurfaceObservation.authenticationMutationImpact({
+        records: observer.takeRecords(),
+        mountedHost: false,
+        renderedWorkflow: observation(form),
+      }),
+    ).toEqual({
+      shouldRemountRenderedWorkflow: false,
+      shouldScheduleScan: false,
+    })
+    input.setAttribute('style', 'display: none;')
+    expect(
+      authenticationSurfaceObservation.authenticationMutationImpact({
+        records: observer.takeRecords(),
+        mountedHost: false,
+        renderedWorkflow: observation(form),
+      }),
+    ).toEqual({ shouldRemountRenderedWorkflow: true, shouldScheduleScan: true })
+    input.setAttribute('style', 'padding-right: 35px !important;')
+    input.setAttribute('style', 'display: none;')
+    expect(
+      authenticationSurfaceObservation.authenticationMutationImpact({
+        records: observer.takeRecords(),
+        mountedHost: false,
+        renderedWorkflow: observation(form),
+      }),
+    ).toEqual({ shouldRemountRenderedWorkflow: true, shouldScheduleScan: true })
+    observer.disconnect()
+  })
   test('schedules a fresh scan for visible QR instruction text but ignores unrelated and widget text', () => {
     document.body.innerHTML = `
       <section><h2 id="instructions">Use your Microsoft account</h2><canvas width="120" height="120"></canvas></section>

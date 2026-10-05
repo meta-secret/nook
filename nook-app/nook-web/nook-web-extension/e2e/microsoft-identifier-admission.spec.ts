@@ -395,6 +395,26 @@ for (const authentication of [true, false]) {
         }
       })
       expect(setupFailures).toEqual([])
+      await page.locator('#usernameEntry').evaluate((field) => {
+        field.setAttribute('style', 'padding-right: 35px !important;')
+      })
+      await expect(page.getByTestId('nook-auth-gate')).toBeVisible()
+      const retainedFrames = await page
+        .locator('#usernameEntry')
+        .evaluate(async (field) => {
+          let retained = 0
+          for (let frame = 0; frame < 60; frame += 1) {
+            await new Promise<void>((resolve) =>
+              requestAnimationFrame(() => resolve()),
+            )
+            field.setAttribute('style', 'padding-right: 35px !important;')
+            retained += Number(
+              Boolean(document.getElementById('nook-auth-widget')),
+            )
+          }
+          return retained
+        })
+      expect(retainedFrames).toBe(60)
       if (!authentication) {
         // Replace only the form after real startup and classification succeeded.
         // Removing the separately mounted HUD then requires a new negative scan.
