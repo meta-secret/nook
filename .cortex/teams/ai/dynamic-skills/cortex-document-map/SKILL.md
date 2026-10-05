@@ -23,7 +23,7 @@ keep that same filename. The document-map tooling uses root, owner, and child
 indexes directly, without alternate navigation filenames.
 
 Nook has one root router, a Gizmo Prime graph, six engineering and operational
-owner graphs, and shared knowledge.
+owner graphs, shared knowledge, and project-local document owners.
 
 - The root graph selects Gizmo Prime, Delivery Pipeline, AI, development core,
   security, SRE, web development, or shared context.
@@ -40,6 +40,13 @@ owner graphs, and shared knowledge.
 - Each Nook document belongs to one owning graph. The root graph does not index
   child documents directly, and one child graph does not index another
   context's documents.
+- Project-local `.cortex/docs/spec/index.md` and
+  `.cortex/docs/architecture/index.md` own their local documents. Root and team
+  graphs route to these indexes. Broader project indexes route to narrower
+  module indexes without duplicating document ownership. Each local document
+  is indexed once by its own spec or architecture index. Local graphs may read
+  shared root requirements and route other local owner indexes; they do not
+  directly index another owner's document.
 
 **Prohibited:** launch separate AI and web coordinators because their contexts
 have separate graphs.
@@ -47,13 +54,23 @@ have separate graphs.
 **Preferred:** the existing Team Gizmo supplies the AI and web contexts to their
 bounded worker assignments.
 
+- **Prohibited:** move an auth specification beside `nook-auth2` but retain a
+  second owning entry in the root development-core catalog, or omit it from
+  audit discovery because it is outside root `.cortex/`.
+
+- **Required:** index that specification once in
+  `nook-app/nook-platform/nook-auth2/.cortex/docs/spec/index.md`. Route the root
+  team graph to that catalog. Discover project-local Cortex documents and apply
+  the same document and ownership audits to them.
+
 ## Nook document placement
 
 When adding or moving a Nook document:
 
-1. Select its owning context from the [root graph](../../../../index.md)
-   and confirm placement in that team's graph.
-2. Put the document under its owning context and link it once from that graph.
+1. Select its owning context from the [root graph](../../../../index.md),
+   following team routes to the owning project index for local documents.
+2. Put the document under its owning context and link it once from that owner's
+   graph. Route other graphs to the owner index.
 3. Remove obsolete ownership links and update direct callers when a path changes.
 4. Update the central [Nook skill registry](../index.md) when a skill card is
    added, moved, or retired.

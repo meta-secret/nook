@@ -14,17 +14,13 @@ Open one relevant category. Do not preload all shared documents.
 These documents route repository-wide relationships and application-owned context.
 
 - [Architecture catalog](architecture/index.md)
-- [Package responsibilities and layers](../../nook-app/.cortex/docs/architecture/packages.md)
-- [System architecture](architecture/system.md)
 - [Nook application architecture](../../nook-app/.cortex/docs/architecture/index.md)
 
 ## Product and specification catalogs
 
 These catalogs route cross-team lookup without transferring ownership.
 
-- [Product specifications catalog](product-specs/index.md)
-- [Shared specifications catalog](spec/index.md)
-- [Application logging](../../nook-app/.cortex/docs/spec/logging.md)
+- [Shared and product specification catalog](docs/spec/index.md)
 
 ## Shared engineering rules
 

@@ -240,7 +240,7 @@ Verify the exact account, project, and target resource before mutation.
 OAuth browser-origin changes require the Google Auth Platform client
 configuration to contain exact origins. Do not commit client secrets. Do not
 assume per-PR Cloudflare preview hosts can be covered by wildcards. See
-[auth-providers.md §7](../../dev-core/design-docs/auth-providers.md#7-oauth-origins-and-pr-previews).
+[auth-providers.md §7](../../../../nook-app/nook-platform/.cortex/docs/architecture/auth-providers.md#7-oauth-origins-and-pr-previews).
 
 ## Agent execution policy
 

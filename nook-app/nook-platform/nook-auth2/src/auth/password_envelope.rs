@@ -13,7 +13,7 @@
 //! Future variants (hardware token, social recovery, …) extend the enum
 //! without altering the storage layout.
 //!
-//! See `.cortex/teams/dev-core/product-specs/password-envelope.md` for the full design.
+//! See `nook-app/nook-platform/nook-auth2/.cortex/docs/spec/password-envelope.md` for the full design.
 
 #![cfg_attr(
     dylint_lib = "nook_domain_api",

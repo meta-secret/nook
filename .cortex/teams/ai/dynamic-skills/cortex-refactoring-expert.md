@@ -41,7 +41,7 @@ It does not apply patches, silently change product meaning, generate workflow
 topology from Markdown, or mutate lifecycle state.
 
 Follow the canonical
-[structural expert registry](../architecture/refactoring-experts.md) and
+[structural expert registry](../docs/architecture/refactoring-experts.md) and
 [workflow](../workflows/structural-refactoring.md).
 Internal Team Gizmo and Team Agent handoffs follow the root
 [Agent Derailment Circuit Breaker](../../../CIRCUIT-BREAKER.md).

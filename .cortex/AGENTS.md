@@ -99,8 +99,8 @@ project's `index.md`, then to the relevant document.
 Use the responsible Meta-Cortex role, programming documents, and skills for
 generic language rules. Nook adds these project constraints:
 
-- [Rust lint rollout and existing values](teams/dev-core/design-docs/typed-newtypes.md).
-- [Rust ownership lint rollout](teams/dev-core/design-docs/rust-action-ownership.md).
+- [Rust lint rollout and existing values](teams/dev-core/docs/architecture/typed-newtypes.md).
+- [Rust ownership lint rollout](teams/dev-core/docs/architecture/rust-action-ownership.md).
 - [Nook test surfaces and coverage](shared/dynamic-skills/testing-pyramid-and-regression.md).
 - [Nook source-size enforcement](shared/dynamic-skills/source-file-size.md): preserve the 1,000-line source limit, keep unit tests colocated while retaining integration tests, and use domain or architectural decomposition for oversized files.
 - [Dependency audit integration](shared/dynamic-skills/prefer-popular-libraries.md).

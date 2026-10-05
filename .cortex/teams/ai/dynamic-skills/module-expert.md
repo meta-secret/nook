@@ -15,7 +15,7 @@ Duplicated per-agent prompts then become stale copies of architecture rules.
 ## Preferred Pattern
 
 Resolve the module in
-[the expert registry](../architecture/module-experts.md).
+[the expert registry](../docs/architecture/module-experts.md).
 Load only the task-selected authorities and skills allowed by that role.
 Inspect only the relevant source at the exact baseline.
 

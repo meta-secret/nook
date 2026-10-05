@@ -56,7 +56,7 @@
       "authority": "loom-tools",
       "categoryId": "CX-AI",
       "title": "Loom tools",
-      "locator": ".cortex/teams/ai/references/loom-tools.md"
+      "locator": "agentic-ai/loom/.cortex/docs/spec/loom-tools.md"
     },
     {
       "id": "CX-AI-7K3M2",
@@ -64,7 +64,7 @@
       "authority": "agent-action-references",
       "categoryId": "CX-AI",
       "title": "Agent action references",
-      "locator": ".cortex/teams/ai/references/loom-tools.md#agent-action-references"
+      "locator": "agentic-ai/loom/.cortex/docs/spec/loom-tools.md#agent-action-references"
     }
   ]
 }

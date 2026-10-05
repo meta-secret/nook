@@ -493,8 +493,8 @@ Use this workflow for quality, CI, and deployment changes.
     - **Below 90% line coverage, agents add tests before finishing.**
     - See [testing-pyramid-and-regression.md](../../../shared/dynamic-skills/testing-pyramid-and-regression.md).
 17. **Cortex + README hygiene:**
-    - After learning something durable from tests, CI, or PR review, update `.cortex` per [core-beliefs.md §10](../../ai/design-docs/core-beliefs.md#10-grow-cortex-dynamically).
-    - When the change is architectural or alters the public developer/product surface, also update the root [`README.md`](../../../../README.md) in the same PR ([core beliefs, section 10](../../ai/design-docs/core-beliefs.md#10-grow-cortex-dynamically)).
+    - After learning something durable from tests, CI, or PR review, update `.cortex` per [core-beliefs.md §10](../../ai/docs/architecture/core-beliefs.md#10-grow-cortex-dynamically).
+    - When the change is architectural or alters the public developer/product surface, also update the root [`README.md`](../../../../README.md) in the same PR ([core beliefs, section 10](../../ai/docs/architecture/core-beliefs.md#10-grow-cortex-dynamically)).
 18. **Troubleshooting web/e2e/CI failures:** After test output and static analysis, **always check persisted app logs** — they are the most important source of truth for vault, sync, and WASM behavior. See [logging.md § Debugging, troubleshooting, and CI verification](../../../../nook-app/.cortex/docs/spec/logging.md#debugging-troubleshooting-and-ci-verification).
 19. **Coverage enforcement:**
     - Docker/BuildKit runs the portable Rust coverage graph in PR and Main

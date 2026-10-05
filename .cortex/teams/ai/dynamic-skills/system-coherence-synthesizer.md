@@ -58,7 +58,7 @@ identities. Failed observations never count as accepted provider evidence. The
 output cannot authorize implementation or replace the delivery owner's review.
 
 The delivery owner follows the canonical
-[structural expert registry](../architecture/refactoring-experts.md) and
+[structural expert registry](../docs/architecture/refactoring-experts.md) and
 [workflow](../workflows/structural-refactoring.md).
 
 ## Examples

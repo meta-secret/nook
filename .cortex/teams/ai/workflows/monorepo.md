@@ -54,4 +54,4 @@ Portable work belongs in `nook-core` first so web, mobile, and CLI can share it:
    wasm getters, not duplicated TS schemas.
 6. Playwright — user flow coverage when the type is exposed in the vault UI.
 
-See [references/rust-wasm.md](../../dev-core/references/rust-wasm.md) §4 for the boundary pattern.
+See [Rust and WebAssembly](../../../../nook-app/nook-platform/.cortex/docs/spec/rust-wasm.md) §4 for the boundary pattern.
