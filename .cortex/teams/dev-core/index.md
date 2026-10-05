@@ -8,32 +8,19 @@ Load only the category that owns the assigned portable product functionality.
 
 ## Product specifications
 
-Open only the specification for the requested item, identity, recovery, or
-vault behavior.
+Select the owning project catalog for the requested product behavior.
 
-- [Authenticator items](product-specs/authenticator-items.md)
-- [Credit card items](product-specs/credit-card-items.md)
-- [Multi-device decentralized authentication](product-specs/decentralized-auth.md)
-- [Devices and access](product-specs/devices-and-access.md)
-- [File attachments](product-specs/file-attachments.md)
-- [Password unlock and device join](product-specs/password-envelope.md)
-- [Password manager](product-specs/password-manager.md)
-- [Secure notes](product-specs/secure-notes.md)
-- [SLIP-0039 recovery](product-specs/slip39-recovery.md)
+- [Application specifications](../../../nook-app/.cortex/docs/spec/index.md)
+- [Identity and authorization specifications](../../../nook-app/nook-platform/nook-auth2/.cortex/docs/spec/index.md)
+- [Vault item specifications](../../../nook-app/nook-platform/nook-core/.cortex/docs/spec/index.md)
 
 ## Domain and storage design
 
-Open the narrow design authority for the affected Rust or WASM contract.
+Select local architecture for the affected Rust or WASM contract.
 
-- [Authentication providers and sync](design-docs/auth-providers.md)
-- [Companion protocol simulation](design-docs/companion-protocol-simulation.md)
-- [Sentinel genesis](design-docs/sentinel-genesis.md)
-- [Rust action ownership and typestate](design-docs/rust-action-ownership.md)
-- [Typed newtypes](design-docs/typed-newtypes.md)
-- [Unified vault](design-docs/unified-vault.md)
-- [Vault architecture modes](design-docs/vault-architecture-modes.md)
-- [Vault event log](design-docs/vault-event-log.md)
-- [Vault schema versioning](design-docs/vault-schema-versioning.md)
+- [Rust platform architecture](../../../nook-app/nook-platform/.cortex/docs/architecture/index.md)
+
+- [Development core architecture](docs/architecture/index.md)
 
 ## Development skills
 
@@ -44,7 +31,7 @@ Open the narrow design authority for the affected Rust or WASM contract.
 
 ## Reference
 
-- [Rust and WebAssembly](references/rust-wasm.md)
+- [Rust platform specifications](../../../nook-app/nook-platform/.cortex/docs/spec/index.md)
 
 ## Team topology
 

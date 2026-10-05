@@ -108,4 +108,4 @@ requirements come from Meta-Cortex
 Keep harness-specific discovery outside the tracked repository, as described by
 the Nook workflow.
 
-See [Loom tools](../references/loom-tools.md).
+See [Loom tools](../../../../agentic-ai/loom/.cortex/docs/spec/loom-tools.md).

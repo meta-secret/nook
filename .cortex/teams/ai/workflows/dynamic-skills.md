@@ -123,7 +123,7 @@ link. Then fill the card content. The required hosted PR stage runs
 [delivery and validation policy](../../../AGENTS.md#delivery-and-validation)
 and does not replace the hosted check.
 
-See [loom-tools.md](../references/loom-tools.md).
+See [loom-tools.md](../../../../agentic-ai/loom/.cortex/docs/spec/loom-tools.md).
 
 Ask for clarification only when the scope or preferred pattern cannot be inferred
 from the user's example and surrounding code.

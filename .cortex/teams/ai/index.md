@@ -11,10 +11,7 @@ functionality.
 
 Use these documents for AI runtime design and read-only expert routing.
 
-- [Module expert registry](architecture/module-experts.md)
-- [Structural refactoring expert registry](architecture/refactoring-experts.md)
-- [Core agent-first beliefs](design-docs/core-beliefs.md)
-- [Design document catalog](design-docs/index.md)
+- [AI architecture catalog](docs/architecture/index.md)
 
 ## Cortex authoring and maintenance
 
@@ -60,12 +57,9 @@ Use these workflows for AI-owned skills and cross-package changes.
 
 ## Loom reference
 
-- [Loom tools](references/loom-tools.md)
+- [Loom specifications](../../../agentic-ai/loom/.cortex/docs/spec/index.md)
 
 ## Team topology
-
-- [Docker cache specialist activation](architecture/docker-cache-specialist-activation.md)
-  defines deterministic SRE routing from cache-health telemetry.
 
 - [AI Team Gizmo](gizmo/index.md) coordinates bounded AI-team mechanics.
 - [Loom specialist](loom-specialist/index.md) handles packeted AI-owned Loom work.

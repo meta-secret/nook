@@ -126,7 +126,7 @@ flowchart TD
   - Its credentials stay sealed to a local app key.
 
 The normative model is in
-[identity-vault-architecture.md](../../../../.cortex/teams/security/architecture/identity-vault-architecture.md).
+[identity-vault-architecture.md](../../../nook-platform/.cortex/docs/architecture/identity-vault-architecture.md).
 
 ---
 
@@ -235,18 +235,18 @@ Search catalog detail:
 - Bucket assignment derives from opaque secret ids.
 
 Store identity detail: see
-[secret-store-identity.md](../../../../.cortex/teams/security/architecture/secret-store-identity.md).
+[secret-store-identity.md](../../../nook-platform/nook-core/.cortex/docs/architecture/secret-store-identity.md).
 
 Vault revision detail:
 
-- Live sync uses the event log ([vault-event-log.md](../../../../.cortex/teams/dev-core/design-docs/vault-event-log.md)).
-- Legacy YAML `vault_version` is historical/local projection context ([unified-vault.md](../../../../.cortex/teams/dev-core/design-docs/unified-vault.md)).
+- Live sync uses the event log ([vault-event-log.md](../../../nook-platform/nook-event-log/.cortex/docs/architecture/vault-event-log.md)).
+- Legacy YAML `vault_version` is historical/local projection context ([unified-vault.md](../../../nook-platform/.cortex/docs/architecture/unified-vault.md)).
 
 Unlock mode detail:
 
 - Password-only vaults use `{type: password, …}`.
 - Device-key vaults use `auth:` plus optional `password_entries`.
-- See [password-envelope.md](../../../../.cortex/teams/dev-core/product-specs/password-envelope.md).
+- See [password-envelope.md](../../../nook-platform/nook-auth2/.cortex/docs/spec/password-envelope.md).
 
 Authorization and membership detail:
 
@@ -270,12 +270,12 @@ Provider connections detail:
 - Credentials are sealed to the local device.
   Related design specifications:
 
-- [vault-session-and-lock.md](../../../../.cortex/teams/security/architecture/vault-session-and-lock.md): Lock session vs persisted data boundaries.
-- [decentralized-auth.md](../../../../.cortex/teams/dev-core/product-specs/decentralized-auth.md): Join and approve flows.
-- [auth-providers.md](../../../../.cortex/teams/dev-core/design-docs/auth-providers.md): Login UX and sync-provider credential persistence.
-- [vault-event-log.md](../../../../.cortex/teams/dev-core/design-docs/vault-event-log.md): Provider event-log sync.
-- [unified-vault.md](../../../../.cortex/teams/dev-core/design-docs/unified-vault.md): Local-first vault architecture (scalar sync historical).
-- [identity-vault-architecture.md](../../../../.cortex/teams/security/architecture/identity-vault-architecture.md): Identity, onboarding, grant, and provider ownership.
+- [vault-session-and-lock.md](../../../nook-platform/.cortex/docs/architecture/vault-session-and-lock.md): Lock session vs persisted data boundaries.
+- [decentralized-auth.md](../../../nook-platform/nook-auth2/.cortex/docs/spec/decentralized-auth.md): Join and approve flows.
+- [auth-providers.md](../../../nook-platform/.cortex/docs/architecture/auth-providers.md): Login UX and sync-provider credential persistence.
+- [vault-event-log.md](../../../nook-platform/nook-event-log/.cortex/docs/architecture/vault-event-log.md): Provider event-log sync.
+- [unified-vault.md](../../../nook-platform/.cortex/docs/architecture/unified-vault.md): Local-first vault architecture (scalar sync historical).
+- [identity-vault-architecture.md](../../../nook-platform/.cortex/docs/architecture/identity-vault-architecture.md): Identity, onboarding, grant, and provider ownership.
 
 YAML payload sections:
 

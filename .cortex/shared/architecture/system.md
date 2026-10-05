@@ -62,6 +62,6 @@ All development tasks and builds in Nook run containerized via a unified `Taskfi
   or Kata runtime. Untrusted and unsupported lanes retain ephemeral
   GitHub-hosted fallback capacity.
 
-See [architecture/engineering-harness.md](../../teams/sre/architecture/engineering-harness.md) for the complete Taskfile hierarchy, Docker cache topology, builder driver configurations, and solve pipelines.
+See [architecture/engineering-harness.md](../../teams/sre/docs/architecture/engineering-harness.md) for the complete Taskfile hierarchy, Docker cache topology, builder driver configurations, and solve pipelines.
 
 ---

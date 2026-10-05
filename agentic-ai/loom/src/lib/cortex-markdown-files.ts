@@ -1,9 +1,46 @@
-import { lstatSync, readdirSync } from 'node:fs';
+import { lstatSync, readdirSync, type Dirent } from 'node:fs';
 import path from 'node:path';
 
 /** Owns the cortex markdown inventory registry and its capability transitions. */
 export class CortexMarkdownInventory {
-  private constructor() {}
+  constructor(private readonly repositoryRoot: string) {}
+
+  repositoryFiles(): string[] {
+    return this.contextRoots(this.repositoryRoot)
+      .flatMap((context) =>
+        CortexMarkdownInventory.listCortexMarkdownFiles(context),
+      )
+      .sort();
+  }
+
+  private contextRoots(directory: string): string[] {
+    return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+      const request: EntryContextRootsArgs = { directory, entry };
+      return this.entryContextRoots(request);
+    });
+  }
+
+  private entryContextRoots(request: EntryContextRootsArgs): string[] {
+    switch (request.entry.isDirectory()) {
+      case false:
+        return [];
+      case true:
+        break;
+    }
+    const directory = path.join(request.directory, request.entry.name);
+    switch (request.entry.name) {
+      case 'node_modules':
+      case '.git':
+      case '.meta-cortex':
+      case '.vale':
+        return [];
+      case '.cortex':
+        return [directory];
+      default:
+        return this.contextRoots(directory);
+    }
+  }
+
   private static readonly EXECUTABLE_SKILL_PROJECT_FILES = [
     '.gitignore',
     '.prettierrc',
@@ -132,3 +169,8 @@ type IsExecutableSkillScriptsDirectoryArgs = {
   readonly cortexRoot: string;
   readonly candidate: string;
 };
+
+interface EntryContextRootsArgs {
+  readonly directory: string;
+  readonly entry: Dirent;
+}

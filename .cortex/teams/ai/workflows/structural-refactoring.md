@@ -6,7 +6,7 @@ Use this workflow to improve existing code or Cortex structure while preserving
 system coherence.
 
 The workflow routes evidence through the
-[structural refactoring expert registry](../architecture/refactoring-experts.md).
+[structural refactoring expert registry](../docs/architecture/refactoring-experts.md).
 It follows the universal
 [subagent delegation contract](../../../gizmo-prime/workflows/subagent-delegation.md).
 

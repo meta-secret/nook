@@ -12,7 +12,7 @@ Humans do not use Loom interactively. AI agents and Task wrappers do.
 ## Module expert catalog
 
 Named read-only semantic roles are defined in
-`.cortex/teams/ai/architecture/module-experts.md`.
+`.cortex/teams/ai/docs/architecture/module-experts.md`.
 
 The typed catalog mirrors production module routes, boundary scope, canonical
 context, authorities, skills, entry points, and focused validation selectors.

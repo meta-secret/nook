@@ -124,7 +124,7 @@ Run the sync task to atomically copy it to the developer machine at
 `NOOK_PR_STEWARD_CREDENTIAL_FILE` override to select another absolute private
 path. Use the rotation task above to replace the remote identity, restart the
 server cluster, and then rerun the sync task. See
-the [repository-managed JetStream contract](../.cortex/teams/sre/design-docs/repository-managed-jetstream.md)
+the [repository-managed JetStream contract](../.cortex/teams/sre/docs/architecture/repository-managed-jetstream.md)
 for ownership, permissions, rotation, and removal.
 
 JetStream persistence belongs to the ingress platform. PR Steward agents use

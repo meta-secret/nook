@@ -486,3 +486,33 @@ test('self-verifies an accepted request through decode, audit, and result decode
       ),
   ).toEqual(ok(result));
 });
+
+test('admits canonical project-local Cortex article paths and rejects traversal and framework paths', () => {
+  const localRequest: AuditCortexArticleStructureRequest = {
+    ...validRequest,
+    documents: validRequest.documents.map((document) => ({
+      ...document,
+      relativePath: 'agentic-ai/loom/.cortex/docs/spec/loom-tools.md',
+    })),
+  };
+  expect(
+    CortexArticleTransport.from(JSON.stringify(localRequest)).decodeRequest(),
+  ).toEqual(ok(localRequest));
+  for (const relativePath of [
+    'agentic-ai/loom/../.cortex/docs/spec/loom-tools.md',
+    '.meta-cortex/team/.cortex/docs/spec/loom-tools.md',
+  ]) {
+    const invalid = {
+      ...localRequest,
+      documents: localRequest.documents.map((document) => ({
+        ...document,
+        relativePath,
+      })),
+    };
+    expect(
+      CortexArticleTransport.from(JSON.stringify(invalid))
+        .decodeRequest()
+        .isErr(),
+    ).toBe(true);
+  }
+});

@@ -178,26 +178,26 @@ describe('module expert audit', () => {
     ]);
     expect(WEB_EXPERT_SKILL_AUTHORITY_PATHS).toEqual([
       '.cortex/teams/web-dev/AGENTS.md',
-      '.cortex/teams/ai/architecture/module-experts.md',
+      '.cortex/teams/ai/docs/architecture/module-experts.md',
       '.cortex/teams/ai/dynamic-skills/module-expert.md',
       '.cortex/gizmo-prime/workflows/module-oriented-development.md',
     ]);
     expect(WEB_EXPERT_AUTHORITY_PATHS).toEqual([
       'nook-app/.cortex/docs/architecture/packages.md',
-      '.cortex/teams/ai/architecture/module-experts.md',
+      '.cortex/teams/ai/docs/architecture/module-experts.md',
     ]);
     expect(WEB_EXPERT_PRODUCT_SPEC_PATHS).toEqual([
-      '.cortex/teams/dev-core/product-specs/authenticator-items.md',
-      '.cortex/teams/web-dev/product-specs/browser-extension.md',
-      '.cortex/teams/dev-core/product-specs/credit-card-items.md',
-      '.cortex/teams/dev-core/product-specs/decentralized-auth.md',
-      '.cortex/teams/dev-core/product-specs/devices-and-access.md',
-      '.cortex/teams/dev-core/product-specs/file-attachments.md',
-      '.cortex/teams/dev-core/product-specs/password-envelope.md',
-      '.cortex/teams/dev-core/product-specs/password-manager.md',
-      '.cortex/teams/dev-core/product-specs/secure-notes.md',
-      '.cortex/teams/dev-core/product-specs/slip39-recovery.md',
-      '.cortex/teams/web-dev/product-specs/vault-app-isolation.md',
+      'nook-app/nook-platform/nook-core/.cortex/docs/spec/authenticator-items.md',
+      'nook-app/nook-web/nook-web-extension/.cortex/docs/spec/browser-extension.md',
+      'nook-app/nook-platform/nook-core/.cortex/docs/spec/credit-card-items.md',
+      'nook-app/nook-platform/nook-auth2/.cortex/docs/spec/decentralized-auth.md',
+      'nook-app/.cortex/docs/spec/devices-and-access.md',
+      'nook-app/nook-platform/nook-core/.cortex/docs/spec/file-attachments.md',
+      'nook-app/nook-platform/nook-auth2/.cortex/docs/spec/password-envelope.md',
+      'nook-app/.cortex/docs/spec/password-manager.md',
+      'nook-app/nook-platform/nook-core/.cortex/docs/spec/secure-notes.md',
+      'nook-app/nook-platform/nook-auth2/.cortex/docs/spec/slip39-recovery.md',
+      'nook-app/.cortex/docs/spec/vault-app-isolation.md',
     ]);
     expect(WEB_EXPERT_RELEASE_AUTHORITY_PATHS).toEqual([
       '.github/scripts/ci-release-verify-extension.sh',
@@ -500,7 +500,7 @@ describe('module expert audit', () => {
   test('rejects semantic drift in the Cortex module expert contract', async () => {
     const authorityPath = join(
       ModuleExpertsAuditFixture.REPO_ROOT,
-      '.cortex/teams/ai/architecture/module-experts.md',
+      '.cortex/teams/ai/docs/architecture/module-experts.md',
     );
     const source = await readFile(authorityPath, 'utf8');
     const driftedSource = source.replace(

@@ -42,7 +42,7 @@ restart requires reauthentication. This preserves required prompts rather than
 reducing them. The identity is never written to browser-vendor storage.
 
 The extension first-run model is specified in
-[`.cortex/teams/web-dev/product-specs/browser-extension.md`](../../../.cortex/teams/web-dev/product-specs/browser-extension.md).
+[`nook-app/nook-web/nook-web-extension/.cortex/docs/spec/browser-extension.md`](.cortex/docs/spec/browser-extension.md).
 The extension becomes its own passkey-protected Nook device and pairs only
 through vault consent at the configured Simple Vault
 `/extension-connect` route; it does not borrow or scrape the Simple web app

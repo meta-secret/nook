@@ -9,7 +9,7 @@ verification, an external audit, regulatory compliance, or immunity from
 vulnerabilities.
 
 Use the linked design authorities for detailed storage and lifecycle rules.
-Use [Cryptography and protected material](../references/cryptography.md) for
+Use [Cryptography and protected material](../../../../nook-app/nook-platform/nook-auth2/.cortex/docs/spec/cryptography.md) for
 algorithm-to-purpose mappings and source anchors.
 
 ## Security objectives
@@ -80,7 +80,7 @@ in-memory vault session from accepted key material.
 
 Lock clears the active session and plaintext projection. It does not erase the
 encrypted vault, provider mounts, or every public identifier. See
-[Vault session and lock](vault-session-and-lock.md).
+[Vault session and lock](../../../../nook-app/nook-platform/.cortex/docs/architecture/vault-session-and-lock.md).
 
 ### Browser origin boundary
 
@@ -132,7 +132,7 @@ The following values are intentionally not interchangeable:
 - public device metadata and verified key possession; and
 - encrypted replica and trusted materialized state.
 
-See [Identity, app keys, passkeys, and vault keys](identity-vault-architecture.md)
+See [Identity, app keys, passkeys, and vault keys](../../../../nook-app/nook-platform/.cortex/docs/architecture/identity-vault-architecture.md)
 for the full ownership model.
 
 ## Encryption and integrity layers
@@ -159,7 +159,7 @@ for the full ownership model.
   - Uses HMAC-SHA256 for keyed secret fingerprints and the search catalog.
 
 Exact versions, work factors, domain-separation contexts, and source anchors
-are listed in [Cryptography and protected material](../references/cryptography.md).
+are listed in [Cryptography and protected material](../../../../nook-app/nook-platform/nook-auth2/.cortex/docs/spec/cryptography.md).
 
 ## Authorization and event history
 
@@ -177,7 +177,7 @@ The encrypted event log is also the authorization history.
   enrollment requires an already authorized actor.
 
 The canonical event and epoch details remain in the development-core
-[Vault event log](../../dev-core/design-docs/vault-event-log.md).
+[Vault event log](../../../../nook-app/nook-platform/nook-event-log/.cortex/docs/architecture/vault-event-log.md).
 
 ## Recovery and access paths
 

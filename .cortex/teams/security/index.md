@@ -9,9 +9,8 @@ Load only the category that owns the assigned security question.
 ## Security architecture
 
 - [Nook security architecture](architecture/security-architecture.md)
-- [Identity, app keys, passkeys, and vault keys](architecture/identity-vault-architecture.md)
-- [Secret store identity](architecture/secret-store-identity.md)
-- [Vault session and lock](architecture/vault-session-and-lock.md)
+- [Rust platform architecture](../../../nook-app/nook-platform/.cortex/docs/architecture/index.md)
+- [Vault application core architecture](../../../nook-app/nook-platform/nook-core/.cortex/docs/architecture/index.md)
 
 ## Security skills
 
@@ -21,7 +20,7 @@ Load only the category that owns the assigned security question.
 
 ## Security reference
 
-- [Cryptography and protected material](references/cryptography.md)
+- [Identity and cryptographic specifications](../../../nook-app/nook-platform/nook-auth2/.cortex/docs/spec/index.md)
 
 ## Related team authorities
 

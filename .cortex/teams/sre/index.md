@@ -8,9 +8,8 @@ Load only the category that owns the assigned operational functionality.
 
 ## Platform architecture
 
-- [Engineering harness](architecture/engineering-harness.md)
-- [ARC and Kata runner platform](design-docs/arc-kata-runner-platform.md)
-- [Repository-managed JetStream](design-docs/repository-managed-jetstream.md)
+- [SRE architecture catalog](docs/architecture/index.md)
+
 
 ## Infrastructure and validation skills
 
@@ -30,14 +29,9 @@ action being performed.
 - [Quality and release](workflows/quality.md)
 - [Remote execution](workflows/remote-execution.md)
 
-## Operations references
+## Repository specifications
 
-- [Cloudflare operations](references/cloudflare-operations.md)
-- [Infrastructure provider operations](references/infrastructure-provider-operations.md)
-
-## Toolchain product contract
-
-- [Monorepo and toolchain setup](product-specs/monorepo-setup.md)
+- [SRE specification catalog](docs/spec/index.md)
 
 ## Team topology
 

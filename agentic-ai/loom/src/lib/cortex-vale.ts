@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { LoomFailureCode } from '../loom-failure.ts';
 import { CortexMarkdownInventory } from './cortex-markdown-files.ts';
+import { CortexDocumentPath } from '../../../../.cortex/teams/ai/dynamic-skills/cortex-document-map/scripts/src/cortex-document-structure.ts';
 import {
   type RepositoryCommandRequest,
   RepositoryCommand,
@@ -44,19 +45,26 @@ export class CortexValeInvocation {
         message: 'Vale 3.22.0 is required for Cortex Markdown linting.',
       });
     }
-    const markdownFiles =
-      CortexMarkdownInventory.listPersistentCortexMarkdownFiles(
-        args.cortexRoot,
-      ).filter((filePath) => {
-        const graphArgs: IsCanonicalKnowledgeGraphArgs = {
-          cortexRoot: args.cortexRoot,
-          filePath,
-        };
-        return (
-          new CortexKnowledgeGraphPath(graphArgs).role() ===
+    const selectedFiles =
+      path.resolve(args.cortexRoot) === path.resolve(args.repoRoot, '.cortex')
+        ? new CortexMarkdownInventory(args.repoRoot).repositoryFiles()
+        : CortexMarkdownInventory.listPersistentCortexMarkdownFiles(
+            args.cortexRoot,
+          );
+    const markdownFiles = selectedFiles.filter((filePath) => {
+      const graphArgs: IsCanonicalKnowledgeGraphArgs = {
+        cortexRoot: args.cortexRoot,
+        filePath,
+      };
+      return (
+        !path
+          .relative(args.repoRoot, filePath)
+          .split(path.sep)
+          .includes('.session') &&
+        new CortexKnowledgeGraphPath(graphArgs).role() ===
           CortexMarkdownRole.Article
-        );
-      });
+      );
+    });
     if (markdownFiles.length === 0) return ok();
     const lintArgs: RepositoryCommandRequest = {
       command: RepositoryCommandExecutable.Vale,
@@ -87,9 +95,17 @@ export class CortexKnowledgeGraphPath {
       .relative(args.cortexRoot, args.filePath)
       .split(path.sep)
       .join('/');
-    if (relativePath === 'index.md') {
-      return CortexMarkdownRole.KnowledgeGraph;
+    switch (
+      new CortexDocumentPath(
+        path.relative(path.dirname(args.cortexRoot), args.filePath),
+      ).isScopedGraphPath()
+    ) {
+      case true:
+        return CortexMarkdownRole.KnowledgeGraph;
+      case false:
+        break;
     }
+    if (relativePath === 'index.md') return CortexMarkdownRole.KnowledgeGraph;
     return /^(?:gizmo-prime|shared|teams\/(?:ai|dev-core|security|sre|web-dev))\/index\.md$/u.test(
       relativePath,
     )

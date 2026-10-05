@@ -64,10 +64,10 @@ invariants to the delivery owner for security-team acceptance.
 Task contracts may name these read-only authorities:
 
 - [Nook security architecture](../security/architecture/security-architecture.md)
-- [Identity, app keys, passkeys, and vault keys](../security/architecture/identity-vault-architecture.md)
-- [Secret store identity](../security/architecture/secret-store-identity.md)
-- [Vault session and lock](../security/architecture/vault-session-and-lock.md)
-- [Cryptography and protected material](../security/references/cryptography.md)
+- [Identity, app keys, passkeys, and vault keys](../../../nook-app/nook-platform/.cortex/docs/architecture/identity-vault-architecture.md)
+- [Secret store identity](../../../nook-app/nook-platform/nook-core/.cortex/docs/architecture/secret-store-identity.md)
+- [Vault session and lock](../../../nook-app/nook-platform/.cortex/docs/architecture/vault-session-and-lock.md)
+- [Cryptography and protected material](../../../nook-app/nook-platform/nook-auth2/.cortex/docs/spec/cryptography.md)
 
 Rust expertise does not transfer functional ownership. The consumer team keeps
 its capability semantics and acceptance contract.

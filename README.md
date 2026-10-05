@@ -24,7 +24,7 @@ There is no centrally hosted Nook account and no master password. The shipped
 applications keep multiple local identities in an independently protected
 browser keyring. Replicated identity control remains target architecture;
 identity records are not owned by a Nook account service. See the
-[identity and vault architecture](.cortex/teams/security/architecture/identity-vault-architecture.md)
+[identity and vault architecture](nook-app/nook-platform/.cortex/docs/architecture/identity-vault-architecture.md)
 for the implemented/target boundary.
 
 > [!WARNING]
@@ -278,12 +278,12 @@ and `auth/icloud`; portable provider policy remains in Rust.
 Deeper documentation lives in [`.cortex/`](.cortex/):
 
 - [Architecture](.cortex/shared/architecture/system.md)
-- [Vault event log](.cortex/teams/dev-core/design-docs/vault-event-log.md)
-- [Unified vault / local-first](.cortex/teams/dev-core/design-docs/unified-vault.md)
-- [Vault session and lock](.cortex/teams/security/architecture/vault-session-and-lock.md)
-- [Password manager](.cortex/teams/dev-core/product-specs/password-manager.md)
-- [Decentralized multi-device auth](.cortex/teams/dev-core/product-specs/decentralized-auth.md)
-- [Engineering principles](.cortex/teams/ai/design-docs/core-beliefs.md)
+- [Vault event log](nook-app/nook-platform/nook-event-log/.cortex/docs/architecture/vault-event-log.md)
+- [Unified vault / local-first](nook-app/nook-platform/.cortex/docs/architecture/unified-vault.md)
+- [Vault session and lock](nook-app/nook-platform/.cortex/docs/architecture/vault-session-and-lock.md)
+- [Password manager](nook-app/.cortex/docs/spec/password-manager.md)
+- [Decentralized multi-device auth](nook-app/nook-platform/nook-auth2/.cortex/docs/spec/decentralized-auth.md)
+- [Engineering principles](.cortex/teams/ai/docs/architecture/core-beliefs.md)
 - [Agent map](.cortex/AGENTS.md)
 
 Development issues are stored in the versioned
@@ -463,7 +463,7 @@ available for humans. Main-fix PRs use `ci:full-e2e` to request the
 Main-equivalent browser suites.
 
 Project-scoped module experts use stable semantic role names defined by the
-[Cortex registry](.cortex/teams/ai/architecture/module-experts.md). Universal
+[Cortex registry](.cortex/teams/ai/docs/architecture/module-experts.md). Universal
 worker behavior follows the [root Cortex contract](.cortex/AGENTS.md). The
 typed Loom catalog mirrors their roles and bounded read-only context.
 Run **`task loom:module-experts:validate`** to verify complete production-module
@@ -477,7 +477,7 @@ maintenance scopes do not pretend to own production modules. Run
 **`task loom:structural-experts:validate`** to verify the exact code, Cortex,
 and synthesis role contracts. Gizmo invokes these roles through the active
 harness. Every role remains nondelegating and read-only. See the
-[structural refactoring registry](.cortex/teams/ai/architecture/refactoring-experts.md)
+[structural refactoring registry](.cortex/teams/ai/docs/architecture/refactoring-experts.md)
 and [workflow](.cortex/teams/ai/workflows/structural-refactoring.md).
 
 ```sh

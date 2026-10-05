@@ -34,14 +34,14 @@ read-only unless an explicit expertise contract authorizes implementation.
 
 Task contracts may name these read-only authorities:
 
-- [Devices and access](../dev-core/product-specs/devices-and-access.md)
-- [Decentralized authentication](../dev-core/product-specs/decentralized-auth.md)
-- [Password unlock and device join](../dev-core/product-specs/password-envelope.md)
-- [SLIP-0039 recovery](../dev-core/product-specs/slip39-recovery.md)
-- [Vault event log](../dev-core/design-docs/vault-event-log.md)
-- [Browser extension](../web-dev/product-specs/browser-extension.md)
-- [Application isolation](../web-dev/product-specs/vault-app-isolation.md)
-- [ARC and Kata runner platform](../sre/design-docs/arc-kata-runner-platform.md)
+- [Devices and access](../../../nook-app/.cortex/docs/spec/devices-and-access.md)
+- [Decentralized authentication](../../../nook-app/nook-platform/nook-auth2/.cortex/docs/spec/decentralized-auth.md)
+- [Password unlock and device join](../../../nook-app/nook-platform/nook-auth2/.cortex/docs/spec/password-envelope.md)
+- [SLIP-0039 recovery](../../../nook-app/nook-platform/nook-auth2/.cortex/docs/spec/slip39-recovery.md)
+- [Vault event log](../../../nook-app/nook-platform/nook-event-log/.cortex/docs/architecture/vault-event-log.md)
+- [Browser extension](../../../nook-app/nook-web/nook-web-extension/.cortex/docs/spec/browser-extension.md)
+- [Application isolation](../../../nook-app/.cortex/docs/spec/vault-app-isolation.md)
+- [ARC and Kata runner platform](../sre/docs/architecture/arc-kata-runner-platform.md)
 
 ## Owned responsibilities
 

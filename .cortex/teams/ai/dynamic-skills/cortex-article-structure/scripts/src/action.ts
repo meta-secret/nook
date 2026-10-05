@@ -58,7 +58,7 @@ const CORTEX_MARKDOWN_PATH_SCHEMA = {
   type: 'string',
   maxUtf16CodeUnits: CORTEX_ARTICLE_PATH_LIMIT,
   pattern:
-    '^\\.cortex/(?!\\.\\.?/)(?!.*/\\.\\.?(?:/|$))(?!.*\\\\)(?!.*[\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e-\\u200f\\u2028-\\u202e\\u2066-\\u206f])[^/]+(?:/[^/]+)*\\.md$',
+    '^(?!\\.meta-cortex/)(?!\\.\\.?/)(?!.*/\\.\\.?(?:/|$))(?!.*\\\\)(?!.*[\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e-\\u200f\\u2028-\\u202e\\u2066-\\u206f])(?:[^/]+/)*\\.cortex/[^/]+(?:/[^/]+)*\\.md$',
 } as const;
 
 const HEADING_BLOCK_SCHEMA = {

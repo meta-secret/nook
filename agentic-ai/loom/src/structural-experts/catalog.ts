@@ -57,7 +57,7 @@ export const SYSTEM_COHERENCE_BEHAVIOR_CONTRACT = [
 const COMMON_CONTEXT = [
   '.cortex/AGENTS.md',
   '.cortex/index.md',
-  '.cortex/teams/ai/architecture/refactoring-experts.md',
+  '.cortex/teams/ai/docs/architecture/refactoring-experts.md',
   '.cortex/teams/ai/workflows/structural-refactoring.md',
   '.cortex/gizmo-prime/workflows/subagent-delegation.md',
 ] as const;
@@ -94,6 +94,15 @@ const CORTEX_REFACTORING_FILES = [
 ] as const;
 
 const CORTEX_REFACTORING_DESCENDANT_ROOTS = [
+  'agentic-ai/loom/.cortex',
+  'nook-app/.cortex',
+  'nook-app/nook-platform/.cortex',
+  'nook-app/nook-platform/nook-auth2/.cortex',
+  'nook-app/nook-platform/nook-companion-core/.cortex',
+  'nook-app/nook-platform/nook-core/.cortex',
+  'nook-app/nook-platform/nook-event-log/.cortex',
+  'nook-app/nook-web/.cortex',
+  'nook-app/nook-web/nook-web-extension/.cortex',
   '.cortex',
   '.github/workflows',
   '.task',
@@ -132,7 +141,18 @@ export const STRUCTURAL_EXPERT_CATALOG: readonly StructuralExpertProfile[] = [
     requiredContextPaths: COMMON_CONTEXT,
     allowedEvidenceFiles: CORTEX_REFACTORING_FILES,
     allowedEvidenceDescendantRoots: CORTEX_REFACTORING_DESCENDANT_ROOTS,
-    excludedPaths: ['.cortex/.session'],
+    excludedPaths: [
+      '.cortex/.session',
+      'agentic-ai/loom/.cortex/.session',
+      'nook-app/.cortex/.session',
+      'nook-app/nook-platform/.cortex/.session',
+      'nook-app/nook-platform/nook-auth2/.cortex/.session',
+      'nook-app/nook-platform/nook-companion-core/.cortex/.session',
+      'nook-app/nook-platform/nook-core/.cortex/.session',
+      'nook-app/nook-platform/nook-event-log/.cortex/.session',
+      'nook-app/nook-web/.cortex/.session',
+      'nook-app/nook-web/nook-web-extension/.cortex/.session',
+    ],
     runtimeBehaviorContract: '',
     validationSelectors: ['loom:cortex-audit', 'loom:verify'],
   },

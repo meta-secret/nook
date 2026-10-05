@@ -44,7 +44,9 @@ export class StructuralExpertsRequestCodecScenario {
       ...StructuralExpertsRequestCodecScenario.evidenceRequest(),
       expert: 'cortex_refactoring_expert',
       task: 'inspect-cortex-structure',
-      evidencePaths: ['.cortex/teams/ai/architecture/refactoring-experts.md'],
+      evidencePaths: [
+        '.cortex/teams/ai/docs/architecture/refactoring-experts.md',
+      ],
     };
   }
 
@@ -221,3 +223,34 @@ type ChildProjectionFixtureRequest = {
   readonly task: string;
   readonly expert: string;
 };
+
+test('admits migrated local Cortex evidence while preserving bounded roots and session exclusions', () => {
+  const request: StructuralEvidenceInvocationRequest = {
+    ...StructuralExpertsRequestCodecScenario.cortexEvidenceRequest(),
+    evidencePaths: [
+      'nook-app/nook-platform/nook-auth2/.cortex/docs/spec/password-envelope.md',
+    ],
+  };
+  expect(
+    StructuralExpertRequestDecoder.decodeStructuralExpertInvocationRequest(
+      JSON.stringify(request),
+    ),
+  ).toEqual(request);
+  for (const evidencePath of [
+    'nook-app/nook-platform/nook-auth2/.cortex/.session/transient.md',
+    'agentic-ai/loom/.cortex/.session/transient.md',
+    'nook-app/nook-platform/nook-auth2/src/auth/password_envelope.rs',
+    'node_modules/dependency/.cortex/docs/spec/policy.md',
+    '.meta-cortex/teams/dev-team/AGENTS.md',
+  ]) {
+    const excludedRequest: StructuralEvidenceInvocationRequest = {
+      ...request,
+      evidencePaths: [evidencePath],
+    };
+    expect(() =>
+      StructuralExpertRequestDecoder.decodeStructuralExpertInvocationRequest(
+        JSON.stringify(excludedRequest),
+      ),
+    ).toThrow();
+  }
+});

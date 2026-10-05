@@ -24,7 +24,7 @@ diagnostics, and unresolved blockers through Team Gizmo.
 ## Provider provisioning
 
 Nook retains provider-specific provisioning through its
-[infrastructure runbook](../references/infrastructure-provider-operations.md).
+[infrastructure runbook](../docs/spec/infrastructure-provider-operations.md).
 Use upstream Docker or Kubernetes expertise when the assigned work reaches
 those subjects. Provisioning does not authorize a new release pipeline or
 changes outside the assigned infrastructure scope.

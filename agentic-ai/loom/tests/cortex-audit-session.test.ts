@@ -667,3 +667,37 @@ ${gizmoIndexRows}
     rmSync(repoRoot, removeOptions);
   }
 });
+
+test('discovers project-local Cortex without scanning framework, dependencies, or symlinks', () => {
+  const repository = mkdtempSync(path.join(tmpdir(), 'loom-local-context-'));
+  const contexts = [
+    '.cortex',
+    'nook-app/.cortex/docs/spec',
+    'nook-app/nook-platform/nook-core/.cortex/docs/architecture',
+    '.meta-cortex/teams/project/.cortex',
+    'node_modules/dependency/.cortex',
+    '.git/fixture/.cortex',
+    '.vale/fixtures/synthetic/.cortex',
+  ];
+  try {
+    for (const context of contexts) {
+      const directory = path.join(repository, context);
+      mkdirSync(directory, { recursive: true });
+      writeFileSync(path.join(directory, 'index.md'), '# Context\n');
+    }
+    symlinkSync(
+      path.join(repository, '.meta-cortex'),
+      path.join(repository, 'linked-framework'),
+    );
+    const files = new CortexMarkdownInventory(repository)
+      .repositoryFiles()
+      .map((file) => path.relative(repository, file));
+    expect(files).toEqual([
+      '.cortex/index.md',
+      'nook-app/.cortex/docs/spec/index.md',
+      'nook-app/nook-platform/nook-core/.cortex/docs/architecture/index.md',
+    ]);
+  } finally {
+    rmSync(repository, { recursive: true, force: true });
+  }
+});

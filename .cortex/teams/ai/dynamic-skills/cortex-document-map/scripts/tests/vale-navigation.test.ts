@@ -111,4 +111,7 @@ test('does not exempt an ordinary nested index document', () => {
   const result =
     CortexDocumentMapValeNavigationScenario.runOrdinaryGraphFixture();
   expect(result.exitCode).not.toBe(0);
+  expect(new TextDecoder().decode(result.stderr)).toContain(
+    'Nook.CortexNavigation',
+  );
 });

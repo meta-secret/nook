@@ -12,7 +12,7 @@ Load only the authority needed for the assigned Docker cache packet.
 
 ## Cache authorities
 
-- [Engineering harness](../architecture/engineering-harness.md)
+- [Engineering harness](../docs/architecture/engineering-harness.md)
 - [Docker container and harness hygiene](../dynamic-skills/docker-container-harness.md)
 - [GitHub Actions execution and validation](../dynamic-skills/github-actions-only-validation.md)
 - [CI pipeline](../workflows/ci-pipeline.md)

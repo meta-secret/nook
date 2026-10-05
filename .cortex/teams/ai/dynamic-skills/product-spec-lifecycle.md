@@ -11,7 +11,7 @@ This is a P1 documentation integrity rule:
 
 ## Purpose
 
-Keep product specifications in the responsible team's `product-specs/`
+Keep product specifications in the owning project's `.cortex/docs/spec/`
 directory and in the active loop of every AI agent.
 
 Product specifications are the living system of record for:
@@ -46,7 +46,7 @@ Before planning or editing code for any product feature:
 
 1. Select the responsible team through
    [Engineering team ownership](../../../gizmo-prime/architecture/team-ownership.md).
-2. Search that team's index and the global [product catalog](../../../shared/product-specs/index.md).
+2. Search that team's index and the global [product catalog](../../../shared/docs/spec/index.md).
 3. Read the owning specification for the feature, item type, or workflow.
 4. Understand existing invariants, user flows, and acceptance criteria.
 5. Align the task plan with the specification before making changes.
@@ -64,17 +64,19 @@ Capture durable product knowledge in the owning specification in the same PR:
 
 If no specification exists for a new feature or item type:
 
-1. Create the specification in the responsible team's `product-specs/` directory.
+1. Create the specification in the owning project's `.cortex/docs/spec/` directory.
+   Repository-wide tooling specifications remain in their root owner context.
 2. Follow [cortex-writer.md](cortex-writer.md) and
    [cortex-article-structure/SKILL.md](cortex-article-structure/SKILL.md).
-3. Register the new specification in [`.cortex/shared/product-specs/index.md`](../../../shared/product-specs/index.md).
-4. Update navigation entries in the owning team index.
+3. Register the new specification in its owning `docs/spec/index.md`.
+   Route that catalog through the global [product catalog](../../../shared/docs/spec/index.md).
+4. Update navigation routes from the owning team to that project catalog.
 
 ### 3. Maintain specification status and consistency
 
 Keep specifications accurate and current:
 
-- Mark status accurately in [`.cortex/shared/product-specs/index.md`](../../../shared/product-specs/index.md) (`Draft`, `Active`, `Implemented`, `Verified`, `Historical`).
+- Mark status accurately in the owning specification catalog (`Draft`, `Active`, `Implemented`, `Verified`, `Historical`).
 - Garbage-collect obsolete product claims under [cortex-consistency](cortex-consistency/SKILL.md).
 - Ensure code, tests, and specifications agree.
 
@@ -86,8 +88,8 @@ Applies to:
 - Vault item types, fields, and validation rules.
 - Authentication, enrollment, device joining, and recovery user flows.
 - Changes to feature requirements discussed in user chat or PR comments.
-- All team-owned `product-specs/` files under `.cortex/teams/dev-core/`,
-  `.cortex/teams/sre/`, and `.cortex/teams/web-dev/`.
+- All project-owned `.cortex/docs/spec/` product files and repository-wide
+  specifications retained in their root owner context.
 
 Does not apply to:
 
@@ -102,26 +104,26 @@ Before:
 - User explains in chat that secure notes must support search by custom tags.
 - Agent adds the tag search in code and tests, then returns the exact feature
   branch to Gizmo for remote compilation and feature pull-request delivery.
-- `.cortex/teams/dev-core/product-specs/secure-notes.md` is never updated and remains unaware of tag search.
+- `nook-app/nook-platform/nook-core/.cortex/docs/spec/secure-notes.md` is never updated and remains unaware of tag search.
 
 After:
 
 - User explains tag search requirements for secure notes in chat.
-- Agent reads `.cortex/teams/dev-core/product-specs/secure-notes.md`.
+- Agent reads `nook-app/nook-platform/nook-core/.cortex/docs/spec/secure-notes.md`.
 - Agent implements tag search in code and domain tests.
-- Agent updates `.cortex/teams/dev-core/product-specs/secure-notes.md` to document tag search behavior and rules in the same feature delivery.
+- Agent updates `nook-app/nook-platform/nook-core/.cortex/docs/spec/secure-notes.md` to document tag search behavior and rules in the same feature delivery.
 
 Before:
 
 - A PR review thread decides that credit card items must validate expiration month bounds (1–12).
 - Agent adds the validation to Rust code and resolves the comment.
-- `.cortex/teams/dev-core/product-specs/credit-card-items.md` is left unchanged.
+- `nook-app/nook-platform/nook-core/.cortex/docs/spec/credit-card-items.md` is left unchanged.
 
 After:
 
 - Agent fixes the code and adds regression tests.
 - Agent updates the validation rules section in
-  `.cortex/teams/dev-core/product-specs/credit-card-items.md` in the same feature
+  `nook-app/nook-platform/nook-core/.cortex/docs/spec/credit-card-items.md` in the same feature
   delivery.
 
 ## Application Checklist
@@ -132,7 +134,8 @@ After:
       acceptance criteria.
 - [ ] Update the specification when new product knowledge is gained from chat, tasks, or PR feedback.
 - [ ] Create a new specification file if the feature or item type is new.
-- [ ] Update [`.cortex/shared/product-specs/index.md`](../../../shared/product-specs/index.md) status and description.
+- [ ] Update the owning specification catalog status and description.
+- [ ] Keep its route from the global [product catalog](../../../shared/docs/spec/index.md) current.
 - [ ] Verify that specification, code, and tests agree.
 - [ ] Apply [cortex-writer.md](cortex-writer.md) to all specification edits.
 

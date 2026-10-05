@@ -344,11 +344,12 @@ export class CortexIdentifierCatalog {
     if (
       extra.length > 0 ||
       !relativePath ||
-      !relativePath.startsWith('.cortex/') ||
+      !/(?:^|\/)\.cortex\//u.test(relativePath) ||
       !relativePath.endsWith('.md') ||
       locatorSegments.includes('.session') ||
       locatorSegments.includes('scripts') ||
-      locatorSegments.includes('node_modules')
+      locatorSegments.includes('node_modules') ||
+      locatorSegments.includes('.meta-cortex')
     ) {
       args.findings.push(
         CortexIdentifierCatalog.finding(
@@ -359,7 +360,11 @@ export class CortexIdentifierCatalog {
     }
     const realRepoRoot = realpathSync(args.repoRoot);
     const absolutePath = path.resolve(realRepoRoot, relativePath);
-    const cortexRoot = `${realpathSync(path.resolve(realRepoRoot, '.cortex'))}${path.sep}`;
+    const cortexSegments = locatorSegments.slice(
+      0,
+      locatorSegments.indexOf('.cortex') + 1,
+    );
+    const cortexRoot = `${path.resolve(realRepoRoot, ...cortexSegments)}${path.sep}`;
     if (path.posix.normalize(relativePath) !== relativePath) {
       args.findings.push(
         CortexIdentifierCatalog.finding(
@@ -386,7 +391,10 @@ export class CortexIdentifierCatalog {
       return;
     }
     const realTarget = realpathSync(absolutePath);
-    if (!realTarget.startsWith(cortexRoot)) {
+    if (
+      !cortexRoot.startsWith(`${realRepoRoot}${path.sep}`) ||
+      !realTarget.startsWith(cortexRoot)
+    ) {
       args.findings.push(
         CortexIdentifierCatalog.finding(
           `Cortex locator ${args.entry.locator} escapes the Cortex root.`,

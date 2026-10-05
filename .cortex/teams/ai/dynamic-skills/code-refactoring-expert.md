@@ -33,7 +33,7 @@ It does not invent requirements, apply patches, weaken tests, schedule work, or
 mutate lifecycle state.
 
 Follow the canonical
-[structural expert registry](../architecture/refactoring-experts.md) and
+[structural expert registry](../docs/architecture/refactoring-experts.md) and
 [workflow](../workflows/structural-refactoring.md).
 Internal Team Gizmo and Team Agent handoffs follow the root
 [Agent Derailment Circuit Breaker](../../../CIRCUIT-BREAKER.md).

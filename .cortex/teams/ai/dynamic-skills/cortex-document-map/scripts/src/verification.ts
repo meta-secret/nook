@@ -253,6 +253,12 @@ export class CortexDocumentMapVerifier {
     for (const graphPath of OWNER_GRAPHS) {
       const [indexedPaths = []] = [indexedByGraph.get(graphPath)];
       for (const indexedPath of indexedPaths) {
+        switch (new CortexDocumentPath(indexedPath).isKnowledgeGraphPath()) {
+          case true:
+            continue;
+          case false:
+            break;
+        }
         const indexedOwner = new CortexDocumentPath(indexedPath).graphOwner();
         const graphOwner = new CortexDocumentPath(graphPath).graphOwner();
         if (indexedOwner === false || indexedOwner === graphOwner) continue;
@@ -265,11 +271,14 @@ export class CortexDocumentMapVerifier {
       }
     }
     for (const indexedPath of rootIndexed) {
-      const bypassesOwner = OWNER_GRAPHS.some(
-        (graphPath) =>
-          indexedPath.startsWith(`${path.posix.dirname(graphPath)}/`) &&
-          indexedPath !== graphPath,
-      );
+      const bypassesOwner =
+        (new CortexDocumentPath(indexedPath).isProjectContextPath() &&
+          !new CortexDocumentPath(indexedPath).isKnowledgeGraphPath()) ||
+        OWNER_GRAPHS.some(
+          (graphPath) =>
+            indexedPath.startsWith(`${path.posix.dirname(graphPath)}/`) &&
+            indexedPath !== graphPath,
+        );
       if (!bypassesOwner) continue;
       this.add(args.findings)({
         code: CortexStructureFindingCode.InvalidIndexEntry,
@@ -310,7 +319,10 @@ export class CortexDocumentMapVerifier {
         continue;
       }
       const [target = false] = [args.catalog.get(resolved.target)];
-      if (!resolved.target.startsWith('.cortex/')) {
+      if (
+        !resolved.target.startsWith('.cortex/') &&
+        !new CortexDocumentPath(resolved.target).isProjectContextPath()
+      ) {
         continue;
       }
       if (target === false) {
@@ -423,7 +435,12 @@ export class CortexDocumentMapVerifier {
     const normalized = value.replace(/\\/gu, '/');
     if (normalized.startsWith('.cortex/')) return normalized;
     if (normalized.startsWith('./.cortex/')) return normalized.slice(2);
-    return `.cortex/${normalized}`;
+    switch (new CortexDocumentPath(normalized).isProjectContextPath()) {
+      case true:
+        return normalized;
+      case false:
+        return `.cortex/${normalized}`;
+    }
   }
 
   private links(root: Root): Link[] {

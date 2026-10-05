@@ -257,5 +257,5 @@ added" in an event-log sync flow.
 **Note:** `connect` / `vault connected` is emitted by `loadDb` (provider unlock
 path), not device-key local vault creation (`vault-local` + `wasm-connect` instead).
 
-See also: [rust-wasm.md](../../../../.cortex/teams/dev-core/references/rust-wasm.md), [bun-svelte.md](../../../../.cortex/teams/web-dev/references/bun-svelte.md),
+See also: [rust-wasm.md](../../../nook-platform/.cortex/docs/spec/rust-wasm.md), [bun-svelte.md](../../../nook-web/.cortex/docs/spec/bun-svelte.md),
 [CI pipeline](../../../../.cortex/teams/sre/workflows/ci-pipeline.md).

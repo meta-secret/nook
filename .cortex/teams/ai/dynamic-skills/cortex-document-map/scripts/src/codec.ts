@@ -484,7 +484,7 @@ const FINDING_KEYS = ['code', 'file', 'line', 'message'] as const;
 const UTF8_ENCODER = new TextEncoder();
 
 const CORTEX_PATH =
-  /^\.cortex\/(?!\.\.?\/)(?!.*\/\.\.?(?:\/|$))(?!.*\\)(?!.*[\u0000-\u001f\u007f-\u009f\u061c\u200e-\u200f\u2028-\u202e\u2066-\u206f])[^/]+(?:\/[^/]+)*\.md$/u;
+  /^(?!\.meta-cortex\/)(?!\.\.?\/)(?!.*\/\.\.?(?:\/|$))(?!.*\\)(?!.*[\u0000-\u001f\u007f-\u009f\u061c\u200e-\u200f\u2028-\u202e\u2066-\u206f])(?:[^/]+\/)*\.cortex\/[^/]+(?:\/[^/]+)*\.md$/u;
 
 export class CortexDocumentMapValeReportDecoder {
   private constructor(private readonly serialized: string) {}

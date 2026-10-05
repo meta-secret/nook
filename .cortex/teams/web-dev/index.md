@@ -8,12 +8,12 @@ Load only the category that owns the assigned browser-facing functionality.
 
 ## Product specifications
 
-- [Browser extension](product-specs/browser-extension.md)
-- [Simple and Sentinel application isolation](product-specs/vault-app-isolation.md)
+- [Application specifications](../../../nook-app/.cortex/docs/spec/index.md)
+- [Browser extension specifications](../../../nook-app/nook-web/nook-web-extension/.cortex/docs/spec/index.md)
 
 ## Interaction design
 
-- [Website passkey manager](design-docs/passkey-manager.md)
+- [Browser extension architecture](../../../nook-app/nook-web/nook-web-extension/.cortex/docs/architecture/index.md)
 
 ## Frontend skills
 
@@ -38,7 +38,7 @@ when the selected authority links them as read-only engineering policy.
 
 ## Frontend references
 
-- [Svelte, Vite, and Bun](references/bun-svelte.md)
+- [Web specifications](../../../nook-app/nook-web/.cortex/docs/spec/index.md)
 
 ## Team topology
 
