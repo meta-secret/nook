@@ -143,7 +143,7 @@ test('returns failed setup when passkey association persistence fails', async ()
 test('generated recorder rejects an unprotected manager with a JavaScript error', async () => {
   const manager = new NookVaultManager()
   try {
-    await expect(
+    expect(
       manager.record_extension_passkey_creation('Extension passkey'),
     ).rejects.toBeInstanceOf(Error)
   } finally {
