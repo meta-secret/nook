@@ -19,8 +19,8 @@ use zeroize::{Zeroize, Zeroizing};
 
 // Version 2 requires an app-bound protection descriptor. Version 1 handoffs
 // are rejected; no legacy path infers protection from identity membership.
-#[derive(Clone, Copy, Serialize, Deserialize)]
-#[serde(try_from = "u8", into = "u8")]
+#[derive(Clone, Copy, Deserialize)]
+#[serde(try_from = "u8")]
 enum ExtensionIdentityHandoffVersion {
     AppProtectionDescriptor,
 }
@@ -39,10 +39,13 @@ impl TryFrom<u8> for ExtensionIdentityHandoffVersion {
     }
 }
 
-impl From<ExtensionIdentityHandoffVersion> for u8 {
-    fn from(version: ExtensionIdentityHandoffVersion) -> Self {
-        match version {
-            ExtensionIdentityHandoffVersion::AppProtectionDescriptor => 2,
+impl Serialize for ExtensionIdentityHandoffVersion {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            Self::AppProtectionDescriptor => serializer.serialize_u8(2),
         }
     }
 }
@@ -82,6 +85,7 @@ impl ExtensionIdentityHandoffMaterial {
         &self.protection
     }
 
+    #[must_use]
     pub fn into_parts(mut self) -> (DeviceIdentity, String) {
         let signing_seed = mem::take(&mut self.signing_seed.0);
         (self.identity, signing_seed)
@@ -360,9 +364,9 @@ mod tests {
     use super::{
         CheckedExtensionIdentityOpen, CheckedExtensionIdentitySeal,
         ExtensionIdentityHandoffMaterial, ExtensionIdentityHandoffOpen,
-        ExtensionIdentityHandoffPayload, ExtensionIdentityHandoffSeal, HandoffEventLog,
-        HandoffNonce, HandoffSigningSeedChoice, HandoffSigningSeedSelection, SensitiveSigningSeed,
-        StoredSigningSeed,
+        ExtensionIdentityHandoffPayload, ExtensionIdentityHandoffSeal,
+        ExtensionIdentityHandoffVersion, HandoffEventLog, HandoffNonce, HandoffSigningSeedChoice,
+        HandoffSigningSeedSelection, SensitiveSigningSeed, StoredSigningSeed,
     };
     use crate::device_access::{AppProtectionAssociation, AppProtectionDescriptor};
     use crate::{
@@ -371,6 +375,20 @@ mod tests {
     };
     use std::ptr;
     use zeroize::{Zeroize, Zeroizing};
+
+    #[test]
+    fn handoff_version_preserves_numeric_wire_identity() -> serde_json::Result<()> {
+        let version = ExtensionIdentityHandoffVersion::AppProtectionDescriptor;
+        assert_eq!(serde_json::to_string(&version)?, "2");
+        assert!(matches!(
+            serde_json::from_str::<ExtensionIdentityHandoffVersion>("2")?,
+            ExtensionIdentityHandoffVersion::AppProtectionDescriptor
+        ));
+        for unsupported in ["1", "3", "\"2\""] {
+            assert!(serde_json::from_str::<ExtensionIdentityHandoffVersion>(unsupported).is_err());
+        }
+        Ok(())
+    }
 
     struct HandoffFixture {
         identity: DeviceIdentity,

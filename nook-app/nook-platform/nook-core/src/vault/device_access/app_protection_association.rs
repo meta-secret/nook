@@ -42,6 +42,7 @@ pub struct AppProtectionDescriptor {
     pub association: AppProtectionAssociation,
 }
 
+#[derive(Clone, Copy)]
 pub struct AppProtectionDescriptorSource<'a> {
     pub app_id: &'a AppId,
     pub wrapped: &'a WrappedDeviceIdentity,
@@ -161,15 +162,18 @@ mod tests {
                 },
             )?);
         }
-        assert_eq!(descriptors[0].app_id, *browser.app_id());
-        assert_eq!(descriptors[1].app_id, *extension.app_id());
+        let [browser_descriptor, extension_descriptor] = descriptors.as_slice() else {
+            anyhow::bail!("expected browser and extension descriptors");
+        };
+        assert_eq!(browser_descriptor.app_id, *browser.app_id());
+        assert_eq!(extension_descriptor.app_id, *extension.app_id());
         let AppProtectionAssociation::PasskeyStandard(browser_profile) =
-            &descriptors[0].association
+            &browser_descriptor.association
         else {
             anyhow::bail!("expected browser passkey");
         };
         let AppProtectionAssociation::PasskeyStandard(extension_profile) =
-            &descriptors[1].association
+            &extension_descriptor.association
         else {
             anyhow::bail!("expected extension passkey");
         };
@@ -178,7 +182,7 @@ mod tests {
             extension_profile.credential_fingerprint
         );
         assert!(extension_profile.nook_name.is_empty());
-        let json = serde_json::to_string(&descriptors[1])?;
+        let json = serde_json::to_string(extension_descriptor)?;
         assert!(!json.contains("prfInput"));
         assert!(!json.contains("credentialId"));
         assert!(!json.contains("ciphertext"));
