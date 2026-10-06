@@ -1,3 +1,9 @@
+import { Effect } from 'effect'
+import {
+  ExtensionPasskeySetup,
+  type ExtensionPasskeySetupRequest,
+  type ExtensionPasskeySetupFailure,
+} from './extension-passkey-setup'
 import { err, ok, type Result } from 'neverthrow'
 import {
   SessionOperationFailure,
@@ -85,6 +91,15 @@ type PasskeySetupResponse = {
   readonly ok: true
   readonly setup: PasskeySetup
 }
+type ExtensionPasskeySetupResultProjection = {
+  readonly onFailure: (
+    failure: ExtensionPasskeySetupFailure,
+  ) => Result<DeviceActivationResponse, SessionOperationFailure>
+  readonly onSuccess: (
+    device: DeviceResult,
+  ) => Result<DeviceActivationResponse, SessionOperationFailure>
+}
+
 type DeviceActivationResponse = {
   readonly ok: true
   readonly device: DeviceResult
@@ -310,11 +325,6 @@ export async function handleSessionMessage({
       }
       case ExtensionSessionMessageType.FinishPasskeySetup: {
         const payload = message.payload
-        const activeManager = await getManager()
-        const credentialId = PasskeyBrowserBytes.fromWire(payload.credentialId)
-        const userHandle = PasskeyBrowserBytes.fromWire(payload.userHandle)
-        const prfInput = PasskeyBrowserBytes.fromWire(payload.prfInput)
-        const prfOutput = PasskeyBrowserBytes.fromWire(payload.prfOutput)
         const deviceMode = payload.deviceMode as DeviceMode
         if (
           deviceMode !== DeviceMode.Standard &&
@@ -326,25 +336,22 @@ export async function handleSessionMessage({
             ),
           )
         }
-        try {
-          await activeManager.finish_device_protection_with_mode(
-            credentialId,
-            userHandle,
-            prfInput,
-            prfOutput,
-            deviceMode,
-          )
-        } finally {
-          credentialId.fill(0)
-          userHandle.fill(0)
-          prfInput.fill(0)
-          prfOutput.fill(0)
+        const setupRequest: ExtensionPasskeySetupRequest = { payload, context }
+        const projection: ExtensionPasskeySetupResultProjection = {
+          onFailure: () =>
+            err(
+              new SessionOperationFailure(SessionOperationFailureKind.Failed),
+            ),
+          onSuccess: (device) => {
+            const response: DeviceActivationResponse = { ok: true, device }
+            return ok(response)
+          },
         }
-        const response: DeviceActivationResponse = {
-          ok: true,
-          device: await activateSession(),
-        }
-        return ok(response)
+        return Effect.runPromise(
+          new ExtensionPasskeySetup(setupRequest)
+            .run()
+            .pipe(Effect.match(projection)),
+        )
       }
       case ExtensionSessionMessageType.RecoverPasskey: {
         const payload = message.payload
