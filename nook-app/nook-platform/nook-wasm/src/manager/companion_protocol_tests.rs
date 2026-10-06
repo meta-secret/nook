@@ -438,9 +438,15 @@ impl ReplayEndpoint {
         operation: CompanionExtensionSealOperation<'_>,
     ) -> Result<CompanionIdentityHandoffResponse, CompanionOperationError> {
         let authorized = self.authorize_handoff(operation.authorization)?;
+        // This in-memory protocol fixture has no stored local protector metadata.
+        let protection = nook_core::AppProtectionDescriptor {
+            app_id: operation.manager.device_identity()?.app_id().clone(),
+            association: nook_core::AppProtectionAssociation::Unknown,
+        };
         NookCompanionExtensionEndpoint::seal_authorized_loaded(CompanionAuthorizedSealOperation {
             manager: operation.manager,
             authorized,
+            protection,
         })
     }
 }

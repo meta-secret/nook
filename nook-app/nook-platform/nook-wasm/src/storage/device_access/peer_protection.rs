@@ -11,6 +11,7 @@ use nook_core::{
 
 pub(crate) struct PeerProtectionStore;
 
+#[derive(Clone, Copy)]
 struct PeerProtectionDecodeRequest<'a> {
     app_id: &'a AppId,
     value: &'a str,

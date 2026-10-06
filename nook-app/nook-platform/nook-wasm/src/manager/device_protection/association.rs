@@ -1,10 +1,12 @@
 //! Local wrapper authority for descriptive extension protection metadata.
-use super::*;
-use crate::storage::device_access::DeviceAccessProfileKey;
+use crate::storage::device_access::{self, DeviceAccessProfileKey, PasskeyCreationCeremony};
+use crate::storage::identity_record::ProtectedIdentityLookup;
+use crate::{NookError, NookVaultManager};
 use nook_core::{
     AppProtectionAppBinding, AppProtectionAppBindingRequest, AppProtectionDescriptor,
-    AppProtectionDescriptorSource, PasskeyBrowserObservation,
+    AppProtectionDescriptorSource, PasskeyAccessProfile, PasskeyBrowserObservation,
 };
+use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 #[wasm_bindgen]
 impl NookVaultManager {
     #[wasm_bindgen]

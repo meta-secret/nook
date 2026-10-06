@@ -1,9 +1,25 @@
 //! Peer descriptors describe protection without granting local unlock.
-use super::NookIdentityMemberSnapshot;
+use super::vault_app_inventory::BrowserIdentityVaultAppInventory;
+use super::{NookIdentityMemberSnapshot, NookIdentitySnapshot};
 use crate::NookError;
 use crate::storage::device_access::peer_protection::PeerProtectionStore;
-use nook_core::{AppId, AppProtectionAssociation, DeviceAccessProtectionKind};
+use nook_core::{AppId, AppProtectionAssociation};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
+
+impl NookIdentitySnapshot {
+    pub(super) async fn with_app_protection_inventory(
+        self,
+        request: BrowserIdentityVaultAppInventory<'_>,
+    ) -> Result<Self, JsError> {
+        let mut snapshot = self.with_vault_app_inventory(request).await?;
+        let mut members = Vec::new();
+        for member in snapshot.members {
+            members.push(member.with_peer_protection().await?);
+        }
+        snapshot.members = members;
+        Ok(snapshot)
+    }
+}
 
 impl NookIdentityMemberSnapshot {
     pub(super) async fn with_peer_protection(mut self) -> Result<Self, crate::NookError> {
@@ -47,8 +63,8 @@ mod tests {
     use super::*;
     use crate::identity_record::{CurrentAppIdentity, NookIdentitySnapshot};
     use nook_core::{
-        AppKey, AppProtectionAssociation, AppProtectionDescriptor, IdentityRecord,
-        MemberLabelState, PasskeyAccessProfile,
+        AppKey, AppProtectionAssociation, AppProtectionDescriptor, DeviceAccessProtectionKind,
+        IdentityRecord, MemberLabelState, PasskeyAccessProfile,
     };
     use wasm_bindgen_test::wasm_bindgen_test;
 

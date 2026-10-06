@@ -521,17 +521,12 @@ impl NookIdentityDirectorySnapshot {
         for record in selected_identities {
             let mut snapshot =
                 NookIdentitySnapshot::from_record(record, &current_app, &local_protections)
-                    .with_vault_app_inventory(BrowserIdentityVaultAppInventory {
+                    .with_app_protection_inventory(BrowserIdentityVaultAppInventory {
                         identity: record,
                         current_app: &current_app,
                         local_protections: &local_protections,
                     })
                     .await?;
-            let mut members = Vec::new();
-            for member in snapshot.members {
-                members.push(member.with_peer_protection().await?);
-            }
-            snapshot.members = members;
             snapshot.vaults = NookDeviceVaultAccess::device_vault_access_for_identity(
                 BrowserDeviceVaultAccessForIdentity {
                     identity: record,
