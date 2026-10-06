@@ -7,10 +7,12 @@
 
 use std::{fmt, mem};
 
+use crate::device_access::{
+    AppProtectionAppBinding, AppProtectionAppBindingRequest, AppProtectionDescriptor,
+};
 use crate::{
-    AgeArmoredCiphertext, AppProtectionAppBinding, AppProtectionAppBindingRequest, DeviceId,
-    DeviceIdentity, DeviceIdentitySecret, DevicePublicKey, DeviceSigningPublicKey,
-    ExtensionIdentityHandoffError, SigningIdentity, VaultResult,
+    AgeArmoredCiphertext, DeviceId, DeviceIdentity, DeviceIdentitySecret, DevicePublicKey,
+    DeviceSigningPublicKey, ExtensionIdentityHandoffError, SigningIdentity, VaultResult,
 };
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, Zeroizing};
@@ -55,7 +57,7 @@ struct ExtensionIdentityHandoffPayload {
     device_signing_public_key: DeviceSigningPublicKey,
     identity_private_key: DeviceIdentitySecret,
     signing_seed: SensitiveSigningSeed,
-    protection: crate::AppProtectionDescriptor,
+    protection: AppProtectionDescriptor,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -71,12 +73,12 @@ impl Drop for SensitiveSigningSeed {
 pub struct ExtensionIdentityHandoffMaterial {
     identity: DeviceIdentity,
     signing_seed: SensitiveSigningSeed,
-    protection: crate::AppProtectionDescriptor,
+    protection: AppProtectionDescriptor,
 }
 
 impl ExtensionIdentityHandoffMaterial {
     #[must_use]
-    pub fn protection(&self) -> &crate::AppProtectionDescriptor {
+    pub fn protection(&self) -> &AppProtectionDescriptor {
         &self.protection
     }
 
@@ -218,7 +220,7 @@ pub struct ExtensionIdentityHandoffSeal<'a> {
     pub signing_seed: &'a str,
     pub recipient_public_key: &'a DevicePublicKey,
     pub nonce: &'a str,
-    pub protection: &'a crate::AppProtectionDescriptor,
+    pub protection: &'a AppProtectionDescriptor,
 }
 
 impl<'a> ExtensionIdentityHandoffSeal<'a> {
@@ -340,7 +342,7 @@ impl ExtensionIdentityHandoffOpen<'_> {
 struct CheckedExtensionIdentityOpen {
     identity: DeviceIdentity,
     signing_seed: SensitiveSigningSeed,
-    protection: crate::AppProtectionDescriptor,
+    protection: AppProtectionDescriptor,
 }
 
 impl CheckedExtensionIdentityOpen {
@@ -362,10 +364,10 @@ mod tests {
         HandoffNonce, HandoffSigningSeedChoice, HandoffSigningSeedSelection, SensitiveSigningSeed,
         StoredSigningSeed,
     };
+    use crate::device_access::{AppProtectionAssociation, AppProtectionDescriptor};
     use crate::{
-        AgeArmoredCiphertext, AppProtectionAssociation, DeviceIdentity, DevicePublicKey,
-        DeviceSigningPublicKey, ExtensionIdentityHandoffError, SigningIdentity, SigningSeedHex,
-        VaultError, VaultResult,
+        AgeArmoredCiphertext, DeviceIdentity, DevicePublicKey, DeviceSigningPublicKey,
+        ExtensionIdentityHandoffError, SigningIdentity, SigningSeedHex, VaultError, VaultResult,
     };
     use std::ptr;
     use zeroize::{Zeroize, Zeroizing};
@@ -378,7 +380,7 @@ mod tests {
         signing_key: DeviceSigningPublicKey,
         recipient_key: DevicePublicKey,
         envelope: AgeArmoredCiphertext,
-        protection: crate::AppProtectionDescriptor,
+        protection: AppProtectionDescriptor,
     }
 
     impl HandoffFixture {
@@ -392,7 +394,7 @@ mod tests {
             let identity_key = identity.public_key();
             let signing_key = signing.public_key();
             let recipient_key = recipient.public_key();
-            let protection = crate::AppProtectionDescriptor {
+            let protection = AppProtectionDescriptor {
                 app_id: identity.device_id().clone(),
                 association: AppProtectionAssociation::Unknown,
             };
