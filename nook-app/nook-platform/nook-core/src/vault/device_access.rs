@@ -17,6 +17,8 @@ use wasm_bindgen::prelude::wasm_bindgen;
 use crate::errors::ValidationError;
 use crate::{DeviceId, IsoTimestamp, StoreId};
 
+mod app_protection_association;
+pub use app_protection_association::*;
 mod actions;
 mod credential_profile;
 pub use credential_profile::*;

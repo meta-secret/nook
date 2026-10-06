@@ -27,6 +27,8 @@ pub(crate) use auth::{
 };
 pub(crate) use crypto::{vault_crypto, vault_epoch_crypto};
 pub use device_access::{
+    AppProtectionAppBinding, AppProtectionAppBindingRequest, AppProtectionAssociation,
+    AppProtectionDescriptor, AppProtectionDescriptorError, AppProtectionDescriptorSource,
     AuthenticatorGuidEvidence, DEVICE_ACCESS_PROFILE_VERSION,
     DEVICE_ACCESS_PROVIDER_LABEL_MAX_CHARS, DeviceAccessCredentialKind,
     DeviceAccessIdentityObservation, DeviceAccessIdentityState, DeviceAccessProfile,

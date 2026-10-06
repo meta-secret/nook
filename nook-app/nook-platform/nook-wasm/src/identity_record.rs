@@ -18,6 +18,7 @@ use nook_core::{
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
+mod app_protection_association;
 mod identity_directory_projection;
 mod snapshot_scope;
 mod vault_app_inventory;
@@ -112,6 +113,7 @@ pub struct NookIdentityMemberSnapshot {
     label: MemberLabelState,
     current_browser: bool,
     local_protection: nook_core::DeviceAccessProtectionKind,
+    protection_association: nook_core::AppProtectionAssociation,
 }
 
 impl NookIdentityMemberSnapshot {
@@ -123,6 +125,7 @@ impl NookIdentityMemberSnapshot {
         Self {
             app_id: member.app_id.as_str().to_owned(),
             label: member.label.clone(),
+            protection_association: nook_core::AppProtectionAssociation::Unknown,
             current_browser: matches!(current_app_id, CurrentAppIdentity::Identified(app_id) if member.app_id == *app_id),
             local_protection: local_protections
                 .iter()
@@ -518,7 +521,7 @@ impl NookIdentityDirectorySnapshot {
         for record in selected_identities {
             let mut snapshot =
                 NookIdentitySnapshot::from_record(record, &current_app, &local_protections)
-                    .with_vault_app_inventory(BrowserIdentityVaultAppInventory {
+                    .with_app_protection_inventory(BrowserIdentityVaultAppInventory {
                         identity: record,
                         current_app: &current_app,
                         local_protections: &local_protections,

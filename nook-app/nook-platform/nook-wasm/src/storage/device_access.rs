@@ -25,6 +25,7 @@ pub(crate) use nook_core::{
 use super::indexed_db::{StringUpdateGuard, StringUpdateResult};
 
 mod migration;
+pub(crate) mod peer_protection;
 mod profile_store;
 mod verified_vault_access;
 pub(crate) use verified_vault_access::VerifiedVaultAccessUpdate;
@@ -83,6 +84,17 @@ pub(crate) struct AppPasskeyCreation<'a> {
 }
 impl AppPasskeyCreation<'_> {
     pub(crate) async fn apply(self) -> Result<(), NookError> {
+        self.apply_with_intent(DeviceAccessProfileUpdateIntent::BestEffort)
+            .await
+    }
+    pub(crate) async fn apply_required(self) -> Result<(), NookError> {
+        self.apply_with_intent(DeviceAccessProfileUpdateIntent::Interactive)
+            .await
+    }
+    async fn apply_with_intent(
+        self,
+        intent: DeviceAccessProfileUpdateIntent,
+    ) -> Result<(), NookError> {
         let Self {
             app_id,
             credential_fingerprint,
@@ -95,7 +107,7 @@ impl AppPasskeyCreation<'_> {
         DeviceAccessProfileKey::for_app_id(app_id)
             .await?
             .update(DeviceAccessProfileMutation {
-                intent: DeviceAccessProfileUpdateIntent::BestEffort,
+                intent,
                 guard: StringUpdateGuard::AppWrappedCredentialFingerprint {
                     app_id,
                     expected: credential_fingerprint,
@@ -111,7 +123,17 @@ impl AppPasskeyCreation<'_> {
                 },
             })
             .await
-            .map(|_| ())
+            .and_then(|result| match (intent, result) {
+                (
+                    DeviceAccessProfileUpdateIntent::Interactive,
+                    StringUpdateResult::GuardRejected,
+                ) => Err(NookError::PasskeyMetadataGuardRejected),
+                (DeviceAccessProfileUpdateIntent::Interactive, StringUpdateResult::Applied)
+                | (
+                    DeviceAccessProfileUpdateIntent::BestEffort,
+                    StringUpdateResult::Applied | StringUpdateResult::GuardRejected,
+                ) => Ok(()),
+            })
     }
 }
 

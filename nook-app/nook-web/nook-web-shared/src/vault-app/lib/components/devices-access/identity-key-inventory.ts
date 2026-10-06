@@ -9,11 +9,16 @@ import {
 import { I18N_KEYS } from "../../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
 import { type DashboardView } from "../devices-access-dashboard-state";
-import type { IdentityDirectoryEntry } from "./identity-directory-view";
+import type {
+  IdentityDirectoryEntry,
+  IdentityMemberView,
+} from "./identity-directory-view";
 import { IdentityAccessPresentation } from "./identity-access-list";
 import { AccessChainPresentation } from "./access-chain";
 import {
   PASSKEY_CARD_SUMMARY_ABSENT,
+  PasskeyCardSummaryKind,
+  PasskeyCardFactKind,
   type PasskeyCardSummaryState,
 } from "./passkey-card";
 
@@ -77,6 +82,25 @@ export class IdentityKeyInventory {
         ),
         appId: member.appId,
       };
+      const associatedRequest: AssociatedProtectorRequest = {
+        member,
+        app: appBase,
+      };
+      const displayRequest: ProtectorAssociationDisplayRequest = {
+        localProtection,
+        association: member.protectionAssociation,
+      };
+      switch (this.displayedAssociation(displayRequest)) {
+        case DeviceAccessProtectionKind.PasskeyStandard:
+        case DeviceAccessProtectionKind.PasskeyAntiHacker:
+        case DeviceAccessProtectionKind.PinOrPassphrase: {
+          rows.push(this.associatedProtector(associatedRequest));
+          continue;
+        }
+        case DeviceAccessProtectionKind.Missing:
+        case DeviceAccessProtectionKind.CompanionSession:
+          break;
+      }
       if (!isLocal) {
         const linkedRelationshipArgs: Parameters<typeof vault.t>[0] = {
           key: I18N_KEYS.DevicesAccessAppLinkedToIdentity,
@@ -171,4 +195,105 @@ export class IdentityKeyInventory {
     }
     return rows;
   }
+
+  private displayedAssociation(
+    request: ProtectorAssociationDisplayRequest,
+  ): DeviceAccessProtectionKind {
+    switch (request.localProtection) {
+      case DeviceAccessProtectionKind.Missing:
+      case DeviceAccessProtectionKind.CompanionSession:
+        return request.association;
+      case DeviceAccessProtectionKind.PasskeyStandard:
+      case DeviceAccessProtectionKind.PasskeyAntiHacker:
+      case DeviceAccessProtectionKind.PinOrPassphrase:
+        return DeviceAccessProtectionKind.Missing;
+    }
+  }
+
+  private associatedProtector(
+    request: AssociatedProtectorRequest,
+  ): IdentityKeyInventoryRow {
+    const { vault } = this.request;
+    const { member, app } = request;
+    const protectionLabelRequest: Parameters<
+      AccessChainPresentation["protectionLabel"]
+    >[0] = {
+      protection: member.protectionAssociation,
+    };
+    const modeLabel = new AccessChainPresentation(vault).protectionLabel(
+      protectionLabelRequest,
+    );
+    let title = modeLabel;
+    let typeLabel = vault.t(I18N_KEYS.DevicesAccessKeyTypePin);
+    let passkeySummary: PasskeyCardSummaryState = PASSKEY_CARD_SUMMARY_ABSENT;
+    switch (member.protectionAssociation) {
+      case DeviceAccessProtectionKind.PasskeyStandard:
+      case DeviceAccessProtectionKind.PasskeyAntiHacker:
+        title = member.associatedPasskeyName.displayText(() =>
+          vault.t(I18N_KEYS.DevicesAccessPasskeyUnnamed),
+        );
+        typeLabel = vault.t(I18N_KEYS.DevicesAccessKeyTypePasskey);
+        passkeySummary = {
+          kind: PasskeyCardSummaryKind.Present,
+          summary: {
+            title,
+            typeLabel,
+            modeLabel,
+            facts: [
+              {
+                kind: PasskeyCardFactKind.Fingerprint,
+                label: vault.t(I18N_KEYS.DevicesAccessCredentialId),
+                value: member.associatedPasskeyFingerprint.displayText(() =>
+                  vault.t(I18N_KEYS.DevicesAccessUnknown),
+                ),
+              },
+              {
+                kind: PasskeyCardFactKind.Keeper,
+                label: vault.t(I18N_KEYS.DevicesAccessKeeperLabel),
+                value: vault.t(I18N_KEYS.DevicesAccessKeeperUnknown),
+              },
+              {
+                kind: PasskeyCardFactKind.Created,
+                label: vault.t(I18N_KEYS.DevicesAccessCreated),
+                value: vault.t(I18N_KEYS.DevicesAccessUnknownLegacy),
+              },
+              {
+                kind: PasskeyCardFactKind.LastUsed,
+                label: vault.t(I18N_KEYS.DevicesAccessLastUsedColumn),
+                value: vault.t(I18N_KEYS.DevicesAccessUnknownLegacy),
+              },
+            ],
+          },
+        };
+        break;
+      case DeviceAccessProtectionKind.PinOrPassphrase:
+      case DeviceAccessProtectionKind.Missing:
+      case DeviceAccessProtectionKind.CompanionSession:
+        break;
+    }
+    const relationshipRequest: Parameters<typeof vault.t>[0] = {
+      key: I18N_KEYS.DevicesAccessAppProtectedBy,
+      replacements: { protection: title },
+    };
+    return {
+      key: `protector:${member.appId}`,
+      kind: IdentityKeyInventoryRowKind.Protector,
+      title,
+      typeLabel,
+      lastUsed: vault.t(I18N_KEYS.DevicesAccessUnknownLegacy),
+      renamable: false,
+      passkeySummary,
+      apps: [{ ...app, relationship: vault.t(relationshipRequest) }],
+    };
+  }
 }
+
+type AssociatedProtectorRequest = {
+  readonly member: IdentityMemberView;
+  readonly app: Omit<IdentityAppInventoryItem, "relationship">;
+};
+
+type ProtectorAssociationDisplayRequest = {
+  readonly localProtection: DeviceAccessProtectionKind;
+  readonly association: DeviceAccessProtectionKind;
+};

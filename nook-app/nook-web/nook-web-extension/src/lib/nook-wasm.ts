@@ -89,6 +89,7 @@ type ExtensionBeginPasskeySetupRequest = {
 type ExtensionFinishPasskeySetupRequest = {
   type: typeof ExtensionSessionMessageType.FinishPasskeySetup
   payload: {
+    passkeyLabel: string
     credentialId: number[]
     userHandle: number[]
     prfInput: number[]
@@ -541,6 +542,7 @@ class ExtensionWasmRuntime {
     const finishRequest: ExtensionFinishPasskeySetupRequest = {
       type: ExtensionSessionMessageType.FinishPasskeySetup,
       payload: {
+        passkeyLabel,
         credentialId: this.credentialId(created),
         userHandle: setup.userHandle,
         prfInput: setup.prfInput,

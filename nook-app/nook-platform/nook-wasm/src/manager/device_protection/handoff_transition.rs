@@ -7,6 +7,7 @@ use super::{
     identity_record, mem,
 };
 use crate::manager::device_protection::ExtensionIdentityPublication;
+use crate::storage::device_access::peer_protection::PeerProtectionStore;
 use crate::storage::identity_record::AuthorizerSigningUpdate;
 use crate::storage::identity_record::HandoffAuthorization;
 use crate::storage::identity_record::{IdentityHandoffOperation, PairedVaultEnrollment};
@@ -45,6 +46,7 @@ impl NookVaultManager {
             expected_device_signing_public_key: &expected_signing_public_key,
         }
         .open()?;
+        PeerProtectionStore::save(material.protection()).await?;
         let (identity, handoff_signing_seed) = material.into_parts();
         let authorizer = if self.device.identity_private_key.is_empty() {
             HandoffAuthorizer::Unauthenticated
