@@ -40,6 +40,8 @@ import {
   type CompanionUnlockedAppKey,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
+  DeviceAccessProtectionKind,
+  load_identity_directory_snapshot,
   default_password_generation_options,
   generate_password,
   default as initNookWasm,
@@ -407,6 +409,26 @@ afterAll(async () => {
 })
 
 describe('generated companion protocol composition', () => {
+  test('generated member association getters reject missing metadata before creation is recorded', async () => {
+    const before = await load_identity_directory_snapshot()
+    const identity = before.identity(0)
+    const members = identity.members()
+    try {
+      expect(members).toHaveLength(1)
+      for (const member of members) {
+        expect(member.protectionAssociation).toBe(
+          DeviceAccessProtectionKind.Missing,
+        )
+        expect(() => member.associated_passkey_fingerprint()).toThrow(Error)
+        expect(() => member.associated_passkey_name()).toThrow(Error)
+      }
+    } finally {
+      for (const member of members) member.free()
+      identity.free()
+      before.free()
+    }
+    await extension.record_extension_passkey_creation('Composition passkey')
+  })
   test('both generated packages project the same four canonical scopes', () => {
     expect([
       nook_companion_wasm.extension_vault_access_scope(),
@@ -564,6 +586,26 @@ describe('generated companion protocol composition', () => {
     for (const record of records) record.free()
     const committed = adopted.after_verified_connect(website)
     committed.confirm(website)
+
+    const after = await load_identity_directory_snapshot()
+    const recordedIdentity = after.identity(0)
+    const recordedMembers = recordedIdentity.members()
+    try {
+      expect(recordedMembers).toHaveLength(1)
+      for (const member of recordedMembers) {
+        expect(member.protectionAssociation).toBe(
+          DeviceAccessProtectionKind.PasskeyStandard,
+        )
+        expect(member.associated_passkey_name()).toBe('Composition passkey')
+        expect(member.associated_passkey_fingerprint().length).toBeGreaterThan(
+          0,
+        )
+      }
+    } finally {
+      for (const member of recordedMembers) member.free()
+      recordedIdentity.free()
+      after.free()
+    }
 
     expect(response.encryptedEnvelope).toContain('BEGIN AGE ENCRYPTED FILE')
     expect(website.device_id).toBe(extension.device_id)

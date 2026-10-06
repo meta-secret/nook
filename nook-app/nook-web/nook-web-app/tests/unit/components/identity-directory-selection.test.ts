@@ -92,6 +92,9 @@ function identitySnapshot(identity: (typeof identities)[number]) {
       identity.members.map((member) => ({
         appId: member.appId,
         currentBrowser: member.currentBrowser,
+        protectionAssociation: DeviceAccessProtectionKind.Missing,
+        associated_passkey_name: () => '',
+        associated_passkey_fingerprint: () => '',
         localProtection:
           identity.identityId === 'personal'
             ? DeviceAccessProtectionKind.PasskeyStandard

@@ -100,7 +100,7 @@ on request.
               <span class="access-micro-label text-muted-foreground">
                 {row.typeLabel}
               </span>
-              {#if row.kind === IdentityKeyInventoryRowKind.Protector && editingPasskey}
+              {#if row.kind === IdentityKeyInventoryRowKind.Protector && row.renamable && editingPasskey}
                 <span class="mt-2 flex min-w-0 flex-wrap items-center gap-2">
                   <input
                     class="min-w-48 flex-1 rounded-md border border-input bg-background px-2.5 py-1.5 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
