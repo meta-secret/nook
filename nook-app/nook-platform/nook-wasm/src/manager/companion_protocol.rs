@@ -624,6 +624,18 @@ mod typed_boundary_tests {
             },
         )
         .await?;
+        // Protection persistence establishes the durable app-scoped signer.
+        // Advertise that actual installation rather than the transient fixture signer.
+        let app = scenario.extension.device_identity()?;
+        let signing = scenario.extension.ensure_signing_identity().await?;
+        let CompanionExtensionPresence::Unlocked { app_key, .. } = &mut scenario.presence else {
+            return Err(JsError::new(
+                "Public fixture must advertise an unlocked app.",
+            ));
+        };
+        app_key.app_key.app_id = app.app_id().as_str().to_owned();
+        app_key.app_key.encryption_public_key = app.public_key().as_str().to_owned();
+        app_key.app_key.signing_public_key = signing.public_key().as_str().to_owned();
         let pending = scenario.begin()?;
         let request = pending.request()?.to_rust()?;
         assert_eq!(request.transaction.discovery, scenario.discovery);
