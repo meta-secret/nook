@@ -132,6 +132,7 @@ pub struct FinishPasskeySetupPayload {
     prf_input: SessionSecretBytes,
     prf_output: SessionSecretBytes,
     device_mode: PasskeyDeviceModeWire,
+    passkey_label: String,
     queue: QueueDisposition,
 }
 
@@ -551,6 +552,29 @@ mod tests {
     use super::*;
 
     #[test]
+    fn passkey_setup_transport_requires_and_preserves_user_label() -> anyhow::Result<()> {
+        let payload = FinishPasskeySetupPayload {
+            credential_id: SessionSecretBytes(vec![1]),
+            user_handle: SessionSecretBytes(vec![2]),
+            prf_input: SessionSecretBytes(vec![3]),
+            prf_output: SessionSecretBytes(vec![4]),
+            device_mode: PasskeyDeviceModeWire::try_from(1).map_err(anyhow::Error::msg)?,
+            passkey_label: "  Extension 🔑  ".to_owned(),
+            queue: QueueDisposition::MessageDefault {},
+        };
+        let serialized = serde_json::to_string(&payload)?;
+        let decoded: FinishPasskeySetupPayload = serde_json::from_str(&serialized)?;
+        assert_eq!(decoded, payload);
+        assert_eq!(decoded.passkey_label, "  Extension 🔑  ");
+        let missing_label = serialized.replace(r#""passkeyLabel":"  Extension 🔑  ","#, "");
+        assert!(serde_json::from_str::<FinishPasskeySetupPayload>(&missing_label).is_err());
+        let unknown_field =
+            serialized.replace(r#""queue":"#, r#""unknownLabel":"unexpected","queue":"#);
+        assert!(serde_json::from_str::<FinishPasskeySetupPayload>(&unknown_field).is_err());
+        Ok(())
+    }
+
+    #[test]
     fn decoded_request_owns_its_copy_and_secret_values_remain_zeroizable() -> anyhow::Result<()> {
         let wire: ExtensionSessionRequestWire = serde_json::from_str(
             r#"{"type":"nook:extension-session-create-pin","payload":{"pin":"123456","queue":{"kind":"message-default"}}}"#,
@@ -669,7 +693,7 @@ mod tests {
 
     #[test]
     fn validates_passkey_bytes_and_queue_metadata() {
-        let valid = r#"{"type":"nook:extension-session-finish-passkey-setup","payload":{"credentialId":[1],"userHandle":[2],"prfInput":[3],"prfOutput":[4],"deviceMode":1,"queue":{"kind":"deadline","expiresAt":42,"priority":"interactive"}}}"#;
+        let valid = r#"{"type":"nook:extension-session-finish-passkey-setup","payload":{"credentialId":[1],"userHandle":[2],"prfInput":[3],"prfOutput":[4],"deviceMode":1,"passkeyLabel":"Extension","queue":{"kind":"deadline","expiresAt":42,"priority":"interactive"}}}"#;
         assert_eq!(
             ExtensionSessionRequestValidation::validate_extension_session_request_json(valid),
             ExtensionSessionRequestValidation::Accepted
@@ -838,7 +862,7 @@ mod tests {
 
     #[test]
     fn rejects_open_ended_session_domain_values() {
-        let passkey_setup = r#"{"type":"nook:extension-session-finish-passkey-setup","payload":{"credentialId":[1],"userHandle":[2],"prfInput":[3],"prfOutput":[4],"deviceMode":1,"queue":{"kind":"deadline","expiresAt":42,"priority":"interactive"}}}"#;
+        let passkey_setup = r#"{"type":"nook:extension-session-finish-passkey-setup","payload":{"credentialId":[1],"userHandle":[2],"prfInput":[3],"prfOutput":[4],"deviceMode":1,"passkeyLabel":"Extension","queue":{"kind":"deadline","expiresAt":42,"priority":"interactive"}}}"#;
         assert_eq!(
             ExtensionSessionRequestValidation::validate_extension_session_request_json(
                 &passkey_setup.replace(r#""deviceMode":1"#, r#""deviceMode":2"#),
