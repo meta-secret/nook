@@ -1,4 +1,12 @@
-import { expect, test } from '../fixtures'
+import {
+  DeviceAccessProtectionKind,
+  NookIdentityMemberLabelKind,
+  type NookVaultManager,
+  type NookIdentityDirectorySnapshot,
+  type NookIdentitySnapshot,
+  type NookIdentityMemberSnapshot,
+} from '$lib/nook-wasm/nook_wasm'
+import { expect, test, type Locator } from '../fixtures'
 import { UnlockMethod } from '$lib/components/login/login-unlock-state'
 import {
   addVaultPassword,
@@ -270,5 +278,142 @@ test('switch protected identities before creating a vault', async ({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
   await expect(page.getByTestId('devices-access-key-inventory')).toBeVisible()
+  await page.waitForTimeout(BEAT_MS)
+})
+
+type PasskeyGroupFilter = {
+  readonly has: Locator
+}
+
+type ExtensionAssociationDemoRequest = {
+  readonly protection: DeviceAccessProtectionKind
+  readonly missingProtection: DeviceAccessProtectionKind
+  readonly labelKind: NookIdentityMemberLabelKind
+}
+
+type ExtensionAssociationDemoDescriptors = {
+  readonly appId: PropertyDescriptor
+  readonly currentBrowser: PropertyDescriptor
+  readonly localProtection: PropertyDescriptor
+  readonly protectionAssociation: PropertyDescriptor
+  readonly labelKind: PropertyDescriptor
+}
+
+test('shows independent browser and extension passkeys with local-only rename', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('nook_e2e_manual_passkey', 'true')
+  })
+  await installPasskeyMock(page)
+  await connectLocalVault(page)
+  const request: ExtensionAssociationDemoRequest = {
+    protection: DeviceAccessProtectionKind.PasskeyAntiHacker,
+    missingProtection: DeviceAccessProtectionKind.Missing,
+    labelKind: NookIdentityMemberLabelKind.Known,
+  }
+  // Presentation-only snapshot seam: real browser setup supplies native handles.
+  // This demo does not execute extension handoff; domain and ABI tests cover it.
+  await page.evaluate((request: ExtensionAssociationDemoRequest) => {
+    const vault = window.__nookVault
+    if (!vault) throw new Error('Vault runtime is unavailable')
+    const admission = vault.admitManager()
+    if (admission.isErr()) throw new Error('Browser manager is unavailable')
+
+    class ExtensionAssociationDemo {
+      private readonly read: NookVaultManager['identity_directory_snapshot_request']
+
+      constructor(private readonly manager: NookVaultManager) {
+        this.read = manager.identity_directory_snapshot_request.bind(manager)
+      }
+
+      install(): void {
+        this.manager.identity_directory_snapshot_request = () =>
+          this.snapshotRequest()
+      }
+
+      private snapshotRequest(): ReturnType<
+        NookVaultManager['identity_directory_snapshot_request']
+      > {
+        const snapshotRequest = this.read()
+        const resolve = snapshotRequest.resolve.bind(snapshotRequest)
+        snapshotRequest.resolve = async () => this.directory(await resolve())
+        return snapshotRequest
+      }
+
+      private directory(
+        snapshot: NookIdentityDirectorySnapshot,
+      ): NookIdentityDirectorySnapshot {
+        const readIdentity = snapshot.identity.bind(snapshot)
+        snapshot.identity = (index) => this.identity(readIdentity(index))
+        return snapshot
+      }
+
+      private identity(identity: NookIdentitySnapshot): NookIdentitySnapshot {
+        const readMembers = identity.members.bind(identity)
+        identity.members = () => this.members(readMembers)
+        return identity
+      }
+
+      private members(
+        readMembers: NookIdentitySnapshot['members'],
+      ): NookIdentityMemberSnapshot[] {
+        const browserMembers = readMembers()
+        const peerMembers = readMembers()
+        for (const member of peerMembers) {
+          const descriptors: ExtensionAssociationDemoDescriptors = {
+            appId: { value: 'demo_extension_app' },
+            currentBrowser: { value: false },
+            localProtection: { value: request.missingProtection },
+            protectionAssociation: { value: request.protection },
+            labelKind: { value: request.labelKind },
+          }
+          Object.defineProperties(member, descriptors)
+          member.label = () => 'Nook Extension'
+          member.associated_passkey_name = () => 'Extension passkey'
+          member.associated_passkey_fingerprint = () => 'passkey_extension_demo'
+        }
+        return [...browserMembers, ...peerMembers]
+      }
+    }
+    new ExtensionAssociationDemo(admission.value).install()
+  }, request)
+
+  await page.getByTestId('header-devices-access-btn').click()
+  const inventory = page.getByTestId('devices-access-key-inventory')
+  await expect(inventory).toBeVisible()
+  const groupFilter: PasskeyGroupFilter = {
+    has: page.getByTestId('devices-access-key-row'),
+  }
+  const rows = inventory.locator('li').filter(groupFilter)
+  await expect(rows).toHaveCount(2)
+  const browserRow = rows.nth(0)
+  const extensionRow = rows.nth(1)
+  for (const row of [browserRow, extensionRow]) {
+    await expect(row.getByTestId('devices-access-key-row')).toHaveAttribute(
+      'data-kind',
+      'protector',
+    )
+    await expect(row.getByTestId('devices-access-app')).toHaveCount(1)
+  }
+  await expect(browserRow).toContainText('Nook in this browser')
+  await expect(extensionRow).toContainText('Extension passkey')
+  await expect(extensionRow).toContainText('Nook Extension')
+  const browserFingerprint = browserRow.locator('[data-kind="fingerprint"]')
+  const extensionFingerprint = extensionRow.locator('[data-kind="fingerprint"]')
+  await expect(browserFingerprint).toContainText('passkey_')
+  await expect(extensionFingerprint).toContainText('passkey_extension_demo')
+  expect(await browserFingerprint.textContent()).not.toBe(
+    await extensionFingerprint.textContent(),
+  )
+  await expect(
+    browserRow.getByTestId('devices-access-rename-passkey'),
+  ).toHaveCount(1)
+  await expect(
+    extensionRow.getByTestId('devices-access-rename-passkey'),
+  ).toHaveCount(0)
+  await expect(page.getByTestId('devices-access-unlock-identity')).toHaveCount(
+    0,
+  )
   await page.waitForTimeout(BEAT_MS)
 })
