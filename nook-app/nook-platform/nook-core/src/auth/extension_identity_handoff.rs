@@ -8,24 +8,54 @@
 use std::{fmt, mem};
 
 use crate::{
-    AgeArmoredCiphertext, DeviceId, DeviceIdentity, DeviceIdentitySecret, DevicePublicKey,
-    DeviceSigningPublicKey, ExtensionIdentityHandoffError, SigningIdentity, VaultResult,
+    AgeArmoredCiphertext, AppProtectionAppBinding, AppProtectionAppBindingRequest, DeviceId,
+    DeviceIdentity, DeviceIdentitySecret, DevicePublicKey, DeviceSigningPublicKey,
+    ExtensionIdentityHandoffError, SigningIdentity, VaultResult,
 };
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, Zeroizing};
 
-const HANDOFF_VERSION: u8 = 1;
+// Version 2 requires an app-bound protection descriptor. Version 1 handoffs
+// are rejected; no legacy path infers protection from identity membership.
+#[derive(Clone, Copy, Serialize, Deserialize)]
+#[serde(try_from = "u8", into = "u8")]
+enum ExtensionIdentityHandoffVersion {
+    AppProtectionDescriptor,
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("Unsupported extension identity handoff version: {0}")]
+struct UnsupportedHandoffVersion(u8);
+
+impl TryFrom<u8> for ExtensionIdentityHandoffVersion {
+    type Error = UnsupportedHandoffVersion;
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            2 => Ok(Self::AppProtectionDescriptor),
+            unsupported => Err(UnsupportedHandoffVersion(unsupported)),
+        }
+    }
+}
+
+impl From<ExtensionIdentityHandoffVersion> for u8 {
+    fn from(version: ExtensionIdentityHandoffVersion) -> Self {
+        match version {
+            ExtensionIdentityHandoffVersion::AppProtectionDescriptor => 2,
+        }
+    }
+}
 const MAX_NONCE_LEN: usize = 128;
 
 #[derive(Serialize, Deserialize)]
 struct ExtensionIdentityHandoffPayload {
-    version: u8,
+    version: ExtensionIdentityHandoffVersion,
     nonce: String,
     device_id: DeviceId,
     device_public_key: DevicePublicKey,
     device_signing_public_key: DeviceSigningPublicKey,
     identity_private_key: DeviceIdentitySecret,
     signing_seed: SensitiveSigningSeed,
+    protection: crate::AppProtectionDescriptor,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -41,10 +71,15 @@ impl Drop for SensitiveSigningSeed {
 pub struct ExtensionIdentityHandoffMaterial {
     identity: DeviceIdentity,
     signing_seed: SensitiveSigningSeed,
+    protection: crate::AppProtectionDescriptor,
 }
 
 impl ExtensionIdentityHandoffMaterial {
     #[must_use]
+    pub fn protection(&self) -> &crate::AppProtectionDescriptor {
+        &self.protection
+    }
+
     pub fn into_parts(mut self) -> (DeviceIdentity, String) {
         let signing_seed = mem::take(&mut self.signing_seed.0);
         (self.identity, signing_seed)
@@ -142,7 +177,7 @@ impl HandoffNonce<'_> {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, tsify::Tsify)]
+#[derive(Debug, Clone, Deserialize, Serialize, tsify::Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct ExtensionIdentityHandoffSealRequest {
     pub recipient_public_key: String,
@@ -183,6 +218,7 @@ pub struct ExtensionIdentityHandoffSeal<'a> {
     pub signing_seed: &'a str,
     pub recipient_public_key: &'a DevicePublicKey,
     pub nonce: &'a str,
+    pub protection: &'a crate::AppProtectionDescriptor,
 }
 
 impl<'a> ExtensionIdentityHandoffSeal<'a> {
@@ -216,10 +252,12 @@ impl CheckedExtensionIdentitySeal<'_> {
             signing_seed,
             recipient_public_key,
             nonce,
+            protection,
         } = self.source;
         let signing = self.signing;
         let payload = ExtensionIdentityHandoffPayload {
-            version: HANDOFF_VERSION,
+            version: ExtensionIdentityHandoffVersion::AppProtectionDescriptor,
+            protection: protection.clone(),
             nonce: nonce.to_owned(),
             device_id: identity.device_id().clone(),
             device_public_key: identity.public_key(),
@@ -265,8 +303,18 @@ impl ExtensionIdentityHandoffOpen<'_> {
         let identity = DeviceIdentity::from_secret_str(&payload.identity_private_key)?;
         let signing = SigningIdentity::from_seed_hex_stored(&payload.signing_seed.0)?;
 
-        if payload.version != HANDOFF_VERSION
-            || payload.nonce != expected_nonce
+        match (AppProtectionAppBindingRequest {
+            observed: &payload.protection.app_id,
+            expected: expected_device_id,
+        })
+        .classify()
+        {
+            AppProtectionAppBinding::Matched => {}
+            AppProtectionAppBinding::DifferentApp => {
+                return Err(ExtensionIdentityHandoffError::BindingMismatch.into());
+            }
+        }
+        if payload.nonce != expected_nonce
             || payload.device_id != *expected_device_id
             || payload.device_public_key != *expected_device_public_key
             || payload.device_signing_public_key != *expected_device_signing_public_key
@@ -280,6 +328,7 @@ impl ExtensionIdentityHandoffOpen<'_> {
         Ok(CheckedExtensionIdentityOpen {
             identity,
             signing_seed: payload.signing_seed,
+            protection: payload.protection,
         })
     }
 }
@@ -291,6 +340,7 @@ impl ExtensionIdentityHandoffOpen<'_> {
 struct CheckedExtensionIdentityOpen {
     identity: DeviceIdentity,
     signing_seed: SensitiveSigningSeed,
+    protection: crate::AppProtectionDescriptor,
 }
 
 impl CheckedExtensionIdentityOpen {
@@ -298,6 +348,7 @@ impl CheckedExtensionIdentityOpen {
         ExtensionIdentityHandoffMaterial {
             identity: self.identity,
             signing_seed: self.signing_seed,
+            protection: self.protection,
         }
     }
 }
@@ -312,8 +363,9 @@ mod tests {
         StoredSigningSeed,
     };
     use crate::{
-        AgeArmoredCiphertext, DeviceIdentity, DevicePublicKey, DeviceSigningPublicKey,
-        ExtensionIdentityHandoffError, SigningIdentity, SigningSeedHex, VaultError, VaultResult,
+        AgeArmoredCiphertext, AppProtectionAssociation, DeviceIdentity, DevicePublicKey,
+        DeviceSigningPublicKey, ExtensionIdentityHandoffError, SigningIdentity, SigningSeedHex,
+        VaultError, VaultResult,
     };
     use std::ptr;
     use zeroize::{Zeroize, Zeroizing};
@@ -326,6 +378,7 @@ mod tests {
         signing_key: DeviceSigningPublicKey,
         recipient_key: DevicePublicKey,
         envelope: AgeArmoredCiphertext,
+        protection: crate::AppProtectionDescriptor,
     }
 
     impl HandoffFixture {
@@ -339,7 +392,12 @@ mod tests {
             let identity_key = identity.public_key();
             let signing_key = signing.public_key();
             let recipient_key = recipient.public_key();
+            let protection = crate::AppProtectionDescriptor {
+                app_id: identity.device_id().clone(),
+                association: AppProtectionAssociation::Unknown,
+            };
             let envelope = ExtensionIdentityHandoffSeal {
+                protection: &protection,
                 identity: &identity,
                 signing_seed: signing_seed.as_str(),
                 recipient_public_key: &recipient_key,
@@ -354,11 +412,13 @@ mod tests {
                 signing_key,
                 recipient_key,
                 envelope,
+                protection,
             })
         }
 
         fn seal_request(&self) -> ExtensionIdentityHandoffSeal<'_> {
             ExtensionIdentityHandoffSeal {
+                protection: &self.protection,
                 identity: &self.identity,
                 signing_seed: self.signing_seed.as_str(),
                 recipient_public_key: &self.recipient_key,
@@ -405,6 +465,7 @@ mod tests {
     fn handoff_roundtrips_and_preserves_both_device_keys() -> VaultResult<()> {
         let fixture = HandoffFixture::new()?;
         let opened = fixture.open_request(&fixture.envelope).open()?;
+        assert_eq!(opened.protection(), &fixture.protection);
         let (opened_identity, opened_signing_seed) = opened.into_parts();
         let opened_signing_seed = Zeroizing::new(opened_signing_seed);
         assert_eq!(opened_identity.device_id(), fixture.identity.device_id());
@@ -413,6 +474,21 @@ mod tests {
             SigningIdentity::from_seed_hex_stored(&opened_signing_seed)?.public_key(),
             fixture.signing_key
         );
+        Ok(())
+    }
+
+    #[test]
+    fn descriptor_cannot_be_bound_to_another_app() -> VaultResult<()> {
+        let fixture = HandoffFixture::new()?;
+        let mut payload = fixture.payload()?;
+        payload.protection.app_id = DeviceIdentity::generate()?.device_id().clone();
+        let envelope = fixture.encrypt_payload(&payload)?;
+        assert!(matches!(
+            fixture.open_request(&envelope).open(),
+            Err(VaultError::ExtensionIdentityHandoff(
+                ExtensionIdentityHandoffError::BindingMismatch
+            ))
+        ));
         Ok(())
     }
 
@@ -544,8 +620,7 @@ mod tests {
                 ExtensionIdentityHandoffError::Deserialize(_)
             ))
         ));
-        let mut payload = fixture.payload()?;
-        payload.version = 2;
+        let payload = fixture.payload()?;
         let plaintext = Zeroizing::new(
             serde_json::to_string(&payload)
                 .map_err(ExtensionIdentityHandoffError::Serialize)?
@@ -562,22 +637,27 @@ mod tests {
     }
 
     #[test]
-    fn signing_seed_reconstruction_precedes_version_rejection() -> VaultResult<()> {
+    fn version_one_is_rejected_before_signing_seed_reconstruction() -> VaultResult<()> {
         let fixture = HandoffFixture::new()?;
         let mut payload = fixture.payload()?;
-        payload.version = 2;
         payload.signing_seed = SensitiveSigningSeed("invalid-signing-seed".to_owned());
-        let envelope = fixture.encrypt_payload(&payload)?;
+        let plaintext = Zeroizing::new(
+            serde_json::to_string(&payload)
+                .map_err(ExtensionIdentityHandoffError::Serialize)?
+                .replace("\"version\":2", "\"version\":1"),
+        );
+        let envelope = fixture.encrypt_text(&plaintext)?;
         assert!(matches!(
             fixture.open_request(&envelope).open(),
-            Err(VaultError::Event(_))
+            Err(VaultError::ExtensionIdentityHandoff(
+                ExtensionIdentityHandoffError::Deserialize(_)
+            ))
         ));
         Ok(())
     }
 
     #[derive(Clone, Copy)]
     enum BindingChange {
-        Version,
         Nonce,
         ReportedDevice,
         ReportedEncryptionKey,
@@ -589,7 +669,6 @@ mod tests {
     impl BindingChange {
         fn apply(self, payload: &mut ExtensionIdentityHandoffPayload) -> VaultResult<()> {
             match self {
-                Self::Version => payload.version = 2,
                 Self::Nonce => payload.nonce = "different".to_owned(),
                 Self::ReportedDevice => {
                     payload.device_id = DeviceIdentity::generate()?.device_id().clone();
@@ -617,7 +696,6 @@ mod tests {
     {
         let fixture = HandoffFixture::new()?;
         for change in [
-            BindingChange::Version,
             BindingChange::Nonce,
             BindingChange::ReportedDevice,
             BindingChange::ReportedEncryptionKey,

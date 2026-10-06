@@ -1,5 +1,6 @@
 //! Passkey-PRF setup, unlock, and recovery orchestration.
 
+mod association;
 use nook_core::ExtensionIdentityHandoffSourceBinding;
 use nook_core::PasskeyAccessProfile;
 use std::rc::Rc;
@@ -418,9 +419,11 @@ impl NookVaultManager {
                 "Extension identity request does not match this device.",
             ));
         }
+        let protection = self.extension_protection_descriptor().await?;
         let recipient_public_key = DevicePublicKey::parse(&request.recipient_public_key)?;
         Ok::<_, wasm_bindgen::JsError>(
             nook_core::ExtensionIdentityHandoffSeal {
+                protection: &protection,
                 identity: &identity,
                 signing_seed: &self.event_log.signing_seed,
                 recipient_public_key: &recipient_public_key,
@@ -919,5 +922,3 @@ impl NookVaultManager {
         }
     }
 }
-
-impl NookVaultManager {}

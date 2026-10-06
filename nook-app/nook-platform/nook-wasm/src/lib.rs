@@ -170,6 +170,21 @@ pub fn companion_pairing_provider_manifest_digest(
 
 #[derive(thiserror::Error, Debug)]
 pub enum NookError {
+    #[error("App protection is unavailable")]
+    AppProtectionUnavailable,
+    #[error("App protection belongs to another app")]
+    AppProtectionBindingMismatch,
+    #[error(transparent)]
+    AppProtectionDescriptor(#[from] nook_core::AppProtectionDescriptorError),
+    #[error("Peer protection serialization failed")]
+    PeerProtectionEncode(#[source] serde_json::Error),
+    #[error("Peer protection deserialization failed")]
+    PeerProtectionDecode(#[source] serde_json::Error),
+    #[error("App passkey association is unavailable")]
+    AppPasskeyAssociationUnavailable,
+    #[error("Passkey metadata no longer matches protected app")]
+    PasskeyMetadataGuardRejected,
+
     #[error("IndexedDB error: {0}")]
     IndexedDb(String),
 

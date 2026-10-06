@@ -137,9 +137,10 @@ impl NookCompanionExtensionEndpoint {
     fn seal_authorized_loaded(
         operation: CompanionAuthorizedSealOperation<'_>,
     ) -> Result<CompanionIdentityHandoffResponse, CompanionOperationError> {
-        operation
-            .authorized
-            .seal(&mut CompanionManagerSealer(operation.manager))
+        operation.authorized.seal(&mut CompanionManagerSealer {
+            manager: operation.manager,
+            protection: operation.protection,
+        })
     }
 }
 
@@ -152,6 +153,7 @@ struct CompanionExtensionSealOperation<'a> {
 struct CompanionAuthorizedSealOperation<'a> {
     manager: &'a mut NookVaultManager,
     authorized: AuthorizedCompanionIdentityHandoff,
+    protection: nook_core::AppProtectionDescriptor,
 }
 
 #[wasm_bindgen]
@@ -250,10 +252,17 @@ impl NookDiscoveredCompanionExtensionEndpoint {
         manager.ensure_signing_identity().await.map_err(|error| {
             NookVaultManager::companion_js_error(&CompanionOperationError::Manager(error))
         })?;
+        let protection = manager
+            .extension_protection_descriptor()
+            .await
+            .map_err(|error| {
+                NookVaultManager::companion_js_error(&CompanionOperationError::Manager(error))
+            })?;
         let result = NookCompanionExtensionEndpoint::seal_authorized_loaded(
             CompanionAuthorizedSealOperation {
                 manager,
                 authorized,
+                protection,
             },
         )
         .map_err(|error| NookVaultManager::companion_js_error(&error))?;
@@ -261,7 +270,10 @@ impl NookDiscoveredCompanionExtensionEndpoint {
     }
 }
 
-struct CompanionManagerSealer<'a>(&'a mut NookVaultManager);
+struct CompanionManagerSealer<'a> {
+    manager: &'a mut NookVaultManager,
+    protection: nook_core::AppProtectionDescriptor,
+}
 
 impl CompanionIdentityHandoffSealer for CompanionManagerSealer<'_> {
     type Error = CompanionOperationError;
@@ -271,7 +283,7 @@ impl CompanionIdentityHandoffSealer for CompanionManagerSealer<'_> {
         request: &CompanionIdentityHandoffRequest,
     ) -> Result<String, Self::Error> {
         request.validate()?;
-        let manager = &mut *self.0;
+        let manager = &mut *self.manager;
         let CompanionIdentityStatus::Unlocked {
             vault_store_id,
             app_key,
@@ -303,6 +315,7 @@ impl CompanionIdentityHandoffSealer for CompanionManagerSealer<'_> {
         let recipient =
             DevicePublicKey::parse(&request.recipient_public_key).map_err(NookError::from)?;
         Ok(nook_core::ExtensionIdentityHandoffSeal {
+            protection: &self.protection,
             identity: &identity,
             signing_seed: &manager.event_log.signing_seed,
             recipient_public_key: &recipient,
@@ -468,9 +481,16 @@ impl NookPendingCompanionIdentityHandoff {
 #[cfg(all(test, target_arch = "wasm32"))]
 mod typed_boundary_tests {
     use super::*;
+    #[cfg(feature = "browser-wasm-tests")]
+    use crate::storage::identity_record::PriorAppAuthorization;
     use nook_companion_core::{
         CompanionIdentityDiscoveryRequest, CompanionInstallationAppKey, CompanionUnlockedAppKey,
         ExtensionConnectScope, ExtensionPairingVaultType,
+    };
+    #[cfg(feature = "browser-wasm-tests")]
+    use nook_core::{
+        AppProtectionAssociation, DeviceIdentityProtection, DeviceKeyProtectionSetup,
+        PasskeyAccessProfile, WebAuthnCredentialId, WebAuthnPrfOutput,
     };
     use serde::Serialize;
     use serde_wasm_bindgen::Serializer;
@@ -576,10 +596,34 @@ mod typed_boundary_tests {
         }
     }
 
+    #[cfg(feature = "browser-wasm-tests")]
     #[wasm_bindgen_test]
     async fn public_handoff_roundtrip_preserves_correlation_and_cancellation() -> Result<(), JsError>
     {
+        let mut cleanup = NookVaultManager::new();
+        cleanup.delete_local_browser_data().await?;
         let mut scenario = PublicHandoffScenario::new()?;
+        let app = scenario.extension.device_identity()?;
+        let setup = DeviceKeyProtectionSetup::generate()?;
+        let credential_id = WebAuthnCredentialId::try_from(vec![8; 32])?;
+        let prf_output = WebAuthnPrfOutput::try_from(vec![9; 32])?;
+        let record = DeviceIdentityProtection::new(&app.secret_string()).with_passkey(
+            &nook_core::PasskeyProtectionInput {
+                credential_id: &credential_id,
+                user_handle: setup.user_handle(),
+                prf_input: setup.prf_input(),
+                prf_output: &prf_output,
+            },
+        )?;
+        crate::NookDatabase::save_new_protected_local_identity(
+            crate::IdentityDbSaveNewProtectedLocalIdentity {
+                app_key: &app,
+                record: &record,
+                prior_app_key: PriorAppAuthorization::Unavailable,
+                label: "Extension",
+            },
+        )
+        .await?;
         let pending = scenario.begin()?;
         let request = pending.request()?.to_rust()?;
         assert_eq!(request.transaction.discovery, scenario.discovery);
@@ -599,6 +643,15 @@ mod typed_boundary_tests {
         let response_value = response.to_rust()?;
         assert_eq!(response_value.request, request);
         assert!(!response_value.encrypted_envelope.is_empty());
+        let protection = scenario.extension.extension_protection_descriptor().await?;
+        let AppProtectionAssociation::PasskeyAntiHacker(profile) = protection.association else {
+            return Err(JsError::new("Expected extension passkey"));
+        };
+        assert_eq!(
+            profile.credential_fingerprint,
+            PasskeyAccessProfile::credential_identifier(&[8; 32])
+        );
+        assert!(profile.nook_name.is_empty());
         let admission =
             admit_companion_handoff_response(&Ts::new_unchecked(response.js_value()))?.to_rust()?;
         assert!(matches!(
