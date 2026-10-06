@@ -1,8 +1,10 @@
 import './session-message-dispatch-test-support'
-import { expect, spyOn, test } from 'bun:test'
+import { beforeAll, expect, spyOn, test } from 'bun:test'
 import {
+  configure_vault_application,
   DeviceMode,
   NookVaultManager,
+  VaultApplication,
 } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import {
   handleSessionMessage,
@@ -16,6 +18,10 @@ import {
   type ExtensionSessionRequest,
 } from '../src/offscreen/session-request-adapter'
 import { SessionOperationFailureKind } from '../src/lib/session-operation-queue'
+
+beforeAll(() => {
+  configure_vault_application(VaultApplication.Extension)
+})
 
 class ExtensionPasskeySetupFixture {
   readonly manager = new NookVaultManager()
