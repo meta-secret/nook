@@ -6,6 +6,7 @@ use super::queue::{
     MessageDefaultQueueDisposition, PasskeyCeremonyQueueDisposition, QueueDisposition,
 };
 use crate::ExtensionVaultEventPayload;
+use crate::credential_fill::CredentialKind;
 use nook_auth2::StoreId;
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -254,6 +255,22 @@ pub struct SecretGrantPayload {
     queue: QueueDisposition,
 }
 
+/// Existing browser session grant wire fields, with one explicit value selection.
+/// Camel-case grant keys preserve the established extension transport contract.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct FocusedSecretGrantPayload {
+    vault_store_id: String,
+    device_id: String,
+    device_public_key: String,
+    device_signing_public_key: String,
+    origin: String,
+    secret_id: String,
+    #[tsify(type = "keyof typeof CredentialKind")]
+    credential: CredentialKind,
+    queue: QueueDisposition,
+}
+
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct QueryGrantPayload {
@@ -422,6 +439,8 @@ pub enum ExtensionSessionRequest {
     ListLogins(OriginGrantPayload),
     #[serde(rename = "nook:extension-session-reveal-login")]
     RevealLogin(SecretGrantPayload),
+    #[serde(rename = "nook:extension-session-reveal-focused-login")]
+    RevealFocusedLogin(FocusedSecretGrantPayload),
     #[serde(rename = "nook:extension-session-list-authenticators")]
     ListAuthenticators(QueryGrantPayload),
     #[serde(rename = "nook:extension-session-authenticator-code")]
@@ -523,6 +542,7 @@ impl Drop for ExtensionSessionRequestWire {
             | ExtensionSessionRequest::ListPasskeys(_)
             | ExtensionSessionRequest::ListLogins(_)
             | ExtensionSessionRequest::RevealLogin(_)
+            | ExtensionSessionRequest::RevealFocusedLogin(_)
             | ExtensionSessionRequest::ListAuthenticators(_)
             | ExtensionSessionRequest::AuthenticatorCode(_)
             | ExtensionSessionRequest::PendingLoginSave(_)
@@ -550,6 +570,32 @@ impl ExtensionSessionRequestValidation {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn focused_reveal_transport_preserves_one_typed_value_selection() -> anyhow::Result<()> {
+        let request = ExtensionSessionRequest::RevealFocusedLogin(FocusedSecretGrantPayload {
+            vault_store_id: "store_SMypl8K0w9a".to_owned(),
+            device_id: "device".to_owned(),
+            device_public_key: "public".to_owned(),
+            device_signing_public_key: "signing".to_owned(),
+            origin: "https://example.com".to_owned(),
+            secret_id: "secret_SMypl8K0w9a".to_owned(),
+            credential: CredentialKind::Username,
+            queue: QueueDisposition::MessageDefault {},
+        });
+        let encoded = serde_json::to_string(&request)?;
+        let decoded: ExtensionSessionRequest = serde_json::from_str(&encoded)?;
+        assert_eq!(decoded, request);
+        assert!(encoded.contains("nook:extension-session-reveal-focused-login"));
+        assert!(
+            ExtensionSessionRequest::DECL.contains("nook:extension-session-reveal-focused-login")
+        );
+        let unknown_selection = encoded.replace("Username", "Unavailable");
+        assert!(serde_json::from_str::<ExtensionSessionRequest>(&unknown_selection).is_err());
+        let missing_selection = encoded.replace(r#""credential":"Username","#, "");
+        assert!(serde_json::from_str::<ExtensionSessionRequest>(&missing_selection).is_err());
+        Ok(())
+    }
 
     #[test]
     fn passkey_setup_transport_requires_and_preserves_user_label() -> anyhow::Result<()> {
