@@ -179,7 +179,10 @@ export abstract class PasswordFormUnownedScopeDiscovery extends AuthenticationIn
   }
 
   protected containerLooksLikeExplicitAuthSurface(container: Element): boolean {
-    return new AuthenticationContainerIdentity(container).present;
+    return this.cachedLabel(
+      CompanionWasmLabelKind.AuthenticationContainerIdentity,
+      new AuthenticationContainerIdentity(container).text,
+    );
   }
 
   private containerIsFormlessAuthenticationScope({

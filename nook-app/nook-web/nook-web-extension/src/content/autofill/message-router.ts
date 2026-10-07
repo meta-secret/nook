@@ -1,3 +1,7 @@
+import {
+  FocusedPickerOwnership,
+  focusedCredentialInteraction,
+} from './focused-credential-interaction'
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import { Schema } from 'effect'
 import { LoginPickerPageVerification } from '../../lib/inline-login-picker'
@@ -37,6 +41,7 @@ export function removeScannedWidget(): void {
 }
 
 async function clearAuthenticationSurface(): Promise<void> {
+  focusedCredentialInteraction.clear()
   const dismissal = loginSaveInteraction.dismissPendingSaveOffer()
   removeScannedWidget()
   await dismissal
@@ -98,6 +103,18 @@ export const routeAutofillMessage: AutofillMessageListener = (
     loginCanceled.value.payload.origin === location.origin
   ) {
     const message = loginCanceled.value
+    switch (
+      focusedCredentialInteraction.ownsPicker(message.payload.requestId)
+    ) {
+      case FocusedPickerOwnership.Owned: {
+        focusedCredentialInteraction.cancelPicker()
+        const response: Parameters<typeof sendResponse>[0] = { ok: true }
+        sendResponse(response)
+        return false
+      }
+      case FocusedPickerOwnership.Unowned:
+        break
+    }
     const taken = pickerState.takeLogin(message.payload.requestId)
     if (taken.kind !== PendingPickerTakeKind.Taken) return false
     const pending = taken.request
@@ -130,6 +147,18 @@ export const routeAutofillMessage: AutofillMessageListener = (
     loginSelected.value.payload.origin === location.origin
   ) {
     const message = loginSelected.value
+    switch (
+      focusedCredentialInteraction.ownsPicker(message.payload.requestId)
+    ) {
+      case FocusedPickerOwnership.Owned: {
+        void focusedCredentialInteraction.select(message)
+        const response: Parameters<typeof sendResponse>[0] = { ok: true }
+        sendResponse(response)
+        return false
+      }
+      case FocusedPickerOwnership.Unowned:
+        break
+    }
     const taken = pickerState.takeLogin(message.payload.requestId)
     if (taken.kind !== PendingPickerTakeKind.Taken) return false
     const pending = taken.request

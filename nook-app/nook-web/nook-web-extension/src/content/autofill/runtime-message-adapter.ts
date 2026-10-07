@@ -1,3 +1,7 @@
+import type {
+  WebsiteFocusedLoginRevealMessage,
+  WebsiteFocusedLoginFillResponse,
+} from '../../lib/focused-login-fill-messages'
 /* eslint-disable nook-typed-api/no-raw-object-arguments, @typescript-eslint/no-unsafe-type-assertion -- Chrome runtime payloads are decoded and narrowed inside this dedicated adapter. */
 import {
   CompanionWasmContentResponseKind,
@@ -76,6 +80,7 @@ export type RuntimeMessageDelivery<Response> =
   | { kind: RuntimeMessageDeliveryKind.Unavailable }
 
 type RuntimeMessageResponse =
+  | WebsiteFocusedLoginFillResponse
   | AuthenticationOutcomeResponse
   | AuthenticationWorkflowRoutingResponse
   | AuthenticationWorkflowSnapshotResponse
@@ -104,6 +109,7 @@ export type AuthenticationWorkflowSnapshotRuntimeResponse = {
 }
 
 export type ExtensionRuntimeRequest =
+  | WebsiteFocusedLoginRevealMessage
   | AuthenticationOutcomeClassifyMessage
   | AuthenticationWorkflowSnapshotMessage
   | AuthenticatorPickerCancelMessage

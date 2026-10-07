@@ -108,6 +108,7 @@ function sessionMessagePriority(
     case ExtensionSessionMessageType.PlanLoginSave:
     case ExtensionSessionMessageType.CommitLoginSave:
     case ExtensionSessionMessageType.RevealLogin:
+    case ExtensionSessionMessageType.RevealFocusedLogin:
     case ExtensionSessionMessageType.AuthenticatorCode:
     case ExtensionSessionMessageType.AuthenticatorEnrollConfirm:
     case ExtensionSessionMessageType.AuthenticatorBackupAttach:

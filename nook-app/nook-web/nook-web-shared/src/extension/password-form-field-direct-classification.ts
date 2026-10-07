@@ -4,6 +4,7 @@ import {
   authentication_username_evidence,
   has_login_context,
   looks_like_email_verification_body,
+  looks_like_authentication_container_identity,
   looks_like_login_advance_control_label,
   looks_like_manual_checkpoint_label,
   looks_like_one_time_code_auto_submit_signal,
@@ -85,6 +86,8 @@ export class PasswordFormFieldDirectClassification {
 
   label({ kind, value }: DirectLabelRequest): boolean {
     switch (kind) {
+      case CompanionWasmLabelKind.AuthenticationContainerIdentity:
+        return looks_like_authentication_container_identity(value);
       case CompanionWasmLabelKind.LoginAdvance:
         return looks_like_login_advance_control_label(value);
       case CompanionWasmLabelKind.PasskeyControl:

@@ -63,3 +63,31 @@ export function websiteLoginRevealSessionRequest({
     },
   }
 }
+
+type WebsiteFocusedLoginRevealSessionRequest = Extract<
+  ExtensionSessionTransportRequest,
+  { type: typeof ExtensionSessionMessageType.RevealFocusedLogin }
+>
+
+type WebsiteFocusedLoginRevealSessionProjection = {
+  readonly grant: StoredExtensionPairingGrant
+  readonly origin: string
+  readonly secretId: string
+  readonly credential: WebsiteFocusedLoginRevealSessionRequest['payload']['credential']
+}
+
+/** Projects the existing authorized grant into the generated minimum-disclosure request. */
+export function websiteFocusedLoginRevealSessionRequest(
+  request: WebsiteFocusedLoginRevealSessionProjection,
+): WebsiteFocusedLoginRevealSessionRequest {
+  return {
+    type: ExtensionSessionMessageType.RevealFocusedLogin,
+    payload: {
+      ...extensionSessionGrantIdentity(request.grant),
+      origin: request.origin,
+      secretId: request.secretId,
+      credential: request.credential,
+      queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+    },
+  }
+}

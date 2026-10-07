@@ -19,6 +19,7 @@ export const ExtensionSessionMessageType = {
   ListPasskeys: 'nook:extension-session-list-passkeys',
   ListLogins: 'nook:extension-session-list-logins',
   RevealLogin: 'nook:extension-session-reveal-login',
+  RevealFocusedLogin: 'nook:extension-session-reveal-focused-login',
   ListAuthenticators: 'nook:extension-session-list-authenticators',
   AuthenticatorCode: 'nook:extension-session-authenticator-code',
   AuthenticatorEnrollPreview:
