@@ -4,48 +4,49 @@
 
 ### Required bootstrap
 
-Nook pins Meta-Cortex v0.15.0. Identify the consuming project root and the
-installed library root separately. Creating a Git worktree does not install
-the framework. An assignment may use the verified ignored `.meta-cortex/`
-library in the original checkout while its task worktree contains project work.
-Never copy the library or a ledger database into the task worktree.
+Nook pins Meta-Cortex `0.16.0` in [`.meta-cortex-version`](../.meta-cortex-version).
+Use the checked-in [POSIX wrapper](../meta-cortexw) or
+[PowerShell wrapper](../meta-cortexw.ps1) from the consuming worktree.
+Identify the consuming project root and installed library root separately.
+Creating a Git worktree does not install the framework. An assignment may use
+a verified library from another worktree only when its version matches the
+consuming worktree's pin. Never copy the library or a ledger database into the
+task worktree.
 Use the consuming project's or assigned worktree's absolute path in every YAML
 request. Run framework scripts from the supplied library root.
 
-Resolve the CLI before normal repository work. `command -v meta-cortex` must
-select the intended executable, and `meta-cortex --version` must report
-`0.15.0`. If the command is missing or resolves to another version, install the
-Nook-pinned [v0.15.0 release](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/tag/v0.15.0)
-and correct command resolution. Run `meta-cortex list` to inspect supported
-typed requests. The CLI upgrade and installed framework replacement are
-separate operations; use the upstream [v0.15.0 release notes](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/tag/v0.15.0)
-and [pinned project update procedure](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/blob/39d75633c1c32fc77aff436d1d3a2a90806fd170/README.md#update-a-project).
+Verify the pinned executable before normal repository work. The commands below
+run from the consuming worktree's root. Install the Linux prerequisites below
+before either command on Linux. The version must match its committed pin.
+`list` supplies the supported typed requests.
 
 ```sh
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/download/v0.15.0/meta-cortex-installer.sh | sh
+./meta-cortexw --version
+./meta-cortexw list
 ```
 
-On Windows x86-64, use the native PowerShell installer:
+On Windows x86-64, use the native PowerShell wrapper:
 
 ```powershell
-irm https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/download/v0.15.0/meta-cortex-installer.ps1 | iex
-Get-Command meta-cortex
-meta-cortex --version
-meta-cortex list
+.\meta-cortexw.ps1 --version
+.\meta-cortexw.ps1 list
 ```
 
-On Linux, install the pinned release’s [native runtime prerequisites](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/blob/39d75633c1c32fc77aff436d1d3a2a90806fd170/CONTRIBUTING.md#native-dashboard-prerequisites)
-before invoking the executable. GTK 3 and WebKitGTK 4.1 runtime libraries are
-required even for headless commands.
+The upstream [wrapper contract](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/blob/f385941d7482a4d82d5b327236540f724f37fd6c/README.md#run-the-pinned-command)
+owns installation, cache paths, prerequisites, and failure behavior. The wrapper
+bootstraps the exact pin into a separate cache directory per version.
+A global command is optional and does not select Nook's executable.
+On Linux, install the pinned release's [native runtime prerequisites](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/blob/f385941d7482a4d82d5b327236540f724f37fd6c/CONTRIBUTING.md#native-dashboard-prerequisites)
+before either command. GTK 3 and WebKitGTK 4.1 are required even for headless use.
 
-- **Prohibited:** invoke `meta-cortex list` on Linux before installing its native
+- **Prohibited:** invoke `./meta-cortexw list` on Linux before installing its native
   runtime prerequisites because the command is headless.
 - **Required:** install the pinned GTK 3 and WebKitGTK 4.1 runtime prerequisites
-  before invoking `meta-cortex list` on Linux.
+  before invoking `./meta-cortexw list` on Linux.
 
 Windows initialization uses native tools and requires neither WSL nor Git Bash.
-Use `Get-Command meta-cortex` instead of `command -v` in PowerShell.
-Both shells must resolve the pinned CLI before proceeding.
+Both shells must verify the pinned CLI before proceeding. Stop on a wrapper
+bootstrap failure. Report its diagnostic without substituting a global command.
 
 Before using the framework, confirm that `AGENTS.md` and `meta-cortex.toml`
 exist in the resolved library root. For initial project setup, that root is
@@ -58,7 +59,7 @@ tracked root `AGENTS.md` owns Nook's harness instructions; initialization must
 leave those instructions unchanged.
 
 ```sh
-meta-cortex run --request - <<'REQUEST'
+./meta-cortexw run --request - <<'REQUEST'
 version: 1
 project: /absolute/path/to/this/Nook/worktree
 operation:
@@ -85,13 +86,13 @@ operation:
     arguments:
       harness: codex
       instructions: skip
-'@ | meta-cortex run --request -
+'@ | .\meta-cortexw.ps1 run --request -
 ```
 
 Do not initialize over an existing installation. If either required framework
 file is missing, initialization fails, or the versions do not match, follow
-the upstream replacement procedure. Back up or move the old installation
-before Initialize.
+the upstream [replacement procedure](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/blob/f385941d7482a4d82d5b327236540f724f37fd6c/README.md#replace-an-installed-framework).
+Back up or move the old installation before Initialize.
 Reapply the prior role models and reasoning efforts to the newly generated
 configuration. Preserve the repository identity as described below. Do not
 overwrite the new configuration with the old file.
@@ -101,7 +102,7 @@ Verify the installation with `Framework / Info` using the same absolute
 project path:
 
 ```sh
-meta-cortex run --request - <<'REQUEST'
+./meta-cortexw run --request - <<'REQUEST'
 version: 1
 project: /absolute/path/to/this/Nook/worktree
 operation:
@@ -123,14 +124,18 @@ operation:
   command:
     name: Info
     arguments: {}
-'@ | meta-cortex run --request -
+'@ | .\meta-cortexw.ps1 run --request -
 ```
 
-`Framework / Info` reports schema version 5. Continue only when
-`schema_version` is `5`, `cli_version` and `framework_version` both report
-`0.15.0`, and the Codex integration reports `Connected` for the project owning
-the installation. Verify Info against that project when a task uses its shared
-library. Then read the installed [Meta-Cortex circuit breaker](../.meta-cortex/CIRCUIT-BREAKER.md), followed by
+`Framework / Info` must verify all of these conditions before work continues:
+
+- `schema_version` is `5`.
+- `cli_version` and `framework_version` both match the consuming worktree's pin
+  (`0.16.0` here).
+- The Codex integration reports `Connected` for the project owning the installation.
+
+Verify Info against that project when a task uses its shared library.
+Then read the installed [Meta-Cortex circuit breaker](../.meta-cortex/CIRCUIT-BREAKER.md), followed by
 its [entry point](../.meta-cortex/AGENTS.md). If the CLI cannot be installed,
 initialization fails, or Info cannot verify the framework, stop and report the
 exact failure or affected path.
@@ -145,6 +150,38 @@ PATH in each new shell. Stop if that check fails.
   and `instructions: skip`, then verify the pinned CLI and framework. For an
   assigned task worktree, carry the verified library root separately.
 
+#### Different versions in simultaneous worktrees
+
+Each worktree uses its checked-out wrapper and exact version pin. Follow the
+upstream [pin upgrade procedure](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/blob/f385941d7482a4d82d5b327236540f724f37fd6c/README.md#upgrade-the-project-pin)
+when choosing a different published release. A pin change selects the CLI.
+It leaves installed frameworks unchanged.
+
+1. Verify the CLI through that worktree's wrapper.
+2. Select a library that matches that pin. If other worktrees still need the
+   shared library's version, keep that library unchanged.
+3. Initialize an absent `.meta-cortex/` in the consuming worktree with its
+   wrapper and `instructions: skip`. For an existing installation, use the
+   supported replacement procedure above.
+4. Reapply the assigned configuration values. Verify Info for the project
+   owning the selected library.
+5. Pass that verified library root separately to every assignment. Run library
+   scripts from it. Invoke the consuming worktree's wrapper for CLI requests.
+
+The wrapper preserves the caller's working directory. From an immediate `src/`
+subdirectory, `../meta-cortexw run --request ../request.yaml` addresses the
+root request file. PowerShell uses
+`..\meta-cortexw.ps1 run --request ..\request.yaml`. Use actual paths from deeper
+directories. Every YAML `project` remains the explicit absolute consuming path.
+
+**Prohibited:** replace a shared `0.15.0` library while another assignment uses
+it, or pass it to an assignment whose wrapper pin is `0.16.0`.
+
+**Required:** keep the older library for its existing assignments. Initialize
+and verify `0.16.0` in the consuming worktree, then pass that library to its
+assignments. Check [shared ledger compatibility](#repository-identity-and-ledger-migration)
+before either version writes. Separate CLI caches do not isolate ledger storage.
+
 ### Configuration and ownership
 
 Keep `meta-cortex.toml` in the resolved ignored library installation.
@@ -153,7 +190,7 @@ Meta-Cortex owns generic role configuration and launch procedure through its
 Read the supplied active library configuration and pass each role's configured model
 and `reasoning_effort`. Preserve those configured values during upgrades. Do not
 copy role settings from a canonical checkout or maintain Nook-specific
-overrides. Meta-Cortex v0.15.0 configures model and reasoning effort for
+overrides. Meta-Cortex v0.16.0 configures model and reasoning effort for
 each role. Its `[host]` section also declares `required_total_agents`.
 Preserve the newly generated configuration shape. Set the host requirement to
 Nook's configured total of `20` and follow upstream
@@ -228,22 +265,25 @@ tooling and graph topology; they do not redefine generic authoring rules.
 
 ### Release pin
 
-The [v0.15.0 release](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/tag/v0.15.0)
+The [v0.16.0 release](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/tag/v0.16.0)
 identifies upstream commit
-[`39d75633c1c32fc77aff436d1d3a2a90806fd170`](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/commit/39d75633c1c32fc77aff436d1d3a2a90806fd170).
-Use that release's installer and framework source together.
+[`f385941d7482a4d82d5b327236540f724f37fd6c`](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/commit/f385941d7482a4d82d5b327236540f724f37fd6c).
+The checked-in launchers are the official source files from that revision.
+Keep their upstream behavior. Do not maintain a Nook launcher implementation.
 
-The Nook CLI release pin is 0.15.0. `preflight/Dockerfile` pins the official
-v0.15.0 installer URL. `.github/workflows/repository-policy.yml` and
-`.task/ci-workflows.yml` pin the upstream library commit
-`39d75633c1c32fc77aff436d1d3a2a90806fd170`. `preflight/tests/loom_contracts.rs`
-asserts the expected `v0.15.0` installer release. Future upgrades update this
-contract, each source pin, and their owning policy and test contracts together.
+The Nook CLI release pin is `0.16.0` in `.meta-cortex-version`.
+`preflight/Dockerfile` uses the project wrapper with that pin.
+`.github/workflows/repository-policy.yml` and `.task/ci-workflows.yml` pin the
+upstream library commit `f385941d7482a4d82d5b327236540f724f37fd6c`.
+`preflight/tests/loom_contracts.rs` owns the corresponding policy assertions.
+Future upgrades update this contract, the exact version pin, every library
+source pin, and their owning assertions together. Update launcher source from
+an inspected fixed upstream revision when the launchers themselves change.
 
-- **Prohibited:** Update only the installer URL or only the pinned library
-  commit.
-- **Required:** Update the version contract, every source pin, and the
-  corresponding policy and test assertions in the same change.
+- **Prohibited:** change only `.meta-cortex-version` while CI still fetches the
+  previous library source, or replace its exact version with `latest`.
+- **Required:** update the pin, matching library source pins, this contract,
+  and policy assertions in the same change. Verify through the project wrapper.
 
 ### Repository identity and ledger migration
 
@@ -257,7 +297,14 @@ separate from ledger database schema `6`. The upstream ledger protocol owns
 released request and task formats, migration behavior, and supported readers.
 Keep the existing per-feature database in the resolved repository data directory.
 
-- Stop all older ledger writers before upgrading.
+Linked worktrees share repository identity and feature ledgers even when their
+CLI pins and library roots differ. Version-separated executable caches do not
+isolate database schemas or make mixed-version writers safe. Before simultaneous
+writers use the same feature, verify compatibility through the upstream ledger
+contract for both releases. Stop older writers before any schema migration.
+Do not claim mixed-version compatibility from successful wrapper bootstrap alone.
+
+- Stop all older ledger writers before upgrading shared ledger storage.
 - Preserve a consistent database backup with its engine-managed sidecars.
 - Preserve `.meta-cortex/repository-id` from the actual Git main checkout.
 - Restore that exact UUID to the replacement main-checkout installation before
@@ -287,5 +334,5 @@ existing feature. Preserve its database and engine-managed sidecars together.
 - Do not treat a CLI upgrade as an installed-framework replacement.
 - Do not continue repository work after initialization or framework verification
   fails.
-- Do not upgrade while old ledger writers are active.
+- Do not upgrade shared ledger storage while old ledger writers are active.
 - Do not manually copy, reset, or delete legacy databases, records, or sidecars.
