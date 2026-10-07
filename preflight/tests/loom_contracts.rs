@@ -352,7 +352,7 @@ fn meta_cortex_integration_documents_host_native_execution_and_storage_contracts
         "no `mode` or `service_tier` fields",
         "../.meta-cortex/teams/gizmo-team/docs/agent-ledger.md#storage-and-ownership",
         "../.meta-cortex/teams/gizmo-team/docs/agent-ledger.md#storage-migration-and-supported-readers",
-        "Stop all older ledger writers before upgrading.",
+        "Stop all older ledger writers before upgrading shared ledger storage.",
         "Preserve a consistent database backup with its engine-managed sidecars.",
         "Preserve `.meta-cortex/repository-id` from the actual Git main checkout.",
         "Restore that exact UUID to the replacement main-checkout installation before\n  initializing features or linked worktrees.",
@@ -423,7 +423,7 @@ fn preflight_initializes_released_meta_cortex_with_only_default_tool_policies() 
         "Docker preflight must stage the pinned Vale executable at Meta-Cortex's expected path",
     );
     let initialize_request_prefix = concat!(
-        "meta-cortex run --request - <<'YAML'\n",
+        "./meta-cortexw run --request - <<'YAML'\n",
         "version: 1\n",
         "project: /meta-secret/nook\n",
         "operation:\n",
@@ -455,7 +455,7 @@ fn preflight_initializes_released_meta_cortex_with_only_default_tool_policies() 
         "Docker Initialize may spell out only the framework's default tool policies"
     );
     let info_request = concat!(
-        "meta-cortex run --request - <<'YAML'\n",
+        "./meta-cortexw run --request - <<'YAML'\n",
         "version: 1\n",
         "project: /meta-secret/nook\n",
         "operation:\n",
@@ -485,19 +485,19 @@ fn preflight_initializes_released_meta_cortex_with_only_default_tool_policies() 
         git_metadata_copy < initialize_position,
         "policy source must copy Git metadata before Meta-Cortex Framework Initialize"
     );
-    assert!(
-        dockerfile.contains(
-            "https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/download/v0.15.0/meta-cortex-installer.sh"
-        ),
-        "Meta-Cortex installation must use the official v0.15.0 release"
+    assert_eq!(
+        RepositoryFixture::repository_root()
+            .read(".meta-cortex-version")
+            .trim(),
+        "0.16.0",
+        "Meta-Cortex project wrapper must pin the official 0.16.0 release"
     );
     assert!(
-        dockerfile.contains(
-            "META_CORTEX_UNMANAGED_INSTALL=/usr/local/bin sh /tmp/meta-cortex-installer.sh"
-        ) && dockerfile.contains(info_request)
+        dockerfile.contains(info_request)
+            && !dockerfile.contains("meta-cortex-installer.sh")
             && !dockerfile.contains("meta-cortex init ")
             && !dockerfile.contains("meta-cortex info "),
-        "Meta-Cortex installation must use the supported framework YAML requests"
+        "Meta-Cortex installation must use the project wrapper and supported framework YAML requests"
     );
     assert!(
         !dockerfile.contains("sed -i"),
@@ -510,7 +510,7 @@ fn repository_policy_pins_meta_cortex_library_to_the_selected_commit() {
     let root = RepositoryFixture::repository_root();
     let workflow = root.read(".github/workflows/repository-policy.yml");
     let taskfile = root.read(".task/ci-workflows.yml");
-    let expected_commit = "39d75633c1c32fc77aff436d1d3a2a90806fd170";
+    let expected_commit = "f385941d7482a4d82d5b327236540f724f37fd6c";
     let workflow_checkout = format!(
         "          repository: ai-ai-ai-ai-ai-ai-ai/meta-cortex\n          ref: {expected_commit}\n          path: .meta-cortex-source"
     );
