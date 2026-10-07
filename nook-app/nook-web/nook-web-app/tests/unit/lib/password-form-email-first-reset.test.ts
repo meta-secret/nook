@@ -17,6 +17,12 @@ class EmailFirstResetFixture {
     const [observation] =
       passwordFormInteraction.summarizeAuthenticationWorkflowForms()
     switch (typeof observation) {
+      case 'string':
+      case 'number':
+      case 'bigint':
+      case 'boolean':
+      case 'symbol':
+      case 'function':
       case 'undefined':
         throw new Error('Expected the captured email-first observation')
       case 'object':
@@ -44,6 +50,12 @@ describe('captured email-first reset utility shell', () => {
     expect(facts.fields.currentPasswordFieldCount).toBe(0)
     const detail = facts.detailedAdvanceControl
     switch (typeof detail) {
+      case 'string':
+      case 'number':
+      case 'bigint':
+      case 'boolean':
+      case 'symbol':
+      case 'function':
       case 'undefined':
         throw new Error('Expected detailed Continue observation')
       case 'object':
@@ -57,6 +69,12 @@ describe('captured email-first reset utility shell', () => {
         expect(control?.label).toBe('Continue')
         expect(control?.machineIdentity?.length).toBe(740)
         switch (typeof control) {
+          case 'string':
+          case 'number':
+          case 'bigint':
+          case 'boolean':
+          case 'symbol':
+          case 'function':
           case 'undefined':
             throw new Error('Expected the full captured Continue observation')
           case 'object':

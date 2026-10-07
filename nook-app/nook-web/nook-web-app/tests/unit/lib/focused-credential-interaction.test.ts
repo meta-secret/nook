@@ -50,7 +50,29 @@ class FocusedInteractionFixture {
           kind: RuntimeMessageDeliveryKind.Delivered,
           response: new FocusedFieldRecognitionOperation(message).run(),
         }
-      default:
+      case CompanionWasmSessionMessageType.GetAuthenticationActivityProgress:
+      case CompanionWasmSessionMessageType.ExtractAuthenticationBackupCodeCandidates:
+      case CompanionWasmSessionMessageType.ProjectAuthenticationNavigationPath:
+      case CompanionWasmSessionMessageType.AuthenticationAuthenticatorSetupObservation:
+      case CompanionWasmSessionMessageType.AuthenticationWorkflowPilotPresentationCapability:
+      case CompanionWasmSessionMessageType.PasswordWorkflowActivity:
+      case CompanionWasmSessionMessageType.BindAuthenticationPageObservationFacts:
+      case CompanionWasmSessionMessageType.AuthenticationPageObservationFactsMatchBinding:
+      case CompanionWasmSessionMessageType.AuthenticationEnrollmentWorkflowMatch:
+      case CompanionWasmSessionMessageType.HasLoginContext:
+      case CompanionWasmSessionMessageType.ClassifyPageInputField:
+      case CompanionWasmSessionMessageType.ClassifyPageInputs:
+      case CompanionWasmSessionMessageType.LooksLikeLoginAdvanceControlLabel:
+      case CompanionWasmSessionMessageType.LooksLikeManualCheckpointLabel:
+      case CompanionWasmSessionMessageType.LooksLikePasskeyControlLabel:
+      case CompanionWasmSessionMessageType.LooksLikeEmailVerificationBody:
+      case CompanionWasmSessionMessageType.LooksLikeOneTimeCodeAutoSubmitSignal:
+      case CompanionWasmSessionMessageType.AuthenticationRecoveryCopyEvidence:
+      case CompanionWasmSessionMessageType.IsNookVaultAppUrl:
+      case CompanionWasmSessionMessageType.DecodeAuthenticationWorkflowRuntimeResponse:
+      case CompanionWasmSessionMessageType.DecodeContentRuntimeResponse:
+      case CompanionWasmSessionMessageType.EvaluateAuthenticationPolicies:
+      case CompanionWasmSessionMessageType.RevalidateApprovedAuthenticationWorkflow:
         return { kind: RuntimeMessageDeliveryKind.Unavailable }
     }
   }
