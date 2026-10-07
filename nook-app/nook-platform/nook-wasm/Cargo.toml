@@ -10,6 +10,7 @@ repository.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+derive_more = { version = "2.1.1", default-features = false, features = ["from"] }
 tsify = { version = "0.5.8", default-features = false, features = ["js"] }
 nook-companion-core = { path = "../nook-companion-core" }
 nook-core = { path = "../nook-core" }

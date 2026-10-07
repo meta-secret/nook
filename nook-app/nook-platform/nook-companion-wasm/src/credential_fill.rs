@@ -4,6 +4,91 @@ use crate::page_form_policy::NookPageInputFieldObservation;
 use nook_companion_core::credential_fill::{self, field};
 use wasm_bindgen::prelude::wasm_bindgen;
 
+pub use credential_fill::FocusedCredentialOpportunity;
+use credential_fill::FocusedCredentialSelection;
+
+#[wasm_bindgen]
+pub struct FocusedCredentialRecognition {
+    opportunity: FocusedCredentialOpportunity,
+}
+
+#[wasm_bindgen]
+impl FocusedCredentialRecognition {
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn opportunity(&self) -> FocusedCredentialOpportunity {
+        self.opportunity
+    }
+
+    pub fn credential_selection(
+        &self,
+    ) -> Result<tsify::Ts<FocusedCredentialSelection>, wasm_bindgen::JsError> {
+        use tsify::Tsify;
+        self.opportunity
+            .credential_selection()?
+            .into_ts()
+            .map_err(Into::into)
+    }
+}
+
+#[wasm_bindgen]
+pub struct FocusedCredentialRevalidation {
+    opportunity: FocusedCredentialOpportunity,
+    field: nook_companion_core::PageInputFieldObservation,
+}
+
+#[wasm_bindgen]
+impl FocusedCredentialRevalidation {
+    #[wasm_bindgen(constructor)]
+    #[must_use]
+    pub fn new(field: &NookPageInputFieldObservation) -> Self {
+        Self {
+            opportunity: FocusedCredentialOpportunity::Unavailable,
+            field: field.as_core().clone(),
+        }
+    }
+
+    #[must_use]
+    pub fn with_opportunity(mut self, opportunity: FocusedCredentialOpportunity) -> Self {
+        self.opportunity = opportunity;
+        self
+    }
+}
+
+#[wasm_bindgen]
+#[must_use]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        unowned_function,
+        reason = "FFI boundary: wasm-bindgen focused field classification export"
+    )
+)]
+pub fn classify_companion_focused_credential_field(
+    field: &NookPageInputFieldObservation,
+) -> FocusedCredentialRecognition {
+    FocusedCredentialRecognition {
+        opportunity: FocusedCredentialOpportunity::from_page_input(field.as_core()),
+    }
+}
+
+#[wasm_bindgen]
+#[must_use]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        unowned_function,
+        reason = "FFI boundary: wasm-bindgen focused field revalidation export"
+    )
+)]
+pub fn revalidate_companion_focused_credential_field(
+    request: &FocusedCredentialRevalidation,
+) -> FocusedCredentialRecognition {
+    FocusedCredentialRecognition {
+        opportunity: request.opportunity.revalidate(&request.field),
+    }
+}
+
 #[wasm_bindgen]
 #[derive(Clone, Debug)]
 pub struct CredentialFillFieldRole {
@@ -425,6 +510,58 @@ impl CredentialFillResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn focused_exports_borrow_fields_and_preserve_revalidation_role() {
+        let field = NookPageInputFieldObservation::new(
+            nook_companion_core::PageInputType::Password,
+            false,
+            false,
+            vec!["current-password".to_owned()],
+            "password".to_owned(),
+            false,
+        );
+        assert_eq!(
+            classify_companion_focused_credential_field(&field).opportunity(),
+            FocusedCredentialOpportunity::CurrentPassword
+        );
+        let request = FocusedCredentialRevalidation::new(&field)
+            .with_opportunity(FocusedCredentialOpportunity::CurrentPassword);
+        assert_eq!(
+            revalidate_companion_focused_credential_field(&request).opportunity(),
+            FocusedCredentialOpportunity::CurrentPassword
+        );
+        let wrong_role = FocusedCredentialRevalidation::new(&field)
+            .with_opportunity(FocusedCredentialOpportunity::Username);
+        assert_eq!(
+            revalidate_companion_focused_credential_field(&wrong_role).opportunity(),
+            FocusedCredentialOpportunity::Unavailable
+        );
+        assert_eq!(
+            field.as_core().input_type,
+            nook_companion_core::PageInputType::Password
+        );
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen_test::wasm_bindgen_test]
+    fn focused_selector_bridge_returns_only_the_canonical_kind() -> Result<(), wasm_bindgen::JsError>
+    {
+        let recognition = FocusedCredentialRecognition {
+            opportunity: FocusedCredentialOpportunity::CurrentPassword,
+        };
+        let selection = recognition.credential_selection()?.to_rust()?;
+        assert_eq!(
+            selection.credential,
+            credential_fill::CredentialKind::CurrentPassword
+        );
+        let unavailable = FocusedCredentialRecognition {
+            opportunity: FocusedCredentialOpportunity::Unavailable,
+        };
+        assert!(unavailable.credential_selection().is_err());
+        Ok(())
+    }
 
     struct CredentialObservationFixture<'a> {
         field_index: field::Index,

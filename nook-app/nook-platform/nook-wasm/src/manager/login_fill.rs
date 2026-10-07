@@ -3,6 +3,7 @@
 use super::NookVaultManager;
 use crate::NookError;
 use crate::types::{LoginAccountProjection, NookLoginAccount, NookLoginFillCredential};
+use crate::types::{NookFocusedLoginFillCredential, NookFocusedLoginFillRequest};
 use nook_core::{SecretId, SecretType, SecretValue};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
@@ -12,6 +13,25 @@ struct RevealLoginRequest<'a> {
 }
 
 impl NookVaultManager {
+    fn reveal_matching_login_for_focused_fill(
+        &self,
+        request: NookFocusedLoginFillRequest,
+    ) -> Result<NookFocusedLoginFillCredential, NookError> {
+        let secret_id = request.secret_id.into_inner();
+        let id = SecretId::parse(&secret_id)?;
+        let crypto = self.vault.crypto.get()?;
+        let record =
+            nook_core::VaultSecretSession::new(&self.vault.meta.secrets, crypto).decrypt(&id)?;
+        nook_core::FocusedLoginFillProjection {
+            record,
+            origin: &request.origin,
+            credential: request.credential,
+        }
+        .reveal()
+        .map(NookFocusedLoginFillCredential::from)
+        .map_err(|error| NookError::Decryption(error.to_string()))
+    }
+
     fn ensure_login_fill_extension_capability(&self) -> Result<(), NookError> {
         // Same extension Simple Vault boundary as website passkeys.
         self.ensure_passkey_extension_capability()
@@ -181,6 +201,35 @@ mod browser_tests {
         })?;
         assert_eq!(credential.username(), "alice");
         assert_eq!(credential.password(), "correct");
+        let focused_username =
+            manager.reveal_matching_login_for_focused_fill(NookFocusedLoginFillRequest {
+                secret_id: SecretId::parse("secret_SMypl8K0w9a")?,
+                origin: nook_core::FocusedLoginFillOrigin::try_from(
+                    "https://example.com/account".to_owned(),
+                )?,
+                credential: nook_core::CredentialKind::Username,
+            })?;
+        assert_eq!(focused_username.value(), "alice");
+        let focused_password =
+            manager.reveal_matching_login_for_focused_fill(NookFocusedLoginFillRequest {
+                secret_id: SecretId::parse("secret_SMypl8K0w9a")?,
+                origin: nook_core::FocusedLoginFillOrigin::try_from(
+                    "https://example.com/account".to_owned(),
+                )?,
+                credential: nook_core::CredentialKind::CurrentPassword,
+            })?;
+        assert_eq!(focused_password.value(), "correct");
+        assert!(
+            manager
+                .reveal_matching_login_for_focused_fill(NookFocusedLoginFillRequest {
+                    secret_id: SecretId::parse("secret_SMypl8K0w9a")?,
+                    origin: nook_core::FocusedLoginFillOrigin::try_from(
+                        "https://other.example".to_owned()
+                    )?,
+                    credential: nook_core::CredentialKind::Username,
+                })
+                .is_err()
+        );
         assert!(
             manager
                 .reveal_matching_login_for_fill(&RevealLoginRequest {
@@ -217,10 +266,50 @@ mod browser_tests {
                 .is_err()
         );
     }
+
+    #[wasm_bindgen_test]
+    fn focused_reveal_requires_unlocked_crypto_and_strict_secret_identity() -> anyhow::Result<()> {
+        let manager = NookVaultManager::new();
+        let origin = nook_core::FocusedLoginFillOrigin::try_from("https://example.com".to_owned())?;
+        assert!(
+            manager
+                .reveal_matching_login_for_focused_fill(NookFocusedLoginFillRequest {
+                    secret_id: SecretId::parse("secret_SMypl8K0w9a")?,
+                    origin: origin.clone(),
+                    credential: nook_core::CredentialKind::Username,
+                })
+                .is_err()
+        );
+        assert!(
+            manager
+                .reveal_matching_login_for_focused_fill(NookFocusedLoginFillRequest {
+                    secret_id: SecretId::from_vault_record("not-a-secret-id"),
+                    origin,
+                    credential: nook_core::CredentialKind::CurrentPassword,
+                })
+                .is_err()
+        );
+        Ok(())
+    }
 }
 
 #[wasm_bindgen]
 impl NookVaultManager {
+    /// Hydrates the existing externally retained WASM vault session before one fill.
+    #[wasm_bindgen]
+    pub async fn reveal_website_login_for_focused_fill(
+        &mut self,
+        request: tsify::Ts<NookFocusedLoginFillRequest>,
+    ) -> Result<NookFocusedLoginFillCredential, JsError> {
+        let request = request
+            .to_rust()
+            .map_err(|_| JsError::new("Invalid focused login fill request."))?;
+        self.ensure_login_fill_extension_capability()?;
+        self.ensure_vault_crypto_from_cache().await?;
+        self.reveal_matching_login_for_focused_fill(request)
+            .map_err(Into::into)
+    }
+
     #[wasm_bindgen]
     pub async fn list_website_login_accounts(
         &mut self,

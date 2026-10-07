@@ -5,6 +5,34 @@ use nook_core::{
 use tsify::Tsify;
 use wasm_bindgen::JsError;
 
+/// Generated structural input for one explicitly selected credential value.
+#[derive(serde::Serialize, serde::Deserialize, Tsify)]
+#[serde(deny_unknown_fields)]
+pub struct NookFocusedLoginFillRequest {
+    #[tsify(type = "string")]
+    pub secret_id: SecretId,
+    #[tsify(type = "string")]
+    pub origin: nook_core::FocusedLoginFillOrigin,
+    #[tsify(type = "keyof typeof CredentialKind")]
+    pub credential: nook_core::CredentialKind,
+}
+
+/// Short-lived selected value; freeing this wrapper zeroizes its Rust owner.
+#[wasm_bindgen]
+#[derive(derive_more::From)]
+pub struct NookFocusedLoginFillCredential {
+    credential: nook_core::FocusedLoginFillCredential,
+}
+
+#[wasm_bindgen]
+impl NookFocusedLoginFillCredential {
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn value(&self) -> String {
+        self.credential.as_str().to_owned()
+    }
+}
+
 #[wasm_bindgen]
 #[derive(Clone)]
 pub struct NookLoginAccount {
@@ -413,6 +441,39 @@ impl NookWebsiteLoginSavePlan {
             )),
             WebsiteLoginSaveTarget::ExistingSecret(secret_id) => Ok(secret_id.clone()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nook_core::{CredentialKind, FocusedLoginFillOrigin};
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn focused_request_round_trip_keeps_exact_generated_shape() -> anyhow::Result<()> {
+        let request = NookFocusedLoginFillRequest {
+            secret_id: SecretId::parse("secret_SMypl8K0w9a")?,
+            origin: FocusedLoginFillOrigin::try_from("https://example.com/".to_owned())?,
+            credential: CredentialKind::Username,
+        };
+        let encoded = serde_json::to_string(&request)?;
+        let decoded: NookFocusedLoginFillRequest = serde_json::from_str(&encoded)?;
+        assert_eq!(decoded.secret_id, request.secret_id);
+        assert_eq!(decoded.origin.as_str(), request.origin.as_str());
+        assert_eq!(decoded.credential, request.credential);
+        assert_eq!(
+            encoded,
+            r#"{"secret_id":"secret_SMypl8K0w9a","origin":"https://example.com/","credential":"Username"}"#
+        );
+        assert!(serde_json::from_str::<NookFocusedLoginFillRequest>(r#"{"secret_id":"secret_SMypl8K0w9a","origin":"https://example.com/","credential":"Unavailable"}"#).is_err());
+        assert!(
+            serde_json::from_str::<NookFocusedLoginFillRequest>(
+                r#"{"secret_id":"secret_SMypl8K0w9a","origin":"https://","credential":"Username"}"#
+            )
+            .is_err()
+        );
+        Ok(())
     }
 }
 

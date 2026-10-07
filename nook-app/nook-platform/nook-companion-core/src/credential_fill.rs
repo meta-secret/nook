@@ -21,6 +21,11 @@ use std::collections::HashSet;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::wasm_bindgen;
 
+mod focused_field;
+pub use focused_field::{
+    FocusedCredentialOpportunity, FocusedCredentialSelection, FocusedCredentialSelectionUnavailable,
+};
+
 /// Credential kind assigned to one field in a fill plan.
 #[wasm_bindgen]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
