@@ -5,6 +5,12 @@
 )]
 
 use super::control_identity::AuthenticationControlIdentity;
+use super::control_text::AuthenticationIdentityPhraseEvidence;
+#[derive(Clone, Copy)]
+pub(super) enum AuthenticationPasswordRecoveryEvidence {
+    Recovery,
+    Unrelated,
+}
 use super::{AuthenticationUsernameEvidence, PASSKEY_OR_PLATFORM_AUTHENTICATOR_WORDS};
 use crate::AuthenticationAdvanceControlObservation;
 use crate::AuthenticationControlText;
@@ -475,28 +481,70 @@ impl AuthenticationRouteIdentity<'_> {
             .contains_any_word(NON_AUTHENTICATION_ACCOUNT_WORDS)
     }
     pub(super) fn indicates_non_authentication(&self) -> bool {
-        let destination_identity = self.identity;
-        if destination_identity.trim().is_empty() {
-            return false;
+        matches!(
+            self.non_authentication_admission(),
+            AuthenticationRouteDecision::Destructive
+                | AuthenticationRouteDecision::AccountManagement
+                | AuthenticationRouteDecision::Unrelated
+        )
+    }
+    fn non_authentication_admission(&self) -> AuthenticationRouteDecision {
+        if let AuthenticationRouteDecision::Destructive = self.form_admission() {
+            return AuthenticationRouteDecision::Destructive;
         }
-        let identity = AuthenticationControlText::new(destination_identity).expand_identity_text();
-        if AuthenticationRouteIdentity::new(&identity).indicates_destructive_action()
-            || AuthenticationControlText::new(&identity).contains_any_word(&[
-                "register",
-                "registration",
-                "signup",
-                "sign up",
-                "recover",
-                "recovery",
-                "forgot password",
-                "reset",
-                "reset password",
-            ])
+        if let AuthenticationPasswordRecoveryEvidence::Recovery = self.password_recovery_evidence()
         {
-            return true;
+            return AuthenticationRouteDecision::Unrelated;
         }
-        !AuthenticationRouteIdentity::new(&identity).indicates_authentication()
-            && AuthenticationRouteIdentity::new(&identity).indicates_account_management()
+        if let AuthenticationPasswordRecoveryEvidence::Recovery = self.reset_route_evidence() {
+            return AuthenticationRouteDecision::Unrelated;
+        }
+        let identity = AuthenticationControlText::new(self.identity).expand_identity_text();
+        let text = AuthenticationControlText::new(&identity);
+        if let AuthenticationIdentityPhraseEvidence::Found(_) =
+            text.identity_phrase_evidence(&["register", "registration", "signup", "sign up"])
+        {
+            return AuthenticationRouteDecision::Unrelated;
+        }
+        match self.form_admission() {
+            AuthenticationRouteDecision::AccountManagement => {
+                match text.identity_phrase_evidence(&[
+                    "login",
+                    "log in",
+                    "signin",
+                    "sign in",
+                    "identity",
+                    "auth",
+                    "authentication",
+                ]) {
+                    AuthenticationIdentityPhraseEvidence::Found(_) => {
+                        AuthenticationRouteDecision::Eligible
+                    }
+                    AuthenticationIdentityPhraseEvidence::Absent => {
+                        AuthenticationRouteDecision::AccountManagement
+                    }
+                }
+            }
+            AuthenticationRouteDecision::Eligible => AuthenticationRouteDecision::Eligible,
+            AuthenticationRouteDecision::Destructive => AuthenticationRouteDecision::Destructive,
+            AuthenticationRouteDecision::Unrelated => AuthenticationRouteDecision::Unrelated,
+            AuthenticationRouteDecision::DisallowedDestination => {
+                AuthenticationRouteDecision::DisallowedDestination
+            }
+        }
+    }
+    fn reset_route_evidence(&self) -> AuthenticationPasswordRecoveryEvidence {
+        let Some(_) = self.identity.split_once('/') else {
+            return AuthenticationPasswordRecoveryEvidence::Unrelated;
+        };
+        match self
+            .normalized()
+            .split('/')
+            .find(|segment| *segment == "reset")
+        {
+            Some(_) => AuthenticationPasswordRecoveryEvidence::Recovery,
+            None => AuthenticationPasswordRecoveryEvidence::Unrelated,
+        }
     }
     fn indicates_safe_post_login(&self) -> bool {
         let destination_identity = self.identity;
@@ -551,21 +599,59 @@ impl AuthenticationRouteIdentity<'_> {
             .contains_any_word(&["register", "registration", "signup", "sign up"])
     }
     pub(super) fn indicates_password_recovery(&self) -> bool {
-        let destination_identity = self.identity;
-        let identity = AuthenticationControlText::new(destination_identity).expand_identity_text();
-        !destination_identity.trim().is_empty()
-            && (AuthenticationControlText::new(&identity).contains_any_word(&[
-                "recover",
-                "recovery",
-                "forgot password",
-            ]) || (AuthenticationControlText::new(&identity).contains_any_word(&["reset"])
-                && AuthenticationControlText::new(&identity)
-                    .contains_any_word(&["password", "credential"])))
+        matches!(
+            self.password_recovery_evidence(),
+            AuthenticationPasswordRecoveryEvidence::Recovery
+        )
+    }
+    pub(super) fn password_recovery_evidence(&self) -> AuthenticationPasswordRecoveryEvidence {
+        let identity = AuthenticationControlText::new(self.identity).expand_identity_text();
+        let text = AuthenticationControlText::new(&identity);
+        if let AuthenticationIdentityPhraseEvidence::Found(phrase) =
+            text.identity_phrase_evidence(&["recover", "recovery", "forgot password"])
+        {
+            match phrase.as_str() {
+                "recover" | "recovery" | "forgot password" => {
+                    return AuthenticationPasswordRecoveryEvidence::Recovery;
+                }
+                _ => {}
+            }
+        }
+        let AuthenticationIdentityPhraseEvidence::Found(_) =
+            text.identity_phrase_evidence(&["reset"])
+        else {
+            return AuthenticationPasswordRecoveryEvidence::Unrelated;
+        };
+        match text.identity_phrase_evidence(&["password", "credential", "credentials"]) {
+            AuthenticationIdentityPhraseEvidence::Found(_) => {
+                AuthenticationPasswordRecoveryEvidence::Recovery
+            }
+            AuthenticationIdentityPhraseEvidence::Absent => {
+                AuthenticationPasswordRecoveryEvidence::Unrelated
+            }
+        }
     }
 }
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn css_reset_identity_does_not_veto_authentication() {
+        let identity = AuthenticationRouteIdentity::new("reset_base__abc flex_column knox-reset");
+        assert!(!identity.indicates_non_authentication());
+        for recovery in [
+            "reset-password",
+            "passwordRecovery",
+            "/reset",
+            "/auth/reset/",
+        ] {
+            assert!(
+                AuthenticationRouteIdentity::new(recovery).indicates_non_authentication(),
+                "{recovery}"
+            );
+        }
+    }
 
     #[test]
     fn destination_metadata_removal_preserves_action_evidence() {

@@ -2,6 +2,12 @@
 pub struct AuthenticationControlText<'a> {
     value: &'a str,
 }
+
+/// The requested identity phrase found by lexical whole-word matching.
+pub(super) enum AuthenticationIdentityPhraseEvidence<'a> {
+    Found(AuthenticationControlText<'a>),
+    Absent,
+}
 impl<'a> AuthenticationControlText<'a> {
     pub(super) fn as_str(&self) -> &'a str {
         self.value
@@ -12,6 +18,20 @@ impl<'a> AuthenticationControlText<'a> {
     }
 }
 impl AuthenticationControlText<'_> {
+    pub(super) fn identity_phrase_evidence<'a>(
+        &self,
+        phrases: &[&'a str],
+    ) -> AuthenticationIdentityPhraseEvidence<'a> {
+        match phrases
+            .iter()
+            .find(|phrase| self.contains_word_phrase(phrase))
+        {
+            Some(phrase) => {
+                AuthenticationIdentityPhraseEvidence::Found(AuthenticationControlText::new(phrase))
+            }
+            None => AuthenticationIdentityPhraseEvidence::Absent,
+        }
+    }
     #[must_use]
     pub fn expand_identity_text(&self) -> String {
         let value = self.value;

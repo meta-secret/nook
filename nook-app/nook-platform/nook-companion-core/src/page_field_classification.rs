@@ -11,9 +11,11 @@ use form_identity::{
 };
 mod authentication_advance_control;
 mod authentication_route_evidence;
+mod container_identity;
 mod control_identity;
 mod control_labels;
 mod control_text;
+pub use container_identity::AuthenticationContainerIdentity;
 pub use control_text::AuthenticationControlText;
 mod destination_identity;
 mod form_identity;
