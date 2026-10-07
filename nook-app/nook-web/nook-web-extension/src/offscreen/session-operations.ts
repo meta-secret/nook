@@ -1,3 +1,4 @@
+import { FocusedLoginRevealOperation } from './session-focused-login-reveal'
 import { Effect } from 'effect'
 import {
   ExtensionPasskeySetup,
@@ -634,6 +635,15 @@ export async function handleSessionMessage({
         } finally {
           accounts.forEach((account) => account.free())
         }
+      }
+      case ExtensionSessionMessageType.RevealFocusedLogin: {
+        const request: ConstructorParameters<
+          typeof FocusedLoginRevealOperation
+        >[0] = {
+          message,
+          getManager,
+        }
+        return new FocusedLoginRevealOperation(request).run()
       }
       case ExtensionSessionMessageType.RevealLogin: {
         const payload = message.payload

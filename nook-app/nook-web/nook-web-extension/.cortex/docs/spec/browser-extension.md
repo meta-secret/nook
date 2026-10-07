@@ -304,6 +304,70 @@ paired to a vault. It is not login detection. Login detection is the in-page
 Nook Pilot HUD; the companion may also show a one-line current-tab hint
 (“Login form detected on this page” / “No login form detected”).
 
+### Focused credential opportunities
+
+Accepted slice: retain general URL, page-context, and detected-form recognition.
+When whole-page detection is inconclusive, mouse click or keyboard focus on a
+Rust-recognized username, email, or current-password field shows the existing Pilot
+widget. Rust/WASM owns semantic roles and the typed credential opportunity.
+Content scripts report interaction and render that opportunity.
+
+#### Credential eligibility
+
+Ambiguous, unrelated, newsletter, search, OTP, and new-password inputs do not
+qualify. Existing signup and password generation remain unchanged.
+
+- **Prohibited:** focus on a new-password, newsletter, search, OTP, unrelated,
+  or ambiguous input offers the focused login-fill path.
+- **Required:** those inputs remain ineligible. Focus on a recognized
+  current-password field may show Pilot; a signup new-password field remains
+  eligible only for its existing explicit password-generation flow.
+
+#### Login and recovery context
+
+A CSS-reset wrapper name alone does not classify a password-reset ceremony.
+Genuine password-reset and recovery semantics remain distinct from login.
+
+- **Prohibited:** a CSS-reset wrapper turns an email-first login into recovery,
+  or the focused login path reclassifies a genuine password-reset ceremony.
+- **Required:** the wrapper alone does not change login classification.
+  Genuine reset or recovery evidence retains its existing ceremony semantics.
+
+#### Focused selection and target lifetime
+
+- Focus or click alone never fills a field or submits a form.
+- When interaction is the sole evidence, Continue opens the existing
+  origin-matched credential picker. Explicit selection permits filling only
+  the retained exact field and grants no submission authority.
+- Preserve that target while focus moves into the widget or picker.
+  Invalidate it if the field is removed, disabled, or changes semantic role,
+  or if the page origin changes. Existing lock, expiry, cancellation, and
+  teardown cleanup also clear the target.
+
+- **Prohibited:** keyboard focus on an inconclusive email-first login fills
+  nearby fields or submits after the user selects a login. Moving focus into
+  the picker loses the target or selects another field. A removed, disabled,
+  role-changed, or different-origin target remains usable after revalidation.
+  Lock, expiry, cancellation, or teardown leaves that target available.
+- **Required:** focus shows Pilot without filling. Continue opens its existing
+  picker; a selected origin-matched login fills only the retained email field
+  after revalidation, even while the picker holds focus. Removal, disabling,
+  semantic-role change, origin change, lock, expiry, cancellation, or teardown
+  invalidates the target, so no field is filled from that retained opportunity.
+
+#### Normally detected forms
+
+A normally detected form retains its explicit picker and full-form fill/submit
+behavior with existing origin/workflow revalidation.
+
+- **Prohibited:** the focused-field limit restricts an independently detected
+  login form to one field or removes its explicitly approved submit action.
+- **Required:** explicit selection for that detected form retains normal
+  full-form filling and separately approved submission after revalidation.
+
+This interaction path is limited to the accepted credential opportunity.
+It introduces no separate UI or speculative recovery capability.
+
 ### Popular-site detection coverage
 
 CI does **not** hit live third-party login pages. Coverage is data-driven:
@@ -353,7 +417,7 @@ The gate must:
   manual takeover without exposing a username, password, TOTP code, setup key,
   recovery code, or provider credential;
 - offer a primary Continue with Nook action that lists matching logins for the
-  page origin, reveals one credential after explicit choice, fills the form,
+  page origin, reveals one credential after explicit choice, fills a detected form,
   and submits only after explicit user action; when locked, open the shared
   extension authentication tab and keep the host page in status/Continue mode.
   After unlock, show localized return guidance and require a fresh Continue click
@@ -369,7 +433,7 @@ The gate must:
   - show explicit search, loading, empty-result, and error states;
   - return only the selected opaque item identity to the content script;
   - continue through the existing origin/workflow revalidation and explicit
-    fill/submit operation;
+    fill/submit operation, subject to the focused-field limit above;
   - preserve existing lock, expiry, cancellation, and teardown cleanup;
 - for OTP challenges, open the extension-owned searchable 2FA picker and keep
   issuer/account labels out of the host-page DOM;

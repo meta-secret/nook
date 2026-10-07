@@ -336,6 +336,7 @@ const sensitiveSessionFields: Readonly<
   [ExtensionSessionMessageType.ListPasskeys]: [],
   [ExtensionSessionMessageType.ListLogins]: [],
   [ExtensionSessionMessageType.RevealLogin]: [],
+  [ExtensionSessionMessageType.RevealFocusedLogin]: [],
   [ExtensionSessionMessageType.ListAuthenticators]: [],
   [ExtensionSessionMessageType.AuthenticatorCode]: [],
   [ExtensionSessionMessageType.AuthenticatorEnrollPreview]: [

@@ -1,3 +1,4 @@
+import { Effect } from 'effect'
 /* eslint-disable nook-typed-api/no-raw-object-arguments -- DOM observations are converted into typed Rust requests at this content boundary. */
 import {
   authenticationRouteBrowser,
@@ -8,6 +9,12 @@ import {
   authenticationFactObserverOptions,
   authenticationFactObserver,
 } from '../../../nook-web-shared/src/extension/authentication-fact-attributes'
+import {
+  FocusedSurfaceKind,
+  FocusedUiDisposition,
+  focusedCredentialInteraction,
+  focusedCredentialTargetSensor,
+} from './autofill/focused-credential-interaction'
 import { companionWasmReadiness } from './autofill/companion-wasm-readiness'
 import { AuthenticationWorkflowSnapshotResponseKind } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { CompanionWasmSessionMessageType } from '../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
@@ -79,6 +86,7 @@ import { workflowUi } from './autofill/workflow-ui'
 import { authenticatorEnrollmentInteraction } from './enrollment-flow'
 
 enum AuthenticationScanOutcome {
+  Inconclusive = 'inconclusive',
   Removed = 'removed',
   Rendered = 'rendered',
   Stale = 'stale',
@@ -112,7 +120,7 @@ class NamecheapLoginDrawerActivation {
   }
 }
 
-class AuthenticationScanRenderLifecycle {
+export class AuthenticationScanRenderLifecycle {
   constructor(
     private readonly request: AuthenticationScanRenderLifecycleRequest,
   ) {}
@@ -121,6 +129,15 @@ class AuthenticationScanRenderLifecycle {
     observation: AuthenticationDiagnosticObservation,
   ): void {
     authenticationDiagnosticChannel.record(observation)
+  }
+
+  private removeInconclusiveWidget(): void {
+    switch (focusedCredentialInteraction.hasSurface) {
+      case FocusedSurfaceKind.Visible:
+        return
+      case FocusedSurfaceKind.Empty:
+        removeScannedWidget()
+    }
   }
 
   private async performScanAndRender(): Promise<AuthenticationScanOutcome> {
@@ -314,8 +331,8 @@ class AuthenticationScanRenderLifecycle {
       return AuthenticationScanOutcome.Rendered
     }
     if (workflowForms.length === 0) {
-      removeScannedWidget()
-      return AuthenticationScanOutcome.Removed
+      this.removeInconclusiveWidget()
+      return AuthenticationScanOutcome.Inconclusive
     }
     const namecheapDisplayRequest: Parameters<
       typeof namecheapWidgetDisplayGate.eligibility
@@ -357,8 +374,8 @@ class AuthenticationScanRenderLifecycle {
     }
     this.recordDiagnostic(classifiedDiagnostic)
     if (classifiedWorkflows.length === 0) {
-      removeScannedWidget()
-      return AuthenticationScanOutcome.Removed
+      this.removeInconclusiveWidget()
+      return AuthenticationScanOutcome.Inconclusive
     }
     const message: Parameters<
       typeof authenticationRuntimeTransport.sendAuthenticationWorkflowSnapshotRuntimeMessage
@@ -398,8 +415,8 @@ class AuthenticationScanRenderLifecycle {
         candidateCount: classifiedWorkflows.length,
       }
       this.recordDiagnostic(diagnostic)
-      removeScannedWidget()
-      return AuthenticationScanOutcome.Removed
+      this.removeInconclusiveWidget()
+      return AuthenticationScanOutcome.Inconclusive
     }
     const { snapshot } = verdict
     const selected = classifiedWorkflows[snapshot.observationIndex]
@@ -448,8 +465,40 @@ class AuthenticationScanRenderLifecycle {
     return AuthenticationScanOutcome.Rendered
   }
 
-  async scanAndRender(): Promise<void> {
-    await this.performScanAndRender()
+  scanAndRender(): Promise<void> {
+    return Effect.runPromise(
+      Effect.gen(this, function* () {
+        const outcome = yield* Effect.promise(() => this.performScanAndRender())
+        switch (outcome) {
+          case AuthenticationScanOutcome.Inconclusive: {
+            const sequence = scanState.sequence
+            const rendered = yield* Effect.promise(() =>
+              focusedCredentialInteraction.tryRender(),
+            )
+            switch (sequence === scanState.sequence) {
+              case false:
+                return
+              case true:
+                break
+            }
+            switch (rendered) {
+              case FocusedUiDisposition.Unavailable:
+                removeScannedWidget()
+                break
+              case FocusedUiDisposition.Ready:
+                break
+            }
+            break
+          }
+          case AuthenticationScanOutcome.Removed:
+          case AuthenticationScanOutcome.Rendered:
+          case AuthenticationScanOutcome.Stale:
+          case AuthenticationScanOutcome.Suppressed:
+          case AuthenticationScanOutcome.Watching:
+            break
+        }
+      }),
+    )
   }
 
   schedule(mutations?: AuthenticationScanMutationBatch): void {
@@ -669,6 +718,7 @@ void runAfterCompanionWasmReady({
     document.addEventListener(
       'click',
       (event) => {
+        focusedCredentialTargetSensor.observe(event)
         authenticationScanRenderLifecycle.handleAuthenticationControlActivation(
           event,
         )
@@ -678,6 +728,11 @@ void runAfterCompanionWasmReady({
       true,
     )
 
+    document.addEventListener(
+      'focusin',
+      focusedCredentialTargetSensor.observe.bind(focusedCredentialTargetSensor),
+      true,
+    )
     const observer = new MutationObserver(
       authenticationScanRenderLifecycle.handleMutations.bind(
         authenticationScanRenderLifecycle,

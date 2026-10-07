@@ -1,3 +1,8 @@
+import {
+  FocusedWebsiteLoginFillOperation,
+  focusedWebsiteLoginFillDependencies,
+} from './service-worker/focused-login-operations'
+import { WebsiteFocusedLoginRevealMessage } from '../lib/focused-login-fill-messages'
 import { loginPickerOperations } from './service-worker/login-picker-operations'
 /* eslint-disable nook-typed-api/no-raw-object-arguments, @typescript-eslint/no-unsafe-type-assertion -- Chrome runtime messages are narrowed at this external transport boundary. */
 import {
@@ -329,6 +334,14 @@ const schemaRuntimeMessageRoutes: BackgroundRuntimeMessageRoutes = [
       accountPickerSessions.websiteLoginOptions.bind(accountPickerSessions),
     )
     .onRejected(() => ({ ok: false, reason: 'login-options-failed' })),
+  SchemaRuntimeMessageRoute.matching(WebsiteFocusedLoginRevealMessage)
+    .respondWith((request) => {
+      const operation: ConstructorParameters<
+        typeof FocusedWebsiteLoginFillOperation
+      >[0] = { request, dependencies: focusedWebsiteLoginFillDependencies }
+      return new FocusedWebsiteLoginFillOperation(operation).run()
+    })
+    .onRejected(() => ({ ok: false, reason: 'login-fill-failed' })),
   SchemaRuntimeMessageRoute.matching(WebsiteLoginRevealMessageSchema)
     .respondWith(websiteLoginFill)
     .onRejected(() => ({ ok: false, reason: 'login-fill-failed' })),

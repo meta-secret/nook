@@ -35,6 +35,7 @@ import {
   PasswordFormFieldDirectClassification,
   type DirectFieldClassification,
 } from "./password-form-field-direct-classification";
+import { AuthenticationContainerIdentity } from "./password-form-container-identity";
 import { authenticationFieldIndexCatalog } from "./password-form-owned-field-index";
 import {
   AuthenticationWorkflowScopeDiagnosticBuilder,
@@ -184,6 +185,20 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
   private readonly companionLabels = new Map<string, boolean>();
   private companionStrongestUsernameEvidence:
     AuthenticationUsernameEvidence | false = false;
+
+  /** Captures field metadata without a value or a whole-page authentication assumption. */
+  focusedFieldObservation(
+    field: HTMLInputElement,
+  ): CompanionWasmPageInputFieldRequest["observation"] {
+    return {
+      inputType: field.type,
+      disabled: field.disabled,
+      readOnly: field.readOnly,
+      autocompleteTokens: this.autocompleteTokens(field),
+      identityText: this.authenticationFieldIdentityText(field),
+      loginContext: false,
+    };
+  }
 
   async prepareCompanionClassification(root: ParentNode): Promise<void> {
     const fields = Array.from(root.querySelectorAll<HTMLInputElement>("input"));
@@ -343,6 +358,14 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
       );
     }
     for (const field of root.querySelectorAll<HTMLInputElement>("input")) {
+      let container = field.parentElement;
+      while (container) {
+        add(
+          CompanionWasmLabelKind.AuthenticationContainerIdentity,
+          new AuthenticationContainerIdentity(container).text,
+        );
+        container = container.parentElement;
+      }
       for (const attribute of ["oninput", "onchange"]) {
         const handler = field.getAttribute(attribute);
         if (typeof handler === "string")
