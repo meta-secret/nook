@@ -32,6 +32,7 @@ import type {
 
 const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
 
+// Repository traversal exceeded 38 seconds during parallel hosted validation.
 test('only the Loom semantic adapter reaches the provider', async () => {
   const tracked = new ExecutableSkillCheckout(
     REPOSITORY_ROOT,
@@ -122,7 +123,7 @@ test('only the Loom semantic adapter reaches the provider', async () => {
   ).text();
   expect(activeAudit).toContain("'../lib/cortex-article-structure.ts'");
   expect(activeAudit).not.toContain('src/cortex-article-provider');
-}, 30_000);
+}, 60_000);
 
 test('runnable configuration inventory includes Taskfiles and actions', () => {
   const taskfilePattern = /(^|\/)Taskfile(?:\.[^/]*)?\.ya?ml$/u;

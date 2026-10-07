@@ -188,6 +188,10 @@ type WidgetWorkflowRenderRequest = {
 }
 
 class WidgetState {
+  private renderedCleanup: () => void = () => {}
+  setRenderedCleanup(cleanup: () => void): void {
+    this.renderedCleanup = cleanup
+  }
   private hostState: WidgetHost = { kind: WidgetHostKind.Detached }
   private workflowKeyState: WidgetWorkflowKey = {
     kind: WidgetWorkflowKeyKind.Unassigned,
@@ -284,6 +288,9 @@ class WidgetState {
     }
   }
   clearRenderedWidget(): void {
+    const cleanup = this.renderedCleanup
+    this.renderedCleanup = () => {}
+    cleanup()
     if (this.hostState.kind === WidgetHostKind.Attached) this.hostState.detach()
     this.hostState = { kind: WidgetHostKind.Detached }
     this.workflowKeyState = { kind: WidgetWorkflowKeyKind.Unassigned }

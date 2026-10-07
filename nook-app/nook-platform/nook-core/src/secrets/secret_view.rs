@@ -16,7 +16,12 @@ pub use secret_presentation::{
     AuthenticatorGroupKeyRequest, LoginHostMatchRequest, SecretGroupKey, WebsiteHost,
     WebsiteHostError,
 };
+mod focused_login_fill;
 mod secret_record_presentation;
+pub use focused_login_fill::{
+    CredentialKind, FocusedLoginFillCredential, FocusedLoginFillError, FocusedLoginFillOrigin,
+    FocusedLoginFillProjection,
+};
 
 /// Number of words exposed by a seed-phrase list projection.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

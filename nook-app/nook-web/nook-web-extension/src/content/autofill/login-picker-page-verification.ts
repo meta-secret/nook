@@ -1,3 +1,8 @@
+import {
+  FocusedPickerOwnership,
+  FocusedUiDisposition,
+  focusedCredentialInteraction,
+} from './focused-credential-interaction'
 import { Effect } from 'effect'
 import type { LoginPickerPageVerification } from '../../lib/inline-login-picker'
 import { LiveAuthenticationWorkflowDisposition } from '../../../../nook-web-shared/src/extension/password-form-classified-observations'
@@ -23,6 +28,26 @@ export class LoginPickerPageVerificationReceiver {
       case false:
         return false
       case true:
+        break
+    }
+    switch (
+      focusedCredentialInteraction.ownsPicker(delivery.message.requestId)
+    ) {
+      case FocusedPickerOwnership.Owned: {
+        const verification = Effect.promise(() =>
+          focusedCredentialInteraction.verifyPicker(delivery.message.requestId),
+        ).pipe(
+          Effect.map((disposition) => {
+            const response: Parameters<typeof delivery.sendResponse>[0] = {
+              ok: disposition === FocusedUiDisposition.Ready,
+            }
+            delivery.sendResponse(response)
+          }),
+        )
+        void Effect.runPromise(verification)
+        return true
+      }
+      case FocusedPickerOwnership.Unowned:
         break
     }
     switch (pickerState.login.kind) {

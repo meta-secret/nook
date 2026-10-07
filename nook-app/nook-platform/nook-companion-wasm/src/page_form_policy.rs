@@ -15,6 +15,7 @@ pub use passkey_control::{
 };
 
 use nook_companion_core::AuthenticationAdvanceControlObservation;
+use nook_companion_core::AuthenticationContainerIdentity;
 use nook_companion_core::AuthenticationControlText;
 use nook_companion_core::AuthenticationRouteActuation;
 use nook_companion_core::AuthenticationRouteEvidence;
@@ -124,6 +125,15 @@ impl NookLoginContextObservation {
 #[must_use]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn looks_like_email_verification_body(body: &str) -> bool {
     AuthenticationAdvanceControlObservation::looks_like_email_verification_body(body)
+}
+
+#[wasm_bindgen]
+#[must_use]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen label predicate export"))] pub fn looks_like_authentication_container_identity(identity: &str) -> bool {
+    matches!(
+        AuthenticationControlText::new(identity).authentication_container_identity(),
+        AuthenticationContainerIdentity::Authentication
+    )
 }
 
 #[wasm_bindgen]
@@ -263,6 +273,13 @@ mod tests {
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn page_form_wasm_exports_match_authentication_route_policy() {
+        assert!(looks_like_authentication_container_identity("signIn"));
+        assert!(looks_like_authentication_container_identity(
+            "reset-password"
+        ));
+        assert!(!looks_like_authentication_container_identity(
+            "reset_base__abc knox-reset"
+        ));
         let username = NookPageInputFieldObservation::new(
             PageInputType::Text,
             false,

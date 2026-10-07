@@ -7,6 +7,8 @@ import type {
   AuthenticationPageObservationFactsBatch,
   AuthenticationPilotPresentationCapability,
   AuthenticationUsernameEvidence,
+  FocusedCredentialOpportunity,
+  FocusedCredentialSelection,
   AuthenticationWorkflowMatch,
   AuthenticationWorkflowSnapshot,
   AuthenticationRecoveryCopyEvidence,
@@ -41,6 +43,8 @@ import type {
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 
 export enum CompanionWasmSessionMessageType {
+  ClassifyFocusedCredentialField = "nook:extension-session-classify-focused-credential-field",
+  RevalidateFocusedCredentialField = "nook:extension-session-revalidate-focused-credential-field",
   GetAuthenticationActivityProgress = "nook:extension-session-get-authentication-activity-progress",
   ExtractAuthenticationBackupCodeCandidates = "nook:extension-session-extract-authentication-backup-code-candidates",
   ProjectAuthenticationNavigationPath = "nook:extension-session-project-authentication-navigation-path",
@@ -67,6 +71,7 @@ export enum CompanionWasmSessionMessageType {
 }
 
 export enum CompanionWasmLabelKind {
+  AuthenticationContainerIdentity = "authentication-container-identity",
   LoginAdvance = "login-advance",
   ManualCheckpoint = "manual-checkpoint",
   PasskeyControl = "passkey-control",
@@ -125,6 +130,19 @@ export type CompanionWasmLabelRequest = {
 };
 
 export type CompanionWasmSessionMessage =
+  | {
+      readonly type: CompanionWasmSessionMessageType.ClassifyFocusedCredentialField;
+      readonly payload: {
+        readonly observation: CompanionWasmPageInputFieldObservation;
+      };
+    }
+  | {
+      readonly type: CompanionWasmSessionMessageType.RevalidateFocusedCredentialField;
+      readonly payload: {
+        readonly observation: CompanionWasmPageInputFieldObservation;
+        readonly opportunity: FocusedCredentialOpportunity;
+      };
+    }
   | {
       readonly type: CompanionWasmSessionMessageType.GetAuthenticationActivityProgress;
       readonly payload: { readonly activity: AuthenticationWorkflowActivity };
@@ -304,7 +322,18 @@ export const CompanionWasmActivityProgressDecoder: Schema.Schema<{
   readonly activityProgress: AuthenticationDisplayProgress;
 }> = Schema.Struct(activityProgressResponseFields);
 
+export type CompanionWasmFocusedRecognitionResponse =
+  | { readonly focusedOpportunity: FocusedCredentialOpportunity.Unavailable }
+  | {
+      readonly focusedOpportunity: Exclude<
+        FocusedCredentialOpportunity,
+        FocusedCredentialOpportunity.Unavailable
+      >;
+      readonly focusedSelection: FocusedCredentialSelection;
+    };
+
 export type CompanionWasmSessionResponse =
+  | CompanionWasmFocusedRecognitionResponse
   | { readonly activityProgress: AuthenticationDisplayProgress }
   | AuthenticationBackupCodeExtraction
   | AuthenticationNavigationPathProjection

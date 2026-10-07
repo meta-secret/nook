@@ -1,3 +1,4 @@
+import { FocusedFieldRecognitionOperation } from './session-focused-field-recognition'
 /* eslint-disable nook-typed-api/no-raw-object-arguments, max-params -- This offscreen adapter maps Chrome session messages onto generated WASM calls. */
 import { err, ok, type Result } from 'neverthrow'
 import { Schema } from 'effect'
@@ -50,6 +51,7 @@ import {
   bind_authentication_page_observation_facts,
   has_login_context,
   looks_like_email_verification_body,
+  looks_like_authentication_container_identity,
   looks_like_login_advance_control_label,
   looks_like_manual_checkpoint_label,
   looks_like_one_time_code_auto_submit_signal,
@@ -151,6 +153,8 @@ function classifyPageInputs(
 
 function labelMatches(label: CompanionWasmLabelRequest): boolean {
   switch (label.kind) {
+    case CompanionWasmLabelKind.AuthenticationContainerIdentity:
+      return looks_like_authentication_container_identity(label.value)
     case CompanionWasmLabelKind.LoginAdvance:
       return looks_like_login_advance_control_label(label.value)
     case CompanionWasmLabelKind.ManualCheckpoint:
@@ -237,6 +241,9 @@ export async function handleCompanionWasmMessage(
           loginContext.free()
         }
       }
+      case CompanionWasmSessionMessageType.ClassifyFocusedCredentialField:
+      case CompanionWasmSessionMessageType.RevalidateFocusedCredentialField:
+        return ok(new FocusedFieldRecognitionOperation(message).run())
       case CompanionWasmSessionMessageType.ClassifyPageInputField:
         return ok(classifyPageInputField(message.payload.observation))
       case CompanionWasmSessionMessageType.ClassifyPageInputs:
