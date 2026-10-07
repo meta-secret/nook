@@ -133,11 +133,6 @@ COPY --from=repository-git /git /meta-secret/nook/.git
 RUN <<'EOF'
 set -eu
 test ! -e /meta-secret/nook/.meta-cortex
-curl --proto '=https' --tlsv1.2 -LsSf \
-  https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/download/v0.15.0/meta-cortex-installer.sh \
-  --output /tmp/meta-cortex-installer.sh
-META_CORTEX_UNMANAGED_INSTALL=/usr/local/bin sh /tmp/meta-cortex-installer.sh
-rm /tmp/meta-cortex-installer.sh
 # Framework Initialize invokes mise while applying its InstallMissing policies.
 mise_version=v2026.9.13
 mise_sha256=a72f49916b33ba952ba398046c5cc91a58238f0b718fee1d938206ef2af21c6d
@@ -152,7 +147,7 @@ rm /tmp/mise
 install -d -m 0755 /root/.meta-cortex/bun/bin /root/.meta-cortex/vale/bin
 install -m 0755 /usr/local/bin/bun /root/.meta-cortex/bun/bin/bun
 install -m 0755 /usr/local/bin/vale /root/.meta-cortex/vale/bin/vale
-meta-cortex run --request - <<'YAML'
+./meta-cortexw run --request - <<'YAML'
 version: 1
 project: /meta-secret/nook
 operation:
@@ -166,7 +161,7 @@ operation:
       bun: InstallMissing
       vale: InstallMissing
 YAML
-meta-cortex run --request - <<'YAML'
+./meta-cortexw run --request - <<'YAML'
 version: 1
 project: /meta-secret/nook
 operation:

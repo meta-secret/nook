@@ -1,0 +1,43 @@
+#!/bin/sh
+set -eu
+wrapper_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+version=$(cat "$wrapper_root/.meta-cortex-version")
+case $(expr "$version" : '[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*$' || :) in
+    0)
+        echo 'Invalid .meta-cortex-version: expected an exact release such as 0.15.0' >&2
+        exit 1 ;;
+esac
+case "$version" in
+    0[0-9]*.*|*.0[0-9]*.*|*.*.0[0-9]*)
+            echo 'Invalid .meta-cortex-version: release components must not have leading zeros' >&2
+            exit 1 ;;
+    0.[0-9].*|0.1[0-4].*)
+            echo 'Project wrapper requires release 0.15.0 or later' >&2
+            exit 1 ;;
+esac
+cache_root=${META_CORTEX_WRAPPER_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/meta-cortex/wrapper}
+install_dir="$cache_root/$version"
+binary="$install_dir/meta-cortex"
+case $(test -x "$binary" && printf available || printf missing) in
+    available) : ;;
+    missing)
+        mkdir -p "$install_dir"
+        installer=$(mktemp "${TMPDIR:-/tmp}/meta-cortex-installer.XXXXXX")
+        trap 'rm -f "$installer"' EXIT HUP INT TERM
+        curl --fail --location --silent --show-error "https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/download/v$version/meta-cortex-installer.sh" --output "$installer"
+        (
+            unset META_CORTEX_INSTALL_DIR CARGO_DIST_FORCE_INSTALL_DIR META_CORTEX_DOWNLOAD_URL INSTALLER_DOWNLOAD_URL META_CORTEX_INSTALLER_GHE_BASE_URL META_CORTEX_INSTALLER_GITHUB_BASE_URL
+            export META_CORTEX_UNMANAGED_INSTALL="$install_dir"
+            sh "$installer"
+        )
+        rm -f "$installer"
+        trap - EXIT HUP INT TERM ;;
+esac
+actual_version=$("$binary" --version)
+case "$actual_version" in
+    "meta-cortex $version") ;;
+    *)
+        echo "Cached executable version mismatch: expected meta-cortex $version, received $actual_version ($binary)" >&2
+        exit 1 ;;
+esac
+exec "$binary" "$@"
