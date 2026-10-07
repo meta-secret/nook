@@ -227,6 +227,7 @@ pub use website_passkey_account_list::{
 };
 pub use website_passkey_proposal::{WebsitePasskeyEvidence, WebsitePasskeyProposal};
 
+pub use page_field_classification::AuthenticationContainerIdentity;
 pub use page_field_classification::AuthenticationControlText;
 
 pub use page_field_classification::{
