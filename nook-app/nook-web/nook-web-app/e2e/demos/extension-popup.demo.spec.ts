@@ -53,14 +53,14 @@ function installPopupDemoRuntime(session: PopupDemoSession): void {
         case session.authenticatorQueryMessageType:
           {
             const decodedQuery = Effect.runSync(
-              Effect.either(AuthenticatorPickerQueryMessage.decode(message)),
+              Effect.result(AuthenticatorPickerQueryMessage.decode(message)),
             )
             callback({
               ok: true,
               origin: 'https://accounts.example.test',
               accounts:
-                decodedQuery._tag === 'Right'
-                  ? decodedQuery.right.payload.query.trim().length === 0
+                decodedQuery._tag === 'Success'
+                  ? decodedQuery.success.payload.query.trim().length === 0
                     ? [
                         {
                           vaultStoreId: 'popup-demo-store',

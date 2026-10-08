@@ -288,6 +288,7 @@ class LoginPickerOperations {
       const delivery: Parameters<typeof AccountPickerPageTarget.send>[0] = {
         tabId: request.tabId,
         frameId: request.frameId,
+        documentId: request.parentDocumentId,
         message: nookTypedArgs0_3,
       }
       const response = await AccountPickerPageTarget.send(delivery)
@@ -350,6 +351,7 @@ class LoginPickerOperations {
       const delivery: Parameters<typeof AccountPickerPageTarget.send>[0] = {
         tabId: request.tabId,
         frameId: request.frameId,
+        documentId: request.parentDocumentId,
         message: nookTypedArgs0_4,
       }
       await AccountPickerPageTarget.send(delivery)

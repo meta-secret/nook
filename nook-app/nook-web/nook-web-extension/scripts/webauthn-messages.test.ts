@@ -38,40 +38,40 @@ describe('website passkey runtime messages', () => {
     }
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           WebsitePasskeyOptionsMessageSchema.decode({
             type: 'nook:website-passkey-options',
             payload,
           }),
         ),
       )._tag,
-    ).toBe('Right')
+    ).toBe('Success')
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           WebsitePasskeyPerformMessageSchema.decode({
             type: 'nook:website-passkey-perform',
             payload: { ...payload, vaultStoreId: 'store_test' },
           }),
         ),
       )._tag,
-    ).toBe('Right')
+    ).toBe('Success')
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           WebsitePasskeyCancelMessageSchema.decode({
             type: 'nook:website-passkey-cancel',
             payload: { requestId: payload.requestId },
           }),
         ),
       )._tag,
-    ).toBe('Right')
+    ).toBe('Success')
   })
 
   test('rejects oversized, malformed, and unscoped messages', async () => {
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           WebsitePasskeyOptionsMessageSchema.decode({
             type: 'nook:website-passkey-options',
             payload: {
@@ -82,10 +82,10 @@ describe('website passkey runtime messages', () => {
           }),
         ),
       )._tag,
-    ).toBe('Left')
+    ).toBe('Failure')
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           WebsitePasskeyPerformMessageSchema.decode({
             type: 'nook:website-passkey-perform',
             payload: {
@@ -99,10 +99,10 @@ describe('website passkey runtime messages', () => {
           }),
         ),
       )._tag,
-    ).toBe('Left')
+    ).toBe('Failure')
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           WebsitePasskeyPerformMessageSchema.decode({
             type: 'nook:website-passkey-perform',
             payload: {
@@ -114,7 +114,7 @@ describe('website passkey runtime messages', () => {
           }),
         ),
       )._tag,
-    ).toBe('Left')
+    ).toBe('Failure')
     const parseArgs = {
       ceremony: WebsitePasskeyCeremony.Get,
       requestJson: '{',

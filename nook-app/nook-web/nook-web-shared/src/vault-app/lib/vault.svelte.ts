@@ -286,11 +286,11 @@ export class VaultState extends VaultRuntimeState {
       typeof this.localLoginActions.selectVaultForUnlock
     >[0] = { storeId };
     const selection = await Effect.runPromise(
-      Effect.either(this.localLoginActions.selectVaultForUnlock(request)),
+      Effect.result(this.localLoginActions.selectVaultForUnlock(request)),
     );
-    return selection._tag === "Left"
-      ? err(selection.left)
-      : ok(selection.right);
+    return selection._tag === "Failure"
+      ? err(selection.failure)
+      : ok(selection.success);
   }
 
   async prepareExistingVaultImportSlot() {

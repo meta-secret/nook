@@ -2,7 +2,7 @@ import { copyFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Connect } from "vite";
 import type { Plugin } from "vitest/config";
-import { vaultAppHeaders } from "./src/vault-app/security-headers";
+import { vaultAppHeaders } from "./src/vault-app/security-headers.ts";
 
 export type VaultSpaOptions = {
   name: string;
@@ -42,7 +42,9 @@ export function vaultSpaPlugin(options: VaultSpaOptions): Plugin {
   return {
     name: options.name,
     transformIndexHtml(_html, context) {
-      const vaultWasm = Object.values(((v) => (v ? v : {}))(context.bundle)).find(
+      const vaultWasm = Object.values(
+        ((v) => (v ? v : {}))(context.bundle),
+      ).find(
         (output) =>
           output.type === "asset" &&
           output.fileName.includes("nook_wasm_bg") &&

@@ -1,4 +1,4 @@
-import { Effect, Either } from 'effect'
+import { Effect, Result } from 'effect'
 
 export enum ConcreteDecoderResultKind {
   Decoded = 'decoded',
@@ -71,16 +71,16 @@ export function runConcreteDecoder<TransportInput, DecodedValue, DecodeFailure>(
       ? request[0]
       : { decode: request[0], value: request[1] }
   const result = Effect.runSync(
-    Effect.either(decoderRequest.decode(decoderRequest.value)),
+    Effect.result(decoderRequest.decode(decoderRequest.value)),
   )
-  if (Either.isLeft(result)) {
+  if (Result.isFailure(result)) {
     return {
       kind: ConcreteDecoderResultKind.Rejected,
-      failure: result.left,
+      failure: result.failure,
     }
   }
   return {
     kind: ConcreteDecoderResultKind.Decoded,
-    value: result.right,
+    value: result.success,
   }
 }

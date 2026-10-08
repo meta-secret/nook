@@ -1,4 +1,11 @@
-import { expect, test } from '@playwright/test'
+import {
+  expect,
+  test,
+  type Locator,
+  type Page,
+  type TestInfo,
+} from '@playwright/test'
+import { Effect, Fiber } from 'effect'
 import {
   launchPairedPinExtension,
   saveVaultLogin,
@@ -7,8 +14,176 @@ import {
 import { startMockAuthServer } from './mock-auth'
 import { getServiceWorker } from './helpers/extension-smoke-runtime'
 
+type FocusedPopupButtonChoice = NonNullable<Parameters<Locator['getByRole']>[1]>
+type FocusedPopupWindow = { readonly opener: Page; readonly url: string }
+type FocusedGooglePopupEnvironment = {
+  readonly mockAuth: Awaited<ReturnType<typeof startMockAuthServer>>
+  readonly paired: Awaited<ReturnType<typeof launchPairedPinExtension>>
+}
+type FocusedGooglePopupContext = { readonly self: FocusedGooglePopupScenario }
+class FocusedGooglePopupScenario {
+  private readonly generatorContext: FocusedGooglePopupContext = { self: this }
+  constructor(private readonly testInfo: TestInfo) {}
+  run(): Promise<void> {
+    return Effect.runPromise(
+      Effect.acquireUseRelease(
+        Effect.tryPromise(startMockAuthServer),
+        this.withMockAuth.bind(this),
+        (mockAuth) => Effect.tryPromise(mockAuth.close.bind(mockAuth)),
+      ),
+    )
+  }
+  private withMockAuth(mockAuth: FocusedGooglePopupEnvironment['mockAuth']) {
+    const launchRequest: Parameters<typeof launchPairedPinExtension>[1] = {
+      vaultName: 'Google popup focused chooser vault',
+    }
+    return Effect.acquireUseRelease(
+      Effect.tryPromise(() =>
+        launchPairedPinExtension(this.testInfo, launchRequest),
+      ),
+      (paired) => {
+        const environment: FocusedGooglePopupEnvironment = { paired, mockAuth }
+        return this.exercise(environment)
+      },
+      (paired) => Effect.tryPromise(paired.context.close.bind(paired.context)),
+    )
+  }
+  private openWindow({ opener, url }: FocusedPopupWindow): Promise<void> {
+    return opener.evaluate((destination) => {
+      window.open(destination, 'google-sign-in', 'popup,width=520,height=760')
+    }, url)
+  }
+  private prepareSurface(username: Locator): Promise<void> {
+    // Google's field remains standalone: no form, advance or login context.
+    return username.evaluate((input) => {
+      document.title = 'Profile details'
+      const main = document.createElement('main')
+      const heading = document.createElement('h1')
+      heading.textContent = 'Profile details'
+      const profile = document.createElement('input')
+      profile.id = 'display-name'
+      profile.setAttribute('autocomplete', 'nickname')
+      profile.value = 'Popup profile'
+      main.append(heading, input, profile)
+      document.body.replaceChildren(main)
+      document.body.dataset.fixtureSubmitCount = '0'
+      document.addEventListener(
+        'submit',
+        (event) => {
+          event.preventDefault()
+          document.body.dataset.fixtureSubmitCount = String(
+            Number(document.body.dataset.fixtureSubmitCount) + 1,
+          )
+        },
+        true,
+      )
+    })
+  }
+  private exercise = Effect.fn(
+    this.generatorContext,
+    function* ({ paired, mockAuth }: FocusedGooglePopupEnvironment) {
+      yield* Effect.tryPromise(() =>
+        saveVaultLogin(
+          paired.vaultPage,
+          mockAuth.origin,
+          'alice@nook.test',
+          'first-extension-password',
+        ),
+      )
+      yield* Effect.tryPromise(() =>
+        saveVaultLogin(
+          paired.vaultPage,
+          mockAuth.origin,
+          'bob@nook.test',
+          'second-extension-password',
+        ),
+      )
+      yield* Effect.tryPromise(() =>
+        unlockExtensionPopupPin(paired.context, paired.extensionId),
+      )
+      const opener = yield* Effect.tryPromise(() => paired.context.newPage())
+      yield* Effect.tryPromise(() =>
+        opener.goto(`${mockAuth.origin}/plain/login`),
+      )
+      const opened = yield* Effect.forkChild(
+        Effect.tryPromise(() => opener.waitForEvent('popup')),
+      )
+      const popupWindow: FocusedPopupWindow = {
+        opener,
+        url: `${mockAuth.origin}/template/google`,
+      }
+      yield* Effect.tryPromise(this.openWindow.bind(this, popupWindow))
+      const popup = yield* Fiber.join(opened)
+      const username = popup.locator('#identifierId')
+      yield* Effect.tryPromise(() => expect(username).toBeVisible())
+      // Retain Google's username field in a neutral standalone surface.
+      // Without a form, advance control or login context whole-page
+      // recognition is inconclusive; explicit field focus owns 1/1.
+      yield* Effect.tryPromise(() => this.prepareSurface(username))
+      yield* Effect.tryPromise(() => username.click())
+      const widget = popup.locator('#nook-auth-widget')
+      yield* Effect.tryPromise(() =>
+        expect(widget).toHaveAttribute('data-nook-credential-mode', 'focused'),
+      )
+      yield* Effect.tryPromise(() =>
+        expect(widget.locator('.step-label')).toHaveText(/1\s*\/\s*1/),
+      )
+      yield* Effect.tryPromise(() => expect(username).toHaveValue(''))
+      const continueChoice: FocusedPopupButtonChoice = {
+        name: 'Continue with Nook',
+      }
+      yield* Effect.tryPromise(() =>
+        widget.getByRole('button', continueChoice).click(),
+      )
+      const picker = widget
+        .getByTestId('nook-inline-login-picker')
+        .contentFrame()
+      yield* Effect.tryPromise(() =>
+        expect(picker.getByText('alice@nook.test')).toBeVisible(),
+      )
+      yield* Effect.tryPromise(() =>
+        expect(picker.getByText('bob@nook.test')).toBeVisible(),
+      )
+      yield* Effect.tryPromise(() => expect(username).toHaveValue(''))
+      const bobChoice: FocusedPopupButtonChoice = { name: /bob@nook\.test/ }
+      yield* Effect.tryPromise(() =>
+        picker.getByRole('button', bobChoice).click(),
+      )
+      yield* Effect.tryPromise(() =>
+        expect(username).toHaveValue('bob@nook.test'),
+      )
+      yield* Effect.tryPromise(() =>
+        expect(popup.locator('body')).toHaveAttribute(
+          'data-fixture-submit-count',
+          '0',
+        ),
+      )
+      yield* Effect.tryPromise(() =>
+        expect(popup.locator('#display-name')).toHaveValue('Popup profile'),
+      )
+      yield* Effect.tryPromise(() =>
+        expect(opener.locator('input[name="username"]')).toHaveValue(''),
+      )
+      yield* Effect.tryPromise(() =>
+        expect(popup.locator('input[type="password"]')).toHaveCount(0),
+      )
+      yield* Effect.tryPromise(() =>
+        expect(popup).toHaveURL(`${mockAuth.origin}/template/google`),
+      )
+    },
+  )
+}
+
 test.describe('PIN Pilot mock-auth coverage', () => {
-  test.describe.configure({ timeout: 180_000 })
+  const popupTestConfiguration: Parameters<typeof test.describe.configure>[0] =
+    { timeout: 180_000 }
+  test.describe.configure(popupTestConfiguration)
+  test('fills only the explicitly selected username in a newly opened inconclusive Google popup without submitting', ({
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+    return new FocusedGooglePopupScenario(testInfo).run()
+  })
   test('shows extension-owned login picker usernames and completes plain success', async ({
     browserName,
   }, testInfo) => {

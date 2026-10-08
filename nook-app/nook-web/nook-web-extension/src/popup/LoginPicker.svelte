@@ -1,7 +1,7 @@
 <script lang="ts">
   import { I18N_KEYS } from '../../../nook-web-shared/src/generated/i18n-keys'
   import { Search } from '@lucide/svelte'
-  import { onMount } from 'svelte'
+  import { onMount, untrack } from 'svelte'
   import type { ExtensionI18n } from '../lib/i18n'
   import {
     LoginPickerActivity,
@@ -19,7 +19,7 @@
   } = $props()
   const documentRequest: ConstructorParameters<
     typeof LoginPickerController
-  >[0] = { i18n, requestId, parentOrigin }
+  >[0] = untrack(() => ({ i18n, requestId, parentOrigin }))
   const picker = new LoginPickerController(documentRequest)
 
   $effect(() => picker.load(picker.query))

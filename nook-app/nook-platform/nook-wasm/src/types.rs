@@ -32,5 +32,3 @@ pub use startup_unlock_policy::NookVaultStartupUnlockRequest;
 pub use store_id::*;
 pub use sync::*;
 pub use sync_state::*;
-
-pub(crate) use authentication::LoginAccountProjection;

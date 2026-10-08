@@ -36,6 +36,10 @@ type FocusedWebsiteLoginFillConfiguration = {
 
 /** Owns sender-origin/grant admission, picker generation, and one-value response cleanup. */
 export class FocusedWebsiteLoginFillOperation {
+  private readonly generatorContext: FocusedWebsiteLoginFillOperationGeneratorContext =
+    {
+      self: this,
+    }
   private readonly locked: WebsiteFocusedLoginFillResponse = {
     ok: false,
     reason: 'login-locked',
@@ -96,8 +100,9 @@ export class FocusedWebsiteLoginFillOperation {
     )
   }
 
-  private release(grant: StoredExtensionPairingGrant) {
-    return Effect.gen(this, function* () {
+  private release = Effect.fn(
+    this.generatorContext,
+    function* (grant: StoredExtensionPairingGrant) {
       switch (this.authorization()) {
         case FocusedReleaseAuthorization.Revoked:
           return this.locked
@@ -119,12 +124,15 @@ export class FocusedWebsiteLoginFillOperation {
       const response: WebsiteFocusedLoginFillResponse =
         yield* this.decode(delivery)
       return this.finish(response)
-    })
-  }
+    },
+  )
 
   run(): Promise<WebsiteFocusedLoginFillResponse> {
+    const generatorContext: FocusedWebsiteLoginFillOperationGeneratorContext = {
+      self: this,
+    }
     return Effect.runPromise(
-      Effect.gen(this, function* () {
+      Effect.gen(generatorContext, function* () {
         switch (this.authorization()) {
           case FocusedReleaseAuthorization.Revoked:
             return this.locked
@@ -155,7 +163,7 @@ export class FocusedWebsiteLoginFillOperation {
             return this.failed
         }
         return this.failed
-      }).pipe(Effect.catchAll(() => Effect.succeed(this.failed))),
+      }).pipe(Effect.catch(() => Effect.succeed(this.failed))),
     )
   }
 }
@@ -169,3 +177,7 @@ export const focusedWebsiteLoginFillDependencies: FocusedWebsiteLoginFillDepende
       extensionPairingIdentity,
     ),
   }
+
+type FocusedWebsiteLoginFillOperationGeneratorContext = {
+  readonly self: FocusedWebsiteLoginFillOperation
+}

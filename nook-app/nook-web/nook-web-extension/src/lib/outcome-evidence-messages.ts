@@ -34,14 +34,14 @@ export class AuthenticationOutcomeClassifyMessage {
   declare readonly type: AuthenticationOutcomeClassifyMessageType.NookAuthenticationOutcomeClassify
   declare readonly payload: AuthenticationOutcomeClassifyPayload
   static decode(message: unknown) {
-    return Schema.decodeUnknown(authenticationOutcomeClassifyMessageSchema)(
-      message,
-    )
+    return Schema.decodeUnknownEffect(
+      authenticationOutcomeClassifyMessageSchema,
+    )(message)
   }
 }
 
 type AuthenticationOutcomeObservationSchemaFields = {
-  readonly [Field in keyof AuthenticationOutcomeObservationView]: Schema.Schema<
+  readonly [Field in keyof AuthenticationOutcomeObservationView]: Schema.Codec<
     AuthenticationOutcomeObservationView[Field]
   >
 }
@@ -55,17 +55,19 @@ const authenticationOutcomeObservationSchemaFields: AuthenticationOutcomeObserva
     sameDocumentMutation: Schema.Boolean,
     inIframe: Schema.Boolean,
     elapsedMs: Schema.Number.pipe(
-      Schema.filter((elapsedMs) => Number.isFinite(elapsedMs)),
-      Schema.filter((elapsedMs) => elapsedMs >= 0),
+      Schema.check(
+        Schema.makeFilter((elapsedMs) => Number.isFinite(elapsedMs)),
+      ),
+      Schema.check(Schema.makeFilter((elapsedMs) => elapsedMs >= 0)),
     ),
   }
 
 export const AuthenticationOutcomeObservationViewSchema = Schema.Struct(
   authenticationOutcomeObservationSchemaFields,
-) satisfies Schema.Schema<AuthenticationOutcomeObservationView>
+) satisfies Schema.Codec<AuthenticationOutcomeObservationView>
 
 type AuthenticationOutcomeClassifyPayloadSchemaFields = {
-  readonly [Field in keyof AuthenticationOutcomeClassifyPayload]: Schema.Schema<
+  readonly [Field in keyof AuthenticationOutcomeClassifyPayload]: Schema.Codec<
     AuthenticationOutcomeClassifyPayload[Field]
   >
 }
@@ -74,8 +76,10 @@ const authenticationOutcomeClassifyPayloadSchemaFields: AuthenticationOutcomeCla
   {
     observation: AuthenticationOutcomeObservationViewSchema,
     timeoutMs: Schema.Number.pipe(
-      Schema.filter((timeoutMs) => Number.isFinite(timeoutMs)),
-      Schema.filter((timeoutMs) => timeoutMs > 0),
+      Schema.check(
+        Schema.makeFilter((timeoutMs) => Number.isFinite(timeoutMs)),
+      ),
+      Schema.check(Schema.makeFilter((timeoutMs) => timeoutMs > 0)),
     ),
   }
 
@@ -84,8 +88,8 @@ const authenticationOutcomeClassifyPayloadSchema = Schema.Struct(
 )
 
 type AuthenticationOutcomeClassifyMessageSchemaFields = {
-  readonly type: Schema.Schema<AuthenticationOutcomeClassifyMessage['type']>
-  readonly payload: Schema.Schema<AuthenticationOutcomeClassifyPayload>
+  readonly type: Schema.Codec<AuthenticationOutcomeClassifyMessage['type']>
+  readonly payload: Schema.Codec<AuthenticationOutcomeClassifyPayload>
 }
 
 const authenticationOutcomeClassifyMessageSchemaFields: AuthenticationOutcomeClassifyMessageSchemaFields =
@@ -98,4 +102,4 @@ const authenticationOutcomeClassifyMessageSchemaFields: AuthenticationOutcomeCla
 
 const authenticationOutcomeClassifyMessageSchema = Schema.Struct(
   authenticationOutcomeClassifyMessageSchemaFields,
-) satisfies Schema.Schema<AuthenticationOutcomeClassifyMessage>
+) satisfies Schema.Codec<AuthenticationOutcomeClassifyMessage>

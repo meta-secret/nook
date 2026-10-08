@@ -1,4 +1,4 @@
-import { Effect, ParseResult, Schema } from 'effect'
+import { Effect, Schema } from 'effect'
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type {
@@ -179,7 +179,7 @@ const extensionSessionRawEnvelopeHeaderFields: ExtensionSessionRawEnvelopeHeader
   }
 const extensionSessionRawEnvelopeHeaderSchema = Schema.Struct(
   extensionSessionRawEnvelopeHeaderFields,
-) satisfies Schema.Schema<ExtensionSessionRawEnvelopeHeader>
+) satisfies Schema.Codec<ExtensionSessionRawEnvelopeHeader>
 
 enum ExtensionSessionPayloadField {
   Payload = 'payload',
@@ -209,10 +209,10 @@ export function decodeExtensionSessionRawEnvelope(
   value: ExtensionSessionRuntimeMessageValue,
 ): Effect.Effect<
   ExtensionSessionRawEnvelope,
-  ParseResult.ParseError | ExtensionSessionRequestDecodeFailure
+  Schema.SchemaError | ExtensionSessionRequestDecodeFailure
 > {
   return Effect.flatMap(
-    Schema.decodeUnknown(extensionSessionRawEnvelopeHeaderSchema)(value),
+    Schema.decodeUnknownEffect(extensionSessionRawEnvelopeHeaderSchema)(value),
     ({ type }) => {
       if (typeof value !== 'object' || Array.isArray(value)) {
         return Effect.fail(rawEnvelopeDecodeFailure)
@@ -515,14 +515,14 @@ class ExtensionSessionIngressAdmission {
         envelope: ExtensionSessionRawEnvelope
       } {
     const decoded = Effect.runSync(
-      Effect.either(decodeExtensionSessionRawEnvelope(this.value)),
+      Effect.result(decodeExtensionSessionRawEnvelope(this.value)),
     )
-    if (decoded._tag === 'Left') {
+    if (decoded._tag === 'Failure') {
       return { kind: ExtensionSessionSensitiveStageKind.Invalid }
     }
     return {
       kind: ExtensionSessionSensitiveStageKind.Staged,
-      envelope: decoded.right,
+      envelope: decoded.success,
     }
   }
 
@@ -534,13 +534,13 @@ class ExtensionSessionIngressAdmission {
     try {
       const staged = structuredClone(this.value)
       const stagedDecoded = Effect.runSync(
-        Effect.either(decodeExtensionSessionRawEnvelope(staged)),
+        Effect.result(decodeExtensionSessionRawEnvelope(staged)),
       )
-      if (stagedDecoded._tag === 'Left') {
+      if (stagedDecoded._tag === 'Failure') {
         clearRawExtensionSessionSecrets(decoded.envelope)
         return { kind: ExtensionSessionSensitiveStageKind.Invalid }
       }
-      stagedEnvelope = stagedDecoded.right
+      stagedEnvelope = stagedDecoded.success
     } catch {
       clearRawExtensionSessionSecrets(decoded.envelope)
       return { kind: ExtensionSessionSensitiveStageKind.Invalid }
@@ -674,11 +674,11 @@ export async function parseExtensionSessionRequest(
       return { kind: ExtensionSessionRequestParseKind.Invalid }
     }
     const decoded = Effect.runSync(
-      Effect.either(decodeExtensionSessionIngress(envelope)),
+      Effect.result(decodeExtensionSessionIngress(envelope)),
     )
-    if (decoded._tag === 'Left')
+    if (decoded._tag === 'Failure')
       return { kind: ExtensionSessionRequestParseKind.Invalid }
-    const request = decoded.right
+    const request = decoded.success
     const queue = request.payload.queue
     const expiresAt =
       queue.kind === ExtensionSessionQueueKind.Deadline
@@ -752,7 +752,7 @@ function decodeExtensionSessionIngress(
     }
     const decodedProviders: StorageProvider[] = []
     for (const provider of rawProviders) {
-      const decodedProvider = yield* Effect.either(
+      const decodedProvider = yield* Effect.result(
         Effect.mapError(
           ExtensionPairingStorageProviderPayloadDecoder.decode(provider),
           (): ExtensionSessionRequestDecodeFailure => ({
@@ -760,11 +760,11 @@ function decodeExtensionSessionIngress(
           }),
         ),
       )
-      if (decodedProvider._tag === 'Left') {
+      if (decodedProvider._tag === 'Failure') {
         new ProviderCredentialBuffer(decodedProviders).clear()
-        return yield* Effect.fail(decodedProvider.left)
+        return yield* Effect.fail(decodedProvider.failure)
       }
-      decodedProviders.push(decodedProvider.right)
+      decodedProviders.push(decodedProvider.success)
     }
     const identities: ExtensionStorageProviderIdentity[] = decodedProviders.map(
       (provider) => ({
@@ -792,19 +792,21 @@ function decodeExtensionSessionIngress(
         kind: ExtensionSessionRequestDecodeFailureKind.SessionRequest,
       }),
     }
-    const decodedRequest = yield* Effect.either(Effect.try(attempt))
-    if (decodedRequest._tag === 'Left') {
+    const decodedRequest = yield* Effect.result(Effect.try(attempt))
+    if (decodedRequest._tag === 'Failure') {
       new ProviderCredentialBuffer(decodedProviders).clear()
-      return yield* Effect.fail(decodedRequest.left)
+      return yield* Effect.fail(decodedRequest.failure)
     }
-    if (decodedRequest.right.type !== ExtensionSessionMessageType.ImportVault) {
+    if (
+      decodedRequest.success.type !== ExtensionSessionMessageType.ImportVault
+    ) {
       new ProviderCredentialBuffer(decodedProviders).clear()
       return yield* Effect.fail(sessionRequestDecodeFailure)
     }
     return {
-      ...decodedRequest.right,
+      ...decodedRequest.success,
       payload: {
-        ...decodedRequest.right.payload,
+        ...decodedRequest.success.payload,
         providers: decodedProviders,
       },
     }

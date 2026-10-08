@@ -31,8 +31,8 @@ use crate::storage::local_folder::LocalFolderHandles;
 use nook_core::{
     DeviceIdentity, DeviceIdentitySecret, DriveEventParent, DriveStorageTargetRef,
     ICloudEventTarget, MultiDeviceError, SelfRosterSync, SentinelGenesisPhase, StorageMode,
-    SymmetricKey, VaultCrypto, VaultNameRef, VaultStoreIdentityRef, VaultType, VaultUnlock,
-    VaultVersionWrite, i18n_keys,
+    SymmetricKey, VaultCrypto, VaultNameRef, VaultSessionProjection, VaultStoreIdentityRef,
+    VaultType, VaultUnlock, VaultVersionWrite, i18n_keys,
 };
 use nook_core::{EnsureSelfInRosterRequest, VaultMetaState};
 use std::mem;
@@ -457,6 +457,7 @@ impl NookVaultManager {
         secrets_key: &str,
         members_key: &str,
     ) -> Result<(), NookError> {
+        self.vault.projection = VaultSessionProjection::Unhydrated;
         self.vault.secrets_key = secrets_key.to_owned();
         self.vault.members_key = members_key.to_owned();
         let parsed_secrets = SymmetricKey::parse(secrets_key)?;
@@ -465,6 +466,7 @@ impl NookVaultManager {
     }
 
     pub(in crate::manager) fn clear_vault_keys(&mut self) {
+        self.vault.projection = VaultSessionProjection::Unhydrated;
         self.vault.secrets_key.zeroize();
         self.vault.members_key.zeroize();
         self.vault.crypto = VaultCryptoState::Locked;

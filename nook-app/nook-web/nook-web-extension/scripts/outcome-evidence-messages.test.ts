@@ -16,20 +16,20 @@ describe('outcome evidence messages', () => {
   test('accepts a bounded classify payload', () => {
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           AuthenticationOutcomeClassifyMessageSchema.decode({
             type: 'nook:authentication-outcome-classify',
             payload: { observation: validObservation, timeoutMs: 8_000 },
           }),
         ),
       )._tag,
-    ).toBe('Right')
+    ).toBe('Success')
   })
 
   test('rejects secret-bearing or malformed observations', () => {
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           AuthenticationOutcomeClassifyMessageSchema.decode({
             type: 'nook:authentication-outcome-classify',
             payload: {
@@ -38,10 +38,10 @@ describe('outcome evidence messages', () => {
           }),
         ),
       )._tag,
-    ).toBe('Left')
+    ).toBe('Failure')
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           AuthenticationOutcomeClassifyMessageSchema.decode({
             type: 'nook:authentication-outcome-classify',
             payload: {
@@ -51,6 +51,6 @@ describe('outcome evidence messages', () => {
           }),
         ),
       )._tag,
-    ).toBe('Right')
+    ).toBe('Success')
   })
 })

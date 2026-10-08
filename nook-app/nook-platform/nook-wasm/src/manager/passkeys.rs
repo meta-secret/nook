@@ -1,7 +1,8 @@
 //! Website-passkey ceremonies for the unlocked extension vault session.
 
+mod extension_vault;
+
 use super::NookVaultManager;
-use crate::NookDatabase;
 use nook_core::CheckedPasskeyAssertion;
 use nook_core::CheckedPasskeyRegistration;
 use nook_core::EncryptedSecretPayload;
@@ -11,11 +12,7 @@ use tsify::Tsify;
 
 use crate::{NookError, NookPasskeyAccount, NookPasskeyAssertion, NookPasskeyRegistration};
 use js_sys::Object;
-use nook_core::{
-    DeviceId, DevicePublicKey, DeviceSigningPublicKey, EventGraphDeviceAccess,
-    EventGraphDeviceAccessRequest, PasskeyAuthenticatorError, SecretType, SecretValue, StoreId,
-    SymmetricKey, VaultApplication, VaultMetaGraphProjection, VaultOperation, VaultType,
-};
+use nook_core::{PasskeyAuthenticatorError, SecretType, SecretValue, SymmetricKey, VaultOperation};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroizing;
 
@@ -73,23 +70,14 @@ impl NookVaultManager {
 mod tests {
     use super::NookVaultManager;
     use crate::manager::VaultCryptoState;
-    #[cfg(test)]
-    #[cfg(test)]
-    use nook_core::DeviceIdentity;
-    #[cfg(test)]
-    #[cfg(test)]
-    use nook_core::DeviceMode;
     use nook_core::SecretId;
-    use nook_core::VaultApplication;
     #[cfg(test)]
     #[cfg(test)]
     use nook_core::VaultCrypto;
     #[cfg(test)]
     #[cfg(test)]
     use nook_core::VaultKeys;
-    use nook_core::{
-        PasskeyAuthenticatorError, SecretType, StoredRecordPayload, VaultArchitecture,
-    };
+    use nook_core::{PasskeyAuthenticatorError, SecretType, StoredRecordPayload};
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
@@ -150,31 +138,6 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn passkey_capability_requires_unlock_and_simple_architecture() -> anyhow::Result<()> {
-        let locked = NookVaultManager::new();
-        assert!(locked.ensure_passkey_extension_capability().is_err());
-
-        let identity = DeviceIdentity::generate()?;
-        let mut ready = NookVaultManager::new();
-        ready.device.identity_private_key = identity.secret_string().into_inner();
-        assert!(ready.ensure_passkey_extension_capability().is_ok());
-
-        ready.vault.architecture = VaultArchitecture::sentinel_personal(
-            DeviceMode::Standard,
-            nook_core::SentinelPolicy {
-                threshold: 2.into(),
-                required_participants: 2.into(),
-                ready_participants: 0.into(),
-            },
-        );
-        assert!(ready.ensure_passkey_extension_capability().is_err());
-        ready.vault.architecture = VaultArchitecture::default();
-        ready.application = VaultApplication::Simple;
-        assert!(ready.ensure_passkey_extension_capability().is_err());
-        Ok(())
-    }
-
-    #[wasm_bindgen_test]
     fn passkey_crypto_round_trip_decrypts_only_passkey_records() -> anyhow::Result<()> {
         let keys = VaultKeys::generate()?;
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
@@ -231,7 +194,6 @@ mod browser_tests {
     #[cfg(test)]
     #[cfg(test)]
     use nook_core::DeviceIdentity;
-    use nook_core::StoreId;
     #[cfg(test)]
     #[cfg(test)]
     use nook_core::VaultKeys;
@@ -309,40 +271,6 @@ mod browser_tests {
         );
         Ok(())
     }
-
-    #[wasm_bindgen_test]
-    async fn opening_passkey_vault_rejects_malformed_grants_before_storage() -> Result<(), JsError>
-    {
-        let identity = DeviceIdentity::generate()?;
-        let store_id = StoreId::generate()?.to_string();
-        let mut manager = NookVaultManager::new();
-        manager.device.identity_private_key = identity.secret_string().into_inner();
-
-        assert!(
-            manager
-                .open_extension_passkey_vault_js("", "", "", "")
-                .await
-                .is_err()
-        );
-        assert!(
-            manager
-                .open_extension_passkey_vault_js(&store_id, "", "", "")
-                .await
-                .is_err()
-        );
-        assert!(
-            manager
-                .open_extension_passkey_vault_js(
-                    &store_id,
-                    &identity.device_id().to_string(),
-                    &identity.public_key().to_string(),
-                    "",
-                )
-                .await
-                .is_err()
-        );
-        Ok(())
-    }
 }
 
 impl NookVaultManager {
@@ -360,70 +288,6 @@ impl NookVaultManager {
 }
 
 impl NookVaultManager {
-    async fn open_extension_passkey_vault(
-        &mut self,
-        expected_store_id: &str,
-        expected_device_id: &str,
-        expected_device_public_key: &str,
-        expected_device_signing_public_key: &str,
-    ) -> Result<(), NookError> {
-        self.ensure_passkey_extension_capability()?;
-        let store_id = StoreId::parse(expected_store_id)?;
-        let expected_device_id = DeviceId::parse(expected_device_id)?;
-        let expected_public_key = DevicePublicKey::parse(expected_device_public_key)?;
-        let expected_signing_key =
-            DeviceSigningPublicKey::parse(expected_device_signing_public_key)?;
-        let identity = self.device_identity()?;
-        let signing = self.ensure_signing_identity().await?;
-        if identity.device_id() != &expected_device_id
-            || identity.public_key() != expected_public_key
-            || signing.public_key() != expected_signing_key
-        {
-            return Err(NookError::Decryption(
-                "Approved extension grant does not match the unlocked device.".to_owned(),
-            ));
-        }
-        self.vault.store_id = store_id.as_str().to_owned();
-        let store = NookDatabase::load_local_event_store(store_id.as_str()).await?;
-        let graph = store.load_graph(store_id.as_str())?;
-        if !EventGraphDeviceAccess::new(&graph).has_access(&EventGraphDeviceAccessRequest {
-            expected_device_id: &expected_device_id,
-            expected_public_key: &expected_public_key,
-            expected_signing_public_key: &expected_signing_key,
-        })? {
-            return Err(NookError::Decryption(
-                "Extension vault grant is missing or revoked.".to_owned(),
-            ));
-        }
-        VaultMetaGraphProjection::new(&graph).materialize(&mut self.vault.meta)?;
-        self.ensure_vault_crypto_from_cache().await?;
-        self.apply_event_projection_to_session().await?;
-        Ok(())
-    }
-
-    pub(super) fn ensure_passkey_extension_capability(&self) -> Result<(), NookError> {
-        if self.application != VaultApplication::Extension
-            && self.application != VaultApplication::UnifiedDevelopment
-        {
-            return Err(NookError::Database(
-                "Website passkeys require the extension application capability.".to_owned(),
-            ));
-        }
-        self.application
-            .validate_session_access(self.vault.architecture.vault_type)?;
-        if self.vault.architecture.vault_type != VaultType::Simple {
-            return Err(NookError::Database(
-                "Website passkeys are available only for Simple Vault.".to_owned(),
-            ));
-        }
-        if self.device.identity_private_key.is_empty() {
-            return Err(NookError::Decryption(
-                "Extension device identity is locked.".to_owned(),
-            ));
-        }
-        Ok(())
-    }
-
     fn decrypt_passkeys(&self) -> Result<DecryptedPasskeys, NookError> {
         let crypto = self.vault.crypto.get()?;
         let mut passkeys = Vec::new();
@@ -466,24 +330,6 @@ impl NookVaultManager {
 
 #[wasm_bindgen]
 impl NookVaultManager {
-    #[wasm_bindgen]
-    pub async fn open_extension_passkey_vault_js(
-        &mut self,
-        expected_store_id: &str,
-        expected_device_id: &str,
-        expected_device_public_key: &str,
-        expected_device_signing_public_key: &str,
-    ) -> Result<(), JsError> {
-        self.open_extension_passkey_vault(
-            expected_store_id,
-            expected_device_id,
-            expected_device_public_key,
-            expected_device_signing_public_key,
-        )
-        .await
-        .map_err(Into::into)
-    }
-
     #[wasm_bindgen]
     pub async fn list_website_passkey_accounts(
         &mut self,

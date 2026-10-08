@@ -616,7 +616,7 @@ class EnrollmentBackupInteraction {
             recoveryCopyObservation.clearBackupCodeCandidates(pasted)
           }
         }).pipe(
-          Effect.catchAll(() =>
+          Effect.catch(() =>
             Effect.sync(() => {
               if (host.panel.isConnected)
                 host.description.textContent = host.translatedMessage(

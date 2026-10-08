@@ -1,4 +1,4 @@
-import { Effect, Either, Schema } from 'effect'
+import { Effect, Result, Schema } from 'effect'
 
 export enum BrowserRuntimeMessageAdmissionKind {
   Accepted = 'accepted',
@@ -20,19 +20,19 @@ export type BrowserRuntimeMessageValue =
   | { readonly [key: string]: BrowserRuntimeMessageValue }
 
 type BrowserRuntimeMessageAdmissionMatcher = {
-  readonly onLeft: () => BrowserRuntimeMessageAdmission
-  readonly onRight: (
+  readonly onFailure: () => BrowserRuntimeMessageAdmission
+  readonly onSuccess: (
     message: BrowserRuntimeMessage,
   ) => BrowserRuntimeMessageAdmission
 }
 
 type BrowserRuntimeMessageRecordConfiguration = {
   readonly key: typeof Schema.String
-  readonly value: Schema.Schema<BrowserRuntimeMessageValue>
+  readonly value: Schema.Codec<BrowserRuntimeMessageValue>
 }
 
 type BrowserRuntimeMessageSchemaFields = {
-  readonly type: Schema.filter<typeof Schema.String>
+  readonly type: typeof Schema.String
 }
 
 /** Concrete browser IPC envelope admitted before schema-specific routing. */
@@ -43,7 +43,7 @@ export class BrowserRuntimeMessage {
   readonly [key: string]: BrowserRuntimeMessageValue
 
   static decode(value: unknown) {
-    return Schema.decodeUnknown(browserRuntimeMessageSchema)(value)
+    return Schema.decodeUnknownEffect(browserRuntimeMessageSchema)(value)
   }
 
   static from(value: unknown): BrowserRuntimeMessageAdmission {
@@ -51,16 +51,16 @@ export class BrowserRuntimeMessage {
       return { kind: BrowserRuntimeMessageAdmissionKind.Rejected }
     }
     const decodeResult = Effect.runSync(
-      Effect.either(BrowserRuntimeMessage.decode(value)),
+      Effect.result(BrowserRuntimeMessage.decode(value)),
     )
     const admissionMatcher: BrowserRuntimeMessageAdmissionMatcher = {
-      onLeft: () => ({ kind: BrowserRuntimeMessageAdmissionKind.Rejected }),
-      onRight: (message) => ({
+      onFailure: () => ({ kind: BrowserRuntimeMessageAdmissionKind.Rejected }),
+      onSuccess: (message) => ({
         kind: BrowserRuntimeMessageAdmissionKind.Accepted,
         message,
       }),
     }
-    return Either.match(decodeResult, admissionMatcher)
+    return Result.match(decodeResult, admissionMatcher)
   }
 }
 
@@ -96,19 +96,22 @@ const browserRuntimeMessageRecordConfiguration: BrowserRuntimeMessageRecordConfi
     value: Schema.suspend(() => browserRuntimeMessageValueSchema),
   }
 
-const browserRuntimeMessageValueSchema: Schema.Schema<BrowserRuntimeMessageValue> =
+const browserRuntimeMessageValueSchema: Schema.Codec<BrowserRuntimeMessageValue> =
   Schema.suspend(() =>
-    Schema.Union(
+    Schema.Union([
       Schema.String,
       Schema.Number,
       Schema.Boolean,
       Schema.mutable(Schema.Array(browserRuntimeMessageValueSchema)),
-      Schema.Record(browserRuntimeMessageRecordConfiguration),
-    ),
+      Schema.Record(
+        browserRuntimeMessageRecordConfiguration.key,
+        browserRuntimeMessageRecordConfiguration.value,
+      ),
+    ]),
   )
 
 const browserRuntimeMessageSchemaFields: BrowserRuntimeMessageSchemaFields = {
-  type: Schema.String.pipe(Schema.minLength(1)),
+  type: Schema.String.pipe(Schema.check(Schema.isMinLength(1))),
 }
 
 const browserRuntimeMessageRestRecordConfiguration: BrowserRuntimeMessageRecordConfiguration =
@@ -117,7 +120,12 @@ const browserRuntimeMessageRestRecordConfiguration: BrowserRuntimeMessageRecordC
     value: browserRuntimeMessageValueSchema,
   }
 
-const browserRuntimeMessageSchema = Schema.Struct(
-  browserRuntimeMessageSchemaFields,
-  Schema.Record(browserRuntimeMessageRestRecordConfiguration),
-) satisfies Schema.Schema<BrowserRuntimeMessage>
+const browserRuntimeMessageSchema = Schema.StructWithRest(
+  Schema.Struct(browserRuntimeMessageSchemaFields),
+  [
+    Schema.Record(
+      browserRuntimeMessageRestRecordConfiguration.key,
+      browserRuntimeMessageRestRecordConfiguration.value,
+    ),
+  ],
+) satisfies Schema.Codec<BrowserRuntimeMessage>

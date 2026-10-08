@@ -2,8 +2,10 @@ use super::companion_protocol::PendingCompanionWebsiteHandoff;
 use super::device_protection::ExtensionIdentityPublication;
 use crate::ConfiguredVaultApplication;
 use nook_core::{
-    DriveEventParent, ICloudEventTarget, SentinelGenesisPhase, StorageMode, VaultArchitecture,
-    VaultMetaState, VaultUnlock,
+    DriveEventParent, EventGraph, ICloudEventTarget, SentinelConfiguration, SentinelGenesisPhase,
+    SentinelPolicy, StorageMode, StoreId, StoredSecretRecord, VaultArchitecture,
+    VaultMetaGraphProjection, VaultMetaState, VaultProjection, VaultSessionProjection, VaultType,
+    VaultUnlock, VaultUserRecordBatch,
 };
 use std::rc::Rc;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
@@ -165,6 +167,7 @@ impl SearchCatalogState {
 }
 
 pub(in crate::manager) struct VaultSessionState {
+    pub(in crate::manager) projection: nook_core::VaultSessionProjection,
     pub(in crate::manager) secrets_key: String,
     pub(in crate::manager) members_key: String,
     pub(in crate::manager) crypto: VaultCryptoState,
@@ -182,9 +185,16 @@ pub(in crate::manager) struct VaultSessionState {
     pub(in crate::manager) search_catalog_pending_bucket_mask: u64,
 }
 
+pub(in crate::manager) struct VaultSessionGraphProjection<'a> {
+    pub(in crate::manager) graph: &'a EventGraph,
+    pub(in crate::manager) store_id: &'a StoreId,
+    pub(in crate::manager) architecture: &'a VaultArchitecture,
+}
+
 impl Default for VaultSessionState {
     fn default() -> Self {
         Self {
+            projection: VaultSessionProjection::Unhydrated,
             secrets_key: String::new(),
             members_key: String::new(),
             crypto: VaultCryptoState::Locked,
@@ -216,6 +226,30 @@ pub(in crate::manager) enum SessionCatalogAvailability<'a> {
     Ready(&'a nook_core::SecretSearchCatalog),
 }
 impl VaultSessionState {
+    /// Materialize an owned session before publishing it to the retained manager.
+    pub(in crate::manager) fn from_event_graph(
+        input: &VaultSessionGraphProjection<'_>,
+    ) -> Result<Self, NookError> {
+        let projection = VaultProjection::from_graph(input.graph, input.store_id.as_str())?;
+        let records: Vec<StoredSecretRecord> =
+            projection.live_secrets(input.graph).into_values().collect();
+        let mut vault = Self {
+            store_id: input.store_id.to_string(),
+            architecture: input.architecture.clone(),
+            password_entries: projection.password_entries,
+            ..Self::default()
+        };
+        VaultUserRecordBatch::new(records).replace(&mut vault.meta);
+        VaultMetaGraphProjection::new(input.graph).materialize(&mut vault.meta)?;
+        if let SentinelConfiguration::Enabled(policy) =
+            SentinelPolicy::from_share_records(&vault.meta)?
+        {
+            vault.architecture.vault_type = VaultType::Sentinel;
+            vault.architecture.sentinel = SentinelConfiguration::Enabled(policy);
+        }
+        Ok(vault)
+    }
+
     pub(in crate::manager) fn key_material(&self) -> VaultKeyMaterial<'_> {
         if self.secrets_key.is_empty() || self.members_key.is_empty() {
             VaultKeyMaterial::Unavailable
@@ -249,6 +283,7 @@ impl VaultSessionState {
         self.secrets_key.zeroize();
         self.members_key.zeroize();
         self.crypto = VaultCryptoState::Locked;
+        self.projection = VaultSessionProjection::Unhydrated;
         self.meta = VaultMetaState::default();
         self.last_synced_content.clear();
         self.unlock = VaultUnlock::Keys;

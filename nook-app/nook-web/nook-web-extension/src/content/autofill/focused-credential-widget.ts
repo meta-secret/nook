@@ -6,7 +6,8 @@ import {
   WidgetVaultPresentationProjection,
   type PilotVaultConnection,
 } from './widget-presentation-state'
-import { WorkflowCopy } from './workflow-ui'
+import { WorkflowCopy, workflowUi } from './workflow-ui'
+import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 
 type FocusedCredentialWidgetMount = {
   readonly vaultConnection: PilotVaultConnection
@@ -34,6 +35,11 @@ export class FocusedCredentialWidget {
       totalSteps: 1,
     }
     const shell = authenticationWidgetShell.createWidgetShell(shellRequest)
+    const continueLabel = workflowUi.translatedMessage(
+      BROWSER_MESSAGE_KEYS.WidgetContinue,
+    )
+    shell.continueButton.textContent = continueLabel
+    shell.continueButton.setAttribute('aria-label', continueLabel)
     shell.host.setAttribute('data-nook-credential-mode', 'focused')
     shell.continueButton.addEventListener('click', (event) => {
       switch (new AuthenticationGesture(event).trusted) {

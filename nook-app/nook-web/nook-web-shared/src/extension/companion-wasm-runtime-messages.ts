@@ -275,13 +275,16 @@ export type CompanionWasmAuthenticatorSetupResponse = {
   readonly authenticatorSetupObservation: AuthenticationAuthenticatorSetupObservation;
 };
 
-const authenticatorSetupObservationSchema = Schema.Literal("present", "absent");
+const authenticatorSetupObservationSchema = Schema.Literals([
+  "present",
+  "absent",
+]);
 const companionWasmAuthenticatorSetupResponseFields: {
   readonly authenticatorSetupObservation: typeof authenticatorSetupObservationSchema;
 } = {
   authenticatorSetupObservation: authenticatorSetupObservationSchema,
 };
-export const CompanionWasmAuthenticatorSetupResponseDecoder: Schema.Schema<CompanionWasmAuthenticatorSetupResponse> =
+export const CompanionWasmAuthenticatorSetupResponseDecoder: Schema.Codec<CompanionWasmAuthenticatorSetupResponse> =
   Schema.Struct(companionWasmAuthenticatorSetupResponseFields);
 
 const backupCodeArraySchema = Schema.mutable(Schema.Array(Schema.String));
@@ -290,19 +293,19 @@ const backupCodeExtractionFields: {
 } = {
   codes: backupCodeArraySchema,
 };
-export const CompanionWasmBackupCodeExtractionDecoder: Schema.Schema<AuthenticationBackupCodeExtraction> =
+export const CompanionWasmBackupCodeExtractionDecoder: Schema.Codec<AuthenticationBackupCodeExtraction> =
   Schema.Struct(backupCodeExtractionFields);
 
-const authenticationNavigationObservationSchema = Schema.Literal(
+const authenticationNavigationObservationSchema = Schema.Literals([
   "Authentication",
   "Unrelated",
-);
+]);
 const authenticationNavigationPathFields: {
   readonly observation: typeof authenticationNavigationObservationSchema;
 } = {
   observation: authenticationNavigationObservationSchema,
 };
-export const CompanionWasmNavigationPathDecoder: Schema.Schema<AuthenticationNavigationPathProjection> =
+export const CompanionWasmNavigationPathDecoder: Schema.Codec<AuthenticationNavigationPathProjection> =
   Schema.Struct(authenticationNavigationPathFields);
 
 const activityProgressFields: {
@@ -318,7 +321,7 @@ const activityProgressResponseFields: {
 } = {
   activityProgress: activityProgressSchema,
 };
-export const CompanionWasmActivityProgressDecoder: Schema.Schema<{
+export const CompanionWasmActivityProgressDecoder: Schema.Codec<{
   readonly activityProgress: AuthenticationDisplayProgress;
 }> = Schema.Struct(activityProgressResponseFields);
 

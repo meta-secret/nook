@@ -8,7 +8,7 @@ import {
   vaultAppAliases,
   vaultSpaPlugin,
   type VaultSpaOptions,
-} from "../nook-web-shared/vite-config";
+} from "../nook-web-shared/vite-config.ts";
 
 const sentinelAppUrl =
   process.env.VITE_SENTINEL_APP_URL?.trim() || "https://sentinel.nokey.sh";

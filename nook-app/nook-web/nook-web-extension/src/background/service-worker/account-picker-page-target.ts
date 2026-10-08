@@ -11,7 +11,8 @@ export type AccountPickerPageMessage =
 
 type AccountPickerPageResponse = { ok: true } | { ok: false; reason: string }
 
-type AccountPickerPageMessageDelivery = {
+// Preserve Chrome's document targeting at this outgoing browser boundary.
+type AccountPickerPageMessageDelivery = chrome.tabs.MessageSendOptions & {
   tabId: number
   frameId: number
   message: AccountPickerPageMessage
@@ -48,10 +49,9 @@ export class AccountPickerPageTarget {
 
   static send({
     tabId,
-    frameId,
     message,
+    ...options
   }: AccountPickerPageMessageDelivery): Promise<AccountPickerPageResponse> {
-    const options: chrome.tabs.MessageSendOptions = { frameId }
     return chrome.tabs.sendMessage(
       tabId,
       message,

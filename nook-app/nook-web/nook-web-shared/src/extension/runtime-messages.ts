@@ -54,7 +54,7 @@ type RuntimeMessageDecodeRequest<
   DecodedRuntimeMessage,
   RuntimeMessageWireValue,
 > = {
-  readonly schema: Schema.Schema<DecodedRuntimeMessage>;
+  readonly schema: Schema.Codec<DecodedRuntimeMessage>;
   readonly value: RuntimeMessageWireValue;
   readonly kind: RuntimeMessageDecodeFailureKind;
 };
@@ -65,7 +65,7 @@ function decodeRuntimeMessage<DecodedRuntimeMessage, RuntimeMessageWireValue>(
     RuntimeMessageWireValue
   >,
 ): Effect.Effect<DecodedRuntimeMessage, RuntimeMessageDecodeFailure> {
-  return Schema.decodeUnknown(request.schema)(request.value).pipe(
+  return Schema.decodeUnknownEffect(request.schema)(request.value).pipe(
     Effect.mapError((cause) => {
       const failureRequest: Parameters<
         typeof RuntimeMessageDecodeFailure.fromParseError
@@ -210,24 +210,24 @@ export class ExtensionPairingApprovedGrantAdmission {
     const scopes: ExtensionConnectScope[] = [];
     for (const candidate of payload.scopes) {
       const admitted = Effect.runSync(
-        Effect.either(ExtensionConnectScope.decode(candidate)),
+        Effect.result(ExtensionConnectScope.decode(candidate)),
       );
-      if (admitted._tag === "Left")
+      if (admitted._tag === "Failure")
         return err(ExtensionPairingApprovedMessageAdmissionFailure.Scopes);
-      scopes.push(admitted.right);
+      scopes.push(admitted.success);
     }
     if (!("providers" in payload) || !Array.isArray(payload.providers))
       return err(ExtensionPairingApprovedMessageAdmissionFailure.Providers);
     const providers: ExtensionPairingStorageProviderPayload[] = [];
     for (const candidate of payload.providers) {
       const decoded = Effect.runSync(
-        Effect.either(
+        Effect.result(
           ExtensionPairingStorageProviderPayloadDecoder.decode(candidate),
         ),
       );
-      if (decoded._tag === "Left")
+      if (decoded._tag === "Failure")
         return err(ExtensionPairingApprovedMessageAdmissionFailure.Providers);
-      providers.push(decoded.right);
+      providers.push(decoded.success);
     }
     const grant: ExtensionPairingApprovedGrant = {
       vaultType: vaultType.value,
@@ -312,7 +312,7 @@ const extensionPairingApprovedTypeSchema = Schema.Literal(
 );
 const extensionPairingApprovedEventLogRecordsSchema = Schema.Array(
   Schema.Unknown,
-).pipe(Schema.minItems(1));
+).pipe(Schema.check(Schema.isMinLength(1)));
 type ExtensionPairingApprovedMessageFields = {
   readonly type: typeof extensionPairingApprovedTypeSchema;
   readonly payload: typeof Schema.Unknown;
@@ -396,14 +396,18 @@ export class ExtensionIdentityHandoffRequestMessage {
     ExtensionIdentityHandoffRequestMessage,
     RuntimeMessageDecodeFailure
   > {
-    const recipientPublicKeySchema = Schema.String.pipe(Schema.minLength(1));
-    const nonceSchema = Schema.String.pipe(Schema.minLength(1));
-    const expectedDeviceIdSchema = Schema.String.pipe(Schema.minLength(1));
+    const recipientPublicKeySchema = Schema.String.pipe(
+      Schema.check(Schema.isMinLength(1)),
+    );
+    const nonceSchema = Schema.String.pipe(Schema.check(Schema.isMinLength(1)));
+    const expectedDeviceIdSchema = Schema.String.pipe(
+      Schema.check(Schema.isMinLength(1)),
+    );
     const expectedDevicePublicKeySchema = Schema.String.pipe(
-      Schema.minLength(1),
+      Schema.check(Schema.isMinLength(1)),
     );
     const expectedDeviceSigningPublicKeySchema = Schema.String.pipe(
-      Schema.minLength(1),
+      Schema.check(Schema.isMinLength(1)),
     );
     const identityHandoffPayloadFields: {
       readonly recipientPublicKey: typeof recipientPublicKeySchema;
@@ -509,8 +513,12 @@ export class ExtensionPairedVaultUnlockRequestMessage {
     ExtensionPairedVaultUnlockRequestMessage,
     RuntimeMessageDecodeFailure
   > {
-    const unlockRequestIdSchema = Schema.String.pipe(Schema.minLength(1));
-    const unlockVaultStoreIdSchema = Schema.String.pipe(Schema.minLength(1));
+    const unlockRequestIdSchema = Schema.String.pipe(
+      Schema.check(Schema.isMinLength(1)),
+    );
+    const unlockVaultStoreIdSchema = Schema.String.pipe(
+      Schema.check(Schema.isMinLength(1)),
+    );
     const unlockPayloadFields: {
       readonly requestId: typeof unlockRequestIdSchema;
       readonly vaultStoreId: typeof unlockVaultStoreIdSchema;

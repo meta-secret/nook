@@ -61,16 +61,16 @@ export const routeAutofillMessage: AutofillMessageListener = (
 ) => {
   if (!runtimeMessage || typeof runtimeMessage !== 'object') return false
   const message = runtimeMessage
-  const verification = Schema.decodeUnknownEither(LoginPickerPageVerification)(
+  const verification = Schema.decodeUnknownResult(LoginPickerPageVerification)(
     message,
   )
   switch (verification._tag) {
-    case 'Left':
+    case 'Failure':
       break
-    case 'Right': {
+    case 'Success': {
       const delivery: Parameters<
         LoginPickerPageVerificationReceiver['receive']
-      >[0] = { message: verification.right, sender, sendResponse }
+      >[0] = { message: verification.success, sender, sendResponse }
       return new LoginPickerPageVerificationReceiver().receive(delivery)
     }
   }

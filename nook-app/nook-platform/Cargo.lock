@@ -1990,6 +1990,7 @@ dependencies = [
  "ciborium",
  "coset",
  "csv",
+ "derive_more",
  "ed25519-dalek",
  "flate2",
  "getrandom 0.4.3",

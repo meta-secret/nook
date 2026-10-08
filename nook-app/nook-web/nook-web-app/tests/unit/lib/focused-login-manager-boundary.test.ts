@@ -1,4 +1,4 @@
-import { Effect, Either } from 'effect'
+import { Effect, Result } from 'effect'
 import { describe, expect, test } from 'vitest'
 import { NookVaultManager } from '$app-wasm'
 import {
@@ -52,21 +52,21 @@ describe('focused login manager generated JS boundary', () => {
             credential: new ManagerCredentialSelection(metadata).selection()
               .credential,
           }
-          const outcome = yield* Effect.either(
+          const outcome = yield* Effect.result(
             Effect.tryPromise(() =>
               manager.reveal_website_login_for_focused_fill(request),
             ),
           ).pipe(Effect.ensuring(Effect.sync(() => manager.free())))
-          expect(Either.isLeft(outcome)).toBe(true)
+          expect(Result.isFailure(outcome)).toBe(true)
           switch (outcome._tag) {
-            case 'Left':
-              expect(outcome.left.cause).toBeInstanceOf(Error)
-              expect(String(outcome.left.cause)).not.toContain(
+            case 'Failure':
+              expect(outcome.failure.cause).toBeInstanceOf(Error)
+              expect(String(outcome.failure.cause)).not.toContain(
                 'Invalid focused login fill request',
               )
               break
-            case 'Right':
-              outcome.right.free()
+            case 'Success':
+              outcome.success.free()
               throw new Error('A closed vault must not release a credential')
           }
         }),

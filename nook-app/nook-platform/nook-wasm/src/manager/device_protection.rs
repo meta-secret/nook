@@ -44,8 +44,9 @@ use nook_core::{
     DeviceIdentitySecret, DeviceKeyProtectionSetup, DeviceMode, DeviceProtectionStatus,
     DevicePublicKey, DeviceSigningPublicKey, HandoffSigningSeedChoice, PasskeyDeviceProtectionMode,
     PasskeyRecoveryRequest, PasskeyRegistration, PasskeyRegistrationInput,
-    PasskeyRegistrationOutcome, PasskeyRegistrationPrfOutput, StoreId, WebAuthnCredentialId,
-    WebAuthnPrfInput, WebAuthnPrfOutput, WebAuthnUserHandle, WrappedDeviceIdentity, i18n_keys,
+    PasskeyRegistrationOutcome, PasskeyRegistrationPrfOutput, StoreId, VaultSessionProjection,
+    WebAuthnCredentialId, WebAuthnPrfInput, WebAuthnPrfOutput, WebAuthnUserHandle,
+    WrappedDeviceIdentity, i18n_keys,
 };
 use std::mem;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -366,6 +367,7 @@ impl NookVaultManager {
     /// Require passkey authorization again before any device-key operation.
     #[wasm_bindgen]
     pub fn lock_device_identity(&mut self) {
+        self.vault.projection = VaultSessionProjection::Unhydrated;
         self.device.handoff_generation = Rc::default();
         self.device.identity_private_key.zeroize();
         self.device.identity_private_key.clear();

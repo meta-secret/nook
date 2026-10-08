@@ -27,6 +27,7 @@
 use tsify::Tsify;
 
 use nook_companion_core::ExtensionConnectScope;
+use nook_core::WebsiteHostError;
 mod application;
 mod conversion;
 mod device_access;
@@ -170,6 +171,9 @@ pub fn companion_pairing_provider_manifest_digest(
 
 #[derive(thiserror::Error, Debug)]
 pub enum NookError {
+    #[error("Invalid requesting login origin: {0}")]
+    LoginFillOrigin(#[from] WebsiteHostError),
+
     #[error("App protection is unavailable")]
     AppProtectionUnavailable,
     #[error("App protection belongs to another app")]

@@ -69,6 +69,7 @@ import {
   SavePageWatchKind,
   ScanScheduleKind,
   WidgetHostKind,
+  WidgetCredentialActuation,
   WidgetWorkflowKeyKind,
   WidgetWorkflowRootKind,
   type AuthenticationScanMutationBatch,
@@ -141,6 +142,13 @@ export class AuthenticationScanRenderLifecycle {
   }
 
   private async performScanAndRender(): Promise<AuthenticationScanOutcome> {
+    switch (widgetState.credentialActuation) {
+      case WidgetCredentialActuation.WorkflowFill:
+      case WidgetCredentialActuation.FocusedSelection:
+        return AuthenticationScanOutcome.Suppressed
+      case WidgetCredentialActuation.Idle:
+        break
+    }
     if (widgetState.dismissed) {
       const diagnostic: AuthenticationDiagnosticObservation = {
         gate: AuthenticationDiagnosticGate.Scan,
@@ -466,8 +474,10 @@ export class AuthenticationScanRenderLifecycle {
   }
 
   scanAndRender(): Promise<void> {
+    const generatorContext: AuthenticationScanRenderLifecycleGeneratorContext =
+      { self: this }
     return Effect.runPromise(
-      Effect.gen(this, function* () {
+      Effect.gen(generatorContext, function* () {
         const outcome = yield* Effect.promise(() => this.performScanAndRender())
         switch (outcome) {
           case AuthenticationScanOutcome.Inconclusive: {
@@ -574,11 +584,18 @@ export class AuthenticationScanRenderLifecycle {
     // Filling may synchronously schedule a framework update that enables the
     // observed advance control. Keep the mount through that update; the action
     // path still requires a fresh domain decision and exact control identity.
+    switch (widgetState.credentialActuation) {
+      case WidgetCredentialActuation.WorkflowFill:
+      case WidgetCredentialActuation.FocusedSelection:
+        this.schedule()
+        return
+      case WidgetCredentialActuation.Idle:
+        break
+    }
     if (
       widgetState.host.kind === WidgetHostKind.Attached &&
       renderedWorkflow &&
-      impact.shouldRemountRenderedWorkflow &&
-      !widgetState.credentialActuationInFlight
+      impact.shouldRemountRenderedWorkflow
     ) {
       this.invalidateRenderedAuthenticationAction()
       removeScannedWidget()
@@ -618,7 +635,7 @@ export class AuthenticationScanRenderLifecycle {
           mountedHost && event.composedPath().includes(mountedHost),
         ),
       }),
-      credentialActuationInFlight: widgetState.credentialActuationInFlight,
+      credentialActuation: widgetState.credentialActuation,
     }
     if (
       authenticationControlActivationDisposition(dispositionRequest) !==
@@ -771,3 +788,7 @@ void runAfterCompanionWasmReady({
     }
   },
 })
+
+type AuthenticationScanRenderLifecycleGeneratorContext = {
+  readonly self: AuthenticationScanRenderLifecycle
+}

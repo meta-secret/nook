@@ -126,7 +126,7 @@ describe('installed extension launcher', () => {
 
   test('accepts only the supported companion launcher intent', () => {
     const accepted = Effect.runSync(
-      Effect.either(
+      Effect.result(
         OpenCompanionLauncherMessageGuard.decode({
           type: 'nook:open-companion-launcher',
           payload: { intent: OpenCompanionLauncherIntent.Pair },
@@ -134,14 +134,14 @@ describe('installed extension launcher', () => {
       ),
     )
     const rejected = Effect.runSync(
-      Effect.either(
+      Effect.result(
         OpenCompanionLauncherMessageGuard.decode({
           type: 'nook:open-companion-launcher',
           payload: { intent: 'forget-vault' },
         }),
       ),
     )
-    expect(accepted._tag).toBe('Right')
-    expect(rejected._tag).toBe('Left')
+    expect(accepted._tag).toBe('Success')
+    expect(rejected._tag).toBe('Failure')
   })
 })

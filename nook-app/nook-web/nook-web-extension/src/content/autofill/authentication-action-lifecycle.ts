@@ -1,3 +1,5 @@
+import { WidgetCredentialActuation } from './state'
+
 export enum AuthenticationControlActivationDisposition {
   Ignore = 'ignore',
   Invalidate = 'invalidate',
@@ -6,7 +8,7 @@ export enum AuthenticationControlActivationDisposition {
 export type AuthenticationControlActivationRequest = {
   controlTouchesRenderedWorkflow: boolean
   controlBelongsToMountedWidget: boolean
-  credentialActuationInFlight: boolean
+  credentialActuation: WidgetCredentialActuation
 }
 
 export type AuthenticationWidgetControlOwnershipRequest = {
@@ -26,13 +28,16 @@ export function authenticationWidgetOwnsControl({
 export function authenticationControlActivationDisposition({
   controlTouchesRenderedWorkflow,
   controlBelongsToMountedWidget,
-  credentialActuationInFlight,
+  credentialActuation,
 }: AuthenticationControlActivationRequest): AuthenticationControlActivationDisposition {
-  if (
-    !controlTouchesRenderedWorkflow ||
-    controlBelongsToMountedWidget ||
-    credentialActuationInFlight
-  ) {
+  switch (credentialActuation) {
+    case WidgetCredentialActuation.WorkflowFill:
+    case WidgetCredentialActuation.FocusedSelection:
+      return AuthenticationControlActivationDisposition.Ignore
+    case WidgetCredentialActuation.Idle:
+      break
+  }
+  if (!controlTouchesRenderedWorkflow || controlBelongsToMountedWidget) {
     return AuthenticationControlActivationDisposition.Ignore
   }
   return AuthenticationControlActivationDisposition.Invalidate

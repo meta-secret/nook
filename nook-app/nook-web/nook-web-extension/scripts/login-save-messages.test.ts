@@ -11,7 +11,7 @@ describe('website login save runtime messages', () => {
   test('accepts typed save offer, pending, commit, and dismiss messages', () => {
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           WebsiteLoginSaveOfferMessageSchema.decode({
             type: 'nook:website-login-save-offer',
             payload: {
@@ -22,20 +22,20 @@ describe('website login save runtime messages', () => {
           }),
         ),
       )._tag,
-    ).toBe('Right')
+    ).toBe('Success')
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           WebsiteLoginSavePendingMessageSchema.decode({
             type: 'nook:website-login-save-pending',
             payload: { origin: 'https://login.example.com' },
           }),
         ),
       )._tag,
-    ).toBe('Right')
+    ).toBe('Success')
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           WebsiteLoginSaveCommitMessageSchema.decode({
             type: 'nook:website-login-save-commit',
             payload: {
@@ -54,10 +54,10 @@ describe('website login save runtime messages', () => {
           }),
         ),
       )._tag,
-    ).toBe('Right')
+    ).toBe('Success')
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           WebsiteLoginSaveDismissMessageSchema.decode({
             type: 'nook:website-login-save-dismiss',
             payload: {
@@ -67,13 +67,13 @@ describe('website login save runtime messages', () => {
           }),
         ),
       )._tag,
-    ).toBe('Right')
+    ).toBe('Success')
   })
 
   test('rejects malformed save messages', () => {
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           WebsiteLoginSaveOfferMessageSchema.decode({
             type: 'nook:website-login-save-offer',
             payload: {
@@ -84,10 +84,10 @@ describe('website login save runtime messages', () => {
           }),
         ),
       )._tag,
-    ).toBe('Left')
+    ).toBe('Failure')
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           WebsiteLoginSaveCommitMessageSchema.decode({
             type: 'nook:website-login-save-commit',
             payload: {
@@ -97,6 +97,6 @@ describe('website login save runtime messages', () => {
           }),
         ),
       )._tag,
-    ).toBe('Left')
+    ).toBe('Failure')
   })
 })

@@ -11,7 +11,11 @@ import {
   AuthenticationWorkflowActivity,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { authentication_workflow_activity_progress } from './authentication-activity-progress'
-import { WidgetControlDisposition, widgetState } from './state'
+import {
+  WidgetControlDisposition,
+  widgetState,
+  WidgetCredentialActuation,
+} from './state'
 import { authenticationWorkflowUi } from './authentication-workflow-ui-state'
 import { workflowUi } from './workflow-ui'
 import {
@@ -155,7 +159,7 @@ export class LoginCredentialFillAction {
         return { kind: RevalidatedAuthenticationActResultKind.Acted }
       },
     }
-    widgetState.credentialActuationInFlight = true
+    widgetState.credentialActuation = WidgetCredentialActuation.WorkflowFill
     try {
       let fillOutcome: Awaited<
         ReturnType<RevalidatedAuthenticationAction['execute']>
@@ -322,7 +326,7 @@ export class LoginCredentialFillAction {
       continueButton.hidden = true
       return true
     } finally {
-      widgetState.credentialActuationInFlight = false
+      widgetState.credentialActuation = WidgetCredentialActuation.Idle
     }
   }
 }

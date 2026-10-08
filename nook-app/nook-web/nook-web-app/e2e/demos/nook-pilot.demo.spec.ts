@@ -17,7 +17,7 @@ type RequiredCatalogEntryFields = { readonly message: typeof Schema.String }
 const requiredCatalogEntryFields: RequiredCatalogEntryFields = {
   message: Schema.String,
 }
-const requiredCatalogEntrySchema: Schema.Schema<ChromeMessage> = Schema.Struct(
+const requiredCatalogEntrySchema: Schema.Codec<ChromeMessage> = Schema.Struct(
   requiredCatalogEntryFields,
 )
 

@@ -170,16 +170,16 @@ test('offer browser extension install on vault home and in Devices', async ({
     throw new Error('Companion launcher message was not recorded.')
   }
   const launcherMessage = Effect.runSync(
-    Effect.either(
+    Effect.result(
       OpenCompanionLauncherMessageGuard.decode(
         parseJson(encodedLauncherMessage),
       ),
     ),
   )
-  if (launcherMessage._tag === 'Left') {
+  if (launcherMessage._tag === 'Failure') {
     throw new Error('Companion launcher message was malformed.')
   }
-  expect(launcherMessage.right.intent).toBe(OpenCompanionLauncherIntent.Pair)
+  expect(launcherMessage.success.intent).toBe(OpenCompanionLauncherIntent.Pair)
   const routedTypesAttribute = await page
     .locator('html')
     .evaluate(

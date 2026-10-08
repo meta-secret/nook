@@ -15,27 +15,27 @@ describe('authenticator picker messages', () => {
   test('accepts bounded picker requests', () => {
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           WebsiteAuthenticatorPickerOpenMessageSchema.decode({
             type: 'nook:website-authenticator-picker-open',
             payload: { origin: 'https://example.test' },
           }),
         ),
       )._tag,
-    ).toBe('Right')
+    ).toBe('Success')
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           AuthenticatorPickerQueryMessageSchema.decode({
             type: 'nook:authenticator-picker-query',
             payload: { requestId: 'picker-1', query: 'alice' },
           }),
         ),
       )._tag,
-    ).toBe('Right')
+    ).toBe('Success')
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           AuthenticatorPickerSelectMessageSchema.decode({
             type: 'nook:authenticator-picker-select',
             payload: {
@@ -46,23 +46,23 @@ describe('authenticator picker messages', () => {
           }),
         ),
       )._tag,
-    ).toBe('Right')
+    ).toBe('Success')
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           AuthenticatorPickerCancelMessageSchema.decode({
             type: 'nook:authenticator-picker-cancel',
             payload: { requestId: 'picker-1' },
           }),
         ),
       )._tag,
-    ).toBe('Right')
+    ).toBe('Success')
   })
 
   test('rejects oversized search text and incomplete selections', () => {
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           AuthenticatorPickerQueryMessageSchema.decode({
             type: 'nook:authenticator-picker-query',
             payload: {
@@ -72,10 +72,10 @@ describe('authenticator picker messages', () => {
           }),
         ),
       )._tag,
-    ).toBe('Left')
+    ).toBe('Failure')
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           AuthenticatorPickerSelectMessageSchema.decode({
             type: 'nook:authenticator-picker-select',
             payload: {
@@ -86,13 +86,13 @@ describe('authenticator picker messages', () => {
           }),
         ),
       )._tag,
-    ).toBe('Left')
+    ).toBe('Failure')
   })
 
   test('admits only complete authenticator query responses', () => {
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           AuthenticatorPickerQueryResponseSchema.decode({
             ok: true,
             origin: 'https://accounts.example.test',
@@ -108,10 +108,10 @@ describe('authenticator picker messages', () => {
           }),
         ),
       )._tag,
-    ).toBe('Right')
+    ).toBe('Success')
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           AuthenticatorPickerQueryResponseSchema.decode({
             ok: true,
             origin: 'https://accounts.example.test',
@@ -119,13 +119,13 @@ describe('authenticator picker messages', () => {
           }),
         ),
       )._tag,
-    ).toBe('Left')
+    ).toBe('Failure')
   })
 
   test('accepts only complete background selections', () => {
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           WebsiteAuthenticatorSelectedMessageSchema.decode({
             type: 'nook:website-authenticator-selected',
             payload: {
@@ -140,10 +140,10 @@ describe('authenticator picker messages', () => {
           }),
         ),
       )._tag,
-    ).toBe('Right')
+    ).toBe('Success')
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           WebsiteAuthenticatorSelectedMessageSchema.decode({
             type: 'nook:website-authenticator-selected',
             payload: {
@@ -154,10 +154,10 @@ describe('authenticator picker messages', () => {
           }),
         ),
       )._tag,
-    ).toBe('Left')
+    ).toBe('Failure')
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           WebsiteAuthenticatorCanceledMessageSchema.decode({
             type: 'nook:website-authenticator-canceled',
             payload: {
@@ -167,16 +167,16 @@ describe('authenticator picker messages', () => {
           }),
         ),
       )._tag,
-    ).toBe('Right')
+    ).toBe('Success')
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           WebsiteAuthenticatorCanceledMessageSchema.decode({
             type: 'nook:website-authenticator-canceled',
             payload: { origin: 'https://example.test' },
           }),
         ),
       )._tag,
-    ).toBe('Left')
+    ).toBe('Failure')
   })
 })

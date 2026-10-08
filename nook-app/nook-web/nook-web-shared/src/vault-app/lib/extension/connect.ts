@@ -222,9 +222,9 @@ class ExtensionConnectionBrowser {
     const admittedScopes: ExtensionConnectScope[] = [];
     for (const scope of scopes) {
       const admitted = Effect.runSync(
-        Effect.either(ExtensionConnectScope.decode(scope)),
+        Effect.result(ExtensionConnectScope.decode(scope)),
       );
-      if (admitted._tag === "Right") admittedScopes.push(admitted.right);
+      if (admitted._tag === "Success") admittedScopes.push(admitted.success);
     }
     return admittedScopes;
   }
@@ -309,10 +309,10 @@ class ExtensionConnectionBrowser {
     response: ChromeExtensionRuntimeResponse,
   ): ExtensionPairingDelivery {
     const decoded = Effect.runSync(
-      Effect.either(pairingApprovalResponseDecoder.decode(response)),
+      Effect.result(pairingApprovalResponseDecoder.decode(response)),
     );
-    return decoded._tag === "Right"
-      ? decoded.right
+    return decoded._tag === "Success"
+      ? decoded.success
       : { kind: ExtensionPairingDeliveryKind.Rejected };
   }
 
@@ -356,9 +356,9 @@ class ExtensionConnectionBrowser {
     const delivery = await this.messageChannel.send(sendExtensionMessageArgs);
     if (delivery.kind !== ExtensionMessageDeliveryKind.Received) return false;
     const decoded = Effect.runSync(
-      Effect.either(companionResponseDecoder.decodeLauncher(delivery.response)),
+      Effect.result(companionResponseDecoder.decodeLauncher(delivery.response)),
     );
-    return decoded._tag === "Right";
+    return decoded._tag === "Success";
   }
 
   private async discoverPairedExtensionIdentityOnce(
@@ -408,11 +408,11 @@ class ExtensionConnectionBrowser {
         ),
       );
     const decoded = Effect.runSync(
-      Effect.either(
+      Effect.result(
         companionResponseDecoder.decodeIdentityDiscovery(delivery.response),
       ),
     );
-    if (decoded._tag === "Left") {
+    if (decoded._tag === "Failure") {
       return err(
         new PairedExtensionDiscoveryFailure(
           PairedExtensionDiscoveryFailureKind.Decode,
@@ -425,7 +425,7 @@ class ExtensionConnectionBrowser {
         typeof admit_companion_identity_status
       >[0] = {
         discovery: protocolDiscovery,
-        status: decoded.right.status,
+        status: decoded.success.status,
         observedAt: Date.now(),
       };
       admission = admit_companion_identity_status(admissionRequest);
@@ -549,12 +549,12 @@ class ExtensionConnectionBrowser {
     const delivery = await this.messageChannel.send(sendExtensionMessageArgs3);
     if (delivery.kind !== ExtensionMessageDeliveryKind.Received) return false;
     const decoded = Effect.runSync(
-      Effect.either(companionResponseDecoder.decodeUnlock(delivery.response)),
+      Effect.result(companionResponseDecoder.decodeUnlock(delivery.response)),
     );
     return (
-      decoded._tag === "Right" &&
-      decoded.right.requestId === unlockRequestId &&
-      decoded.right.vaultStoreId === vaultStoreId
+      decoded._tag === "Success" &&
+      decoded.success.requestId === unlockRequestId &&
+      decoded.success.vaultStoreId === vaultStoreId
     );
   }
 
@@ -578,21 +578,21 @@ class ExtensionConnectionBrowser {
             ),
           );
         const decodedResponse = Effect.runSync(
-          Effect.either(
+          Effect.result(
             identityHandoffResponseDecoder.decode(delivery.response),
           ),
         );
-        if (decodedResponse._tag === "Right") {
-          if (!decodedResponse.right.ok) {
+        if (decodedResponse._tag === "Success") {
+          if (!decodedResponse.success.ok) {
             return err(
               this.identityHandoffFailureForProviderOutcome(
-                decodedResponse.right.state,
+                decodedResponse.success.state,
               ),
             );
           }
           const identityEnvelope: ExtensionIdentityEnvelope = {
-            envelope: decodedResponse.right.envelope,
-            nextNonce: decodedResponse.right.nextNonce,
+            envelope: decodedResponse.success.envelope,
+            nextNonce: decodedResponse.success.nextNonce,
           };
           return ok(identityEnvelope);
         }
@@ -672,11 +672,11 @@ class ExtensionConnectionBrowser {
         ),
       };
     const decoded = Effect.runSync(
-      Effect.either(
+      Effect.result(
         companionResponseDecoder.decodeIdentityHandoff(delivery.response),
       ),
     );
-    if (decoded._tag === "Left")
+    if (decoded._tag === "Failure")
       return {
         kind: IdentityHandoffAttemptKind.Pending,
         outcome: err(
@@ -687,7 +687,7 @@ class ExtensionConnectionBrowser {
       };
     let admission: ReturnType<typeof admit_companion_handoff_response>;
     try {
-      admission = admit_companion_handoff_response(decoded.right.response);
+      admission = admit_companion_handoff_response(decoded.success.response);
     } catch (failure) {
       return {
         kind: IdentityHandoffAttemptKind.Pending,

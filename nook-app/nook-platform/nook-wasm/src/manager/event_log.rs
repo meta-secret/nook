@@ -11,7 +11,7 @@ use nook_core::StoredSigningSeed;
 use nook_core::{
     EventError, IsoTimestamp, StoreId, VaultError, VaultMetaGraphProjection,
     VaultMetaOperationApplier, VaultMetaOperationRequest, VaultNameRef, VaultProjection,
-    VaultStoreIdentityRef, VaultUnlock, VaultVersionWrite,
+    VaultSessionProjection, VaultStoreIdentityRef, VaultUnlock, VaultVersionWrite,
 };
 mod extension_import;
 mod import_as_local;
@@ -372,14 +372,23 @@ impl NookVaultManager {
         self.ensure_vault_crypto_from_cache().await?;
         let store = NookDatabase::load_local_event_store(&self.vault.store_id).await?;
         let graph = store.load_graph(&self.vault.store_id)?;
-        let projection = VaultProjection::from_graph(&graph, &self.vault.store_id)?;
-        let live = projection.live_secrets(&graph);
+        self.apply_loaded_event_projection(&graph)
+    }
+
+    /// The caller supplies the already loaded and validated durable graph.
+    pub(in crate::manager) fn apply_loaded_event_projection(
+        &mut self,
+        graph: &nook_core::EventGraph,
+    ) -> Result<(), NookError> {
+        self.vault.projection = VaultSessionProjection::Unhydrated;
+        let projection = VaultProjection::from_graph(graph, &self.vault.store_id)?;
+        let live = projection.live_secrets(graph);
         let user_records: Vec<nook_core::StoredSecretRecord> = live.into_values().collect();
         self.vault.password_entries = projection.password_entries;
         self.vault.unlock = VaultUnlock::Keys;
         VaultUserRecordBatch::new(user_records).replace(&mut self.vault.meta);
         self.vault.mark_search_catalog_dirty();
-        VaultMetaGraphProjection::new(&graph).materialize(&mut self.vault.meta)?;
+        VaultMetaGraphProjection::new(graph).materialize(&mut self.vault.meta)?;
         self.ensure_sentinel_architecture_from_shares()?;
         if let Ok(identity) = self.device_identity() {
             drop(self.maybe_sync_self_into_roster(&identity));

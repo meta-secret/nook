@@ -2,7 +2,7 @@ import {
   FocusedWebsiteLoginFillOperation,
   focusedWebsiteLoginFillDependencies,
 } from './service-worker/focused-login-operations'
-import { WebsiteFocusedLoginRevealMessage } from '../lib/focused-login-fill-messages'
+import { FocusedLoginMessageRoute } from './service-worker/focused-login-message-route'
 import { loginPickerOperations } from './service-worker/login-picker-operations'
 /* eslint-disable nook-typed-api/no-raw-object-arguments, @typescript-eslint/no-unsafe-type-assertion -- Chrome runtime messages are narrowed at this external transport boundary. */
 import {
@@ -133,7 +133,7 @@ import {
   type BackgroundRuntimeMessageRoutes,
 } from './service-worker/schema-runtime-message-route'
 import { backgroundVaultRuntime } from './vault-runtime'
-import { Effect, Either } from 'effect'
+import { Effect, Result } from 'effect'
 import {
   isCompanionWasmSessionMessageType,
   type CompanionWasmRuntimeMessage,
@@ -200,16 +200,16 @@ const extensionLifecycleRoutingDependencies: Parameters<
 }
 
 void Effect.runPromise(
-  Effect.either(
+  Effect.result(
     recoverInterruptedAuthorizationCleanup(
       extensionLifecycleRoutingDependencies,
     ),
   ),
 ).then((cleanup) => {
-  if (Either.isLeft(cleanup))
+  if (Result.isFailure(cleanup))
     console.warn(
       'Extension authorization cleanup remains pending',
-      cleanup.left,
+      cleanup.failure,
     )
 })
 
@@ -251,6 +251,16 @@ const externalCompanionRoutingDependencies: ExternalCompanionRoutingRequest['dep
       ),
   }
 
+const focusedLoginMessageRouteRequest: ConstructorParameters<
+  typeof FocusedLoginMessageRoute
+>[0] = {
+  operation: (request) => {
+    const operation: ConstructorParameters<
+      typeof FocusedWebsiteLoginFillOperation
+    >[0] = { request, dependencies: focusedWebsiteLoginFillDependencies }
+    return new FocusedWebsiteLoginFillOperation(operation).run()
+  },
+}
 const schemaRuntimeMessageRoutes: BackgroundRuntimeMessageRoutes = [
   SchemaRuntimeMessageRoute.matching(WebsiteLoginPickerOpenMessageSchema)
     .respondWith(
@@ -334,14 +344,7 @@ const schemaRuntimeMessageRoutes: BackgroundRuntimeMessageRoutes = [
       accountPickerSessions.websiteLoginOptions.bind(accountPickerSessions),
     )
     .onRejected(() => ({ ok: false, reason: 'login-options-failed' })),
-  SchemaRuntimeMessageRoute.matching(WebsiteFocusedLoginRevealMessage)
-    .respondWith((request) => {
-      const operation: ConstructorParameters<
-        typeof FocusedWebsiteLoginFillOperation
-      >[0] = { request, dependencies: focusedWebsiteLoginFillDependencies }
-      return new FocusedWebsiteLoginFillOperation(operation).run()
-    })
-    .onRejected(() => ({ ok: false, reason: 'login-fill-failed' })),
+  new FocusedLoginMessageRoute(focusedLoginMessageRouteRequest),
   SchemaRuntimeMessageRoute.matching(WebsiteLoginRevealMessageSchema)
     .respondWith(websiteLoginFill)
     .onRejected(() => ({ ok: false, reason: 'login-fill-failed' })),
