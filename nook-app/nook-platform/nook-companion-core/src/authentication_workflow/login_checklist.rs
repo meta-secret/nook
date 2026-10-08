@@ -264,7 +264,7 @@ impl AuthenticationLoginChecklistState {
         use AuthenticationLoginChecklistStep as Step;
         match self {
             Self::Activity {
-                activity: Activity::Ready,
+                activity: Activity::Ready | Activity::TakenOver,
             } => Row::Pending,
             Self::Activity {
                 activity: Activity::Filling,
@@ -299,9 +299,6 @@ impl AuthenticationLoginChecklistState {
                 Step::CheckResult => Row::Current,
             },
             Self::Outcome { result } => result.row_state(step),
-            Self::Activity {
-                activity: Activity::TakenOver,
-            } => Row::Pending,
         }
     }
 
@@ -384,9 +381,10 @@ impl From<LoginChecklistOutcomeEvidence> for AuthenticationLoginChecklistResult 
                 Self::Attention
             }
             AuthenticationOutcomeVerdict::Insufficient => {
-                match evidence.observation.error_marker_present {
-                    true => Self::Attention,
-                    false => Self::Waiting,
+                if evidence.observation.error_marker_present {
+                    Self::Attention
+                } else {
+                    Self::Waiting
                 }
             }
         }
