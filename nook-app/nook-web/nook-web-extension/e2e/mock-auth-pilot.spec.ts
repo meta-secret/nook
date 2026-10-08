@@ -101,12 +101,12 @@ type PilotScenarioPageRequest = {
   origin: string
   testInfo: TestInfo
 }
-enum PilotScenarioButtonType {
-  Manual = 'button',
+enum PilotScenarioAdvanceControlKind {
+  Absent = 'absent',
   Submit = 'submit',
 }
 type ScenarioMarkup = {
-  button: PilotScenarioButtonType
+  advanceControl: PilotScenarioAdvanceControlKind
   alertMarkup: string
   successScript: string
 }
@@ -124,36 +124,44 @@ class PilotScenarioPage {
     switch (this.request.scenario) {
       case PilotScenario.Manual:
         return {
-          button: PilotScenarioButtonType.Manual,
+          advanceControl: PilotScenarioAdvanceControlKind.Absent,
           alertMarkup: '',
           successScript: '',
         }
       case PilotScenario.Attention:
         return {
-          button: PilotScenarioButtonType.Submit,
+          advanceControl: PilotScenarioAdvanceControlKind.Submit,
           alertMarkup: '<p role="alert">Unable to sign in.</p>',
           successScript: '',
         }
       case PilotScenario.Waiting:
         return {
-          button: PilotScenarioButtonType.Submit,
+          advanceControl: PilotScenarioAdvanceControlKind.Submit,
           alertMarkup: '',
           successScript: '',
         }
       case PilotScenario.Confirmed:
         return {
-          button: PilotScenarioButtonType.Submit,
+          advanceControl: PilotScenarioAdvanceControlKind.Submit,
           alertMarkup: '',
           successScript:
             "const marker = document.createElement('p'); marker.dataset.nookAuthOutcome = 'success'; marker.textContent = 'Authentication complete'; document.body.append(marker);",
         }
     }
   }
+  private advanceControlMarkup(markup: ScenarioMarkup): string {
+    switch (markup.advanceControl) {
+      case PilotScenarioAdvanceControlKind.Absent:
+        return ''
+      case PilotScenarioAdvanceControlKind.Submit:
+        return '<button type="submit">Sign in</button>'
+    }
+  }
   private async fulfill(route: Route): Promise<void> {
     const markup = this.markup()
     const response: Parameters<Route['fulfill']>[0] = {
       contentType: 'text/html',
-      body: `<!doctype html><html><body><h1>Sign in</h1><form id="login-form" action="/auth/login" method="post"><label>Email<input autocomplete="username" name="username" type="email"></label><label>Password<input autocomplete="current-password" name="password" type="password"></label>${markup.alertMarkup}<button type="${markup.button}">Sign in</button></form><script>document.getElementById('login-form').addEventListener('submit', event => { event.preventDefault(); ${markup.successScript} });</script></body></html>`,
+      body: `<!doctype html><html><body><h1>Sign in</h1><form id="login-form" action="/auth/login" method="post"><label>Email<input autocomplete="username" name="username" type="email"></label><label>Password<input autocomplete="current-password" name="password" type="password"></label>${markup.alertMarkup}${this.advanceControlMarkup(markup)}</form><script>document.getElementById('login-form').addEventListener('submit', event => { event.preventDefault(); ${markup.successScript} });</script></body></html>`,
     }
     await route.fulfill(response)
   }
