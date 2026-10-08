@@ -28,7 +28,6 @@ type PilotPanelEvidenceRequest = {
 type PilotPanelScreenshotOptions = NonNullable<
   Parameters<Page['screenshot']>[0]
 >
-type PilotPanelClip = NonNullable<PilotPanelScreenshotOptions['clip']>
 class PilotPanelEvidence {
   constructor(private readonly request: PilotPanelEvidenceRequest) {}
   checklist(): Locator {
@@ -42,36 +41,36 @@ class PilotPanelEvidence {
     return this.request.widget.getByRole('button', options)
   }
   async screenshot(name: string): Promise<void> {
+    await this.request.page.bringToFront()
     await expect(this.request.widget).toBeVisible()
-    const clip = await this.request.widget.evaluate(
-      (element): PilotPanelClip => {
-        const bounds = element.getBoundingClientRect()
-        return {
-          x: bounds.x,
-          y: bounds.y,
-          width: bounds.width,
-          height: bounds.height,
-        }
-      },
-    )
     const options: PilotPanelScreenshotOptions = {
       path: this.request.testInfo.outputPath(name),
-      clip,
+      caret: 'initial',
     }
     await this.request.page.screenshot(options)
+    await expect(this.request.widget).toBeVisible()
   }
-  async ready(): Promise<void> {
+  private async assertReady(): Promise<void> {
     const checklist = this.checklist()
     await expect(checklist.getByRole('listitem')).toHaveCount(3)
     await expect(checklist.locator('[aria-current]')).toHaveCount(0)
+  }
+  async ready(): Promise<void> {
+    await this.request.page.bringToFront()
+    const checklist = this.checklist()
+    await this.assertReady()
     await this.screenshot('pilot-checklist-ready.png')
+    await this.assertReady()
     await this.button('Collapse Nook').click()
     await expect(checklist).toBeHidden()
-    const exact: Parameters<Locator['getByText']>[1] = { exact: true }
-    await expect(
-      this.request.widget.getByText('Nook Pilot · 1/3', exact),
-    ).toBeVisible()
+    const launcher = this.request.widget.getByTestId('nook-auth-gate-expand')
+    await expect(launcher).toHaveCount(1)
+    await expect(launcher).toBeVisible()
+    await expect(launcher).toHaveAccessibleName('Expand Nook: Nook Pilot · 1/3')
+    await expect(launcher).toContainText('1/3')
     await this.screenshot('pilot-checklist-collapsed.png')
+    await expect(launcher).toBeVisible()
+    await expect(checklist).toBeHidden()
     await this.button('Expand Nook').click()
     await expect(checklist).toBeVisible()
     const viewport: Parameters<Page['setViewportSize']>[0] = {
@@ -81,6 +80,8 @@ class PilotPanelEvidence {
     await this.request.page.setViewportSize(viewport)
     await expect(this.button('Continue with Nook')).toBeVisible()
     await this.screenshot('pilot-checklist-responsive.png')
+    await this.assertReady()
+    await expect(this.button('Continue with Nook')).toBeVisible()
   }
 }
 enum PilotScenario {
@@ -165,6 +166,7 @@ class PilotScenarioPage {
       this.fulfill.bind(this),
     )
     await this.request.page.goto(`${this.request.origin}/plain/login`)
+    await this.request.page.bringToFront()
     const widget = this.request.page.locator('#nook-auth-widget')
     const checklist = this.evidence.checklist()
     await expect(widget.getByText('Ready to sign in')).toBeVisible()
@@ -188,6 +190,10 @@ class PilotScenarioPage {
         ).toHaveAttribute('data-step', 'FillLogin')
         await expect(widget.getByText('Ready to sign in')).toHaveCount(0)
         await this.evidence.screenshot('pilot-checklist-working.png')
+        await expect(checklist).toHaveAttribute('data-status', 'Working')
+        await expect(
+          checklist.locator('[aria-current="step"]'),
+        ).toHaveAttribute('data-step', 'FillLogin')
         await releasePilotProjection(this.request.worker)
         break
       case PilotScenario.Manual:
@@ -203,6 +209,8 @@ class PilotScenarioPage {
     await this.evidence.screenshot(
       `pilot-checklist-${this.request.scenario}.png`,
     )
+    await this.assertOutcome(checklist)
+    await expect(this.evidence.button('Take over')).toBeVisible()
     await this.evidence.button('Take over').click()
     await expect(widget).toHaveCount(0)
   }
