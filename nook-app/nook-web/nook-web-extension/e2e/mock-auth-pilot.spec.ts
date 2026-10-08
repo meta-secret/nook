@@ -83,8 +83,12 @@ type PilotScenarioPageRequest = {
   origin: string
   testInfo: TestInfo
 }
+enum PilotScenarioButtonType {
+  Manual = 'button',
+  Submit = 'submit',
+}
 type ScenarioMarkup = {
-  button: 'button' | 'submit'
+  button: PilotScenarioButtonType
   alertMarkup: string
   successScript: string
 }
@@ -101,18 +105,26 @@ class PilotScenarioPage {
   private markup(): ScenarioMarkup {
     switch (this.request.scenario) {
       case PilotScenario.Manual:
-        return { button: 'button', alertMarkup: '', successScript: '' }
+        return {
+          button: PilotScenarioButtonType.Manual,
+          alertMarkup: '',
+          successScript: '',
+        }
       case PilotScenario.Attention:
         return {
-          button: 'submit',
+          button: PilotScenarioButtonType.Submit,
           alertMarkup: '<p role="alert">Unable to sign in.</p>',
           successScript: '',
         }
       case PilotScenario.Waiting:
-        return { button: 'submit', alertMarkup: '', successScript: '' }
+        return {
+          button: PilotScenarioButtonType.Submit,
+          alertMarkup: '',
+          successScript: '',
+        }
       case PilotScenario.Confirmed:
         return {
-          button: 'submit',
+          button: PilotScenarioButtonType.Submit,
           alertMarkup: '',
           successScript:
             "const marker = document.createElement('p'); marker.dataset.nookAuthOutcome = 'success'; marker.textContent = 'Authentication complete'; document.body.append(marker);",
