@@ -122,14 +122,14 @@ type PilotScenarioPageRequest = {
   origin: string
   testInfo: TestInfo
 }
-const credentialFieldsMarkup =
-  '<label>Email<input autocomplete="username" name="username" type="email"></label><label>Password<input autocomplete="current-password" name="password" type="password"></label>'
 type ScenarioMarkup = {
   fieldsMarkup: string
   alertMarkup: string
   successScript: string
 }
 class PilotScenarioPage {
+  private readonly credentialFieldsMarkup =
+    '<label>Email<input autocomplete="username" name="username" type="email"></label><label>Password<input autocomplete="current-password" name="password" type="password"></label>'
   private readonly evidence: PilotPanelEvidence
   constructor(private readonly request: PilotScenarioPageRequest) {
     const evidenceRequest: PilotPanelEvidenceRequest = {
@@ -143,25 +143,25 @@ class PilotScenarioPage {
     switch (this.request.scenario) {
       case PilotScenario.Manual:
         return {
-          fieldsMarkup: `${credentialFieldsMarkup}<label>Tenant<input name="tenant" required></label>`,
+          fieldsMarkup: `${this.credentialFieldsMarkup}<label>Tenant<input name="tenant" required></label>`,
           alertMarkup: '',
           successScript: '',
         }
       case PilotScenario.Attention:
         return {
-          fieldsMarkup: credentialFieldsMarkup,
+          fieldsMarkup: this.credentialFieldsMarkup,
           alertMarkup: '<p role="alert">Unable to sign in.</p>',
           successScript: '',
         }
       case PilotScenario.Waiting:
         return {
-          fieldsMarkup: credentialFieldsMarkup,
+          fieldsMarkup: this.credentialFieldsMarkup,
           alertMarkup: '',
           successScript: '',
         }
       case PilotScenario.Confirmed:
         return {
-          fieldsMarkup: credentialFieldsMarkup,
+          fieldsMarkup: this.credentialFieldsMarkup,
           alertMarkup: '',
           successScript:
             "const marker = document.createElement('p'); marker.dataset.nookAuthOutcome = 'success'; marker.textContent = 'Authentication complete'; document.body.append(marker);",
