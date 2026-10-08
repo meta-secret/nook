@@ -75,7 +75,8 @@ const WIDGET_PANEL_STYLES = `
     .panel.is-collapsed {
       width: auto;
       gap: 0;
-      padding: 0;
+      padding: 0 4px 4px 0;
+      overflow: visible;
       border-radius: 16px;
       background: transparent;
       border: 0;

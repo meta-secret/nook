@@ -28,6 +28,12 @@ type PilotPanelEvidenceRequest = {
 type PilotPanelScreenshotOptions = NonNullable<
   Parameters<Page['screenshot']>[0]
 >
+type PilotPanelScrollDimensions = {
+  scrollWidth: number
+  clientWidth: number
+  scrollHeight: number
+  clientHeight: number
+}
 class PilotPanelEvidence {
   constructor(private readonly request: PilotPanelEvidenceRequest) {}
   checklist(): Locator {
@@ -55,6 +61,19 @@ class PilotPanelEvidence {
     await expect(checklist.getByRole('listitem')).toHaveCount(3)
     await expect(checklist.locator('[aria-current]')).toHaveCount(0)
   }
+  private async assertCollapsedLayout(): Promise<void> {
+    const panel = this.request.widget.locator('.panel.is-collapsed')
+    const dimensions = await panel.evaluate(
+      (element): PilotPanelScrollDimensions => ({
+        scrollWidth: element.scrollWidth,
+        clientWidth: element.clientWidth,
+        scrollHeight: element.scrollHeight,
+        clientHeight: element.clientHeight,
+      }),
+    )
+    expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth)
+    expect(dimensions.scrollHeight).toBeLessThanOrEqual(dimensions.clientHeight)
+  }
   async ready(): Promise<void> {
     await this.request.page.bringToFront()
     const checklist = this.checklist()
@@ -68,9 +87,11 @@ class PilotPanelEvidence {
     await expect(launcher).toBeVisible()
     await expect(launcher).toHaveAccessibleName('Expand Nook: Nook Pilot · 1/3')
     await expect(launcher).toContainText('1/3')
+    await this.assertCollapsedLayout()
     await this.screenshot('pilot-checklist-collapsed.png')
     await expect(launcher).toBeVisible()
     await expect(checklist).toBeHidden()
+    await this.assertCollapsedLayout()
     await this.button('Expand Nook').click()
     await expect(checklist).toBeVisible()
     const viewport: Parameters<Page['setViewportSize']>[0] = {
