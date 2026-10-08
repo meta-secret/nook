@@ -122,12 +122,10 @@ type PilotScenarioPageRequest = {
   origin: string
   testInfo: TestInfo
 }
-enum PilotScenarioAdvanceControlKind {
-  Absent = 'absent',
-  Submit = 'submit',
-}
+const credentialFieldsMarkup =
+  '<label>Email<input autocomplete="username" name="username" type="email"></label><label>Password<input autocomplete="current-password" name="password" type="password"></label>'
 type ScenarioMarkup = {
-  advanceControl: PilotScenarioAdvanceControlKind
+  fieldsMarkup: string
   alertMarkup: string
   successScript: string
 }
@@ -145,48 +143,33 @@ class PilotScenarioPage {
     switch (this.request.scenario) {
       case PilotScenario.Manual:
         return {
-          advanceControl: PilotScenarioAdvanceControlKind.Absent,
+          fieldsMarkup: `${credentialFieldsMarkup}<label>Tenant<input name="tenant" required></label>`,
           alertMarkup: '',
           successScript: '',
         }
       case PilotScenario.Attention:
         return {
-          advanceControl: PilotScenarioAdvanceControlKind.Submit,
+          fieldsMarkup: credentialFieldsMarkup,
           alertMarkup: '<p role="alert">Unable to sign in.</p>',
           successScript: '',
         }
       case PilotScenario.Waiting:
         return {
-          advanceControl: PilotScenarioAdvanceControlKind.Submit,
+          fieldsMarkup: credentialFieldsMarkup,
           alertMarkup: '',
           successScript: '',
         }
       case PilotScenario.Confirmed:
         return {
-          advanceControl: PilotScenarioAdvanceControlKind.Submit,
+          fieldsMarkup: credentialFieldsMarkup,
           alertMarkup: '',
           successScript:
             "const marker = document.createElement('p'); marker.dataset.nookAuthOutcome = 'success'; marker.textContent = 'Authentication complete'; document.body.append(marker);",
         }
     }
   }
-  private advanceControlMarkup(
-    control: PilotScenarioAdvanceControlKind,
-  ): string {
-    switch (control) {
-      case PilotScenarioAdvanceControlKind.Absent:
-        return ''
-      case PilotScenarioAdvanceControlKind.Submit:
-        return '<button type="submit">Sign in</button>'
-    }
-  }
   private pageMarkup(markup: ScenarioMarkup): string {
-    switch (markup.advanceControl) {
-      case PilotScenarioAdvanceControlKind.Absent:
-        return '<!doctype html><html><body><h1>Sign in</h1><section id="login-form" role="form"><label>Email<input autocomplete="username" name="username" type="email"></label><label>Password<input autocomplete="current-password" name="password" type="password"></label></section></body></html>'
-      case PilotScenarioAdvanceControlKind.Submit:
-        return `<!doctype html><html><body><h1>Sign in</h1><form id="login-form" action="/auth/login" method="post"><label>Email<input autocomplete="username" name="username" type="email"></label><label>Password<input autocomplete="current-password" name="password" type="password"></label>${markup.alertMarkup}${this.advanceControlMarkup(markup.advanceControl)}</form><script>document.getElementById('login-form').addEventListener('submit', event => { event.preventDefault(); ${markup.successScript} });</script></body></html>`
-    }
+    return `<!doctype html><html><body><h1>Sign in</h1><form id="login-form" action="/auth/login" method="post">${markup.fieldsMarkup}${markup.alertMarkup}<button type="submit">Sign in</button></form><script>document.getElementById('login-form').addEventListener('submit', event => { event.preventDefault(); ${markup.successScript} });</script></body></html>`
   }
   private async fulfill(route: Route): Promise<void> {
     const markup: ScenarioMarkup = this.markup()
