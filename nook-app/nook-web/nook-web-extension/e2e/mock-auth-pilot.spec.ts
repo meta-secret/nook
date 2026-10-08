@@ -149,8 +149,10 @@ class PilotScenarioPage {
         }
     }
   }
-  private advanceControlMarkup(markup: ScenarioMarkup): string {
-    switch (markup.advanceControl) {
+  private advanceControlMarkup(
+    control: PilotScenarioAdvanceControlKind,
+  ): string {
+    switch (control) {
       case PilotScenarioAdvanceControlKind.Absent:
         return ''
       case PilotScenarioAdvanceControlKind.Submit:
@@ -161,7 +163,7 @@ class PilotScenarioPage {
     const markup = this.markup()
     const response: Parameters<Route['fulfill']>[0] = {
       contentType: 'text/html',
-      body: `<!doctype html><html><body><h1>Sign in</h1><form id="login-form" action="/auth/login" method="post"><label>Email<input autocomplete="username" name="username" type="email"></label><label>Password<input autocomplete="current-password" name="password" type="password"></label>${markup.alertMarkup}${this.advanceControlMarkup(markup)}</form><script>document.getElementById('login-form').addEventListener('submit', event => { event.preventDefault(); ${markup.successScript} });</script></body></html>`,
+      body: `<!doctype html><html><body><h1>Sign in</h1><form id="login-form" action="/auth/login" method="post"><label>Email<input autocomplete="username" name="username" type="email"></label><label>Password<input autocomplete="current-password" name="password" type="password"></label>${markup.alertMarkup}${this.advanceControlMarkup(markup.advanceControl)}</form><script>document.getElementById('login-form').addEventListener('submit', event => { event.preventDefault(); ${markup.successScript} });</script></body></html>`,
     }
     await route.fulfill(response)
   }
