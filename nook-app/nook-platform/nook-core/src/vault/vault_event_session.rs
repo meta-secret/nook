@@ -1,5 +1,11 @@
 //! Testable event-log session orchestration (append, union, projection, outbox).
 
+mod projection;
+pub use projection::{
+    VaultHydratedProjection, VaultProjectionObservation, VaultProjectionRefresh,
+    VaultSessionProjection,
+};
+
 use crate::LocalEventBytes;
 use crate::ResolveMemberRosterRequest;
 use crate::{

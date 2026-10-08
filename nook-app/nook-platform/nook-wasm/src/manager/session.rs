@@ -3,7 +3,7 @@ use super::device_protection::ExtensionIdentityPublication;
 use crate::ConfiguredVaultApplication;
 use nook_core::{
     DriveEventParent, ICloudEventTarget, SentinelGenesisPhase, StorageMode, VaultArchitecture,
-    VaultMetaState, VaultUnlock,
+    VaultMetaState, VaultSessionProjection, VaultUnlock,
 };
 use std::rc::Rc;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
@@ -165,6 +165,7 @@ impl SearchCatalogState {
 }
 
 pub(in crate::manager) struct VaultSessionState {
+    pub(in crate::manager) projection: nook_core::VaultSessionProjection,
     pub(in crate::manager) secrets_key: String,
     pub(in crate::manager) members_key: String,
     pub(in crate::manager) crypto: VaultCryptoState,
@@ -185,6 +186,7 @@ pub(in crate::manager) struct VaultSessionState {
 impl Default for VaultSessionState {
     fn default() -> Self {
         Self {
+            projection: VaultSessionProjection::Unhydrated,
             secrets_key: String::new(),
             members_key: String::new(),
             crypto: VaultCryptoState::Locked,
@@ -249,6 +251,7 @@ impl VaultSessionState {
         self.secrets_key.zeroize();
         self.members_key.zeroize();
         self.crypto = VaultCryptoState::Locked;
+        self.projection = VaultSessionProjection::Unhydrated;
         self.meta = VaultMetaState::default();
         self.last_synced_content.clear();
         self.unlock = VaultUnlock::Keys;

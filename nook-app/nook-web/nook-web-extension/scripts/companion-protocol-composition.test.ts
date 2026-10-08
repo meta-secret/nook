@@ -464,6 +464,23 @@ describe('generated companion protocol composition', () => {
     ).toHaveLength(20)
   })
 
+  test('generated login listing rejects invalid origins as JavaScript errors and allows valid unmatched origins', async () => {
+    for (const origin of ['', 'https://']) {
+      const listing = extension.list_website_login_accounts(origin)
+      await rejects(listing, Error)
+      await rejects(listing, /Invalid requesting login origin:/)
+    }
+
+    const accounts = await extension.list_website_login_accounts(
+      'https://unmatched.example',
+    )
+    try {
+      expect(accounts).toEqual([])
+    } finally {
+      for (const account of accounts) account.free()
+    }
+  })
+
   test('issues fresh discovery after an unlocked endpoint and authorizes the latest request', async () => {
     const previous = beginHandoff('fresh-discovery-prior')
     expect(previous.endpoint.status.status).toBe('unlocked')
