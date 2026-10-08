@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { PilotVaultConnectionKind } from '../../../../nook-web-extension/src/content/autofill/widget-presentation-state'
+import {
+  BROWSER_MESSAGE_KEYS,
+  type BrowserMessageKey,
+} from '../../../../nook-web-extension/src/lib/browser-message-keys'
 
 const shellFixture = vi.hoisted(() => ({ mount: vi.fn(), trusted: true }))
 vi.mock('../../../../nook-web-extension/src/lib/auth-widget-policy', () => ({
@@ -24,6 +28,9 @@ vi.mock(
 vi.mock(
   '../../../../nook-web-extension/src/content/autofill/workflow-ui',
   () => ({
+    workflowUi: {
+      translatedMessage: (key: BrowserMessageKey) => `localized:${key}`,
+    },
     WorkflowCopy: {
       forKind: () => ({
         titleKey: 'login-title',
@@ -53,6 +60,9 @@ describe('focused credential widget surface', () => {
       'focused',
     )
     expect(choose).not.toHaveBeenCalled()
+    const label = `localized:${BROWSER_MESSAGE_KEYS.WidgetContinue}`
+    expect(widget.shell.continueButton.textContent).toBe(label)
+    expect(widget.shell.continueButton.getAttribute('aria-label')).toBe(label)
     widget.shell.continueButton.click()
     expect(choose).toHaveBeenCalledOnce()
   })

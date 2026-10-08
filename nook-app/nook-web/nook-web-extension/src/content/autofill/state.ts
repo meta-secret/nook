@@ -12,6 +12,18 @@ import {
 
 export type WidgetPosition = { left: number; top: number }
 
+export enum WidgetCredentialActuation {
+  Idle = 'idle',
+  WorkflowFill = 'workflow-fill',
+  FocusedSelection = 'focused-selection',
+}
+
+export enum WidgetSelectionAdmission {
+  Available = 'available',
+  Interacting = 'interacting',
+  Actuating = 'actuating',
+}
+
 type PendingAuthenticatorPicker = {
   requestId: string
   workflow: PasswordFormObservation
@@ -205,7 +217,22 @@ class WidgetState {
   dismissed = false
   busy = false
   collapsed = false
-  credentialActuationInFlight = false
+  credentialActuation = WidgetCredentialActuation.Idle
+  selectionAdmission(): WidgetSelectionAdmission {
+    switch (this.credentialActuation) {
+      case WidgetCredentialActuation.WorkflowFill:
+      case WidgetCredentialActuation.FocusedSelection:
+        return WidgetSelectionAdmission.Actuating
+      case WidgetCredentialActuation.Idle:
+        break
+    }
+    switch (this.busy) {
+      case true:
+        return WidgetSelectionAdmission.Interacting
+      case false:
+        return WidgetSelectionAdmission.Available
+    }
+  }
   controlDisposition(control: HTMLButtonElement): WidgetControlDisposition {
     if (this.dismissed) return WidgetControlDisposition.Dismissed
     return control.isConnected

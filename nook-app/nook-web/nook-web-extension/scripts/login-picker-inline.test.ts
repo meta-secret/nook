@@ -1,4 +1,6 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
+import { AccountPickerPageTarget } from '../src/background/service-worker/account-picker-page-target'
+import { WebsiteLoginSelectedMessageType } from '../src/lib/login-picker-messages'
 import { LoginPickerFrameBindingKind } from '../src/lib/inline-login-picker'
 import {
   LoginPickerFrameAdmission,
@@ -81,6 +83,45 @@ class InlinePickerFixture {
 }
 
 describe('inline login request document binding', () => {
+  test('targets the original popup document when delivering the selected account', () => {
+    const fixture = new InlinePickerFixture()
+    const response: Awaited<ReturnType<typeof AccountPickerPageTarget.send>> = {
+      ok: true,
+    }
+    const sendMessage = mock(() => Promise.resolve(response))
+    type PopupChromeTransportFixture = {
+      readonly tabs: { readonly sendMessage: typeof sendMessage }
+    }
+    const browser: PopupChromeTransportFixture = { tabs: { sendMessage } }
+    Object.assign(globalThis.chrome, browser)
+    const options: chrome.tabs.MessageSendOptions = {
+      frameId: fixture.request.frameId,
+      documentId: fixture.request.parentDocumentId,
+    }
+    const delivery: Parameters<typeof AccountPickerPageTarget.send>[0] = {
+      tabId: fixture.request.tabId,
+      frameId: fixture.request.frameId,
+      documentId: fixture.request.parentDocumentId,
+      message: {
+        type: WebsiteLoginSelectedMessageType.NookWebsiteLoginSelected,
+        payload: {
+          origin: fixture.request.origin,
+          requestId: fixture.request.requestId,
+          account: {
+            vaultStoreId: 'vault-1',
+            secretId: 'selected-login',
+            authorizationGeneration: 'generation-1',
+          },
+        },
+      },
+    }
+    void AccountPickerPageTarget.send(delivery)
+    expect(sendMessage).toHaveBeenCalledWith(
+      fixture.request.tabId,
+      delivery.message,
+      options,
+    )
+  })
   test('cannot select or cancel from an unbound document; first query pins before metadata work', () => {
     const fixture = new InlinePickerFixture()
     expect(fixture.target(fixture.sender).boundAdmission()).toBe(

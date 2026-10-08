@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { Effect } from 'effect'
 import {
   AuthenticationWorkflowAction,
   classify_authentication_authenticator_setup_batch,
@@ -65,12 +66,22 @@ vi.mock('../../../../nook-web-shared/src/extension/password-forms', () => ({
 
 vi.mock(
   '../../../../nook-web-extension/src/content/autofill/authentication-activity-progress',
-  () => ({
-    authentication_workflow_activity_progress: () => ({
-      currentStep: 1,
-      totalSteps: 3,
-    }),
-  }),
+  async (importOriginal) => {
+    const activity = await Effect.runPromise(
+      Effect.tryPromise(() =>
+        importOriginal<
+          typeof import('../../../../nook-web-extension/src/content/autofill/authentication-activity-progress')
+        >(),
+      ),
+    )
+    return {
+      authenticationActivityProgress: activity.authenticationActivityProgress,
+      authentication_workflow_activity_progress: () => ({
+        currentStep: 1,
+        totalSteps: 3,
+      }),
+    }
+  },
 )
 
 vi.mock(
@@ -167,41 +178,47 @@ vi.mock(
   }),
 )
 
-vi.mock('../../../../nook-web-extension/src/content/autofill/state', () => ({
-  AuthenticatorPickerKind: { Closed: 'closed', Open: 'open' },
-  LoginPickerKind: { Closed: 'closed', Open: 'open' },
-  WidgetControlDisposition: {
-    Active: 'active',
-    Dismissed: 'dismissed',
-    Detached: 'detached',
+vi.mock(
+  '../../../../nook-web-extension/src/content/autofill/state',
+  async (importOriginal) => {
+    const state =
+      await importOriginal<
+        typeof import('../../../../nook-web-extension/src/content/autofill/state')
+      >()
+    return {
+      WidgetCredentialActuation: state.WidgetCredentialActuation,
+      WidgetSelectionAdmission: state.WidgetSelectionAdmission,
+      AuthenticatorPickerKind: { Closed: 'closed', Open: 'open' },
+      LoginPickerKind: { Closed: 'closed', Open: 'open' },
+      WidgetControlDisposition: {
+        Active: 'active',
+        Dismissed: 'dismissed',
+        Detached: 'detached',
+      },
+      WidgetWorkflowAdmissionKind: {
+        Unassigned: 'unassigned',
+        Assigned: 'assigned',
+      },
+      PendingPickerTakeKind: {
+        Closed: 'closed',
+        DifferentRequest: 'different-request',
+        Taken: 'taken',
+      },
+      pickerState: state.pickerState,
+      saveOfferState: {
+        clearActiveOffer: vi.fn(),
+        confirmationActive: false,
+      },
+      widgetState: state.widgetState,
+    }
   },
-  WidgetWorkflowAdmissionKind: {
-    Unassigned: 'unassigned',
-    Assigned: 'assigned',
-  },
-  PendingPickerTakeKind: {
-    Closed: 'closed',
-    DifferentRequest: 'different-request',
-    Taken: 'taken',
-  },
-  pickerState: {},
-  saveOfferState: {
-    clearActiveOffer: vi.fn(),
-    confirmationActive: false,
-  },
-  widgetState: {
-    busy: false,
-    credentialActuationInFlight: false,
-    workflowAdmission: () => ({ kind: 'unassigned' }),
-    controlDisposition: (control: HTMLButtonElement) =>
-      widgetState.dismissed
-        ? 'dismissed'
-        : control.isConnected
-          ? 'active'
-          : 'detached',
-  },
-}))
-import { widgetState } from '../../../../nook-web-extension/src/content/autofill/state'
+)
+import {
+  widgetState,
+  WidgetCredentialActuation,
+  WidgetSelectionAdmission,
+} from '../../../../nook-web-extension/src/content/autofill/state'
+import { authenticationActivityProgress } from '../../../../nook-web-extension/src/content/autofill/authentication-activity-progress'
 import { authenticatorInteraction } from '../../../../nook-web-extension/src/content/autofill/authenticator-actions'
 import { loginPasskeyInteraction } from '../../../../nook-web-extension/src/content/autofill/login-passkey-actions'
 
@@ -303,7 +320,7 @@ beforeEach(() => {
   document.body.replaceChildren()
   vi.clearAllMocks()
   widgetState.dismissed = false
-  widgetState.credentialActuationInFlight = false
+  widgetState.credentialActuation = WidgetCredentialActuation.Idle
   actionMocks.performRevalidation.mockImplementation(async (request) => {
     const actResult = request.act({
       authenticatorSetupSnapshot,
@@ -319,13 +336,47 @@ beforeEach(() => {
 })
 
 describe('revalidated authentication actions', () => {
+  test('failed login preparation retains idle scan ownership and available admission without filling', () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const ui = controls()
+        const username: HTMLInputElement = document.createElement('input')
+        username.value = 'unchanged-username'
+        document.body.append(username)
+        vi.spyOn(authenticationActivityProgress, 'prepare').mockReturnValueOnce(
+          false,
+        )
+        const request: Parameters<
+          typeof loginPasskeyInteraction.continueWithNook
+        >[0] = { workflow, approval, ...ui }
+        yield* Effect.tryPromise(
+          loginPasskeyInteraction.continueWithNook.bind(
+            loginPasskeyInteraction,
+            request,
+          ),
+        )
+        expect(widgetState.credentialActuation).toBe(
+          WidgetCredentialActuation.Idle,
+        )
+        expect(widgetState.selectionAdmission()).toBe(
+          WidgetSelectionAdmission.Available,
+        )
+        expect(username.value).toBe('unchanged-username')
+        expect(ui.continueButton.disabled).toBe(false)
+        expect(actionMocks.fillLoginCredentials).not.toHaveBeenCalled()
+        expect(actionMocks.sendLoginFill).not.toHaveBeenCalled()
+        expect(actionMocks.submitLoginForm).not.toHaveBeenCalled()
+      }),
+    ))
   test('revalidates the post-fill submission through a fresh domain decision', async () => {
     const ui = controls()
     ui.continueButton.disabled = true
     let browserReactionSettled = false
     actionMocks.fillLoginCredentials.mockImplementationOnce(() => {
       queueMicrotask(() => {
-        expect(widgetState.credentialActuationInFlight).toBe(true)
+        expect(widgetState.credentialActuation).toBe(
+          WidgetCredentialActuation.WorkflowFill,
+        )
         ui.continueButton.disabled = false
         browserReactionSettled = true
       })
@@ -378,7 +429,7 @@ describe('revalidated authentication actions', () => {
     })
     expect(actionMocks.fillLoginCredentials).toHaveBeenCalledOnce()
     expect(actionMocks.submitLoginForm).toHaveBeenCalledOnce()
-    expect(widgetState.credentialActuationInFlight).toBe(false)
+    expect(widgetState.credentialActuation).toBe(WidgetCredentialActuation.Idle)
   })
 
   test('authorizes OTP release before filling the returned code', async () => {
@@ -586,7 +637,7 @@ describe('revalidated authentication actions', () => {
     expect(actionMocks.submitLoginForm).not.toHaveBeenCalled()
     expect(actionMocks.clearLoginCredentials).toHaveBeenCalledOnce()
     expect(response.password).toBe('')
-    expect(widgetState.credentialActuationInFlight).toBe(false)
+    expect(widgetState.credentialActuation).toBe(WidgetCredentialActuation.Idle)
   })
 
   test('clears filled credentials when fill revalidation throws after actuation', async () => {
@@ -637,7 +688,7 @@ describe('revalidated authentication actions', () => {
     expect(actionMocks.submitLoginForm).not.toHaveBeenCalled()
     expect(actionMocks.clearLoginCredentials).toHaveBeenCalledOnce()
     expect(response.password).toBe('')
-    expect(widgetState.credentialActuationInFlight).toBe(false)
+    expect(widgetState.credentialActuation).toBe(WidgetCredentialActuation.Idle)
   })
 
   test('clears filled credentials when post-fill revalidation throws', async () => {
@@ -681,7 +732,7 @@ describe('revalidated authentication actions', () => {
     expect(actionMocks.submitLoginForm).not.toHaveBeenCalled()
     expect(actionMocks.clearLoginCredentials).toHaveBeenCalledOnce()
     expect(response.password).toBe('')
-    expect(widgetState.credentialActuationInFlight).toBe(false)
+    expect(widgetState.credentialActuation).toBe(WidgetCredentialActuation.Idle)
   })
 
   test('refuses a TOTP that expires during revalidation', async () => {

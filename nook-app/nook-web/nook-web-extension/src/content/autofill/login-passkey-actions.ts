@@ -30,6 +30,7 @@ import {
   PendingPickerTakeKind,
   pickerState,
   widgetState,
+  WidgetCredentialActuation,
 } from './state'
 import { authenticationWorkflowUi } from './authentication-workflow-ui-state'
 import { WorkflowCopy, workflowUi } from './workflow-ui'
@@ -712,13 +713,13 @@ class LoginPasskeyInteraction {
     if (widgetState.busy || pickerState.login.kind === LoginPickerKind.Open)
       return
     widgetState.busy = true
-    widgetState.credentialActuationInFlight = true
     continueButton.disabled = true
     if (!authenticationActivityProgress.prepare()) {
       widgetState.busy = false
       continueButton.disabled = false
       return
     }
+    widgetState.credentialActuation = WidgetCredentialActuation.WorkflowFill
     const flightProgressRequest11: Parameters<
       typeof workflowUi.setFlightProgress
     >[0] = {
@@ -891,7 +892,7 @@ class LoginPasskeyInteraction {
       await this.openLoginPicker(openLoginPickerRequest1)
     } finally {
       widgetState.busy = false
-      widgetState.credentialActuationInFlight = false
+      widgetState.credentialActuation = WidgetCredentialActuation.Idle
       if (
         pickerState.login.kind === LoginPickerKind.Closed &&
         continueButton.isConnected &&
