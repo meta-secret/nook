@@ -1,7 +1,6 @@
 import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
 import { err as storageErr, ok as storageOk, type Result } from "neverthrow";
 import { Effect, Schema } from "effect";
-import * as ParseResult from "effect/ParseResult";
 import {
   VaultStorageFailure as StorageOperationFailure,
   VaultStorageFailureKind as StorageOperationFailureKind,
@@ -95,11 +94,14 @@ export class OAuthFilePresetDecoder {
     OAuthFilePreset,
     {
       readonly kind: OAuthFilePresetDecodeFailureKind.Invalid;
-      readonly cause: ParseResult.ParseError;
+      readonly cause: Schema.SchemaError;
     }
   > {
-    return Schema.decodeUnknown(
-      Schema.Literal(GOOGLE_DRIVE_OAUTH_FILE_PRESET, ICLOUD_OAUTH_FILE_PRESET),
+    return Schema.decodeUnknownEffect(
+      Schema.Literals([
+        GOOGLE_DRIVE_OAUTH_FILE_PRESET,
+        ICLOUD_OAUTH_FILE_PRESET,
+      ]),
     )(value).pipe(
       Effect.mapError((cause) => ({
         kind: OAuthFilePresetDecodeFailureKind.Invalid,
@@ -289,13 +291,13 @@ export class PasswordEnrollmentActions {
           ) {
             const presetValue = enrollmentProvider.oauthPreset;
             const decodedPreset = await Effect.runPromise(
-              Effect.either(OAuthFilePresetDecoder.decode(presetValue)),
+              Effect.result(OAuthFilePresetDecoder.decode(presetValue)),
             );
-            if (decodedPreset._tag === "Left") {
+            if (decodedPreset._tag === "Failure") {
               state.errorMsg = state.t(I18N_KEYS.ErrorsVaultSelectionFailed);
               return;
             }
-            const preset = decodedPreset.right;
+            const preset = decodedPreset.success;
             const storageTarget: SharedStorageTarget = {
               kind: SharedStorageTargetKind.Bound,
               storageTargetId: enrollmentProvider.sharedStorageTargetId,
@@ -546,16 +548,16 @@ export class PasswordEnrollmentActions {
           } else if (enrollmentProvider.type === OAUTH_FILE_PROVIDER_TYPE) {
             const presetValue = enrollmentProvider.oauthPreset;
             const decodedPreset = await Effect.runPromise(
-              Effect.either(OAuthFilePresetDecoder.decode(presetValue)),
+              Effect.result(OAuthFilePresetDecoder.decode(presetValue)),
             );
-            if (decodedPreset._tag === "Left") {
+            if (decodedPreset._tag === "Failure") {
               state.errorMsg = state.t(I18N_KEYS.ErrorsVaultSelectionFailed);
               return;
             }
             const defaultOAuthFileConfigArgs: Parameters<
               typeof defaultOAuthFileConfig
             >[0] = {
-              preset: decodedPreset.right,
+              preset: decodedPreset.success,
               fileName: DEFAULT_DRIVE_BACKUP_NAME,
             };
             const defaults = defaultOAuthFileConfig(defaultOAuthFileConfigArgs);

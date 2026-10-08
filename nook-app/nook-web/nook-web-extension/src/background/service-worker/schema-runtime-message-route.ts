@@ -1,4 +1,4 @@
-import { Effect, Either, ParseResult } from 'effect'
+import { Effect, Result, Schema } from 'effect'
 
 import type { BrowserRuntimeMessage } from '../../lib/browser-runtime-message'
 
@@ -38,7 +38,7 @@ export interface BackgroundRuntimeMessageRoute {
 export interface RuntimeMessageSchema<Message extends BrowserRuntimeMessage> {
   decode(
     message: BrowserRuntimeMessage,
-  ): Effect.Effect<Message, ParseResult.ParseError>
+  ): Effect.Effect<Message, Schema.SchemaError>
 }
 
 export enum RuntimeMessageSchemaDecodeKind {
@@ -55,7 +55,7 @@ export type RuntimeMessageSchemaDecodeResult<
     }
   | {
       readonly kind: RuntimeMessageSchemaDecodeKind.Rejected
-      readonly failure: ParseResult.ParseError
+      readonly failure: Schema.SchemaError
     }
 
 export type SchemaRuntimeMessageOperationRequest<
@@ -142,29 +142,29 @@ export class SchemaRuntimeMessageRoute<
     message: BrowserRuntimeMessage,
   ): RuntimeMessageSchemaDecodeResult<Message> {
     const decodeResult = Effect.runSync(
-      Effect.either(this.request.schema.decode(message)),
+      Effect.result(this.request.schema.decode(message)),
     )
     type DecodeMessageMatchRequest = {
-      readonly onLeft: (left: ParseResult.ParseError) => {
+      readonly onFailure: (left: Schema.SchemaError) => {
         kind: RuntimeMessageSchemaDecodeKind.Rejected
-        failure: ParseResult.ParseError
+        failure: Schema.SchemaError
       }
-      readonly onRight: (right: Message) => {
+      readonly onSuccess: (right: Message) => {
         kind: RuntimeMessageSchemaDecodeKind.Decoded
         message: Message
       }
     }
     const decodeMessageMatchRequest: DecodeMessageMatchRequest = {
-      onLeft: (failure) => ({
+      onFailure: (failure) => ({
         kind: RuntimeMessageSchemaDecodeKind.Rejected,
         failure,
       }),
-      onRight: (decodedMessage) => ({
+      onSuccess: (decodedMessage) => ({
         kind: RuntimeMessageSchemaDecodeKind.Decoded,
         message: decodedMessage,
       }),
     }
-    return Either.match(decodeResult, decodeMessageMatchRequest)
+    return Result.match(decodeResult, decodeMessageMatchRequest)
   }
 
   static create<

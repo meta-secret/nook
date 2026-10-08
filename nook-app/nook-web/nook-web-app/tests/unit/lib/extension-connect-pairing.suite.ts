@@ -224,7 +224,7 @@ describe('extension pairing approved message', () => {
 
   test('rejects a malformed successful acknowledgement instead of trusting its ok flag', () => {
     const decoded = Effect.runSync(
-      Effect.either(
+      Effect.result(
         pairingApprovalResponseDecoder.decode({
           ok: true,
           reason: ExtensionPairingRejectionReason.EventLogAccessNotGranted,
@@ -232,12 +232,12 @@ describe('extension pairing approved message', () => {
       ),
     )
 
-    expect(decoded._tag).toBe('Left')
+    expect(decoded._tag).toBe('Failure')
   })
 
   test('rejects conflicting reason and error responses instead of choosing one field', () => {
     const decoded = Effect.runSync(
-      Effect.either(
+      Effect.result(
         pairingApprovalResponseDecoder.decode({
           ok: false,
           reason: ExtensionPairingRejectionReason.ExtensionRuntimeUnavailable,
@@ -246,26 +246,29 @@ describe('extension pairing approved message', () => {
       ),
     )
 
-    expect(decoded._tag).toBe('Left')
+    expect(decoded._tag).toBe('Failure')
   })
 
-  test.each([-1, 1.5, Number.POSITIVE_INFINITY, Number.NaN])(
-    'rejects invalid imported event count %s',
-    (eventCount) => {
-      const decoded = Effect.runSync(
-        Effect.either(
-          pairingApprovalResponseDecoder.decode({ ok: true, eventCount }),
-        ),
-      )
+  test.each([
+    -1,
+    1.5,
+    Number.MAX_SAFE_INTEGER + 1,
+    Number.POSITIVE_INFINITY,
+    Number.NaN,
+  ])('rejects invalid imported event count %s', (eventCount) => {
+    const decoded = Effect.runSync(
+      Effect.result(
+        pairingApprovalResponseDecoder.decode({ ok: true, eventCount }),
+      ),
+    )
 
-      expect(decoded._tag).toBe('Left')
-    },
-  )
+    expect(decoded._tag).toBe('Failure')
+  })
 
   test('accepts complete approved grants', () => {
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           ExtensionPairingApprovedMessageSchema.decode({
             type: 'nook:extension-pairing-approved',
             payload: {
@@ -284,13 +287,13 @@ describe('extension pairing approved message', () => {
           }),
         ),
       )._tag,
-    ).toBe('Right')
+    ).toBe('Success')
   })
 
   test('rejects ISO approval timestamps at the new-grant browser boundary', () => {
     const message = approvalDeliveryArgs().message
     const admission = Effect.runSync(
-      Effect.either(
+      Effect.result(
         ExtensionPairingApprovedMessageSchema.decode({
           ...message,
           payload: {
@@ -300,7 +303,7 @@ describe('extension pairing approved message', () => {
         }),
       ),
     )
-    expect(admission._tag).toBe('Left')
+    expect(admission._tag).toBe('Failure')
   })
 
   test('preserves complete provider payloads for extension import', () => {
@@ -321,7 +324,7 @@ describe('extension pairing approved message', () => {
     }
     const message = approvalDeliveryArgs().message
     const admission = Effect.runSync(
-      Effect.either(
+      Effect.result(
         ExtensionPairingApprovedMessageSchema.decode({
           ...message,
           payload: { ...message.payload, providers: [provider] },
@@ -329,15 +332,15 @@ describe('extension pairing approved message', () => {
       ),
     )
 
-    expect(admission._tag).toBe('Right')
-    if (admission._tag === 'Left') return
-    expect(admission.right.payload.providers).toEqual([provider])
+    expect(admission._tag).toBe('Success')
+    if (admission._tag === 'Failure') return
+    expect(admission.success.payload.providers).toEqual([provider])
   })
 
   test('rejects identity-only provider rows at pairing admission', () => {
     const message = approvalDeliveryArgs().message
     const admission = Effect.runSync(
-      Effect.either(
+      Effect.result(
         ExtensionPairingApprovedMessageSchema.decode({
           ...message,
           payload: {
@@ -347,20 +350,20 @@ describe('extension pairing approved message', () => {
         }),
       ),
     )
-    expect(admission._tag).toBe('Left')
+    expect(admission._tag).toBe('Failure')
   })
 
   test('classifies empty approved grant event records without payload values', () => {
     const message = approvalDeliveryArgs().message
     const admission = Effect.runSync(
-      Effect.either(
+      Effect.result(
         ExtensionPairingApprovedMessageSchema.decode({
           ...message,
           eventLogRecords: [],
         }),
       ),
     )
-    expect(admission._tag).toBe('Left')
+    expect(admission._tag).toBe('Failure')
   })
 
   test.each([
@@ -386,7 +389,7 @@ describe('extension pairing approved message', () => {
     (eventLogRecords, expectedFailureKind) => {
       const message = approvalDeliveryArgs().message
       const admission = Effect.runSync(
-        Effect.either(
+        Effect.result(
           ExtensionPairingApprovedMessageSchema.decode({
             ...message,
             eventLogRecords,
@@ -394,17 +397,17 @@ describe('extension pairing approved message', () => {
         ),
       )
 
-      if (admission._tag === 'Right') {
+      if (admission._tag === 'Success') {
         expect.fail('invalid event-log records must not be admitted')
       }
-      expect(admission.left.kind).toBe(expectedFailureKind)
+      expect(admission.failure.kind).toBe(expectedFailureKind)
     },
   )
 
   test('rejects Sentinel grants before extension persistence', () => {
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           ExtensionPairingApprovedMessageSchema.decode({
             type: 'nook:extension-pairing-approved',
             payload: {
@@ -423,13 +426,13 @@ describe('extension pairing approved message', () => {
           }),
         ),
       )._tag,
-    ).toBe('Left')
+    ).toBe('Failure')
   })
 
   test('accepts encrypted local event-log notifications and rejects empty snapshots', () => {
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           ExtensionLocalEventLogUpdatedMessageGuard.decode({
             type: 'nook:extension-local-event-log-updated',
             payload: {
@@ -439,10 +442,10 @@ describe('extension pairing approved message', () => {
           }),
         ),
       )._tag,
-    ).toBe('Right')
+    ).toBe('Success')
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           ExtensionLocalEventLogUpdatedMessageGuard.decode({
             type: 'nook:extension-local-event-log-updated',
             payload: {
@@ -452,7 +455,7 @@ describe('extension pairing approved message', () => {
           }),
         ),
       )._tag,
-    ).toBe('Left')
+    ).toBe('Failure')
   })
 
   test('maps approved grants into extension-owned storage keys', () => {
@@ -493,12 +496,12 @@ describe('extension pairing approved message', () => {
     ).not.toHaveProperty('providers')
     const setup = items[setupStorageKey]
     const admittedSetup = Effect.runSync(
-      Effect.either(decodeExtensionReadySetupState(setup)),
+      Effect.result(decodeExtensionReadySetupState(setup)),
     )
-    if (admittedSetup._tag === 'Left') {
+    if (admittedSetup._tag === 'Failure') {
       throw new Error('expected a ready extension setup')
     }
-    const readySetup = admittedSetup.right
+    const readySetup = admittedSetup.success
     expect(readySetup.deviceLabel).toBe('Nook Extension')
     expect(readySetup.pairedVaults).toEqual(['Personal'])
     expect(readySetup.selectedVaultStoreId).toBe('store_abcdefghijk')
@@ -511,11 +514,11 @@ describe('extension pairing approved message', () => {
 
   test('does not present incomplete or revoked setup as connected', () => {
     expect(
-      Effect.runSync(Effect.either(decodeExtensionReadySetupState({})))._tag,
-    ).toBe('Left')
+      Effect.runSync(Effect.result(decodeExtensionReadySetupState({})))._tag,
+    ).toBe('Failure')
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           decodeExtensionReadySetupState({
             status: 'ready',
             deviceLabel: 'Nook Extension',
@@ -529,10 +532,10 @@ describe('extension pairing approved message', () => {
           }),
         ),
       )._tag,
-    ).toBe('Left')
+    ).toBe('Failure')
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           decodeExtensionReadySetupState({
             status: 'revoked',
             deviceLabel: 'Nook Extension',
@@ -546,7 +549,7 @@ describe('extension pairing approved message', () => {
           }),
         ),
       )._tag,
-    ).toBe('Left')
+    ).toBe('Failure')
   })
 
   test('keeps passive updates from selecting another paired vault', () => {
@@ -574,16 +577,16 @@ describe('extension pairing approved message', () => {
     }
     const approved = extensionPairingGrantStorageItems(approvedStorageItemsArgs)
     const decodedGrant = Effect.runSync(
-      Effect.either(
+      Effect.result(
         decodeStoredExtensionPairingGrant(
           approved[pairingGrantStorageKey('store_abcdefghijk')],
         ),
       ),
     )
-    if (decodedGrant._tag === 'Left') {
+    if (decodedGrant._tag === 'Failure') {
       throw new Error('expected the approved pairing grant')
     }
-    const grant = decodedGrant.right
+    const grant = decodedGrant.success
 
     const passiveStorageItemsArgs: Parameters<
       typeof extensionStoredPairingGrantStorageItems
@@ -704,21 +707,21 @@ describe('extension pairing approved message', () => {
     const current = extensionPairingGrantStorageItems(currentStorageItemsArgs)
     const key = pairingGrantStorageKey('store_abcdefghijk')
     const decodedCurrentGrant = Effect.runSync(
-      Effect.either(decodeStoredExtensionPairingGrant(current[key])),
+      Effect.result(decodeStoredExtensionPairingGrant(current[key])),
     )
-    if (decodedCurrentGrant._tag === 'Left') {
+    if (decodedCurrentGrant._tag === 'Failure') {
       throw new Error('expected a stored extension pairing grant')
     }
-    const currentGrant = decodedCurrentGrant.right
+    const currentGrant = decodedCurrentGrant.success
     const { eventCount, eventLogHeads, lastLocalSyncAt, ...legacyGrant } =
       currentGrant
     const decodedCurrentSetup = Effect.runSync(
-      Effect.either(decodeExtensionReadySetupState(current[setupStorageKey])),
+      Effect.result(decodeExtensionReadySetupState(current[setupStorageKey])),
     )
-    if (decodedCurrentSetup._tag === 'Left') {
+    if (decodedCurrentSetup._tag === 'Failure') {
       throw new Error('expected a ready extension setup')
     }
-    const currentSetup = decodedCurrentSetup.right
+    const currentSetup = decodedCurrentSetup.success
     const { selectedVaultStoreId: _selectedVaultStoreId, ...legacySetup } =
       currentSetup
     void _selectedVaultStoreId

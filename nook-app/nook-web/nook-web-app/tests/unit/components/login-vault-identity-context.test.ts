@@ -137,7 +137,7 @@ describe('login vault identity context', () => {
       new LoginVaultIdentityReader(request).executeQueued(state),
     )
 
-    await Effect.runPromise(Effect.yieldNow())
+    await Effect.runPromise(Effect.yieldNow)
     expect(selectedVaultRequest).not.toHaveBeenCalled()
     await Effect.runPromise(Deferred.succeed(released, void 0))
     await activeCeremony

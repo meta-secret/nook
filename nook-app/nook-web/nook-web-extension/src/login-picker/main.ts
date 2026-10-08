@@ -28,19 +28,19 @@ class InlineLoginPickerDocument {
       case InlineLoginPickerDocumentPhase.Waiting:
         break
     }
-    const admission = Schema.decodeUnknownEither(
-      InlineLoginPickerInitialization,
-    )(event.data)
+    const admission = Schema.decodeUnknownExit(InlineLoginPickerInitialization)(
+      event.data,
+    )
     switch (admission._tag) {
-      case 'Left':
+      case 'Failure':
         return
-      case 'Right':
-        switch (admission.right.origin === event.origin) {
+      case 'Success':
+        switch (admission.value.origin === event.origin) {
           case false:
             return
           case true:
             this.state = InlineLoginPickerDocumentPhase.Mounted
-            void Effect.runPromise(this.render(admission.right))
+            void Effect.runPromise(this.render(admission.value))
         }
     }
   }

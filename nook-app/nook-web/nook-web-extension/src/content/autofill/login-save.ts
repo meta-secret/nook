@@ -1,3 +1,8 @@
+import {
+  authenticationOutcomeObservation,
+  AuthenticationOutcomeReadKind,
+  type AuthenticationOutcomeObservationContext,
+} from './authentication-outcome-observation'
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import type { LoginCredentials } from '../../../../nook-web-shared/src/extension/password-forms'
 import {
@@ -8,7 +13,6 @@ import {
 } from '../../../../nook-web-shared/src/extension/password-forms'
 import { passwordFieldDiscovery } from '../../../../nook-web-shared/src/extension/password-form-fields'
 import {
-  AuthenticationOutcomeResponseKind,
   AuthenticationWorkflowActivity,
   type AuthenticationDisplayProgress,
   AuthenticationOutcomeVerdict,
@@ -16,7 +20,6 @@ import {
 import { Effect, Schema } from 'effect'
 import {
   CompanionWasmSessionMessageType,
-  CompanionWasmNavigationPathDecoder,
   CompanionWasmActivityProgressDecoder,
   type CompanionWasmRuntimeMessage,
 } from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
@@ -33,11 +36,6 @@ import {
   WebsiteLoginSavePendingMessageType,
   type WebsiteLoginSaveOfferView,
 } from '../../lib/login-save-messages'
-import { AuthenticationOutcomeClassifyMessageType } from '../../lib/outcome-evidence-messages'
-import type {
-  AuthenticationOutcomeObservationView,
-  AuthenticationOutcomeVerdictView,
-} from '../../lib/outcome-evidence-messages'
 import {
   RuntimeMessageDeliveryKind,
   authenticationRuntimeTransport,
@@ -62,24 +60,6 @@ import {
   WIDGET_HOST_ID,
   workflowUi,
 } from './workflow-ui'
-
-enum AuthenticationOutcomeReadKind {
-  Available = 'available',
-  Unavailable = 'unavailable',
-}
-
-type AuthenticationOutcomeRead =
-  | {
-      kind: AuthenticationOutcomeReadKind.Available
-      verdict: AuthenticationOutcomeVerdictView
-    }
-  | { kind: AuthenticationOutcomeReadKind.Unavailable }
-
-type AuthenticationOutcomeObservationContext = {
-  startedAt: number
-  authPath: string
-  sawMutation: boolean
-}
 
 type StageSaveOfferRequest = {
   credentials: LoginCredentials
@@ -196,106 +176,6 @@ class LoginSaveInteraction {
     await this.dismissSaveOffer(offer)
   }
 
-  private collectOutcomeObservation({
-    startedAt,
-    authPath,
-    sawMutation,
-  }: AuthenticationOutcomeObservationContext): AuthenticationOutcomeObservationView {
-    const successMarkerPresent = Boolean(
-      document.querySelector(
-        '[data-nook-auth-outcome="success"], [data-testid="mock-auth-success"]',
-      ),
-    )
-    const errorMarkerPresent = Boolean(
-      document.querySelector(
-        '[data-nook-auth-outcome="error"], [role="alert"], .error[role="alert"]',
-      ),
-    )
-    const forms = passwordFormInteraction.summarizeAuthenticationWorkflowForms()
-    const authFieldsPresent = forms.some(
-      (form) =>
-        form.summary.passwordFieldCount > 0 ||
-        form.summary.usernameFieldCount > 0 ||
-        form.summary.oneTimeCodeFieldCount > 0,
-    )
-    return {
-      navigatedAwayFromAuthPath: location.pathname !== authPath,
-      authFieldsPresent,
-      successMarkerPresent,
-      errorMarkerPresent,
-      sameDocumentMutation: sawMutation,
-      inIframe: window !== window.top,
-      elapsedMs: Math.max(0, Date.now() - startedAt),
-    }
-  }
-
-  private async classifyOutcomeEvidence(
-    observation: AuthenticationOutcomeObservationView,
-  ): Promise<AuthenticationOutcomeRead> {
-    try {
-      await this.prepareOutcomeNavigationPath(observation)
-    } catch {
-      return { kind: AuthenticationOutcomeReadKind.Unavailable }
-    }
-    const message: Parameters<
-      typeof authenticationRuntimeTransport.sendAuthenticationOutcomeRuntimeMessage
-    >[0] = {
-      type: AuthenticationOutcomeClassifyMessageType.NookAuthenticationOutcomeClassify,
-      payload: {
-        observation,
-        timeoutMs: OUTCOME_EVIDENCE_TIMEOUT_MS,
-      },
-    }
-    const sendMessage: Parameters<
-      typeof authenticationRuntimeTransport.sendAuthenticationOutcomeRuntimeMessage
-    >[0] = message
-    const delivery =
-      await authenticationRuntimeTransport.sendAuthenticationOutcomeRuntimeMessage(
-        sendMessage,
-      )
-    if (
-      delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
-      delivery.response.kind !== AuthenticationOutcomeResponseKind.Completed ||
-      !('verdict' in delivery.response)
-    ) {
-      return { kind: AuthenticationOutcomeReadKind.Unavailable }
-    }
-    return {
-      kind: AuthenticationOutcomeReadKind.Available,
-      verdict: delivery.response.verdict,
-    }
-  }
-
-  private prepareOutcomeNavigationPath(
-    observation: AuthenticationOutcomeObservationView,
-  ): Promise<void> {
-    const pathname = location.pathname
-    const request: CompanionWasmRuntimeMessage = {
-      type: CompanionWasmSessionMessageType.ProjectAuthenticationNavigationPath,
-      origin: location.origin,
-      payload: { pathname },
-    }
-    return Effect.runPromise(
-      Effect.gen(function* () {
-        const delivery = yield* Effect.tryPromise(() =>
-          sendCompanionWasmRuntimeMessage(globalThis, request),
-        )
-        if (
-          delivery.kind !== CompanionWasmRuntimeDeliveryKind.Delivered ||
-          location.pathname !== pathname
-        )
-          return yield* Effect.fail(
-            new Error('Authentication navigation projection unavailable.'),
-          )
-        const projected = yield* Schema.decodeUnknown(
-          CompanionWasmNavigationPathDecoder,
-        )(delivery.response)
-        observation.navigatedAwayFromAuthPath ||=
-          projected.observation === 'Unrelated'
-      }),
-    )
-  }
-
   async evaluatePendingSaveEvidence(): Promise<void> {
     if (saveOfferState.watch.kind === SavePageWatchKind.Idle) return
     const { watch } = saveOfferState.watch
@@ -304,8 +184,14 @@ class LoginSaveInteraction {
       authPath: watch.authPath,
       sawMutation: watch.sawMutation,
     }
-    const observation = this.collectOutcomeObservation(observationContext)
-    const verdictRead = await this.classifyOutcomeEvidence(observation)
+    const observation =
+      authenticationOutcomeObservation.collectOutcomeObservation(
+        observationContext,
+      )
+    const verdictRead =
+      await authenticationOutcomeObservation.classifyOutcomeEvidence(
+        observation,
+      )
     if (
       verdictRead.kind === AuthenticationOutcomeReadKind.Unavailable ||
       saveOfferState.watch.kind !== SavePageWatchKind.Watching ||
@@ -650,7 +536,10 @@ class LoginSaveInteraction {
           authPath: location.pathname,
           sawMutation: false,
         }
-      const evidence = this.collectOutcomeObservation(commitObservationContext)
+      const evidence =
+        authenticationOutcomeObservation.collectOutcomeObservation(
+          commitObservationContext,
+        )
       // Commit re-checks the live page; require an explicit success marker now.
       evidence.successMarkerPresent = Boolean(
         document.querySelector(
@@ -665,7 +554,9 @@ class LoginSaveInteraction {
       evidence.elapsedMs = 0
       Effect.runFork(
         Effect.tryPromise(async () => {
-          await this.prepareOutcomeNavigationPath(evidence)
+          await authenticationOutcomeObservation.prepareOutcomeNavigationPath(
+            evidence,
+          )
           const message: Parameters<
             typeof authenticationRuntimeTransport.sendLoginSaveActionRuntimeMessage
           >[0] = {
@@ -712,7 +603,7 @@ class LoginSaveInteraction {
               widgetState.busy = false
             })
         }).pipe(
-          Effect.catchAll(() =>
+          Effect.catch(() =>
             Effect.sync(() => {
               description.textContent = workflowUi.translatedMessage(
                 BROWSER_MESSAGE_KEYS.WidgetSaveLoginFailed,

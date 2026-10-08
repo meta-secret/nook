@@ -94,6 +94,10 @@ enum AuthenticationScanOutcome {
   Watching = 'watching',
 }
 
+type AuthenticationScanExecution = {
+  readonly self: AuthenticationScanRenderLifecycle
+}
+
 type AuthenticationScanRenderLifecycleRequest = {
   readonly scanState: typeof scanState
 }
@@ -466,8 +470,9 @@ export class AuthenticationScanRenderLifecycle {
   }
 
   scanAndRender(): Promise<void> {
+    const execution: AuthenticationScanExecution = { self: this }
     return Effect.runPromise(
-      Effect.gen(this, function* () {
+      Effect.gen(execution, function* () {
         const outcome = yield* Effect.promise(() => this.performScanAndRender())
         switch (outcome) {
           case AuthenticationScanOutcome.Inconclusive: {

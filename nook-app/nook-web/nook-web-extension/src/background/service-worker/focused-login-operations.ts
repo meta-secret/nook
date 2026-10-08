@@ -97,7 +97,10 @@ export class FocusedWebsiteLoginFillOperation {
   }
 
   private release(grant: StoredExtensionPairingGrant) {
-    return Effect.gen(this, function* () {
+    const execution1: { readonly self: FocusedWebsiteLoginFillOperation } = {
+      self: this,
+    }
+    return Effect.gen(execution1, function* () {
       switch (this.authorization()) {
         case FocusedReleaseAuthorization.Revoked:
           return this.locked
@@ -123,8 +126,11 @@ export class FocusedWebsiteLoginFillOperation {
   }
 
   run(): Promise<WebsiteFocusedLoginFillResponse> {
+    const execution2: { readonly self: FocusedWebsiteLoginFillOperation } = {
+      self: this,
+    }
     return Effect.runPromise(
-      Effect.gen(this, function* () {
+      Effect.gen(execution2, function* () {
         switch (this.authorization()) {
           case FocusedReleaseAuthorization.Revoked:
             return this.locked
@@ -155,7 +161,7 @@ export class FocusedWebsiteLoginFillOperation {
             return this.failed
         }
         return this.failed
-      }).pipe(Effect.catchAll(() => Effect.succeed(this.failed))),
+      }).pipe(Effect.catch(() => Effect.succeed(this.failed))),
     )
   }
 }

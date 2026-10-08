@@ -33,7 +33,7 @@ class PilotCompanionDemoRuntime {
   install(): void {
     Effect.runFork(
       Effect.tryPromise(() => companionWasmReady).pipe(
-        Effect.catchAll((error) =>
+        Effect.catch((error) =>
           Effect.sync(() =>
             console.error(
               'Pilot demo companion readiness rejected',

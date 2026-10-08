@@ -15,6 +15,7 @@ import {
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import {
   NookLoginContextObservation,
+  project_authentication_login_checklist,
   classify_authentication_authenticator_setup_batch,
   extract_authentication_backup_code_candidates,
   project_authentication_navigation_path,
@@ -174,11 +175,13 @@ export async function handleCompanionWasmMessage(
   try {
     await companionWasmReady
     switch (message.type) {
+      case CompanionWasmSessionMessageType.ProjectAuthenticationLoginChecklist:
+        return ok(project_authentication_login_checklist(message.payload))
       case CompanionWasmSessionMessageType.GetAuthenticationActivityProgress:
         return ok({
           activityProgress: authentication_workflow_activity_progress(
             Schema.decodeUnknownSync(
-              Schema.Enums(AuthenticationWorkflowActivity),
+              Schema.Enum(AuthenticationWorkflowActivity),
             )(message.payload.activity),
           ),
         })

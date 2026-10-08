@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-restricted-types, no-restricted-syntax -- This dedicated untrusted-input decoder narrows browser transport values immediately. */
 import { Schema } from "effect";
 import type {
+  AuthenticationLoginChecklistProjection,
+  AuthenticationLoginChecklistPresentation,
   AuthenticationAuthenticatorSetupBatch,
   AuthenticationAuthenticatorSetupObservation,
   AuthenticationObservationBindingToken,
@@ -43,6 +45,7 @@ import type {
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 
 export enum CompanionWasmSessionMessageType {
+  ProjectAuthenticationLoginChecklist = "nook:extension-session-project-authentication-login-checklist",
   ClassifyFocusedCredentialField = "nook:extension-session-classify-focused-credential-field",
   RevalidateFocusedCredentialField = "nook:extension-session-revalidate-focused-credential-field",
   GetAuthenticationActivityProgress = "nook:extension-session-get-authentication-activity-progress",
@@ -130,6 +133,10 @@ export type CompanionWasmLabelRequest = {
 };
 
 export type CompanionWasmSessionMessage =
+  | {
+      readonly type: CompanionWasmSessionMessageType.ProjectAuthenticationLoginChecklist;
+      readonly payload: AuthenticationLoginChecklistProjection;
+    }
   | {
       readonly type: CompanionWasmSessionMessageType.ClassifyFocusedCredentialField;
       readonly payload: {
@@ -275,13 +282,16 @@ export type CompanionWasmAuthenticatorSetupResponse = {
   readonly authenticatorSetupObservation: AuthenticationAuthenticatorSetupObservation;
 };
 
-const authenticatorSetupObservationSchema = Schema.Literal("present", "absent");
+const authenticatorSetupObservationSchema = Schema.Literals([
+  "present",
+  "absent",
+]);
 const companionWasmAuthenticatorSetupResponseFields: {
   readonly authenticatorSetupObservation: typeof authenticatorSetupObservationSchema;
 } = {
   authenticatorSetupObservation: authenticatorSetupObservationSchema,
 };
-export const CompanionWasmAuthenticatorSetupResponseDecoder: Schema.Schema<CompanionWasmAuthenticatorSetupResponse> =
+export const CompanionWasmAuthenticatorSetupResponseDecoder: Schema.Codec<CompanionWasmAuthenticatorSetupResponse> =
   Schema.Struct(companionWasmAuthenticatorSetupResponseFields);
 
 const backupCodeArraySchema = Schema.mutable(Schema.Array(Schema.String));
@@ -290,19 +300,19 @@ const backupCodeExtractionFields: {
 } = {
   codes: backupCodeArraySchema,
 };
-export const CompanionWasmBackupCodeExtractionDecoder: Schema.Schema<AuthenticationBackupCodeExtraction> =
+export const CompanionWasmBackupCodeExtractionDecoder: Schema.Codec<AuthenticationBackupCodeExtraction> =
   Schema.Struct(backupCodeExtractionFields);
 
-const authenticationNavigationObservationSchema = Schema.Literal(
+const authenticationNavigationObservationSchema = Schema.Literals([
   "Authentication",
   "Unrelated",
-);
+]);
 const authenticationNavigationPathFields: {
   readonly observation: typeof authenticationNavigationObservationSchema;
 } = {
   observation: authenticationNavigationObservationSchema,
 };
-export const CompanionWasmNavigationPathDecoder: Schema.Schema<AuthenticationNavigationPathProjection> =
+export const CompanionWasmNavigationPathDecoder: Schema.Codec<AuthenticationNavigationPathProjection> =
   Schema.Struct(authenticationNavigationPathFields);
 
 const activityProgressFields: {
@@ -318,7 +328,7 @@ const activityProgressResponseFields: {
 } = {
   activityProgress: activityProgressSchema,
 };
-export const CompanionWasmActivityProgressDecoder: Schema.Schema<{
+export const CompanionWasmActivityProgressDecoder: Schema.Codec<{
   readonly activityProgress: AuthenticationDisplayProgress;
 }> = Schema.Struct(activityProgressResponseFields);
 
@@ -333,6 +343,7 @@ export type CompanionWasmFocusedRecognitionResponse =
     };
 
 export type CompanionWasmSessionResponse =
+  | AuthenticationLoginChecklistPresentation
   | CompanionWasmFocusedRecognitionResponse
   | { readonly activityProgress: AuthenticationDisplayProgress }
   | AuthenticationBackupCodeExtraction

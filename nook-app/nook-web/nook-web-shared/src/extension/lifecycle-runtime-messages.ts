@@ -6,7 +6,7 @@ import {
 } from "./runtime-message-decode-failure";
 
 type RuntimeMessageDecodeRequest<DecodedMessage, WireMessage> = {
-  readonly schema: Schema.Schema<DecodedMessage>;
+  readonly schema: Schema.Decoder<DecodedMessage>;
   readonly value: WireMessage;
   readonly kind: RuntimeMessageDecodeFailureKind;
 };
@@ -14,7 +14,7 @@ type RuntimeMessageDecodeRequest<DecodedMessage, WireMessage> = {
 function decodeRuntimeMessage<DecodedMessage, WireMessage>(
   request: RuntimeMessageDecodeRequest<DecodedMessage, WireMessage>,
 ): Effect.Effect<DecodedMessage, RuntimeMessageDecodeFailure> {
-  return Schema.decodeUnknown(request.schema)(request.value).pipe(
+  return Schema.decodeUnknownEffect(request.schema)(request.value).pipe(
     Effect.mapError((cause) => {
       const failureRequest: Parameters<
         typeof RuntimeMessageDecodeFailure.fromParseError
@@ -68,16 +68,16 @@ const beginExtensionPairingTypeSchema = Schema.Literal(
   BeginExtensionPairingMessageType.NookBeginExtensionPairing,
 );
 const beginExtensionPairingDeviceIdSchema = Schema.String.pipe(
-  Schema.minLength(1),
+  Schema.check(Schema.isMinLength(1)),
 );
 const beginExtensionPairingDevicePublicKeySchema = Schema.String.pipe(
-  Schema.minLength(1),
+  Schema.check(Schema.isMinLength(1)),
 );
 const beginExtensionPairingDeviceSigningPublicKeySchema = Schema.String.pipe(
-  Schema.minLength(1),
+  Schema.check(Schema.isMinLength(1)),
 );
 const beginExtensionPairingDeviceLabelSchema = Schema.String.pipe(
-  Schema.minLength(1),
+  Schema.check(Schema.isMinLength(1)),
 );
 type BeginExtensionPairingPayloadFields = {
   readonly deviceId: typeof beginExtensionPairingDeviceIdSchema;
@@ -201,11 +201,11 @@ const extensionLocalEventLogUpdatedTypeSchema = Schema.Literal(
   ExtensionLocalEventLogUpdatedMessageType.NookExtensionLocalEventLogUpdated,
 );
 const extensionLocalEventLogUpdatedVaultStoreIdSchema = Schema.String.pipe(
-  Schema.minLength(1),
+  Schema.check(Schema.isMinLength(1)),
 );
 const extensionLocalEventLogUpdatedRecordsSchema = Schema.Array(
   Schema.Unknown,
-).pipe(Schema.minItems(1));
+).pipe(Schema.check(Schema.isMinLength(1)));
 type ExtensionLocalEventLogUpdatedPayloadFields = {
   readonly vaultStoreId: typeof extensionLocalEventLogUpdatedVaultStoreIdSchema;
   readonly eventLogRecords: typeof extensionLocalEventLogUpdatedRecordsSchema;

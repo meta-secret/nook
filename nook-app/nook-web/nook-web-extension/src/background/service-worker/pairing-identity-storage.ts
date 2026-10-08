@@ -24,10 +24,10 @@ export type PendingIdentityHandoff = {
 }
 
 type PendingIdentityHandoffSchemaFields = {
-  kind: Schema.Schema<PendingIdentityHandoff['kind']>
-  deviceId: Schema.Schema<string>
-  devicePublicKey: Schema.Schema<string>
-  deviceSigningPublicKey: Schema.Schema<string>
+  kind: Schema.Codec<PendingIdentityHandoff['kind']>
+  deviceId: Schema.Codec<string>
+  devicePublicKey: Schema.Codec<string>
+  deviceSigningPublicKey: Schema.Codec<string>
 }
 
 const pendingIdentityHandoffSchemaFields: PendingIdentityHandoffSchemaFields = {
@@ -39,12 +39,12 @@ const pendingIdentityHandoffSchemaFields: PendingIdentityHandoffSchemaFields = {
 
 const pendingIdentityHandoffSchema = Schema.Struct(
   pendingIdentityHandoffSchemaFields,
-) satisfies Schema.Schema<PendingIdentityHandoff>
+) satisfies Schema.Codec<PendingIdentityHandoff>
 
 export function decodePendingIdentityHandoff(
   value: ExtensionSessionStorageValue,
 ) {
-  return Schema.decodeUnknown(pendingIdentityHandoffSchema)(value)
+  return Schema.decodeUnknownEffect(pendingIdentityHandoffSchema)(value)
 }
 
 export type ExtensionSessionStorageValue =

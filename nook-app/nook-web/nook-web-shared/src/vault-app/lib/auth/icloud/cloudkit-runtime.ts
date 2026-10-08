@@ -1,6 +1,5 @@
 import { err, ok, type Result } from "neverthrow";
 import { Effect, Schema } from "effect";
-import * as ParseResult from "effect/ParseResult";
 import { OAuthFailure, OAuthFailureKind } from "$lib/auth/oauth-failure";
 import {
   ICLOUD_API_TOKEN,
@@ -305,7 +304,7 @@ export enum CloudKitUserIdentityDecodeFailureKind {
 
 export type CloudKitUserIdentityDecodeFailure = {
   readonly kind: CloudKitUserIdentityDecodeFailureKind.Invalid;
-  readonly cause: ParseResult.ParseError;
+  readonly cause: Schema.SchemaError;
 };
 
 export class CloudKitUserIdentityDecoder {
@@ -314,7 +313,7 @@ export class CloudKitUserIdentityDecoder {
   static decode(
     value: unknown,
   ): Effect.Effect<CloudKitUserIdentity, CloudKitUserIdentityDecodeFailure> {
-    return Schema.decodeUnknown(CloudKitUserIdentitySchema)(value).pipe(
+    return Schema.decodeUnknownEffect(CloudKitUserIdentitySchema)(value).pipe(
       Effect.mapError((cause) => {
         const failure: CloudKitUserIdentityDecodeFailure = {
           kind: CloudKitUserIdentityDecodeFailureKind.Invalid,
@@ -326,16 +325,8 @@ export class CloudKitUserIdentityDecoder {
   }
 }
 
-type ExactOptionalFieldOptions = { readonly exact: true };
-const exactOptionalFieldOptions: ExactOptionalFieldOptions = { exact: true };
-const CloudKitGivenNameSchema = Schema.optionalWith(
-  Schema.String,
-  exactOptionalFieldOptions,
-);
-const CloudKitFamilyNameSchema = Schema.optionalWith(
-  Schema.String,
-  exactOptionalFieldOptions,
-);
+const CloudKitGivenNameSchema = Schema.optionalKey(Schema.String);
+const CloudKitFamilyNameSchema = Schema.optionalKey(Schema.String);
 type CloudKitNameComponentFields = {
   readonly givenName: typeof CloudKitGivenNameSchema;
   readonly familyName: typeof CloudKitFamilyNameSchema;
@@ -345,10 +336,7 @@ const cloudKitNameComponentFields: CloudKitNameComponentFields = {
   familyName: CloudKitFamilyNameSchema,
 };
 const CloudKitNameComponentsSchema = Schema.Struct(cloudKitNameComponentFields);
-const CloudKitEmailAddressSchema = Schema.optionalWith(
-  Schema.String,
-  exactOptionalFieldOptions,
-);
+const CloudKitEmailAddressSchema = Schema.optionalKey(Schema.String);
 type CloudKitLookupInfoFields = {
   readonly emailAddress: typeof CloudKitEmailAddressSchema;
 };
@@ -356,17 +344,12 @@ const cloudKitLookupInfoFields: CloudKitLookupInfoFields = {
   emailAddress: CloudKitEmailAddressSchema,
 };
 const CloudKitLookupInfoSchema = Schema.Struct(cloudKitLookupInfoFields);
-const CloudKitUserRecordNameSchema = Schema.optionalWith(
-  Schema.String,
-  exactOptionalFieldOptions,
-);
-const CloudKitNameComponentsOptionalSchema = Schema.optionalWith(
+const CloudKitUserRecordNameSchema = Schema.optionalKey(Schema.String);
+const CloudKitNameComponentsOptionalSchema = Schema.optionalKey(
   CloudKitNameComponentsSchema,
-  exactOptionalFieldOptions,
 );
-const CloudKitLookupInfoOptionalSchema = Schema.optionalWith(
+const CloudKitLookupInfoOptionalSchema = Schema.optionalKey(
   CloudKitLookupInfoSchema,
-  exactOptionalFieldOptions,
 );
 type CloudKitUserIdentityFields = {
   readonly userRecordName: typeof CloudKitUserRecordNameSchema;
@@ -400,10 +383,10 @@ class CloudKitRuntime {
   private webAuthTokenListeners = new Set<CloudKitWebAuthTokenListener>();
   private cloudKitIdentityFromTransport(value: unknown): CloudKitIdentity {
     const decoded = Effect.runSync(
-      Effect.either(CloudKitUserIdentityDecoder.decode(value)),
+      Effect.result(CloudKitUserIdentityDecoder.decode(value)),
     );
-    return decoded._tag === "Right"
-      ? { kind: CloudKitIdentityKind.SignedIn, identity: decoded.right }
+    return decoded._tag === "Success"
+      ? { kind: CloudKitIdentityKind.SignedIn, identity: decoded.success }
       : { kind: CloudKitIdentityKind.SignedOut };
   }
 

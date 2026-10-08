@@ -39,7 +39,7 @@ const actionMocks = vi.hoisted(() => ({
   sendAuthenticatorCode: vi.fn(),
   sendLoginFill: vi.fn(),
   sendGeneratePassword: vi.fn(),
-  submitLoginForm: vi.fn(() => true),
+  submitLoginForm: vi.fn(() => 'submitted'),
 }))
 
 vi.mock('../../../../nook-web-shared/src/extension/password-forms', () => ({

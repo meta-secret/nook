@@ -114,7 +114,7 @@ function installRuntimeMock(mock: RuntimeMock): void {
         'response' in message.payload
       ) {
         const kind = Schema.decodeUnknownSync(
-          Schema.Enums(CompanionWasmContentResponseKind),
+          Schema.Enum(CompanionWasmContentResponseKind),
         )(message.payload.kind)
         const request: CompanionWasmSessionMessage = {
           type: CompanionWasmSessionMessageType.DecodeContentRuntimeResponse,

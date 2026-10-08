@@ -1,5 +1,6 @@
 import type { AuthenticationPageObservationFacts } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { InlineLoginPickerSurface } from './inline-login-picker'
+import type { LoginChecklistProgress } from './login-checklist-progress'
 import {
   PasswordFormScopeKind,
   type PasswordFormObservation,
@@ -187,7 +188,18 @@ type WidgetWorkflowRenderRequest = {
   observation: PasswordFormObservation
 }
 
+export enum LoginChecklistMountKind {
+  Mounted = 'mounted',
+  Unmounted = 'unmounted',
+}
+export type LoginChecklistMountState =
+  | { kind: LoginChecklistMountKind.Mounted; progress: LoginChecklistProgress }
+  | { kind: LoginChecklistMountKind.Unmounted }
+
 class WidgetState {
+  loginChecklist: LoginChecklistMountState = {
+    kind: LoginChecklistMountKind.Unmounted,
+  }
   private renderedCleanup: () => void = () => {}
   setRenderedCleanup(cleanup: () => void): void {
     this.renderedCleanup = cleanup
@@ -288,6 +300,14 @@ class WidgetState {
     }
   }
   clearRenderedWidget(): void {
+    switch (this.loginChecklist.kind) {
+      case LoginChecklistMountKind.Mounted:
+        this.loginChecklist.progress.cancel()
+        break
+      case LoginChecklistMountKind.Unmounted:
+        break
+    }
+    this.loginChecklist = { kind: LoginChecklistMountKind.Unmounted }
     const cleanup = this.renderedCleanup
     this.renderedCleanup = () => {}
     cleanup()

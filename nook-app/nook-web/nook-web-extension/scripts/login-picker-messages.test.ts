@@ -15,30 +15,30 @@ describe('login picker runtime messages', () => {
   test('accepts open messages with a non-empty origin', () => {
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           WebsiteLoginPickerOpenMessageSchema.decode({
             type: 'nook:website-login-picker-open',
             payload: { origin: 'https://login.example.test' },
           }),
         ),
       )._tag,
-    ).toBe('Right')
+    ).toBe('Success')
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           WebsiteLoginPickerOpenMessageSchema.decode({
             type: 'nook:website-login-picker-open',
             payload: { origin: '' },
           }),
         ),
       )._tag,
-    ).toBe('Left')
+    ).toBe('Failure')
   })
 
   test('bounds query length and requires a request id', () => {
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           LoginPickerQueryMessageSchema.decode({
             type: 'nook:login-picker-query',
             payload: {
@@ -49,10 +49,10 @@ describe('login picker runtime messages', () => {
           }),
         ),
       )._tag,
-    ).toBe('Right')
+    ).toBe('Success')
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           LoginPickerQueryMessageSchema.decode({
             type: 'nook:login-picker-query',
             payload: {
@@ -63,13 +63,13 @@ describe('login picker runtime messages', () => {
           }),
         ),
       )._tag,
-    ).toBe('Left')
+    ).toBe('Failure')
   })
 
   test('admits only complete login query responses', () => {
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           LoginPickerQueryResponseSchema.decode({
             ok: true,
             origin: 'https://login.example.test',
@@ -86,10 +86,10 @@ describe('login picker runtime messages', () => {
           }),
         ),
       )._tag,
-    ).toBe('Right')
+    ).toBe('Success')
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           LoginPickerQueryResponseSchema.decode({
             ok: true,
             origin: 'https://login.example.test',
@@ -97,13 +97,13 @@ describe('login picker runtime messages', () => {
           }),
         ),
       )._tag,
-    ).toBe('Left')
+    ).toBe('Failure')
   })
 
   test('requires select and cancel identity fields', () => {
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           LoginPickerSelectMessageSchema.decode({
             type: 'nook:login-picker-select',
             payload: {
@@ -114,23 +114,23 @@ describe('login picker runtime messages', () => {
           }),
         ),
       )._tag,
-    ).toBe('Right')
+    ).toBe('Success')
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           LoginPickerCancelMessageSchema.decode({
             type: 'nook:login-picker-cancel',
             payload: { requestId: 'req-1' },
           }),
         ),
       )._tag,
-    ).toBe('Right')
+    ).toBe('Success')
   })
 
   test('accepts selected and canceled page callbacks', () => {
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           WebsiteLoginSelectedMessageSchema.decode({
             type: 'nook:website-login-selected',
             payload: {
@@ -145,10 +145,10 @@ describe('login picker runtime messages', () => {
           }),
         ),
       )._tag,
-    ).toBe('Right')
+    ).toBe('Success')
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           WebsiteLoginCanceledMessageSchema.decode({
             type: 'nook:website-login-canceled',
             payload: {
@@ -158,6 +158,6 @@ describe('login picker runtime messages', () => {
           }),
         ),
       )._tag,
-    ).toBe('Right')
+    ).toBe('Success')
   })
 })

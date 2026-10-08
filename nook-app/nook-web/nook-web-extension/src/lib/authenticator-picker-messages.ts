@@ -16,9 +16,9 @@ export class WebsiteAuthenticatorPickerOpenMessage {
     origin: string
   }
   static decode(message: unknown) {
-    return Schema.decodeUnknown(websiteAuthenticatorPickerOpenMessageSchema)(
-      message,
-    )
+    return Schema.decodeUnknownEffect(
+      websiteAuthenticatorPickerOpenMessageSchema,
+    )(message)
   }
 }
 
@@ -34,7 +34,7 @@ export class AuthenticatorPickerQueryResponse {
   declare readonly accounts: WebsiteAuthenticatorOption[]
 
   static decode(response: unknown) {
-    return Schema.decodeUnknown(authenticatorPickerQueryResponseSchema)(
+    return Schema.decodeUnknownEffect(authenticatorPickerQueryResponseSchema)(
       response,
     )
   }
@@ -49,7 +49,9 @@ export class AuthenticatorPickerQueryMessage {
     query: string
   }
   static decode(message: unknown) {
-    return Schema.decodeUnknown(authenticatorPickerQueryMessageSchema)(message)
+    return Schema.decodeUnknownEffect(authenticatorPickerQueryMessageSchema)(
+      message,
+    )
   }
 }
 
@@ -67,7 +69,9 @@ export class AuthenticatorPickerSelectMessage {
     secretId: string
   }
   static decode(message: unknown) {
-    return Schema.decodeUnknown(authenticatorPickerSelectMessageSchema)(message)
+    return Schema.decodeUnknownEffect(authenticatorPickerSelectMessageSchema)(
+      message,
+    )
   }
 }
 
@@ -77,7 +81,7 @@ export class AuthenticatorPickerSelectResponse {
   declare readonly ok: true
 
   static decode(response: unknown) {
-    return Schema.decodeUnknown(authenticatorPickerSelectResponseSchema)(
+    return Schema.decodeUnknownEffect(authenticatorPickerSelectResponseSchema)(
       response,
     )
   }
@@ -112,7 +116,9 @@ export class AuthenticatorPickerCancelMessage {
     requestId: string
   }
   static decode(message: unknown) {
-    return Schema.decodeUnknown(authenticatorPickerCancelMessageSchema)(message)
+    return Schema.decodeUnknownEffect(authenticatorPickerCancelMessageSchema)(
+      message,
+    )
   }
 }
 
@@ -132,9 +138,9 @@ export class WebsiteAuthenticatorSelectedMessage {
     }
   }
   static decode(message: unknown) {
-    return Schema.decodeUnknown(websiteAuthenticatorSelectedMessageSchema)(
-      message,
-    )
+    return Schema.decodeUnknownEffect(
+      websiteAuthenticatorSelectedMessageSchema,
+    )(message)
   }
 }
 
@@ -151,19 +157,19 @@ export class WebsiteAuthenticatorCanceledMessage {
     requestId: string
   }
   static decode(message: unknown) {
-    return Schema.decodeUnknown(websiteAuthenticatorCanceledMessageSchema)(
-      message,
-    )
+    return Schema.decodeUnknownEffect(
+      websiteAuthenticatorCanceledMessageSchema,
+    )(message)
   }
 }
 
 const authenticatorPickerNonEmptyStringSchema = Schema.String.pipe(
-  Schema.minLength(1),
+  Schema.check(Schema.isMinLength(1)),
 )
 
 type AuthenticatorPickerQueryResponseAccountsSchemaFields = {
-  vaultStoreId: Schema.filter<typeof Schema.String>
-  secretId: Schema.filter<typeof Schema.String>
+  vaultStoreId: typeof Schema.String
+  secretId: typeof Schema.String
   issuer: typeof Schema.String
   account: typeof Schema.String
   vaultName: typeof Schema.String
@@ -178,13 +184,13 @@ const authenticatorPickerQueryResponseAccountsSchemaFields: AuthenticatorPickerQ
   }
 
 type AuthenticatorPickerQueryResponseSchemaFields = {
-  ok: Schema.Literal<[true]>
-  origin: Schema.filter<typeof Schema.String>
+  ok: Schema.Literal<true>
+  origin: typeof Schema.String
   accounts: Schema.mutable<
-    Schema.Array$<
+    Schema.$Array<
       Schema.Struct<{
-        vaultStoreId: Schema.filter<typeof Schema.String>
-        secretId: Schema.filter<typeof Schema.String>
+        vaultStoreId: typeof Schema.String
+        secretId: typeof Schema.String
         issuer: typeof Schema.String
         account: typeof Schema.String
         vaultName: typeof Schema.String
@@ -205,10 +211,10 @@ const authenticatorPickerQueryResponseSchemaFields: AuthenticatorPickerQueryResp
 
 const authenticatorPickerQueryResponseSchema = Schema.Struct(
   authenticatorPickerQueryResponseSchemaFields,
-) satisfies Schema.Schema<AuthenticatorPickerQueryResponse>
+) satisfies Schema.Codec<AuthenticatorPickerQueryResponse>
 
 type AuthenticatorPickerSelectResponseSchemaFields = {
-  ok: Schema.Literal<[true]>
+  ok: Schema.Literal<true>
 }
 const authenticatorPickerSelectResponseSchemaFields: AuthenticatorPickerSelectResponseSchemaFields =
   {
@@ -217,17 +223,17 @@ const authenticatorPickerSelectResponseSchemaFields: AuthenticatorPickerSelectRe
 
 const authenticatorPickerSelectResponseSchema = Schema.Struct(
   authenticatorPickerSelectResponseSchemaFields,
-) satisfies Schema.Schema<AuthenticatorPickerSelectResponse>
+) satisfies Schema.Codec<AuthenticatorPickerSelectResponse>
 
 type WebsiteAuthenticatorPickerOpenMessagePayloadSchemaFields = {
-  origin: Schema.filter<typeof Schema.String>
+  origin: typeof Schema.String
 }
 const websiteAuthenticatorPickerOpenMessagePayloadSchemaFields: WebsiteAuthenticatorPickerOpenMessagePayloadSchemaFields =
   { origin: authenticatorPickerNonEmptyStringSchema }
 
 type WebsiteAuthenticatorPickerOpenMessageSchemaFields = {
-  type: Schema.Literal<[WebsiteAuthenticatorPickerOpenMessageType]>
-  payload: Schema.Struct<{ origin: Schema.filter<typeof Schema.String> }>
+  type: Schema.Literal<WebsiteAuthenticatorPickerOpenMessageType>
+  payload: Schema.Struct<{ origin: typeof Schema.String }>
 }
 const websiteAuthenticatorPickerOpenMessageSchemaFields: WebsiteAuthenticatorPickerOpenMessageSchemaFields =
   {
@@ -241,25 +247,25 @@ const websiteAuthenticatorPickerOpenMessageSchemaFields: WebsiteAuthenticatorPic
 
 const websiteAuthenticatorPickerOpenMessageSchema = Schema.Struct(
   websiteAuthenticatorPickerOpenMessageSchemaFields,
-) satisfies Schema.Schema<WebsiteAuthenticatorPickerOpenMessage>
+) satisfies Schema.Codec<WebsiteAuthenticatorPickerOpenMessage>
 
 type AuthenticatorPickerQueryMessagePayloadSchemaFields = {
-  requestId: Schema.filter<typeof Schema.String>
-  query: Schema.filter<typeof Schema.String>
+  requestId: typeof Schema.String
+  query: typeof Schema.String
 }
 const authenticatorPickerQueryMessagePayloadSchemaFields: AuthenticatorPickerQueryMessagePayloadSchemaFields =
   {
     requestId: authenticatorPickerNonEmptyStringSchema,
     query: Schema.String.pipe(
-      Schema.maxLength(MAX_AUTHENTICATOR_SEARCH_LENGTH),
+      Schema.check(Schema.isMaxLength(MAX_AUTHENTICATOR_SEARCH_LENGTH)),
     ),
   }
 
 type AuthenticatorPickerQueryMessageSchemaFields = {
-  type: Schema.Literal<[AuthenticatorPickerQueryMessageType]>
+  type: Schema.Literal<AuthenticatorPickerQueryMessageType>
   payload: Schema.Struct<{
-    requestId: Schema.filter<typeof Schema.String>
-    query: Schema.filter<typeof Schema.String>
+    requestId: typeof Schema.String
+    query: typeof Schema.String
   }>
 }
 const authenticatorPickerQueryMessageSchemaFields: AuthenticatorPickerQueryMessageSchemaFields =
@@ -272,12 +278,12 @@ const authenticatorPickerQueryMessageSchemaFields: AuthenticatorPickerQueryMessa
 
 const authenticatorPickerQueryMessageSchema = Schema.Struct(
   authenticatorPickerQueryMessageSchemaFields,
-) satisfies Schema.Schema<AuthenticatorPickerQueryMessage>
+) satisfies Schema.Codec<AuthenticatorPickerQueryMessage>
 
 type AuthenticatorPickerSelectMessagePayloadSchemaFields = {
-  requestId: Schema.filter<typeof Schema.String>
-  vaultStoreId: Schema.filter<typeof Schema.String>
-  secretId: Schema.filter<typeof Schema.String>
+  requestId: typeof Schema.String
+  vaultStoreId: typeof Schema.String
+  secretId: typeof Schema.String
 }
 const authenticatorPickerSelectMessagePayloadSchemaFields: AuthenticatorPickerSelectMessagePayloadSchemaFields =
   {
@@ -287,11 +293,11 @@ const authenticatorPickerSelectMessagePayloadSchemaFields: AuthenticatorPickerSe
   }
 
 type AuthenticatorPickerSelectMessageSchemaFields = {
-  type: Schema.Literal<[AuthenticatorPickerSelectMessageType]>
+  type: Schema.Literal<AuthenticatorPickerSelectMessageType>
   payload: Schema.Struct<{
-    requestId: Schema.filter<typeof Schema.String>
-    vaultStoreId: Schema.filter<typeof Schema.String>
-    secretId: Schema.filter<typeof Schema.String>
+    requestId: typeof Schema.String
+    vaultStoreId: typeof Schema.String
+    secretId: typeof Schema.String
   }>
 }
 const authenticatorPickerSelectMessageSchemaFields: AuthenticatorPickerSelectMessageSchemaFields =
@@ -304,10 +310,10 @@ const authenticatorPickerSelectMessageSchemaFields: AuthenticatorPickerSelectMes
 
 const authenticatorPickerSelectMessageSchema = Schema.Struct(
   authenticatorPickerSelectMessageSchemaFields,
-) satisfies Schema.Schema<AuthenticatorPickerSelectMessage>
+) satisfies Schema.Codec<AuthenticatorPickerSelectMessage>
 
 type AuthenticatorPickerCancelMessagePayloadSchemaFields = {
-  requestId: Schema.filter<typeof Schema.String>
+  requestId: typeof Schema.String
 }
 const authenticatorPickerCancelMessagePayloadSchemaFields: AuthenticatorPickerCancelMessagePayloadSchemaFields =
   {
@@ -315,8 +321,8 @@ const authenticatorPickerCancelMessagePayloadSchemaFields: AuthenticatorPickerCa
   }
 
 type AuthenticatorPickerCancelMessageSchemaFields = {
-  type: Schema.Literal<[AuthenticatorPickerCancelMessageType]>
-  payload: Schema.Struct<{ requestId: Schema.filter<typeof Schema.String> }>
+  type: Schema.Literal<AuthenticatorPickerCancelMessageType>
+  payload: Schema.Struct<{ requestId: typeof Schema.String }>
 }
 const authenticatorPickerCancelMessageSchemaFields: AuthenticatorPickerCancelMessageSchemaFields =
   {
@@ -328,12 +334,12 @@ const authenticatorPickerCancelMessageSchemaFields: AuthenticatorPickerCancelMes
 
 const authenticatorPickerCancelMessageSchema = Schema.Struct(
   authenticatorPickerCancelMessageSchemaFields,
-) satisfies Schema.Schema<AuthenticatorPickerCancelMessage>
+) satisfies Schema.Codec<AuthenticatorPickerCancelMessage>
 
 type WebsiteAuthenticatorSelectedMessagePayloadAccountSchemaFields = {
-  vaultStoreId: Schema.filter<typeof Schema.String>
-  secretId: Schema.filter<typeof Schema.String>
-  authorizationGeneration: Schema.filter<typeof Schema.String>
+  vaultStoreId: typeof Schema.String
+  secretId: typeof Schema.String
+  authorizationGeneration: typeof Schema.String
 }
 const websiteAuthenticatorSelectedMessagePayloadAccountSchemaFields: WebsiteAuthenticatorSelectedMessagePayloadAccountSchemaFields =
   {
@@ -343,12 +349,12 @@ const websiteAuthenticatorSelectedMessagePayloadAccountSchemaFields: WebsiteAuth
   }
 
 type WebsiteAuthenticatorSelectedMessagePayloadSchemaFields = {
-  origin: Schema.filter<typeof Schema.String>
-  requestId: Schema.filter<typeof Schema.String>
+  origin: typeof Schema.String
+  requestId: typeof Schema.String
   account: Schema.Struct<{
-    vaultStoreId: Schema.filter<typeof Schema.String>
-    secretId: Schema.filter<typeof Schema.String>
-    authorizationGeneration: Schema.filter<typeof Schema.String>
+    vaultStoreId: typeof Schema.String
+    secretId: typeof Schema.String
+    authorizationGeneration: typeof Schema.String
   }>
 }
 const websiteAuthenticatorSelectedMessagePayloadSchemaFields: WebsiteAuthenticatorSelectedMessagePayloadSchemaFields =
@@ -361,14 +367,14 @@ const websiteAuthenticatorSelectedMessagePayloadSchemaFields: WebsiteAuthenticat
   }
 
 type WebsiteAuthenticatorSelectedMessageSchemaFields = {
-  type: Schema.Literal<[WebsiteAuthenticatorSelectedMessageType]>
+  type: Schema.Literal<WebsiteAuthenticatorSelectedMessageType>
   payload: Schema.Struct<{
-    origin: Schema.filter<typeof Schema.String>
-    requestId: Schema.filter<typeof Schema.String>
+    origin: typeof Schema.String
+    requestId: typeof Schema.String
     account: Schema.Struct<{
-      vaultStoreId: Schema.filter<typeof Schema.String>
-      secretId: Schema.filter<typeof Schema.String>
-      authorizationGeneration: Schema.filter<typeof Schema.String>
+      vaultStoreId: typeof Schema.String
+      secretId: typeof Schema.String
+      authorizationGeneration: typeof Schema.String
     }>
   }>
 }
@@ -384,11 +390,11 @@ const websiteAuthenticatorSelectedMessageSchemaFields: WebsiteAuthenticatorSelec
 
 const websiteAuthenticatorSelectedMessageSchema = Schema.Struct(
   websiteAuthenticatorSelectedMessageSchemaFields,
-) satisfies Schema.Schema<WebsiteAuthenticatorSelectedMessage>
+) satisfies Schema.Codec<WebsiteAuthenticatorSelectedMessage>
 
 type WebsiteAuthenticatorCanceledMessagePayloadSchemaFields = {
-  origin: Schema.filter<typeof Schema.String>
-  requestId: Schema.filter<typeof Schema.String>
+  origin: typeof Schema.String
+  requestId: typeof Schema.String
 }
 const websiteAuthenticatorCanceledMessagePayloadSchemaFields: WebsiteAuthenticatorCanceledMessagePayloadSchemaFields =
   {
@@ -397,10 +403,10 @@ const websiteAuthenticatorCanceledMessagePayloadSchemaFields: WebsiteAuthenticat
   }
 
 type WebsiteAuthenticatorCanceledMessageSchemaFields = {
-  type: Schema.Literal<[WebsiteAuthenticatorCanceledMessageType]>
+  type: Schema.Literal<WebsiteAuthenticatorCanceledMessageType>
   payload: Schema.Struct<{
-    origin: Schema.filter<typeof Schema.String>
-    requestId: Schema.filter<typeof Schema.String>
+    origin: typeof Schema.String
+    requestId: typeof Schema.String
   }>
 }
 const websiteAuthenticatorCanceledMessageSchemaFields: WebsiteAuthenticatorCanceledMessageSchemaFields =
@@ -415,4 +421,4 @@ const websiteAuthenticatorCanceledMessageSchemaFields: WebsiteAuthenticatorCance
 
 const websiteAuthenticatorCanceledMessageSchema = Schema.Struct(
   websiteAuthenticatorCanceledMessageSchemaFields,
-) satisfies Schema.Schema<WebsiteAuthenticatorCanceledMessage>
+) satisfies Schema.Codec<WebsiteAuthenticatorCanceledMessage>

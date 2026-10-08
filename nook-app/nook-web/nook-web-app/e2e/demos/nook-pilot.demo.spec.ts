@@ -17,7 +17,7 @@ type RequiredCatalogEntryFields = { readonly message: typeof Schema.String }
 const requiredCatalogEntryFields: RequiredCatalogEntryFields = {
   message: Schema.String,
 }
-const requiredCatalogEntrySchema: Schema.Schema<ChromeMessage> = Schema.Struct(
+const requiredCatalogEntrySchema: Schema.Codec<ChromeMessage> = Schema.Struct(
   requiredCatalogEntryFields,
 )
 
@@ -255,6 +255,24 @@ test('waits for typed companion runtime readiness before the first Pilot scan', 
   ).toEqual([])
 
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
+  const checklistOptions: Parameters<typeof widget.getByRole>[1] = {
+    name: 'Sign-in steps',
+  }
+  const exactChecklistCopy: Parameters<typeof widget.getByText>[1] = {
+    exact: true,
+  }
+  const checklist = widget.getByRole('list', checklistOptions)
+  await expect(checklist.getByRole('listitem')).toHaveCount(3)
+  await expect(checklist.locator('[aria-current]')).toHaveCount(0)
+  await expect(
+    checklist.getByText('Fill login', exactChecklistCopy),
+  ).toBeVisible()
+  await expect(
+    checklist.getByText('Submit form', exactChecklistCopy),
+  ).toBeVisible()
+  await expect(
+    checklist.getByText('Check result', exactChecklistCopy),
+  ).toBeVisible()
   expect(
     await page.evaluate(() => {
       const messages = window.__nookDemoRuntimeMessageTypes

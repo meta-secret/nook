@@ -1,5 +1,7 @@
+import { LoginChecklistMountKind } from './state'
 import type { AuthenticationAuthenticatorSetupSnapshot } from '../../lib/page-qr-capture'
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
+import { LoginChecklistProgress } from './login-checklist-progress'
 
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 
@@ -12,6 +14,7 @@ import {
 
 import {
   AuthenticationWorkflowAction,
+  AuthenticationWorkflowKind,
   type AuthenticationPageObservationFacts,
   type WebsiteLoginMatchAvailability,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
@@ -461,6 +464,43 @@ class AuthenticationWidgetRenderer {
       workflowRoot: nookTypedArgs0_1,
     }
     authenticationWidgetShell.mountWidgetShell(nookTypedArgs0_8)
+
+    switch (snapshot.kind) {
+      case AuthenticationWorkflowKind.Login:
+        switch (snapshot.action) {
+          case AuthenticationWorkflowAction.ContinueWithNook: {
+            const mount: ConstructorParameters<
+              typeof LoginChecklistProgress
+            >[0] = {
+              surface: { body, title, description },
+              control: continueButton,
+              workflow,
+            }
+            const checklist = new LoginChecklistProgress(mount)
+            this.ui.widgetState.loginChecklist = {
+              kind: LoginChecklistMountKind.Mounted,
+              progress: checklist,
+            }
+            await checklist.initialize()
+            break
+          }
+          case AuthenticationWorkflowAction.GeneratePassword:
+          case AuthenticationWorkflowAction.FillTotp:
+          case AuthenticationWorkflowAction.EnrollAuthenticator:
+          case AuthenticationWorkflowAction.UsePasskey:
+          case AuthenticationWorkflowAction.CreatePasskey:
+          case AuthenticationWorkflowAction.TakeOver:
+          case AuthenticationWorkflowAction.SaveBackupCodes:
+            break
+        }
+        break
+      case AuthenticationWorkflowKind.Signup:
+      case AuthenticationWorkflowKind.PasswordChange:
+      case AuthenticationWorkflowKind.TotpChallenge:
+      case AuthenticationWorkflowKind.TotpEnrollment:
+      case AuthenticationWorkflowKind.Manual:
+        break
+    }
 
     const enrollmentHints =
       authenticatorEnrollmentInteraction.detectEnrollmentHints(

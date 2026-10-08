@@ -1,5 +1,4 @@
 import { Effect, Schema } from "effect";
-import * as ParseResult from "effect/ParseResult";
 import * as AST from "effect/SchemaAST";
 import { NookExtensionIdentityHandoffProviderOutcome } from "$app-wasm";
 import type { NookExtensionIdentityHandoffProviderOutcomeState } from "$app-wasm";
@@ -24,24 +23,24 @@ export type ExtensionRuntimeResponseObject = {
   readonly [key: string]: ExtensionRuntimeResponseValue;
 };
 
-const extensionRuntimeResponseValueSchema: Schema.Schema<ExtensionRuntimeResponseValue> =
+const extensionRuntimeResponseValueSchema: Schema.Codec<ExtensionRuntimeResponseValue> =
   Schema.suspend(() => {
     const recursiveRecordFields: RuntimeResponseRecordFields = {
       key: Schema.String,
       value: extensionRuntimeResponseValueSchema,
     };
-    return Schema.Union(
+    return Schema.Union([
       Schema.String,
       Schema.Number,
       Schema.Boolean,
       Schema.mutable(Schema.Array(extensionRuntimeResponseValueSchema)),
-      Schema.Record(recursiveRecordFields),
-    );
+      Schema.Record(recursiveRecordFields.key, recursiveRecordFields.value),
+    ]);
   });
 
 type RuntimeResponseRecordFields = {
   readonly key: typeof Schema.String;
-  readonly value: Schema.Schema<ExtensionRuntimeResponseValue>;
+  readonly value: Schema.Codec<ExtensionRuntimeResponseValue>;
 };
 
 const runtimeResponseRecordFields: RuntimeResponseRecordFields = {
@@ -49,7 +48,8 @@ const runtimeResponseRecordFields: RuntimeResponseRecordFields = {
   value: extensionRuntimeResponseValueSchema,
 };
 const extensionRuntimeResponseObjectSchema = Schema.Record(
-  runtimeResponseRecordFields,
+  runtimeResponseRecordFields.key,
+  runtimeResponseRecordFields.value,
 );
 
 class AcceptedIdentityHandoffResponseFields {
@@ -57,7 +57,7 @@ class AcceptedIdentityHandoffResponseFields {
     return {
       ok: Schema.Literal(true),
       envelope: Schema.String,
-      nextNonce: Schema.String.pipe(Schema.minLength(1)),
+      nextNonce: Schema.String.pipe(Schema.check(Schema.isMinLength(1))),
     };
   }
 }
@@ -101,19 +101,19 @@ export class ExtensionResponseDecodeFailure {
   readonly _tag = "ExtensionResponseDecodeFailure";
   readonly kind = ExtensionResponseDecodeFailureKind.InvalidResponse;
 
-  constructor(readonly cause: ParseResult.ParseError) {}
+  constructor(readonly cause: Schema.SchemaError) {}
 }
 
 export class IdentityHandoffResponseDecoder {
   decode(
     value?: ExtensionRuntimeResponseObject,
   ): Effect.Effect<IdentityHandoffResponse, ExtensionResponseDecodeFailure> {
-    const accepted = Schema.decodeUnknown(
+    const accepted = Schema.decodeUnknownEffect(
       AcceptedIdentityHandoffResponseSchema,
     )(value, strictDecodeOptions).pipe(
       Effect.mapError((cause) => new ExtensionResponseDecodeFailure(cause)),
     );
-    const rejected = Schema.decodeUnknown(
+    const rejected = Schema.decodeUnknownEffect(
       RejectedIdentityHandoffResponseSchema,
     )(value, strictDecodeOptions).pipe(
       Effect.map(
@@ -133,7 +133,7 @@ export class IdentityHandoffResponseDecoder {
       ),
       Effect.mapError((cause) => new ExtensionResponseDecodeFailure(cause)),
     );
-    return accepted.pipe(Effect.orElse(() => rejected));
+    return accepted.pipe(Effect.catch(() => rejected));
   }
 }
 
@@ -165,8 +165,8 @@ class CompanionUnlockResponseFields {
   static build() {
     return {
       ok: Schema.Literal(true),
-      requestId: Schema.String.pipe(Schema.minLength(1)),
-      vaultStoreId: Schema.String.pipe(Schema.minLength(1)),
+      requestId: Schema.String.pipe(Schema.check(Schema.isMinLength(1))),
+      vaultStoreId: Schema.String.pipe(Schema.check(Schema.isMinLength(1))),
     };
   }
 }
@@ -204,7 +204,7 @@ export class CompanionResponseDecoder {
   decodeLauncher(
     value: ExtensionRuntimeResponseObject,
   ): Effect.Effect<CompanionLauncherResponse, ExtensionResponseDecodeFailure> {
-    return Schema.decodeUnknown(CompanionLauncherResponseSchema)(
+    return Schema.decodeUnknownEffect(CompanionLauncherResponseSchema)(
       value,
       strictDecodeOptions,
     ).pipe(
@@ -217,7 +217,7 @@ export class CompanionResponseDecoder {
     CompanionIdentityDiscoveryResponse,
     ExtensionResponseDecodeFailure
   > {
-    return Schema.decodeUnknown(CompanionIdentityDiscoveryResponseSchema)(
+    return Schema.decodeUnknownEffect(CompanionIdentityDiscoveryResponseSchema)(
       value,
       strictDecodeOptions,
     ).pipe(
@@ -227,7 +227,7 @@ export class CompanionResponseDecoder {
   decodeUnlock(
     value: ExtensionRuntimeResponseObject,
   ): Effect.Effect<CompanionUnlockResponse, ExtensionResponseDecodeFailure> {
-    return Schema.decodeUnknown(CompanionUnlockResponseSchema)(
+    return Schema.decodeUnknownEffect(CompanionUnlockResponseSchema)(
       value,
       strictDecodeOptions,
     ).pipe(
@@ -240,7 +240,7 @@ export class CompanionResponseDecoder {
     CompanionIdentityHandoffResponse,
     ExtensionResponseDecodeFailure
   > {
-    return Schema.decodeUnknown(CompanionIdentityHandoffResponseSchema)(
+    return Schema.decodeUnknownEffect(CompanionIdentityHandoffResponseSchema)(
       value,
       strictDecodeOptions,
     ).pipe(
@@ -251,17 +251,19 @@ export class CompanionResponseDecoder {
 
 export const companionResponseDecoder = new CompanionResponseDecoder();
 
-const eventCountFilterOptions: Schema.Annotations.Filter<number> = {
-  message: () => "eventCount must be a nonnegative safe integer",
+const eventCountFilterOptions: Schema.Annotations.Filter = {
+  message: "eventCount must be a nonnegative safe integer",
 };
 class PairingDeliveredResponseFields {
   static build() {
     return {
       ok: Schema.Literal(true),
       eventCount: Schema.Number.pipe(
-        Schema.filter(
-          (eventCount) => Number.isSafeInteger(eventCount) && eventCount >= 0,
-          eventCountFilterOptions,
+        Schema.check(
+          Schema.makeFilter(
+            (eventCount) => Number.isSafeInteger(eventCount) && eventCount >= 0,
+            eventCountFilterOptions,
+          ),
         ),
       ),
     };
@@ -294,7 +296,7 @@ class PairingRejectedReasonResponseFields {
   static build() {
     return {
       ok: Schema.Literal(false),
-      reason: Schema.Enums(ExtensionPairingRejectionReason),
+      reason: Schema.Enum(ExtensionPairingRejectionReason),
     };
   }
 }
@@ -305,7 +307,7 @@ class PairingRejectedErrorResponseFields {
   static build() {
     return {
       ok: Schema.Literal(false),
-      error: Schema.Enums(ExtensionPairingRejectionReason),
+      error: Schema.Enum(ExtensionPairingRejectionReason),
     };
   }
 }
@@ -326,30 +328,29 @@ export class PairingApprovalResponseDecoder {
   decode(
     value: ExtensionRuntimeResponseObject,
   ): Effect.Effect<ExtensionPairingDelivery, ExtensionResponseDecodeFailure> {
-    const delivered = Schema.decodeUnknown(PairingDeliveredResponseSchema)(
-      value,
-      strictDecodeOptions,
-    ).pipe(
+    const delivered = Schema.decodeUnknownEffect(
+      PairingDeliveredResponseSchema,
+    )(value, strictDecodeOptions).pipe(
       Effect.map(({ eventCount }): ExtensionPairingDelivery => ({
         kind: ExtensionPairingDeliveryKind.Delivered,
         eventCount,
       })),
     );
-    const migrationByReason = Schema.decodeUnknown(
+    const migrationByReason = Schema.decodeUnknownEffect(
       PairingMigrationReasonResponseSchema,
     )(value, strictDecodeOptions).pipe(
       Effect.map((): ExtensionPairingDelivery => ({
         kind: ExtensionPairingDeliveryKind.PlaintextProviderMigrationRequired,
       })),
     );
-    const migrationByError = Schema.decodeUnknown(
+    const migrationByError = Schema.decodeUnknownEffect(
       PairingMigrationErrorResponseSchema,
     )(value, strictDecodeOptions).pipe(
       Effect.map((): ExtensionPairingDelivery => ({
         kind: ExtensionPairingDeliveryKind.PlaintextProviderMigrationRequired,
       })),
     );
-    const rejectedByReason = Schema.decodeUnknown(
+    const rejectedByReason = Schema.decodeUnknownEffect(
       PairingRejectedReasonResponseSchema,
     )(value, strictDecodeOptions).pipe(
       Effect.map(({ reason }): ExtensionPairingDelivery => ({
@@ -357,7 +358,7 @@ export class PairingApprovalResponseDecoder {
         reason,
       })),
     );
-    const rejectedByError = Schema.decodeUnknown(
+    const rejectedByError = Schema.decodeUnknownEffect(
       PairingRejectedErrorResponseSchema,
     )(value, strictDecodeOptions).pipe(
       Effect.map(({ error }): ExtensionPairingDelivery => ({
@@ -365,7 +366,7 @@ export class PairingApprovalResponseDecoder {
         reason: error,
       })),
     );
-    const rejected = Schema.decodeUnknown(PairingRejectedResponseSchema)(
+    const rejected = Schema.decodeUnknownEffect(PairingRejectedResponseSchema)(
       value,
       strictDecodeOptions,
     ).pipe(
@@ -375,11 +376,11 @@ export class PairingApprovalResponseDecoder {
     );
 
     return delivered.pipe(
-      Effect.orElse(() => migrationByReason),
-      Effect.orElse(() => migrationByError),
-      Effect.orElse(() => rejectedByReason),
-      Effect.orElse(() => rejectedByError),
-      Effect.orElse(() => rejected),
+      Effect.catch(() => migrationByReason),
+      Effect.catch(() => migrationByError),
+      Effect.catch(() => rejectedByReason),
+      Effect.catch(() => rejectedByError),
+      Effect.catch(() => rejected),
       Effect.mapError((cause) => new ExtensionResponseDecodeFailure(cause)),
     );
   }

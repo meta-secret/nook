@@ -27,11 +27,11 @@ export class WebsiteLoginOptionsMessage {
     origin: string
   }
   static decodeWebsiteLoginFillResponse(response: unknown) {
-    return Schema.decodeUnknown(websiteLoginFillResponseSchema)(response)
+    return Schema.decodeUnknownEffect(websiteLoginFillResponseSchema)(response)
   }
 
   static decode(message: unknown) {
-    return Schema.decodeUnknown(websiteLoginOptionsMessageSchema)(message)
+    return Schema.decodeUnknownEffect(websiteLoginOptionsMessageSchema)(message)
   }
 }
 
@@ -50,7 +50,7 @@ export class WebsiteLoginRevealMessage {
     authorizationGeneration: string
   }
   static decode(message: unknown) {
-    return Schema.decodeUnknown(websiteLoginRevealMessageSchema)(message)
+    return Schema.decodeUnknownEffect(websiteLoginRevealMessageSchema)(message)
   }
 }
 
@@ -66,7 +66,7 @@ export class WebsiteAuthenticatorOptionsMessage {
     origin: string
   }
   static decode(message: unknown) {
-    return Schema.decodeUnknown(websiteAuthenticatorOptionsMessageSchema)(
+    return Schema.decodeUnknownEffect(websiteAuthenticatorOptionsMessageSchema)(
       message,
     )
   }
@@ -87,14 +87,18 @@ export class WebsiteAuthenticatorFillMessage {
     authorizationGeneration?: string
   }
   static decode(message: unknown) {
-    return Schema.decodeUnknown(websiteAuthenticatorFillMessageSchema)(message)
+    return Schema.decodeUnknownEffect(websiteAuthenticatorFillMessageSchema)(
+      message,
+    )
   }
 }
 
-const nonEmptyStringSchema = Schema.String.pipe(Schema.minLength(1))
+const nonEmptyStringSchema = Schema.String.pipe(
+  Schema.check(Schema.isMinLength(1)),
+)
 
 type WebsiteLoginFillFailureSchemaFields = {
-  ok: Schema.Literal<[false]>
+  ok: Schema.Literal<false>
   reason: typeof Schema.String
 }
 const websiteLoginFillFailureSchemaFields: WebsiteLoginFillFailureSchemaFields =
@@ -104,7 +108,7 @@ const websiteLoginFillFailureSchemaFields: WebsiteLoginFillFailureSchemaFields =
   }
 
 type WebsiteLoginFillSuccessSchemaFields = {
-  ok: Schema.Literal<[true]>
+  ok: Schema.Literal<true>
   username: typeof Schema.String
   password: typeof Schema.String
 }
@@ -115,20 +119,20 @@ const websiteLoginFillSuccessSchemaFields: WebsiteLoginFillSuccessSchemaFields =
     password: Schema.String,
   }
 
-const websiteLoginFillResponseSchema = Schema.Union(
+const websiteLoginFillResponseSchema = Schema.Union([
   Schema.Struct(websiteLoginFillSuccessSchemaFields),
   Schema.Struct(websiteLoginFillFailureSchemaFields),
-) satisfies Schema.Schema<WebsiteLoginFillResponse>
+]) satisfies Schema.Codec<WebsiteLoginFillResponse>
 
 type WebsiteLoginOptionsMessagePayloadSchemaFields = {
-  origin: Schema.filter<typeof Schema.String>
+  origin: typeof Schema.String
 }
 const websiteLoginOptionsMessagePayloadSchemaFields: WebsiteLoginOptionsMessagePayloadSchemaFields =
   { origin: nonEmptyStringSchema }
 
 type WebsiteLoginOptionsMessageSchemaFields = {
-  type: Schema.Literal<[WebsiteLoginOptionsMessageType]>
-  payload: Schema.Struct<{ origin: Schema.filter<typeof Schema.String> }>
+  type: Schema.Literal<WebsiteLoginOptionsMessageType>
+  payload: Schema.Struct<{ origin: typeof Schema.String }>
 }
 const websiteLoginOptionsMessageSchemaFields: WebsiteLoginOptionsMessageSchemaFields =
   {
@@ -140,13 +144,13 @@ const websiteLoginOptionsMessageSchemaFields: WebsiteLoginOptionsMessageSchemaFi
 
 const websiteLoginOptionsMessageSchema = Schema.Struct(
   websiteLoginOptionsMessageSchemaFields,
-) satisfies Schema.Schema<WebsiteLoginOptionsMessage>
+) satisfies Schema.Codec<WebsiteLoginOptionsMessage>
 
 type WebsiteLoginRevealMessagePayloadSchemaFields = {
-  origin: Schema.filter<typeof Schema.String>
-  vaultStoreId: Schema.filter<typeof Schema.String>
-  secretId: Schema.filter<typeof Schema.String>
-  authorizationGeneration: Schema.filter<typeof Schema.String>
+  origin: typeof Schema.String
+  vaultStoreId: typeof Schema.String
+  secretId: typeof Schema.String
+  authorizationGeneration: typeof Schema.String
 }
 const websiteLoginRevealMessagePayloadSchemaFields: WebsiteLoginRevealMessagePayloadSchemaFields =
   {
@@ -157,12 +161,12 @@ const websiteLoginRevealMessagePayloadSchemaFields: WebsiteLoginRevealMessagePay
   }
 
 type WebsiteLoginRevealMessageSchemaFields = {
-  type: Schema.Literal<[WebsiteLoginRevealMessageType]>
+  type: Schema.Literal<WebsiteLoginRevealMessageType>
   payload: Schema.Struct<{
-    origin: Schema.filter<typeof Schema.String>
-    vaultStoreId: Schema.filter<typeof Schema.String>
-    secretId: Schema.filter<typeof Schema.String>
-    authorizationGeneration: Schema.filter<typeof Schema.String>
+    origin: typeof Schema.String
+    vaultStoreId: typeof Schema.String
+    secretId: typeof Schema.String
+    authorizationGeneration: typeof Schema.String
   }>
 }
 const websiteLoginRevealMessageSchemaFields: WebsiteLoginRevealMessageSchemaFields =
@@ -173,17 +177,17 @@ const websiteLoginRevealMessageSchemaFields: WebsiteLoginRevealMessageSchemaFiel
 
 const websiteLoginRevealMessageSchema = Schema.Struct(
   websiteLoginRevealMessageSchemaFields,
-) satisfies Schema.Schema<WebsiteLoginRevealMessage>
+) satisfies Schema.Codec<WebsiteLoginRevealMessage>
 
 type WebsiteAuthenticatorOptionsMessagePayloadSchemaFields = {
-  origin: Schema.filter<typeof Schema.String>
+  origin: typeof Schema.String
 }
 const websiteAuthenticatorOptionsMessagePayloadSchemaFields: WebsiteAuthenticatorOptionsMessagePayloadSchemaFields =
   { origin: nonEmptyStringSchema }
 
 type WebsiteAuthenticatorOptionsMessageSchemaFields = {
-  type: Schema.Literal<[WebsiteAuthenticatorOptionsMessageType]>
-  payload: Schema.Struct<{ origin: Schema.filter<typeof Schema.String> }>
+  type: Schema.Literal<WebsiteAuthenticatorOptionsMessageType>
+  payload: Schema.Struct<{ origin: typeof Schema.String }>
 }
 const websiteAuthenticatorOptionsMessageSchemaFields: WebsiteAuthenticatorOptionsMessageSchemaFields =
   {
@@ -197,40 +201,30 @@ const websiteAuthenticatorOptionsMessageSchemaFields: WebsiteAuthenticatorOption
 
 const websiteAuthenticatorOptionsMessageSchema = Schema.Struct(
   websiteAuthenticatorOptionsMessageSchemaFields,
-) satisfies Schema.Schema<WebsiteAuthenticatorOptionsMessage>
+) satisfies Schema.Codec<WebsiteAuthenticatorOptionsMessage>
 
 type WebsiteAuthenticatorFillMessagePayloadSchemaFields = {
-  origin: Schema.filter<typeof Schema.String>
-  vaultStoreId: Schema.filter<typeof Schema.String>
-  secretId: Schema.filter<typeof Schema.String>
-  authorizationGeneration: Schema.optionalWith<
-    Schema.filter<typeof Schema.String>,
-    { exact: true }
-  >
+  origin: typeof Schema.String
+  vaultStoreId: typeof Schema.String
+  secretId: typeof Schema.String
+  authorizationGeneration: Schema.optionalKey<typeof Schema.String>
 }
-type ExactSchemaPropertyOptions = { readonly exact: true }
-const exactSchemaPropertyOptions: ExactSchemaPropertyOptions = { exact: true }
+
 const websiteAuthenticatorFillMessagePayloadSchemaFields: WebsiteAuthenticatorFillMessagePayloadSchemaFields =
   {
     origin: nonEmptyStringSchema,
     vaultStoreId: nonEmptyStringSchema,
     secretId: nonEmptyStringSchema,
-    authorizationGeneration: Schema.optionalWith(
-      nonEmptyStringSchema,
-      exactSchemaPropertyOptions,
-    ),
+    authorizationGeneration: Schema.optionalKey(nonEmptyStringSchema),
   }
 
 type WebsiteAuthenticatorFillMessageSchemaFields = {
-  type: Schema.Literal<[WebsiteAuthenticatorFillMessageType]>
+  type: Schema.Literal<WebsiteAuthenticatorFillMessageType>
   payload: Schema.Struct<{
-    origin: Schema.filter<typeof Schema.String>
-    vaultStoreId: Schema.filter<typeof Schema.String>
-    secretId: Schema.filter<typeof Schema.String>
-    authorizationGeneration: Schema.optionalWith<
-      Schema.filter<typeof Schema.String>,
-      { exact: true }
-    >
+    origin: typeof Schema.String
+    vaultStoreId: typeof Schema.String
+    secretId: typeof Schema.String
+    authorizationGeneration: Schema.optionalKey<typeof Schema.String>
   }>
 }
 const websiteAuthenticatorFillMessageSchemaFields: WebsiteAuthenticatorFillMessageSchemaFields =
@@ -243,4 +237,4 @@ const websiteAuthenticatorFillMessageSchemaFields: WebsiteAuthenticatorFillMessa
 
 const websiteAuthenticatorFillMessageSchema = Schema.Struct(
   websiteAuthenticatorFillMessageSchemaFields,
-) satisfies Schema.Schema<WebsiteAuthenticatorFillMessage>
+) satisfies Schema.Codec<WebsiteAuthenticatorFillMessage>

@@ -9,15 +9,15 @@ export enum LoginPickerPageVerificationType {
 }
 
 type VerificationSchemaFields = {
-  readonly type: Schema.Literal<[LoginPickerPageVerificationType.Verify]>
-  readonly requestId: Schema.filter<typeof Schema.String>
-  readonly origin: Schema.filter<typeof Schema.String>
+  readonly type: Schema.Literal<LoginPickerPageVerificationType.Verify>
+  readonly requestId: typeof Schema.String
+  readonly origin: typeof Schema.String
 }
 
 const verificationFields: VerificationSchemaFields = {
   type: Schema.Literal(LoginPickerPageVerificationType.Verify),
-  requestId: Schema.String.pipe(Schema.minLength(1)),
-  origin: Schema.String.pipe(Schema.minLength(1)),
+  requestId: Schema.String.pipe(Schema.check(Schema.isMinLength(1))),
+  origin: Schema.String.pipe(Schema.check(Schema.isMinLength(1))),
 }
 
 export class LoginPickerPageVerification extends Schema.Class<LoginPickerPageVerification>(
@@ -26,15 +26,15 @@ export class LoginPickerPageVerification extends Schema.Class<LoginPickerPageVer
 
 /** The existing request nonce crosses only the retained extension frame window. */
 type InitializationSchemaFields = {
-  readonly type: Schema.Literal<[InlineLoginPickerMessageType.Initialize]>
-  readonly requestId: Schema.filter<typeof Schema.String>
-  readonly origin: Schema.filter<typeof Schema.String>
+  readonly type: Schema.Literal<InlineLoginPickerMessageType.Initialize>
+  readonly requestId: typeof Schema.String
+  readonly origin: typeof Schema.String
 }
 
 const initializationFields: InitializationSchemaFields = {
   type: Schema.Literal(InlineLoginPickerMessageType.Initialize),
-  requestId: Schema.String.pipe(Schema.minLength(1)),
-  origin: Schema.String.pipe(Schema.minLength(1)),
+  requestId: Schema.String.pipe(Schema.check(Schema.isMinLength(1))),
+  origin: Schema.String.pipe(Schema.check(Schema.isMinLength(1))),
 }
 
 export class InlineLoginPickerInitialization extends Schema.Class<InlineLoginPickerInitialization>(

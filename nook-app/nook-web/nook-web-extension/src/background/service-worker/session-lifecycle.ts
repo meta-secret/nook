@@ -33,16 +33,16 @@ type AuthenticationSurfaceNotification = {
 type AuthenticationSurfaceRefreshSuccess = { ok: true }
 type AuthenticationSurfaceRefreshResponse = { ok?: boolean }
 
-type ModuleStructRequest = { ok: Schema.Literal<[true]> }
+type ModuleStructRequest = { ok: Schema.Literal<true> }
 const moduleStructRequest: ModuleStructRequest = {
   ok: Schema.Literal(true),
 }
 const authenticationSurfaceRefreshSuccessSchema = Schema.Struct(
   moduleStructRequest,
-) satisfies Schema.Schema<AuthenticationSurfaceRefreshSuccess>
+) satisfies Schema.Codec<AuthenticationSurfaceRefreshSuccess>
 
 function decodeAuthenticationSurfaceRefreshSuccess(response: unknown) {
-  return Schema.decodeUnknown(authenticationSurfaceRefreshSuccessSchema)(
+  return Schema.decodeUnknownEffect(authenticationSurfaceRefreshSuccessSchema)(
     response,
   )
 }

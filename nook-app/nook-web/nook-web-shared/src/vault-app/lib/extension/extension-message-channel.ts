@@ -212,18 +212,18 @@ export class ExtensionMessageChannel {
       return { kind: ChromeRuntimeLastErrorStateKind.Absent };
     }
     const decoded = Effect.runSync(
-      Effect.either(
-        Schema.decodeUnknown(ChromeRuntimeLastErrorSchema)(
+      Effect.result(
+        Schema.decodeUnknownEffect(ChromeRuntimeLastErrorSchema)(
           Reflect.get(runtime, "lastError"),
         ),
       ),
     );
-    if (decoded._tag === "Left" || !decoded.right.message) {
+    if (decoded._tag === "Failure" || !decoded.success.message) {
       return { kind: ChromeRuntimeLastErrorStateKind.Absent };
     }
     return {
       kind: ChromeRuntimeLastErrorStateKind.Present,
-      message: decoded.right.message,
+      message: decoded.success.message,
     };
   }
 

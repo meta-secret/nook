@@ -153,7 +153,8 @@ export class FocusedCredentialInteraction {
     }
   }
   private current(surface: VisibleFocusedSurface) {
-    return Effect.gen(this, function* () {
+    const execution1: FocusedInteractionExecution = { self: this }
+    return Effect.gen(execution1, function* () {
       switch (this.localDisposition(surface)) {
         case FocusedUiDisposition.Unavailable:
           return FocusedUiDisposition.Unavailable
@@ -197,7 +198,7 @@ export class FocusedCredentialInteraction {
           return FocusedUiDisposition.Unavailable
       }
     }).pipe(
-      Effect.catchAll(() => Effect.succeed(FocusedUiDisposition.Unavailable)),
+      Effect.catch(() => Effect.succeed(FocusedUiDisposition.Unavailable)),
     )
   }
   private renderDisposition(
@@ -246,7 +247,8 @@ export class FocusedCredentialInteraction {
     }
   }
   private mount(request: FocusedRenderRequest) {
-    return Effect.gen(this, function* () {
+    const execution2: FocusedInteractionExecution = { self: this }
+    return Effect.gen(execution2, function* () {
       const vaultConnection = yield* Effect.tryPromise(() =>
         this.dependencies.ui.loadPilotVaultConnection(),
       )
@@ -281,8 +283,9 @@ export class FocusedCredentialInteraction {
     })
   }
   tryRender(): Promise<FocusedUiDisposition> {
+    const execution3: FocusedInteractionExecution = { self: this }
     return Effect.runPromise(
-      Effect.gen(this, function* () {
+      Effect.gen(execution3, function* () {
         const target = this.dependencies.sensor.target
         switch (target.kind) {
           case FocusedCredentialTargetKind.Empty:
@@ -345,7 +348,7 @@ export class FocusedCredentialInteraction {
           case FocusedSurfaceReuse.Replace:
             return yield* this.mount(request)
         }
-      }).pipe(Effect.catchAll(() => Effect.sync(this.failedRender.bind(this)))),
+      }).pipe(Effect.catch(() => Effect.sync(this.failedRender.bind(this)))),
     )
   }
   private failedRender(): FocusedUiDisposition {
@@ -387,7 +390,8 @@ export class FocusedCredentialInteraction {
     this.dependencies.ui.removeWidget()
   }
   private openPicker(request: FocusedPickerMount) {
-    return Effect.gen(this, function* () {
+    const execution4: FocusedInteractionExecution = { self: this }
+    return Effect.gen(execution4, function* () {
       const disposition = yield* this.current(request.surface)
       switch (
         disposition === FocusedUiDisposition.Ready &&
@@ -426,7 +430,8 @@ export class FocusedCredentialInteraction {
     })
   }
   private acceptPicker(request: FocusedPickerAcceptance) {
-    return Effect.gen(this, function* () {
+    const execution5: FocusedInteractionExecution = { self: this }
+    return Effect.gen(execution5, function* () {
       switch (request.response.kind) {
         case RuntimeMessageDeliveryKind.Unavailable:
           this.cancelPicker()
@@ -465,8 +470,9 @@ export class FocusedCredentialInteraction {
   }
   choose(): Promise<void> {
     const opening: FocusedPicker = { kind: FocusedPickerKind.Opening }
+    const execution6: FocusedInteractionExecution = { self: this }
     return Effect.runPromise(
-      Effect.gen(this, function* () {
+      Effect.gen(execution6, function* () {
         const surface = this.surface
         switch (surface.kind) {
           case FocusedSurfaceKind.Empty:
@@ -504,7 +510,7 @@ export class FocusedCredentialInteraction {
           FocusedCredentialInteraction['acceptPicker']
         >[0] = { surface, response }
         yield* this.acceptPicker(acceptance)
-      }).pipe(Effect.catchAll(() => Effect.sync(this.cancelPicker.bind(this)))),
+      }).pipe(Effect.catch(() => Effect.sync(this.cancelPicker.bind(this)))),
     )
   }
   ownsPicker(requestId: string): FocusedPickerOwnership {
@@ -523,8 +529,9 @@ export class FocusedCredentialInteraction {
     }
   }
   verifyPicker(requestId: string): Promise<FocusedUiDisposition> {
+    const execution7: FocusedInteractionExecution = { self: this }
     return Effect.runPromise(
-      Effect.gen(this, function* () {
+      Effect.gen(execution7, function* () {
         const surface = this.surface
         switch (surface.kind) {
           case FocusedSurfaceKind.Empty:
@@ -549,7 +556,8 @@ export class FocusedCredentialInteraction {
     )
   }
   private fillReleased(request: FocusedReleasedFill) {
-    return Effect.gen(this, function* () {
+    const execution8: FocusedInteractionExecution = { self: this }
+    return Effect.gen(execution8, function* () {
       const response = request.response
       switch (response.ok) {
         case false:
@@ -575,7 +583,8 @@ export class FocusedCredentialInteraction {
   }
   private fillCurrent(request: FocusedCurrentFill) {
     const { surface, value } = request
-    return Effect.gen(this, function* () {
+    const execution9: FocusedInteractionExecution = { self: this }
+    return Effect.gen(execution9, function* () {
       switch (yield* this.current(surface)) {
         case FocusedUiDisposition.Unavailable:
           return
@@ -589,8 +598,9 @@ export class FocusedCredentialInteraction {
     })
   }
   select(message: WebsiteLoginSelectedMessage): Promise<void> {
+    const execution10: FocusedInteractionExecution = { self: this }
     return Effect.runPromise(
-      Effect.gen(this, function* () {
+      Effect.gen(execution10, function* () {
         const surface = this.surface
         switch (surface.kind) {
           case FocusedSurfaceKind.Empty:
@@ -651,7 +661,7 @@ export class FocusedCredentialInteraction {
           FocusedCredentialInteraction['fillReleased']
         >[0] = { surface, response: delivery.response }
         yield* this.fillReleased(fillRequest)
-      }).pipe(Effect.catchAll(() => Effect.sync(this.clear.bind(this)))),
+      }).pipe(Effect.catch(() => Effect.sync(this.clear.bind(this)))),
     )
   }
 }
@@ -677,3 +687,7 @@ const interactionRequest: ConstructorParameters<
 export const focusedCredentialInteraction = new FocusedCredentialInteraction(
   interactionRequest,
 )
+
+type FocusedInteractionExecution = {
+  readonly self: FocusedCredentialInteraction
+}

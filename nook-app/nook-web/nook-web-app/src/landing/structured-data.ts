@@ -1,5 +1,4 @@
 import { Effect, Schema } from 'effect'
-import * as ParseResult from 'effect/ParseResult'
 
 export enum LandingLocale {
   English = 'en',
@@ -62,10 +61,10 @@ export class LandingStructuredDataDecodeFailure extends Error {
   }
 
   readonly kind: LandingStructuredDataDecodeFailureKind
-  override readonly cause: Error | ParseResult.ParseError
+  override readonly cause: Error | Schema.SchemaError
 
   static invalidJson(
-    cause: Error | ParseResult.ParseError,
+    cause: Error | Schema.SchemaError,
   ): LandingStructuredDataDecodeFailure {
     const request: LandingStructuredDataDecodeFailureRequest = {
       kind: LandingStructuredDataDecodeFailureKind.InvalidJson,
@@ -75,7 +74,7 @@ export class LandingStructuredDataDecodeFailure extends Error {
   }
 
   static invalidStructuredData(
-    cause: ParseResult.ParseError,
+    cause: Schema.SchemaError,
   ): LandingStructuredDataDecodeFailure {
     const request: LandingStructuredDataDecodeFailureRequest = {
       kind: LandingStructuredDataDecodeFailureKind.InvalidStructuredData,
@@ -87,18 +86,18 @@ export class LandingStructuredDataDecodeFailure extends Error {
 
 type LandingStructuredDataDecodeFailureRequest = {
   readonly kind: LandingStructuredDataDecodeFailureKind
-  readonly cause: Error | ParseResult.ParseError
+  readonly cause: Error | Schema.SchemaError
 }
 
 export class LandingStructuredDataDecoder {
   static decode(
     serialized: string,
   ): Effect.Effect<LandingStructuredData, LandingStructuredDataDecodeFailure> {
-    const jsonSchema = Schema.parseJson()
-    return Schema.decodeUnknown(jsonSchema)(serialized).pipe(
+    const jsonSchema = Schema.fromJsonString(Schema.Unknown)
+    return Schema.decodeUnknownEffect(jsonSchema)(serialized).pipe(
       Effect.mapError(LandingStructuredDataDecodeFailure.invalidJson),
       Effect.flatMap((value) =>
-        Schema.decodeUnknown(LandingStructuredDataSchema)(value).pipe(
+        Schema.decodeUnknownEffect(LandingStructuredDataSchema)(value).pipe(
           Effect.mapError(
             LandingStructuredDataDecodeFailure.invalidStructuredData,
           ),

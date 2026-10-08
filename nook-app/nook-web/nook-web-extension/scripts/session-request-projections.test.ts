@@ -96,24 +96,24 @@ describe('extension session request projections', () => {
     })
     expect(
       await Effect.runPromise(
-        Effect.either(
+        Effect.result(
           decodeCompanionIdentityHandoffSessionTransportRequest({
             type: COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE,
             payload: { request },
           }),
         ),
       ),
-    ).toHaveProperty('_tag', 'Left')
+    ).toHaveProperty('_tag', 'Failure')
     expect(
       await Effect.runPromise(
-        Effect.either(
+        Effect.result(
           decodeCompanionIdentityDiscoverySessionTransportRequest({
             type: COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE,
             payload: { presence },
           }),
         ),
       ),
-    ).toHaveProperty('_tag', 'Left')
+    ).toHaveProperty('_tag', 'Failure')
   })
 
   test('removes stored-grant metadata from login reveal', () => {

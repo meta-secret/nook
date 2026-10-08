@@ -148,14 +148,14 @@ describe('selectVaultForUnlock', () => {
     state.reloadProvidersForActiveVault = reloadProvidersForActiveVault
 
     const selected = await Effect.runPromise(
-      Effect.either(
+      Effect.result(
         new VaultLoginActions(state).selectVaultForUnlock({
           storeId: 'store-2',
         }),
       ),
     )
 
-    expect(selected._tag).toBe('Right')
+    expect(selected._tag).toBe('Success')
     expect(wasmMocks.setActiveVault).toHaveBeenCalledWith('store-2')
     expect(openActiveVault).toHaveBeenCalledWith('store-2')
     expect(syncActiveVaultStoreIdToAuth).not.toHaveBeenCalled()

@@ -27,7 +27,7 @@ export type ExtensionSessionRuntimeMessageInput = {
 export type ExtensionSessionRuntimeMessageValue = BrowserRuntimeMessageValue
 
 type ExtensionSessionEnsureMessageSchemaFields = {
-  readonly type: Schema.Schema<ExtensionSessionEnsureMessage['type']>
+  readonly type: Schema.Codec<ExtensionSessionEnsureMessage['type']>
 }
 const extensionSessionEnsureMessageSchemaFields: ExtensionSessionEnsureMessageSchemaFields =
   {
@@ -35,10 +35,10 @@ const extensionSessionEnsureMessageSchemaFields: ExtensionSessionEnsureMessageSc
   }
 const extensionSessionEnsureMessageSchema = Schema.Struct(
   extensionSessionEnsureMessageSchemaFields,
-) satisfies Schema.Schema<ExtensionSessionEnsureMessage>
+) satisfies Schema.Codec<ExtensionSessionEnsureMessage>
 
 type ExtensionAuthenticationSurfacesRefreshMessageSchemaFields = {
-  readonly type: Schema.Schema<
+  readonly type: Schema.Codec<
     ExtensionAuthenticationSurfacesRefreshMessage['type']
   >
 }
@@ -50,10 +50,10 @@ const extensionAuthenticationSurfacesRefreshMessageSchemaFields: ExtensionAuthen
   }
 const extensionAuthenticationSurfacesRefreshMessageSchema = Schema.Struct(
   extensionAuthenticationSurfacesRefreshMessageSchemaFields,
-) satisfies Schema.Schema<ExtensionAuthenticationSurfacesRefreshMessage>
+) satisfies Schema.Codec<ExtensionAuthenticationSurfacesRefreshMessage>
 
 type ExtensionSessionExpiryMessageSchemaFields = {
-  readonly type: Schema.Schema<ExtensionSessionExpiryMessage['type']>
+  readonly type: Schema.Codec<ExtensionSessionExpiryMessage['type']>
 }
 const extensionSessionExpiryMessageSchemaFields: ExtensionSessionExpiryMessageSchemaFields =
   {
@@ -61,10 +61,10 @@ const extensionSessionExpiryMessageSchemaFields: ExtensionSessionExpiryMessageSc
   }
 const extensionSessionExpiryMessageSchema = Schema.Struct(
   extensionSessionExpiryMessageSchemaFields,
-) satisfies Schema.Schema<ExtensionSessionExpiryMessage>
+) satisfies Schema.Codec<ExtensionSessionExpiryMessage>
 
 type ExtensionSessionLockMessageSchemaFields = {
-  readonly type: Schema.Schema<ExtensionSessionLockMessage['type']>
+  readonly type: Schema.Codec<ExtensionSessionLockMessage['type']>
 }
 const extensionSessionLockMessageSchemaFields: ExtensionSessionLockMessageSchemaFields =
   {
@@ -72,18 +72,20 @@ const extensionSessionLockMessageSchemaFields: ExtensionSessionLockMessageSchema
   }
 const extensionSessionLockMessageSchema = Schema.Struct(
   extensionSessionLockMessageSchemaFields,
-) satisfies Schema.Schema<ExtensionSessionLockMessage>
+) satisfies Schema.Codec<ExtensionSessionLockMessage>
 
 export function decodeExtensionSessionEnsureMessage(
   message: ExtensionSessionRuntimeMessageValue,
 ) {
-  return Schema.decodeUnknown(extensionSessionEnsureMessageSchema)(message)
+  return Schema.decodeUnknownEffect(extensionSessionEnsureMessageSchema)(
+    message,
+  )
 }
 
 export function decodeExtensionAuthenticationSurfacesRefreshMessage(
   message: ExtensionSessionRuntimeMessageValue,
 ) {
-  return Schema.decodeUnknown(
+  return Schema.decodeUnknownEffect(
     extensionAuthenticationSurfacesRefreshMessageSchema,
   )(message)
 }
@@ -91,11 +93,13 @@ export function decodeExtensionAuthenticationSurfacesRefreshMessage(
 export function decodeExtensionSessionExpiryMessage(
   message: ExtensionSessionRuntimeMessageValue,
 ) {
-  return Schema.decodeUnknown(extensionSessionExpiryMessageSchema)(message)
+  return Schema.decodeUnknownEffect(extensionSessionExpiryMessageSchema)(
+    message,
+  )
 }
 
 export function decodeExtensionSessionLockMessage(
   message: ExtensionSessionRuntimeMessageValue,
 ) {
-  return Schema.decodeUnknown(extensionSessionLockMessageSchema)(message)
+  return Schema.decodeUnknownEffect(extensionSessionLockMessageSchema)(message)
 }

@@ -30,14 +30,14 @@ enum DemoLocalePrefix {
 function decodeOpenedUrls(
   serialized: unknown,
 ): Effect.Effect<OpenedUrlsDecode> {
-  return Schema.decodeUnknown(Schema.parseJson(Schema.Array(Schema.String)))(
-    serialized,
-  ).pipe(
+  return Schema.decodeUnknownEffect(
+    Schema.fromJsonString(Schema.Array(Schema.String)),
+  )(serialized).pipe(
     Effect.map((urls): OpenedUrlsDecode => ({
       kind: OpenedUrlsDecodeKind.Valid,
       urls,
     })),
-    Effect.catchAll(() =>
+    Effect.catch(() =>
       Effect.succeed<OpenedUrlsDecode>({
         kind: OpenedUrlsDecodeKind.Invalid,
       }),
@@ -58,7 +58,7 @@ function openedUrlsFromDecode(result: OpenedUrlsDecode): readonly string[] {
 
 function localeTimeoutCopy(localeValue: unknown): string {
   return Effect.runSync(
-    Schema.decodeUnknown(Schema.String)(localeValue).pipe(
+    Schema.decodeUnknownEffect(Schema.String)(localeValue).pipe(
       Effect.map((locale) => {
         switch (locale.slice(0, 2)) {
           case DemoLocalePrefix.English:
@@ -69,7 +69,7 @@ function localeTimeoutCopy(localeValue: unknown): string {
             return DemoLocale.English
         }
       }),
-      Effect.catchAll(() => Effect.succeed(DemoLocale.English)),
+      Effect.catch(() => Effect.succeed(DemoLocale.English)),
       Effect.map((locale) => {
         switch (locale) {
           case DemoLocale.English:

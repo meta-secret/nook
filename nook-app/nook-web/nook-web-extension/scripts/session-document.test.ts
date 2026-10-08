@@ -245,7 +245,9 @@ describe('extension session document ownership', () => {
       },
     )
     const decoded = await Effect.runPromise(
-      Schema.decodeUnknown(CompanionWasmBackupCodeExtractionDecoder)(admitted),
+      Schema.decodeUnknownEffect(CompanionWasmBackupCodeExtractionDecoder)(
+        admitted,
+      ),
     )
     expect(decoded.codes).toEqual(['A1B2-C3D4-E5F6', 'G7H8-I9J0-K1L2'])
     const oversized: CompanionWasmSessionMessage = {
@@ -285,9 +287,9 @@ describe('extension session document ownership', () => {
     )
     expect(
       await Effect.runPromise(
-        Schema.decodeUnknown(CompanionWasmAuthenticatorSetupResponseDecoder)(
-          response,
-        ),
+        Schema.decodeUnknownEffect(
+          CompanionWasmAuthenticatorSetupResponseDecoder,
+        )(response),
       ),
     ).toEqual({ authenticatorSetupObservation: 'absent' })
 

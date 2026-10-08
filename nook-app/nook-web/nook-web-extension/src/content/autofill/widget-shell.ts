@@ -120,6 +120,16 @@ const WIDGET_PANEL_STYLES = `
       display: grid;
       gap: 12px;
     }
+    .pilot-checklist { list-style:none; margin:0; padding:12px; display:grid; gap:12px; min-width:0; border-radius:9px; background:oklch(0.21 0.006 285.885); }
+    .pilot-checklist-step { display:flex; gap:10px; align-items:flex-start; min-width:0; color:oklch(0.705 0.015 286.067); font-size:13px; line-height:1.4; }
+    .pilot-checklist-mark { display:grid; place-items:center; flex:0 0 21px; width:21px; height:21px; margin-top:1px; border-radius:50%; background:oklch(0.141 0.005 285.823); color:inherit; font-size:11px; font-weight:600; }
+    .pilot-checklist-copy { min-width:0; overflow-wrap:anywhere; }
+    .pilot-checklist-label { display:block; }
+    .pilot-checklist-detail { display:block; margin-top:2px; font-size:12px; line-height:1.5; font-weight:400; color:oklch(0.705 0.015 286.067); }
+    .pilot-checklist-step[data-state='Current'] { color:oklch(0.985 0 0); font-weight:600; }
+    .pilot-checklist-step[data-state='Current'] .pilot-checklist-mark { background:oklch(0.92 0.004 286.32); color:oklch(0.21 0.006 285.885); }
+    .pilot-checklist-step[data-state='Done'] .pilot-checklist-mark { color:oklch(0.82 0.04 155); }
+    .pilot-checklist-step[data-state='Attention'] .pilot-checklist-mark { color:oklch(0.78 0.05 70); }
     .inline-login-picker {
       width: 100%;
       height: max(80px, min(420px, calc(100dvh - 360px)));

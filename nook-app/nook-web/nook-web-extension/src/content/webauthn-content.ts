@@ -85,7 +85,6 @@ type PasskeyOption = {
   }
 }
 type PasskeyAccount = NonNullable<PasskeyOption['account']>
-type ExactSchemaPropertyOptions = { readonly exact: true }
 
 enum PasskeyOptionChoiceKind {
   BrowserFallback = 'browser-fallback',
@@ -157,30 +156,24 @@ const passkeyAccountSchemaFields: PasskeyAccountSchemaFields = {
 }
 const passkeyAccountSchema = Schema.Struct(
   passkeyAccountSchemaFields,
-) satisfies Schema.Schema<PasskeyAccount>
-const passkeyAccountSchemaOptions: ExactSchemaPropertyOptions = { exact: true }
+) satisfies Schema.Codec<PasskeyAccount>
+
 type PasskeyOptionSchemaFields = {
   vaultStoreId: typeof Schema.String
   vaultName: typeof Schema.String
-  account: Schema.optionalWith<
-    typeof passkeyAccountSchema,
-    ExactSchemaPropertyOptions
-  >
+  account: Schema.optionalKey<typeof passkeyAccountSchema>
 }
 const passkeyOptionSchemaFields: PasskeyOptionSchemaFields = {
   vaultStoreId: Schema.String,
   vaultName: Schema.String,
-  account: Schema.optionalWith(
-    passkeyAccountSchema,
-    passkeyAccountSchemaOptions,
-  ),
+  account: Schema.optionalKey(passkeyAccountSchema),
 }
 const passkeyOptionSchema = Schema.Struct(
   passkeyOptionSchemaFields,
-) satisfies Schema.Schema<PasskeyOption>
+) satisfies Schema.Codec<PasskeyOption>
 
 function decodePasskeyOption(value: unknown) {
-  return Schema.decodeUnknown(passkeyOptionSchema)(value)
+  return Schema.decodeUnknownEffect(passkeyOptionSchema)(value)
 }
 
 function validOptions(value: unknown): PasskeyOption[] {
