@@ -895,9 +895,18 @@ use progress::AuthenticationWorkflowSnapshotDraft;
 pub use progress::{AuthenticationWorkflowProgress, AuthenticatorEnrollmentProgress};
 
 mod activity_presentation;
+mod login_checklist;
 pub use activity_presentation::{
     AuthenticationDisplayProgress, AuthenticationWorkflowActivity,
     PasswordWorkflowActivityEvidence, PasswordWorkflowActivityPresentation,
+};
+pub use login_checklist::{
+    AuthenticationLoginChecklistActivity, AuthenticationLoginChecklistMessageKey,
+    AuthenticationLoginChecklistObservation, AuthenticationLoginChecklistOutcomePolling,
+    AuthenticationLoginChecklistPresentation, AuthenticationLoginChecklistProjection,
+    AuthenticationLoginChecklistResult, AuthenticationLoginChecklistRow,
+    AuthenticationLoginChecklistRowState, AuthenticationLoginChecklistState,
+    AuthenticationLoginChecklistStatus, AuthenticationLoginChecklistStep,
 };
 
 pub use observation_facts::{

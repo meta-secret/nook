@@ -1095,6 +1095,37 @@ pub const EXTENSION_WIDGET_BACKUP_REVIEW: &str = "extension.widget.backup_review
 pub const EXTENSION_WIDGET_BACKUP_SAVED: &str = "extension.widget.backup_saved";
 pub const EXTENSION_WIDGET_BACKUP_TITLE: &str = "extension.widget.backup_title";
 pub const EXTENSION_WIDGET_BACKUP_WORKING: &str = "extension.widget.backup_working";
+pub const EXTENSION_WIDGET_CHECKLIST_ATTENTION: &str = "extension.widget.checklist_attention";
+pub const EXTENSION_WIDGET_CHECKLIST_CHECK_RESULT: &str = "extension.widget.checklist_check_result";
+pub const EXTENSION_WIDGET_CHECKLIST_COMPLETE: &str = "extension.widget.checklist_complete";
+pub const EXTENSION_WIDGET_CHECKLIST_FILL_DONE: &str = "extension.widget.checklist_fill_done";
+pub const EXTENSION_WIDGET_CHECKLIST_FILL_FAILED: &str = "extension.widget.checklist_fill_failed";
+pub const EXTENSION_WIDGET_CHECKLIST_FILL_LOGIN: &str = "extension.widget.checklist_fill_login";
+pub const EXTENSION_WIDGET_CHECKLIST_FILL_READY: &str = "extension.widget.checklist_fill_ready";
+pub const EXTENSION_WIDGET_CHECKLIST_FILL_WORKING: &str = "extension.widget.checklist_fill_working";
+pub const EXTENSION_WIDGET_CHECKLIST_INACTIVE: &str = "extension.widget.checklist_inactive";
+pub const EXTENSION_WIDGET_CHECKLIST_LABEL: &str = "extension.widget.checklist_label";
+pub const EXTENSION_WIDGET_CHECKLIST_READY: &str = "extension.widget.checklist_ready";
+pub const EXTENSION_WIDGET_CHECKLIST_RESULT_ATTENTION: &str =
+    "extension.widget.checklist_result_attention";
+pub const EXTENSION_WIDGET_CHECKLIST_RESULT_DONE: &str = "extension.widget.checklist_result_done";
+pub const EXTENSION_WIDGET_CHECKLIST_RESULT_PENDING: &str =
+    "extension.widget.checklist_result_pending";
+pub const EXTENSION_WIDGET_CHECKLIST_RESULT_WAITING: &str =
+    "extension.widget.checklist_result_waiting";
+pub const EXTENSION_WIDGET_CHECKLIST_SUBMIT_DONE: &str = "extension.widget.checklist_submit_done";
+pub const EXTENSION_WIDGET_CHECKLIST_SUBMIT_FORM: &str = "extension.widget.checklist_submit_form";
+pub const EXTENSION_WIDGET_CHECKLIST_SUBMIT_MANUAL: &str =
+    "extension.widget.checklist_submit_manual";
+pub const EXTENSION_WIDGET_CHECKLIST_SUBMIT_PENDING: &str =
+    "extension.widget.checklist_submit_pending";
+pub const EXTENSION_WIDGET_CHECKLIST_SUBMIT_READY: &str = "extension.widget.checklist_submit_ready";
+pub const EXTENSION_WIDGET_CHECKLIST_SUBMIT_REJECTED: &str =
+    "extension.widget.checklist_submit_rejected";
+pub const EXTENSION_WIDGET_CHECKLIST_SUBMIT_WORKING: &str =
+    "extension.widget.checklist_submit_working";
+pub const EXTENSION_WIDGET_CHECKLIST_WAITING: &str = "extension.widget.checklist_waiting";
+pub const EXTENSION_WIDGET_CHECKLIST_WORKING: &str = "extension.widget.checklist_working";
 pub const EXTENSION_WIDGET_CHOOSE_ACCOUNT: &str = "extension.widget.choose_account";
 pub const EXTENSION_WIDGET_CHOOSE_AUTHENTICATOR: &str = "extension.widget.choose_authenticator";
 pub const EXTENSION_WIDGET_COLLAPSE: &str = "extension.widget.collapse";
