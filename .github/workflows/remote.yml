@@ -470,6 +470,8 @@ jobs:
         password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
     env:
       CI: "1"
+      NOOK_EXTENSION_COMMIT: ${{ inputs.source_sha || github.sha }}
+      NOOK_EXTENSION_CHANNEL: production
       E2E_PROJECT: ${{ inputs.e2e_project }}
       E2E_SPECS: ${{ inputs.e2e_specs }}
       E2E_GREP: ${{ inputs.e2e_grep }}
