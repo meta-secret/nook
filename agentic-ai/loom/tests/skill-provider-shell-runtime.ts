@@ -57,12 +57,39 @@ enum RuntimeOptionValueFailure {
   InvalidNodeHeapValue = 'invalid-node-heap-value',
 }
 
-function numericRuntimeValueKind(value: string): NumericRuntimeValueKind {
-  switch (/^[0-9]+$/u.test(value)) {
-    case true:
-      return NumericRuntimeValueKind.Literal;
-    case false:
-      return NumericRuntimeValueKind.Invalid;
+class RuntimeOptionValueValidation {
+  constructor(private readonly request: RuntimeOptionValueRequest) {}
+
+  execute(): void {
+    switch (this.request.runtime) {
+      case 'node':
+        return this.validateNodeOption();
+    }
+  }
+
+  private validateNodeOption(): void {
+    switch (this.request.option) {
+      case NodeNumericRuntimeOption.MaxOldSpaceSize:
+        return this.validateNumericHeapValue();
+    }
+  }
+
+  private validateNumericHeapValue(): void {
+    switch (this.numericValueKind()) {
+      case NumericRuntimeValueKind.Literal:
+        return;
+      case NumericRuntimeValueKind.Invalid:
+        throw new Error(RuntimeOptionValueFailure.InvalidNodeHeapValue);
+    }
+  }
+
+  private numericValueKind(): NumericRuntimeValueKind {
+    switch (/^[0-9]+$/u.test(this.request.value)) {
+      case true:
+        return NumericRuntimeValueKind.Literal;
+      case false:
+        return NumericRuntimeValueKind.Invalid;
+    }
   }
 }
 
@@ -400,7 +427,7 @@ export class ShellRuntimeInvocation {
         option,
         value: optionValue,
       };
-      ShellRuntimeInvocation.validateRuntimeOptionValue(optionValueRequest);
+      new RuntimeOptionValueValidation(optionValueRequest).execute();
       index += 1;
     }
     if (index === request.words.length) return false;
@@ -472,22 +499,5 @@ export class ShellRuntimeInvocation {
         'Dynamic protected-skill executable construction is forbidden.',
       );
     return false;
-  }
-
-  private static validateRuntimeOptionValue(
-    request: RuntimeOptionValueRequest,
-  ): void {
-    switch (request.runtime) {
-      case 'node':
-        switch (request.option) {
-          case NodeNumericRuntimeOption.MaxOldSpaceSize:
-            switch (numericRuntimeValueKind(request.value)) {
-              case NumericRuntimeValueKind.Literal:
-                return;
-              case NumericRuntimeValueKind.Invalid:
-                throw new Error(RuntimeOptionValueFailure.InvalidNodeHeapValue);
-            }
-        }
-    }
   }
 }
