@@ -1,6 +1,7 @@
 //! Website-passkey ceremonies for the unlocked extension vault session.
 
-use super::{NookVaultManager, VaultCryptoState};
+use super::session::VaultSessionGraphProjection;
+use super::{NookVaultManager, VaultCryptoState, VaultSessionState};
 use crate::NookDatabase;
 use nook_core::CheckedPasskeyAssertion;
 use nook_core::CheckedPasskeyRegistration;
@@ -14,7 +15,7 @@ use js_sys::Object;
 use nook_core::{
     DeviceAuthorization, DeviceId, DeviceIdentity, DevicePublicKey, DeviceSigningPublicKey,
     EventGraph, EventGraphDeviceAccess, EventGraphDeviceAccessRequest, PasskeyAuthenticatorError,
-    SecretType, SecretValue, StoreId, SymmetricKey, VaultApplication, VaultOperation,
+    SecretType, SecretValue, StoreId, SymmetricKey, VaultApplication, VaultCrypto, VaultOperation,
     VaultProjectionObservation, VaultProjectionRefresh, VaultSessionProjection, VaultType,
 };
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
@@ -125,10 +126,9 @@ impl NookVaultManager {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        ExtensionUnlockedIdentity, ExtensionVaultOpenRequest, ExtensionVaultProjectionRequest,
-        NookVaultManager,
-    };
+    mod projection_fixture;
+    use self::projection_fixture::{ExtensionProjectionFixture, FixtureEnvelopeKey};
+    use super::{ExtensionUnlockedIdentity, NookVaultManager};
     use crate::NookError;
     use crate::manager::{SearchCatalogState, VaultCryptoState};
     #[cfg(test)]
@@ -146,165 +146,16 @@ mod tests {
     #[cfg(test)]
     use nook_core::VaultKeys;
     use nook_core::{
-        CanonicalEventBodyBytes, EncryptedSecretPayload, EpochMetadataState, EpochPasswordState,
-        EventGraph, EventGraphInsert, EventGraphRejection, EventId, IsoTimestamp, MemberLabel,
-        PasskeyAuthenticatorError, SecretFingerprint, SecretSearchCatalog, SecretType, Sha256Hex,
-        SigningIdentity, StoreId, StoredRecordPayload, VaultArchitecture, VaultEvent,
-        VaultEventBody, VaultEventSchemaVersion, VaultOperation, VaultSessionProjection,
+        PasskeyAuthenticatorError, SecretSearchCatalog, SecretType, SigningIdentity,
+        StoredRecordPayload, VaultArchitecture, VaultSessionProjection,
     };
     use wasm_bindgen_test::wasm_bindgen_test;
-
-    struct ExtensionProjectionFixture {
-        identity: DeviceIdentity,
-        grant: ExtensionVaultOpenRequest,
-        graph: EventGraph,
-        signing: SigningIdentity,
-        epoch: EventId,
-    }
-
-    struct ProjectionEventFixture {
-        parents: Vec<EventId>,
-        key_epoch: EventId,
-        operations: Vec<VaultOperation>,
-    }
-
-    impl ExtensionProjectionFixture {
-        fn new() -> anyhow::Result<Self> {
-            let identity = DeviceIdentity::generate()?;
-            let keys = VaultKeys::generate()?;
-            let (signing, _) = SigningIdentity::generate()?;
-            let store_id = StoreId::generate()?;
-            let epoch = EventId::from_body_bytes(&CanonicalEventBodyBytes::from(
-                b"extension projection epoch".to_vec(),
-            ));
-            let mut fixture = Self {
-                grant: ExtensionVaultOpenRequest {
-                    store_id,
-                    app_id: identity.app_id().clone(),
-                    encryption_public_key: identity.public_key(),
-                    signing_public_key: signing.public_key(),
-                },
-                identity,
-                graph: EventGraph::new(),
-                signing,
-                epoch,
-            };
-            let ciphertext =
-                VaultCrypto::new(&keys.secrets_key)?.encrypt_value("encrypted fixture")?;
-            let secrets = (0..1_300)
-                .map(|index| {
-                    EncryptedSecretPayload::from_armored(
-                        &SecretId::from_vault_record(&format!("secret_projection{index:05}")),
-                        SecretType::Login,
-                        ciphertext.as_str(),
-                        SecretFingerprint::from_trusted("fixture identity".to_owned()),
-                        SecretFingerprint::from_trusted("fixture version".to_owned()),
-                    )
-                })
-                .collect();
-            let root = fixture.event(ProjectionEventFixture {
-                parents: Vec::new(),
-                key_epoch: fixture.epoch.clone(),
-                operations: vec![
-                    VaultOperation::VaultImported {
-                        source_content_hash: Sha256Hex::from_bytes(b"fixture"),
-                        secrets,
-                        password_entries: Vec::new(),
-                    },
-                    VaultOperation::JoinApproved {
-                        device_id: fixture.identity.app_id().clone(),
-                        encryption_public_key: fixture.identity.public_key(),
-                        signing_public_key: fixture.signing.public_key(),
-                        label: MemberLabel::from_trusted("Extension".to_owned()),
-                        secrets_key_ciphertext: fixture
-                            .identity
-                            .seal_utf8(keys.secrets_key.as_str())?,
-                        members_key_ciphertext: fixture
-                            .identity
-                            .seal_utf8(keys.members_key.as_str())?,
-                    },
-                ],
-            })?;
-            fixture.graph = fixture
-                .graph
-                .insert(EventGraphInsert {
-                    event: root,
-                    expected_store_id: fixture.grant.store_id.as_str(),
-                })
-                .map_err(EventGraphRejection::into_cause)?
-                .graph;
-            Ok(fixture)
-        }
-
-        fn event(&self, request: ProjectionEventFixture) -> anyhow::Result<VaultEvent> {
-            Ok(VaultEvent::sign(
-                VaultEventBody {
-                    schema_version: VaultEventSchemaVersion::CURRENT,
-                    store_id: self.grant.store_id.clone(),
-                    actor_id: self.signing.actor_id()?,
-                    actor_signing_public_key: self.signing.public_key(),
-                    parents: request.parents,
-                    created_at: IsoTimestamp::parse("2026-10-07T00:00:00Z")?,
-                    key_epoch: request.key_epoch,
-                    operations: request.operations,
-                },
-                self.signing.signing_key(),
-            )?)
-        }
-
-        fn manager(&self) -> NookVaultManager {
-            let mut manager = NookVaultManager::new();
-            manager.device.identity_private_key = self.identity.secret_string().into_inner();
-            manager
-        }
-
-        fn request(&self) -> ExtensionVaultProjectionRequest<'_> {
-            ExtensionVaultProjectionRequest {
-                grant: &self.grant,
-                identity: &self.identity,
-                graph: &self.graph,
-            }
-        }
-
-        #[must_use = "retain the revoked durable graph fixture"]
-        fn revoke(mut self) -> anyhow::Result<Self> {
-            let trigger = self.event(ProjectionEventFixture {
-                parents: self.graph.heads(),
-                key_epoch: self.epoch.clone(),
-                operations: vec![VaultOperation::DeviceRevoked {
-                    device_id: self.identity.app_id().clone(),
-                }],
-            })?;
-            let trigger_id = trigger.id()?;
-            let checkpoint = self.event(ProjectionEventFixture {
-                parents: vec![trigger_id.clone()],
-                key_epoch: trigger_id,
-                operations: vec![VaultOperation::EpochCheckpoint {
-                    secrets: Vec::new(),
-                    members_checkpoint_hash: Sha256Hex::from_bytes(b"empty roster"),
-                    rotated_meta_records: EpochMetadataState::Replace(Vec::new()),
-                    password_entries: EpochPasswordState::Replace(Vec::new()),
-                }],
-            })?;
-            for event in [trigger, checkpoint] {
-                self.graph = self
-                    .graph
-                    .insert(EventGraphInsert {
-                        event,
-                        expected_store_id: self.grant.store_id.as_str(),
-                    })
-                    .map_err(EventGraphRejection::into_cause)?
-                    .graph;
-            }
-            Ok(self)
-        }
-    }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn current_grant_identity_rejects_different_app_or_signer_before_graph_loading()
     -> anyhow::Result<()> {
-        let fixture = ExtensionProjectionFixture::new()?;
+        let fixture = ExtensionProjectionFixture::new(FixtureEnvelopeKey::Generated)?;
         fixture.grant.validate_identity(ExtensionUnlockedIdentity {
             identity: &fixture.identity,
             signing_public_key: &fixture.signing.public_key(),
@@ -331,7 +182,7 @@ mod tests {
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn repeated_1300_item_projection_retains_warm_catalog_and_ciphertexts() -> anyhow::Result<()> {
-        let fixture = ExtensionProjectionFixture::new()?;
+        let fixture = ExtensionProjectionFixture::new(FixtureEnvelopeKey::Generated)?;
         let mut manager = fixture.manager();
         manager.hydrate_extension_vault_projection(fixture.request())?;
         assert_eq!(manager.vault.meta.secrets.len(), 1_300);
@@ -343,13 +194,21 @@ mod tests {
             assert!(!manager.vault.search_catalog_dirty);
             assert_eq!(manager.vault.meta.secrets.len(), 1_300);
         }
+        manager.vault.crypto = VaultCryptoState::Locked;
+        manager.hydrate_extension_vault_projection(fixture.request())?;
+        assert!(matches!(
+            manager.vault.crypto,
+            VaultCryptoState::Unlocked(_)
+        ));
+        assert!(manager.vault.search_catalog_dirty);
+        assert_eq!(manager.vault.meta.secrets.len(), 1_300);
         Ok(())
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn fresh_revocation_blocks_an_already_hydrated_projection() -> anyhow::Result<()> {
-        let fixture = ExtensionProjectionFixture::new()?;
+        let fixture = ExtensionProjectionFixture::new(FixtureEnvelopeKey::Generated)?;
         let mut manager = fixture.manager();
         manager.hydrate_extension_vault_projection(fixture.request())?;
         let fixture = fixture.revoke()?;
@@ -364,7 +223,7 @@ mod tests {
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn clear_keys_reset_and_identity_lock_end_projection_reuse() -> anyhow::Result<()> {
-        let fixture = ExtensionProjectionFixture::new()?;
+        let fixture = ExtensionProjectionFixture::new(FixtureEnvelopeKey::Generated)?;
         let mut manager = fixture.manager();
         manager.hydrate_extension_vault_projection(fixture.request())?;
         manager.clear_vault_keys();
@@ -389,6 +248,22 @@ mod tests {
                 .hydrate_extension_vault_projection(fixture.request())
                 .is_err()
         );
+        Ok(())
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn malformed_envelope_keys_preserve_the_prior_session() -> anyhow::Result<()> {
+        let fixture = ExtensionProjectionFixture::new(FixtureEnvelopeKey::Malformed)?;
+        let mut manager = fixture.manager();
+        manager.vault.store_id = "prior vault".to_owned();
+        manager.vault.search_catalog_dirty = false;
+        assert!(matches!(
+            manager.hydrate_extension_vault_projection(fixture.request()),
+            Err(NookError::Encryption(_))
+        ));
+        assert_eq!(manager.vault.store_id, "prior vault");
+        assert!(!manager.vault.search_catalog_dirty);
         Ok(())
     }
 
@@ -708,13 +583,11 @@ impl NookVaultManager {
         };
         // Authorization above always uses fresh durable graph data. Only the
         // encrypted session projection can be reused after that succeeds.
-        match &self.vault.crypto {
-            VaultCryptoState::Locked => {
-                self.vault.projection = VaultSessionProjection::Unhydrated;
-            }
-            VaultCryptoState::Unlocked(_) => {}
-        }
-        let refresh = self.vault.projection.observe(VaultProjectionObservation {
+        let projection = match &self.vault.crypto {
+            VaultCryptoState::Locked => &VaultSessionProjection::Unhydrated,
+            VaultCryptoState::Unlocked(_) => &self.vault.projection,
+        };
+        let refresh = projection.observe(VaultProjectionObservation {
             store_id: &request.store_id,
             app_id: &request.app_id,
             encryption_public_key: &request.encryption_public_key,
@@ -726,18 +599,25 @@ impl NookVaultManager {
         };
         let secrets_key = identity.decrypt_envelope(&envelopes.secrets_key)?;
         let members_key = identity.decrypt_envelope(&envelopes.members_key)?;
+        let crypto = VaultCrypto::new(&secrets_key)?;
+        let mut vault = VaultSessionState::from_event_graph(VaultSessionGraphProjection {
+            graph,
+            store_id: &request.store_id,
+            architecture: &self.vault.architecture,
+        })?;
+        vault.secrets_key = secrets_key.as_str().to_owned();
+        vault.members_key = members_key.as_str().to_owned();
+        vault.crypto = VaultCryptoState::Unlocked(crypto);
+        vault.projection = VaultSessionProjection::Hydrated(snapshot);
         // Switching or refreshing adopts only keys from the current graph grant.
         // Drop the prior catalog before it can be used with different vault keys.
         self.vault.reset();
         self.event_log.heads.clear();
         self.event_log.key_epoch.clear();
-        self.vault.store_id = request.store_id.to_string();
-        self.apply_vault_keys(secrets_key.as_str(), members_key.as_str())?;
-        if let Err(error) = self.apply_loaded_event_projection(graph) {
-            self.vault.reset();
-            return Err(error);
+        self.vault = vault;
+        if let Ok(identity) = self.device_identity() {
+            drop(self.maybe_sync_self_into_roster(&identity));
         }
-        self.vault.projection = VaultSessionProjection::Hydrated(snapshot);
         Ok(())
     }
 
