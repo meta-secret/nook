@@ -3,6 +3,7 @@ import {
   decode_extension_session_request,
   type ExtensionSessionRequestAdmission,
   type ExtensionSessionRequest,
+  type MessageDefaultQueueDisposition,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import { Effect, Schema, SchemaIssue } from 'effect'
@@ -88,7 +89,9 @@ export class WebsiteFocusedLoginRevealMessage {
         origin: decoded.payload.origin,
         secretId: decoded.payload.secretId,
         credential: decoded.payload.credential,
-        queue: { kind: 'default' },
+        queue: {
+          kind: 'message-default',
+        } satisfies MessageDefaultQueueDisposition,
       },
     }
     const rejected = new Schema.SchemaError(

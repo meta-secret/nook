@@ -33,7 +33,12 @@ import {
   authenticationRuntimeTransport,
   RuntimeMessageDeliveryKind,
 } from './runtime-message-adapter'
-import { scanState, widgetState } from './state'
+import {
+  scanState,
+  widgetState,
+  WidgetCredentialActuation,
+  WidgetSelectionAdmission,
+} from './state'
 import { workflowUi } from './workflow-ui'
 
 export enum FocusedSurfaceKind {
@@ -56,6 +61,18 @@ enum FocusedPickerKind {
 enum FocusedSurfaceReuse {
   Reuse = 'reuse',
   Replace = 'replace',
+}
+enum FocusedScanCurrentness {
+  Current = 'current',
+  Superseded = 'superseded',
+}
+enum FocusedSelectionAdmission {
+  Admitted = 'admitted',
+  Refused = 'refused',
+}
+type FocusedScanGeneration = {
+  readonly epoch: number
+  readonly sequence: number
 }
 type FocusedPicker =
   | { readonly kind: FocusedPickerKind.Closed }
@@ -111,6 +128,10 @@ type FocusedCurrentFill = {
   readonly surface: VisibleFocusedSurface
   readonly value: { value: string }
 }
+type FocusedSelectedFill = {
+  readonly surface: VisibleFocusedSurface
+  readonly message: WebsiteLoginSelectedMessage
+}
 type PickerMountRequest = Parameters<typeof InlineLoginPicker.mount>[0]
 type FocusedInteractionDependencies = {
   readonly scanSequence: () => number
@@ -136,6 +157,55 @@ export class FocusedCredentialInteraction {
   constructor(private readonly dependencies: FocusedInteractionDependencies) {}
   get hasSurface(): FocusedSurfaceKind {
     return this.surface.kind
+  }
+  private scanCurrentness(
+    generation: FocusedScanGeneration,
+  ): FocusedScanCurrentness {
+    switch (
+      generation.epoch === this.epoch &&
+      generation.sequence === this.dependencies.scanSequence()
+    ) {
+      case true:
+        return FocusedScanCurrentness.Current
+      case false:
+        return FocusedScanCurrentness.Superseded
+    }
+  }
+  private selectionAdmission(
+    selected: FocusedSelectedFill,
+  ): FocusedSelectionAdmission {
+    switch (widgetState.selectionAdmission()) {
+      case WidgetSelectionAdmission.Interacting:
+      case WidgetSelectionAdmission.Actuating:
+        return FocusedSelectionAdmission.Refused
+      case WidgetSelectionAdmission.Available:
+        break
+    }
+    switch (
+      this.ownsPicker(selected.message.payload.requestId) ===
+        FocusedPickerOwnership.Owned &&
+      selected.message.payload.origin ===
+        selected.surface.observation.target.origin
+    ) {
+      case true:
+        return FocusedSelectionAdmission.Admitted
+      case false:
+        return FocusedSelectionAdmission.Refused
+    }
+  }
+  private acquireSelected(selected: FocusedSelectedFill) {
+    return Effect.sync(() => {
+      widgetState.credentialActuation =
+        WidgetCredentialActuation.FocusedSelection
+      scanState.invalidatePendingScan()
+      return selected
+    })
+  }
+  private releaseSelected() {
+    return Effect.sync(() => {
+      widgetState.credentialActuation = WidgetCredentialActuation.Idle
+      scanState.schedule()
+    })
   }
 
   private localDisposition(
@@ -316,6 +386,13 @@ export class FocusedCredentialInteraction {
             classification,
           ),
         )
+        const generation: FocusedScanGeneration = { epoch, sequence }
+        switch (this.scanCurrentness(generation)) {
+          case FocusedScanCurrentness.Superseded:
+            return FocusedUiDisposition.Unavailable
+          case FocusedScanCurrentness.Current:
+            break
+        }
         switch (delivery.kind) {
           case RuntimeMessageDeliveryKind.Unavailable:
             this.clear()
@@ -480,6 +557,13 @@ export class FocusedCredentialInteraction {
     }
     return Effect.runPromise(
       Effect.gen(generatorContext, function* () {
+        switch (widgetState.selectionAdmission()) {
+          case WidgetSelectionAdmission.Interacting:
+          case WidgetSelectionAdmission.Actuating:
+            return
+          case WidgetSelectionAdmission.Available:
+            break
+        }
         const surface = this.surface
         switch (surface.kind) {
           case FocusedSurfaceKind.Empty:
@@ -606,6 +690,54 @@ export class FocusedCredentialInteraction {
       this.dependencies.fill(mutation)
     },
   )
+  private fillSelected = Effect.fn(
+    this.generatorContext,
+    function* ({ surface, message }: FocusedSelectedFill) {
+      // Successful selection closes only picker resources until revalidation and fill finish.
+      this.closePicker()
+      switch (yield* this.current(surface)) {
+        case FocusedUiDisposition.Unavailable:
+          this.clear()
+          return
+        case FocusedUiDisposition.Ready:
+          break
+      }
+      const account = message.payload.account
+      const messageRequest: WebsiteFocusedLoginRevealMessage = {
+        type: WebsiteFocusedLoginRevealMessageType.Reveal,
+        payload: {
+          origin: surface.observation.target.origin,
+          vaultStoreId: account.vaultStoreId,
+          secretId: account.secretId,
+          authorizationGeneration: account.authorizationGeneration,
+          credential: surface.selection.credential,
+        },
+      }
+      const revealRequest: Parameters<
+        typeof authenticationRuntimeTransport.sendDecodedRuntimeMessage<WebsiteFocusedLoginFillResponse>
+      >[0] = {
+        message: messageRequest,
+        decode: (response) =>
+          Effect.runSync(
+            WebsiteFocusedLoginRevealMessage.decodeResponse(response),
+          ),
+      }
+      const delivery = yield* Effect.tryPromise(() =>
+        this.dependencies.transport.sendDecodedRuntimeMessage(revealRequest),
+      )
+      switch (delivery.kind) {
+        case RuntimeMessageDeliveryKind.Unavailable:
+          this.clear()
+          return
+        case RuntimeMessageDeliveryKind.Delivered:
+          break
+      }
+      const fillRequest: Parameters<
+        FocusedCredentialInteraction['fillReleased']
+      >[0] = { surface, response: delivery.response }
+      yield* this.fillReleased(fillRequest)
+    },
+  )
   select(message: WebsiteLoginSelectedMessage): Promise<void> {
     const generatorContext: FocusedCredentialInteractionGeneratorContext = {
       self: this,
@@ -619,59 +751,18 @@ export class FocusedCredentialInteraction {
           case FocusedSurfaceKind.Visible:
             break
         }
-        switch (
-          this.ownsPicker(message.payload.requestId) ===
-            FocusedPickerOwnership.Owned &&
-          message.payload.origin === surface.observation.target.origin
-        ) {
-          case false:
+        const selected: FocusedSelectedFill = { surface, message }
+        switch (this.selectionAdmission(selected)) {
+          case FocusedSelectionAdmission.Refused:
             return
-          case true:
+          case FocusedSelectionAdmission.Admitted:
             break
         }
-        // Successful selection closes only picker resources until revalidation and fill finish.
-        this.closePicker()
-        switch (yield* this.current(surface)) {
-          case FocusedUiDisposition.Unavailable:
-            this.clear()
-            return
-          case FocusedUiDisposition.Ready:
-            break
-        }
-        const account = message.payload.account
-        const messageRequest: WebsiteFocusedLoginRevealMessage = {
-          type: WebsiteFocusedLoginRevealMessageType.Reveal,
-          payload: {
-            origin: surface.observation.target.origin,
-            vaultStoreId: account.vaultStoreId,
-            secretId: account.secretId,
-            authorizationGeneration: account.authorizationGeneration,
-            credential: surface.selection.credential,
-          },
-        }
-        const revealRequest: Parameters<
-          typeof authenticationRuntimeTransport.sendDecodedRuntimeMessage<WebsiteFocusedLoginFillResponse>
-        >[0] = {
-          message: messageRequest,
-          decode: (response) =>
-            Effect.runSync(
-              WebsiteFocusedLoginRevealMessage.decodeResponse(response),
-            ),
-        }
-        const delivery = yield* Effect.tryPromise(() =>
-          this.dependencies.transport.sendDecodedRuntimeMessage(revealRequest),
+        yield* Effect.acquireUseRelease(
+          this.acquireSelected(selected),
+          this.fillSelected.bind(this),
+          this.releaseSelected.bind(this),
         )
-        switch (delivery.kind) {
-          case RuntimeMessageDeliveryKind.Unavailable:
-            this.clear()
-            return
-          case RuntimeMessageDeliveryKind.Delivered:
-            break
-        }
-        const fillRequest: Parameters<
-          FocusedCredentialInteraction['fillReleased']
-        >[0] = { surface, response: delivery.response }
-        yield* this.fillReleased(fillRequest)
       }).pipe(Effect.catch(() => Effect.sync(this.clear.bind(this)))),
     )
   }
