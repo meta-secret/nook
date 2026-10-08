@@ -476,6 +476,11 @@ jobs:
       E2E_SPECS: ${{ inputs.e2e_specs }}
       E2E_GREP: ${{ inputs.e2e_grep }}
     steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
       - name: Run selected task without a nested container runtime
         env:
           REMOTE_CONTAINER_TASK: ${{ inputs.tasks || inputs.task }}
