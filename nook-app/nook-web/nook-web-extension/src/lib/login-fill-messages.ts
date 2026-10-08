@@ -209,7 +209,6 @@ type WebsiteAuthenticatorFillMessagePayloadSchemaFields = {
   secretId: typeof Schema.String
   authorizationGeneration: Schema.optionalKey<typeof Schema.String>
 }
-
 const websiteAuthenticatorFillMessagePayloadSchemaFields: WebsiteAuthenticatorFillMessagePayloadSchemaFields =
   {
     origin: nonEmptyStringSchema,

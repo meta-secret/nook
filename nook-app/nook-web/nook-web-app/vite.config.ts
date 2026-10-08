@@ -12,11 +12,11 @@ import {
   DefaultSiteUrlEnvironment,
   SiteUrlConfiguration,
   type SiteUrlEnvironment,
-} from '../nook-web-shared/src/vault-app/lib/content/sitemap'
+} from '../nook-web-shared/src/vault-app/lib/content/sitemap.ts'
 import {
   VAULT_WORKSPACE_OUTPUT_ALIASES,
   VAULT_WORKSPACE_SPA_PATHS,
-} from '../nook-web-shared/vite-config'
+} from '../nook-web-shared/vite-config.ts'
 
 const viteBase = 'Bun' in globalThis ? Bun.env.VITE_BASE : process.env.VITE_BASE
 const simpleAppUrl =

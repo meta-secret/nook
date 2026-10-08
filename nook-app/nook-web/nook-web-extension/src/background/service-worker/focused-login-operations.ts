@@ -36,6 +36,10 @@ type FocusedWebsiteLoginFillConfiguration = {
 
 /** Owns sender-origin/grant admission, picker generation, and one-value response cleanup. */
 export class FocusedWebsiteLoginFillOperation {
+  private readonly generatorContext: FocusedWebsiteLoginFillOperationGeneratorContext =
+    {
+      self: this,
+    }
   private readonly locked: WebsiteFocusedLoginFillResponse = {
     ok: false,
     reason: 'login-locked',
@@ -96,11 +100,9 @@ export class FocusedWebsiteLoginFillOperation {
     )
   }
 
-  private release(grant: StoredExtensionPairingGrant) {
-    const execution1: { readonly self: FocusedWebsiteLoginFillOperation } = {
-      self: this,
-    }
-    return Effect.gen(execution1, function* () {
+  private release = Effect.fn(
+    this.generatorContext,
+    function* (grant: StoredExtensionPairingGrant) {
       switch (this.authorization()) {
         case FocusedReleaseAuthorization.Revoked:
           return this.locked
@@ -122,15 +124,15 @@ export class FocusedWebsiteLoginFillOperation {
       const response: WebsiteFocusedLoginFillResponse =
         yield* this.decode(delivery)
       return this.finish(response)
-    })
-  }
+    },
+  )
 
   run(): Promise<WebsiteFocusedLoginFillResponse> {
-    const execution2: { readonly self: FocusedWebsiteLoginFillOperation } = {
+    const generatorContext: FocusedWebsiteLoginFillOperationGeneratorContext = {
       self: this,
     }
     return Effect.runPromise(
-      Effect.gen(execution2, function* () {
+      Effect.gen(generatorContext, function* () {
         switch (this.authorization()) {
           case FocusedReleaseAuthorization.Revoked:
             return this.locked
@@ -175,3 +177,7 @@ export const focusedWebsiteLoginFillDependencies: FocusedWebsiteLoginFillDepende
       extensionPairingIdentity,
     ),
   }
+
+type FocusedWebsiteLoginFillOperationGeneratorContext = {
+  readonly self: FocusedWebsiteLoginFillOperation
+}

@@ -157,7 +157,6 @@ const passkeyAccountSchemaFields: PasskeyAccountSchemaFields = {
 const passkeyAccountSchema = Schema.Struct(
   passkeyAccountSchemaFields,
 ) satisfies Schema.Codec<PasskeyAccount>
-
 type PasskeyOptionSchemaFields = {
   vaultStoreId: typeof Schema.String
   vaultName: typeof Schema.String

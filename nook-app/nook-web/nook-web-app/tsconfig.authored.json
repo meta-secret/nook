@@ -1,6 +1,7 @@
 {
   "extends": "./tsconfig.app.json",
   "compilerOptions": {
+    "allowImportingTsExtensions": true,
     "types": ["svelte", "vite/client", "node", "bun", "chrome"]
   },
   "include": [

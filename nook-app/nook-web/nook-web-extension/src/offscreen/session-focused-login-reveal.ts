@@ -49,11 +49,11 @@ export class FocusedLoginRevealOperation {
   }
 
   run() {
-    const execution1: { readonly self: FocusedLoginRevealOperation } = {
+    const generatorContext: FocusedLoginRevealOperationGeneratorContext = {
       self: this,
     }
     return Effect.runPromise(
-      Effect.gen(execution1, function* () {
+      Effect.gen(generatorContext, function* () {
         const activeManager = yield* Effect.tryPromise(this.request.getManager)
         const admissionRequest: Parameters<typeof openPasskeyVault>[0] = {
           activeManager,
@@ -73,4 +73,8 @@ export class FocusedLoginRevealOperation {
       }),
     )
   }
+}
+
+type FocusedLoginRevealOperationGeneratorContext = {
+  readonly self: FocusedLoginRevealOperation
 }

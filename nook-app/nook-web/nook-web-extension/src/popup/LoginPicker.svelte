@@ -17,12 +17,10 @@
     requestId: string
     parentOrigin: string
   } = $props()
-  const picker = untrack(() => {
-    const documentRequest: ConstructorParameters<
-      typeof LoginPickerController
-    >[0] = { i18n, requestId, parentOrigin }
-    return new LoginPickerController(documentRequest)
-  })
+  const documentRequest: ConstructorParameters<
+    typeof LoginPickerController
+  >[0] = untrack(() => ({ i18n, requestId, parentOrigin }))
+  const picker = new LoginPickerController(documentRequest)
 
   $effect(() => picker.load(picker.query))
 

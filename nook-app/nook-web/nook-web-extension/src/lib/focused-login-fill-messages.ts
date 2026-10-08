@@ -3,6 +3,7 @@ import {
   decode_extension_session_request,
   type ExtensionSessionRequestAdmission,
   type ExtensionSessionRequest,
+  type MessageDefaultQueueDisposition,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import { Effect, Schema, SchemaIssue } from 'effect'
@@ -73,51 +74,49 @@ export class WebsiteFocusedLoginRevealMessage {
   declare readonly payload: WebsiteLoginRevealMessage['payload'] & {
     readonly credential: NookFocusedLoginFillRequest['credential']
   }
-  static decode(message: unknown) {
-    return Effect.gen(function* () {
-      const decoded = yield* Schema.decodeUnknownEffect(messageSchema)(message)
-      yield* Effect.promise(() => companionWasmReady)
-      // This unsent envelope admits only wire shape. Real grant authority remains
-      // the service worker's prerequisite for the subsequent disclosure request.
-      const admission: ExtensionSessionRequestAdmission = {
-        type: ExtensionSessionMessageType.RevealFocusedLogin,
-        payload: {
-          vaultStoreId: decoded.payload.vaultStoreId,
-          deviceId: 'selector-admission',
-          devicePublicKey: 'selector-admission',
-          deviceSigningPublicKey: 'selector-admission',
-          origin: decoded.payload.origin,
-          secretId: decoded.payload.secretId,
-          credential: decoded.payload.credential,
-          queue: { kind: 'default' },
-        },
-      }
-      const issue: ConstructorParameters<typeof SchemaIssue.InvalidValue>[0] = {
-        message: 'Focused credential selection was not admitted',
-      }
-      const rejected = new Schema.SchemaError(
-        new SchemaIssue.InvalidValue(issue),
-      )
-      const attempt: FocusedSelectorAdmissionAttempt = {
-        try: () => decode_extension_session_request(admission),
-        catch: () => rejected,
-      }
-      const request = yield* Effect.try(attempt)
-      switch (true) {
-        case request.type === ExtensionSessionMessageType.RevealFocusedLogin:
-          return {
-            ...decoded,
-            payload: {
-              ...decoded.payload,
-              credential: request.payload.credential,
-            },
-          }
-        case true:
-          return yield* Effect.fail(rejected)
-      }
-      return yield* Effect.fail(rejected)
-    })
-  }
+  static decode = Effect.fnUntraced(function* (message: unknown) {
+    const decoded = yield* Schema.decodeUnknownEffect(messageSchema)(message)
+    yield* Effect.promise(() => companionWasmReady)
+    // This unsent envelope admits only wire shape. Real grant authority remains
+    // the service worker's prerequisite for the subsequent disclosure request.
+    const admission: ExtensionSessionRequestAdmission = {
+      type: ExtensionSessionMessageType.RevealFocusedLogin,
+      payload: {
+        vaultStoreId: decoded.payload.vaultStoreId,
+        deviceId: 'selector-admission',
+        devicePublicKey: 'selector-admission',
+        deviceSigningPublicKey: 'selector-admission',
+        origin: decoded.payload.origin,
+        secretId: decoded.payload.secretId,
+        credential: decoded.payload.credential,
+        queue: {
+          kind: 'message-default',
+        } satisfies MessageDefaultQueueDisposition,
+      },
+    }
+    const issue: ConstructorParameters<typeof SchemaIssue.InvalidValue>[0] = {
+      message: 'Focused credential selection was not admitted',
+    }
+    const rejected = new Schema.SchemaError(new SchemaIssue.InvalidValue(issue))
+    const attempt: FocusedSelectorAdmissionAttempt = {
+      try: () => decode_extension_session_request(admission),
+      catch: () => rejected,
+    }
+    const request = yield* Effect.try(attempt)
+    switch (true) {
+      case request.type === ExtensionSessionMessageType.RevealFocusedLogin:
+        return {
+          ...decoded,
+          payload: {
+            ...decoded.payload,
+            credential: request.payload.credential,
+          },
+        }
+      case true:
+        return yield* Effect.fail(rejected)
+    }
+    return yield* Effect.fail(rejected)
+  })
   static decodeResponse(response: unknown) {
     return Schema.decodeUnknownEffect(responseSchema)(response)
   }

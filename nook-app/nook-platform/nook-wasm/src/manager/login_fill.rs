@@ -2,9 +2,9 @@
 
 use super::NookVaultManager;
 use crate::NookError;
-use crate::types::{LoginAccountProjection, NookLoginAccount, NookLoginFillCredential};
 use crate::types::{NookFocusedLoginFillCredential, NookFocusedLoginFillRequest};
-use nook_core::{SecretId, SecretType, SecretValue};
+use crate::types::{NookLoginAccount, NookLoginFillCredential};
+use nook_core::{SecretId, SecretValue, WebsiteHost};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 struct RevealLoginRequest<'a> {
@@ -41,41 +41,15 @@ impl NookVaultManager {
         &self,
         origin: &str,
     ) -> Result<Vec<NookLoginAccount>, NookError> {
-        let crypto = self.vault.crypto.get()?;
-        let mut accounts = Vec::new();
-        for (id, (secret_type, _)) in &self.vault.meta.secrets {
-            if *secret_type != SecretType::Login {
-                continue;
-            }
-            let mut record =
-                nook_core::VaultSecretSession::new(&self.vault.meta.secrets, crypto).decrypt(id)?;
-            let matches = match &record.data {
-                SecretValue::Login(login) => (nook_core::LoginHostMatchRequest {
-                    website_url: &login.website_url,
-                    origin,
-                })
-                .matches()
-                .map_err(|error| NookError::Database(error.to_string())),
-                _ => Ok(false),
-            };
-            match matches {
-                Ok(true) => match record.data {
-                    SecretValue::Login(login) => {
-                        accounts.push(NookLoginAccount::from(LoginAccountProjection {
-                            secret_id: id,
-                            login,
-                        }));
-                    }
-                    mut other => other.zeroize_plaintext(),
-                },
-                Ok(false) => record.zeroize_plaintext(),
-                Err(error) => {
-                    record.zeroize_plaintext();
-                    return Err(error);
-                }
-            }
-        }
-        Ok(accounts)
+        self.vault.crypto.get()?;
+        let origin = WebsiteHost::normalize(origin)?;
+        let accounts = self
+            .vault
+            .search_catalog
+            .get()?
+            .matching_login_accounts(&origin)
+            .map_err(|error| NookError::Database(error.to_string()))?;
+        Ok(accounts.into_iter().map(NookLoginAccount::from).collect())
     }
 
     fn reveal_matching_login_for_fill(
@@ -120,12 +94,92 @@ impl NookVaultManager {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::NookVaultManager;
+    use crate::NookError;
+    use crate::manager::{SearchCatalogState, VaultCryptoState};
+    use nook_core::{
+        LoginSecret, SecretId, SecretSearchCatalog, SecretType, SecretValue, StoredRecordPayload,
+        VaultCrypto, VaultKeys,
+    };
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn warm_login_listing_does_not_open_unrelated_full_records() -> anyhow::Result<()> {
+        let keys = VaultKeys::generate()?;
+        let crypto = VaultCrypto::new(&keys.secrets_key)?;
+        let mut manager = NookVaultManager::new();
+        let selected = SecretId::from_vault_record("secret_selected");
+        let value = SecretValue::Login(LoginSecret {
+            website_url: "https://example.com/login".to_owned(),
+            username: "selected-account".to_owned(),
+            password: "selected-password".to_owned(),
+            notes: String::new(),
+        });
+        let ciphertext = crypto.encrypt_value(value.to_yaml()?.as_str())?;
+        manager.vault.meta.secrets.insert(
+            selected,
+            (
+                SecretType::Login,
+                StoredRecordPayload::from_age_armored(ciphertext),
+            ),
+        );
+        let mut catalog = SecretSearchCatalog::default();
+        catalog.reconcile(&manager.vault.meta.secrets, &crypto, &keys.secrets_key)?;
+        manager.vault.search_catalog = SearchCatalogState::Ready(catalog);
+        // A warm lookup has no need to open an unrelated ciphertext. This sentinel
+        // makes any full-record traversal observable as a decryption error.
+        manager.vault.meta.secrets.insert(
+            SecretId::from_vault_record("secret_unrelated"),
+            (
+                SecretType::Login,
+                StoredRecordPayload::from_trusted("unreadable".to_owned()),
+            ),
+        );
+        manager.vault.crypto = VaultCryptoState::Unlocked(crypto);
+
+        let accounts = manager.list_matching_login_accounts("https://example.com")?;
+        assert_eq!(accounts.len(), 1);
+        let account = accounts
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("missing account"))?;
+        assert_eq!(account.username(), "selected-account");
+        assert_eq!(account.website_host(), "example.com");
+        Ok(())
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn login_listing_rejects_invalid_origin_and_allows_valid_unmatched_origin() -> anyhow::Result<()>
+    {
+        let keys = VaultKeys::generate()?;
+        let mut manager = NookVaultManager::new();
+        manager.vault.crypto = VaultCryptoState::Unlocked(VaultCrypto::new(&keys.secrets_key)?);
+        manager.vault.search_catalog = SearchCatalogState::Ready(SecretSearchCatalog::default());
+
+        for origin in ["", "https://"] {
+            assert!(matches!(
+                manager.list_matching_login_accounts(origin),
+                Err(NookError::LoginFillOrigin(_))
+            ));
+        }
+        assert!(
+            manager
+                .list_matching_login_accounts("https://unmatched.example")?
+                .is_empty()
+        );
+        Ok(())
+    }
+}
+
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
-    use crate::manager::VaultCryptoState;
+    use crate::manager::{SearchCatalogState, VaultCryptoState};
     use nook_core::{
-        LoginSecret, SecretId, SecretType, SecretValue, StoredRecordPayload, VaultCrypto,
+        LoginSecret, SecretId, SecretSearchCatalog, SecretType, SecretValue, StoredRecordPayload,
+        VaultCrypto,
     };
     use wasm_bindgen_test::*;
 
@@ -188,6 +242,9 @@ mod browser_tests {
                 note: "fixture".to_owned(),
             }),
         )?;
+        let mut catalog = SecretSearchCatalog::default();
+        catalog.reconcile(&manager.vault.meta.secrets, &crypto, &keys.secrets_key)?;
+        manager.vault.search_catalog = SearchCatalogState::Ready(catalog);
         manager.vault.crypto = VaultCryptoState::Unlocked(crypto);
 
         let accounts = manager.list_matching_login_accounts("https://example.com/account")?;
@@ -317,6 +374,7 @@ impl NookVaultManager {
     ) -> Result<Vec<NookLoginAccount>, JsError> {
         self.ensure_login_fill_extension_capability()?;
         self.ensure_vault_crypto_from_cache().await?;
+        self.prepare_secret_search_catalog().await?;
         self.list_matching_login_accounts(origin)
             .map_err(Into::into)
     }

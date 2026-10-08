@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import type { Schema } from "effect";
 
 export enum RuntimeMessageDecodeFailureKind {
   OpenCompanionLauncher = "open-companion-launcher",

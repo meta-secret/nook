@@ -122,7 +122,10 @@ class LoginPickerSessionSchema {
   } satisfies Schema.Struct.Fields
   private static readonly boundFields = {
     kind: Schema.Literal(LoginPickerFrameBindingKind.Bound),
-    frameId: Schema.Number.check(Schema.isInt(), Schema.isGreaterThan(0)),
+    frameId: Schema.Number.pipe(
+      Schema.check(Schema.isInt()),
+      Schema.check(Schema.isGreaterThan(0)),
+    ),
     documentId: Schema.String.pipe(Schema.check(Schema.isMinLength(1))),
   } satisfies Schema.Struct.Fields
   private static readonly fields = {

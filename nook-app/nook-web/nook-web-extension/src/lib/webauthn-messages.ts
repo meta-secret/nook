@@ -188,7 +188,6 @@ type WebsitePasskeyPerformMessagePayloadSchemaFields = {
   requestJson: typeof Schema.String
   expiresAt: typeof Schema.Number
 }
-
 const websitePasskeyPerformMessagePayloadSchemaFields: WebsitePasskeyPerformMessagePayloadSchemaFields =
   {
     ...websitePasskeyOptionsPayloadSchema.fields,

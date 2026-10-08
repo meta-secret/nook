@@ -4,32 +4,41 @@ import {
   authenticationControlActivationDisposition,
   authenticationWidgetOwnsControl,
 } from '../src/content/autofill/authentication-action-lifecycle'
-import { scanState } from '../src/content/autofill/state'
+import {
+  scanState,
+  WidgetCredentialActuation,
+} from '../src/content/autofill/state'
 
 describe('authentication control activation lifecycle', () => {
   test('invalidates a stale page control before the pending rescan', () => {
-    expect(
-      authenticationControlActivationDisposition({
-        controlTouchesRenderedWorkflow: true,
-        controlBelongsToMountedWidget: false,
-        credentialActuationInFlight: false,
-      }),
-    ).toBe(AuthenticationControlActivationDisposition.Invalidate)
+    const pageControl: Parameters<
+      typeof authenticationControlActivationDisposition
+    >[0] = {
+      controlTouchesRenderedWorkflow: true,
+      controlBelongsToMountedWidget: false,
+      credentialActuation: WidgetCredentialActuation.Idle,
+    }
+    expect(authenticationControlActivationDisposition(pageControl)).toBe(
+      AuthenticationControlActivationDisposition.Invalidate,
+    )
   })
 
   test('preserves mounted-widget and credential-actuation controls', () => {
-    for (const request of [
+    const protectedControls: Parameters<
+      typeof authenticationControlActivationDisposition
+    >[0][] = [
       {
         controlTouchesRenderedWorkflow: true,
         controlBelongsToMountedWidget: true,
-        credentialActuationInFlight: false,
+        credentialActuation: WidgetCredentialActuation.Idle,
       },
       {
         controlTouchesRenderedWorkflow: true,
         controlBelongsToMountedWidget: false,
-        credentialActuationInFlight: true,
+        credentialActuation: WidgetCredentialActuation.WorkflowFill,
       },
-    ]) {
+    ]
+    for (const request of protectedControls) {
       expect(authenticationControlActivationDisposition(request)).toBe(
         AuthenticationControlActivationDisposition.Ignore,
       )
