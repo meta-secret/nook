@@ -180,11 +180,19 @@ class PilotScenarioPage {
         return '<button type="submit">Sign in</button>'
     }
   }
+  private pageMarkup(markup: ScenarioMarkup): string {
+    switch (markup.advanceControl) {
+      case PilotScenarioAdvanceControlKind.Absent:
+        return '<!doctype html><html><body><h1>Sign in</h1><section id="login-form" role="form"><label>Email<input autocomplete="username" name="username" type="email"></label><label>Password<input autocomplete="current-password" name="password" type="password"></label></section></body></html>'
+      case PilotScenarioAdvanceControlKind.Submit:
+        return `<!doctype html><html><body><h1>Sign in</h1><form id="login-form" action="/auth/login" method="post"><label>Email<input autocomplete="username" name="username" type="email"></label><label>Password<input autocomplete="current-password" name="password" type="password"></label>${markup.alertMarkup}${this.advanceControlMarkup(markup.advanceControl)}</form><script>document.getElementById('login-form').addEventListener('submit', event => { event.preventDefault(); ${markup.successScript} });</script></body></html>`
+    }
+  }
   private async fulfill(route: Route): Promise<void> {
-    const markup = this.markup()
+    const markup: ScenarioMarkup = this.markup()
     const response: Parameters<Route['fulfill']>[0] = {
       contentType: 'text/html',
-      body: `<!doctype html><html><body><h1>Sign in</h1><form id="login-form" action="/auth/login" method="post"><label>Email<input autocomplete="username" name="username" type="email"></label><label>Password<input autocomplete="current-password" name="password" type="password"></label>${markup.alertMarkup}${this.advanceControlMarkup(markup.advanceControl)}</form><script>document.getElementById('login-form').addEventListener('submit', event => { event.preventDefault(); ${markup.successScript} });</script></body></html>`,
+      body: this.pageMarkup(markup),
     }
     await route.fulfill(response)
   }
