@@ -161,10 +161,11 @@ export class CortexArticleTransport {
         }).error(),
       );
     }
-    let blocks = new CortexArticleBlockSequence({
+    const sequenceRequest: CortexArticleBlockSequenceRequest = {
       documentPath: request.path,
       blocks: [],
-    });
+    };
+    let blocks = new CortexArticleBlockSequence(sequenceRequest);
     for (const [index, candidate] of envelope.data.blocks.entries()) {
       const block = this.decodeBlock({
         path: `${request.path}.blocks[${index}]`,
@@ -298,12 +299,8 @@ class CortexArticleBlockSequence {
         }),
       );
     }
-    return ok(
-      new CortexArticleBlockSequence({
-        documentPath: this.request.documentPath,
-        blocks: [...this.request.blocks, block],
-      }),
-    );
+    this.request.blocks.push(block);
+    return ok(this);
   }
 
   values(): readonly CortexArticleSemanticBlock[] {
@@ -330,7 +327,7 @@ type CortexArticleFindingTransport = ZodOutput<
 >['findings'][number];
 type CortexArticleBlockSequenceRequest = {
   readonly documentPath: string;
-  readonly blocks: readonly CortexArticleSemanticBlock[];
+  readonly blocks: CortexArticleSemanticBlock[];
 };
 const UTF8_ENCODER = new TextEncoder();
 
