@@ -536,12 +536,10 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       })
       await expect(inlinePicker).toHaveCount(0)
       await expect(fillWidget.getByText('Nook Pilot · 3/3')).toBeVisible()
-      await expect(fillWidget.getByText('Verifying sign-in')).toBeVisible()
-      await expect(
-        fillWidget.getByText(
-          'Credentials were submitted. Nook is waiting for the site response.',
-        ),
-      ).toBeVisible()
+      const checklist = fillWidget.getByTestId('nook-auth-checklist')
+      await expect(checklist).toHaveAttribute('data-status', 'Waiting')
+      await expect(checklist).toContainText('Form submission observed')
+      await expect(checklist).toContainText('Waiting for the site’s response')
       await fillLoginPage.close()
     })
 

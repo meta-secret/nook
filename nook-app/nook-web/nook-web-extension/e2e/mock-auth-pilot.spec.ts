@@ -25,6 +25,10 @@ type PilotPanelEvidenceRequest = {
   widget: Locator
   testInfo: TestInfo
 }
+type PilotPanelScreenshotOptions = NonNullable<
+  Parameters<Page['screenshot']>[0]
+>
+type PilotPanelClip = NonNullable<PilotPanelScreenshotOptions['clip']>
 class PilotPanelEvidence {
   constructor(private readonly request: PilotPanelEvidenceRequest) {}
   checklist(): Locator {
@@ -38,10 +42,23 @@ class PilotPanelEvidence {
     return this.request.widget.getByRole('button', options)
   }
   async screenshot(name: string): Promise<void> {
-    const options: Parameters<Locator['screenshot']>[0] = {
+    await expect(this.request.widget).toBeVisible()
+    const clip = await this.request.widget.evaluate(
+      (element): PilotPanelClip => {
+        const bounds = element.getBoundingClientRect()
+        return {
+          x: bounds.x,
+          y: bounds.y,
+          width: bounds.width,
+          height: bounds.height,
+        }
+      },
+    )
+    const options: PilotPanelScreenshotOptions = {
       path: this.request.testInfo.outputPath(name),
+      clip,
     }
-    await this.request.widget.screenshot(options)
+    await this.request.page.screenshot(options)
   }
   async ready(): Promise<void> {
     const checklist = this.checklist()
