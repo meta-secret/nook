@@ -155,6 +155,7 @@ class FocusedInteractionFixture {
           response: new FocusedFieldRecognitionOperation(message).run(),
         }
       case CompanionWasmSessionMessageType.GetAuthenticationActivityProgress:
+      case CompanionWasmSessionMessageType.ProjectAuthenticationLoginChecklist:
       case CompanionWasmSessionMessageType.ExtractAuthenticationBackupCodeCandidates:
       case CompanionWasmSessionMessageType.ProjectAuthenticationNavigationPath:
       case CompanionWasmSessionMessageType.AuthenticationAuthenticatorSetupObservation:

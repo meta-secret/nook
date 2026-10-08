@@ -54,7 +54,7 @@ type RuntimeMessageDecodeRequest<
   DecodedRuntimeMessage,
   RuntimeMessageWireValue,
 > = {
-  readonly schema: Schema.Codec<DecodedRuntimeMessage>;
+  readonly schema: Schema.Decoder<DecodedRuntimeMessage>;
   readonly value: RuntimeMessageWireValue;
   readonly kind: RuntimeMessageDecodeFailureKind;
 };

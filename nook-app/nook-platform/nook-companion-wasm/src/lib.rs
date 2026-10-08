@@ -32,7 +32,9 @@ use nook_companion_core::BackupCodePageText;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 mod authentication_action_projection;
+mod authentication_login_checklist;
 pub use authentication_action_projection::*;
+pub use authentication_login_checklist::*;
 mod account_picker_authorization;
 mod authentication_control_actuation;
 mod authentication_observation_binding;

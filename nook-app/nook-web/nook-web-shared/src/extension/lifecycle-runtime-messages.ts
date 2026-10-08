@@ -6,7 +6,7 @@ import {
 } from "./runtime-message-decode-failure";
 
 type RuntimeMessageDecodeRequest<DecodedMessage, WireMessage> = {
-  readonly schema: Schema.Codec<DecodedMessage>;
+  readonly schema: Schema.Decoder<DecodedMessage>;
   readonly value: WireMessage;
   readonly kind: RuntimeMessageDecodeFailureKind;
 };

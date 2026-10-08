@@ -56,7 +56,7 @@ tasks:
   web:static:lint:
     dir: "{{.ROOT_DIR}}/nook-app/nook-web"
     cmds:
-      - nook-web-app/node_modules/.bin/eslint --config eslint.config.js .
+      - node --max-old-space-size=4096 nook-web-app/node_modules/.bin/eslint --config eslint.config.js .
 
   web:static:app:
     cmds:

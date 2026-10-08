@@ -34,12 +34,65 @@ import {
   NODE_BOOLEAN_OPTIONS,
   BUN_VALUE_OPTIONS,
   NODE_VALUE_OPTIONS,
+  NodeNumericRuntimeOption,
   TASK_BOOLEAN_OPTIONS,
   TASK_VALUE_OPTIONS,
   EXECUTABLE_RUNTIME_OPTIONS,
   BUN_SUBCOMMANDS,
   PROTECTED_SKILL_FRAGMENTS,
 } from './skill-provider-command-boundary.ts';
+
+type RuntimeOptionValueRequest = {
+  readonly runtime: string;
+  readonly option: string;
+  readonly value: string;
+};
+
+enum NumericRuntimeValueKind {
+  Literal = 'literal',
+  Invalid = 'invalid',
+}
+
+enum RuntimeOptionValueFailure {
+  InvalidNodeHeapValue = 'invalid-node-heap-value',
+}
+
+class RuntimeOptionValueValidation {
+  constructor(private readonly request: RuntimeOptionValueRequest) {}
+
+  execute(): void {
+    switch (this.request.runtime) {
+      case 'node':
+        return this.validateNodeOption();
+    }
+  }
+
+  private validateNodeOption(): void {
+    switch (this.request.option) {
+      case NodeNumericRuntimeOption.MaxOldSpaceSize:
+        return this.validateNumericHeapValue();
+    }
+  }
+
+  private validateNumericHeapValue(): void {
+    switch (this.numericValueKind()) {
+      case NumericRuntimeValueKind.Literal:
+        return;
+      case NumericRuntimeValueKind.Invalid:
+        throw new Error(RuntimeOptionValueFailure.InvalidNodeHeapValue);
+    }
+  }
+
+  private numericValueKind(): NumericRuntimeValueKind {
+    switch (/^[0-9]+$/u.test(this.request.value)) {
+      case true:
+        return NumericRuntimeValueKind.Literal;
+      case false:
+        return NumericRuntimeValueKind.Invalid;
+    }
+  }
+}
+
 export class ShellRuntimeInvocation {
   private constructor(private readonly request: RuntimeCommandRequest) {}
   static consumeEnvPrefix(request: EnvPrefixRequest): number {
@@ -347,6 +400,7 @@ export class ShellRuntimeInvocation {
         throw new Error(
           `Unsupported ${request.runtime} runtime option: ${word.value}`,
         );
+      let optionValue = word.value.slice(option.length + 1);
       if (!word.value.includes('=')) {
         const value = request.words[index + 1];
         if (!value) throw new Error('Missing runtime option value.');
@@ -365,8 +419,15 @@ export class ShellRuntimeInvocation {
             throw new Error('Dynamic runtime option value is forbidden.');
           return false;
         }
+        optionValue = value.value;
         index += 1;
       }
+      const optionValueRequest: RuntimeOptionValueRequest = {
+        runtime: request.runtime,
+        option,
+        value: optionValue,
+      };
+      new RuntimeOptionValueValidation(optionValueRequest).execute();
       index += 1;
     }
     if (index === request.words.length) return false;

@@ -782,6 +782,27 @@ void test("one PR job avoids telemetry and registry handoffs", () => {
   assert.match(workflow, /require-sccache: "true"/);
 });
 
+void test("remote browser checkout supplies repository actions before sealed task execution", () => {
+  const workflow = fs.readFileSync(".github/workflows/remote.yml", "utf8");
+  const jobStart = workflow.indexOf("\n  web-e2e:\n");
+  const jobEnd = workflow.indexOf("\n  ci-pr-e2e-suite:\n", jobStart);
+  assert.notEqual(jobStart, -1);
+  assert.notEqual(jobEnd, -1);
+  const job = workflow.slice(jobStart, jobEnd);
+
+  assert.match(
+    job,
+    / {4}steps:\n {6}- uses: actions\/checkout@v7\n {8}with:\n {10}ref: \$\{\{ inputs\.source_sha \|\| github\.sha \}\}\n {10}fetch-depth: 0\n {10}persist-credentials: false\n {6}- name: Run selected task without a nested container runtime\n/,
+  );
+  assert.match(workflow, /^ {2}contents: read$/m);
+  assert.match(
+    job,
+    /image: registry\.dev\.nokey\.sh\/nook\/remote-buildcache\/nook-web-e2e:run-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}/,
+  );
+  assert.match(job, /^ {10}cd \/meta-secret\/nook$/m);
+  assert.doesNotMatch(job, /continue-on-error:/);
+});
+
 void test(
   "authentication PR validation preserves extension Playwright diagnostics and screenshots",
   () => {

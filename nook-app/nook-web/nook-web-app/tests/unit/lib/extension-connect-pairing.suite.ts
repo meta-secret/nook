@@ -249,18 +249,21 @@ describe('extension pairing approved message', () => {
     expect(decoded._tag).toBe('Failure')
   })
 
-  test.each([-1, 1.5, Number.POSITIVE_INFINITY, Number.NaN])(
-    'rejects invalid imported event count %s',
-    (eventCount) => {
-      const decoded = Effect.runSync(
-        Effect.result(
-          pairingApprovalResponseDecoder.decode({ ok: true, eventCount }),
-        ),
-      )
+  test.each([
+    -1,
+    1.5,
+    Number.MAX_SAFE_INTEGER + 1,
+    Number.POSITIVE_INFINITY,
+    Number.NaN,
+  ])('rejects invalid imported event count %s', (eventCount) => {
+    const decoded = Effect.runSync(
+      Effect.result(
+        pairingApprovalResponseDecoder.decode({ ok: true, eventCount }),
+      ),
+    )
 
-      expect(decoded._tag).toBe('Failure')
-    },
-  )
+    expect(decoded._tag).toBe('Failure')
+  })
 
   test('accepts complete approved grants', () => {
     expect(

@@ -94,9 +94,10 @@ export class WebsiteFocusedLoginRevealMessage {
         } satisfies MessageDefaultQueueDisposition,
       },
     }
-    const rejected = new Schema.SchemaError(
-      new SchemaIssue.InvalidType(messageSchema.ast),
-    )
+    const issue: ConstructorParameters<typeof SchemaIssue.InvalidValue>[0] = {
+      message: 'Focused credential selection was not admitted',
+    }
+    const rejected = new Schema.SchemaError(new SchemaIssue.InvalidValue(issue))
     const attempt: FocusedSelectorAdmissionAttempt = {
       try: () => decode_extension_session_request(admission),
       catch: () => rejected,

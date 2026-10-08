@@ -40,7 +40,7 @@ const actionMocks = vi.hoisted(() => ({
   sendAuthenticatorCode: vi.fn(),
   sendLoginFill: vi.fn(),
   sendGeneratePassword: vi.fn(),
-  submitLoginForm: vi.fn(() => true),
+  submitLoginForm: vi.fn(() => 'submitted'),
 }))
 
 vi.mock('../../../../nook-web-shared/src/extension/password-forms', () => ({
@@ -186,6 +186,7 @@ vi.mock(
         typeof import('../../../../nook-web-extension/src/content/autofill/state')
       >()
     return {
+      LoginChecklistMountKind: state.LoginChecklistMountKind,
       WidgetCredentialActuation: state.WidgetCredentialActuation,
       WidgetSelectionAdmission: state.WidgetSelectionAdmission,
       AuthenticatorPickerKind: { Closed: 'closed', Open: 'open' },

@@ -15,6 +15,30 @@ type NookLocaleCatalogShape = {
       status_locked: string
     }
     widget: {
+      checklist_fill_login: string
+      checklist_submit_form: string
+      checklist_check_result: string
+      checklist_fill_ready: string
+      checklist_fill_working: string
+      checklist_fill_done: string
+      checklist_fill_failed: string
+      checklist_submit_pending: string
+      checklist_submit_ready: string
+      checklist_submit_working: string
+      checklist_submit_done: string
+      checklist_submit_rejected: string
+      checklist_submit_manual: string
+      checklist_result_pending: string
+      checklist_result_waiting: string
+      checklist_result_done: string
+      checklist_result_attention: string
+      checklist_ready: string
+      checklist_working: string
+      checklist_waiting: string
+      checklist_attention: string
+      checklist_complete: string
+      checklist_inactive: string
+      checklist_label: string
       open_vault: string
       dismiss: string
       collapse: string
@@ -237,6 +261,144 @@ export async function buildChromeLocales({
       }
       const catalog = extensionLocaleCatalogAdmission.admit(admissionArgs)
       const messages = {
+        widgetChecklistFillLogin: {
+          message: catalog.extension.widget.message(
+            'checklist_fill_login',
+            locale,
+          ),
+        },
+        widgetChecklistSubmitForm: {
+          message: catalog.extension.widget.message(
+            'checklist_submit_form',
+            locale,
+          ),
+        },
+        widgetChecklistCheckResult: {
+          message: catalog.extension.widget.message(
+            'checklist_check_result',
+            locale,
+          ),
+        },
+        widgetChecklistFillReady: {
+          message: catalog.extension.widget.message(
+            'checklist_fill_ready',
+            locale,
+          ),
+        },
+        widgetChecklistFillWorking: {
+          message: catalog.extension.widget.message(
+            'checklist_fill_working',
+            locale,
+          ),
+        },
+        widgetChecklistFillDone: {
+          message: catalog.extension.widget.message(
+            'checklist_fill_done',
+            locale,
+          ),
+        },
+        widgetChecklistFillFailed: {
+          message: catalog.extension.widget.message(
+            'checklist_fill_failed',
+            locale,
+          ),
+        },
+        widgetChecklistSubmitPending: {
+          message: catalog.extension.widget.message(
+            'checklist_submit_pending',
+            locale,
+          ),
+        },
+        widgetChecklistSubmitReady: {
+          message: catalog.extension.widget.message(
+            'checklist_submit_ready',
+            locale,
+          ),
+        },
+        widgetChecklistSubmitWorking: {
+          message: catalog.extension.widget.message(
+            'checklist_submit_working',
+            locale,
+          ),
+        },
+        widgetChecklistSubmitDone: {
+          message: catalog.extension.widget.message(
+            'checklist_submit_done',
+            locale,
+          ),
+        },
+        widgetChecklistSubmitRejected: {
+          message: catalog.extension.widget.message(
+            'checklist_submit_rejected',
+            locale,
+          ),
+        },
+        widgetChecklistSubmitManual: {
+          message: catalog.extension.widget.message(
+            'checklist_submit_manual',
+            locale,
+          ),
+        },
+        widgetChecklistResultPending: {
+          message: catalog.extension.widget.message(
+            'checklist_result_pending',
+            locale,
+          ),
+        },
+        widgetChecklistResultWaiting: {
+          message: catalog.extension.widget.message(
+            'checklist_result_waiting',
+            locale,
+          ),
+        },
+        widgetChecklistResultDone: {
+          message: catalog.extension.widget.message(
+            'checklist_result_done',
+            locale,
+          ),
+        },
+        widgetChecklistResultAttention: {
+          message: catalog.extension.widget.message(
+            'checklist_result_attention',
+            locale,
+          ),
+        },
+        widgetChecklistReady: {
+          message: catalog.extension.widget.message('checklist_ready', locale),
+        },
+        widgetChecklistWorking: {
+          message: catalog.extension.widget.message(
+            'checklist_working',
+            locale,
+          ),
+        },
+        widgetChecklistWaiting: {
+          message: catalog.extension.widget.message(
+            'checklist_waiting',
+            locale,
+          ),
+        },
+        widgetChecklistAttention: {
+          message: catalog.extension.widget.message(
+            'checklist_attention',
+            locale,
+          ),
+        },
+        widgetChecklistComplete: {
+          message: catalog.extension.widget.message(
+            'checklist_complete',
+            locale,
+          ),
+        },
+        widgetChecklistInactive: {
+          message: catalog.extension.widget.message(
+            'checklist_inactive',
+            locale,
+          ),
+        },
+        widgetChecklistLabel: {
+          message: catalog.extension.widget.message('checklist_label', locale),
+        },
         widgetOpenVault: {
           message: catalog.extension.widget.message('open_vault', locale),
         },

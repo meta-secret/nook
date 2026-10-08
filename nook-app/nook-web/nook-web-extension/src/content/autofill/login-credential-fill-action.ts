@@ -1,3 +1,7 @@
+import {
+  loginChecklistForControl,
+  LoginChecklistControlKind,
+} from './login-checklist-progress'
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import {
   FormSubmissionResult,
@@ -41,10 +45,22 @@ export class LoginCredentialFillAction {
     description,
     continueButton,
   }: FillAndSubmitAccountArgs): Promise<boolean> {
+    const checklistRequest: Parameters<typeof loginChecklistForControl>[0] = {
+      mount: widgetState.loginChecklist,
+      control: continueButton,
+    }
+    const checklist = loginChecklistForControl(checklistRequest)
+    switch (checklist.kind) {
+      case LoginChecklistControlKind.Owned:
+        await checklist.progress.activity('Filling')
+        break
+      case LoginChecklistControlKind.Unowned:
+        break
+    }
     const approvalIsActive = () =>
       widgetState.controlDisposition(continueButton) ===
       WidgetControlDisposition.Active
-    const showFillFailure = () => {
+    const showFillFailure = async () => {
       const flightProgressRequest1: Parameters<
         typeof workflowUi.setFlightProgress
       >[0] = {
@@ -67,6 +83,13 @@ export class LoginCredentialFillAction {
         enableContinue: true,
       }
       authenticationWorkflowUi.setStatus(authenticationStatusRequest1)
+      switch (checklist.kind) {
+        case LoginChecklistControlKind.Owned:
+          await checklist.progress.activity('FillFailed')
+          break
+        case LoginChecklistControlKind.Unowned:
+          break
+      }
       return false
     }
     let releasedObservationBinding: AuthenticationObservationBinding = {
@@ -185,6 +208,13 @@ export class LoginCredentialFillAction {
       }
       const approvedFillRequest = filledRequest
       if (!approvedFillRequest) return false
+      switch (checklist.kind) {
+        case LoginChecklistControlKind.Owned:
+          await checklist.progress.activity('Filled')
+          break
+        case LoginChecklistControlKind.Unowned:
+          break
+      }
 
       // Page frameworks may apply input-event state updates in their own
       // microtask. Cross the browser task boundary before rebuilding the
@@ -199,6 +229,13 @@ export class LoginCredentialFillAction {
       await passwordFormInteraction.prepareCompanionWorkflowPolicies(
         companionPoliciesRequest,
       )
+      switch (checklist.kind) {
+        case LoginChecklistControlKind.Owned:
+          await checklist.progress.activity('Submitting')
+          break
+        case LoginChecklistControlKind.Unowned:
+          break
+      }
       const submissionRevalidationRequest: ConstructorParameters<
         typeof RevalidatedAuthenticationAction
       >[0] = {
@@ -289,6 +326,13 @@ export class LoginCredentialFillAction {
         }
         authenticationWorkflowUi.setStatus(authenticationStatusRequest2)
         continueButton.hidden = false
+        switch (checklist.kind) {
+          case LoginChecklistControlKind.Owned:
+            await checklist.progress.activity('SubmissionRejected')
+            break
+          case LoginChecklistControlKind.Unowned:
+            break
+        }
         return false
       }
       if (submission.result === FormSubmissionResult.NotObserved) {
@@ -307,6 +351,13 @@ export class LoginCredentialFillAction {
           BROWSER_MESSAGE_KEYS.WidgetFilledManual,
         )
         continueButton.hidden = true
+        switch (checklist.kind) {
+          case LoginChecklistControlKind.Owned:
+            await checklist.progress.activity('SubmissionUnobserved')
+            break
+          case LoginChecklistControlKind.Unowned:
+            break
+        }
         return true
       }
       const flightProgressRequest4: Parameters<
@@ -324,7 +375,23 @@ export class LoginCredentialFillAction {
         BROWSER_MESSAGE_KEYS.WidgetSubmitted,
       )
       continueButton.hidden = true
+      switch (checklist.kind) {
+        case LoginChecklistControlKind.Owned:
+          await checklist.progress.activity('Submitted')
+          break
+        case LoginChecklistControlKind.Unowned:
+          break
+      }
       return true
+    } catch (error) {
+      switch (checklist.kind) {
+        case LoginChecklistControlKind.Owned:
+          await checklist.progress.activity('FillFailed')
+          break
+        case LoginChecklistControlKind.Unowned:
+          break
+      }
+      throw error
     } finally {
       widgetState.credentialActuation = WidgetCredentialActuation.Idle
     }

@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-restricted-types, no-restricted-syntax -- This dedicated untrusted-input decoder narrows browser transport values immediately. */
 import { Schema } from "effect";
 import type {
+  AuthenticationLoginChecklistProjection,
+  AuthenticationLoginChecklistPresentation,
   AuthenticationAuthenticatorSetupBatch,
   AuthenticationAuthenticatorSetupObservation,
   AuthenticationObservationBindingToken,
@@ -43,6 +45,7 @@ import type {
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 
 export enum CompanionWasmSessionMessageType {
+  ProjectAuthenticationLoginChecklist = "nook:extension-session-project-authentication-login-checklist",
   ClassifyFocusedCredentialField = "nook:extension-session-classify-focused-credential-field",
   RevalidateFocusedCredentialField = "nook:extension-session-revalidate-focused-credential-field",
   GetAuthenticationActivityProgress = "nook:extension-session-get-authentication-activity-progress",
@@ -130,6 +133,10 @@ export type CompanionWasmLabelRequest = {
 };
 
 export type CompanionWasmSessionMessage =
+  | {
+      readonly type: CompanionWasmSessionMessageType.ProjectAuthenticationLoginChecklist;
+      readonly payload: AuthenticationLoginChecklistProjection;
+    }
   | {
       readonly type: CompanionWasmSessionMessageType.ClassifyFocusedCredentialField;
       readonly payload: {
@@ -336,6 +343,7 @@ export type CompanionWasmFocusedRecognitionResponse =
     };
 
 export type CompanionWasmSessionResponse =
+  | AuthenticationLoginChecklistPresentation
   | CompanionWasmFocusedRecognitionResponse
   | { readonly activityProgress: AuthenticationDisplayProgress }
   | AuthenticationBackupCodeExtraction

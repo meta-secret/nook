@@ -274,9 +274,15 @@ pub use authentication_navigation_path::{
     AuthenticationOutcomePathname, AuthenticationOutcomePathnameError,
 };
 pub use authentication_workflow::{
-    AuthenticationDisplayProgress, AuthenticationWorkflowActivity, AuthenticationWorkflowProgress,
-    AuthenticatorEnrollmentProgress, PasswordWorkflowActivityEvidence,
-    PasswordWorkflowActivityPresentation,
+    AuthenticationDisplayProgress, AuthenticationLoginChecklistActivity,
+    AuthenticationLoginChecklistMessageKey, AuthenticationLoginChecklistObservation,
+    AuthenticationLoginChecklistOutcomePolling, AuthenticationLoginChecklistPresentation,
+    AuthenticationLoginChecklistProjection, AuthenticationLoginChecklistResult,
+    AuthenticationLoginChecklistRow, AuthenticationLoginChecklistRowState,
+    AuthenticationLoginChecklistState, AuthenticationLoginChecklistStatus,
+    AuthenticationLoginChecklistStep, AuthenticationWorkflowActivity,
+    AuthenticationWorkflowProgress, AuthenticatorEnrollmentProgress,
+    PasswordWorkflowActivityEvidence, PasswordWorkflowActivityPresentation,
 };
 pub use authentication_workflow_response::SavedLoginActionPresentationRequest;
 pub use extension_pairing_state::ImportedExtensionEventLogError;

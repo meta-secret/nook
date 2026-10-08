@@ -57,6 +57,51 @@ const PROTECTED =
 
 const PROTECTED_ROOT = PROTECTED.slice(0, PROTECTED.lastIndexOf('/'));
 
+test('admits literal numeric Node heap options without changing script resolution', () => {
+  expect(() =>
+    SkillProviderCommandBoundaryFixture.inspectShell(
+      'node --max-old-space-size=4096 nook-web-app/node_modules/.bin/eslint --config eslint.config.js .',
+    ),
+  ).not.toThrow();
+  for (const source of [
+    'node --max-old-space-size=4096 scripts/safe.js',
+    'node --max-old-space-size 4096 scripts/safe.js',
+  ]) {
+    const analysis = SkillProviderCommandBoundaryFixture.inspectShell(source);
+    expect(analysis.launches.map((launch) => launch.specifier)).toEqual([
+      'scripts/safe.js',
+    ]);
+  }
+});
+
+test('rejects invalid and dynamic Node heap values', () => {
+  for (const source of [
+    'node --max-old-space-size= scripts/safe.js',
+    'node --max-old-space-size=4.5 scripts/safe.js',
+    'node --max-old-space-size=-1 scripts/safe.js',
+    'node --max-old-space-size=4096x scripts/safe.js',
+    'node --max-old-space-size="$HEAP" scripts/safe.js',
+    'node --max-old-space-size "$HEAP" scripts/safe.js',
+    'node --max-old-space-size',
+  ])
+    expect(
+      () => SkillProviderCommandBoundaryFixture.inspectShell(source),
+      source,
+    ).toThrow();
+});
+
+test('heap options preserve protected launch and execution-option restrictions', () => {
+  for (const source of [
+    `node --max-old-space-size=4096 ${PROTECTED}`,
+    `node --max-old-space-size=4096 --require ${PROTECTED} scripts/safe.js`,
+    'NODE_OPTIONS=--max-old-space-size=4096 node scripts/safe.js',
+  ])
+    expect(
+      () => SkillProviderCommandBoundaryFixture.inspectProtected(source),
+      source,
+    ).toThrow();
+});
+
 test('rejects every protected runtime construction and masked launch', () => {
   const fixtures = [
     `bun ${PROTECTED.replace('example-skill', 'exampl?-skill')}`,
