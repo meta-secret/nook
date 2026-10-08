@@ -34,12 +34,38 @@ import {
   NODE_BOOLEAN_OPTIONS,
   BUN_VALUE_OPTIONS,
   NODE_VALUE_OPTIONS,
+  NodeNumericRuntimeOption,
   TASK_BOOLEAN_OPTIONS,
   TASK_VALUE_OPTIONS,
   EXECUTABLE_RUNTIME_OPTIONS,
   BUN_SUBCOMMANDS,
   PROTECTED_SKILL_FRAGMENTS,
 } from './skill-provider-command-boundary.ts';
+
+type RuntimeOptionValueRequest = {
+  readonly runtime: string;
+  readonly option: string;
+  readonly value: string;
+};
+
+enum NumericRuntimeValueKind {
+  Literal = 'literal',
+  Invalid = 'invalid',
+}
+
+enum RuntimeOptionValueFailure {
+  InvalidNodeHeapValue = 'invalid-node-heap-value',
+}
+
+function numericRuntimeValueKind(value: string): NumericRuntimeValueKind {
+  switch (/^[0-9]+$/u.test(value)) {
+    case true:
+      return NumericRuntimeValueKind.Literal;
+    case false:
+      return NumericRuntimeValueKind.Invalid;
+  }
+}
+
 export class ShellRuntimeInvocation {
   private constructor(private readonly request: RuntimeCommandRequest) {}
   static consumeEnvPrefix(request: EnvPrefixRequest): number {
@@ -347,6 +373,7 @@ export class ShellRuntimeInvocation {
         throw new Error(
           `Unsupported ${request.runtime} runtime option: ${word.value}`,
         );
+      let optionValue = word.value.slice(option.length + 1);
       if (!word.value.includes('=')) {
         const value = request.words[index + 1];
         if (!value) throw new Error('Missing runtime option value.');
@@ -365,8 +392,15 @@ export class ShellRuntimeInvocation {
             throw new Error('Dynamic runtime option value is forbidden.');
           return false;
         }
+        optionValue = value.value;
         index += 1;
       }
+      const optionValueRequest: RuntimeOptionValueRequest = {
+        runtime: request.runtime,
+        option,
+        value: optionValue,
+      };
+      ShellRuntimeInvocation.validateRuntimeOptionValue(optionValueRequest);
       index += 1;
     }
     if (index === request.words.length) return false;
@@ -438,5 +472,22 @@ export class ShellRuntimeInvocation {
         'Dynamic protected-skill executable construction is forbidden.',
       );
     return false;
+  }
+
+  private static validateRuntimeOptionValue(
+    request: RuntimeOptionValueRequest,
+  ): void {
+    switch (request.runtime) {
+      case 'node':
+        switch (request.option) {
+          case NodeNumericRuntimeOption.MaxOldSpaceSize:
+            switch (numericRuntimeValueKind(request.value)) {
+              case NumericRuntimeValueKind.Literal:
+                return;
+              case NumericRuntimeValueKind.Invalid:
+                throw new Error(RuntimeOptionValueFailure.InvalidNodeHeapValue);
+            }
+        }
+    }
   }
 }

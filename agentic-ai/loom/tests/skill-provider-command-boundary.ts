@@ -771,11 +771,16 @@ export const NODE_BOOLEAN_OPTIONS = new Set(
   '--check --test --version -v'.split(' '),
 );
 
-export const NODE_VALUE_OPTIONS = new Set(
-  '--conditions --require --import --loader --experimental-loader --env-file --env-file-if-exists --input-type -e --eval --print -p'.split(
+export enum NodeNumericRuntimeOption {
+  MaxOldSpaceSize = '--max-old-space-size',
+}
+
+export const NODE_VALUE_OPTIONS = new Set([
+  NodeNumericRuntimeOption.MaxOldSpaceSize,
+  ...'--conditions --require --import --loader --experimental-loader --env-file --env-file-if-exists --input-type -e --eval --print -p'.split(
     ' ',
   ),
-);
+]);
 
 export const EXECUTABLE_RUNTIME_OPTIONS = new Set(
   '--cwd --preload --require --import --loader --experimental-loader --env-file --env-file-if-exists --eval -e --print -p'.split(

@@ -11,6 +11,7 @@ import { RevalidatedAuthenticationActionOutcomeKind } from '../../../../nook-web
 import type { AuthenticationWorkflowApproval } from '../../../../nook-web-extension/src/lib/auth-workflow-messages'
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 import { emptyPasswordFormSummary } from '../../../../nook-web-shared/src/extension/password-form-summary-state'
+import type { LoginChecklistMountState } from '../../../../nook-web-extension/src/content/autofill/state'
 
 type RevalidationRequest = ConstructorParameters<
   typeof import('../../../../nook-web-extension/src/content/autofill/workflow-revalidation').RevalidatedAuthenticationAction
@@ -167,40 +168,54 @@ vi.mock(
   }),
 )
 
-vi.mock('../../../../nook-web-extension/src/content/autofill/state', () => ({
-  AuthenticatorPickerKind: { Closed: 'closed', Open: 'open' },
-  LoginPickerKind: { Closed: 'closed', Open: 'open' },
-  WidgetControlDisposition: {
-    Active: 'active',
-    Dismissed: 'dismissed',
-    Detached: 'detached',
+vi.mock(
+  '../../../../nook-web-extension/src/content/autofill/state',
+  async (importOriginal) => {
+    const { LoginChecklistMountKind } =
+      await importOriginal<
+        typeof import('../../../../nook-web-extension/src/content/autofill/state')
+      >()
+    const loginChecklist: LoginChecklistMountState = {
+      kind: LoginChecklistMountKind.Unmounted,
+    }
+    return {
+      LoginChecklistMountKind,
+      AuthenticatorPickerKind: { Closed: 'closed', Open: 'open' },
+      LoginPickerKind: { Closed: 'closed', Open: 'open' },
+      WidgetControlDisposition: {
+        Active: 'active',
+        Dismissed: 'dismissed',
+        Detached: 'detached',
+      },
+      WidgetWorkflowAdmissionKind: {
+        Unassigned: 'unassigned',
+        Assigned: 'assigned',
+      },
+      PendingPickerTakeKind: {
+        Closed: 'closed',
+        DifferentRequest: 'different-request',
+        Taken: 'taken',
+      },
+      pickerState: {},
+      saveOfferState: {
+        clearActiveOffer: vi.fn(),
+        confirmationActive: false,
+      },
+      widgetState: {
+        loginChecklist,
+        busy: false,
+        credentialActuationInFlight: false,
+        workflowAdmission: () => ({ kind: 'unassigned' }),
+        controlDisposition: (control: HTMLButtonElement) =>
+          widgetState.dismissed
+            ? 'dismissed'
+            : control.isConnected
+              ? 'active'
+              : 'detached',
+      },
+    }
   },
-  WidgetWorkflowAdmissionKind: {
-    Unassigned: 'unassigned',
-    Assigned: 'assigned',
-  },
-  PendingPickerTakeKind: {
-    Closed: 'closed',
-    DifferentRequest: 'different-request',
-    Taken: 'taken',
-  },
-  pickerState: {},
-  saveOfferState: {
-    clearActiveOffer: vi.fn(),
-    confirmationActive: false,
-  },
-  widgetState: {
-    busy: false,
-    credentialActuationInFlight: false,
-    workflowAdmission: () => ({ kind: 'unassigned' }),
-    controlDisposition: (control: HTMLButtonElement) =>
-      widgetState.dismissed
-        ? 'dismissed'
-        : control.isConnected
-          ? 'active'
-          : 'detached',
-  },
-}))
+)
 import { widgetState } from '../../../../nook-web-extension/src/content/autofill/state'
 import { authenticatorInteraction } from '../../../../nook-web-extension/src/content/autofill/authenticator-actions'
 import { loginPasskeyInteraction } from '../../../../nook-web-extension/src/content/autofill/login-passkey-actions'
