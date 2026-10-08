@@ -10,6 +10,7 @@ repository.workspace = true
 mock-passkey = ["nook-auth2/mock-passkey"]
 
 [dependencies]
+derive_more = { version = "2.1.1", default-features = false, features = ["from"] }
 nook-companion-core = { path = "../nook-companion-core" }
 nook-app-common = { path = "../nook-app-common" }
 nook-auth2 = { path = "../nook-auth2" }

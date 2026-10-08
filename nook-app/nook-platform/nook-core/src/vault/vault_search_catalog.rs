@@ -22,6 +22,9 @@ use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
 use std::hash::BuildHasher;
 
+mod login_accounts;
+pub use login_accounts::{LoginAccountMetadata, LoginAccountUsername, LoginAccountWebsiteUrl};
+
 const SEARCH_CATALOG_VERSION: u8 = 2;
 const SEARCH_CATALOG_BUCKET_VERSION: u8 = 1;
 const PAYLOAD_DIGEST_BYTES: usize = 16;

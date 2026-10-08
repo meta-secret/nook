@@ -1,7 +1,5 @@
 use super::wasm_bindgen;
-use nook_core::{
-    AuthenticationWorkflowMatch, LoginSecret, SecretId, WebsiteHost, WebsiteLoginSaveDecision,
-};
+use nook_core::{AuthenticationWorkflowMatch, SecretId, WebsiteLoginSaveDecision};
 use tsify::Tsify;
 use wasm_bindgen::JsError;
 
@@ -40,11 +38,6 @@ pub struct NookLoginAccount {
     username: String,
     website_url: String,
     website_host: String,
-}
-
-pub(crate) struct LoginAccountProjection<'a> {
-    pub(crate) secret_id: &'a SecretId,
-    pub(crate) login: LoginSecret,
 }
 
 #[wasm_bindgen]
@@ -314,19 +307,13 @@ impl NookAuthenticationWorkflowSnapshot {
     }
 }
 
-impl From<LoginAccountProjection<'_>> for NookLoginAccount {
-    fn from(mut projection: LoginAccountProjection<'_>) -> Self {
-        use zeroize::Zeroize;
-        let website_host = WebsiteHost::normalize(&projection.login.website_url)
-            .map(WebsiteHost::into_string)
-            .unwrap_or_default();
-        projection.login.password.zeroize();
-        projection.login.notes.zeroize();
+impl From<nook_core::LoginAccountMetadata> for NookLoginAccount {
+    fn from(projection: nook_core::LoginAccountMetadata) -> Self {
         Self {
             secret_id: projection.secret_id.to_string(),
-            username: projection.login.username,
-            website_url: projection.login.website_url,
-            website_host,
+            username: projection.username.into(),
+            website_url: projection.website_url.into(),
+            website_host: projection.website_host.into_string(),
         }
     }
 }
@@ -480,14 +467,14 @@ mod tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
+    use nook_core::SecretId;
     use nook_core::WebsiteLoginSaveDecision;
     use nook_core::{
         AuthenticationApprovalRequirement, AuthenticationOutcomeVerdict,
         AuthenticationSavedLoginCapability, AuthenticationWorkflowAction,
         AuthenticationWorkflowKind, AuthenticationWorkflowMatch, AuthenticationWorkflowSnapshot,
-        AuthenticationWorkflowStage,
+        AuthenticationWorkflowStage, WebsiteHost,
     };
-    use nook_core::{LoginSecret, SecretId};
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -572,17 +559,13 @@ mod browser_tests {
     }
 
     #[wasm_bindgen_test]
-    fn login_account_and_save_plan_wrappers_project_success_and_errors() {
+    fn login_account_and_save_plan_wrappers_project_success_and_errors() -> anyhow::Result<()> {
         let id = SecretId::from_vault_record("secret-1");
-        let login = LoginSecret {
-            website_url: "https://login.example.test/path".into(),
-            username: "alice".into(),
-            password: "secret".into(),
-            notes: String::new(),
-        };
-        let account = NookLoginAccount::from(LoginAccountProjection {
-            secret_id: &id,
-            login,
+        let account = NookLoginAccount::from(nook_core::LoginAccountMetadata {
+            secret_id: id.clone(),
+            website_url: "https://login.example.test/path".to_owned().into(),
+            username: "alice".to_owned().into(),
+            website_host: WebsiteHost::normalize("https://login.example.test/path")?,
         });
         assert_eq!(account.secret_id(), "secret-1");
         assert_eq!(account.username(), "alice");
@@ -623,5 +606,6 @@ mod browser_tests {
             assert_eq!(plan.decision(), expected);
             assert_eq!(plan.secret_id().is_ok(), has_id);
         }
+        Ok(())
     }
 }

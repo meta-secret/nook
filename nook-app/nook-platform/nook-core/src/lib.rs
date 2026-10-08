@@ -368,8 +368,9 @@ pub use vault_epoch_crypto::{
 };
 pub use vault_event_session::{
     EventPublicationDestination, VaultEpochRotated, VaultEventAppend, VaultEventAppended,
-    VaultEventSession, VaultEventSessionRejection, VaultOutboxFlush, VaultOutboxFlushed,
-    VaultSecurityEpochRotationInput,
+    VaultEventSession, VaultEventSessionRejection, VaultHydratedProjection, VaultOutboxFlush,
+    VaultOutboxFlushed, VaultProjectionObservation, VaultProjectionRefresh,
+    VaultSecurityEpochRotationInput, VaultSessionProjection,
 };
 pub use vault_format::{
     VaultFormat, VaultFormatDocument, VaultName, VaultNameRef, VaultRecordSet, VaultStoreIdentity,
@@ -385,6 +386,7 @@ pub use vault_runtime_policy::{
     RuntimeConfigValue, VaultRuntimePolicy,
 };
 pub use vault_search_catalog::{
+    LoginAccountMetadata, LoginAccountUsername, LoginAccountWebsiteUrl,
     SECRET_SEARCH_CATALOG_BUCKET_COUNT, SearchCatalogBucketPayload, SecretSearchCatalog,
     SecretSearchCatalogChangeCount, SecretSearchCatalogReconcile,
 };
