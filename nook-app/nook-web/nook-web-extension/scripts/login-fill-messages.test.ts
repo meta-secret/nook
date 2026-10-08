@@ -11,27 +11,27 @@ describe('website login fill runtime messages', () => {
   test('accepts typed options and fill messages', () => {
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           WebsiteLoginOptionsMessageSchema.decode({
             type: 'nook:website-login-options',
             payload: { origin: 'https://login.example.com' },
           }),
         ),
       )._tag,
-    ).toBe('Right')
+    ).toBe('Success')
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           WebsiteAuthenticatorOptionsMessageSchema.decode({
             type: 'nook:website-authenticator-options',
             payload: { origin: 'https://login.example.com' },
           }),
         ),
       )._tag,
-    ).toBe('Right')
+    ).toBe('Success')
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           WebsiteAuthenticatorFillMessageSchema.decode({
             type: 'nook:website-authenticator-fill',
             payload: {
@@ -43,10 +43,10 @@ describe('website login fill runtime messages', () => {
           }),
         ),
       )._tag,
-    ).toBe('Right')
+    ).toBe('Success')
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           WebsiteLoginRevealMessageSchema.decode({
             type: 'nook:website-login-fill',
             payload: {
@@ -58,23 +58,23 @@ describe('website login fill runtime messages', () => {
           }),
         ),
       )._tag,
-    ).toBe('Right')
+    ).toBe('Success')
   })
 
   test('rejects malformed messages', () => {
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           WebsiteLoginOptionsMessageSchema.decode({
             type: 'nook:website-login-options',
             payload: { origin: '' },
           }),
         ),
       )._tag,
-    ).toBe('Left')
+    ).toBe('Failure')
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           WebsiteLoginRevealMessageSchema.decode({
             type: 'nook:website-login-fill',
             payload: {
@@ -84,10 +84,10 @@ describe('website login fill runtime messages', () => {
           }),
         ),
       )._tag,
-    ).toBe('Left')
+    ).toBe('Failure')
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           WebsiteAuthenticatorFillMessageSchema.decode({
             type: 'nook:website-authenticator-fill',
             payload: {
@@ -97,6 +97,6 @@ describe('website login fill runtime messages', () => {
           }),
         ),
       )._tag,
-    ).toBe('Left')
+    ).toBe('Failure')
   })
 })

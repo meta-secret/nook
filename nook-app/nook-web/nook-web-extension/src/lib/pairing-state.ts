@@ -11,14 +11,14 @@ export class ExtensionPairingStateQueryMessage {
   private constructor() {}
   declare readonly type: ExtensionPairingStateQueryMessageType.NookExtensionPairingStateQuery
   static decode(message: unknown) {
-    return Schema.decodeUnknown(extensionPairingStateQueryMessageSchema)(
+    return Schema.decodeUnknownEffect(extensionPairingStateQueryMessageSchema)(
       message,
     )
   }
 }
 
 type ExtensionPairingStateQueryMessageSchemaFields = {
-  readonly type: Schema.Schema<ExtensionPairingStateQueryMessage['type']>
+  readonly type: Schema.Codec<ExtensionPairingStateQueryMessage['type']>
 }
 
 const extensionPairingStateQueryMessageSchemaFields: ExtensionPairingStateQueryMessageSchemaFields =
@@ -30,7 +30,7 @@ const extensionPairingStateQueryMessageSchemaFields: ExtensionPairingStateQueryM
 
 const extensionPairingStateQueryMessageSchema = Schema.Struct(
   extensionPairingStateQueryMessageSchemaFields,
-) satisfies Schema.Schema<ExtensionPairingStateQueryMessage>
+) satisfies Schema.Codec<ExtensionPairingStateQueryMessage>
 
 export type ExtensionPairingStateLoaderArgs = {
   browser: typeof globalThis

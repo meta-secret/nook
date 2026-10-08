@@ -25,7 +25,9 @@ class MicrosoftLiveProofBuild {
   async launch(): Promise<BrowserContext> {
     const profile = this.testInfo.outputPath('profile')
     switch (
-      Schema.decodeUnknownSync(Schema.Literal('', 'dev'))(process.env.CHANNEL)
+      Schema.decodeUnknownSync(Schema.Literals(['', 'dev']))(
+        process.env.CHANNEL,
+      )
     ) {
       case '':
         return launchExtensionContext(profile)
@@ -175,9 +177,7 @@ test('packaged extension detects the real Microsoft identifier page and opens No
   // Preserve Playwright's assertion diagnostic at its test-runner boundary.
   await Effect.runPromise(
     proof.pipe(
-      Effect.catchTag('UnknownException', (failure) =>
-        Effect.die(failure.error),
-      ),
+      Effect.catchTag('UnknownError', (failure) => Effect.die(failure.cause)),
     ),
   )
 })

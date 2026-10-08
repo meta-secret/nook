@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from 'bun:test'
 import { err } from 'neverthrow'
-import { Effect, Either } from 'effect'
+import { Effect, Result } from 'effect'
 import {
   AccountPickerAuthorizationLifecycle,
   CleanupEvidence,
@@ -70,9 +70,9 @@ describe('interrupted authorization cleanup recovery', () => {
 
     expect(
       await Effect.runPromise(
-        Effect.either(recoverInterruptedAuthorizationCleanup(dependencies)),
+        Effect.result(recoverInterruptedAuthorizationCleanup(dependencies)),
       ),
-    ).toEqual(Either.left([AuthorizationCleanupFailureKind.MarkerLookupFailed]))
+    ).toEqual(Result.fail([AuthorizationCleanupFailureKind.MarkerLookupFailed]))
     expect(events).toEqual(['marker-read-started', 'authorization-invalidated'])
   })
 
@@ -85,9 +85,9 @@ describe('interrupted authorization cleanup recovery', () => {
 
     expect(
       await Effect.runPromise(
-        Effect.either(recoverInterruptedAuthorizationCleanup(dependencies)),
+        Effect.result(recoverInterruptedAuthorizationCleanup(dependencies)),
       ),
-    ).toEqual(Either.left([AuthorizationCleanupFailureKind.Rejected]))
+    ).toEqual(Result.fail([AuthorizationCleanupFailureKind.Rejected]))
   })
 
   test.each([
@@ -110,9 +110,9 @@ describe('interrupted authorization cleanup recovery', () => {
 
     expect(
       await Effect.runPromise(
-        Effect.either(recoverInterruptedAuthorizationCleanup(dependencies)),
+        Effect.result(recoverInterruptedAuthorizationCleanup(dependencies)),
       ),
-    ).toEqual(Either.left([AuthorizationCleanupFailureKind.Rejected]))
+    ).toEqual(Result.fail([AuthorizationCleanupFailureKind.Rejected]))
     expect(release).toHaveBeenCalledWith('epoch-1')
   })
 })

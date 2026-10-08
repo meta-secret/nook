@@ -34,7 +34,9 @@ export class WebsitePasskeyOptionsMessage {
     expiresAt: number
   }
   static decode(message: unknown) {
-    return Schema.decodeUnknown(websitePasskeyOptionsMessageSchema)(message)
+    return Schema.decodeUnknownEffect(websitePasskeyOptionsMessageSchema)(
+      message,
+    )
   }
 
   static async parsedWebsitePasskeyRequest(
@@ -97,7 +99,9 @@ export class WebsitePasskeyPerformMessage {
     credentialId?: string
   }
   static decode(message: unknown) {
-    return Schema.decodeUnknown(websitePasskeyPerformMessageSchema)(message)
+    return Schema.decodeUnknownEffect(websitePasskeyPerformMessageSchema)(
+      message,
+    )
   }
 }
 
@@ -109,53 +113,57 @@ export class WebsitePasskeyCancelMessage {
     requestId: string
   }
   static decode(message: unknown) {
-    return Schema.decodeUnknown(websitePasskeyCancelMessageSchema)(message)
+    return Schema.decodeUnknownEffect(websitePasskeyCancelMessageSchema)(
+      message,
+    )
   }
 }
 
 const websitePasskeyRequestIdSchema = Schema.String.pipe(
-  Schema.minLength(16),
-  Schema.maxLength(128),
+  Schema.check(Schema.isMinLength(16)),
+  Schema.check(Schema.isMaxLength(128)),
 )
 
 type WebsitePasskeyOptionsPayloadSchemaFields = {
-  requestId: Schema.filter<Schema.filter<typeof Schema.String>>
-  ceremony: Schema.Literal<
+  requestId: typeof Schema.String
+  ceremony: Schema.Literals<
     [WebsitePasskeyCeremony.Create, WebsitePasskeyCeremony.Get]
   >
-  requestJson: Schema.filter<Schema.filter<typeof Schema.String>>
-  expiresAt: Schema.filter<Schema.filter<typeof Schema.Number>>
+  requestJson: typeof Schema.String
+  expiresAt: typeof Schema.Number
 }
 const websitePasskeyOptionsPayloadSchemaFields: WebsitePasskeyOptionsPayloadSchemaFields =
   {
     requestId: websitePasskeyRequestIdSchema,
-    ceremony: Schema.Literal(
+    ceremony: Schema.Literals([
       WebsitePasskeyCeremony.Create,
       WebsitePasskeyCeremony.Get,
-    ),
+    ]),
     requestJson: Schema.String.pipe(
-      Schema.minLength(1),
-      Schema.maxLength(65_536),
+      Schema.check(Schema.isMinLength(1)),
+      Schema.check(Schema.isMaxLength(65_536)),
     ),
     expiresAt: Schema.Number.pipe(
-      Schema.filter((expiresAt) => Number.isFinite(expiresAt)),
-      Schema.filter((expiresAt) => expiresAt > Date.now()),
+      Schema.check(
+        Schema.makeFilter((expiresAt) => Number.isFinite(expiresAt)),
+      ),
+      Schema.check(Schema.makeFilter((expiresAt) => expiresAt > Date.now())),
     ),
   }
 
 const websitePasskeyOptionsPayloadSchema = Schema.Struct(
   websitePasskeyOptionsPayloadSchemaFields,
-) satisfies Schema.Schema<WebsitePasskeyOptionsMessage['payload']>
+) satisfies Schema.Codec<WebsitePasskeyOptionsMessage['payload']>
 
 type WebsitePasskeyOptionsMessageSchemaFields = {
-  type: Schema.Literal<[WebsitePasskeyOptionsMessageType]>
+  type: Schema.Literal<WebsitePasskeyOptionsMessageType>
   payload: Schema.Struct<{
-    requestId: Schema.filter<Schema.filter<typeof Schema.String>>
-    ceremony: Schema.Literal<
+    requestId: typeof Schema.String
+    ceremony: Schema.Literals<
       [WebsitePasskeyCeremony.Create, WebsitePasskeyCeremony.Get]
     >
-    requestJson: Schema.filter<Schema.filter<typeof Schema.String>>
-    expiresAt: Schema.filter<Schema.filter<typeof Schema.Number>>
+    requestJson: typeof Schema.String
+    expiresAt: typeof Schema.Number
   }>
 }
 const websitePasskeyOptionsMessageSchemaFields: WebsitePasskeyOptionsMessageSchemaFields =
@@ -168,47 +176,38 @@ const websitePasskeyOptionsMessageSchemaFields: WebsitePasskeyOptionsMessageSche
 
 const websitePasskeyOptionsMessageSchema = Schema.Struct(
   websitePasskeyOptionsMessageSchemaFields,
-) satisfies Schema.Schema<WebsitePasskeyOptionsMessage>
+) satisfies Schema.Codec<WebsitePasskeyOptionsMessage>
 
 type WebsitePasskeyPerformMessagePayloadSchemaFields = {
-  vaultStoreId: Schema.filter<typeof Schema.String>
-  credentialId: Schema.optionalWith<
-    Schema.filter<typeof Schema.String>,
-    { exact: true }
-  >
-  requestId: Schema.filter<Schema.filter<typeof Schema.String>>
-  ceremony: Schema.Literal<
+  vaultStoreId: typeof Schema.String
+  credentialId: Schema.optionalKey<typeof Schema.String>
+  requestId: typeof Schema.String
+  ceremony: Schema.Literals<
     [WebsitePasskeyCeremony.Create, WebsitePasskeyCeremony.Get]
   >
-  requestJson: Schema.filter<Schema.filter<typeof Schema.String>>
-  expiresAt: Schema.filter<Schema.filter<typeof Schema.Number>>
+  requestJson: typeof Schema.String
+  expiresAt: typeof Schema.Number
 }
-type ExactSchemaPropertyOptions = { readonly exact: true }
-const exactSchemaPropertyOptions: ExactSchemaPropertyOptions = { exact: true }
 const websitePasskeyPerformMessagePayloadSchemaFields: WebsitePasskeyPerformMessagePayloadSchemaFields =
   {
     ...websitePasskeyOptionsPayloadSchema.fields,
-    vaultStoreId: Schema.String.pipe(Schema.minLength(1)),
-    credentialId: Schema.optionalWith(
-      Schema.String.pipe(Schema.minLength(1)),
-      exactSchemaPropertyOptions,
+    vaultStoreId: Schema.String.pipe(Schema.check(Schema.isMinLength(1))),
+    credentialId: Schema.optionalKey(
+      Schema.String.pipe(Schema.check(Schema.isMinLength(1))),
     ),
   }
 
 type WebsitePasskeyPerformMessageSchemaFields = {
-  type: Schema.Literal<[WebsitePasskeyPerformMessageType]>
+  type: Schema.Literal<WebsitePasskeyPerformMessageType>
   payload: Schema.Struct<{
-    vaultStoreId: Schema.filter<typeof Schema.String>
-    credentialId: Schema.optionalWith<
-      Schema.filter<typeof Schema.String>,
-      { exact: true }
-    >
-    requestId: Schema.filter<Schema.filter<typeof Schema.String>>
-    ceremony: Schema.Literal<
+    vaultStoreId: typeof Schema.String
+    credentialId: Schema.optionalKey<typeof Schema.String>
+    requestId: typeof Schema.String
+    ceremony: Schema.Literals<
       [WebsitePasskeyCeremony.Create, WebsitePasskeyCeremony.Get]
     >
-    requestJson: Schema.filter<Schema.filter<typeof Schema.String>>
-    expiresAt: Schema.filter<Schema.filter<typeof Schema.Number>>
+    requestJson: typeof Schema.String
+    expiresAt: typeof Schema.Number
   }>
 }
 const websitePasskeyPerformMessageSchemaFields: WebsitePasskeyPerformMessageSchemaFields =
@@ -221,18 +220,18 @@ const websitePasskeyPerformMessageSchemaFields: WebsitePasskeyPerformMessageSche
 
 const websitePasskeyPerformMessageSchema = Schema.Struct(
   websitePasskeyPerformMessageSchemaFields,
-) satisfies Schema.Schema<WebsitePasskeyPerformMessage>
+) satisfies Schema.Codec<WebsitePasskeyPerformMessage>
 
 type WebsitePasskeyCancelMessagePayloadSchemaFields = {
-  requestId: Schema.filter<Schema.filter<typeof Schema.String>>
+  requestId: typeof Schema.String
 }
 const websitePasskeyCancelMessagePayloadSchemaFields: WebsitePasskeyCancelMessagePayloadSchemaFields =
   { requestId: websitePasskeyRequestIdSchema }
 
 type WebsitePasskeyCancelMessageSchemaFields = {
-  type: Schema.Literal<[WebsitePasskeyCancelMessageType]>
+  type: Schema.Literal<WebsitePasskeyCancelMessageType>
   payload: Schema.Struct<{
-    requestId: Schema.filter<Schema.filter<typeof Schema.String>>
+    requestId: typeof Schema.String
   }>
 }
 const websitePasskeyCancelMessageSchemaFields: WebsitePasskeyCancelMessageSchemaFields =
@@ -245,7 +244,7 @@ const websitePasskeyCancelMessageSchemaFields: WebsitePasskeyCancelMessageSchema
 
 const websitePasskeyCancelMessageSchema = Schema.Struct(
   websitePasskeyCancelMessageSchemaFields,
-) satisfies Schema.Schema<WebsitePasskeyCancelMessage>
+) satisfies Schema.Codec<WebsitePasskeyCancelMessage>
 
 export type WebsitePasskeyAccount = {
   credentialId: string

@@ -557,11 +557,11 @@ describe('extension pairing grant transport', () => {
     }> = {}
 
     const decoded = await Effect.runPromise(
-      Effect.either(
+      Effect.result(
         policy.decodeStoredExtensionPairingGrant(storageSnapshot.grant),
       ),
     )
-    expect(decoded._tag).toBe('Left')
+    expect(decoded._tag).toBe('Failure')
   })
 
   test('projects only session identity fields from stored grants', () => {

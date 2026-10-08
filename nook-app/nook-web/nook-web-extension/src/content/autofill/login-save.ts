@@ -287,7 +287,7 @@ class LoginSaveInteraction {
           return yield* Effect.fail(
             new Error('Authentication navigation projection unavailable.'),
           )
-        const projected = yield* Schema.decodeUnknown(
+        const projected = yield* Schema.decodeUnknownEffect(
           CompanionWasmNavigationPathDecoder,
         )(delivery.response)
         observation.navigatedAwayFromAuthPath ||=
@@ -712,7 +712,7 @@ class LoginSaveInteraction {
               widgetState.busy = false
             })
         }).pipe(
-          Effect.catchAll(() =>
+          Effect.catch(() =>
             Effect.sync(() => {
               description.textContent = workflowUi.translatedMessage(
                 BROWSER_MESSAGE_KEYS.WidgetSaveLoginFailed,

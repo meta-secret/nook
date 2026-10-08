@@ -25,7 +25,7 @@ describe('enrollment message guards', () => {
   test('accepts bounded otpauth preview, stage, and confirm payloads', () => {
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           WebsiteAuthenticatorEnrollPreviewMessageSchema.decode({
             type: 'nook:website-authenticator-enroll-preview',
             payload: {
@@ -36,11 +36,11 @@ describe('enrollment message guards', () => {
           }),
         ),
       )._tag,
-    ).toBe('Right')
+    ).toBe('Success')
 
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           WebsiteAuthenticatorEnrollStageMessageSchema.decode({
             type: 'nook:website-authenticator-enroll-stage',
             payload: {
@@ -52,11 +52,11 @@ describe('enrollment message guards', () => {
           }),
         ),
       )._tag,
-    ).toBe('Right')
+    ).toBe('Success')
 
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           WebsiteAuthenticatorEnrollConfirmMessageSchema.decode({
             type: 'nook:website-authenticator-enroll-confirm',
             payload: {
@@ -67,11 +67,11 @@ describe('enrollment message guards', () => {
           }),
         ),
       )._tag,
-    ).toBe('Right')
+    ).toBe('Success')
 
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           WebsiteAuthenticatorEnrollConfirmMessageSchema.decode({
             type: 'nook:website-authenticator-enroll-confirm',
             payload: {
@@ -83,13 +83,13 @@ describe('enrollment message guards', () => {
           }),
         ),
       )._tag,
-    ).toBe('Left')
+    ).toBe('Failure')
   })
 
   test('rejects hotp, missing vault, and invalid backup attach modes', () => {
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           WebsiteAuthenticatorEnrollPreviewMessageSchema.decode({
             type: 'nook:website-authenticator-enroll-preview',
             payload: {
@@ -100,11 +100,11 @@ describe('enrollment message guards', () => {
           }),
         ),
       )._tag,
-    ).toBe('Left')
+    ).toBe('Failure')
 
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           WebsiteAuthenticatorBackupAttachMessageSchema.decode({
             type: 'nook:website-authenticator-backup-attach',
             payload: {
@@ -117,11 +117,11 @@ describe('enrollment message guards', () => {
           }),
         ),
       )._tag,
-    ).toBe('Left')
+    ).toBe('Failure')
 
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           WebsiteAuthenticatorBackupAttachMessageSchema.decode({
             type: 'nook:website-authenticator-backup-attach',
             payload: {
@@ -134,7 +134,7 @@ describe('enrollment message guards', () => {
           }),
         ),
       )._tag,
-    ).toBe('Right')
+    ).toBe('Success')
   })
 })
 

@@ -178,7 +178,7 @@ export async function handleCompanionWasmMessage(
         return ok({
           activityProgress: authentication_workflow_activity_progress(
             Schema.decodeUnknownSync(
-              Schema.Enums(AuthenticationWorkflowActivity),
+              Schema.Enum(AuthenticationWorkflowActivity),
             )(message.payload.activity),
           ),
         })

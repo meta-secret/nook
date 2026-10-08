@@ -58,7 +58,7 @@ const sessionAuthenticatorAccountSchemaFields: SessionAuthenticatorAccountSchema
   }
 const sessionAuthenticatorAccountSchema = Schema.Struct(
   sessionAuthenticatorAccountSchemaFields,
-) satisfies Schema.Schema<SessionAuthenticatorAccount>
+) satisfies Schema.Codec<SessionAuthenticatorAccount>
 
 type SessionLoginAccountSchemaFields = {
   readonly secretId: typeof Schema.String
@@ -75,19 +75,19 @@ const sessionLoginAccountSchemaFields: SessionLoginAccountSchemaFields = {
 }
 const sessionLoginAccountSchema = Schema.Struct(
   sessionLoginAccountSchemaFields,
-) satisfies Schema.Schema<SessionLoginAccount>
+) satisfies Schema.Codec<SessionLoginAccount>
 
 const sessionAccountsSchema = Schema.Array(
-  Schema.Union(sessionAuthenticatorAccountSchema, sessionLoginAccountSchema),
-) satisfies Schema.Schema<readonly SessionAccount[]>
+  Schema.Union([sessionAuthenticatorAccountSchema, sessionLoginAccountSchema]),
+) satisfies Schema.Codec<readonly SessionAccount[]>
 
 type PendingAuthenticatorPickerSchemaFields = {
   requestId: typeof Schema.String
   origin: typeof Schema.String
-  tabId: Schema.filter<typeof Schema.Number>
-  frameId: Schema.filter<typeof Schema.Number>
-  allowedVaultStoreIds: Schema.Array$<Schema.filter<typeof Schema.String>>
-  expiresAt: Schema.filter<typeof Schema.Number>
+  tabId: typeof Schema.Number
+  frameId: typeof Schema.Number
+  allowedVaultStoreIds: Schema.$Array<typeof Schema.String>
+  expiresAt: typeof Schema.Number
 }
 
 const pendingAuthenticatorPickerSchemaFields: PendingAuthenticatorPickerSchemaFields =
@@ -95,18 +95,26 @@ const pendingAuthenticatorPickerSchemaFields: PendingAuthenticatorPickerSchemaFi
     requestId: Schema.String,
     origin: Schema.String,
     tabId: Schema.Number.pipe(
-      Schema.filter((value) => Number.isInteger(value) && value >= 0),
+      Schema.check(
+        Schema.makeFilter((value) => Number.isInteger(value) && value >= 0),
+      ),
     ),
     frameId: Schema.Number.pipe(
-      Schema.filter((value) => Number.isInteger(value) && value >= 0),
+      Schema.check(
+        Schema.makeFilter((value) => Number.isInteger(value) && value >= 0),
+      ),
     ),
-    allowedVaultStoreIds: Schema.Array(Schema.String.pipe(Schema.minLength(1))),
-    expiresAt: Schema.Number.pipe(Schema.filter(Number.isFinite)),
+    allowedVaultStoreIds: Schema.Array(
+      Schema.String.pipe(Schema.check(Schema.isMinLength(1))),
+    ),
+    expiresAt: Schema.Number.pipe(
+      Schema.check(Schema.makeFilter(Number.isFinite)),
+    ),
   }
 
 const pendingAuthenticatorPickerSchema = Schema.Struct(
   pendingAuthenticatorPickerSchemaFields,
-) satisfies Schema.Schema<PendingAuthenticatorPicker>
+) satisfies Schema.Codec<PendingAuthenticatorPicker>
 
 class LoginPickerSessionSchema {
   private static readonly awaitingFields = {
@@ -114,31 +122,34 @@ class LoginPickerSessionSchema {
   } satisfies Schema.Struct.Fields
   private static readonly boundFields = {
     kind: Schema.Literal(LoginPickerFrameBindingKind.Bound),
-    frameId: Schema.Number.pipe(Schema.int(), Schema.positive()),
-    documentId: Schema.String.pipe(Schema.minLength(1)),
+    frameId: Schema.Number.pipe(
+      Schema.check(Schema.isInt()),
+      Schema.check(Schema.isGreaterThan(0)),
+    ),
+    documentId: Schema.String.pipe(Schema.check(Schema.isMinLength(1))),
   } satisfies Schema.Struct.Fields
   private static readonly fields = {
     ...pendingAuthenticatorPickerSchemaFields,
-    parentDocumentId: Schema.String.pipe(Schema.minLength(1)),
-    pickerDocument: Schema.Union(
+    parentDocumentId: Schema.String.pipe(Schema.check(Schema.isMinLength(1))),
+    pickerDocument: Schema.Union([
       Schema.Struct(LoginPickerSessionSchema.awaitingFields),
       Schema.Struct(LoginPickerSessionSchema.boundFields),
-    ),
+    ]),
   } satisfies Schema.Struct.Fields
   static readonly value = Schema.Struct(LoginPickerSessionSchema.fields)
 }
 
 class AccountPickerSessionCodec {
   decodeSessionAccounts(value: SessionAccountWireValue) {
-    return Schema.decodeUnknown(sessionAccountsSchema)(value)
+    return Schema.decodeUnknownEffect(sessionAccountsSchema)(value)
   }
 
   decodePendingAuthenticatorPicker(value: ExtensionSessionStorageValue) {
-    return Schema.decodeUnknown(pendingAuthenticatorPickerSchema)(value)
+    return Schema.decodeUnknownEffect(pendingAuthenticatorPickerSchema)(value)
   }
 
   decodePendingLoginPicker(value: ExtensionSessionStorageValue) {
-    return Schema.decodeUnknown(LoginPickerSessionSchema.value)(value)
+    return Schema.decodeUnknownEffect(LoginPickerSessionSchema.value)(value)
   }
 }
 

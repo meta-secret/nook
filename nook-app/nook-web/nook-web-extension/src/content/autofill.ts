@@ -466,8 +466,10 @@ export class AuthenticationScanRenderLifecycle {
   }
 
   scanAndRender(): Promise<void> {
+    const generatorContext: AuthenticationScanRenderLifecycleGeneratorContext =
+      { self: this }
     return Effect.runPromise(
-      Effect.gen(this, function* () {
+      Effect.gen(generatorContext, function* () {
         const outcome = yield* Effect.promise(() => this.performScanAndRender())
         switch (outcome) {
           case AuthenticationScanOutcome.Inconclusive: {
@@ -771,3 +773,7 @@ void runAfterCompanionWasmReady({
     }
   },
 })
+
+type AuthenticationScanRenderLifecycleGeneratorContext = {
+  readonly self: AuthenticationScanRenderLifecycle
+}

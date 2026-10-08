@@ -1,6 +1,7 @@
 {
   "extends": ["@tsconfig/svelte/tsconfig.json", "../tsconfig.safety.json"],
   "compilerOptions": {
+    "allowImportingTsExtensions": true,
     "target": "es2023",
     "module": "esnext",
     "types": ["svelte", "vite/client", "node"],

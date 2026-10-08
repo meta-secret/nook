@@ -1,6 +1,5 @@
 import { DEFAULT_SITE_URL } from "$lib/content/sitemap";
 import { Effect, Schema } from "effect";
-import * as ParseResult from "effect/ParseResult";
 import {
   InstalledExtensionRuntimeKind,
   extensionConnectionBrowser,
@@ -79,14 +78,14 @@ export enum ExtensionDeploymentMetadataDecodeFailureKind {
 
 type ExtensionDeploymentMetadataDecodeFailureRequest = {
   readonly kind: ExtensionDeploymentMetadataDecodeFailureKind;
-  readonly cause: ParseResult.ParseError | string;
+  readonly cause: Schema.SchemaError | string;
 };
 
 export class ExtensionDeploymentMetadataDecodeFailure extends Error {
   readonly _tag = "ExtensionDeploymentMetadataDecodeFailure";
 
   readonly kind: ExtensionDeploymentMetadataDecodeFailureKind;
-  override readonly cause: ParseResult.ParseError | string;
+  override readonly cause: Schema.SchemaError | string;
 
   constructor(request: ExtensionDeploymentMetadataDecodeFailureRequest) {
     super(request.kind);
@@ -98,14 +97,14 @@ export class ExtensionDeploymentMetadataDecodeFailure extends Error {
 class ExtensionDeploymentMetadataFields {
   static build() {
     return {
-      channel: Schema.String.pipe(Schema.minLength(1)),
-      version: Schema.String.pipe(Schema.minLength(1)),
-      extension_id: Schema.String.pipe(Schema.minLength(1)),
-      install_method: Schema.Literal(
+      channel: Schema.String.pipe(Schema.check(Schema.isMinLength(1))),
+      version: Schema.String.pipe(Schema.check(Schema.isMinLength(1))),
+      extension_id: Schema.String.pipe(Schema.check(Schema.isMinLength(1))),
+      install_method: Schema.Literals([
         ExtensionInstallMethod.ChromeWebStore,
         ExtensionInstallMethod.ManualZip,
-      ),
-      install_url: Schema.String.pipe(Schema.minLength(1)),
+      ]),
+      install_url: Schema.String.pipe(Schema.check(Schema.isMinLength(1))),
     };
   }
 }
@@ -122,7 +121,9 @@ export class ExtensionDeploymentMetadataDecoder {
     ExtensionDeploymentMetadata,
     ExtensionDeploymentMetadataDecodeFailure
   > {
-    return Schema.decodeUnknown(ExtensionDeploymentMetadataSchema)(value).pipe(
+    return Schema.decodeUnknownEffect(ExtensionDeploymentMetadataSchema)(
+      value,
+    ).pipe(
       Effect.mapError((cause) => {
         const request: ExtensionDeploymentMetadataDecodeFailureRequest = {
           kind: ExtensionDeploymentMetadataDecodeFailureKind.Invalid,
@@ -132,7 +133,9 @@ export class ExtensionDeploymentMetadataDecoder {
       }),
       Effect.flatMap((metadata) => {
         const installUrl = metadata.install_url.trim();
-        return Schema.decodeUnknown(Schema.URL)(installUrl).pipe(
+        return Schema.decodeUnknownEffect(Schema.URLFromString)(
+          installUrl,
+        ).pipe(
           Effect.mapError((cause) => {
             const request: ExtensionDeploymentMetadataDecodeFailureRequest = {
               kind: ExtensionDeploymentMetadataDecodeFailureKind.Invalid,
@@ -235,14 +238,14 @@ class ExtensionInstallationBrowser {
 
   private parseExtensionMetadata(value: unknown): ExtensionMetadataParse {
     const decoded = Effect.runSync(
-      Effect.either(ExtensionDeploymentMetadataDecoder.decode(value)),
+      Effect.result(ExtensionDeploymentMetadataDecoder.decode(value)),
     );
-    if (decoded._tag === "Left") {
+    if (decoded._tag === "Failure") {
       return { kind: ExtensionMetadataParseKind.Invalid };
     }
     return {
       kind: ExtensionMetadataParseKind.Valid,
-      metadata: decoded.right,
+      metadata: decoded.success,
     };
   }
 

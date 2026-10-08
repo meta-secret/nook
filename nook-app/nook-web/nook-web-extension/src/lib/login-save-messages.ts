@@ -40,7 +40,9 @@ export class WebsiteLoginSaveOfferMessage {
     password: string
   }
   static decode(message: unknown) {
-    return Schema.decodeUnknown(websiteLoginSaveOfferMessageSchema)(message)
+    return Schema.decodeUnknownEffect(websiteLoginSaveOfferMessageSchema)(
+      message,
+    )
   }
 }
 
@@ -56,7 +58,9 @@ export class WebsiteLoginSavePendingMessage {
     origin: string
   }
   static decode(message: unknown) {
-    return Schema.decodeUnknown(websiteLoginSavePendingMessageSchema)(message)
+    return Schema.decodeUnknownEffect(websiteLoginSavePendingMessageSchema)(
+      message,
+    )
   }
 }
 
@@ -74,13 +78,15 @@ export class WebsiteLoginSaveCommitMessage {
     evidence: AuthenticationOutcomeObservationView
   }
   static decodeOutcomeObservation(value: unknown) {
-    return Schema.decodeUnknown(AuthenticationOutcomeObservationViewSchema)(
-      value,
-    )
+    return Schema.decodeUnknownEffect(
+      AuthenticationOutcomeObservationViewSchema,
+    )(value)
   }
 
   static decode(message: unknown) {
-    return Schema.decodeUnknown(websiteLoginSaveCommitMessageSchema)(message)
+    return Schema.decodeUnknownEffect(websiteLoginSaveCommitMessageSchema)(
+      message,
+    )
   }
 }
 
@@ -97,14 +103,18 @@ export class WebsiteLoginSaveDismissMessage {
     offerId: string
   }
   static decode(message: unknown) {
-    return Schema.decodeUnknown(websiteLoginSaveDismissMessageSchema)(message)
+    return Schema.decodeUnknownEffect(websiteLoginSaveDismissMessageSchema)(
+      message,
+    )
   }
 }
 
-const loginSaveNonEmptyStringSchema = Schema.String.pipe(Schema.minLength(1))
+const loginSaveNonEmptyStringSchema = Schema.String.pipe(
+  Schema.check(Schema.isMinLength(1)),
+)
 
 type LoginSaveOriginSchemaFields = {
-  origin: Schema.filter<typeof Schema.String>
+  origin: typeof Schema.String
 }
 const loginSaveOriginSchemaFields: LoginSaveOriginSchemaFields = {
   origin: loginSaveNonEmptyStringSchema,
@@ -113,25 +123,25 @@ const loginSaveOriginSchemaFields: LoginSaveOriginSchemaFields = {
 const loginSaveOriginSchema = Schema.Struct(loginSaveOriginSchemaFields)
 
 type WebsiteLoginSaveOfferMessagePayloadSchemaFields = {
-  username: Schema.filter<typeof Schema.String>
-  password: Schema.filter<typeof Schema.String>
-  origin: Schema.filter<typeof Schema.String>
+  username: typeof Schema.String
+  password: typeof Schema.String
+  origin: typeof Schema.String
 }
 const websiteLoginSaveOfferMessagePayloadSchemaFields: WebsiteLoginSaveOfferMessagePayloadSchemaFields =
   {
     ...loginSaveOriginSchema.fields,
     username: Schema.String.pipe(
-      Schema.filter((username) => username.trim().length > 0),
+      Schema.check(Schema.makeFilter((username) => username.trim().length > 0)),
     ),
     password: loginSaveNonEmptyStringSchema,
   }
 
 type WebsiteLoginSaveOfferMessageSchemaFields = {
-  type: Schema.Literal<[WebsiteLoginSaveOfferMessageType]>
+  type: Schema.Literal<WebsiteLoginSaveOfferMessageType>
   payload: Schema.Struct<{
-    username: Schema.filter<typeof Schema.String>
-    password: Schema.filter<typeof Schema.String>
-    origin: Schema.filter<typeof Schema.String>
+    username: typeof Schema.String
+    password: typeof Schema.String
+    origin: typeof Schema.String
   }>
 }
 const websiteLoginSaveOfferMessageSchemaFields: WebsiteLoginSaveOfferMessageSchemaFields =
@@ -144,11 +154,11 @@ const websiteLoginSaveOfferMessageSchemaFields: WebsiteLoginSaveOfferMessageSche
 
 const websiteLoginSaveOfferMessageSchema = Schema.Struct(
   websiteLoginSaveOfferMessageSchemaFields,
-) satisfies Schema.Schema<WebsiteLoginSaveOfferMessage>
+) satisfies Schema.Codec<WebsiteLoginSaveOfferMessage>
 
 type WebsiteLoginSavePendingMessageSchemaFields = {
-  type: Schema.Literal<[WebsiteLoginSavePendingMessageType]>
-  payload: Schema.Struct<{ origin: Schema.filter<typeof Schema.String> }>
+  type: Schema.Literal<WebsiteLoginSavePendingMessageType>
+  payload: Schema.Struct<{ origin: typeof Schema.String }>
 }
 const websiteLoginSavePendingMessageSchemaFields: WebsiteLoginSavePendingMessageSchemaFields =
   {
@@ -160,12 +170,12 @@ const websiteLoginSavePendingMessageSchemaFields: WebsiteLoginSavePendingMessage
 
 const websiteLoginSavePendingMessageSchema = Schema.Struct(
   websiteLoginSavePendingMessageSchemaFields,
-) satisfies Schema.Schema<WebsiteLoginSavePendingMessage>
+) satisfies Schema.Codec<WebsiteLoginSavePendingMessage>
 
 type WebsiteLoginSaveCommitMessagePayloadSchemaFields = {
-  offerId: Schema.filter<typeof Schema.String>
+  offerId: typeof Schema.String
   evidence: typeof AuthenticationOutcomeObservationViewSchema
-  origin: Schema.filter<typeof Schema.String>
+  origin: typeof Schema.String
 }
 const websiteLoginSaveCommitMessagePayloadSchemaFields: WebsiteLoginSaveCommitMessagePayloadSchemaFields =
   {
@@ -175,11 +185,11 @@ const websiteLoginSaveCommitMessagePayloadSchemaFields: WebsiteLoginSaveCommitMe
   }
 
 type WebsiteLoginSaveCommitMessageSchemaFields = {
-  type: Schema.Literal<[WebsiteLoginSaveCommitMessageType]>
+  type: Schema.Literal<WebsiteLoginSaveCommitMessageType>
   payload: Schema.Struct<{
-    offerId: Schema.filter<typeof Schema.String>
+    offerId: typeof Schema.String
     evidence: typeof AuthenticationOutcomeObservationViewSchema
-    origin: Schema.filter<typeof Schema.String>
+    origin: typeof Schema.String
   }>
 }
 const websiteLoginSaveCommitMessageSchemaFields: WebsiteLoginSaveCommitMessageSchemaFields =
@@ -192,11 +202,11 @@ const websiteLoginSaveCommitMessageSchemaFields: WebsiteLoginSaveCommitMessageSc
 
 const websiteLoginSaveCommitMessageSchema = Schema.Struct(
   websiteLoginSaveCommitMessageSchemaFields,
-) satisfies Schema.Schema<WebsiteLoginSaveCommitMessage>
+) satisfies Schema.Codec<WebsiteLoginSaveCommitMessage>
 
 type WebsiteLoginSaveDismissMessagePayloadSchemaFields = {
-  offerId: Schema.filter<typeof Schema.String>
-  origin: Schema.filter<typeof Schema.String>
+  offerId: typeof Schema.String
+  origin: typeof Schema.String
 }
 const websiteLoginSaveDismissMessagePayloadSchemaFields: WebsiteLoginSaveDismissMessagePayloadSchemaFields =
   {
@@ -205,10 +215,10 @@ const websiteLoginSaveDismissMessagePayloadSchemaFields: WebsiteLoginSaveDismiss
   }
 
 type WebsiteLoginSaveDismissMessageSchemaFields = {
-  type: Schema.Literal<[WebsiteLoginSaveDismissMessageType]>
+  type: Schema.Literal<WebsiteLoginSaveDismissMessageType>
   payload: Schema.Struct<{
-    offerId: Schema.filter<typeof Schema.String>
-    origin: Schema.filter<typeof Schema.String>
+    offerId: typeof Schema.String
+    origin: typeof Schema.String
   }>
 }
 const websiteLoginSaveDismissMessageSchemaFields: WebsiteLoginSaveDismissMessageSchemaFields =
@@ -221,4 +231,4 @@ const websiteLoginSaveDismissMessageSchemaFields: WebsiteLoginSaveDismissMessage
 
 const websiteLoginSaveDismissMessageSchema = Schema.Struct(
   websiteLoginSaveDismissMessageSchemaFields,
-) satisfies Schema.Schema<WebsiteLoginSaveDismissMessage>
+) satisfies Schema.Codec<WebsiteLoginSaveDismissMessage>

@@ -155,7 +155,7 @@ class RecoveryCopyObservation {
           return yield* Effect.fail(
             new Error('Backup code extraction runtime unavailable.'),
           )
-        const result = yield* Schema.decodeUnknown(
+        const result = yield* Schema.decodeUnknownEffect(
           CompanionWasmBackupCodeExtractionDecoder,
         )(delivery.response)
         return result.codes

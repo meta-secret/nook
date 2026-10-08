@@ -8,7 +8,7 @@ import {
   vaultAppAliases,
   vaultSpaPlugin,
   type VaultSpaOptions,
-} from "../nook-web-shared/vite-config";
+} from "../nook-web-shared/vite-config.ts";
 
 const simpleAppUrl =
   process.env.VITE_SIMPLE_APP_URL?.trim() || "https://simple.nokey.sh";

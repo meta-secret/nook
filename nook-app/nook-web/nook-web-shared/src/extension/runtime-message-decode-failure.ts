@@ -1,4 +1,4 @@
-import * as ParseResult from "effect/ParseResult";
+import type { Schema } from "effect";
 
 export enum RuntimeMessageDecodeFailureKind {
   OpenCompanionLauncher = "open-companion-launcher",
@@ -25,7 +25,7 @@ export enum RuntimeMessageDecodeCauseKind {
 export type RuntimeMessageDecodeCause =
   | {
       readonly kind: RuntimeMessageDecodeCauseKind.Parse;
-      readonly error: ParseResult.ParseError;
+      readonly error: Schema.SchemaError;
     }
   | {
       readonly kind: RuntimeMessageDecodeCauseKind.Error;
@@ -56,7 +56,7 @@ export class RuntimeMessageDecodeFailure extends Error {
   override readonly cause: RuntimeMessageDecodeCause;
 
   static fromParseError(
-    request: RuntimeMessageDecodeFailureRequest<ParseResult.ParseError>,
+    request: RuntimeMessageDecodeFailureRequest<Schema.SchemaError>,
   ): RuntimeMessageDecodeFailure {
     const failureRequest: RuntimeMessageDecodeFailureRequest<RuntimeMessageDecodeCause> =
       {

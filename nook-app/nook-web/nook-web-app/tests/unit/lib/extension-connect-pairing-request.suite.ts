@@ -11,7 +11,7 @@ describe('extension-owned pairing start', () => {
   test('requires the complete extension device request', () => {
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           BeginExtensionPairingMessageGuard.decode({
             type: 'nook:begin-extension-pairing',
             payload: {
@@ -23,10 +23,10 @@ describe('extension-owned pairing start', () => {
           }),
         ),
       )._tag,
-    ).toBe('Right')
+    ).toBe('Success')
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           BeginExtensionPairingMessageGuard.decode({
             type: 'nook:begin-extension-pairing',
             payload: {
@@ -38,7 +38,7 @@ describe('extension-owned pairing start', () => {
           }),
         ),
       )._tag,
-    ).toBe('Left')
+    ).toBe('Failure')
   })
 
   test('requires complete nonce-bound identity handoff requests', () => {
@@ -54,21 +54,21 @@ describe('extension-owned pairing start', () => {
     }
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           ExtensionIdentityHandoffRequestMessageSchema.decode(message),
         ),
       )._tag,
-    ).toBe('Right')
+    ).toBe('Success')
     expect(
       Effect.runSync(
-        Effect.either(
+        Effect.result(
           ExtensionIdentityHandoffRequestMessageSchema.decode({
             ...message,
             payload: { ...message.payload, nonce: '' },
           }),
         ),
       )._tag,
-    ).toBe('Left')
+    ).toBe('Failure')
   })
 })
 

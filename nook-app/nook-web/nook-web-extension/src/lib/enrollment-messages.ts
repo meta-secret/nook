@@ -13,13 +13,13 @@ export class WebsiteAuthenticatorEnrollPreviewMessage {
     otpauthUri: string
   }
   static decodeOtpauthTotpUri(value: unknown) {
-    return Schema.decodeUnknown(otpauthTotpUriSchema)(value)
+    return Schema.decodeUnknownEffect(otpauthTotpUriSchema)(value)
   }
 
   static decode(message: unknown) {
-    return Schema.decodeUnknown(websiteAuthenticatorEnrollPreviewMessageSchema)(
-      message,
-    )
+    return Schema.decodeUnknownEffect(
+      websiteAuthenticatorEnrollPreviewMessageSchema,
+    )(message)
   }
 }
 
@@ -37,9 +37,9 @@ export class WebsiteAuthenticatorEnrollStageMessage {
     otpauthUri: string
   }
   static decode(message: unknown) {
-    return Schema.decodeUnknown(websiteAuthenticatorEnrollStageMessageSchema)(
-      message,
-    )
+    return Schema.decodeUnknownEffect(
+      websiteAuthenticatorEnrollStageMessageSchema,
+    )(message)
   }
 }
 
@@ -56,9 +56,9 @@ export class WebsiteAuthenticatorEnrollCodeMessage {
     stageId: string
   }
   static decode(message: unknown) {
-    return Schema.decodeUnknown(websiteAuthenticatorEnrollCodeMessageSchema)(
-      message,
-    )
+    return Schema.decodeUnknownEffect(
+      websiteAuthenticatorEnrollCodeMessageSchema,
+    )(message)
   }
 }
 
@@ -76,9 +76,9 @@ export class WebsiteAuthenticatorEnrollConfirmMessage {
     stageId: string
   }
   static decode(message: unknown) {
-    return Schema.decodeUnknown(websiteAuthenticatorEnrollConfirmMessageSchema)(
-      message,
-    )
+    return Schema.decodeUnknownEffect(
+      websiteAuthenticatorEnrollConfirmMessageSchema,
+    )(message)
   }
 }
 
@@ -95,9 +95,9 @@ export class WebsiteAuthenticatorEnrollDismissMessage {
     stageId: string
   }
   static decode(message: unknown) {
-    return Schema.decodeUnknown(websiteAuthenticatorEnrollDismissMessageSchema)(
-      message,
-    )
+    return Schema.decodeUnknownEffect(
+      websiteAuthenticatorEnrollDismissMessageSchema,
+    )(message)
   }
 }
 
@@ -113,9 +113,9 @@ export class WebsiteAuthenticatorEnrollPendingMessage {
     origin: string
   }
   static decode(message: unknown) {
-    return Schema.decodeUnknown(websiteAuthenticatorEnrollPendingMessageSchema)(
-      message,
-    )
+    return Schema.decodeUnknownEffect(
+      websiteAuthenticatorEnrollPendingMessageSchema,
+    )(message)
   }
 }
 
@@ -142,16 +142,18 @@ export class WebsiteAuthenticatorBackupAttachMessage {
       | WebsiteAuthenticatorBackupAttachMessageMode.Merge
   }
   static decode(message: unknown) {
-    return Schema.decodeUnknown(websiteAuthenticatorBackupAttachMessageSchema)(
-      message,
-    )
+    return Schema.decodeUnknownEffect(
+      websiteAuthenticatorBackupAttachMessageSchema,
+    )(message)
   }
 }
 
-const enrollmentNonEmptyStringSchema = Schema.String.pipe(Schema.minLength(1))
+const enrollmentNonEmptyStringSchema = Schema.String.pipe(
+  Schema.check(Schema.isMinLength(1)),
+)
 
 type EnrollmentOriginSchemaFields = {
-  origin: Schema.filter<typeof Schema.String>
+  origin: typeof Schema.String
 }
 const enrollmentOriginSchemaFields: EnrollmentOriginSchemaFields = {
   origin: enrollmentNonEmptyStringSchema,
@@ -160,12 +162,14 @@ const enrollmentOriginSchemaFields: EnrollmentOriginSchemaFields = {
 const enrollmentOriginSchema = Schema.Struct(enrollmentOriginSchemaFields)
 
 const otpauthTotpUriSchema = Schema.String.pipe(
-  Schema.filter((value) => value.startsWith('otpauth://totp/')),
+  Schema.check(
+    Schema.makeFilter((value) => value.startsWith('otpauth://totp/')),
+  ),
 )
 
 type WebsiteAuthenticatorEnrollPreviewMessagePayloadSchemaFields = {
-  otpauthUri: Schema.filter<typeof Schema.String>
-  origin: Schema.filter<typeof Schema.String>
+  otpauthUri: typeof Schema.String
+  origin: typeof Schema.String
 }
 const websiteAuthenticatorEnrollPreviewMessagePayloadSchemaFields: WebsiteAuthenticatorEnrollPreviewMessagePayloadSchemaFields =
   {
@@ -174,10 +178,10 @@ const websiteAuthenticatorEnrollPreviewMessagePayloadSchemaFields: WebsiteAuthen
   }
 
 type WebsiteAuthenticatorEnrollPreviewMessageSchemaFields = {
-  type: Schema.Literal<[WebsiteAuthenticatorEnrollPreviewMessageType]>
+  type: Schema.Literal<WebsiteAuthenticatorEnrollPreviewMessageType>
   payload: Schema.Struct<{
-    otpauthUri: Schema.filter<typeof Schema.String>
-    origin: Schema.filter<typeof Schema.String>
+    otpauthUri: typeof Schema.String
+    origin: typeof Schema.String
   }>
 }
 const websiteAuthenticatorEnrollPreviewMessageSchemaFields: WebsiteAuthenticatorEnrollPreviewMessageSchemaFields =
@@ -192,12 +196,12 @@ const websiteAuthenticatorEnrollPreviewMessageSchemaFields: WebsiteAuthenticator
 
 const websiteAuthenticatorEnrollPreviewMessageSchema = Schema.Struct(
   websiteAuthenticatorEnrollPreviewMessageSchemaFields,
-) satisfies Schema.Schema<WebsiteAuthenticatorEnrollPreviewMessage>
+) satisfies Schema.Codec<WebsiteAuthenticatorEnrollPreviewMessage>
 
 type WebsiteAuthenticatorEnrollStageMessagePayloadSchemaFields = {
-  vaultStoreId: Schema.filter<typeof Schema.String>
-  otpauthUri: Schema.filter<typeof Schema.String>
-  origin: Schema.filter<typeof Schema.String>
+  vaultStoreId: typeof Schema.String
+  otpauthUri: typeof Schema.String
+  origin: typeof Schema.String
 }
 const websiteAuthenticatorEnrollStageMessagePayloadSchemaFields: WebsiteAuthenticatorEnrollStageMessagePayloadSchemaFields =
   {
@@ -207,11 +211,11 @@ const websiteAuthenticatorEnrollStageMessagePayloadSchemaFields: WebsiteAuthenti
   }
 
 type WebsiteAuthenticatorEnrollStageMessageSchemaFields = {
-  type: Schema.Literal<[WebsiteAuthenticatorEnrollStageMessageType]>
+  type: Schema.Literal<WebsiteAuthenticatorEnrollStageMessageType>
   payload: Schema.Struct<{
-    vaultStoreId: Schema.filter<typeof Schema.String>
-    otpauthUri: Schema.filter<typeof Schema.String>
-    origin: Schema.filter<typeof Schema.String>
+    vaultStoreId: typeof Schema.String
+    otpauthUri: typeof Schema.String
+    origin: typeof Schema.String
   }>
 }
 const websiteAuthenticatorEnrollStageMessageSchemaFields: WebsiteAuthenticatorEnrollStageMessageSchemaFields =
@@ -226,11 +230,11 @@ const websiteAuthenticatorEnrollStageMessageSchemaFields: WebsiteAuthenticatorEn
 
 const websiteAuthenticatorEnrollStageMessageSchema = Schema.Struct(
   websiteAuthenticatorEnrollStageMessageSchemaFields,
-) satisfies Schema.Schema<WebsiteAuthenticatorEnrollStageMessage>
+) satisfies Schema.Codec<WebsiteAuthenticatorEnrollStageMessage>
 
 type WebsiteAuthenticatorEnrollCodeMessagePayloadSchemaFields = {
-  stageId: Schema.filter<typeof Schema.String>
-  origin: Schema.filter<typeof Schema.String>
+  stageId: typeof Schema.String
+  origin: typeof Schema.String
 }
 const websiteAuthenticatorEnrollCodeMessagePayloadSchemaFields: WebsiteAuthenticatorEnrollCodeMessagePayloadSchemaFields =
   {
@@ -239,10 +243,10 @@ const websiteAuthenticatorEnrollCodeMessagePayloadSchemaFields: WebsiteAuthentic
   }
 
 type WebsiteAuthenticatorEnrollCodeMessageSchemaFields = {
-  type: Schema.Literal<[WebsiteAuthenticatorEnrollCodeMessageType]>
+  type: Schema.Literal<WebsiteAuthenticatorEnrollCodeMessageType>
   payload: Schema.Struct<{
-    stageId: Schema.filter<typeof Schema.String>
-    origin: Schema.filter<typeof Schema.String>
+    stageId: typeof Schema.String
+    origin: typeof Schema.String
   }>
 }
 const websiteAuthenticatorEnrollCodeMessageSchemaFields: WebsiteAuthenticatorEnrollCodeMessageSchemaFields =
@@ -257,12 +261,12 @@ const websiteAuthenticatorEnrollCodeMessageSchemaFields: WebsiteAuthenticatorEnr
 
 const websiteAuthenticatorEnrollCodeMessageSchema = Schema.Struct(
   websiteAuthenticatorEnrollCodeMessageSchemaFields,
-) satisfies Schema.Schema<WebsiteAuthenticatorEnrollCodeMessage>
+) satisfies Schema.Codec<WebsiteAuthenticatorEnrollCodeMessage>
 
 type WebsiteAuthenticatorEnrollConfirmMessagePayloadSchemaFields = {
-  vaultStoreId: Schema.filter<typeof Schema.String>
-  stageId: Schema.filter<typeof Schema.String>
-  origin: Schema.filter<typeof Schema.String>
+  vaultStoreId: typeof Schema.String
+  stageId: typeof Schema.String
+  origin: typeof Schema.String
 }
 const websiteAuthenticatorEnrollConfirmMessagePayloadSchemaFields: WebsiteAuthenticatorEnrollConfirmMessagePayloadSchemaFields =
   {
@@ -272,11 +276,11 @@ const websiteAuthenticatorEnrollConfirmMessagePayloadSchemaFields: WebsiteAuthen
   }
 
 type WebsiteAuthenticatorEnrollConfirmMessageSchemaFields = {
-  type: Schema.Literal<[WebsiteAuthenticatorEnrollConfirmMessageType]>
+  type: Schema.Literal<WebsiteAuthenticatorEnrollConfirmMessageType>
   payload: Schema.Struct<{
-    vaultStoreId: Schema.filter<typeof Schema.String>
-    stageId: Schema.filter<typeof Schema.String>
-    origin: Schema.filter<typeof Schema.String>
+    vaultStoreId: typeof Schema.String
+    stageId: typeof Schema.String
+    origin: typeof Schema.String
   }>
 }
 const websiteAuthenticatorEnrollConfirmMessageSchemaFields: WebsiteAuthenticatorEnrollConfirmMessageSchemaFields =
@@ -291,11 +295,11 @@ const websiteAuthenticatorEnrollConfirmMessageSchemaFields: WebsiteAuthenticator
 
 const websiteAuthenticatorEnrollConfirmMessageSchema = Schema.Struct(
   websiteAuthenticatorEnrollConfirmMessageSchemaFields,
-) satisfies Schema.Schema<WebsiteAuthenticatorEnrollConfirmMessage>
+) satisfies Schema.Codec<WebsiteAuthenticatorEnrollConfirmMessage>
 
 type WebsiteAuthenticatorEnrollDismissMessagePayloadSchemaFields = {
-  stageId: Schema.filter<typeof Schema.String>
-  origin: Schema.filter<typeof Schema.String>
+  stageId: typeof Schema.String
+  origin: typeof Schema.String
 }
 const websiteAuthenticatorEnrollDismissMessagePayloadSchemaFields: WebsiteAuthenticatorEnrollDismissMessagePayloadSchemaFields =
   {
@@ -304,10 +308,10 @@ const websiteAuthenticatorEnrollDismissMessagePayloadSchemaFields: WebsiteAuthen
   }
 
 type WebsiteAuthenticatorEnrollDismissMessageSchemaFields = {
-  type: Schema.Literal<[WebsiteAuthenticatorEnrollDismissMessageType]>
+  type: Schema.Literal<WebsiteAuthenticatorEnrollDismissMessageType>
   payload: Schema.Struct<{
-    stageId: Schema.filter<typeof Schema.String>
-    origin: Schema.filter<typeof Schema.String>
+    stageId: typeof Schema.String
+    origin: typeof Schema.String
   }>
 }
 const websiteAuthenticatorEnrollDismissMessageSchemaFields: WebsiteAuthenticatorEnrollDismissMessageSchemaFields =
@@ -322,11 +326,11 @@ const websiteAuthenticatorEnrollDismissMessageSchemaFields: WebsiteAuthenticator
 
 const websiteAuthenticatorEnrollDismissMessageSchema = Schema.Struct(
   websiteAuthenticatorEnrollDismissMessageSchemaFields,
-) satisfies Schema.Schema<WebsiteAuthenticatorEnrollDismissMessage>
+) satisfies Schema.Codec<WebsiteAuthenticatorEnrollDismissMessage>
 
 type WebsiteAuthenticatorEnrollPendingMessageSchemaFields = {
-  type: Schema.Literal<[WebsiteAuthenticatorEnrollPendingMessageType]>
-  payload: Schema.Struct<{ origin: Schema.filter<typeof Schema.String> }>
+  type: Schema.Literal<WebsiteAuthenticatorEnrollPendingMessageType>
+  payload: Schema.Struct<{ origin: typeof Schema.String }>
 }
 const websiteAuthenticatorEnrollPendingMessageSchemaFields: WebsiteAuthenticatorEnrollPendingMessageSchemaFields =
   {
@@ -338,19 +342,19 @@ const websiteAuthenticatorEnrollPendingMessageSchemaFields: WebsiteAuthenticator
 
 const websiteAuthenticatorEnrollPendingMessageSchema = Schema.Struct(
   websiteAuthenticatorEnrollPendingMessageSchemaFields,
-) satisfies Schema.Schema<WebsiteAuthenticatorEnrollPendingMessage>
+) satisfies Schema.Codec<WebsiteAuthenticatorEnrollPendingMessage>
 
 type WebsiteAuthenticatorBackupAttachMessagePayloadSchemaFields = {
-  vaultStoreId: Schema.filter<typeof Schema.String>
-  secretId: Schema.filter<typeof Schema.String>
-  codes: Schema.mutable<Schema.Array$<typeof Schema.String>>
-  mode: Schema.Literal<
+  vaultStoreId: typeof Schema.String
+  secretId: typeof Schema.String
+  codes: Schema.mutable<Schema.$Array<typeof Schema.String>>
+  mode: Schema.Literals<
     [
       WebsiteAuthenticatorBackupAttachMessageMode.Replace,
       WebsiteAuthenticatorBackupAttachMessageMode.Merge,
     ]
   >
-  origin: Schema.filter<typeof Schema.String>
+  origin: typeof Schema.String
 }
 const websiteAuthenticatorBackupAttachMessagePayloadSchemaFields: WebsiteAuthenticatorBackupAttachMessagePayloadSchemaFields =
   {
@@ -358,25 +362,25 @@ const websiteAuthenticatorBackupAttachMessagePayloadSchemaFields: WebsiteAuthent
     vaultStoreId: enrollmentNonEmptyStringSchema,
     secretId: enrollmentNonEmptyStringSchema,
     codes: Schema.mutable(Schema.Array(Schema.String)),
-    mode: Schema.Literal(
+    mode: Schema.Literals([
       WebsiteAuthenticatorBackupAttachMessageMode.Replace,
       WebsiteAuthenticatorBackupAttachMessageMode.Merge,
-    ),
+    ]),
   }
 
 type WebsiteAuthenticatorBackupAttachMessageSchemaFields = {
-  type: Schema.Literal<[WebsiteAuthenticatorBackupAttachMessageType]>
+  type: Schema.Literal<WebsiteAuthenticatorBackupAttachMessageType>
   payload: Schema.Struct<{
-    vaultStoreId: Schema.filter<typeof Schema.String>
-    secretId: Schema.filter<typeof Schema.String>
-    codes: Schema.mutable<Schema.Array$<typeof Schema.String>>
-    mode: Schema.Literal<
+    vaultStoreId: typeof Schema.String
+    secretId: typeof Schema.String
+    codes: Schema.mutable<Schema.$Array<typeof Schema.String>>
+    mode: Schema.Literals<
       [
         WebsiteAuthenticatorBackupAttachMessageMode.Replace,
         WebsiteAuthenticatorBackupAttachMessageMode.Merge,
       ]
     >
-    origin: Schema.filter<typeof Schema.String>
+    origin: typeof Schema.String
   }>
 }
 const websiteAuthenticatorBackupAttachMessageSchemaFields: WebsiteAuthenticatorBackupAttachMessageSchemaFields =
@@ -391,6 +395,6 @@ const websiteAuthenticatorBackupAttachMessageSchemaFields: WebsiteAuthenticatorB
 
 const websiteAuthenticatorBackupAttachMessageSchema = Schema.Struct(
   websiteAuthenticatorBackupAttachMessageSchemaFields,
-) satisfies Schema.Schema<WebsiteAuthenticatorBackupAttachMessage>
+) satisfies Schema.Codec<WebsiteAuthenticatorBackupAttachMessage>
 
 export type { AuthenticatorEnrollmentPreview as OtpauthEnrollmentPreview } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'

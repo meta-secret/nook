@@ -133,7 +133,7 @@ import {
   type BackgroundRuntimeMessageRoutes,
 } from './service-worker/schema-runtime-message-route'
 import { backgroundVaultRuntime } from './vault-runtime'
-import { Effect, Either } from 'effect'
+import { Effect, Result } from 'effect'
 import {
   isCompanionWasmSessionMessageType,
   type CompanionWasmRuntimeMessage,
@@ -200,16 +200,16 @@ const extensionLifecycleRoutingDependencies: Parameters<
 }
 
 void Effect.runPromise(
-  Effect.either(
+  Effect.result(
     recoverInterruptedAuthorizationCleanup(
       extensionLifecycleRoutingDependencies,
     ),
   ),
 ).then((cleanup) => {
-  if (Either.isLeft(cleanup))
+  if (Result.isFailure(cleanup))
     console.warn(
       'Extension authorization cleanup remains pending',
-      cleanup.left,
+      cleanup.failure,
     )
 })
 

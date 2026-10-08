@@ -165,7 +165,7 @@ function routeCompanionFixture(
       if (!('kind' in message.payload) || !('response' in message.payload))
         throw new Error('Invalid decoder fixture request')
       const kind = Schema.decodeUnknownSync(
-        Schema.Enums(CompanionWasmContentResponseKind),
+        Schema.Enum(CompanionWasmContentResponseKind),
       )(message.payload.kind)
       request = {
         type: message.type,

@@ -1,5 +1,4 @@
 import { Effect, Schema } from "effect";
-import * as ParseResult from "effect/ParseResult";
 import type { ExtensionConnectScope as RustExtensionConnectScope } from "./nook-companion-wasm/nook_companion_wasm.js";
 
 export type ExtensionConnectScope = RustExtensionConnectScope;
@@ -32,7 +31,7 @@ export type ExtensionConnectScopeDecodeFailure =
   | { readonly kind: ExtensionConnectScopeDecodeFailureKind.RuntimeUnavailable }
   | {
       readonly kind: ExtensionConnectScopeDecodeFailureKind.InvalidScope;
-      readonly cause: ParseResult.ParseError;
+      readonly cause: Schema.SchemaError;
     };
 
 /** Owns the browser runtime resources shared by these interactions. */
@@ -71,13 +70,13 @@ class ExtensionConnectScopeCatalog {
       }
       case ExtensionConnectScopeRuntimeStateKind.Configured: {
         const runtime = this.scopeRuntimeState.runtime;
-        const schema = Schema.Union(
+        const schema = Schema.Union([
           Schema.Literal(runtime.extension_vault_access_scope()),
           Schema.Literal(runtime.extension_password_filling_scope()),
           Schema.Literal(runtime.extension_passkey_management_scope()),
           Schema.Literal(runtime.extension_sync_provider_credentials_scope()),
-        );
-        return Schema.decodeUnknown(schema)(value).pipe(
+        ]);
+        return Schema.decodeUnknownEffect(schema)(value).pipe(
           Effect.mapError((cause) => ({
             kind: ExtensionConnectScopeDecodeFailureKind.InvalidScope,
             cause,

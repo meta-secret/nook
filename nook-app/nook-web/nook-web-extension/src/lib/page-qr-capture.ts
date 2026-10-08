@@ -192,7 +192,7 @@ class PageQrCapture {
               )
             case CompanionWasmRuntimeDeliveryKind.Delivered: {
               const { authenticatorSetupObservation: observation } =
-                yield* Schema.decodeUnknown(
+                yield* Schema.decodeUnknownEffect(
                   CompanionWasmAuthenticatorSetupResponseDecoder,
                 )(delivery.response).pipe(
                   Effect.mapError(

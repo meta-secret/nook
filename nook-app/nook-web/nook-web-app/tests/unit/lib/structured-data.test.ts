@@ -27,7 +27,7 @@ describe('landing structured data', () => {
 
   test('rejects structured data without a description', () => {
     const decoded = Effect.runSync(
-      Effect.either(
+      Effect.result(
         localizeLandingStructuredData({
           serialized: JSON.stringify({ '@type': 'WebApplication' }),
           description: 'Localized description',
@@ -35,6 +35,6 @@ describe('landing structured data', () => {
         }),
       ),
     )
-    expect(decoded._tag).toBe('Left')
+    expect(decoded._tag).toBe('Failure')
   })
 })

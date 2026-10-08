@@ -16,7 +16,9 @@ export class WebsiteLoginPickerOpenMessage {
     origin: string
   }
   static decode(message: unknown) {
-    return Schema.decodeUnknown(websiteLoginPickerOpenMessageSchema)(message)
+    return Schema.decodeUnknownEffect(websiteLoginPickerOpenMessageSchema)(
+      message,
+    )
   }
 }
 
@@ -32,7 +34,7 @@ export class LoginPickerQueryResponse {
   declare readonly accounts: WebsiteLoginAccountOption[]
 
   static decode(response: unknown) {
-    return Schema.decodeUnknown(loginPickerQueryResponseSchema)(response)
+    return Schema.decodeUnknownEffect(loginPickerQueryResponseSchema)(response)
   }
 }
 
@@ -46,7 +48,7 @@ export class LoginPickerQueryMessage {
     parentOrigin: string
   }
   static decode(message: unknown) {
-    return Schema.decodeUnknown(loginPickerQueryMessageSchema)(message)
+    return Schema.decodeUnknownEffect(loginPickerQueryMessageSchema)(message)
   }
 }
 
@@ -64,7 +66,7 @@ export class LoginPickerSelectMessage {
     secretId: string
   }
   static decode(message: unknown) {
-    return Schema.decodeUnknown(loginPickerSelectMessageSchema)(message)
+    return Schema.decodeUnknownEffect(loginPickerSelectMessageSchema)(message)
   }
 }
 
@@ -74,7 +76,7 @@ export class LoginPickerSelectResponse {
   declare readonly ok: true
 
   static decode(response: unknown) {
-    return Schema.decodeUnknown(loginPickerSelectResponseSchema)(response)
+    return Schema.decodeUnknownEffect(loginPickerSelectResponseSchema)(response)
   }
 }
 
@@ -107,7 +109,7 @@ export class LoginPickerCancelMessage {
     requestId: string
   }
   static decode(message: unknown) {
-    return Schema.decodeUnknown(loginPickerCancelMessageSchema)(message)
+    return Schema.decodeUnknownEffect(loginPickerCancelMessageSchema)(message)
   }
 }
 
@@ -127,7 +129,9 @@ export class WebsiteLoginSelectedMessage {
     }
   }
   static decode(message: unknown) {
-    return Schema.decodeUnknown(websiteLoginSelectedMessageSchema)(message)
+    return Schema.decodeUnknownEffect(websiteLoginSelectedMessageSchema)(
+      message,
+    )
   }
 }
 
@@ -144,15 +148,19 @@ export class WebsiteLoginCanceledMessage {
     requestId: string
   }
   static decode(message: unknown) {
-    return Schema.decodeUnknown(websiteLoginCanceledMessageSchema)(message)
+    return Schema.decodeUnknownEffect(websiteLoginCanceledMessageSchema)(
+      message,
+    )
   }
 }
 
-const loginPickerNonEmptyStringSchema = Schema.String.pipe(Schema.minLength(1))
+const loginPickerNonEmptyStringSchema = Schema.String.pipe(
+  Schema.check(Schema.isMinLength(1)),
+)
 
 type LoginPickerQueryResponseAccountsSchemaFields = {
-  vaultStoreId: Schema.filter<typeof Schema.String>
-  secretId: Schema.filter<typeof Schema.String>
+  vaultStoreId: typeof Schema.String
+  secretId: typeof Schema.String
   username: typeof Schema.String
   websiteHost: typeof Schema.String
   websiteUrl: typeof Schema.String
@@ -169,13 +177,13 @@ const loginPickerQueryResponseAccountsSchemaFields: LoginPickerQueryResponseAcco
   }
 
 type LoginPickerQueryResponseSchemaFields = {
-  ok: Schema.Literal<[true]>
-  origin: Schema.filter<typeof Schema.String>
+  ok: Schema.Literal<true>
+  origin: typeof Schema.String
   accounts: Schema.mutable<
-    Schema.Array$<
+    Schema.$Array<
       Schema.Struct<{
-        vaultStoreId: Schema.filter<typeof Schema.String>
-        secretId: Schema.filter<typeof Schema.String>
+        vaultStoreId: typeof Schema.String
+        secretId: typeof Schema.String
         username: typeof Schema.String
         websiteHost: typeof Schema.String
         websiteUrl: typeof Schema.String
@@ -195,9 +203,9 @@ const loginPickerQueryResponseSchemaFields: LoginPickerQueryResponseSchemaFields
 
 const loginPickerQueryResponseSchema = Schema.Struct(
   loginPickerQueryResponseSchemaFields,
-) satisfies Schema.Schema<LoginPickerQueryResponse>
+) satisfies Schema.Codec<LoginPickerQueryResponse>
 
-type LoginPickerSelectResponseSchemaFields = { ok: Schema.Literal<[true]> }
+type LoginPickerSelectResponseSchemaFields = { ok: Schema.Literal<true> }
 const loginPickerSelectResponseSchemaFields: LoginPickerSelectResponseSchemaFields =
   {
     ok: Schema.Literal(true),
@@ -205,17 +213,17 @@ const loginPickerSelectResponseSchemaFields: LoginPickerSelectResponseSchemaFiel
 
 const loginPickerSelectResponseSchema = Schema.Struct(
   loginPickerSelectResponseSchemaFields,
-) satisfies Schema.Schema<LoginPickerSelectResponse>
+) satisfies Schema.Codec<LoginPickerSelectResponse>
 
 type WebsiteLoginPickerOpenMessagePayloadSchemaFields = {
-  origin: Schema.filter<typeof Schema.String>
+  origin: typeof Schema.String
 }
 const websiteLoginPickerOpenMessagePayloadSchemaFields: WebsiteLoginPickerOpenMessagePayloadSchemaFields =
   { origin: loginPickerNonEmptyStringSchema }
 
 type WebsiteLoginPickerOpenMessageSchemaFields = {
-  type: Schema.Literal<[WebsiteLoginPickerOpenMessageType]>
-  payload: Schema.Struct<{ origin: Schema.filter<typeof Schema.String> }>
+  type: Schema.Literal<WebsiteLoginPickerOpenMessageType>
+  payload: Schema.Struct<{ origin: typeof Schema.String }>
 }
 const websiteLoginPickerOpenMessageSchemaFields: WebsiteLoginPickerOpenMessageSchemaFields =
   {
@@ -227,26 +235,28 @@ const websiteLoginPickerOpenMessageSchemaFields: WebsiteLoginPickerOpenMessageSc
 
 const websiteLoginPickerOpenMessageSchema = Schema.Struct(
   websiteLoginPickerOpenMessageSchemaFields,
-) satisfies Schema.Schema<WebsiteLoginPickerOpenMessage>
+) satisfies Schema.Codec<WebsiteLoginPickerOpenMessage>
 
 type LoginPickerQueryMessagePayloadSchemaFields = {
-  requestId: Schema.filter<typeof Schema.String>
-  query: Schema.filter<typeof Schema.String>
-  parentOrigin: Schema.filter<typeof Schema.String>
+  requestId: typeof Schema.String
+  query: typeof Schema.String
+  parentOrigin: typeof Schema.String
 }
 const loginPickerQueryMessagePayloadSchemaFields: LoginPickerQueryMessagePayloadSchemaFields =
   {
     requestId: loginPickerNonEmptyStringSchema,
-    query: Schema.String.pipe(Schema.maxLength(MAX_LOGIN_SEARCH_LENGTH)),
+    query: Schema.String.pipe(
+      Schema.check(Schema.isMaxLength(MAX_LOGIN_SEARCH_LENGTH)),
+    ),
     parentOrigin: loginPickerNonEmptyStringSchema,
   }
 
 type LoginPickerQueryMessageSchemaFields = {
-  type: Schema.Literal<[LoginPickerQueryMessageType]>
+  type: Schema.Literal<LoginPickerQueryMessageType>
   payload: Schema.Struct<{
-    requestId: Schema.filter<typeof Schema.String>
-    query: Schema.filter<typeof Schema.String>
-    parentOrigin: Schema.filter<typeof Schema.String>
+    requestId: typeof Schema.String
+    query: typeof Schema.String
+    parentOrigin: typeof Schema.String
   }>
 }
 const loginPickerQueryMessageSchemaFields: LoginPickerQueryMessageSchemaFields =
@@ -257,12 +267,12 @@ const loginPickerQueryMessageSchemaFields: LoginPickerQueryMessageSchemaFields =
 
 const loginPickerQueryMessageSchema = Schema.Struct(
   loginPickerQueryMessageSchemaFields,
-) satisfies Schema.Schema<LoginPickerQueryMessage>
+) satisfies Schema.Codec<LoginPickerQueryMessage>
 
 type LoginPickerSelectMessagePayloadSchemaFields = {
-  requestId: Schema.filter<typeof Schema.String>
-  vaultStoreId: Schema.filter<typeof Schema.String>
-  secretId: Schema.filter<typeof Schema.String>
+  requestId: typeof Schema.String
+  vaultStoreId: typeof Schema.String
+  secretId: typeof Schema.String
 }
 const loginPickerSelectMessagePayloadSchemaFields: LoginPickerSelectMessagePayloadSchemaFields =
   {
@@ -272,11 +282,11 @@ const loginPickerSelectMessagePayloadSchemaFields: LoginPickerSelectMessagePaylo
   }
 
 type LoginPickerSelectMessageSchemaFields = {
-  type: Schema.Literal<[LoginPickerSelectMessageType]>
+  type: Schema.Literal<LoginPickerSelectMessageType>
   payload: Schema.Struct<{
-    requestId: Schema.filter<typeof Schema.String>
-    vaultStoreId: Schema.filter<typeof Schema.String>
-    secretId: Schema.filter<typeof Schema.String>
+    requestId: typeof Schema.String
+    vaultStoreId: typeof Schema.String
+    secretId: typeof Schema.String
   }>
 }
 const loginPickerSelectMessageSchemaFields: LoginPickerSelectMessageSchemaFields =
@@ -287,17 +297,17 @@ const loginPickerSelectMessageSchemaFields: LoginPickerSelectMessageSchemaFields
 
 const loginPickerSelectMessageSchema = Schema.Struct(
   loginPickerSelectMessageSchemaFields,
-) satisfies Schema.Schema<LoginPickerSelectMessage>
+) satisfies Schema.Codec<LoginPickerSelectMessage>
 
 type LoginPickerCancelMessagePayloadSchemaFields = {
-  requestId: Schema.filter<typeof Schema.String>
+  requestId: typeof Schema.String
 }
 const loginPickerCancelMessagePayloadSchemaFields: LoginPickerCancelMessagePayloadSchemaFields =
   { requestId: loginPickerNonEmptyStringSchema }
 
 type LoginPickerCancelMessageSchemaFields = {
-  type: Schema.Literal<[LoginPickerCancelMessageType]>
-  payload: Schema.Struct<{ requestId: Schema.filter<typeof Schema.String> }>
+  type: Schema.Literal<LoginPickerCancelMessageType>
+  payload: Schema.Struct<{ requestId: typeof Schema.String }>
 }
 const loginPickerCancelMessageSchemaFields: LoginPickerCancelMessageSchemaFields =
   {
@@ -307,12 +317,12 @@ const loginPickerCancelMessageSchemaFields: LoginPickerCancelMessageSchemaFields
 
 const loginPickerCancelMessageSchema = Schema.Struct(
   loginPickerCancelMessageSchemaFields,
-) satisfies Schema.Schema<LoginPickerCancelMessage>
+) satisfies Schema.Codec<LoginPickerCancelMessage>
 
 type WebsiteLoginSelectedMessagePayloadAccountSchemaFields = {
-  vaultStoreId: Schema.filter<typeof Schema.String>
-  secretId: Schema.filter<typeof Schema.String>
-  authorizationGeneration: Schema.filter<typeof Schema.String>
+  vaultStoreId: typeof Schema.String
+  secretId: typeof Schema.String
+  authorizationGeneration: typeof Schema.String
 }
 const websiteLoginSelectedMessagePayloadAccountSchemaFields: WebsiteLoginSelectedMessagePayloadAccountSchemaFields =
   {
@@ -322,12 +332,12 @@ const websiteLoginSelectedMessagePayloadAccountSchemaFields: WebsiteLoginSelecte
   }
 
 type WebsiteLoginSelectedMessagePayloadSchemaFields = {
-  origin: Schema.filter<typeof Schema.String>
-  requestId: Schema.filter<typeof Schema.String>
+  origin: typeof Schema.String
+  requestId: typeof Schema.String
   account: Schema.Struct<{
-    vaultStoreId: Schema.filter<typeof Schema.String>
-    secretId: Schema.filter<typeof Schema.String>
-    authorizationGeneration: Schema.filter<typeof Schema.String>
+    vaultStoreId: typeof Schema.String
+    secretId: typeof Schema.String
+    authorizationGeneration: typeof Schema.String
   }>
 }
 const websiteLoginSelectedMessagePayloadSchemaFields: WebsiteLoginSelectedMessagePayloadSchemaFields =
@@ -340,14 +350,14 @@ const websiteLoginSelectedMessagePayloadSchemaFields: WebsiteLoginSelectedMessag
   }
 
 type WebsiteLoginSelectedMessageSchemaFields = {
-  type: Schema.Literal<[WebsiteLoginSelectedMessageType]>
+  type: Schema.Literal<WebsiteLoginSelectedMessageType>
   payload: Schema.Struct<{
-    origin: Schema.filter<typeof Schema.String>
-    requestId: Schema.filter<typeof Schema.String>
+    origin: typeof Schema.String
+    requestId: typeof Schema.String
     account: Schema.Struct<{
-      vaultStoreId: Schema.filter<typeof Schema.String>
-      secretId: Schema.filter<typeof Schema.String>
-      authorizationGeneration: Schema.filter<typeof Schema.String>
+      vaultStoreId: typeof Schema.String
+      secretId: typeof Schema.String
+      authorizationGeneration: typeof Schema.String
     }>
   }>
 }
@@ -361,11 +371,11 @@ const websiteLoginSelectedMessageSchemaFields: WebsiteLoginSelectedMessageSchema
 
 const websiteLoginSelectedMessageSchema = Schema.Struct(
   websiteLoginSelectedMessageSchemaFields,
-) satisfies Schema.Schema<WebsiteLoginSelectedMessage>
+) satisfies Schema.Codec<WebsiteLoginSelectedMessage>
 
 type WebsiteLoginCanceledMessagePayloadSchemaFields = {
-  origin: Schema.filter<typeof Schema.String>
-  requestId: Schema.filter<typeof Schema.String>
+  origin: typeof Schema.String
+  requestId: typeof Schema.String
 }
 const websiteLoginCanceledMessagePayloadSchemaFields: WebsiteLoginCanceledMessagePayloadSchemaFields =
   {
@@ -374,10 +384,10 @@ const websiteLoginCanceledMessagePayloadSchemaFields: WebsiteLoginCanceledMessag
   }
 
 type WebsiteLoginCanceledMessageSchemaFields = {
-  type: Schema.Literal<[WebsiteLoginCanceledMessageType]>
+  type: Schema.Literal<WebsiteLoginCanceledMessageType>
   payload: Schema.Struct<{
-    origin: Schema.filter<typeof Schema.String>
-    requestId: Schema.filter<typeof Schema.String>
+    origin: typeof Schema.String
+    requestId: typeof Schema.String
   }>
 }
 const websiteLoginCanceledMessageSchemaFields: WebsiteLoginCanceledMessageSchemaFields =
@@ -390,4 +400,4 @@ const websiteLoginCanceledMessageSchemaFields: WebsiteLoginCanceledMessageSchema
 
 const websiteLoginCanceledMessageSchema = Schema.Struct(
   websiteLoginCanceledMessageSchemaFields,
-) satisfies Schema.Schema<WebsiteLoginCanceledMessage>
+) satisfies Schema.Codec<WebsiteLoginCanceledMessage>

@@ -33,7 +33,7 @@ class RecordedRoute implements BackgroundRuntimeMessageRoute {
 
 class MatchingRuntimeMessageSchema {
   static decode(message: BrowserRuntimeMessage) {
-    return Schema.decodeUnknown(matchingRuntimeMessageSchema)(message)
+    return Schema.decodeUnknownEffect(matchingRuntimeMessageSchema)(message)
   }
 }
 
@@ -51,9 +51,9 @@ type MatchingRuntimeMessage = {
 const matchingRuntimeMessageSchema = Schema.Struct({
   type: Schema.Literal(MatchingRuntimeMessageType.Test),
   payload: Schema.Struct({
-    value: Schema.String.pipe(Schema.minLength(1)),
+    value: Schema.String.pipe(Schema.check(Schema.isMinLength(1))),
   }),
-}) satisfies Schema.Schema<MatchingRuntimeMessage>
+}) satisfies Schema.Codec<MatchingRuntimeMessage>
 
 class RejectingRuntimeMessageOperation {
   constructor(private readonly receivedValues: string[]) {}

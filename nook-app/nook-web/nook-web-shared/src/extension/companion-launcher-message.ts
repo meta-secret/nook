@@ -17,8 +17,7 @@ export enum OpenCompanionLauncherIntent {
 
 type NormalizedCompanionLauncherPayload = {
   readonly intent:
-    | OpenCompanionLauncherIntent.Pair
-    | OpenCompanionLauncherIntent.PilotAuth;
+    OpenCompanionLauncherIntent.Pair | OpenCompanionLauncherIntent.PilotAuth;
 };
 
 /** Structural browser wire value; validation requires no instance methods or runtime state. */
@@ -27,8 +26,7 @@ export class OpenCompanionLauncherMessage {
   declare readonly type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher;
   declare readonly payload?: {
     intent:
-      | OpenCompanionLauncherIntent.Pair
-      | OpenCompanionLauncherIntent.PilotAuth;
+      OpenCompanionLauncherIntent.Pair | OpenCompanionLauncherIntent.PilotAuth;
   };
   static decode<WireMessage>(
     message: WireMessage,
@@ -52,9 +50,9 @@ export class NormalizedOpenCompanionLauncherMessage {
     NormalizedOpenCompanionLauncherMessage,
     RuntimeMessageDecodeFailure
   > {
-    return Schema.decodeUnknown(NormalizedOpenCompanionLauncherMessageSchema)(
-      message,
-    ).pipe(
+    return Schema.decodeUnknownEffect(
+      NormalizedOpenCompanionLauncherMessageSchema,
+    )(message).pipe(
       Effect.mapError((cause) => {
         const failureRequest: Parameters<
           typeof RuntimeMessageDecodeFailure.fromParseError
@@ -100,10 +98,10 @@ export class NormalizedOpenCompanionLauncherMessage {
   }
 }
 
-const normalizedCompanionLauncherIntentSchema = Schema.Literal(
+const normalizedCompanionLauncherIntentSchema = Schema.Literals([
   OpenCompanionLauncherIntent.Pair,
   OpenCompanionLauncherIntent.PilotAuth,
-);
+]);
 type NormalizedCompanionLauncherPayloadFields = {
   readonly intent: typeof normalizedCompanionLauncherIntentSchema;
 };

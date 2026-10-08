@@ -24,7 +24,7 @@ interface IdentityHandoffProviderRejectionCase {
 describe('extension identity handoff response decoding', () => {
   test('decodes a successful identity handoff response', () => {
     const decoded = Effect.runSync(
-      Effect.either(
+      Effect.result(
         identityHandoffResponseDecoder.decode({
           ok: true,
           envelope: 'encrypted-handoff',
@@ -33,9 +33,9 @@ describe('extension identity handoff response decoding', () => {
       ),
     )
 
-    expect(decoded._tag).toBe('Right')
-    if (decoded._tag === 'Left') expect.fail('handoff response must decode')
-    expect(decoded.right).toEqual({
+    expect(decoded._tag).toBe('Success')
+    if (decoded._tag === 'Failure') expect.fail('handoff response must decode')
+    expect(decoded.success).toEqual({
       ok: true,
       envelope: 'encrypted-handoff',
       nextNonce: 'nonce-next',
@@ -44,7 +44,7 @@ describe('extension identity handoff response decoding', () => {
 
   test('returns a typed failure for a response with an empty next nonce', () => {
     const decoded = Effect.runSync(
-      Effect.either(
+      Effect.result(
         identityHandoffResponseDecoder.decode({
           ok: true,
           envelope: 'encrypted-handoff',
@@ -53,9 +53,9 @@ describe('extension identity handoff response decoding', () => {
       ),
     )
 
-    expect(decoded._tag).toBe('Left')
-    if (decoded._tag === 'Left') {
-      expect(decoded.left.kind).toBe(
+    expect(decoded._tag).toBe('Failure')
+    if (decoded._tag === 'Failure') {
+      expect(decoded.failure.kind).toBe(
         IdentityHandoffResponseDecodeFailureKind.InvalidResponse,
       )
     }
@@ -89,14 +89,14 @@ describe('extension identity handoff response decoding', () => {
 
     for (const rejectionCase of rejectionCases) {
       const decoded = Effect.runSync(
-        Effect.either(
+        Effect.result(
           identityHandoffResponseDecoder.decode(rejectionCase.response),
         ),
       )
 
-      expect(decoded._tag).toBe('Right')
-      if (decoded._tag === 'Right') {
-        expect(decoded.right).toEqual({
+      expect(decoded._tag).toBe('Success')
+      if (decoded._tag === 'Success') {
+        expect(decoded.success).toEqual({
           ok: false,
           state: rejectionCase.state,
         })
@@ -108,17 +108,17 @@ describe('extension identity handoff response decoding', () => {
 describe('extension runtime response decoding', () => {
   test('rejects launcher acknowledgements with unrelated fields', () => {
     const decoded = Effect.runSync(
-      Effect.either(
+      Effect.result(
         companionResponseDecoder.decodeLauncher({ ok: true, stale: true }),
       ),
     )
 
-    expect(decoded._tag).toBe('Left')
+    expect(decoded._tag).toBe('Failure')
   })
 
   test('decodes discovery and paired handoff payload objects', () => {
     const discovery = Effect.runSync(
-      Effect.either(
+      Effect.result(
         companionResponseDecoder.decodeIdentityDiscovery({
           ok: true,
           status: { status: 'locked' },
@@ -126,7 +126,7 @@ describe('extension runtime response decoding', () => {
       ),
     )
     const handoff = Effect.runSync(
-      Effect.either(
+      Effect.result(
         companionResponseDecoder.decodeIdentityHandoff({
           ok: true,
           response: { encryptedEnvelope: 'sealed' },
@@ -134,13 +134,13 @@ describe('extension runtime response decoding', () => {
       ),
     )
 
-    expect(discovery._tag).toBe('Right')
-    expect(handoff._tag).toBe('Right')
+    expect(discovery._tag).toBe('Success')
+    expect(handoff._tag).toBe('Success')
   })
 
   test('decodes unlock acknowledgements before request binding is checked', () => {
     const decoded = Effect.runSync(
-      Effect.either(
+      Effect.result(
         companionResponseDecoder.decodeUnlock({
           ok: true,
           requestId: 'request-1',
@@ -149,9 +149,9 @@ describe('extension runtime response decoding', () => {
       ),
     )
 
-    expect(decoded._tag).toBe('Right')
-    if (decoded._tag === 'Left') expect.fail('unlock response must decode')
-    expect(decoded.right).toEqual({
+    expect(decoded._tag).toBe('Success')
+    if (decoded._tag === 'Failure') expect.fail('unlock response must decode')
+    expect(decoded.success).toEqual({
       ok: true,
       requestId: 'request-1',
       vaultStoreId: 'store_abcdefghijk',

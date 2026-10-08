@@ -17,7 +17,7 @@ export type ExtensionSessionReadinessQuery = {
 export type ExtensionSessionReadyResponse = { readonly ok: true }
 
 type ExtensionSessionReadyResponseSchemaFields = {
-  readonly ok: Schema.Schema<ExtensionSessionReadyResponse['ok']>
+  readonly ok: Schema.Codec<ExtensionSessionReadyResponse['ok']>
 }
 
 export class ExtensionSessionReadyResponseDecoder {
@@ -27,11 +27,11 @@ export class ExtensionSessionReadyResponseDecoder {
     }
   private static readonly schema = Schema.Struct(
     ExtensionSessionReadyResponseDecoder.schemaFields,
-  ) satisfies Schema.Schema<ExtensionSessionReadyResponse>
+  ) satisfies Schema.Codec<ExtensionSessionReadyResponse>
 
   static decode(response: BrowserRuntimeMessageValue) {
-    return Schema.decodeUnknown(ExtensionSessionReadyResponseDecoder.schema)(
-      response,
-    )
+    return Schema.decodeUnknownEffect(
+      ExtensionSessionReadyResponseDecoder.schema,
+    )(response)
   }
 }
