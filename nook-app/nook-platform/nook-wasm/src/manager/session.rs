@@ -228,7 +228,7 @@ pub(in crate::manager) enum SessionCatalogAvailability<'a> {
 impl VaultSessionState {
     /// Materialize an owned session before publishing it to the retained manager.
     pub(in crate::manager) fn from_event_graph(
-        input: VaultSessionGraphProjection<'_>,
+        input: &VaultSessionGraphProjection<'_>,
     ) -> Result<Self, NookError> {
         let projection = VaultProjection::from_graph(input.graph, input.store_id.as_str())?;
         let records: Vec<StoredSecretRecord> =
