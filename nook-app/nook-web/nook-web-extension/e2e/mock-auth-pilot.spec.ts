@@ -224,6 +224,9 @@ class PilotScenarioPage {
         await expect(
           checklist.locator('[data-step="CheckResult"]'),
         ).toHaveAttribute('data-state', 'Pending')
+        await expect(
+          checklist.locator('[data-step="SubmitForm"]'),
+        ).toContainText('Review and submit the form yourself')
         return
       case PilotScenario.Waiting:
         await expect(checklist).toHaveAttribute('data-status', 'Waiting')
@@ -234,10 +237,14 @@ class PilotScenarioPage {
       case PilotScenario.Attention:
         await expect(checklist).toHaveAttribute('data-status', 'Attention')
         await expect(checklist.locator('[aria-current]')).toHaveCount(0)
+        await expect(
+          checklist.locator('[data-step="CheckResult"]'),
+        ).toHaveAttribute('data-state', 'Attention')
         return
       case PilotScenario.Confirmed:
         await expect(checklist).toHaveAttribute('data-status', 'Complete')
         await expect(checklist.locator('[aria-current]')).toHaveCount(0)
+        await expect(checklist.locator('[data-state="Done"]')).toHaveCount(3)
     }
   }
 }
