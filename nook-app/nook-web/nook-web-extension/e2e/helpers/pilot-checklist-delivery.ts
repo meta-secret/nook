@@ -1,6 +1,7 @@
 /// <reference types="chrome" />
 import type { Worker } from '@playwright/test'
 import { CompanionWasmSessionMessageType } from '../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
+import { GoogleLoginContinuationMessageType } from '../../../nook-web-shared/src/extension/google-login-continuation-messages'
 import type { ExtensionSessionTransportRequest } from '../../src/offscreen/session-request-adapter'
 import type { ExtensionSessionResponse } from '../../src/offscreen/session'
 import { ExtensionSessionMessageType } from '../../src/lib/extension-session-message-type'
@@ -32,6 +33,7 @@ declare global {
 
 type FilledProjectionInstall = {
   companion: typeof CompanionWasmSessionMessageType
+  google: typeof GoogleLoginContinuationMessageType
   session: typeof ExtensionSessionMessageType
   delivery: typeof PilotProjectionDeliveryKind
   completion: typeof PilotReplyCompletionKind
@@ -130,6 +132,7 @@ function installFilledProjectionHold(install: FilledProjectionInstall): void {
               }
           }
           break
+        case install.google.Session:
         case install.session.Status:
         case install.session.UnlockPin:
         case install.session.VaultSummary:
@@ -254,6 +257,7 @@ function releaseHeldProjection(
 export async function holdPilotFilledProjection(worker: Worker): Promise<void> {
   const request: FilledProjectionInstall = {
     companion: CompanionWasmSessionMessageType,
+    google: GoogleLoginContinuationMessageType,
     session: ExtensionSessionMessageType,
     delivery: PilotProjectionDeliveryKind,
     completion: PilotReplyCompletionKind,

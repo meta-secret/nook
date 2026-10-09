@@ -10,6 +10,7 @@ import {
   type CompanionWasmSessionMessage,
   type CompanionWasmSessionResponse,
 } from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
+import { GoogleLoginContinuationMessageType } from '../../../../nook-web-shared/src/extension/google-login-continuation-messages'
 import { handleCompanionWasmMessage } from '../../../../nook-web-extension/src/offscreen/session-companion-wasm-operations'
 import {
   AuthenticationOutcomeClassifyMessageType,
@@ -165,6 +166,7 @@ class ChecklistBrowserFixture {
         reply.deliver(value)
         return
       }
+      case GoogleLoginContinuationMessageType.Session:
       case CompanionWasmSessionMessageType.ProjectAuthenticationLoginChecklist:
       case CompanionWasmSessionMessageType.ClassifyFocusedCredentialField:
       case CompanionWasmSessionMessageType.RevalidateFocusedCredentialField:

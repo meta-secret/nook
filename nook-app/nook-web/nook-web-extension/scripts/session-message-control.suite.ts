@@ -485,7 +485,8 @@ describe('ExtensionSessionMessageDispatcher control ingress', () => {
   })
 
   test('routes companion workflow operations through the offscreen queue', async () => {
-    const handled: CompanionWasmSessionMessageType[] = []
+    type CompanionQueueOperation = CompanionWasmSessionMessage['type']
+    const handled: CompanionQueueOperation[] = []
     const dispatcher = new ExtensionSessionMessageDispatcher({
       handleCompanionIdentityDiscovery: async () =>
         err(

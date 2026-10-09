@@ -7,6 +7,7 @@ import {
 import {
   GoogleLoginContinuationMessageType,
   GoogleLoginContinuationOperation,
+  GoogleLoginContinuationResponse,
   GoogleLoginDocumentId,
   GoogleLoginFrameId,
   GoogleLoginSourceOrigin,
@@ -14,19 +15,18 @@ import {
   type GoogleLoginBrowserContext,
   type GoogleLoginBrowserMessage,
   type GoogleLoginSessionMessage,
+  type GoogleLoginRuntimeResponse,
 } from '../../../../nook-web-shared/src/extension/google-login-continuation-messages'
-import type {
-  CompanionWasmRuntimeMessage,
-  CompanionWasmSessionResponse,
+import {
+  CompanionWasmSessionMessageType,
+  type CompanionWasmRuntimeMessage,
+  type CompanionWasmSessionResponse,
 } from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 import {
   passwordFormInteraction,
   type PasswordFormObservation,
 } from '../../../../nook-web-shared/src/extension/password-forms'
-import {
-  AuthenticationWorkflowSnapshotMessageType,
-  type AuthenticationWorkflowSnapshotMessage,
-} from '../../../../nook-web-extension/src/lib/auth-workflow-messages'
+import type { AuthenticationWorkflowSnapshotMessage } from '../../../../nook-web-extension/src/lib/auth-workflow-messages'
 import type { AuthenticationWorkflowRoutingResponse } from '../../../../nook-web-extension/src/background/service-worker/authentication-workflow-routing'
 import {
   WebsiteFocusedLoginRevealMessageType,
@@ -39,6 +39,16 @@ import {
 } from '../../../../nook-web-extension/src/content/autofill/google-login-continuation'
 import { GoogleLoginSessionContinuations } from '../../../../nook-web-extension/src/offscreen/google-login-continuation'
 import { pageQrCapture } from '../../../../nook-web-extension/src/lib/page-qr-capture'
+import {
+  ExtensionSessionDocumentOwner,
+  extensionSessionDocument,
+  type ExtensionSessionTransportDelivery,
+} from '../../../../nook-web-extension/src/background/service-worker/session-document'
+import {
+  ExtensionSessionReadinessMessageType,
+  type ExtensionSessionReadinessQuery,
+  type ExtensionSessionReadyResponse,
+} from '../../../../nook-web-extension/src/lib/extension-session-readiness'
 
 enum IdentifierNextInteraction {
   Automatic = 'automatic',
@@ -58,12 +68,23 @@ enum AdvanceSnapshotDelivery {
   RevokeAtFirst = 'revoke-at-first',
   RevokeAtSecond = 'revoke-at-second',
 }
+enum SequenceSessionDocumentPreparation {
+  Unprepared = 'unprepared',
+  Prepared = 'prepared',
+}
+type SequenceSessionDocument =
+  | { readonly kind: SequenceSessionDocumentPreparation.Unprepared }
+  | {
+      readonly kind: SequenceSessionDocumentPreparation.Prepared
+      readonly owner: ExtensionSessionDocumentOwner
+    }
 
 type SequenceRuntimeMessage =
   | GoogleLoginBrowserMessage
   | CompanionWasmRuntimeMessage
   | AuthenticationWorkflowSnapshotMessage
   | WebsiteFocusedLoginRevealMessage
+  | ExtensionSessionReadinessQuery
 interface SequenceSessionResponse {
   readonly ok: true
   readonly result: CompanionWasmSessionResponse
@@ -72,18 +93,31 @@ type SequenceRuntimeResponse =
   | SequenceSessionResponse
   | AuthenticationWorkflowRoutingResponse
   | WebsiteFocusedLoginFillResponse
-type ChromeResponseCallback = (response: SequenceRuntimeResponse) => void
+type SequenceChromeResponse =
+  | SequenceRuntimeResponse
+  | CompanionWasmSessionResponse
+  | ExtensionSessionReadyResponse
+type ChromeResponseCallback = (response: SequenceChromeResponse) => void
 // Chrome sendMessage supports both Promise and callback delivery overloads.
 type ChromeRuntimeInvocation =
   | [message: SequenceRuntimeMessage]
   | [message: SequenceRuntimeMessage, respond: ChromeResponseCallback]
 interface SequenceChromeHost {
   readonly runtime: {
+    readonly ContextType: { readonly OFFSCREEN_DOCUMENT: 'OFFSCREEN_DOCUMENT' }
+    readonly getURL: (path: string) => string
+    readonly getContexts: () => Promise<SequenceOffscreenContexts>
     readonly sendMessage: (
       ...invocation: ChromeRuntimeInvocation
-    ) => Promise<SequenceRuntimeResponse>
+    ) => Promise<SequenceChromeResponse>
   }
+  readonly offscreen: { readonly closeDocument: () => Promise<void> }
 }
+interface SequenceOffscreenContext {
+  readonly contextType: 'OFFSCREEN_DOCUMENT'
+  readonly documentUrl: string
+}
+type SequenceOffscreenContexts = SequenceOffscreenContext[]
 type SequenceSessionResult = Awaited<
   ReturnType<GoogleLoginSessionContinuations['handle']>
 >
@@ -105,6 +139,9 @@ type AdvanceApprovalLosses = AdvanceApprovalLoss[]
 class GoogleLoginContentSequence {
   readonly content = new GoogleLoginDocumentContinuation(globalThis)
   private readonly session = new GoogleLoginSessionContinuations()
+  private sessionDocument: SequenceSessionDocument = {
+    kind: SequenceSessionDocumentPreparation.Unprepared,
+  }
   private readonly context: GoogleLoginBrowserContext = {
     tabId: GoogleLoginTabId.make(7),
     frameId: GoogleLoginFrameId.make(0),
@@ -134,11 +171,19 @@ class GoogleLoginContentSequence {
   install = Effect.fnUntraced(function* (this: GoogleLoginContentSequence) {
     const chromeHost: SequenceChromeHost = {
       runtime: {
+        ContextType: { OFFSCREEN_DOCUMENT: 'OFFSCREEN_DOCUMENT' },
+        getURL: (path) => this.extensionUrl(path),
+        getContexts: () => this.offscreenContexts(),
         sendMessage: (...invocation: ChromeRuntimeInvocation) =>
           this.deliver(invocation),
       },
+      offscreen: { closeDocument: () => Promise.resolve() },
     }
     vi.stubGlobal('chrome', chromeHost)
+    this.sessionDocument = {
+      kind: SequenceSessionDocumentPreparation.Prepared,
+      owner: new ExtensionSessionDocumentOwner(),
+    }
     yield* Effect.promise(() =>
       pageQrCapture.prepareAuthenticationAuthenticatorSetupObservation(),
     )
@@ -162,6 +207,28 @@ class GoogleLoginContentSequence {
       this.showPassword()
     })
   })
+
+  private extensionUrl(path: string): string {
+    return `chrome-extension://nook-sequence-extension/${path}`
+  }
+
+  private documentOwner(): ExtensionSessionDocumentOwner {
+    switch (this.sessionDocument.kind) {
+      case SequenceSessionDocumentPreparation.Unprepared:
+        throw new Error('Expected the installed Chrome session document owner')
+      case SequenceSessionDocumentPreparation.Prepared:
+        return this.sessionDocument.owner
+    }
+  }
+
+  private offscreenContexts(): Promise<SequenceOffscreenContexts> {
+    const context: SequenceOffscreenContext = {
+      contextType: 'OFFSCREEN_DOCUMENT',
+      documentUrl: this.extensionUrl(extensionSessionDocument),
+    }
+    const contexts: SequenceOffscreenContexts = [context]
+    return Promise.resolve(contexts)
+  }
 
   private waitForIdentifierTurn(): Promise<void> {
     return new Promise((resolve) => globalThis.setTimeout(resolve, 0))
@@ -192,7 +259,7 @@ class GoogleLoginContentSequence {
   /** Simulates only Chrome's delivery overload and service-worker context stamp. */
   private deliver(
     invocation: ChromeRuntimeInvocation,
-  ): Promise<SequenceRuntimeResponse> {
+  ): Promise<SequenceChromeResponse> {
     const delivery = Effect.runPromise(this.respond(invocation[0]))
     switch (invocation.length) {
       case 1:
@@ -206,20 +273,52 @@ class GoogleLoginContentSequence {
   private respond = Effect.fnUntraced(function* (
     this: GoogleLoginContentSequence,
     message: SequenceRuntimeMessage,
-  ): Effect.fn.Return<SequenceRuntimeResponse> {
+  ) {
     switch (message.type) {
       case GoogleLoginContinuationMessageType.Session: {
+        switch ('browserContext' in message) {
+          case true: {
+            const result = yield* Effect.promise(() =>
+              this.session.handle(message),
+            )
+            return this.sessionValue(result)
+          }
+          case false:
+            break
+        }
         this.operations.push(message.payload.operation)
         const sessionMessage: GoogleLoginSessionMessage = {
           ...message,
           browserContext: this.context,
         }
-        const result = yield* Effect.promise(() =>
-          this.session.handle(sessionMessage),
+        const opened = yield* Effect.promise(() => this.documentOwner().open())
+        const transport = opened.match(
+          (value) => value,
+          (failure) => {
+            throw failure
+          },
         )
-        return this.chromeSessionResponse(result)
+        const delivery: ExtensionSessionTransportDelivery = {
+          message: sessionMessage,
+        }
+        const delivered = yield* Effect.promise(() =>
+          transport.sendMessage(delivery),
+        )
+        const value = delivered.match(
+          (response) => response,
+          (failure) => {
+            throw failure
+          },
+        )
+        const result = yield* GoogleLoginContinuationResponse.decode(value)
+        const response: GoogleLoginRuntimeResponse = { ok: true, result }
+        return response
       }
-      case AuthenticationWorkflowSnapshotMessageType.NookAuthenticationWorkflowSnapshot: {
+      case ExtensionSessionReadinessMessageType.Query: {
+        const response: ExtensionSessionReadyResponse = { ok: true }
+        return response
+      }
+      case 'nook:authentication-workflow-snapshot': {
         const response = this.snapshot(message)
         switch (this.usernameInputs.length > 0) {
           case false:
@@ -252,7 +351,32 @@ class GoogleLoginContentSequence {
       }
       case WebsiteFocusedLoginRevealMessageType.Reveal:
         return yield* this.reveal(message)
-      default: {
+      case CompanionWasmSessionMessageType.ProjectAuthenticationLoginChecklist:
+      case CompanionWasmSessionMessageType.ClassifyFocusedCredentialField:
+      case CompanionWasmSessionMessageType.RevalidateFocusedCredentialField:
+      case CompanionWasmSessionMessageType.GetAuthenticationActivityProgress:
+      case CompanionWasmSessionMessageType.ExtractAuthenticationBackupCodeCandidates:
+      case CompanionWasmSessionMessageType.ProjectAuthenticationNavigationPath:
+      case CompanionWasmSessionMessageType.AuthenticationAuthenticatorSetupObservation:
+      case CompanionWasmSessionMessageType.AuthenticationWorkflowPilotPresentationCapability:
+      case CompanionWasmSessionMessageType.PasswordWorkflowActivity:
+      case CompanionWasmSessionMessageType.BindAuthenticationPageObservationFacts:
+      case CompanionWasmSessionMessageType.AuthenticationPageObservationFactsMatchBinding:
+      case CompanionWasmSessionMessageType.AuthenticationEnrollmentWorkflowMatch:
+      case CompanionWasmSessionMessageType.HasLoginContext:
+      case CompanionWasmSessionMessageType.ClassifyPageInputField:
+      case CompanionWasmSessionMessageType.ClassifyPageInputs:
+      case CompanionWasmSessionMessageType.LooksLikeLoginAdvanceControlLabel:
+      case CompanionWasmSessionMessageType.LooksLikeManualCheckpointLabel:
+      case CompanionWasmSessionMessageType.LooksLikePasskeyControlLabel:
+      case CompanionWasmSessionMessageType.LooksLikeEmailVerificationBody:
+      case CompanionWasmSessionMessageType.LooksLikeOneTimeCodeAutoSubmitSignal:
+      case CompanionWasmSessionMessageType.AuthenticationRecoveryCopyEvidence:
+      case CompanionWasmSessionMessageType.IsNookVaultAppUrl:
+      case CompanionWasmSessionMessageType.DecodeAuthenticationWorkflowRuntimeResponse:
+      case CompanionWasmSessionMessageType.DecodeContentRuntimeResponse:
+      case CompanionWasmSessionMessageType.EvaluateAuthenticationPolicies:
+      case CompanionWasmSessionMessageType.RevalidateApprovedAuthenticationWorkflow: {
         const result = yield* Effect.promise(() => this.session.handle(message))
         return this.chromeSessionResponse(result)
       }
@@ -262,11 +386,14 @@ class GoogleLoginContentSequence {
   private chromeSessionResponse(
     result: SequenceSessionResult,
   ): SequenceSessionResponse {
+    return { ok: true, result: this.sessionValue(result) }
+  }
+
+  private sessionValue(
+    result: SequenceSessionResult,
+  ): CompanionWasmSessionResponse {
     return result.match(
-      (value) => {
-        const response: SequenceSessionResponse = { ok: true, result: value }
-        return response
-      },
+      (value) => value,
       (failure) => {
         throw failure
       },
@@ -437,12 +564,14 @@ class GoogleLoginContentSequence {
     yield* Effect.promise(() => this.content.observe(workflows))
   })
 
-  close(): void {
+  close = Effect.fnUntraced(function* (this: GoogleLoginContentSequence) {
     this.content.cancel()
     this.session.cancel(this.context)
+    yield* Effect.promise(this.waitForIdentifierTurn.bind(this))
+    yield* Effect.promise(() => this.documentOwner().close())
     location.href = this.previousUrl
     document.body.replaceChildren()
-  }
+  })
 }
 
 afterEach(() => vi.unstubAllGlobals())
@@ -486,7 +615,7 @@ describe('selected Google content sequence', () => {
         fixture.passwordNext().click()
         expect(fixture.passwordNextClicks).toBe(1)
       } finally {
-        fixture.close()
+        await Effect.runPromise(fixture.close())
       }
     },
   )
@@ -510,7 +639,7 @@ describe('selected Google content sequence', () => {
       expect(fixture.password().value).toBe('')
       expect(fixture.passwordNextClicks).toBe(0)
     } finally {
-      fixture.close()
+      await Effect.runPromise(fixture.close())
     }
   })
 
@@ -549,7 +678,7 @@ describe('selected Google content sequence', () => {
         expect(fixture.passwordInputs).toEqual(noPasswordFill)
         expect(fixture.passwordNextClicks).toBe(0)
       } finally {
-        fixture.close()
+        await Effect.runPromise(fixture.close())
       }
     },
   )
@@ -581,7 +710,7 @@ describe('selected Google content sequence', () => {
       expect(fixture.passwordInputs).toEqual(noPasswordFill)
       expect(fixture.passwordNextClicks).toBe(0)
     } finally {
-      fixture.close()
+      await Effect.runPromise(fixture.close())
     }
   })
 
@@ -604,7 +733,7 @@ describe('selected Google content sequence', () => {
       expect(fixture.reveals).toEqual(identifierOnly)
       expect(fixture.passwordNextClicks).toBe(0)
     } finally {
-      fixture.close()
+      await Effect.runPromise(fixture.close())
     }
   })
 })
