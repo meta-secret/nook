@@ -1,10 +1,11 @@
-import { Effect } from 'effect'
+import { Effect, Schema } from 'effect'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import {
   bind_authentication_page_observation_facts,
   classify_companion_authentication_workflow_facts,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
+  GoogleLoginBrowserContextSchema,
   GoogleLoginContinuationMessageType,
   GoogleLoginContinuationOperation,
   GoogleLoginContinuationResponse,
@@ -276,14 +277,21 @@ class GoogleLoginContentSequence {
   ) {
     switch (message.type) {
       case GoogleLoginContinuationMessageType.Session: {
-        switch ('browserContext' in message) {
-          case true: {
+        switch (true) {
+          case 'browserContext' in message: {
+            const browserContext = yield* Schema.decodeUnknownEffect(
+              GoogleLoginBrowserContextSchema,
+            )(message.browserContext)
+            const sessionMessage: GoogleLoginSessionMessage = {
+              ...message,
+              browserContext,
+            }
             const result = yield* Effect.promise(() =>
-              this.session.handle(message),
+              this.session.handle(sessionMessage),
             )
             return this.sessionValue(result)
           }
-          case false:
+          case true:
             break
         }
         this.operations.push(message.payload.operation)
