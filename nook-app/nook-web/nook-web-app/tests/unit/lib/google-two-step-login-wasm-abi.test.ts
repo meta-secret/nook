@@ -10,6 +10,7 @@ import {
   type GoogleLoginBrowserContext,
   type GoogleLoginContinuationRequest,
   type GoogleLoginSessionMessage,
+  type GoogleLoginSessionResponse,
 } from '../../../../nook-web-shared/src/extension/google-login-continuation-messages'
 import {
   begin_google_two_step_login,
@@ -139,6 +140,18 @@ describe('Google selected-login generated ABI', () => {
 class GoogleLoginOwnerFixture {
   readonly owner = new GoogleLoginSessionContinuations()
   readonly facts = new GoogleLoginFixture()
+  readonly cancelled: GoogleLoginSessionResponse = {
+    ok: true,
+    result: GoogleLoginContinuationDecision.Cancel,
+  }
+  readonly awaitingPassword: GoogleLoginSessionResponse = {
+    ok: true,
+    result: GoogleLoginContinuationDecision.AwaitPassword,
+  }
+  readonly fillPassword: GoogleLoginSessionResponse = {
+    ok: true,
+    result: GoogleLoginContinuationDecision.FillPassword,
+  }
   readonly context: GoogleLoginBrowserContext = {
     tabId: GoogleLoginTabId.make(7),
     frameId: GoogleLoginFrameId.make(0),
@@ -199,12 +212,12 @@ describe('Google continuation offscreen ownership', () => {
     expect((await fixture.admit(malformed)).isErr()).toBe(true)
     expect(
       (await fixture.admit(fixture.facts.password()))._unsafeUnwrap(),
-    ).toBe(GoogleLoginContinuationDecision.Cancel)
+    ).toEqual(fixture.cancelled)
   })
   test('admits only the original document and consumes exactly once', async () => {
     const fixture = new GoogleLoginOwnerFixture()
-    expect((await fixture.begin())._unsafeUnwrap()).toBe(
-      GoogleLoginContinuationDecision.AwaitPassword,
+    expect((await fixture.begin())._unsafeUnwrap()).toEqual(
+      fixture.awaitingPassword,
     )
     const payload: GoogleLoginContinuationRequest = {
       operation: GoogleLoginContinuationOperation.Admit,
@@ -219,15 +232,15 @@ describe('Google continuation offscreen ownership', () => {
       },
       payload,
     }
-    expect((await fixture.owner.handle(other))._unsafeUnwrap()).toBe(
-      GoogleLoginContinuationDecision.Cancel,
+    expect((await fixture.owner.handle(other))._unsafeUnwrap()).toEqual(
+      fixture.cancelled,
     )
     expect(
       (await fixture.admit(fixture.facts.password()))._unsafeUnwrap(),
-    ).toBe(GoogleLoginContinuationDecision.FillPassword)
+    ).toEqual(fixture.fillPassword)
     expect(
       (await fixture.admit(fixture.facts.password()))._unsafeUnwrap(),
-    ).toBe(GoogleLoginContinuationDecision.Cancel)
+    ).toEqual(fixture.cancelled)
   })
   test.each([
     'edited',
@@ -256,12 +269,12 @@ describe('Google continuation offscreen ownership', () => {
         observation.elapsed_milliseconds = 60_000
         break
     }
-    expect((await fixture.inspect(observation))._unsafeUnwrap()).toBe(
-      GoogleLoginContinuationDecision.Cancel,
+    expect((await fixture.inspect(observation))._unsafeUnwrap()).toEqual(
+      fixture.cancelled,
     )
     expect(
       (await fixture.admit(fixture.facts.password()))._unsafeUnwrap(),
-    ).toBe(GoogleLoginContinuationDecision.Cancel)
+    ).toEqual(fixture.cancelled)
   })
   test('explicit lock or dismissal cleanup removes the live handle', async () => {
     const fixture = new GoogleLoginOwnerFixture()
@@ -269,6 +282,6 @@ describe('Google continuation offscreen ownership', () => {
     fixture.owner.cancel(fixture.context)
     expect(
       (await fixture.admit(fixture.facts.password()))._unsafeUnwrap(),
-    ).toBe(GoogleLoginContinuationDecision.Cancel)
+    ).toEqual(fixture.cancelled)
   })
 })

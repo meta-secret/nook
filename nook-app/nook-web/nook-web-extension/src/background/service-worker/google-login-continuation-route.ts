@@ -21,15 +21,6 @@ interface GoogleChromeSenderContext {
   readonly documentId: chrome.runtime.MessageSender['documentId']
   readonly sourceOrigin: chrome.runtime.MessageSender['origin']
 }
-type GooglePolicySessionValue = ReturnType<
-  Awaited<
-    ReturnType<typeof extensionPairingIdentity.sendSessionMessage>
-  >['_unsafeUnwrap']
->
-interface GooglePolicyResponseInput {
-  readonly ok: true
-  readonly result: GooglePolicySessionValue
-}
 type GoogleWebsiteSenderAdmission = Parameters<
   typeof extensionPairingIdentity.isAuthorizedWebsiteSender
 >[0]
@@ -103,10 +94,8 @@ export class GoogleLoginContinuationRoute {
             payload = { operation: GoogleLoginContinuationOperation.Cancel }
             break
           case true:
-            payload = {
-              ...payload,
-              request: { ...payload.request, page_url: pageUrl },
-            }
+            // History transitions retain this sender document's original URL.
+            // The decoded live observation carries its current route to Rust.
             break
         }
         break
@@ -122,17 +111,10 @@ export class GoogleLoginContinuationRoute {
     const delivery = yield* Effect.tryPromise(() =>
       extensionPairingIdentity.sendSessionMessage(session),
     )
-    switch (delivery.isOk()) {
-      case false:
-        return GoogleLoginContinuationRoute.failed
-      case true:
-        break
-    }
-    const input: GooglePolicyResponseInput = {
-      ok: true,
-      result: delivery.value,
-    }
-    const result = yield* GoogleLoginContinuationResponse.decode(input)
+    const result = yield* delivery.match(
+      GoogleLoginContinuationResponse.decode,
+      (failure) => Effect.fail(failure),
+    )
     const response: GoogleLoginRuntimeResponse = { ok: true, result }
     return response
   })

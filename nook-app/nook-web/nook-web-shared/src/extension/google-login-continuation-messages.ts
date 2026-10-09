@@ -83,6 +83,10 @@ export interface GoogleLoginSessionMessage extends GoogleLoginBrowserMessage {
 export type GoogleLoginRuntimeResponse =
   | { readonly ok: true; readonly result: GoogleLoginContinuationDecision }
   | { readonly ok: false; readonly reason: string };
+export type GoogleLoginSessionResponse = Extract<
+  GoogleLoginRuntimeResponse,
+  { readonly ok: true }
+>;
 type GoogleLoginResponseFields = {
   readonly ok: Schema.Literal<true>;
   readonly result: ReturnType<

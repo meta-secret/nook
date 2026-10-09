@@ -18,10 +18,12 @@ import {
   type GoogleLoginDocumentId,
   type GoogleLoginSourceOrigin,
   type GoogleLoginSessionMessage,
+  type GoogleLoginSessionResponse,
 } from '../../../nook-web-shared/src/extension/google-login-continuation-messages'
-import type {
-  CompanionWasmSessionMessage,
-  CompanionWasmSessionResponse,
+import {
+  CompanionWasmSessionMessageType,
+  type CompanionWasmSessionMessage,
+  type CompanionWasmSessionResponse,
 } from '../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 import { handleCompanionWasmMessage } from './session-companion-wasm-operations'
 import {
@@ -129,6 +131,9 @@ export class GoogleLoginSessionContinuations {
             this.cancel(context)
             return decision
         }
+        throw new SessionOperationFailure(
+          SessionOperationFailureKind.Verification,
+        )
       }
       case GoogleLoginContinuationOperation.Admit: {
         // Remove ownership before consuming: an admission failure consumes too.
@@ -153,7 +158,13 @@ export class GoogleLoginSessionContinuations {
       case GoogleLoginContinuationMessageType.Session:
         return Effect.runPromise(
           Effect.promise(() => companionWasmReady).pipe(
-            Effect.map(() => ok(this.execute(message))),
+            Effect.map(() => {
+              const response: GoogleLoginSessionResponse = {
+                ok: true,
+                result: this.execute(message),
+              }
+              return ok(response)
+            }),
             Effect.catchDefect(() => {
               this.cancel(message.browserContext)
               return Effect.succeed(
@@ -166,7 +177,32 @@ export class GoogleLoginSessionContinuations {
             }),
           ),
         )
-      default:
+      case CompanionWasmSessionMessageType.ProjectAuthenticationLoginChecklist:
+      case CompanionWasmSessionMessageType.ClassifyFocusedCredentialField:
+      case CompanionWasmSessionMessageType.RevalidateFocusedCredentialField:
+      case CompanionWasmSessionMessageType.GetAuthenticationActivityProgress:
+      case CompanionWasmSessionMessageType.ExtractAuthenticationBackupCodeCandidates:
+      case CompanionWasmSessionMessageType.ProjectAuthenticationNavigationPath:
+      case CompanionWasmSessionMessageType.AuthenticationAuthenticatorSetupObservation:
+      case CompanionWasmSessionMessageType.AuthenticationWorkflowPilotPresentationCapability:
+      case CompanionWasmSessionMessageType.PasswordWorkflowActivity:
+      case CompanionWasmSessionMessageType.BindAuthenticationPageObservationFacts:
+      case CompanionWasmSessionMessageType.AuthenticationPageObservationFactsMatchBinding:
+      case CompanionWasmSessionMessageType.AuthenticationEnrollmentWorkflowMatch:
+      case CompanionWasmSessionMessageType.HasLoginContext:
+      case CompanionWasmSessionMessageType.ClassifyPageInputField:
+      case CompanionWasmSessionMessageType.ClassifyPageInputs:
+      case CompanionWasmSessionMessageType.LooksLikeLoginAdvanceControlLabel:
+      case CompanionWasmSessionMessageType.LooksLikeManualCheckpointLabel:
+      case CompanionWasmSessionMessageType.LooksLikePasskeyControlLabel:
+      case CompanionWasmSessionMessageType.LooksLikeEmailVerificationBody:
+      case CompanionWasmSessionMessageType.LooksLikeOneTimeCodeAutoSubmitSignal:
+      case CompanionWasmSessionMessageType.AuthenticationRecoveryCopyEvidence:
+      case CompanionWasmSessionMessageType.IsNookVaultAppUrl:
+      case CompanionWasmSessionMessageType.DecodeAuthenticationWorkflowRuntimeResponse:
+      case CompanionWasmSessionMessageType.DecodeContentRuntimeResponse:
+      case CompanionWasmSessionMessageType.EvaluateAuthenticationPolicies:
+      case CompanionWasmSessionMessageType.RevalidateApprovedAuthenticationWorkflow:
         return handleCompanionWasmMessage(message)
     }
   }

@@ -19,29 +19,37 @@ type GoogleObservationWireFields = {
   readonly page_url: typeof Schema.String
   readonly authorization_generation: typeof Schema.String
   readonly elapsed_milliseconds: typeof Schema.Number
-  readonly identifier_integrity: Schema.Literal<'Unchanged' | 'Edited'>
-  readonly user_intent: Schema.Literal<'Continuing' | 'Interrupted'>
-  readonly password_occupancy: Schema.Literal<'Empty' | 'Populated'>
+  readonly identifier_integrity: Schema.Literals<
+    readonly GoogleLoginPageObservation['identifier_integrity'][]
+  >
+  readonly user_intent: Schema.Literals<
+    readonly GoogleLoginPageObservation['user_intent'][]
+  >
+  readonly password_occupancy: Schema.Literals<
+    readonly GoogleLoginPageObservation['password_occupancy'][]
+  >
   readonly facts: typeof Schema.Unknown
 }
 const observationFields: GoogleObservationWireFields = {
   page_url: Schema.String,
   authorization_generation: Schema.String,
   elapsed_milliseconds: Schema.Number,
-  identifier_integrity: Schema.Literal('Unchanged', 'Edited'),
-  user_intent: Schema.Literal('Continuing', 'Interrupted'),
-  password_occupancy: Schema.Literal('Empty', 'Populated'),
+  identifier_integrity: Schema.Literals(['Unchanged', 'Edited']),
+  user_intent: Schema.Literals(['Continuing', 'Interrupted']),
+  password_occupancy: Schema.Literals(['Empty', 'Populated']),
   facts: Schema.Unknown,
 }
 const observationSchema = Schema.Struct(observationFields)
 type GoogleObservationWire = typeof observationSchema.Type
 type GoogleStartWireFields = {
   readonly observation: typeof observationSchema
-  readonly selection_authority: Schema.Literal<'DetectedLogin' | 'FocusedField'>
+  readonly selection_authority: Schema.Literals<
+    readonly GoogleLoginStartRequest['selection_authority'][]
+  >
 }
 const startFields: GoogleStartWireFields = {
   observation: observationSchema,
-  selection_authority: Schema.Literal('DetectedLogin', 'FocusedField'),
+  selection_authority: Schema.Literals(['DetectedLogin', 'FocusedField']),
 }
 const startSchema = Schema.Struct(startFields)
 type GoogleBeginWireFields = {
@@ -53,17 +61,19 @@ const beginFields: GoogleBeginWireFields = {
   request: startSchema,
 }
 type GoogleInspectWireFields = {
-  readonly operation: Schema.Literal<
-    | GoogleLoginContinuationOperation.Inspect
-    | GoogleLoginContinuationOperation.Admit
+  readonly operation: Schema.Literals<
+    readonly (
+      | GoogleLoginContinuationOperation.Inspect
+      | GoogleLoginContinuationOperation.Admit
+    )[]
   >
   readonly request: typeof observationSchema
 }
 const inspectFields: GoogleInspectWireFields = {
-  operation: Schema.Literal(
+  operation: Schema.Literals([
     GoogleLoginContinuationOperation.Inspect,
     GoogleLoginContinuationOperation.Admit,
-  ),
+  ]),
   request: observationSchema,
 }
 type GoogleCancelWireFields = {

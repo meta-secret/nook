@@ -676,6 +676,7 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
 
   authenticationPageObservationFacts({
     observation,
+    fieldQuery,
     authenticatorSetupHint,
     backupCodesHint = false,
     backupCodesCopy,
@@ -705,11 +706,21 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
         );
       });
 
-    const observationScopeQuery: PasswordFormScopeQuery = {
+    const scopedFieldQuery: PasswordFormScopeQuery = {
       kind: PasswordFormQueryKind.Scoped,
       root: observation.root,
       formScope: observation.formScope,
     };
+    let observationScopeQuery: PasswordFormScopeQuery;
+    switch (fieldQuery?.kind) {
+      case PasswordFormQueryKind.Root:
+      case PasswordFormQueryKind.Scoped:
+        observationScopeQuery = fieldQuery;
+        break;
+      case undefined:
+        observationScopeQuery = scopedFieldQuery;
+        break;
+    }
     const oneTimeCodeBoundRequest: Parameters<
       typeof authenticationSubmissionControls.boundAuthenticationControlObservations<string>
     >[0] = {

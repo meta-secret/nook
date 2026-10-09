@@ -13,6 +13,7 @@ import {
 } from '../../../../nook-web-shared/src/extension/google-login-continuation-messages'
 import {
   PasswordFormQueryKind,
+  PasswordFormScopeKind,
   FormSubmissionResult,
   passwordFieldDiscovery,
   passwordFormInteraction,
@@ -38,7 +39,6 @@ import {
 } from './workflow-revalidation'
 import { AuthenticationWorkflowAction } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { FillAndSubmitAccountArgs } from './login-passkey-action-types'
-import { RefreshedAuthenticationObservation } from '../../../../nook-web-shared/src/extension/authentication-workflow-observation-refresh'
 
 export enum GoogleLoginStartDisposition {
   OtherPage = 'other-page',
@@ -82,9 +82,19 @@ interface GoogleLoginStartInteraction {
   readonly approvalIsActive: () => boolean
 }
 type GoogleLoginObservedWorkflows = readonly PasswordFormObservation[]
+interface GoogleLoginObservationRequest {
+  readonly workflow: PasswordFormObservation
+  readonly fieldQuery: Parameters<
+    typeof passwordFormInteraction.summarizeRoot
+  >[0]
+}
 interface GoogleLoginAdvanceRequest {
   readonly selection: GoogleLoginSelection
   readonly interaction: GoogleLoginStartInteraction
+  readonly submission: GoogleIdentifierSubmission
+}
+interface GoogleIdentifierSubmission {
+  result: FormSubmissionResult
 }
 interface GoogleIdentifierActivationRequest {
   readonly advance: GoogleLoginAdvanceRequest
@@ -214,7 +224,7 @@ export class GoogleLoginDocumentContinuation {
     return authenticationRuntimeTransport.sendDecodedRuntimeMessage(request)
   }
   private observation(
-    workflow: PasswordFormObservation,
+    request: GoogleLoginObservationRequest,
   ): GoogleLoginPageObservation {
     switch (this.state.kind) {
       case GoogleLoginDocumentState.Idle:
@@ -222,15 +232,19 @@ export class GoogleLoginDocumentContinuation {
       case GoogleLoginDocumentState.Selected:
         break
     }
-    const refreshed = new RefreshedAuthenticationObservation(workflow).value
+    const refreshed: PasswordFormObservation = {
+      ...request.workflow,
+      summary: passwordFormInteraction.summarizeRoot(request.fieldQuery),
+    }
     const factsRequest: Parameters<
       typeof passwordFormInteraction.authenticationPageObservationFacts
     >[0] = {
       observation: refreshed,
+      fieldQuery: request.fieldQuery,
       authenticatorSetupHint: 'absent',
       backupCodesCopy: '',
     }
-    const fields = passwordFieldDiscovery.findPasswordFields(refreshed)
+    const fields = passwordFieldDiscovery.findPasswordFields(request.fieldQuery)
     let occupancy: GoogleLoginPageObservation['password_occupancy'] = 'Empty'
     switch (fields.some((field) => field.value.length > 0)) {
       case true:
@@ -279,10 +293,10 @@ export class GoogleLoginDocumentContinuation {
       ),
     )
   }
-  private startSelected = Effect.fnUntraced(function* (
-    this: GoogleLoginDocumentContinuation,
-    request: GoogleLoginStartInteraction,
-  ) {
+  private startSelected = Effect.fnUntraced(
+    this.startSelectedOperation.bind(this),
+  )
+  private *startSelectedOperation(request: GoogleLoginStartInteraction) {
     // This is browser routing to one observed provider; Rust admits the selection.
     switch (
       this.browser.location.origin === 'https://accounts.google.com' &&
@@ -321,9 +335,17 @@ export class GoogleLoginDocumentContinuation {
     this.browser.document.addEventListener('click', this.onClick, true)
     this.browser.document.addEventListener('keydown', this.onKey, true)
     this.browser.addEventListener('pagehide', this.onPageHide)
+    const initialObservationRequest: GoogleLoginObservationRequest = {
+      workflow: request.workflow,
+      fieldQuery: {
+        kind: PasswordFormQueryKind.Scoped,
+        root: request.workflow.root,
+        formScope: request.workflow.formScope,
+      },
+    }
     const start: GoogleLoginStartRequest = {
       observation: {
-        ...this.observation(request.workflow),
+        ...this.observation(initialObservationRequest),
         elapsed_milliseconds: 0,
       },
       selection_authority: 'DetectedLogin',
@@ -441,15 +463,19 @@ export class GoogleLoginDocumentContinuation {
           return GoogleLoginStartDisposition.Rejected
       }
       response.value = ''
+      const submission: GoogleIdentifierSubmission = {
+        result: FormSubmissionResult.NotObserved,
+      }
       const advancement: Parameters<typeof this.advanceIdentifier>[0] = {
         selection,
         interaction: request,
+        submission,
       }
       return yield* this.advanceIdentifier(advancement)
     } finally {
       response.value = ''
     }
-  })
+  }
   private activateIdentifier(
     request: GoogleIdentifierActivationRequest,
   ): RevalidatedAuthenticationActResult {
@@ -465,6 +491,7 @@ export class GoogleLoginDocumentContinuation {
         advanceControls = approvedFacts.detailedAdvanceControl.observations
         break
       case 'absent':
+      case undefined:
         break
     }
     const submission: Parameters<
@@ -484,6 +511,7 @@ export class GoogleLoginDocumentContinuation {
       },
     }
     const result = passwordFormInteraction.submitLoginForm(submission)
+    request.advance.submission.result = result
     switch (result) {
       case FormSubmissionResult.Rejected:
         return { kind: RevalidatedAuthenticationActResultKind.Failed }
@@ -495,10 +523,10 @@ export class GoogleLoginDocumentContinuation {
   private waitForIdentifierTurn(): Promise<void> {
     return new Promise((resolve) => this.browser.setTimeout(resolve, 0))
   }
-  private advanceIdentifier = Effect.fnUntraced(function* (
-    this: GoogleLoginDocumentContinuation,
-    request: GoogleLoginAdvanceRequest,
-  ) {
+  private advanceIdentifier = Effect.fnUntraced(
+    this.advanceIdentifierOperation.bind(this),
+  )
+  private *advanceIdentifierOperation(request: GoogleLoginAdvanceRequest) {
     // Page input state is applied before fresh admission of the identifier Next.
     yield* Effect.promise(this.waitForIdentifierTurn.bind(this))
     switch (
@@ -565,17 +593,27 @@ export class GoogleLoginDocumentContinuation {
       case RevalidatedAuthenticationActionOutcomeKind.Acted:
         break
     }
-    switch (
-      this.retention(request.selection) ===
-        GoogleLoginSelectionRetention.Current &&
-      request.interaction.approvalIsActive()
-    ) {
-      case false:
+    switch (this.retention(request.selection)) {
+      case GoogleLoginSelectionRetention.Changed:
         return GoogleLoginStartDisposition.Rejected
-      case true:
-        return GoogleLoginStartDisposition.Started
+      case GoogleLoginSelectionRetention.Current:
+        break
     }
-  })
+    switch (request.submission.result) {
+      case FormSubmissionResult.Rejected:
+        return GoogleLoginStartDisposition.Rejected
+      case FormSubmissionResult.Submitted:
+        // Own approved Next may replace the identifier widget synchronously.
+        return GoogleLoginStartDisposition.Started
+      case FormSubmissionResult.NotObserved:
+        switch (request.interaction.approvalIsActive()) {
+          case false:
+            return GoogleLoginStartDisposition.Rejected
+          case true:
+            return GoogleLoginStartDisposition.Started
+        }
+    }
+  }
   async observe(workflows: GoogleLoginObservedWorkflows): Promise<void> {
     switch (this.phase) {
       case GoogleLoginObservationPhase.Actuating:
@@ -594,10 +632,10 @@ export class GoogleLoginDocumentContinuation {
       this.phase = GoogleLoginObservationPhase.Ready
     }
   }
-  private observePassword = Effect.fnUntraced(function* (
-    this: GoogleLoginDocumentContinuation,
-    workflows: GoogleLoginObservedWorkflows,
-  ) {
+  private observePassword = Effect.fnUntraced(
+    this.observePasswordOperation.bind(this),
+  )
+  private *observePasswordOperation(workflows: GoogleLoginObservedWorkflows) {
     switch (this.state.kind) {
       case GoogleLoginDocumentState.Idle:
         return
@@ -605,17 +643,53 @@ export class GoogleLoginDocumentContinuation {
         break
     }
     const selection = this.state.selection
-    const workflow = workflows[0]
-    switch (true) {
-      case !workflow:
-        return
-      case workflows.length !== 1:
-        this.cancel()
-        return
-      case true:
+    let observationRequest: GoogleLoginObservationRequest
+    switch (
+      this.browser.location.origin === 'https://accounts.google.com' &&
+      this.browser.location.pathname === '/v3/signin/challenge/pwd'
+    ) {
+      case false: {
+        const workflow = workflows[0]
+        switch (true) {
+          case !workflow:
+            return
+          case workflows.length !== 1:
+            this.cancel()
+            return
+          case true:
+            break
+        }
+        observationRequest = {
+          workflow,
+          fieldQuery: {
+            kind: PasswordFormQueryKind.Scoped,
+            root: workflow.root,
+            formScope: workflow.formScope,
+          },
+        }
         break
+      }
+      case true: {
+        // This selected document's facts reach Rust even when generic scope discovery has no match.
+        const summaryRequest: Parameters<
+          typeof passwordFormInteraction.summarizeRoot
+        >[0] = {
+          kind: PasswordFormQueryKind.Root,
+          root: this.browser.document,
+        }
+        const passwordObservation: PasswordFormObservation = {
+          root: this.browser.document,
+          formScope: { kind: PasswordFormScopeKind.Unowned },
+          summary: passwordFormInteraction.summarizeRoot(summaryRequest),
+        }
+        observationRequest = {
+          workflow: passwordObservation,
+          fieldQuery: summaryRequest,
+        }
+        break
+      }
     }
-    const observation = this.observation(workflow)
+    const observation = this.observation(observationRequest)
     const inspect: GoogleLoginContinuationRequest = {
       operation: GoogleLoginContinuationOperation.Inspect,
       request: observation,
@@ -645,7 +719,9 @@ export class GoogleLoginDocumentContinuation {
       case GoogleLoginContinuationDecision.FillPassword:
         break
     }
-    const fields = passwordFieldDiscovery.findPasswordFields(workflow)
+    const fields = passwordFieldDiscovery.findPasswordFields(
+      observationRequest.fieldQuery,
+    )
     const field = fields[0]
     switch (true) {
       case !field || !field.isConnected || field.value.length > 0:
@@ -699,7 +775,7 @@ export class GoogleLoginDocumentContinuation {
       }
       const admission: GoogleLoginContinuationRequest = {
         operation: GoogleLoginContinuationOperation.Admit,
-        request: this.observation(workflow),
+        request: this.observation(observationRequest),
       }
       const admissionDelivery = yield* Effect.promise(() =>
         this.send(admission),
@@ -748,5 +824,5 @@ export class GoogleLoginDocumentContinuation {
       response.value = ''
       this.cancel()
     }
-  })
+  }
 }

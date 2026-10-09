@@ -3,8 +3,8 @@ import { Schema } from "effect";
 import {
   GoogleLoginContinuationMessageType,
   type GoogleLoginSessionMessage,
+  type GoogleLoginSessionResponse,
 } from "./google-login-continuation-messages";
-import type { GoogleLoginContinuationDecision } from "./nook-companion-wasm/nook_companion_wasm.js";
 import type {
   AuthenticationLoginChecklistProjection,
   AuthenticationLoginChecklistPresentation,
@@ -349,7 +349,7 @@ export type CompanionWasmFocusedRecognitionResponse =
     };
 
 export type CompanionWasmSessionResponse =
-  | GoogleLoginContinuationDecision
+  | GoogleLoginSessionResponse
   | AuthenticationLoginChecklistPresentation
   | CompanionWasmFocusedRecognitionResponse
   | { readonly activityProgress: AuthenticationDisplayProgress }
