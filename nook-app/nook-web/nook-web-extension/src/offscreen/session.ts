@@ -36,7 +36,7 @@ import {
   type HandleSessionMessageArgs,
   type SessionOperationContext,
 } from './session-operations'
-import { handleCompanionWasmMessage } from './session-companion-wasm-operations'
+import { GoogleLoginSessionContinuations } from './google-login-continuation'
 import {
   CompanionVaultDiscovery,
   freshCompanionDiscoveryEndpoint,
@@ -398,7 +398,7 @@ const dispatchContext: SessionMessageDispatchContext<ExtensionSessionResponse> =
     handleMessage,
     handleCompanionIdentityDiscovery,
     handleCompanionIdentityHandoff,
-    handleCompanionWasmMessage,
+    handleCompanionWasmMessage: GoogleLoginSessionContinuations.buildHandler(),
     decodeProviders: async (providers) => {
       return admit_extension_storage_providers(providers)
     },

@@ -1,5 +1,6 @@
 import type { AuthenticationPageObservationFacts } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { InlineLoginPickerSurface } from './inline-login-picker'
+import { GoogleLoginDocumentContinuation } from './google-login-continuation'
 import type { LoginChecklistProgress } from './login-checklist-progress'
 import {
   PasswordFormScopeKind,
@@ -144,7 +145,20 @@ export type PendingSaveWatch = {
   observer?: MutationObserver
 }
 
+export enum AuthenticationScanValidity {
+  Current = 'current',
+  Stale = 'stale',
+}
+
 class ScanState {
+  validity(sequence: number): AuthenticationScanValidity {
+    switch (sequence === this.sequence) {
+      case true:
+        return AuthenticationScanValidity.Current
+      case false:
+        return AuthenticationScanValidity.Stale
+    }
+  }
   private currentSchedule: ScanSchedule = { kind: ScanScheduleKind.Idle }
   private scheduleStartedAt = 0
   sequence = 0
@@ -209,6 +223,9 @@ export type LoginChecklistMountState =
   | { kind: LoginChecklistMountKind.Unmounted }
 
 class WidgetState {
+  readonly googleLoginContinuation = new GoogleLoginDocumentContinuation(
+    globalThis,
+  )
   loginChecklist: LoginChecklistMountState = {
     kind: LoginChecklistMountKind.Unmounted,
   }

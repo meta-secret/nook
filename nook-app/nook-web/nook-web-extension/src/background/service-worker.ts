@@ -1,8 +1,11 @@
+import { GoogleLoginContinuationMessageCodec } from '../lib/google-login-continuation-messages'
+import type { RuntimeMessageSchema } from './service-worker/schema-runtime-message-route'
 import {
   FocusedWebsiteLoginFillOperation,
   focusedWebsiteLoginFillDependencies,
 } from './service-worker/focused-login-operations'
 import { FocusedLoginMessageRoute } from './service-worker/focused-login-message-route'
+import { GoogleLoginContinuationRoute } from './service-worker/google-login-continuation-route'
 import { loginPickerOperations } from './service-worker/login-picker-operations'
 /* eslint-disable nook-typed-api/no-raw-object-arguments, @typescript-eslint/no-unsafe-type-assertion -- Chrome runtime messages are narrowed at this external transport boundary. */
 import {
@@ -261,7 +264,20 @@ const focusedLoginMessageRouteRequest: ConstructorParameters<
     return new FocusedWebsiteLoginFillOperation(operation).run()
   },
 }
+const googleLoginRuntimeSchema: RuntimeMessageSchema<BrowserRuntimeMessage> = {
+  decode: GoogleLoginContinuationMessageCodec.decodeEnvelope,
+}
 const schemaRuntimeMessageRoutes: BackgroundRuntimeMessageRoutes = [
+  SchemaRuntimeMessageRoute.matching(googleLoginRuntimeSchema)
+    .respondWith((request) => {
+      const operation: ConstructorParameters<
+        typeof GoogleLoginContinuationRoute
+      >[0] = request
+      return Effect.runPromise(
+        new GoogleLoginContinuationRoute(operation).run(),
+      )
+    })
+    .onRejected(() => GoogleLoginContinuationRoute.failed),
   SchemaRuntimeMessageRoute.matching(WebsiteLoginPickerOpenMessageSchema)
     .respondWith(
       loginPickerOperations.openWebsiteLoginPicker.bind(loginPickerOperations),

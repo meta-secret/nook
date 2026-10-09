@@ -41,6 +41,7 @@ export function removeScannedWidget(): void {
 }
 
 async function clearAuthenticationSurface(): Promise<void> {
+  widgetState.googleLoginContinuation.cancel()
   focusedCredentialInteraction.clear()
   const dismissal = loginSaveInteraction.dismissPendingSaveOffer()
   removeScannedWidget()

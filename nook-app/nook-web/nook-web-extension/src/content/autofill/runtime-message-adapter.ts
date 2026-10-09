@@ -1,3 +1,4 @@
+import type { GoogleLoginBrowserMessage } from '../../../../nook-web-shared/src/extension/google-login-continuation-messages'
 import type {
   WebsiteFocusedLoginRevealMessage,
   WebsiteFocusedLoginFillResponse,
@@ -109,6 +110,7 @@ export type AuthenticationWorkflowSnapshotRuntimeResponse = {
 }
 
 export type ExtensionRuntimeRequest =
+  | GoogleLoginBrowserMessage
   | WebsiteFocusedLoginRevealMessage
   | AuthenticationOutcomeClassifyMessage
   | AuthenticationWorkflowSnapshotMessage

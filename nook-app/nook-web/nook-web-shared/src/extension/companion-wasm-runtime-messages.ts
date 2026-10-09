@@ -1,5 +1,10 @@
 /* eslint-disable @typescript-eslint/no-restricted-types, no-restricted-syntax -- This dedicated untrusted-input decoder narrows browser transport values immediately. */
 import { Schema } from "effect";
+import {
+  GoogleLoginContinuationMessageType,
+  type GoogleLoginSessionMessage,
+} from "./google-login-continuation-messages";
+import type { GoogleLoginContinuationDecision } from "./nook-companion-wasm/nook_companion_wasm.js";
 import type {
   AuthenticationLoginChecklistProjection,
   AuthenticationLoginChecklistPresentation,
@@ -133,6 +138,7 @@ export type CompanionWasmLabelRequest = {
 };
 
 export type CompanionWasmSessionMessage =
+  | GoogleLoginSessionMessage
   | {
       readonly type: CompanionWasmSessionMessageType.ProjectAuthenticationLoginChecklist;
       readonly payload: AuthenticationLoginChecklistProjection;
@@ -343,6 +349,7 @@ export type CompanionWasmFocusedRecognitionResponse =
     };
 
 export type CompanionWasmSessionResponse =
+  | GoogleLoginContinuationDecision
   | AuthenticationLoginChecklistPresentation
   | CompanionWasmFocusedRecognitionResponse
   | { readonly activityProgress: AuthenticationDisplayProgress }
@@ -422,10 +429,12 @@ export type CompanionWasmRuntimeMessage = CompanionWasmSessionMessage & {
 
 export const companionWasmSessionMessageTypes: readonly string[] = [
   ...Object.values(CompanionWasmSessionMessageType),
+  ...Object.values(GoogleLoginContinuationMessageType),
 ];
 
 export function isCompanionWasmSessionMessageType(
   type: string,
-): type is CompanionWasmSessionMessageType {
+): type is
+  CompanionWasmSessionMessageType | GoogleLoginContinuationMessageType {
   return companionWasmSessionMessageTypes.includes(type);
 }

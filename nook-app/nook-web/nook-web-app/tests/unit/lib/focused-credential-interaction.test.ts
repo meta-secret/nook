@@ -43,6 +43,7 @@ import {
   CompanionWasmSessionMessageType,
   type CompanionWasmSessionMessage,
 } from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
+import { GoogleLoginContinuationMessageType } from '../../../../nook-web-shared/src/extension/google-login-continuation-messages'
 import {
   WebsiteLoginSelectedMessageType,
   type WebsiteLoginSelectedMessage,
@@ -155,6 +156,7 @@ class FocusedInteractionFixture {
           response: new FocusedFieldRecognitionOperation(message).run(),
         }
       case CompanionWasmSessionMessageType.GetAuthenticationActivityProgress:
+      case GoogleLoginContinuationMessageType.Session:
       case CompanionWasmSessionMessageType.ProjectAuthenticationLoginChecklist:
       case CompanionWasmSessionMessageType.ExtractAuthenticationBackupCodeCandidates:
       case CompanionWasmSessionMessageType.ProjectAuthenticationNavigationPath:
