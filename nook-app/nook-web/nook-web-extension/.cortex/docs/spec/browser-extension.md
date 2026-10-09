@@ -359,6 +359,8 @@ Genuine password-reset and recovery semantics remain distinct from login.
 
 A normally detected form retains its explicit picker and full-form fill/submit
 behavior with existing origin/workflow revalidation.
+The [Google two-step login](#google-two-step-login) requirement below defines
+the narrow selection-authorized username-advance exception.
 
 - **Prohibited:** the focused-field limit restricts an independently detected
   login form to one field or removes its explicitly approved submit action.
@@ -367,6 +369,47 @@ behavior with existing origin/workflow revalidation.
 
 This interaction path is limited to the accepted credential opportunity.
 It introduces no separate UI or speculative recovery capability.
+
+### Google two-step login
+
+Accepted requirement: explicit saved-login selection on
+`https://accounts.google.com/v3/signin/identifier` authorizes the following
+sequence only when the username-only login flow is independently detected.
+
+1. Fill the selected login's username and activate Google's Next control.
+2. On the observed Google password challenge, fill that same selected item's
+   password once. Support this continuation when the user manually clicks Next
+   after selection as well.
+3. Require an explicit user action for final password submission.
+
+This exception authorizes only Google's username advance after selection.
+It grants no generic automatic submission. A focused-only credential
+opportunity remains exact-field fill-only.
+
+- **Prohibited:** selecting a login on Google's identifier step automatically
+  submits the later password, chooses another saved login, or grants the same
+  continuation to a focused-only opportunity or another site's login.
+- **Required:** selection fills the Google username and advances with Next.
+  Whether Pilot or the user activates Next, the observed password challenge
+  receives the selected item's password once. Final submission awaits explicit
+  user action. A focused-only selection fills only its retained exact field.
+
+#### Selected login lifetime
+
+- Between steps, retain only the selected opaque item identity and bounded
+  authorization, origin, tab, frame, and document context.
+- Reuse existing runtime revalidation before revealing and filling the password.
+- Clear the continuation on lock, expiry, cancellation, or teardown.
+  Changed source or credential context also clears it, including a user account
+  change.
+- Keep plaintext limited to each immediate fill. Do not persist credentials,
+  log sensitive data, or introduce generic recovery behavior.
+
+- **Prohibited:** retain the decrypted credential between Google's steps or
+  continue after lock, expiry, cancellation, teardown, or a context change.
+- **Required:** retain only the opaque selection and its bounded context.
+  Revalidate before the password fill. A vault lock or user account change before
+  the challenge clears that continuation without revealing or filling the password.
 
 ### Popular-site detection coverage
 
@@ -417,9 +460,11 @@ The gate must:
   manual takeover without exposing a username, password, TOTP code, setup key,
   recovery code, or provider credential;
 - offer a primary Continue with Nook action that lists matching logins for the
-  page origin, reveals one credential after explicit choice, fills a detected form,
-  and submits only after explicit user action; when locked, open the shared
-  extension authentication tab and keep the host page in status/Continue mode.
+  page origin. Reveal one credential after explicit choice and fill a detected
+  form. Require explicit submission approval except for the
+  [selected Google username advance](#google-two-step-login).
+  When locked, open the shared extension authentication tab and keep the host
+  page in status/Continue mode.
   After unlock, show localized return guidance and require a fresh Continue click
   with existing origin/workflow revalidation before any page interaction;
 - keep Open vault as an optional secondary action;

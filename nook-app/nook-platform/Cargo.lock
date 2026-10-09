@@ -1946,6 +1946,7 @@ name = "nook-companion-core"
 version = "1.0.0"
 dependencies = [
  "anyhow",
+ "derive_more",
  "nook-auth2",
  "nook-authenticator-domain",
  "nook-event-log",

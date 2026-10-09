@@ -3,6 +3,7 @@ import type {
   AuthenticationUsernameEvidence,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import type { PasswordFormScope } from "./password-form-fields";
+import type { PasswordFormScopeQuery } from "./password-form-submission-controls";
 
 export type PasswordFormSummary = {
   passwordFieldCount: number;
@@ -25,6 +26,8 @@ export type PasswordFormObservation = {
 
 export type AuthenticationObservationFactsRequest = {
   observation: PasswordFormObservation;
+  /** Omission preserves the observation's existing scoped field query. */
+  fieldQuery?: PasswordFormScopeQuery;
   authenticatorSetupHint: AuthenticationAuthenticatorSetupObservation;
   backupCodesHint?: boolean;
   backupCodesCopy?: string;

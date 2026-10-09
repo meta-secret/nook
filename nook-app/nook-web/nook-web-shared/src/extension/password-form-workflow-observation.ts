@@ -3,6 +3,7 @@ import type {
   AuthenticationObservationFactsRequest,
   PageControlObservationRequest,
 } from "./password-form-observation-types";
+import { Option } from "effect";
 export type {
   PasswordFormSummary,
   PasswordFormObservation,
@@ -676,6 +677,7 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
 
   authenticationPageObservationFacts({
     observation,
+    fieldQuery,
     authenticatorSetupHint,
     backupCodesHint = false,
     backupCodesCopy,
@@ -705,11 +707,21 @@ export class PasswordFormWorkflowObservation extends PasswordFormSummaryObservat
         );
       });
 
-    const observationScopeQuery: PasswordFormScopeQuery = {
+    const scopedFieldQuery: PasswordFormScopeQuery = {
       kind: PasswordFormQueryKind.Scoped,
       root: observation.root,
       formScope: observation.formScope,
     };
+    let observationScopeQuery: PasswordFormScopeQuery;
+    const explicitFieldQuery = Option.fromNullishOr(fieldQuery);
+    switch (explicitFieldQuery._tag) {
+      case "Some":
+        observationScopeQuery = explicitFieldQuery.value;
+        break;
+      case "None":
+        observationScopeQuery = scopedFieldQuery;
+        break;
+    }
     const oneTimeCodeBoundRequest: Parameters<
       typeof authenticationSubmissionControls.boundAuthenticationControlObservations<string>
     >[0] = {

@@ -18,6 +18,7 @@ import { authentication_workflow_activity_progress } from './authentication-acti
 import {
   WidgetControlDisposition,
   widgetState,
+  scanState,
   WidgetCredentialActuation,
 } from './state'
 import { authenticationWorkflowUi } from './authentication-workflow-ui-state'
@@ -34,6 +35,7 @@ import {
   type AuthenticationObservationBinding,
 } from './workflow-revalidation'
 import type { FillAndSubmitAccountArgs } from './login-passkey-action-types'
+import { GoogleLoginStartDisposition } from './google-login-continuation'
 
 /** Owns the credential reveal, fill, and form submission lifecycle. */
 export class LoginCredentialFillAction {
@@ -117,6 +119,30 @@ export class LoginCredentialFillAction {
       releaseOutcome.kind !== RevalidatedAuthenticationActionOutcomeKind.Acted
     ) {
       return showFillFailure()
+    }
+    const googleRequest: Parameters<
+      typeof widgetState.googleLoginContinuation.start
+    >[0] = { account, workflow, approvalIsActive }
+    let googleStart: GoogleLoginStartDisposition
+    widgetState.credentialActuation = WidgetCredentialActuation.WorkflowFill
+    try {
+      googleStart =
+        await widgetState.googleLoginContinuation.start(googleRequest)
+    } finally {
+      widgetState.credentialActuation = WidgetCredentialActuation.Idle
+    }
+    switch (googleStart) {
+      case GoogleLoginStartDisposition.Started:
+        description.textContent = workflowUi.translatedMessage(
+          BROWSER_MESSAGE_KEYS.WidgetFilledManual,
+        )
+        continueButton.hidden = true
+        scanState.schedule()
+        return true
+      case GoogleLoginStartDisposition.Rejected:
+        return showFillFailure()
+      case GoogleLoginStartDisposition.OtherPage:
+        break
     }
     const loginFillMessage1: Parameters<
       typeof loginFillRuntimeTransport.sendLoginFillMessage

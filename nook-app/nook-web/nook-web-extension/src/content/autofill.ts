@@ -68,6 +68,7 @@ import {
   SaveOfferDisplayKind,
   SavePageWatchKind,
   ScanScheduleKind,
+  AuthenticationScanValidity,
   WidgetHostKind,
   WidgetCredentialActuation,
   WidgetWorkflowKeyKind,
@@ -262,6 +263,13 @@ export class AuthenticationScanRenderLifecycle {
     const workflowForms = passwordFormInteraction
       .summarizeAuthenticationWorkflowForms()
       .slice(0, MAX_AUTHENTICATION_WORKFLOW_TRANSPORT_OBSERVATIONS)
+    await widgetState.googleLoginContinuation.observe(workflowForms)
+    switch (this.request.scanState.validity(sequence)) {
+      case AuthenticationScanValidity.Stale:
+        return AuthenticationScanOutcome.Stale
+      case AuthenticationScanValidity.Current:
+        break
+    }
     const workflowFormsDiagnostic: AuthenticationDiagnosticObservation = {
       gate: AuthenticationDiagnosticGate.WorkflowFormDiscovery,
       outcome:
