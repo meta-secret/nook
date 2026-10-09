@@ -99,6 +99,8 @@ class VkLoginAccountListingScenario {
       ok: true,
       accounts: [
         {
+          vaultStoreId: 'vk-vault',
+          vaultName: 'vk-vault',
           secretId: 'vk-login',
           username: 'vk-fixture-user',
           websiteUrl: 'https://vk.ru/',
@@ -125,7 +127,7 @@ class VkLoginAccountListingScenario {
     >[0] = {
       grants: [grant('vk-vault')],
       origin: 'https://id.vk.ru',
-      sendMessage: (message) => {
+      sendMessage: (message: ExtensionSessionTransportRequest) => {
         const delivery: ExtensionSessionTransportDelivery = { message }
         return this.transport.sendMessage(delivery)
       },
