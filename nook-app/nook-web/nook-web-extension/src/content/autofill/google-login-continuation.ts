@@ -1,4 +1,4 @@
-import { Effect } from 'effect'
+import { Effect, Option } from 'effect'
 import {
   GoogleLoginContinuationDecision,
   type GoogleLoginPageObservation,
@@ -19,6 +19,7 @@ import {
   passwordFormInteraction,
   passwordFormCredentialInteraction,
   type PasswordFormObservation,
+  type PasswordFormScopeQuery,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 import {
   WebsiteFocusedLoginRevealMessageType,
@@ -84,9 +85,7 @@ interface GoogleLoginStartInteraction {
 type GoogleLoginObservedWorkflows = readonly PasswordFormObservation[]
 interface GoogleLoginObservationRequest {
   readonly workflow: PasswordFormObservation
-  readonly fieldQuery: Parameters<
-    typeof passwordFormInteraction.summarizeRoot
-  >[0]
+  readonly fieldQuery: PasswordFormScopeQuery
 }
 interface GoogleLoginAdvanceRequest {
   readonly selection: GoogleLoginSelection
@@ -486,12 +485,20 @@ export class GoogleLoginDocumentContinuation {
         typeof passwordFormInteraction.submitLoginForm
       >[0]['approvedAdvanceControls']
     > = []
-    switch (approvedFacts.detailedAdvanceControl?.kind) {
-      case 'observed':
-        advanceControls = approvedFacts.detailedAdvanceControl.observations
+    const advanceObservation = Option.fromNullishOr(
+      approvedFacts.detailedAdvanceControl,
+    )
+    switch (advanceObservation._tag) {
+      case 'Some':
+        switch (advanceObservation.value.kind) {
+          case 'observed':
+            advanceControls = advanceObservation.value.observations
+            break
+          case 'absent':
+            break
+        }
         break
-      case 'absent':
-      case undefined:
+      case 'None':
         break
     }
     const submission: Parameters<
@@ -659,21 +666,20 @@ export class GoogleLoginDocumentContinuation {
           case true:
             break
         }
+        const fieldQuery: PasswordFormScopeQuery = {
+          kind: PasswordFormQueryKind.Scoped,
+          root: workflow.root,
+          formScope: workflow.formScope,
+        }
         observationRequest = {
           workflow,
-          fieldQuery: {
-            kind: PasswordFormQueryKind.Scoped,
-            root: workflow.root,
-            formScope: workflow.formScope,
-          },
+          fieldQuery,
         }
         break
       }
       case true: {
         // This selected document's facts reach Rust even when generic scope discovery has no match.
-        const summaryRequest: Parameters<
-          typeof passwordFormInteraction.summarizeRoot
-        >[0] = {
+        const summaryRequest: PasswordFormScopeQuery = {
           kind: PasswordFormQueryKind.Root,
           root: this.browser.document,
         }
@@ -719,9 +725,8 @@ export class GoogleLoginDocumentContinuation {
       case GoogleLoginContinuationDecision.FillPassword:
         break
     }
-    const fields = passwordFieldDiscovery.findPasswordFields(
-      observationRequest.fieldQuery,
-    )
+    const fieldQuery: PasswordFormScopeQuery = observationRequest.fieldQuery
+    const fields = passwordFieldDiscovery.findPasswordFields(fieldQuery)
     const field = fields[0]
     switch (true) {
       case !field || !field.isConnected || field.value.length > 0:

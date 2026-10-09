@@ -4,7 +4,7 @@ import {
   type Page,
   type Route,
   type TestInfo,
-  type PlaywrightTestOptions,
+  type PlaywrightWorkerOptions,
 } from '@playwright/test'
 import {
   launchPairedPinExtension,
@@ -22,7 +22,7 @@ interface GoogleBrowserScenario {
 }
 interface GoogleBrowserRun {
   readonly mode: GoogleNextMode
-  readonly browserName: PlaywrightTestOptions['browserName']
+  readonly browserName: PlaywrightWorkerOptions['browserName']
   readonly testInfo: TestInfo
 }
 

@@ -80,6 +80,11 @@ export type RuntimeMessageDelivery<Response> =
   | { kind: RuntimeMessageDeliveryKind.Delivered; response: Response }
   | { kind: RuntimeMessageDeliveryKind.Unavailable }
 
+/** The background companion route wraps its session value before Chrome delivery. */
+type CompanionWasmRuntimeResponse =
+  | { readonly ok: true; readonly result: CompanionWasmSessionResponse }
+  | { readonly ok: false; readonly reason: string }
+
 type RuntimeMessageResponse =
   | WebsiteFocusedLoginFillResponse
   | AuthenticationOutcomeResponse
@@ -98,6 +103,7 @@ type RuntimeMessageResponse =
   | WebsiteLoginSaveActionResponse
   | WebsiteLoginSaveOfferResponse
   | WebsiteLoginSavePendingResponse
+  | CompanionWasmRuntimeResponse
   | CompanionWasmSessionResponse
 
 export type AuthenticationWorkflowSnapshotRuntimeResponse = {
