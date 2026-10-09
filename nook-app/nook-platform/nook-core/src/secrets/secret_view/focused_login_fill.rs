@@ -132,6 +132,19 @@ mod tests {
     struct LoginFixture;
 
     impl LoginFixture {
+        fn vk_record() -> SecretRecord {
+            SecretRecord {
+                id: SecretId::from_vault_record("secret_vk_login"),
+                secret_type: SecretType::Login,
+                data: SecretValue::Login(LoginSecret {
+                    website_url: "https://vk.ru/login".to_owned(),
+                    username: "vk-account".to_owned(),
+                    password: "vk-password-only".to_owned(),
+                    notes: "never-projected".to_owned(),
+                }),
+            }
+        }
+
         fn record() -> SecretRecord {
             SecretRecord {
                 id: SecretId::from_vault_record("secret_SMypl8K0w9a"),
@@ -144,6 +157,51 @@ mod tests {
                 }),
             }
         }
+    }
+
+    #[test]
+    fn vk_current_password_reveal_accepts_explicit_identity_host() -> anyhow::Result<()> {
+        for origin in [
+            "https://id.vk.ru/auth",
+            "https://vk.ru/login",
+            "https://www.VK.ru/login?next=home",
+        ] {
+            let origin = FocusedLoginFillOrigin::try_from(origin.to_owned())?;
+            let mut password = FocusedLoginFillProjection {
+                record: LoginFixture::vk_record(),
+                origin: &origin,
+                credential: CredentialKind::CurrentPassword,
+            }
+            .reveal()?;
+            assert_eq!(password.as_str(), "vk-password-only");
+            password.zeroize();
+            assert_eq!(password.as_str(), "");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn vk_current_password_reveal_rejects_hosts_outside_explicit_family() -> anyhow::Result<()> {
+        for origin in [
+            "https://arbitrary.vk.ru/auth",
+            "https://nested.id.vk.ru/auth",
+            "https://id.vk.ru.evil.example/auth",
+            "https://evil-vk.ru/auth",
+            "https://vk.com/auth",
+            "https://unrelated.example/auth",
+        ] {
+            let origin = FocusedLoginFillOrigin::try_from(origin.to_owned())?;
+            assert!(matches!(
+                FocusedLoginFillProjection {
+                    record: LoginFixture::vk_record(),
+                    origin: &origin,
+                    credential: CredentialKind::CurrentPassword,
+                }
+                .reveal(),
+                Err(FocusedLoginFillError::OriginMismatch)
+            ));
+        }
+        Ok(())
     }
 
     #[test]
