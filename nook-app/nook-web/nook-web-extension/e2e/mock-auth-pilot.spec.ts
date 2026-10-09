@@ -8,6 +8,7 @@ import {
   type Route,
   type PlaywrightWorkerOptions,
 } from '@playwright/test'
+import { Effect } from 'effect'
 import {
   launchPairedPinExtension,
   saveVaultAuthenticator,
@@ -323,6 +324,115 @@ class PilotChecklistScenarios {
   }
 }
 
+type VkPasswordStepBrowserRequest = {
+  readonly browserName: PlaywrightWorkerOptions['browserName']
+  readonly testInfo: TestInfo
+}
+type VkPasswordStepBrowserContext = {
+  readonly self: VkPasswordStepBrowserScenario
+}
+
+class VkPasswordStepBrowserScenario {
+  private readonly generatorContext: VkPasswordStepBrowserContext = {
+    self: this,
+  }
+  private readonly response: Parameters<Route['fulfill']>[0] = {
+    contentType: 'text/html',
+    body: '<!doctype html><html><body data-fixture-submit-count="0"><main><input id="selected-username" type="hidden" autocomplete="username" value="already-selected-user"><label>Password<input id="current-password" type="password" autocomplete="current-password"></label></main><script>document.addEventListener("submit", event => { event.preventDefault(); document.body.dataset.fixtureSubmitCount = "1"; });</script></body></html>',
+  }
+
+  constructor(private readonly request: VkPasswordStepBrowserRequest) {}
+
+  private fulfill(route: Route): Promise<void> {
+    return route.fulfill(this.response)
+  }
+
+  readonly verifyPasswordSelection = Effect.fn(
+    this.generatorContext,
+    function* () {
+      test.skip(
+        this.request.browserName !== 'chromium',
+        'Chrome extensions require Chromium',
+      )
+      const paired = yield* Effect.tryPromise(() =>
+        launchPairedPinExtension(this.request.testInfo),
+      )
+      try {
+        yield* Effect.tryPromise(() =>
+          saveVaultLogin(
+            paired.vaultPage,
+            'https://vk.ru/',
+            'alice-vk@nook.test',
+            'alice-fixture-password',
+          ),
+        )
+        yield* Effect.tryPromise(() =>
+          saveVaultLogin(
+            paired.vaultPage,
+            'https://vk.ru/',
+            'bob-vk@nook.test',
+            'bob-fixture-password',
+          ),
+        )
+        const page = yield* Effect.tryPromise(() => paired.context.newPage())
+        yield* Effect.tryPromise(() =>
+          page.route('https://id.vk.ru/**', this.fulfill.bind(this)),
+        )
+        yield* Effect.tryPromise(() => page.goto('https://id.vk.ru/auth'))
+        const password = page.locator('#current-password')
+        yield* Effect.tryPromise(() => password.click())
+        const widget = page.locator('#nook-auth-widget')
+        yield* Effect.tryPromise(() => expect(widget).toBeVisible())
+        yield* Effect.tryPromise(() => expect(password).toHaveValue(''))
+        const continueChoice: Parameters<Locator['getByRole']>[1] = {
+          name: 'Continue with Nook',
+        }
+        yield* Effect.tryPromise(() =>
+          widget.getByRole('button', continueChoice).click(),
+        )
+        const picker = widget
+          .getByTestId('nook-inline-login-picker')
+          .contentFrame()
+        yield* Effect.tryPromise(() =>
+          expect(picker.getByText('alice-vk@nook.test')).toBeVisible(),
+        )
+        yield* Effect.tryPromise(() =>
+          expect(picker.getByText('bob-vk@nook.test')).toBeVisible(),
+        )
+        yield* Effect.tryPromise(() =>
+          expect(widget).not.toContainText('bob-vk@nook.test'),
+        )
+        yield* Effect.tryPromise(() => expect(password).toHaveValue(''))
+        const selectedChoice: Parameters<Locator['getByRole']>[1] = {
+          name: /bob-vk@nook\.test/,
+        }
+        yield* Effect.tryPromise(() =>
+          picker.getByRole('button', selectedChoice).click(),
+        )
+        yield* Effect.tryPromise(() =>
+          expect(password).toHaveValue('bob-fixture-password'),
+        )
+        yield* Effect.tryPromise(() =>
+          expect(page.locator('#selected-username')).toHaveValue(
+            'already-selected-user',
+          ),
+        )
+        yield* Effect.tryPromise(() =>
+          expect(page.locator('body')).toHaveAttribute(
+            'data-fixture-submit-count',
+            '0',
+          ),
+        )
+        yield* Effect.tryPromise(() =>
+          expect(page).toHaveURL('https://id.vk.ru/auth'),
+        )
+      } finally {
+        yield* Effect.tryPromise(() => paired.context.close())
+      }
+    },
+  )
+}
+
 test.describe('PIN Pilot against mock auth', () => {
   test.describe.configure({ timeout: 180_000 })
 
@@ -377,6 +487,14 @@ test.describe('PIN Pilot against mock auth', () => {
   }, testInfo) => {
     const request: PilotScenarioRun = { browserName, testInfo }
     await new PilotChecklistScenarios(request).run()
+  })
+
+  test('selects a saved vk.ru account on the id.vk.ru password step without submitting', ({
+    browserName,
+  }, testInfo) => {
+    const request: VkPasswordStepBrowserRequest = { browserName, testInfo }
+    const scenario = new VkPasswordStepBrowserScenario(request)
+    return Effect.runPromise(scenario.verifyPasswordSelection())
   })
 
   test('completes login then 2FA through Pilot', async ({

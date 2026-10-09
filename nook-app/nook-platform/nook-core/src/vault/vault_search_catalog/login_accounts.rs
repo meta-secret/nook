@@ -99,6 +99,16 @@ mod tests {
     }
 
     impl LoginCatalogFixture {
+        fn vk_login() -> anyhow::Result<Self> {
+            Self::new()?.with_item(SecretListItem {
+                id: SecretId::from_vault_record("secret_vk_login"),
+                data: SecretListItemData::Login {
+                    website_url: "https://vk.ru/login".to_owned(),
+                    username: "vk-account".to_owned(),
+                },
+            })
+        }
+
         fn new() -> anyhow::Result<Self> {
             Ok(Self {
                 catalog: SecretSearchCatalog::default(),
@@ -118,6 +128,56 @@ mod tests {
             );
             Ok(self)
         }
+    }
+
+    #[test]
+    fn vk_login_is_listed_on_explicit_identity_host() -> anyhow::Result<()> {
+        let fixture = LoginCatalogFixture::vk_login()?.with_item(SecretListItem {
+            id: SecretId::from_vault_record("secret_vk_unlisted"),
+            data: SecretListItemData::Login {
+                website_url: "https://arbitrary.vk.ru/login".to_owned(),
+                username: "unlisted-account".to_owned(),
+            },
+        })?;
+        let accounts = fixture
+            .catalog
+            .matching_login_accounts(&WebsiteHost::normalize("https://id.vk.ru/auth")?)?;
+        let [account] = accounts.as_slice() else {
+            anyhow::bail!("expected only the saved VK brand-host account");
+        };
+        assert_eq!(
+            account.secret_id,
+            SecretId::from_vault_record("secret_vk_login")
+        );
+        assert_eq!(String::from(account.username.clone()), "vk-account");
+        assert_eq!(
+            String::from(account.website_url.clone()),
+            "https://vk.ru/login"
+        );
+        assert_eq!(account.website_host, WebsiteHost::normalize("vk.ru")?);
+        Ok(())
+    }
+
+    #[test]
+    fn vk_login_listing_rejects_hosts_outside_explicit_family() -> anyhow::Result<()> {
+        let fixture = LoginCatalogFixture::vk_login()?;
+        for origin in [
+            "https://arbitrary.vk.ru/auth",
+            "https://nested.id.vk.ru/auth",
+            "https://id.vk.ru.evil.example/auth",
+            "https://evil-vk.ru/auth",
+            "https://vk.com/auth",
+            "https://unrelated.example/auth",
+        ] {
+            assert!(
+                fixture
+                    .catalog
+                    .matching_login_accounts(&WebsiteHost::normalize(origin)?)?
+                    .is_empty(),
+                "unexpected VK login listed for {origin}"
+            );
+        }
+        Ok(())
     }
 
     #[test]
