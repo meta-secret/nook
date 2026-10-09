@@ -7,6 +7,7 @@ description = "Portable auth-companion heuristics and host policy without vault 
 repository.workspace = true
 
 [dependencies]
+derive_more = { version = "2.1.1", default-features = false, features = ["from"] }
 nook-authenticator-domain = { path = "../nook-authenticator-domain" }
 nook-auth2 = { path = "../nook-auth2" }
 nook-event-log = { path = "../nook-event-log" }

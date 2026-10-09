@@ -22,8 +22,16 @@ use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::wasm_bindgen;
 
 mod focused_field;
+mod google_two_step;
 pub use focused_field::{
     FocusedCredentialOpportunity, FocusedCredentialSelection, FocusedCredentialSelectionUnavailable,
+};
+pub use google_two_step::{
+    GoogleLoginAuthorizationGeneration, GoogleLoginContinuationDecision,
+    GoogleLoginContinuationError, GoogleLoginElapsedMilliseconds, GoogleLoginIdentifierIntegrity,
+    GoogleLoginPageObservation, GoogleLoginPageUrl, GoogleLoginPasswordOccupancy,
+    GoogleLoginSelectionAuthority, GoogleLoginStartRequest, GoogleLoginUserIntent,
+    GoogleTwoStepLoginContinuation,
 };
 
 /// Credential kind assigned to one field in a fill plan.
