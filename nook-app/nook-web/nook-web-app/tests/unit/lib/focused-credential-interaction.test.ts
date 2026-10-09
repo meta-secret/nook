@@ -95,6 +95,17 @@ enum FocusedRevealFailure {
   Rejected = 'rejected',
   Failed = 'failed',
 }
+enum VkPasswordTargetMutation {
+  Removed = 'removed',
+  Disabled = 'disabled',
+  Readonly = 'readonly',
+  Role = 'role',
+  MessageOrigin = 'origin',
+  PageOrigin = 'page-origin',
+}
+type VkPasswordTargetMutationRequest = {
+  readonly mutation: VkPasswordTargetMutation
+}
 type FocusedRevealDelivery = Awaited<
   ReturnType<
     typeof authenticationRuntimeTransport.sendDecodedRuntimeMessage<WebsiteFocusedLoginFillResponse>
@@ -510,6 +521,99 @@ class FocusedInteractionFixture {
       },
     }
   }
+
+  readonly verifyVkPasswordSelection = Effect.fn(
+    this.generatorContext,
+    function* () {
+      vi.spyOn(location, 'origin', 'get').mockReturnValue('https://id.vk.ru')
+      vi.spyOn(location, 'href', 'get').mockReturnValue('https://id.vk.ru/auth')
+      this.input.type = 'password'
+      this.input.autocomplete = 'current-password'
+      this.other.type = 'hidden'
+      this.other.autocomplete = 'username'
+      this.other.value = 'already-selected-vk-user'
+      this.input.click()
+      expect(yield* Effect.tryPromise(() => this.interaction.tryRender())).toBe(
+        FocusedUiDisposition.Ready,
+      )
+      expect(this.input.value).toBe('')
+      expect(this.reveal).not.toHaveBeenCalled()
+      yield* Effect.tryPromise(() => this.interaction.choose())
+      this.mounts[0]?.shell.continueButton.focus()
+      expect(
+        yield* Effect.tryPromise(() =>
+          this.interaction.verifyPicker('focused-request'),
+        ),
+      ).toBe(FocusedUiDisposition.Ready)
+      expect(this.reveal).not.toHaveBeenCalled()
+      const released = { ok: true as const, value: 'chosen-password' }
+      const response: Awaited<
+        ReturnType<
+          typeof authenticationRuntimeTransport.sendDecodedRuntimeMessage<WebsiteFocusedLoginFillResponse>
+        >
+      > = { kind: RuntimeMessageDeliveryKind.Delivered, response: released }
+      this.reveal.mockImplementation(() =>
+        Effect.runPromise(Effect.succeed(response)),
+      )
+      yield* Effect.tryPromise(() => this.interaction.select(this.selected()))
+      expect(this.input.value).toBe('chosen-password')
+      expect(this.other.value).toBe('already-selected-vk-user')
+      expect(released.value).toBe('')
+      expect(this.submit).not.toHaveBeenCalled()
+      const expected: {
+        payload: {
+          origin: string
+          credential: ReturnType<
+            FocusedInteractionFixture['selection']
+          >['credential']
+        }
+      } = {
+        payload: {
+          origin: 'https://id.vk.ru',
+          credential: this.selection().credential,
+        },
+      }
+      expect(this.reveal.mock.calls[0]?.[0].message).toMatchObject(expected)
+    },
+  )
+
+  readonly verifyVkTargetMutation = Effect.fn(
+    this.generatorContext,
+    function* ({ mutation }: VkPasswordTargetMutationRequest) {
+      vi.spyOn(location, 'origin', 'get').mockReturnValue('https://id.vk.ru')
+      this.input.type = 'password'
+      this.input.autocomplete = 'current-password'
+      this.input.click()
+      yield* Effect.tryPromise(() => this.interaction.tryRender())
+      yield* Effect.tryPromise(() => this.interaction.choose())
+      const message = this.selected()
+      switch (mutation) {
+        case VkPasswordTargetMutation.Removed:
+          this.input.remove()
+          break
+        case VkPasswordTargetMutation.Disabled:
+          this.input.disabled = true
+          break
+        case VkPasswordTargetMutation.Readonly:
+          this.input.readOnly = true
+          break
+        case VkPasswordTargetMutation.Role:
+          this.input.autocomplete = 'one-time-code'
+          break
+        case VkPasswordTargetMutation.MessageOrigin:
+          message.payload.origin = 'https://other.example'
+          break
+        case VkPasswordTargetMutation.PageOrigin:
+          vi.spyOn(location, 'origin', 'get').mockReturnValue('https://vk.com')
+          break
+      }
+      yield* Effect.tryPromise(() => this.interaction.select(message))
+      expect(this.reveal).not.toHaveBeenCalled()
+      expect(this.input.value).toBe('')
+      expect(this.other.value).toBe('')
+      expect(this.submit).not.toHaveBeenCalled()
+    },
+  )
 }
 
 beforeEach(() => {
@@ -738,43 +842,10 @@ describe('focused credential explicit chooser flow', () => {
       }),
     ))
 
-  test('fills only the selected current-password field and clears the returned value', () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const fixture = new FocusedInteractionFixture()
-        fixture.input.type = 'password'
-        fixture.input.autocomplete = 'current-password'
-        fixture.input.click()
-        yield* Effect.tryPromise(() => fixture.interaction.tryRender())
-        yield* Effect.tryPromise(() => fixture.interaction.choose())
-        const released = { ok: true as const, value: 'chosen-password' }
-        const response: Awaited<
-          ReturnType<
-            typeof authenticationRuntimeTransport.sendDecodedRuntimeMessage<WebsiteFocusedLoginFillResponse>
-          >
-        > = { kind: RuntimeMessageDeliveryKind.Delivered, response: released }
-        fixture.reveal.mockImplementation(() =>
-          Effect.runPromise(Effect.succeed(response)),
-        )
-        yield* Effect.tryPromise(() =>
-          fixture.interaction.select(fixture.selected()),
-        )
-        expect(fixture.input.value).toBe('chosen-password')
-        expect(fixture.other.value).toBe('')
-        expect(released.value).toBe('')
-        expect(fixture.submit).not.toHaveBeenCalled()
-        const expected: {
-          payload: {
-            credential: ReturnType<
-              FocusedInteractionFixture['selection']
-            >['credential']
-          }
-        } = { payload: { credential: fixture.selection().credential } }
-        expect(fixture.reveal.mock.calls[0]?.[0].message).toMatchObject(
-          expected,
-        )
-      }),
-    ))
+  test('fills only the explicitly selected VK password-step field and clears the returned value', () => {
+    const fixture = new FocusedInteractionFixture()
+    return Effect.runPromise(fixture.verifyVkPasswordSelection())
+  })
 
   test('rejects role drift after release and clears the value without fill or submit', () =>
     Effect.runPromise(
@@ -804,38 +875,20 @@ describe('focused credential explicit chooser flow', () => {
       }),
     ))
 
-  test.each(['removed', 'disabled', 'readonly', 'role', 'origin'])(
-    'rejects %s mutation before selected disclosure',
-    (mutation) =>
-      Effect.runPromise(
-        Effect.gen(function* () {
-          const fixture = new FocusedInteractionFixture()
-          fixture.input.click()
-          yield* Effect.tryPromise(() => fixture.interaction.tryRender())
-          yield* Effect.tryPromise(() => fixture.interaction.choose())
-          const message = fixture.selected()
-          switch (mutation) {
-            case 'removed':
-              fixture.input.remove()
-              break
-            case 'disabled':
-              fixture.input.disabled = true
-              break
-            case 'readonly':
-              fixture.input.readOnly = true
-              break
-            case 'role':
-              fixture.input.autocomplete = 'one-time-code'
-              break
-            case 'origin':
-              message.payload.origin = 'https://other.example'
-              break
-          }
-          yield* Effect.tryPromise(() => fixture.interaction.select(message))
-          expect(fixture.reveal).not.toHaveBeenCalled()
-          expect(fixture.input.value).toBe('')
-        }),
-      ),
+  test.each([
+    VkPasswordTargetMutation.Removed,
+    VkPasswordTargetMutation.Disabled,
+    VkPasswordTargetMutation.Readonly,
+    VkPasswordTargetMutation.Role,
+    VkPasswordTargetMutation.MessageOrigin,
+    VkPasswordTargetMutation.PageOrigin,
+  ])(
+    'rejects VK current-password %s mutation before selected disclosure',
+    (mutation) => {
+      const fixture = new FocusedInteractionFixture()
+      const request: VkPasswordTargetMutationRequest = { mutation }
+      return Effect.runPromise(fixture.verifyVkTargetMutation(request))
+    },
   )
 
   test.each(['cancel', 'expiry', 'lock', 'teardown'])(
