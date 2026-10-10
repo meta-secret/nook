@@ -200,13 +200,13 @@ mod tests {
                     };
                     assert_eq!(String::from(account.website_url.clone()), self.saved);
                     assert_eq!(focused?.as_str(), "synthetic-password");
-                    assert!(
+                    assert_eq!(
                         LoginHostMatchRequest {
                             website_url: self.saved,
                             origin: self.requesting
                         }
-                        .assess()
-                            == LoginHostMatch::Matched
+                        .assess(),
+                        LoginHostMatch::Matched
                     );
                 }
                 LoginHostMatch::Unmatched => {
@@ -215,13 +215,13 @@ mod tests {
                         focused,
                         Err(FocusedLoginFillError::OriginMismatch)
                     ));
-                    assert!(
+                    assert_eq!(
                         LoginHostMatchRequest {
                             website_url: self.saved,
                             origin: self.requesting
                         }
-                        .assess()
-                            == LoginHostMatch::Unmatched
+                        .assess(),
+                        LoginHostMatch::Unmatched
                     );
                 }
             }
@@ -230,7 +230,7 @@ mod tests {
     }
 
     #[test]
-    fn registrable_domain_policy_is_symmetric_across_shared_consumers() -> anyhow::Result<()> {
+    fn registrable_domain_rules_are_symmetric_across_shared_consumers() -> anyhow::Result<()> {
         for case in [
             LoginSiteCase {
                 saved: "https://example.com/login",
@@ -297,6 +297,22 @@ mod tests {
                 requesting: "https://b.device.local",
                 expected: LoginHostMatch::Matched,
             },
+        ] {
+            case.assert_consumers()?;
+            LoginSiteCase {
+                saved: case.requesting,
+                requesting: case.saved,
+                expected: case.expected,
+            }
+            .assert_consumers()?;
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn canonical_hosts_and_site_boundaries_are_symmetric_across_shared_consumers()
+    -> anyhow::Result<()> {
+        for case in [
             LoginSiteCase {
                 saved: "http://localhost:80/login",
                 requesting: "http://localhost:90",
@@ -382,13 +398,13 @@ mod tests {
             "https://example.com:invalid",
         ] {
             assert!(LoginWebsiteHost::try_from(raw).is_err());
-            assert!(
+            assert_eq!(
                 LoginHostMatchRequest {
                     website_url: raw,
                     origin: raw
                 }
-                .assess()
-                    == LoginHostMatch::Unmatched
+                .assess(),
+                LoginHostMatch::Unmatched
             );
         }
     }

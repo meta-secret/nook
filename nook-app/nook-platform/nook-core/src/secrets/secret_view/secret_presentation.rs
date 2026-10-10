@@ -116,6 +116,7 @@ pub struct LoginHostMatchRequest<'a> {
 }
 
 impl LoginHostMatchRequest<'_> {
+    #[must_use]
     pub fn assess(&self) -> super::LoginHostMatch {
         let Ok(secret_host) = super::LoginWebsiteHost::try_from(self.website_url) else {
             return super::LoginHostMatch::Unmatched;
@@ -556,21 +557,21 @@ mod tests {
             "  https://SECURE06EA.CHASE.COM:443/login?next=account#signin  ",
         ] {
             for origin in ["https://www.chase.com", "https://secure.chase.com"] {
-                assert!(
+                assert_eq!(
                     LoginHostMatchRequest {
                         website_url,
                         origin
                     }
-                    .assess()
-                        == LoginHostMatch::Matched
+                    .assess(),
+                    LoginHostMatch::Matched
                 );
-                assert!(
+                assert_eq!(
                     LoginHostMatchRequest {
                         website_url: origin,
                         origin: website_url,
                     }
-                    .assess()
-                        == LoginHostMatch::Matched
+                    .assess(),
+                    LoginHostMatch::Matched
                 );
             }
         }
@@ -583,21 +584,21 @@ mod tests {
             "https://unlisted.example.com",
             "https://secure07ea.example.com",
         ] {
-            assert!(
+            assert_eq!(
                 LoginHostMatchRequest {
                     website_url: "https://www.chase.com/login",
                     origin,
                 }
-                .assess()
-                    == LoginHostMatch::Unmatched
+                .assess(),
+                LoginHostMatch::Unmatched
             );
-            assert!(
+            assert_eq!(
                 LoginHostMatchRequest {
                     website_url: origin,
                     origin: "https://secure.chase.com",
                 }
-                .assess()
-                    == LoginHostMatch::Unmatched
+                .assess(),
+                LoginHostMatch::Unmatched
             );
         }
     }
@@ -622,77 +623,77 @@ mod tests {
 
     #[test]
     fn login_host_matches_origin_uses_normalized_registrable_domain() {
-        assert!(
+        assert_eq!(
             LoginHostMatchRequest {
                 website_url: "https://www.example.com/login",
                 origin: "https://example.com",
             }
-            .assess()
-                == LoginHostMatch::Matched
+            .assess(),
+            LoginHostMatch::Matched
         );
-        assert!(
+        assert_eq!(
             LoginHostMatchRequest {
                 website_url: "example.com",
                 origin: "http://127.0.0.1:4173/login",
             }
-            .assess()
-                == LoginHostMatch::Unmatched
+            .assess(),
+            LoginHostMatch::Unmatched
         );
-        assert!(
+        assert_eq!(
             LoginHostMatchRequest {
                 website_url: "http://127.0.0.1:4173/account",
                 origin: "http://127.0.0.1:4199/login",
             }
-            .assess()
-                == LoginHostMatch::Matched
+            .assess(),
+            LoginHostMatch::Matched
         );
-        assert!(
+        assert_eq!(
             LoginHostMatchRequest {
                 website_url: "https://example.com",
                 origin: "https://evil-example.com",
             }
-            .assess()
-                == LoginHostMatch::Unmatched
+            .assess(),
+            LoginHostMatch::Unmatched
         );
-        assert!(
+        assert_eq!(
             LoginHostMatchRequest {
                 website_url: "https://notexample.com",
                 origin: "https://example.com",
             }
-            .assess()
-                == LoginHostMatch::Unmatched
+            .assess(),
+            LoginHostMatch::Unmatched
         );
-        assert!(
+        assert_eq!(
             LoginHostMatchRequest {
                 website_url: "https://",
                 origin: "https://example.com",
             }
-            .assess()
-                == LoginHostMatch::Unmatched
+            .assess(),
+            LoginHostMatch::Unmatched
         );
-        assert!(
+        assert_eq!(
             LoginHostMatchRequest {
                 website_url: "https://microsoft.com/account",
                 origin: "https://login.microsoft.com",
             }
-            .assess()
-                == LoginHostMatch::Matched
+            .assess(),
+            LoginHostMatch::Matched
         );
-        assert!(
+        assert_eq!(
             LoginHostMatchRequest {
                 website_url: "https://slack.com",
                 origin: "https://app.slack.com",
             }
-            .assess()
-                == LoginHostMatch::Matched
+            .assess(),
+            LoginHostMatch::Matched
         );
-        assert!(
+        assert_eq!(
             LoginHostMatchRequest {
                 website_url: "https://microsoft.com",
                 origin: "https://evil-microsoft.com",
             }
-            .assess()
-                == LoginHostMatch::Unmatched
+            .assess(),
+            LoginHostMatch::Unmatched
         );
     }
 

@@ -35,6 +35,7 @@ pub struct LoginAccountMetadata {
 impl SecretSearchCatalog {
     /// Applies the same registrable-domain policy as selected-record reveal without
     /// opening any full record. Catalog reconciliation authenticates these rows.
+    #[must_use]
     pub fn matching_login_accounts(&self, origin: &LoginWebsiteHost) -> Vec<LoginAccountMetadata> {
         let mut accounts = Vec::new();
         for entry in self.entries.values() {
