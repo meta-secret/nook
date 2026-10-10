@@ -131,6 +131,25 @@ mod tests {
 
     struct LoginFixture;
 
+    struct ChaseLoginFixture {
+        website_url: crate::LoginAccountWebsiteUrl,
+    }
+
+    impl ChaseLoginFixture {
+        fn record(&self) -> SecretRecord {
+            SecretRecord {
+                id: SecretId::from_vault_record("secret_chase_login"),
+                secret_type: SecretType::Login,
+                data: SecretValue::Login(LoginSecret {
+                    website_url: String::from(self.website_url.clone()),
+                    username: "synthetic-chase-account".to_owned(),
+                    password: "synthetic-chase-password".to_owned(),
+                    notes: "never-projected".to_owned(),
+                }),
+            }
+        }
+    }
+
     impl LoginFixture {
         fn vk_record() -> SecretRecord {
             SecretRecord {
@@ -157,6 +176,52 @@ mod tests {
                 }),
             }
         }
+    }
+
+    #[test]
+    fn chase_focused_reveal_admits_saved_hosts_and_siblings_only() -> anyhow::Result<()> {
+        for website_url in [
+            "https://chaseonline.chase.com/login",
+            "https://secure.chase.com/login",
+            "https://secure03ea.chase.com/login",
+            "https://secure05c.chase.com/login",
+            "https://SECURE06EA.CHASE.COM:443/login?next=account#signin",
+        ] {
+            let fixture = ChaseLoginFixture {
+                website_url: crate::LoginAccountWebsiteUrl::from(website_url.to_owned()),
+            };
+            for origin in ["https://www.chase.com", "https://secure.chase.com"] {
+                let origin = FocusedLoginFillOrigin::try_from(origin.to_owned())?;
+                let mut password = FocusedLoginFillProjection {
+                    record: fixture.record(),
+                    origin: &origin,
+                    credential: CredentialKind::CurrentPassword,
+                }
+                .reveal()?;
+                assert_eq!(password.as_str(), "synthetic-chase-password");
+                password.zeroize();
+                assert_eq!(password.as_str(), "");
+            }
+            for origin in [
+                "https://evil-chase.com",
+                "https://secure.chase.com.evil.example",
+                "https://nested.secure.chase.com",
+                "https://unlisted.chase.com",
+                "https://unrelated.example",
+            ] {
+                let origin = FocusedLoginFillOrigin::try_from(origin.to_owned())?;
+                assert!(matches!(
+                    FocusedLoginFillProjection {
+                        record: fixture.record(),
+                        origin: &origin,
+                        credential: CredentialKind::CurrentPassword,
+                    }
+                    .reveal(),
+                    Err(FocusedLoginFillError::OriginMismatch)
+                ));
+            }
+        }
+        Ok(())
     }
 
     #[test]

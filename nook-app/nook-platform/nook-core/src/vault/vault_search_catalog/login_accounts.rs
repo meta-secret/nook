@@ -99,6 +99,23 @@ mod tests {
     }
 
     impl LoginCatalogFixture {
+        fn assert_chase_urls(accounts: &[LoginAccountMetadata]) {
+            for expected_url in [
+                "https://chaseonline.chase.com/login",
+                "https://secure.chase.com/login",
+                "https://secure03ea.chase.com/login",
+                "https://secure05c.chase.com/login",
+                "https://SECURE06EA.CHASE.COM:443/login?next=account#signin",
+            ] {
+                let expected_url = LoginAccountWebsiteUrl::from(expected_url.to_owned());
+                assert!(
+                    accounts
+                        .iter()
+                        .any(|account| account.website_url == expected_url)
+                );
+            }
+        }
+
         fn vk_login() -> anyhow::Result<Self> {
             Self::new()?.with_item(SecretListItem {
                 id: SecretId::from_vault_record("secret_vk_login"),
@@ -128,6 +145,57 @@ mod tests {
             );
             Ok(self)
         }
+    }
+
+    #[test]
+    fn chase_login_listing_preserves_all_saved_urls_and_rejects_unlisted_hosts()
+    -> anyhow::Result<()> {
+        let mut fixture = LoginCatalogFixture::new()?;
+        for website_url in [
+            "https://chaseonline.chase.com/login",
+            "https://secure.chase.com/login",
+            "https://secure03ea.chase.com/login",
+            "https://secure05c.chase.com/login",
+            "https://SECURE06EA.CHASE.COM:443/login?next=account#signin",
+            "https://unlisted.chase.com/login",
+            "https://nested.secure.chase.com/login",
+            "https://chase.com.evil.example/login",
+        ] {
+            fixture = fixture.with_item(SecretListItem {
+                id: SecretId::from_vault_record(website_url),
+                data: SecretListItemData::Login {
+                    website_url: website_url.to_owned(),
+                    username: "synthetic-chase-account".to_owned(),
+                },
+            })?;
+        }
+        for origin in ["https://www.chase.com", "https://secure05c.chase.com"] {
+            let accounts = fixture
+                .catalog
+                .matching_login_accounts(&WebsiteHost::normalize(origin)?)?;
+            assert_eq!(accounts.len(), 5);
+            LoginCatalogFixture::assert_chase_urls(&accounts);
+            for account in accounts {
+                let saved_url = String::from(account.website_url.clone());
+                assert_eq!(account.secret_id, SecretId::from_vault_record(&saved_url));
+                assert_eq!(account.website_host, WebsiteHost::normalize(&saved_url)?);
+                assert_eq!(String::from(account.username), "synthetic-chase-account");
+            }
+        }
+        for origin in [
+            "https://evil-chase.com",
+            "https://secure.chase.com.evil.example",
+            "https://unrelated.example",
+            "https://secure07ea.chase.com",
+        ] {
+            assert!(
+                fixture
+                    .catalog
+                    .matching_login_accounts(&WebsiteHost::normalize(origin)?)?
+                    .is_empty()
+            );
+        }
+        Ok(())
     }
 
     #[test]
