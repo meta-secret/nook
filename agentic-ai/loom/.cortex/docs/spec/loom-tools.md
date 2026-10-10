@@ -189,7 +189,7 @@ Consume that output instead of maintaining request bodies in Cortex.
 
 The historical request identifier is retained only for compatibility and fails
 closed without executing commands. Follow [dev
-delivery](../../../../../.cortex/gizmo-prime/architecture/dev-delivery.md) for the remote
+delivery](../../../../../.cortex/docs/architecture/dev-delivery.md) for the remote
 build-only compilation stage and the feature PR required-check stage.
 
 ### cortexAudit
@@ -231,3 +231,17 @@ Success includes `family`, optional `operation` for nested families, and
 `result`.
 
 Failures include `phase`, `errors[].path`, and `recover.toolsListRequest`.
+
+## Module-delivery plan migration
+
+The current module-delivery plan contract is version `7`. It uses Meta-Cortex
+worker role names and Nook functional ownership specifications. Versions `1`
+through `6` are rejected at the decoder. Regenerate a plan from its current
+assignment, owning context, and upstream role; no compatibility reader or
+automatic conversion is provided. Feature ledger schemas remain unchanged.
+
+**Prohibited:** resubmit a version `6` plan with retired Nook role names or
+change only its version number.
+
+**Required:** generate a version `7` plan with its upstream role, canonical
+worker branch, functional ownership document, and refreshed assignment context.

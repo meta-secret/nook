@@ -116,352 +116,116 @@ test('accepts document-level team and shared graphs', () => {
   ).toEqual([]);
 });
 
-test('allows every child graph to reference the root circuit breaker read-only', () => {
-  const circuitBreakerPath = '.cortex/CIRCUIT-BREAKER.md';
-  const childGraphPath =
-    '.cortex/teams/delivery-pipeline/pr-lifecycle/index.md';
-  const documents =
-    CortexDocumentMapCortexDocumentStructureScenario.nestedDistributedDocuments();
-  documents.push(
-    CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
-      path: circuitBreakerPath,
-      content: '# Agent Derailment Circuit Breaker\n',
-    }),
-  );
-  const linkedDocuments = documents.map((document) => {
-    if (document.relativePath === '.cortex/index.md') {
-      return {
-        ...document,
-        content: `${document.content}\n- [Circuit breaker](CIRCUIT-BREAKER.md)\n`,
-      };
-    }
-    if (document.relativePath === childGraphPath) {
-      return {
-        ...document,
-        content: `${document.content}\n- [Circuit breaker](../../../CIRCUIT-BREAKER.md)\n`,
-      };
-    }
-    if (document.relativePath === PIPELINE_GRAPH_PATH) {
-      return {
-        ...document,
-        content: `${document.content}\n- [Circuit breaker](../../CIRCUIT-BREAKER.md)\n`,
-      };
-    }
-    return document;
-  });
-
+test('discovers specification and architecture owners without agent directories', () => {
   expect(
-    CortexDocumentMapCortexDocumentStructureScenario.audit(linkedDocuments),
-  ).toEqual([]);
-});
-
-test('indexes PR Lifecycle Agent documents only through their owning graph', () => {
-  const documents =
-    CortexDocumentMapCortexDocumentStructureScenario.distributedDocuments();
-  const managerGraphPath =
-    '.cortex/teams/delivery-pipeline/pr-lifecycle/index.md';
-  const policyPath =
-    '.cortex/teams/delivery-pipeline/pr-lifecycle/workflows/policy.md';
-  documents.push(
-    CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
-      path: managerGraphPath,
-      content: '# Delivery Pipeline PR Lifecycle Index\n',
-    }),
-    CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
-      path: policyPath,
-      content: '# PR Lifecycle Policy\n',
-    }),
-  );
-  const findings =
-    CortexDocumentMapCortexDocumentStructureScenario.audit(documents);
-  expect(findings).toContainEqual({
-    code: CortexStructureFindingCode.MissingFromIndex,
-    file: managerGraphPath,
-    line: 1,
-    message: `Document is not indexed in its owning index ${managerGraphPath}: ${policyPath}`,
-  });
-  const indexedDocuments = documents.map((document) =>
-    document.relativePath === managerGraphPath
-      ? {
-          ...document,
-          content: `${document.content}\n- [Policy](workflows/policy.md)\n`,
-        }
-      : document,
-  );
-  expect(
-    CortexDocumentMapCortexDocumentStructureScenario.audit(indexedDocuments),
-  ).toEqual([]);
-  const foreignIndex = indexedDocuments.map((document) =>
-    document.relativePath === '.cortex/gizmo-prime/index.md'
-      ? {
-          ...document,
-          content: `${document.content}\n- [PR lifecycle policy](../teams/delivery-pipeline/pr-lifecycle/workflows/policy.md)\n`,
-        }
-      : document,
-  );
-  expect(
-    CortexDocumentMapCortexDocumentStructureScenario.audit(foreignIndex),
-  ).toContainEqual({
-    code: CortexStructureFindingCode.InvalidIndexEntry,
-    file: '.cortex/gizmo-prime/index.md',
-    line: 1,
-    message: `Owning index cannot index another context's document: ${policyPath}`,
-  });
-});
-
-test('indexes Team Gizmo documents only through their owning graph', () => {
-  const documents =
-    CortexDocumentMapCortexDocumentStructureScenario.distributedDocuments();
-  const graphPath = '.cortex/teams/delivery-pipeline/gizmo/index.md';
-  const policyPath = '.cortex/teams/delivery-pipeline/gizmo/policy.md';
-  documents.push(
-    CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
-      path: graphPath,
-      content: '# Delivery Pipeline Team Gizmo\n',
-    }),
-  );
-  documents.push(
-    CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
-      path: policyPath,
-      content: '# Team Gizmo Policy\n',
-    }),
-  );
-  const findings =
-    CortexDocumentMapCortexDocumentStructureScenario.audit(documents);
-  expect(findings).toContainEqual({
-    code: CortexStructureFindingCode.MissingFromIndex,
-    file: graphPath,
-    line: 1,
-    message: `Document is not indexed in its owning index ${graphPath}: ${policyPath}`,
-  });
-  const indexedDocuments = documents.map((document) =>
-    document.relativePath === graphPath
-      ? { ...document, content: `${document.content}\n- [Policy](policy.md)\n` }
-      : document,
-  );
-  expect(
-    CortexDocumentMapCortexDocumentStructureScenario.audit(indexedDocuments),
-  ).toEqual([]);
-});
-
-test('indexes Delivery Pipeline documents only through their owning graph', () => {
-  const documents =
-    CortexDocumentMapCortexDocumentStructureScenario.distributedDocuments();
-  const policyPath = '.cortex/teams/delivery-pipeline/policy.md';
-  documents.push(
-    CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
-      path: policyPath,
-      content: '# Delivery Pipeline Policy\n',
-    }),
-  );
-  const findings =
-    CortexDocumentMapCortexDocumentStructureScenario.audit(documents);
-  expect(findings).toContainEqual({
-    code: CortexStructureFindingCode.MissingFromIndex,
-    file: PIPELINE_GRAPH_PATH,
-    line: 1,
-    message: `Document is not indexed in its owning index ${PIPELINE_GRAPH_PATH}: ${policyPath}`,
-  });
-  const indexedDocuments = documents.map((document) =>
-    document.relativePath === PIPELINE_GRAPH_PATH
-      ? { ...document, content: `${document.content}\n- [Policy](policy.md)\n` }
-      : document,
-  );
-  expect(
-    CortexDocumentMapCortexDocumentStructureScenario.audit(indexedDocuments),
-  ).toEqual([]);
-  const foreignIndex = indexedDocuments.map((document) =>
-    document.relativePath === '.cortex/gizmo-prime/index.md'
-      ? {
-          ...document,
-          content: `${document.content}\n- [Delivery Pipeline policy](../teams/delivery-pipeline/policy.md)\n`,
-        }
-      : document,
-  );
-  expect(
-    CortexDocumentMapCortexDocumentStructureScenario.audit(foreignIndex),
-  ).toContainEqual({
-    code: CortexStructureFindingCode.InvalidIndexEntry,
-    file: '.cortex/gizmo-prime/index.md',
-    line: 1,
-    message: `Owning index cannot index another context's document: ${policyPath}`,
-  });
-});
-
-test('audits Delivery Pipeline direct child graphs with matching ownership', () => {
-  const documents =
-    CortexDocumentMapCortexDocumentStructureScenario.nestedDistributedDocuments();
-  expect(
-    CortexDocumentMapCortexDocumentStructureScenario.audit(documents),
-  ).toEqual([]);
-
-  const lifecycleGraphPath =
-    '.cortex/teams/delivery-pipeline/pr-lifecycle/index.md';
-  const lifecyclePolicyPath =
-    '.cortex/teams/delivery-pipeline/pr-lifecycle/workflows/policy.md';
-  const parentOnlyIndex = documents.map((document) => {
-    if (document.relativePath === lifecycleGraphPath) {
-      return {
-        ...document,
-        content: '# Delivery Pipeline PR Lifecycle Index\n',
-      };
-    }
-    if (document.relativePath === PIPELINE_GRAPH_PATH) {
-      return {
-        ...document,
-        content: `${document.content}- [Policy](${lifecyclePolicyPath.replace(
-          '.cortex/teams/delivery-pipeline/',
-          '',
-        )})\n`,
-      };
-    }
-    return document;
-  });
-  expect(
-    CortexDocumentMapCortexDocumentStructureScenario.audit(parentOnlyIndex),
-  ).toContainEqual({
-    code: CortexStructureFindingCode.MissingFromIndex,
-    file: lifecycleGraphPath,
-    line: 1,
-    message: `Document is not indexed in its owning index ${lifecycleGraphPath}: ${lifecyclePolicyPath}`,
-  });
-});
-
-test('rejects sibling same-team child authority from a child graph', () => {
-  const managerGraphPath =
-    '.cortex/teams/delivery-pipeline/pr-lifecycle/index.md';
-  const siblingGraphPath = '.cortex/teams/delivery-pipeline/gizmo/index.md';
-  const documents =
-    CortexDocumentMapCortexDocumentStructureScenario.nestedDistributedDocuments().map(
-      (document) =>
-        document.relativePath === managerGraphPath
-          ? {
-              ...document,
-              content: `${document.content}- [Sibling authority](../gizmo/index.md)\n`,
-            }
-          : document,
-    );
-  const findings =
-    CortexDocumentMapCortexDocumentStructureScenario.audit(documents);
-  expect(
-    CortexDocumentMapCortexDocumentStructureScenario.hasFinding(findings, {
-      code: CortexStructureFindingCode.InvalidIndexEntry,
-      file: managerGraphPath,
-      message: `Child index may link only its own directory or explicit read-only authorities: ${siblingGraphPath}`,
-    }),
-  ).toBe(true);
-});
-
-test('admits a same-team sibling AGENTS authority as read-only', () => {
-  const managerGraphPath =
-    '.cortex/teams/delivery-pipeline/pr-lifecycle/index.md';
-  const siblingAuthorityPath =
-    '.cortex/teams/delivery-pipeline/gizmo/AGENTS.md';
-  const documents = [
-    ...CortexDocumentMapCortexDocumentStructureScenario.nestedDistributedDocuments().map(
-      (document) =>
-        document.relativePath === managerGraphPath
-          ? {
-              ...document,
-              content: `${document.content}- [Sibling authority](../gizmo/AGENTS.md)\n`,
-            }
-          : document,
+    CortexDocumentMapCortexDocumentStructureScenario.audit(
+      CortexDocumentMapCortexDocumentStructureScenario.nestedDistributedDocuments(),
     ),
-    CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
-      path: siblingAuthorityPath,
-      content: '# Delivery Pipeline Team Gizmo\n',
-    }),
-  ];
-  const findings =
-    CortexDocumentMapCortexDocumentStructureScenario.audit(documents);
-  expect(
-    CortexDocumentMapCortexDocumentStructureScenario.hasFinding(findings, {
-      code: CortexStructureFindingCode.InvalidIndexEntry,
-      file: managerGraphPath,
-      message: `Child index may link only its own directory or explicit read-only authorities: ${siblingAuthorityPath}`,
-    }),
-  ).toBe(false);
+  ).toEqual([]);
 });
 
-test('rejects duplicate direct-child document indexing but allows external authorities', () => {
+test('keeps project requirements discoverable in their specification owner', () => {
   const documents =
     CortexDocumentMapCortexDocumentStructureScenario.nestedDistributedDocuments();
-  const workflowPath =
-    '.cortex/teams/delivery-pipeline/pr-lifecycle/workflows/policy.md';
-  const indexedByParent = documents.map((document) =>
-    document.relativePath === PIPELINE_GRAPH_PATH
-      ? {
-          ...document,
-          content: `${document.content}- [PR Lifecycle policy](pr-lifecycle/workflows/policy.md)\n`,
-        }
-      : document,
-  );
-
+  const changed = CortexDocumentMapCortexDocumentStructureScenario.withContent({
+    documents,
+    path: '.cortex/teams/delivery-pipeline/docs/spec/index.md',
+    content: '# Delivery Specifications\n',
+  });
   expect(
-    CortexDocumentMapCortexDocumentStructureScenario.audit(indexedByParent),
+    CortexDocumentMapCortexDocumentStructureScenario.audit(changed),
   ).toContainEqual({
-    code: CortexStructureFindingCode.InvalidIndexEntry,
-    file: PIPELINE_GRAPH_PATH,
-    line: 1,
-    message: `Indexes must index each non-graph document once: ${workflowPath}`,
-  });
-});
-
-test('validates direct child graph titles and duplicate entries without root links', () => {
-  const documents =
-    CortexDocumentMapCortexDocumentStructureScenario.nestedDistributedDocuments();
-  const gizmoGraphPath = '.cortex/teams/delivery-pipeline/gizmo/index.md';
-  const lifecycleGraphPath =
-    '.cortex/teams/delivery-pipeline/pr-lifecycle/index.md';
-  const malformed = documents.map((document) => {
-    if (document.relativePath === gizmoGraphPath) {
-      return {
-        ...document,
-        content: `Introductory text.\n\n${document.content}`,
-      };
-    }
-    if (document.relativePath === lifecycleGraphPath) {
-      return {
-        ...document,
-        content: `${document.content}- [Duplicate policy](workflows/policy.md)\n`,
-      };
-    }
-    return document;
-  });
-  const findings =
-    CortexDocumentMapCortexDocumentStructureScenario.audit(malformed);
-  expect(
-    CortexDocumentMapCortexDocumentStructureScenario.hasFinding(findings, {
-      code: CortexStructureFindingCode.InvalidTitle,
-      file: gizmoGraphPath,
-    }),
-  ).toBe(true);
-  expect(findings).toContainEqual({
-    code: CortexStructureFindingCode.InvalidIndexEntry,
-    file: lifecycleGraphPath,
-    line: 1,
-    message: `Index must index each document once: .cortex/teams/delivery-pipeline/pr-lifecycle/workflows/policy.md`,
-  });
-});
-
-test('rejects a root link that bypasses Delivery Pipeline child graphs', () => {
-  const documents =
-    CortexDocumentMapCortexDocumentStructureScenario.nestedDistributedDocuments();
-  const root = documents[0];
-  if (!root) throw new Error('Expected nested distributed root document');
-  documents[0] = {
-    ...root,
-    content: `${root.content}- [Nested Gizmo](teams/delivery-pipeline/gizmo/index.md)\n`,
-  };
-  expect(
-    CortexDocumentMapCortexDocumentStructureScenario.audit(documents),
-  ).toContainEqual({
-    code: CortexStructureFindingCode.InvalidIndexEntry,
-    file: '.cortex/index.md',
+    code: CortexStructureFindingCode.MissingFromIndex,
+    file: '.cortex/teams/delivery-pipeline/docs/spec/index.md',
     line: 1,
     message:
-      'Root index must route through owner graphs instead of indexing owned documents directly: .cortex/teams/delivery-pipeline/gizmo/index.md',
+      'Document is not indexed in its owning index .cortex/teams/delivery-pipeline/docs/spec/index.md: .cortex/teams/delivery-pipeline/docs/spec/policy.md',
   });
+});
+
+test('rejects a specification catalog that directly owns another scoped document', () => {
+  const documents =
+    CortexDocumentMapCortexDocumentStructureScenario.nestedDistributedDocuments();
+  const changed = CortexDocumentMapCortexDocumentStructureScenario.withContent({
+    documents,
+    path: '.cortex/teams/delivery-pipeline/docs/spec/index.md',
+    content:
+      '# Delivery Specifications\n\n- [Policy](policy.md)\n- [Foreign](../architecture/delivery.md)\n',
+  });
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.audit(changed).map(
+      (finding) => finding.code,
+    ),
+  ).toContain(CortexStructureFindingCode.InvalidIndexEntry);
+});
+
+test('allows upstream roles and shared circuit breakers as read-only dependencies', () => {
+  const documents =
+    CortexDocumentMapCortexDocumentStructureScenario.nestedDistributedDocuments();
+  documents.push(
+    CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
+      path: '.cortex/CIRCUIT-BREAKER.md',
+      content: '# Circuit Breaker\n',
+    }),
+  );
+  const routed = CortexDocumentMapCortexDocumentStructureScenario.withContent({
+    documents,
+    path: '.cortex/index.md',
+    content:
+      documents
+        .map(
+          (document) =>
+            document.relativePath === '.cortex/index.md' && document.content,
+        )
+        .filter(Boolean)
+        .join('') + '- [Circuit breaker](CIRCUIT-BREAKER.md)\n',
+  });
+  const changed = CortexDocumentMapCortexDocumentStructureScenario.withContent({
+    documents: routed,
+    path: '.cortex/teams/delivery-pipeline/docs/spec/index.md',
+    content:
+      '# Delivery Specifications\n\n- [Policy](policy.md)\n- [Circuit breaker](../../../../CIRCUIT-BREAKER.md)\n- [Upstream PR agent](../../../../../.meta-cortex/teams/delivery-team/agents/pr-agent/AGENTS.md)\n',
+  });
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.audit(changed),
+  ).toEqual([]);
+});
+
+test('rejects a root link that bypasses a specification owner', () => {
+  const documents =
+    CortexDocumentMapCortexDocumentStructureScenario.distributedDocuments({
+      rootExtra:
+        '- [Delivery policy](teams/delivery-pipeline/docs/spec/policy.md)\n',
+      devTarget: 'policy.md',
+      gizmoTarget: 'policy.md',
+    });
+  documents.push(
+    CortexDocumentMapCortexDocumentStructureScenario.makeDocument({
+      path: '.cortex/teams/delivery-pipeline/docs/spec/policy.md',
+      content: '# Policy\n',
+    }),
+  );
+  expect(
+    CortexDocumentMapCortexDocumentStructureScenario.audit(documents).map(
+      (finding) => finding.code,
+    ),
+  ).toContain(CortexStructureFindingCode.InvalidIndexEntry);
+});
+
+test('rejects duplicated ownership and malformed specification indexes', () => {
+  const documents =
+    CortexDocumentMapCortexDocumentStructureScenario.nestedDistributedDocuments();
+  const changed = CortexDocumentMapCortexDocumentStructureScenario.withContent({
+    documents,
+    path: '.cortex/teams/delivery-pipeline/docs/spec/index.md',
+    content:
+      'Intro\n\n# Delivery Specifications\n\n- [Policy](policy.md)\n- [Duplicate](policy.md)\n',
+  });
+  const codes = CortexDocumentMapCortexDocumentStructureScenario.audit(
+    changed,
+  ).map((finding) => finding.code);
+  expect(codes).toContain(CortexStructureFindingCode.InvalidTitle);
+  expect(codes).toContain(CortexStructureFindingCode.InvalidIndexEntry);
 });
 
 test('requires the root index to link the Delivery Pipeline graph', () => {
@@ -497,7 +261,7 @@ test('requires the root index to link the Gizmo Prime graph', () => {
     }).map((document) => ({
       ...document,
       content: document.content.replace(
-        '- [Gizmo Prime](gizmo-prime/index.md)\n',
+        '- [Gizmo Prime](docs/spec/index.md)\n',
         '',
       ),
     }));
@@ -507,8 +271,7 @@ test('requires the root index to link the Gizmo Prime graph', () => {
     code: CortexStructureFindingCode.MissingFromIndex,
     file: '.cortex/index.md',
     line: 1,
-    message:
-      'Root index must link the owner graph: .cortex/gizmo-prime/index.md',
+    message: 'Root index must link the owner graph: .cortex/docs/spec/index.md',
   });
 });
 
@@ -527,7 +290,7 @@ test('requires the root index to link the Gizmo graph', () => {
   documents[0] = {
     ...rootDocument,
     content: rootDocument.content.replace(
-      '- [Gizmo Prime](gizmo-prime/index.md)\n',
+      '- [Gizmo Prime](docs/spec/index.md)\n',
       '',
     ),
   };
@@ -536,8 +299,7 @@ test('requires the root index to link the Gizmo graph', () => {
   const expectedFinding = {
     code: CortexStructureFindingCode.MissingFromIndex,
     file: '.cortex/index.md',
-    message:
-      'Root index must link the owner graph: .cortex/gizmo-prime/index.md',
+    message: 'Root index must link the owner graph: .cortex/docs/spec/index.md',
   };
   expect(
     CortexDocumentMapCortexDocumentStructureScenario.hasFinding(
@@ -560,9 +322,9 @@ test('maps Gizmo Prime-owned documents to the Gizmo Prime index', () => {
   );
   const expectedFinding = {
     code: CortexStructureFindingCode.MissingFromIndex,
-    file: '.cortex/gizmo-prime/index.md',
+    file: '.cortex/docs/spec/index.md',
     message:
-      'Document is not indexed in its owning index .cortex/gizmo-prime/index.md: .cortex/gizmo-prime/policy.md',
+      'Document is not indexed in its owning index .cortex/docs/spec/index.md: .cortex/docs/spec/policy.md',
   };
   expect(
     CortexDocumentMapCortexDocumentStructureScenario.hasFinding(
@@ -648,7 +410,7 @@ test('rejects cross-owner indexing between Gizmo and team graphs', () => {
   const gizmoIndexesTeamArgs: DistributedDocumentsArgs = {
     rootExtra: '',
     devTarget: 'policy.md',
-    gizmoTarget: '../teams/dev-core/policy.md',
+    gizmoTarget: '../../teams/dev-core/policy.md',
   };
   const gizmoFindings = CortexDocumentMapCortexDocumentStructureScenario.audit(
     CortexDocumentMapCortexDocumentStructureScenario.distributedDocuments(
@@ -657,7 +419,7 @@ test('rejects cross-owner indexing between Gizmo and team graphs', () => {
   );
   const gizmoFinding = {
     code: CortexStructureFindingCode.InvalidIndexEntry,
-    file: '.cortex/gizmo-prime/index.md',
+    file: '.cortex/docs/spec/index.md',
   };
   expect(
     CortexDocumentMapCortexDocumentStructureScenario.hasFinding(
@@ -668,7 +430,7 @@ test('rejects cross-owner indexing between Gizmo and team graphs', () => {
 
   const teamIndexesGizmoArgs: DistributedDocumentsArgs = {
     rootExtra: '',
-    devTarget: '../../gizmo/policy.md',
+    devTarget: '../../docs/spec/policy.md',
     gizmoTarget: 'policy.md',
   };
   const teamFindings = CortexDocumentMapCortexDocumentStructureScenario.audit(

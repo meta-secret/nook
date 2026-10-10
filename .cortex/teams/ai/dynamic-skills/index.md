@@ -10,16 +10,16 @@ delivery cards. The [dynamic-skill authoring workflow](dynamic-skill-authoring.m
 owns their creation and registry maintenance.
 
 AI-authored TypeScript packet requirements live in the
-[AI team contract](../AGENTS.md#validation). This index catalogs the linked
+[AI team contract](../docs/spec/functional-ownership.md#validation). This index catalogs the linked
 authorities without copying their policies.
 
 ## Skill catalog
 
-- **[Branch naming](../../../gizmo-prime/dynamic-skills/branch-naming.md)**
+- **[Branch naming](../../../docs/spec/branch-naming.md)**
   - Purpose: Name feature, Team Gizmo, and Team Agent branches consistently.
 - **[Pre-push hygiene](../../sre/dynamic-skills/pre-push-hygiene.md)**
   - Purpose: Preserve repository and generated-state hygiene before publication.
-- **[Team-oriented development](../../../gizmo-prime/dynamic-skills/team-oriented-development.md)**
+- **[Team-oriented development](../../../docs/spec/functional-team-development.md)**
   - Purpose: Route capabilities across the root/controller graphs and six
     engineering and operational owner graphs, including Delivery Pipeline's
     nested graphs.
@@ -47,13 +47,13 @@ authorities without copying their policies.
 - **[Product-spec lifecycle](product-spec-lifecycle.md)**
   - Purpose: Read owning product specs before implementation and update them
     when chat, task, or PR iterations establish durable knowledge.
-- **[Agent feature ownership](../../../gizmo-prime/dynamic-skills/agent-feature-ownership.md)**
+- **[Agent feature ownership](../../../docs/spec/agent-feature-ownership.md)**
   - Purpose: Keep every agent inside its assigned feature and focused issue set.
-- **[Code-review comments](../../../gizmo-prime/dynamic-skills/code-review-comments.md)**
+- **[Code-review comments](../../../docs/spec/code-review-comments.md)**
   - Purpose: Address active actionable feedback and resolve its review conversations.
 - **[Dynamic-skill authoring](dynamic-skill-authoring.md)**
   - Purpose: Capture user feedback as durable team-owned Cortex skill cards.
-- **[Efficient PR delivery](../../../gizmo-prime/dynamic-skills/efficient-pr-delivery.md)**
+- **[Efficient PR delivery](../../../docs/spec/efficient-pr-delivery.md)**
   - Purpose: Route current development delivery and retain prior PR runtime reference.
 - **[GitHub Actions execution and validation](../../sre/dynamic-skills/github-actions-only-validation.md)**
   - Purpose: Route feature compilation and required PR checks to remote execution; local diagnostics follow the root policy.
@@ -61,9 +61,9 @@ authorities without copying their policies.
   - Purpose: Prohibit nested container runtimes in Kubernetes and k0s; require direct Pod execution for Playwright and other workloads.
 - **[Browser-extension release security](../../security/dynamic-skills/browser-extension-release-security.md)**
   - Purpose: Apply origin, identity, archive, redirect, and profile-isolation checks before shipping extension artifacts.
-- **[Feature-issue planning](../../../gizmo-prime/dynamic-skills/feature-issue-planning.md)**
+- **[Feature-issue planning](../../../docs/spec/feature-issue-planning.md)**
   - Purpose: Organize each feature as a Workbench directory with a shared summary, focused Markdown issues, dependencies, and explicit automation state.
-- **[Issue-scope management](../../../gizmo-prime/dynamic-skills/issue-scope-management.md)**
+- **[Issue-scope management](../../../docs/spec/issue-scope-management.md)**
   - Purpose: Keep deferred, risky, or oversized work in a focused Workbench issue while preserving ownership and append-only issue history.
 - **[Module expert](module-expert.md)**
   - Purpose: Route exact-baseline production-module analysis through one named read-only expert without granting write or scheduling authority.

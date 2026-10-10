@@ -377,7 +377,7 @@ const EXPECTED_PROFILES = [
       '.cortex/index.md',
       '.cortex/teams/ai/docs/architecture/refactoring-experts.md',
       '.cortex/teams/ai/workflows/structural-refactoring.md',
-      '.cortex/gizmo-prime/workflows/subagent-delegation.md',
+      '.cortex/docs/spec/subagent-delegation.md',
     ],
     allowedEvidenceFiles: [
       'Taskfile.yml',
@@ -418,7 +418,7 @@ const EXPECTED_PROFILES = [
       '.cortex/index.md',
       '.cortex/teams/ai/docs/architecture/refactoring-experts.md',
       '.cortex/teams/ai/workflows/structural-refactoring.md',
-      '.cortex/gizmo-prime/workflows/subagent-delegation.md',
+      '.cortex/docs/spec/subagent-delegation.md',
     ],
     allowedEvidenceFiles: [
       'README.md',

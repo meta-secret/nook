@@ -34,7 +34,7 @@ test('binds every canonical worker branch to its assigned team and feature', () 
     workspace: {
       ...node.workspace,
       workerBranch:
-        'codex/child/sre/provisioning/module-delivery-test/core-provider-implementation-work',
+        'codex/child/sre/cicd-agent/module-delivery-test/core-provider-implementation-work',
     },
   };
   const result = ModuleDeliveryPlanValidationScenario.validate(
@@ -63,7 +63,7 @@ test('binds every canonical worker branch to its assigned role', () => {
     workspace: {
       ...node.workspace,
       workerBranch:
-        'codex/child/dev-core/rust-auth2-developer/module-delivery-test/core-provider-implementation-work',
+        'codex/child/dev-core/typescript-dev/module-delivery-test/core-provider-implementation-work',
     },
   };
   const result = ModuleDeliveryPlanValidationScenario.validate(
@@ -300,7 +300,7 @@ test('returns a typed rejection for a retired child feature ref', () => {
   const result = ModuleDeliveryPlanDecoder.decodeAndValidate(
     JSON.stringify({
       ...plan,
-      featureBranch: 'codex/child/ai/loom-specialist/retired-feature/work',
+      featureBranch: 'codex/child/ai/typescript-dev/retired-feature/work',
     }),
   );
   expect(result.status).toBe(ModuleDeliveryValidationStatus.Rejected);

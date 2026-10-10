@@ -25,11 +25,11 @@ export class CortexContractsScenario {
     '.cortex/teams/web-dev/dynamic-skills/ui-design-skills.md';
 
   static readonly VALID_REFERENCES = [
-    '[direct](../web-dev/dynamic-skills/ui-design-skills.md)',
-    '[title](../web-dev/dynamic-skills/ui-design-skills.md "Policy")',
-    '[heading](../web-dev/dynamic-skills/ui-design-skills.md#validation)',
-    '[query](../web-dev/dynamic-skills/ui-design-skills.md?plain=1#validation)',
-    '[reference][rule]\n\n[rule]: ../web-dev/dynamic-skills/ui-design-skills.md',
+    '[direct](../../../web-dev/dynamic-skills/ui-design-skills.md)',
+    '[title](../../../web-dev/dynamic-skills/ui-design-skills.md "Policy")',
+    '[heading](../../../web-dev/dynamic-skills/ui-design-skills.md#validation)',
+    '[query](../../../web-dev/dynamic-skills/ui-design-skills.md?plain=1#validation)',
+    '[reference][rule]\n\n[rule]: ../../../web-dev/dynamic-skills/ui-design-skills.md',
   ] as const;
 
   private constructor(private readonly request: readonly string[]) {}
@@ -135,7 +135,7 @@ for (const reference of CortexContractsScenario.VALID_REFERENCES) {
 
 test('uses the first duplicate Markdown reference definition', () => {
   const content =
-    '# SRE\n\n[policy][rule]\n\n[rule]: unrelated.md\n[rule]: ../web-dev/dynamic-skills/ui-design-skills.md\n';
+    '# SRE\n\n[policy][rule]\n\n[rule]: unrelated.md\n[rule]: ../../../web-dev/dynamic-skills/ui-design-skills.md\n';
   expect(
     CortexContractsScenario.compile(content).some(
       (finding) =>
@@ -148,7 +148,7 @@ test('uses the first duplicate Markdown reference definition', () => {
 test('adapts inline and fenced runtime commands without prose inference', () => {
   const documents = CortexContractDocuments.adaptCortexContractDocuments([
     {
-      relativePath: '.cortex/gizmo-prime/workflows/subagent-delegation.md',
+      relativePath: '.cortex/docs/spec/subagent-delegation.md',
       content: `# Delegation
 
 Prose mentions loom-agent-delegation but does not invoke it.

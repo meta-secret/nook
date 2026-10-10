@@ -49,12 +49,12 @@ AI, Development Core, Security, SRE, Web Development, and Delivery Pipeline.
 They describe product ownership, not six coordinator instances.
 Each feature uses one functional team identity: the single Team Gizmo coordinates
 bounded Team Agents and owns their integration order. See [agent feature
-ownership](gizmo-prime/dynamic-skills/agent-feature-ownership.md) for the
+ownership](docs/spec/agent-feature-ownership.md) for the
 ownership boundary.
 
-- [Nook Gizmo Prime](gizmo-prime/AGENTS.md) wraps upstream Prime.
-- [Nook Team Gizmo](gizmo-prime/team-gizmo/AGENTS.md) wraps the single upstream coordinator.
-- [Nook agent catalog](gizmo-prime/team-gizmo/role-catalog.md) maps project scopes to roles.
+- Use [Meta-Cortex Gizmo Prime](../.meta-cortex/teams/gizmo-team/agents/gizmo-prime/AGENTS.md) directly.
+- Use [Meta-Cortex Team Gizmo](../.meta-cortex/teams/gizmo-team/agents/gizmo/AGENTS.md) directly.
+- [Nook scope routing](docs/spec/upstream-role-routing.md) maps project requirements to upstream roles.
 - The active ignored `.meta-cortex/meta-cortex.toml` is the sole live launch
   configuration. Follow Meta-Cortex's
   [agent configuration rules](../.meta-cortex/teams/gizmo-team/docs/agent-configuration.md).
@@ -63,7 +63,7 @@ ownership boundary.
 ### Project-local Cortex
 
 Projects and subprojects may keep a `.cortex/` beside their code. Place local
-knowledge in `docs/` and project-specific agents in `team/agents/` when needed.
+knowledge in `docs/spec/` or `docs/architecture/`. Use installed Meta-Cortex roles.
 Keep context with the smallest project that owns it, and link to it from broader
 Cortex catalogs. Repository-wide requirements still apply.
 
@@ -87,12 +87,12 @@ project's `index.md`, then to the relevant document.
 
 ## Context routes
 
-- [AI](teams/ai/AGENTS.md): Cortex, Loom, executable skills, and agent tooling.
-- [Development Core](teams/dev-core/AGENTS.md): portable Rust behavior and WASM contracts.
-- [Security](teams/security/AGENTS.md): product trust boundaries and security review.
-- [SRE](teams/sre/AGENTS.md): infrastructure, deployment, runners, and operations.
-- [Web Development](teams/web-dev/AGENTS.md): browser presentation and interaction.
-- [Delivery Pipeline](teams/delivery-pipeline/AGENTS.md): authorized GitHub mechanics.
+- [AI](teams/ai/docs/spec/functional-ownership.md): Cortex, Loom, executable skills, and agent tooling.
+- [Development Core](teams/dev-core/docs/spec/functional-ownership.md): portable Rust behavior and WASM contracts.
+- [Security](teams/security/docs/spec/functional-ownership.md): product trust boundaries and security review.
+- [SRE](teams/sre/docs/spec/functional-ownership.md): infrastructure, deployment, runners, and operations.
+- [Web Development](teams/web-dev/docs/spec/functional-ownership.md): browser presentation and interaction.
+- [Delivery Pipeline](teams/delivery-pipeline/docs/spec/functional-ownership.md): authorized GitHub mechanics.
 
 ## Nook language and tooling constraints
 
@@ -116,11 +116,11 @@ schemas require an explicit migration decision and behavior-focused Rust coverag
 
 ## Team worker contract
 
-Use upstream Prime and Team Gizmo roles with Nook's functional scopes and
-acceptance requirements. Team-context Gizmo paths resolve to the feature's
-single coordinator. Another active task remains read-only without an explicit
-handoff. Add Nook-specific assignment details through the
-[subagent-delegation workflow](gizmo-prime/workflows/subagent-delegation.md).
+Use upstream Prime, Team Gizmo, and specialist roles directly with Nook's
+functional scopes and acceptance requirements. Supply the relevant ownership
+specifications to the feature's single coordinator. Another active task remains
+read-only without an explicit handoff. Add Nook-specific assignment details through the
+[subagent-delegation workflow](docs/spec/subagent-delegation.md).
 
 The upstream [integration agent](../.meta-cortex/teams/delivery-team/agents/integration-agent/AGENTS.md)
 owns local Git mechanics. Nook adds its feature constraints and applicable
@@ -128,22 +128,22 @@ checks through the root and selected team authorities.
 
 ## Mandatory delivery architecture
 
-Read the [delivery visual model](gizmo-prime/architecture/multiagent-delivery-diagrams.md)
-and [feature-delivery contract](gizmo-prime/architecture/dev-delivery.md)
+Read the [delivery visual model](docs/architecture/multiagent-delivery-diagrams.md)
+and [feature-delivery contract](docs/architecture/dev-delivery.md)
 for an authorized delivery task. Prime owns the feature's outcome and authorization.
-The upstream integration agent integrates bounded work. PR Lifecycle performs
+The upstream integration agent integrates bounded work. The upstream PR agent performs
 authorized GitHub mechanics.
 The user's explicit intermediate stopping point takes precedence over full delivery.
 
 ## GitHub execution boundary
 
 Route live-agent GitHub PR operations, including read-only queries and wrapper
-calls, through upstream PR agent behavior in Nook's PR Lifecycle adapter.
+calls, through upstream PR agent behavior with Nook's pull-request operations specification.
 Route workflow dispatch, reruns, logs, and pipeline repairs through upstream
 CI/CD with Nook's SRE context. Both require Prime's authorization and Team
 Gizmo's assignment in multi-agent mode.
 Repository-owned CI retains its existing execution contracts.
-Use the [operation handshake](teams/delivery-pipeline/pr-lifecycle/workflows/authorization-handshake.md).
+Use the [operation handshake](teams/delivery-pipeline/docs/spec/authorization-handshake.md).
 An explicit user-directed direct task follows the integration contract instead.
 
 ## Remote task execution

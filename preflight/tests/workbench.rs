@@ -103,14 +103,13 @@ impl RepositoryFixture {
 #[test]
 fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> {
     let agent_map = RepositoryFixture::repository_root().read(".cortex/AGENTS.md");
-    let coding_workflow = RepositoryFixture::repository_root()
-        .read(".cortex/gizmo-prime/workflows/mission-delivery.md");
-    let issue_workflow =
-        RepositoryFixture::repository_root().read(".cortex/gizmo-prime/workflows/issues.md");
+    let coding_workflow =
+        RepositoryFixture::repository_root().read(".cortex/docs/spec/mission-delivery.md");
+    let issue_workflow = RepositoryFixture::repository_root().read(".cortex/docs/spec/issues.md");
     let pull_request_workflow =
-        RepositoryFixture::repository_root().read(".cortex/gizmo-prime/workflows/pull-requests.md");
-    let ownership_skill = RepositoryFixture::repository_root()
-        .read(".cortex/gizmo-prime/dynamic-skills/agent-feature-ownership.md");
+        RepositoryFixture::repository_root().read(".cortex/docs/spec/pull-requests.md");
+    let ownership_skill =
+        RepositoryFixture::repository_root().read(".cortex/docs/spec/agent-feature-ownership.md");
     let normalized_agent_map = agent_map.split_whitespace().collect::<Vec<_>>().join(" ");
     let normalized_coding_workflow = coding_workflow
         .split_whitespace()
@@ -118,7 +117,7 @@ fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> 
         .join(" ");
 
     assert!(
-        agent_map.contains("gizmo-prime/dynamic-skills/agent-feature-ownership.md")
+        agent_map.contains("docs/spec/agent-feature-ownership.md")
             && normalized_agent_map.contains("Another active task remains read-only"),
         "root routing must preserve the universal ownership boundary and link its authority"
     );
@@ -169,10 +168,10 @@ fn pr_workbench_suite_runs_issue_publisher_contract_tests() {
 fn cortex_promotions_use_optional_curated_session_memory() -> anyhow::Result<()> {
     let gitignore = RepositoryFixture::repository_root().read(".gitignore");
     let agent_map = RepositoryFixture::repository_root().read(".cortex/AGENTS.md");
-    let coding_workflow = RepositoryFixture::repository_root()
-        .read(".cortex/gizmo-prime/workflows/mission-delivery.md");
+    let coding_workflow =
+        RepositoryFixture::repository_root().read(".cortex/docs/spec/mission-delivery.md");
     let pull_request_workflow =
-        RepositoryFixture::repository_root().read(".cortex/gizmo-prime/workflows/pull-requests.md");
+        RepositoryFixture::repository_root().read(".cortex/docs/spec/pull-requests.md");
     let self_improvement = RepositoryFixture::repository_root()
         .read(".cortex/teams/ai/dynamic-skills/self-improvement.md");
     let agent_tasks = RepositoryFixture::repository_root().read(".task/agentic-ai.yml");

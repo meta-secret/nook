@@ -1,0 +1,90 @@
+# Nook Development Core ownership
+
+This is a Nook functional context. The single Team Gizmo supplies it alongside
+Meta-Cortex roles and skill composition. Generic upstream rules take precedence
+over legacy generic wording here; Nook product and delivery requirements remain.
+
+
+## Mission
+
+Apply the [dev delivery stages](../../../../docs/architecture/dev-delivery.md).
+Author meaningful tests in feature work. The hosted feature PR required-check
+stage remains mandatory for delivery and readiness. Follow the root
+[delivery and validation policy](../../../../AGENTS.md#delivery-and-validation) for
+local test, check, or E2E diagnostics; local results do not replace hosted
+checks. Other local feedback remains limited to scoped rustfmt and bounded
+inexpensive TS diagnostics or formatting.
+
+Development core owns Nook's portable application behavior, including the Rust
+implementation of security controls.
+
+## Nook context authorities
+
+Follow Meta-Cortex [assignment context](../../../../../.meta-cortex/teams/AGENTS.md#assignment-context)
+for generic context selection. The Nook [development core graph](../../index.md)
+catalogs the product specifications, design authorities, and linked upstream
+Rust skills used by this context.
+
+Load a shared architecture document only when the assigned contract crosses a
+named package boundary. Report every foreign-team dependency to the delivery
+owner.
+
+For a Rust expertise request, load the named consumer contract as read-only.
+Do not load the consumer team's complete graph.
+
+## Owned responsibilities
+
+- Portable Rust domain crates and their behavior-focused tests.
+- Rust implementations for identity, authorization, cryptography, replication,
+  signed events, vaults, and storage schemas.
+- Typed WASM bridges and generated contracts when they expose core behavior.
+- Portable validation and business rules.
+- Development-core product specifications, design docs, references, and
+  skills.
+- Rust files assigned by AI, SRE, or web development through an expertise
+  contract.
+
+## Forbidden responsibilities
+
+- Browser presentation, interaction design, accessibility, and visual behavior.
+- CI/CD pipelines, runners, clusters, deployments, and provider operations.
+- Foreign capability semantics or another team's Cortex documents.
+- Consumer-team files outside an explicit expertise contract.
+- Shared Git, PR, Workbench, validation, readiness, and merge state.
+- Security-team architecture, cryptographic policy, or review criteria.
+
+TypeScript or Svelte must not become an alternate owner for portable business
+or security logic. Return the required typed contract to the delivery owner
+when a web consumer needs new core functionality.
+
+Load a named security architecture section as read-only policy when changing a
+security-sensitive Rust contract. Return new or changed cross-team security
+invariants to the delivery owner for security-team acceptance.
+
+Task contracts may name these read-only authorities:
+
+- [Nook security architecture](../../../security/architecture/security-architecture.md)
+- [Identity, app keys, passkeys, and vault keys](../../../../../nook-app/nook-platform/.cortex/docs/architecture/identity-vault-architecture.md)
+- [Secret store identity](../../../../../nook-app/nook-platform/nook-core/.cortex/docs/architecture/secret-store-identity.md)
+- [Vault session and lock](../../../../../nook-app/nook-platform/.cortex/docs/architecture/vault-session-and-lock.md)
+- [Cryptography and protected material](../../../../../nook-app/nook-platform/nook-auth2/.cortex/docs/spec/cryptography.md)
+
+Rust expertise does not transfer functional ownership. The consumer team keeps
+its capability semantics and acceptance contract.
+
+## Complete team scope
+
+For an assigned development-core unit, own:
+
+- the provider contract;
+- implementation;
+- Rust and WASM tests;
+- development-core Cortex updates;
+- review-driven fixes in the same scope;
+- validation-failure fixes caused by the change; and
+- a bounded evidence handoff.
+
+## Validation
+
+Prove portable behavior at the Rust layer. Add typed bridge tests when the WASM
+contract changes. Browser E2E does not replace domain tests.

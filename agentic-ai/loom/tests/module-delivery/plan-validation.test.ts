@@ -36,12 +36,12 @@ import type {
   ModuleDeliveryEvidenceSynthesisNodeV2,
   ModuleDeliveryNodeV2,
   ModuleDeliveryPlan,
-  ModuleDeliveryPlanV6,
+  ModuleDeliveryPlanV7,
   ModuleDeliveryReadOnlyNodeV2,
   ModuleDeliveryWriteNodeV2,
 } from '../../src/module-delivery/index.ts';
 
-import { TeamKey } from '../../src/team-agents/catalog.ts';
+import { TeamKey } from '../../src/project-context/catalog.ts';
 import { MAX_MODULE_DELIVERY_STRING_LIST_ENTRIES } from '../../src/module-delivery/evidence-limits.ts';
 
 type LegacySynthesisNode = Omit<LegacyModuleDeliveryNode, 'kind'> & {
@@ -234,9 +234,9 @@ describe('reviewed module delivery plan', () => {
           moduleRoot: 'infra',
           write: ['infra/**'],
         }).workspace,
-        workerRole: 'provisioning',
+        workerRole: 'cicd-agent',
         workerBranch:
-          'codex/child/sre/provisioning/module-delivery-test/core-provider-implementation-work',
+          'codex/child/sre/cicd-agent/module-delivery-test/core-provider-implementation-work',
       },
     };
     expect(ModuleDeliveryPlanValidationScenario.acceptsNode(sreWrite)).toBe(
@@ -297,16 +297,15 @@ describe('reviewed module delivery plan', () => {
     }
   });
 
-  test('rejects every pre-v6 plan version at the compatibility boundary', () => {
+  test('rejects every pre-v7 plan version at the compatibility boundary', () => {
     const canonical = ModuleDeliveryPlanValidationScenario.plan({
       nodes: [CORE_NODE],
       edgeContracts: [],
     });
-    for (const version of [1, 2, 3, 4, 5]) {
+    for (const version of [1, 2, 3, 4, 5, 6]) {
       const historical = {
         ...canonical,
         version,
-        parentJoin: { ...canonical.parentJoin, kind: 'direct-commits' },
       };
       const result =
         ModuleDeliveryPlanSchema.decodeCompatibleModuleDeliveryPlan(
@@ -486,7 +485,7 @@ describe('reviewed module delivery plan', () => {
         ],
       },
     };
-    const reversedNodePlan: ModuleDeliveryPlanV6 = {
+    const reversedNodePlan: ModuleDeliveryPlanV7 = {
       ...orderedPlan,
       nodes: [reversedNode],
     };
@@ -556,7 +555,7 @@ describe('reviewed module delivery plan', () => {
       edgeContracts: DEFAULT_EDGES,
     };
     const validPlan = ModuleDeliveryPlanValidationScenario.plan(fixture);
-    const invalidPlan: ModuleDeliveryPlanV6 = {
+    const invalidPlan: ModuleDeliveryPlanV7 = {
       ...validPlan,
       baseBranch: 'main',
     };

@@ -83,7 +83,7 @@ export class SkillScaffoldRequestDecoder {
         path: `${ROOT}.${SkillScaffoldField.SkillOwner}`,
         issue: FieldIssue.ExpectedOneOf,
         detail: FieldDiagnosticText.create(
-          'shared|gizmo|ai|dev-core|security|sre|web-dev',
+          'shared|ai|dev-core|security|sre|web-dev',
         ),
       };
       errors.push(FieldDiagnostic.create(fieldErrorArgs));
@@ -108,7 +108,6 @@ export enum SkillScaffoldField {
 
 export enum SkillOwner {
   Shared = 'shared',
-  Gizmo = 'gizmo',
   Ai = 'ai',
   DevCore = 'dev-core',
   Security = 'security',
@@ -122,8 +121,6 @@ class SkillOwnerVocabulary {
     switch (value) {
       case SkillOwner.Shared:
         return SkillOwner.Shared;
-      case SkillOwner.Gizmo:
-        return SkillOwner.Gizmo;
       case SkillOwner.Ai:
         return SkillOwner.Ai;
       case SkillOwner.DevCore:
@@ -149,14 +146,14 @@ const ROOT = RequestFamily.SkillScaffold;
 
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
-const SKILL_OWNER_RE = /^(?:shared|gizmo|ai|dev-core|security|sre|web-dev)$/;
+const SKILL_OWNER_RE = /^(?:shared|ai|dev-core|security|sre|web-dev)$/;
 
 const skillSlugPatternArgs: PatternStringJsonSchemaArgs = {
   pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$',
 };
 
 const skillOwnerPatternArgs: PatternStringJsonSchemaArgs = {
-  pattern: '^(?:shared|gizmo|ai|dev-core|security|sre|web-dev)$',
+  pattern: '^(?:shared|ai|dev-core|security|sre|web-dev)$',
 };
 
 const skillScaffoldInputSchemaArgs: ObjectJsonSchemaArgs = {

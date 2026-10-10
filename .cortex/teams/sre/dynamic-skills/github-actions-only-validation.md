@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The [dev delivery contract](../../../gizmo-prime/architecture/dev-delivery.md)
+The [dev delivery contract](../../../docs/architecture/dev-delivery.md)
 defines the remote build-only and required-check stages. Hosted execution is the
 default. Follow the root [delivery and validation policy](../../../AGENTS.md#delivery-and-validation)
 for any bounded local diagnostic. Local results never replace required hosted

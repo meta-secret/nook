@@ -8,7 +8,7 @@ or refactor pattern that should become durable agent knowledge.
 Nook's canonical repository-local skill cards live in `dynamic-skills/`
 directories under Gizmo, shared Cortex, or one engineering team.
 
-- Delivery-control cards live under `.cortex/gizmo-prime/dynamic-skills/`.
+- Project delivery requirements live under `.cortex/docs/spec/`.
 - Shared ownerless repository-wide cards live under
   `.cortex/shared/dynamic-skills/`.
 - AI cards live under `.cortex/teams/ai/dynamic-skills/`.
