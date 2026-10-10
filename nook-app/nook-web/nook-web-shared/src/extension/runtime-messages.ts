@@ -8,6 +8,7 @@ import type {
   ExtensionStorageProviderIdentity,
   ExtensionPairingGrantApproval,
   ExtensionStorageProviderType as RustExtensionStorageProviderType,
+  ExtensionVaultEventLogRequestMessage,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import { ExtensionConnectScope } from "./extension-connect-scope";
 import { extensionPairingVaultType } from "./extension-pairing-vault-type";
@@ -611,6 +612,7 @@ export type CompanionIdentityHandoffTransportResponse =
   | { ok: false; reason: string };
 
 export type RuntimeMessage =
+  | ExtensionVaultEventLogRequestMessage
   | OpenSimpleVaultMessage
   | OpenCompanionLauncherMessage
   | BeginExtensionPairingMessage

@@ -9,6 +9,7 @@ use super::login_save::{
 use super::queue::{
     MessageDefaultQueueDisposition, PasskeyCeremonyQueueDisposition, QueueDisposition,
 };
+use super::vault_event_log::ExportVaultEventLogPayload;
 use crate::ExtensionVaultEventPayload;
 use crate::credential_fill::CredentialKind;
 use nook_auth2::StoreId;
@@ -410,6 +411,7 @@ pub enum ExtensionSessionRequest {
     ImportVault(ImportVaultPayload),
     #[serde(rename = "nook:extension-session-update-vault")]
     UpdateVault(UpdateVaultPayload),
+    ExportVaultEventLog(ExportVaultEventLogPayload),
     #[serde(rename = "nook:extension-session-vault-summary")]
     VaultSummary(VaultSummaryPayload),
     #[serde(rename = "nook:extension-session-list-passkeys")]
@@ -518,6 +520,7 @@ impl Drop for ExtensionSessionRequestWire {
             | ExtensionSessionRequest::UnlockOptions(_)
             | ExtensionSessionRequest::ImportVault(_)
             | ExtensionSessionRequest::UpdateVault(_)
+            | ExtensionSessionRequest::ExportVaultEventLog(_)
             | ExtensionSessionRequest::VaultSummary(_)
             | ExtensionSessionRequest::ListPasskeys(_)
             | ExtensionSessionRequest::ListLogins(_)

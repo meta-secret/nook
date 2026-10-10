@@ -163,6 +163,7 @@ function installFilledProjectionHold(install: FilledProjectionInstall): void {
         case install.companion.EvaluateAuthenticationPolicies:
         case install.companion.RevalidateApprovedAuthenticationWorkflow:
         case install.session.ClassifyGrantAuthority:
+        case install.session.ExportVaultEventLog:
         case install.session.Reset:
         case install.session.MigrateAuthProviders:
         case install.session.BeginPasskeySetup:

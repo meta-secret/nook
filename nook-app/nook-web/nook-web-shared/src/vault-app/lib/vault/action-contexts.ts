@@ -587,6 +587,13 @@ export type SessionActionsContext = Pick<VaultRuntimeState, "errorMsg"> &
     publishExtensionEventLogUpdate(): Promise<
       Result<ExtensionEventLogPublicationSnapshot, VaultStorageFailure>
     >;
+    refreshSecretsFromSession(): Promise<
+      Result<
+        SecretPageRefreshSnapshot | VaultOperationStale,
+        VaultStorageFailure
+      >
+    >;
+    t(request: TranslationRequest): string;
     refreshVaultArchitectureFromManager(): Result<
       VaultArchitectureRefreshSnapshot,
       VaultStorageFailure

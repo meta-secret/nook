@@ -182,9 +182,13 @@ pub use extension_persistence::{
 };
 pub use extension_session_protocol::{
     ExtensionEventLogRecord, ExtensionSessionRequest, ExtensionSessionRequestValidation,
-    ExtensionSessionRequestWire, LoginPickerOpenResponse, LoginPickerOpenResponseDecodeError,
-    LoginPickerOpenResponseWire, SessionSecretText, SubmittedLoginSaveTarget,
-    SubmittedWebsiteLoginSaveRequest,
+    ExtensionSessionRequestWire, ExtensionVaultEventLogFailure,
+    ExtensionVaultEventLogGrantDecision, ExtensionVaultEventLogGrantDecodeRequest,
+    ExtensionVaultEventLogRequest, ExtensionVaultEventLogRequestMessage,
+    ExtensionVaultEventLogResponse, ExtensionVaultEventLogResponseAdmission,
+    ExtensionVaultEventLogResponseDecodeRequest, ExtensionVaultEventLogResponseError,
+    LoginPickerOpenResponse, LoginPickerOpenResponseDecodeError, LoginPickerOpenResponseWire,
+    SessionSecretText, SubmittedLoginSaveTarget, SubmittedWebsiteLoginSaveRequest,
 };
 pub use extension_session_status_response::{
     ExtensionSessionDeviceProtectionStatusWire, ExtensionSessionDeviceResponse,

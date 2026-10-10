@@ -113,6 +113,7 @@ function sessionMessagePriority(
     case ExtensionSessionMessageType.AuthenticatorEnrollConfirm:
     case ExtensionSessionMessageType.AuthenticatorBackupAttach:
     case ExtensionSessionMessageType.ListLogins:
+    case ExtensionSessionMessageType.ExportVaultEventLog:
     case ExtensionSessionMessageType.ListAuthenticators:
     case ExtensionSessionMessageType.RegisterPasskey:
     case ExtensionSessionMessageType.AssertPasskey:
@@ -567,7 +568,8 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
         typeof message !== 'object' ||
         !('type' in message) ||
         typeof message.type !== 'string' ||
-        !message.type.startsWith('nook:extension-session-') ||
+        (!message.type.startsWith('nook:extension-session-') &&
+          message.type !== ExtensionSessionMessageType.ExportVaultEventLog) ||
         message.type === ExtensionSessionMessageType.Lock
       ) {
         return false
@@ -685,10 +687,12 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
           const type = request.type
           const serviceWorkerOnly =
             type === ExtensionSessionMessageType.SealIdentityHandoff ||
-            type === ExtensionSessionMessageType.CancelPasskey
+            type === ExtensionSessionMessageType.CancelPasskey ||
+            type === ExtensionSessionMessageType.ExportVaultEventLog
           if (
             (serviceWorkerOnly && !serviceWorkerSender) ||
-            !type.startsWith('nook:extension-session-')
+            (!type.startsWith('nook:extension-session-') &&
+              type !== ExtensionSessionMessageType.ExportVaultEventLog)
           ) {
             const forbiddenResponse: Parameters<typeof sendResponse>[0] = {
               ok: false,

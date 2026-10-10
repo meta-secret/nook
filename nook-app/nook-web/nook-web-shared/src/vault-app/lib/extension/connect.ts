@@ -1,4 +1,5 @@
 import { Effect } from "effect";
+import { ExtensionVaultEventLogChannel } from "./vault-event-log";
 import { err, ok, type Result } from "neverthrow";
 import {
   VaultStorageFailure,
@@ -303,6 +304,12 @@ class ExtensionConnectionBrowser {
     return extensionRuntimeId
       ? { kind: InstalledExtensionRuntimeKind.Installed, extensionRuntimeId }
       : { kind: InstalledExtensionRuntimeKind.NotInstalled };
+  }
+
+  pullVaultEventLog(
+    request: Parameters<ExtensionVaultEventLogChannel["pull"]>[0],
+  ): ReturnType<ExtensionVaultEventLogChannel["pull"]> {
+    return new ExtensionVaultEventLogChannel(this.browser).pull(request);
   }
 
   private pairingDeliveryFromResponse(

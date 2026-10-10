@@ -332,6 +332,7 @@ const sensitiveSessionFields: Readonly<
   [ExtensionSessionMessageType.SealIdentityHandoff]: [],
   [ExtensionSessionMessageType.ImportVault]: [],
   [ExtensionSessionMessageType.UpdateVault]: [],
+  [ExtensionSessionMessageType.ExportVaultEventLog]: [],
   [ExtensionSessionMessageType.VaultSummary]: [],
   [ExtensionSessionMessageType.ListPasskeys]: [],
   [ExtensionSessionMessageType.ListLogins]: [],

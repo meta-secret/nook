@@ -26,6 +26,7 @@ import type { ExtensionPairingApprovedMessage } from "$web-shared/extension/runt
 import { ExtensionIdentityRequestSource } from "$web-shared/extension/extension-connect-types";
 import { ExtensionPairedVaultIdentityStatusMessageStatus } from "$web-shared/extension/paired-vault-identity-status";
 import type { ExtensionPairingDelivery } from "$lib/extension/extension-pairing-delivery";
+import type { ExtensionVaultEventLogChannel } from "$lib/extension/vault-event-log";
 
 export { ExtensionIdentityRequestSource };
 export {
@@ -149,6 +150,9 @@ export const extensionConnectionBrowser = {
   isExtensionConnectPath,
   extensionConnectRequestFromLocation,
   readInstalledExtensionRuntimeId,
+  pullVaultEventLog(): ReturnType<ExtensionVaultEventLogChannel["pull"]> {
+    throw new PairedExtensionDiscoveryFailure();
+  },
   companionProviderPresence,
   openInstalledExtension,
   discoverPairedExtensionIdentity,

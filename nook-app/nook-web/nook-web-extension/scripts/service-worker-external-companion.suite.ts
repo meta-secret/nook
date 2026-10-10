@@ -1,4 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test'
+import { Effect } from 'effect'
 import {
   OpenCompanionLauncherIntent,
   OpenCompanionLauncherMessageType,
@@ -13,6 +14,96 @@ import {
 } from './service-worker-routing-test-support'
 
 describe('external companion routing', () => {
+  test('exports the requested vault only after approved external-origin admission', async () => {
+    const response = { kind: 'NotPaired' as const }
+    const exportEvents = mock(() => Effect.succeed(response))
+    const dependencies: ExternalCompanionRoutingDependencies = {
+      ...externalDependencies,
+      vaultEventLogExporter: { run: exportEvents },
+    }
+    const { ExternalCompanionRouter } =
+      await import('../src/background/service-worker/external-companion-routing')
+    const sendResponse = mock(() => {})
+    const message = {
+      type: 'ExportVaultEventLog',
+      payload: { vault_store_id: 'store_abcdefghijk' },
+    }
+    const request: ConstructorParameters<typeof ExternalCompanionRouter>[0] = {
+      dependencies,
+      message,
+      sender: { url: 'https://simple.example.test/' },
+      sendResponse,
+    }
+    expect(await new ExternalCompanionRouter(request).route()).toBe(true)
+    await flushResponses()
+    expect(exportEvents).toHaveBeenCalledWith(message)
+    expect(sendResponse).toHaveBeenCalledWith(response)
+  })
+
+  test('rejects an encrypted-event export from a foreign origin before opening the extension vault', async () => {
+    const response = { kind: 'NotPaired' as const }
+    const exportEvents = mock(() => Effect.succeed(response))
+    const dependencies: ExternalCompanionRoutingDependencies = {
+      ...externalDependencies,
+      vaultEventLogExporter: { run: exportEvents },
+    }
+    const { ExternalCompanionRouter } =
+      await import('../src/background/service-worker/external-companion-routing')
+    const sendResponse = mock(() => {})
+    const request: ConstructorParameters<typeof ExternalCompanionRouter>[0] = {
+      dependencies,
+      message: {
+        type: 'ExportVaultEventLog',
+        payload: { vault_store_id: 'store_abcdefghijk' },
+      },
+      sender: { url: 'https://foreign.example/' },
+      sendResponse,
+    }
+    expect(await new ExternalCompanionRouter(request).route()).toBe(false)
+    expect(exportEvents).not.toHaveBeenCalled()
+    expect(sendResponse).toHaveBeenCalledWith({
+      ok: false,
+      reason: 'forbidden-sender',
+    })
+  })
+
+  test('removes page-supplied identity and grant fields before resolving stored authority', async () => {
+    const response = { kind: 'NotPaired' as const }
+    const exportEvents = mock(() => Effect.succeed(response))
+    const dependencies: ExternalCompanionRoutingDependencies = {
+      ...externalDependencies,
+      vaultEventLogExporter: { run: exportEvents },
+    }
+    const { ExternalCompanionRouter } =
+      await import('../src/background/service-worker/external-companion-routing')
+    const sendResponse = mock(() => {})
+    const request: ConstructorParameters<typeof ExternalCompanionRouter>[0] = {
+      dependencies,
+      message: {
+        type: 'ExportVaultEventLog',
+        payload: {
+          vault_store_id: 'store_abcdefghijk',
+          app_id: 'page-authority',
+          app_public_key: 'page-encryption-key',
+          app_signing_public_key: 'page-signing-key',
+          grant: { vaultStoreId: 'store_other', deviceId: 'page-device' },
+        },
+      },
+      sender: { url: 'https://simple.example.test/' },
+      sendResponse,
+    }
+    const accepted = await new ExternalCompanionRouter(request).route()
+    await flushResponses()
+    const canonicalRequest = {
+      type: 'ExportVaultEventLog',
+      payload: { vault_store_id: 'store_abcdefghijk' },
+    }
+    expect(exportEvents).toHaveBeenCalledWith(canonicalRequest)
+    expect(exportEvents).toHaveBeenCalledTimes(1)
+    expect(accepted).toBe(true)
+    expect(sendResponse).toHaveBeenCalledWith(response)
+  })
+
   test('passes the decoded new-device identity handoff wire request unchanged', async () => {
     const createIdentityHandoff = mock(() =>
       Promise.resolve({

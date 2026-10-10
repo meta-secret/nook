@@ -1,5 +1,10 @@
 import { chromium, expect, test, type Page } from '@playwright/test'
 import {
+  PasskeyVaultDiscovery,
+  WebsitePasskeyStateKind,
+  type WebsitePasskeyState,
+} from './helpers/passkey-vault-discovery'
+import {
   assertWebsitePasskeyThroughExtension,
   attachNookLogsForTest,
   advanceCreateVaultWizardToFinalStep,
@@ -301,14 +306,6 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await reconnectPage.close()
     await pairingLauncher.close()
 
-    enum WebsitePasskeyStateKind {
-      NotCreated = 'not-created',
-      Created = 'created',
-    }
-
-    type WebsitePasskeyState =
-      | { kind: WebsitePasskeyStateKind.NotCreated }
-      | { kind: WebsitePasskeyStateKind.Created; credentialId: string }
     let websitePasskeyState: WebsitePasskeyState = {
       kind: WebsitePasskeyStateKind.NotCreated,
     }
@@ -367,6 +364,9 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await expect(
       reopenedVaultPage.getByTestId('passkey-auth-overlay'),
     ).toHaveCount(0)
+    await new PasskeyVaultDiscovery(reopenedVaultPage).assert(
+      websitePasskeyState,
+    )
     if (!isHostedSmoke) {
       expect(
         await reopenedVaultPage.evaluate(

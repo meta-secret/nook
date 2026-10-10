@@ -1,10 +1,32 @@
-import { expect, test } from '../fixtures'
+import { expect, test, type Page } from '../fixtures'
+import {
+  advanceCreateVaultWizardToFinalStep,
+  extensionApprovalVaultName,
+  installMockPasskeyRuntime,
+  launchExtensionContext,
+  openSimpleVaultConnection,
+  readExtensionStorage,
+  registerWebsitePasskeyThroughExtension,
+  setupPasskeyExtensionPopup,
+  setupStorageKey,
+  startLoginServer,
+  waitForExtensionPairingReady,
+  waitForNewPage,
+} from '../../../nook-web-extension/e2e/helpers/extension-smoke-runtime'
+import {
+  PasskeyVaultDiscovery,
+  WebsitePasskeyStateKind,
+  type WebsitePasskeyState,
+} from '../../../nook-web-extension/e2e/helpers/passkey-vault-discovery'
 import {
   demoBeat,
   injectPilotAutofill,
   loadPilotMessages,
 } from './pilot-demo-helpers'
 import { demoDomainEnumArgs, installDemoChromeStub } from './static-chrome-stub'
+
+type PairedVaultReopenOperations = readonly [Promise<Page>, Promise<void>]
+type PasskeyVaultDemoVisibilityWait = { readonly timeout: number }
 
 test('propose Create passkey through Nook Pilot without silent ceremony', async ({
   page,
@@ -104,4 +126,74 @@ test('propose Create passkey through Nook Pilot without silent ceremony', async 
     widget.getByRole('button', { name: 'Create passkey' }),
   ).toBeVisible()
   await demoBeat(page)
+})
+
+test('discover a website passkey in the reopened local paired vault', async ({
+  browserName,
+}, testInfo) => {
+  test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+  testInfo.setTimeout(180_000)
+  const context = await launchExtensionContext(
+    testInfo.outputPath('local-passkey-demo-profile'),
+  )
+  const loginServer = await startLoginServer()
+  try {
+    // Load the real website before the device-protection mock is installed;
+    // its credential ceremony must pass through the production extension.
+    const website = await context.newPage()
+    await website.goto(`${loginServer.origin}/login`)
+    await context.addInitScript(installMockPasskeyRuntime)
+    const popup = await setupPasskeyExtensionPopup(context)
+    const popupUrl = popup.url()
+    const vault = await openSimpleVaultConnection(context, popup)
+    await advanceCreateVaultWizardToFinalStep(vault)
+    await vault
+      .getByTestId('login-vault-name-input')
+      .fill(extensionApprovalVaultName)
+    await vault.getByTestId('login-create-device-vault-btn').click()
+    await expect(vault.getByTestId('extension-connect-consent')).toBeVisible()
+    await vault.getByTestId('approve-extension-device-btn').click()
+    const readSetupState = async () => {
+      const storage = await readExtensionStorage(context)
+      return storage[setupStorageKey]
+    }
+    await waitForExtensionPairingReady(
+      vault,
+      readSetupState,
+      extensionApprovalVaultName,
+    )
+    await expect(vault.getByTestId('authenticated-shell')).toBeVisible()
+
+    const credentialId = await registerWebsitePasskeyThroughExtension(website)
+    expect(credentialId).not.toBe('')
+    await website.close()
+    await vault.close()
+    await popup.close()
+
+    const connectedPopup = await context.newPage()
+    await connectedPopup.goto(popupUrl)
+    await expect(
+      connectedPopup.getByTestId('open-simple-vault-btn'),
+    ).toBeVisible()
+    const reopen: PairedVaultReopenOperations = [
+      waitForNewPage(context, 'paired local vault after website registration'),
+      connectedPopup.getByTestId('open-simple-vault-btn').click(),
+    ]
+    const [reopenedVault] = await Promise.all(reopen)
+    const visibility: PasskeyVaultDemoVisibilityWait = { timeout: 15_000 }
+    await expect(reopenedVault.getByTestId('authenticated-shell')).toBeVisible(
+      visibility,
+    )
+    // Production Simple startup pulls the encrypted companion events and
+    // imports them through Rust before these normal list assertions run.
+    const state: WebsitePasskeyState = {
+      kind: WebsitePasskeyStateKind.Created,
+      credentialId,
+    }
+    await new PasskeyVaultDiscovery(reopenedVault).assert(state)
+    await demoBeat(reopenedVault)
+  } finally {
+    await context.close()
+    await loginServer.close()
+  }
 })
