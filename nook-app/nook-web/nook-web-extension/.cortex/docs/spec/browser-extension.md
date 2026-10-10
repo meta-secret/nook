@@ -275,15 +275,15 @@ It shows a verification-wait state only after a site form was actually
 submitted.
 A filled-only login or TOTP remains at the current checkpoint for manual review
 and submission.
-After a login or signup form submit, Nook Pilot stages credentials in extension
-memory.
-It waits for Rust-classified outcome evidence before offering Save / Update.
-Durable writes through the unlocked extension WASM session
-(`add_secret` / `replace_secret`) require a Sufficient verdict.
-Navigation alone never counts.
+After a submitted login, Nook Pilot stages credentials in extension memory for
+the [submitted-login save opportunity](#submitted-login-save-opportunity).
+Signup saves retain their existing Rust-classified outcome requirement.
+Their durable writes through the unlocked extension WASM session
+(`add_secret` / `replace_secret`) require a Sufficient verdict from
+`AuthenticationOutcomeDecision`; navigation alone never counts for that flow.
 Content scripts report only bounded non-secret signals
-(`data-nook-auth-outcome`, auth-field presence, SPA mutation, iframe context,
-elapsed time).
+(`data-nook-auth-outcome`, auth-field presence, bounded control labels,
+authenticated affordances, SPA mutation, iframe context, elapsed time).
 Site-specific plugins may add markers through that adapter attribute.
 They must not scrape secrets or bypass the Rust classifier.
 Signup and password-change pages may offer **Generate password** through
@@ -303,6 +303,138 @@ The companion tab “Ready / Connected” state means the extension device is
 paired to a vault. It is not login detection. Login detection is the in-page
 Nook Pilot HUD; the companion may also show a one-line current-tab hint
 (“Login form detected on this page” / “No login form detected”).
+
+### Submitted-login save opportunity
+
+Accepted requirement: a submitted login may produce **Save this login?** after
+Rust classifies bounded evidence as eligible. This is an opportunity to save
+the submitted credential, not proof that an arbitrary server authenticated it.
+`LoginSaveOutcomeDecision` is separate from `AuthenticationOutcomeDecision`.
+The existing signup and 2FA outcome requirements remain unchanged.
+
+- **Prohibited:** label a generic login transition “confirmed login success,”
+  or use unrelated signup or 2FA success to offer a login save.
+- **Required:** describe an eligible submitted login as **Save this login?**.
+  Preserve the separate success and 2FA verdicts for their existing flows.
+
+#### Capture actual login intent
+
+- Rust classifies trusted native form submission, submit-button click, or Enter
+  within the same login form or container as actual login intent.
+- Support dynamically inserted login forms and current-password fields whose
+  visibility toggle changes their input type.
+- Typing, focus, or filling alone does not capture a submitted login.
+- Exclude newsletter, search, registration, password-change, and multiple-password
+  confirmation structures from generic login capture.
+- Capture the origin, time, URL/path, auth presence, and bounded control-label
+  baseline synchronously with the credentials. Do this before asynchronous
+  staging can observe a later page state.
+
+- **Prohibited:** stage a password from typing alone or combine an Enter event
+  in a search box with a password elsewhere. Capture the baseline only after
+  asynchronous staging returns, treating removed fields as the baseline.
+- **Required:** capture a trusted submit in its dynamically inserted login
+  container, including a visible current-password field. Retain that moment's
+  origin, time, URL/path, auth presence, and control labels before staging.
+  A registration form with password confirmation remains excluded.
+
+#### Classify fresh outcome evidence
+
+- Rust owns the typed eligibility states `Eligible`, `Waiting`, `Rejected`, and
+  `Expired` in `LoginSaveOutcomeDecision`.
+- A same-origin document transition or URL/history transition may qualify.
+  - Require stable absence of authentication fields for at least 750 ms.
+  - Reject an auth error, OTP, CAPTCHA, or manual checkpoint.
+  - Authenticated UI is optional corroboration for this transition path.
+- Evaluate fresh eligible evidence before applying the waiting timeout.
+  The existing 8,000 ms budget bounds `Waiting` for outcome evidence from the
+  original capture, including the 750 ms stability interval.
+- A DOM-only mutation without a route transition requires a newly classified
+  authenticated affordance compared with the capture baseline.
+  - Removing, hiding, toggling, or disabling fields alone remains `Waiting`.
+  - A page with neither a route transition nor a new authenticated affordance
+    remains `Waiting`.
+- Reject generic iframe outcome evidence. Retain the existing bounded
+  explicit-marker login path through its Rust classifier.
+- Reclassify fresh page evidence before showing a prompt and again at explicit
+  Save. A stale eligible observation does not authorize a later write.
+- Preserve the captured workflow in outcome classification. Signup, password
+  change, OTP, and manual-checkpoint evidence does not qualify a generic login.
+- Keep the original capture baseline unchanged after offering Save. The existing
+  two-minute offer TTL governs consent and Save lifetime; the waiting budget
+  does not expire an otherwise eligible offer while the user reads it.
+
+- **Prohibited:** field removal on the same route, an already-present account
+  link, or an unrelated success marker makes a login eligible. An iframe or
+  an OTP challenge supplies generic evidence. A previously eligible page saves
+  after a fresh auth error appears.
+- **Required:** a same-origin history transition with auth fields absent for
+  750 ms may offer Save when no checkpoint remains.
+  A same-route mutation qualifies only with a newly classified authenticated
+  affordance. Recheck at Save; an auth error rejects the write. If fresh evidence
+  remains insufficient after the waiting budget, produce `Expired`.
+
+#### Consent and credential mutation
+
+- Require explicit Save consent before any durable credential write.
+- Rust owns create, update, and identical-credential suppression through the
+  unlocked vault session. Preserve the password's exact bytes from capture
+  through commit.
+- `NookVaultManager` reclassifies the fresh `LoginSaveOutcomeObservation` in
+  Rust before writing. A TypeScript eligibility guard alone is insufficient.
+- Keep passwords out of the HUD and sensitive logs.
+
+- **Prohibited:** an eligible opportunity automatically writes a credential,
+  or normalizing password whitespace suppresses a changed password.
+- **Required:** offer Save and wait for explicit approval. The Rust manager
+  reclassifies fresh eligibility before creating or updating the credential.
+  Its exact password bytes determine change; an identical credential causes
+  no write. Reading an eligible prompt for more than eight seconds still permits
+  Save while fresh evidence qualifies within the existing two-minute TTL.
+  Lock or expiry rejects that Save.
+
+#### Pending credential scope and lifetime
+
+- Authorize each pending credential using sender-derived origin, tab, and frame.
+- A captured document may navigate within the same origin while retaining that
+  tab/frame scope. Another tab or frame cannot load, commit, or clear it.
+- Keep the existing offscreen plaintext `Map` staging memory-only with its
+  two-minute TTL. Clear it on lock, expiry, dismissal, and replacement.
+- Persist no plaintext credential or sensitive log. Add no recovery path for
+  an unavailable pending credential.
+
+- **Prohibited:** a second tab on the same origin loads, commits, or clears the
+  first tab's pending credential. Browser storage retains its plaintext after
+  dismissal or expiry.
+- **Required:** the captured tab/frame may continue after a same-origin
+  document navigation. Reject another sender's pending operations. Lock,
+  expiry, dismissal, or replacement clears the memory-only staged credential.
+
+#### Ephemeral wire rollout
+
+- Extend the Rust-owned `ExtensionSessionRequest` wire with required sender
+  `tab_id`/`frame_id`, the existing origin, and initial/pending offer metadata.
+- The capture baseline carries `submitted_at` as `CompanionEpochMilliseconds`,
+  validated HTTP(S) `submitted_url`, `initial_auth_fields`, and bounded control
+  labels.
+- `LoginSubmissionIntent` carries raw context as
+  `AuthenticationPageObservationFacts`. Rust derives the canonical
+  `AuthenticationWorkflowKind` from the same accumulated field/history
+  observations plus that context. Classification returns the canonical workflow
+  and capture source. Outcome observations retain the captured workflow.
+- Expose the additive Rust classifier exports through the typed WASM boundary.
+  Content scripts supply observations; TypeScript does not decide eligibility.
+- Roll out the current extension and runtime together. Do not accept old wire
+  shapes through compatibility defaults.
+- No durable vault schema or storage migration is required: the changed wire
+  and pending metadata are ephemeral. Preserve the existing encrypted vault
+  representation and memory-only staging lifecycle.
+
+- **Prohibited:** default missing sender context in an old request, duplicate
+  the classifier in TypeScript, or persist staged plaintext as a migration.
+- **Required:** use the current typed request and Rust classifiers together.
+  Reject an old request shape and require a fresh current-runtime interaction;
+  durable vault storage needs no migration.
 
 ### Focused credential opportunities
 
