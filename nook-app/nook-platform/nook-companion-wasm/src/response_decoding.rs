@@ -628,8 +628,23 @@ mod wasm_tests {
     #[wasm_bindgen_test]
     fn login_save_decoders_preserve_closed_success_and_rejection_states() -> Result<(), JsError> {
         let offer = ResponseWireFixture::parse(
-            r#"{"kind":"offer-available","offer":{"offerId":"offer","decision":0,"vaultStoreId":"vault","vaultName":"Personal"}}"#,
-        )?.into_typed();
+            r#"{
+                "kind":"offer-available",
+                "offer":{
+                    "offerId":"offer","decision":0,"vaultStoreId":"vault","vaultName":"Personal",
+                    "baseline":{
+                        "source":"SubmittedLogin","submitted_at":1000,
+                        "submitted_url":"https://example.test/login","captured_workflow":0,
+                        "initial_auth_fields":"Present","controls":[]
+                    },
+                    "selection":{
+                        "kind":"SubmittedLogin",
+                        "username_field_index":{"value":0},"password_field_index":{"value":1}
+                    }
+                }
+            }"#,
+        )?
+        .into_typed();
         assert!(matches!(
             decode_website_login_save_offer_response(&offer)?.to_rust()?,
             WebsiteLoginSaveOfferResponse::OfferAvailable { .. }
