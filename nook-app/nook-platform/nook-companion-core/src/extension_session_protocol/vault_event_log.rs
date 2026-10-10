@@ -106,8 +106,7 @@ impl ExtensionVaultEventLogResponse {
                     record.admit_store(expected_store_id)?;
                 }
             }
-            Self::Rejected { reason: _ } => {}
-            Self::NotPaired => {}
+            Self::Rejected { reason: _ } | Self::NotPaired => {}
         }
         Ok(self)
     }
