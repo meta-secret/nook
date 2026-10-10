@@ -2,9 +2,7 @@
 
 ## Team authority
 
-- [Delivery Pipeline contract](AGENTS.md)
-- [Team Gizmo index](gizmo/index.md)
-- [PR Lifecycle Agent index](pr-lifecycle/index.md)
+- [Delivery Pipeline ownership and specifications](docs/spec/index.md)
 
 ## Canonical delivery
 

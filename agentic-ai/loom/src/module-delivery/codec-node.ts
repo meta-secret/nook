@@ -1,6 +1,6 @@
 import { UntrustedYamlBoundary } from '../lib/guards.ts';
 import { MODULE_EXPERT_CATALOG } from '../module-experts/catalog.ts';
-import { TeamKey, TeamAuthorityCatalog } from '../team-agents/catalog.ts';
+import { TeamKey, TeamAuthorityCatalog } from '../project-context/catalog.ts';
 import {
   CORTEX_TEAM_WRITER_EXPERT,
   MAX_MODULE_DELIVERY_EDGE_CONTRACTS,

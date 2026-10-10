@@ -15,13 +15,13 @@ import type {
   ModuleDeliveryAcceptanceCommand,
   ModuleDeliveryBaseline,
   ModuleDeliveryNodeV2,
-  ModuleDeliveryPlanV6,
+  ModuleDeliveryPlanV7,
   ModuleDeliveryPlanValidation,
   ModuleDeliveryReadOnlyNodeV2,
   ModuleDeliveryWriteNodeV2,
 } from '../../src/module-delivery/index.ts';
 
-import { TeamKey } from '../../src/team-agents/catalog.ts';
+import { TeamKey } from '../../src/project-context/catalog.ts';
 export class ModuleDeliveryPlanValidationScenario {
   private constructor(private readonly request: PlanFixture) {}
 
@@ -69,10 +69,8 @@ export class ModuleDeliveryPlanValidationScenario {
       workspace: {
         kind: ModuleDeliveryWorkspaceKind.WorkerWorktree,
         workerRole:
-          fixture.expert === 'web_expert'
-            ? 'typescript-specialist'
-            : 'rust-core-developer',
-        workerBranch: `codex/child/${fixture.expert === 'web_expert' ? 'web-dev/typescript-specialist' : 'dev-core/rust-core-developer'}/module-delivery-test/${fixture.taskId}-implementation-work`,
+          fixture.expert === 'web_expert' ? 'typescript-dev' : 'rust-dev',
+        workerBranch: `codex/child/${fixture.expert === 'web_expert' ? 'web-dev/typescript-dev' : 'dev-core/rust-dev'}/module-delivery-test/${fixture.taskId}-implementation-work`,
         worktreePath: `/tmp/nook-module-delivery/${fixture.taskId}`,
       },
     };
@@ -135,14 +133,14 @@ export class ModuleDeliveryPlanValidationScenario {
     };
   }
 
-  static plan(fixture: PlanFixture): ModuleDeliveryPlanV6 {
+  static plan(fixture: PlanFixture): ModuleDeliveryPlanV7 {
     return new ModuleDeliveryPlanValidationScenario(fixture).execute();
   }
 
-  private execute(): ModuleDeliveryPlanV6 {
+  private execute(): ModuleDeliveryPlanV7 {
     const fixture = this.request;
     return {
-      version: 6,
+      version: 7,
       baseBranch: 'origin/main',
       featureBranch: 'codex/module-delivery-test',
       generation: 1,
@@ -157,7 +155,7 @@ export class ModuleDeliveryPlanValidationScenario {
     };
   }
 
-  static validate(value: ModuleDeliveryPlanV6): ModuleDeliveryPlanValidation {
+  static validate(value: ModuleDeliveryPlanV7): ModuleDeliveryPlanValidation {
     return ModuleDeliveryPlanDecoder.decodeAndValidate(JSON.stringify(value));
   }
 

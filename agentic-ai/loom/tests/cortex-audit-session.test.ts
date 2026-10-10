@@ -477,7 +477,7 @@ test('admits session Markdown only through the global HTML syntax gate', async (
   }
 });
 
-test('admits Gizmo skill rows without cascading from rejected syntax', async () => {
+test('admits project specifications without cascading from rejected syntax', async () => {
   const repoRoot = realpathSync(
     mkdtempSync(path.join(tmpdir(), 'cortex-html-cascade-')),
   );
@@ -486,8 +486,8 @@ test('admits Gizmo skill rows without cascading from rejected syntax', async () 
     const cortexRoot = path.join(repoRoot, '.cortex');
     const teamsRoot = path.join(cortexRoot, 'teams');
     const aiRoot = path.join(teamsRoot, 'ai');
-    const gizmoRoot = path.join(cortexRoot, 'gizmo-prime');
-    const gizmoSkillsRoot = path.join(gizmoRoot, 'dynamic-skills');
+    const gizmoRoot = path.join(cortexRoot, 'docs', 'spec');
+    const gizmoSkillsRoot = gizmoRoot;
     const skillsRoot = path.join(aiRoot, 'dynamic-skills');
     const gizmoSkillSlugs = [
       'team-oriented-development',
@@ -498,12 +498,7 @@ test('admits Gizmo skill rows without cascading from rejected syntax', async () 
       'issue-scope-management',
     ] as const;
     const gizmoGraphRows = gizmoSkillSlugs
-      .map((slug) => `- [${slug}](dynamic-skills/${slug}.md)`)
-      .join('\n');
-    const gizmoIndexRows = gizmoSkillSlugs
-      .map(
-        (slug) => `- [${slug}](../../../gizmo-prime/dynamic-skills/${slug}.md)`,
-      )
+      .map((slug) => `- [${slug}](${slug}.md)`)
       .join('\n');
     const directoryOptions = { recursive: true } as const;
     mkdirSync(skillsRoot, directoryOptions);
@@ -513,6 +508,11 @@ test('admits Gizmo skill rows without cascading from rejected syntax', async () 
     mkdirSync(path.join(teamsRoot, 'sre'), directoryOptions);
     mkdirSync(path.join(teamsRoot, 'web-dev'), directoryOptions);
     mkdirSync(gizmoRoot, directoryOptions);
+    mkdirSync(path.join(cortexRoot, 'docs', 'architecture'), directoryOptions);
+    writeFileSync(
+      path.join(cortexRoot, 'docs', 'architecture', 'index.md'),
+      '# Architecture\n',
+    );
     mkdirSync(path.join(cortexRoot, 'shared'), directoryOptions);
     writeFileSync(path.join(cortexRoot, 'AGENTS.md'), '# Agent Map\n');
     writeFileSync(
@@ -520,7 +520,8 @@ test('admits Gizmo skill rows without cascading from rejected syntax', async () 
       `# Index
 
 - [Agent Map](AGENTS.md)
-- [Gizmo](gizmo-prime/index.md)
+- [Project specifications](docs/spec/index.md)
+- [Project architecture](docs/architecture/index.md)
 - [AI](teams/ai/index.md)
 - [Development core](teams/dev-core/index.md)
 - [Security](teams/security/index.md)
@@ -558,7 +559,6 @@ ${gizmoGraphRows}
       `# Skills
 
 - [Rejected skill](bad.md)
-${gizmoIndexRows}
 `,
     );
     writeFileSync(
@@ -654,9 +654,9 @@ ${gizmoIndexRows}
         },
         {
           code: CortexContractFindingCode.MissingRuntimeDocument,
-          file: '.cortex/gizmo-prime/workflows/subagent-delegation.md',
+          file: '.cortex/docs/spec/subagent-delegation.md',
           message:
-            'Cortex runtime references a missing document: .cortex/gizmo-prime/workflows/subagent-delegation.md',
+            'Cortex runtime references a missing document: .cortex/docs/spec/subagent-delegation.md',
         },
       ],
       auditOk: false,

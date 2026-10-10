@@ -59,7 +59,7 @@ const COMMON_CONTEXT = [
   '.cortex/index.md',
   '.cortex/teams/ai/docs/architecture/refactoring-experts.md',
   '.cortex/teams/ai/workflows/structural-refactoring.md',
-  '.cortex/gizmo-prime/workflows/subagent-delegation.md',
+  '.cortex/docs/spec/subagent-delegation.md',
 ] as const;
 
 const CODE_REFACTORING_FILES = [

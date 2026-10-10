@@ -1,6 +1,6 @@
 import { TaskResourceClaim } from '../agent-workflow/domain.ts';
 
-import { TeamKey, TeamAuthorityCatalog } from '../team-agents/catalog.ts';
+import { TeamKey, TeamAuthorityCatalog } from '../project-context/catalog.ts';
 
 import {
   CORTEX_TEAM_WRITER_EXPERT,
@@ -9,7 +9,7 @@ import {
   ModuleDeliveryTaskKind,
 } from './domain.ts';
 
-import type { ModuleDeliveryNodeV2, ModuleDeliveryPlanV6 } from './domain.ts';
+import type { ModuleDeliveryNodeV2, ModuleDeliveryPlanV7 } from './domain.ts';
 
 export class CortexAuthoringPolicy {
   private constructor(
@@ -152,7 +152,7 @@ export class CortexAuthoringPolicy {
       sharedWriteClaims.length === node.resources.write.length &&
       node.resources.write.every(
         (claim) =>
-          claim.startsWith('.cortex/gizmo-prime/') &&
+          claim.startsWith('.cortex/docs/') &&
           !claim.includes('*') &&
           CortexAuthoringPolicy.isMarkdownFileClaim(claim) &&
           sharedWriteClaims.includes(claim),
@@ -180,7 +180,7 @@ export class CortexAuthoringPolicy {
     return (
       CortexAuthoringPolicy.isMarkdownFileClaim(claim) &&
       (claim.startsWith('.cortex/shared/') ||
-        (claim.startsWith('.cortex/gizmo-prime/') &&
+        (claim.startsWith('.cortex/docs/') &&
           node.team === TeamKey.Ai &&
           node.functionalOwner === ModuleDeliveryOwner.GizmoPrime &&
           node.acceptanceOwner === ModuleDeliveryOwner.GizmoPrime))
@@ -222,6 +222,6 @@ export type CortexWriteAuthorizationRequest = {
 };
 
 export type ParentOwnedExclusionsRequest = {
-  readonly plan: ModuleDeliveryPlanV6;
+  readonly plan: ModuleDeliveryPlanV7;
   readonly node: ModuleDeliveryNodeV2;
 };

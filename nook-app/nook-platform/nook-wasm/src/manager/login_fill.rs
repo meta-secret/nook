@@ -4,7 +4,7 @@ use super::NookVaultManager;
 use crate::NookError;
 use crate::types::{NookFocusedLoginFillCredential, NookFocusedLoginFillRequest};
 use crate::types::{NookLoginAccount, NookLoginFillCredential};
-use nook_core::{SecretId, SecretValue, WebsiteHost};
+use nook_core::{LoginHostMatch, LoginWebsiteHost, SecretId, SecretValue};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 struct RevealLoginRequest<'a> {
@@ -42,13 +42,12 @@ impl NookVaultManager {
         origin: &str,
     ) -> Result<Vec<NookLoginAccount>, NookError> {
         self.vault.crypto.get()?;
-        let origin = WebsiteHost::normalize(origin)?;
+        let origin = LoginWebsiteHost::try_from(origin)?;
         let accounts = self
             .vault
             .search_catalog
             .get()?
-            .matching_login_accounts(&origin)
-            .map_err(|error| NookError::Database(error.to_string()))?;
+            .matching_login_accounts(&origin);
         Ok(accounts.into_iter().map(NookLoginAccount::from).collect())
     }
 
@@ -60,49 +59,226 @@ impl NookVaultManager {
         let crypto = self.vault.crypto.get()?;
         let mut record =
             nook_core::VaultSecretSession::new(&self.vault.meta.secrets, crypto).decrypt(&id)?;
-        let match_result = match &record.data {
-            SecretValue::Login(login) => nook_core::LoginHostMatchRequest {
+        let result = match &record.data {
+            SecretValue::Login(login) => match (nook_core::LoginHostMatchRequest {
                 website_url: &login.website_url,
                 origin: request.origin,
-            }
-            .matches()
-            .map_err(|error| NookError::Database(error.to_string())),
-            _ => Ok(false),
-        };
-        let is_login = matches!(&record.data, SecretValue::Login(_));
-        let credential_parts = match (&record.data, &match_result) {
-            (SecretValue::Login(login), Ok(true)) => {
-                Some((login.username.clone(), login.password.clone()))
-            }
-            _ => None,
-        };
-        record.zeroize_plaintext();
-        match match_result {
-            Err(error) => Err(error),
-            Ok(true) => credential_parts
-                .map(|(username, password)| NookLoginFillCredential::new(username, password))
-                .ok_or_else(|| {
-                    NookError::Decryption("Selected secret is not a login credential.".to_owned())
-                }),
-            Ok(false) if is_login => Err(NookError::Decryption(
-                "Login does not match the requesting website origin.".to_owned(),
-            )),
-            Ok(false) => Err(NookError::Decryption(
+            })
+            .assess()
+            {
+                LoginHostMatch::Matched => Ok(NookLoginFillCredential::new(
+                    login.username.clone(),
+                    login.password.clone(),
+                )),
+                LoginHostMatch::Unmatched => Err(NookError::Decryption(
+                    "Login does not match the requesting website origin.".to_owned(),
+                )),
+            },
+            _ => Err(NookError::Decryption(
                 "Selected secret is not a login credential.".to_owned(),
             )),
-        }
+        };
+        record.zeroize_plaintext();
+        result
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::NookVaultManager;
+    use super::{NookVaultManager, RevealLoginRequest};
     use crate::NookError;
     use crate::manager::{SearchCatalogState, VaultCryptoState};
+    use crate::types::NookFocusedLoginFillRequest;
     use nook_core::{
-        LoginSecret, SecretId, SecretSearchCatalog, SecretType, SecretValue, StoredRecordPayload,
-        VaultCrypto, VaultKeys,
+        CredentialKind, FocusedLoginFillOrigin, LoginHostMatch, LoginSecret, SecretId,
+        SecretSearchCatalog, SecretType, SecretValue, StoredRecordPayload, VaultCrypto, VaultKeys,
+        WebsiteHost,
     };
+
+    struct LoginFillSiteCase {
+        saved: &'static str,
+        origin: &'static str,
+        expected: LoginHostMatch,
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn general_domain_policy_reaches_full_and_focused_reveal() -> anyhow::Result<()> {
+        for case in [
+            LoginFillSiteCase {
+                saved: "https://one.widget-tools.com/login",
+                origin: "https://two.widget-tools.com",
+                expected: LoginHostMatch::Matched,
+            },
+            LoginFillSiteCase {
+                saved: "https://one.sample.co.uk/login",
+                origin: "https://sample.co.uk",
+                expected: LoginHostMatch::Matched,
+            },
+            LoginFillSiteCase {
+                saved: "https://www.github.io/login",
+                origin: "https://github.io",
+                expected: LoginHostMatch::Unmatched,
+            },
+            LoginFillSiteCase {
+                saved: "https://www.github.io/login",
+                origin: "https://login.www.github.io",
+                expected: LoginHostMatch::Matched,
+            },
+            LoginFillSiteCase {
+                saved: "https://a.foo.ck/login",
+                origin: "https://b.foo.ck",
+                expected: LoginHostMatch::Unmatched,
+            },
+            LoginFillSiteCase {
+                saved: "https://a.www.ck/login",
+                origin: "https://b.www.ck",
+                expected: LoginHostMatch::Matched,
+            },
+            LoginFillSiteCase {
+                saved: "https://one.sample.nookunknown/login",
+                origin: "https://two.sample.nookunknown",
+                expected: LoginHostMatch::Matched,
+            },
+            LoginFillSiteCase {
+                saved: "https://microsoft.com/login",
+                origin: "https://login.microsoftonline.com",
+                expected: LoginHostMatch::Unmatched,
+            },
+        ] {
+            let keys = VaultKeys::generate()?;
+            let crypto = VaultCrypto::new(&keys.secrets_key)?;
+            let mut manager = NookVaultManager::new();
+            let value = SecretValue::Login(LoginSecret {
+                website_url: case.saved.to_owned(),
+                username: "synthetic-account".to_owned(),
+                password: "synthetic-password".to_owned(),
+                notes: String::new(),
+            });
+            let ciphertext = crypto.encrypt_value(value.to_yaml()?.as_str())?;
+            manager.vault.meta.secrets.insert(
+                SecretId::parse("secret_SMypl8K0w9a")?,
+                (
+                    SecretType::Login,
+                    StoredRecordPayload::from_age_armored(ciphertext),
+                ),
+            );
+            let mut catalog = SecretSearchCatalog::default();
+            catalog.reconcile(&manager.vault.meta.secrets, &crypto, &keys.secrets_key)?;
+            manager.vault.search_catalog = SearchCatalogState::Ready(catalog);
+            manager.vault.crypto = VaultCryptoState::Unlocked(crypto);
+            let accounts = manager.list_matching_login_accounts(case.origin)?;
+            let full = manager.reveal_matching_login_for_fill(&RevealLoginRequest {
+                secret_id: "secret_SMypl8K0w9a",
+                origin: case.origin,
+            });
+            let focused =
+                manager.reveal_matching_login_for_focused_fill(NookFocusedLoginFillRequest {
+                    secret_id: SecretId::parse("secret_SMypl8K0w9a")?,
+                    origin: FocusedLoginFillOrigin::try_from(case.origin.to_owned())?,
+                    credential: CredentialKind::CurrentPassword,
+                });
+            match case.expected {
+                LoginHostMatch::Matched => {
+                    assert_eq!(accounts.len(), 1);
+                    assert_eq!(full?.password(), "synthetic-password");
+                    assert_eq!(focused?.value(), "synthetic-password");
+                }
+                LoginHostMatch::Unmatched => {
+                    assert!(accounts.is_empty());
+                    assert!(full.is_err());
+                    assert!(focused.is_err());
+                }
+            }
+        }
+        Ok(())
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn chase_listing_and_selected_reveal_use_the_same_registrable_domain() -> anyhow::Result<()> {
+        for website_url in [
+            "https://chaseonline.chase.com/login",
+            "https://secure.chase.com/login",
+            "https://secure03ea.chase.com/login",
+            "https://secure05c.chase.com/login",
+            "https://SECURE06EA.CHASE.COM:443/login?next=account#signin",
+        ] {
+            let keys = VaultKeys::generate()?;
+            let crypto = VaultCrypto::new(&keys.secrets_key)?;
+            let mut manager = NookVaultManager::new();
+            let value = SecretValue::Login(LoginSecret {
+                website_url: website_url.to_owned(),
+                username: "synthetic-chase-account".to_owned(),
+                password: "synthetic-chase-password".to_owned(),
+                notes: "never-projected".to_owned(),
+            });
+            let ciphertext = crypto.encrypt_value(value.to_yaml()?.as_str())?;
+            manager.vault.meta.secrets.insert(
+                SecretId::parse("secret_SMypl8K0w9a")?,
+                (
+                    SecretType::Login,
+                    StoredRecordPayload::from_age_armored(ciphertext),
+                ),
+            );
+            let mut catalog = SecretSearchCatalog::default();
+            catalog.reconcile(&manager.vault.meta.secrets, &crypto, &keys.secrets_key)?;
+            manager.vault.search_catalog = SearchCatalogState::Ready(catalog);
+            manager.vault.crypto = VaultCryptoState::Unlocked(crypto);
+            for origin in ["https://www.chase.com", "https://secure.chase.com"] {
+                let accounts = manager.list_matching_login_accounts(origin)?;
+                let [account] = accounts.as_slice() else {
+                    anyhow::bail!("expected the selected synthetic Chase account");
+                };
+                assert_eq!(account.website_url(), website_url);
+                assert_eq!(
+                    account.website_host(),
+                    WebsiteHost::normalize(website_url)?.as_str()
+                );
+                let credential = manager.reveal_matching_login_for_fill(&RevealLoginRequest {
+                    secret_id: "secret_SMypl8K0w9a",
+                    origin,
+                })?;
+                assert_eq!(credential.username(), "synthetic-chase-account");
+                assert_eq!(credential.password(), "synthetic-chase-password");
+                let focused = manager.reveal_matching_login_for_focused_fill(
+                    NookFocusedLoginFillRequest {
+                        secret_id: SecretId::parse("secret_SMypl8K0w9a")?,
+                        origin: FocusedLoginFillOrigin::try_from(origin.to_owned())?,
+                        credential: CredentialKind::CurrentPassword,
+                    },
+                )?;
+                assert_eq!(focused.value(), "synthetic-chase-password");
+            }
+            for origin in [
+                "https://unlisted.example.com",
+                "https://nested.secure.evil.example",
+                "https://secure.chase.com.evil.example",
+                "https://evil-chase.com",
+                "https://unrelated.example",
+            ] {
+                assert!(manager.list_matching_login_accounts(origin)?.is_empty());
+                assert!(
+                    manager
+                        .reveal_matching_login_for_fill(&RevealLoginRequest {
+                            secret_id: "secret_SMypl8K0w9a",
+                            origin,
+                        })
+                        .is_err()
+                );
+                assert!(
+                    manager
+                        .reveal_matching_login_for_focused_fill(NookFocusedLoginFillRequest {
+                            secret_id: SecretId::parse("secret_SMypl8K0w9a")?,
+                            origin: FocusedLoginFillOrigin::try_from(origin.to_owned())?,
+                            credential: CredentialKind::CurrentPassword,
+                        })
+                        .is_err()
+                );
+            }
+        }
+        Ok(())
+    }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]

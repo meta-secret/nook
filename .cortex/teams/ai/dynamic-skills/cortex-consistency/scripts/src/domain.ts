@@ -24,14 +24,13 @@ export enum CortexConsistencyContractKind {
 
 export enum CortexContextAuthorityDocument {
   Root = '.cortex/AGENTS.md',
-  GizmoPrime = '.cortex/gizmo-prime/AGENTS.md',
   Shared = '.cortex/shared/AGENTS.md',
-  Ai = '.cortex/teams/ai/AGENTS.md',
-  DevelopmentCore = '.cortex/teams/dev-core/AGENTS.md',
-  Security = '.cortex/teams/security/AGENTS.md',
-  Sre = '.cortex/teams/sre/AGENTS.md',
-  WebDevelopment = '.cortex/teams/web-dev/AGENTS.md',
-  DeliveryPipeline = '.cortex/teams/delivery-pipeline/AGENTS.md',
+  Ai = '.cortex/teams/ai/docs/spec/functional-ownership.md',
+  DevelopmentCore = '.cortex/teams/dev-core/docs/spec/functional-ownership.md',
+  Security = '.cortex/teams/security/docs/spec/functional-ownership.md',
+  Sre = '.cortex/teams/sre/docs/spec/functional-ownership.md',
+  WebDevelopment = '.cortex/teams/web-dev/docs/spec/functional-ownership.md',
+  DeliveryPipeline = '.cortex/teams/delivery-pipeline/docs/spec/functional-ownership.md',
 }
 export const CORTEX_CONSISTENCY_DOCUMENT_LIMIT = 10_000;
 export const CORTEX_CONSISTENCY_REFERENCE_LIMIT = 10_000;

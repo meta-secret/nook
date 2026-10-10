@@ -2,7 +2,7 @@
 
 ## Agent delivery applicability
 
-Follow the [dev delivery contract](../../../../.cortex/gizmo-prime/architecture/dev-delivery.md) for
+Follow the [dev delivery contract](../../../../.cortex/docs/architecture/dev-delivery.md) for
 feature compilation and the manually run Feature Gizmo's slow PR cycle.
 Use the root [delivery and validation policy](../../../../.cortex/AGENTS.md#delivery-and-validation)
 to decide whether a bounded local test, check, or E2E diagnostic may run.

@@ -4,7 +4,7 @@ Load only the category that owns the assigned operational functionality.
 
 ## Team contract
 
-- [SRE team agent contract](AGENTS.md)
+- [SRE ownership and specifications](docs/spec/index.md)
 
 ## Platform architecture
 
@@ -28,17 +28,3 @@ action being performed.
 - [CI pipeline](workflows/ci-pipeline.md)
 - [Quality and release](workflows/quality.md)
 - [Remote execution](workflows/remote-execution.md)
-
-## Repository specifications
-
-- [SRE specification catalog](docs/spec/index.md)
-
-## Team topology
-
-- [SRE Team Gizmo](gizmo/index.md) coordinates bounded SRE-team mechanics.
-- [Provisioning and CI/CD adapter](provisioning/index.md) supplies Nook
-  provider and hosted-execution context to upstream operations.
-- [Cloud-native specialist](cloud-native/index.md) handles packeted cloud-native work.
-- [Docker cache specialist contract](docker-cache-specialist/AGENTS.md) and
-  [index](docker-cache-specialist/index.md) handle packeted
-  Docker, BuildKit, and compiler-cache performance work.

@@ -4,7 +4,7 @@ Load only the category that owns the assigned browser-facing functionality.
 
 ## Team contract
 
-- [Web development team agent contract](AGENTS.md)
+- [Web Development ownership and specifications](docs/spec/index.md)
 
 ## Product specifications
 
@@ -39,9 +39,3 @@ when the selected authority links them as read-only engineering policy.
 ## Frontend references
 
 - [Web specifications](../../../nook-app/nook-web/.cortex/docs/spec/index.md)
-
-## Team topology
-
-- [Web Development Team Gizmo](gizmo/index.md) coordinates bounded Web Development mechanics.
-- [TypeScript specialist](typescript-specialist/index.md) handles packeted TypeScript implementation work.
-- [Svelte specialist](svelte-specialist/index.md) handles packeted Svelte presentation and interaction work.

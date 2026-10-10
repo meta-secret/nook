@@ -32,7 +32,7 @@ fn is_valid_application_root(cortex_root: &Path, path: &Path) -> bool {
     let (slug, canonical_owner) = match parts.as_slice() {
         [owner, dynamic, slug, scripts] => (
             slug.as_ref(),
-            matches!(owner.as_ref(), "gizmo" | "shared")
+            matches!(owner.as_ref(), "shared")
                 && dynamic == "dynamic-skills"
                 && scripts == "scripts",
         ),

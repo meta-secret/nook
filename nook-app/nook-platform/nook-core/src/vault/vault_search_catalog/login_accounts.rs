@@ -1,9 +1,7 @@
 //! Origin-matched login labels from the authenticated unlocked metadata catalog.
 
 use super::SecretSearchCatalog;
-use crate::{
-    LoginHostMatchRequest, LoginSiteHostsError, SecretId, SecretListItemData, WebsiteHost,
-};
+use crate::{LoginHostMatch, LoginWebsiteHost, SecretId, SecretListItemData, WebsiteHost};
 
 #[derive(Debug, Clone, PartialEq, Eq, derive_more::From)]
 pub struct LoginAccountUsername(String);
@@ -34,22 +32,11 @@ pub struct LoginAccountMetadata {
     pub website_host: WebsiteHost,
 }
 
-enum LoginAccountMatch {
-    Matched,
-    Unmatched,
-}
-
 impl SecretSearchCatalog {
-    /// Applies the same host/family policy as selected-record reveal without
+    /// Applies the same registrable-domain policy as selected-record reveal without
     /// opening any full record. Catalog reconciliation authenticates these rows.
-    #[expect(
-        clippy::match_bool,
-        reason = "native-bool boundary conversion into named match outcomes required by branching-and-exhaustive-matching"
-    )]
-    pub fn matching_login_accounts(
-        &self,
-        origin: &WebsiteHost,
-    ) -> Result<Vec<LoginAccountMetadata>, LoginSiteHostsError> {
+    #[must_use]
+    pub fn matching_login_accounts(&self, origin: &LoginWebsiteHost) -> Vec<LoginAccountMetadata> {
         let mut accounts = Vec::new();
         for entry in self.entries.values() {
             let SecretListItemData::Login {
@@ -62,18 +49,12 @@ impl SecretSearchCatalog {
             let Ok(website_host) = WebsiteHost::normalize(website_url) else {
                 continue;
             };
-            let matching = match (LoginHostMatchRequest {
-                website_url,
-                origin: origin.as_str(),
-            })
-            .matches()?
-            {
-                true => LoginAccountMatch::Matched,
-                false => LoginAccountMatch::Unmatched,
+            let Ok(login_host) = LoginWebsiteHost::try_from(website_url.as_str()) else {
+                continue;
             };
-            match matching {
-                LoginAccountMatch::Unmatched => {}
-                LoginAccountMatch::Matched => accounts.push(LoginAccountMetadata {
+            match login_host.matches(origin) {
+                LoginHostMatch::Unmatched => {}
+                LoginHostMatch::Matched => accounts.push(LoginAccountMetadata {
                     secret_id: entry.item.id.clone(),
                     username: LoginAccountUsername(username.clone()),
                     website_url: LoginAccountWebsiteUrl(website_url.clone()),
@@ -81,7 +62,7 @@ impl SecretSearchCatalog {
                 }),
             }
         }
-        Ok(accounts)
+        accounts
     }
 }
 
@@ -99,6 +80,23 @@ mod tests {
     }
 
     impl LoginCatalogFixture {
+        fn assert_chase_urls(accounts: &[LoginAccountMetadata]) {
+            for expected_url in [
+                "https://chaseonline.chase.com/login",
+                "https://secure.chase.com/login",
+                "https://secure03ea.chase.com/login",
+                "https://secure05c.chase.com/login",
+                "https://SECURE06EA.CHASE.COM:443/login?next=account#signin",
+            ] {
+                let expected_url = LoginAccountWebsiteUrl::from(expected_url.to_owned());
+                assert!(
+                    accounts
+                        .iter()
+                        .any(|account| account.website_url == expected_url)
+                );
+            }
+        }
+
         fn vk_login() -> anyhow::Result<Self> {
             Self::new()?.with_item(SecretListItem {
                 id: SecretId::from_vault_record("secret_vk_login"),
@@ -131,17 +129,71 @@ mod tests {
     }
 
     #[test]
-    fn vk_login_is_listed_on_explicit_identity_host() -> anyhow::Result<()> {
+    fn chase_login_listing_preserves_saved_urls_across_registrable_domain() -> anyhow::Result<()> {
+        let mut fixture = LoginCatalogFixture::new()?;
+        for website_url in [
+            "https://chaseonline.chase.com/login",
+            "https://secure.chase.com/login",
+            "https://secure03ea.chase.com/login",
+            "https://secure05c.chase.com/login",
+            "https://SECURE06EA.CHASE.COM:443/login?next=account#signin",
+            "https://unlisted.example.com/login",
+            "https://nested.secure.evil.example/login",
+            "https://chase.com.evil.example/login",
+        ] {
+            fixture = fixture.with_item(SecretListItem {
+                id: SecretId::from_vault_record(website_url),
+                data: SecretListItemData::Login {
+                    website_url: website_url.to_owned(),
+                    username: "synthetic-chase-account".to_owned(),
+                },
+            })?;
+        }
+        for origin in [
+            "https://www.chase.com",
+            "https://secure05c.chase.com",
+            "https://arbitrary.chase.com",
+        ] {
+            let accounts = fixture
+                .catalog
+                .matching_login_accounts(&LoginWebsiteHost::try_from(origin)?);
+            assert_eq!(accounts.len(), 5);
+            LoginCatalogFixture::assert_chase_urls(&accounts);
+            for account in accounts {
+                let saved_url = String::from(account.website_url.clone());
+                assert_eq!(account.secret_id, SecretId::from_vault_record(&saved_url));
+                assert_eq!(account.website_host, WebsiteHost::normalize(&saved_url)?);
+                assert_eq!(String::from(account.username), "synthetic-chase-account");
+            }
+        }
+        for origin in [
+            "https://evil-chase.com",
+            "https://secure.chase.com.evil.org",
+            "https://unrelated.example",
+            "https://secure07ea.example.org",
+        ] {
+            assert!(
+                fixture
+                    .catalog
+                    .matching_login_accounts(&LoginWebsiteHost::try_from(origin)?)
+                    .is_empty()
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn vk_login_is_listed_on_same_domain_identity_host() -> anyhow::Result<()> {
         let fixture = LoginCatalogFixture::vk_login()?.with_item(SecretListItem {
             id: SecretId::from_vault_record("secret_vk_unlisted"),
             data: SecretListItemData::Login {
-                website_url: "https://arbitrary.vk.ru/login".to_owned(),
+                website_url: "https://arbitrary.example.com/login".to_owned(),
                 username: "unlisted-account".to_owned(),
             },
         })?;
         let accounts = fixture
             .catalog
-            .matching_login_accounts(&WebsiteHost::normalize("https://id.vk.ru/auth")?)?;
+            .matching_login_accounts(&LoginWebsiteHost::try_from("https://id.vk.ru/auth")?);
         let [account] = accounts.as_slice() else {
             anyhow::bail!("expected only the saved VK brand-host account");
         };
@@ -159,11 +211,11 @@ mod tests {
     }
 
     #[test]
-    fn vk_login_listing_rejects_hosts_outside_explicit_family() -> anyhow::Result<()> {
+    fn vk_login_listing_rejects_hosts_outside_registrable_domain() -> anyhow::Result<()> {
         let fixture = LoginCatalogFixture::vk_login()?;
         for origin in [
-            "https://arbitrary.vk.ru/auth",
-            "https://nested.id.vk.ru/auth",
+            "https://arbitrary.example.com/auth",
+            "https://nested.id.example.com/auth",
             "https://id.vk.ru.evil.example/auth",
             "https://evil-vk.ru/auth",
             "https://vk.com/auth",
@@ -172,7 +224,7 @@ mod tests {
             assert!(
                 fixture
                     .catalog
-                    .matching_login_accounts(&WebsiteHost::normalize(origin)?)?
+                    .matching_login_accounts(&LoginWebsiteHost::try_from(origin)?)
                     .is_empty(),
                 "unexpected VK login listed for {origin}"
             );
@@ -187,16 +239,16 @@ mod tests {
             fixture = fixture.with_item(SecretListItem {
                 id: SecretId::from_vault_record(&format!("secret_listing{index:05}")),
                 data: SecretListItemData::Login {
-                    website_url: format!("https://site-{index}.example.com/login"),
+                    website_url: format!("https://site-{index}.example/login"),
                     username: format!("account-{index}"),
                 },
             })?;
         }
         // There is no VaultCrypto, encrypted record map, or password here. All
         // twenty repeated requests operate on the existing authenticated metadata.
-        let origin = WebsiteHost::normalize("https://site-987.example.com/account")?;
+        let origin = LoginWebsiteHost::try_from("https://site-987.example/account")?;
         for _ in 0..20 {
-            let accounts = fixture.catalog.matching_login_accounts(&origin)?;
+            let accounts = fixture.catalog.matching_login_accounts(&origin);
             assert_eq!(accounts.len(), 1);
             let account = accounts
                 .first()
@@ -211,7 +263,7 @@ mod tests {
     }
 
     #[test]
-    fn catalog_listing_preserves_host_family_labels_and_type_boundary() -> anyhow::Result<()> {
+    fn catalog_listing_preserves_domain_labels_and_type_boundary() -> anyhow::Result<()> {
         let fixture = LoginCatalogFixture::new()?
             .with_item(SecretListItem {
                 id: SecretId::from_vault_record("secret_microsoft"),
@@ -228,9 +280,7 @@ mod tests {
             })?;
         let accounts = fixture
             .catalog
-            .matching_login_accounts(&WebsiteHost::normalize(
-                "https://login.microsoftonline.com",
-            )?)?;
+            .matching_login_accounts(&LoginWebsiteHost::try_from("https://login.microsoft.com")?);
         assert_eq!(accounts.len(), 1);
         let account = accounts
             .first()
@@ -244,7 +294,7 @@ mod tests {
         assert!(
             fixture
                 .catalog
-                .matching_login_accounts(&WebsiteHost::normalize("https://other.example")?)?
+                .matching_login_accounts(&LoginWebsiteHost::try_from("https://other.example")?)
                 .is_empty()
         );
         Ok(())

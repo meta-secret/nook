@@ -192,9 +192,9 @@ pub use secret_view::{
     ApiKeySecretForm, AuthenticatorBackupCodeCount, AuthenticatorGroupKeyRequest,
     AuthenticatorSecretForm, CredentialKind, CreditCardSecretForm, FileAttachmentSecretForm,
     FocusedLoginFillCredential, FocusedLoginFillError, FocusedLoginFillOrigin,
-    FocusedLoginFillProjection, LoginHostMatchRequest, LoginSecretForm, LoginSiteHostsError,
-    SecretFormFields, SecretGroupKey, SecretListItem, SecretListItemData, SecureNoteSecretForm,
-    SeedPhraseSecretForm, SeedPhraseWordCount, WebsiteHost, WebsiteHostError,
+    FocusedLoginFillProjection, LoginHostMatch, LoginHostMatchRequest, LoginSecretForm,
+    LoginWebsiteHost, SecretFormFields, SecretGroupKey, SecretListItem, SecretListItemData,
+    SecureNoteSecretForm, SeedPhraseSecretForm, SeedPhraseWordCount, WebsiteHost, WebsiteHostError,
 };
 pub use vault_security::{VaultSecurityAssessment, VaultSecurityRecommendations};
 pub use vault_sentinel_onboarding::{

@@ -113,14 +113,14 @@ test('accepts a referenced imported policy', () => {
   expect(
     CortexConsistencyContract.from(
       CortexConsistencyAuditScenario.request([
-        '../web-dev/dynamic-skills/ui-design-skills.md',
+        '../../../web-dev/dynamic-skills/ui-design-skills.md',
       ]),
     ).execute(),
   ).toEqual([]);
 });
 
 test('rejects missing and retired native delegation runtime bindings', () => {
-  const workflow = '.cortex/gizmo-prime/workflows/subagent-delegation.md';
+  const workflow = '.cortex/docs/spec/subagent-delegation.md';
   const compileRequest: AuditCortexContractsArgs = {
     registry: {
       contexts: [],
@@ -171,7 +171,7 @@ test('rejects missing and retired native delegation runtime bindings', () => {
 });
 
 test('accepts the static skill host for native delegation rendering', () => {
-  const workflow = '.cortex/gizmo-prime/workflows/subagent-delegation.md';
+  const workflow = '.cortex/docs/spec/subagent-delegation.md';
   const compileRequest: AuditCortexContractsArgs = {
     registry: {
       contexts: [],
@@ -197,7 +197,7 @@ test('accepts the static skill host for native delegation rendering', () => {
 });
 
 test('rejects a missing registered runtime document', () => {
-  const workflow = '.cortex/gizmo-prime/workflows/subagent-delegation.md';
+  const workflow = '.cortex/docs/spec/subagent-delegation.md';
   const compileRequest: AuditCortexContractsArgs = {
     registry: {
       contexts: [],
@@ -223,7 +223,7 @@ test('rejects a missing registered runtime document', () => {
 });
 
 test('requires an exact runtime command prefix boundary', () => {
-  const workflow = '.cortex/gizmo-prime/workflows/subagent-delegation.md';
+  const workflow = '.cortex/docs/spec/subagent-delegation.md';
   const compileRequest: AuditCortexContractsArgs = {
     registry: {
       contexts: [],

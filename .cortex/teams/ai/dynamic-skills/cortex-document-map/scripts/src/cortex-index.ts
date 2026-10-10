@@ -285,41 +285,8 @@ export class CortexNavigationExtraction {
   }
 }
 
-export const CORTEX_CONTEXT_ROUTER_MARKDOWN = `# Nook Cortex Index
-
-## Required entry
-
-Follow the root routing contract for the entry sequence. It
-requires the circuit breaker first and a verified per-worktree bootstrap
-through the integration contract before using this graph to select Nook
-context.
-
-- [Circuit breaker](CIRCUIT-BREAKER.md)
-- [Root routing contract](AGENTS.md)
-- [Meta-Cortex integration and provenance](meta-cortex-integration.md)
-- [Installed Meta-Cortex entry point](../.meta-cortex/AGENTS.md)
-- [Upstream Team Gizmo](../.meta-cortex/teams/gizmo-team/agents/gizmo/AGENTS.md)
-- [Upstream local feature integration](../.meta-cortex/teams/delivery-team/agents/integration-agent/AGENTS.md)
-
-## Coordination
-
-- [Prime, single Team Gizmo, and delivery](gizmo-prime/index.md)
-
-## Project-local context
-
-- [Nook application architecture](../nook-app/.cortex/docs/architecture/index.md)
-- [Nook application specifications](../nook-app/.cortex/docs/spec/index.md)
-
-## Product and operational contexts
-
-- [AI](teams/ai/index.md)
-- [Development Core](teams/dev-core/index.md)
-- [Security](teams/security/index.md)
-- [SRE](teams/sre/index.md)
-- [Web Development](teams/web-dev/index.md)
-- [Delivery Pipeline](teams/delivery-pipeline/index.md)
-- [Shared knowledge](shared/index.md)
-`;
+export const CORTEX_CONTEXT_ROUTER_MARKDOWN =
+  '# Nook Cortex Index\n\n## Required entry\n\nFollow the root routing contract for the entry sequence. It\nrequires the circuit breaker first and a verified per-worktree bootstrap\nthrough the integration contract before using this graph to select Nook\ncontext.\n\n- [Circuit breaker](CIRCUIT-BREAKER.md)\n- [Root routing contract](AGENTS.md)\n- [Meta-Cortex integration and provenance](meta-cortex-integration.md)\n- [Installed Meta-Cortex entry point](../.meta-cortex/AGENTS.md)\n- [Upstream Team Gizmo](../.meta-cortex/teams/gizmo-team/agents/gizmo/AGENTS.md)\n- [Upstream local feature integration](../.meta-cortex/teams/delivery-team/agents/integration-agent/AGENTS.md)\n\n## Coordination\n\n- [Prime, single Team Gizmo, and delivery](docs/spec/index.md)\n- [Coordination and delivery architecture](docs/architecture/index.md)\n\n## Project-local context\n\n- [Nook application architecture](../nook-app/.cortex/docs/architecture/index.md)\n- [Nook application specifications](../nook-app/.cortex/docs/spec/index.md)\n\n## Product and operational contexts\n\n- [AI](teams/ai/index.md)\n- [Development Core](teams/dev-core/index.md)\n- [Security](teams/security/index.md)\n- [SRE](teams/sre/index.md)\n- [Web Development](teams/web-dev/index.md)\n- [Delivery Pipeline](teams/delivery-pipeline/index.md)\n- [Shared knowledge](shared/index.md)\n';
 
 export class CortexNavigationStripping {
   constructor(private readonly request: StripDocumentNavigationArgs) {}

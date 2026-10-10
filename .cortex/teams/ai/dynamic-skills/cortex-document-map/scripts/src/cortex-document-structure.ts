@@ -8,7 +8,8 @@ import { fromMarkdown } from 'mdast-util-from-markdown';
 import type { Heading, Link, Parent, Root, RootContent } from 'mdast';
 
 export const CORTEX_OWNER_GRAPH_PATHS = [
-  '.cortex/gizmo-prime/index.md',
+  '.cortex/docs/spec/index.md',
+  '.cortex/docs/architecture/index.md',
   '.cortex/teams/ai/index.md',
   '.cortex/teams/dev-core/index.md',
   '.cortex/teams/security/index.md',
@@ -20,60 +21,12 @@ export const CORTEX_OWNER_GRAPH_PATHS = [
 
 const CORTEX_TEAM_PATTERN =
   /^(?:ai|dev-core|security|sre|web-dev|delivery-pipeline)$/u;
-const CORTEX_TEAM_CHILDREN = new Map<string, readonly string[]>([
-  ['ai', ['gizmo', 'loom-specialist', 'cortex-specialist']],
-  ['dev-core', ['gizmo', 'rust-core-developer', 'rust-auth2-developer']],
-  [
-    'security',
-    ['gizmo', 'cryptography-specialist', 'security-review-specialist'],
-  ],
-  ['sre', ['gizmo', 'provisioning', 'cloud-native']],
-  ['web-dev', ['gizmo', 'typescript-specialist', 'svelte-specialist']],
-  ['delivery-pipeline', ['gizmo', 'pr-lifecycle']],
-]);
-const CORTEX_CHILD_DIRECTORY_PATTERN =
-  /^\.cortex\/teams\/([^/]+)\/([^/]+)(?:\/|$)/u;
-
-type CortexChildDirectory = {
-  readonly team: string;
-  readonly child: string;
-};
-
 /** Owns the meaning and ownership decisions for one Cortex document path. */
 export class CortexDocumentPath {
   constructor(private readonly filePath: string) {}
 
   value(): string {
     return this.filePath;
-  }
-
-  isChildGraphPath(): boolean {
-    return (
-      this.filePath.endsWith('/index.md') &&
-      this.canonicalChildDirectory() !== false
-    );
-  }
-
-  childGraphParentPath(): string | false {
-    const child = this.canonicalChildDirectory();
-    return child ? `.cortex/teams/${child.team}/index.md` : false;
-  }
-
-  childGraphTeam(): string | false {
-    const child = this.canonicalChildDirectory();
-    return child && this.filePath.endsWith('/index.md') ? child.team : false;
-  }
-
-  childTeam(): string | false {
-    const child = this.canonicalChildDirectory();
-    return child ? child.team : false;
-  }
-
-  isChildAuthorityPath(): boolean {
-    return (
-      this.filePath.endsWith('/AGENTS.md') &&
-      this.canonicalChildDirectory() !== false
-    );
   }
 
   isProjectContextPath(): boolean {
@@ -84,6 +37,7 @@ export class CortexDocumentPath {
     return (
       this.isProjectContextPath() ||
       this.filePath.startsWith('.cortex/shared/architecture/') ||
+      /^\.cortex\/docs\/(?:spec|architecture)\//u.test(this.filePath) ||
       /^\.cortex\/(?:teams\/[^/]+|shared)\/docs\/(?:spec|architecture)\//u.test(
         this.filePath,
       )
@@ -98,7 +52,6 @@ export class CortexDocumentPath {
     return (
       this.filePath === '.cortex/index.md' ||
       CORTEX_OWNER_GRAPH_PATHS.some((path) => path === this.filePath) ||
-      this.isChildGraphPath() ||
       this.isScopedGraphPath()
     );
   }
@@ -114,10 +67,8 @@ export class CortexDocumentPath {
       case false:
         break;
     }
-    const childDirectory = this.childDirectoryPath();
-    if (childDirectory !== false) return `${childDirectory}/index.md`;
-    if (this.filePath.startsWith('.cortex/gizmo-prime/')) {
-      return '.cortex/gizmo-prime/index.md';
+    if (this.filePath.startsWith('.cortex/docs/')) {
+      return `${path.posix.dirname(this.filePath)}/index.md`;
     }
     if (this.filePath.startsWith('.cortex/shared/')) {
       return '.cortex/shared/index.md';
@@ -137,32 +88,11 @@ export class CortexDocumentPath {
       case false:
         break;
     }
-    if (this.filePath.startsWith('.cortex/gizmo-prime/')) return 'gizmo-prime';
+    if (this.filePath.startsWith('.cortex/docs/')) return 'project';
     if (this.filePath.startsWith('.cortex/shared/')) return 'shared';
-    const childTeam = this.childGraphTeam();
-    if (childTeam !== false) return childTeam;
     const teamMatch = /^\.cortex\/teams\/([^/]+)\//u.exec(this.filePath);
     const team = teamMatch?.[1];
     return team && CORTEX_TEAM_PATTERN.test(team) ? team : false;
-  }
-
-  ownsChildGraphPath(indexedPath: string): boolean {
-    const graphDirectory = path.posix.dirname(this.filePath);
-    return indexedPath.startsWith(`${graphDirectory}/`);
-  }
-
-  private childDirectoryPath(): string | false {
-    const child = this.canonicalChildDirectory();
-    return child ? `.cortex/teams/${child.team}/${child.child}` : false;
-  }
-
-  private canonicalChildDirectory(): CortexChildDirectory | false {
-    const match = CORTEX_CHILD_DIRECTORY_PATTERN.exec(this.filePath);
-    const team = match?.[1];
-    const child = match?.[2];
-    if (!team || !child || !CORTEX_TEAM_PATTERN.test(team)) return false;
-    if (!CORTEX_TEAM_CHILDREN.get(team)?.includes(child)) return false;
-    return { team, child };
   }
 }
 
@@ -174,9 +104,7 @@ export class CortexChildGraphPathCollection {
     return [...this.paths]
       .filter((filePath) => {
         const documentPath = new CortexDocumentPath(filePath);
-        return (
-          documentPath.isChildGraphPath() || documentPath.isScopedGraphPath()
-        );
+        return documentPath.isScopedGraphPath();
       })
       .sort();
   }
@@ -206,36 +134,7 @@ export class CortexChildGraphReference {
       case false:
         break;
     }
-    if (!this.graphPath.isChildGraphPath()) return true;
-    if (this.indexedPath.isCircuitBreakerPath()) return true;
-    if (this.graphPath.ownsChildGraphPath(this.indexedPath.value())) {
-      return true;
-    }
-    const indexedPath = this.indexedPath.value();
-    if (
-      indexedPath.startsWith('.cortex/gizmo-prime/') ||
-      indexedPath.startsWith('.cortex/shared/')
-    ) {
-      return true;
-    }
-    if (indexedPath === this.graphPath.childGraphParentPath()) return true;
-    const parentTeamPath = this.graphPath.childGraphParentPath();
-    if (
-      parentTeamPath !== false &&
-      indexedPath === parentTeamPath.replace('/index.md', '/AGENTS.md')
-    ) {
-      return true;
-    }
-    const graphTeam = this.graphPath.childGraphTeam();
-    const indexedTeam = this.indexedPath.childTeam();
-    if (
-      graphTeam !== false &&
-      indexedTeam === graphTeam &&
-      this.indexedPath.isChildAuthorityPath()
-    ) {
-      return true;
-    }
-    return false;
+    return true;
   }
 
   isReadOnly(): boolean {
@@ -245,12 +144,7 @@ export class CortexChildGraphReference {
       case false:
         break;
     }
-    if (!this.graphPath.isChildGraphPath()) return false;
-    if (this.indexedPath.isCircuitBreakerPath()) return true;
-    if (this.graphPath.ownsChildGraphPath(this.indexedPath.value())) {
-      return false;
-    }
-    return this.isAllowed();
+    return false;
   }
 }
 

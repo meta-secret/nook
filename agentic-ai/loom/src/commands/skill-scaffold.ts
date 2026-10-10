@@ -150,9 +150,6 @@ export class SkillOwnerDirectory {
     if (args.skillOwner === SkillOwner.Shared) {
       return path.join(args.cortexRoot, 'shared', 'dynamic-skills');
     }
-    if (args.skillOwner === SkillOwner.Gizmo) {
-      return path.join(args.cortexRoot, 'gizmo-prime', 'dynamic-skills');
-    }
     return path.join(
       args.cortexRoot,
       'teams',
@@ -168,7 +165,6 @@ export class SkillCardLocation {
     const args = this.request;
     const owners = [
       SkillOwner.Shared,
-      SkillOwner.Gizmo,
       SkillOwner.Ai,
       SkillOwner.DevCore,
       SkillOwner.Security,

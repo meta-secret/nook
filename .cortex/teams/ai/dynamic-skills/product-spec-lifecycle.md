@@ -45,7 +45,7 @@ Integrate product specifications into every phase of agent work.
 Before planning or editing code for any product feature:
 
 1. Select the responsible team through
-   [Engineering team ownership](../../../gizmo-prime/architecture/team-ownership.md).
+   [Engineering team ownership](../../../docs/architecture/team-ownership.md).
 2. Search that team's index and the global [product catalog](../../../shared/docs/spec/index.md).
 3. Read the owning specification for the feature, item type, or workflow.
 4. Understand existing invariants, user flows, and acceptance criteria.

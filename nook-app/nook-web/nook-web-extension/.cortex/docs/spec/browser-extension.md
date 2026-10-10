@@ -268,8 +268,8 @@ Rust/WASM.
 Username detection uses autocomplete tokens plus identity heuristics
 (`loginfmt`, `login_email`, account/email labels).
 It still ignores newsletter-style email fields.
-Credential matching may use an explicit related-login host allowlist.
-A saved `microsoft.com` login can fill on `login.microsoftonline.com`.
+Credential matching follows the [general login website matching](#general-login-website-matching)
+policy for every site.
 It performs explicit login selection/fill/submit and TOTP selection/fill.
 It shows a verification-wait state only after a site form was actually
 submitted.
@@ -606,8 +606,48 @@ CI does **not** hit live third-party login pages. Coverage is data-driven:
    an existing template; Vitest + extension e2e over **each unique template**
    (not one e2e visit per catalog id).
 
-Related host credential matching remains in
-[`login_site_hosts.json`](../../../../../nook-platform/nook-core/data/login_site_hosts.json).
+The catalog selects detection fixtures only. Credential eligibility follows
+[general login website matching](#general-login-website-matching) independently
+of catalog membership.
+
+### General login website matching
+
+Login matching applies to any site without a site allowlist or brand-family
+catalog. Rust owns the shared policy used by login metadata listing, full and
+focused credential reveal, and save/update candidate planning.
+Matching eligibility still requires explicit user selection before filling.
+
+- Compare the full canonical website hosts first. Preserve `www` and private
+  tenant labels in matching identity; display-host formatting is separate.
+- If the canonical hosts differ, match only when both have the same
+  registrable domain under the maintained Public Suffix List (PSL).
+- Apply ICANN and PRIVATE rules, including wildcard and exception rules.
+  Unknown suffixes use the standard PSL default wildcard rule.
+- Hosts without a registrable domain, including single-label hosts such as
+  `localhost` and IP addresses, match only by exact canonical host equality.
+- Apply the comparison in both directions across root, subdomain, and sibling
+  hosts. Do not admit aliases across different registrable domains.
+
+- **Prohibited:** require `example.com` to appear in a popular-site catalog
+  before offering its saved login on `login.example.com`, or offer that login
+  only when the saved host is the root.
+- **Required:** match `example.com`, `login.example.com`, and
+  `account.example.com` in either direction. Match `a.example.unknown` with
+  `b.example.unknown` through the default PSL rule. Match `localhost` or an IP
+  address only with the same canonical host.
+
+The registrable-domain boundary keeps unrelated private tenants separate.
+An exact host match remains eligible even when no registrable domain exists.
+Host comparison retains the current parsed-host behavior regardless of scheme;
+this requirement does not expand accepted URL schemes.
+
+- **Prohibited:** merge `a.github.io` with `b.github.io`, or strip `www` before
+  comparing `www.github.io` with `github.io`. Treat `microsoft.com` and
+  `login.microsoftonline.com`, or `vk.com` and `vk.ru`, as one login site.
+- **Required:** keep those pairs ineligible. PRIVATE PSL rules preserve tenant
+  boundaries; different registrable domains receive no brand exceptions.
+  Metadata listing, credential reveal, and save/update planning use that same
+  decision.
 
 ### In-Page HUD
 

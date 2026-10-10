@@ -2,8 +2,8 @@
 
 ## Delivery and ownership
 
-Use [mission delivery](../../../gizmo-prime/workflows/mission-delivery.md) and the
-[dev contract](../../../gizmo-prime/architecture/dev-delivery.md). Use the
+Use [mission delivery](../../../docs/spec/mission-delivery.md) and the
+[dev contract](../../../docs/architecture/dev-delivery.md). Use the
 upstream integration agent for local workspaces, branch integration, and cleanup.
 AI workers do not publish or promote branches.
 

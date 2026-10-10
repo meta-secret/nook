@@ -4,7 +4,7 @@ Load only the category that owns the assigned portable product functionality.
 
 ## Team contract
 
-- [Development core team agent contract](AGENTS.md)
+- [Development Core ownership and specifications](docs/spec/index.md)
 
 ## Product specifications
 
@@ -32,9 +32,3 @@ Select local architecture for the affected Rust or WASM contract.
 ## Reference
 
 - [Rust platform specifications](../../../nook-app/nook-platform/.cortex/docs/spec/index.md)
-
-## Team topology
-
-- [Development Core Team Gizmo](gizmo/index.md) coordinates bounded Development Core mechanics.
-- [Rust Core Developer](rust-core-developer/index.md) handles packeted portable Rust core work.
-- [Rust Auth2 Developer](rust-auth2-developer/index.md) handles packeted portable Rust Auth2 work.

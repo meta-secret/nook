@@ -11,7 +11,7 @@ It does not replace package responsibilities in
 
 Universal worker behavior follows the root
 [team worker contract](../../../../AGENTS.md#team-worker-contract) and
-[subagent delegation](../../../../gizmo-prime/workflows/subagent-delegation.md).
+[subagent delegation](../../../../docs/spec/subagent-delegation.md).
 
 ## Engineering team routing
 
@@ -239,10 +239,10 @@ It identifies:
   cards. The task-selected snapshot includes the security authority when the
   security skill is required.
 - **Base context:** Every invocation receives these authorities.
-  - `.cortex/teams/web-dev/AGENTS.md`
+  - `.cortex/teams/web-dev/docs/spec/functional-ownership.md`
   - `.cortex/teams/web-dev/index.md`
   - `.cortex/teams/ai/dynamic-skills/module-expert.md`
-  - `.cortex/gizmo-prime/workflows/module-oriented-development.md`
+  - `.cortex/docs/spec/module-oriented-development.md`
 - **Allowed product authority catalog:** The task selects only the authorities
   that own its assigned functionality.
   - `nook-app/nook-platform/nook-core/.cortex/docs/spec/authenticator-items.md`

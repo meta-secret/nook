@@ -2,7 +2,7 @@
 
 ## Agent delivery applicability
 
-Follow the [dev delivery contract](../../../gizmo-prime/architecture/dev-delivery.md) for
+Follow the [dev delivery contract](../../../docs/architecture/dev-delivery.md) for
 feature compilation and the manually run Feature Gizmo's slow PR cycle.
 Local test, check, and E2E diagnostics follow the root
 [delivery and validation policy](../../../AGENTS.md#delivery-and-validation).
@@ -15,7 +15,7 @@ System of record for how Nook validates changes in GitHub Actions. Agents must u
 
 Nook Workbench stores development issues only. Issue changes do not create Nook
 branches, PRs, product validation, or recursive Main builds. See
-[issues](../../../gizmo-prime/workflows/issues.md).
+[issues](../../../docs/spec/issues.md).
 
 ## Central CI entrypoint
 

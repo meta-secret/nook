@@ -20,7 +20,7 @@ import type {
   ModuleDeliveryExecutionPrecedence,
   ModuleDeliveryEvidenceSynthesisNodeV2,
   ModuleDeliveryNodeV2,
-  ModuleDeliveryPlanV6,
+  ModuleDeliveryPlanV7,
   ModuleDeliveryPlanValidation,
   ModuleDeliveryWriteNodeV2,
 } from '../../src/module-delivery/index.ts';
@@ -28,9 +28,9 @@ import type {
 import {
   TeamKey,
   TeamAuthorityCatalog,
-} from '../../src/team-agents/catalog.ts';
+} from '../../src/project-context/catalog.ts';
 
-import { CORTEX_AUTHORING_SKILL_PATHS } from '../../src/team-agents/context.ts';
+import { CORTEX_AUTHORING_SKILL_PATHS } from '../../src/project-context/context.ts';
 
 export class ModuleDeliveryCortexPlanValidationScenario {
   private constructor(
@@ -77,21 +77,23 @@ export class ModuleDeliveryCortexPlanValidationScenario {
       workspace: {
         kind: ModuleDeliveryWorkspaceKind.WorkerWorktree,
         workerRole:
-          request.team === TeamKey.Sre ? 'cloud-native' : 'cortex-specialist',
-        workerBranch: `codex/child/${request.team === TeamKey.Sre ? 'sre/cloud-native' : 'ai/cortex-specialist'}/module-delivery-test/${request.taskId}-cortex-authoring-work`,
+          request.team === TeamKey.Sre
+            ? 'kubernetes-specialist'
+            : 'tech-writer',
+        workerBranch: `codex/child/${request.team === TeamKey.Sre ? 'sre/kubernetes-specialist' : 'ai/tech-writer'}/module-delivery-test/${request.taskId}-cortex-authoring-work`,
         worktreePath: `/tmp/nook-module-delivery/${request.taskId}`,
       },
     };
   }
 
-  static plan(nodes: readonly ModuleDeliveryNodeV2[]): ModuleDeliveryPlanV6 {
+  static plan(nodes: readonly ModuleDeliveryNodeV2[]): ModuleDeliveryPlanV7 {
     return new ModuleDeliveryCortexPlanValidationScenario(nodes).execute();
   }
 
-  private execute(): ModuleDeliveryPlanV6 {
+  private execute(): ModuleDeliveryPlanV7 {
     const nodes = this.request;
     return {
-      version: 6,
+      version: 7,
       baseBranch: 'origin/main',
       featureBranch: 'codex/module-delivery-test',
       generation: 1,
@@ -153,9 +155,9 @@ export class ModuleDeliveryCortexPlanValidationScenario {
       parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
       workspace: {
         ...node.workspace,
-        workerRole: 'rust-core-developer',
+        workerRole: 'rust-dev',
         workerBranch:
-          'codex/child/dev-core/rust-core-developer/module-delivery-test/dev-core-write-cortex-authoring-work',
+          'codex/child/dev-core/rust-dev/module-delivery-test/dev-core-write-cortex-authoring-work',
       },
     };
   }
@@ -209,7 +211,7 @@ describe('Cortex module-delivery plan validation', () => {
     expect(result.status).toBe(ModuleDeliveryValidationStatus.Accepted);
     if (result.status !== ModuleDeliveryValidationStatus.Accepted) return;
     expect(result.plan.nodes[0]?.resources.read).toEqual([
-      '.cortex/teams/sre/AGENTS.md',
+      '.cortex/teams/sre/docs/spec/functional-ownership.md',
       '.cortex/teams/sre/index.md',
       ...CORTEX_AUTHORING_SKILL_PATHS,
       SRE_SKILL,
@@ -217,7 +219,7 @@ describe('Cortex module-delivery plan validation', () => {
   });
 
   test('admits only an exact Gizmo grant owned by Gizmo Prime and written by AI', () => {
-    const claim = '.cortex/gizmo-prime/workflows/subagent-delegation.md';
+    const claim = '.cortex/docs/spec/subagent-delegation.md';
     const gizmo: ModuleDeliveryWriteNodeV2 = {
       ...ModuleDeliveryCortexPlanValidationScenario.cortexNode({
         taskId: 'gizmo-workflow',
@@ -237,21 +239,21 @@ describe('Cortex module-delivery plan validation', () => {
       { ...gizmo, acceptanceOwner: TeamKey.Ai },
       {
         ...gizmo,
-        resources: { ...gizmo.resources, write: ['.cortex/gizmo-prime/**'] },
+        resources: { ...gizmo.resources, write: ['.cortex/docs/**'] },
         cortexAuthoring: {
           selectedSkillPaths: [],
-          sharedWriteClaims: ['.cortex/gizmo-prime/**'],
+          sharedWriteClaims: ['.cortex/docs/**'],
         },
       },
       {
         ...gizmo,
         resources: {
           ...gizmo.resources,
-          write: ['.cortex/gizmo-prime/workflows'],
+          write: ['.cortex/docs/workflows'],
         },
         cortexAuthoring: {
           selectedSkillPaths: [],
-          sharedWriteClaims: ['.cortex/gizmo-prime/workflows'],
+          sharedWriteClaims: ['.cortex/docs/workflows'],
         },
       },
     ])

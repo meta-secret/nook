@@ -1,6 +1,6 @@
 //! Minimum plaintext projection for an explicit focused-field fill.
 
-use super::{LoginHostMatchRequest, LoginSiteHostsError};
+use super::{LoginHostMatch, LoginHostMatchRequest};
 use crate::{SecretRecord, SecretValue};
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -60,19 +60,12 @@ pub enum FocusedLoginFillError {
     NotLogin,
     #[error("login does not match the requesting website origin")]
     OriginMismatch,
-    #[error("login host policy is unavailable")]
-    HostPolicy(#[from] LoginSiteHostsError),
 }
 
 pub struct FocusedLoginFillProjection<'a> {
     pub record: SecretRecord,
     pub origin: &'a FocusedLoginFillOrigin,
     pub credential: CredentialKind,
-}
-
-enum LoginOriginAdmission {
-    Matched,
-    Mismatched,
 }
 
 impl Drop for FocusedLoginFillProjection<'_> {
@@ -92,20 +85,15 @@ impl FocusedLoginFillProjection<'_> {
         self.project_matching_login()
     }
 
-    fn origin_admission(&self) -> Result<LoginOriginAdmission, FocusedLoginFillError> {
+    fn origin_admission(&self) -> Result<LoginHostMatch, FocusedLoginFillError> {
         let SecretValue::Login(login) = &self.record.data else {
             return Err(FocusedLoginFillError::NotLogin);
         };
-        let matches = (LoginHostMatchRequest {
+        Ok((LoginHostMatchRequest {
             website_url: &login.website_url,
             origin: self.origin.as_str(),
         })
-        .matches()?;
-        Ok(if matches {
-            LoginOriginAdmission::Matched
-        } else {
-            LoginOriginAdmission::Mismatched
-        })
+        .assess())
     }
 
     fn project_matching_login(&self) -> Result<FocusedLoginFillCredential, FocusedLoginFillError> {
@@ -113,8 +101,8 @@ impl FocusedLoginFillProjection<'_> {
             return Err(FocusedLoginFillError::NotLogin);
         };
         match self.origin_admission()? {
-            LoginOriginAdmission::Mismatched => Err(FocusedLoginFillError::OriginMismatch),
-            LoginOriginAdmission::Matched => Ok(FocusedLoginFillCredential {
+            LoginHostMatch::Unmatched => Err(FocusedLoginFillError::OriginMismatch),
+            LoginHostMatch::Matched => Ok(FocusedLoginFillCredential {
                 value: Zeroizing::new(match self.credential {
                     CredentialKind::Username => login.username.clone(),
                     CredentialKind::CurrentPassword => login.password.clone(),
@@ -130,6 +118,25 @@ mod tests {
     use crate::{LoginSecret, SecretId, SecretType};
 
     struct LoginFixture;
+
+    struct ChaseLoginFixture {
+        website_url: crate::LoginAccountWebsiteUrl,
+    }
+
+    impl ChaseLoginFixture {
+        fn record(&self) -> SecretRecord {
+            SecretRecord {
+                id: SecretId::from_vault_record("secret_chase_login"),
+                secret_type: SecretType::Login,
+                data: SecretValue::Login(LoginSecret {
+                    website_url: String::from(self.website_url.clone()),
+                    username: "synthetic-chase-account".to_owned(),
+                    password: "synthetic-chase-password".to_owned(),
+                    notes: "never-projected".to_owned(),
+                }),
+            }
+        }
+    }
 
     impl LoginFixture {
         fn vk_record() -> SecretRecord {
@@ -160,7 +167,53 @@ mod tests {
     }
 
     #[test]
-    fn vk_current_password_reveal_accepts_explicit_identity_host() -> anyhow::Result<()> {
+    fn chase_focused_reveal_admits_saved_hosts_and_siblings_only() -> anyhow::Result<()> {
+        for website_url in [
+            "https://chaseonline.chase.com/login",
+            "https://secure.chase.com/login",
+            "https://secure03ea.chase.com/login",
+            "https://secure05c.chase.com/login",
+            "https://SECURE06EA.CHASE.COM:443/login?next=account#signin",
+        ] {
+            let fixture = ChaseLoginFixture {
+                website_url: crate::LoginAccountWebsiteUrl::from(website_url.to_owned()),
+            };
+            for origin in ["https://www.chase.com", "https://secure.chase.com"] {
+                let origin = FocusedLoginFillOrigin::try_from(origin.to_owned())?;
+                let mut password = FocusedLoginFillProjection {
+                    record: fixture.record(),
+                    origin: &origin,
+                    credential: CredentialKind::CurrentPassword,
+                }
+                .reveal()?;
+                assert_eq!(password.as_str(), "synthetic-chase-password");
+                password.zeroize();
+                assert_eq!(password.as_str(), "");
+            }
+            for origin in [
+                "https://evil-chase.com",
+                "https://secure.chase.com.evil.example",
+                "https://nested.secure.evil.example",
+                "https://unlisted.example.com",
+                "https://unrelated.example",
+            ] {
+                let origin = FocusedLoginFillOrigin::try_from(origin.to_owned())?;
+                assert!(matches!(
+                    FocusedLoginFillProjection {
+                        record: fixture.record(),
+                        origin: &origin,
+                        credential: CredentialKind::CurrentPassword,
+                    }
+                    .reveal(),
+                    Err(FocusedLoginFillError::OriginMismatch)
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn vk_current_password_reveal_accepts_same_domain_identity_host() -> anyhow::Result<()> {
         for origin in [
             "https://id.vk.ru/auth",
             "https://vk.ru/login",
@@ -181,10 +234,10 @@ mod tests {
     }
 
     #[test]
-    fn vk_current_password_reveal_rejects_hosts_outside_explicit_family() -> anyhow::Result<()> {
+    fn vk_current_password_reveal_rejects_hosts_outside_registrable_domain() -> anyhow::Result<()> {
         for origin in [
-            "https://arbitrary.vk.ru/auth",
-            "https://nested.id.vk.ru/auth",
+            "https://arbitrary.example.com/auth",
+            "https://nested.id.example.com/auth",
             "https://id.vk.ru.evil.example/auth",
             "https://evil-vk.ru/auth",
             "https://vk.com/auth",
@@ -206,8 +259,7 @@ mod tests {
 
     #[test]
     fn projects_only_requested_value_on_same_or_related_host() -> anyhow::Result<()> {
-        let origin =
-            FocusedLoginFillOrigin::try_from("https://login.microsoftonline.com".to_owned())?;
+        let origin = FocusedLoginFillOrigin::try_from("https://login.microsoft.com".to_owned())?;
         let username = FocusedLoginFillProjection {
             record: LoginFixture::record(),
             origin: &origin,
