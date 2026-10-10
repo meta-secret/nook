@@ -99,7 +99,7 @@ class GeneralLoginCompositionScenario {
     try {
       const firstRecords = yield* Effect.tryPromise(() =>
         this.manager.add_secret(
-          'general-login-first',
+          'secret_General0001',
           SecretType.Login,
           build_secret_yaml(first),
         ),
@@ -107,7 +107,7 @@ class GeneralLoginCompositionScenario {
       for (const record of firstRecords) record.free()
       const selectedRecords = yield* Effect.tryPromise(() =>
         this.manager.add_secret(
-          'general-login-selected',
+          'secret_General0002',
           SecretType.Login,
           build_secret_yaml(selected),
         ),
@@ -115,7 +115,7 @@ class GeneralLoginCompositionScenario {
       for (const record of selectedRecords) record.free()
       const tenantRecords = yield* Effect.tryPromise(() =>
         this.manager.add_secret(
-          'general-login-tenant',
+          'secret_General0003',
           SecretType.Login,
           build_secret_yaml(tenant),
         ),
@@ -137,13 +137,13 @@ class GeneralLoginCompositionScenario {
       try {
         const identities = accounts.map((account) => account.secretId).sort()
         const expected: string[] = [
-          'general-login-first',
-          'general-login-selected',
+          'secret_General0001',
+          'secret_General0002',
         ]
         expect(identities).toEqual(expected)
         expect(reveal).toHaveBeenCalledTimes(0)
         // An explicit picker choice carries only the selected opaque identity.
-        const chosenIdentity = 'general-login-selected'
+        const chosenIdentity = 'secret_General0002'
         const credential = yield* Effect.tryPromise(() =>
           this.manager.reveal_website_login_for_fill(
             chosenIdentity,
@@ -166,7 +166,7 @@ class GeneralLoginCompositionScenario {
       )
       try {
         expect(sameTenant).toHaveLength(1)
-        expect(sameTenant[0]?.secretId).toBe('general-login-tenant')
+        expect(sameTenant[0]?.secretId).toBe('secret_General0003')
         expect(sameTenant[0]?.websiteHost).toBe('www.github.io')
       } finally {
         for (const account of sameTenant) account.free()
@@ -183,7 +183,7 @@ class GeneralLoginCompositionScenario {
       yield* Effect.tryPromise(() =>
         rejects(
           this.manager.reveal_website_login_for_fill(
-            'general-login-tenant',
+            'secret_General0003',
             'https://other.github.io',
           ),
           Error,
