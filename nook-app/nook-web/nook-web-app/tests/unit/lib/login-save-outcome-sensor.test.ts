@@ -1,5 +1,6 @@
 import type { LoginSaveEvidenceKind } from '../../../../nook-web-extension/src/lib/login-save-observation-codecs'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { Schema } from 'effect'
 import { handleCompanionWasmMessage } from '../../../../nook-web-extension/src/offscreen/session-companion-wasm-operations'
 import {
   LoginSaveNavigationMode,
@@ -157,13 +158,9 @@ describe('submitted login fresh save evidence', () => {
   test('connected credential nodes remain authentication when disabled, readonly or shown', async () => {
     document.body.innerHTML =
       '<input id="submitted" type="password" autocomplete="current-password">'
-    const field = document.querySelector<HTMLInputElement>('#submitted')
-    switch (field instanceof HTMLInputElement) {
-      case true:
-        break
-      case false:
-        throw new Error('expected credential fixture')
-    }
+    const field = Schema.decodeUnknownSync(Schema.instanceOf(HTMLInputElement))(
+      document.querySelector('#submitted'),
+    )
     const fixture = new LoginSaveOutcomeFixture()
     const sensor = fixture.sensor([field])
     field.disabled = true

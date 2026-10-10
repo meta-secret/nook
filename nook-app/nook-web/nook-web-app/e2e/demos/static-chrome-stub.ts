@@ -242,10 +242,16 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     constructor(private readonly message: RuntimeMessage) {}
     response(): DemoSubmittedLoginOfferResponse {
       const capture = this.message.payload?.capture
-      switch (true) {
-        case typeof capture === 'object':
+      switch (typeof capture) {
+        case 'object':
           break
-        case true:
+        case 'string':
+        case 'number':
+        case 'bigint':
+        case 'boolean':
+        case 'symbol':
+        case 'undefined':
+        case 'function':
           return { kind: DemoRuntimeAvailabilityKind.Unavailable }
       }
       const offer: StagedSaveOffer = {

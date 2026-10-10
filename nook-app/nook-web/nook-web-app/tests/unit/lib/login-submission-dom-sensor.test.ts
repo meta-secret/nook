@@ -1,9 +1,7 @@
 import type { LoginCredentials } from '../../../../nook-web-shared/src/extension/password-forms'
-import type {
-  LoginSubmissionIntent,
-  AuthenticationCeremonyContextObservation,
-} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import type { LoginSubmissionIntent } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { afterEach, describe, expect, test } from 'vitest'
+import { Schema } from 'effect'
 import {
   LoginSubmissionDomObservationKind,
   LoginSubmissionDomSensor,
@@ -39,13 +37,9 @@ class LoginSubmissionDomFixture {
     selector,
     event,
   }: LoginSubmissionDomDispatch): LoginSubmissionDomObservation {
-    const target = document.querySelector(selector)
-    switch (target instanceof HTMLElement) {
-      case false:
-        throw new Error('expected submission event target')
-      case true:
-        break
-    }
+    const target = Schema.decodeUnknownSync(Schema.instanceOf(HTMLElement))(
+      document.querySelector(selector),
+    )
     const trust: PropertyDescriptor = { value: true }
     Object.defineProperty(event, 'isTrusted', trust)
     const options: AddEventListenerOptions = { once: true }
@@ -203,26 +197,14 @@ describe('submitted login DOM snapshot', () => {
         throw new Error('expected submission snapshot')
     }
     document.querySelector('main')?.replaceChildren()
-    const expectedIntent: Pick<LoginSubmissionIntent, 'control_label'> & {
-      context: {
-        ceremony: {
-          authenticationContext: Pick<
-            AuthenticationCeremonyContextObservation,
-            'formIdentity'
-          >
-        }
-      }
-    } = {
+    const expectedIntent: Pick<LoginSubmissionIntent, 'control_label'> = {
       control_label: 'Create account',
-      context: {
-        ceremony: {
-          authenticationContext: {
-            formIdentity: expect.stringContaining('Create account'),
-          },
-        },
-      },
     }
     expect(observation.snapshot.intent()).toMatchObject(expectedIntent)
+    expect(
+      observation.snapshot.intent().context.ceremony.authenticationContext
+        ?.formIdentity,
+    ).toContain('Create account')
     expect(observation.snapshot.mutationOccurred()).toBe(true)
     observation.snapshot.dispose()
   })

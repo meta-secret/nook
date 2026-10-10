@@ -21,7 +21,7 @@ import {
   LoginCredentialsLookupKind,
   type LoginCredentials,
 } from '../../../../nook-web-shared/src/extension/password-forms'
-import { Effect } from 'effect'
+import { Effect, Schema } from 'effect'
 import { SessionOperationFailureKind } from '../../../../nook-web-extension/src/lib/session-operation-queue'
 import type { LoginSubmissionDomSnapshot } from '../../../../nook-web-extension/src/content/autofill/login-submission-dom-sensor'
 import { ExtensionSessionMessageType } from '../../../../nook-web-extension/src/lib/extension-session-message-type'
@@ -122,17 +122,12 @@ class LoginSaveCaptureFixture {
       let credentials: LoginCredentials
       switch (decision.kind) {
         case 'SubmittedLogin': {
-          const username = values[decision.username_field_index.value]
-          const password = values[decision.password_field_index.value]
-          switch (
-            typeof username === 'string' &&
-            typeof password === 'string'
-          ) {
-            case true:
-              break
-            case false:
-              throw new Error('captured values absent')
-          }
+          const username = Schema.decodeUnknownSync(Schema.String)(
+            values[decision.username_field_index.value],
+          )
+          const password = Schema.decodeUnknownSync(Schema.String)(
+            values[decision.password_field_index.value],
+          )
           credentials = { username, password }
           break
         }
@@ -157,13 +152,9 @@ class LoginSaveCaptureFixture {
     }
   }
   async submit(): Promise<void> {
-    const form = document.querySelector('form')
-    switch (form instanceof HTMLFormElement) {
-      case false:
-        throw new Error('expected submitted form')
-      case true:
-        break
-    }
+    const form = Schema.decodeUnknownSync(Schema.instanceOf(HTMLFormElement))(
+      document.querySelector('form'),
+    )
     const options: SubmitEventInit = { bubbles: true, cancelable: true }
     const submitter = form.querySelector('button')
     switch (submitter instanceof HTMLButtonElement) {
@@ -192,13 +183,9 @@ class LoginSaveCaptureFixture {
     await operation
   }
   async enter(selector: string): Promise<void> {
-    const field = document.querySelector(selector)
-    switch (true) {
-      case field instanceof HTMLInputElement:
-        break
-      case true:
-        throw new Error('expected Enter target')
-    }
+    const field = Schema.decodeUnknownSync(Schema.instanceOf(HTMLInputElement))(
+      document.querySelector(selector),
+    )
     const options: KeyboardEventInit = { key: 'Enter', bubbles: true }
     const event = new KeyboardEvent('keydown', options)
     const trust: PropertyDescriptor = { value: true }
@@ -219,13 +206,9 @@ class LoginSaveCaptureFixture {
     await operation
   }
   async click(selector: string): Promise<void> {
-    const control = document.querySelector(selector)
-    switch (true) {
-      case control instanceof HTMLElement:
-        break
-      case true:
-        throw new Error('expected Click target')
-    }
+    const control = Schema.decodeUnknownSync(Schema.instanceOf(HTMLElement))(
+      document.querySelector(selector),
+    )
     const options: MouseEventInit = { bubbles: true }
     const event = new MouseEvent('click', options)
     const trust: PropertyDescriptor = { value: true }
@@ -270,13 +253,9 @@ class LoginCaptureFailureFixture {
     }
   }
   submit(): Effect.Effect<void, LoginSubmissionCaptureFailure> {
-    const form = document.querySelector('form')
-    switch (true) {
-      case form instanceof HTMLFormElement:
-        break
-      case true:
-        throw new Error('expected submitted form')
-    }
+    const form = Schema.decodeUnknownSync(Schema.instanceOf(HTMLFormElement))(
+      document.querySelector('form'),
+    )
     const options: SubmitEventInit = { bubbles: true }
     const event = new SubmitEvent('submit', options)
     const trust: PropertyDescriptor = { value: true }
@@ -439,7 +418,13 @@ describe('submitted login capture through the typed classifier', () => {
     switch (typeof staged) {
       case 'object':
         break
-      default:
+      case 'string':
+      case 'number':
+      case 'bigint':
+      case 'boolean':
+      case 'symbol':
+      case 'undefined':
+      case 'function':
         throw new Error('expected owned staged login')
     }
     expect(staged.credentials.password).toBe('  exact password  ')
