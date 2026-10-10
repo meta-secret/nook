@@ -58,24 +58,24 @@ const REPLICATION_ROOT = 'nook-app/nook-platform/nook-replication';
 
 const MODULE_EXPERT_SHARED_CONTEXT_PATHS = [
   '.cortex/teams/ai/dynamic-skills/module-expert.md',
-  '.cortex/gizmo-prime/workflows/module-oriented-development.md',
+  '.cortex/docs/spec/module-oriented-development.md',
 ] as const;
 
 export const MODULE_EXPERT_CANONICAL_CONTEXT_PATHS = [
-  '.cortex/teams/dev-core/AGENTS.md',
+  '.cortex/teams/dev-core/docs/spec/functional-ownership.md',
   '.cortex/teams/dev-core/index.md',
   ...MODULE_EXPERT_SHARED_CONTEXT_PATHS,
 ] as const;
 
 export const INTERNAL_API_EXPERT_CANONICAL_CONTEXT_PATHS = [
-  '.cortex/teams/ai/AGENTS.md',
+  '.cortex/teams/ai/docs/spec/functional-ownership.md',
   '.cortex/teams/ai/index.md',
   '.cortex/teams/ai/dynamic-skills/internal-api-expert.md',
   ...MODULE_EXPERT_SHARED_CONTEXT_PATHS,
 ] as const;
 
 export const WEB_EXPERT_CANONICAL_CONTEXT_PATHS = [
-  '.cortex/teams/web-dev/AGENTS.md',
+  '.cortex/teams/web-dev/docs/spec/functional-ownership.md',
   '.cortex/teams/web-dev/index.md',
   ...MODULE_EXPERT_SHARED_CONTEXT_PATHS,
 ] as const;
@@ -87,7 +87,7 @@ export const WEB_EXPERT_SKILL_PATHS = [
 ] as const;
 
 export const WEB_EXPERT_SKILL_AUTHORITY_PATHS = [
-  '.cortex/teams/web-dev/AGENTS.md',
+  '.cortex/teams/web-dev/docs/spec/functional-ownership.md',
   EXPERT_AUTHORITY_PATH,
   ...MODULE_EXPERT_SHARED_CONTEXT_PATHS,
 ] as const;

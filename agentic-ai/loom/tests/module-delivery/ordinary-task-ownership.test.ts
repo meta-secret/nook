@@ -15,7 +15,7 @@ import {
 } from '../../src/module-delivery/index.ts';
 
 import type {
-  ModuleDeliveryPlanV6,
+  ModuleDeliveryPlanV7,
   ModuleDeliveryWriteNodeV2,
 } from '../../src/module-delivery/index.ts';
 
@@ -76,15 +76,15 @@ export class ModuleDeliveryOrdinaryTaskOwnershipScenario {
   private workerNamespace(team: TeamKey): string {
     switch (team) {
       case TeamKey.Ai:
-        return 'ai/loom-specialist';
+        return 'ai/typescript-dev';
       case TeamKey.DevelopmentCore:
-        return 'dev-core/rust-core-developer';
+        return 'dev-core/rust-dev';
       case TeamKey.Security:
-        return 'security/security-review-specialist';
+        return 'security/security-agent';
       case TeamKey.Sre:
-        return 'sre/cloud-native';
+        return 'sre/kubernetes-specialist';
       case TeamKey.WebDevelopment:
-        return 'web-dev/typescript-specialist';
+        return 'web-dev/typescript-dev';
       case TeamKey.DeliveryPipeline:
         return 'delivery-pipeline/pr-lifecycle';
     }
@@ -95,7 +95,7 @@ export class ModuleDeliveryOrdinaryTaskOwnershipScenario {
   }
 
   static accepted(node: ModuleDeliveryWriteNodeV2): boolean {
-    const plan: ModuleDeliveryPlanV6 = {
+    const plan: ModuleDeliveryPlanV7 = {
       version: MODULE_DELIVERY_PLAN_VERSION,
       baseBranch: 'origin/main',
       featureBranch: 'codex/module-delivery-test',

@@ -255,7 +255,7 @@ export class CortexConsistencyContract {
         'nook-app/nook-web/nook-web-extension/.cortex/docs/',
         CortexContractTeam.WebDevelopment,
       ],
-      ['.cortex/gizmo-prime/', CortexContractTeam.GizmoPrime],
+      ['.cortex/docs/', CortexContractTeam.GizmoPrime],
       ['.cortex/shared/', CortexContractTeam.Shared],
       ['.cortex/teams/ai/', CortexContractTeam.Ai],
       ['.cortex/teams/dev-core/', CortexContractTeam.DevelopmentCore],

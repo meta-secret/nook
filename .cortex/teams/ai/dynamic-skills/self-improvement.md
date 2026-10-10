@@ -81,7 +81,7 @@ deterministic work, unclear ownership, or recurring friction.
 
 Follow upstream [Context Engineering](../../../../.meta-cortex/teams/ai-team/agents/tech-writer/skills/context-engineering/SKILL.md)
 for generic instruction classification; use Nook's
-[subagent-delegation contract](../../../gizmo-prime/workflows/subagent-delegation.md)
+[subagent-delegation contract](../../../docs/spec/subagent-delegation.md)
 for bounded delegation and shared-edit ownership.
 
 ### Loom extraction procedure

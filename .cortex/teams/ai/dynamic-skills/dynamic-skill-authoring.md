@@ -35,7 +35,7 @@ When the user invokes `/dynamic-skill` or explains a reusable mistake:
 
 1. Inspect the referenced code.
 2. Select the responsible team through
-   [Engineering team ownership](../../../gizmo-prime/architecture/team-ownership.md).
+   [Engineering team ownership](../../../docs/architecture/team-ownership.md).
 3. Consult upstream skill composition first. Improve generic practice upstream
    instead of creating another local language or agent rule. Capture Nook-only
    requirements as a concise supplement in the owner's

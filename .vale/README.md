@@ -176,8 +176,8 @@ future Vale upgrade can be evaluated without repeating lossy prototypes.
     compilation, not prose style validation.
 
 - **Not a Vale rule — team authority source markers**
-  - **Files:** `../agentic-ai/loom/src/team-agents/audit.ts` and
-    `../agentic-ai/loom/tests/team-agents/audit.test.ts`.
+  - **Files:** `../agentic-ai/loom/src/project-context/audit.ts` and
+    `../agentic-ai/loom/tests/project-context/audit.test.ts`.
   - **Contract:** The root Cortex authority must retain exact H2 headings and
     multiline literal policy markers; the Gizmo authority must retain its exact
     literal policy markers alongside the typed team catalog.

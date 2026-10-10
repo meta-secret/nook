@@ -22,20 +22,14 @@ Every Nook navigation document is named `index.md`. Existing subject catalogs
 keep that same filename. The document-map tooling uses root, owner, and child
 indexes directly, without alternate navigation filenames.
 
-Nook has one root router, a Gizmo Prime graph, six engineering and operational
-owner graphs, shared knowledge, and project-local document owners.
+Nook has one root router, project specifications and architecture, six
+functional owner graphs, shared knowledge, and project-local document owners.
 
-- The root graph selects Gizmo Prime, Delivery Pipeline, AI, development core,
-  security, SRE, web development, or shared context.
-- The Delivery Pipeline graph routes its direct `gizmo` and `pr-lifecycle`
-  child contexts.
-- The Delivery Pipeline `pr-lifecycle` child owns bounded feature PR mechanics.
-- Gizmo Prime owns end-to-end feature delivery.
-- The six engineering and operational owner graphs index documents owned by
-  their teams: Delivery Pipeline, AI, development core, security, SRE, and web
-  development.
-- One Team Gizmo coordinates the six Nook contexts under Prime. Team-specific
-  Gizmo paths adapt those contexts for the single coordinator.
+- The root graph selects project requirements and functional owner catalogs.
+- Project documents supply Nook requirements to upstream Prime and Team Gizmo.
+- The six owner graphs describe Delivery Pipeline, AI, development core,
+  security, SRE, and web development context.
+- All executable roles and coordinator behavior come from Meta-Cortex.
 - The shared graph indexes genuinely cross-team documents.
 - Each Nook document belongs to one owning graph. The root graph does not index
   child documents directly, and one child graph does not index another
@@ -74,8 +68,7 @@ When adding or moving a Nook document:
 3. Remove obsolete ownership links and update direct callers when a path changes.
 4. Update the central [Nook skill registry](../index.md) when a skill card is
    added, moved, or retired.
-5. Keep Delivery Pipeline's `gizmo` and `pr-lifecycle` children beneath its
-   team graph.
+5. Place delivery specifications under the Delivery Pipeline specification catalog.
 
 Use the supplied context and the upstream
 [assignment-context rules](../../../../../.meta-cortex/teams/AGENTS.md#assignment-context)

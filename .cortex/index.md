@@ -16,7 +16,8 @@ context.
 
 ## Coordination
 
-- [Prime, single Team Gizmo, and delivery](gizmo-prime/index.md)
+- [Prime, single Team Gizmo, and delivery](docs/spec/index.md)
+- [Coordination and delivery architecture](docs/architecture/index.md)
 
 ## Project-local context
 

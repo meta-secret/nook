@@ -8,7 +8,7 @@ import {
 } from './codec-fields.ts';
 import { ModuleDeliveryPlanDigest } from './codec-digest.ts';
 import { ModuleDeliveryPlanNodeCodec } from './codec-node.ts';
-import { ModulePlanV6RootField } from './codec-schema.ts';
+import { ModulePlanV7RootField } from './codec-schema.ts';
 import type { RejectedModulePlanRequest } from './codec-schema.ts';
 import {
   MAX_MODULE_DELIVERY_EDGE_CONTRACTS,
@@ -27,7 +27,7 @@ import {
 } from './evidence-limits.ts';
 import type {
   CompatibleModuleDeliveryPlanDecode,
-  ModuleDeliveryPlanV6,
+  ModuleDeliveryPlanV7,
   ModuleDeliveryIssue,
   RejectedCompatibleModuleDeliveryPlan,
 } from './domain.ts';
@@ -193,7 +193,7 @@ export class ModuleDeliveryPlanSchema {
     throw new ModuleDeliveryPlanTransportLimit(request);
   }
 
-  static moduleDeliveryPlanDigest(plan: ModuleDeliveryPlanV6): string {
+  static moduleDeliveryPlanDigest(plan: ModuleDeliveryPlanV7): string {
     return ModuleDeliveryPlanDigest.moduleDeliveryPlanDigest(plan);
   }
 
@@ -209,7 +209,7 @@ export class ModuleDeliveryPlanSchema {
       ModuleDeliveryPlanSchema.fail(
         '$.version: only canonical plan version 6 is accepted.',
       );
-    fields.requireExactKeys(ModulePlanV6RootField);
+    fields.requireExactKeys(ModulePlanV7RootField);
     const parentJoinRequest = {
       record: fields.recordField('parentJoin'),
       path: '$.parentJoin',
@@ -238,7 +238,7 @@ export class ModuleDeliveryPlanSchema {
         '$.featureBranch: feature branch is not canonical.',
       );
     }
-    const currentPlan: ModuleDeliveryPlanV6 = {
+    const currentPlan: ModuleDeliveryPlanV7 = {
       version: MODULE_DELIVERY_PLAN_VERSION,
       baseBranch: fields.string('baseBranch'),
       generation,

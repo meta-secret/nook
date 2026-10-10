@@ -106,7 +106,7 @@ export class CortexKnowledgeGraphPath {
         break;
     }
     if (relativePath === 'index.md') return CortexMarkdownRole.KnowledgeGraph;
-    return /^(?:gizmo-prime|shared|teams\/(?:ai|dev-core|security|sre|web-dev))\/index\.md$/u.test(
+    return /^(?:shared|teams\/(?:ai|dev-core|security|sre|web-dev))\/index\.md$/u.test(
       relativePath,
     )
       ? CortexMarkdownRole.KnowledgeGraph
