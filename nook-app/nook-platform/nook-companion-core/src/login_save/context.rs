@@ -23,6 +23,13 @@ pub struct LoginSaveTabId(i32);
 
 impl TryFrom<i32> for LoginSaveTabId {
     type Error = LoginSaveContextError;
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: admits the existing numeric wire representation"
+        )
+    )]
     fn try_from(value: i32) -> Result<Self, Self::Error> {
         match value {
             0.. => Ok(Self(value)),
@@ -44,6 +51,13 @@ pub struct LoginSaveFrameId(i32);
 
 impl TryFrom<i32> for LoginSaveFrameId {
     type Error = LoginSaveContextError;
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: admits the existing numeric wire representation"
+        )
+    )]
     fn try_from(value: i32) -> Result<Self, Self::Error> {
         match value {
             0.. => Ok(Self(value)),

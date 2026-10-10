@@ -4,6 +4,7 @@ use super::{
     AuthenticationRouteIdentity, AuthenticationUsernameEvidence, PageControlActionability,
     PageControlSemantics, PageControlSubmissionMethod,
 };
+use crate::AuthenticationControlText;
 use crate::AuthenticationFieldObservationFacts;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -64,7 +65,9 @@ impl AuthenticationAdvanceControlObservation {
         .iter()
         .any(|identity| {
             let control = AuthenticationControlIdentity::new(identity);
+            let expanded = AuthenticationControlText::new(identity).expand_identity_text();
             control.is_auxiliary()
+                || AuthenticationControlText::new(&expanded).contains_any_word(&["reset"])
                 || control.is_registration()
                 || control.is_password_recovery()
                 || control.is_alternate_authentication_route()

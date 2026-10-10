@@ -326,7 +326,9 @@ mod tests {
             },
             LoginSaveCaptureSelection::SubmittedLogin {
                 username_field_index: LoginCapturedFieldIndex::from(Index::ZERO),
-                password_field_index: LoginCapturedFieldIndex::from(Index::from(64)),
+                password_field_index: LoginCapturedFieldIndex::from(Index::from(
+                    crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
+                )),
             },
         ] {
             let mut offer = valid.clone();

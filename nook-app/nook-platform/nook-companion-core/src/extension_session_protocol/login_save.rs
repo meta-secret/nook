@@ -353,7 +353,7 @@ mod tests {
         }
         let mut oversized = Fixture::capture()?;
         oversized.fields.resize(
-            65,
+            crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT as usize + 1,
             oversized
                 .fields
                 .first()
@@ -402,7 +402,7 @@ mod tests {
         );
         for target in [
             serde_json::json!({"kind":"CredentialField"}),
-            serde_json::json!({"kind":"CredentialField","field_index":{"value":64}}),
+            serde_json::json!({"kind":"CredentialField","field_index":{"value":crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT}}),
             serde_json::json!({"kind":"CredentialField","field_index":{"value":-1}}),
             serde_json::json!({"kind":"CredentialField","field_index":{"value":1},"role":"password"}),
         ] {
