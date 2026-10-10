@@ -2,6 +2,10 @@
 
 #![allow(dead_code)] // Serde reads the private wire fields during concrete decoding.
 
+use super::login_save::{
+    DirectLoginSaveActionPayload, GrantedLoginSaveActionPayload, LoginSavePlanPayload,
+    OriginPayload,
+};
 use super::queue::{
     MessageDefaultQueueDisposition, PasskeyCeremonyQueueDisposition, QueueDisposition,
 };
@@ -9,6 +13,7 @@ use crate::ExtensionVaultEventPayload;
 use crate::credential_fill::CredentialKind;
 use nook_auth2::StoreId;
 use serde::{Deserialize, Serialize};
+use std::fmt::{Debug, Formatter, Result as FmtResult};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 use zeroize::Zeroize;
@@ -53,9 +58,23 @@ pub enum ExtensionSessionRequestValidation {
     Rejected,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Tsify)]
+#[derive(Clone, PartialEq, Eq, Deserialize, Serialize, Tsify)]
 #[serde(transparent)]
 pub struct SessionSecretText(String);
+
+impl Debug for SessionSecretText {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
+        formatter.write_str("[REDACTED]")
+    }
+}
+
+impl SessionSecretText {
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        let Self(value) = self;
+        value
+    }
+}
 
 impl Zeroize for SessionSecretText {
     fn zeroize(&mut self) {
@@ -328,39 +347,7 @@ pub struct BackupAttachPayload {
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct LoginSavePlanPayload {
-    vault_store_id: String,
-    device_id: String,
-    device_public_key: String,
-    device_signing_public_key: String,
-    origin: String,
-    username: SessionSecretText,
-    password: SessionSecretText,
-    queue: QueueDisposition,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Tsify)]
-#[serde(deny_unknown_fields)]
-pub struct OriginPayload {
-    origin: String,
-    queue: QueueDisposition,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Tsify)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct LoginSaveActionPayload {
-    origin: String,
-    offer_id: String,
-    queue: QueueDisposition,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Tsify)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct GrantedLoginSaveActionPayload {
-    vault_store_id: String,
-    device_id: String,
-    device_public_key: String,
-    device_signing_public_key: String,
     origin: String,
     offer_id: String,
     queue: QueueDisposition,
@@ -371,14 +358,6 @@ pub struct GrantedLoginSaveActionPayload {
 pub struct RequestPayload {
     request_id: String,
     queue: QueueDisposition,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Tsify)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct DirectLoginSaveActionPayload {
-    origin: String,
-    offer_id: String,
-    queue: MessageDefaultQueueDisposition,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Tsify)]
@@ -525,6 +504,7 @@ impl Drop for ExtensionSessionRequestWire {
             ExtensionSessionRequest::PlanLoginSave(payload) => {
                 payload.username.zeroize();
                 payload.password.zeroize();
+                payload.captured_values.zeroize();
             }
             ExtensionSessionRequest::RegisterPasskey(payload)
             | ExtensionSessionRequest::AssertPasskey(payload) => {
@@ -847,26 +827,6 @@ mod tests {
                 "backup attach",
                 r#"{"type":"nook:extension-session-authenticator-backup-attach","payload":{"vaultStoreId":"vault","deviceId":"device","devicePublicKey":"public","deviceSigningPublicKey":"signing","secretId":"secret","codes":["backup"],"mode":"replace","queue":{"kind":"message-default"}}}"#,
                 r#""codes":["backup"],"#,
-            ),
-            (
-                "login-save plan",
-                r#"{"type":"nook:extension-session-plan-login-save","payload":{"vaultStoreId":"vault","deviceId":"device","devicePublicKey":"public","deviceSigningPublicKey":"signing","origin":"https://example.com","username":"alice","password":"password","queue":{"kind":"message-default"}}}"#,
-                r#""password":"password","#,
-            ),
-            (
-                "pending login-save",
-                r#"{"type":"nook:extension-session-pending-login-save","payload":{"origin":"https://example.com","queue":{"kind":"message-default"}}}"#,
-                r#""origin":"https://example.com","#,
-            ),
-            (
-                "commit login-save",
-                r#"{"type":"nook:extension-session-commit-login-save","payload":{"vaultStoreId":"vault","deviceId":"device","devicePublicKey":"public","deviceSigningPublicKey":"signing","origin":"https://example.com","offerId":"offer","queue":{"kind":"message-default"}}}"#,
-                r#""offerId":"offer","#,
-            ),
-            (
-                "dismiss login-save",
-                r#"{"type":"nook:extension-session-dismiss-login-save","payload":{"origin":"https://example.com","offerId":"offer","queue":{"kind":"message-default"}}}"#,
-                r#""offerId":"offer","#,
             ),
             (
                 "assert ceremony",

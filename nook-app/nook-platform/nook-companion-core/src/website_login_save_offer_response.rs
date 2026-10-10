@@ -23,16 +23,18 @@ impl TryFrom<u32> for WebsiteLoginSaveOfferDecision {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Tsify)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct WebsiteLoginSaveOffer {
     offer_id: String,
     decision: WebsiteLoginSaveOfferDecision,
     vault_store_id: String,
     vault_name: String,
+    baseline: crate::LoginSaveCaptureBaseline,
+    selection: crate::LoginSaveCaptureSelection,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Tsify)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Tsify)]
 #[serde(
     deny_unknown_fields,
     tag = "kind",
@@ -53,9 +55,14 @@ pub struct WebsiteLoginSaveOfferResponseDecodeError;
 
 impl WebsiteLoginSaveOffer {
     fn is_valid(&self) -> bool {
-        !self.offer_id.trim().is_empty()
-            && !self.vault_store_id.trim().is_empty()
-            && !self.vault_name.trim().is_empty()
+        match self.selection.validate_baseline(&self.baseline) {
+            Ok(()) => {
+                !self.offer_id.trim().is_empty()
+                    && !self.vault_store_id.trim().is_empty()
+                    && !self.vault_name.trim().is_empty()
+            }
+            Err(_) => false,
+        }
     }
 }
 
@@ -79,7 +86,7 @@ impl WebsiteLoginSaveOfferResponse {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Tsify)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Tsify)]
 #[serde(
     deny_unknown_fields,
     tag = "state",
@@ -92,18 +99,18 @@ pub enum WebsiteLoginSavePendingAvailable {
     },
     Available {
         ok: bool,
-        offer: WebsiteLoginSaveOffer,
+        offer: Box<WebsiteLoginSaveOffer>,
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Tsify)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Tsify)]
 #[serde(deny_unknown_fields)]
 pub struct WebsiteLoginSavePendingRejected {
     ok: bool,
     reason: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Tsify)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Tsify)]
 #[serde(untagged)]
 pub enum WebsiteLoginSavePendingResponse {
     Available(WebsiteLoginSavePendingAvailable),
@@ -133,7 +140,7 @@ impl WebsiteLoginSavePendingResponse {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Tsify)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Tsify)]
 #[serde(deny_unknown_fields, tag = "kind", rename_all = "kebab-case")]
 pub enum WebsiteLoginSaveActionResponse {
     Completed {},
@@ -159,68 +166,147 @@ impl WebsiteLoginSaveActionResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-
+    use crate::LoginCapturedFieldIndex;
+    use crate::LoginSaveCaptureSelection;
+    use crate::LoginSaveCaptureSource;
+    use crate::credential_fill::field::Index;
+    use crate::{
+        AuthenticationWorkflowKind, LoginAuthFieldPresence, LoginSaveCaptureBaseline,
+        LoginSubmissionPageUrl,
+    };
+    use anyhow::Error as AnyhowError;
+    struct Fixture;
+    impl Fixture {
+        fn offer(decision: WebsiteLoginSaveOfferDecision) -> anyhow::Result<WebsiteLoginSaveOffer> {
+            Ok(WebsiteLoginSaveOffer {
+                offer_id: "offer".to_owned(),
+                decision,
+                vault_store_id: "vault".to_owned(),
+                vault_name: "Personal".to_owned(),
+                selection: LoginSaveCaptureSelection::SubmittedLogin {
+                    username_field_index: LoginCapturedFieldIndex::from(Index::ZERO),
+                    password_field_index: LoginCapturedFieldIndex::from(Index::ONE),
+                },
+                baseline: LoginSaveCaptureBaseline {
+                    source: LoginSaveCaptureSource::SubmittedLogin,
+                    submitted_at: serde_json::from_str("1000")?,
+                    submitted_url: LoginSubmissionPageUrl::try_from(
+                        "https://example.test/login".to_owned(),
+                    )?,
+                    captured_workflow: AuthenticationWorkflowKind::Login,
+                    initial_auth_fields: LoginAuthFieldPresence::Present,
+                    controls: Vec::new(),
+                },
+            })
+        }
+    }
     #[test]
-    fn decodes_each_login_save_offer_variant() -> anyhow::Result<()> {
-        for serialized in [
-            r#"{"kind":"offer-available","offer":{"offerId":"offer","decision":0,"vaultStoreId":"vault","vaultName":"Personal"}}"#,
-            r#"{"kind":"not-required"}"#,
-            r#"{"kind":"locked"}"#,
-            r#"{"kind":"unavailable"}"#,
-            r#"{"kind":"rejected","reason":"login-save-plan-failed"}"#,
-        ] {
-            let response = serde_json::from_str::<WebsiteLoginSaveOfferResponse>(serialized)?;
-            assert!(WebsiteLoginSaveOfferResponse::validate(response).is_ok());
+    fn preserves_save_decisions_and_capture_baseline_across_offer_and_pending() -> anyhow::Result<()>
+    {
+        for decision in [0, 1] {
+            let offer = Fixture::offer(
+                WebsiteLoginSaveOfferDecision::try_from(decision).map_err(AnyhowError::msg)?,
+            )?;
+            let response = WebsiteLoginSaveOfferResponse::OfferAvailable {
+                offer: offer.clone(),
+            };
+            let encoded = serde_json::to_string(&response)?;
+            let decoded: WebsiteLoginSaveOfferResponse = serde_json::from_str(&encoded)?;
+            assert_eq!(decoded.validate()?, response);
+            let pending = WebsiteLoginSavePendingResponse::Available(
+                WebsiteLoginSavePendingAvailable::Available {
+                    ok: true,
+                    offer: Box::new(offer),
+                },
+            );
+            let encoded = serde_json::to_string(&pending)?;
+            let decoded: WebsiteLoginSavePendingResponse = serde_json::from_str(&encoded)?;
+            assert_eq!(decoded.validate()?, pending);
         }
         Ok(())
     }
-
     #[test]
-    fn rejects_blank_contradictory_and_foreign_offer_values() {
-        for serialized in [
-            r#"{"kind":"offer-available","offer":{"offerId":"","decision":0,"vaultStoreId":"vault","vaultName":"Personal"}}"#,
-            r#"{"kind":"offer-available","offer":{"offerId":"offer","decision":2,"vaultStoreId":"vault","vaultName":"Personal"}}"#,
-            r#"{"kind":"offer-available","offer":{"offerId":"offer","decision":0,"vaultStoreId":"vault","vaultName":" "}}"#,
-            r#"{"kind":"offer-available","offer":{"offerId":"offer","decision":0,"vaultStoreId":"vault","vaultName":"Personal"},"reason":"login-save-plan-failed"}"#,
-            r#"{"kind":"locked","offer":{"offerId":"offer","decision":0,"vaultStoreId":"vault","vaultName":"Personal"}}"#,
-            r#"{"kind":"rejected","reason":" "}"#,
-        ] {
-            let decoded = serde_json::from_str::<WebsiteLoginSaveOfferResponse>(serialized)
-                .map_err(|_| WebsiteLoginSaveOfferResponseDecodeError)
-                .and_then(WebsiteLoginSaveOfferResponse::validate);
-            assert!(decoded.is_err(), "accepted {serialized}");
-        }
+    fn rejects_blank_offer_metadata_and_missing_capture_baseline() -> anyhow::Result<()> {
+        let valid =
+            Fixture::offer(WebsiteLoginSaveOfferDecision::try_from(0).map_err(AnyhowError::msg)?)?;
+        let mut offer = valid.clone();
+        offer.offer_id.clear();
+        assert!(
+            WebsiteLoginSaveOfferResponse::OfferAvailable { offer }
+                .validate()
+                .is_err()
+        );
+        let mut offer = valid.clone();
+        offer.vault_store_id.clear();
+        assert!(
+            WebsiteLoginSaveOfferResponse::OfferAvailable { offer }
+                .validate()
+                .is_err()
+        );
+        let mut offer = valid;
+        offer.vault_name = " ".to_owned();
+        assert!(
+            WebsiteLoginSaveOfferResponse::OfferAvailable { offer }
+                .validate()
+                .is_err()
+        );
+        assert!(serde_json::from_str::<WebsiteLoginSaveOfferResponse>(r#"{"kind":"offer-available","offer":{"offerId":"offer","decision":0,"vaultStoreId":"vault","vaultName":"Personal"}}"#).is_err());
+        assert!(WebsiteLoginSaveOfferDecision::try_from(2).is_err());
+        Ok(())
     }
-
     #[test]
-    fn pending_and_action_variants_are_closed() -> anyhow::Result<()> {
-        for serialized in [
-            r#"{"ok":true,"state":"unavailable"}"#,
-            r#"{"ok":true,"state":"available","offer":{"offerId":"offer","decision":1,"vaultStoreId":"vault","vaultName":"Personal"}}"#,
-            r#"{"ok":false,"reason":"login-save-pending-failed"}"#,
+    fn pending_and_action_variants_remain_closed_and_consistent() -> anyhow::Result<()> {
+        for response in [
+            WebsiteLoginSaveOfferResponse::NotRequired {},
+            WebsiteLoginSaveOfferResponse::Locked {},
+            WebsiteLoginSaveOfferResponse::Unavailable {},
+            WebsiteLoginSaveOfferResponse::Rejected {
+                reason: "failed".to_owned(),
+            },
         ] {
-            let response = serde_json::from_str::<WebsiteLoginSavePendingResponse>(serialized)?;
-            assert!(WebsiteLoginSavePendingResponse::validate(response).is_ok());
+            let encoded = serde_json::to_string(&response)?;
+            let decoded: WebsiteLoginSaveOfferResponse = serde_json::from_str(&encoded)?;
+            assert_eq!(decoded.validate()?, response);
         }
-        for serialized in [
-            r#"{"kind":"completed"}"#,
-            r#"{"kind":"rejected","reason":"login-save-commit-failed"}"#,
-        ] {
-            let response = serde_json::from_str::<WebsiteLoginSaveActionResponse>(serialized)?;
-            assert!(WebsiteLoginSaveActionResponse::validate(response).is_ok());
-        }
-        for serialized in [
-            r#"{"ok":true,"state":"unavailable","offer":{"offerId":"offer","decision":0,"vaultStoreId":"vault","vaultName":"Personal"}}"#,
-            r#"{"ok":false,"reason":" "}"#,
-        ] {
-            let decoded = serde_json::from_str::<WebsiteLoginSavePendingResponse>(serialized)
-                .map_err(|_| WebsiteLoginSaveOfferResponseDecodeError)
-                .and_then(WebsiteLoginSavePendingResponse::validate);
-            assert!(decoded.is_err(), "accepted {serialized}");
-        }
+        let valid = WebsiteLoginSavePendingResponse::Available(
+            WebsiteLoginSavePendingAvailable::Unavailable { ok: true },
+        );
+        let encoded = serde_json::to_string(&valid)?;
+        assert_eq!(
+            serde_json::from_str::<WebsiteLoginSavePendingResponse>(&encoded)?.validate()?,
+            valid
+        );
+        assert!(
+            WebsiteLoginSavePendingResponse::Available(
+                WebsiteLoginSavePendingAvailable::Unavailable { ok: false }
+            )
+            .validate()
+            .is_err()
+        );
+        assert!(
+            WebsiteLoginSavePendingResponse::Rejected(WebsiteLoginSavePendingRejected {
+                ok: true,
+                reason: "failed".to_owned()
+            })
+            .validate()
+            .is_err()
+        );
+        assert!(
+            WebsiteLoginSaveActionResponse::Rejected {
+                reason: " ".to_owned()
+            }
+            .validate()
+            .is_err()
+        );
         assert!(
             serde_json::from_str::<WebsiteLoginSaveActionResponse>(
-                r#"{"kind":"completed","reason":"contradiction"}"#,
+                r#"{"kind":"completed","reason":"contradiction"}"#
+            )
+            .is_err()
+        );
+        assert!(
+            serde_json::from_str::<WebsiteLoginSaveOfferResponse>(
+                r#"{"kind":"locked","offer":{}}"#
             )
             .is_err()
         );
@@ -228,32 +314,34 @@ mod tests {
     }
 
     #[test]
-    fn preserves_save_decisions_and_string_discriminators() -> anyhow::Result<()> {
-        for decision in [0, 1] {
-            let wire = format!(
-                r#"{{"kind":"offer-available","offer":{{"offerId":"offer","decision":{decision},"vaultStoreId":"vault","vaultName":"Personal"}}}}"#
-            );
-            let response: WebsiteLoginSaveOfferResponse = serde_json::from_str(&wire)?;
-            assert_eq!(serde_json::to_string(&response.validate()?)?, wire);
-        }
-        let completed: WebsiteLoginSaveActionResponse =
-            serde_json::from_str(r#"{"kind":"completed"}"#)?;
-        assert_eq!(
-            serde_json::to_string(&completed.validate()?)?,
-            r#"{"kind":"completed"}"#
-        );
-        for wire in [
-            r#"{"ok":false,"state":"unavailable"}"#,
-            r#"{"ok":false,"state":"available","offer":{"offerId":"offer","decision":1,"vaultStoreId":"vault","vaultName":"Personal"}}"#,
-            r#"{"ok":true,"reason":"denied"}"#,
-            r#"{"ok":true,"state":"available","offer":{"offerId":"offer","decision":1,"vaultStoreId":" ","vaultName":"Personal"}}"#,
+    fn offer_selection_rejects_conflicting_source_duplicate_and_unbounded_indices()
+    -> anyhow::Result<()> {
+        let valid =
+            Fixture::offer(WebsiteLoginSaveOfferDecision::try_from(0).map_err(AnyhowError::msg)?)?;
+        for selection in [
+            LoginSaveCaptureSelection::ExplicitAuthentication,
+            LoginSaveCaptureSelection::SubmittedLogin {
+                username_field_index: LoginCapturedFieldIndex::from(Index::ZERO),
+                password_field_index: LoginCapturedFieldIndex::from(Index::ZERO),
+            },
+            LoginSaveCaptureSelection::SubmittedLogin {
+                username_field_index: LoginCapturedFieldIndex::from(Index::ZERO),
+                password_field_index: LoginCapturedFieldIndex::from(Index::from(64)),
+            },
         ] {
-            let response: WebsiteLoginSavePendingResponse = serde_json::from_str(wire)?;
-            assert!(response.validate().is_err());
+            let mut offer = valid.clone();
+            offer.selection = selection;
+            assert!(
+                WebsiteLoginSaveOfferResponse::OfferAvailable { offer }
+                    .validate()
+                    .is_err()
+            );
         }
-        let rejected: WebsiteLoginSaveActionResponse =
-            serde_json::from_str(r#"{"kind":"rejected","reason":" "}"#)?;
-        assert!(rejected.validate().is_err());
+        let mut wire = serde_json::to_value(valid)?;
+        wire.as_object_mut()
+            .ok_or_else(|| anyhow::anyhow!("offer fixture"))?
+            .remove("selection");
+        assert!(serde_json::from_value::<WebsiteLoginSaveOffer>(wire).is_err());
         Ok(())
     }
 }

@@ -41,8 +41,10 @@ mod extension_session_protocol;
 mod extension_session_status_response;
 mod extension_vault_event;
 mod generated_password_response;
+mod login_save;
 mod oauth_origin_policy;
 mod outcome_evidence;
+pub use login_save::*;
 mod page_field_classification;
 mod vault_host_policy;
 mod website_login_options_response;
@@ -181,7 +183,8 @@ pub use extension_persistence::{
 pub use extension_session_protocol::{
     ExtensionEventLogRecord, ExtensionSessionRequest, ExtensionSessionRequestValidation,
     ExtensionSessionRequestWire, LoginPickerOpenResponse, LoginPickerOpenResponseDecodeError,
-    LoginPickerOpenResponseWire,
+    LoginPickerOpenResponseWire, SessionSecretText, SubmittedLoginSaveTarget,
+    SubmittedWebsiteLoginSaveRequest,
 };
 pub use extension_session_status_response::{
     ExtensionSessionDeviceProtectionStatusWire, ExtensionSessionDeviceResponse,

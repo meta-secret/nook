@@ -3,6 +3,7 @@
 use super::NookVaultManager;
 use crate::NookError;
 use crate::types::{NookWebsiteLoginSaveDecision, NookWebsiteLoginSavePlan};
+use nook_companion_core::{LoginSaveEligibility, SubmittedLoginSaveTarget};
 use nook_core::{SecretFormFields, SecretId, SecretType, SecretValue};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::{Zeroize, Zeroizing};
@@ -106,7 +107,7 @@ impl NookVaultManager {
         request: LoginSaveCommitRequest<'_>,
     ) -> Result<(), NookError> {
         let mut username = Zeroizing::new(request.username.trim().to_owned());
-        let mut password = Zeroizing::new(request.password.trim().to_owned());
+        let mut password = Zeroizing::new(request.password.to_owned());
         if username.is_empty() || password.is_empty() {
             username.zeroize();
             password.zeroize();
@@ -207,9 +208,17 @@ impl NookVaultManager {
 mod browser_tests {
     use super::*;
     use crate::manager::VaultCryptoState;
+    use nook_auth2::DeviceIdentity;
+    use nook_companion_core::{
+        AuthenticationOutcomeObservation, AuthenticationWorkflowKind, LoginAuthFieldPresence,
+        LoginManualCheckpoint, LoginSaveOutcomeObservation, LoginSubmissionOrigin,
+        LoginSubmissionPageUrl, LoginSubmissionPresence, LoginSubmissionTransition,
+        SubmittedWebsiteLoginSaveRequest,
+    };
     use nook_core::{
         LoginSecret, SecretId, SecretType, SecretValue, StoredRecordPayload, VaultCrypto,
     };
+    use tsify::Tsify;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -373,6 +382,104 @@ mod browser_tests {
         );
         Ok(())
     }
+
+    #[wasm_bindgen_test]
+    async fn exact_spaced_password_skips_a_duplicate_write() -> anyhow::Result<()> {
+        let mut manager = manager_with_login("alice", " password ")?;
+        manager
+            .commit_matching_login_save(LoginSaveCommitRequest {
+                origin: "https://example.com",
+                username: "alice",
+                password: " password ",
+                target: LoginSaveTarget::Create,
+            })
+            .await?;
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn generic_iframe_marker_is_rejected_at_typed_commit_boundary() -> anyhow::Result<()> {
+        let mut manager = manager_with_login("alice", "current")?;
+        manager.device.identity_private_key =
+            DeviceIdentity::generate()?.secret_string().into_inner();
+        let request = SubmittedWebsiteLoginSaveRequest {
+            origin: LoginSubmissionPageUrl::try_from("https://example.com".to_owned())?,
+            username: serde_json::from_str("\"alice\"")?,
+            password: serde_json::from_str("\"current\"")?,
+            target: SubmittedLoginSaveTarget::Create,
+            evidence: LoginSaveOutcomeObservation {
+                observation: AuthenticationOutcomeObservation {
+                    success_marker_present: true,
+                    in_iframe: true,
+                    elapsed_ms: 1_000.into(),
+                    ..Default::default()
+                },
+                captured_workflow: AuthenticationWorkflowKind::Login,
+                submission: LoginSubmissionPresence::Captured,
+                origin: LoginSubmissionOrigin::SameOrigin,
+                initial_auth_fields: LoginAuthFieldPresence::Present,
+                transition: LoginSubmissionTransition::DocumentNavigation,
+                checkpoint: LoginManualCheckpoint::Clear,
+                no_auth_elapsed_ms: 750.into(),
+                baseline_controls: Vec::new(),
+                current_controls: Vec::new(),
+            },
+        };
+        assert!(manager.ensure_login_save_extension_capability().is_ok());
+        assert!(manager.vault.crypto.get().is_ok());
+        let result = manager
+            .commit_submitted_website_login_save(&request.into_ts()?)
+            .await;
+        assert!(
+            result.is_err(),
+            "generic iframe cannot save despite explicit marker"
+        );
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn marker_without_route_or_new_control_is_rejected_at_typed_commit_boundary()
+    -> anyhow::Result<()> {
+        let mut manager = manager_with_login("alice", "current")?;
+        manager.device.identity_private_key =
+            DeviceIdentity::generate()?.secret_string().into_inner();
+        assert!(manager.ensure_login_save_extension_capability().is_ok());
+        assert!(manager.vault.crypto.get().is_ok());
+        for transition in [
+            LoginSubmissionTransition::None,
+            LoginSubmissionTransition::SameDocumentMutation,
+        ] {
+            let request = SubmittedWebsiteLoginSaveRequest {
+                origin: LoginSubmissionPageUrl::try_from("https://example.com".to_owned())?,
+                username: serde_json::from_str("\"alice\"")?,
+                password: serde_json::from_str("\"current\"")?,
+                target: SubmittedLoginSaveTarget::Create,
+                evidence: LoginSaveOutcomeObservation {
+                    observation: AuthenticationOutcomeObservation {
+                        success_marker_present: true,
+                        elapsed_ms: 1_000.into(),
+                        ..Default::default()
+                    },
+                    captured_workflow: AuthenticationWorkflowKind::Login,
+                    submission: LoginSubmissionPresence::Captured,
+                    origin: LoginSubmissionOrigin::SameOrigin,
+                    initial_auth_fields: LoginAuthFieldPresence::Present,
+                    transition,
+                    checkpoint: LoginManualCheckpoint::Clear,
+                    no_auth_elapsed_ms: 750.into(),
+                    baseline_controls: Vec::new(),
+                    current_controls: Vec::new(),
+                },
+            };
+            assert!(
+                manager
+                    .commit_submitted_website_login_save(&request.into_ts()?)
+                    .await
+                    .is_err()
+            );
+        }
+        Ok(())
+    }
 }
 
 #[wasm_bindgen]
@@ -409,6 +516,39 @@ impl NookVaultManager {
             origin,
             username,
             password,
+            target,
+        })
+        .await
+        .map_err(Into::into)
+    }
+
+    /// A generic submitted-login save additionally revalidates its current
+    /// eligibility in Rust before entering the existing authorized write path.
+    #[wasm_bindgen]
+    pub async fn commit_submitted_website_login_save(
+        &mut self,
+        request: &tsify::Ts<nook_companion_core::SubmittedWebsiteLoginSaveRequest>,
+    ) -> Result<(), JsError> {
+        self.ensure_login_save_extension_capability()?;
+        self.ensure_vault_crypto_from_cache().await?;
+        let request = request.to_rust()?;
+        match request.evidence.classify()?.eligibility {
+            LoginSaveEligibility::Eligible => {}
+            LoginSaveEligibility::Waiting
+            | LoginSaveEligibility::Rejected
+            | LoginSaveEligibility::Expired => {
+                return Err(JsError::new("Submitted login is not eligible to save."));
+            }
+        }
+        let target = match request.target {
+            SubmittedLoginSaveTarget::Create => LoginSaveTarget::Create,
+            SubmittedLoginSaveTarget::Replace { secret_id } => LoginSaveTarget::Replace(secret_id),
+        };
+        let origin = String::from(request.origin);
+        self.commit_matching_login_save(LoginSaveCommitRequest {
+            origin: &origin,
+            username: request.username.as_str(),
+            password: request.password.as_str(),
             target,
         })
         .await

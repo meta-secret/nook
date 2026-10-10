@@ -2,8 +2,10 @@ use super::super::CredentialFillFieldClassificationOutcome;
 use super::{
     Credential, CredentialRole, Editability, Index, NewPassword, Observation, OneTimeCode, Password,
 };
+use crate::AuthenticationControlText;
 use crate::AutocompleteTokenQuery;
 use crate::PageInputFieldObservation;
+use crate::PageInputType;
 use crate::page_field_classification;
 use serde::{Deserialize, Serialize};
 
@@ -80,8 +82,25 @@ impl Classification {
                 Self::Ignored(field_index.into())
             }
             page_field_classification::AuthenticationInputRole::Unrelated(_) => {
-                if field.input_type != crate::PageInputType::Password {
-                    return Self::Ignored(field_index.into());
+                match field.input_type {
+                    PageInputType::Password => {}
+                    PageInputType::Text
+                        if PageInputFieldObservation::has_autocomplete_token(
+                            AutocompleteTokenQuery {
+                                tokens: &field.autocomplete_tokens,
+                                expected: "current-password",
+                            },
+                        ) && (field.identity_text.is_empty()
+                            || AuthenticationControlText::new(
+                                &AuthenticationControlText::new(&field.identity_text)
+                                    .expand_identity_text(),
+                            )
+                            .contains_word_phrase("password")) => {}
+                    PageInputType::Text
+                    | PageInputType::Email
+                    | PageInputType::Tel
+                    | PageInputType::Number
+                    | PageInputType::Other => return Self::Ignored(field_index.into()),
                 }
                 if PageInputFieldObservation::has_autocomplete_token(AutocompleteTokenQuery {
                     tokens: &field.autocomplete_tokens,
@@ -117,6 +136,7 @@ impl Classification {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::PageInputType;
 
     struct Fixture;
 
@@ -163,18 +183,14 @@ mod tests {
         let cases = [
             (
                 Fixture::page_input(
-                    crate::PageInputType::Email,
+                    PageInputType::Email,
                     &["one-time-code", "username", "cc-csc"],
                     "account email",
                 ),
                 Classification::from(Observation::from(OneTimeCode::from(Index::ZERO))),
             ),
             (
-                Fixture::page_input(
-                    crate::PageInputType::Text,
-                    &["username"],
-                    "verification code",
-                ),
+                Fixture::page_input(PageInputType::Text, &["username"], "verification code"),
                 Classification::from(Observation::from(Credential {
                     field_index: Index::ZERO,
                     role: CredentialRole::Username,
@@ -182,20 +198,16 @@ mod tests {
                 })),
             ),
             (
-                Fixture::page_input(
-                    crate::PageInputType::Text,
-                    &[],
-                    "username verification code",
-                ),
+                Fixture::page_input(PageInputType::Text, &[], "username verification code"),
                 Classification::from(Observation::from(OneTimeCode::from(Index::ZERO))),
             ),
             (
-                Fixture::page_input(crate::PageInputType::Password, &["one-time-code"], ""),
+                Fixture::page_input(PageInputType::Password, &["one-time-code"], ""),
                 Classification::from(Observation::from(OneTimeCode::from(Index::ZERO))),
             ),
             (
                 Fixture::page_input(
-                    crate::PageInputType::Password,
+                    PageInputType::Password,
                     &["one-time-code"],
                     "credit card security code",
                 ),
@@ -203,7 +215,7 @@ mod tests {
             ),
             (
                 Fixture::page_input(
-                    crate::PageInputType::Password,
+                    PageInputType::Password,
                     &["one-time-code", "current-password"],
                     "otp verification code",
                 ),
@@ -211,18 +223,14 @@ mod tests {
             ),
             (
                 Fixture::page_input(
-                    crate::PageInputType::Password,
+                    PageInputType::Password,
                     &["new-password", "current-password"],
                     "new password",
                 ),
                 Classification::from(Observation::from(NewPassword::from(Index::ZERO))),
             ),
             (
-                Fixture::page_input(
-                    crate::PageInputType::Password,
-                    &["current-password"],
-                    "password",
-                ),
+                Fixture::page_input(PageInputType::Password, &["current-password"], "password"),
                 Classification::from(Observation::from(Credential {
                     field_index: Index::ZERO,
                     role: CredentialRole::Password(Password::Current),
@@ -230,7 +238,7 @@ mod tests {
                 })),
             ),
             (
-                Fixture::page_input(crate::PageInputType::Password, &[], "password"),
+                Fixture::page_input(PageInputType::Password, &[], "password"),
                 Classification::from(Observation::from(Credential {
                     field_index: Index::ZERO,
                     role: CredentialRole::Password(Password::Generic),
@@ -238,11 +246,7 @@ mod tests {
                 })),
             ),
             (
-                Fixture::page_input(
-                    crate::PageInputType::Text,
-                    &["username"],
-                    "account identity",
-                ),
+                Fixture::page_input(PageInputType::Text, &["username"], "account identity"),
                 Classification::from(Observation::from(Credential {
                     field_index: Index::ZERO,
                     role: CredentialRole::Username,
@@ -265,7 +269,7 @@ mod tests {
 
     #[test]
     fn nonstandard_password_autocomplete_remains_generic() {
-        let field = Fixture::page_input(crate::PageInputType::Password, &["password"], "password");
+        let field = Fixture::page_input(PageInputType::Password, &["password"], "password");
         assert_eq!(
             Classification::from_page_input(Index::ZERO, &field),
             Observation::from(Credential {
@@ -279,11 +283,8 @@ mod tests {
 
     #[test]
     fn carries_readonly_credential_editability_but_preserves_unsafe_variants() {
-        let mut password = Fixture::page_input(
-            crate::PageInputType::Password,
-            &["current-password"],
-            "password",
-        );
+        let mut password =
+            Fixture::page_input(PageInputType::Password, &["current-password"], "password");
         password.read_only = true;
         assert_eq!(
             Classification::from_page_input(Index::ZERO, &password),
@@ -295,8 +296,7 @@ mod tests {
             .into()
         );
 
-        let mut username =
-            Fixture::page_input(crate::PageInputType::Text, &["username"], "identity");
+        let mut username = Fixture::page_input(PageInputType::Text, &["username"], "identity");
         username.read_only = true;
         assert_eq!(
             Classification::from_page_input(Index::ONE, &username),
@@ -309,7 +309,7 @@ mod tests {
         );
 
         let mut otp = Fixture::page_input(
-            crate::PageInputType::Password,
+            PageInputType::Password,
             &["one-time-code", "current-password"],
             "verification code",
         );
@@ -320,7 +320,7 @@ mod tests {
         );
 
         let mut new_password = Fixture::page_input(
-            crate::PageInputType::Password,
+            PageInputType::Password,
             &["new-password", "current-password"],
             "new password",
         );
@@ -334,7 +334,7 @@ mod tests {
     #[test]
     fn password_autocomplete_tokens_do_not_override_input_type() {
         for token in ["current-password", "new-password"] {
-            let field = Fixture::page_input(crate::PageInputType::Text, &[token], "search");
+            let field = Fixture::page_input(PageInputType::Text, &[token], "search");
             assert_eq!(
                 Classification::from_page_input(Index::ZERO, &field),
                 Classification::Ignored(Index::ZERO.into())
@@ -343,11 +343,25 @@ mod tests {
     }
 
     #[test]
+    fn recognizes_revealed_current_password_without_losing_password_semantics() {
+        let field = Fixture::page_input(PageInputType::Text, &["current-password"], "Password");
+        assert_eq!(
+            Classification::from_page_input(Index::ZERO, &field),
+            Observation::from(Credential {
+                field_index: Index::ZERO,
+                role: CredentialRole::Password(Password::Current),
+                editability: Editability::Writable,
+            })
+            .into()
+        );
+    }
+
+    #[test]
     fn ignores_disabled_and_unrelated_page_inputs() {
         for field in [
             {
                 let mut field = Fixture::page_input(
-                    crate::PageInputType::Password,
+                    PageInputType::Password,
                     &["one-time-code", "new-password", "current-password"],
                     "verification code",
                 );
@@ -355,13 +369,13 @@ mod tests {
                 field
             },
             Fixture::page_input(
-                crate::PageInputType::Text,
+                PageInputType::Text,
                 &["username", "cc-csc"],
                 "account email",
             ),
-            Fixture::page_input(crate::PageInputType::Password, &["cc-csc"], ""),
-            Fixture::page_input(crate::PageInputType::Password, &[], "card security code"),
-            Fixture::page_input(crate::PageInputType::Text, &[], "search"),
+            Fixture::page_input(PageInputType::Password, &["cc-csc"], ""),
+            Fixture::page_input(PageInputType::Password, &[], "card security code"),
+            Fixture::page_input(PageInputType::Text, &[], "search"),
         ] {
             let classification = Classification::from_page_input(Index::ZERO, &field);
             assert_eq!(classification, Classification::Ignored(Index::ZERO.into()));
