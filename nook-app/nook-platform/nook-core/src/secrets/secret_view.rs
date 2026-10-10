@@ -10,8 +10,9 @@ use crate::{CreditCardFields, ValidationError};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
+mod login_website_host;
 mod secret_presentation;
-pub use super::login_site_hosts::LoginSiteHostsError;
+pub use login_website_host::{LoginHostMatch, LoginWebsiteHost};
 pub use secret_presentation::{
     AuthenticatorGroupKeyRequest, LoginHostMatchRequest, SecretGroupKey, WebsiteHost,
     WebsiteHostError,

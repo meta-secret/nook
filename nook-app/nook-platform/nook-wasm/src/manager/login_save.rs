@@ -3,7 +3,7 @@
 use super::NookVaultManager;
 use crate::NookError;
 use crate::types::{NookWebsiteLoginSaveDecision, NookWebsiteLoginSavePlan};
-use nook_core::{SecretFormFields, SecretId, SecretType, SecretValue};
+use nook_core::{LoginHostMatch, LoginSecret, SecretFormFields, SecretId, SecretType, SecretValue};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::{Zeroize, Zeroizing};
 
@@ -23,6 +23,20 @@ struct LoginSaveCommitRequest<'a> {
 enum LoginSaveTarget {
     Create,
     Replace(SecretId),
+}
+
+struct SavedLoginCandidate {
+    secret_id: SecretId,
+    login: LoginSecret,
+}
+
+impl Drop for SavedLoginCandidate {
+    fn drop(&mut self) {
+        self.login.website_url.zeroize();
+        self.login.username.zeroize();
+        self.login.password.zeroize();
+        self.login.notes.zeroize();
+    }
 }
 
 impl LoginSaveTarget {
@@ -45,45 +59,41 @@ impl NookVaultManager {
         request: &LoginSavePlanRequest<'_>,
     ) -> Result<NookWebsiteLoginSavePlan, NookError> {
         let crypto = self.vault.crypto.get()?;
-        let mut owned_logins: Vec<(SecretId, nook_core::LoginSecret)> = Vec::new();
+        let mut owned_logins: Vec<SavedLoginCandidate> = Vec::new();
         for (id, (secret_type, _)) in &self.vault.meta.secrets {
-            if *secret_type != SecretType::Login {
+            let SecretType::Login = secret_type else {
                 continue;
-            }
+            };
             let mut record =
                 nook_core::VaultSecretSession::new(&self.vault.meta.secrets, crypto).decrypt(id)?;
-            let match_result = match &record.data {
-                SecretValue::Login(login) => (nook_core::LoginHostMatchRequest {
-                    website_url: &login.website_url,
-                    origin: request.origin,
-                })
-                .matches()
-                .map_err(|error| NookError::Database(error.to_string())),
-                _ => Ok(false),
+            let SecretValue::Login(login) = &record.data else {
+                record.zeroize_plaintext();
+                continue;
             };
-            let login = match (&record.data, &match_result) {
-                (SecretValue::Login(login), Ok(true)) => Some(login.clone()),
-                _ => None,
+            let LoginHostMatch::Matched = (nook_core::LoginHostMatchRequest {
+                website_url: &login.website_url,
+                origin: request.origin,
+            })
+            .assess() else {
+                record.zeroize_plaintext();
+                continue;
             };
+            owned_logins.push(SavedLoginCandidate {
+                secret_id: id.clone(),
+                login: LoginSecret {
+                    website_url: login.website_url.clone(),
+                    username: login.username.clone(),
+                    password: login.password.clone(),
+                    notes: String::new(),
+                },
+            });
             record.zeroize_plaintext();
-            let did_match = match match_result {
-                Ok(did_match) => did_match,
-                Err(error) => {
-                    for (_, login) in &mut owned_logins {
-                        login.password.zeroize();
-                    }
-                    return Err(error);
-                }
-            };
-            if did_match && let Some(login) = login {
-                owned_logins.push((id.clone(), login));
-            }
         }
         let candidates: Vec<nook_core::WebsiteLoginSaveCandidate<'_>> = owned_logins
             .iter()
-            .map(|(id, login)| nook_core::WebsiteLoginSaveCandidate {
-                secret_id: id,
-                login,
+            .map(|candidate| nook_core::WebsiteLoginSaveCandidate {
+                secret_id: &candidate.secret_id,
+                login: &candidate.login,
             })
             .collect();
         let decision = nook_core::WebsiteLoginSaveRequest {
@@ -92,12 +102,7 @@ impl NookVaultManager {
             password: request.password,
             candidates: &candidates,
         }
-        .decide()
-        .map_err(|error| NookError::Database(error.to_string()));
-        for (_, login) in &mut owned_logins {
-            login.password.zeroize();
-        }
-        let decision = decision?;
+        .decide();
         Ok(NookWebsiteLoginSavePlan::from_decision(decision))
     }
 
@@ -198,6 +203,95 @@ impl NookVaultManager {
                 NookError::Database("Failed to create the website login.".to_owned())
             })?;
             drop(records);
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{LoginSavePlanRequest, NookVaultManager};
+    use crate::manager::VaultCryptoState;
+    use crate::types::NookWebsiteLoginSaveDecision;
+    use nook_core::{
+        LoginSecret, SecretId, SecretType, SecretValue, StoredRecordPayload, VaultCrypto, VaultKeys,
+    };
+
+    struct LoginSaveSiteCase {
+        saved: &'static str,
+        origin: &'static str,
+        expected: NookWebsiteLoginSaveDecision,
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn save_planner_uses_general_registrable_domain_admission() -> anyhow::Result<()> {
+        for case in [
+            LoginSaveSiteCase {
+                saved: "https://one.widget-tools.com/login",
+                origin: "https://two.widget-tools.com",
+                expected: NookWebsiteLoginSaveDecision::AlreadySaved,
+            },
+            LoginSaveSiteCase {
+                saved: "https://one.sample.co.uk/login",
+                origin: "https://sample.co.uk",
+                expected: NookWebsiteLoginSaveDecision::AlreadySaved,
+            },
+            LoginSaveSiteCase {
+                saved: "https://www.github.io/login",
+                origin: "https://github.io",
+                expected: NookWebsiteLoginSaveDecision::Create,
+            },
+            LoginSaveSiteCase {
+                saved: "https://www.github.io/login",
+                origin: "https://login.www.github.io",
+                expected: NookWebsiteLoginSaveDecision::AlreadySaved,
+            },
+            LoginSaveSiteCase {
+                saved: "https://a.foo.ck/login",
+                origin: "https://b.foo.ck",
+                expected: NookWebsiteLoginSaveDecision::Create,
+            },
+            LoginSaveSiteCase {
+                saved: "https://a.www.ck/login",
+                origin: "https://b.www.ck",
+                expected: NookWebsiteLoginSaveDecision::AlreadySaved,
+            },
+            LoginSaveSiteCase {
+                saved: "https://one.sample.nookunknown/login",
+                origin: "https://two.sample.nookunknown",
+                expected: NookWebsiteLoginSaveDecision::AlreadySaved,
+            },
+            LoginSaveSiteCase {
+                saved: "https://microsoft.com/login",
+                origin: "https://login.microsoftonline.com",
+                expected: NookWebsiteLoginSaveDecision::Create,
+            },
+        ] {
+            let keys = VaultKeys::generate()?;
+            let crypto = VaultCrypto::new(&keys.secrets_key)?;
+            let mut manager = NookVaultManager::new();
+            let login = SecretValue::Login(LoginSecret {
+                website_url: case.saved.to_owned(),
+                username: "synthetic-account".to_owned(),
+                password: "synthetic-password".to_owned(),
+                notes: String::new(),
+            });
+            let ciphertext = crypto.encrypt_value(login.to_yaml()?.as_str())?;
+            manager.vault.meta.secrets.insert(
+                SecretId::parse("secret_SMypl8K0w9a")?,
+                (
+                    SecretType::Login,
+                    StoredRecordPayload::from_age_armored(ciphertext),
+                ),
+            );
+            manager.vault.crypto = VaultCryptoState::Unlocked(crypto);
+            let plan = manager.plan_matching_login_save(&LoginSavePlanRequest {
+                origin: case.origin,
+                username: "synthetic-account",
+                password: "synthetic-password",
+            })?;
+            assert_eq!(plan.decision(), case.expected);
         }
         Ok(())
     }
