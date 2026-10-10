@@ -18,7 +18,7 @@ const FORBIDDEN_AUTHORITY_REFERENCES: [&str; 6] = [
     "web_development_team_agent",
     ".codex/agents",
 ];
-const EXECUTABLE_SKILL_OWNERS: [&str; 7] = [
+const EXECUTABLE_SKILL_OWNERS: [&str; 6] = [
     ".cortex/shared/dynamic-skills",
     ".cortex/teams/ai/dynamic-skills",
     ".cortex/teams/dev-core/dynamic-skills",
