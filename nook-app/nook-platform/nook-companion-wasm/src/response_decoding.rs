@@ -19,12 +19,14 @@ use nook_companion_core::GeneratedPasswordResponseKind;
 #[cfg(all(test, target_arch = "wasm32"))]
 use nook_companion_core::WebsitePasskeyAccountListKind;
 mod authenticator_mutation;
+mod vault_event_log;
 pub use authenticator_mutation::{
     AuthenticatorBackupAttachAdmission, AuthenticatorEnrollmentConfirmAdmission,
     AuthenticatorEnrollmentStageAdmission, decode_authenticator_backup_attach_response,
     decode_authenticator_enrollment_confirm_response,
     decode_authenticator_enrollment_stage_response,
 };
+pub use vault_event_log::*;
 
 use nook_companion_core::AuthenticatorCodeSessionResponse;
 use nook_companion_core::AuthenticatorPreviewSessionResponse;

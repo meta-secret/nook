@@ -1,4 +1,5 @@
 mod envelope;
+mod vault_event_log;
 pub use envelope::{
     CompanionIdentityDiscoverySessionTransportAdmission,
     CompanionIdentityDiscoverySessionTransportRequest,
@@ -21,6 +22,7 @@ use nook_companion_core::{
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
+pub use vault_event_log::*;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 #[derive(Deserialize, Tsify)]

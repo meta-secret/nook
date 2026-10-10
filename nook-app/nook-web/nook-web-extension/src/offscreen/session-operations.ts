@@ -1,4 +1,5 @@
 import { FocusedLoginRevealOperation } from './session-focused-login-reveal'
+import { SessionVaultEventLogExport } from './session-vault-event-log-export'
 import { Effect } from 'effect'
 import {
   ExtensionPasskeySetup,
@@ -50,7 +51,6 @@ import { PasskeyBrowserBytes } from './session-key-material'
 import { extensionVaultGrant } from './session-vault-grant'
 import {
   type WebsitePasskeyOperationArgs,
-  type WebsitePasskeyOperationResponse,
   sessionWebsitePasskeys,
 } from './session-website-passkey-operations'
 
@@ -265,6 +265,13 @@ export async function handleSessionMessage({
           payload: message.payload,
         }
         return ok(classifySessionGrantAuthority(args))
+      }
+      case ExtensionSessionMessageType.ExportVaultEventLog: {
+        const request: ConstructorParameters<
+          typeof SessionVaultEventLogExport
+        >[0] = { manager: await getManager(), payload: message.payload }
+        const operation = new SessionVaultEventLogExport(request)
+        return ok(await Effect.runPromise(operation.run()))
       }
       case ExtensionSessionMessageType.Reset: {
         pendingLoginSaveOfferStore.clearAll()
@@ -970,11 +977,9 @@ export async function handleSessionMessage({
           openVault: openPasskeyVault,
           flushEvent: flushPasskeyEventToProviders,
         }
-        const response: WebsitePasskeyOperationResponse =
-          await sessionWebsitePasskeys.handleWebsitePasskeyOperation(
-            operationArgs,
-          )
-        return response
+        return sessionWebsitePasskeys.handleWebsitePasskeyOperation(
+          operationArgs,
+        )
       }
       case ExtensionSessionMessageType.Lock: {
         const response: SessionAcknowledgement = { ok: true }
