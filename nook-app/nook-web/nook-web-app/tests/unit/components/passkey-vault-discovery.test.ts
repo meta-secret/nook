@@ -1,4 +1,4 @@
-import { afterEach, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, within } from '@testing-library/svelte'
 import { tick, type ComponentProps } from 'svelte'
 import { ok } from 'neverthrow'
@@ -103,10 +103,19 @@ class PasskeyVaultDiscoveryFixture {
   }
 }
 
-afterEach(() => {
-  cleanup()
-  vi.useRealTimers()
-  vi.restoreAllMocks()
+beforeEach(() => {
+  vi.useFakeTimers()
+})
+
+afterEach(async () => {
+  try {
+    cleanup()
+    await tick()
+    await vi.runOnlyPendingTimersAsync()
+  } finally {
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  }
 })
 
 test('discovers a website passkey in the complete vault and expands safe account metadata', async () => {
@@ -162,7 +171,6 @@ test('requests the Passkey filter and displays the returned passkey page', async
 })
 
 test('searches RP or account through the vault page contract and keeps passkey metadata visible', async () => {
-  vi.useFakeTimers()
   const fixture = new PasskeyVaultDiscoveryFixture()
   const props = fixture.props()
   const view = render(SecretVault, props)

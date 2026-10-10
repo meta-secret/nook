@@ -1,5 +1,8 @@
 import type { LoginCredentials } from '../../../../nook-web-shared/src/extension/password-forms'
-import type { LoginSubmissionIntent, AuthenticationCeremonyContextObservation } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import type {
+  LoginSubmissionIntent,
+  AuthenticationCeremonyContextObservation,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { afterEach, describe, expect, test } from 'vitest'
 import {
   LoginSubmissionDomObservationKind,
@@ -14,23 +17,28 @@ class LoginSubmissionDomFixture {
   private observation: LoginSubmissionDomObservation = {
     kind: LoginSubmissionDomObservationKind.Ignored,
   }
-  constructor() {this.sensor.rememberPasswordFields()}
+  constructor() {
+    this.sensor.rememberPasswordFields()
+  }
 
   click(selector: string): LoginSubmissionDomObservation {
-    const options: MouseEventInit = {bubbles: true}
+    const options: MouseEventInit = { bubbles: true }
     const event = new MouseEvent('click', options)
-    const request: LoginSubmissionDomDispatch = {selector, event}
+    const request: LoginSubmissionDomDispatch = { selector, event }
     return this.dispatch(request)
   }
 
   enter(selector: string): LoginSubmissionDomObservation {
     const options: KeyboardEventInit = { key: 'Enter', bubbles: true }
     const event = new KeyboardEvent('keydown', options)
-    const request: LoginSubmissionDomDispatch = {selector, event}
+    const request: LoginSubmissionDomDispatch = { selector, event }
     return this.dispatch(request)
   }
 
-  private dispatch({ selector, event }: LoginSubmissionDomDispatch): LoginSubmissionDomObservation {
+  private dispatch({
+    selector,
+    event,
+  }: LoginSubmissionDomDispatch): LoginSubmissionDomObservation {
     const target = document.querySelector(selector)
     switch (target instanceof HTMLElement) {
       case false:
@@ -40,10 +48,14 @@ class LoginSubmissionDomFixture {
     }
     const trust: PropertyDescriptor = { value: true }
     Object.defineProperty(event, 'isTrusted', trust)
-    const options: AddEventListenerOptions = {once: true}
-    target.addEventListener(event.type, (received) => {
-      this.observation = this.sensor.observe(received)
-    }, options)
+    const options: AddEventListenerOptions = { once: true }
+    target.addEventListener(
+      event.type,
+      (received) => {
+        this.observation = this.sensor.observe(received)
+      },
+      options,
+    )
     target.dispatchEvent(event)
     return this.observation
   }
@@ -72,9 +84,17 @@ describe('submitted login DOM snapshot', () => {
         break
     }
     document.body.replaceChildren()
-    const indices: LoginSubmissionCredentialIndices = { usernameIndex: 0, passwordIndex: 1 }
-    const expectedCredentials: LoginCredentials = {username: 'submitted-user', password: '  submitted-password  '}
-    expect(observation.snapshot.credentials(indices)).toEqual(expectedCredentials)
+    const indices: LoginSubmissionCredentialIndices = {
+      usernameIndex: 0,
+      passwordIndex: 1,
+    }
+    const expectedCredentials: LoginCredentials = {
+      username: 'submitted-user',
+      password: '  submitted-password  ',
+    }
+    expect(observation.snapshot.credentials(indices)).toEqual(
+      expectedCredentials,
+    )
     observation.snapshot.dispose()
     expect(observation.snapshot.captureRecord().fields).toEqual([])
   })
@@ -95,10 +115,20 @@ describe('submitted login DOM snapshot', () => {
       case LoginSubmissionDomObservationKind.Observed:
         break
     }
-    const indices: LoginSubmissionCredentialIndices = { usernameIndex: 0, passwordIndex: 1 }
-    const expectedCredentials: LoginCredentials = {username: 'first-user', password: 'first-password'}
-    expect(observation.snapshot.credentials(indices)).toEqual(expectedCredentials)
-    expect(observation.snapshot.captureRecord().fields[1]?.input_type).toBe('text')
+    const indices: LoginSubmissionCredentialIndices = {
+      usernameIndex: 0,
+      passwordIndex: 1,
+    }
+    const expectedCredentials: LoginCredentials = {
+      username: 'first-user',
+      password: 'first-password',
+    }
+    expect(observation.snapshot.credentials(indices)).toEqual(
+      expectedCredentials,
+    )
+    expect(observation.snapshot.captureRecord().fields[1]?.input_type).toBe(
+      'text',
+    )
     observation.snapshot.dispose()
   })
 
@@ -120,9 +150,17 @@ describe('submitted login DOM snapshot', () => {
       case LoginSubmissionDomObservationKind.Observed:
         break
     }
-    const indices: LoginSubmissionCredentialIndices = { usernameIndex: 0, passwordIndex: 1 }
-    const expectedCredentials: LoginCredentials = {username: 'first-user', password: 'first-password'}
-    expect(observation.snapshot.credentials(indices)).toEqual(expectedCredentials)
+    const indices: LoginSubmissionCredentialIndices = {
+      usernameIndex: 0,
+      passwordIndex: 1,
+    }
+    const expectedCredentials: LoginCredentials = {
+      username: 'first-user',
+      password: 'first-password',
+    }
+    expect(observation.snapshot.credentials(indices)).toEqual(
+      expectedCredentials,
+    )
     observation.snapshot.dispose()
   })
 
@@ -132,25 +170,58 @@ describe('submitted login DOM snapshot', () => {
       <div id="nook-auth-widget"><button id="save" type="button">Save</button></div>
     </main>`
     const sensor = new LoginSubmissionDomSensor()
-    expect(sensor.observe(new Event('input')).kind).toBe(LoginSubmissionDomObservationKind.Ignored)
-    expect(sensor.observe(new Event('focusin')).kind).toBe(LoginSubmissionDomObservationKind.Ignored)
+    expect(sensor.observe(new Event('input')).kind).toBe(
+      LoginSubmissionDomObservationKind.Ignored,
+    )
+    expect(sensor.observe(new Event('focusin')).kind).toBe(
+      LoginSubmissionDomObservationKind.Ignored,
+    )
     const fixture = new LoginSubmissionDomFixture()
-    expect(fixture.click('#save').kind).toBe(LoginSubmissionDomObservationKind.Ignored)
+    expect(fixture.click('#save').kind).toBe(
+      LoginSubmissionDomObservationKind.Ignored,
+    )
   })
 
   test('does not combine credentials from separate incomplete semantic containers', () => {
-    document.body.innerHTML = '<main><section><input autocomplete="username" value="other-user"></section><section><input type="password" value="secret"><button id="login" type="button">Sign in</button></section></main>'
+    document.body.innerHTML =
+      '<main><section><input autocomplete="username" value="other-user"></section><section><input type="password" value="secret"><button id="login" type="button">Sign in</button></section></main>'
     const fixture = new LoginSubmissionDomFixture()
-    expect(fixture.click('#login').kind).toBe(LoginSubmissionDomObservationKind.Ignored)
+    expect(fixture.click('#login').kind).toBe(
+      LoginSubmissionDomObservationKind.Ignored,
+    )
   })
 
   test('retains the pre-handler intent context and drains a transition occurring during staging', () => {
-    document.body.innerHTML = '<main id="signup"><input autocomplete="username"><input type="password"><h1>Create account</h1><button id="submit" type="button">Create account</button></main>'
+    document.body.innerHTML =
+      '<main id="signup"><input autocomplete="username"><input type="password"><h1>Create account</h1><button id="submit" type="button">Create account</button></main>'
     const fixture = new LoginSubmissionDomFixture()
     const observation = fixture.click('#submit')
-    switch (observation.kind) {case LoginSubmissionDomObservationKind.Observed: break; case LoginSubmissionDomObservationKind.Ignored: throw new Error('expected submission snapshot')}
+    switch (observation.kind) {
+      case LoginSubmissionDomObservationKind.Observed:
+        break
+      case LoginSubmissionDomObservationKind.Ignored:
+        throw new Error('expected submission snapshot')
+    }
     document.querySelector('main')?.replaceChildren()
-    const expectedIntent: Pick<LoginSubmissionIntent, 'control_label'> & {context: {ceremony: {authenticationContext: Pick<AuthenticationCeremonyContextObservation, 'formIdentity'>}}} = {control_label: 'Create account', context: {ceremony: {authenticationContext: {formIdentity: expect.stringContaining('Create account')}}}}
+    const expectedIntent: Pick<LoginSubmissionIntent, 'control_label'> & {
+      context: {
+        ceremony: {
+          authenticationContext: Pick<
+            AuthenticationCeremonyContextObservation,
+            'formIdentity'
+          >
+        }
+      }
+    } = {
+      control_label: 'Create account',
+      context: {
+        ceremony: {
+          authenticationContext: {
+            formIdentity: expect.stringContaining('Create account'),
+          },
+        },
+      },
+    }
     expect(observation.snapshot.intent()).toMatchObject(expectedIntent)
     expect(observation.snapshot.mutationOccurred()).toBe(true)
     observation.snapshot.dispose()

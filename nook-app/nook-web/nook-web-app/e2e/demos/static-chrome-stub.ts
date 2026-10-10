@@ -20,7 +20,10 @@ import {
 import { WebsiteAuthenticatorBackupAttachMessageType } from '../../../nook-web-extension/src/lib/enrollment-messages'
 import { GeneratePasswordRequestType } from '../../../nook-web-shared/src/extension/runtime-messages'
 import type { AuthenticationOutcomeObservationView } from '../../../nook-web-extension/src/lib/outcome-evidence-messages'
-import type { LoginSubmissionCapture, WebsiteLoginSaveOffer } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm'
+import type {
+  LoginSubmissionCapture,
+  WebsiteLoginSaveOffer,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm'
 
 declare global {
   interface Window {
@@ -150,10 +153,12 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     response: unknown
   }
   type StagedSaveOffer = WebsiteLoginSaveOffer
-  enum DemoRuntimeAvailabilityKind {Unavailable = 'unavailable'}
+  enum DemoRuntimeAvailabilityKind {
+    Unavailable = 'unavailable',
+  }
   type DemoSubmittedLoginOfferResponse =
-    | {kind: `${DemoRuntimeAvailabilityKind.Unavailable}`}
-    | {kind: DemoLoginSaveResponses['offerAvailable']; offer: StagedSaveOffer}
+    | { kind: `${DemoRuntimeAvailabilityKind.Unavailable}` }
+    | { kind: DemoLoginSaveResponses['offerAvailable']; offer: StagedSaveOffer }
 
   const {
     delayedPendingSaveOfferReads,
@@ -195,7 +200,11 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
       initial_auth_fields: 'Present',
       controls: ['Sign in'],
     },
-    selection: {kind: 'SubmittedLogin', username_field_index: {value: 0}, password_field_index: {value: 1}},
+    selection: {
+      kind: 'SubmittedLogin',
+      username_field_index: { value: 0 },
+      password_field_index: { value: 1 },
+    },
   }
   let pendingSaveOfferReads = 0
   let stagedOffer:
@@ -233,7 +242,12 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     constructor(private readonly message: RuntimeMessage) {}
     response(): DemoSubmittedLoginOfferResponse {
       const capture = this.message.payload?.capture
-      switch (true) {case typeof capture === 'object': break; case true: return {kind: DemoRuntimeAvailabilityKind.Unavailable}}
+      switch (true) {
+        case typeof capture === 'object':
+          break
+        case true:
+          return { kind: DemoRuntimeAvailabilityKind.Unavailable }
+      }
       const offer: StagedSaveOffer = {
         offerId: 'demo-save-offer',
         decision: loginSaveCreateDecision,
@@ -247,7 +261,11 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
           initial_auth_fields: 'Present',
           controls: capture.controls,
         },
-        selection: {kind: 'SubmittedLogin', username_field_index: {value: 0}, password_field_index: {value: 1}},
+        selection: {
+          kind: 'SubmittedLogin',
+          username_field_index: { value: 0 },
+          password_field_index: { value: 1 },
+        },
       }
       stagedOffer = {
         kind: StagedOfferKind.Present,
@@ -488,7 +506,8 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
             },
           }
         }
-        case 'nook:website-login-save-offer': return new DemoSubmittedLoginOffer(message).response()
+        case 'nook:website-login-save-offer':
+          return new DemoSubmittedLoginOffer(message).response()
         case 'nook:website-login-save-pending':
           pendingSaveOfferReads += 1
           if (pendingSaveOfferReads <= delayedPendingSaveOfferReads) {
