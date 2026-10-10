@@ -1,6 +1,6 @@
 import { afterEach, expect, test, vi } from 'vitest'
 import { Effect } from 'effect'
-import { decode_extension_vault_event_log_response as decodeVaultResponse } from '$app-wasm'
+import * as vaultWasm from '$app-wasm'
 import { ExtensionVaultEventLogChannel } from '$lib/extension/vault-event-log'
 import type {
   ExtensionBrowserHost,
@@ -17,8 +17,15 @@ import {
 
 const vaultStoreId = 'store_abcdefghijk'
 const responseDecoders = [
-  { package: 'companion', decode: decode_extension_vault_event_log_response },
-  { package: 'vault', decode: decodeVaultResponse },
+  {
+    package: 'companion',
+    decode_extension_vault_event_log_response,
+  },
+  {
+    package: 'vault',
+    decode_extension_vault_event_log_response:
+      vaultWasm.decode_extension_vault_event_log_response,
+  },
 ]
 afterEach(() => vi.unstubAllGlobals())
 
@@ -44,24 +51,30 @@ test('generated WASM admits the public encrypted-event request and rejects malfo
 
 test.each(responseDecoders)(
   '$package generated WASM admits exported records only for the requested vault',
-  ({ decode }) => {
+  ({ decode_extension_vault_event_log_response }) => {
     const response: ExtensionVaultEventLogResponse = {
       kind: 'Exported',
       vault_store_id: vaultStoreId,
       event_log_records: [],
     }
     const request = { response, vault_store_id: vaultStoreId }
-    expect(decode(request)).toEqual(response)
+    expect(decode_extension_vault_event_log_response(request)).toEqual(response)
     const foreignRequest = { response, vault_store_id: 'store_lmnopqrstuv' }
-    expect(() => decode(foreignRequest)).toThrow(Error)
+    expect(() =>
+      decode_extension_vault_event_log_response(foreignRequest),
+    ).toThrow(Error)
     const malformedRequest = {
       response: { kind: 'Exported' },
       vault_store_id: vaultStoreId,
     }
     // Deliberately incomplete raw response must still produce a real JS Error from Rust.
     expect(() =>
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Deliberate malformed host input verifies actual Rust admission despite structural generated typing.
-      decode(malformedRequest as Parameters<typeof decode>[0]),
+      decode_extension_vault_event_log_response(
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Deliberate malformed host input verifies actual Rust admission despite structural generated typing.
+        malformedRequest as Parameters<
+          typeof decode_extension_vault_event_log_response
+        >[0],
+      ),
     ).toThrow(Error)
   },
 )

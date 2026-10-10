@@ -2,6 +2,7 @@ import { Effect } from "effect";
 import {
   decode_extension_vault_event_log_response,
   type ExtensionVaultEventLogResponse,
+  type ExtensionEventLogRecord,
 } from "$app-wasm";
 import type { ExtensionVaultEventLogRequestMessage } from "$web-shared/extension/nook-companion-wasm/nook_companion_wasm.js";
 import {
@@ -28,7 +29,7 @@ type VaultEventLogPullRequest = {
 };
 type ExportedVaultEventLog = Extract<
   ExtensionVaultEventLogResponse,
-  { kind: "Exported" }
+  { event_log_records: ExtensionEventLogRecord[] }
 >;
 type VaultEventLogResponseAdmission = {
   readonly response: ExtensionRuntimeResponseObject;
