@@ -561,6 +561,59 @@ mod tests {
     }
 
     #[test]
+    fn chase_login_matching_is_explicit_symmetric_and_normalized() -> anyhow::Result<()> {
+        for website_url in [
+            "https://chaseonline.chase.com/login",
+            "https://secure.chase.com/login",
+            "https://secure03ea.chase.com/login",
+            "https://secure05c.chase.com/login",
+            "  https://SECURE06EA.CHASE.COM:443/login?next=account#signin  ",
+        ] {
+            for origin in ["https://www.chase.com", "https://secure.chase.com"] {
+                assert!(
+                    LoginHostMatchRequest {
+                        website_url,
+                        origin
+                    }
+                    .matches()?
+                );
+                assert!(
+                    LoginHostMatchRequest {
+                        website_url: origin,
+                        origin: website_url,
+                    }
+                    .matches()?
+                );
+            }
+        }
+        for origin in [
+            "https://unrelated.example",
+            "https://evil-chase.com",
+            "https://chase.com.evil.example",
+            "https://secure.chase.com.evil.example",
+            "https://nested.secure.chase.com",
+            "https://unlisted.chase.com",
+            "https://secure07ea.chase.com",
+        ] {
+            assert!(
+                !LoginHostMatchRequest {
+                    website_url: "https://www.chase.com/login",
+                    origin,
+                }
+                .matches()?
+            );
+            assert!(
+                !LoginHostMatchRequest {
+                    website_url: origin,
+                    origin: "https://secure.chase.com",
+                }
+                .matches()?
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
     fn website_host_strips_url_credentials_query_and_fragment() -> anyhow::Result<()> {
         for (url, expected) in [
             ("https://example.com?next=/vault", "example.com"),
