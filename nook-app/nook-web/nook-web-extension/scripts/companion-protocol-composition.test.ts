@@ -4,7 +4,8 @@ import {
 } from '../src/offscreen/session-vault-operations'
 import 'fake-indexeddb/auto'
 import { rejects, throws } from 'node:assert/strict'
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test'
+import { Effect } from 'effect'
 import {
   IDBCursor,
   IDBCursorWithValue,
@@ -56,6 +57,9 @@ import {
   NookPreparedCompanionPairingActivation,
   NookStoredCompanionPairingActivationCandidate,
   NookVaultManager,
+  NookSecretFormFields,
+  SecretType,
+  build_secret_yaml,
   NookPrevalidatedCompanionPairingApproval,
   seal_auth_providers_for_device_public_key,
   VaultApplication,
@@ -63,6 +67,133 @@ import {
   type CompanionIdentityHandoffResponse,
   type CompanionWebsiteHandoffBegin,
 } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm.js'
+
+type GeneralLoginCompositionContext = {
+  readonly self: GeneralLoginCompositionScenario
+}
+
+class GeneralLoginCompositionScenario {
+  private readonly context: GeneralLoginCompositionContext = { self: this }
+
+  constructor(private readonly manager: NookVaultManager) {}
+
+  readonly verify = Effect.fn(this.context, function* () {
+    const first = NookSecretFormFields.login(
+      'https://accounts.arbitrary-widget.com/login',
+      'synthetic-first',
+      'synthetic-first-password',
+      '',
+    )
+    const selected = NookSecretFormFields.login(
+      'https://arbitrary-widget.com/login',
+      'synthetic-selected',
+      'synthetic-selected-password',
+      '',
+    )
+    const tenant = NookSecretFormFields.login(
+      'https://www.github.io/login',
+      'synthetic-private-tenant',
+      'synthetic-private-password',
+      '',
+    )
+    try {
+      const firstRecords = yield* Effect.tryPromise(() =>
+        this.manager.add_secret(
+          'general-login-first',
+          SecretType.Login,
+          build_secret_yaml(first),
+        ),
+      )
+      for (const record of firstRecords) record.free()
+      const selectedRecords = yield* Effect.tryPromise(() =>
+        this.manager.add_secret(
+          'general-login-selected',
+          SecretType.Login,
+          build_secret_yaml(selected),
+        ),
+      )
+      for (const record of selectedRecords) record.free()
+      const tenantRecords = yield* Effect.tryPromise(() =>
+        this.manager.add_secret(
+          'general-login-tenant',
+          SecretType.Login,
+          build_secret_yaml(tenant),
+        ),
+      )
+      for (const record of tenantRecords) record.free()
+    } finally {
+      first.free()
+      selected.free()
+      tenant.free()
+    }
+
+    const reveal = spyOn(this.manager, 'reveal_website_login_for_fill')
+    try {
+      const accounts = yield* Effect.tryPromise(() =>
+        this.manager.list_website_login_accounts(
+          'https://checkout.arbitrary-widget.com',
+        ),
+      )
+      try {
+        const identities = accounts.map((account) => account.secretId).sort()
+        const expected: string[] = [
+          'general-login-first',
+          'general-login-selected',
+        ]
+        expect(identities).toEqual(expected)
+        expect(reveal).toHaveBeenCalledTimes(0)
+        // An explicit picker choice carries only the selected opaque identity.
+        const chosenIdentity = 'general-login-selected'
+        const credential = yield* Effect.tryPromise(() =>
+          this.manager.reveal_website_login_for_fill(
+            chosenIdentity,
+            'https://checkout.arbitrary-widget.com',
+          ),
+        )
+        try {
+          expect(credential.username).toBe('synthetic-selected')
+          expect(credential.password).toBe('synthetic-selected-password')
+          expect(reveal).toHaveBeenCalledTimes(1)
+        } finally {
+          credential.free()
+        }
+      } finally {
+        for (const account of accounts) account.free()
+      }
+
+      const sameTenant = yield* Effect.tryPromise(() =>
+        this.manager.list_website_login_accounts('https://www.github.io'),
+      )
+      try {
+        expect(sameTenant).toHaveLength(1)
+        expect(sameTenant[0]?.secretId).toBe('general-login-tenant')
+        expect(sameTenant[0]?.websiteHost).toBe('www.github.io')
+      } finally {
+        for (const account of sameTenant) account.free()
+      }
+
+      const unrelated = yield* Effect.tryPromise(() =>
+        this.manager.list_website_login_accounts('https://other.github.io'),
+      )
+      try {
+        expect(unrelated).toHaveLength(0)
+      } finally {
+        for (const account of unrelated) account.free()
+      }
+      yield* Effect.tryPromise(() =>
+        rejects(
+          this.manager.reveal_website_login_for_fill(
+            'general-login-tenant',
+            'https://other.github.io',
+          ),
+          Error,
+        ),
+      )
+    } finally {
+      reveal.mockRestore()
+    }
+  })
+}
 
 let extension: NookVaultManager
 let extensionOwned = false
@@ -479,6 +610,11 @@ describe('generated companion protocol composition', () => {
     } finally {
       for (const account of accounts) account.free()
     }
+  })
+
+  test('real WASM lists arbitrary sibling logins, reveals the chosen identity and isolates private tenants', () => {
+    const scenario = new GeneralLoginCompositionScenario(extension)
+    return Effect.runPromise(scenario.verify())
   })
 
   test('issues fresh discovery after an unlocked endpoint and authorizes the latest request', async () => {
