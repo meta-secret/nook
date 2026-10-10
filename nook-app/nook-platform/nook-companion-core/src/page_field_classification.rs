@@ -30,6 +30,9 @@ pub use authentication_advance_control::{
     PageControlActionability, PageControlOwnership, PageControlSemantics,
     PageControlSubmissionDestinationSource, PageControlSubmissionMethod,
 };
+pub(crate) use authentication_advance_control::{
+    SubmittedLoginControlAdmission, SubmittedLoginControlRequest,
+};
 pub(crate) use authentication_route_evidence::MAX_AUTHENTICATION_POLICY_DESTINATION_TEXT_BYTES;
 pub use authentication_route_evidence::{
     AuthenticationRouteActuation, AuthenticationRouteEvidence, CredentialUpdateRouteEvidence,
