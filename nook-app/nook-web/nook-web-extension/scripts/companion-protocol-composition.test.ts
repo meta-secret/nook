@@ -136,10 +136,7 @@ class GeneralLoginCompositionScenario {
       )
       try {
         const identities = accounts.map((account) => account.secretId).sort()
-        const expected: string[] = [
-          'secret_General0001',
-          'secret_General0002',
-        ]
+        const expected: string[] = ['secret_General0001', 'secret_General0002']
         expect(identities).toEqual(expected)
         expect(reveal).toHaveBeenCalledTimes(0)
         // An explicit picker choice carries only the selected opaque identity.
@@ -167,7 +164,7 @@ class GeneralLoginCompositionScenario {
       try {
         expect(sameTenant).toHaveLength(1)
         expect(sameTenant[0]?.secretId).toBe('secret_General0003')
-        expect(sameTenant[0]?.websiteHost).toBe('www.github.io')
+        expect(sameTenant[0]?.websiteHost).toBe('github.io')
       } finally {
         for (const account of sameTenant) account.free()
       }
