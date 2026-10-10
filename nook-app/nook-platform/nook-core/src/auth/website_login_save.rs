@@ -65,7 +65,7 @@ impl WebsiteLoginSaveRequest<'_> {
     #[must_use]
     pub fn decide(&self) -> WebsiteLoginSaveDecision {
         let username = self.username.trim();
-        let password = self.password.trim();
+        let password = self.password;
         match username.is_empty() || password.is_empty() {
             true => return WebsiteLoginSaveDecision::Invalid,
             false => {}
@@ -219,6 +219,35 @@ mod tests {
         assert_eq!(
             decide_website_login_save("", "alice", "password", &[]),
             WebsiteLoginSaveDecision::Invalid
+        );
+    }
+
+    #[test]
+    fn compares_password_bytes_without_trimming() -> anyhow::Result<()> {
+        let id = secret_id("e")?;
+        let existing = login("https://example.com", "alice", " password ");
+        let candidates = [WebsiteLoginSaveCandidate {
+            secret_id: &id,
+            login: &existing,
+        }];
+        assert_eq!(
+            decide_website_login_save("https://example.com", "alice", " password ", &candidates),
+            WebsiteLoginSaveDecision::AlreadySaved {
+                secret_id: id.clone()
+            }
+        );
+        assert_eq!(
+            decide_website_login_save("https://example.com", "alice", "password", &candidates),
+            WebsiteLoginSaveDecision::Update { secret_id: id }
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn whitespace_password_is_a_nonempty_credential() {
+        assert_eq!(
+            decide_website_login_save("https://example.com", "alice", " ", &[]),
+            WebsiteLoginSaveDecision::Create
         );
     }
 }

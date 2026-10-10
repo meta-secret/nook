@@ -53,7 +53,7 @@ impl From<CompanionProtocolError> for CompanionProtocolFailure {
 pub struct CompanionEpochMilliseconds(f64);
 
 impl CompanionEpochMilliseconds {
-    fn validate(self) -> Result<(), CompanionProtocolError> {
+    pub(crate) fn validate(self) -> Result<(), CompanionProtocolError> {
         if !self.0.is_finite()
             || self.0 <= 0.0
             || self.0.fract() != 0.0
