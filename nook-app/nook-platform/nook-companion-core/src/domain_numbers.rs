@@ -3,7 +3,9 @@
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Tsify,
+)]
 #[serde(transparent)]
 #[tsify(type = "number")]
 pub struct AuthenticationOutcomeElapsedMilliseconds(u32);

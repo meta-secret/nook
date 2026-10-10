@@ -20,6 +20,8 @@ mod envelope;
 mod microsoft;
 mod policy;
 mod submission_destination_source;
+mod submitted_login;
+pub(crate) use submitted_login::{SubmittedLoginControlAdmission, SubmittedLoginControlRequest};
 mod tesla;
 
 pub use submission_destination_source::PageControlSubmissionDestinationSource;
