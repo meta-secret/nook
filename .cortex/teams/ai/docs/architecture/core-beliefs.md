@@ -51,7 +51,7 @@ These are the core engineering beliefs that guide the development of Nook. Becau
   hosted evidence.
 - Author behavior tests and retain their required PR-check execution.
 - Routine local feedback remains scoped rustfmt and bounded inexpensive TS diagnostics.
-- Follow the [dev contract](../../../../gizmo-prime/architecture/dev-delivery.md).
+- Follow the [dev contract](../../../../docs/architecture/dev-delivery.md).
 
 ## 5. Pay Down Tech Debt Continuously
 
@@ -71,11 +71,11 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 
 - Report the outcome once with essential evidence and unresolved blockers.
 - Keep elapsed time in required delivery records unless the user requests it.
-- See [feature delivery evidence](../../../../gizmo-prime/architecture/dev-delivery.md#evidence).
+- See [feature delivery evidence](../../../../docs/architecture/dev-delivery.md#evidence).
 
 ## 8. Deliver Through One Feature Pull Request
 
-- Each feature Gizmo follows [mission delivery](../../../../gizmo-prime/workflows/mission-delivery.md).
+- Each feature Gizmo follows [mission delivery](../../../../docs/spec/mission-delivery.md).
 - Team Agents own scoped implementation and authored tests.
 - Gizmo owns feature compilation, review, and feature pull-request delivery decisions.
 - A manually run Feature Gizmo owns publication, slow PR validation, and merge readiness.

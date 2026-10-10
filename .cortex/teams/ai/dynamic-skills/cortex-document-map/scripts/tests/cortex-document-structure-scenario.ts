@@ -104,7 +104,8 @@ export class CortexDocumentMapCortexDocumentStructureScenario {
 - [SRE](teams/sre/index.md)
 - [Web development](teams/web-dev/index.md)
 - [Shared](shared/index.md)
-- [Gizmo Prime](gizmo-prime/index.md)
+- [Gizmo Prime](docs/spec/index.md)
+- [Project architecture](docs/architecture/index.md)
 ${args.rootExtra}`,
     };
     const aiGraphArgs: MakeDocumentArgs = {
@@ -132,7 +133,7 @@ ${args.rootExtra}`,
       content: '# Shared Index\n',
     };
     const gizmoGraphArgs: MakeDocumentArgs = {
-      path: '.cortex/gizmo-prime/index.md',
+      path: '.cortex/docs/spec/index.md',
       content: `# Gizmo Prime Index\n\n- [Gizmo policy](${args.gizmoTarget})\n`,
     };
     const corePolicyArgs: MakeDocumentArgs = {
@@ -140,7 +141,7 @@ ${args.rootExtra}`,
       content: '# Core Policy\n\n## Boundary\n\nPolicy text.\n',
     };
     const gizmoPolicyArgs: MakeDocumentArgs = {
-      path: '.cortex/gizmo-prime/policy.md',
+      path: '.cortex/docs/spec/policy.md',
       content: '# Gizmo Prime Policy\n\n## Boundary\n\nPolicy text.\n',
     };
     return [
@@ -156,43 +157,60 @@ ${args.rootExtra}`,
       this.makeDocument(webGraphArgs),
       this.makeDocument(sharedGraphArgs),
       this.makeDocument(gizmoGraphArgs),
+      this.makeDocument({
+        path: '.cortex/docs/architecture/index.md',
+        content: '# Project Architecture\n',
+      }),
       this.makeDocument(corePolicyArgs),
       this.makeDocument(gizmoPolicyArgs),
     ];
   }
 
   static nestedDistributedDocuments(): CortexDocumentSource[] {
-    const documents = this.distributedDocuments().map((document) =>
-      document.relativePath === PIPELINE_GRAPH_PATH
-        ? {
-            ...document,
-            content: `${document.content}
-- [Team Gizmo](gizmo/index.md)
-- [PR Lifecycle Agent](pr-lifecycle/index.md)
-`,
-          }
-        : document,
-    );
-    documents.push(
+    const documents = this.distributedDocuments();
+    const routed = this.withContent({
+      documents,
+      path: PIPELINE_GRAPH_PATH,
+      content:
+        '# Delivery Pipeline\n\n- [Specifications](docs/spec/index.md)\n- [Architecture](docs/architecture/index.md)\n',
+    });
+    return [
+      ...routed,
       this.makeDocument({
-        path: '.cortex/teams/delivery-pipeline/gizmo/index.md',
+        path: '.cortex/teams/delivery-pipeline/docs/spec/index.md',
         content:
-          '# Delivery Pipeline Team Gizmo Index\n\n- [Policy](policy.md)\n- [Gizmo authority](../../../gizmo-prime/policy.md)\n',
+          '# Delivery Specifications\n\n- [Policy](policy.md)\n- [Project specifications](../../../../docs/spec/index.md)\n',
       }),
       this.makeDocument({
-        path: '.cortex/teams/delivery-pipeline/gizmo/policy.md',
-        content: '# Team Gizmo Policy\n',
+        path: '.cortex/teams/delivery-pipeline/docs/spec/policy.md',
+        content: '# Delivery Policy\n\n## Scope\n\nOne authorized operation.\n',
       }),
       this.makeDocument({
-        path: '.cortex/teams/delivery-pipeline/pr-lifecycle/index.md',
+        path: '.cortex/teams/delivery-pipeline/docs/architecture/index.md',
+        content: '# Delivery Architecture\n\n- [Architecture](delivery.md)\n',
+      }),
+      this.makeDocument({
+        path: '.cortex/teams/delivery-pipeline/docs/architecture/delivery.md',
         content:
-          '# Delivery Pipeline PR Lifecycle Index\n\n- [Policy](workflows/policy.md)\n- [Gizmo authority](../../../gizmo-prime/policy.md)\n',
+          '# Delivery Architecture\n\n## Scope\n\nProject constraints.\n',
       }),
-      this.makeDocument({
-        path: '.cortex/teams/delivery-pipeline/pr-lifecycle/workflows/policy.md',
-        content: '# PR Lifecycle Policy\n',
-      }),
-    );
-    return documents;
+    ];
   }
+
+  static withContent(request: DocumentContentChange): CortexDocumentSource[] {
+    return request.documents.map((document) => {
+      switch (document.relativePath) {
+        case request.path:
+          return { ...document, content: request.content };
+        default:
+          return document;
+      }
+    });
+  }
+}
+
+interface DocumentContentChange {
+  readonly documents: readonly CortexDocumentSource[];
+  readonly path: string;
+  readonly content: string;
 }

@@ -2,7 +2,7 @@
 
 ## Agent delivery applicability
 
-Follow the [dev delivery contract](../../../gizmo-prime/architecture/dev-delivery.md) for
+Follow the [dev delivery contract](../../../docs/architecture/dev-delivery.md) for
 feature compilation and the manually run Feature Gizmo's slow PR cycle.
 Local diagnostics follow the root
 [delivery and validation policy](../../../AGENTS.md#delivery-and-validation).
@@ -59,8 +59,8 @@ Full specification: [logging.md § Debugging, troubleshooting, and CI verificati
 
 For human debugging, local `task ci:pr` remains an optional warm-cache mirror.
 It is a broad gate, not an agent local diagnostic target or a merge gate. See
-[pull request validation](../../../gizmo-prime/workflows/pull-requests.md) and
-[mission delivery](../../../gizmo-prime/workflows/mission-delivery.md).
+[pull request validation](../../../docs/spec/pull-requests.md) and
+[mission delivery](../../../docs/spec/mission-delivery.md).
 
 E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_INTERVAL_MS=1000` for fast background sync. Main saves prod dist before e2e and restores after (`web:e2e:restore-prod-dist`).
 
@@ -271,7 +271,7 @@ assume per-PR Cloudflare preview hosts can be covered by wildcards. See
    test/check/E2E diagnostics; do not run unrelated heavy product builds or
    broad local gates.
 4. **Do** update this doc and
-   [pull requests](../../../gizmo-prime/workflows/pull-requests.md) when workflow
+   [pull requests](../../../docs/spec/pull-requests.md) when workflow
    behavior changes.
 5. Explicitly labeled PR CI runs Rust/WASM/JS unit tests, Svelte/type checks, lint, formatting, and builds.
    - UI-changing PRs must still add or update their focused headless demo specs.
@@ -287,4 +287,4 @@ assume per-PR Cloudflare preview hosts can be covered by wildcards. See
    - Credentialed **sync-live** checks are explicit manual runs.
 6. **Never** add Dockerfile `RUN --mount=type=cache`; dependency installs must use normal image layers. The repository-root Rust suite invoked by `task preflight` rejects violations before app setup.
 
-See also: [System architecture §3](../../../shared/architecture/system.md#3-the-engineering-harness), [pull requests](../../../gizmo-prime/workflows/pull-requests.md).
+See also: [System architecture §3](../../../shared/architecture/system.md#3-the-engineering-harness), [pull requests](../../../docs/spec/pull-requests.md).

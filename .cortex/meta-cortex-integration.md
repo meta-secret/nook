@@ -246,10 +246,10 @@ from the installed library root.
   [verifier context boundary](../.meta-cortex/teams/gizmo-team/docs/project-context.md#carry-and-refresh-assignment-context)
   for operational project context and framework practice review.
 
-Nook's Prime and Team Gizmo documents adapt the upstream roles. The Nook
-[agent catalog](gizmo-prime/team-gizmo/role-catalog.md) maps project scopes to
-upstream roles and preserves the Nook role identities used by Loom. Upstream
-role and skill authority remains in the installed Meta-Cortex catalogs.
+Use Meta-Cortex Prime, Team Gizmo, and specialist roles directly. Nook's
+[scope routing](docs/spec/upstream-role-routing.md) supplies functional and module
+requirements without maintaining project agent identities. Loom resolves Nook
+context by functional team; upstream catalogs own role and skill authority.
 
 #### Cortex authoring
 

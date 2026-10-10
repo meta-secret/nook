@@ -17,7 +17,7 @@ class CortexContextRouterScenario {
 
 const TRUSTED_HANDOFF_DUPLICATION_SURFACES = [
   '.cortex/AGENTS.md',
-  '.cortex/teams/ai/AGENTS.md',
+  '.cortex/teams/ai/docs/spec/functional-ownership.md',
   '.cortex/teams/ai/docs/architecture/refactoring-experts.md',
   '.cortex/teams/ai/workflows/structural-refactoring.md',
   'agentic-ai/loom/.cortex/docs/spec/loom-tools.md',
@@ -69,7 +69,7 @@ Model text.
   expect(markdown).toContain('# Nook Cortex Index');
   expect(markdown).toContain('## Product and operational contexts');
   expect(markdown).toContain(
-    '[Prime, single Team Gizmo, and delivery](gizmo-prime/index.md)',
+    '[Prime, single Team Gizmo, and delivery](docs/spec/index.md)',
   );
   expect(markdown).not.toContain('[Gizmo Prime](teams/gizmo/index.md)');
   expect(markdown).toContain(
@@ -109,7 +109,7 @@ test('renders the complete canonical Cortex context router', () => {
   }
 
   const teamOwnershipContracts = [
-    '[Prime, single Team Gizmo, and delivery](gizmo-prime/index.md)',
+    '[Prime, single Team Gizmo, and delivery](docs/spec/index.md)',
     '[Delivery Pipeline](teams/delivery-pipeline/index.md)',
     '[AI](teams/ai/index.md)',
     '[Development Core](teams/dev-core/index.md)',
@@ -203,7 +203,10 @@ test('keeps direct remote Task and BuildKit execution authoritative', () => {
 
 test('keeps AI acceptance claims aligned with executable enforcement', () => {
   const aiContract = readFileSync(
-    path.join(REPOSITORY_ROOT, '.cortex/teams/ai/AGENTS.md'),
+    path.join(
+      REPOSITORY_ROOT,
+      '.cortex/teams/ai/docs/spec/functional-ownership.md',
+    ),
     'utf8',
   );
   for (const required of [
@@ -250,64 +253,19 @@ test('keeps AI acceptance claims aligned with executable enforcement', () => {
   );
 });
 
-test('routes AI and Delivery Pipeline authorities through their owner graphs', () => {
-  const aiGraph = readFileSync(
-    new URL('../../../../../../teams/ai/index.md', import.meta.url),
+test('routes project requirements through specification owners', () => {
+  const ai = readFileSync(
+    path.join(REPOSITORY_ROOT, '.cortex/teams/ai/index.md'),
     'utf8',
   );
-  const aiSkills = readFileSync(
-    new URL(
-      '../../../../../../teams/ai/dynamic-skills/index.md',
-      import.meta.url,
-    ),
+  const delivery = readFileSync(
+    path.join(REPOSITORY_ROOT, '.cortex/teams/delivery-pipeline/index.md'),
     'utf8',
   );
-  const pipelineGizmo = readFileSync(
-    new URL(
-      '../../../../../../teams/delivery-pipeline/gizmo/AGENTS.md',
-      import.meta.url,
-    ),
-    'utf8',
-  );
-  const pipelineGraph = readFileSync(
-    new URL(
-      '../../../../../../teams/delivery-pipeline/gizmo/index.md',
-      import.meta.url,
-    ),
-    'utf8',
-  );
-
-  expect(aiGraph).not.toContain('../delivery-pipeline/');
-  expect(aiSkills).not.toContain('dynamic-skills/dev-publish.md');
-  expect(aiSkills).not.toContain('dynamic-skills/dev-promote.md');
-  expect(aiSkills).toContain(
-    '[Branch naming](../../../gizmo-prime/dynamic-skills/branch-naming.md)',
-  );
-  expect(aiSkills).toContain(
-    '[Pre-push hygiene](../../sre/dynamic-skills/pre-push-hygiene.md)',
-  );
-  expect(pipelineGizmo).toContain(
-    '[Nook Team Gizmo wrapper](../../../gizmo-prime/team-gizmo/AGENTS.md)',
-  );
-  expect(pipelineGraph).toContain('[Team contract](../AGENTS.md)');
-});
-
-test('keeps Delivery Pipeline direct-child ownership in its parent graph', () => {
-  const deliveryPipelineGraph = readFileSync(
-    new URL(
-      '../../../../../../teams/delivery-pipeline/index.md',
-      import.meta.url,
-    ),
-    'utf8',
-  );
-
-  expect(deliveryPipelineGraph).toContain(
-    '- [Team Gizmo index](gizmo/index.md)',
-  );
-  expect(deliveryPipelineGraph).toContain(
-    '- [PR Lifecycle Agent index](pr-lifecycle/index.md)',
-  );
-  expect(deliveryPipelineGraph).not.toContain('internal/');
+  expect(ai).toContain('docs/spec/index.md');
+  expect(delivery).toContain('docs/spec/index.md');
+  expect(delivery).not.toContain('gizmo/index.md');
+  expect(delivery).not.toContain('pr-lifecycle/index.md');
 });
 
 test('stripDocumentNavigation strips relationships and document map', () => {
@@ -343,57 +301,40 @@ This is the actual overview text.
   expect(stripped).not.toContain('- [Other](other.md)');
 });
 
-test('composes upstream roles with Nook delivery instead of duplicating policies', () => {
+test('uses upstream roles directly with Nook project requirements', () => {
   const root = readFileSync(
     path.join(REPOSITORY_ROOT, '.cortex/AGENTS.md'),
     'utf8',
   );
-  const prime = readFileSync(
-    path.join(REPOSITORY_ROOT, '.cortex/gizmo-prime/AGENTS.md'),
-    'utf8',
-  );
-  const team = readFileSync(
-    path.join(REPOSITORY_ROOT, '.cortex/gizmo-prime/team-gizmo/AGENTS.md'),
-    'utf8',
-  );
-  const ai = readFileSync(
-    path.join(REPOSITORY_ROOT, '.cortex/teams/ai/AGENTS.md'),
+  const routing = readFileSync(
+    path.join(REPOSITORY_ROOT, '.cortex/docs/spec/upstream-role-routing.md'),
     'utf8',
   );
   const delivery = readFileSync(
-    path.join(
-      REPOSITORY_ROOT,
-      '.cortex/gizmo-prime/architecture/dev-delivery.md',
-    ),
+    path.join(REPOSITORY_ROOT, '.cortex/docs/architecture/dev-delivery.md'),
     'utf8',
   );
   expect(root.indexOf('CIRCUIT-BREAKER.md')).toBeLessThan(
     root.indexOf('../.meta-cortex/AGENTS.md'),
   );
   expect(root).toContain(
-    '../.meta-cortex/teams/delivery-team/agents/integration-agent/AGENTS.md',
+    '../.meta-cortex/teams/gizmo-team/agents/gizmo-prime/AGENTS.md',
+  );
+  expect(root).toContain(
+    '../.meta-cortex/teams/gizmo-team/agents/gizmo/AGENTS.md',
   );
   expect(root).toContain(
     'Nook project root and shared Meta-Cortex library root',
   );
-  expect(root).toContain('selected base and feature branches');
   expect(root).toContain('each worker branch and worktree in dependency order');
-  expect(root).toContain('applicable Nook checks');
-  expect(ai).not.toContain('owns shared-branch sequencing');
-  expect(prime).toContain(
-    '../../.meta-cortex/teams/gizmo-team/agents/gizmo-prime/AGENTS.md',
-  );
-  expect(team).toContain(
-    '../../../.meta-cortex/teams/gizmo-team/agents/gizmo/AGENTS.md',
-  );
-  expect(team).toContain(
-    '../../../.meta-cortex/teams/delivery-team/agents/integration-agent/AGENTS.md',
-  );
-  expect(team).toContain('project and shared-library');
-  expect(team).toContain('roots, selected base and feature branches');
-  expect(team).toContain('worker branches and worktrees');
-  expect(team).toContain('applicable Nook checks');
-  expect(team).toContain('There is one Team Gizmo per feature.');
+  expect(routing).toContain('same upstream role');
+  expect(routing).toContain('functional team keys only');
   expect(delivery).toContain('git fetch --prune origin');
-  expect(delivery).toContain('freshly fetched `origin/main` base branch');
+  expect(delivery).toContain(
+    'freshly fetched ' +
+      String.fromCharCode(96) +
+      'origin/main' +
+      String.fromCharCode(96) +
+      ' base branch',
+  );
 });

@@ -74,7 +74,8 @@ const validFinding = {
 
 test('acceptance verifies direct child graph ownership and rejects omitted evidence', () => {
   const contexts = [
-    'gizmo-prime',
+    'docs/spec',
+    'docs/architecture',
     'teams/ai',
     'teams/dev-core',
     'teams/delivery-pipeline',
@@ -96,19 +97,19 @@ test('acceptance verifies direct child graph ownership and rejects omitted evide
         content: '# Owner Graph\n',
       })),
       {
-        relativePath: '.cortex/teams/delivery-pipeline/pr-lifecycle/index.md',
+        relativePath: '.cortex/teams/delivery-pipeline/docs/spec/index.md',
         content: '# Feature Gizmo Index\n',
       },
       {
-        relativePath: '.cortex/teams/delivery-pipeline/pr-lifecycle/index.md',
+        relativePath: '.cortex/teams/delivery-pipeline/docs/spec/index.md',
         content: '# PR Lifecycle Index\n',
       },
       {
-        relativePath: '.cortex/teams/delivery-pipeline/pr-lifecycle/policy.md',
+        relativePath: '.cortex/teams/delivery-pipeline/docs/spec/policy.md',
         content: '# Feature Delivery Policy\n',
       },
       {
-        relativePath: '.cortex/teams/delivery-pipeline/pr-lifecycle/policy.md',
+        relativePath: '.cortex/teams/delivery-pipeline/docs/spec/policy.md',
         content: '# PR Lifecycle Policy\n',
       },
     ],
@@ -118,17 +119,17 @@ test('acceptance verifies direct child graph ownership and rejects omitted evide
     findings: [
       {
         code: CortexStructureFindingCode.MissingFromIndex,
-        file: '.cortex/teams/delivery-pipeline/pr-lifecycle/index.md',
+        file: '.cortex/teams/delivery-pipeline/docs/spec/index.md',
         line: 1,
         message:
-          'Document is not indexed in its owning index .cortex/teams/delivery-pipeline/pr-lifecycle/index.md: .cortex/teams/delivery-pipeline/pr-lifecycle/policy.md',
+          'Document is not indexed in its owning index .cortex/teams/delivery-pipeline/docs/spec/index.md: .cortex/teams/delivery-pipeline/docs/spec/policy.md',
       },
       {
         code: CortexStructureFindingCode.MissingFromIndex,
-        file: '.cortex/teams/delivery-pipeline/pr-lifecycle/index.md',
+        file: '.cortex/teams/delivery-pipeline/docs/spec/index.md',
         line: 1,
         message:
-          'Document is not indexed in its owning index .cortex/teams/delivery-pipeline/pr-lifecycle/index.md: .cortex/teams/delivery-pipeline/pr-lifecycle/policy.md',
+          'Document is not indexed in its owning index .cortex/teams/delivery-pipeline/docs/spec/index.md: .cortex/teams/delivery-pipeline/docs/spec/policy.md',
       },
     ],
   } as const;
@@ -150,10 +151,10 @@ test('acceptance verifies direct child graph ownership and rejects omitted evide
     ...auditRequest,
     documents: auditRequest.documents.map((document) =>
       document.relativePath ===
-      '.cortex/teams/delivery-pipeline/pr-lifecycle/index.md'
+      '.cortex/teams/delivery-pipeline/docs/spec/index.md'
         ? { ...document, content: '# Owner Graph\n\n- [Policy](policy.md)\n' }
         : document.relativePath ===
-            '.cortex/teams/delivery-pipeline/pr-lifecycle/index.md'
+            '.cortex/teams/delivery-pipeline/docs/spec/index.md'
           ? {
               ...document,
               content: '# Owner Graph\n\n- [Policy](policy.md)\n',

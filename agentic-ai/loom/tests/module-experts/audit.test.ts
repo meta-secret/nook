@@ -153,23 +153,23 @@ describe('module expert audit', () => {
 
   test('requires exact canonical context, web skills, and Rust boundary scope', () => {
     expect(MODULE_EXPERT_CANONICAL_CONTEXT_PATHS).toEqual([
-      '.cortex/teams/dev-core/AGENTS.md',
+      '.cortex/teams/dev-core/docs/spec/functional-ownership.md',
       '.cortex/teams/dev-core/index.md',
       '.cortex/teams/ai/dynamic-skills/module-expert.md',
-      '.cortex/gizmo-prime/workflows/module-oriented-development.md',
+      '.cortex/docs/spec/module-oriented-development.md',
     ]);
     expect(INTERNAL_API_EXPERT_CANONICAL_CONTEXT_PATHS).toEqual([
-      '.cortex/teams/ai/AGENTS.md',
+      '.cortex/teams/ai/docs/spec/functional-ownership.md',
       '.cortex/teams/ai/index.md',
       '.cortex/teams/ai/dynamic-skills/internal-api-expert.md',
       '.cortex/teams/ai/dynamic-skills/module-expert.md',
-      '.cortex/gizmo-prime/workflows/module-oriented-development.md',
+      '.cortex/docs/spec/module-oriented-development.md',
     ]);
     expect(WEB_EXPERT_CANONICAL_CONTEXT_PATHS).toEqual([
-      '.cortex/teams/web-dev/AGENTS.md',
+      '.cortex/teams/web-dev/docs/spec/functional-ownership.md',
       '.cortex/teams/web-dev/index.md',
       '.cortex/teams/ai/dynamic-skills/module-expert.md',
-      '.cortex/gizmo-prime/workflows/module-oriented-development.md',
+      '.cortex/docs/spec/module-oriented-development.md',
     ]);
     expect(WEB_EXPERT_SKILL_PATHS).toEqual([
       '.cortex/teams/ai/dynamic-skills/module-expert.md',
@@ -177,10 +177,10 @@ describe('module expert audit', () => {
       '.cortex/teams/security/dynamic-skills/browser-extension-release-security.md',
     ]);
     expect(WEB_EXPERT_SKILL_AUTHORITY_PATHS).toEqual([
-      '.cortex/teams/web-dev/AGENTS.md',
+      '.cortex/teams/web-dev/docs/spec/functional-ownership.md',
       '.cortex/teams/ai/docs/architecture/module-experts.md',
       '.cortex/teams/ai/dynamic-skills/module-expert.md',
-      '.cortex/gizmo-prime/workflows/module-oriented-development.md',
+      '.cortex/docs/spec/module-oriented-development.md',
     ]);
     expect(WEB_EXPERT_AUTHORITY_PATHS).toEqual([
       'nook-app/.cortex/docs/architecture/packages.md',

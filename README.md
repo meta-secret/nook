@@ -275,7 +275,7 @@ capability (`app`, `auth`, `content`, `enrollment`, `extension`, `runtime`, and
 `vault`). Provider-specific authentication adapters live under `auth/google`
 and `auth/icloud`; portable provider policy remains in Rust.
 
-Deeper documentation lives in [`.cortex/`](.cortex/):
+Deeper documentation lives in [`.cortex/`](.cortex):
 
 - [Architecture](.cortex/shared/architecture/system.md)
 - [Vault event log](nook-app/nook-platform/nook-event-log/.cortex/docs/architecture/vault-event-log.md)
@@ -315,7 +315,7 @@ Prerequisites:
 The root `Taskfile.yml` is the repository entrypoint. Compile, test, and
 package installs run inside the project container. Infrastructure commands use
 [`infra/Taskfile.yml`](infra/Taskfile.yml) as their composition root and flatten
-domain-owned modules from [`infra/tasks/`](infra/tasks/) into the public
+domain-owned modules from [`infra/tasks/`](infra/tasks) into the public
 `infra:*` command surface; standalone infrastructure shell scripts and orphan
 domain Taskfiles are prohibited.
 
@@ -368,7 +368,7 @@ cannot consume each other's handoff; Rust `target/` and the compiler toolchain
 never enter `nook-web:local`.
 
 Rust compilation can use authenticated SeaweedFS S3 sccache deployed from
-[`infra/`](infra/) at `https://sccache.dev.nokey.sh`. Authorized local and
+[`infra/`](infra) at `https://sccache.dev.nokey.sh`. Authorized local and
 trusted Main builds write `nook-sccache`; manually dispatched Remote tasks
 use a separately authorized read-only identity for that bucket. Branch builds
 reuse trusted compiler objects but cannot replace them.
@@ -425,7 +425,7 @@ encrypted event log under `nook-log/v1/events/` in a private repository.
 
 Delivery uses one Gizmo context and five Cortex engineering team domains:
 
-- [Gizmo Prime](.cortex/gizmo-prime/index.md) owns coordination, integration,
+- [Gizmo Prime](.cortex/docs/spec/index.md) owns coordination, integration,
   lifecycle state, and the final integrated PR verdict.
 
 - [AI](.cortex/teams/ai/index.md) owns Cortex, Loom, agent skills,

@@ -4,7 +4,7 @@ Load only the category that owns the assigned security question.
 
 ## Team contract
 
-- [Security team agent contract](AGENTS.md)
+- [Security ownership and specifications](docs/spec/index.md)
 
 ## Security architecture
 
@@ -32,9 +32,3 @@ contract.
 - Web development owns browser presentation and application interaction.
 - SRE owns infrastructure, deployment, and operational controls.
 - AI owns Cortex, Loom, agent routing, and deterministic policy enforcement.
-
-## Team topology
-
-- [Security Team Gizmo](gizmo/index.md) coordinates bounded Security-team mechanics.
-- [Cryptography specialist](cryptography-specialist/index.md) handles packeted cryptographic policy and review work.
-- [Security review specialist](security-review-specialist/index.md) handles packeted security review and acceptance evidence.

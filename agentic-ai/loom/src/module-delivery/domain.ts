@@ -1,7 +1,7 @@
-import { TeamKey } from '../team-agents/catalog.ts';
+import { TeamKey } from '../project-context/catalog.ts';
 import { TaskResourceClaim } from '../agent-workflow/domain.ts';
 
-export const MODULE_DELIVERY_PLAN_VERSION = 6;
+export const MODULE_DELIVERY_PLAN_VERSION = 7;
 export type ModuleDeliveryPlanInputVersion =
   typeof MODULE_DELIVERY_PLAN_VERSION;
 export const MAX_MODULE_DELIVERY_NODES = 64;
@@ -157,11 +157,23 @@ export class ModuleTaskOwnership {
     if (request.kind === ModuleDeliveryTaskKind.Write) {
       return ModuleTaskOwnership.ordinaryTaskWriteTeam(request.moduleRoot);
     }
-    if (request.expertContextPaths.includes('.cortex/teams/ai/AGENTS.md'))
+    if (
+      request.expertContextPaths.includes(
+        '.cortex/teams/ai/docs/spec/functional-ownership.md',
+      )
+    )
       return TeamKey.Ai;
-    if (request.expertContextPaths.includes('.cortex/teams/web-dev/AGENTS.md'))
+    if (
+      request.expertContextPaths.includes(
+        '.cortex/teams/web-dev/docs/spec/functional-ownership.md',
+      )
+    )
       return TeamKey.WebDevelopment;
-    if (request.expertContextPaths.includes('.cortex/teams/dev-core/AGENTS.md'))
+    if (
+      request.expertContextPaths.includes(
+        '.cortex/teams/dev-core/docs/spec/functional-ownership.md',
+      )
+    )
       return TeamKey.DevelopmentCore;
     return false;
   }
@@ -400,7 +412,7 @@ export type ModuleDeliveryPlanV4 = {
 };
 
 /** Current plan authority uses named branches and prepared worker worktrees. */
-export type ModuleDeliveryPlanV6 = {
+export type ModuleDeliveryPlanV7 = {
   readonly version: typeof MODULE_DELIVERY_PLAN_VERSION;
   readonly baseBranch: string;
   readonly featureBranch: string;
@@ -477,7 +489,7 @@ export type ModuleDeliveryPlanInput =
   | ModuleDeliveryPlanV2
   | ModuleDeliveryPlanV3
   | ModuleDeliveryPlanV4
-  | ModuleDeliveryPlanV6;
+  | ModuleDeliveryPlanV7;
 
 export type ModuleDeliveryPlan = ModuleDeliveryPlanInput;
 
@@ -524,7 +536,7 @@ export enum ModuleDeliveryCompatibilityStatus {
 export type DecodedCompatibleModuleDeliveryPlan = {
   readonly status: ModuleDeliveryCompatibilityStatus.Decoded;
   readonly inputVersion: typeof MODULE_DELIVERY_PLAN_VERSION;
-  readonly plan: ModuleDeliveryPlanV6;
+  readonly plan: ModuleDeliveryPlanV7;
 };
 
 export type RejectedCompatibleModuleDeliveryPlan = {
@@ -538,7 +550,7 @@ export type CompatibleModuleDeliveryPlanDecode =
 export type ValidatedModuleDeliveryPlan = {
   readonly status: ModuleDeliveryValidationStatus.Accepted;
   readonly inputVersion: typeof MODULE_DELIVERY_PLAN_VERSION;
-  readonly plan: ModuleDeliveryPlanV6;
+  readonly plan: ModuleDeliveryPlanV7;
   readonly planDigest: string;
   readonly topologicalOrder: readonly string[];
   readonly waves: readonly (readonly string[])[];

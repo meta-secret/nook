@@ -18,8 +18,7 @@ const FORBIDDEN_AUTHORITY_REFERENCES: [&str; 6] = [
     "web_development_team_agent",
     ".codex/agents",
 ];
-const EXECUTABLE_SKILL_OWNERS: [&str; 7] = [
-    ".cortex/gizmo-prime/dynamic-skills",
+const EXECUTABLE_SKILL_OWNERS: [&str; 6] = [
     ".cortex/shared/dynamic-skills",
     ".cortex/teams/ai/dynamic-skills",
     ".cortex/teams/dev-core/dynamic-skills",
@@ -308,11 +307,9 @@ fn cortex_prohibits_speculative_recovery_engines() {
 fn gizmo_dispatches_complete_harness_neutral_team_contracts() {
     let authority = [
         RepositoryFixture::repository_root().read(".cortex/AGENTS.md"),
-        RepositoryFixture::repository_root().read(".cortex/gizmo-prime/AGENTS.md"),
-        RepositoryFixture::repository_root()
-            .read(".cortex/gizmo-prime/workflows/team-oriented-development.md"),
-        RepositoryFixture::repository_root()
-            .read(".cortex/gizmo-prime/workflows/subagent-delegation.md"),
+        RepositoryFixture::repository_root().read(".cortex/docs/spec/upstream-role-routing.md"),
+        RepositoryFixture::repository_root().read(".cortex/docs/spec/team-oriented-development.md"),
+        RepositoryFixture::repository_root().read(".cortex/docs/spec/subagent-delegation.md"),
     ]
     .join("\n")
     .split_whitespace()
@@ -344,7 +341,7 @@ fn gizmo_dispatches_complete_harness_neutral_team_contracts() {
     }
 
     assert!(
-        authority.contains("workflows/subagent-delegation.md"),
+        authority.contains("docs/spec/subagent-delegation.md"),
         "Gizmo authority must link the compact Team Agent delegation workflow"
     );
 }
