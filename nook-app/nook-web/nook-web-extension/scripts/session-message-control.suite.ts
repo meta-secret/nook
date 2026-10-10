@@ -1,7 +1,7 @@
 import { err, ok } from 'neverthrow'
 import { describe, expect, test } from 'bun:test'
 import type { ExtensionSessionRequest } from '../src/offscreen/session-request-adapter'
-type BrowserFixtureFields<Value> = Value extends string | number | boolean | undefined ? Value : Value extends readonly (infer Entry)[] ? BrowserFixtureFields<Entry>[] : { [Key in keyof Value]: BrowserFixtureFields<Value[Key]> }
+type BrowserFixtureFields<Value> = Value extends string | number | boolean ? Value : Value extends readonly (infer Entry)[] ? BrowserFixtureFields<Entry>[] : { [Key in keyof Value]: BrowserFixtureFields<Value[Key]> }
 import {
   SessionOperationFailure,
   SessionOperationFailureKind,

@@ -1,3 +1,4 @@
+import type { LoginSaveEvidenceKind } from '../../../../nook-web-extension/src/lib/login-save-observation-codecs'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { handleCompanionWasmMessage } from '../../../../nook-web-extension/src/offscreen/session-companion-wasm-operations'
 import { LoginSaveNavigationMode, LoginSaveOutcomeSensor, type LoginSaveOutcomeSensorRequest } from '../../../../nook-web-extension/src/content/autofill/login-save-outcome-sensor'
@@ -83,7 +84,7 @@ describe('submitted login fresh save evidence', () => {
     vi.stubGlobal('chrome', browserRuntime)
     document.body.innerHTML = '<p hidden>Hidden template content</p><p>Please verify your email to continue</p>'
     const evidence = await sensor.collect()
-    const expectedCheckpoint: {kind: Extract<LoginSaveCommitEvidence, {kind: 'SubmittedLogin'}>['kind']; observation: Pick<LoginSaveOutcomeObservation, 'checkpoint'>} = {kind: 'SubmittedLogin', observation: {checkpoint: 'Pending'}}
+    const expectedCheckpoint: {kind: Extract<LoginSaveCommitEvidence, {kind: `${LoginSaveEvidenceKind.SubmittedLogin}`}>['kind']; observation: Pick<LoginSaveOutcomeObservation, 'checkpoint'>} = {kind: 'SubmittedLogin', observation: {checkpoint: 'Pending'}}
     expect(evidence).toMatchObject(expectedCheckpoint)
     expect(await fixture.eligibility(sensor)).toBe('Waiting')
     document.body.innerHTML = '<p hidden>Please verify your email to continue</p><p>Account dashboard</p>'
@@ -116,7 +117,7 @@ describe('submitted login fresh save evidence', () => {
     vi.setSystemTime(1750)
     document.body.innerHTML = '<input type="text" autocomplete="current-password" aria-label="Password">'
     const evidence = await sensor.collect()
-    const expectedAuthentication: {kind: Extract<LoginSaveCommitEvidence, {kind: 'SubmittedLogin'}>['kind']; observation: {observation: Pick<LoginSaveOutcomeObservation['observation'], 'authFieldsPresent'>}} = {kind: 'SubmittedLogin', observation: {observation: {authFieldsPresent: true}}}
+    const expectedAuthentication: {kind: Extract<LoginSaveCommitEvidence, {kind: `${LoginSaveEvidenceKind.SubmittedLogin}`}>['kind']; observation: {observation: Pick<LoginSaveOutcomeObservation['observation'], 'authFieldsPresent'>}} = {kind: 'SubmittedLogin', observation: {observation: {authFieldsPresent: true}}}
     expect(evidence).toMatchObject(expectedAuthentication)
     expect(await fixture.eligibility(sensor)).toBe('Waiting')
   })

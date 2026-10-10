@@ -197,18 +197,18 @@ export class LoginSubmissionDomSnapshot extends AuthenticationInputSurface {
       case true: default: return {kind: 'absent'}
     }
     let formScope: Parameters<typeof authenticationSubmissionControls.controlDestinationIdentity>[0]['formScope'] = {kind: PasswordFormScopeKind.Unowned}
-    let ownership: Extract<AuthenticationPageObservationFacts['detailedAdvanceControl'], {kind: 'observed'}>['observations'][number]['ownership'] = 'locally-scoped'
+    let ownership: Extract<AuthenticationPageObservationFacts['detailedAdvanceControl'], {kind: `${LoginSubmissionDomObservationKind.Observed}`}>['observations'][number]['ownership'] = 'locally-scoped'
     const root = this.root
     switch (true) {
       case root instanceof HTMLFormElement: formScope = {kind: PasswordFormScopeKind.Owned, owner: root}; ownership = 'owned-form'; break
       case true: default: break
     }
-    let actionability: Extract<AuthenticationPageObservationFacts['detailedAdvanceControl'], {kind: 'observed'}>['observations'][number]['actionability'] = 'actionable'
+    let actionability: Extract<AuthenticationPageObservationFacts['detailedAdvanceControl'], {kind: `${LoginSubmissionDomObservationKind.Observed}`}>['observations'][number]['actionability'] = 'actionable'
     switch (authenticationSubmissionControls.controlIsInert(selected)) {case true: actionability = 'inert'; break; case false: break}
-    let semantics: Extract<AuthenticationPageObservationFacts['detailedAdvanceControl'], {kind: 'observed'}>['observations'][number]['semantics'] = 'activation'
+    let semantics: Extract<AuthenticationPageObservationFacts['detailedAdvanceControl'], {kind: `${LoginSubmissionDomObservationKind.Observed}`}>['observations'][number]['semantics'] = 'activation'
     switch (selected.matches(semanticSubmitControlSelector)) {case true: semantics = 'semantic-submit'; break; case false: break}
     const destinationRequest: Parameters<typeof authenticationSubmissionControls.controlDestinationIdentity>[0] = {control: selected, formScope}
-    const observation: Extract<AuthenticationPageObservationFacts['detailedAdvanceControl'], {kind: 'observed'}>['observations'][number] = {
+    const observation: Extract<AuthenticationPageObservationFacts['detailedAdvanceControl'], {kind: `${LoginSubmissionDomObservationKind.Observed}`}>['observations'][number] = {
       actionability, ownership, semantics, authenticationUsername: 'absent', passwordFieldCount: 0,
       newPasswordFieldCount: 0, oneTimeCodeFieldCount: 0,
       semanticSubmitControlCount: this.root.querySelectorAll(semanticSubmitControlSelector).length,
@@ -219,7 +219,7 @@ export class LoginSubmissionDomSnapshot extends AuthenticationInputSurface {
       submissionMethod: authenticationSubmissionControls.controlSubmissionMethod(selected),
       submissionDestinationSource: AuthenticationSubmissionDestination.source(selected),
     }
-    return {kind: 'observed', observations: [observation]}
+    return {kind: LoginSubmissionDomObservationKind.Observed, observations: [observation]}
   }
 
   credentials({ usernameIndex, passwordIndex }: LoginSubmissionCredentialIndices): LoginCredentials {

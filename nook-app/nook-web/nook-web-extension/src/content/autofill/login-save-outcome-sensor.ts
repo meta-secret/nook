@@ -1,3 +1,4 @@
+import type { LoginSaveEvidenceKind } from '../../lib/login-save-observation-codecs'
 import { Effect, Schema } from 'effect'
 import { FocusedCredentialObservation } from './focused-credential-observation'
 import { FocusedCredentialOpportunity } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
@@ -25,7 +26,7 @@ export type LoginSaveOutcomeSensorRequest = {
   readonly submittedNodes: readonly HTMLInputElement[]
   readonly navigationMode: LoginSaveNavigationMode
 }
-type SubmittedLoginSaveEvidence = Extract<LoginSaveCommitEvidence, {kind: 'SubmittedLogin'}>
+type SubmittedLoginSaveEvidence = Extract<LoginSaveCommitEvidence, {kind: `${LoginSaveEvidenceKind.SubmittedLogin}`}>
 
 /** Retains only capture-time metadata and DOM identity after staging. */
 export class LoginSaveOutcomeSensor extends AuthenticationInputSurface {

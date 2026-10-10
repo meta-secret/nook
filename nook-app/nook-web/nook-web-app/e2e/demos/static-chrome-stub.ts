@@ -150,8 +150,9 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     response: unknown
   }
   type StagedSaveOffer = WebsiteLoginSaveOffer
+  enum DemoRuntimeAvailabilityKind {Unavailable = 'unavailable'}
   type DemoSubmittedLoginOfferResponse =
-    | {kind: 'unavailable'}
+    | {kind: `${DemoRuntimeAvailabilityKind.Unavailable}`}
     | {kind: DemoLoginSaveResponses['offerAvailable']; offer: StagedSaveOffer}
 
   const {
@@ -232,7 +233,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     constructor(private readonly message: RuntimeMessage) {}
     response(): DemoSubmittedLoginOfferResponse {
       const capture = this.message.payload?.capture
-      switch (true) {case typeof capture === 'object': break; case true: return {kind: 'unavailable'}}
+      switch (true) {case typeof capture === 'object': break; case true: return {kind: DemoRuntimeAvailabilityKind.Unavailable}}
       const offer: StagedSaveOffer = {
         offerId: 'demo-save-offer',
         decision: loginSaveCreateDecision,
@@ -657,7 +658,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     ) {
       return {
         workflow: response,
-        loginMatches: { kind: 'unavailable' },
+        loginMatches: { kind: DemoRuntimeAvailabilityKind.Unavailable },
         selectedFacts: { state: 'notApplicable' },
       }
     }
@@ -683,7 +684,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     if (!selectedFacts) {
       return {
         workflow: response,
-        loginMatches: { kind: 'unavailable' },
+        loginMatches: { kind: DemoRuntimeAvailabilityKind.Unavailable },
         selectedFacts: { state: 'notApplicable' },
       }
     }

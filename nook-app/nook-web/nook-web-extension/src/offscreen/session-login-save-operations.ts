@@ -1,3 +1,4 @@
+import type { LoginSaveEvidenceKind } from '../lib/login-save-observation-codecs'
 import { err, ok } from 'neverthrow'
 import { Effect } from 'effect'
 import { NookWebsiteLoginSaveDecision, type NookVaultManager, type NookWebsiteLoginSavePlan } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
@@ -18,8 +19,8 @@ export type LoginSaveSessionManager = Pick<NookVaultManager, 'open_extension_pas
 type CapturedLoginSaveNormalization = {baseline: LoginSaveCaptureBaseline; selection: WebsiteLoginSaveOffer['selection']}
 type LoginSaveCapturePayload = Extract<LoginSaveSessionMessage, {type: typeof ExtensionSessionMessageType.PlanLoginSave}>['payload']
 type LoginSaveCommitEvidence = Extract<LoginSaveSessionMessage, {type: typeof ExtensionSessionMessageType.CommitLoginSave}>['payload']['evidence']
-type SubmittedLoginCommitRequest = {activeManager: LoginSaveSessionManager; committedOffer: PendingLoginSaveOffer; observation: Extract<LoginSaveCommitEvidence, {kind: 'SubmittedLogin'}>['observation']}
-type ExplicitLoginCommitRequest = {committedOffer: PendingLoginSaveOffer; observation: Extract<LoginSaveCommitEvidence, {kind: 'ExplicitAuthentication'}>['observation']}
+type SubmittedLoginCommitRequest = {activeManager: LoginSaveSessionManager; committedOffer: PendingLoginSaveOffer; observation: Extract<LoginSaveCommitEvidence, {kind: `${LoginSaveEvidenceKind.SubmittedLogin}`}>['observation']}
+type ExplicitLoginCommitRequest = {committedOffer: PendingLoginSaveOffer; observation: Extract<LoginSaveCommitEvidence, {kind: `${LoginSaveEvidenceKind.ExplicitAuthentication}`}>['observation']}
 type LoginSaveManagerAccess = () => Promise<LoginSaveSessionManager>
 type LoginSaveScopePayload = {origin: string; sender: LoginSaveSenderContext}
 type LoginSavePlanResponse =

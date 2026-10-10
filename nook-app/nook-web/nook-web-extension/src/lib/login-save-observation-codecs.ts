@@ -3,15 +3,19 @@ import { AuthenticationWorkflowKind } from '../../../nook-web-shared/src/extensi
 import type { LoginSaveCaptureBaseline, LoginSaveCommitEvidence, LoginSaveOutcomeObservation, LoginSubmissionCapture, LoginSubmissionFieldMetadata, LoginSubmissionIntent, AuthenticationAdvanceControlObservation, AuthenticationDetailedAdvanceControlObservation, AuthenticationDetailedPasskeyControlObservation, AuthenticationDetailedPasskeyControlCandidateObservation, AuthenticationCeremonyContextObservation, AuthenticationCeremonyObservationFacts, AuthenticationAuthenticatorObservationFacts, AuthenticationFieldObservationFacts, AuthenticationCredentialSubmissionFacts, AuthenticationCredentialSubmissionObservation, AuthenticationPageObservationFacts, LoginSubmissionTarget, LoginCapturedFieldIndex } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { AuthenticationOutcomeObservationViewSchema } from './outcome-evidence-messages'
 
-type BrowserObservation<Value> = Value extends string | number | boolean | undefined ? Value : Value extends readonly (infer Entry)[] ? BrowserObservation<Entry>[] : { [Key in keyof Value]: BrowserObservation<Value[Key]> }
-type ObservationFields<Value> = { readonly [Key in keyof Value]-?: undefined extends Value[Key] ? Schema.optionalKey<Schema.Codec<BrowserObservation<Exclude<Value[Key], undefined>>>> : Schema.Codec<BrowserObservation<Value[Key]>> }
+export enum LoginSaveEvidenceKind {SubmittedLogin = 'SubmittedLogin', ExplicitAuthentication = 'ExplicitAuthentication'}
+enum AuthenticationObservationKind {Absent = 'absent', Observed = 'observed', ExplicitlyMarked = 'explicitly-marked', Labeled = 'labeled', Candidates = 'candidates'}
+enum LoginSubmissionTargetKind {CredentialScope = 'CredentialScope', CredentialField = 'CredentialField', OutsideCredentialScope = 'OutsideCredentialScope'}
+
+type BrowserObservation<Value> = Value extends string | number | boolean ? Value : Value extends readonly (infer Entry)[] ? BrowserObservation<Entry>[] : { [Key in keyof Value]: BrowserObservation<Value[Key]> }
+type ObservationFields<Value> = { readonly [Key in keyof Value]-?: Pick<Value, Key> extends Required<Pick<Value, Key>> ? Schema.Codec<BrowserObservation<Value[Key]>> : Schema.optionalKey<Schema.Codec<BrowserObservation<Required<Value>[Key]>>> }
 
 /** Browser-envelope validation; portable eligibility remains in Rust. */
 export class LoginSaveObservationCodecs {
   private readonly workflow = Schema.Literals([AuthenticationWorkflowKind.Login, AuthenticationWorkflowKind.Signup, AuthenticationWorkflowKind.PasswordChange, AuthenticationWorkflowKind.TotpChallenge, AuthenticationWorkflowKind.TotpEnrollment, AuthenticationWorkflowKind.Manual])
   private readonly usernameEvidence = Schema.Literals(['absent', 'generic', 'standards-based-email', 'mixed-phone-or-email', 'web-authn-email', 'strong', 'explicit'])
   private readonly method = Schema.Literals(['absent', 'post', 'get', 'dialog'])
-  private readonly absentFields: ObservationFields<Extract<AuthenticationDetailedAdvanceControlObservation, {kind: 'absent'}>> = {kind: Schema.Literal('absent')}
+  private readonly absentFields: ObservationFields<Extract<AuthenticationDetailedAdvanceControlObservation, {kind: `${AuthenticationObservationKind.Absent}`}>> = {kind: Schema.Literal('absent')}
   private readonly absent = Schema.Struct(this.absentFields)
   private readonly controlFields: ObservationFields<AuthenticationAdvanceControlObservation> = {
     actionability: Schema.Literals(['inert', 'actionable']), ownership: Schema.Literals(['unowned', 'owned-form', 'locally-scoped']),
@@ -21,12 +25,12 @@ export class LoginSaveObservationCodecs {
     machineIdentity: Schema.optionalKey(Schema.String), submissionMethod: Schema.optionalKey(this.method), submissionDestinationSource: Schema.Literals(['omitted', 'authored']),
   }
   private readonly control = Schema.Struct(this.controlFields)
-  private readonly advanceFields: ObservationFields<Extract<AuthenticationDetailedAdvanceControlObservation, {kind: 'observed'}>> = {kind: Schema.Literal('observed'), observations: Schema.mutable(Schema.Array(this.control))}
-  private readonly observedPasskeyFields: ObservationFields<Extract<AuthenticationDetailedPasskeyControlObservation, {kind: 'observed'}>> = {kind: Schema.Literal('observed'), observation: this.control}
-  private readonly markedPasskeyFields: ObservationFields<Extract<AuthenticationDetailedPasskeyControlObservation, {kind: 'explicitly-marked'}>> = {kind: Schema.Literal('explicitly-marked'), observation: this.control}
-  private readonly labeledPasskeyFields: ObservationFields<Extract<AuthenticationDetailedPasskeyControlCandidateObservation, {kind: 'labeled'}>> = {kind: Schema.Literal('labeled'), observation: this.control}
+  private readonly advanceFields: ObservationFields<Extract<AuthenticationDetailedAdvanceControlObservation, {kind: `${AuthenticationObservationKind.Observed}`}>> = {kind: Schema.Literal('observed'), observations: Schema.mutable(Schema.Array(this.control))}
+  private readonly observedPasskeyFields: ObservationFields<Extract<AuthenticationDetailedPasskeyControlObservation, {kind: `${AuthenticationObservationKind.Observed}`}>> = {kind: Schema.Literal('observed'), observation: this.control}
+  private readonly markedPasskeyFields: ObservationFields<Extract<AuthenticationDetailedPasskeyControlObservation, {kind: `${AuthenticationObservationKind.ExplicitlyMarked}`}>> = {kind: Schema.Literal('explicitly-marked'), observation: this.control}
+  private readonly labeledPasskeyFields: ObservationFields<Extract<AuthenticationDetailedPasskeyControlCandidateObservation, {kind: `${AuthenticationObservationKind.Labeled}`}>> = {kind: Schema.Literal('labeled'), observation: this.control}
   private readonly passkeyCandidate = Schema.Union([Schema.Struct(this.labeledPasskeyFields), Schema.Struct(this.markedPasskeyFields)])
-  private readonly passkeyCandidatesFields: ObservationFields<Extract<AuthenticationDetailedPasskeyControlObservation, {kind: 'candidates'}>> = {kind: Schema.Literal('candidates'), observation: Schema.mutable(Schema.Array(this.passkeyCandidate))}
+  private readonly passkeyCandidatesFields: ObservationFields<Extract<AuthenticationDetailedPasskeyControlObservation, {kind: `${AuthenticationObservationKind.Candidates}`}>> = {kind: Schema.Literal('candidates'), observation: Schema.mutable(Schema.Array(this.passkeyCandidate))}
   private readonly passkey = Schema.Union([this.absent, Schema.Struct(this.observedPasskeyFields), Schema.Struct(this.markedPasskeyFields), Schema.Struct(this.passkeyCandidatesFields)])
   private readonly contextIdentityFields: ObservationFields<AuthenticationCeremonyContextObservation> = {authenticationUsername: this.usernameEvidence, sourceOrigin: Schema.String, formIdentity: Schema.String, destinationIdentity: Schema.String}
   private readonly ceremonyFields: ObservationFields<AuthenticationCeremonyObservationFacts> = {
@@ -44,15 +48,15 @@ export class LoginSaveObservationCodecs {
     oneTimeCodeFieldCount: Schema.Number, actionablePasswordFieldCount: Schema.Number, readonlyPasswordFieldCount: Schema.Number,
   }
   private readonly submissionFactFields: ObservationFields<AuthenticationCredentialSubmissionFacts> = {actionability: Schema.Literals(['inert', 'actionable']), method: this.method, sourceOrigin: Schema.String, formIdentity: Schema.String, destinationIdentity: Schema.String}
-  private readonly submissionFields: ObservationFields<Extract<AuthenticationCredentialSubmissionObservation, {kind: 'observed'}>> = {kind: Schema.Literal('observed'), facts: Schema.Struct(this.submissionFactFields)}
+  private readonly submissionFields: ObservationFields<Extract<AuthenticationCredentialSubmissionObservation, {kind: `${AuthenticationObservationKind.Observed}`}>> = {kind: Schema.Literal('observed'), facts: Schema.Struct(this.submissionFactFields)}
   private readonly contextFields: ObservationFields<AuthenticationPageObservationFacts> = {
     fields: Schema.Struct(this.fieldCountFields), ceremony: Schema.Struct(this.ceremonyFields), authenticator: Schema.Struct(this.authenticatorFields),
     credentialSubmission: Schema.Union([this.absent, Schema.Struct(this.submissionFields)]), detailedAdvanceControl: Schema.optionalKey(Schema.Union([this.absent, Schema.Struct(this.advanceFields)])),
   }
-  private readonly scopeTargetFields: ObservationFields<Extract<LoginSubmissionTarget, {kind: 'CredentialScope'}>> = {kind: Schema.Literal('CredentialScope')}
-  private readonly outsideTargetFields: ObservationFields<Extract<LoginSubmissionTarget, {kind: 'OutsideCredentialScope'}>> = {kind: Schema.Literal('OutsideCredentialScope')}
+  private readonly scopeTargetFields: ObservationFields<Extract<LoginSubmissionTarget, {kind: `${LoginSubmissionTargetKind.CredentialScope}`}>> = {kind: Schema.Literal('CredentialScope')}
+  private readonly outsideTargetFields: ObservationFields<Extract<LoginSubmissionTarget, {kind: `${LoginSubmissionTargetKind.OutsideCredentialScope}`}>> = {kind: Schema.Literal('OutsideCredentialScope')}
   private readonly capturedIndexFields: ObservationFields<LoginCapturedFieldIndex> = {value: Schema.Number}
-  private readonly fieldTargetFields: ObservationFields<Extract<LoginSubmissionTarget, {kind: 'CredentialField'}>> = {kind: Schema.Literal('CredentialField'), field_index: Schema.Struct(this.capturedIndexFields)}
+  private readonly fieldTargetFields: ObservationFields<Extract<LoginSubmissionTarget, {kind: `${LoginSubmissionTargetKind.CredentialField}`}>> = {kind: Schema.Literal('CredentialField'), field_index: Schema.Struct(this.capturedIndexFields)}
   private readonly target = Schema.Union([Schema.Struct(this.scopeTargetFields), Schema.Struct(this.fieldTargetFields), Schema.Struct(this.outsideTargetFields)])
   private readonly metadataFields: ObservationFields<LoginSubmissionFieldMetadata> = {
     input_type: Schema.String, disabled: Schema.Boolean, read_only: Schema.Boolean,
@@ -95,10 +99,10 @@ export class LoginSaveObservationCodecs {
     current_controls: Schema.mutable(Schema.Array(Schema.String)),
   }
   readonly outcome = Schema.Struct(this.outcomeFields)
-  private readonly submittedFields: ObservationFields<Extract<LoginSaveCommitEvidence, {kind: 'SubmittedLogin'}>> = {
+  private readonly submittedFields: ObservationFields<Extract<LoginSaveCommitEvidence, {kind: `${LoginSaveEvidenceKind.SubmittedLogin}`}>> = {
     kind: Schema.Literal('SubmittedLogin'), observation: this.outcome,
   }
-  private readonly explicitFields: ObservationFields<Extract<LoginSaveCommitEvidence, {kind: 'ExplicitAuthentication'}>> = {
+  private readonly explicitFields: ObservationFields<Extract<LoginSaveCommitEvidence, {kind: `${LoginSaveEvidenceKind.ExplicitAuthentication}`}>> = {
     kind: Schema.Literal('ExplicitAuthentication'), observation: AuthenticationOutcomeObservationViewSchema,
   }
   readonly evidence = Schema.Union([
