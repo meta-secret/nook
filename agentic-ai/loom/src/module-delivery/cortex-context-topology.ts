@@ -1,6 +1,6 @@
-import { TeamTaskContextResolver } from '../team-agents/context.ts';
+import { TeamTaskContextResolver } from '../project-context/context.ts';
 
-import type { TeamTaskContextPathRequest } from '../team-agents/context.ts';
+import type { TeamTaskContextPathRequest } from '../project-context/context.ts';
 
 import { ModuleDeliveryTaskKind } from './domain.ts';
 
@@ -8,12 +8,12 @@ import { ModuleResourceContainment } from './resource-claim-containment.ts';
 
 import type { ResourceClaimListPair } from './resource-claim-containment.ts';
 
-import type { ModuleDeliveryPlanV6 } from './domain.ts';
+import type { ModuleDeliveryPlanV7 } from './domain.ts';
 
 export class CortexContextTopology {
-  private constructor(private readonly request: ModuleDeliveryPlanV6) {}
+  private constructor(private readonly request: ModuleDeliveryPlanV7) {}
   static precedence(
-    plan: ModuleDeliveryPlanV6,
+    plan: ModuleDeliveryPlanV7,
   ): readonly CortexContextPrecedence[] {
     return new CortexContextTopology(plan).execute();
   }

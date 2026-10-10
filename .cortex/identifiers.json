@@ -5,8 +5,8 @@
       "id": "CX-GIZ",
       "kind": "category",
       "authority": "gizmo-prime",
-      "title": "Gizmo Prime",
-      "locator": ".cortex/gizmo-prime/index.md"
+      "title": "Nook Project Specifications",
+      "locator": ".cortex/docs/spec/index.md"
     },
     {
       "id": "CX-AI",

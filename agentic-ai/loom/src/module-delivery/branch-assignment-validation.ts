@@ -14,7 +14,7 @@ import {
 } from '../lib/base-evidence.ts';
 import { ModuleDeliveryIssueCode, ModuleDeliveryTaskKind } from './domain.ts';
 import type { ModuleDeliveryIssue } from './domain.ts';
-import { TeamKey } from '../team-agents/catalog.ts';
+import { TeamKey } from '../project-context/catalog.ts';
 import type {
   IssueRequest,
   ValidationState,

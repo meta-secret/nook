@@ -99,27 +99,35 @@ describe('skill scaffold', () => {
     );
   });
 
-  test('routes Gizmo-owned skills outside the teams directory', () => {
+  test('rejects the retired Gizmo skill owner without recreating role directories', () => {
+    const outcome = SkillScaffoldRequestDecoder.decode({
+      skillSlug: 'workflow-routing',
+      skillOwner: 'gizmo',
+    });
+    expect(outcome.status).toBe(DecodeStatus.Failed);
+  });
+
+  test('routes shared project skills outside the teams directory', () => {
     const directoryArgs: SkillOwnerDynamicSkillsDirectoryArgs = {
       cortexRoot: '/repo/.cortex',
-      skillOwner: SkillOwner.Gizmo,
+      skillOwner: SkillOwner.Shared,
     };
     expect(new SkillOwnerDirectory(directoryArgs).path()).toBe(
-      '/repo/.cortex/gizmo-prime/dynamic-skills',
+      '/repo/.cortex/shared/dynamic-skills',
     );
   });
 
-  test('decodes Gizmo as a supported skill owner', () => {
+  test('decodes Shared as a supported skill owner', () => {
     const requestNode: UntrustedYamlNode = {
       skillSlug: 'workflow-routing',
-      skillOwner: 'gizmo',
+      skillOwner: 'shared',
     };
     const outcome = SkillScaffoldRequestDecoder.decode(requestNode);
     const expectedOutcome: DecodeOutcome<SkillScaffoldRequest> = {
       status: DecodeStatus.Ok,
       value: {
         skillSlug: 'workflow-routing',
-        skillOwner: SkillOwner.Gizmo,
+        skillOwner: SkillOwner.Shared,
       },
     };
     expect(outcome).toEqual(expectedOutcome);
@@ -237,12 +245,12 @@ describe('skill scaffold', () => {
     }
   });
 
-  test('finds an existing Gizmo-owned skill card', async () => {
+  test('finds an existing shared project skill card', async () => {
     const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-gizmo-skill-'));
     const cortexRoot = join(fixtureRoot, '.cortex');
     const gizmoCard = join(
       cortexRoot,
-      'gizmo-prime',
+      'shared',
       'dynamic-skills',
       'workflow-routing.md',
     );
@@ -250,7 +258,7 @@ describe('skill scaffold', () => {
     try {
       const directoryOptions = { recursive: true } as const;
       await mkdir(
-        join(cortexRoot, 'gizmo-prime', 'dynamic-skills'),
+        join(cortexRoot, 'shared', 'dynamic-skills'),
         directoryOptions,
       );
       await writeFile(gizmoCard, '# Workflow Routing\n', 'utf8');

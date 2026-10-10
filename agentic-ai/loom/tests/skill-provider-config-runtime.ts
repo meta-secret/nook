@@ -323,7 +323,7 @@ export class SkillProviderConfigRuntimeScenario {
       throw new Error('Unaudited AGENT_EOF shell exemption.');
     }
     const protectedPath =
-      /(?:\.agents\/skills|\.cortex\/(?:gizmo|shared|teams\/[^/]+)\/dynamic-skills)/u;
+      /(?:\.agents\/skills|\.cortex\/(?:shared|teams\/[^/]+)\/dynamic-skills)/u;
     const normalized = source
       .replaceAll('\\`', '')
       .replace(

@@ -4,7 +4,7 @@ export {
   ModuleDeliveryPlanTransportLimit,
   ModuleDeliveryPlanTransportLimitCode,
 } from './codec-fields.ts';
-export { TeamKey } from '../team-agents/catalog.ts';
+export { TeamKey } from '../project-context/catalog.ts';
 export {
   MAX_MODULE_DELIVERY_PLAN_AGGREGATE_NODES,
   MAX_MODULE_DELIVERY_PLAN_AGGREGATE_STRING_CODE_UNITS,

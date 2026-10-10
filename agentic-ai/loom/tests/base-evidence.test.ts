@@ -95,6 +95,37 @@ class BaseEvidenceGitFixture {
   }
 }
 
+describe('upstream worker role branch scopes', () => {
+  test.each([
+    'codex/child/ai/tech-writer/agent-branching/define-project-context-rules',
+    'codex/child/ai/typescript-dev/agent-branching/implement-loom-context-routing',
+    'codex/child/dev-core/rust-dev/agent-branching/implement-domain-validation',
+    'codex/child/security/security-agent/agent-branching/review-vault-trust-boundaries',
+    'codex/child/sre/docker-specialist/agent-branching/verify-compile-cache-reuse',
+    'codex/child/sre/kubernetes-specialist/agent-branching/update-runner-cluster-policy',
+    'codex/child/sre/cicd-agent/agent-branching/validate-hosted-build-results',
+    'codex/child/web-dev/typescript-dev/agent-branching/implement-browser-interaction',
+    'codex/child/delivery-pipeline/pr-agent/agent-branching/publish-validated-feature-head',
+  ])('accepts the upstream role in its Nook scope: %s', (branch) => {
+    assert.equal(CanonicalWorkerBranchContract.parse(branch), branch);
+  });
+
+  test.each([
+    'codex/child/ai/loom-specialist/agent-branching/implement-loom-context-routing',
+    'codex/child/dev-core/rust-auth2-developer/agent-branching/implement-domain-validation',
+    'codex/child/delivery-pipeline/pr-lifecycle/agent-branching/publish-validated-feature-head',
+    'codex/child/security/typescript-dev/agent-branching/implement-domain-validation',
+  ])(
+    'rejects retired roles and foreign role scopes without aliases: %s',
+    (branch) => {
+      assert.throws(
+        () => CanonicalWorkerBranchContract.parse(branch),
+        /malformed/,
+      );
+    },
+  );
+});
+
 describe('pinned dev base Git identity', () => {
   test('rejects replacement-ref ancestry bypasses', () => {
     const fixture = BaseEvidenceGitFixture.create();
@@ -176,16 +207,16 @@ describe('canonical feature branch identity', () => {
       'codex/',
       'codex/repair',
       'codex/agent--branching',
-      'codex/child/sre/provisioning/agent-branching/fix-cache-branch-compile',
-      'codex/agent-branching/sre/provisioning/fix--cache-branch-compile',
+      'codex/child/sre/cicd-agent/agent-branching/fix-cache-branch-compile',
+      'codex/agent-branching/sre/cicd-agent/fix--cache-branch-compile',
       'codex/automation-main-failure-abc-run-42-attempt-1',
       'codex/agentic-pipeline-deliveries',
       'codex/Repair-cache',
-      'codex/agent-branching/sre/provisioning/short',
-      'codex/agent-branching/web-dev/provisioning/fix-cache-branch-compile',
-      'codex/agent-branching/sre/provisioning/fix-cache-branch-compile/extra',
+      'codex/agent-branching/sre/cicd-agent/short',
+      'codex/agent-branching/web-dev/cicd-agent/fix-cache-branch-compile',
+      'codex/agent-branching/sre/cicd-agent/fix-cache-branch-compile/extra',
       'codex/agentic-pipeline-delivery/tmp',
-      'codex/agentic-pipeline-delivery/delivery-pipeline/pr-lifecycle/short',
+      'codex/agentic-pipeline-delivery/delivery-pipeline/pr-agent/short',
     ];
 
     for (const branch of invalidBranches) {
@@ -197,10 +228,10 @@ describe('canonical feature branch identity', () => {
 describe('canonical worker branch identity', () => {
   test('accepts registered worker forms with the isolated child namespace', () => {
     const validBranches: readonly string[] = [
-      'codex/child/sre/provisioning/agent-branching/fix-cache-branch-compile',
+      'codex/child/sre/cicd-agent/agent-branching/fix-cache-branch-compile',
       'codex/child/web-dev/web-designer/agent-branching/design-shared-browser-interface',
-      'codex/child/delivery-pipeline/pr-lifecycle/agent-branching/define-remote-branch-contract',
-      'codex/child/ai/loom-specialist/agentic-pipeline-delivery/update-agent-routing-contract',
+      'codex/child/delivery-pipeline/pr-agent/agent-branching/define-remote-branch-contract',
+      'codex/child/ai/typescript-dev/agentic-pipeline-delivery/update-agent-routing-contract',
     ];
 
     for (const branch of validBranches) {
@@ -213,16 +244,16 @@ describe('canonical worker branch identity', () => {
   test('rejects noncanonical identities and opaque work suffixes', () => {
     const invalidBranches: readonly string[] = [
       'codex/agent-branching',
-      'codex/agent-branching/sre/provisioning/fix-cache-branch-compile',
+      'codex/agent-branching/sre/cicd-agent/fix-cache-branch-compile',
       'codex/child/sre/gizmo/agent-branching/fix-cache-branch-compile',
-      'codex/child/web-dev/provisioning/agent-branching/fix-cache-branch-compile',
-      'codex/child/sre/provisioning/short/fix-cache-branch-compile',
-      'codex/child/sre/provisioning/agent-branching/short',
-      'codex/child/sre/provisioning/agent-branching/fix-cache-branch-compile-v2',
-      'codex/child/sre/provisioning/agent-branching/123e4567-e89b-12d3-a456-426614174000',
-      'codex/child/sre/provisioning/agent-branching/fix-cache-on-2026-09-22',
-      'codex/child/sre/provisioning/agent-branching/fix-cache-20260922-021234',
-      'codex/child/sre/provisioning/agent-branching/fix-cache-20260922021234',
+      'codex/child/web-dev/cicd-agent/agent-branching/fix-cache-branch-compile',
+      'codex/child/sre/cicd-agent/short/fix-cache-branch-compile',
+      'codex/child/sre/cicd-agent/agent-branching/short',
+      'codex/child/sre/cicd-agent/agent-branching/fix-cache-branch-compile-v2',
+      'codex/child/sre/cicd-agent/agent-branching/123e4567-e89b-12d3-a456-426614174000',
+      'codex/child/sre/cicd-agent/agent-branching/fix-cache-on-2026-09-22',
+      'codex/child/sre/cicd-agent/agent-branching/fix-cache-20260922-021234',
+      'codex/child/sre/cicd-agent/agent-branching/fix-cache-20260922021234',
     ];
 
     for (const branch of invalidBranches) {

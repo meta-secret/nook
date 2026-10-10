@@ -88,30 +88,21 @@ class CanonicalBranchNameSyntax {
     if (typeof team !== 'string' || typeof role !== 'string') return false;
     switch (team) {
       case 'ai':
-        return role === 'loom-specialist' || role === 'cortex-specialist';
+        return role === 'typescript-dev' || role === 'tech-writer';
       case 'dev-core':
-        return (
-          role === 'rust-core-developer' || role === 'rust-auth2-developer'
-        );
+        return role === 'rust-dev';
       case 'security':
-        return (
-          role === 'cryptography-specialist' ||
-          role === 'security-review-specialist'
-        );
+        return role === 'security-agent';
       case 'sre':
         return (
-          role === 'provisioning' ||
-          role === 'cloud-native' ||
-          role === 'docker-cache-specialist'
+          role === 'cicd-agent' ||
+          role === 'kubernetes-specialist' ||
+          role === 'docker-specialist'
         );
       case 'web-dev':
-        return (
-          role === 'typescript-specialist' ||
-          role === 'svelte-specialist' ||
-          role === 'web-designer'
-        );
+        return role === 'typescript-dev' || role === 'web-designer';
       case 'delivery-pipeline':
-        return role === 'pr-lifecycle';
+        return role === 'pr-agent';
       default:
         return false;
     }

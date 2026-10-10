@@ -59,7 +59,7 @@ and check observation. Upstream CI/CD handles required dispatches, reruns, and
 pipeline diagnostics with SRE context. The Feature Gizmo retains policy authority, and
 the feature PR lifecycle remains the sole path for pull-request
 creation/update. Follow
-[dev delivery](../../../gizmo-prime/architecture/dev-delivery.md).
+[dev delivery](../../../docs/architecture/dev-delivery.md).
 
 - Resolve the latest committed feature-branch head before every stage.
 - Preserve e2e opt-ins and security-required focused checks.

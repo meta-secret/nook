@@ -1,8 +1,8 @@
-import { TeamTaskContextResolver } from '../team-agents/context.ts';
+import { TeamTaskContextResolver } from '../project-context/context.ts';
 
-import type { TeamKey } from '../team-agents/catalog.ts';
+import type { TeamKey } from '../project-context/catalog.ts';
 
-import type { TeamTaskContextPathRequest } from '../team-agents/context.ts';
+import type { TeamTaskContextPathRequest } from '../project-context/context.ts';
 
 import { ModuleWriteClaim } from './resource-claims.ts';
 

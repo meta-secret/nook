@@ -48,4 +48,4 @@ Required tests and mechanical Cortex checks execute in the feature pull
 request's required-check stage. Local test, check, or E2E diagnostics follow the
 root [delivery and validation policy](../../../AGENTS.md#delivery-and-validation);
 local results do not replace hosted evidence. Routine local feedback is also
-limited by the [dev contract](../../../gizmo-prime/architecture/dev-delivery.md).
+limited by the [dev contract](../../../docs/architecture/dev-delivery.md).

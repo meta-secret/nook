@@ -131,7 +131,6 @@ const WORKSPACE_PACKAGE = {
   private: true,
   packageManager: 'bun@1.3.14',
   workspaces: [
-    'gizmo-prime/dynamic-skills/*/scripts',
     'shared/dynamic-skills/*/scripts',
     'teams/*/dynamic-skills/*/scripts',
   ],

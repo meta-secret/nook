@@ -365,4 +365,4 @@ const SCRIPT_DIRECTORY_EXPRESSION =
   /^\$\(dirname (?:-- )?["']?(?:\$0|\$\{BASH_SOURCE\[0\]\})["']?\)$/u;
 
 export const PROTECTED_SKILL_PATH =
-  /(?:\.agents\/skills|\.cortex\/(?:gizmo|shared|teams\/[^/]+)\/dynamic-skills\/[^/]+\/scripts)\//u;
+  /(?:\.agents\/skills|\.cortex\/(?:shared|teams\/[^/]+)\/dynamic-skills\/[^/]+\/scripts)\//u;

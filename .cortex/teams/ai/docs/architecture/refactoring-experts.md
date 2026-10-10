@@ -36,7 +36,7 @@ Structural experts find improvements across existing structures.
 
 Every structural expert attempt follows the root
 [team worker contract](../../../../AGENTS.md#team-worker-contract) and
-[subagent delegation](../../../../gizmo-prime/workflows/subagent-delegation.md).
+[subagent delegation](../../../../docs/spec/subagent-delegation.md).
 
 This registry adds:
 

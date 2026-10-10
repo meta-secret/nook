@@ -5,7 +5,7 @@ functionality.
 
 ## Team contract
 
-- [AI team agent contract](AGENTS.md)
+- [AI ownership and specifications](docs/spec/index.md)
 
 ## Architecture and expert registries
 
@@ -58,9 +58,3 @@ Use these workflows for AI-owned skills and cross-package changes.
 ## Loom reference
 
 - [Loom specifications](../../../agentic-ai/loom/.cortex/docs/spec/index.md)
-
-## Team topology
-
-- [AI Team Gizmo](gizmo/index.md) coordinates bounded AI-team mechanics.
-- [Loom specialist](loom-specialist/index.md) handles packeted AI-owned Loom work.
-- [Cortex specialist](cortex-specialist/index.md) handles packeted AI-owned Cortex work.

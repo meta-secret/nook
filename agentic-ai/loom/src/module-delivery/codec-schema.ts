@@ -97,7 +97,7 @@ export enum ModulePlanV4RootField {
 }
 
 /** Current branch-authoritative plan shape. Feature heads are resolved by Delivery. */
-export enum ModulePlanV6RootField {
+export enum ModulePlanV7RootField {
   BaseBranch = 'baseBranch',
   EdgeContracts = 'edgeContracts',
   FeatureBranch = 'featureBranch',

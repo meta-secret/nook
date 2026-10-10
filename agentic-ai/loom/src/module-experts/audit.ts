@@ -27,9 +27,9 @@ import {
 
 import type { DiscoverCargoWorkspaceArgs } from './cargo-workspace.ts';
 
-import { TeamAgentContract } from '../team-agents/audit.ts';
+import { ProjectContextContract } from '../project-context/audit.ts';
 
-import type { AuditTeamAgentsRequest } from '../team-agents/audit.ts';
+import type { AuditProjectContextsRequest } from '../project-context/audit.ts';
 
 import { MarkdownContractSections } from '../lib/markdown-contract.ts';
 
@@ -74,10 +74,11 @@ export class ModuleExpertContract {
   private static mergeTeamAgentAudit(
     context: ModuleExpertValidationContext,
   ): void {
-    const teamAuditRequest: AuditTeamAgentsRequest = {
+    const teamAuditRequest: AuditProjectContextsRequest = {
       repoRoot: context.repoRoot,
     };
-    const teamAudit = TeamAgentContract.auditTeamAgents(teamAuditRequest);
+    const teamAudit =
+      ProjectContextContract.auditProjectContexts(teamAuditRequest);
     for (const teamFinding of teamAudit.findings) {
       const finding: ModuleExpertAuditFinding = {
         code: teamFinding.code,
