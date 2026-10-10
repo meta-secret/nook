@@ -47,9 +47,12 @@ import type {
   WebsiteLoginSaveActionResponse,
   WebsiteLoginSaveOfferResponse,
   AuthenticationImplicitSubmitActuationObservation,
+  LoginSaveOutcomeObservation,
+  LoginSaveOutcomeDecision,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 
 export enum CompanionWasmSessionMessageType {
+  ClassifyLoginSaveOutcome = "nook:extension-session-classify-login-save-outcome",
   ProjectAuthenticationLoginChecklist = "nook:extension-session-project-authentication-login-checklist",
   ClassifyFocusedCredentialField = "nook:extension-session-classify-focused-credential-field",
   RevalidateFocusedCredentialField = "nook:extension-session-revalidate-focused-credential-field",
@@ -138,6 +141,10 @@ export type CompanionWasmLabelRequest = {
 };
 
 export type CompanionWasmSessionMessage =
+  | {
+      readonly type: CompanionWasmSessionMessageType.ClassifyLoginSaveOutcome;
+      readonly payload: LoginSaveOutcomeObservation;
+    }
   | GoogleLoginSessionMessage
   | {
       readonly type: CompanionWasmSessionMessageType.ProjectAuthenticationLoginChecklist;
@@ -350,6 +357,7 @@ export type CompanionWasmFocusedRecognitionResponse =
 
 export type CompanionWasmSessionResponse =
   | GoogleLoginSessionResponse
+  | LoginSaveOutcomeDecision
   | AuthenticationLoginChecklistPresentation
   | CompanionWasmFocusedRecognitionResponse
   | { readonly activityProgress: AuthenticationDisplayProgress }

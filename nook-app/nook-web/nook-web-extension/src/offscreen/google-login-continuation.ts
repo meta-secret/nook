@@ -178,6 +178,7 @@ export class GoogleLoginSessionContinuations {
           ),
         )
       case CompanionWasmSessionMessageType.ProjectAuthenticationLoginChecklist:
+      case CompanionWasmSessionMessageType.ClassifyLoginSaveOutcome:
       case CompanionWasmSessionMessageType.ClassifyFocusedCredentialField:
       case CompanionWasmSessionMessageType.RevalidateFocusedCredentialField:
       case CompanionWasmSessionMessageType.GetAuthenticationActivityProgress:

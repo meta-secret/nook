@@ -1,3 +1,4 @@
+import { classify_companion_login_save_outcome } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { FocusedFieldRecognitionOperation } from './session-focused-field-recognition'
 import { GoogleLoginContinuationMessageType } from '../../../nook-web-shared/src/extension/google-login-continuation-messages'
 /* eslint-disable nook-typed-api/no-raw-object-arguments, max-params -- This offscreen adapter maps Chrome session messages onto generated WASM calls. */
@@ -176,6 +177,8 @@ export async function handleCompanionWasmMessage(
   try {
     await companionWasmReady
     switch (message.type) {
+      case CompanionWasmSessionMessageType.ClassifyLoginSaveOutcome:
+        return ok(classify_companion_login_save_outcome(message.payload))
       case GoogleLoginContinuationMessageType.Session:
         return invalidRequest()
       case CompanionWasmSessionMessageType.ProjectAuthenticationLoginChecklist:

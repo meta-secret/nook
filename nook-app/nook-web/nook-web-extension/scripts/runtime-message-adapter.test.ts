@@ -1,3 +1,4 @@
+import { RuntimeLoginSaveCaptureFixture } from './runtime-login-save-capture-fixture'
 import { describe, expect, test } from 'bun:test'
 import { Schema } from 'effect'
 import { handleCompanionWasmMessage } from '../src/offscreen/session-companion-wasm-operations'
@@ -155,6 +156,8 @@ const loginSaveOfferMessage: Parameters<
     origin: 'https://example.test',
     username: 'person@example.test',
     password: 'secret',
+    capture: new RuntimeLoginSaveCaptureFixture().capture,
+    capturedValues: ['person@example.test', 'secret'],
   },
 }
 const loginPickerOpenMessage: Parameters<

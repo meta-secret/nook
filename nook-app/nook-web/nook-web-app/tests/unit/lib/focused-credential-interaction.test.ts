@@ -167,6 +167,7 @@ class FocusedInteractionFixture {
           response: new FocusedFieldRecognitionOperation(message).run(),
         }
       case CompanionWasmSessionMessageType.GetAuthenticationActivityProgress:
+      case CompanionWasmSessionMessageType.ClassifyLoginSaveOutcome:
       case GoogleLoginContinuationMessageType.Session:
       case CompanionWasmSessionMessageType.ProjectAuthenticationLoginChecklist:
       case CompanionWasmSessionMessageType.ExtractAuthenticationBackupCodeCandidates:

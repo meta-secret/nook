@@ -1,5 +1,11 @@
 import { err, ok } from 'neverthrow'
 import { describe, expect, test } from 'bun:test'
+import type { ExtensionSessionRequest } from '../src/offscreen/session-request-adapter'
+type BrowserFixtureFields<Value> = Value extends string | number | boolean
+  ? Value
+  : Value extends readonly (infer Entry)[]
+    ? BrowserFixtureFields<Entry>[]
+    : { [Key in keyof Value]: BrowserFixtureFields<Value[Key]> }
 import {
   SessionOperationFailure,
   SessionOperationFailureKind,
@@ -316,7 +322,78 @@ describe('ExtensionSessionMessageDispatcher control ingress', () => {
     expect(await response).toEqual(ok({ pin: '123456' }))
   })
   test('keeps a login-save plan after its submitting document navigates', async () => {
-    const payload = {
+    type PlanLoginSaveRequest = Extract<
+      ExtensionSessionRequest,
+      { type: typeof ExtensionSessionMessageType.PlanLoginSave }
+    >
+    const capture: BrowserFixtureFields<
+      PlanLoginSaveRequest['payload']['capture']
+    > = {
+      submitted_at: 1000,
+      submitted_url: 'https://example.com/login',
+      controls: ['Sign in'],
+      explicit_candidate: 'Present',
+      fields: [
+        {
+          input_type: 'text',
+          disabled: false,
+          read_only: false,
+          autocomplete_tokens: ['username'],
+          identity_text: 'User',
+          login_context: false,
+          password_history: 'Unobserved',
+        },
+        {
+          input_type: 'password',
+          disabled: false,
+          read_only: false,
+          autocomplete_tokens: ['current-password'],
+          identity_text: 'Password',
+          login_context: false,
+          password_history: 'PreviouslyPassword',
+        },
+      ],
+      intent: {
+        event: 'FormSubmit',
+        trust: 'Trusted',
+        target: { kind: 'CredentialScope' },
+        control_label: 'Sign in',
+        context: {
+          fields: {
+            usernameFieldCount: 0,
+            currentPasswordFieldCount: 0,
+            newPasswordFieldCount: 0,
+            genericPasswordFieldCount: 0,
+            oneTimeCodeFieldCount: 0,
+            actionablePasswordFieldCount: 0,
+            readonlyPasswordFieldCount: 0,
+          },
+          ceremony: {
+            oneTimeCodeProgression: 'advance-control-required',
+            oneTimeCodeHandlerSignal: '',
+            authenticationContext: {
+              authenticationUsername: 'absent',
+              sourceOrigin: 'https://example.com',
+              formIdentity: 'login',
+              destinationIdentity: '/login',
+            },
+            manualCheckpoint: 'absent',
+            advanceControl: 'absent',
+          },
+          authenticator: {
+            authenticatorSetup: 'absent',
+            backupCodesCopy: '',
+            passkeyControl: 'absent',
+            passkeyAccountAvailability: 'unavailable',
+            matchingPasskeyAccountCount: 0,
+            detailedPasskeyControl: { kind: 'absent' },
+          },
+          credentialSubmission: { kind: 'absent' },
+          detailedAdvanceControl: { kind: 'absent' },
+        },
+      },
+    }
+    const payload: BrowserFixtureFields<PlanLoginSaveRequest['payload']> = {
       vaultStoreId: 'store_abcdefghijk',
       deviceId: 'device',
       devicePublicKey: 'public',
@@ -324,6 +401,9 @@ describe('ExtensionSessionMessageDispatcher control ingress', () => {
       origin: 'https://example.com',
       username: 'alice',
       password: 'password',
+      capturedValues: ['alice', 'password'],
+      capture,
+      sender: { tab_id: 12, frame_id: 0 },
       queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
     }
     const parsing = parseExtensionSessionRequest({
@@ -332,7 +412,9 @@ describe('ExtensionSessionMessageDispatcher control ingress', () => {
     })
     expect(payload.username).toBe('')
     expect(payload.password).toBe('')
+    expect(payload.capturedValues).toEqual([])
     payload.origin = 'https://navigated.example.com'
+    payload.capturedValues[0] = 'navigated-user'
     const parsed = await parsing
     expect(parsed.kind).toBe(ExtensionSessionRequestParseKind.Parsed)
     if (parsed.kind === ExtensionSessionRequestParseKind.Parsed) {
@@ -343,8 +425,11 @@ describe('ExtensionSessionMessageDispatcher control ingress', () => {
         'password',
       )
       expect(sessionMessageWireFixture.loginSave(parsed.request).origin).toBe(
-        'https://example.com',
+        'https://example.com/',
       )
+      expect(
+        sessionMessageWireFixture.loginSave(parsed.request).capturedValues,
+      ).toEqual(['alice', 'password'])
     }
   })
   test('rejects a missing queue before staging and clears browser-owned secrets', async () => {

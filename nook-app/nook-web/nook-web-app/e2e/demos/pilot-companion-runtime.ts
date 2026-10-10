@@ -67,6 +67,7 @@ class PilotCompanionDemoRuntime {
         this.sendMessage(message, callback)
         return
       case true:
+        window.__nookDemoRuntimeMessageTypes?.push(message.type)
         this.deliver(message, callback)
         return
     }

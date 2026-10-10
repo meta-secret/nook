@@ -168,6 +168,7 @@ class ChecklistBrowserFixture {
       }
       case GoogleLoginContinuationMessageType.Session:
       case CompanionWasmSessionMessageType.ProjectAuthenticationLoginChecklist:
+      case CompanionWasmSessionMessageType.ClassifyLoginSaveOutcome:
       case CompanionWasmSessionMessageType.ClassifyFocusedCredentialField:
       case CompanionWasmSessionMessageType.RevalidateFocusedCredentialField:
       case CompanionWasmSessionMessageType.GetAuthenticationActivityProgress:
