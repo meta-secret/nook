@@ -76,7 +76,7 @@ class PasswordFormCredentialInteraction {
     }
     if (!passwordField) [passwordField] = passwordFields;
     if (!passwordField) return { kind: LoginCredentialsLookupKind.Absent };
-    const password = passwordField.value.trim();
+    const password = passwordField.value;
     const nookNamedArgs0_3 = this.passwordFieldQuery(request);
     const username = ((v) => (v ? v : ""))(
       passwordFieldDiscovery

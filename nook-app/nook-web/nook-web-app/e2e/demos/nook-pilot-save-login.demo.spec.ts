@@ -84,14 +84,14 @@ test('save a freshly submitted login through Nook Pilot', async ({ page }) => {
         <main>
           <p class="eyebrow">Example account</p>
           <h1>Welcome back</h1>
-          <p class="intro">Sign in once. Nook can offer to save the login after verified success.</p>
+          <p class="intro">Submit your login, then choose whether Nook saves it.</p>
           <form id="login-form" method="post">
             <label>Email<input autocomplete="username" name="email" type="email"></label>
             <label>Password<input autocomplete="current-password" name="password" type="password"></label>
             <button type="submit">Sign in</button>
           </form>
           <p id="site-status" role="status"></p>
-          <p id="site-success" data-nook-auth-outcome="success" data-testid="mock-auth-success">Authentication complete</p>
+          <p id="site-success">Your account page</p>
         </main>
       </body>
     </html>`)
@@ -101,6 +101,8 @@ test('save a freshly submitted login through Nook Pilot', async ({ page }) => {
       ?.addEventListener('submit', (event) => {
         event.preventDefault()
         document.body.classList.add('signed-in')
+        const navigationState: Record<string, never> = {}
+        history.pushState(navigationState, '', '/account')
         const status = document.querySelector('#site-status')
         if (status) status.textContent = 'Secure sign-in submitted'
       })
@@ -130,13 +132,13 @@ test('save a freshly submitted login through Nook Pilot', async ({ page }) => {
   })
   const offerIndex = saveSequence.indexOf('nook:website-login-save-offer')
   const evidenceIndex = saveSequence.indexOf(
-    'nook:authentication-outcome-classify',
+    'nook:extension-session-classify-login-save-outcome',
   )
   const commitIndex = saveSequence.indexOf('nook:website-login-save-commit')
   expect(offerIndex).toBeGreaterThanOrEqual(0)
   expect(evidenceIndex).toBeGreaterThan(offerIndex)
   expect(commitIndex).toBeGreaterThan(evidenceIndex)
-  // Formless success pages used to re-scan and tear this confirmation down.
+  // Account-page mutations must preserve the explicit Save confirmation.
   await page.evaluate(() => {
     document.body.setAttribute('data-demo-mutation', String(Date.now()))
   })
@@ -186,17 +188,17 @@ test('recover a delayed save offer after authentication navigation', async ({
         </style>
       </head>
       <body>
-        <main data-nook-auth-outcome="success">
-          <p class="eyebrow">Authentication complete</p>
+        <main>
+          <p class="eyebrow">Your account</p>
           <h1>Welcome back</h1>
-          <p class="intro" data-testid="mock-auth-success">The account page loaded while Nook finished preparing the save offer.</p>
+          <p class="intro" data-testid="account-page">The account page loaded while Nook finished preparing the submitted-login save offer.</p>
         </main>
       </body>
     </html>`)
   await page.evaluate(installDemoChromeStub, stubArgs)
   await injectPilotAutofill(page)
 
-  await expect(page.getByTestId('mock-auth-success')).toBeVisible()
+  await expect(page.getByTestId('account-page')).toBeVisible()
   const widget = page.locator('#nook-auth-widget')
   await expect(widget.getByText('Save this login?')).toBeVisible()
   await expect(widget.getByTestId('nook-auth-gate-save')).toBeEnabled()
@@ -210,5 +212,7 @@ test('recover a delayed save offer after authentication navigation', async ({
       : 0
   })
   expect(pendingReads).toBe(2)
+  await widget.getByTestId('nook-auth-gate-save').click()
+  await expect(widget.getByTestId('nook-auth-gate-save-saved')).toBeVisible()
   await demoBeat(page)
 })

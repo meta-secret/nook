@@ -1,3 +1,4 @@
+import { LoginSaveNavigationMode, LoginSaveOutcomeSensor, type LoginSaveOutcomeSensorRequest } from './login-save-outcome-sensor'
 import {
   authenticationOutcomeObservation,
   AuthenticationOutcomeReadKind,
@@ -7,11 +8,8 @@ import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import type { LoginCredentials } from '../../../../nook-web-shared/src/extension/password-forms'
 import {
   LoginCredentialsLookupKind,
-  PasswordFormQueryKind,
-  passwordFormCredentialInteraction as passwordFormCredentialReader,
   passwordFormInteraction,
 } from '../../../../nook-web-shared/src/extension/password-forms'
-import { passwordFieldDiscovery } from '../../../../nook-web-shared/src/extension/password-form-fields'
 import {
   AuthenticationWorkflowActivity,
   type AuthenticationDisplayProgress,
@@ -54,6 +52,8 @@ import {
   authenticationWidgetPosition,
 } from './widget-position'
 import { authenticationWidgetShell } from './widget-shell'
+import { LoginSubmissionCapture, type CapturedLoginSubmission, type LoginSubmissionCaptureRuntime } from './login-submission-capture'
+import type { LoginSubmissionDomSnapshot } from './login-submission-dom-sensor'
 import {
   OUTCOME_EVIDENCE_POLL_MS,
   OUTCOME_EVIDENCE_TIMEOUT_MS,
@@ -63,60 +63,10 @@ import {
 
 type StageSaveOfferRequest = {
   credentials: LoginCredentials
+  snapshot: LoginSubmissionDomSnapshot
 }
-
-enum AuthenticationSubmitterKind {
-  Absent = 'absent',
-  Present = 'present',
-}
-
-type AuthenticationSubmitter =
-  | { kind: AuthenticationSubmitterKind.Absent }
-  | {
-      kind: AuthenticationSubmitterKind.Present
-      control: HTMLButtonElement | HTMLInputElement
-    }
-
-enum AuthenticationSubmitEventAdmissionKind {
-  Rejected = 'rejected',
-  Admitted = 'admitted',
-}
-
-type AuthenticationSubmitEventAdmission =
-  | { kind: AuthenticationSubmitEventAdmissionKind.Rejected }
-  | {
-      kind: AuthenticationSubmitEventAdmissionKind.Admitted
-      submitter: AuthenticationSubmitter
-    }
-
-/** Admits submit semantics without relying on page/isolated-world prototypes. */
-class AuthenticationSubmitEvent {
-  static admit(event: Event): AuthenticationSubmitEventAdmission {
-    if (event.type !== 'submit' || !('submitter' in event)) {
-      return { kind: AuthenticationSubmitEventAdmissionKind.Rejected }
-    }
-    const submitter = event.submitter
-    if (!submitter) {
-      return {
-        kind: AuthenticationSubmitEventAdmissionKind.Admitted,
-        submitter: { kind: AuthenticationSubmitterKind.Absent },
-      }
-    }
-    if (!(
-      submitter instanceof HTMLButtonElement ||
-      submitter instanceof HTMLInputElement
-    )) {
-      return { kind: AuthenticationSubmitEventAdmissionKind.Rejected }
-    }
-    return {
-      kind: AuthenticationSubmitEventAdmissionKind.Admitted,
-      submitter: {
-        kind: AuthenticationSubmitterKind.Present,
-        control: submitter,
-      },
-    }
-  }
-}
+type PendingSaveSensorRequest = {offer: WebsiteLoginSaveOfferView; sensor: LoginSaveOutcomeSensor}
+type FreshSaveEvidence = Awaited<ReturnType<LoginSaveOutcomeSensor['collect']>>
 
 export enum PendingSaveOfferLoadKind {
   Absent = 'absent',
@@ -129,7 +79,45 @@ export type PendingSaveOfferLoad =
 
 /** Owns the browser runtime resources shared by these interactions. */
 class LoginSaveInteraction {
+  private readonly offerSensors = new Map<string, LoginSaveOutcomeSensor>()
   private pendingSaveOfferRequests = new Set<Promise<void>>()
+  private readonly captureRuntime: LoginSubmissionCaptureRuntime = {stage: this.stageSubmittedLogin.bind(this)}
+  private readonly submissionCapture = new LoginSubmissionCapture(this.captureRuntime)
+
+  readonly captureSubmissionIntent = (event: Event): void => {
+    const capture = this.submissionCapture.captureEffect(event)
+    Effect.runFork(capture.pipe(Effect.catchTag('LoginSubmissionCaptureFailure', () => Effect.sync(() => this.presentSubmissionFailure()))))
+  }
+  captureSubmission(event: Event): Promise<void> {return this.submissionCapture.capture(event)}
+
+  private presentSubmissionFailure(): void {
+    const description = document.getElementById(WIDGET_HOST_ID)?.shadowRoot?.querySelector<HTMLParagraphElement>('.description')
+    switch (true) {
+      case description instanceof HTMLParagraphElement:
+        description.textContent = workflowUi.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetSaveLoginFailed)
+        break
+      case true: break
+    }
+  }
+
+  rememberSubmissionPasswordFields(): void {
+    this.submissionCapture.sensor.rememberPasswordFields()
+  }
+
+  rememberSubmissionPasswordMutations(mutations: readonly MutationRecord[]): void {this.submissionCapture.sensor.rememberPasswordMutations(mutations)}
+
+  enableSubmissionCapture(): void { this.submissionCapture.enable() }
+  discardSubmissionCapture(): void { this.submissionCapture.discard() }
+
+  private stageSubmittedLogin({ snapshot }: CapturedLoginSubmission): Promise<void> {
+    let credentials: LoginCredentials = {username: '', password: ''}
+    switch (snapshot.explicitCredentials.kind) {
+      case LoginCredentialsLookupKind.Absent: break
+      case LoginCredentialsLookupKind.Found: credentials = {...snapshot.explicitCredentials.credentials}; break
+    }
+    const request: StageSaveOfferRequest = {credentials, snapshot}
+    return this.trackSaveOffer(request)
+  }
   stopPendingSaveWatch(): void {
     if (saveOfferState.watch.kind === SavePageWatchKind.Idle) return
     const { watch } = saveOfferState.watch
@@ -144,6 +132,7 @@ class LoginSaveInteraction {
     offer: WebsiteLoginSaveOfferView,
   ): Promise<void> {
     saveOfferState.dismissedOfferIds.add(offer.offerId)
+    this.offerSensors.delete(offer.offerId)
     const message: Parameters<
       typeof authenticationRuntimeTransport.sendLoginSaveActionRuntimeMessage
     >[0] = {
@@ -179,7 +168,34 @@ class LoginSaveInteraction {
   async evaluatePendingSaveEvidence(): Promise<void> {
     if (saveOfferState.watch.kind === SavePageWatchKind.Idle) return
     const { watch } = saveOfferState.watch
-    const observationContext: AuthenticationOutcomeObservationContext = {
+    const evidence = await watch.sensor.collect()
+    switch (evidence.kind) {
+      case 'SubmittedLogin': {
+        const decision = await watch.sensor.eligibility(evidence)
+        switch (saveOfferState.watch.kind === SavePageWatchKind.Watching && saveOfferState.watch.watch === watch) {
+          case false: return
+          case true: break
+        }
+        switch (decision.eligibility) {
+          case 'Eligible':
+            this.stopPendingSaveWatch()
+            widgetState.dismissed = false
+            saveOfferState.showOffer(watch.offer)
+            await this.renderSaveOfferWidget(watch.offer)
+            return
+          case 'Rejected':
+          case 'Expired':
+            this.stopPendingSaveWatch()
+            await this.dismissSaveOffer(watch.offer)
+            return
+          case 'Waiting': return
+        }
+        break
+      }
+      case 'ExplicitAuthentication': break
+    }
+    const observationContext:
+ AuthenticationOutcomeObservationContext = {
       startedAt: watch.startedAt,
       authPath: watch.authPath,
       sawMutation: watch.sawMutation,
@@ -226,11 +242,20 @@ class LoginSaveInteraction {
   }
 
   beginPendingSaveWatch(offer: WebsiteLoginSaveOfferView): void {
+    const sensorRequest: LoginSaveOutcomeSensorRequest = { baseline: offer.baseline, submittedNodes: [], navigationMode: LoginSaveNavigationMode.DocumentNavigation }
+    const request: PendingSaveSensorRequest = { offer, sensor: new LoginSaveOutcomeSensor(sensorRequest) }
+    this.beginPendingSaveWatchWithSensor(request)
+  }
+
+  private beginPendingSaveWatchWithSensor({offer, sensor}: PendingSaveSensorRequest): void {
     this.stopPendingSaveWatch()
-    const startedAt = Date.now()
-    const authPath = location.pathname
+    this.offerSensors.clear()
+    this.offerSensors.set(offer.offerId, sensor)
+    const startedAt = offer.baseline.submitted_at
+    const authPath = new URL(offer.baseline.submitted_url).pathname
     const watch: PendingSaveWatch = {
       offer,
+      sensor,
       startedAt,
       authPath,
       sawMutation: false,
@@ -238,6 +263,7 @@ class LoginSaveInteraction {
     watch.observer = new MutationObserver(() => {
       if (saveOfferState.watch.kind === SavePageWatchKind.Idle) return
       saveOfferState.watch.watch.sawMutation = true
+      sensor.sawMutation = true
       void this.evaluatePendingSaveEvidence()
     })
     const nookTypedArgs0_2: Parameters<typeof watch.observer.observe>[1] = {
@@ -253,10 +279,8 @@ class LoginSaveInteraction {
     void this.evaluatePendingSaveEvidence()
   }
 
-  stageSaveForCredentials(credentials: LoginCredentials): Promise<void> {
-    const stageRequest: StageSaveOfferRequest = {
-      credentials,
-    }
+  private trackSaveOffer(stageRequest: StageSaveOfferRequest): Promise<void> {
+
     const operation = this.stageSaveOfferForCredentials(stageRequest)
     const trackedOperation = operation.finally(() => {
       this.pendingSaveOfferRequests.delete(trackedOperation)
@@ -266,7 +290,7 @@ class LoginSaveInteraction {
   }
 
   private async stageSaveOfferForCredentials({
-    credentials,
+    credentials, snapshot,
   }: StageSaveOfferRequest): Promise<void> {
     const message: Parameters<
       typeof authenticationRuntimeTransport.sendLoginSaveOfferRuntimeMessage
@@ -276,68 +300,51 @@ class LoginSaveInteraction {
         origin: location.origin,
         username: credentials.username,
         password: credentials.password,
+        capture: snapshot.captureRecord(),
+        capturedValues: snapshot.capturedValues(),
       },
     }
     const delivery =
       await authenticationRuntimeTransport.sendLoginSaveOfferRuntimeMessage(
         message,
-      )
-    credentials.password = ''
-    credentials.username = ''
+      ).finally(() => {
+        credentials.password = ''; credentials.username = ''; message.payload.password = ''; message.payload.username = ''; message.payload.capturedValues.fill('')
+      })
     if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
       return
     }
     const { response } = delivery
-    if (response.kind !== 'offer-available') return
-    const { offer } = response
-    if (saveOfferState.dismissedOfferIds.has(offer.offerId)) return
-    this.beginPendingSaveWatch(offer)
-  }
-
-  captureSubmittedLogin(event: Event): void {
-    const submitEvent = AuthenticationSubmitEvent.admit(event)
-    const target = event.target
-    if (
-      submitEvent.kind === AuthenticationSubmitEventAdmissionKind.Rejected ||
-      !(target instanceof HTMLFormElement) ||
-      widgetState.busy
-    ) {
-      return
-    }
-    const observations =
-      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
-    const workflow = observations.find(
-      (candidate) =>
-        candidate.formScope.kind === 'owned' &&
-        candidate.formScope.owner === target,
-    )
-    if (!workflow || workflow.summary.passwordFieldCount === 0) return
-    const { submitter } = submitEvent
-    if (submitter.kind === AuthenticationSubmitterKind.Present) {
-      const { control } = submitter
-      if (
-        control.form !== target ||
-        (passwordFieldDiscovery.ownedObservationIsLocallyBounded(workflow) &&
-          !workflow.root.contains(control))
-      ) {
+    switch (response.kind) {
+      case 'not-required': {
+        const display = saveOfferState.display
+        this.stopPendingSaveWatch()
+        this.offerSensors.clear()
+        switch (display.kind) {
+          case SaveOfferDisplayKind.Visible: workflowUi.removeWidget(); break
+          case SaveOfferDisplayKind.Hidden: saveOfferState.clearActiveOffer(); break
+        }
         return
       }
-    } else if (
-      passwordFieldDiscovery.ownedObservationIsLocallyBounded(workflow)
-    ) {
-      return
+      case 'locked': case 'rejected': case 'unavailable': return
+      case 'offer-available': break
     }
-    const nookTypedArgs0_1: Parameters<
-      typeof passwordFormCredentialReader.readLoginCredentials
-    >[0] = {
-      kind: PasswordFormQueryKind.Scoped,
-      root: workflow.root,
-      formScope: workflow.formScope,
+    const { offer } = response
+    if (saveOfferState.dismissedOfferIds.has(offer.offerId)) return
+    let submittedNodes: HTMLInputElement[] = []
+    switch (offer.selection.kind) {
+      case 'ExplicitAuthentication': break
+      case 'SubmittedLogin': {
+        const indices: Parameters<typeof snapshot.credentialNodes>[0] = {usernameIndex: offer.selection.username_field_index.value, passwordIndex: offer.selection.password_field_index.value}
+        submittedNodes = snapshot.credentialNodes(indices)
+        break
+      }
     }
-    const credentials =
-      passwordFormCredentialReader.readLoginCredentials(nookTypedArgs0_1)
-    if (credentials.kind === LoginCredentialsLookupKind.Absent) return
-    void this.stageSaveForCredentials(credentials.credentials)
+
+    const sensorRequest: LoginSaveOutcomeSensorRequest = { baseline: offer.baseline, submittedNodes, navigationMode: LoginSaveNavigationMode.SameDocument }
+    const sensor = new LoginSaveOutcomeSensor(sensorRequest)
+    sensor.sawMutation = snapshot.mutationOccurred()
+    const watchRequest: {offer: WebsiteLoginSaveOfferView; sensor: LoginSaveOutcomeSensor} = {offer, sensor}
+    this.beginPendingSaveWatchWithSensor(watchRequest)
   }
 
   async loadPendingSaveOffer(): Promise<PendingSaveOfferLoad> {
@@ -371,7 +378,7 @@ class LoginSaveInteraction {
         !delivery.response.ok ||
         !('state' in delivery.response) ||
         delivery.response.state !== 'unavailable' ||
-        !this.pageShowsSuccessfulAuthentication() ||
+        passwordFormInteraction.summarizeAuthenticationWorkflowForms().some((form) => form.summary.passwordFieldCount > 0 || form.summary.usernameFieldCount > 0 || form.summary.oneTimeCodeFieldCount > 0) ||
         Date.now() - recoveryStartedAt >= OUTCOME_EVIDENCE_TIMEOUT_MS
       ) {
         return { kind: PendingSaveOfferLoadKind.Absent }
@@ -380,18 +387,25 @@ class LoginSaveInteraction {
     }
   }
 
-  private pageShowsSuccessfulAuthentication(): boolean {
-    return Boolean(
-      document.querySelector(
-        '[data-nook-auth-outcome="success"], [data-testid="mock-auth-success"]',
-      ),
-    )
-  }
-
   private waitForPendingSaveOffer(): Promise<void> {
     return new Promise((resolve) => {
       window.setTimeout(resolve, OUTCOME_EVIDENCE_POLL_MS)
     })
+  }
+
+  private async freshSaveEvidence(offer: WebsiteLoginSaveOfferView): Promise<FreshSaveEvidence> {
+    const sensor = this.offerSensors.get(offer.offerId)
+    switch (true) {case typeof sensor === 'object': break; case true: default: throw new Error('login save baseline unavailable')}
+    const evidence = await sensor.collect()
+    switch (evidence.kind) {
+      case 'SubmittedLogin': {
+        const decision = await sensor.eligibility(evidence)
+        switch (decision.eligibility) {case 'Eligible': break; case 'Waiting': case 'Rejected': case 'Expired': throw new Error('login save no longer eligible')}
+        break
+      }
+      case 'ExplicitAuthentication': await authenticationOutcomeObservation.prepareOutcomeNavigationPath(evidence.observation); break
+    }
+    return evidence
   }
 
   async renderSaveOfferWidget(
@@ -474,6 +488,7 @@ class LoginSaveInteraction {
     )
     dismissButton.addEventListener('click', () => {
       saveOfferState.dismissedOfferIds.add(offer.offerId)
+      this.offerSensors.delete(offer.offerId)
       const message: Parameters<
         typeof authenticationRuntimeTransport.sendRuntimeMessageWithoutResponse
       >[0] = {
@@ -530,33 +545,9 @@ class LoginSaveInteraction {
       if (!new AuthenticationGesture(event).trusted || widgetState.busy) return
       widgetState.busy = true
       saveButton.disabled = true
-      const commitObservationContext: AuthenticationOutcomeObservationContext =
-        {
-          startedAt: Date.now(),
-          authPath: location.pathname,
-          sawMutation: false,
-        }
-      const evidence =
-        authenticationOutcomeObservation.collectOutcomeObservation(
-          commitObservationContext,
-        )
-      // Commit re-checks the live page; require an explicit success marker now.
-      evidence.successMarkerPresent = Boolean(
-        document.querySelector(
-          '[data-nook-auth-outcome="success"], [data-testid="mock-auth-success"]',
-        ),
-      )
-      evidence.errorMarkerPresent = Boolean(
-        document.querySelector(
-          '[data-nook-auth-outcome="error"], [role="alert"]',
-        ),
-      )
-      evidence.elapsedMs = 0
       Effect.runFork(
         Effect.tryPromise(async () => {
-          await authenticationOutcomeObservation.prepareOutcomeNavigationPath(
-            evidence,
-          )
+          const evidence = await this.freshSaveEvidence(offer)
           const message: Parameters<
             typeof authenticationRuntimeTransport.sendLoginSaveActionRuntimeMessage
           >[0] = {
@@ -590,6 +581,7 @@ class LoginSaveInteraction {
               saveButton.hidden = true
               notNowButton.hidden = true
               saveOfferState.clearActiveOffer()
+              this.offerSensors.delete(offer.offerId)
               // Hold confirmation through the dismiss window so formless success
               // pages cannot scan-away "Login saved" before the user sees it.
               saveOfferState.confirmationActive = true

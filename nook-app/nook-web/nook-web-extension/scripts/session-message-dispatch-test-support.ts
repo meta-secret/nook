@@ -50,6 +50,7 @@ class SessionMessageWireFixture {
     username: string
     password: string
     origin: string
+    capturedValues: string[]
   } {
     if (message.type !== ExtensionSessionMessageType.PlanLoginSave) {
       throw new TypeError('test request is not a login-save plan')
@@ -58,6 +59,7 @@ class SessionMessageWireFixture {
       username: message.payload.username,
       password: message.payload.password,
       origin: message.payload.origin,
+      capturedValues: message.payload.capturedValues,
     }
   }
 

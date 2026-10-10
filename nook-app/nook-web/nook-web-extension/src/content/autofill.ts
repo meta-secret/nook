@@ -79,7 +79,6 @@ import {
   widgetState,
 } from './autofill/state'
 import {
-  queueSubmitCaptureUntilCompanionWasmReady,
   runAfterCompanionWasmReady,
 } from './autofill/companion-wasm-gate'
 import { authenticationWidgetRenderer } from './autofill/widget-rendering'
@@ -722,24 +721,23 @@ scanState.schedule = authenticationScanRenderLifecycle.schedule.bind(
   authenticationScanRenderLifecycle,
 )
 
-const captureSubmittedLogin =
-  loginSaveInteraction.captureSubmittedLogin.bind(loginSaveInteraction)
-const queuedSubmitCapture = queueSubmitCaptureUntilCompanionWasmReady(
-  captureSubmittedLogin,
-)
-
-document.addEventListener('submit', queuedSubmitCapture.capture, true)
+document.addEventListener('submit', loginSaveInteraction.captureSubmissionIntent, true)
+document.addEventListener('click', loginSaveInteraction.captureSubmissionIntent, true)
+document.addEventListener('keydown', loginSaveInteraction.captureSubmissionIntent, true)
 
 void runAfterCompanionWasmReady({
   companionWasmReady: companionWasmReadiness.waitForExtensionClassification(),
   start: async () => {
     if (await simpleVaultRuntime.isRuntimeNookVaultAppUrl(location.href)) {
-      document.removeEventListener('submit', queuedSubmitCapture.capture, true)
-      queuedSubmitCapture.discard()
+      document.removeEventListener('submit', loginSaveInteraction.captureSubmissionIntent, true)
+      document.removeEventListener('click', loginSaveInteraction.captureSubmissionIntent, true)
+      document.removeEventListener('keydown', loginSaveInteraction.captureSubmissionIntent, true)
+      loginSaveInteraction.discardSubmissionCapture()
       return
     }
     void authenticationScanRenderLifecycle.scanAndRender()
-    queuedSubmitCapture.enable()
+    loginSaveInteraction.rememberSubmissionPasswordFields()
+    loginSaveInteraction.enableSubmissionCapture()
     document.addEventListener(
       'click',
       (event) => {
@@ -753,16 +751,16 @@ void runAfterCompanionWasmReady({
       true,
     )
 
+
     document.addEventListener(
       'focusin',
       focusedCredentialTargetSensor.observe.bind(focusedCredentialTargetSensor),
       true,
     )
-    const observer = new MutationObserver(
-      authenticationScanRenderLifecycle.handleMutations.bind(
-        authenticationScanRenderLifecycle,
-      ),
-    )
+    const observer = new MutationObserver((mutations) => {
+      loginSaveInteraction.rememberSubmissionPasswordMutations(mutations)
+      authenticationScanRenderLifecycle.handleMutations(mutations)
+    })
     const observerOptions: MutationObserverInit = {
       ...authenticationFactObserverOptions,
       attributeFilter: [...AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER],

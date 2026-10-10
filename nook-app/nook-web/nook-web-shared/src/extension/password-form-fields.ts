@@ -377,7 +377,7 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
     }
     add(
       CompanionWasmLabelKind.EmailVerificationBody,
-      ((v) => (v ? v : ""))(root.textContent),
+      this.renderedCheckpointText(root),
     );
     return labels;
   }

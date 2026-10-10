@@ -137,6 +137,7 @@ function installFilledProjectionHold(install: FilledProjectionInstall): void {
         case install.session.UnlockPin:
         case install.session.VaultSummary:
         case install.companion.ClassifyFocusedCredentialField:
+        case install.companion.ClassifyLoginSaveOutcome:
         case install.companion.RevalidateFocusedCredentialField:
         case install.companion.GetAuthenticationActivityProgress:
         case install.companion.ExtractAuthenticationBackupCodeCandidates:

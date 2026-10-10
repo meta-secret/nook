@@ -192,6 +192,7 @@ enum ExtensionSessionPayloadField {
 }
 
 enum ExtensionSessionSensitiveField {
+  CapturedValues = 'capturedValues',
   StoredJson = 'stored_json',
   CredentialId = 'credentialId',
   UserHandle = 'userHandle',
@@ -353,6 +354,7 @@ const sensitiveSessionFields: Readonly<
     ExtensionSessionSensitiveField.Codes,
   ],
   [ExtensionSessionMessageType.PlanLoginSave]: [
+    ExtensionSessionSensitiveField.CapturedValues,
     ExtensionSessionSensitiveField.Username,
     ExtensionSessionSensitiveField.Password,
   ],

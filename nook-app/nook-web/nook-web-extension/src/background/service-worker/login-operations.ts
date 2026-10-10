@@ -1,7 +1,8 @@
+import type { LoginSubmissionCapture, LoginSaveCommitEvidence } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { LoginSaveBrowserSender } from './login-save-browser-sender'
 import {
   NookWebsiteLoginSaveDecision,
   type WebsiteLoginSaveActionResponse,
-  type WebsiteLoginSaveOfferView,
   type WebsiteLoginSaveOfferResponse,
   type WebsiteLoginSavePendingResponse,
 } from '../../lib/login-save-messages'
@@ -30,7 +31,7 @@ import {
   decodeWebsiteLoginFillResponse,
 } from './login-session-response-adapter'
 import { websiteLoginRevealSessionRequest } from './session-request-projections'
-import { decode_website_login_save_pending_response } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { decode_website_login_save_pending_response, decode_website_login_save_offer_response } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 type WebsiteLoginSaveSessionRequest = Extract<
   ExtensionSessionRequest,
@@ -43,6 +44,8 @@ type WebsiteLoginSaveOfferArgs = {
       origin: string
       username: string
       password: string
+      capture: LoginSubmissionCapture
+      capturedValues: string[]
     }
   }
   sender: chrome.runtime.MessageSender
@@ -53,6 +56,10 @@ export async function websiteLoginSaveOffer({
   sender,
 }: WebsiteLoginSaveOfferArgs): Promise<WebsiteLoginSaveOfferResponse> {
   const pendingPassword = { value: message.payload.password }
+  const capturedValues = [...message.payload.capturedValues]
+  message.payload.capturedValues.fill('')
+  const pendingUsername = {value: message.payload.username}
+  message.payload.username = ''
   message.payload.password = ''
   try {
     const nookTypedArgs0_5: Parameters<
@@ -68,6 +75,10 @@ export async function websiteLoginSaveOffer({
         reason: 'login-save-forbidden-origin',
       }
     }
+    const captureSender: Parameters<typeof extensionPairingIdentity.isAuthorizedWebsiteSender>[0] = {sender, origin: new URL(message.payload.capture.submitted_url).origin}
+    switch (extensionPairingIdentity.isAuthorizedWebsiteSender(captureSender)) {case true: break; case false: return {kind: 'rejected', reason: 'login-save-forbidden-origin'}}
+    const browserSender = new LoginSaveBrowserSender(sender).read()
+
     const grants = await extensionPairingIdentity.passwordPairingGrants()
     const [grant] = grants
     if (!grant) {
@@ -84,8 +95,11 @@ export async function websiteLoginSaveOffer({
       payload: {
         ...extensionSessionGrantIdentity(grant),
         origin: message.payload.origin,
-        username: message.payload.username,
+        username: pendingUsername.value,
         password: pendingPassword.value,
+        sender: browserSender,
+        capture: message.payload.capture,
+        capturedValues,
         queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
       },
     }
@@ -95,6 +109,8 @@ export async function websiteLoginSaveOffer({
       .finally(() => {
         pendingPassword.value = ''
         nookTypedArgs0_7.payload.password = ''
+        nookTypedArgs0_7.payload.username = ''
+        capturedValues.fill('')
       })
     if (delivery0_7.isErr()) {
       pendingPassword.value = ''
@@ -139,25 +155,32 @@ export async function websiteLoginSaveOffer({
       (response.decision !== NookWebsiteLoginSaveDecision.Create &&
         response.decision !== NookWebsiteLoginSaveDecision.Update) ||
       !('offerId' in response) ||
-      typeof response.offerId !== 'string'
+      typeof response.offerId !== 'string' ||
+      !('baseline' in response) ||
+      !('selection' in response)
     ) {
       return {
         kind: 'rejected',
         reason: 'login-save-plan-failed',
       }
     }
-    const offer: WebsiteLoginSaveOfferView = {
+    const offer = {
       offerId: response.offerId,
       decision: response.decision,
       vaultStoreId: grant.vaultStoreId,
       vaultName: grant.vaultName,
+      baseline: response.baseline,
+      selection: response.selection,
     }
-    return {
+    const envelope: Parameters<typeof decode_website_login_save_offer_response>[0] = {
       kind: 'offer-available',
       offer,
     }
+    return decode_website_login_save_offer_response(envelope)
   } finally {
     pendingPassword.value = ''
+    capturedValues.fill('')
+    pendingUsername.value = ''
   }
 }
 
@@ -179,6 +202,7 @@ export async function websiteLoginSavePending({
   if (!extensionPairingIdentity.isAuthorizedWebsiteSender(nookTypedArgs0_8)) {
     return { ok: false, reason: 'login-save-forbidden-origin' }
   }
+  const browserSender = new LoginSaveBrowserSender(sender).read()
   const grants = await extensionPairingIdentity.passwordPairingGrants()
   if (grants.length === 0) {
     return { ok: true, state: 'unavailable' }
@@ -190,6 +214,7 @@ export async function websiteLoginSavePending({
     type: 'nook:extension-session-pending-login-save',
     payload: {
       origin: message.payload.origin,
+      sender: browserSender,
       queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
     },
   }
@@ -234,6 +259,8 @@ export async function websiteLoginSavePending({
       decision: staged.decision,
       vaultStoreId: grant.vaultStoreId,
       vaultName: grant.vaultName,
+      baseline: staged.baseline,
+      selection: staged.selection,
     },
   }
   return decode_website_login_save_pending_response(response)
@@ -244,15 +271,7 @@ type WebsiteLoginSaveCommitArgs = {
     payload: {
       origin: string
       offerId: string
-      evidence: {
-        navigatedAwayFromAuthPath: boolean
-        authFieldsPresent: boolean
-        successMarkerPresent: boolean
-        errorMarkerPresent: boolean
-        sameDocumentMutation: boolean
-        inIframe: boolean
-        elapsedMs: number
-      }
+      evidence: LoginSaveCommitEvidence
     }
   }
   sender: chrome.runtime.MessageSender
@@ -274,14 +293,16 @@ export async function websiteLoginSaveCommit({
       reason: 'login-save-forbidden-origin',
     }
   }
-  const verdict =
-    await backgroundVaultRuntime.classifyAuthenticationOutcomeWithDefaultTimeout(
-      message.payload.evidence,
-    )
-  if (!verdict.allowsCredentialCommit) {
-    return {
-      kind: 'rejected',
-      reason: 'login-save-evidence-insufficient',
+  const browserSender = new LoginSaveBrowserSender(sender).read()
+  switch (message.payload.evidence.kind) {
+    case 'SubmittedLogin': break
+    case 'ExplicitAuthentication': {
+      const verdict = await backgroundVaultRuntime.classifyAuthenticationOutcomeWithDefaultTimeout(message.payload.evidence.observation)
+      switch (verdict.allowsCredentialCommit) {
+        case true: break
+        case false: return {kind: 'rejected', reason: 'login-save-evidence-insufficient'}
+      }
+      break
     }
   }
   const grants = await extensionPairingIdentity.passwordPairingGrants()
@@ -298,6 +319,7 @@ export async function websiteLoginSaveCommit({
     type: 'nook:extension-session-pending-login-save',
     payload: {
       origin: message.payload.origin,
+      sender: browserSender,
       queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
     },
   }
@@ -366,6 +388,8 @@ export async function websiteLoginSaveCommit({
       ...extensionSessionGrantIdentity(grant),
       origin: message.payload.origin,
       offerId: message.payload.offerId,
+      sender: browserSender,
+      evidence: message.payload.evidence,
       queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
     },
   }
@@ -403,6 +427,7 @@ export async function websiteLoginSaveDismiss({
     }
   }
 
+  const browserSender = new LoginSaveBrowserSender(sender).read()
   const nookTypedArgs0_15: Parameters<
     typeof extensionPairingIdentity.sendSessionMessage
   >[0] = {
@@ -410,6 +435,7 @@ export async function websiteLoginSaveDismiss({
     payload: {
       origin: message.payload.origin,
       offerId: message.payload.offerId,
+      sender: browserSender,
       queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
     },
   }

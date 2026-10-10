@@ -1,8 +1,10 @@
 import { Schema } from 'effect'
+import { LoginSaveObservationCodecs } from './login-save-observation-codecs'
+import type { LoginSubmissionCapture, LoginSaveCommitEvidence } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+const loginSaveObservationCodecs = new LoginSaveObservationCodecs()
 
 import {
   AuthenticationOutcomeObservationViewSchema,
-  type AuthenticationOutcomeObservationView,
 } from './outcome-evidence-messages'
 
 import { NookWebsiteLoginSaveDecision } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
@@ -38,6 +40,8 @@ export class WebsiteLoginSaveOfferMessage {
     origin: string
     username: string
     password: string
+    capture: LoginSubmissionCapture
+    capturedValues: string[]
   }
   static decode(message: unknown) {
     return Schema.decodeUnknownEffect(websiteLoginSaveOfferMessageSchema)(
@@ -75,7 +79,7 @@ export class WebsiteLoginSaveCommitMessage {
   declare readonly payload: {
     origin: string
     offerId: string
-    evidence: AuthenticationOutcomeObservationView
+    evidence: LoginSaveCommitEvidence
   }
   static decodeOutcomeObservation(value: unknown) {
     return Schema.decodeUnknownEffect(
@@ -125,15 +129,17 @@ const loginSaveOriginSchema = Schema.Struct(loginSaveOriginSchemaFields)
 type WebsiteLoginSaveOfferMessagePayloadSchemaFields = {
   username: typeof Schema.String
   password: typeof Schema.String
+  capture: typeof loginSaveObservationCodecs.capture
+  capturedValues: Schema.Codec<string[]>
   origin: typeof Schema.String
 }
 const websiteLoginSaveOfferMessagePayloadSchemaFields: WebsiteLoginSaveOfferMessagePayloadSchemaFields =
   {
     ...loginSaveOriginSchema.fields,
-    username: Schema.String.pipe(
-      Schema.check(Schema.makeFilter((username) => username.trim().length > 0)),
-    ),
-    password: loginSaveNonEmptyStringSchema,
+    username: Schema.String,
+    password: Schema.String,
+    capture: loginSaveObservationCodecs.capture,
+    capturedValues: Schema.mutable(Schema.Array(Schema.String)),
   }
 
 type WebsiteLoginSaveOfferMessageSchemaFields = {
@@ -141,6 +147,8 @@ type WebsiteLoginSaveOfferMessageSchemaFields = {
   payload: Schema.Struct<{
     username: typeof Schema.String
     password: typeof Schema.String
+  capture: typeof loginSaveObservationCodecs.capture
+  capturedValues: Schema.Codec<string[]>
     origin: typeof Schema.String
   }>
 }
@@ -174,21 +182,21 @@ const websiteLoginSavePendingMessageSchema = Schema.Struct(
 
 type WebsiteLoginSaveCommitMessagePayloadSchemaFields = {
   offerId: typeof Schema.String
-  evidence: typeof AuthenticationOutcomeObservationViewSchema
+  evidence: typeof loginSaveObservationCodecs.evidence
   origin: typeof Schema.String
 }
 const websiteLoginSaveCommitMessagePayloadSchemaFields: WebsiteLoginSaveCommitMessagePayloadSchemaFields =
   {
     ...loginSaveOriginSchema.fields,
     offerId: loginSaveNonEmptyStringSchema,
-    evidence: AuthenticationOutcomeObservationViewSchema,
+    evidence: loginSaveObservationCodecs.evidence,
   }
 
 type WebsiteLoginSaveCommitMessageSchemaFields = {
   type: Schema.Literal<WebsiteLoginSaveCommitMessageType>
   payload: Schema.Struct<{
     offerId: typeof Schema.String
-    evidence: typeof AuthenticationOutcomeObservationViewSchema
+    evidence: typeof loginSaveObservationCodecs.evidence
     origin: typeof Schema.String
   }>
 }

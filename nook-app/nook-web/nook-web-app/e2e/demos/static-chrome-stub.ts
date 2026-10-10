@@ -20,6 +20,7 @@ import {
 import { WebsiteAuthenticatorBackupAttachMessageType } from '../../../nook-web-extension/src/lib/enrollment-messages'
 import { GeneratePasswordRequestType } from '../../../nook-web-shared/src/extension/runtime-messages'
 import type { AuthenticationOutcomeObservationView } from '../../../nook-web-extension/src/lib/outcome-evidence-messages'
+import type { LoginSubmissionCapture, WebsiteLoginSaveOffer } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm'
 
 declare global {
   interface Window {
@@ -137,6 +138,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
       secretId?: string
       observations?: unknown[]
       observation?: AuthenticationOutcomeObservationView
+      capture?: LoginSubmissionCapture
     }
   }
   type RuntimeCallback = (response?: unknown) => void
@@ -147,12 +149,10 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     message: RuntimeMessage
     response: unknown
   }
-  type StagedSaveOffer = {
-    offerId: string
-    decision: NookWebsiteLoginSaveDecision.Create
-    vaultStoreId: string
-    vaultName: string
-  }
+  type StagedSaveOffer = WebsiteLoginSaveOffer
+  type DemoSubmittedLoginOfferResponse =
+    | {kind: 'unavailable'}
+    | {kind: DemoLoginSaveResponses['offerAvailable']; offer: StagedSaveOffer}
 
   const {
     delayedPendingSaveOfferReads,
@@ -186,6 +186,15 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     decision: loginSaveCreateDecision,
     vaultStoreId: 'demo-vault',
     vaultName: 'Demo vault',
+    baseline: {
+      source: 'SubmittedLogin',
+      submitted_at: Date.now(),
+      submitted_url: new URL('/login', location.href).href,
+      captured_workflow: authenticationWorkflow.loginKind,
+      initial_auth_fields: 'Present',
+      controls: ['Sign in'],
+    },
+    selection: {kind: 'SubmittedLogin', username_field_index: {value: 0}, password_field_index: {value: 1}},
   }
   let pendingSaveOfferReads = 0
   let stagedOffer:
@@ -218,6 +227,37 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
       sendResponse: RuntimeCallback,
     ) => boolean
   > = []
+
+  class DemoSubmittedLoginOffer {
+    constructor(private readonly message: RuntimeMessage) {}
+    response(): DemoSubmittedLoginOfferResponse {
+      const capture = this.message.payload?.capture
+      switch (true) {case typeof capture === 'object': break; case true: return {kind: 'unavailable'}}
+      const offer: StagedSaveOffer = {
+        offerId: 'demo-save-offer',
+        decision: loginSaveCreateDecision,
+        vaultStoreId: 'demo-vault',
+        vaultName: 'Demo vault',
+        baseline: {
+          source: 'SubmittedLogin',
+          submitted_at: capture.submitted_at,
+          submitted_url: capture.submitted_url,
+          captured_workflow: authenticationWorkflow.loginKind,
+          initial_auth_fields: 'Present',
+          controls: capture.controls,
+        },
+        selection: {kind: 'SubmittedLogin', username_field_index: {value: 0}, password_field_index: {value: 1}},
+      }
+      stagedOffer = {
+        kind: StagedOfferKind.Present,
+        offer,
+      }
+      return {
+        kind: loginSaveResponses.offerAvailable,
+        offer,
+      }
+    }
+  }
 
   const responseFor = (message: RuntimeMessage): unknown => {
     if (message.type && message.type in responsesByType) {
@@ -447,22 +487,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
             },
           }
         }
-        case 'nook:website-login-save-offer': {
-          const offer: StagedSaveOffer = {
-            offerId: 'demo-save-offer',
-            decision: loginSaveCreateDecision,
-            vaultStoreId: 'demo-vault',
-            vaultName: 'Demo vault',
-          }
-          stagedOffer = {
-            kind: StagedOfferKind.Present,
-            offer,
-          }
-          return {
-            kind: loginSaveResponses.offerAvailable,
-            offer,
-          }
-        }
+        case 'nook:website-login-save-offer': return new DemoSubmittedLoginOffer(message).response()
         case 'nook:website-login-save-pending':
           pendingSaveOfferReads += 1
           if (pendingSaveOfferReads <= delayedPendingSaveOfferReads) {

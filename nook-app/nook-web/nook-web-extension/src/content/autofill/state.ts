@@ -1,3 +1,4 @@
+import type { LoginSaveOutcomeSensor } from './login-save-outcome-sensor'
 import type { AuthenticationPageObservationFacts } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { InlineLoginPickerSurface } from './inline-login-picker'
 import { GoogleLoginDocumentContinuation } from './google-login-continuation'
@@ -137,6 +138,7 @@ export type LoginPicker =
   | { kind: LoginPickerKind.Closed }
   | { kind: LoginPickerKind.Open; request: PendingLoginPicker }
 export type PendingSaveWatch = {
+  sensor: LoginSaveOutcomeSensor
   offer: WebsiteLoginSaveOfferView
   startedAt: number
   authPath: string
