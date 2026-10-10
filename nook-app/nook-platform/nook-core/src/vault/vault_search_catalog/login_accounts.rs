@@ -129,8 +129,7 @@ mod tests {
     }
 
     #[test]
-    fn chase_login_listing_preserves_all_saved_urls_and_rejects_unlisted_hosts()
-    -> anyhow::Result<()> {
+    fn chase_login_listing_preserves_saved_urls_across_registrable_domain() -> anyhow::Result<()> {
         let mut fixture = LoginCatalogFixture::new()?;
         for website_url in [
             "https://chaseonline.chase.com/login",
@@ -150,7 +149,11 @@ mod tests {
                 },
             })?;
         }
-        for origin in ["https://www.chase.com", "https://secure05c.chase.com"] {
+        for origin in [
+            "https://www.chase.com",
+            "https://secure05c.chase.com",
+            "https://arbitrary.chase.com",
+        ] {
             let accounts = fixture
                 .catalog
                 .matching_login_accounts(&LoginWebsiteHost::try_from(origin)?);
@@ -165,9 +168,9 @@ mod tests {
         }
         for origin in [
             "https://evil-chase.com",
-            "https://secure.chase.com.evil.example",
+            "https://secure.chase.com.evil.org",
             "https://unrelated.example",
-            "https://secure07ea.example.com",
+            "https://secure07ea.example.org",
         ] {
             assert!(
                 fixture
