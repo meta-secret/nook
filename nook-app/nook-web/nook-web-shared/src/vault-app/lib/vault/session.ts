@@ -1,4 +1,11 @@
 import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
+import { Effect } from "effect";
+import { NookExternalEventLogRecords } from "$app-wasm";
+import { extensionConnectionBrowser } from "$lib/extension/connect";
+import {
+  ExtensionVaultSessionSynchronization,
+  ExtensionVaultSessionPublication,
+} from "$lib/vault/sync-extension-session";
 import { err as storageErr, ok as storageOk } from "neverthrow";
 
 import { BrowserIdentityHandoffKind } from "$lib/vault/identity-handoff";
@@ -108,14 +115,50 @@ export class VaultSessionActions {
     state.awaitingJoinApproval = false;
     state.sessionExpiredByIdle = false;
     log.info("vault session unlocked");
-    void state.publishExtensionEventLogUpdate().then((publication) => {
-      if (publication.isErr()) {
-        log.warn(
-          `extension event-log notification failed: ${publication.error.kind}`,
-        );
+    this.synchronizeExtensionSession(state.sessionEpoch);
+    return storageOk(VaultSessionUnlockOutcome.Unlocked);
+  }
+
+  private synchronizeExtensionSession(epoch: number): void {
+    const state = this.state;
+    const request: ConstructorParameters<
+      typeof ExtensionVaultSessionSynchronization
+    >[0] = {
+      state,
+      channel: {
+        pull: extensionConnectionBrowser.pullVaultEventLog.bind(
+          extensionConnectionBrowser,
+        ),
+      },
+      installedRuntime:
+        extensionConnectionBrowser.readInstalledExtensionRuntimeId.bind(
+          extensionConnectionBrowser,
+        ),
+      createRecords: NookExternalEventLogRecords.from_array,
+    };
+    void Effect.runPromise(
+      Effect.result(new ExtensionVaultSessionSynchronization(request).run()),
+    ).then((result) => {
+      switch (state.sessionEpoch) {
+        case epoch:
+          break;
+        default:
+          return;
+      }
+      switch (result._tag) {
+        case "Failure":
+          state.errorMsg = state.t(result.failure.translationKey);
+          return;
+        case "Success": {
+          const publication: ConstructorParameters<
+            typeof ExtensionVaultSessionPublication
+          >[0] = { state, epoch };
+          void Effect.runPromise(
+            new ExtensionVaultSessionPublication(publication).run(),
+          );
+        }
       }
     });
-    return storageOk(VaultSessionUnlockOutcome.Unlocked);
   }
 
   clearUnlockedSession({ resetManager }: UnlockedSessionClearRequest): void {

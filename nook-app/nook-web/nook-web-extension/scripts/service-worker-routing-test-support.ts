@@ -5,6 +5,7 @@ import {
   type ExtensionSessionTransport,
 } from '../src/background/service-worker/session-document'
 import { err, ok } from 'neverthrow'
+import { Effect } from 'effect'
 import {
   BeginExtensionPairingMessage,
   ExtensionLocalEventLogUpdatedMessage,
@@ -214,7 +215,10 @@ const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
   refreshAuthenticationSurfaces,
 }
 
+const unpaired: import('../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js').ExtensionVaultEventLogResponse =
+  { kind: 'NotPaired' }
 const externalDependencies: ExternalCompanionRoutingDependencies = {
+  vaultEventLogExporter: { run: () => Effect.succeed(unpaired) },
   createIdentityHandoff: unusedAsyncDependency,
   createPairedIdentityHandoff: unusedAsyncDependency,
   discoverPairedVaultIdentity: unusedAsyncDependency,

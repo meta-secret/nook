@@ -1,4 +1,5 @@
 import { GoogleLoginContinuationMessageCodec } from '../lib/google-login-continuation-messages'
+import { ExtensionVaultEventLogExport } from './service-worker/vault-event-log-export'
 import type { RuntimeMessageSchema } from './service-worker/schema-runtime-message-route'
 import {
   FocusedWebsiteLoginFillOperation,
@@ -218,6 +219,7 @@ void Effect.runPromise(
 
 const externalCompanionRoutingDependencies: ExternalCompanionRoutingRequest['dependencies'] =
   {
+    vaultEventLogExporter: ExtensionVaultEventLogExport.create(),
     createIdentityHandoff: extensionPairingIdentity.createIdentityHandoff.bind(
       extensionPairingIdentity,
     ),

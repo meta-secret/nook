@@ -1,4 +1,7 @@
 import { ExternalSenderTrustPolicy } from './routing-trust'
+import { Effect } from 'effect'
+import { ExtensionVaultEventLogExport } from './vault-event-log-export'
+import { decode_extension_vault_event_log_request_message } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type * as RuntimeMessages from '../../../../nook-web-shared/src/extension/runtime-messages'
 import {
   ExtensionPairingApprovedGrantAdmission,
@@ -41,6 +44,7 @@ export type ExternalCompanionRoutingRequest = {
 }
 
 export type ExternalCompanionRoutingDependencies = {
+  vaultEventLogExporter: Pick<ExtensionVaultEventLogExport, 'run'>
   createIdentityHandoff: typeof PairingIdentity.extensionPairingIdentity.createIdentityHandoff
   createPairedIdentityHandoff: typeof PairingIdentity.extensionPairingIdentity.createPairedIdentityHandoff
   discoverPairedVaultIdentity: typeof PairingIdentity.extensionPairingIdentity.discoverPairedVaultIdentity
@@ -92,6 +96,11 @@ function pairingGrantDecodeFailureResponse(
   return eventLogImportFailureResponse
 }
 
+enum ExternalVaultEventLogRoute {
+  Export = 'export',
+  Other = 'other',
+}
+
 export class ExternalCompanionRouter {
   constructor(private readonly request: ExternalCompanionRoutingRequest) {}
 
@@ -118,6 +127,13 @@ export class ExternalCompanionRouter {
       refreshAuthenticationSurfaces,
       requestPairedVaultUnlock,
     } = dependencies
+    const exportRoute = this.observeVaultEventLogRoute()
+    switch (exportRoute) {
+      case ExternalVaultEventLogRoute.Export:
+        return this.exportVaultEventLog()
+      case ExternalVaultEventLogRoute.Other:
+        break
+    }
     const launcherMessage = runConcreteDecoder(
       decodeOpenCompanionLauncherMessage,
       message,
@@ -228,5 +244,52 @@ export class ExternalCompanionRouter {
       })
       .then(sendResponse)
     return true
+  }
+
+  private observeVaultEventLogRoute(): ExternalVaultEventLogRoute {
+    switch (this.request.message.type === 'ExportVaultEventLog') {
+      case true:
+        return ExternalVaultEventLogRoute.Export
+      case false:
+        return ExternalVaultEventLogRoute.Other
+    }
+  }
+
+  private exportVaultEventLog(): boolean {
+    const { message, dependencies, sendResponse } = this.request
+    const attempt: {
+      readonly try: () => ReturnType<
+        typeof decode_extension_vault_event_log_request_message
+      >
+      readonly catch: () => 'invalid-request'
+    } = {
+      try: () => {
+        // Rust alone admits this untrusted Chrome request into the structural product type.
+        /* eslint-disable @typescript-eslint/no-unsafe-type-assertion, @typescript-eslint/no-restricted-types -- Raw Chrome messages have not yet crossed the generated Rust admission boundary. */
+        return decode_extension_vault_event_log_request_message(
+          message as unknown as Parameters<
+            typeof decode_extension_vault_event_log_request_message
+          >[0],
+        )
+        /* eslint-enable @typescript-eslint/no-unsafe-type-assertion, @typescript-eslint/no-restricted-types */
+      },
+      catch: () => 'invalid-request',
+    }
+    const decoded = Effect.runSync(Effect.result(Effect.try(attempt)))
+    switch (decoded._tag) {
+      case 'Failure': {
+        const rejection: {
+          readonly kind: 'Rejected'
+          readonly reason: 'Failed'
+        } = { kind: 'Rejected', reason: 'Failed' }
+        sendResponse(rejection)
+        return false
+      }
+      case 'Success':
+        void Effect.runPromise(
+          dependencies.vaultEventLogExporter.run(decoded.success),
+        ).then(sendResponse)
+        return true
+    }
   }
 }
