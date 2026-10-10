@@ -13,7 +13,6 @@ pub(crate) mod import_support;
 pub(crate) mod keepassxc_import;
 pub(crate) mod keeper_import;
 pub(crate) mod lastpass_import;
-pub(crate) mod login_site_hosts;
 pub(crate) mod onepassword_import;
 pub(crate) mod passkey_authenticator;
 pub(crate) mod password;
