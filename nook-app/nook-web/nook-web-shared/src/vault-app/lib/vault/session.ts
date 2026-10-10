@@ -134,7 +134,7 @@ export class VaultSessionActions {
         extensionConnectionBrowser.readInstalledExtensionRuntimeId.bind(
           extensionConnectionBrowser,
         ),
-      createRecords: NookExternalEventLogRecords.from_array,
+      from_array: NookExternalEventLogRecords.from_array,
     };
     void Effect.runPromise(
       Effect.result(new ExtensionVaultSessionSynchronization(request).run()),

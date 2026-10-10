@@ -4,6 +4,8 @@ import {
   decode_extension_vault_event_log_response,
   type ExtensionVaultEventLogRequestMessage,
   type ExtensionVaultEventLogResponse,
+  type ExtensionVaultEventLogFailure,
+  type ExtensionEventLogRecord,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { ExtensionSessionMessageType } from '../../lib/extension-session-message-type'
 import {
@@ -26,7 +28,7 @@ type VaultEventLogExportDependencies = {
 }
 type ExportRejected = Extract<
   ExtensionVaultEventLogResponse,
-  { kind: 'Rejected' }
+  { reason: ExtensionVaultEventLogFailure }
 >
 type ExportTransportAttempt<Value> = {
   readonly try: () => Promise<Value>
@@ -141,7 +143,7 @@ export class ExtensionVaultEventLogExport {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Rust has admitted this exact exported response.
         const exported = response as Extract<
           ExtensionVaultEventLogResponse,
-          { kind: 'Exported' }
+          { event_log_records: ExtensionEventLogRecord[] }
         >
         return { ...decoded, event_log_records: exported.event_log_records }
       }

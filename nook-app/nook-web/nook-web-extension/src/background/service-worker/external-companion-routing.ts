@@ -1,7 +1,10 @@
 import { ExternalSenderTrustPolicy } from './routing-trust'
 import { Effect } from 'effect'
 import { ExtensionVaultEventLogExport } from './vault-event-log-export'
-import { decode_extension_vault_event_log_request_message } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  decode_extension_vault_event_log_request_message,
+  type ExtensionVaultEventLogResponse,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type * as RuntimeMessages from '../../../../nook-web-shared/src/extension/runtime-messages'
 import {
   ExtensionPairingApprovedGrantAdmission,
@@ -278,10 +281,10 @@ export class ExternalCompanionRouter {
     const decoded = Effect.runSync(Effect.result(Effect.try(attempt)))
     switch (decoded._tag) {
       case 'Failure': {
-        const rejection: {
-          readonly kind: 'Rejected'
-          readonly reason: 'Failed'
-        } = { kind: 'Rejected', reason: 'Failed' }
+        const rejection: ExtensionVaultEventLogResponse = {
+          kind: 'Rejected',
+          reason: 'Failed',
+        }
         sendResponse(rejection)
         return false
       }

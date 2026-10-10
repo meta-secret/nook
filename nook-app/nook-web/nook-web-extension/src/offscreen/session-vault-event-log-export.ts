@@ -6,6 +6,7 @@ import {
 import type {
   ExportVaultEventLogPayload,
   ExtensionVaultEventLogResponse,
+  ExtensionVaultEventLogFailure,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 type ExportedEventLogResource = Pick<
@@ -24,7 +25,7 @@ export type SessionVaultEventLogExportRequest = {
 }
 type ExportFailure = Extract<
   ExtensionVaultEventLogResponse,
-  { kind: 'Rejected' }
+  { reason: ExtensionVaultEventLogFailure }
 >
 type ExportAttempt<Value> = {
   readonly try: () => Promise<Value>

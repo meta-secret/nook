@@ -1,7 +1,10 @@
 import { Effect, type Result as EffectResult } from "effect";
 import { err, ok, type Result } from "neverthrow";
 import { NookExternalEventLogRecords, type NookVaultManager } from "$app-wasm";
-import type { ExtensionVaultEventLogResponse } from "$app-wasm";
+import type {
+  ExtensionVaultEventLogResponse,
+  ExtensionEventLogRecord,
+} from "$app-wasm";
 import type { ExtensionVaultEventLogChannel } from "$lib/extension/vault-event-log";
 import {
   InstalledExtensionRuntimeKind,
@@ -41,7 +44,7 @@ type ExtensionVaultSessionSynchronizationRequest = {
   readonly state: ExtensionVaultSessionState;
   readonly channel: Pick<ExtensionVaultEventLogChannel, "pull">;
   readonly installedRuntime: () => InstalledExtensionRuntime;
-  readonly createRecords: typeof NookExternalEventLogRecords.from_array;
+  readonly from_array: typeof NookExternalEventLogRecords.from_array;
 };
 type ExtensionVaultSessionContext = {
   readonly epoch: number;
@@ -49,7 +52,7 @@ type ExtensionVaultSessionContext = {
 };
 type ExportedVaultEventLog = Extract<
   ExtensionVaultEventLogResponse,
-  { kind: "Exported" }
+  { event_log_records: ExtensionEventLogRecord[] }
 >;
 type ExtensionVaultSessionImport = ExtensionVaultSessionContext & {
   readonly exported: ExportedVaultEventLog;
@@ -395,7 +398,7 @@ export class ExtensionVaultSessionSynchronization {
       // Its returned resource is independently released by the scope below.
       try: () =>
         manager.sync_external_event_log_records_js(
-          this.request.createRecords(request.exported.event_log_records),
+          this.request.from_array(request.exported.event_log_records),
         ),
       catch: (cause) => new NativeVaultStorageFailure(cause),
     };

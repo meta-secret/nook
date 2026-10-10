@@ -67,7 +67,7 @@ class ExtensionVaultSessionSyncFixture {
         kind: InstalledExtensionRuntimeKind.Installed,
         extensionRuntimeId: 'extension-runtime',
       }),
-      createRecords: NookExternalEventLogRecords.from_array,
+      from_array: NookExternalEventLogRecords.from_array,
     }
     return new ExtensionVaultSessionSynchronization(request)
   }
@@ -138,7 +138,7 @@ test('a failed extension export stays observable and never refreshes a misleadin
     state: fixture.state,
     channel,
     installedRuntime,
-    createRecords: NookExternalEventLogRecords.from_array,
+    from_array: NookExternalEventLogRecords.from_array,
   }
   const result = await Effect.runPromise(
     Effect.result(
