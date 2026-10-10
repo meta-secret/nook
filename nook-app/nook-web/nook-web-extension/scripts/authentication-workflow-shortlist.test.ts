@@ -31,8 +31,14 @@ initSync(wasmInit)
 
 const originalChrome = Object.getOwnPropertyDescriptor(globalThis, 'chrome')
 const originalLocation = Object.getOwnPropertyDescriptor(globalThis, 'location')
-const originalNodeFilter = Object.getOwnPropertyDescriptor(globalThis, 'NodeFilter')
-const originalHTMLElement = Object.getOwnPropertyDescriptor(globalThis, 'HTMLElement')
+const originalNodeFilter = Object.getOwnPropertyDescriptor(
+  globalThis,
+  'NodeFilter',
+)
+const originalHTMLElement = Object.getOwnPropertyDescriptor(
+  globalThis,
+  'HTMLElement',
+)
 const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
 
 beforeEach(() => {
@@ -41,26 +47,50 @@ beforeEach(() => {
     configurable: true,
     value: testWindow.location,
   })
-  const NodeFilterDescriptor: PropertyDescriptor = {configurable: true, value: testWindow.NodeFilter}
+  const NodeFilterDescriptor: PropertyDescriptor = {
+    configurable: true,
+    value: testWindow.NodeFilter,
+  }
   Object.defineProperty(globalThis, 'NodeFilter', NodeFilterDescriptor)
-  const HTMLElementDescriptor: PropertyDescriptor = {configurable: true, value: testWindow.HTMLElement}
+  const HTMLElementDescriptor: PropertyDescriptor = {
+    configurable: true,
+    value: testWindow.HTMLElement,
+  }
   Object.defineProperty(globalThis, 'HTMLElement', HTMLElementDescriptor)
-  const documentDescriptor: PropertyDescriptor = {configurable: true, value: testWindow.document}
+  const documentDescriptor: PropertyDescriptor = {
+    configurable: true,
+    value: testWindow.document,
+  }
   Object.defineProperty(globalThis, 'document', documentDescriptor)
 })
 
 afterEach(() => {
   switch (true) {
-    case typeof originalDocument === 'object': Object.defineProperty(globalThis, 'document', originalDocument); break
-    case true: default: Reflect.deleteProperty(globalThis, 'document'); break
+    case typeof originalDocument === 'object':
+      Object.defineProperty(globalThis, 'document', originalDocument)
+      break
+    case true:
+    default:
+      Reflect.deleteProperty(globalThis, 'document')
+      break
   }
   switch (true) {
-    case typeof originalNodeFilter === 'object': Object.defineProperty(globalThis, 'NodeFilter', originalNodeFilter); break
-    case true: default: Reflect.deleteProperty(globalThis, 'NodeFilter'); break
+    case typeof originalNodeFilter === 'object':
+      Object.defineProperty(globalThis, 'NodeFilter', originalNodeFilter)
+      break
+    case true:
+    default:
+      Reflect.deleteProperty(globalThis, 'NodeFilter')
+      break
   }
   switch (true) {
-    case typeof originalHTMLElement === 'object': Object.defineProperty(globalThis, 'HTMLElement', originalHTMLElement); break
-    case true: default: Reflect.deleteProperty(globalThis, 'HTMLElement'); break
+    case typeof originalHTMLElement === 'object':
+      Object.defineProperty(globalThis, 'HTMLElement', originalHTMLElement)
+      break
+    case true:
+    default:
+      Reflect.deleteProperty(globalThis, 'HTMLElement')
+      break
   }
   if (originalChrome) {
     Object.defineProperty(globalThis, 'chrome', originalChrome)

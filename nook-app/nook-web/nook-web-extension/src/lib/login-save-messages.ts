@@ -1,11 +1,12 @@
 import { Schema } from 'effect'
 import { LoginSaveObservationCodecs } from './login-save-observation-codecs'
-import type { LoginSubmissionCapture, LoginSaveCommitEvidence } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import type {
+  LoginSubmissionCapture,
+  LoginSaveCommitEvidence,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 const loginSaveObservationCodecs = new LoginSaveObservationCodecs()
 
-import {
-  AuthenticationOutcomeObservationViewSchema,
-} from './outcome-evidence-messages'
+import { AuthenticationOutcomeObservationViewSchema } from './outcome-evidence-messages'
 
 import { NookWebsiteLoginSaveDecision } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
@@ -147,8 +148,8 @@ type WebsiteLoginSaveOfferMessageSchemaFields = {
   payload: Schema.Struct<{
     username: typeof Schema.String
     password: typeof Schema.String
-  capture: typeof loginSaveObservationCodecs.capture
-  capturedValues: Schema.Codec<string[]>
+    capture: typeof loginSaveObservationCodecs.capture
+    capturedValues: Schema.Codec<string[]>
     origin: typeof Schema.String
   }>
 }

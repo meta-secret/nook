@@ -1,4 +1,9 @@
-import { compare_login_save_sender_scope, type LoginSaveSenderScopeComparison, type WebsiteLoginSaveOffer, type LoginSaveCaptureBaseline } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  compare_login_save_sender_scope,
+  type LoginSaveSenderScopeComparison,
+  type WebsiteLoginSaveOffer,
+  type LoginSaveCaptureBaseline,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { NookWebsiteLoginSaveDecision } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
 export const LOGIN_SAVE_OFFER_TTL_MS = 2 * 60 * 1000
@@ -30,12 +35,12 @@ export type PendingLoginSaveOffer = PendingLoginSaveOfferScope & {
   expiresAt: number
   expiryTimer: ReturnType<typeof setTimeout>
 } & (
-  | { decision: NookWebsiteLoginSaveDecision.Create }
-  | {
-      decision: NookWebsiteLoginSaveDecision.Update
-      replaceSecretId: string
-    }
-)
+    | { decision: NookWebsiteLoginSaveDecision.Create }
+    | {
+        decision: NookWebsiteLoginSaveDecision.Update
+        replaceSecretId: string
+      }
+  )
 
 export enum PendingLoginSaveLookupState {
   Unavailable = 'unavailable',
@@ -97,7 +102,9 @@ class PendingLoginSaveOfferStore {
       case typeof offer === 'object':
         this.clearOffer(offer)
         break
-      case true: default: break
+      case true:
+      default:
+        break
     }
   }
 
@@ -115,13 +122,17 @@ class PendingLoginSaveOfferStore {
     return { state: PendingLoginSaveLookupState.Unavailable }
   }
 
-  findById({ offerId, scope }: PendingLoginSaveOfferLookup): PendingLoginSaveLookup {
+  findById({
+    offerId,
+    scope,
+  }: PendingLoginSaveOfferLookup): PendingLoginSaveLookup {
     this.purgeExpired()
     const offer = this.offers.get(offerId)
     switch (true) {
       case typeof offer === 'object':
         break
-      case true: default:
+      case true:
+      default:
         return { state: PendingLoginSaveLookupState.Unavailable }
     }
     const request: PendingLoginSaveScopeComparison = { offer, scope }
@@ -154,11 +165,16 @@ class PendingLoginSaveOfferStore {
     }
   }
 
-  private matchScope({ offer, scope }: PendingLoginSaveScopeComparison): PendingLoginSaveScopeMatch {
-    const comparison: LoginSaveSenderScopeComparison = { expected: {tab_id: offer.tabId, frame_id: offer.frameId}, current: {tab_id: scope.tabId, frame_id: scope.frameId} }
+  private matchScope({
+    offer,
+    scope,
+  }: PendingLoginSaveScopeComparison): PendingLoginSaveScopeMatch {
+    const comparison: LoginSaveSenderScopeComparison = {
+      expected: { tab_id: offer.tabId, frame_id: offer.frameId },
+      current: { tab_id: scope.tabId, frame_id: scope.frameId },
+    }
     const verdict = compare_login_save_sender_scope(comparison)
     switch (offer.origin === scope.origin && verdict === 'SameScope') {
-
       case true:
         return PendingLoginSaveScopeMatch.Matching
       case false:

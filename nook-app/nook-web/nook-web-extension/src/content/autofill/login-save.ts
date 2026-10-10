@@ -1,4 +1,8 @@
-import { LoginSaveNavigationMode, LoginSaveOutcomeSensor, type LoginSaveOutcomeSensorRequest } from './login-save-outcome-sensor'
+import {
+  LoginSaveNavigationMode,
+  LoginSaveOutcomeSensor,
+  type LoginSaveOutcomeSensorRequest,
+} from './login-save-outcome-sensor'
 import {
   authenticationOutcomeObservation,
   AuthenticationOutcomeReadKind,
@@ -52,7 +56,11 @@ import {
   authenticationWidgetPosition,
 } from './widget-position'
 import { authenticationWidgetShell } from './widget-shell'
-import { LoginSubmissionCapture, type CapturedLoginSubmission, type LoginSubmissionCaptureRuntime } from './login-submission-capture'
+import {
+  LoginSubmissionCapture,
+  type CapturedLoginSubmission,
+  type LoginSubmissionCaptureRuntime,
+} from './login-submission-capture'
 import type { LoginSubmissionDomSnapshot } from './login-submission-dom-sensor'
 import {
   OUTCOME_EVIDENCE_POLL_MS,
@@ -65,7 +73,10 @@ type StageSaveOfferRequest = {
   credentials: LoginCredentials
   snapshot: LoginSubmissionDomSnapshot
 }
-type PendingSaveSensorRequest = {offer: WebsiteLoginSaveOfferView; sensor: LoginSaveOutcomeSensor}
+type PendingSaveSensorRequest = {
+  offer: WebsiteLoginSaveOfferView
+  sensor: LoginSaveOutcomeSensor
+}
 type FreshSaveEvidence = Awaited<ReturnType<LoginSaveOutcomeSensor['collect']>>
 
 export enum PendingSaveOfferLoadKind {
@@ -81,22 +92,39 @@ export type PendingSaveOfferLoad =
 class LoginSaveInteraction {
   private readonly offerSensors = new Map<string, LoginSaveOutcomeSensor>()
   private pendingSaveOfferRequests = new Set<Promise<void>>()
-  private readonly captureRuntime: LoginSubmissionCaptureRuntime = {stage: this.stageSubmittedLogin.bind(this)}
-  private readonly submissionCapture = new LoginSubmissionCapture(this.captureRuntime)
+  private readonly captureRuntime: LoginSubmissionCaptureRuntime = {
+    stage: this.stageSubmittedLogin.bind(this),
+  }
+  private readonly submissionCapture = new LoginSubmissionCapture(
+    this.captureRuntime,
+  )
 
   readonly captureSubmissionIntent = (event: Event): void => {
     const capture = this.submissionCapture.captureEffect(event)
-    Effect.runFork(capture.pipe(Effect.catchTag('LoginSubmissionCaptureFailure', () => Effect.sync(() => this.presentSubmissionFailure()))))
+    Effect.runFork(
+      capture.pipe(
+        Effect.catchTag('LoginSubmissionCaptureFailure', () =>
+          Effect.sync(() => this.presentSubmissionFailure()),
+        ),
+      ),
+    )
   }
-  captureSubmission(event: Event): Promise<void> {return this.submissionCapture.capture(event)}
+  captureSubmission(event: Event): Promise<void> {
+    return this.submissionCapture.capture(event)
+  }
 
   private presentSubmissionFailure(): void {
-    const description = document.getElementById(WIDGET_HOST_ID)?.shadowRoot?.querySelector<HTMLParagraphElement>('.description')
+    const description = document
+      .getElementById(WIDGET_HOST_ID)
+      ?.shadowRoot?.querySelector<HTMLParagraphElement>('.description')
     switch (true) {
       case description instanceof HTMLParagraphElement:
-        description.textContent = workflowUi.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetSaveLoginFailed)
+        description.textContent = workflowUi.translatedMessage(
+          BROWSER_MESSAGE_KEYS.WidgetSaveLoginFailed,
+        )
         break
-      case true: break
+      case true:
+        break
     }
   }
 
@@ -104,18 +132,31 @@ class LoginSaveInteraction {
     this.submissionCapture.sensor.rememberPasswordFields()
   }
 
-  rememberSubmissionPasswordMutations(mutations: readonly MutationRecord[]): void {this.submissionCapture.sensor.rememberPasswordMutations(mutations)}
+  rememberSubmissionPasswordMutations(
+    mutations: readonly MutationRecord[],
+  ): void {
+    this.submissionCapture.sensor.rememberPasswordMutations(mutations)
+  }
 
-  enableSubmissionCapture(): void { this.submissionCapture.enable() }
-  discardSubmissionCapture(): void { this.submissionCapture.discard() }
+  enableSubmissionCapture(): void {
+    this.submissionCapture.enable()
+  }
+  discardSubmissionCapture(): void {
+    this.submissionCapture.discard()
+  }
 
-  private stageSubmittedLogin({ snapshot }: CapturedLoginSubmission): Promise<void> {
-    let credentials: LoginCredentials = {username: '', password: ''}
+  private stageSubmittedLogin({
+    snapshot,
+  }: CapturedLoginSubmission): Promise<void> {
+    let credentials: LoginCredentials = { username: '', password: '' }
     switch (snapshot.explicitCredentials.kind) {
-      case LoginCredentialsLookupKind.Absent: break
-      case LoginCredentialsLookupKind.Found: credentials = {...snapshot.explicitCredentials.credentials}; break
+      case LoginCredentialsLookupKind.Absent:
+        break
+      case LoginCredentialsLookupKind.Found:
+        credentials = { ...snapshot.explicitCredentials.credentials }
+        break
     }
-    const request: StageSaveOfferRequest = {credentials, snapshot}
+    const request: StageSaveOfferRequest = { credentials, snapshot }
     return this.trackSaveOffer(request)
   }
   stopPendingSaveWatch(): void {
@@ -172,9 +213,14 @@ class LoginSaveInteraction {
     switch (evidence.kind) {
       case 'SubmittedLogin': {
         const decision = await watch.sensor.eligibility(evidence)
-        switch (saveOfferState.watch.kind === SavePageWatchKind.Watching && saveOfferState.watch.watch === watch) {
-          case false: return
-          case true: break
+        switch (
+          saveOfferState.watch.kind === SavePageWatchKind.Watching &&
+          saveOfferState.watch.watch === watch
+        ) {
+          case false:
+            return
+          case true:
+            break
         }
         switch (decision.eligibility) {
           case 'Eligible':
@@ -188,14 +234,15 @@ class LoginSaveInteraction {
             this.stopPendingSaveWatch()
             await this.dismissSaveOffer(watch.offer)
             return
-          case 'Waiting': return
+          case 'Waiting':
+            return
         }
         break
       }
-      case 'ExplicitAuthentication': break
+      case 'ExplicitAuthentication':
+        break
     }
-    const observationContext:
- AuthenticationOutcomeObservationContext = {
+    const observationContext: AuthenticationOutcomeObservationContext = {
       startedAt: watch.startedAt,
       authPath: watch.authPath,
       sawMutation: watch.sawMutation,
@@ -242,12 +289,22 @@ class LoginSaveInteraction {
   }
 
   beginPendingSaveWatch(offer: WebsiteLoginSaveOfferView): void {
-    const sensorRequest: LoginSaveOutcomeSensorRequest = { baseline: offer.baseline, submittedNodes: [], navigationMode: LoginSaveNavigationMode.DocumentNavigation }
-    const request: PendingSaveSensorRequest = { offer, sensor: new LoginSaveOutcomeSensor(sensorRequest) }
+    const sensorRequest: LoginSaveOutcomeSensorRequest = {
+      baseline: offer.baseline,
+      submittedNodes: [],
+      navigationMode: LoginSaveNavigationMode.DocumentNavigation,
+    }
+    const request: PendingSaveSensorRequest = {
+      offer,
+      sensor: new LoginSaveOutcomeSensor(sensorRequest),
+    }
     this.beginPendingSaveWatchWithSensor(request)
   }
 
-  private beginPendingSaveWatchWithSensor({offer, sensor}: PendingSaveSensorRequest): void {
+  private beginPendingSaveWatchWithSensor({
+    offer,
+    sensor,
+  }: PendingSaveSensorRequest): void {
     this.stopPendingSaveWatch()
     this.offerSensors.clear()
     this.offerSensors.set(offer.offerId, sensor)
@@ -280,7 +337,6 @@ class LoginSaveInteraction {
   }
 
   private trackSaveOffer(stageRequest: StageSaveOfferRequest): Promise<void> {
-
     const operation = this.stageSaveOfferForCredentials(stageRequest)
     const trackedOperation = operation.finally(() => {
       this.pendingSaveOfferRequests.delete(trackedOperation)
@@ -290,7 +346,8 @@ class LoginSaveInteraction {
   }
 
   private async stageSaveOfferForCredentials({
-    credentials, snapshot,
+    credentials,
+    snapshot,
   }: StageSaveOfferRequest): Promise<void> {
     const message: Parameters<
       typeof authenticationRuntimeTransport.sendLoginSaveOfferRuntimeMessage
@@ -304,11 +361,14 @@ class LoginSaveInteraction {
         capturedValues: snapshot.capturedValues(),
       },
     }
-    const delivery =
-      await authenticationRuntimeTransport.sendLoginSaveOfferRuntimeMessage(
-        message,
-      ).finally(() => {
-        credentials.password = ''; credentials.username = ''; message.payload.password = ''; message.payload.username = ''; message.payload.capturedValues.fill('')
+    const delivery = await authenticationRuntimeTransport
+      .sendLoginSaveOfferRuntimeMessage(message)
+      .finally(() => {
+        credentials.password = ''
+        credentials.username = ''
+        message.payload.password = ''
+        message.payload.username = ''
+        message.payload.capturedValues.fill('')
       })
     if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
       return
@@ -320,30 +380,49 @@ class LoginSaveInteraction {
         this.stopPendingSaveWatch()
         this.offerSensors.clear()
         switch (display.kind) {
-          case SaveOfferDisplayKind.Visible: workflowUi.removeWidget(); break
-          case SaveOfferDisplayKind.Hidden: saveOfferState.clearActiveOffer(); break
+          case SaveOfferDisplayKind.Visible:
+            workflowUi.removeWidget()
+            break
+          case SaveOfferDisplayKind.Hidden:
+            saveOfferState.clearActiveOffer()
+            break
         }
         return
       }
-      case 'locked': case 'rejected': case 'unavailable': return
-      case 'offer-available': break
+      case 'locked':
+      case 'rejected':
+      case 'unavailable':
+        return
+      case 'offer-available':
+        break
     }
     const { offer } = response
     if (saveOfferState.dismissedOfferIds.has(offer.offerId)) return
     let submittedNodes: HTMLInputElement[] = []
     switch (offer.selection.kind) {
-      case 'ExplicitAuthentication': break
+      case 'ExplicitAuthentication':
+        break
       case 'SubmittedLogin': {
-        const indices: Parameters<typeof snapshot.credentialNodes>[0] = {usernameIndex: offer.selection.username_field_index.value, passwordIndex: offer.selection.password_field_index.value}
+        const indices: Parameters<typeof snapshot.credentialNodes>[0] = {
+          usernameIndex: offer.selection.username_field_index.value,
+          passwordIndex: offer.selection.password_field_index.value,
+        }
         submittedNodes = snapshot.credentialNodes(indices)
         break
       }
     }
 
-    const sensorRequest: LoginSaveOutcomeSensorRequest = { baseline: offer.baseline, submittedNodes, navigationMode: LoginSaveNavigationMode.SameDocument }
+    const sensorRequest: LoginSaveOutcomeSensorRequest = {
+      baseline: offer.baseline,
+      submittedNodes,
+      navigationMode: LoginSaveNavigationMode.SameDocument,
+    }
     const sensor = new LoginSaveOutcomeSensor(sensorRequest)
     sensor.sawMutation = snapshot.mutationOccurred()
-    const watchRequest: {offer: WebsiteLoginSaveOfferView; sensor: LoginSaveOutcomeSensor} = {offer, sensor}
+    const watchRequest: {
+      offer: WebsiteLoginSaveOfferView
+      sensor: LoginSaveOutcomeSensor
+    } = { offer, sensor }
     this.beginPendingSaveWatchWithSensor(watchRequest)
   }
 
@@ -378,7 +457,14 @@ class LoginSaveInteraction {
         !delivery.response.ok ||
         !('state' in delivery.response) ||
         delivery.response.state !== 'unavailable' ||
-        passwordFormInteraction.summarizeAuthenticationWorkflowForms().some((form) => form.summary.passwordFieldCount > 0 || form.summary.usernameFieldCount > 0 || form.summary.oneTimeCodeFieldCount > 0) ||
+        passwordFormInteraction
+          .summarizeAuthenticationWorkflowForms()
+          .some(
+            (form) =>
+              form.summary.passwordFieldCount > 0 ||
+              form.summary.usernameFieldCount > 0 ||
+              form.summary.oneTimeCodeFieldCount > 0,
+          ) ||
         Date.now() - recoveryStartedAt >= OUTCOME_EVIDENCE_TIMEOUT_MS
       ) {
         return { kind: PendingSaveOfferLoadKind.Absent }
@@ -393,17 +479,36 @@ class LoginSaveInteraction {
     })
   }
 
-  private async freshSaveEvidence(offer: WebsiteLoginSaveOfferView): Promise<FreshSaveEvidence> {
+  private async freshSaveEvidence(
+    offer: WebsiteLoginSaveOfferView,
+  ): Promise<FreshSaveEvidence> {
     const sensor = this.offerSensors.get(offer.offerId)
-    switch (true) {case typeof sensor === 'object': break; case true: default: throw new Error('login save baseline unavailable')}
+    switch (true) {
+      case typeof sensor === 'object':
+        break
+      case true:
+      default:
+        throw new Error('login save baseline unavailable')
+    }
     const evidence = await sensor.collect()
     switch (evidence.kind) {
       case 'SubmittedLogin': {
         const decision = await sensor.eligibility(evidence)
-        switch (decision.eligibility) {case 'Eligible': break; case 'Waiting': case 'Rejected': case 'Expired': throw new Error('login save no longer eligible')}
+        switch (decision.eligibility) {
+          case 'Eligible':
+            break
+          case 'Waiting':
+          case 'Rejected':
+          case 'Expired':
+            throw new Error('login save no longer eligible')
+        }
         break
       }
-      case 'ExplicitAuthentication': await authenticationOutcomeObservation.prepareOutcomeNavigationPath(evidence.observation); break
+      case 'ExplicitAuthentication':
+        await authenticationOutcomeObservation.prepareOutcomeNavigationPath(
+          evidence.observation,
+        )
+        break
     }
     return evidence
   }

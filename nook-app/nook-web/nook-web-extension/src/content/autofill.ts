@@ -78,9 +78,7 @@ import {
   scanState,
   widgetState,
 } from './autofill/state'
-import {
-  runAfterCompanionWasmReady,
-} from './autofill/companion-wasm-gate'
+import { runAfterCompanionWasmReady } from './autofill/companion-wasm-gate'
 import { authenticationWidgetRenderer } from './autofill/widget-rendering'
 import { authenticationWidgetPosition } from './autofill/widget-position'
 import { workflowUi } from './autofill/workflow-ui'
@@ -721,17 +719,41 @@ scanState.schedule = authenticationScanRenderLifecycle.schedule.bind(
   authenticationScanRenderLifecycle,
 )
 
-document.addEventListener('submit', loginSaveInteraction.captureSubmissionIntent, true)
-document.addEventListener('click', loginSaveInteraction.captureSubmissionIntent, true)
-document.addEventListener('keydown', loginSaveInteraction.captureSubmissionIntent, true)
+document.addEventListener(
+  'submit',
+  loginSaveInteraction.captureSubmissionIntent,
+  true,
+)
+document.addEventListener(
+  'click',
+  loginSaveInteraction.captureSubmissionIntent,
+  true,
+)
+document.addEventListener(
+  'keydown',
+  loginSaveInteraction.captureSubmissionIntent,
+  true,
+)
 
 void runAfterCompanionWasmReady({
   companionWasmReady: companionWasmReadiness.waitForExtensionClassification(),
   start: async () => {
     if (await simpleVaultRuntime.isRuntimeNookVaultAppUrl(location.href)) {
-      document.removeEventListener('submit', loginSaveInteraction.captureSubmissionIntent, true)
-      document.removeEventListener('click', loginSaveInteraction.captureSubmissionIntent, true)
-      document.removeEventListener('keydown', loginSaveInteraction.captureSubmissionIntent, true)
+      document.removeEventListener(
+        'submit',
+        loginSaveInteraction.captureSubmissionIntent,
+        true,
+      )
+      document.removeEventListener(
+        'click',
+        loginSaveInteraction.captureSubmissionIntent,
+        true,
+      )
+      document.removeEventListener(
+        'keydown',
+        loginSaveInteraction.captureSubmissionIntent,
+        true,
+      )
       loginSaveInteraction.discardSubmissionCapture()
       return
     }
@@ -750,7 +772,6 @@ void runAfterCompanionWasmReady({
       },
       true,
     )
-
 
     document.addEventListener(
       'focusin',

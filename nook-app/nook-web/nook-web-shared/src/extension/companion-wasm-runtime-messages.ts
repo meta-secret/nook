@@ -141,7 +141,10 @@ export type CompanionWasmLabelRequest = {
 };
 
 export type CompanionWasmSessionMessage =
-  | { readonly type: CompanionWasmSessionMessageType.ClassifyLoginSaveOutcome; readonly payload: LoginSaveOutcomeObservation }
+  | {
+      readonly type: CompanionWasmSessionMessageType.ClassifyLoginSaveOutcome;
+      readonly payload: LoginSaveOutcomeObservation;
+    }
   | GoogleLoginSessionMessage
   | {
       readonly type: CompanionWasmSessionMessageType.ProjectAuthenticationLoginChecklist;

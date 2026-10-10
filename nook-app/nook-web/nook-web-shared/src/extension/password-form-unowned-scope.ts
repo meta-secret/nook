@@ -24,7 +24,7 @@ export type UnownedAuthContainerRequest = {
   field: HTMLElement;
   root: ParentNode;
 };
-type RenderedCheckpointTextRequest = {node: Node; text: string[]};
+type RenderedCheckpointTextRequest = { node: Node; text: string[] };
 
 export type AutocompleteTokenMatchRequest = {
   field: HTMLInputElement;
@@ -450,9 +450,15 @@ export abstract class PasswordFormUnownedScopeDiscovery extends AuthenticationIn
       root.nodeType === 9
         ? root
         : ((v) => (v ? v : this.browser.document))(root.ownerDocument);
-    switch (Array.from(doc.querySelectorAll<HTMLElement>("[data-nook-manual-checkpoint]")).some((checkpoint) => this.isRenderedElement(checkpoint))) {
-      case true: return true;
-      case false: break;
+    switch (
+      Array.from(
+        doc.querySelectorAll<HTMLElement>("[data-nook-manual-checkpoint]"),
+      ).some((checkpoint) => this.isRenderedElement(checkpoint))
+    ) {
+      case true:
+        return true;
+      case false:
+        break;
     }
     const checkpointSelector =
       'iframe[src*="recaptcha" i], iframe[src*="hcaptcha" i], iframe[src*="turnstile" i], iframe[title*="captcha" i]';
@@ -486,41 +492,72 @@ export abstract class PasswordFormUnownedScopeDiscovery extends AuthenticationIn
     let doc: Document;
     const ownerDocument = root.ownerDocument;
     switch (true) {
-      case typeof ownerDocument?.createTreeWalker === "function": doc = ownerDocument; break;
-      case true: default: doc = this.browser.document; break;
+      case typeof ownerDocument?.createTreeWalker === "function":
+        doc = ownerDocument;
+        break;
+      case true:
+      default:
+        doc = this.browser.document;
+        break;
     }
-    const walker = doc.createTreeWalker(root, this.browser.NodeFilter.SHOW_TEXT);
+    const walker = doc.createTreeWalker(
+      root,
+      this.browser.NodeFilter.SHOW_TEXT,
+    );
     const text: string[] = [];
     let node = walker.nextNode();
     while (node) {
-      const request: RenderedCheckpointTextRequest = {node, text};
+      const request: RenderedCheckpointTextRequest = { node, text };
       this.appendRenderedCheckpointText(request);
       node = walker.nextNode();
     }
     return text.join(" ");
   }
 
-  private appendRenderedCheckpointText({node, text}: RenderedCheckpointTextRequest): void {
+  private appendRenderedCheckpointText({
+    node,
+    text,
+  }: RenderedCheckpointTextRequest): void {
     const parent = node.parentElement;
     switch (true) {
-      case parent instanceof this.browser.HTMLElement: break;
-      case true: default: return;
+      case parent instanceof this.browser.HTMLElement:
+        break;
+      case true:
+      default:
+        return;
     }
-    switch (!parent.closest("script, style, template") && this.isRenderedElement(parent)) {
-      case false: return;
-      case true: break;
+    switch (
+      !parent.closest("script, style, template") &&
+      this.isRenderedElement(parent)
+    ) {
+      case false:
+        return;
+      case true:
+        break;
     }
     switch (typeof node.textContent) {
-      case "string": text.push(node.textContent); break;
-      case "object": text.push(""); break;
-      case "number": case "bigint": case "boolean": case "symbol": case "undefined": case "function": break;
+      case "string":
+        text.push(node.textContent);
+        break;
+      case "object":
+        text.push("");
+        break;
+      case "number":
+      case "bigint":
+      case "boolean":
+      case "symbol":
+      case "undefined":
+      case "function":
+        break;
     }
   }
 
   private checkboxHasManualCheckpoint(checkbox: HTMLInputElement): boolean {
     switch (this.isRenderedElement(checkbox)) {
-      case false: return false;
-      case true: break;
+      case false:
+        return false;
+      case true:
+        break;
     }
     const label = checkbox.labels?.[0];
     const ariaLabel = checkbox.attributes.getNamedItem("aria-label");

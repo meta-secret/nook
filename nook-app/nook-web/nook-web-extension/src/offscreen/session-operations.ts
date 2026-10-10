@@ -32,9 +32,7 @@ import {
 import { handleAuthenticatorEnrollmentMessage } from './authenticator-enrollment-session'
 import { ExtensionSessionMessageType } from './session-message-dispatch'
 import { type ExtensionSessionRequest } from './session-request-adapter'
-import {
-  pendingLoginSaveOfferStore,
-} from './login-save-offers'
+import { pendingLoginSaveOfferStore } from './login-save-offers'
 import {
   flushPasskeyEventToProviders,
   type ActivatedExtensionIdentityOperation,

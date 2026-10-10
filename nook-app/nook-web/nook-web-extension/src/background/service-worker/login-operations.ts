@@ -1,4 +1,7 @@
-import type { LoginSubmissionCapture, LoginSaveCommitEvidence } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import type {
+  LoginSubmissionCapture,
+  LoginSaveCommitEvidence,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { LoginSaveBrowserSender } from './login-save-browser-sender'
 import {
   NookWebsiteLoginSaveDecision,
@@ -31,7 +34,10 @@ import {
   decodeWebsiteLoginFillResponse,
 } from './login-session-response-adapter'
 import { websiteLoginRevealSessionRequest } from './session-request-projections'
-import { decode_website_login_save_pending_response, decode_website_login_save_offer_response } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  decode_website_login_save_pending_response,
+  decode_website_login_save_offer_response,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 type WebsiteLoginSaveSessionRequest = Extract<
   ExtensionSessionRequest,
@@ -58,7 +64,7 @@ export async function websiteLoginSaveOffer({
   const pendingPassword = { value: message.payload.password }
   const capturedValues = [...message.payload.capturedValues]
   message.payload.capturedValues.fill('')
-  const pendingUsername = {value: message.payload.username}
+  const pendingUsername = { value: message.payload.username }
   message.payload.username = ''
   message.payload.password = ''
   try {
@@ -75,8 +81,18 @@ export async function websiteLoginSaveOffer({
         reason: 'login-save-forbidden-origin',
       }
     }
-    const captureSender: Parameters<typeof extensionPairingIdentity.isAuthorizedWebsiteSender>[0] = {sender, origin: new URL(message.payload.capture.submitted_url).origin}
-    switch (extensionPairingIdentity.isAuthorizedWebsiteSender(captureSender)) {case true: break; case false: return {kind: 'rejected', reason: 'login-save-forbidden-origin'}}
+    const captureSender: Parameters<
+      typeof extensionPairingIdentity.isAuthorizedWebsiteSender
+    >[0] = {
+      sender,
+      origin: new URL(message.payload.capture.submitted_url).origin,
+    }
+    switch (extensionPairingIdentity.isAuthorizedWebsiteSender(captureSender)) {
+      case true:
+        break
+      case false:
+        return { kind: 'rejected', reason: 'login-save-forbidden-origin' }
+    }
     const browserSender = new LoginSaveBrowserSender(sender).read()
 
     const grants = await extensionPairingIdentity.passwordPairingGrants()
@@ -172,7 +188,9 @@ export async function websiteLoginSaveOffer({
       baseline: response.baseline,
       selection: response.selection,
     }
-    const envelope: Parameters<typeof decode_website_login_save_offer_response>[0] = {
+    const envelope: Parameters<
+      typeof decode_website_login_save_offer_response
+    >[0] = {
       kind: 'offer-available',
       offer,
     }
@@ -295,12 +313,21 @@ export async function websiteLoginSaveCommit({
   }
   const browserSender = new LoginSaveBrowserSender(sender).read()
   switch (message.payload.evidence.kind) {
-    case 'SubmittedLogin': break
+    case 'SubmittedLogin':
+      break
     case 'ExplicitAuthentication': {
-      const verdict = await backgroundVaultRuntime.classifyAuthenticationOutcomeWithDefaultTimeout(message.payload.evidence.observation)
+      const verdict =
+        await backgroundVaultRuntime.classifyAuthenticationOutcomeWithDefaultTimeout(
+          message.payload.evidence.observation,
+        )
       switch (verdict.allowsCredentialCommit) {
-        case true: break
-        case false: return {kind: 'rejected', reason: 'login-save-evidence-insufficient'}
+        case true:
+          break
+        case false:
+          return {
+            kind: 'rejected',
+            reason: 'login-save-evidence-insufficient',
+          }
       }
       break
     }
