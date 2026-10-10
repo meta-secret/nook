@@ -319,24 +319,47 @@ The existing signup and 2FA outcome requirements remain unchanged.
 
 #### Capture actual login intent
 
-- Rust classifies trusted native form submission, submit-button click, or Enter
-  within the same login form or container as actual login intent.
+- Rust classifies trusted native form submission, Enter, or semantic control
+  activation within the same login form or container as actual login intent.
+  Native submission and Enter do not require a control label.
+- A Click uses the existing raw `detailedAdvanceControl` observation for the
+  exactly clicked actionable control in the same locally scoped credential
+  container. Rust derives credential evidence from the same captured
+  fields/history.
+  - A semantic submit or scoped activation may qualify, including Continue,
+    Next, localized, or icon-only controls without an English login label.
+  - Apply the existing auxiliary, reveal, cancel, reset, recovery, registration,
+    and destructive-control vetoes. Unsupported ambiguous controls remain
+    ineligible; this does not guarantee recognition of every language or icon.
 - Support dynamically inserted login forms and current-password fields whose
   visibility toggle changes their input type.
 - Typing, focus, or filling alone does not capture a submitted login.
 - Exclude newsletter, search, registration, password-change, and multiple-password
   confirmation structures from generic login capture.
-- Capture the origin, time, URL/path, auth presence, and bounded control-label
-  baseline synchronously with the credentials. Do this before asynchronous
-  staging can observe a later page state.
+- Capture scoped candidate values and raw intent, field/history metadata, time,
+  URL, auth presence, and bounded control labels synchronously in the trusted
+  event handler.
+- Send that capture in the first Plan message before the submitting document
+  unloads. Do not wait for a classifier reply before sending the values.
+- Background/offscreen owns the received request across the originating
+  document's unload. Rust classifies and selects the credential before existing
+  memory-only `Map` staging. Preserve the origin/tab/frame/grant/TTL scope and
+  explicit Save consent; add no storage, retry, or recovery path.
 
 - **Prohibited:** stage a password from typing alone or combine an Enter event
-  in a search box with a password elsewhere. Capture the baseline only after
-  asynchronous staging returns, treating removed fields as the baseline.
+  in a search box with a password elsewhere. Wait for a classifier reply in the
+  submitting document before sending credential values, losing them on unload.
+  Capture page facts only after navigation and treat them as the baseline.
+  Treat a reveal, cancel, reset, or ambiguous control as submit intent merely
+  because it is near a password field.
 - **Required:** capture a trusted submit in its dynamically inserted login
-  container, including a visible current-password field. Retain that moment's
-  origin, time, URL/path, auth presence, and control labels before staging.
-  A registration form with password confirmation remains excluded.
+  container, including a visible current-password field. A clicked Continue,
+  localized, or icon-only control qualifies only through its scoped semantic
+  advance observation and Rust's Login classification after the vetoes.
+  Send scoped values and that moment's raw facts in the first Plan message
+  before unload. Background/offscreen retains ownership while Rust classifies
+  and selects before staging; registration with password confirmation remains
+  excluded.
 
 #### Classify fresh outcome evidence
 
@@ -414,14 +437,23 @@ The existing signup and 2FA outcome requirements remain unchanged.
 
 - Extend the Rust-owned `ExtensionSessionRequest` wire with required sender
   `tab_id`/`frame_id`, the existing origin, and initial/pending offer metadata.
-- The capture baseline carries `submitted_at` as `CompanionEpochMilliseconds`,
-  validated HTTP(S) `submitted_url`, `initial_auth_fields`, and bounded control
-  labels.
+- The first Plan carries top-level `capturedValues` through the existing
+  sensitive-array copy/wipe path. Its scalar `username`/`password` fields serve
+  only the explicit-authentication pre-handler candidate.
+- `capture` carries raw intent, fields/history, submission time, URL, bounded
+  controls, and explicit-candidate presence. Rust validates counts, bounds, and
+  origin before selecting values and deriving baseline source/workflow.
+- The Rust-derived capture baseline retains `submitted_at` as
+  `CompanionEpochMilliseconds`, validated HTTP(S) `submitted_url`,
+  `initial_auth_fields`, and bounded control labels.
 - `LoginSubmissionIntent` carries raw context as
   `AuthenticationPageObservationFacts`. Rust derives the canonical
   `AuthenticationWorkflowKind` from the same accumulated field/history
   observations plus that context. Classification returns the canonical workflow
   and capture source. Outcome observations retain the captured workflow.
+- Offer metadata pairs the Rust-derived baseline source with a non-secret
+  selection: submitted-login field indices or the explicit-authentication
+  candidate kind. Rejected captures produce no selection.
 - Expose the additive Rust classifier exports through the typed WASM boundary.
   Content scripts supply observations; TypeScript does not decide eligibility.
 - Roll out the current extension and runtime together. Do not accept old wire
@@ -432,7 +464,11 @@ The existing signup and 2FA outcome requirements remain unchanged.
 
 - **Prohibited:** default missing sender context in an old request, duplicate
   the classifier in TypeScript, or persist staged plaintext as a migration.
+  Reuse the Plan's scalar pre-handler candidate as the generic login credential
+  instead of Rust's selection from the scoped captured array.
 - **Required:** use the current typed request and Rust classifiers together.
+  The first Plan copies and wipes the sensitive array through its existing
+  path. Rust validates the capture and selects its credential before staging.
   Reject an old request shape and require a fresh current-runtime interaction;
   durable vault storage needs no migration.
 
