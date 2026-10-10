@@ -40,6 +40,8 @@ mod provider_import;
 pub use provider_import::*;
 mod companion_heuristics;
 pub use companion_heuristics::*;
+mod vault_event_log;
+pub use vault_event_log::*;
 mod shared_storage_grant;
 pub use shared_storage_grant::*;
 
