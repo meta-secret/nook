@@ -83,30 +83,87 @@ function grant(vaultStoreId: string): StoredExtensionPairingGrant {
   }
 }
 
-type VkLoginAccountListingContext = {
-  readonly self: VkLoginAccountListingScenario
+type LoginAccountListingRequest = Parameters<
+  typeof import('../src/background/service-worker/account-pickers').accountPickerSessions.loginAccountsForOrigin
+>[0]
+
+type LoginAccountListingTarget = Pick<
+  LoginAccountListingRequest,
+  'origin' | 'grants'
+>
+
+type LoginAccountListingFixture = {
+  readonly target: LoginAccountListingTarget
+  readonly accounts: WebsiteLoginAccountOption[]
 }
 
-class VkLoginAccountListingScenario {
-  private readonly generatorContext: VkLoginAccountListingContext = {
+type LoginAccountListingContext = {
+  readonly self: LoginAccountListingScenario
+}
+
+class LoginAccountListingScenario {
+  static chaseFixture(): LoginAccountListingFixture {
+    const accounts: WebsiteLoginAccountOption[] = [
+      {
+        vaultStoreId: 'chase-vault',
+        vaultName: 'chase-vault',
+        secretId: 'chase-login-chaseonline.chase.com',
+        username: 'fixture-chaseonline.chase.com',
+        websiteUrl: 'https://chaseonline.chase.com/',
+        websiteHost: 'chaseonline.chase.com',
+      },
+      {
+        vaultStoreId: 'chase-vault',
+        vaultName: 'chase-vault',
+        secretId: 'chase-login-secure.chase.com',
+        username: 'fixture-secure.chase.com',
+        websiteUrl: 'https://secure.chase.com/',
+        websiteHost: 'secure.chase.com',
+      },
+      {
+        vaultStoreId: 'chase-vault',
+        vaultName: 'chase-vault',
+        secretId: 'chase-login-secure03ea.chase.com',
+        username: 'fixture-secure03ea.chase.com',
+        websiteUrl: 'https://secure03ea.chase.com/',
+        websiteHost: 'secure03ea.chase.com',
+      },
+      {
+        vaultStoreId: 'chase-vault',
+        vaultName: 'chase-vault',
+        secretId: 'chase-login-secure05c.chase.com',
+        username: 'fixture-secure05c.chase.com',
+        websiteUrl: 'https://secure05c.chase.com/',
+        websiteHost: 'secure05c.chase.com',
+      },
+      {
+        vaultStoreId: 'chase-vault',
+        vaultName: 'chase-vault',
+        secretId: 'chase-login-secure06ea.chase.com',
+        username: 'fixture-secure06ea.chase.com',
+        websiteUrl: 'https://secure06ea.chase.com/',
+        websiteHost: 'secure06ea.chase.com',
+      },
+    ]
+    return {
+      target: {
+        origin: 'https://www.chase.com',
+        grants: [grant('chase-vault')],
+      },
+      accounts,
+    }
+  }
+
+  private readonly generatorContext: LoginAccountListingContext = {
     self: this,
   }
   private readonly transport: QueuedSessionTransportFixture
 
-  constructor() {
+  constructor(private readonly fixture: LoginAccountListingFixture) {
     // Rust owns host matching; this fixture verifies its account projection reaches the picker.
     const response: ExtensionSessionResponse = {
       ok: true,
-      accounts: [
-        {
-          vaultStoreId: 'vk-vault',
-          vaultName: 'vk-vault',
-          secretId: 'vk-login',
-          username: 'vk-fixture-user',
-          websiteUrl: 'https://vk.ru/',
-          websiteHost: 'vk.ru',
-        },
-      ],
+      accounts: fixture.accounts,
     }
     const configuration: QueuedSessionTransportFixtureArgs = {
       deliveries: [ok(response)],
@@ -122,11 +179,8 @@ class VkLoginAccountListingScenario {
     const { accountPickerSessions } = yield* Effect.tryPromise(
       () => import('../src/background/service-worker/account-pickers'),
     )
-    const request: Parameters<
-      typeof accountPickerSessions.loginAccountsForOrigin
-    >[0] = {
-      grants: [grant('vk-vault')],
-      origin: 'https://id.vk.ru',
+    const request: LoginAccountListingRequest = {
+      ...this.fixture.target,
       sendMessage: (message: ExtensionSessionTransportRequest) => {
         const delivery: ExtensionSessionTransportDelivery = { message }
         return this.transport.sendMessage(delivery)
@@ -135,31 +189,43 @@ class VkLoginAccountListingScenario {
     const accounts = yield* Effect.tryPromise(() =>
       accountPickerSessions.loginAccountsForOrigin(request),
     )
-    const expected: WebsiteLoginAccountOption[] = [
-      {
-        vaultStoreId: 'vk-vault',
-        vaultName: 'vk-vault',
-        secretId: 'vk-login',
-        username: 'vk-fixture-user',
-        websiteUrl: 'https://vk.ru/',
-        websiteHost: 'vk.ru',
-      },
-    ]
-    expect(accounts).toEqual(expected)
+    expect(accounts).toEqual(this.fixture.accounts)
     expect(this.transport.messages).toHaveLength(1)
     expect(this.transport.messages[0]?.type).toBe(
       ExtensionSessionMessageType.ListLogins,
     )
     expect(this.transport.messages[0]?.payload).toHaveProperty(
       'origin',
-      'https://id.vk.ru',
+      this.fixture.target.origin,
     )
   })
 }
 
 describe('login account listing failure handling', () => {
+  test('forwards the Chase origin and preserves every Rust-projected account without revealing one', () => {
+    const fixture = LoginAccountListingScenario.chaseFixture()
+    const scenario = new LoginAccountListingScenario(fixture)
+    return Effect.runPromise(scenario.verifyProjection())
+  })
+
   test('forwards the VK password-step origin and retains the typed saved account', () => {
-    const scenario = new VkLoginAccountListingScenario()
+    const fixture: LoginAccountListingFixture = {
+      target: {
+        origin: 'https://id.vk.ru',
+        grants: [grant('vk-vault')],
+      },
+      accounts: [
+        {
+          vaultStoreId: 'vk-vault',
+          vaultName: 'vk-vault',
+          secretId: 'vk-login',
+          username: 'vk-fixture-user',
+          websiteUrl: 'https://vk.ru/',
+          websiteHost: 'vk.ru',
+        },
+      ],
+    }
+    const scenario = new LoginAccountListingScenario(fixture)
     return Effect.runPromise(scenario.verifyProjection())
   })
 
