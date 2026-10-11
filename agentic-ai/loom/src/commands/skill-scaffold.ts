@@ -163,14 +163,7 @@ export class SkillCardLocation {
   constructor(private readonly request: FindExistingSkillCardArgs) {}
   existing(): string | false {
     const args = this.request;
-    const owners = [
-      SkillOwner.Shared,
-      SkillOwner.Ai,
-      SkillOwner.DevCore,
-      SkillOwner.Security,
-      SkillOwner.Sre,
-      SkillOwner.WebDev,
-    ] as const;
+    const owners = Object.values(SkillOwner);
     const ownerRoots = owners.map((skillOwner) => {
       const directoryArgs: SkillOwnerDynamicSkillsDirectoryArgs = {
         cortexRoot: args.cortexRoot,

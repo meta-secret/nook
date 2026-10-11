@@ -18,8 +18,10 @@ import {
   SkillOwner,
   type SkillScaffoldRequest,
   SkillScaffoldRequestDecoder,
+  SKILL_SCAFFOLD_INPUT_SCHEMA,
 } from '../src/codec/args/skill-scaffold.ts';
 import { DecodeStatus, type DecodeOutcome } from '../src/codec/field-error.ts';
+import { JsonSchemaType } from '../src/codec/json-schema.ts';
 import type { UntrustedYamlNode } from '../src/lib/guards.ts';
 
 describe('skill scaffold', () => {
@@ -105,6 +107,40 @@ describe('skill scaffold', () => {
       skillOwner: 'gizmo',
     });
     expect(outcome.status).toBe(DecodeStatus.Failed);
+  });
+
+  test.each(Object.values(SkillOwner))(
+    'decodes every declared skill owner: %s',
+    (skillOwner) => {
+      expect(
+        SkillScaffoldRequestDecoder.decode({
+          skillSlug: 'workflow-routing',
+          skillOwner,
+        }),
+      ).toEqual({
+        status: DecodeStatus.Ok,
+        value: { skillSlug: 'workflow-routing', skillOwner },
+      });
+    },
+  );
+
+  test.each(['ai\n', 'ai\r\n', 'ai ', 'AI', 'other'])(
+    'returns a field failure for an invalid owner: %j',
+    (skillOwner) => {
+      expect(
+        SkillScaffoldRequestDecoder.decode({
+          skillSlug: 'workflow-routing',
+          skillOwner,
+        }).status,
+      ).toBe(DecodeStatus.Failed);
+    },
+  );
+
+  test('advertises exactly the enum-owned skill owner choices', () => {
+    expect(SKILL_SCAFFOLD_INPUT_SCHEMA.properties.skillOwner).toEqual({
+      type: JsonSchemaType.String,
+      enum: Object.values(SkillOwner),
+    });
   });
 
   test('routes shared project skills outside the teams directory', () => {

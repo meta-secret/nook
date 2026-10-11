@@ -8,7 +8,6 @@ import {
   type DecodeOutcome,
   type FieldErrorArgs,
   FailedFieldDecode,
-  FieldDecodeInvariantViolation,
   SuccessfulFieldDecode,
   FieldDiagnosticText,
   FieldDiagnostic,
@@ -18,6 +17,7 @@ import {
   type ObjectJsonSchema,
   type ObjectJsonSchemaArgs,
   type PatternStringJsonSchemaArgs,
+  type EnumStringJsonSchemaArgs,
   JsonSchemaDefinition,
 } from '../json-schema.ts';
 
@@ -59,7 +59,9 @@ export class SkillScaffoldRequestDecoder {
       key: SkillScaffoldField.SkillOwner,
       path: ROOT,
     };
-    const skillOwner = YamlStringField.decode(skillOwnerArgs);
+    const skillOwner = new SkillOwnerVocabulary(
+      YamlStringField.decode(skillOwnerArgs),
+    ).decode();
     const errors = [
       ...unknown,
       ...(skillSlug.status === DecodeStatus.Failed ? skillSlug.errors : []),
@@ -75,27 +77,12 @@ export class SkillScaffoldRequestDecoder {
       };
       errors.push(FieldDiagnostic.create(fieldErrorArgs));
     }
-    if (
-      skillOwner.status === DecodeStatus.Ok &&
-      !SKILL_OWNER_RE.test(skillOwner.value)
-    ) {
-      const fieldErrorArgs: FieldErrorArgs = {
-        path: `${ROOT}.${SkillScaffoldField.SkillOwner}`,
-        issue: FieldIssue.ExpectedOneOf,
-        detail: FieldDiagnosticText.create(
-          'shared|ai|dev-core|security|sre|web-dev',
-        ),
-      };
-      errors.push(FieldDiagnostic.create(fieldErrorArgs));
-    }
     if (errors.length > 0) {
       return FailedFieldDecode.create(errors);
     }
     const request: SkillScaffoldRequest = {
       skillSlug: SuccessfulFieldDecode.requireValue(skillSlug),
-      skillOwner: SkillOwnerVocabulary.require(
-        SuccessfulFieldDecode.requireValue(skillOwner),
-      ),
+      skillOwner: SuccessfulFieldDecode.requireValue(skillOwner),
     };
     return SuccessfulFieldDecode.create(request);
   }
@@ -116,24 +103,30 @@ export enum SkillOwner {
 }
 
 class SkillOwnerVocabulary {
-  private constructor() {}
-  static require(value: string): SkillOwner {
-    switch (value) {
-      case SkillOwner.Shared:
-        return SkillOwner.Shared;
-      case SkillOwner.Ai:
-        return SkillOwner.Ai;
-      case SkillOwner.DevCore:
-        return SkillOwner.DevCore;
-      case SkillOwner.Security:
-        return SkillOwner.Security;
-      case SkillOwner.Sre:
-        return SkillOwner.Sre;
-      case SkillOwner.WebDev:
-        return SkillOwner.WebDev;
-      default:
-        throw new FieldDecodeInvariantViolation();
+  constructor(private readonly request: DecodeOutcome<string>) {}
+
+  decode(): DecodeOutcome<SkillOwner> {
+    switch (this.request.status) {
+      case DecodeStatus.Failed:
+        return this.request;
+      case DecodeStatus.Ok:
+        return this.decodeOwner(this.request.value);
     }
+  }
+
+  private decodeOwner(value: string): DecodeOutcome<SkillOwner> {
+    for (const owner of Object.values(SkillOwner)) {
+      switch (value) {
+        case owner:
+          return SuccessfulFieldDecode.create(owner);
+      }
+    }
+    const fieldErrorArgs: FieldErrorArgs = {
+      path: `${ROOT}.${SkillScaffoldField.SkillOwner}`,
+      issue: FieldIssue.ExpectedOneOf,
+      detail: FieldDiagnosticText.create(Object.values(SkillOwner).join('|')),
+    };
+    return FailedFieldDecode.create([FieldDiagnostic.create(fieldErrorArgs)]);
   }
 }
 
@@ -146,14 +139,12 @@ const ROOT = RequestFamily.SkillScaffold;
 
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
-const SKILL_OWNER_RE = /^(?:shared|ai|dev-core|security|sre|web-dev)$/;
-
 const skillSlugPatternArgs: PatternStringJsonSchemaArgs = {
   pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$',
 };
 
-const skillOwnerPatternArgs: PatternStringJsonSchemaArgs = {
-  pattern: '^(?:shared|ai|dev-core|security|sre|web-dev)$',
+const skillOwnerEnumArgs: EnumStringJsonSchemaArgs = {
+  values: Object.values(SkillOwner),
 };
 
 const skillScaffoldInputSchemaArgs: ObjectJsonSchemaArgs = {
@@ -161,9 +152,8 @@ const skillScaffoldInputSchemaArgs: ObjectJsonSchemaArgs = {
   properties: {
     [SkillScaffoldField.SkillSlug]:
       JsonSchemaDefinition.pattern(skillSlugPatternArgs),
-    [SkillScaffoldField.SkillOwner]: JsonSchemaDefinition.pattern(
-      skillOwnerPatternArgs,
-    ),
+    [SkillScaffoldField.SkillOwner]:
+      JsonSchemaDefinition.enumeration(skillOwnerEnumArgs),
   },
 };
 

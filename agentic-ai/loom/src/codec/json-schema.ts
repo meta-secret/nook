@@ -26,6 +26,14 @@ export class JsonSchemaDefinition<TSchema extends JsonSchemaDefinitionValue> {
     return new JsonSchemaDefinition(schema).value;
   }
 
+  static enumeration(args: EnumStringJsonSchemaArgs): EnumStringJsonSchema {
+    const schema: EnumStringJsonSchema = {
+      type: JsonSchemaType.String,
+      enum: args.values,
+    };
+    return new JsonSchemaDefinition(schema).value;
+  }
+
   static object(args: ObjectJsonSchemaArgs): ObjectJsonSchema {
     const schema: ObjectJsonSchema = {
       type: JsonSchemaType.Object,
@@ -67,7 +75,13 @@ export type PatternStringJsonSchema = {
   readonly pattern: string;
 };
 
-export type StringJsonSchema = PlainStringJsonSchema | PatternStringJsonSchema;
+export type EnumStringJsonSchema = {
+  readonly type: JsonSchemaType.String;
+  readonly enum: readonly string[];
+};
+
+export type StringJsonSchema =
+  PlainStringJsonSchema | PatternStringJsonSchema | EnumStringJsonSchema;
 
 export type JsonSchemaProperty =
   BooleanJsonSchema | IntegerJsonSchema | StringJsonSchema;
@@ -87,6 +101,10 @@ export type IntegerJsonSchemaArgs = {
 
 export type PatternStringJsonSchemaArgs = {
   readonly pattern: string;
+};
+
+export type EnumStringJsonSchemaArgs = {
+  readonly values: readonly string[];
 };
 
 export type ObjectJsonSchemaArgs = {
