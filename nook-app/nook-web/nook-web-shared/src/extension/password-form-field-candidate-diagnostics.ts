@@ -1,4 +1,5 @@
 /* eslint-disable nook-typed-api/no-raw-object-arguments -- Diagnostic observations are assembled into generated Rust request records here. */
+import { AuthenticationContainerIdentity } from "./password-form-container-identity";
 export enum AuthenticationFieldCandidateDisposition {
   Accepted = "accepted",
   Rejected = "rejected",
@@ -215,12 +216,13 @@ export class AuthenticationFieldCandidateDiagnosticBuilder {
     const ancestors: AuthenticationFieldCandidateAncestor[] = [];
     let current = field.parentElement;
     while (current && ancestors.length < 8) {
+      const identity = new AuthenticationContainerIdentity(current);
       const style =
         current.ownerDocument.defaultView?.getComputedStyle(current);
       ancestors.push({
         tag: this.token(current.tagName),
-        idTokens: this.tokens(current.id),
-        classTokens: this.tokens(current.className),
+        idTokens: this.tokens(identity.id),
+        classTokens: this.tokens(identity.className),
         hidden: current.hidden === true,
         inert: current.hasAttribute("inert") || current.inert === true,
         ariaHidden: current.getAttribute("aria-hidden") === "true",

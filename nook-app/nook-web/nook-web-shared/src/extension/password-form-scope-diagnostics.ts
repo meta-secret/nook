@@ -1,3 +1,5 @@
+import { AuthenticationContainerIdentity } from "./password-form-container-identity";
+
 export enum AuthenticationWorkflowScopeDiagnosticDisposition {
   Accepted = "accepted",
   Rejected = "rejected",
@@ -117,10 +119,11 @@ export class AuthenticationWorkflowScopeDiagnosticBuilder {
     const ancestors: AuthenticationWorkflowScopeDiagnosticAncestor[] = [];
     let current = field.parentElement;
     while (current && ancestors.length < 8) {
+      const identity = new AuthenticationContainerIdentity(current);
       const ancestor: AuthenticationWorkflowScopeDiagnosticAncestor = {
         tag: this.token(current.tagName),
-        idTokens: this.tokens(current.id),
-        classTokens: this.tokens(current.className),
+        idTokens: this.tokens(identity.id),
+        classTokens: this.tokens(identity.className),
       };
       ancestors.push(ancestor);
       current = current.parentElement;
