@@ -20,6 +20,8 @@ import { ok } from 'neverthrow';
 
 import { CortexAuditCommand } from '../src/commands/cortex-audit.ts';
 import type { RunCortexAuditFromDirectoryArgs } from '../src/commands/cortex-audit.ts';
+import type { MakeDirectoryOptions, RmOptions } from 'node:fs';
+import type { BrokenLink } from '../src/lib/links.ts';
 import { RepositoryRoot } from '../src/lib/repo.ts';
 import { LoomFailureCode } from '../src/loom-failure.ts';
 
@@ -68,7 +70,8 @@ test('catalogs referenced skill links while ignoring link-looking examples', asy
     CortexAuditSessionScenario.installValeConfiguration(repoRoot);
     const cortexRoot = path.join(repoRoot, '.cortex');
     const skillsRoot = path.join(cortexRoot, 'teams', 'ai', 'dynamic-skills');
-    mkdirSync(skillsRoot, { recursive: true });
+    const directoryOptions: MakeDirectoryOptions = { recursive: true };
+    mkdirSync(skillsRoot, directoryOptions);
     writeFileSync(path.join(cortexRoot, 'AGENTS.md'), '# Agents\n');
     writeFileSync(
       path.join(skillsRoot, 'guide.md'),
@@ -98,11 +101,14 @@ test('catalogs referenced skill links while ignoring link-looking examples', asy
     };
     const outcome = await CortexAuditCommand.runCortexAuditFromDirectory(args);
     assert(outcome.isOk());
-    expect(outcome.value.brokenLinks).toEqual([]);
-    expect(outcome.value.missingFromIndex).toEqual([]);
-    expect(outcome.value.orphanIndexRows).toEqual([]);
+    const expectedLinks: BrokenLink[] = [];
+    const expectedCatalogFindings: string[] = [];
+    expect(outcome.value.brokenLinks).toEqual(expectedLinks);
+    expect(outcome.value.missingFromIndex).toEqual(expectedCatalogFindings);
+    expect(outcome.value.orphanIndexRows).toEqual(expectedCatalogFindings);
   } finally {
-    rmSync(repoRoot, { recursive: true, force: true });
+    const removeOptions: RmOptions = { recursive: true, force: true };
+    rmSync(repoRoot, removeOptions);
   }
 });
 

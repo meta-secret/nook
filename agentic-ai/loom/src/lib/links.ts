@@ -21,8 +21,17 @@ export type MarkdownLink = {
   readonly line: number;
 };
 
+type MarkdownLinkNodeKind =
+  Link['type'] | Image['type'] | LinkReference['type'] | ImageReference['type'];
+
 /** Parses real Markdown links, including references, without inspecting examples. */
 export class MarkdownLinkDocument {
+  private static readonly LINK_NODE_KINDS: readonly MarkdownLinkNodeKind[] = [
+    'link',
+    'image',
+    'linkReference',
+    'imageReference',
+  ];
   private readonly root: Root;
 
   constructor(content: string) {
@@ -35,33 +44,38 @@ export class MarkdownLinkDocument {
       definitions.push(node);
     });
     const links: MarkdownLink[] = [];
-    visit(
-      this.root,
-      ['link', 'image', 'linkReference', 'imageReference'] as const,
-      (node) => {
-        switch (node.type) {
-          case 'link':
-          case 'image':
-            links.push({ target: node.url, line: this.line(node) });
-            return;
-          case 'linkReference':
-          case 'imageReference':
-            this.appendReference({ node, definitions, links });
+    visit(this.root, MarkdownLinkDocument.LINK_NODE_KINDS, (node) => {
+      switch (node.type) {
+        case 'link':
+        case 'image': {
+          const link: MarkdownLink = {
+            target: node.url,
+            line: this.line(node),
+          };
+          links.push(link);
+          return;
         }
-      },
-    );
+        case 'linkReference':
+        case 'imageReference': {
+          const request: AppendReferenceRequest = { node, definitions, links };
+          this.appendReference(request);
+        }
+      }
+    });
     return links;
   }
 
   private appendReference(request: AppendReferenceRequest): void {
     for (const definition of request.definitions) {
       switch (definition.identifier.toUpperCase()) {
-        case request.node.identifier.toUpperCase():
-          request.links.push({
+        case request.node.identifier.toUpperCase(): {
+          const link: MarkdownLink = {
             target: definition.url,
             line: this.line(request.node),
-          });
+          };
+          request.links.push(link);
           return;
+        }
       }
     }
   }
@@ -78,29 +92,18 @@ type AppendReferenceRequest = {
   readonly links: MarkdownLink[];
 };
 
+type MarkdownLinkResolution = Result<FileMarkdownLink[], BrokenLink>;
+
 export class RepositoryMarkdownLinks {
-  private constructor(private readonly request: FindBrokenRelativeLinksArgs) {}
+  constructor(private readonly request: FindBrokenRelativeLinksArgs) {}
 
-  static findBroken(args: FindBrokenRelativeLinksArgs): BrokenLink[] {
-    return new RepositoryMarkdownLinks(args).execute();
-  }
-
-  static targets(
-    args: FindBrokenRelativeLinksArgs,
-  ): readonly FileMarkdownLink[] {
-    return new RepositoryMarkdownLinks(args).fileTargets();
-  }
-
-  private execute(): BrokenLink[] {
+  findBroken(): BrokenLink[] {
     return this.resolutions().flatMap((resolution) =>
-      resolution.match(
-        (links) => links.flatMap((link) => this.fileFindings(link)),
-        (finding) => [finding],
-      ),
+      this.resolutionFindings(resolution),
     );
   }
 
-  private fileTargets(): FileMarkdownLink[] {
+  targets(): readonly FileMarkdownLink[] {
     return this.resolutions().flatMap((resolution) =>
       resolution.match(
         (links) => links,
@@ -109,7 +112,14 @@ export class RepositoryMarkdownLinks {
     );
   }
 
-  private resolutions(): Result<FileMarkdownLink[], BrokenLink>[] {
+  private resolutionFindings(resolution: MarkdownLinkResolution): BrokenLink[] {
+    return resolution.match(
+      (links) => links.flatMap((link) => this.fileFindings(link)),
+      (finding) => [finding],
+    );
+  }
+
+  private resolutions(): MarkdownLinkResolution[] {
     return new MarkdownLinkDocument(this.request.content).links().map((link) =>
       Result.fromThrowable(
         () => this.resolve(link),
@@ -124,7 +134,8 @@ export class RepositoryMarkdownLinks {
       case '#':
         return [];
     }
-    const resolved = new URL(link.target, pathToFileURL(this.request.filePath));
+    const base: URL = pathToFileURL(this.request.filePath);
+    const resolved = new URL(link.target, base);
     switch (resolved.protocol) {
       case 'file:':
         return [{ ...link, filePath: fileURLToPath(resolved) }];

@@ -216,7 +216,9 @@ export class CortexAuditCommand {
         repoRoot,
       };
       brokenLinks.push(
-        ...RepositoryMarkdownLinks.findBroken(findBrokenRelativeLinksArgs),
+        ...new RepositoryMarkdownLinks(
+          findBrokenRelativeLinksArgs,
+        ).findBroken(),
       );
       if (args.request.includeDensityLint) {
         const lintProseDensityArgs: LintProseDensityArgs = {
@@ -282,7 +284,8 @@ export class CortexAuditCommand {
       repoRoot,
     };
     const indexed = new Set(
-      RepositoryMarkdownLinks.targets(indexLinksRequest)
+      new RepositoryMarkdownLinks(indexLinksRequest)
+        .targets()
         .map((link) => link.filePath)
         .filter((target) => path.extname(target) === '.md')
         .map((target) => path.relative(repoRoot, target))
