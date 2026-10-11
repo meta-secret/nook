@@ -41,6 +41,9 @@ class ProjectContextFixture {
     mkdirSync(directory, { recursive: true });
     const file = join(directory, 'functional-ownership.md');
     switch (kind) {
+      case OwnershipNodeKind.EmptyFile:
+        writeFileSync(file, '');
+        break;
       case OwnershipNodeKind.Directory:
         mkdirSync(file);
         break;
@@ -67,6 +70,7 @@ class ProjectContextFixture {
 }
 
 enum OwnershipNodeKind {
+  EmptyFile = 'empty-file',
   Directory = 'directory',
   SymbolicLink = 'symbolic-link',
 }
@@ -130,22 +134,22 @@ describe('Nook functional project context', () => {
     }
   });
 
-  test.each([
-    '../.meta-cortex/teams/gizmo-team/agents/gizmo-prime/AGENTS.md',
-    '../.meta-cortex/teams/gizmo-team/agents/gizmo/AGENTS.md',
-    'docs/spec/upstream-role-routing.md',
-    'Nook project root and shared Meta-Cortex library root',
-    'applicable Nook checks',
-  ])('rejects a missing upstream or project binding: %s', (binding) => {
+  test('accepts revised guidance and catalog descriptions with the same ownership paths', () => {
     const fixture = ProjectContextFixture.fromSource(
-      ProjectContextFixture.source().replaceAll(binding, 'removed'),
+      '# Nook project context\n\nUse the owning context documents.\n',
     );
     try {
-      expect(fixture.audit().findings).toContainEqual({
-        code: 'invalid-cortex-team-authority',
-        path: '.cortex/AGENTS.md',
-        message: `Canonical Cortex team authority is missing marker: ${binding}`,
-      });
+      const authorities = TEAM_AUTHORITY_CATALOG.map((context) => ({
+        ...context,
+        description: 'Revised description.',
+        capabilityBoundary: 'Revised explanation of the team boundary.',
+      }));
+      expect(
+        ProjectContextContract.auditTeamAuthorities({
+          repoRoot: fixture.root,
+          authorities,
+        }).auditOk,
+      ).toBe(true);
     } finally {
       fixture.dispose();
     }
@@ -171,8 +175,12 @@ describe('Nook functional project context', () => {
     }
   });
 
-  test.each([OwnershipNodeKind.Directory, OwnershipNodeKind.SymbolicLink])(
-    'requires an ownership specification to be a regular file: %s',
+  test.each([
+    OwnershipNodeKind.EmptyFile,
+    OwnershipNodeKind.Directory,
+    OwnershipNodeKind.SymbolicLink,
+  ])(
+    'requires an ownership specification to be a nonempty regular file: %s',
     (kind) => {
       const fixture = ProjectContextFixture.withOwnershipNode(kind);
       try {

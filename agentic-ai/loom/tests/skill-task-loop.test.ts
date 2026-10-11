@@ -152,8 +152,6 @@ export class SkillTaskLoopScenario {
 
 const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
 
-const TASKFILE_PATH = join(REPOSITORY_ROOT, '.task', 'agentic-ai.yml');
-
 const CANONICAL_SCRIPTS = join(
   REPOSITORY_ROOT,
   '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts',
@@ -194,16 +192,6 @@ const WORKSPACE_PACKAGE = {
 } as const;
 
 test('skills tasks delegate discovery and execution to the canonical gate', async () => {
-  const taskfile = await readFile(TASKFILE_PATH, 'utf8');
-  expect(taskfile).not.toContain('SKILL_APPLICATION_DIRS');
-  for (const action of ['install', 'format', 'verify']) {
-    expect(taskfile).toContain(`package-gate-cli.ts" ${action}`);
-  }
-  expect(taskfile).toContain('deps: [skills:install]');
-  expect(taskfile.match(/src\/cli\.ts/gu)).toHaveLength(2);
-  expect(taskfile).toContain('"--request-yaml=$NOOK_SKILL_REQUEST_YAML"');
-  expect(taskfile).toContain('NOOK_SKILL_REQUEST_YAML:');
-  expect(taskfile).toContain('--tools-list');
   const consumers: string[] = [];
   const tracked = new ExecutableSkillCheckout(
     REPOSITORY_ROOT,

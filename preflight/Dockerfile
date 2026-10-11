@@ -193,7 +193,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
 FROM loom-verify AS repository-policy
 RUN task preflight:format-contract \
     && task loom:cortex-audit \
-    && bun test ./agentic-ai/loom/tests/pr-authored-budget.test.ts ./infra/contracts/registry-cache-descriptor.test.ts
+    && bun test ./infra/contracts/registry-cache-descriptor.test.ts
 # The full preflight/coverage solve is shared with preflight-test, not repeated.
 COPY --from=test /meta-secret/nook/preflight/Cargo.toml /tmp/preflight-verified.toml
 

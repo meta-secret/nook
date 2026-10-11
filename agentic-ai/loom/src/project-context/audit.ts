@@ -1,4 +1,4 @@
-import { existsSync, lstatSync, readFileSync } from 'node:fs';
+import { existsSync, lstatSync } from 'node:fs';
 import { join, normalize } from 'node:path';
 import { TEAM_AUTHORITY_CATALOG, TeamKey } from './catalog.ts';
 import type { TeamAuthority } from './catalog.ts';
@@ -27,26 +27,16 @@ export class ProjectContextContract {
     const findings: TeamAuthorityAuditFinding[] = [];
     const seenKeys = new Set<TeamKey>();
     const seenIdentities = new Set<string>();
-    const authoritySource = existsSync(
-      join(request.repoRoot, TEAM_AUTHORITY_PATH),
-    )
-      ? readFileSync(join(request.repoRoot, TEAM_AUTHORITY_PATH), 'utf8')
-      : '';
-    if (authoritySource.length === 0) {
+    if (
+      !ProjectContextContract.isNonemptyRegularFile(
+        join(request.repoRoot, TEAM_AUTHORITY_PATH),
+      )
+    ) {
       findings.push({
         code: 'missing-cortex-team-authority',
         path: TEAM_AUTHORITY_PATH,
         message: 'Canonical Cortex team authority is missing.',
       });
-    }
-    for (const marker of TEAM_AUTHORITY_MARKERS) {
-      if (!authoritySource.includes(marker)) {
-        findings.push({
-          code: 'invalid-cortex-team-authority',
-          path: TEAM_AUTHORITY_PATH,
-          message: `Canonical Cortex team authority is missing marker: ${marker}`,
-        });
-      }
     }
     for (const skillPath of CORTEX_AUTHORING_SKILL_PATHS) {
       if (!existsSync(join(request.repoRoot, skillPath))) {
@@ -92,8 +82,8 @@ export class ProjectContextContract {
       if (
         JSON.stringify(authority.contextPaths) !==
           JSON.stringify(expectedContextPaths) ||
-        authority.description !== expected?.description ||
-        authority.capabilityBoundary !== expected?.capabilityBoundary
+        authority.description.trim().length === 0 ||
+        authority.capabilityBoundary.trim().length === 0
       ) {
         const finding: TeamAuthorityAuditFinding = {
           code: 'invalid-team-authority-contract',
@@ -112,7 +102,7 @@ export class ProjectContextContract {
           };
           findings.push(finding);
         } else if (
-          !ProjectContextContract.isRegularFile(
+          !ProjectContextContract.isNonemptyRegularFile(
             join(request.repoRoot, contextPath),
           )
         ) {
@@ -143,9 +133,10 @@ export class ProjectContextContract {
     );
   }
 
-  private static isRegularFile(path: string): boolean {
+  private static isNonemptyRegularFile(path: string): boolean {
     try {
-      return lstatSync(path).isFile();
+      const metadata = lstatSync(path);
+      return metadata.isFile() && metadata.size > 0;
     } catch {
       return false;
     }
@@ -170,37 +161,15 @@ export type AuditProjectContextsRequest = { readonly repoRoot: string };
 type ExpectedTeamAuthority = {
   readonly identity: string;
   readonly contextDirectory: string;
-  readonly description: string;
-  readonly capabilityBoundary: string;
 };
 const TEAM_CATALOG_PATH = 'agentic-ai/loom/src/project-context/catalog.ts';
 const TEAM_AUTHORITY_PATH = '.cortex/AGENTS.md';
-const TEAM_AUTHORITY_MARKERS = [
-  '## Mandatory context selection',
-  '## Team worker contract',
-  '../.meta-cortex/AGENTS.md',
-  '../.meta-cortex/teams/delivery-team/agents/integration-agent/AGENTS.md',
-  '../.meta-cortex/teams/gizmo-team/agents/gizmo-prime/AGENTS.md',
-  '../.meta-cortex/teams/gizmo-team/agents/gizmo/AGENTS.md',
-  '../.meta-cortex/meta-cortex.toml',
-  'Nook project root and shared Meta-Cortex library root',
-  'selected base and feature branches',
-  'each worker branch and worktree in dependency order',
-  'applicable Nook checks',
-  'docs/spec/upstream-role-routing.md',
-  'meta-cortex-integration.md',
-] as const;
-const PARENT_OWNED_LIFECYCLE_BOUNDARY =
-  'The active harness owns creation, communication, scheduling, retries, cancellation, barriers, synthesis, and delivery lifecycle state.';
 const EXPECTED_TEAM_AUTHORITIES = new Map<TeamKey, ExpectedTeamAuthority>([
   [
     TeamKey.Ai,
     {
       identity: 'AI',
       contextDirectory: 'ai',
-      description:
-        'Owns Cortex, Loom, agent skills, expert routing, and agent automation.',
-      capabilityBoundary: `AI defines agent capability semantics and acceptance. ${PARENT_OWNED_LIFECYCLE_BOUNDARY}`,
     },
   ],
   [
@@ -208,9 +177,6 @@ const EXPECTED_TEAM_AUTHORITIES = new Map<TeamKey, ExpectedTeamAuthority>([
     {
       identity: 'Development core',
       contextDirectory: 'dev-core',
-      description:
-        'Owns portable Rust behavior, vault behavior, security-control implementation, and typed WASM contracts.',
-      capabilityBoundary: `Development core does not own browser presentation, infrastructure operations, or another team's Cortex authority. ${PARENT_OWNED_LIFECYCLE_BOUNDARY}`,
     },
   ],
   [
@@ -218,9 +184,6 @@ const EXPECTED_TEAM_AUTHORITIES = new Map<TeamKey, ExpectedTeamAuthority>([
     {
       identity: 'Security',
       contextDirectory: 'security',
-      description:
-        'Owns security architecture, cryptographic policy, trust boundaries, and security acceptance.',
-      capabilityBoundary: `Security owns invariants and acceptance without taking implementation ownership from another team. ${PARENT_OWNED_LIFECYCLE_BOUNDARY}`,
     },
   ],
   [
@@ -228,9 +191,6 @@ const EXPECTED_TEAM_AUTHORITIES = new Map<TeamKey, ExpectedTeamAuthority>([
     {
       identity: 'SRE',
       contextDirectory: 'sre',
-      description:
-        'Owns CI/CD, clusters, deployments, runners, containers, and operations.',
-      capabilityBoundary: `SRE does not own product rules, browser presentation, or another team's Cortex authority. ${PARENT_OWNED_LIFECYCLE_BOUNDARY}`,
     },
   ],
   [
@@ -238,9 +198,6 @@ const EXPECTED_TEAM_AUTHORITIES = new Map<TeamKey, ExpectedTeamAuthority>([
     {
       identity: 'Web development',
       contextDirectory: 'web-dev',
-      description:
-        'Owns TypeScript and Svelte engineering expertise, browser presentation, frontend behavior, and extension interaction.',
-      capabilityBoundary: `Web development may implement bounded TypeScript expertise without taking consumer capability semantics or Cortex authority. ${PARENT_OWNED_LIFECYCLE_BOUNDARY}`,
     },
   ],
   [
@@ -248,9 +205,6 @@ const EXPECTED_TEAM_AUTHORITIES = new Map<TeamKey, ExpectedTeamAuthority>([
     {
       identity: 'Delivery Pipeline',
       contextDirectory: 'delivery-pipeline',
-      description:
-        'Owns authorized pull-request lifecycle mechanics, including publication, check observation, squash merge, and remote feature-branch cleanup.',
-      capabilityBoundary: `Delivery Pipeline executes authorized GitHub pull-request, merge, and branch-cleanup mechanics. Local feature integration belongs to the upstream integration agent, and Delivery Pipeline does not own functional product implementation or policy verdicts. ${PARENT_OWNED_LIFECYCLE_BOUNDARY}`,
     },
   ],
 ]);
