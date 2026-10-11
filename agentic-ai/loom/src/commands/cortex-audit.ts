@@ -216,7 +216,9 @@ export class CortexAuditCommand {
         repoRoot,
       };
       brokenLinks.push(
-        ...RepositoryMarkdownLinks.findBroken(findBrokenRelativeLinksArgs),
+        ...new RepositoryMarkdownLinks(
+          findBrokenRelativeLinksArgs,
+        ).findBroken(),
       );
       if (args.request.includeDensityLint) {
         const lintProseDensityArgs: LintProseDensityArgs = {
@@ -276,13 +278,16 @@ export class CortexAuditCommand {
     const indexRelativePath = path.relative(repoRoot, indexPath);
     const indexIsAdmitted = admittedDocumentPaths.has(indexRelativePath);
     const indexContent = indexIsAdmitted ? readFileSync(indexPath, 'utf8') : '';
+    const indexLinksRequest: FindBrokenRelativeLinksArgs = {
+      filePath: indexPath,
+      content: indexContent,
+      repoRoot,
+    };
     const indexed = new Set(
-      [...indexContent.matchAll(/\(([^)]+\.md)\)/g)]
-        .map((match) => {
-          const [, target = ''] = match;
-          return target;
-        })
-        .map((target) => path.resolve(path.dirname(indexPath), target))
+      new RepositoryMarkdownLinks(indexLinksRequest)
+        .targets()
+        .map((link) => link.filePath)
+        .filter((target) => path.extname(target) === '.md')
         .map((target) => path.relative(repoRoot, target))
         .filter((target) => target.includes('/dynamic-skills/')),
     );

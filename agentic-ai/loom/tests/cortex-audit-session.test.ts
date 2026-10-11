@@ -19,6 +19,9 @@ import { expect, test } from 'bun:test';
 import { ok } from 'neverthrow';
 
 import { CortexAuditCommand } from '../src/commands/cortex-audit.ts';
+import type { RunCortexAuditFromDirectoryArgs } from '../src/commands/cortex-audit.ts';
+import type { MakeDirectoryOptions, RmOptions } from 'node:fs';
+import type { BrokenLink } from '../src/lib/links.ts';
 import { RepositoryRoot } from '../src/lib/repo.ts';
 import { LoomFailureCode } from '../src/loom-failure.ts';
 
@@ -58,6 +61,56 @@ export class CortexAuditSessionScenario {
 }
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, '../../..');
+
+test('catalogs referenced skill links while ignoring link-looking examples', async () => {
+  const repoRoot = realpathSync(
+    mkdtempSync(path.join(tmpdir(), 'cortex-reference-catalog-')),
+  );
+  try {
+    CortexAuditSessionScenario.installValeConfiguration(repoRoot);
+    const cortexRoot = path.join(repoRoot, '.cortex');
+    const skillsRoot = path.join(cortexRoot, 'teams', 'ai', 'dynamic-skills');
+    const directoryOptions: MakeDirectoryOptions = { recursive: true };
+    mkdirSync(skillsRoot, directoryOptions);
+    writeFileSync(path.join(cortexRoot, 'AGENTS.md'), '# Agents\n');
+    writeFileSync(
+      path.join(skillsRoot, 'guide.md'),
+      '# Guide\n\nRead the guide.\n',
+    );
+    writeFileSync(
+      path.join(skillsRoot, 'index.md'),
+      [
+        '# Skills',
+        '',
+        '[Guide][guide]',
+        '',
+        '[guide]: ./guide%2Emd#guide',
+        '[unused]: ./unused.md',
+        '',
+        '```md',
+        '[Example](./example.md)',
+        '```',
+        '',
+        '`[Inline example](./inline.md)`',
+        '',
+      ].join('\n'),
+    );
+    const args: RunCortexAuditFromDirectoryArgs = {
+      request: { includeDensityLint: false },
+      startDirectory: repoRoot,
+    };
+    const outcome = await CortexAuditCommand.runCortexAuditFromDirectory(args);
+    assert(outcome.isOk());
+    const expectedLinks: BrokenLink[] = [];
+    const expectedCatalogFindings: string[] = [];
+    expect(outcome.value.brokenLinks).toEqual(expectedLinks);
+    expect(outcome.value.missingFromIndex).toEqual(expectedCatalogFindings);
+    expect(outcome.value.orphanIndexRows).toEqual(expectedCatalogFindings);
+  } finally {
+    const removeOptions: RmOptions = { recursive: true, force: true };
+    rmSync(repoRoot, removeOptions);
+  }
+});
 
 test('returns a typed failure when a discovered repository loses its Cortex root', async () => {
   const repoRoot = mkdtempSync(path.join(tmpdir(), 'cortex-missing-root-'));
