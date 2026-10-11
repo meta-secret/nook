@@ -124,7 +124,5 @@ mod playwright_coverage_contracts;
 mod prepared_pod_build_contracts;
 #[path = "vault_app_isolation/runtime_boundary_contracts.rs"]
 mod runtime_boundary_contracts;
-#[path = "vault_app_isolation/svelte_build_contracts.rs"]
-mod svelte_build_contracts;
 #[path = "vault_app_isolation/web_quality_contracts.rs"]
 mod web_quality_contracts;

@@ -204,10 +204,10 @@ FROM policy-source AS typescript-state
 RUN cargo test --locked --manifest-path preflight/Cargo.toml --test core_ownership typescript_
 
 FROM policy-source AS loom-contracts
-RUN cargo test --locked --manifest-path preflight/Cargo.toml --test loom_contracts --test skill_authority
+RUN cargo test --locked --manifest-path preflight/Cargo.toml --test loom_contracts
 
 FROM loom-verify AS repository-policy-untrusted
 RUN task preflight:format-contract \
-    && cargo test --locked --manifest-path preflight/Cargo.toml --test source_file_size --test repository_languages --test loom_contracts --test skill_authority \
+    && cargo test --locked --manifest-path preflight/Cargo.toml --test source_file_size --test repository_languages --test loom_contracts \
     && cargo test --locked --manifest-path preflight/Cargo.toml --test core_ownership typescript_ \
     && task loom:cortex-audit

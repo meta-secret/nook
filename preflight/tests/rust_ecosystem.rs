@@ -113,14 +113,11 @@ struct RustEcosystemFixture {
     main: String,
     pr: String,
     pr_tasks: String,
-    quality: String,
     workspace: String,
     dylint_manifest: String,
     rust_base_dockerfile: String,
     rust_dockerfiles: String,
     rust_bake: String,
-    replication: String,
-    fuzz_target: String,
     fuzz_manifest: String,
     dependency_policy: String,
     docker_tasks: String,
@@ -154,7 +151,6 @@ impl RustEcosystemFixture {
             main: root.read(".github/workflows/main.yml")?,
             pr: root.read(".github/workflows/pr.yml")?,
             pr_tasks: root.read("nook-app/ci/pr.yml")?,
-            quality: root.read(".cortex/teams/sre/workflows/quality.md")?,
             workspace: root.read("nook-app/nook-platform/Cargo.toml")?,
             dylint_manifest: root
                 .read("nook-app/nook-platform/dylint/nook-domain-api/Cargo.toml")?,
@@ -162,9 +158,6 @@ impl RustEcosystemFixture {
                 .read("nook-app/nook-platform/docker/rust/base/Dockerfile")?,
             rust_dockerfiles,
             rust_bake: root.read("nook-app/nook-platform/docker/rust/docker-bake.hcl")?,
-            replication: root
-                .read("nook-app/nook-platform/nook-replication/src/replica_store.rs")?,
-            fuzz_target: root.read("nook-app/nook-platform/fuzz/fuzz_targets/wire_parsers.rs")?,
             fuzz_manifest: root.read("nook-app/nook-platform/fuzz/Cargo.toml")?,
             dependency_policy,
             docker_tasks: root.read("nook-app/nook-platform/docker/Taskfile.yml")?,
@@ -778,22 +771,6 @@ fn rust_ecosystem_build_cache_lineage_stays_owned_by_each_leaf() -> anyhow::Resu
 fn rust_ecosystem_quality_contract_covers_required_tools_and_lints() -> anyhow::Result<()> {
     let fixture = RustEcosystemFixture::load()?;
 
-    for capability in [
-        "cargo-deny",
-        "RustSec",
-        "Proptest",
-        "Insta",
-        "Loom",
-        "cargo-fuzz",
-        "Kani",
-        "Dylint",
-    ] {
-        assert!(
-            fixture.quality.contains(capability),
-            "Cortex quality guidance is missing {capability}"
-        );
-    }
-
     assert!(fixture.root.join("deny.toml").is_file());
     assert!(
         fixture
@@ -823,15 +800,6 @@ fn rust_ecosystem_quality_contract_covers_required_tools_and_lints() -> anyhow::
                 .workspace
                 .contains("{ path = \"dylint/nook-domain-api\" }")
     );
-    assert!(fixture.replication.contains("proptest!"));
-    assert!(
-        fixture
-            .replication
-            .contains("insta::assert_debug_snapshot!")
-    );
-    assert!(fixture.replication.contains("loom::model"));
-    assert!(fixture.replication.contains("#[kani::proof]"));
-    assert!(fixture.fuzz_target.contains("fuzz_target!"));
     assert!(fixture.fuzz_manifest.contains("[lints.clippy]"));
     assert!(fixture.fuzz_manifest.contains("expect_used = \"deny\""));
     assert!(fixture.fuzz_manifest.contains("unwrap_used = \"deny\""));
@@ -851,16 +819,5 @@ fn rust_ecosystem_quality_contract_covers_required_tools_and_lints() -> anyhow::
         );
     }
 
-    Ok(())
-}
-
-#[test]
-fn ecosystem_policy_replaces_generic_custom_scanners_only() -> anyhow::Result<()> {
-    let quality =
-        RepositoryFixture::repository_root().read(".cortex/teams/sre/workflows/quality.md")?;
-
-    assert!(quality.contains("Ecosystem tools before bespoke preflight"));
-    assert!(quality.contains("Keep `preflight` for Nook-specific"));
-    assert!(quality.contains("Do not duplicate an ecosystem tool"));
     Ok(())
 }

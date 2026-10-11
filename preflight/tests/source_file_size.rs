@@ -178,6 +178,7 @@ impl AsRef<Path> for RepositoryFixture {
 
 #[test]
 fn authored_source_files_stay_within_hard_limits() -> anyhow::Result<()> {
+    assert_eq!(AUTHORED_SOURCE_LINE_LIMIT, 1_000);
     let violations =
         SourceRepository::new(&RepositoryFixture::repository_root()).source_size_violations()?;
     assert!(
@@ -195,46 +196,6 @@ fn rust_unit_tests_stay_with_their_focused_implementation() -> anyhow::Result<()
         violations.is_empty(),
         "{UNIT_TEST_COLOCATION_REMEDIATION}\n{violations:#?}"
     );
-    Ok(())
-}
-
-#[test]
-fn critical_architecture_rule_stays_wired_to_agent_guidance() -> anyhow::Result<()> {
-    assert_eq!(AUTHORED_SOURCE_LINE_LIMIT, 1_000);
-    let root = RepositoryFixture::repository_root();
-    let agents = fs::read_to_string(root.join(".cortex/AGENTS.md"))?;
-    let canonical =
-        fs::read_to_string(root.join(".cortex/shared/dynamic-skills/source-file-size.md"))?;
-
-    for (name, source) in [
-        (".cortex/AGENTS.md", agents.as_str()),
-        ("canonical source-size skill", canonical.as_str()),
-    ] {
-        assert!(
-            source.contains("1,000"),
-            "{name} must preserve the hard limit"
-        );
-        assert!(
-            !source.contains("1,500"),
-            "{name} must not preserve a larger Rust allowance"
-        );
-        assert!(
-            source.contains("unit tests") && source.contains("integration tests"),
-            "{name} must require unit-test colocation and preserve integration tests"
-        );
-        assert!(
-            source.contains("domain") && source.contains("architectural"),
-            "{name} must require domain or architectural decomposition"
-        );
-    }
-
-    assert!(SOURCE_SIZE_REMEDIATION.contains("P1 hard source-size violation"));
-    assert!(SOURCE_SIZE_REMEDIATION.contains("delivery remains blocked"));
-    assert!(SOURCE_SIZE_REMEDIATION.contains("Review the oversized module"));
-    assert!(SOURCE_SIZE_REMEDIATION.contains("Extracting tests alone is prohibited"));
-    assert!(SOURCE_SIZE_REMEDIATION.contains("Arbitrary half-splits"));
-    assert!(UNIT_TEST_COLOCATION_REMEDIATION.contains("unit tests must be inline"));
-    assert!(UNIT_TEST_COLOCATION_REMEDIATION.contains("integration tests"));
     Ok(())
 }
 

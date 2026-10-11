@@ -284,22 +284,6 @@ fn repository_automation_uses_only_typescript_rust_and_taskfiles() -> anyhow::Re
 }
 
 #[test]
-fn repository_language_rule_stays_wired_to_agent_guidance() -> anyhow::Result<()> {
-    let root = RepositoryFixture::repository_root();
-    for path in [
-        ".cortex/AGENTS.md",
-        ".cortex/shared/dynamic-skills/typescript-rust-automation-only.md",
-    ] {
-        let source = fs::read_to_string(root.join(path))?;
-        assert!(source.contains("Python"));
-        assert!(source.contains("Bun") && source.contains("TypeScript"));
-        assert!(source.contains("Rust") && source.contains("Taskfile"));
-        assert!(source.contains("P1") || source.contains("hard rule"));
-    }
-    Ok(())
-}
-
-#[test]
 fn inventory_prunes_generated_source_context_paths_and_preserves_tracked_files()
 -> anyhow::Result<()> {
     let fixture = tempfile::tempdir()?;

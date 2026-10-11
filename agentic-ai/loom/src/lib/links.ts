@@ -1,75 +1,163 @@
 import { existsSync } from 'node:fs';
-
+import assert from 'node:assert/strict';
 import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import type {
+  Definition,
+  Image,
+  ImageReference,
+  Link,
+  LinkReference,
+  Root,
+} from 'mdast';
+import remarkGfm from 'remark-gfm';
+import remarkParse from 'remark-parse';
+import { unified } from 'unified';
+import { visit } from 'unist-util-visit';
+import { Result } from 'neverthrow';
+
+export type MarkdownLink = {
+  readonly target: string;
+  readonly line: number;
+};
+
+/** Parses real Markdown links, including references, without inspecting examples. */
+export class MarkdownLinkDocument {
+  private readonly root: Root;
+
+  constructor(content: string) {
+    this.root = unified().use(remarkParse).use(remarkGfm).parse(content);
+  }
+
+  links(): readonly MarkdownLink[] {
+    const definitions: Definition[] = [];
+    visit(this.root, 'definition', (node) => {
+      definitions.push(node);
+    });
+    const links: MarkdownLink[] = [];
+    visit(
+      this.root,
+      ['link', 'image', 'linkReference', 'imageReference'] as const,
+      (node) => {
+        switch (node.type) {
+          case 'link':
+          case 'image':
+            links.push({ target: node.url, line: this.line(node) });
+            return;
+          case 'linkReference':
+          case 'imageReference':
+            this.appendReference({ node, definitions, links });
+        }
+      },
+    );
+    return links;
+  }
+
+  private appendReference(request: AppendReferenceRequest): void {
+    for (const definition of request.definitions) {
+      switch (definition.identifier.toUpperCase()) {
+        case request.node.identifier.toUpperCase():
+          request.links.push({
+            target: definition.url,
+            line: this.line(request.node),
+          });
+          return;
+      }
+    }
+  }
+
+  private line(node: Link | Image | LinkReference | ImageReference): number {
+    assert(node.position, 'Parsed Markdown link must have a source position.');
+    return node.position.start.line;
+  }
+}
+
+type AppendReferenceRequest = {
+  readonly node: LinkReference | ImageReference;
+  readonly definitions: readonly Definition[];
+  readonly links: MarkdownLink[];
+};
 
 export class RepositoryMarkdownLinks {
   private constructor(private readonly request: FindBrokenRelativeLinksArgs) {}
+
   static findBroken(args: FindBrokenRelativeLinksArgs): BrokenLink[] {
     return new RepositoryMarkdownLinks(args).execute();
   }
-  private execute(): BrokenLink[] {
-    const args = this.request;
-    const { filePath, content, repoRoot } = args;
 
-    const broken: BrokenLink[] = [];
-    const lines = content.split(/\r?\n/);
-    const fileDir = path.dirname(filePath);
-
-    for (let i = 0; i < lines.length; i += 1) {
-      const [line = ''] = [lines[i]];
-      LINK_RE.lastIndex = 0;
-      for (;;) {
-        const match = LINK_RE.exec(line);
-        if (!match) {
-          break;
-        }
-        const target = typeof match[2] === 'string' ? match[2] : '';
-        if (this.shouldCheckLink(target)) {
-          const hashParts = target.split('#');
-          const withoutHash =
-            typeof hashParts[0] === 'string' ? hashParts[0] : '';
-          if (withoutHash.length > 0) {
-            const resolved = path.resolve(fileDir, withoutHash);
-            if (!existsSync(resolved)) {
-              const pushArgs = {
-                file: path.relative(repoRoot, filePath),
-                line: i + 1,
-                target,
-              };
-              broken.push(pushArgs);
-            }
-          }
-        }
-      }
-    }
-
-    return broken;
+  static targets(
+    args: FindBrokenRelativeLinksArgs,
+  ): readonly FileMarkdownLink[] {
+    return new RepositoryMarkdownLinks(args).fileTargets();
   }
 
-  private shouldCheckLink(target: string): boolean {
-    if (target.length === 0) {
-      return false;
+  private execute(): BrokenLink[] {
+    return this.resolutions().flatMap((resolution) =>
+      resolution.match(
+        (links) => links.flatMap((link) => this.fileFindings(link)),
+        (finding) => [finding],
+      ),
+    );
+  }
+
+  private fileTargets(): FileMarkdownLink[] {
+    return this.resolutions().flatMap((resolution) =>
+      resolution.match(
+        (links) => links,
+        () => [],
+      ),
+    );
+  }
+
+  private resolutions(): Result<FileMarkdownLink[], BrokenLink>[] {
+    return new MarkdownLinkDocument(this.request.content).links().map((link) =>
+      Result.fromThrowable(
+        () => this.resolve(link),
+        () => this.finding(link),
+      )(),
+    );
+  }
+
+  private resolve(link: MarkdownLink): FileMarkdownLink[] {
+    switch (link.target.charAt(0)) {
+      case '':
+      case '#':
+        return [];
     }
-    if (target.startsWith('http://') || target.startsWith('https://')) {
-      return false;
+    const resolved = new URL(link.target, pathToFileURL(this.request.filePath));
+    switch (resolved.protocol) {
+      case 'file:':
+        return [{ ...link, filePath: fileURLToPath(resolved) }];
+      default:
+        return [];
     }
-    if (target.startsWith('mailto:')) {
-      return false;
+  }
+
+  private fileFindings(link: FileMarkdownLink): BrokenLink[] {
+    switch (existsSync(link.filePath)) {
+      case true:
+        return [];
+      case false:
+        return [this.finding(link)];
     }
-    if (target.startsWith('#')) {
-      return false;
-    }
-    return true;
+  }
+
+  private finding(link: MarkdownLink): BrokenLink {
+    return {
+      file: path.relative(this.request.repoRoot, this.request.filePath),
+      line: link.line,
+      target: link.target,
+    };
   }
 }
+
+export type FileMarkdownLink = MarkdownLink & { readonly filePath: string };
 
 export type BrokenLink = {
   readonly file: string;
   readonly line: number;
   readonly target: string;
 };
-
-const LINK_RE = /\[([^\]]+)\]\(([^)]+)\)/g;
 
 export type FindBrokenRelativeLinksArgs = {
   readonly filePath: string;
