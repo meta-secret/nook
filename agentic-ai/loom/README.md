@@ -66,12 +66,16 @@ evidence checks remain at their owning external boundaries.
 ## Structural refactoring experts
 
 Structural refactoring roles use a sibling registry because their evidence
-scopes overlap production modules. Validate the exact catalog and role
-definitions from the repository root:
+scopes overlap production modules. Validate the catalog, referenced files, and role scopes from the repository
+root:
 
 ```bash
 task loom:structural-experts:validate
 ```
+
+Catalog audits check typed roles, routing, referenced files, and scope limits.
+Cortex policy meaning stays in its reviewed documents; Loom does not infer it
+from exact prose or description strings.
 
 Gizmo invokes structural experts through the active harness. Loom validates the
 catalog and role boundaries only; it does not persist or replay their handoffs.

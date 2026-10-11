@@ -1,23 +1,12 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 
 import { join, normalize } from 'node:path';
 
 import { WorkflowResultKind } from '../agent-workflow/domain.ts';
 
-import {
-  STRUCTURAL_EXPERT_CATALOG,
-  StructuralExpertKind,
-  SYSTEM_COHERENCE_BEHAVIOR_CONTRACT,
-} from './catalog.ts';
+import { STRUCTURAL_EXPERT_CATALOG, StructuralExpertKind } from './catalog.ts';
 
 import type { StructuralExpertProfile } from './catalog.ts';
-
-import { MarkdownContractSections } from '../lib/markdown-contract.ts';
-
-import type {
-  MarkdownContractAuditRequest,
-  MarkdownContractSection,
-} from '../lib/markdown-contract.ts';
 
 export class StructuralExpertContract {
   private constructor(
@@ -45,37 +34,6 @@ export class StructuralExpertContract {
     request: AuditStructuralExpertProfilesRequest,
   ): StructuralExpertAuditReport {
     const findings: StructuralExpertAuditFinding[] = [];
-    const authorityPath = join(
-      request.repoRoot,
-      STRUCTURAL_EXPERT_CORTEX_AUTHORITY_PATH,
-    );
-    const registrySource = existsSync(authorityPath)
-      ? readFileSync(authorityPath, 'utf8')
-      : '';
-    const skillPath = join(
-      request.repoRoot,
-      SYSTEM_COHERENCE_SKILL_AUTHORITY_PATH,
-    );
-    const skillSource = existsSync(skillPath)
-      ? readFileSync(skillPath, 'utf8')
-      : '';
-    const workflowPath = join(
-      request.repoRoot,
-      STRUCTURAL_REFACTORING_WORKFLOW_AUTHORITY_PATH,
-    );
-    const workflowSource = existsSync(workflowPath)
-      ? readFileSync(workflowPath, 'utf8')
-      : '';
-    const authorityRequest: AuditStructuralExpertCortexAuthorityRequest = {
-      registrySource,
-      skillSource,
-      workflowSource,
-    };
-    findings.push(
-      ...StructuralExpertContract.auditStructuralExpertCortexAuthority(
-        authorityRequest,
-      ),
-    );
     if (request.profiles.length !== EXPECTED_PROFILES.length) {
       const finding: StructuralExpertAuditFinding = {
         code: 'invalid-structural-profile-count',
@@ -136,27 +94,25 @@ export class StructuralExpertContract {
       right: expected.requiredContextPaths,
     };
     const evidenceFiles: EqualStringsRequest = {
-      left: profile.allowedEvidenceFiles,
-      right: expected.allowedEvidenceFiles,
+      left: [...profile.allowedEvidenceFiles].sort(),
+      right: [...expected.allowedEvidenceFiles].sort(),
     };
     const evidenceDescendantRoots: EqualStringsRequest = {
-      left: profile.allowedEvidenceDescendantRoots,
-      right: expected.allowedEvidenceDescendantRoots,
+      left: [...profile.allowedEvidenceDescendantRoots].sort(),
+      right: [...expected.allowedEvidenceDescendantRoots].sort(),
     };
     const excludedPaths: EqualStringsRequest = {
-      left: profile.excludedPaths,
-      right: expected.excludedPaths,
+      left: [...profile.excludedPaths].sort(),
+      right: [...expected.excludedPaths].sort(),
     };
     const validationSelectors: EqualStringsRequest = {
-      left: profile.validationSelectors,
-      right: expected.validationSelectors,
+      left: [...profile.validationSelectors].sort(),
+      right: [...expected.validationSelectors].sort(),
     };
     return (
-      profile.description === expected.description &&
       profile.resultKind === expected.resultKind &&
       profile.kind === expected.kind &&
       profile.skillPath === expected.skillPath &&
-      profile.runtimeBehaviorContract === expected.runtimeBehaviorContract &&
       StructuralExpertContract.equalStrings(contextPaths) &&
       StructuralExpertContract.equalStrings(evidenceFiles) &&
       StructuralExpertContract.equalStrings(evidenceDescendantRoots) &&
@@ -241,61 +197,6 @@ export class StructuralExpertContract {
     StructuralExpertContract.validateRoleIsolation(request);
   }
 
-  static auditStructuralExpertCortexAuthority(
-    request: AuditStructuralExpertCortexAuthorityRequest,
-  ): readonly StructuralExpertAuditFinding[] {
-    const findings: StructuralExpertAuditFinding[] = [];
-    const registryAuditRequest: AuditAuthorityContractRequest = {
-      findings,
-      path: STRUCTURAL_EXPERT_CORTEX_AUTHORITY_PATH,
-      sections: STRUCTURAL_EXPERT_REGISTRY_CONTRACT_SECTIONS,
-      source: request.registrySource,
-    };
-    StructuralExpertContract.auditAuthorityContract(registryAuditRequest);
-    const skillAuditRequest: AuditAuthorityContractRequest = {
-      findings,
-      path: SYSTEM_COHERENCE_SKILL_AUTHORITY_PATH,
-      sections: SYSTEM_COHERENCE_SKILL_CONTRACT_SECTIONS,
-      source: request.skillSource,
-    };
-    StructuralExpertContract.auditAuthorityContract(skillAuditRequest);
-    const workflowAuditRequest: AuditAuthorityContractRequest = {
-      findings,
-      path: STRUCTURAL_REFACTORING_WORKFLOW_AUTHORITY_PATH,
-      sections: STRUCTURAL_REFACTORING_WORKFLOW_CONTRACT_SECTIONS,
-      source: request.workflowSource,
-    };
-    StructuralExpertContract.auditAuthorityContract(workflowAuditRequest);
-    for (const profile of STRUCTURAL_EXPERT_CATALOG) {
-      const marker = `## \`${profile.name}\``;
-      if (request.registrySource.includes(marker)) continue;
-      const finding: StructuralExpertAuditFinding = {
-        code: 'missing-cortex-structural-expert-role',
-        path: STRUCTURAL_EXPERT_CORTEX_AUTHORITY_PATH,
-        message: `Canonical Cortex structural expert role is missing: ${profile.name}`,
-      };
-      findings.push(finding);
-    }
-    return findings;
-  }
-
-  private static auditAuthorityContract(
-    request: AuditAuthorityContractRequest,
-  ): void {
-    const contractAuditRequest: MarkdownContractAuditRequest = {
-      sections: request.sections,
-      source: request.source,
-    };
-    for (const drift of MarkdownContractSections.audit(contractAuditRequest)) {
-      const finding: StructuralExpertAuditFinding = {
-        code: 'cortex-structural-expert-contract-semantic-drift',
-        path: request.path,
-        message: `Canonical Cortex structural expert contract drifted in ${drift.heading}: ${drift.missingMarkers.join(', ')}`,
-      };
-      request.findings.push(finding);
-    }
-  }
-
   private static validateRoleIsolation(
     request: ValidateStructuralProfileRequest,
   ): void {
@@ -358,17 +259,9 @@ export type AuditStructuralExpertProfilesRequest =
     readonly profiles: readonly StructuralExpertProfile[];
   };
 
-export type AuditStructuralExpertCortexAuthorityRequest = {
-  readonly registrySource: string;
-  readonly skillSource: string;
-  readonly workflowSource: string;
-};
-
 const EXPECTED_PROFILES = [
   {
     name: 'code_refactoring_expert',
-    description:
-      'Read-only evidence expert for architecture, design, code quality, stronger types, and tests in explicitly authorized code scopes.',
     resultKind: WorkflowResultKind.CodeRefactoringEvidence,
     kind: StructuralExpertKind.RepositoryEvidence,
     skillPath: '.cortex/teams/ai/dynamic-skills/code-refactoring-expert.md',
@@ -399,7 +292,6 @@ const EXPECTED_PROFILES = [
       'nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm',
       'nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm',
     ],
-    runtimeBehaviorContract: '',
     validationSelectors: [
       'preflight:source-architecture',
       'preflight:typescript-state',
@@ -408,8 +300,6 @@ const EXPECTED_PROFILES = [
   },
   {
     name: 'cortex_refactoring_expert',
-    description:
-      'Read-only evidence expert for Cortex authority, conflicts, legacy content, complexity, and deterministic Loom extraction candidates.',
     resultKind: WorkflowResultKind.CortexRefactoringEvidence,
     kind: StructuralExpertKind.RepositoryEvidence,
     skillPath: '.cortex/teams/ai/dynamic-skills/cortex-refactoring-expert.md',
@@ -459,13 +349,10 @@ const EXPECTED_PROFILES = [
       'nook-app/nook-web/.cortex/.session',
       'nook-app/nook-web/nook-web-extension/.cortex/.session',
     ],
-    runtimeBehaviorContract: '',
     validationSelectors: ['loom:cortex-audit', 'loom:verify'],
   },
   {
     name: 'system_coherence_synthesizer',
-    description:
-      'Legacy loom-structural-experts diagnostic aggregator producing SystemCoherenceSynthesis from verified Completed and Failed terminal observations without repository exploration.',
     resultKind: WorkflowResultKind.SystemCoherenceSynthesis,
     kind: StructuralExpertKind.VerifiedViewSynthesis,
     skillPath:
@@ -474,119 +361,12 @@ const EXPECTED_PROFILES = [
     allowedEvidenceFiles: [],
     allowedEvidenceDescendantRoots: [],
     excludedPaths: [],
-    runtimeBehaviorContract: SYSTEM_COHERENCE_BEHAVIOR_CONTRACT,
     validationSelectors: ['loom:verify'],
   },
 ] as const;
 
 const STRUCTURAL_EXPERT_CATALOG_PATH =
   'agentic-ai/loom/src/structural-experts/catalog.ts';
-
-const STRUCTURAL_EXPERT_CORTEX_AUTHORITY_PATH =
-  '.cortex/teams/ai/docs/architecture/refactoring-experts.md';
-
-const SYSTEM_COHERENCE_SKILL_AUTHORITY_PATH =
-  '.cortex/teams/ai/dynamic-skills/system-coherence-synthesizer.md';
-
-const STRUCTURAL_REFACTORING_WORKFLOW_AUTHORITY_PATH =
-  '.cortex/teams/ai/workflows/structural-refactoring.md';
-
-const STRUCTURAL_EXPERT_REGISTRY_CONTRACT_SECTIONS: readonly MarkdownContractSection[] =
-  [
-    {
-      heading: '## Overview',
-      requiredMarkers: [
-        '`system_coherence_synthesizer` is the `loom-structural-experts` diagnostic role.',
-        'It receives typed `Completed` and `Failed` structural observations from the active harness and does not inspect the repository.',
-        'A failed observation remains failed. The aggregate is diagnostic output for the delivery owner.',
-        'Team Gizmos and Team Agents follow the root [Agent Derailment Circuit Breaker](../../../../CIRCUIT-BREAKER.md).',
-        'This registry adds only its typed structural-observation fields.',
-      ],
-    },
-    {
-      heading: '## Registry contract',
-      requiredMarkers: [
-        'one stable structural role;',
-        'repository evidence for readers or terminal observations for the diagnostic aggregator;',
-        'Every role is read-only and nondelegating.',
-        'This Cortex registry defines each stable semantic role, context, and input/result contract.',
-        'Children cannot add tasks, descendants, resource claims, or workflow tiers.',
-      ],
-    },
-    {
-      heading: '## Shared boundaries',
-      requiredMarkers: [
-        'Structural experts diagnose and propose. They do not apply repository changes.',
-        'Exactly one delivery owner controls:',
-        'mutate source, documentation, lifecycle, or external state.',
-        'Typed workflow state remains authoritative for continuation.',
-      ],
-    },
-    {
-      heading: '## Repository-reader evidence contract',
-      requiredMarkers: [
-        'Each repository-reading role reports bounded findings.',
-        'Every finding identifies:',
-        'The expert groups compatible findings into proposed edit groups.',
-        'This is a typed task and result handoff.',
-        'The parent reviews the ordinary result before assigning edits.',
-      ],
-    },
-    {
-      heading: '## `system_coherence_synthesizer`',
-      requiredMarkers: [
-        'This is the standalone structural/Cortex diagnostic aggregator used by `loom-structural-experts`.',
-        'Its terminal-observation inputs may carry:',
-        'It receives typed `Completed` and `Failed` terminal observations and bounded semantic views.',
-        'It declares empty repository read claims, write claims, and evidence surface.',
-        'It has no repository read scope.',
-        'Its `SystemCoherenceSynthesis` output is diagnostic-only. A failed child does not become accepted evidence, and the aggregate cannot authorize implementation.',
-        'The handoff remains ordinary typed data between trusted peers.',
-        'The repository-reader category remains separate:',
-        'It cannot schedule successors or authorize writes.',
-      ],
-    },
-  ];
-
-const SYSTEM_COHERENCE_SKILL_CONTRACT_SECTIONS: readonly MarkdownContractSection[] =
-  [
-    {
-      heading: '## Scope',
-      requiredMarkers: [
-        'The synthesizer has no repository read scope.',
-        'The input boundary requires:',
-        'the declared child tasks and their `Completed` or `Failed` status;',
-        'The synthesizer does not inspect source, create new evidence, apply patches, authorize writes, schedule successors, or mutate lifecycle state.',
-        '[Agent Derailment Circuit Breaker](../../../CIRCUIT-BREAKER.md).',
-        'This role adds only the structural observations required for synthesis.',
-        '`system_coherence_synthesizer` and `SystemCoherenceSynthesis` are diagnostic identities.',
-        'Failed observations never count as accepted provider evidence.',
-      ],
-    },
-  ];
-
-const STRUCTURAL_REFACTORING_WORKFLOW_CONTRACT_SECTIONS: readonly MarkdownContractSection[] =
-  [
-    {
-      heading: '## Freeze the evidence plan',
-      requiredMarkers: [
-        'Resolves one exact Git baseline.',
-        'Declares each task, dependency, parent, and bounded scope.',
-        'Repository-reading experts receive bounded read claims and non-empty read-covered evidence surfaces.',
-        'The synthesizer receives the resulting typed child observations.',
-        'Freezes every task and dependency.',
-      ],
-    },
-    {
-      heading: '## Synthesize system coherence',
-      requiredMarkers: [
-        'This section defines the `system_coherence_synthesizer` and its `SystemCoherenceSynthesis` diagnostic result.',
-        'It accepts their typed `Completed` or `Failed` observations.',
-        '[Agent Derailment Circuit Breaker](../../../CIRCUIT-BREAKER.md).',
-        "It cannot authorize implementation or replace the delivery owner's review.",
-      ],
-    },
-  ];
 
 type StructuralExpertExpectation = (typeof EXPECTED_PROFILES)[number];
 
@@ -604,11 +384,4 @@ type ValidateStructuralProfileRequest = {
   readonly findings: StructuralExpertAuditFinding[];
   readonly profile: StructuralExpertProfile;
   readonly repoRoot: string;
-};
-
-type AuditAuthorityContractRequest = {
-  readonly findings: StructuralExpertAuditFinding[];
-  readonly path: string;
-  readonly sections: readonly MarkdownContractSection[];
-  readonly source: string;
 };

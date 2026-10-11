@@ -31,13 +31,6 @@ import { ProjectContextContract } from '../project-context/audit.ts';
 
 import type { AuditProjectContextsRequest } from '../project-context/audit.ts';
 
-import { MarkdownContractSections } from '../lib/markdown-contract.ts';
-
-import type {
-  MarkdownContractAuditRequest,
-  MarkdownContractSection,
-} from '../lib/markdown-contract.ts';
-
 export class ModuleExpertContract {
   private constructor(private readonly request: AuditModuleExpertsArgs) {}
 
@@ -55,7 +48,6 @@ export class ModuleExpertContract {
       repoRoot: args.repoRoot,
     };
     ModuleExpertContract.validateProfiles(context);
-    ModuleExpertContract.validateCortexRoleAuthority(context);
     const liveRoots = ModuleExpertContract.liveProductionModuleRoots(context);
     const coverageArgs: ValidateProductionCoverageArgs = {
       context,
@@ -144,65 +136,6 @@ export class ModuleExpertContract {
       ...ModuleExpertSnapshotScope.audit(snapshotScopeArgs),
     );
     ModuleExpertContract.validateInternalApiProfile(context);
-  }
-
-  private static validateCortexRoleAuthority(
-    context: ModuleExpertValidationContext,
-  ): void {
-    const authorityPath = join(
-      context.repoRoot,
-      MODULE_EXPERT_CORTEX_AUTHORITY_PATH,
-    );
-    const source = existsSync(authorityPath)
-      ? readFileSync(authorityPath, 'utf8')
-      : '';
-    const authorityAuditArgs: AuditModuleExpertCortexAuthorityArgs = { source };
-    context.findings.push(
-      ...ModuleExpertContract.auditModuleExpertCortexAuthority(
-        authorityAuditArgs,
-      ),
-    );
-  }
-
-  static auditModuleExpertCortexAuthority(
-    args: AuditModuleExpertCortexAuthorityArgs,
-  ): readonly ModuleExpertAuditFinding[] {
-    const findings: ModuleExpertAuditFinding[] = [];
-    const contractAuditRequest: MarkdownContractAuditRequest = {
-      sections: MODULE_EXPERT_CONTRACT_SECTIONS,
-      source: args.source,
-    };
-    for (const drift of MarkdownContractSections.audit(contractAuditRequest)) {
-      const finding: ModuleExpertAuditFinding = {
-        code: 'cortex-module-expert-contract-semantic-drift',
-        path: MODULE_EXPERT_CORTEX_AUTHORITY_PATH,
-        message: `Canonical Cortex module expert contract drifted in ${drift.heading}: ${drift.missingMarkers.join(', ')}`,
-      };
-      findings.push(finding);
-    }
-    for (const profile of MODULE_EXPERT_CATALOG) {
-      const marker = ModuleExpertContract.moduleExpertCortexMarker(profile);
-      if (args.source.includes(marker)) continue;
-      const finding: ModuleExpertAuditFinding = {
-        code: 'missing-cortex-module-expert-role',
-        path: MODULE_EXPERT_CORTEX_AUTHORITY_PATH,
-        message: `Canonical Cortex module expert role is missing: ${profile.name}`,
-      };
-      findings.push(finding);
-    }
-    return findings;
-  }
-
-  private static moduleExpertCortexMarker(
-    profile: ModuleExpertProfile,
-  ): string {
-    if (profile.name === 'internal_api_expert') {
-      return '`internal_api_expert` owns inter-module contract analysis.';
-    }
-    if (profile.name === 'web_expert') {
-      return '`web_expert` covers the initial production presentation group.';
-    }
-    return `### \`${profile.name}\``;
   }
 
   private static validateProfilePaths(args: ValidateProfilePathsArgs): void {
@@ -558,50 +491,12 @@ export type AuditModuleExpertsArgs = {
   readonly repoRoot: string;
 };
 
-export type AuditModuleExpertCortexAuthorityArgs = {
-  readonly source: string;
-};
-
 const MODULE_EXPERT_CATALOG_PATH =
   'agentic-ai/loom/src/module-experts/catalog.ts';
-
-const MODULE_EXPERT_CORTEX_AUTHORITY_PATH =
-  '.cortex/teams/ai/docs/architecture/module-experts.md';
 
 const PLATFORM_MANIFEST = 'nook-app/nook-platform/Cargo.toml';
 
 const WEB_ROOT = 'nook-app/nook-web';
-
-const MODULE_EXPERT_CONTRACT_SECTIONS: readonly MarkdownContractSection[] = [
-  {
-    heading: '## Engineering team routing',
-    requiredMarkers: [
-      'Every module expert runs inside one engineering-team ownership domain.',
-      'The internal API expert may inspect an accepted provider-consumer boundary across teams. It remains read-only and cannot transfer ownership.',
-      "The expert must not expand into another team's implementation scope.",
-    ],
-  },
-  {
-    heading: '## Registry contract',
-    requiredMarkers: [
-      'This Cortex registry is the semantic authority for role capability and context.',
-      'The typed catalog is a deterministic implementation mirror.',
-      'Every invocation follows the universal worker contract.',
-      'Native semantic evidence, optional `ModuleExpertEvidence`, and `parentActions` remain recommendations. They do not authorize descendants, writes, integration, or lifecycle changes.',
-      'Every role is read-only.',
-      'Every role loads only the context named by this registry and its bounded task contract.',
-      'The stable role name identifies semantic expertise. It is not a native worker label or harness configuration key.',
-    ],
-  },
-  {
-    heading: '## Production web expert',
-    requiredMarkers: [
-      '**Allowed product authority catalog:** The task selects only the authorities that own its assigned functionality.',
-      '**Extension release authority:** When extension release security is required, the task selects only the relevant release paths from this catalog.',
-      '**Security routing:** A task cannot omit `browser-extension-release-security` or its canonical security authority when an extension release boundary is in scope.',
-    ],
-  },
-];
 
 type ModuleExpertValidationContext = {
   readonly findings: ModuleExpertAuditFinding[];

@@ -497,25 +497,6 @@ describe('module expert audit', () => {
     }
   });
 
-  test('rejects semantic drift in the Cortex module expert contract', async () => {
-    const authorityPath = join(
-      ModuleExpertsAuditFixture.REPO_ROOT,
-      '.cortex/teams/ai/docs/architecture/module-experts.md',
-    );
-    const source = await readFile(authorityPath, 'utf8');
-    const driftedSource = source.replace(
-      'Every role is read-only.',
-      'Every role may write when useful.',
-    );
-    const authorityArgs = { source: driftedSource };
-
-    expect(
-      ModuleExpertContract.auditModuleExpertCortexAuthority(authorityArgs).map(
-        (finding) => finding.code,
-      ),
-    ).toContain('cortex-module-expert-contract-semantic-drift');
-  });
-
   for (const mutation of ModuleExpertsAuditFixture.GENERATED_MARKER_MUTATIONS) {
     test(`rejects producer drift for ${mutation.marker.path} in ${mutation.generatedScope.path}`, async () => {
       const fixtureRoot = await mkdtemp(

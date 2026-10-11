@@ -335,20 +335,6 @@ test('derives the package root from the canonical outer skill boundary', () => {
   }
 });
 
-test('repository CLI audits one tracked snapshot', async () => {
-  const cli = await readFile(
-    join(import.meta.dir, '../../src/executable-skills/repository-cli.ts'),
-    'utf8',
-  );
-  expect(
-    cli.match(
-      /new ExecutableSkillCheckout\(repoRoot\)\.readTrackedFiles\(\)/gu,
-    ),
-  ).toHaveLength(1);
-  expect(cli.match(/new ExecutableSkillRepository\(\{/gu)).toHaveLength(1);
-  expect(cli).not.toContain('auditTrackedExecutableSkillPackages');
-});
-
 test('rejects every nested skill-card mirror under scripts', async () => {
   const repoRoot = await ExecutableSkillsRepositoryScenario.packageFixture();
   try {

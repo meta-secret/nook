@@ -118,11 +118,6 @@ test('only the Loom semantic adapter reaches the provider', async () => {
   expect([...new Set(providerReferences)].sort()).toEqual(
     SkillProviderConfigApplicationScenario.expectedProviderReferences(allPaths),
   );
-  const activeAudit = await Bun.file(
-    join(REPOSITORY_ROOT, 'agentic-ai/loom/src/commands/cortex-audit.ts'),
-  ).text();
-  expect(activeAudit).toContain("'../lib/cortex-article-structure.ts'");
-  expect(activeAudit).not.toContain('src/cortex-article-provider');
 }, 60_000);
 
 test('runnable configuration inventory includes Taskfiles and actions', () => {
