@@ -7,6 +7,10 @@ import {
   SavedOptionOrdinal,
 } from '../src/lib/auth-widget-policy'
 
+type NamecheapDisplayRequest = Parameters<
+  NamecheapWidgetDisplayGate['eligibility']
+>[0]
+
 describe('Nook Pilot in-page authorization policy', () => {
   test('rejects page-script clicks and accepts browser-trusted gestures', () => {
     expect(new AuthenticationGesture({ isTrusted: false }).trusted).toBe(false)
@@ -61,4 +65,58 @@ describe('Nook Pilot in-page authorization policy', () => {
       NamecheapWidgetDisplayEligibility.EligibleOnAuthenticationRoute,
     )
   })
+
+  const otpPaths: string[] = ['/twofa/totp', '/twofa/totp/', '/TWOFA/TOTP/']
+  test.each(otpPaths)(
+    'admits the standalone Namecheap OTP route %s without a drawer gesture',
+    (pathname) => {
+      const gate = new NamecheapWidgetDisplayGate()
+      const request: NamecheapDisplayRequest = {
+        hostname: 'namecheap.com',
+        pathname,
+      }
+      expect(gate.eligibility(request)).toBe(
+        NamecheapWidgetDisplayEligibility.EligibleOnAuthenticationRoute,
+      )
+    },
+  )
+
+  const unrelatedPaths: string[] = [
+    '/twofa/',
+    '/twofa/totp-help',
+    '/twofa/totp/settings',
+    '/checkout',
+  ]
+  test.each(unrelatedPaths)(
+    'preserves drawer suppression on unrelated Namecheap path %s',
+    (pathname) => {
+      const gate = new NamecheapWidgetDisplayGate()
+      const request: NamecheapDisplayRequest = {
+        hostname: 'www.namecheap.com',
+        pathname,
+      }
+      expect(gate.eligibility(request)).toBe(
+        NamecheapWidgetDisplayEligibility.AwaitingTrustedActivation,
+      )
+    },
+  )
+
+  const unrelatedHosts: string[] = [
+    'example.com',
+    'notnamecheap.com',
+    'namecheap.com.example.com',
+  ]
+  test.each(unrelatedHosts)(
+    'does not apply Namecheap display policy to %s',
+    (hostname) => {
+      const gate = new NamecheapWidgetDisplayGate()
+      const request: NamecheapDisplayRequest = {
+        hostname,
+        pathname: '/twofa/totp/',
+      }
+      expect(gate.eligibility(request)).toBe(
+        NamecheapWidgetDisplayEligibility.NotNamecheap,
+      )
+    },
+  )
 })

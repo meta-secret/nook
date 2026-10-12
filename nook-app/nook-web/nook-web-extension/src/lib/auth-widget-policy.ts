@@ -60,6 +60,13 @@ export class NamecheapWidgetDisplayGate {
     const isNamecheap =
       hostname === 'namecheap.com' || hostname.endsWith('.namecheap.com')
     if (!isNamecheap) return NamecheapWidgetDisplayEligibility.NotNamecheap
+    // The standalone OTP document has no login drawer to activate. This only
+    // permits the scan; Rust still recognizes the fields and authorizes Pilot.
+    switch (pathname.toLowerCase()) {
+      case '/twofa/totp':
+      case '/twofa/totp/':
+        return NamecheapWidgetDisplayEligibility.EligibleOnAuthenticationRoute
+    }
     if (pathname.toLowerCase().startsWith('/myaccount/login'))
       return NamecheapWidgetDisplayEligibility.EligibleOnAuthenticationRoute
     return this.activation
