@@ -39,8 +39,8 @@ export class NamecheapOtpScenario {
   }
 
   private fulfill(route: Route): Promise<void> {
-    switch (new URL(route.request().url()).pathname) {
-      case '/submitted':
+    switch (route.request().method()) {
+      case 'POST':
         this.submissions += 1
         break
     }
@@ -49,7 +49,7 @@ export class NamecheapOtpScenario {
       body: `<!doctype html><html><body>
         <h1>Enter OTP Code</h1>
         <p>Enter the code from your authenticator app.</p>
-        <form action="/submitted" method="post">
+        <form action="/twofa/totp/" method="post">
           <input id="challenge" name="challenge" type="text" placeholder="Enter OTP Code" autofocus>
           <a href="/twofa/backup/">Use a backup code instead</a>
           <button type="button">Cancel</button><button type="submit">Submit</button>
