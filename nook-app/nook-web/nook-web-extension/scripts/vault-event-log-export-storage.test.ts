@@ -1,5 +1,5 @@
-import { afterEach, expect, mock, spyOn, test } from 'bun:test'
-import { Effect } from 'effect'
+import { afterEach, beforeAll, expect, mock, spyOn, test } from 'bun:test'
+import { Effect, Match } from 'effect'
 import { ok } from 'neverthrow'
 import { ExtensionVaultEventLogExport } from '../src/background/service-worker/vault-event-log-export'
 import {
@@ -20,8 +20,9 @@ import type {
   ExtensionGrantAuthority,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { ExtensionSessionResponse } from '../src/offscreen/session'
+import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 
-type UnkeyedPairingStorageCalls = readonly (readonly [])[]
+type UnkeyedPairingStorageCalls = [][]
 type VaultEventLogExportDependencies = ConstructorParameters<
   typeof ExtensionVaultEventLogExport
 >[0]
@@ -31,6 +32,13 @@ type AuthorityDocumentDelivery<Response, DecodeFailure> =
 type AuthorityDocumentResult<Response, DecodeFailure> =
   | ExtensionSessionTransportResult
   | ExtensionSessionTransportResult<Response, DecodeFailure>
+
+type DecodedAuthorityDeliveryPattern = {
+  readonly decodeResponse: typeof Match.defined
+}
+type RawAuthorityDeliveryPattern = {
+  readonly message: typeof Match.any
+}
 
 enum AuthorityDocumentDeliveryKind {
   Raw = 'raw',
@@ -73,18 +81,38 @@ class AuthoritySessionDocument implements ExtensionSessionTransport {
           Effect.succeed(named.delivery.decodeResponse(response)),
         )
       case AuthorityDocumentDeliveryKind.Raw:
-        return Effect.runPromise(Effect.succeed(ok(response)))
+        return Effect.runPromise(
+          Effect.succeed(
+            ok<ExtensionSessionResponse, ExtensionSessionTransportFailure>(
+              response,
+            ),
+          ),
+        )
     }
   }
   private nameDelivery<Response, DecodeFailure>(
     delivery: AuthorityDocumentDelivery<Response, DecodeFailure>,
   ): NamedAuthorityDocumentDelivery<Response, DecodeFailure> {
-    switch ('decodeResponse' in delivery) {
-      case true:
-        return { kind: AuthorityDocumentDeliveryKind.Decoded, delivery }
-      case false:
-        return { kind: AuthorityDocumentDeliveryKind.Raw }
+    const decodedDelivery: DecodedAuthorityDeliveryPattern = {
+      decodeResponse: Match.defined,
     }
+    const rawDelivery: RawAuthorityDeliveryPattern = { message: Match.any }
+    return Match.value(delivery).pipe(
+      Match.when(decodedDelivery, (decoded) => {
+        const named: NamedAuthorityDocumentDelivery<Response, DecodeFailure> = {
+          kind: AuthorityDocumentDeliveryKind.Decoded,
+          delivery: decoded,
+        }
+        return named
+      }),
+      Match.when(rawDelivery, () => {
+        const named: NamedAuthorityDocumentDelivery<Response, DecodeFailure> = {
+          kind: AuthorityDocumentDeliveryKind.Raw,
+        }
+        return named
+      }),
+      Match.exhaustive,
+    )
   }
 }
 
@@ -142,7 +170,7 @@ interface UnchangedAuthorityScenario {
   readonly authority: ExtensionGrantAuthority
   readonly expected: ExtensionVaultEventLogResponse
 }
-type UnchangedAuthorityScenarios = readonly UnchangedAuthorityScenario[]
+type UnchangedAuthorityScenarios = UnchangedAuthorityScenario[]
 
 class VaultEventLogExportAuthorityFixture extends VaultEventLogExportStorageFixture {
   static readonly unchanged: UnchangedAuthorityScenarios = [
@@ -164,6 +192,8 @@ class VaultEventLogExportAuthorityFixture extends VaultEventLogExportStorageFixt
     )
   }
 }
+
+beforeAll(() => companionWasmReady)
 
 afterEach(() => mock.restore())
 
