@@ -17,32 +17,30 @@ function installMicrosoftLoginStages(element: HTMLElement | SVGElement): void {
     event.preventDefault()
     switch (stage) {
       case MicrosoftLoginStage.Identifier: {
-        const identifier: HTMLInputElement | undefined =
-          element.querySelectorAll<HTMLInputElement>('#usernameEntry')[0]
-        switch (identifier) {
-          case undefined:
-            throw new Error('Microsoft identifier fixture input missing')
+        for (const identifier of element.querySelectorAll<HTMLInputElement>(
+          '#usernameEntry',
+        )) {
+          element.setAttribute('data-identifier', identifier.value)
+          element.innerHTML =
+            '<label>Password<input id="passwordEntry" type="password" autocomplete="current-password"></label><button type="submit" data-testid="primaryButton">Sign in</button>'
+          stage = MicrosoftLoginStage.Password
+          element.setAttribute('data-stage', stage)
+          return
         }
-        element.setAttribute('data-identifier', identifier.value)
-        element.innerHTML =
-          '<label>Password<input id="passwordEntry" type="password" autocomplete="current-password"></label><button type="submit" data-testid="primaryButton">Sign in</button>'
-        stage = MicrosoftLoginStage.Password
-        element.setAttribute('data-stage', stage)
-        break
+        throw new Error('Microsoft identifier fixture input missing')
       }
       case MicrosoftLoginStage.Password: {
-        const password: HTMLInputElement | undefined =
-          element.querySelectorAll<HTMLInputElement>('#passwordEntry')[0]
-        switch (password) {
-          case undefined:
-            throw new Error('Microsoft password fixture input missing')
+        for (const password of element.querySelectorAll<HTMLInputElement>(
+          '#passwordEntry',
+        )) {
+          element.setAttribute('data-password', password.value)
+          stage = MicrosoftLoginStage.Complete
+          element.setAttribute('data-stage', stage)
+          element.innerHTML =
+            '<p role="status">Microsoft authentication complete</p>'
+          return
         }
-        element.setAttribute('data-password', password.value)
-        stage = MicrosoftLoginStage.Complete
-        element.setAttribute('data-stage', stage)
-        element.innerHTML =
-          '<p role="status">Microsoft authentication complete</p>'
-        break
+        throw new Error('Microsoft password fixture input missing')
       }
       case MicrosoftLoginStage.Complete:
         break
