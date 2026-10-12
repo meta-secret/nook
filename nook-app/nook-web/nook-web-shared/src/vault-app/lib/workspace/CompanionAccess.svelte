@@ -14,11 +14,10 @@
   let busy = $state(false);
   let active = true;
   let reading = false;
-  let timer: ReturnType<typeof setInterval> | undefined;
-  let expiry: ReturnType<typeof setTimeout> | undefined;
+  let stopWatch = () => {};
   function stop() {
-    clearInterval(timer);
-    clearTimeout(expiry);
+    stopWatch();
+    stopWatch = () => {};
     busy = false;
   }
   async function refresh() {
@@ -75,8 +74,12 @@
   function watch() {
     stop();
     void refresh();
-    timer = setInterval(() => void refresh(), 500);
-    expiry = setTimeout(stop, 30000);
+    const timer = setInterval(() => void refresh(), 500);
+    const expiry = setTimeout(stop, 30000);
+    stopWatch = () => {
+      clearInterval(timer);
+      clearTimeout(expiry);
+    };
   }
   async function unlock() {
     watch();

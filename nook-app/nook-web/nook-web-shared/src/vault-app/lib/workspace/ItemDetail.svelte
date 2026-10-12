@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Option } from "effect";
   import type { WorkspaceItem } from "./item-metadata";
   import { onDestroy } from "svelte";
   import { ArrowLeft, Eye, EyeOff, Pencil, Trash2 } from "@lucide/svelte";
@@ -22,13 +23,13 @@
   }: { vault: VaultState; item: WorkspaceItem; close: () => void } = $props();
   const emptyRecords: ConstructorParameters<typeof SecretExposure>[0] = {};
   const exposure = new SecretExposure(emptyRecords);
-  let record = $state<NookSecretRecord>();
+  let record = $state<Option.Option<NookSecretRecord>>(Option.none());
   let editing = $state(false);
   let deleting = $state(false);
   let busy = $state(false);
-  let code = $state<AuthenticatorCodeView>();
+  let code = $state<Option.Option<AuthenticatorCodeView>>(Option.none());
   $effect(() => {
-    if (!record || item.type !== SecretType.Authenticator) return;
+    if (Option.isNone(record) || item.type !== SecretType.Authenticator) return;
     let active = true;
     let reading = false;
     async function refreshCode() {
@@ -37,7 +38,7 @@
       const result = await vault.currentAuthenticatorCode(item.id);
       reading = false;
       if (!active) return;
-      if (result.isOk()) code = result.value;
+      if (result.isOk()) code = Option.some(result.value);
       else vault.errorMsg = vault.t(result.error.translationKey);
     }
     void refreshCode();
@@ -45,7 +46,7 @@
     return () => {
       active = false;
       clearInterval(timer);
-      code = undefined;
+      code = Option.none();
     };
   });
   async function copy(value: string) {
@@ -57,19 +58,20 @@
     }
   }
   function download() {
-    if (!record || item.type !== SecretType.FileAttachment) return;
-    const binary = atob(record.contentBase64);
+    if (Option.isNone(record) || item.type !== SecretType.FileAttachment)
+      return;
+    const binary = atob(record.value.contentBase64);
     const bytes = Uint8Array.from(binary, (character) =>
       character.charCodeAt(0),
     );
     const options: BlobPropertyBag = {
-      type: record.mimeType || "application/octet-stream",
+      type: record.value.mimeType || "application/octet-stream",
     };
     const blob = new Blob([bytes], options);
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = record.fileName;
+    anchor.download = record.value.fileName;
     anchor.click();
     URL.revokeObjectURL(url);
   }
@@ -84,7 +86,7 @@
     busy = false;
     if (result.isErr()) vault.errorMsg = vault.t(result.error.translationKey);
     else if (!(result.value instanceof VaultOperationStale))
-      record = result.value[item.id];
+      record = Option.fromUndefinedOr(result.value[item.id]);
   }
   async function remove() {
     busy = true;
@@ -92,6 +94,9 @@
     busy = false;
     if (result.isErr()) new SecretFailurePresentation(vault).show(result.error);
     else close();
+  }
+  function recordField(field: keyof NookSecretRecord): string {
+    return Option.isSome(record) ? text(record.value[field]) : "";
   }
   function text(value: NookSecretRecord[keyof NookSecretRecord]): string {
     return Array.isArray(value)
@@ -102,9 +107,9 @@
   }
 </script>
 
-{#if editing && record}<ItemEditor
+{#if editing && Option.isSome(record)}<ItemEditor
     {vault}
-    editor={{ kind: SecretEditorKind.Editing, record }}
+    editor={{ kind: SecretEditorKind.Editing, record: record.value }}
     close={() => {
       editing = false;
       close();
@@ -130,11 +135,11 @@
       {#if item.type !== SecretType.Passkey}<button
           disabled={busy}
           onclick={reveal}
-          >{#if record}<EyeOff size={17} />{vault.t(
+          >{#if Option.isSome(record)}<EyeOff size={17} />{vault.t(
               K.VaultHideValue,
             )}{:else}<Eye size={17} />{vault.t(K.VaultShowValue)}{/if}</button
         >{/if}
-      {#if record && item.type !== SecretType.Passkey && item.type !== SecretType.FileAttachment}<button
+      {#if Option.isSome(record) && item.type !== SecretType.Passkey && item.type !== SecretType.FileAttachment}<button
           disabled={vault.editsBlocked}
           onclick={() => {
             editing = true;
@@ -161,14 +166,14 @@
           >
         </div>
       </section>{/if}
-    {#if record}
-      {#if code && item.type === SecretType.Authenticator}
+    {#if Option.isSome(record)}
+      {#if Option.isSome(code) && item.type === SecretType.Authenticator}
         <section class="confirmation">
           <h3>{vault.t(K.VaultFieldsCurrentCode)}</h3>
-          <p>{code.code}</p>
+          <p>{code.value.code}</p>
           <button
             onclick={() => {
-              if (code) void copy(code.code);
+              if (Option.isSome(code)) void copy(code.value.code);
             }}>{vault.t(K.VaultCopyCurrentCode)}</button
           >
         </section>
@@ -176,11 +181,12 @@
       <dl class="secret-fields">
         {#each itemFields(item.type) as field (field.draft)}<div>
             <dt>{vault.t(field.label)}</dt>
-            <dd>{text(record[field.record]) || "—"}</dd>
-            {#if text(record[field.record])}<button
+            <dd>{recordField(field.record) || "—"}</dd>
+            {#if recordField(field.record)}<button
                 class="text-button"
                 onclick={() => {
-                  if (record) void copy(text(record[field.record]));
+                  if (Option.isSome(record))
+                    void copy(recordField(field.record));
                 }}>{vault.t(K.CommonCopy)}</button
               >{/if}
           </div>{/each}
@@ -188,7 +194,7 @@
       {#if item.type === SecretType.FileAttachment}<dl class="secret-fields">
           <div>
             <dt>{vault.t(K.VaultFieldsFileName)}</dt>
-            <dd>{record.fileName}</dd>
+            <dd>{record.value.fileName}</dd>
           </div>
         </dl>
         <button onclick={download}>{vault.t(K.VaultDownloadFile)}</button>{/if}

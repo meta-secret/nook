@@ -114,15 +114,15 @@ describe('replacement workspace', () => {
   test('does not publish a late decryption after its detail pane is closed', async () => {
     const vault = fixture()
     const record = Secrets.record({ password: 'late-secret' })
-    let finish:
-      | ((value: Awaited<ReturnType<typeof vault.decryptSecret>>) => void)
-      | undefined
-    vi.spyOn(vault, 'decryptSecret').mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          finish = resolve
-        }),
-    )
+    let finish!: (
+      value: Awaited<ReturnType<typeof vault.decryptSecret>>,
+    ) => void
+    const pending = new Promise<
+      Awaited<ReturnType<typeof vault.decryptSecret>>
+    >((resolve) => {
+      finish = resolve
+    })
+    vi.spyOn(vault, 'decryptSecret').mockReturnValue(pending)
     const view = render(ItemDetail, {
       vault,
       item: Secrets.listItem({ displayTitle: 'Personal email' }),
@@ -132,7 +132,6 @@ describe('replacement workspace', () => {
       view.getByRole('button', { name: vault.t(K.VaultShowValue) }),
     )
     view.unmount()
-    if (!finish) throw new Error('Expected a pending decryption')
     finish(ok(record))
     await tick()
     expect(record.free).toHaveBeenCalledOnce()

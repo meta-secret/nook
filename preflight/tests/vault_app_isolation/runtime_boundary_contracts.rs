@@ -10,7 +10,7 @@ fn vault_app_library_root_is_package_oriented() -> anyhow::Result<()> {
     root_files.retain(|path| path.is_file());
     root_files.sort();
 
-    let mut expected_root_files = ["nook.ts", "utils.ts", "vault.svelte.ts"]
+    let mut expected_root_files = ["nook.ts", "vault.svelte.ts"]
         .map(|name| lib_root.join(name))
         .to_vec();
     expected_root_files.sort();
@@ -27,6 +27,7 @@ fn vault_app_library_root_is_package_oriented() -> anyhow::Result<()> {
         "extension",
         "runtime",
         "vault",
+        "workspace",
     ] {
         assert!(lib_root.join(package).is_dir(), "missing {package} package");
     }

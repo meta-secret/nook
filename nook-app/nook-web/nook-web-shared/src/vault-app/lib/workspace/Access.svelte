@@ -35,7 +35,11 @@
   let usePassword = $state(false);
   const sentinel = configured_vault_application() === VaultApplication.Sentinel;
   const siteUrl = new SiteUrlConfiguration(
-    new ConfiguredSiteUrlEnvironment(import.meta.env.VITE_SITE_URL ?? ""),
+    new ConfiguredSiteUrlEnvironment(
+      typeof import.meta.env.VITE_SITE_URL === "string"
+        ? import.meta.env.VITE_SITE_URL
+        : "",
+    ),
   ).url;
   async function authorizeExtension() {
     if (extension.kind !== ExtensionConnectIntentKind.Requested) return;
@@ -92,7 +96,7 @@
           >{vault.t(K.ExtensionConnectContinue)}</button
         >
       {:else if !vault.deviceProtectionReady && (sentinel || creating || vault.localVaults.length === 0)}
-        <DeviceAuthorization {vault} />
+        <DeviceAuthorization {vault} initializeSession={!creating} />
       {:else if sentinel}<SentinelAccess {vault} />
       {:else if creating || vault.localVaults.length === 0}
         <form
@@ -113,7 +117,7 @@
           <button
             data-testid="login-create-device-vault-btn"
             class="primary"
-            disabled={vault.isVerifying}
+            disabled={vault.isVerifying || vault.isInitializing}
             >{vault.t(
               vault.isVerifying ? K.WorkspaceBusy : K.WorkspaceNewVault,
             )}<ArrowRight size={18} /></button
@@ -133,7 +137,7 @@
               class:chosen={vault.selectedLoginVault.kind ===
                 LoginVaultSelectionKind.Selected &&
                 vault.selectedLoginVault.storeId === local.storeId}
-              disabled={vault.isVerifying}
+              disabled={vault.isVerifying || vault.isInitializing}
               onclick={async () => {
                 usePassword = false;
                 entryId = "";
@@ -185,7 +189,9 @@
               {/if}
               <button
                 class="primary"
-                disabled={vault.isVerifying || vault.isPasswordBusy}
+                disabled={vault.isVerifying ||
+                  vault.isInitializing ||
+                  vault.isPasswordBusy}
                 >{vault.t(
                   vault.isVerifying ? K.WorkspaceBusy : K.WorkspaceUnlock,
                 )}<ArrowRight size={18} /></button

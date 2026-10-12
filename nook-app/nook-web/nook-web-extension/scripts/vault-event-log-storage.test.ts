@@ -6,8 +6,7 @@ import type { ExtensionPairingItems } from '../src/background/pairing-grants'
 test('event-log export loads all pairing rows without treating Effect cancellation as a storage key', async () => {
   const loadPairingStorage = mock(
     async (key?: string): Promise<ExtensionPairingItems> => {
-      if (key !== undefined)
-        throw new Error('Expected an unfiltered pairing read')
+      if (key) throw new Error('Expected an unfiltered pairing read')
       return {}
     },
   )

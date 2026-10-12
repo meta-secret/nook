@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Option } from "effect";
   import { untrack } from "svelte";
   import {
     Plus,
@@ -15,22 +16,22 @@
   import ItemDetail from "./ItemDetail.svelte";
   import ItemEditor from "./ItemEditor.svelte";
   let { vault }: { vault: VaultState } = $props();
-  let selected = $state<WorkspaceItem>();
+  let selected = $state<Option.Option<WorkspaceItem>>(Option.none());
   let creating = $state(false);
   let query = $state(untrack(() => vault.secretQuery));
   let loading = $state(false);
   const items = $derived(vault.secrets.map(workspaceItem));
   const vaultLabel = $derived.by(() => {
     const active = vault.activeVault;
-    const local =
-      active.kind === ActiveVaultKind.Open
-        ? vault.localVaults.find((entry) => entry.storeId === active.storeId)
-        : undefined;
+    if (active.kind !== ActiveVaultKind.Open) return vault.t(K.NavVault);
+    const local = vault.localVaults.find(
+      (entry) => entry.storeId === active.storeId,
+    );
     return local?.label || vault.t(K.NavVault);
   });
   async function page(offset = 0) {
     loading = true;
-    selected = undefined;
+    selected = Option.none();
     const selection: Parameters<VaultState["loadSecretPage"]>[0] = {
       query,
       requestedOffset: offset,
@@ -38,15 +39,18 @@
     const result = await vault.loadSecretPage(selection);
     if (result.isErr()) vault.errorMsg = vault.t(result.error.translationKey);
     loading = false;
-    selected = undefined;
+    selected = Option.none();
   }
   function close() {
-    selected = undefined;
+    selected = Option.none();
     creating = false;
   }
 </script>
 
-<div class="items-workspace" class:has-detail={!!selected || creating}>
+<div
+  class="items-workspace"
+  class:has-detail={Option.isSome(selected) || creating}
+>
   <section class="item-list" aria-label={vault.t(K.WorkspaceItems)}>
     <header class="list-heading">
       <div>
@@ -62,7 +66,7 @@
         aria-label={vault.t(K.VaultAddSecret)}
         disabled={vault.editsBlocked}
         onclick={() => {
-          selected = undefined;
+          selected = Option.none();
           creating = true;
         }}><Plus size={21} /></button
       >
@@ -87,9 +91,10 @@
     <div class="item-rows" aria-busy={loading}>
       {#each items as item (item.id)}<button
           class="item-row"
-          class:selected={selected?.id === item.id}
+          class:selected={Option.isSome(selected) &&
+            selected.value.id === item.id}
           onclick={() => {
-            selected = item;
+            selected = Option.some(item);
             creating = false;
           }}
           ><span class="row-monogram"
@@ -132,9 +137,9 @@
         editor={{ kind: SecretEditorKind.Creating }}
         {close}
       />
-    {:else if selected}{#key selected.id}<ItemDetail
+    {:else if Option.isSome(selected)}{#key selected.value.id}<ItemDetail
           {vault}
-          item={selected}
+          item={selected.value}
           {close}
         />{/key}
     {:else}<div class="empty-state">

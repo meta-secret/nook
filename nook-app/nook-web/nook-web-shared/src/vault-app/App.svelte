@@ -1,6 +1,10 @@
 <script lang="ts">
+  import {
+    WorkspacePage,
+    workspaceNavigation,
+  } from "$lib/workspace/navigation";
   import { onMount } from "svelte";
-  import { LockKeyhole, Settings, PanelLeft, SunMoon } from "@lucide/svelte";
+  import { LockKeyhole, SunMoon } from "@lucide/svelte";
   import { VaultState } from "$lib/vault.svelte";
   import {
     vaultBrowserLifecycle,
@@ -27,7 +31,7 @@
   let extension = $state<ExtensionConnectIntent>(
     initialExtensionConnectIntent(supportsExtension),
   );
-  let page = $state<"items" | "settings">("items");
+  let page = $state(WorkspacePage.Items);
   let colorMode = $state(browserColorMode.systemColorMode());
   let systemMode = $state(true);
   onMount(() => {
@@ -74,22 +78,17 @@
         >
       </div>
       <nav aria-label={vault.t(K.WorkspaceBrand)}>
-        <button
-          aria-label={vault.t(K.WorkspaceItems)}
-          class:active={page === "items"}
-          onclick={() => {
-            page = "items";
-          }}
-          ><PanelLeft size={19} /><span>{vault.t(K.WorkspaceItems)}</span
-          ></button
-        >
-        <button
-          aria-label={vault.t(K.NavSettings)}
-          class:active={page === "settings"}
-          onclick={() => {
-            page = "settings";
-          }}><Settings size={19} /><span>{vault.t(K.NavSettings)}</span></button
-        >
+        {#each workspaceNavigation as entry (entry.page)}
+          <button
+            aria-label={vault.t(entry.label)}
+            class:active={page === entry.page}
+            onclick={() => {
+              page = entry.page;
+            }}
+          >
+            <entry.icon size={19} /><span>{vault.t(entry.label)}</span>
+          </button>
+        {/each}
       </nav>
       <div class="rail-bottom">
         <div class="device-note">
@@ -148,7 +147,7 @@
       />
     {:else}
       {#key vault.sessionEpoch}
-        {#if page === "items"}<Items {vault} />{:else}<Preferences
+        {#if page === WorkspacePage.Items}<Items {vault} />{:else}<Preferences
             {vault}
             {toggleAppearance}
           />{/if}

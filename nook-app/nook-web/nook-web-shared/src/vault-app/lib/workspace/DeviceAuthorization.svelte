@@ -4,7 +4,10 @@
   import { DeviceProtectionActions } from "$lib/vault/device-protection.svelte";
   import { DeviceProtectionStatus, DeviceMode } from "$app-wasm";
   import { I18N_KEYS as K } from "../../../generated/i18n-keys";
-  let { vault }: { vault: VaultState } = $props();
+  let {
+    vault,
+    initializeSession = true,
+  }: { vault: VaultState; initializeSession?: boolean } = $props();
   const actions = untrack(() => new DeviceProtectionActions(vault));
   let pin = $state("");
   let confirmPin = $state("");
@@ -25,7 +28,7 @@
         >[0] = {
           passkeyLabel,
           deviceMode: DeviceMode.Standard,
-          initializeSession: true,
+          initializeSession,
         };
         await actions.setupDeviceProtection(request);
       } else if (
@@ -33,19 +36,19 @@
       ) {
         const request: Parameters<
           DeviceProtectionActions["setupPinDeviceProtection"]
-        >[0] = { pin, confirmPin, initializeSession: true };
+        >[0] = { pin, confirmPin, initializeSession };
         await actions.setupPinDeviceProtection(request);
       } else if (vault.deviceProtectionStatus === DeviceProtectionStatus.Pin) {
         const request: Parameters<
           DeviceProtectionActions["unlockPinDeviceProtection"]
-        >[0] = { pin, initializeSession: true };
+        >[0] = { pin, initializeSession };
         await actions.unlockPinDeviceProtection(request);
       } else if (
         vault.deviceProtectionStatus === DeviceProtectionStatus.Passkey
       ) {
         const request: Parameters<
           DeviceProtectionActions["unlockDeviceProtection"]
-        >[0] = { initializeSession: true };
+        >[0] = { initializeSession };
         await actions.unlockDeviceProtection(request);
       }
     } finally {
