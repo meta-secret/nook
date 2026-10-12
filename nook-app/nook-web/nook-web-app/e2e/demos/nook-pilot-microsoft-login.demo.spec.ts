@@ -6,7 +6,43 @@ import {
 } from './pilot-demo-helpers'
 import { demoDomainEnumArgs, installDemoChromeStub } from './static-chrome-stub'
 
-test('retain Microsoft identifier login during repeated adornment writes, then fill and advance', async ({
+function installMicrosoftLoginStages(element: HTMLElement | SVGElement): void {
+  enum MicrosoftLoginStage {
+    Identifier = 'identifier',
+    Password = 'password',
+    Complete = 'complete',
+  }
+  let stage = MicrosoftLoginStage.Identifier
+  element.addEventListener('submit', (event) => {
+    event.preventDefault()
+    switch (stage) {
+      case MicrosoftLoginStage.Identifier:
+        element.setAttribute(
+          'data-identifier',
+          element.querySelector<HTMLInputElement>('#usernameEntry')!.value,
+        )
+        element.innerHTML =
+          '<label>Password<input id="passwordEntry" type="password" autocomplete="current-password"></label><button type="submit" data-testid="primaryButton">Sign in</button>'
+        stage = MicrosoftLoginStage.Password
+        element.setAttribute('data-stage', stage)
+        break
+      case MicrosoftLoginStage.Password:
+        element.setAttribute(
+          'data-password',
+          element.querySelector<HTMLInputElement>('#passwordEntry')!.value,
+        )
+        stage = MicrosoftLoginStage.Complete
+        element.setAttribute('data-stage', stage)
+        element.innerHTML =
+          '<p role="status">Microsoft authentication complete</p>'
+        break
+      case MicrosoftLoginStage.Complete:
+        break
+    }
+  })
+}
+
+test('retain Microsoft identifier login during adornment writes, then fill both login stages', async ({
   page,
 }) => {
   const stubArgs = {
@@ -33,12 +69,7 @@ test('retain Microsoft identifier login during repeated adornment writes, then f
     'https://login.live.com/oauth20_authorize.srf?client_id=fixture',
   )
   const form = page.getByTestId('microsoft-identifier-form')
-  await form.evaluate((element) =>
-    element.addEventListener('submit', (event) => {
-      event.preventDefault()
-      element.setAttribute('data-submitted', 'true')
-    }),
-  )
+  await form.evaluate(installMicrosoftLoginStages)
   await page.evaluate(installDemoChromeStub, stubArgs)
   await injectPilotAutofill(page)
   const widget = page.locator('#nook-auth-widget')
@@ -59,7 +90,21 @@ test('retain Microsoft identifier login during repeated adornment writes, then f
   expect(retainedFrames).toBe(60)
   await widget.getByRole('button', { name: 'Continue with Nook' }).click()
   await widget.getByRole('button', { name: 'Continue with Nook' }).click()
-  await expect(page.locator('#usernameEntry')).toHaveValue('pilot@example.test')
-  await expect(form).toHaveAttribute('data-submitted', 'true')
+  await expect(form).toHaveAttribute('data-identifier', 'pilot@example.test')
+  await expect(form).toHaveAttribute('data-stage', 'password')
+  await expect(page.locator('#passwordEntry')).toBeVisible()
+  await demoBeat(page)
+  await expect(
+    widget.getByRole('button', { name: 'Continue with Nook' }),
+  ).toBeVisible()
+  await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+  await expect(form).toHaveAttribute(
+    'data-password',
+    'demo-password-never-recorded',
+  )
+  await expect(form).toHaveAttribute('data-stage', 'complete')
+  await expect(form.getByRole('status')).toHaveText(
+    'Microsoft authentication complete',
+  )
   await demoBeat(page)
 })
