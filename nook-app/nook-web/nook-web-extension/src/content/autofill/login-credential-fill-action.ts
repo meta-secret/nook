@@ -420,6 +420,7 @@ export class LoginCredentialFillAction {
       throw error
     } finally {
       widgetState.credentialActuation = WidgetCredentialActuation.Idle
+      scanState.schedule()
     }
   }
 }

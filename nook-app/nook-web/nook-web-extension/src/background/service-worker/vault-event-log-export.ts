@@ -25,7 +25,11 @@ import { ExtensionPairingStorage } from './pairing-identity-storage'
 type VaultEventLogExportDependencies = {
   readonly loadPairingStorage: () => Promise<ExtensionPairingItems>
   readonly openSessionDocument: typeof extensionSessionLifecycle.openSessionDocument
+  readonly closeSessionDocument: typeof extensionSessionLifecycle.closeExtensionSessionDocument
 }
+type VaultEventLogSessionClosureResult = Awaited<
+  ReturnType<VaultEventLogExportDependencies['closeSessionDocument']>
+>
 type ExportRejected = Extract<
   ExtensionVaultEventLogResponse,
   { reason: ExtensionVaultEventLogFailure }
@@ -46,6 +50,10 @@ export class ExtensionVaultEventLogExport {
       openSessionDocument: extensionSessionLifecycle.openSessionDocument.bind(
         extensionSessionLifecycle,
       ),
+      closeSessionDocument:
+        extensionSessionLifecycle.closeExtensionSessionDocument.bind(
+          extensionSessionLifecycle,
+        ),
     }
     return new ExtensionVaultEventLogExport(dependencies)
   }
@@ -62,7 +70,7 @@ export class ExtensionVaultEventLogExport {
     message: ExtensionVaultEventLogRequestMessage,
   ): Effect.fn.Return<ExtensionVaultEventLogResponse, ExportRejected> {
     const storage: ExportTransportAttempt<ExtensionPairingItems> = {
-      try: this.dependencies.loadPairingStorage,
+      try: () => this.dependencies.loadPairingStorage(),
       catch: () => ({ kind: 'Rejected', reason: 'Failed' }),
     }
     const stored = yield* Effect.tryPromise(storage)
@@ -95,7 +103,18 @@ export class ExtensionVaultEventLogExport {
       case 'NotPaired':
         return { kind: 'NotPaired' }
       case 'Rejected':
-        return authority
+        switch (authority.reason) {
+          case 'MissingActiveAuthority':
+            yield* this.closeActiveSession()
+            return authority
+          case 'Unavailable':
+          case 'Locked':
+          case 'NoMatchingAuthority':
+          case 'InvalidStoredAuthority':
+          case 'AccessDenied':
+          case 'Failed':
+            return authority
+        }
       case 'Authorized':
         break
     }
@@ -148,6 +167,29 @@ export class ExtensionVaultEventLogExport {
         return { ...decoded, event_log_records: exported.event_log_records }
       }
     }
+  }
+
+  private closeActiveSession = Effect.fnUntraced(
+    this.closeActiveSessionOperation.bind(this),
+  )
+
+  private *closeActiveSessionOperation(): Effect.fn.Return<
+    void,
+    ExportRejected
+  > {
+    const unavailable: ExportRejected = {
+      kind: 'Rejected',
+      reason: 'Unavailable',
+    }
+    const attempt: ExportTransportAttempt<VaultEventLogSessionClosureResult> = {
+      try: () => this.dependencies.closeSessionDocument(),
+      catch: () => unavailable,
+    }
+    const closed = yield* Effect.tryPromise(attempt)
+    yield* closed.match(
+      () => Effect.void,
+      () => Effect.fail(unavailable),
+    )
   }
 
   private send(

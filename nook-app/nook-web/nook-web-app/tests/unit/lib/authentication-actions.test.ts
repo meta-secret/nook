@@ -10,7 +10,10 @@ import {
 import { PasswordFormScopeKind } from '../../../../nook-web-shared/src/extension/password-form-fields'
 import { RevalidatedAuthenticationActionOutcomeKind } from '../../../../nook-web-extension/src/content/autofill/workflow-revalidation'
 import type { AuthenticationWorkflowApproval } from '../../../../nook-web-extension/src/lib/auth-workflow-messages'
-import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
+import {
+  FormSubmissionResult,
+  type PasswordFormObservation,
+} from '../../../../nook-web-shared/src/extension/password-forms'
 import { emptyPasswordFormSummary } from '../../../../nook-web-shared/src/extension/password-form-summary-state'
 
 type RevalidationRequest = ConstructorParameters<
@@ -41,6 +44,7 @@ const actionMocks = vi.hoisted(() => ({
   sendLoginFill: vi.fn(),
   sendGeneratePassword: vi.fn(),
   submitLoginForm: vi.fn(() => 'submitted'),
+  scheduleScan: vi.fn(),
 }))
 
 vi.mock('../../../../nook-web-shared/src/extension/password-forms', () => ({
@@ -211,6 +215,7 @@ vi.mock(
         confirmationActive: false,
       },
       widgetState: state.widgetState,
+      scanState: { schedule: actionMocks.scheduleScan },
     }
   },
 )
@@ -222,6 +227,10 @@ import {
 import { authenticationActivityProgress } from '../../../../nook-web-extension/src/content/autofill/authentication-activity-progress'
 import { authenticatorInteraction } from '../../../../nook-web-extension/src/content/autofill/authenticator-actions'
 import { loginPasskeyInteraction } from '../../../../nook-web-extension/src/content/autofill/login-passkey-actions'
+import {
+  LoginFillDeliveryKind,
+  type LoginFillDelivery,
+} from '../../../../nook-web-extension/src/content/autofill/login-fill-runtime-adapter'
 
 const workflow: PasswordFormObservation = {
   root: document,
@@ -320,6 +329,7 @@ const authenticatorSetupSnapshot = {
 beforeEach(() => {
   document.body.replaceChildren()
   vi.clearAllMocks()
+  actionMocks.scheduleScan.mockReset()
   widgetState.dismissed = false
   widgetState.credentialActuation = WidgetCredentialActuation.Idle
   actionMocks.performRevalidation.mockImplementation(async (request) => {
@@ -336,7 +346,39 @@ beforeEach(() => {
   })
 })
 
+class UnavailableLoginRevealFixture {
+  async verify(): Promise<void> {
+    const unavailable: LoginFillDelivery = {
+      kind: LoginFillDeliveryKind.Unavailable,
+    }
+    actionMocks.sendLoginFill.mockResolvedValueOnce(unavailable)
+    const request: Parameters<
+      typeof loginPasskeyInteraction.fillAndSubmitAccount
+    >[0] = {
+      account: {
+        vaultStoreId: 'vault',
+        secretId: 'login',
+        authorizationGeneration: 'epoch-1',
+      },
+      workflow,
+      approval,
+      ...controls(),
+    }
+    const outcome = await loginPasskeyInteraction.fillAndSubmitAccount(request)
+    expect(outcome).toBe(false)
+    expect(actionMocks.scheduleScan).not.toHaveBeenCalled()
+    expect(actionMocks.fillLoginCredentials).not.toHaveBeenCalled()
+    expect(actionMocks.submitLoginForm).not.toHaveBeenCalled()
+    expect(widgetState.credentialActuation).toBe(WidgetCredentialActuation.Idle)
+  }
+}
+const unavailableLoginRevealFixture = new UnavailableLoginRevealFixture()
+
 describe('revalidated authentication actions', () => {
+  test(
+    'does not schedule a credential-stage scan or submit when reveal is unavailable',
+    unavailableLoginRevealFixture.verify.bind(unavailableLoginRevealFixture),
+  )
   test('failed login preparation retains idle scan ownership and available admission without filling', () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -403,6 +445,18 @@ describe('revalidated authentication actions', () => {
       kind: 'delivered',
       response: { ok: true, username: 'person', password: 'secret' },
     })
+    const password = document.createElement('input')
+    password.type = 'password'
+    actionMocks.submitLoginForm.mockImplementationOnce(() => {
+      document.body.append(password)
+      return FormSubmissionResult.Submitted
+    })
+    actionMocks.scheduleScan.mockImplementationOnce(() => {
+      expect(widgetState.credentialActuation).toBe(
+        WidgetCredentialActuation.Idle,
+      )
+      expect(password.isConnected).toBe(true)
+    })
 
     await expect(
       loginPasskeyInteraction.fillAndSubmitAccount({
@@ -431,6 +485,7 @@ describe('revalidated authentication actions', () => {
     expect(actionMocks.fillLoginCredentials).toHaveBeenCalledOnce()
     expect(actionMocks.submitLoginForm).toHaveBeenCalledOnce()
     expect(widgetState.credentialActuation).toBe(WidgetCredentialActuation.Idle)
+    expect(actionMocks.scheduleScan).toHaveBeenCalledOnce()
   })
 
   test('authorizes OTP release before filling the returned code', async () => {
@@ -639,6 +694,7 @@ describe('revalidated authentication actions', () => {
     expect(actionMocks.clearLoginCredentials).toHaveBeenCalledOnce()
     expect(response.password).toBe('')
     expect(widgetState.credentialActuation).toBe(WidgetCredentialActuation.Idle)
+    expect(actionMocks.scheduleScan).toHaveBeenCalledOnce()
   })
 
   test('clears filled credentials when fill revalidation throws after actuation', async () => {
