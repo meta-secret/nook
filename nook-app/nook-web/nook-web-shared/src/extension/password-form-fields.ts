@@ -259,8 +259,7 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
     while (container && depth < 6) {
       ancestorIdentities.push(
         [
-          container.id,
-          container.className,
+          new AuthenticationContainerIdentity(container).text,
           ((v) => (v ? v : ""))(container.getAttribute("role")),
         ].join(" "),
       );
@@ -294,10 +293,9 @@ class PasswordFieldDiscovery extends PasswordFormUnownedScopeDiscovery {
     return {
       formIdentity: form
         ? [
-            form.id,
-            form.className,
+            new AuthenticationContainerIdentity(form).text,
             ((v) => (v ? v : ""))(form.getAttribute("action")),
-            form.name,
+            form.getAttribute("name"),
           ].join(" ")
         : "",
       ancestorIdentities,

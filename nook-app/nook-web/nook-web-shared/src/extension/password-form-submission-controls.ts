@@ -6,6 +6,7 @@ import {
   type AirbnbLoginModalRouteRequest,
 } from "./airbnb-login-modal-route";
 import { authenticationFactBounds } from "./authentication-fact-bounds";
+import { AuthenticationContainerIdentity } from "./password-form-container-identity";
 import {
   authenticationAdvanceControlSelector,
   semanticSubmitControlSelector,
@@ -159,7 +160,7 @@ class AuthenticationSubmissionControls extends AuthenticationSubmissionSemantics
 
   rawOwnedFormIdentity(form: HTMLFormElement): string {
     return [
-      form.id,
+      new AuthenticationContainerIdentity(form).id,
       ((v) => (v ? v : ""))(form.getAttribute("name")),
       ((v) => (v ? v : ""))(form.getAttribute("class")),
       ((v) => (v ? v : ""))(form.getAttribute("aria-label")),
@@ -181,8 +182,7 @@ class AuthenticationSubmissionControls extends AuthenticationSubmissionSemantics
     const element = owner.ownerDocument?.defaultView?.Element;
     if (!element || !(owner instanceof element)) return "";
     return [
-      owner.id,
-      owner.className,
+      new AuthenticationContainerIdentity(owner).text,
       ((v) => (v ? v : ""))(owner.getAttribute("name")),
       ((v) => (v ? v : ""))(owner.getAttribute("role")),
       ((v) => (v ? v : ""))(owner.getAttribute("aria-label")),
@@ -467,7 +467,9 @@ class AuthenticationSubmissionControls extends AuthenticationSubmissionSemantics
         ? query.root
         : false;
     const formIdentity = [
-      identityContainer ? identityContainer.id : "",
+      identityContainer
+        ? new AuthenticationContainerIdentity(identityContainer).id
+        : "",
       identityContainer
         ? ((v) => (v ? v : ""))(identityContainer.getAttribute("name"))
         : "",
