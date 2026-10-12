@@ -31,6 +31,7 @@ import {
   waitForVaultUnlocked,
   wipeDeviceIdentity,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  openVaultPage,
 } from './helpers'
 import { createLocalE2eFileSyncVaultStub } from './file-sync-stub'
 
@@ -104,7 +105,7 @@ test.describe('vault password envelope (local)', () => {
     await expect(page.getByTestId('vault-admin-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await expect(page).toHaveURL(/\/admin$/)
+    await expect(page).toHaveURL(/\/vault\/passwords$/)
     await expect(page.getByTestId('login-gate')).not.toBeVisible()
 
     // Simulate lost device keys: wipe identity from nook_db but keep providers.
@@ -125,7 +126,7 @@ test.describe('vault password envelope (local)', () => {
     await expect(page.getByTestId('vault-admin-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await expect(page).toHaveURL(/\/admin$/)
+    await expect(page).toHaveURL(/\/vault\/passwords$/)
   })
 
   test('rejects short passwords client-side', async ({ page }) => {
@@ -280,7 +281,7 @@ test.describe('vault password envelope (local)', () => {
     await page.getByTestId('confirm-remove-vault-password').click()
     await expectNoVaultPasswords(page, { timeout: UI_TIMEOUT_MS })
 
-    await page.getByTestId('vault-secrets-tab').click()
+    await openVaultPage(page)
     await assertVaultReady(page)
 
     const row = page.getByTestId('secret-row').filter({ hasText: key })
@@ -426,7 +427,7 @@ test.describe('enrollment link deep link (local)', () => {
       .fill('manual-link-pass')
     await pageB.getByTestId('submit-enrollment-code-btn').click()
     await waitForVaultUnlocked(pageB, ENROLLMENT_UNLOCK_TIMEOUT_MS)
-    await expect(pageB.getByTestId('vault-switcher-trigger')).toContainText(
+    await expect(pageB.getByTestId('page-bar-title')).toContainText(
       'Test vault',
     )
     const row = pageB.getByTestId('secret-row').filter({ hasText: secretKey })

@@ -7,10 +7,14 @@ import {
 
 export enum WorkspaceRoute {
   Vault = "vault",
-  DevicesAccess = "devices-access",
-  Admin = "admin",
-  Onboard = "onboard",
+  Identities = "identities",
+  Keys = "keys",
+  Vaults = "vaults",
   Settings = "settings",
+  Devices = "devices",
+  Sync = "sync",
+  Passwords = "passwords",
+  Import = "import",
   Help = "help",
 }
 
@@ -25,12 +29,38 @@ export type WorkspaceRouteLookup =
 
 const WORKSPACE_PATHS: Record<WorkspaceRoute, string> = {
   [WorkspaceRoute.Vault]: "/vault",
-  [WorkspaceRoute.DevicesAccess]: "/devices-access",
-  [WorkspaceRoute.Admin]: "/admin",
-  [WorkspaceRoute.Onboard]: "/onboard",
-  [WorkspaceRoute.Settings]: "/settings",
+  [WorkspaceRoute.Identities]: "/identities",
+  [WorkspaceRoute.Keys]: "/identity/keys",
+  [WorkspaceRoute.Vaults]: "/identity/vaults",
+  [WorkspaceRoute.Settings]: "/identity/settings",
+  [WorkspaceRoute.Devices]: "/vault/devices",
+  [WorkspaceRoute.Sync]: "/vault/sync",
+  [WorkspaceRoute.Passwords]: "/vault/passwords",
+  [WorkspaceRoute.Import]: "/vault/import",
   [WorkspaceRoute.Help]: "/help",
 };
+
+/**
+ * Paths from the previous workspace layout. They keep resolving so bookmarks
+ * and enrollment links land on the page that now owns the same controls.
+ */
+const LEGACY_WORKSPACE_PATHS: Readonly<Record<string, WorkspaceRoute>> = {
+  "/": WorkspaceRoute.Vault,
+  "/app": WorkspaceRoute.Vault,
+  "/simple": WorkspaceRoute.Vault,
+  "/sentinel": WorkspaceRoute.Vault,
+  "/devices-access": WorkspaceRoute.Keys,
+  "/admin": WorkspaceRoute.Vaults,
+  "/onboard": WorkspaceRoute.Devices,
+  "/settings": WorkspaceRoute.Settings,
+};
+
+export enum WorkspaceNavigationOutcome {
+  /** History moved to the destination and listeners were notified. */
+  Navigated = "navigated",
+  /** Already at the destination (or no browser history); nothing changed. */
+  Unchanged = "unchanged",
+}
 
 export enum WorkspaceNavigationFailureKind {
   HistoryUpdateFailed = "history-update-failed",
@@ -49,8 +79,9 @@ export class WorkspaceLocation {
 
     return new ApplicationRoutePresentation(WORKSPACE_PATHS[route]).appPath();
   }
-  navigate(): Result<void, WorkspaceNavigationFailure> {
-    if (!("window" in globalThis)) return ok();
+  navigate(): Result<WorkspaceNavigationOutcome, WorkspaceNavigationFailure> {
+    if (!("window" in globalThis))
+      return ok(WorkspaceNavigationOutcome.Unchanged);
     const path = this.path;
     try {
       const nextUrl = new URL(path, window.location.href);
@@ -59,11 +90,11 @@ export class WorkspaceLocation {
         window.location.search === "" &&
         window.location.hash === ""
       )
-        return ok();
+        return ok(WorkspaceNavigationOutcome.Unchanged);
       const historyState: Parameters<typeof window.history.pushState>[0] = {};
       window.history.pushState(historyState, "", path);
       window.dispatchEvent(new PopStateEvent("popstate"));
-      return ok();
+      return ok(WorkspaceNavigationOutcome.Navigated);
     } catch {
       return err(new WorkspaceNavigationFailure());
     }
@@ -79,43 +110,25 @@ export class WorkspacePath {
     const relativePath =
       new ApplicationPath(pathname).relative.replace(/\/$/, "") || "/";
     const normalized = relativePath.replace(/^\/(?:simple|sentinel)(?=\/)/, "");
-    switch (normalized) {
-      case "/":
-      case "/app":
-      case "/simple":
-      case "/sentinel":
-      case "/vault":
-        return {
-          kind: WorkspaceRouteLookupKind.Workspace,
-          route: WorkspaceRoute.Vault,
-        };
-      case "/devices-access":
-        return {
-          kind: WorkspaceRouteLookupKind.Workspace,
-          route: WorkspaceRoute.DevicesAccess,
-        };
-      case "/admin":
-        return {
-          kind: WorkspaceRouteLookupKind.Workspace,
-          route: WorkspaceRoute.Admin,
-        };
-      case "/onboard":
-        return {
-          kind: WorkspaceRouteLookupKind.Workspace,
-          route: WorkspaceRoute.Onboard,
-        };
-      case "/settings":
-        return {
-          kind: WorkspaceRouteLookupKind.Workspace,
-          route: WorkspaceRoute.Settings,
-        };
-      case "/help":
-        return {
-          kind: WorkspaceRouteLookupKind.Workspace,
-          route: WorkspaceRoute.Help,
-        };
-      default:
-        return { kind: WorkspaceRouteLookupKind.Unknown };
+    const legacy = LEGACY_WORKSPACE_PATHS[normalized];
+    if (legacy) {
+      return { kind: WorkspaceRouteLookupKind.Workspace, route: legacy };
     }
+    for (const route of Object.values(WorkspaceRoute)) {
+      if (WORKSPACE_PATHS[route] === normalized) {
+        return { kind: WorkspaceRouteLookupKind.Workspace, route };
+      }
+    }
+    return { kind: WorkspaceRouteLookupKind.Unknown };
   }
+}
+
+/** Whether the current browser location is the identity Keys page. */
+export function keysRouteOpen(): boolean {
+  if (!("window" in globalThis)) return false;
+  const route = new WorkspacePath(window.location.pathname).route;
+  return (
+    route.kind === WorkspaceRouteLookupKind.Workspace &&
+    route.route === WorkspaceRoute.Keys
+  );
 }

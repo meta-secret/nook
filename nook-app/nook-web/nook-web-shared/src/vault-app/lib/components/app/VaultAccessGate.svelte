@@ -19,11 +19,7 @@
   import PasskeyAuthOverlay from '$lib/components/PasskeyAuthOverlay.svelte'
   import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
   import { VaultStatusBarVariant } from '$lib/components/vault-status-bar-state'
-  import {
-    WorkspaceRoute,
-    WorkspaceRouteLookupKind,
-    WorkspacePath,
-  } from '$lib/app/workspace-route'
+  import { keysRouteOpen } from '$lib/app/workspace-route'
   import type { VaultState } from '$lib/vault.svelte'
   import type { ProviderSetupRequest } from '$lib/auth/providers'
   import type { LoginVaultExtensionPairingStatusEntry } from '$lib/components/login/login-vault-extension-pairing-status'
@@ -90,12 +86,7 @@
   const appVersion = '0.1.0'
 
   function devicesAccessRouteOpen(): boolean {
-    if (!('window' in globalThis)) return false
-    const route = new WorkspacePath(window.location.pathname).route
-    return (
-      route.kind === WorkspaceRouteLookupKind.Workspace &&
-      route.route === WorkspaceRoute.DevicesAccess
-    )
+    return keysRouteOpen()
   }
 
   function sentinelInvitationOpen(): boolean {

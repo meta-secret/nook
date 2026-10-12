@@ -1,5 +1,5 @@
-import { copyFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { copyFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import type { Connect } from "vite";
 import type { Plugin } from "vitest/config";
 import { vaultAppHeaders } from "./src/vault-app/security-headers.ts";
@@ -15,10 +15,32 @@ export const VAULT_WORKSPACE_OUTPUT_ALIASES = [
   "admin",
   "devices-access",
   "help",
+  "identities",
+  "identity/keys",
+  "identity/settings",
+  "identity/vaults",
   "onboard",
   "settings",
   "vault",
+  "vault/devices",
+  "vault/import",
+  "vault/passwords",
+  "vault/sync",
 ] as const;
+
+/** Copy the app shell to a route alias, creating nested route folders. */
+export function writeShellAlias(request: ShellAliasWrite): void {
+  const target = join(request.outDir, `${request.alias}.html`);
+  const folder: Parameters<typeof mkdirSync>[1] = { recursive: true };
+  mkdirSync(dirname(target), folder);
+  copyFileSync(request.shell, target);
+}
+
+export type ShellAliasWrite = {
+  readonly shell: string;
+  readonly outDir: string;
+  readonly alias: string;
+};
 
 export const VAULT_WORKSPACE_SPA_PATHS = VAULT_WORKSPACE_OUTPUT_ALIASES.map(
   (alias) => `/${alias}`,
@@ -77,7 +99,8 @@ export function vaultSpaPlugin(options: VaultSpaOptions): Plugin {
       const shell = join(outDir, "index.html");
       copyFileSync(shell, join(outDir, "404.html"));
       for (const alias of options.outputAliases) {
-        copyFileSync(shell, join(outDir, `${alias}.html`));
+        const aliasWrite: ShellAliasWrite = { shell, outDir, alias };
+        writeShellAlias(aliasWrite);
       }
       writeFileSync(join(outDir, "_headers"), vaultAppHeaders());
       writeFileSync(join(outDir, "robots.txt"), "User-agent: *\nDisallow: /\n");

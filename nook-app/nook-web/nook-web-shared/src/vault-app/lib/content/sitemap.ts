@@ -160,6 +160,8 @@ Disallow: /admin
 Disallow: /devices-access
 Disallow: /extension-connect
 Disallow: /help
+Disallow: /identities
+Disallow: /identity/
 Disallow: /logs
 Disallow: /onboard
 Disallow: /privacy

@@ -99,9 +99,7 @@ test('discovers an existing Private Drive v2 vault, distinguishes an empty provi
     await setupGoogleDriveProvider(existingPage, PRIVATE_V2_DRIVE_FILE_NAME)
     await existingPage.getByTestId('connect-provider-btn').click()
     try {
-      await expect(
-        existingPage.getByTestId('devices-access-nudge'),
-      ).toBeVisible()
+      await expect(existingPage.getByTestId('identities-hub')).toBeVisible()
       await expect(existingPage.locator('body')).toContainText(
         'Join this vault',
       )

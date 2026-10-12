@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { WorkspaceLocation } from "$lib/app/workspace-route";
+  import { WorkspaceLocation, keysRouteOpen } from "$lib/app/workspace-route";
   import type { SentinelActionResult } from "$lib/vault/sentinel-genesis";
   type EnrollmentCodeUnlock = {
     readonly code: string;
@@ -12,18 +12,17 @@
   };
 
   import { I18N_KEYS } from "../../../generated/i18n-keys";
-  import { KeyRound, RefreshCw, ShieldCheck } from "@lucide/svelte";
+  import { RefreshCw, ShieldCheck } from "@lucide/svelte";
   import { onMount, tick, untrack, type ComponentProps } from "svelte";
   import type { VaultState } from "$lib/vault.svelte";
   import {
     type DevicesAccessHostMount,
     DevicesAccessHostMountKind,
-    DevicesAccessNudgePreference,
     DevicesAccessTriggerKind,
-    StoredDevicesAccessNudge,
-    DevicesAccessNudgeStorage,
-    DevicesAccessNudgePresentation,
+    type KeysPageLeave,
   } from "./devices-access-dashboard-state";
+  import IdentitiesHub from "$lib/components/identities/IdentitiesHub.svelte";
+  import PageBar from "$lib/components/workspace/PageBar.svelte";
   import { type StartSentinelGenesisArgs } from "$app-wasm";
   import { Button } from "$lib/components/ui/button";
   import type {
@@ -38,13 +37,6 @@
     LocalFolderHandleKind,
     oauth_access_token,
   } from "$lib/auth/providers";
-  import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-  } from "$lib/components/ui/card";
   import ProductIntro from "$lib/components/ProductIntro.svelte";
   import DevicesAccessDashboard from "$lib/components/DevicesAccessDashboard.svelte";
   import {
@@ -236,38 +228,15 @@
 
   let enrollmentPanelOpen = $state(false);
   let showProviderSetupLink = $state(false);
-  function loginDevicesAccessRouteOpen(): boolean {
-    if (!("window" in globalThis)) return false;
-    const route = new WorkspacePath(window.location.pathname).route;
-    return (
-      route.kind === WorkspaceRouteLookupKind.Workspace &&
-      route.route === WorkspaceRoute.DevicesAccess
-    );
-  }
-
-  let devicesAccessOpen = $state(loginDevicesAccessRouteOpen());
+  let devicesAccessOpen = $state(keysRouteOpen());
   let devicesAccessTrigger = $state(DevicesAccessTriggerKind.Header);
   let devicesAccessReturnRoute = $state(WorkspaceRoute.Vault);
   let devicesAccessHost = $state<DevicesAccessHostMount>({
     kind: DevicesAccessHostMountKind.Unmounted,
   });
-  let devicesAccessNudgePreference = $state(
-    DevicesAccessNudgePreference.Visible,
-  );
-  const devicesAccessNudgeStorageKey = "nook.devices-access.nudge-dismissed.v1";
-
-  function dismissDevicesAccessNudge(): void {
-    focusHostButton("login-devices-access");
-    devicesAccessNudgePreference = DevicesAccessNudgePreference.Dismissed;
-    try {
-      localStorage.setItem(
-        devicesAccessNudgeStorageKey,
-        DevicesAccessNudgePreference.Dismissed,
-      );
-    } catch {
-      // Browser preference only. Private browsing may reject local storage.
-    }
-  }
+  let leaveKeysPage = $state<KeysPageLeave>();
+  let accessSheet = $state<HTMLDivElement>();
+  let managedIdentityId = "";
 
   function captureDevicesAccessHost(element: HTMLDivElement) {
     devicesAccessHost = {
@@ -286,6 +255,28 @@
     devicesAccessHost.element
       .querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`)
       ?.focus();
+  }
+
+  /** Return focus to the card's Manage button once the cards have rendered. */
+  async function focusIdentityManageWhenAvailable(): Promise<void> {
+    const preferred = managedIdentityId;
+    for (let frame = 0; frame < 60; frame += 1) {
+      if (devicesAccessHost.kind === DevicesAccessHostMountKind.Unmounted)
+        return;
+      const host = devicesAccessHost.element;
+      const target =
+        host.querySelector<HTMLButtonElement>(
+          `[data-identity-id="${CSS.escape(preferred)}"] [data-testid="identity-manage"]`,
+        ) ??
+        host.querySelector<HTMLButtonElement>('[data-testid="identity-manage"]');
+      if (target) {
+        target.focus();
+        return;
+      }
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => resolve()),
+      );
+    }
   }
 
   async function focusIdentityContextWhenAvailable(): Promise<void> {
@@ -317,9 +308,7 @@
         ? currentRoute.route
         : WorkspaceRoute.Vault;
     devicesAccessTrigger = trigger;
-    const navigation = new WorkspaceLocation(
-      WorkspaceRoute.DevicesAccess,
-    ).navigate();
+    const navigation = new WorkspaceLocation(WorkspaceRoute.Keys).navigate();
     if (navigation.isErr()) {
       vault.errorMsg = vault.t(navigation.error.translationKey);
       return;
@@ -328,13 +317,13 @@
     const applyWorkspaceRouteArgs: Parameters<
       VaultWorkspaceActions["applyWorkspaceRoute"]
     >[0] = {
-      route: WorkspaceRoute.DevicesAccess,
+      route: WorkspaceRoute.Keys,
     };
     new VaultWorkspaceActions(vault).applyWorkspaceRoute(
       applyWorkspaceRouteArgs,
     );
     await tick();
-    focusHostButton("devices-access-back");
+    focusHostButton("page-bar-back");
   }
 
   async function closeDevicesAccess(): Promise<void> {
@@ -355,36 +344,47 @@
       applyWorkspaceRouteArgs2,
     );
     await tick();
-    const testId =
-      devicesAccessTrigger === DevicesAccessTriggerKind.Nudge
-        ? "devices-access-nudge-review"
-        : devicesAccessTrigger === DevicesAccessTriggerKind.IdentityContext
-          ? "login-review-identities"
-          : "login-devices-access";
-    focusHostButton(testId);
     if (devicesAccessTrigger === DevicesAccessTriggerKind.IdentityContext) {
+      focusHostButton("login-review-identities");
       await focusIdentityContextWhenAvailable();
+      return;
     }
+    await focusIdentityManageWhenAvailable();
+  }
+
+  /** A vault row on an identity card selects that vault for unlocking. */
+  async function openVaultFromCard(storeId: string): Promise<void> {
+    if (showProviderSetupLink) {
+      vault.cancelExistingVaultOpen();
+      showProviderSetupLink = false;
+    }
+    if (addProviderOpen) onCancelAddProvider?.();
+    if (showSetup) onCancelSetup();
+    await vault.chooseLoginVault(storeId);
+    await tick();
+    const scrollRequest: ScrollIntoViewOptions = {
+      block: "nearest",
+      behavior: "smooth",
+    };
+    accessSheet?.scrollIntoView(scrollRequest);
+  }
+
+  function manageIdentity(identityId: string): void {
+    managedIdentityId = identityId;
+    vault.identityFocus = identityId;
+    void openDevicesAccess(DevicesAccessTriggerKind.Header);
+  }
+
+  function newIdentity(): void {
+    vault.identityCreationRequested = true;
+    void openDevicesAccess(DevicesAccessTriggerKind.Header);
   }
 
   onMount(() => {
     const syncDevicesAccessRoute = () => {
-      devicesAccessOpen = loginDevicesAccessRouteOpen();
+      devicesAccessOpen = keysRouteOpen();
     };
     window.addEventListener("popstate", syncDevicesAccessRoute);
-    try {
-      const readDevicesAccessNudgeStorageArgs: ConstructorParameters<
-        typeof DevicesAccessNudgeStorage
-      >[0] = {
-        storage: localStorage,
-        storageKey: devicesAccessNudgeStorageKey,
-      };
-      devicesAccessNudgePreference = new StoredDevicesAccessNudge(
-        new DevicesAccessNudgeStorage(readDevicesAccessNudgeStorageArgs).state,
-      ).preference;
-    } catch {
-      devicesAccessNudgePreference = DevicesAccessNudgePreference.Visible;
-    }
     return () => window.removeEventListener("popstate", syncDevicesAccessRoute);
   });
 
@@ -450,6 +450,11 @@
     }
     return { kind: LoginVaultEntryKind.Unavailable };
   });
+  const selectedCardStoreId = $derived(
+    showLocalUnlock && activeLoginVault.kind === LoginVaultEntryKind.Available
+      ? activeLoginVault.entry.storeId
+      : "",
+  );
   const activeVaultExtensionPairingStatus = $derived(
     statusForActiveVault(extensionConnectPairingStatusEntries)(
       activeLoginVault,
@@ -543,73 +548,44 @@
 
 <div
   use:captureDevicesAccessHost
-  class="w-full space-y-3 animate-in fade-in duration-300"
+  class="w-full animate-in fade-in duration-300"
   data-testid="login-gate"
   data-local-vault={vault.localVaultPresent ? "true" : "false"}
 >
   {#if devicesAccessOpen && !isInitializing}
-    <DevicesAccessDashboard {vault} onBack={() => void closeDevicesAccess()} />
-  {:else if !devicesAccessOpen}
-    <div class="flex justify-end">
-      <Button
-        type="button"
-        variant="ghost"
-        class="min-h-11 gap-2 text-muted-foreground hover:text-foreground"
-        data-testid="login-devices-access"
-        onclick={() => void openDevicesAccess(DevicesAccessTriggerKind.Header)}
-      >
-        <KeyRound class="size-4" />
-        {vault.t(I18N_KEYS.DevicesAccessTitle)}
-      </Button>
+    <div class="grid min-w-0 grid-cols-1 gap-5" data-testid="login-keys-page">
+      <PageBar
+        {vault}
+        eyebrow={vault.t(I18N_KEYS.WorkspaceManageIdentity)}
+        title={vault.t(I18N_KEYS.WorkspaceSectionKeys)}
+        testId="manage-page-bar"
+        onBack={() =>
+          leaveKeysPage ? void leaveKeysPage() : void closeDevicesAccess()}
+      />
+      <p class="max-w-[64ch] text-sm text-pretty text-muted-foreground">
+        {vault.t(I18N_KEYS.WorkspaceSectionKeysDescription)}
+      </p>
+      <DevicesAccessDashboard
+        {vault}
+        onBack={() => void closeDevicesAccess()}
+        onLeaveReady={(leave: KeysPageLeave) => (leaveKeysPage = leave)}
+      />
     </div>
-
-    {#if (() => {
-      const shouldShowDevicesAccessNudgeArgs: ConstructorParameters<typeof DevicesAccessNudgePresentation>[0] = { hasActiveLocalVault: vault.localVaultPresent, localVaultCount: vault.localVaults.length, preference: devicesAccessNudgePreference };
-      return new DevicesAccessNudgePresentation(shouldShowDevicesAccessNudgeArgs).visible;
-    })()}
-      <aside
-        class="flex flex-col gap-3 rounded-xl border border-primary/20 bg-primary/8 p-4 sm:flex-row sm:items-center sm:justify-between"
-        data-testid="devices-access-nudge"
-      >
-        <div class="max-w-[65ch]">
-          <p class="text-sm font-medium text-foreground">
-            {vault.t(I18N_KEYS.DevicesAccessNudgeTitle)}
-          </p>
-          <p class="mt-1 text-sm text-muted-foreground">
-            {vault.t(I18N_KEYS.DevicesAccessNudgeDescription)}
-          </p>
-        </div>
-        <div class="flex shrink-0 flex-col items-start gap-2 sm:items-end">
-          <Button
-            type="button"
-            variant="outline"
-            class="min-h-11"
-            data-testid="devices-access-nudge-review"
-            onclick={() =>
-              void openDevicesAccess(DevicesAccessTriggerKind.Nudge)}
-          >
-            {vault.t(I18N_KEYS.DevicesAccessReviewAction)}
-          </Button>
-          <label
-            class="flex min-h-7 cursor-pointer items-center gap-2 text-xs text-muted-foreground"
-          >
-            <input
-              type="checkbox"
-              class="size-4 rounded border-input accent-primary"
-              data-testid="devices-access-dont-show-again"
-              onchange={(event) => {
-                if (event.currentTarget.checked) dismissDevicesAccessNudge();
-              }}
-            />
-            {vault.t(I18N_KEYS.DevicesAccessDontShowAgain)}
-          </label>
-        </div>
-      </aside>
-    {/if}
-
+  {:else if !devicesAccessOpen}
+    <IdentitiesHub
+      {vault}
+      selectedStoreId={selectedCardStoreId}
+      showCards={!showQrOnboarding}
+      busy={isVerifying || isInitializing}
+      onOpenVault={(storeId: string) => void openVaultFromCard(storeId)}
+      onManage={manageIdentity}
+      onNewIdentity={newIdentity}
+      onUseIdentity={manageIdentity}
+    >
+    <div class="grid min-w-0 grid-cols-1 gap-3" bind:this={accessSheet}>
     {#if vault.sessionExpiredByIdle}
       <p
-        class="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-100"
+        class="nk-banner nk-banner-warning px-4 py-3 text-sm text-foreground"
         data-testid="login-session-expired"
         role="status"
       >
@@ -753,14 +729,10 @@
         </p>
       {/if}
 
-      <Card
-        class="gap-0 border-border bg-card/80 py-0 shadow-lg shadow-black/20 backdrop-blur-sm overflow-hidden"
-      >
-        <CardHeader class="border-b border-border/60 px-6 pb-4 pt-5">
+      <section class="nk-frame-sheet min-w-0" data-testid="login-access-sheet">
+        <header class="border-b border-border px-5 pb-4 pt-5 sm:px-6">
           <div class="space-y-1">
-            <CardTitle
-              class="text-lg font-semibold tracking-tight text-foreground"
-            >
+            <h2 class="text-lg font-semibold tracking-tight text-foreground">
               {#if showVaultPicker}
                 {vault.t(I18N_KEYS.LoginVaultPickerTitle)}
               {:else if showLocalUnlock}
@@ -784,36 +756,36 @@
               {:else}
                 {vault.t(I18N_KEYS.OnboardingSetupStorage)}
               {/if}
-            </CardTitle>
+            </h2>
             {#if isUnlocking}
-              <CardDescription class="text-pretty"
-                >{vault.t(I18N_KEYS.LoginUnlocking)}</CardDescription
+              <p class="text-sm text-pretty text-muted-foreground"
+                >{vault.t(I18N_KEYS.LoginUnlocking)}</p
               >
             {:else if showVaultPicker}
-              <CardDescription class="text-pretty">
+              <p class="text-sm text-pretty text-muted-foreground">
                 {vault.t(I18N_KEYS.LoginVaultPickerSubtitle)}
-              </CardDescription>
+              </p>
             {:else if showLocalUnlock}
-              <CardDescription class="text-pretty">
+              <p class="text-sm text-pretty text-muted-foreground">
                 {vault.t(I18N_KEYS.LoginOpenVaultSubtitle)}
-              </CardDescription>
+              </p>
             {:else if showSetup && setupIs("github")}
-              <CardDescription class="text-pretty">
+              <p class="text-sm text-pretty text-muted-foreground">
                 {vault.t(I18N_KEYS.OnboardingGithubDescription)}
-              </CardDescription>
+              </p>
             {:else if showSetup}
-              <CardDescription class="text-pretty">
+              <p class="text-sm text-pretty text-muted-foreground">
                 {vault.t(I18N_KEYS.OnboardingLocalDescription)}
-              </CardDescription>
+              </p>
             {:else if addProviderOpen}
-              <CardDescription class="text-pretty">
+              <p class="text-sm text-pretty text-muted-foreground">
                 {vault.t(I18N_KEYS.OnboardingAnotherProvider)}
-              </CardDescription>
+              </p>
             {/if}
           </div>
-        </CardHeader>
+        </header>
 
-        <CardContent class="px-6 pb-5 pt-4 sm:pb-6">
+        <div class="px-5 pb-5 pt-4 sm:px-6 sm:pb-6">
           {#if showSentinelCeremony && !showVaultPicker}
             <SentinelCeremonyPanel
               {vault}
@@ -979,8 +951,8 @@
               {onBeginSetup}
             />
           {/if}
-        </CardContent>
-      </Card>
+        </div>
+      </section>
 
       {#if showEnrollmentAccess}
         <LoginEnrollmentPanel
@@ -993,5 +965,7 @@
         />
       {/if}
     {/if}
+    </div>
+    </IdentitiesHub>
   {/if}
 </div>

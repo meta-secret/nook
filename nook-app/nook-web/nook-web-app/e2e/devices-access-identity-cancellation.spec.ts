@@ -1,7 +1,7 @@
 import { DeviceProtectionStatus } from '$app-wasm'
 import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures'
-import { connectLocalVault, installPasskeyMock } from './helpers'
+import { connectLocalVault, installPasskeyMock, openKeysPage } from './helpers'
 
 test.describe('devices and access identity cancellation', () => {
   test.beforeEach(async ({ page }) => {
@@ -10,7 +10,7 @@ test.describe('devices and access identity cancellation', () => {
     })
     await installPasskeyMock(page)
     await connectLocalVault(page)
-    await page.getByTestId('header-devices-access-btn').click()
+    await openKeysPage(page)
     await page.getByTestId('devices-access-add-identity').click()
     await expect(
       page.getByTestId('devices-access-add-identity-flow'),
@@ -53,7 +53,7 @@ test.describe('devices and access identity cancellation', () => {
     await page.getByTestId('device-protection-setup-btn').click()
     await expect(page.getByTestId('device-protection-pin-input')).toBeVisible()
 
-    await page.getByTestId('devices-access-back').click()
+    await page.getByTestId('page-bar-back').click()
 
     await expect(page.getByTestId('devices-access-dashboard')).toHaveCount(0)
     await expect.poll(() => deviceProtectionVerifying(page)).toBe(false)
@@ -74,12 +74,12 @@ test.describe('devices and access identity cancellation', () => {
     })
     await page.getByTestId('device-protection-setup-btn').click()
 
-    await page.getByTestId('devices-access-back').click()
+    await page.getByTestId('page-bar-back').click()
 
     await expect(page.getByTestId('devices-access-dashboard')).toHaveCount(0)
     await expect.poll(() => deviceProtectionVerifying(page)).toBe(false)
     await expect.poll(() => identityCreationPending(page)).toBe(false)
-    await page.getByTestId('header-devices-access-btn').click()
+    await openKeysPage(page)
     await expect(
       page.getByTestId('devices-access-identity-option'),
     ).toHaveCount(1)

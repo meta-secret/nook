@@ -173,15 +173,15 @@
 
 <div
   class={isQuiet
-    ? 'border-t border-foreground/15 bg-muted/20 px-3 py-2.5 dark:border-foreground/20 dark:bg-muted/10'
-    : 'border-t border-border/35 bg-muted/25 px-4 py-2.5 sm:border-border/60 sm:bg-muted/30 sm:px-5'}
+    ? 'border-t border-border px-1 py-2.5 font-mono'
+    : 'border-t border-border px-1 py-2.5 font-mono'}
   data-testid="vault-status-bar"
 >
   <div class="flex flex-col gap-2">
     <div
       class={isQuiet
         ? 'flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-[11px]'
-        : 'flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-xs'}
+        : 'flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-[11px]'}
     >
       <div class="flex min-w-0 items-center gap-2 text-muted-foreground">
         {#if showStorageIcon}
@@ -328,7 +328,7 @@
 
     {#if syncConflictLabel}
       <div
-        class="flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-300"
+        class="nk-banner nk-banner-warning flex items-center gap-2 px-2.5 py-1.5 font-sans text-xs text-foreground"
         role="alert"
         data-testid="vault-sync-conflict-banner"
       >
@@ -351,16 +351,16 @@
 
     {#if successMsg}
       <div
-        class="flex items-center gap-2 rounded-md border border-primary/20 bg-primary/10 px-2.5 py-1.5 text-xs text-primary"
+        class="nk-banner nk-banner-success flex items-center gap-2 px-2.5 py-1.5 font-sans text-xs text-foreground"
         role="status"
         data-testid="app-success"
       >
-        <ShieldCheck class="size-3.5 shrink-0" />
+        <ShieldCheck class="size-3.5 shrink-0 text-success" />
         <span class="min-w-0 flex-1 truncate">{successMsg}</span>
         {#if onDismissSuccess}
           <button
             type="button"
-            class="shrink-0 rounded p-0.5 text-primary/70 hover:text-primary"
+            class="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
             aria-label={vault
               ? vault.t(I18N_KEYS.CommonDismissSuccess)
               : 'Dismiss success message'}
@@ -375,7 +375,7 @@
 
     {#if errorMsg}
       <div
-        class="flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive"
+        class="nk-banner flex items-center gap-2 border-l-destructive bg-destructive/5 px-2.5 py-1.5 font-sans text-xs text-destructive"
         role="alert"
         data-testid="vault-error"
       >

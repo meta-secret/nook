@@ -1,0 +1,248 @@
+import {
+  DeviceAccessProtectionKind,
+  NookIdentityLocalAccessKind,
+} from "$app-wasm";
+import type { IdentityDirectoryEntry } from "$lib/components/devices-access/identity-directory-view";
+
+/** What an identity card says about its session on this browser. */
+export enum IdentityCardStatus {
+  /** The current identity with an open vault session. */
+  Unlocked = "unlocked",
+  /** The current identity; opening one of its vaults unlocks it. */
+  Locked = "locked",
+  /** Stored on this browser but not the active identity. */
+  Inactive = "inactive",
+  /** Known from another installation; it cannot be used here. */
+  Elsewhere = "elsewhere",
+}
+
+export enum IdentityKeyKind {
+  None = "none",
+  Passkey = "passkey",
+  Pin = "pin",
+  Mixed = "mixed",
+}
+
+export enum IdentityVaultRowState {
+  /** The vault this session has open. */
+  Open = "open",
+  /** A vault on this browser that can be opened or switched to. */
+  Available = "available",
+  /** Known for this identity but not stored on this browser. */
+  Unavailable = "unavailable",
+}
+
+export type IdentityVaultRow = {
+  readonly storeId: string;
+  readonly label: string;
+  readonly state: IdentityVaultRowState;
+};
+
+export type IdentityCardView = {
+  readonly identityId: string;
+  readonly label: string;
+  readonly monogram: string;
+  readonly hue: number;
+  readonly fingerprint: readonly string[];
+  readonly keyCount: number;
+  readonly keyKind: IdentityKeyKind;
+  readonly status: IdentityCardStatus;
+  readonly current: boolean;
+  readonly vaults: readonly IdentityVaultRow[];
+};
+
+export type IdentityLocalVault = {
+  readonly storeId: string;
+  readonly label: string;
+};
+
+export type IdentityCardSource = {
+  readonly identities: readonly IdentityDirectoryEntry[];
+  readonly localVaults: readonly IdentityLocalVault[];
+  /** The open vault's store id, or empty when no vault session is open. */
+  readonly openStoreId: string;
+  readonly authenticated: boolean;
+};
+
+export type IdentityTotals = {
+  readonly identities: number;
+  readonly keys: number;
+  readonly vaults: number;
+  readonly unlocked: number;
+};
+
+type VaultRowStateRequest = {
+  readonly storeId: string;
+  readonly local: boolean;
+};
+
+type IdentityVaultRowsRequest = {
+  readonly entry: IdentityDirectoryEntry;
+  readonly current: boolean;
+};
+
+const FINGERPRINT_GROUPS = 4;
+const FINGERPRINT_GROUP_SIZE = 4;
+
+/** Stable, decorative hue so each identity keeps its monogram colour. */
+function identityHue(identityId: string): number {
+  let hash = 0;
+  for (const character of identityId) {
+    hash = (hash * 31 + character.charCodeAt(0)) % 360;
+  }
+  return hash;
+}
+
+/** Short, grouped identity fingerprint for recognition, not verification. */
+function identityFingerprint(identityId: string): string[] {
+  // Identity ids carry a short type prefix ("id_…"); the fingerprint is the
+  // random part after it.
+  const random = identityId.replace(/^[a-z]+_/, "");
+  const hex = random.replace(/[^0-9a-fA-F]/g, "").toUpperCase();
+  const source =
+    hex.length >= FINGERPRINT_GROUPS * FINGERPRINT_GROUP_SIZE
+      ? hex
+      : random.replace(/[^0-9a-zA-Z]/g, "").toUpperCase();
+  const groups: string[] = [];
+  for (let group = 0; group < FINGERPRINT_GROUPS; group += 1) {
+    const start = group * FINGERPRINT_GROUP_SIZE;
+    const chunk = source.slice(start, start + FINGERPRINT_GROUP_SIZE);
+    if (chunk.length > 0) groups.push(chunk);
+  }
+  return groups;
+}
+
+function keyKind(entry: IdentityDirectoryEntry): IdentityKeyKind {
+  let passkeys = 0;
+  let pins = 0;
+  for (const member of entry.members) {
+    const protection =
+      member.localProtection === DeviceAccessProtectionKind.Missing
+        ? member.protectionAssociation
+        : member.localProtection;
+    switch (protection) {
+      case DeviceAccessProtectionKind.PasskeyStandard:
+      case DeviceAccessProtectionKind.PasskeyAntiHacker:
+        passkeys += 1;
+        break;
+      case DeviceAccessProtectionKind.PinOrPassphrase:
+        pins += 1;
+        break;
+      case DeviceAccessProtectionKind.Missing:
+      case DeviceAccessProtectionKind.CompanionSession:
+        break;
+    }
+  }
+  if (passkeys > 0 && pins > 0) return IdentityKeyKind.Mixed;
+  if (passkeys > 0) return IdentityKeyKind.Passkey;
+  if (pins > 0) return IdentityKeyKind.Pin;
+  return IdentityKeyKind.None;
+}
+
+/** Project the identity directory and local vault catalog into cards. */
+export class IdentityCardProjection {
+  constructor(private readonly source: IdentityCardSource) {}
+
+  get cards(): IdentityCardView[] {
+    return this.source.identities.map((entry) => this.card(entry));
+  }
+
+  get totals(): IdentityTotals {
+    const cards = this.cards;
+    let keys = 0;
+    let vaults = 0;
+    let unlocked = 0;
+    for (const card of cards) {
+      keys += card.keyCount;
+      vaults += card.vaults.length;
+      if (card.status === IdentityCardStatus.Unlocked) unlocked += 1;
+    }
+    return { identities: cards.length, keys, vaults, unlocked };
+  }
+
+  private status(entry: IdentityDirectoryEntry): IdentityCardStatus {
+    switch (entry.localAccess) {
+      case NookIdentityLocalAccessKind.CurrentBrowser:
+        return this.source.authenticated
+          ? IdentityCardStatus.Unlocked
+          : IdentityCardStatus.Locked;
+      case NookIdentityLocalAccessKind.ThisBrowser:
+        return IdentityCardStatus.Inactive;
+      case NookIdentityLocalAccessKind.OtherInstallation:
+        return IdentityCardStatus.Elsewhere;
+    }
+  }
+
+  private vaultRows({
+    entry,
+    current,
+  }: IdentityVaultRowsRequest): IdentityVaultRow[] {
+    const local = new Map(
+      this.source.localVaults.map((vault) => [vault.storeId, vault.label]),
+    );
+    const rows: IdentityVaultRow[] = [];
+    const seen = new Set<string>();
+    for (const vault of entry.vaults) {
+      seen.add(vault.storeId);
+      const localLabel = local.get(vault.storeId);
+      const label = localLabel ?? vault.label;
+      const stateRequest: VaultRowStateRequest = {
+        storeId: vault.storeId,
+        local: current && local.has(vault.storeId),
+      };
+      const row: IdentityVaultRow = {
+        storeId: vault.storeId,
+        label,
+        state: this.vaultState(stateRequest),
+      };
+      rows.push(row);
+    }
+    // The current identity owns every vault in the local catalog, including
+    // ones it has not opened yet and so has no verified access record for.
+    if (current) {
+      for (const vault of this.source.localVaults) {
+        if (seen.has(vault.storeId)) continue;
+        const stateRequest: VaultRowStateRequest = {
+          storeId: vault.storeId,
+          local: true,
+        };
+        const row: IdentityVaultRow = {
+          storeId: vault.storeId,
+          label: vault.label,
+          state: this.vaultState(stateRequest),
+        };
+        rows.push(row);
+      }
+    }
+    return rows;
+  }
+
+  private vaultState({
+    storeId,
+    local,
+  }: VaultRowStateRequest): IdentityVaultRowState {
+    if (!local) return IdentityVaultRowState.Unavailable;
+    return this.source.authenticated && storeId === this.source.openStoreId
+      ? IdentityVaultRowState.Open
+      : IdentityVaultRowState.Available;
+  }
+
+  private card(entry: IdentityDirectoryEntry): IdentityCardView {
+    const current =
+      entry.localAccess === NookIdentityLocalAccessKind.CurrentBrowser;
+    const label = entry.label.trim();
+    const rowsRequest: IdentityVaultRowsRequest = { entry, current };
+    return {
+      identityId: entry.identityId,
+      label,
+      monogram: (label[0] ?? "?").toUpperCase(),
+      hue: identityHue(entry.identityId),
+      fingerprint: identityFingerprint(entry.identityId),
+      keyCount: entry.members.length,
+      keyKind: keyKind(entry),
+      status: this.status(entry),
+      current,
+      vaults: this.vaultRows(rowsRequest),
+    };
+  }
+}

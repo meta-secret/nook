@@ -46,6 +46,7 @@
     X,
   } from '@lucide/svelte'
   import SettingsAccordionSection from '$lib/components/settings/SettingsAccordionSection.svelte'
+  import ManageSection from '$lib/components/settings/ManageSection.svelte'
   import AuthStorage from '$lib/components/AuthStorage.svelte'
   import VaultPasswordCard from '$lib/components/VaultPasswordCard.svelte'
   import BitwardenImportPanel from '$lib/components/BitwardenImportPanel.svelte'
@@ -74,7 +75,7 @@
     ActiveVaultKind,
     type LoginSetup,
   } from '$lib/vault/state/provider.svelte'
-  import { AdminAccordionSection } from '$lib/vault/state/ui.svelte'
+  import { WorkspaceSection } from '$lib/vault/state/ui.svelte'
   import type { NookManualProviderSync } from '$app-wasm'
   import {
     ImportProviderSectionKind,
@@ -127,7 +128,7 @@
     onImportDashlane,
     onImportGoogleAuthenticator,
     onImportProtonPass,
-    activeSection = $bindable(AdminAccordionSection.Vaults),
+    section,
   }: {
     vault: VaultState
     extensionSetupState: ExtensionSetupOffer
@@ -196,7 +197,7 @@
     onImportProtonPass: (
       exportBytes: Uint8Array,
     ) => Promise<SecretOperationResult<NookImportResult>>
-    activeSection?: AdminAccordionSection
+    section: WorkspaceSection
   } = $props()
 
   type AuthStorageOptionalProps = Partial<
@@ -233,11 +234,6 @@
   let activeImportProvider = $state<ImportProviderSection>({
     kind: ImportProviderSectionKind.Closed,
   })
-  function toggleAdminSection(section: AdminAccordionSection): void {
-    activeSection =
-      activeSection === section ? AdminAccordionSection.Closed : section
-  }
-
   function importProviderOpen(providerId: string): boolean {
     return (
       activeImportProvider.kind === ImportProviderSectionKind.Open &&
@@ -402,12 +398,11 @@
   }
 </script>
 
-<div class="space-y-2" data-testid="vault-admin-panel">
-  <SettingsAccordionSection
+<div class="grid min-w-0 grid-cols-1 gap-6" data-testid="vault-admin-panel" data-section={section}>
+  {#if section === WorkspaceSection.Vaults}
+  <ManageSection
     title={vault.t(I18N_KEYS.VaultAdminVaultsTitle)}
     subtitle={vault.t(I18N_KEYS.VaultAdminVaultsDesc)}
-    open={activeSection === AdminAccordionSection.Vaults}
-    onToggle={() => toggleAdminSection(AdminAccordionSection.Vaults)}
     testId="vault-admin-vaults-section"
   >
     {#snippet badge()}
@@ -621,13 +616,13 @@
         {/each}
       </ul>
     </div>
-  </SettingsAccordionSection>
+  </ManageSection>
+  {/if}
 
-  <SettingsAccordionSection
+  {#if section === WorkspaceSection.Sync}
+  <ManageSection
     title={vault.t(I18N_KEYS.SettingsStorage)}
     subtitle={vault.t(I18N_KEYS.SettingsStorageDesc)}
-    open={activeSection === AdminAccordionSection.Storage}
-    onToggle={() => toggleAdminSection(AdminAccordionSection.Storage)}
     testId="storage-providers-section"
   >
     {#snippet badge()}
@@ -657,13 +652,13 @@
       {onBeginSetup}
       {onCancelSetup}
     />
-  </SettingsAccordionSection>
+  </ManageSection>
+  {/if}
 
-  <SettingsAccordionSection
+  {#if section === WorkspaceSection.Passwords}
+  <ManageSection
     title={vault.t(I18N_KEYS.SettingsPasswords)}
     subtitle={vault.t(I18N_KEYS.SettingsPasswordsDesc)}
-    open={activeSection === AdminAccordionSection.Passwords}
-    onToggle={() => toggleAdminSection(AdminAccordionSection.Passwords)}
     testId="vault-unlock-section"
   >
     {#snippet badge()}
@@ -707,13 +702,13 @@
       {onClearCode}
       allowIssueCode={false}
     />
-  </SettingsAccordionSection>
+  </ManageSection>
+  {/if}
 
-  <SettingsAccordionSection
+  {#if section === WorkspaceSection.Import}
+  <ManageSection
     title={vault.t(I18N_KEYS.SettingsImportExport)}
     subtitle={vault.t(I18N_KEYS.SettingsImportExportDesc)}
-    open={activeSection === AdminAccordionSection.ImportExport}
-    onToggle={() => toggleAdminSection(AdminAccordionSection.ImportExport)}
     testId="vault-import-export-section"
   >
     <div class="space-y-2">
@@ -867,5 +862,6 @@
         />
       </SettingsAccordionSection>
     </div>
-  </SettingsAccordionSection>
+  </ManageSection>
+  {/if}
 </div>

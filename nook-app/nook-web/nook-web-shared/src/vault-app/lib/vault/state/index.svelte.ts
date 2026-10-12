@@ -38,12 +38,11 @@ const runtimeKeys = [
 ] as const satisfies readonly (keyof VaultRuntimeState)[];
 
 const uiKeys = [
-  "settingsOpen",
-  "settingsSection",
+  "workspaceSection",
   "devicesAccessIdentityProtectionOpen",
   "devicesAccessIdentityTransitionPending",
-  "settingsAccordionSection",
-  "adminAccordionSection",
+  "identityFocus",
+  "identityCreationRequested",
   "helpOpen",
 ] as const satisfies readonly (keyof VaultUiState)[];
 
@@ -201,12 +200,11 @@ class VaultStateSlicesImplementation {
   declare isSaving: VaultRuntimeState["isSaving"];
   declare isInitializing: VaultRuntimeState["isInitializing"];
 
-  declare settingsOpen: VaultUiState["settingsOpen"];
-  declare settingsSection: VaultUiState["settingsSection"];
+  declare workspaceSection: VaultUiState["workspaceSection"];
   declare devicesAccessIdentityProtectionOpen: VaultUiState["devicesAccessIdentityProtectionOpen"];
   declare devicesAccessIdentityTransitionPending: VaultUiState["devicesAccessIdentityTransitionPending"];
-  declare settingsAccordionSection: VaultUiState["settingsAccordionSection"];
-  declare adminAccordionSection: VaultUiState["adminAccordionSection"];
+  declare identityFocus: VaultUiState["identityFocus"];
+  declare identityCreationRequested: VaultUiState["identityCreationRequested"];
   declare helpOpen: VaultUiState["helpOpen"];
 
   declare providers: VaultProviderState["providers"];

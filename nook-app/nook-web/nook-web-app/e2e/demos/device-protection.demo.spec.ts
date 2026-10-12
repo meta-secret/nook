@@ -13,6 +13,7 @@ import {
   openStorageSettings,
   uniqueSecretKey,
   waitForVaultOperationsIdle,
+  openVaultPage,
 } from '../helpers'
 import {
   installLocalFolderPickerMock,
@@ -207,7 +208,7 @@ test('retains the folder import while showing matching passkeys and password rec
   await page.getByTestId('settings-choose-local-folder-btn').click()
   await page.getByTestId('settings-connect-local-folder-btn').click()
   await waitForVaultOperationsIdle(page)
-  await page.getByTestId('vault-secrets-tab').click()
+  await openVaultPage(page)
   await assertVaultReady(page)
   // Folder fan-out must finish before wipe; waitForVaultOperationsIdle alone can
   // pause sync before the mock directory has durable event YAML.

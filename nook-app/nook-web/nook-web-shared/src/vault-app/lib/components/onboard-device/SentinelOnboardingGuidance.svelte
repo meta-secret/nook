@@ -3,11 +3,7 @@
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import type { VaultState } from '$lib/vault.svelte'
   import { Button } from '$lib/components/ui/button'
-  import {
-    AdminAccordionSection,
-    SettingsAccordionSection,
-    SettingsSection,
-  } from '$lib/vault/state/ui.svelte'
+  import { WorkspaceSection } from '$lib/vault/state/ui.svelte'
 
   let {
     vault,
@@ -96,7 +92,7 @@
       variant="outline"
       size="sm"
       data-testid="sentinel-manage-providers"
-      onclick={() => vault.openAdmin(AdminAccordionSection.Storage)}
+      onclick={() => vault.openSection(WorkspaceSection.Sync)}
     >
       <Cloud class="size-4" />
       {vault.t(I18N_KEYS.OnboardDeviceSentinelManageProviders)}
@@ -106,11 +102,14 @@
       size="sm"
       data-testid="sentinel-review-joins"
       onclick={() => {
-        const settingsRequest: Parameters<typeof vault.openSettings>[0] = {
-          section: SettingsSection.Storage,
-          accordion: SettingsAccordionSection.Devices,
+        vault.openSection(WorkspaceSection.Devices)
+        const rosterScroll: ScrollIntoViewOptions = {
+          block: 'start',
+          behavior: 'smooth',
         }
-        vault.openSettings(settingsRequest)
+        document
+          .querySelector('[data-testid="vault-devices-section"]')
+          ?.scrollIntoView(rosterScroll)
       }}
     >
       <ShieldCheck class="size-4" />

@@ -3,6 +3,7 @@ import {
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   installPasskeyMock,
   prepareTwoProtectedIdentitiesWithoutVault,
+  openKeysPage,
 } from './helpers'
 
 test.describe('pre-vault identity access', () => {
@@ -15,19 +16,22 @@ test.describe('pre-vault identity access', () => {
 
   test('follows browser Back and Forward while locked', async ({ page }) => {
     await page.goto('/app/')
-    await page.getByTestId('login-devices-access').click()
-    await expect(page).toHaveURL(/\/devices-access$/)
+    await page.getByTestId('identity-new').click()
+    await expect(page).toHaveURL(/\/identity\/keys$/)
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible()
+    await expect(
+      page.getByTestId('devices-access-add-identity-flow'),
+    ).toBeVisible()
 
     await page.goBack()
 
     await expect(page).toHaveURL(/\/vault$/)
     await expect(page.getByTestId('devices-access-dashboard')).toHaveCount(0)
-    await expect(page.getByTestId('login-devices-access')).toBeVisible()
+    await expect(page.getByTestId('identities-hub')).toBeVisible()
 
     await page.goForward()
 
-    await expect(page).toHaveURL(/\/devices-access$/)
+    await expect(page).toHaveURL(/\/identity\/keys$/)
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible()
   })
 
@@ -56,11 +60,11 @@ test.describe('pre-vault identity access', () => {
     await protectionFlow
       .getByRole('button', { name: 'Cancel', exact: true })
       .click()
-    await loginDashboard.getByTestId('devices-access-back').click()
+    await page.getByTestId('page-bar-back').click()
     await expect(page).toHaveURL(/\/vault$/)
-    await expect(page.getByTestId('login-devices-access')).toBeVisible()
-    await page.getByTestId('login-devices-access').click()
-    await expect(page).toHaveURL(/\/devices-access$/)
+    await expect(page.getByTestId('identities-hub')).toBeVisible()
+    await openKeysPage(page)
+    await expect(page).toHaveURL(/\/identity\/keys$/)
     await page.getByTestId('devices-access-unlock-identity').click()
 
     await page.getByTestId('device-protection-unlock-btn').click()

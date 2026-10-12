@@ -23,6 +23,7 @@ import {
   waitForVaultUnlocked,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   UI_TIMEOUT_MS,
+  openVaultPage,
 } from './helpers'
 import {
   E2eSyncProviderId,
@@ -226,7 +227,7 @@ test.describe('Google Drive provider modes', () => {
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })
       .toBeGreaterThan(0)
-    await owner.getByTestId('vault-secrets-tab').click()
+    await openVaultPage(owner)
 
     const secretKey = uniqueSecretKey('shared-drive-onboard')
     const secretValue = 'shared-without-owner-google-credentials'

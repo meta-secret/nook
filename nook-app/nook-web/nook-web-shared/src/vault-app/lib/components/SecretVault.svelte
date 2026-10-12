@@ -674,7 +674,7 @@
         class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
       >
         <div>
-          <p class="text-sm font-semibold text-foreground">
+          <p class="nk-label" data-testid="vault-secret-count">
             {vault.secretTotal !== visibleItemCount
               ? (() => {
                   const tArgs2: Parameters<typeof vault.t>[0] = {
@@ -700,8 +700,7 @@
         <div class="flex w-full shrink-0 items-center gap-2 sm:w-auto">
           <Button
             size="sm"
-            variant="outline"
-            class="flex-1 border-border/40 bg-background/70 text-foreground hover:bg-accent sm:flex-none sm:bg-background"
+            class="flex-1 sm:flex-none"
             data-testid="add-secret-btn"
             disabled={editsBlocked}
             {...editRestriction.decision !== VaultEditDecision.Allowed
@@ -717,10 +716,10 @@
 
       {#if editRestriction.decision !== VaultEditDecision.Allowed}
         <div
-          class="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-foreground"
+          class="nk-banner nk-banner-warning flex items-start gap-2 p-3 text-sm text-foreground"
           data-testid="secret-edit-blocked-banner"
         >
-          <TriangleAlert class="mt-0.5 size-4 shrink-0 text-amber-600" />
+          <TriangleAlert class="mt-0.5 size-4 shrink-0 text-warning" />
           <p class="text-pretty text-xs text-muted-foreground">
             {editRestriction.reason}
           </p>
@@ -734,7 +733,7 @@
           bind:value={searchPattern}
           data-testid="search-secrets"
           placeholder={vault.t(I18N_KEYS.VaultSearchPlaceholder)}
-          class="flex h-10 w-full rounded-lg border border-border/45 bg-background/80 py-2 pl-10 pr-36 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+          class="flex h-10 w-full rounded-none border border-border bg-card py-2 pl-10 pr-36 text-sm focus:border-foreground/40 focus:outline-hidden focus:ring-2 focus:ring-ring"
         />
         <div class="absolute right-1 top-1/2 -translate-y-1/2">
           <Select.Root
@@ -745,7 +744,7 @@
             onValueChange={selectTypeFilter}
           >
             <Select.Trigger
-              class="h-8 max-w-32 border-transparent bg-muted/45 px-2 text-xs hover:bg-muted/70 {vault.secretTypeFilter !==
+              class="h-8 max-w-32 rounded-none border-transparent bg-muted/45 px-2 font-mono text-[0.6875rem] tracking-wide hover:bg-muted/70 {vault.secretTypeFilter !==
               NookSecretTypeFilter.All
                 ? 'border-primary/40 bg-primary/10 text-foreground'
                 : 'text-muted-foreground'}"
@@ -775,7 +774,7 @@
 
       {#if filteredItems.length === 0}
         <Card
-          class="flex min-h-0 flex-1 flex-col gap-0 border-border/45 bg-card py-0 sm:border-border/70"
+          class="flex min-h-0 flex-1 flex-col gap-0 rounded-none border-dashed border-border bg-transparent py-0 shadow-none"
         >
           <CardContent
             class="flex flex-1 items-center justify-center p-10 text-center text-muted-foreground"
@@ -802,15 +801,15 @@
                 firstItem.type === SecretType.CreditCard),
             )}
             <Card
-              class="gap-0 overflow-hidden border-border/35 bg-card py-0 shadow-xs sm:border-border/60"
+              class="nk-list gap-0 overflow-hidden py-0"
               data-testid="vault-site-group"
             >
               {#if !titleAsCardHeader}
                 <div
-                  class="flex items-center gap-2.5 border-b border-border/30 bg-muted/10 px-3 py-2.5 sm:border-border/50"
+                  class="flex items-center gap-2.5 border-b border-border px-3 py-2.5"
                 >
                   <div
-                    class="flex size-6 items-center justify-center rounded-md border border-border/35 bg-muted/35 text-muted-foreground sm:border-border/60"
+                    class="flex size-6 items-center justify-center border border-border text-muted-foreground"
                   >
                     <Icon class="size-3.5" />
                   </div>
@@ -820,9 +819,7 @@
                     {group.site}
                   </h3>
                   {#if group.items.length > 1}
-                    <span
-                      class="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
-                    >
+                    <span class="nk-tag ml-auto">
                       {(() => {
                         const tArgs3: Parameters<typeof vault.t>[0] = {
                           key: I18N_KEYS.VaultSecretCount,

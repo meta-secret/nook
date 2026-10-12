@@ -17,6 +17,7 @@ import {
   UI_TIMEOUT_MS,
   sleep,
 } from './environment'
+import { openManagePage, type ManagePage } from './workspace-navigation'
 import { readLocalVaultYamlFromIdb } from './local-sync'
 import {
   disableVaultIdleLock,
@@ -136,19 +137,16 @@ export async function expandLoginEnrollmentPanel(page: Page) {
   }
 }
 
-/** Open the admin surface that owns sync providers and passwords. */
+/** Open the sync providers page (the admin surface that owns providers). */
 export async function openStorageSettings(page: Page) {
   await keepVaultIdleLockDisabled(page)
   await assertVaultReady(page)
   await waitForVaultOperationsIdle(page)
-  const adminTab = page.getByTestId('vault-admin-tab')
   await expect
     .poll(
       async () => {
         try {
-          await expect(adminTab).toBeVisible({ timeout: UI_TIMEOUT_MS })
-          await expect(adminTab).toBeEnabled({ timeout: UI_TIMEOUT_MS })
-          await adminTab.click({ timeout: UI_TIMEOUT_MS })
+          await openManagePage(page, 'sync')
           return await page.getByTestId('vault-admin-panel').isVisible()
         } catch {
           return false
@@ -157,9 +155,6 @@ export async function openStorageSettings(page: Page) {
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
     .toBe(true)
-  await expect(page.getByTestId('vault-admin-panel')).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
   await expect(page.getByTestId('vault-panel')).not.toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
@@ -199,36 +194,22 @@ export const SETTINGS_SECTION_TEST_IDS = {
 
 export type SettingsSection = keyof typeof SETTINGS_SECTION_TEST_IDS
 
-/** Expand one vault settings accordion section (only one open at a time). */
+const SETTINGS_SECTION_PAGES: Record<SettingsSection, ManagePage> = {
+  storage: 'sync',
+  unlock: 'passwords',
+  import: 'import',
+  devices: 'devices',
+}
+
+/** Open the management page that owns one former settings section. */
 export async function expandSettingsSection(
   page: Page,
   section: SettingsSection,
 ) {
-  const targetTab =
-    section === 'devices'
-      ? page.getByTestId('vault-settings-tab')
-      : page.getByTestId('vault-admin-tab')
-  const targetPanel =
-    section === 'devices'
-      ? page.getByTestId('storage-settings-panel')
-      : page.getByTestId('vault-admin-panel')
-  if (!(await targetPanel.isVisible())) {
-    await targetTab.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-    await expect(targetPanel).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-  }
-  const sectionEl = page.getByTestId(SETTINGS_SECTION_TEST_IDS[section])
-  await expect(sectionEl).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-  const toggle = sectionEl.getByRole('button').first()
-  await expect(toggle).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-  if (
-    (await toggle.getAttribute('aria-expanded', {
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })) !== 'true'
-  ) {
-    await toggle.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-  }
+  await openManagePage(page, SETTINGS_SECTION_PAGES[section])
+  await expect(
+    page.getByTestId(SETTINGS_SECTION_TEST_IDS[section]),
+  ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
 }
 
 export async function addVaultPassword(
@@ -424,7 +405,7 @@ export async function openOnboardDevicePanel(page: Page) {
   await assertVaultReady(page)
   await waitForVaultOperationsIdle(page)
   await forceVaultQuiescentForE2e(page)
-  await page.getByTestId('vault-onboard-tab').click()
+  await openManagePage(page, 'devices')
   await expect(page.getByTestId('onboard-device-panel')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
@@ -646,7 +627,7 @@ export async function authorizeDeviceProtection(
     !(await overlay.isVisible())
   ) {
     restoreDevicesAccess = true
-    await page.getByTestId('devices-access-back').click()
+    await page.getByTestId('page-bar-back').click()
     await expect
       .poll(
         async () => {
@@ -795,13 +776,13 @@ export async function authorizeDeviceProtection(
 
   if (restoreDevicesAccess) {
     await page.evaluate(() => {
-      history.pushState(history.state, '', '/devices-access')
+      history.pushState(history.state, '', '/identity/keys')
       window.dispatchEvent(new PopStateEvent('popstate'))
     })
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await expect(page).toHaveURL(/\/devices-access$/)
+    await expect(page).toHaveURL(/\/identity\/keys$/)
   }
 
   await waitForVaultOperationsIdle(page)

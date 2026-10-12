@@ -1,0 +1,162 @@
+import { describe, expect, test } from 'vitest'
+import {
+  DeviceAccessProtectionKind,
+  NookIdentityLocalAccessKind,
+} from '$app-wasm'
+import {
+  IdentityCardProjection,
+  IdentityCardStatus,
+  IdentityKeyKind,
+  IdentityVaultRowState,
+  type IdentityCardSource,
+} from '../../../../nook-web-shared/src/vault-app/lib/components/identities/identity-card-model'
+import type {
+  IdentityDirectoryEntry,
+  IdentityMemberView,
+} from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/identity-directory-view'
+import {
+  UnknownDashboardText,
+  type DashboardText,
+} from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access-dashboard-state'
+
+const unknown: DashboardText = new UnknownDashboardText()
+
+function member(
+  appId: string,
+  protection: DeviceAccessProtectionKind,
+): IdentityMemberView {
+  return {
+    appId,
+    label: unknown,
+    currentBrowser: false,
+    localProtection: DeviceAccessProtectionKind.Missing,
+    protectionAssociation: protection,
+    associatedPasskeyName: unknown,
+    associatedPasskeyFingerprint: unknown,
+  }
+}
+
+function vaultAccess(storeId: string, label: string) {
+  return {
+    storeId,
+    label,
+    verified: true,
+    verifiedAt: unknown,
+    lastLocalUpdateAt: unknown,
+  }
+}
+
+const personal: IdentityDirectoryEntry = {
+  identityId: 'id_3f2a9c0b71de4e58aa10',
+  label: 'Personal',
+  localAccess: NookIdentityLocalAccessKind.CurrentBrowser,
+  members: [
+    member('browser', DeviceAccessProtectionKind.PasskeyStandard),
+    member('phone', DeviceAccessProtectionKind.PinOrPassphrase),
+  ],
+  vaults: [
+    vaultAccess('store_a', 'Old label'),
+    vaultAccess('store_gone', 'Gone'),
+  ],
+}
+
+const work: IdentityDirectoryEntry = {
+  identityId: 'id_work',
+  label: 'Work',
+  localAccess: NookIdentityLocalAccessKind.ThisBrowser,
+  members: [member('laptop', DeviceAccessProtectionKind.PinOrPassphrase)],
+  vaults: [vaultAccess('store_w', 'Acme')],
+}
+
+const elsewhere: IdentityDirectoryEntry = {
+  identityId: 'id_far',
+  label: 'Family',
+  localAccess: NookIdentityLocalAccessKind.OtherInstallation,
+  members: [],
+  vaults: [],
+}
+
+function source(authenticated: boolean): IdentityCardSource {
+  return {
+    identities: [personal, work, elsewhere],
+    localVaults: [
+      { storeId: 'store_a', label: 'Personal vault' },
+      { storeId: 'store_b', label: 'Family photos' },
+    ],
+    openStoreId: authenticated ? 'store_a' : '',
+    authenticated,
+  }
+}
+
+describe('identity card projection', () => {
+  test('reports each identity status for this browser session', () => {
+    const cards = new IdentityCardProjection(source(true)).cards
+    expect(cards.map((card) => card.status)).toEqual([
+      IdentityCardStatus.Unlocked,
+      IdentityCardStatus.Inactive,
+      IdentityCardStatus.Elsewhere,
+    ])
+    const locked = new IdentityCardProjection(source(false)).cards
+    expect(locked[0]?.status).toBe(IdentityCardStatus.Locked)
+  })
+
+  test('lists the current identity vaults with local labels and the open vault', () => {
+    const [current] = new IdentityCardProjection(source(true)).cards
+    expect(current?.vaults).toEqual([
+      {
+        storeId: 'store_a',
+        label: 'Personal vault',
+        state: IdentityVaultRowState.Open,
+      },
+      {
+        storeId: 'store_gone',
+        label: 'Gone',
+        state: IdentityVaultRowState.Unavailable,
+      },
+      {
+        storeId: 'store_b',
+        label: 'Family photos',
+        state: IdentityVaultRowState.Available,
+      },
+    ])
+  })
+
+  test('never offers another identity vault for opening here', () => {
+    const cards = new IdentityCardProjection(source(true)).cards
+    expect(cards[1]?.vaults).toEqual([
+      {
+        storeId: 'store_w',
+        label: 'Acme',
+        state: IdentityVaultRowState.Unavailable,
+      },
+    ])
+  })
+
+  test('summarises key kinds and counts', () => {
+    const cards = new IdentityCardProjection(source(false)).cards
+    expect(cards.map((card) => [card.keyKind, card.keyCount])).toEqual([
+      [IdentityKeyKind.Mixed, 2],
+      [IdentityKeyKind.Pin, 1],
+      [IdentityKeyKind.None, 0],
+    ])
+  })
+
+  test('derives a stable monogram, hue, and grouped fingerprint', () => {
+    const first = new IdentityCardProjection(source(false)).cards[0]
+    const again = new IdentityCardProjection(source(true)).cards[0]
+    expect(first?.monogram).toBe('P')
+    expect(first?.fingerprint).toEqual(['3F2A', '9C0B', '71DE', '4E58'])
+    expect(first?.hue).toBe(again?.hue)
+    expect(first?.hue).toBeGreaterThanOrEqual(0)
+    expect(first?.hue).toBeLessThan(360)
+  })
+
+  test('totals identities, keys, vaults, and unlocked identities', () => {
+    expect(new IdentityCardProjection(source(true)).totals).toEqual({
+      identities: 3,
+      keys: 3,
+      vaults: 4,
+      unlocked: 1,
+    })
+  })
+})

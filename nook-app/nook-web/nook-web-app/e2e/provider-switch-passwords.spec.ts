@@ -14,6 +14,7 @@ import {
   reloadUnlockWithSyncProvider,
   installOauthFileRemoteForLocalE2e,
   UI_TIMEOUT_MS,
+  openVaultPage,
 } from './helpers'
 import {
   createSyncTarget,
@@ -60,7 +61,7 @@ test.describe('unified vault backup passwords with sync provider', () => {
     })
     await disableVaultIdleLock(page)
 
-    await page.getByTestId('vault-secrets-tab').click()
+    await openVaultPage(page)
     await expect
       .poll(async () => page.getByTestId('header-lock-vault-btn').isEnabled(), {
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,

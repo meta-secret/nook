@@ -28,6 +28,8 @@ import {
   waitForJoinerVaultReady,
   waitForSecretOnDevice,
   waitForVaultOperationsIdle,
+  openVaultPage,
+  openManagePage,
 } from './helpers'
 import { assertGenesisVaultYaml } from './vault-yaml'
 import {
@@ -200,15 +202,19 @@ test.describe(`multi-device ${providerLabel} vault`, () => {
     expect(revealed).toBe(joinerSecretValue)
   })
 
-  test('admin shows storage and passwords while settings keeps devices separate from onboarding', async () => {
+  test('management keeps sync, backup passwords, and devices on their own pages', async () => {
     await openStorageSettings(deviceA)
     await expect(deviceA.getByTestId('storage-providers-section')).toBeVisible()
+    await openManagePage(deviceA, 'passwords')
     await expect(deviceA.getByTestId('vault-unlock-section')).toBeVisible()
-    await deviceA.getByTestId('vault-settings-tab').click()
+    await expect(deviceA.getByTestId('storage-providers-section')).toHaveCount(
+      0,
+    )
+    await openManagePage(deviceA, 'devices')
     await expect(deviceA.getByTestId('vault-devices-section')).toBeVisible()
     await expandSettingsSection(deviceA, 'devices')
     await expect(deviceA.getByTestId('vault-members-list')).toBeVisible()
-    await deviceA.getByTestId('vault-secrets-tab').click()
+    await openVaultPage(deviceA)
     await assertVaultReady(deviceA)
   })
 })

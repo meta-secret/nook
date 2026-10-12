@@ -8,6 +8,8 @@ import {
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   saveAuthProvidersInBrowser,
   unselectedAuthProviderSeedScope,
+  openVaultPage,
+  openKeysPage,
 } from './helpers'
 
 test.describe('devices and access dashboard', () => {
@@ -15,39 +17,25 @@ test.describe('devices and access dashboard', () => {
     await new DevicesAccessScenario(page).prepare()
   })
 
-  test('is available before any vault and lets the suggestion stay dismissed', async ({
+  test('creates an identity before any vault from the identities page', async ({
     page,
   }) => {
     await page.goto('/app/')
 
-    await expect(page.getByTestId('devices-access-nudge')).toBeVisible()
-    await page.getByTestId('devices-access-nudge-review').click()
-    await expect(page.getByTestId('devices-access-back')).toBeFocused()
-    await page.getByTestId('devices-access-back').click()
-    await expect(page.getByTestId('devices-access-nudge-review')).toBeFocused()
-
-    // Dismissing removes the whole suggestion, so the checkbox never settles
-    // into a checked state Playwright could verify with `check()`.
-    await page.getByTestId('devices-access-dont-show-again').click()
-    await expect(page.getByTestId('devices-access-nudge')).toBeHidden()
-    await expect(page.getByTestId('login-devices-access')).toBeFocused()
-
-    await page.getByTestId('login-devices-access').click()
-    await expect(page).toHaveURL(/\/devices-access$/)
-    await expect(page.getByTestId('devices-access-back')).toBeFocused()
+    await expect(page.getByTestId('identities-hub')).toBeVisible()
+    await expect(page.getByTestId('identity-card')).toHaveCount(0)
+    const generationBeforeAdd = await page.evaluate(() =>
+      localStorage.getItem('nook-local-data-storage-generation'),
+    )
+    await page.getByTestId('identity-new').click()
+    await expect(page).toHaveURL(/\/identity\/keys$/)
+    await expect(page.getByTestId('page-bar-back')).toBeFocused()
     const dashboard = page.getByTestId('devices-access-dashboard')
     await expect(dashboard).toBeVisible()
-    await expect(page.getByTestId('devices-access-no-identities')).toBeVisible()
     await expect(page.getByTestId('devices-access-chain')).toHaveCount(0)
     await expect(
       page.getByTestId('devices-access-prepare-browser'),
     ).toHaveCount(0)
-    const addIdentity = page.getByTestId('devices-access-add-identity')
-    await expect(addIdentity).toBeEnabled()
-    const generationBeforeAdd = await page.evaluate(() =>
-      localStorage.getItem('nook-local-data-storage-generation'),
-    )
-    await addIdentity.click()
     await expect(
       page.getByTestId('devices-access-add-identity-flow'),
     ).toBeVisible()
@@ -78,19 +66,20 @@ test.describe('devices and access dashboard', () => {
     await expect(
       page.getByTestId('devices-access-identity-option'),
     ).toHaveCount(1)
-    await page.getByTestId('devices-access-back').click()
-    await expect(page.getByTestId('login-devices-access')).toBeFocused()
+    await page.getByTestId('page-bar-back').click()
+    await expect(page.getByTestId('identity-manage')).toBeFocused()
+    await expect(page.getByTestId('identity-card')).toHaveCount(1)
 
     await page.reload()
-    await expect(page.getByTestId('devices-access-nudge')).toHaveCount(0)
-    await expect(page.getByTestId('login-devices-access')).toBeVisible()
+    await expect(page.getByTestId('identities-hub')).toBeVisible()
+    await expect(page.getByTestId('identity-card')).toHaveCount(1)
   })
 
   test('after creating a passkey vault shows the access dependency graph', async ({
     page,
   }) => {
     await connectLocalVault(page)
-    await page.getByTestId('header-devices-access-btn').click()
+    await openKeysPage(page)
     const dashboard = page.getByTestId('devices-access-dashboard')
     await expect(dashboard).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -123,21 +112,11 @@ test.describe('devices and access dashboard', () => {
     await connectLocalVault(page)
     await page.setViewportSize({ width: 1440, height: 900 })
 
-    const shell = page.getByTestId('app-shell-content')
-    const vaultShellWidth = await shell.evaluate(
-      (element) => element.getBoundingClientRect().width,
-    )
-
-    await page.getByTestId('header-devices-access-btn').click()
+    await openKeysPage(page)
     const dashboard = page.getByTestId('devices-access-dashboard')
     await expect(dashboard).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-
-    const accessShellWidth = await shell.evaluate(
-      (element) => element.getBoundingClientRect().width,
-    )
-    expect(accessShellWidth).toBeGreaterThan(vaultShellWidth + 200)
 
     const identityRail = page.getByTestId('devices-access-identity-rail')
     const keyInventory = page.getByTestId('devices-access-key-inventory')
@@ -224,7 +203,7 @@ test.describe('devices and access dashboard', () => {
     page,
   }) => {
     await connectLocalVault(page)
-    await page.getByTestId('header-devices-access-btn').click()
+    await openKeysPage(page)
     await saveAuthProvidersInBrowser(
       page,
       {
@@ -306,12 +285,12 @@ test.describe('devices and access dashboard', () => {
       page.getByTestId('devices-access-identity-protection-flow'),
     ).toBeVisible()
     await page.goBack()
-    await expect(page).toHaveURL(/\/vault$/)
+    await expect(page).toHaveURL(/\/vault(\/devices)?$/)
     await expect(page.getByTestId('login-local-vault-detected')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await page.goForward()
-    await expect(page).toHaveURL(/\/devices-access$/)
+    await expect(page).toHaveURL(/\/identity\/keys$/)
     await page.getByTestId('devices-access-identity-protection-flow').waitFor()
     await page.evaluate(() => {
       const credentials = navigator.credentials
@@ -323,7 +302,7 @@ test.describe('devices and access dashboard', () => {
     })
     await page.getByTestId('device-protection-unlock-btn').click()
     await page.goBack()
-    await expect(page).toHaveURL(/\/vault$/)
+    await expect(page).toHaveURL(/\/vault(\/devices)?$/)
     await expect(page.getByTestId('login-local-vault-detected')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
@@ -360,7 +339,7 @@ test.describe('devices and access dashboard', () => {
         personalProviderRecovered: true,
       })
     await page.goForward()
-    await expect(page).toHaveURL(/\/devices-access$/)
+    await expect(page).toHaveURL(/\/identity\/keys$/)
     await expect(
       page.getByTestId('login-gate').getByTestId('devices-access-dashboard'),
     ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
@@ -410,14 +389,13 @@ test.describe('devices and access dashboard', () => {
     page,
   }) => {
     await connectLocalVault(page)
-    await expect(page.getByTestId('devices-access-nudge')).toHaveCount(0)
     await addVaultPassword(
       page,
       'Emergency recovery',
       'correct horse battery staple',
     )
 
-    await page.getByTestId('header-devices-access-btn').click()
+    await openKeysPage(page)
     const dashboard = page.getByTestId('devices-access-dashboard')
     await expect(dashboard).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -551,15 +529,15 @@ test.describe('devices and access dashboard', () => {
     await expect(
       bridge.getByRole('article', { name: /Vault access/ }),
     ).toHaveCount(1)
-    await page.getByTestId('devices-access-back').click()
-    await expect(page.getByTestId('header-devices-access-btn')).toBeFocused()
+    await page.getByTestId('page-bar-back').click()
+    await expect(page.getByTestId('vault-panel')).toBeVisible()
   })
 
   test('keeps the localized graph inside a narrow viewport', async ({
     page,
   }) => {
     await connectLocalVault(page)
-    await page.getByTestId('header-devices-access-btn').click()
+    await openKeysPage(page)
     await new DevicesAccessScenario(page).openRelationshipGraph()
     await page.setViewportSize({ width: 320, height: 844 })
     await page.getByTestId('header-mobile-tools-btn').click()
@@ -593,8 +571,7 @@ test.describe('devices and access dashboard', () => {
       localStorage.setItem('nook_e2e_passkey_mode', 'unavailable')
     })
     await page.goto('/app/')
-    await page.getByTestId('login-devices-access').click()
-    await page.getByTestId('devices-access-add-identity').click()
+    await page.getByTestId('identity-new').click()
     await page
       .getByTestId('device-protection-label-input')
       .fill('Unavailable passkey')
@@ -680,7 +657,7 @@ test.describe('devices and access dashboard', () => {
     }, NookDeviceAccessTextKind.Unknown)
     expect(preparationFailure).toBe('')
 
-    await page.getByTestId('header-devices-access-btn').click()
+    await openKeysPage(page)
     const inventory = page.getByTestId('devices-access-key-inventory')
     await expect(inventory).toContainText('Unnamed passkey', {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -749,7 +726,7 @@ test.describe('devices and access dashboard', () => {
     }, DeviceAccessProtectionKind.CompanionSession)
     expect(preparationFailure).toBe('')
 
-    await page.getByTestId('header-devices-access-btn').click()
+    await openKeysPage(page)
     await new DevicesAccessScenario(page).openRelationshipGraph()
     const bridge = page.getByTestId('devices-access-chain')
     await expect(bridge).toContainText('Paired device identity', {
@@ -765,7 +742,7 @@ test.describe('devices and access dashboard', () => {
     page,
   }, testInfo) => {
     await connectLocalVault(page)
-    await page.getByTestId('header-devices-access-btn').click()
+    await openKeysPage(page)
     await new DevicesAccessScenario(page).openRelationshipGraph()
     await expect(
       page.getByTestId('devices-access-strength-vaults'),
@@ -773,7 +750,7 @@ test.describe('devices and access dashboard', () => {
 
     // Enter recovery through the same locked-state UI as production. This
     // quiesces the active vault before its protected identity is forgotten.
-    await page.getByTestId('vault-secrets-tab').click()
+    await openVaultPage(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible()
     await page.getByTestId('header-lock-vault-btn').click()
     await page.evaluate(() => {
@@ -806,7 +783,7 @@ test.describe('devices and access dashboard', () => {
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })
       await page.evaluate(() => {
-        history.replaceState(history.state, '', '/devices-access')
+        history.replaceState(history.state, '', '/identity/keys')
         window.dispatchEvent(new PopStateEvent('popstate'))
       })
 
@@ -822,14 +799,9 @@ test.describe('devices and access dashboard', () => {
         await page.getByTestId('passkey-auth-overlay-dismiss').click()
         await expect(passkeyOverlay).toBeHidden()
       }
-      const loginDevicesAccess = page.getByTestId('login-devices-access')
-      if (await loginDevicesAccess.isVisible()) {
-        await loginDevicesAccess.click()
-      } else {
-        await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
-          timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-        })
-      }
+      await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
       await expect(
         page.getByTestId('devices-access-no-identities'),
       ).toBeVisible({
@@ -853,7 +825,7 @@ test.describe('devices and access dashboard', () => {
     page,
   }) => {
     await connectLocalVault(page)
-    await page.getByTestId('header-devices-access-btn').click()
+    await openKeysPage(page)
     await new DevicesAccessScenario(page).openRelationshipGraph()
     await expect(
       page.getByTestId('devices-access-strength-vaults'),
@@ -944,8 +916,8 @@ test.describe('devices and access dashboard', () => {
     )
 
     // The dashboard reads the snapshot when it mounts, so leave and come back.
-    await page.getByTestId('vault-secrets-tab').click()
-    await page.getByTestId('header-devices-access-btn').click()
+    await openVaultPage(page)
+    await openKeysPage(page)
     await new DevicesAccessScenario(page).openRelationshipGraph()
 
     const chain = page.getByTestId('devices-access-chain')
@@ -963,7 +935,7 @@ test.describe('devices and access dashboard', () => {
   }) => {
     await connectLocalVault(page)
     await addVaultPassword(page, 'Travel recovery', 'demo recovery passphrase')
-    await page.getByTestId('header-devices-access-btn').click()
+    await openKeysPage(page)
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
@@ -981,8 +953,8 @@ test.describe('devices and access dashboard', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await page.getByTestId('header-lock-vault-btn').click()
-    // Locking from /devices-access keeps that URL, so login opens Access directly.
-    await expect(page).toHaveURL(/\/devices-access$/)
+    // Locking from /identity/keys keeps that URL, so login opens Access directly.
+    await expect(page).toHaveURL(/\/identity\/keys$/)
     await new DevicesAccessScenario(page).openRelationshipGraph()
     await expect(
       page.getByTestId('devices-access-identity-state'),

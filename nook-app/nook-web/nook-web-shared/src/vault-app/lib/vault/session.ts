@@ -20,6 +20,7 @@ import { VaultType } from "$lib/vault/architecture-model";
 import { browserLogRuntime } from "$lib/runtime/log";
 import { SentinelUnlockActions } from "$lib/vault/sentinel-unlock";
 import { LocalLoginPreparationState } from "$lib/vault/state/provider.svelte";
+import { WorkspaceSection } from "$lib/vault/state/ui.svelte";
 
 const log = browserLogRuntime.createLogger("vault-session");
 
@@ -184,7 +185,7 @@ export class VaultSessionActions {
     state.enrollMembersKey = "";
     state.sharedJoinerIdentity = "";
     state.sharedGrantInstructions = "";
-    state.settingsOpen = false;
+    state.workspaceSection = WorkspaceSection.Vault;
     state.enrollmentCode = "";
     state.errorMsg = "";
     const wasSentinel =

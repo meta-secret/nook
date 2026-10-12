@@ -31,6 +31,8 @@ import {
   readStringProperty,
   requireRecord,
   waitForVaultUnlocked,
+  openVaultPage,
+  openManagePage,
 } from './helpers'
 import {
   createSyncTarget,
@@ -85,7 +87,7 @@ test.describe('vault password envelope with sync provider', () => {
     await expectNoVaultPasswords(deviceA)
 
     await addVaultPassword(deviceA, 'GitHub vault', vaultPassword)
-    await deviceA.getByTestId('vault-secrets-tab').click()
+    await openVaultPage(deviceA)
 
     const yaml = await waitForStableLocalVaultState(
       deviceA,
@@ -101,9 +103,9 @@ test.describe('vault password envelope with sync provider', () => {
   })
 
   test('device A issues an enrollment link without plaintext provider credentials', async () => {
-    await deviceA.getByTestId('vault-secrets-tab').click()
+    await openVaultPage(deviceA)
     await expect(deviceA.getByTestId('vault-panel')).toBeVisible()
-    await deviceA.getByTestId('vault-onboard-tab').click()
+    await openManagePage(deviceA, 'devices')
     const linkInput = await submitOnboardEnrollmentCode(deviceA, vaultPassword)
     const link = (await linkInput.inputValue()).trim()
     expect(link).toContain('#enroll=')
@@ -332,7 +334,7 @@ test.describe('vault password envelope with sync provider', () => {
     await deviceB.close()
     const stub = target.stub
     stub.setFailureScenario(GithubStubFailureScenario.EventLogForbidden)
-    await deviceA.getByTestId('vault-secrets-tab').click()
+    await openVaultPage(deviceA)
     const eventKey = uniqueSecretKey('e2e-github-permission-event')
     await deviceA.getByTestId('add-secret-btn').click()
     await deviceA.getByTestId('add-secret-panel').waitFor({ state: 'visible' })

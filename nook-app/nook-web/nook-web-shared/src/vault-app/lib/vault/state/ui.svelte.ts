@@ -1,36 +1,57 @@
-export enum SettingsSection {
-  DevicesAccess = "devices-access",
-  Storage = "storage",
-  Onboard = "onboard",
-  Admin = "admin",
-}
-
-export enum SettingsAccordionSection {
-  Closed = "closed",
-  Devices = "devices",
-  Language = "language",
-  Danger = "danger",
-}
-
-export enum AdminAccordionSection {
-  Closed = "closed",
+/**
+ * The unified workspace: identities are the hub, a vault is opened from an
+ * identity, and management pages are grouped by what they act on — the
+ * identity itself (keys, vaults, browser settings) or the open vault (devices,
+ * sync providers, backup passwords, imports).
+ */
+export enum WorkspaceSection {
+  Vault = "vault",
+  Identities = "identities",
+  Keys = "keys",
   Vaults = "vaults",
-  Storage = "storage",
+  Settings = "settings",
+  Devices = "devices",
+  Sync = "sync",
   Passwords = "passwords",
-  ImportExport = "import-export",
+  Import = "import",
+}
+
+export enum ManageSectionScope {
+  Identity = "identity",
+  Vault = "vault",
+  None = "none",
+}
+
+/** Which management group a workspace section belongs to. */
+export class WorkspaceSectionScope {
+  constructor(private readonly section: WorkspaceSection) {}
+
+  get scope(): ManageSectionScope {
+    switch (this.section) {
+      case WorkspaceSection.Keys:
+      case WorkspaceSection.Vaults:
+      case WorkspaceSection.Settings:
+        return ManageSectionScope.Identity;
+      case WorkspaceSection.Devices:
+      case WorkspaceSection.Sync:
+      case WorkspaceSection.Passwords:
+      case WorkspaceSection.Import:
+        return ManageSectionScope.Vault;
+      case WorkspaceSection.Vault:
+      case WorkspaceSection.Identities:
+        return ManageSectionScope.None;
+    }
+  }
 }
 
 export class VaultUiState {
-  settingsOpen = $state(false);
-  settingsSection = $state<SettingsSection>(SettingsSection.Storage);
+  workspaceSection = $state<WorkspaceSection>(WorkspaceSection.Vault);
   devicesAccessIdentityProtectionOpen = $state(false);
   /** Survives panel cancellation and navigation until the identity authenticates. */
   devicesAccessIdentityTransitionPending = $state(false);
-  settingsAccordionSection = $state<SettingsAccordionSection>(
-    SettingsAccordionSection.Devices,
-  );
-  adminAccordionSection = $state<AdminAccordionSection>(
-    AdminAccordionSection.Vaults,
-  );
+  /** Identity the Keys page should present first, chosen from an identity card. */
+  identityFocus = $state("");
+  /** Set by the "New identity" card so the Keys page starts identity creation. */
+  identityCreationRequested = $state(false);
   helpOpen = $state(false);
 }

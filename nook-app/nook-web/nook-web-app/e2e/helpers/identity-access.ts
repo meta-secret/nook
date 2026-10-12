@@ -6,8 +6,7 @@ export async function prepareTwoProtectedIdentitiesWithoutVault(
   page: Page,
 ): Promise<void> {
   await page.goto('/app/')
-  await page.getByTestId('login-devices-access').click()
-  await page.getByTestId('devices-access-add-identity').click()
+  await page.getByTestId('identity-new').click()
   await page
     .getByTestId('device-protection-label-input')
     .fill('Personal identity passkey')

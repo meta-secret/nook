@@ -64,7 +64,7 @@
 
 <aside
   role="alert"
-  class="shrink-0 overflow-hidden rounded-xl border border-amber-500/40 bg-amber-500/10 font-sans text-sm text-amber-900/80 animate-in fade-in slide-in-from-top-2 dark:text-amber-100/80"
+  class="nk-banner nk-banner-warning shrink-0 overflow-hidden font-sans text-sm text-amber-900/80 animate-in fade-in slide-in-from-top-2 dark:text-amber-100/80"
   data-testid="vault-security-guide"
   data-folded={folded ? "true" : "false"}
   data-recommendations={recommendationCount}
@@ -121,7 +121,7 @@
 
       {#if needsSyncProvider}
         <section
-          class="rounded-lg border border-amber-500/25 bg-background/55 p-3"
+          class="border border-amber-500/25 bg-background/55 p-3"
           data-testid="security-guide-sync-provider"
         >
           <div class="flex items-start gap-3">
@@ -158,7 +158,7 @@
 
       {#if needsAnotherDevice}
         <section
-          class="rounded-lg border border-amber-500/25 bg-background/55 p-3"
+          class="border border-amber-500/25 bg-background/55 p-3"
           data-testid="security-guide-device"
         >
           <div class="flex items-start gap-3">

@@ -11,6 +11,7 @@ import {
   openStorageSettings,
   uniqueSecretKey,
   waitForVaultOperationsIdle,
+  openVaultPage,
 } from './helpers'
 import {
   installLocalFolderPickerMock,
@@ -103,7 +104,7 @@ test.describe('local folder backup provider', () => {
       'existing-folder-backup-password',
     )
     await connectLocalFolderProviderFromSettings(page)
-    await page.getByTestId('vault-secrets-tab').click()
+    await openVaultPage(page)
     await assertVaultReady(page)
     const sourceSecretKey = uniqueSecretKey('existing-folder-source')
     await addSecret(page, sourceSecretKey, 'existing-folder-value')
@@ -205,7 +206,7 @@ test.describe('local folder backup provider', () => {
     await expect(page.getByTestId('settings-providers-list')).toContainText(
       'Local backup',
     )
-    await page.getByTestId('vault-secrets-tab').click()
+    await openVaultPage(page)
     await assertVaultReady(page)
 
     const key = uniqueSecretKey('folder-backup')
@@ -252,7 +253,7 @@ test.describe('local folder backup provider', () => {
     await page.getByTestId('settings-connect-local-folder-btn').click()
     await waitForVaultOperationsIdle(page)
     await assertVaultReady(page)
-    await page.getByTestId('vault-secrets-tab').click()
+    await openVaultPage(page)
     await assertVaultReady(page)
 
     const firstVaultKey = uniqueSecretKey('folder-guard-source')
@@ -342,7 +343,7 @@ test.describe('local folder backup provider', () => {
 
     await connectLocalFolderProviderFromSettings(page)
     await assertVaultReady(page)
-    await page.getByTestId('vault-secrets-tab').click()
+    await openVaultPage(page)
     await addSecret(
       page,
       uniqueSecretKey('folder-multi-first'),
@@ -356,7 +357,7 @@ test.describe('local folder backup provider', () => {
     await connectLocalVault(page)
     await connectLocalFolderProviderFromSettings(page)
     await assertVaultReady(page)
-    await page.getByTestId('vault-secrets-tab').click()
+    await openVaultPage(page)
     await addSecret(
       page,
       uniqueSecretKey('folder-multi-second'),

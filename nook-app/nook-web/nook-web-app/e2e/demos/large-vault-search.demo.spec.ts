@@ -4,6 +4,7 @@ import {
   connectLocalVault,
   expandSettingsSection,
   UI_TIMEOUT_MS,
+  openVaultPage,
 } from '../helpers'
 
 const DEMO_BEAT_MS = 700
@@ -45,7 +46,7 @@ test('search a paginated vault through encrypted metadata', async ({
     { timeout: 30_000 },
   )
 
-  await page.getByTestId('vault-secrets-tab').click()
+  await openVaultPage(page)
   await expect(page.getByText('Page 1 of 2')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
@@ -113,7 +114,7 @@ test('search a paginated vault through encrypted metadata', async ({
 
   await page.reload()
   await connectLocalVault(page)
-  await page.getByTestId('vault-secrets-tab').click()
+  await openVaultPage(page)
   await expect(page.getByText('Page 1 of 2')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })

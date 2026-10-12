@@ -17,6 +17,7 @@ import {
   uniqueSecretKey,
   unlockVaultOnLogin,
   waitForVaultUnlocked,
+  openManagePage,
 } from './helpers'
 
 test.describe('local vault', () => {
@@ -260,10 +261,8 @@ test.describe('local vault', () => {
       sessionStorage.setItem('nook_cleanup_probe', 'other-tab-session')
     })
 
-    await page.getByTestId('vault-settings-tab').click()
-    await expect(page.getByTestId('storage-settings-panel')).toBeVisible()
-    const dangerSection = page.getByTestId('vault-danger-section')
-    await dangerSection.getByRole('button').first().click()
+    await openManagePage(page, 'settings')
+    await expect(page.getByTestId('vault-danger-section')).toBeVisible()
     await page.getByTestId('delete-local-vault-button').click()
     await expect(
       page.getByTestId('delete-local-vault-confirmation'),

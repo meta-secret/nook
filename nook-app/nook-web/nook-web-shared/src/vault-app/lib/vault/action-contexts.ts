@@ -43,11 +43,7 @@ import type { VaultSyncState } from "$lib/vault/state/sync.svelte";
 import type { VaultUiState } from "$lib/vault/state/ui.svelte";
 import type { VaultArchitecture } from "$lib/vault/architecture-model";
 import type { TranslationRequest } from "$lib/vault/translation";
-import type {
-  AdminAccordionSection,
-  SettingsAccordionSection,
-  SettingsSection,
-} from "$lib/vault/state/ui.svelte";
+import type { WorkspaceSection } from "$lib/vault/state/ui.svelte";
 import type { EventOutboxRequest } from "$lib/vault/sync-operation-state";
 import type { NookLocalVaultEntry, NookPasswordEntrySummary } from "$app-wasm";
 import type { VaultOperationStale } from "$lib/runtime/vault-operation-stale";
@@ -422,7 +418,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   clearUnlockedSession(resetManager?: boolean): void;
   beginAddProvider(): void;
   beginProviderSetup(request: ProviderSetupRequest): void;
-  openAdmin(accordion: AdminAccordionSection): void;
+  openSection(section: WorkspaceSection): void;
   ensureOAuthTokensFresh(): Promise<
     Result<
       OAuthTokenFreshnessOutcome | VaultOperationStale,
@@ -527,7 +523,7 @@ export type ArchitectureActionsContext = Pick<
   };
 
 export type SessionActionsContext = Pick<VaultRuntimeState, "errorMsg"> &
-  Pick<VaultUiState, "settingsOpen"> &
+  Pick<VaultUiState, "workspaceSection"> &
   Pick<VaultProviderState, "localLoginPreparation" | "vaultArchitecture"> &
   Pick<
     VaultSessionState,
@@ -608,14 +604,7 @@ export type UiActionsContext = Pick<
   "errorMsg" | "isSaving"
 > &
   Pick<VaultSessionState, "hasManager" | "admitManager"> &
-  Pick<
-    VaultUiState,
-    | "adminAccordionSection"
-    | "helpOpen"
-    | "settingsAccordionSection"
-    | "settingsOpen"
-    | "settingsSection"
-  > & {
+  Pick<VaultUiState, "helpOpen" | "workspaceSection"> & {
     localDataDeletionStarted: boolean;
     cancelAddProvider(): void;
     cancelProviderSetup(): void;
@@ -633,10 +622,3 @@ export type UiActionsContext = Pick<
     t(request: TranslationRequest): string;
     waitForStorageChain(): Promise<void>;
   };
-
-export type SettingsNavigationRequest = {
-  readonly section: SettingsSection;
-  readonly accordion: SettingsAccordionSection;
-};
-
-export type OpenAdminAccordion = AdminAccordionSection;

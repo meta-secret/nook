@@ -14,6 +14,7 @@ import {
   waitForVaultOperationsIdle,
   waitForLoadedSyncProviders,
   waitForSyncRemoteVaultState,
+  openVaultPage,
 } from './helpers'
 import { createLocalE2eFileSyncVaultStub } from './file-sync-stub'
 
@@ -173,7 +174,7 @@ test.describe('sync conflict resolution', () => {
       .toEqual(storeA)
     const remoteEventsBeforeConflict = stub.getEventFileContents()
 
-    await page.getByTestId('vault-secrets-tab').click()
+    await openVaultPage(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible()
 
     await page.getByTestId('header-lock-vault-btn').click()

@@ -21,6 +21,7 @@ import {
   EventOutboxTargetKind,
   type EventOutboxRequest,
 } from "$lib/vault/sync-operation-state";
+import { WorkspaceSection } from "$lib/vault/state/ui.svelte";
 
 const log = browserLogRuntime.createLogger("vault-devices");
 
@@ -416,7 +417,7 @@ export class VaultDeviceActions {
       state.showSuccess(state.t(I18N_KEYS.ToastsEnrolledConnected));
       log.info("enrolled and connected");
       state.joinEnrollmentPrompt = JoinEnrollmentState.None;
-      state.closeSettings();
+      state.openSection(WorkspaceSection.Vault);
       state.startIdleSessionTracking();
     } catch (e) {
       state.errorMsg =

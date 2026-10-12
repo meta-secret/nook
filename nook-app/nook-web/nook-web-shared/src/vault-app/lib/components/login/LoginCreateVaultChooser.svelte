@@ -30,7 +30,6 @@
   } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button";
   import SentinelUnlockParticipantHelper from "$lib/components/login/SentinelUnlockParticipantHelper.svelte";
-  import VaultSecurityOrbit from "$lib/components/login/VaultSecurityOrbit.svelte";
   import SentinelGenesisJoinFlow from "$lib/components/login/SentinelGenesisJoinFlow.svelte";
   import SentinelDashboardSurface from "$lib/components/login/SentinelDashboardSurface.svelte";
   import {
@@ -257,13 +256,6 @@
       };
       return sentinelGenesisBrowser.buildSentinelGenesisRequestLink(linkArgs);
     })(),
-  );
-  const landingSupporting = $derived(
-    appKind === VaultApplication.Simple
-      ? vault.t(I18N_KEYS.LoginLandingSupportingSimple)
-      : appKind === VaultApplication.Sentinel
-        ? vault.t(I18N_KEYS.LoginLandingSupportingSentinel)
-        : vault.t(I18N_KEYS.LoginLandingSupporting),
   );
   const existingVaultDescription = $derived(
     appKind === VaultApplication.Simple
@@ -528,41 +520,10 @@
         "mx-auto w-full",
         sentinelDashboardActive
           ? "relative min-h-screen max-w-7xl px-5 py-20 sm:px-10"
-          : "grid max-w-6xl items-start gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:gap-12",
+          : "",
       ]}
     >
-      <div class={sentinelDashboardActive ? "hidden" : "space-y-5"}>
-        <p
-          class="font-mono text-[11px] tracking-[0.2em] text-muted-foreground uppercase"
-        >
-          {vault.t(I18N_KEYS.LoginLandingEyebrow)}
-        </p>
-        <h1
-          class="text-4xl leading-[0.95] font-semibold tracking-tight text-foreground sm:text-5xl lg:text-6xl"
-        >
-          {vault.t(I18N_KEYS.LoginLandingHeadline)}
-        </h1>
-        <p
-          class="max-w-md text-base leading-7 text-muted-foreground text-pretty"
-        >
-          {landingSupporting}
-        </p>
-
-        <div
-          class="relative mt-8 grid min-h-[10rem] place-items-center lg:hidden"
-        >
-          <VaultSecurityOrbit compact />
-        </div>
-      </div>
-
       <div class={sentinelDashboardActive ? "relative w-full" : ""}>
-        <div
-          class={sentinelDashboardActive
-            ? "hidden"
-            : "relative mb-8 hidden min-h-[12rem] place-items-center lg:grid"}
-        >
-          <VaultSecurityOrbit />
-        </div>
 
         <div
           class={[
@@ -571,7 +532,7 @@
               ? "sentinel-card-stack-panel rounded-none border border-[#657580] border-l-4 border-l-[#6ed9ff] bg-[#242d35] p-6 sm:p-10"
               : sentinelDashboardActive
                 ? "rounded-none border border-[#294323] bg-black/40 p-5 shadow-[0_0_80px_rgb(94_255_112/0.05)] sm:p-8"
-                : "rounded-xl border border-border bg-card/80 p-6 shadow-lg shadow-black/10 backdrop-blur-sm sm:p-8",
+                : "nk-frame-sheet p-5 sm:p-8",
           ]}
         >
           {#if sentinelDashboardActive}

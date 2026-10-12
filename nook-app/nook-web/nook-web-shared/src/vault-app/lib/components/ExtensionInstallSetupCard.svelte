@@ -37,7 +37,7 @@
 </script>
 
 <aside
-  class="rounded-lg border border-primary/25 bg-primary/5 p-4 animate-in fade-in slide-in-from-top-2"
+  class="nk-banner bg-card p-4 animate-in fade-in slide-in-from-top-2"
   data-testid="extension-install-setup"
   data-status={state.status}
 >

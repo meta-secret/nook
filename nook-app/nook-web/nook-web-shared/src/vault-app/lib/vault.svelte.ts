@@ -29,7 +29,6 @@ import { type ProviderSetupRequest } from "$lib/auth/providers";
 import type { ProviderVaultIdentitySelection } from "$lib/vault/provider-vault-decision";
 import type { VaultArchitecture } from "$lib/vault/architecture-model";
 import type {
-  SettingsNavigationRequest,
   ProviderActionsContext,
   ProviderSyncRequest,
   SyncFromProvidersRequest,
@@ -64,7 +63,7 @@ import {
   type SecretDeletionInput,
   type SecretReplacementInput,
 } from "$lib/vault/secret-mutations.svelte";
-import { AdminAccordionSection } from "$lib/vault/state/ui.svelte";
+import { WorkspaceSection } from "$lib/vault/state/ui.svelte";
 import { LoginSetupKind } from "$lib/vault/state/provider.svelte";
 import type {
   EventOutboxRequest,
@@ -713,22 +712,9 @@ export class VaultState extends VaultRuntimeState {
     ).discoverStagedVaultStoreId();
   }
 
-  openSettings(options: SettingsNavigationRequest) {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return this.uiActions.openSettings({
-      ...options,
-    });
-  }
-
-  openAdmin(accordion: AdminAccordionSection = AdminAccordionSection.Vaults) {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return this.uiActions.openAdmin({
-      accordion,
-    });
-  }
-
-  closeSettings() {
-    return this.uiActions.closeSettings();
+  /** Navigate to one page of the unified identity and vault workspace. */
+  openSection(section: WorkspaceSection) {
+    return this.uiActions.openSection(section);
   }
 
   async deleteLocalBrowserData(): Promise<void> {
@@ -737,6 +723,16 @@ export class VaultState extends VaultRuntimeState {
 
   async handleRemoteLocalBrowserDataDeletion() {
     return this.uiActions.handleRemoteLocalBrowserDataDeletion();
+  }
+
+  /**
+   * Lock from the UI. The current page is kept so unlocking resumes it; the
+   * identities hub instead resumes into the vault that gets unlocked.
+   */
+  lockIdentity() {
+    if (this.workspaceSection === WorkspaceSection.Identities)
+      this.openSection(WorkspaceSection.Vault);
+    return this.lockVault();
   }
 
   /** End the in-memory session and return to the login gate (encrypted vault + sync providers stay on disk). */

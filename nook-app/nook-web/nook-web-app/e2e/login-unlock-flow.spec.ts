@@ -166,7 +166,7 @@ test.describe('login unlock flow (local-first)', () => {
     await expect(page.getByTestId('vault-admin-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await expect(page).toHaveURL(/\/admin$/)
+    await expect(page).toHaveURL(/\/vault\/passwords$/)
     await waitForPersistedAppLog(page, {
       scope: 'vault-password',
       level: 'info',
@@ -207,8 +207,8 @@ test.describe('login unlock flow (local-first)', () => {
     const reviewIdentities = page.getByTestId('login-review-identities')
     await expect(reviewIdentities).toBeVisible({ timeout: UI_TIMEOUT_MS })
     await reviewIdentities.click()
-    await expect(page.getByTestId('devices-access-back')).toBeFocused()
-    await page.getByTestId('devices-access-back').click()
+    await expect(page.getByTestId('page-bar-back')).toBeFocused()
+    await page.getByTestId('page-bar-back').click()
     try {
       await expect(reviewIdentities).toBeFocused()
     } catch (error) {
@@ -258,7 +258,7 @@ test.describe('login unlock flow (local-first)', () => {
     await expect(page.getByTestId('vault-admin-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await expect(page).toHaveURL(/\/admin$/)
+    await expect(page).toHaveURL(/\/vault\/passwords$/)
   })
 
   test('hides backup password option when vault has no password entries', async ({

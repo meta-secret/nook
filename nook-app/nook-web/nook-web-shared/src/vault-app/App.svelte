@@ -50,11 +50,9 @@
   } from '$lib/app/extension-setup'
   import {
     APP_SHELL_WIDTH,
-    APP_SHELL_WIDTH_WIDE,
     APP_VERSION,
     ApplicationShellLayout,
   } from '$lib/app/shell-layout'
-  import { SettingsSection } from '$lib/vault/state/ui.svelte'
   import {
     assess_vault_security,
     configured_vault_application_is_simple,
@@ -427,11 +425,7 @@
     colorMode = browserColorMode.manualColorMode(manualColorModeRequest)
   }
   const appVersion = APP_VERSION
-  const shellWidth = $derived(
-    vault.settingsOpen && vault.settingsSection === SettingsSection.DevicesAccess
-      ? APP_SHELL_WIDTH_WIDE
-      : APP_SHELL_WIDTH,
-  )
+  const shellWidth = APP_SHELL_WIDTH
   let secretsAddOpen = $state(false)
   const shellSpacing = $derived.by(() => {
     const applicationShellLayoutRequest: ConstructorParameters<
@@ -919,7 +913,6 @@
   legalPageState={routeCoordinator.legalPageState}
   logsPage={routeCoordinator.logsPage}
   extensionConnectRoute={routeCoordinator.extensionConnectRoute}
-  extensionSetupState={extensionSetupStateValue}
   {appVersion}
   extensionConnectRequestState={routeCoordinator.extensionConnectRequestState}
   preserveAccessGate={pendingVaultCreationState.kind ===
@@ -994,6 +987,5 @@
   }}
   onNavigateHome={routeCoordinator.navigateHome}
   onToggleColorMode={toggleColorMode}
-  onExtensionConnect={handleExtensionConnect}
   onFinishExtensionConnect={routeCoordinator.finishExtensionConnect}
 />

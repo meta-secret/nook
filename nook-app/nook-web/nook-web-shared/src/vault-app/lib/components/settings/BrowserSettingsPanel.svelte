@@ -1,118 +1,29 @@
 <script lang="ts">
   import { LocaleCatalogSource } from "$lib/vault/locale";
-  import type {
-    DeviceRenameResult,
-    DeviceRevocationResult,
-  } from "$lib/vault/multi-device";
-  type DeviceRename = { readonly authId: string; readonly label: string };
-
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
-  import { Laptop, Globe, Trash2, TriangleAlert } from "@lucide/svelte";
+  import { Globe, Trash2, TriangleAlert } from "@lucide/svelte";
   import {
     parse_app_locale,
     supported_app_locale_code,
     NookAppLocaleParse,
   } from "$app-wasm";
   import type { VaultState } from "$lib/vault.svelte";
-  import SettingsAccordionPanel from "$lib/components/settings/SettingsAccordionSection.svelte";
-  import VaultDevicesCard from "$lib/components/settings/VaultDevicesCard.svelte";
-  import type {
-    JoinApprovalHandlingOutcome,
-    JoinDenialHandlingOutcome,
-  } from "$lib/components/settings/vault-devices-card-state";
-  import type { JoinRequest, VaultMember } from "$lib/nook";
+  import ManageSection from "$lib/components/settings/ManageSection.svelte";
   import { Button } from "$lib/components/ui/button";
-  import { SettingsAccordionSection } from "$lib/vault/state/ui.svelte";
 
   let deleteConfirmationOpen = $state(false);
 
   let {
     vault,
-    isVerifying,
-    isSaving,
-    deviceId,
-    devicePublicKey,
-    pendingJoins,
-    vaultMembers,
-    hasPasswordEnvelope = false,
-    onApproveJoin,
-    onDenyJoin,
-    onRenameDevice,
-    onRevokeDevice,
-    accordionSection = $bindable(SettingsAccordionSection.Devices),
   }: {
     vault: VaultState;
-    isVerifying: boolean;
-    isSaving: boolean;
-    deviceId: string;
-    devicePublicKey: string;
-    pendingJoins: JoinRequest[];
-    vaultMembers: VaultMember[];
-    hasPasswordEnvelope?: boolean;
-    onApproveJoin: (deviceId: string) => Promise<JoinApprovalHandlingOutcome>;
-    onDenyJoin: (deviceId: string) => Promise<JoinDenialHandlingOutcome>;
-    onRenameDevice: (args: DeviceRename) => Promise<DeviceRenameResult>;
-    onRevokeDevice: (authId: string) => Promise<DeviceRevocationResult>;
-    accordionSection?: SettingsAccordionSection;
   } = $props();
-
-  const hasDevices = $derived(vaultMembers.length > 0);
-
-  function toggleSection(section: SettingsAccordionSection): void {
-    accordionSection =
-      accordionSection === section ? SettingsAccordionSection.Closed : section;
-  }
 </script>
 
-<div class="space-y-2" data-testid="storage-settings-panel">
-  <SettingsAccordionPanel
-    title={vault.t(I18N_KEYS.SettingsDevices)}
-    subtitle={vault.t(I18N_KEYS.SettingsDevicesDesc)}
-    open={accordionSection === SettingsAccordionSection.Devices}
-    onToggle={() => toggleSection(SettingsAccordionSection.Devices)}
-    testId="vault-devices-section"
-  >
-    {#snippet badge()}
-      <span
-        class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium {hasDevices
-          ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-          : 'border-border bg-muted/40 text-muted-foreground'}"
-        data-testid="vault-devices-status"
-      >
-        <Laptop class="size-3" />
-        {vaultMembers.length === 1
-          ? vault.t(I18N_KEYS.SettingsDeviceCountSingular)
-          : (() => {
-              const tArgs: Parameters<typeof vault.t>[0] = {
-                key: I18N_KEYS.SettingsDeviceCountPlural,
-                replacements: {
-                  count: String(vaultMembers.length),
-                },
-              };
-              return vault.t(tArgs);
-            })()}
-      </span>
-    {/snippet}
-    <VaultDevicesCard
-      {vault}
-      {deviceId}
-      {devicePublicKey}
-      {pendingJoins}
-      {vaultMembers}
-      isBusy={isSaving || isVerifying}
-      {hasPasswordEnvelope}
-      {onApproveJoin}
-      {onDenyJoin}
-      {onRenameDevice}
-      {onRevokeDevice}
-    />
-  </SettingsAccordionPanel>
-
-  <SettingsAccordionPanel
+<div class="grid min-w-0 grid-cols-1 gap-8" data-testid="browser-settings-panel">
+  <ManageSection
     title={vault.t(I18N_KEYS.SettingsLanguage)}
     subtitle={vault.t(I18N_KEYS.SettingsSelectLanguage)}
-    open={accordionSection === SettingsAccordionSection.Language}
-    onToggle={() => toggleSection(SettingsAccordionSection.Language)}
     testId="vault-language-section"
   >
     {#snippet badge()}
@@ -123,7 +34,7 @@
         {vault.locale === "en" ? "English" : "Русский"}
       </span>
     {/snippet}
-    <div class="p-4 space-y-3">
+    <div class="nk-list space-y-3 p-4">
       <label
         for="language-select"
         class="block text-sm font-medium text-muted-foreground"
@@ -153,13 +64,11 @@
         <option value="ru">Русский</option>
       </select>
     </div>
-  </SettingsAccordionPanel>
+  </ManageSection>
 
-  <SettingsAccordionPanel
+  <ManageSection
     title={vault.t(I18N_KEYS.SettingsDeleteLocalTitle)}
     subtitle={vault.t(I18N_KEYS.SettingsDeleteLocalDesc)}
-    open={accordionSection === SettingsAccordionSection.Danger}
-    onToggle={() => toggleSection(SettingsAccordionSection.Danger)}
     testId="vault-danger-section"
   >
     {#snippet badge()}
@@ -170,7 +79,7 @@
         {vault.t(I18N_KEYS.SettingsDangerZone)}
       </span>
     {/snippet}
-    <div class="space-y-3 p-4">
+    <div class="nk-banner space-y-3 border-l-destructive p-4">
       <p class="text-sm text-muted-foreground text-pretty">
         {vault.t(I18N_KEYS.SettingsDeleteLocalDetails)}
       </p>
@@ -221,5 +130,5 @@
         </Button>
       {/if}
     </div>
-  </SettingsAccordionPanel>
+  </ManageSection>
 </div>

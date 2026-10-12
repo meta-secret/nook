@@ -187,10 +187,7 @@ test.describe('vault architecture modes', () => {
     page,
   }) => {
     await expect(page.getByTestId('mode-group-device')).toHaveCount(0)
-    await expect(page.getByTestId('vault-security-orbit')).toBeVisible()
-    await expect(
-      page.getByTestId('vault-security-orbit').locator('img'),
-    ).toHaveAttribute('src', '/nook-logo-dark.png')
+    await expect(page.getByTestId('identities-hero')).toBeVisible()
     await expect(page.getByTestId('get-started-path-chooser')).toBeVisible()
 
     await continueToPathChooser(page)
@@ -457,7 +454,9 @@ test.describe('vault architecture modes', () => {
     page,
   }) => {
     const chooser = page.getByTestId('login-create-vault-chooser')
-    await expect(chooser).toContainText('Keys, not accounts.')
+    await expect(page.getByTestId('identities-hero')).toContainText(
+      'Identities',
+    )
     await continueToPathChooser(page)
     await expect(chooser).toContainText('Create a new vault')
     await expect(page.getByTestId('get-started-path-simple')).toContainText(
@@ -477,7 +476,9 @@ test.describe('vault architecture modes', () => {
     await page.getByTestId('header-language-select').click()
     await page.getByTestId('header-language-option-ru').click()
 
-    await expect(chooser).toContainText('Ключи, а не аккаунты.')
+    await expect(page.getByTestId('identities-hero')).toContainText(
+      'Идентификаторы',
+    )
     await expect(chooser).toContainText('Создать новый сейф')
     await expect(page.getByTestId('get-started-path-simple')).toContainText(
       'Создать простой сейф',

@@ -15,6 +15,7 @@ import {
   installPasskeyMock,
   prepareTwoProtectedIdentitiesWithoutVault,
   selectLoginUnlockMethod,
+  openKeysPage,
 } from '../helpers'
 
 const BEAT_MS = 650
@@ -86,8 +87,8 @@ test('walk the access chain from passkey to app to vaults', async ({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
   await expect(page.getByTestId('vault-devices-access-tab')).toHaveCount(0)
-  await page.getByTestId('header-devices-access-btn').click()
-  await expect(page).toHaveURL(/\/devices-access$/)
+  await openKeysPage(page)
+  await expect(page).toHaveURL(/\/identity\/keys$/)
   const dashboard = page.getByTestId('devices-access-dashboard')
   await expect(dashboard).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
   await page.getByTestId('devices-access-unlock-identity').click()
@@ -231,9 +232,9 @@ test('walk the access chain from passkey to app to vaults', async ({
   await page.waitForTimeout(BEAT_MS)
 
   await page.getByTestId('header-lock-vault-btn').click()
-  // Locking from /devices-access keeps that URL, so login opens Access directly.
-  await expect(page).toHaveURL(/\/devices-access$/)
-  await page.goto('/devices-access')
+  // Locking from /identity/keys keeps that URL, so login opens Access directly.
+  await expect(page).toHaveURL(/\/identity\/keys$/)
+  await page.goto('/identity/keys')
   await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
@@ -379,7 +380,7 @@ test('shows independent browser and extension passkeys with local-only rename', 
     new ExtensionAssociationDemo(admission.value).install()
   }, request)
 
-  await page.getByTestId('header-devices-access-btn').click()
+  await openKeysPage(page)
   const inventory = page.getByTestId('devices-access-key-inventory')
   await expect(inventory).toBeVisible()
   const groupFilter: PasskeyGroupFilter = {

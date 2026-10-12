@@ -4,6 +4,7 @@ import {
   connectLocalVault,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   installPasskeyMock,
+  openKeysPage,
 } from './helpers'
 
 test.describe('devices and access passkey inventory', () => {
@@ -18,7 +19,7 @@ test.describe('devices and access passkey inventory', () => {
     page,
   }) => {
     await connectLocalVault(page)
-    await page.getByTestId('header-devices-access-btn').click()
+    await openKeysPage(page)
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })

@@ -275,3 +275,6 @@ import type {
   PasskeyKeeperKind,
 } from "$app-wasm";
 import type { VaultAccessView } from "./devices-access/access-chain";
+
+/** Leaves the Keys page through its own cleanup (abandons identity creation). */
+export type KeysPageLeave = () => Promise<void>;

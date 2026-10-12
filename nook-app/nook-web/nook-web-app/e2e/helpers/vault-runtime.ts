@@ -9,6 +9,7 @@ import { keepVaultIdleLockDisabled } from './device-enrollment'
 import { ENROLLMENT_UNLOCK_TIMEOUT_MS, UI_TIMEOUT_MS } from './environment'
 import { assertNoVaultErrors } from './github-sync'
 import { openLoginProviderSetup } from './vault-setup'
+import { openVaultPage } from './workspace-navigation'
 
 export async function clearBrowserVault(page: Page) {
   const appMountReadinessOptions: { timeout: number } = {
@@ -275,7 +276,7 @@ export async function waitForEngine(page: Page) {
 export async function assertGithubConnected(page: Page) {
   await assertNoVaultErrors(page, { allowTransient: true })
   if (!(await page.getByTestId('vault-panel').isVisible())) {
-    await page.getByTestId('vault-secrets-tab').click()
+    await openVaultPage(page)
   }
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: UI_TIMEOUT_MS,

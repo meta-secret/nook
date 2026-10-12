@@ -1,8 +1,7 @@
 import { LegalRouteKind } from "$lib/app/route-state";
 
 export const APP_VERSION = "0.1.0";
-export const APP_SHELL_WIDTH = "max-w-5xl";
-export const APP_SHELL_WIDTH_WIDE = "max-w-[90rem]";
+export const APP_SHELL_WIDTH = "max-w-6xl";
 
 type AppShellLayoutState = {
   legalRouteKind: LegalRouteKind;

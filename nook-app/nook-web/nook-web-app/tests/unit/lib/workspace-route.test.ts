@@ -17,14 +17,31 @@ describe('workspace routes', () => {
     ['/', WorkspaceRoute.Vault],
     ['/app/', WorkspaceRoute.Vault],
     ['/vault', WorkspaceRoute.Vault],
-    ['/devices-access/', WorkspaceRoute.DevicesAccess],
-    ['/simple/devices-access', WorkspaceRoute.DevicesAccess],
-    ['/sentinel/settings', WorkspaceRoute.Settings],
-    ['/admin', WorkspaceRoute.Admin],
-    ['/onboard', WorkspaceRoute.Onboard],
-    ['/settings', WorkspaceRoute.Settings],
+    ['/identities', WorkspaceRoute.Identities],
+    ['/identity/keys', WorkspaceRoute.Keys],
+    ['/identity/vaults/', WorkspaceRoute.Vaults],
+    ['/identity/settings', WorkspaceRoute.Settings],
+    ['/vault/devices', WorkspaceRoute.Devices],
+    ['/vault/sync', WorkspaceRoute.Sync],
+    ['/vault/passwords', WorkspaceRoute.Passwords],
+    ['/vault/import', WorkspaceRoute.Import],
+    ['/simple/identity/keys', WorkspaceRoute.Keys],
     ['/help', WorkspaceRoute.Help],
   ])('maps %s to its workspace', (pathname, route) => {
+    expect(new WorkspacePath(pathname).route).toEqual({
+      kind: WorkspaceRouteLookupKind.Workspace,
+      route,
+    })
+  })
+
+  test.each([
+    ['/devices-access/', WorkspaceRoute.Keys],
+    ['/simple/devices-access', WorkspaceRoute.Keys],
+    ['/admin', WorkspaceRoute.Vaults],
+    ['/onboard', WorkspaceRoute.Devices],
+    ['/settings', WorkspaceRoute.Settings],
+    ['/sentinel/settings', WorkspaceRoute.Settings],
+  ])('keeps the earlier %s path working', (pathname, route) => {
     expect(new WorkspacePath(pathname).route).toEqual({
       kind: WorkspaceRouteLookupKind.Workspace,
       route,
@@ -39,10 +56,14 @@ describe('workspace routes', () => {
 
   test.each([
     [WorkspaceRoute.Vault, '/vault'],
-    [WorkspaceRoute.DevicesAccess, '/devices-access'],
-    [WorkspaceRoute.Admin, '/admin'],
-    [WorkspaceRoute.Onboard, '/onboard'],
-    [WorkspaceRoute.Settings, '/settings'],
+    [WorkspaceRoute.Identities, '/identities'],
+    [WorkspaceRoute.Keys, '/identity/keys'],
+    [WorkspaceRoute.Vaults, '/identity/vaults'],
+    [WorkspaceRoute.Settings, '/identity/settings'],
+    [WorkspaceRoute.Devices, '/vault/devices'],
+    [WorkspaceRoute.Sync, '/vault/sync'],
+    [WorkspaceRoute.Passwords, '/vault/passwords'],
+    [WorkspaceRoute.Import, '/vault/import'],
     [WorkspaceRoute.Help, '/help'],
   ])('builds the canonical %s path', (route, path) => {
     expect(new WorkspaceLocation(route).path).toBe(path)

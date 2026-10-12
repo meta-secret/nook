@@ -9,7 +9,6 @@
     type ExtensionConnectIntent,
     type LegalRoute,
   } from '$lib/app/route-state'
-  import type { ExtensionSetupOffer } from '$lib/app/extension-setup'
   import LegalDocumentPage from '$lib/components/LegalDocumentPage.svelte'
   import LogsPage from '$lib/components/LogsPage.svelte'
   import AppLogsApiPage from '$lib/components/AppLogsApiPage.svelte'
@@ -35,7 +34,6 @@
     legalPageState,
     logsPage,
     extensionConnectRoute,
-    extensionSetupState,
     appVersion,
     extensionConnectRequestState,
     preserveAccessGate,
@@ -43,7 +41,6 @@
     authenticatedWorkspaceProps,
     onNavigateHome,
     onToggleColorMode,
-    onExtensionConnect,
     onFinishExtensionConnect,
   }: {
     vault: VaultState
@@ -54,7 +51,6 @@
     legalPageState: LegalRoute
     logsPage: boolean
     extensionConnectRoute: boolean
-    extensionSetupState: ExtensionSetupOffer
     appVersion: string
     extensionConnectRequestState: ExtensionConnectIntent
     preserveAccessGate: boolean
@@ -62,15 +58,9 @@
     authenticatedWorkspaceProps: AuthenticatedWorkspaceProps
     onNavigateHome: () => void
     onToggleColorMode: () => void
-    onExtensionConnect: () => Promise<void>
     onFinishExtensionConnect: (outcome: ExtensionConsentCloseOutcome) => void
   } = $props()
 
-  let headerDevicesAccessRequestGeneration = $state(0)
-
-  $effect(() => {
-    if (preserveAccessGate) headerDevicesAccessRequestGeneration = 0
-  })
 </script>
 
 {#if appLogsPage}
@@ -87,15 +77,9 @@
       legalPageOpen={legalPageState.kind === LegalRouteKind.Legal}
       {logsPage}
       {extensionConnectRoute}
-      workspaceAccessAvailable={!preserveAccessGate}
-      {extensionSetupState}
+      workspaceAvailable={!preserveAccessGate}
       {onNavigateHome}
       {onToggleColorMode}
-      onPairExtension={() => void onExtensionConnect()}
-      onOpenDevicesAccess={() => {
-        if (preserveAccessGate) return
-        headerDevicesAccessRequestGeneration += 1
-      }}
     />
 
     <div
@@ -124,13 +108,7 @@
           onClose={onFinishExtensionConnect}
         />
       {:else if vault.isAuthenticated}
-        <AuthenticatedVaultWorkspace
-          {...authenticatedWorkspaceProps}
-          {headerDevicesAccessRequestGeneration}
-          onHeaderDevicesAccessRequestHandled={() => {
-            headerDevicesAccessRequestGeneration = 0
-          }}
-        />
+        <AuthenticatedVaultWorkspace {...authenticatedWorkspaceProps} />
       {/if}
     </div>
 

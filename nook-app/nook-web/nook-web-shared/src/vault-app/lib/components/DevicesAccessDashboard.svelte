@@ -9,8 +9,8 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
   import { err, ok } from "neverthrow";
   import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
   import { I18N_KEYS } from "../../../generated/i18n-keys";
-  import { onDestroy, untrack } from "svelte";
-  import { ArrowLeft, Fingerprint, RefreshCw } from "@lucide/svelte";
+  import { onDestroy, onMount, untrack } from "svelte";
+  import { Fingerprint, RefreshCw } from "@lucide/svelte";
   import {
     DeviceAccessProtectionKind,
     DeviceProtectionStatus,
@@ -30,6 +30,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     DashboardTextKind,
     type DashboardView,
     DevicesAccessRepresentationKind,
+    type KeysPageLeave,
   } from "./devices-access-dashboard-state";
   import IdentityDirectoryRail from "./devices-access/IdentityDirectoryRail.svelte";
   import IdentityKeyInventory from "./devices-access/IdentityKeyInventory.svelte";
@@ -55,9 +56,12 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
   let {
     vault,
     onBack,
+    onLeaveReady = () => {},
   }: {
     vault: VaultState;
     onBack: () => void;
+    /** Hands the host page bar a way to leave through this page's cleanup. */
+    onLeaveReady?: (leave: KeysPageLeave) => void;
   } = $props();
   let loadState = $state<DashboardLoadState<DashboardView>>({
     kind: DashboardLoadKind.Loading,
@@ -282,12 +286,17 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     await abandonPendingIdentityCreation();
   }
 
+  /** Leave through the host page bar; abandons an unfinished identity. */
   async function leaveDashboard(): Promise<void> {
     dashboardMounted = false;
     await abandonPendingIdentityCreation();
     vault.devicesAccessIdentityProtectionOpen = false;
     onBack();
   }
+
+  onMount(() => {
+    onLeaveReady(leaveDashboard);
+  });
 
   onDestroy(() => {
     dashboardMounted = false;
@@ -402,7 +411,21 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
       selectedRepresentation = DevicesAccessRepresentationKind.List;
     }
     resetSelectedVaultForIdentity();
+    applyHostRequests();
     return DashboardLoadKind.Ready;
+  }
+
+  /** Honour the identity card that sent the person here. */
+  function applyHostRequests(): void {
+    const focus = vault.identityFocus;
+    if (focus) {
+      vault.identityFocus = "";
+      chooseIdentity(focus);
+    }
+    if (vault.identityCreationRequested) {
+      vault.identityCreationRequested = false;
+      if (!identityCreationOpen) void beginAddIdentity();
+    }
   }
 
   $effect(() => {
@@ -412,32 +435,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
   });
 </script>
 
-<section class="w-full space-y-8 pb-4" data-testid="devices-access-dashboard">
-  <header class="flex items-start gap-3 border-b border-border/60 pb-5">
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon"
-      class="mt-0.5 shrink-0"
-      aria-label={vault.t(I18N_KEYS.CommonBack)}
-      data-testid="devices-access-back"
-      onclick={() => void leaveDashboard()}
-    >
-      <ArrowLeft class="size-4" />
-    </Button>
-    <div class="min-w-0 space-y-1">
-      <h1
-        class="text-2xl font-semibold tracking-tight text-balance text-foreground sm:text-3xl"
-      >
-        {vault.t(I18N_KEYS.DevicesAccessTitle)}
-      </h1>
-      <p
-        class="max-w-[70ch] text-sm leading-relaxed text-pretty text-muted-foreground"
-      >
-        {vault.t(I18N_KEYS.DevicesAccessDescription)}
-      </p>
-    </div>
-  </header>
+<section class="w-full space-y-6 pb-4" data-testid="devices-access-dashboard">
 
   {#if loadState.kind === DashboardLoadKind.Loading}
     <div

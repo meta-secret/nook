@@ -6,6 +6,7 @@ import {
   authorizeDeviceProtection,
   connectLocalVault,
   UI_TIMEOUT_MS,
+  openKeysPage,
 } from './helpers'
 import { installMockPasskeyRuntime } from './passkey-mock'
 import type { ExtensionPairingApprovedMessage } from '../../nook-web-shared/src/extension/runtime-messages'
@@ -129,9 +130,7 @@ class VaultAppsInventoryScenario {
     yield* Effect.promise(() =>
       expect(page).toHaveURL(/\/vault\/?$/, { timeout: UI_TIMEOUT_MS }),
     )
-    yield* Effect.promise(() =>
-      page.getByTestId('header-devices-access-btn').click(),
-    )
+    yield* Effect.promise(() => openKeysPage(page))
     const identity = page.getByTestId('devices-access-identity-option')
     const apps = page.getByTestId('devices-access-app')
     yield* Effect.promise(() => expect(identity).toHaveCount(1))

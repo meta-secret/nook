@@ -32,7 +32,7 @@
 
 {#if pendingJoins.length > 0}
   <div
-    class="mb-6 rounded-lg border border-primary/25 bg-primary/5 p-4 animate-in fade-in slide-in-from-top-2"
+    class="nk-banner nk-banner-success p-4 animate-in fade-in slide-in-from-top-2"
     data-testid="pending-joins-banner"
   >
     <div class="flex items-start justify-between gap-3">
@@ -84,7 +84,7 @@
     <ul class="mt-3 space-y-2" data-testid="pending-joins-list">
       {#each pendingJoins as join (join.deviceId)}
         <li
-          class="flex items-center justify-between gap-3 rounded-md border border-border bg-background/70 px-3 py-2.5"
+          class="flex items-center justify-between gap-3 border border-border bg-background/70 px-3 py-2.5"
           data-testid="device-join-row"
         >
           <div class="min-w-0">

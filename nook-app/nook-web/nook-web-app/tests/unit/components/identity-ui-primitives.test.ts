@@ -4,10 +4,6 @@ import {
   CipherStripText,
 } from '../../../../nook-web-shared/src/vault-app/lib/components/ui/cipher/cipher-text'
 import {
-  FrameShape,
-  FrameShapeClass,
-} from '../../../../nook-web-shared/src/vault-app/lib/components/ui/frame/frame-state'
-import {
   StatusTone,
   StatusToneClass,
 } from '../../../../nook-web-shared/src/vault-app/lib/components/ui/status-tag/status-tag-state'
@@ -15,19 +11,6 @@ import {
 const BASE64 = /^[A-Za-z0-9+/]*$/
 
 describe('identity UI primitives', () => {
-  test('every frame shape maps to its own app.css class', () => {
-    const names = Object.values(FrameShape).map(
-      (shape) => new FrameShapeClass(shape).name,
-    )
-    expect(names).toEqual([
-      'nk-frame',
-      'nk-frame-keytag',
-      'nk-frame-tab',
-      'nk-frame-sheet',
-      'nk-frame-nick',
-    ])
-  })
-
   test('status tones map to tag classes; neutral adds none', () => {
     expect(new StatusToneClass(StatusTone.Neutral).name).toBe('')
     expect(new StatusToneClass(StatusTone.Success).name).toBe('nk-tag-success')

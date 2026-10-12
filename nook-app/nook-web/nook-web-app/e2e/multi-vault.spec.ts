@@ -8,6 +8,9 @@ import {
   readLocalVaultYamlFromIdb,
   saveAuthProvidersInBrowser,
   unlockVaultOnLogin,
+  openVaultPage,
+  openManagePage,
+  openIdentitiesPage,
 } from './helpers'
 import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
 
@@ -177,14 +180,11 @@ test.describe('multi-vault on one browser profile', () => {
     const vaultAYaml = await readLocalVaultYamlFromIdb(page)
     const storeA = parseStoreId(vaultAYaml)
 
-    await expect(page.getByTestId('vault-switcher-trigger')).toBeVisible()
-    await page.getByTestId('vault-switcher-trigger').click()
-    await expect(page.getByTestId('vault-switcher-menu')).toBeVisible()
-    await expect(page.getByTestId('vault-switcher-count')).toContainText(
-      'One vault on this device',
-    )
-    await page.getByTestId('vault-switcher-admin-btn').click()
+    await openIdentitiesPage(page)
+    await expect(page.getByTestId('identity-vault-row')).toHaveCount(1)
+    await page.getByTestId('identity-new-vault').click()
     await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
+    await expect(page.getByTestId('vault-admin-vault-count')).toContainText('1')
     await page.getByTestId('vault-admin-create-input').fill('Vault B')
     await page.getByTestId('vault-admin-create-btn').click()
     await expect
@@ -204,8 +204,6 @@ test.describe('multi-vault on one browser profile', () => {
     const registryStoreIds = registry.map((entry) => entry.store_id)
     expect(registryStoreIds).toEqual(expect.arrayContaining([storeA, storeB]))
     expect(registry).toHaveLength(2)
-
-    await expect(page.getByTestId('vault-switcher-trigger')).toBeVisible()
 
     await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
     await expect(
@@ -240,76 +238,57 @@ test.describe('multi-vault on one browser profile', () => {
         return entries.find((entry) => entry.store_id === storeB)?.label
       })
       .toBe('Vault Bee')
-    await expect(page.getByTestId('vault-switcher-trigger')).toContainText(
-      'Vault Bee',
-    )
+    await expect(page.getByTestId('manage-nav')).toContainText('Vault Bee')
     await expect(page.getByTestId('vault-admin-vaults-section')).toBeVisible()
     await expect(page.getByTestId('vault-admin-vault-count')).toContainText(
       '2 vaults',
     )
 
-    await page.getByTestId('vault-admin-tab').click()
-    await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
-    await page
-      .getByTestId('storage-providers-section')
-      .getByRole('button')
-      .first()
-      .click()
+    await openManagePage(page, 'sync')
     await page
       .getByTestId('storage-providers-section')
       .getByTestId('add-provider-btn')
       .click()
     await expect(page.getByTestId('provider-picker-list')).toBeVisible()
-    await page.getByTestId('vault-secrets-tab').click()
+    await openVaultPage(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible()
 
     for (let i = 0; i < 2; i += 1) {
       await page.getByTestId('header-lock-vault-btn').click()
       await authorizeDeviceProtection(page, { storeId: storeB })
       await expect(page.getByTestId('vault-panel')).toBeVisible()
-      await expect(page.getByTestId('vault-switcher-trigger')).toBeVisible()
-      await page.getByTestId('vault-switcher-trigger').click()
-      await expect(page.getByTestId('vault-switcher-menu')).toBeVisible()
-      await page.keyboard.press('Escape')
-      await expect(page.getByTestId('vault-switcher-menu')).toBeHidden()
+      await expect(page.getByTestId('page-bar-title')).toContainText(
+        'Vault Bee',
+      )
     }
 
-    await page.getByTestId('vault-switcher-trigger').click()
-    await expect(page.getByTestId('vault-switcher-menu')).toBeVisible()
-    await expect(page.getByTestId('vault-switcher-count')).toBeVisible()
-    const menuBox = await page.getByTestId('vault-switcher-menu').boundingBox()
-    if (!menuBox) {
-      throw new Error('Vault switcher menu was not rendered in the viewport.')
-    }
+    await openIdentitiesPage(page)
+    const vaultRows = page.getByTestId('identity-vault-row')
+    await expect(vaultRows).toHaveCount(2)
     const viewport = page.viewportSize()
     if (!viewport) {
       throw new Error('Page viewport size was not available.')
     }
-    const menuVisibility: VisibleInViewportRequest = {
-      box: menuBox,
-      viewport,
-    }
-    assertBoxVisibleInViewport(menuVisibility)
-    const optionLocators = page.getByTestId('vault-switcher-option')
-    await expect(optionLocators).toHaveCount(2)
-    const options = await optionLocators.all()
-    for (const option of options) {
-      const optionBox = await option.boundingBox()
-      if (!optionBox) {
-        throw new Error(
-          'Vault switcher option was clipped out of the viewport.',
-        )
+    for (const row of await vaultRows.all()) {
+      const rowBox = await row.boundingBox()
+      if (!rowBox) {
+        throw new Error('Identity vault row was clipped out of the viewport.')
       }
-      const optionVisibility: VisibleInViewportRequest = {
-        box: optionBox,
+      const rowVisibility: VisibleInViewportRequest = {
+        box: rowBox,
         viewport,
       }
-      assertBoxVisibleInViewport(optionVisibility)
+      assertBoxVisibleInViewport(rowVisibility)
     }
+    await expect(
+      page.locator(
+        '[data-testid="identity-vault-row"][data-store-id="' + storeB + '"]',
+      ),
+    ).toHaveAttribute('data-state', 'open')
 
     await page
       .locator(
-        '[data-testid="vault-switcher-option"][data-store-id="' + storeA + '"]',
+        '[data-testid="identity-vault-row"][data-store-id="' + storeA + '"]',
       )
       .click()
     await authorizeDeviceProtection(page, { storeId: storeA })
@@ -318,11 +297,10 @@ test.describe('multi-vault on one browser profile', () => {
     let activeYaml = await readLocalVaultYamlFromIdb(page)
     expect(parseStoreId(activeYaml)).toEqual(storeA)
 
-    await page.getByTestId('vault-switcher-trigger').click()
-    await expect(page.getByTestId('vault-switcher-menu')).toBeVisible()
+    await openIdentitiesPage(page)
     await page
       .locator(
-        '[data-testid="vault-switcher-option"][data-store-id="' + storeB + '"]',
+        '[data-testid="identity-vault-row"][data-store-id="' + storeB + '"]',
       )
       .click()
     await authorizeDeviceProtection(page, { storeId: storeB })
@@ -330,13 +308,7 @@ test.describe('multi-vault on one browser profile', () => {
     expect(parseStoreId(activeYaml)).toEqual(storeB)
 
     await seedScopedSyncProviders(page, storeA, storeB)
-    await page.getByTestId('vault-admin-tab').click()
-    await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
-    await page
-      .getByTestId('storage-providers-section')
-      .getByRole('button')
-      .first()
-      .click()
+    await openManagePage(page, 'sync')
     await expect(page.getByTestId('settings-provider-oauth-file')).toBeVisible()
     await expect(page.getByTestId('settings-providers-list')).toContainText(
       'nook-multi-vault-a',

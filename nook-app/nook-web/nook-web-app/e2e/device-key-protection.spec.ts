@@ -9,6 +9,8 @@ import {
   readStringProperty,
   signedSentinelInvitation,
   waitForPersistedAppLog,
+  openVaultPage,
+  openKeysPage,
 } from './helpers'
 
 declare global {
@@ -82,7 +84,7 @@ async function createSentinelParticipantResponse(
 async function openExistingVaultProtectionOverlay(page: Page) {
   const overlay = page.getByTestId('passkey-auth-overlay')
   const unlockVaultButton = page.getByTestId('unlock-vault-btn')
-  // Locking from /devices-access keeps that URL, so LoginGate opens Access
+  // Locking from /identity/keys keeps that URL, so LoginGate opens Access
   // directly and may already show the unlock overlay without Unlock.
   await expect
     .poll(
@@ -563,10 +565,13 @@ test.describe('passkey device-key protection', () => {
     await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await page.getByTestId('login-devices-access').dispatchEvent('click')
-    await expect(page).toHaveURL(/\/devices-access$/)
+    await page.evaluate(() => {
+      history.pushState({}, '', '/identity/keys')
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    })
+    await expect(page).toHaveURL(/\/identity\/keys$/)
     await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
-    await page.getByTestId('devices-access-back').click()
+    await page.getByTestId('page-bar-back').click()
     await expect(page).toHaveURL(/\/vault$/)
     await expect(page.getByTestId('get-started-path-sentinel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -579,12 +584,12 @@ test.describe('passkey device-key protection', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await page.goBack()
-    await expect(page).toHaveURL(/\/devices-access$/)
+    await expect(page).toHaveURL(/\/identity\/keys$/)
     await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await page.getByTestId('devices-access-back').click()
+    await page.getByTestId('page-bar-back').click()
     await page.getByTestId('get-started-path-sentinel').click()
     await page.getByTestId('sentinel-dashboard-card-stack').click()
     await page.getByTestId('sentinel-onboarding-create-keys').click()
@@ -837,7 +842,7 @@ test.describe('passkey device-key protection', () => {
     expect(wrapped).toContain('"protection":"pin"')
     expect(wrapped).not.toContain('AGE-SECRET-KEY-')
 
-    await page.getByTestId('header-devices-access-btn').click()
+    await openKeysPage(page)
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
@@ -847,7 +852,7 @@ test.describe('passkey device-key protection', () => {
 
     // Leave Access before locking. PIN unlock uses the login Unlock button;
     // locking while Access stays open leaves neither Unlock nor an overlay.
-    await page.getByTestId('vault-secrets-tab').click()
+    await openVaultPage(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })

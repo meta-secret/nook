@@ -12,6 +12,7 @@ import {
   reloadUnlockWithSyncProvider,
   UI_TIMEOUT_MS,
   waitForPersistedAppLog,
+  openManagePage,
 } from './helpers'
 
 test.describe('vault connect flow', () => {
@@ -222,13 +223,7 @@ test.describe('vault connect flow', () => {
       timeout: UI_TIMEOUT_MS,
     })
 
-    await page.getByTestId('vault-admin-tab').click()
-    await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
-    await page
-      .getByTestId('storage-providers-section')
-      .getByRole('button')
-      .first()
-      .click()
+    await openManagePage(page, 'sync')
     await expect(page.getByTestId('sync-providers-empty')).toBeVisible()
     await page.getByTestId('add-provider-btn').click()
     await expect(page.getByTestId('provider-picker-list')).toBeVisible()
@@ -316,13 +311,7 @@ test.describe('vault connect flow', () => {
     })
 
     await dismissSyncConflictIfVisible(page)
-    await page.getByTestId('vault-admin-tab').click()
-    await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
-    await page
-      .getByTestId('storage-providers-section')
-      .getByRole('button')
-      .first()
-      .click()
+    await openManagePage(page, 'sync')
     const driveProvider = page.getByTestId('settings-provider-oauth-file')
     await expect(driveProvider).toBeVisible()
 
