@@ -11,6 +11,7 @@ the unlock, so there is no separate unlock button.
     FolderKey,
     Lock,
     Plus,
+    Puzzle,
     Settings2,
     UserRoundCheck,
   } from '@lucide/svelte'
@@ -30,6 +31,7 @@ the unlock, so there is no separate unlock button.
     vault,
     card,
     selectedStoreId = '',
+    extensionStoreIds = [],
     busy = false,
     canAddVault = false,
     onOpenVault,
@@ -41,6 +43,8 @@ the unlock, so there is no separate unlock button.
     vault: VaultState
     card: IdentityCardView
     selectedStoreId?: string
+    /** Vaults the paired browser extension holds a grant for. */
+    extensionStoreIds?: readonly string[]
     busy?: boolean
     canAddVault?: boolean
     onOpenVault: (storeId: string) => void
@@ -180,13 +184,16 @@ the unlock, so there is no separate unlock button.
             data-testid="identity-vault-row"
             data-store-id={row.storeId}
             data-state={row.state}
-            aria-current={row.state === IdentityVaultRowState.Open
+            data-extension-connected={extensionStoreIds.includes(row.storeId)
               ? 'true'
-              : undefined}
-            aria-pressed={selected ? 'true' : undefined}
-            title={row.state === IdentityVaultRowState.Available
-              ? vault.t(I18N_KEYS.WorkspaceVaultLockedHint)
-              : undefined}
+              : 'false'}
+            {...row.state === IdentityVaultRowState.Open
+              ? { 'aria-current': 'true' }
+              : {}}
+            {...selected ? { 'aria-pressed': 'true' } : {}}
+            {...row.state === IdentityVaultRowState.Available
+              ? { title: vault.t(I18N_KEYS.WorkspaceVaultLockedHint) }
+              : {}}
             disabled={rowDisabled(row)}
             onclick={() => onOpenVault(row.storeId)}
           >
@@ -196,6 +203,18 @@ the unlock, so there is no separate unlock button.
             <span class="min-w-0 truncate text-[0.9375rem] font-medium">
               {row.label || vault.t(I18N_KEYS.WorkspaceVaultFallback)}
             </span>
+            {#if extensionStoreIds.includes(row.storeId)}
+              <span
+                class="nk-tag flex-none text-foreground"
+                title={vault.t(I18N_KEYS.VaultSwitcherExtensionBadge)}
+                data-testid="identity-vault-extension-badge"
+              >
+                <Puzzle class="size-3" aria-hidden="true" />
+                <span class="hidden sm:inline"
+                  >{vault.t(I18N_KEYS.VaultSwitcherExtensionBadge)}</span
+                >
+              </span>
+            {/if}
             {#if row.state === IdentityVaultRowState.Open}
               <span class="nk-lead" aria-hidden="true"></span>
               <StatusTag

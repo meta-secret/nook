@@ -68,7 +68,7 @@ bottom bar on phones, so every destination has exactly one control.
       type="button"
       class="nk-manage-item"
       data-testid={item.testId}
-      aria-current={active === item.section ? 'page' : undefined}
+      {...active === item.section ? { 'aria-current': 'page' } : {}}
       onclick={() => onSelect(item.section)}
     >
       {@render itemIcon(item.section)}

@@ -5,6 +5,8 @@ import {
   parseJson,
   requireStringArray,
   UI_TIMEOUT_MS,
+  openManagePage,
+  ManagePage,
 } from '../helpers'
 import {
   ExtensionPairedVaultIdentityDiscoveryMessageType,
@@ -213,7 +215,7 @@ test('offer browser extension install on vault home and in Devices', async ({
   await expect(setupCard).toHaveAttribute('data-status', 'paired_elsewhere')
   await demoBeat(page)
 
-  await page.getByTestId('vault-settings-tab').click()
+  await openManagePage(page, ManagePage.Devices)
   await expect(page.getByTestId('vault-devices-section')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
@@ -360,7 +362,7 @@ test.describe('mobile browser', () => {
     await expect(page.getByTestId('extension-install-setup-cta')).toHaveCount(0)
     await demoBeat(page)
 
-    await page.getByTestId('vault-settings-tab').click()
+    await openManagePage(page, ManagePage.Devices)
     await expect(page.getByTestId('vault-devices-section')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })

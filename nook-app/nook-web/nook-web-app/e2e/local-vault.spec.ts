@@ -18,6 +18,7 @@ import {
   unlockVaultOnLogin,
   waitForVaultUnlocked,
   openManagePage,
+  ManagePage,
 } from './helpers'
 
 test.describe('local vault', () => {
@@ -261,7 +262,7 @@ test.describe('local vault', () => {
       sessionStorage.setItem('nook_cleanup_probe', 'other-tab-session')
     })
 
-    await openManagePage(page, 'settings')
+    await openManagePage(page, ManagePage.Settings)
     await expect(page.getByTestId('vault-danger-section')).toBeVisible()
     await page.getByTestId('delete-local-vault-button').click()
     await expect(

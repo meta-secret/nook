@@ -333,13 +333,13 @@
     {#each activeCells as word, index (index)}
       <label class="relative block" data-testid="seed-word-cell-{index + 1}">
         <span
-          class="pointer-events-none absolute left-2 top-1.5 text-[10px] font-medium text-muted-foreground"
+          class="pointer-events-none absolute left-2 top-1.5 font-mono text-[10px] font-medium tracking-wider text-muted-foreground"
         >
           {index + 1}
         </span>
         {#if readonly}
           <div
-            class="flex h-10 items-center rounded-md border border-border/45 bg-muted/20 px-2 pt-3 font-mono text-xs text-foreground"
+            class="flex h-11 items-center border border-border bg-muted/20 px-2 pt-3 font-mono text-xs text-foreground"
           >
             {#if revealed}
               <span class="truncate" data-testid="seed-word-{index + 1}"
@@ -374,7 +374,7 @@
             {...cellInvalid(index)
               ? { 'aria-describedby': `seed-word-error-${index + 1}` }
               : {}}
-            class="flex h-10 w-full rounded-md border bg-background/80 px-2 pt-3 font-mono text-xs focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background {cellInvalid(
+            class="flex h-11 w-full rounded-none border bg-card px-2 pt-3 font-mono text-xs focus:border-foreground/40 focus:outline-hidden focus:ring-2 focus:ring-ring {cellInvalid(
               index,
             )
               ? 'border-destructive focus:ring-destructive/40'
@@ -472,7 +472,7 @@
 
   {#if !readonly && perWordValid && allWordsFilled && checksumValid.kind === ChecksumStatusKind.Checked && checksumValid.valid}
     <p
-      class="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-500"
+      class="nk-tag nk-tag-success"
       data-testid="seed-phrase-valid"
     >
       <Check class="size-3.5 shrink-0" aria-hidden="true" />

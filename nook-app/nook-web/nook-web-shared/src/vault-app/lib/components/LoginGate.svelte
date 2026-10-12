@@ -264,11 +264,13 @@
       if (devicesAccessHost.kind === DevicesAccessHostMountKind.Unmounted)
         return;
       const host = devicesAccessHost.element;
-      const target =
-        host.querySelector<HTMLButtonElement>(
-          `[data-identity-id="${CSS.escape(preferred)}"] [data-testid="identity-manage"]`,
-        ) ??
-        host.querySelector<HTMLButtonElement>('[data-testid="identity-manage"]');
+      const preferredTarget = host.querySelector<HTMLButtonElement>(
+        `[data-identity-id="${CSS.escape(preferred)}"] [data-testid="identity-manage"]`,
+      );
+      const anyTarget = host.querySelector<HTMLButtonElement>(
+        '[data-testid="identity-manage"]',
+      );
+      const target = preferredTarget || anyTarget;
       if (target) {
         target.focus();
         return;

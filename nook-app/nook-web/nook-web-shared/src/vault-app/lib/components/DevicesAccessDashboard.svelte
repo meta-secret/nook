@@ -514,9 +514,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
         directory.selection.kind === IdentityDirectorySelectionKind.Selected
           ? directory.selection.identityId
           : ""}
-      <div
-        class="grid min-w-0 gap-8 md:grid-cols-[18rem_minmax(0,1fr)] md:gap-0"
-      >
+      <div class="grid min-w-0 grid-cols-1 gap-6">
         <IdentityDirectoryRail
           {vault}
           identities={directory.identities}
@@ -525,9 +523,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
           onAddIdentity={() => void beginAddIdentity()}
         />
 
-        <div
-          class="min-w-0 border-t border-border pt-8 md:border-t-0 md:pt-0 md:pl-8"
-        >
+        <div class="min-w-0 border-t border-border pt-6">
           {#if identityCreationOpen}
             <div data-testid="devices-access-add-identity-flow">
               <div class="flex justify-end">

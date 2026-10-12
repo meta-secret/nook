@@ -14,7 +14,7 @@ const SCRAMBLE_FRAME_MS = 34;
  */
 export const scramble: Action<HTMLElement> = (node) => {
   if (!cipherMotionAllowed()) return;
-  const final = node.textContent ?? "";
+  const final = node.textContent ? node.textContent : "";
   if (final.length === 0) return;
   const frames = SCRAMBLE_FRAMES;
   let frame = 0;
@@ -26,9 +26,9 @@ export const scramble: Action<HTMLElement> = (node) => {
       next +=
         character === " " || character === "\n"
           ? character
-          : (SCRAMBLE_GLYPHS[
-              Math.floor(Math.random() * SCRAMBLE_GLYPHS.length)
-            ] ?? character);
+          : SCRAMBLE_GLYPHS.charAt(
+              Math.floor(Math.random() * SCRAMBLE_GLYPHS.length),
+            );
     }
     node.textContent = next;
     if (frame >= frames) {

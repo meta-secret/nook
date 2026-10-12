@@ -94,11 +94,26 @@ export const MANAGE_NAV_ITEMS: readonly ManageNavItem[] = DEFINITIONS.map(
   },
 );
 
+export enum ManageNavEntryKind {
+  /** A management page with its own navigation entry. */
+  Listed = "listed",
+  /** The vault page or the identities hub, which are not management pages. */
+  Unlisted = "unlisted",
+}
+
+export type ManageNavEntry =
+  | { readonly kind: ManageNavEntryKind.Listed; readonly item: ManageNavItem }
+  | { readonly kind: ManageNavEntryKind.Unlisted };
+
 /** Look up the nav entry (title, description) for a management section. */
 export class ManageNavLookup {
   constructor(private readonly section: WorkspaceSection) {}
 
-  get item(): ManageNavItem | undefined {
-    return MANAGE_NAV_ITEMS.find((entry) => entry.section === this.section);
+  get entry(): ManageNavEntry {
+    for (const item of MANAGE_NAV_ITEMS) {
+      if (item.section === this.section)
+        return { kind: ManageNavEntryKind.Listed, item };
+    }
+    return { kind: ManageNavEntryKind.Unlisted };
   }
 }

@@ -5,6 +5,7 @@ import {
   reloadUnlockWithSyncProvider,
   UI_TIMEOUT_MS,
   openManagePage,
+  ManagePage,
 } from './helpers'
 
 test.describe('sync provider settings', () => {
@@ -17,7 +18,7 @@ test.describe('sync provider settings', () => {
 
     await reloadUnlockWithSyncProvider(page)
 
-    await openManagePage(page, 'sync')
+    await openManagePage(page, ManagePage.Sync)
     await expect(page.getByTestId('settings-provider-oauth-file')).toBeVisible()
     await expect(
       page.getByTestId(`sync-provider-${E2E_OAUTH_ONBOARD_PROVIDER.id}`),

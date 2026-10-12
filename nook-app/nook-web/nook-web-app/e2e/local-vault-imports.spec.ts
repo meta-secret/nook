@@ -12,6 +12,7 @@ import {
   storedZip,
   openVaultPage,
   openManagePage,
+  ManagePage,
 } from './helpers'
 
 declare global {
@@ -47,7 +48,7 @@ test.describe('local vault', () => {
   test('keeps password-manager import forms folded until selected', async ({
     page,
   }) => {
-    await openManagePage(page, 'import')
+    await openManagePage(page, ManagePage.Import)
     await expect(page.getByTestId('vault-import-export-section')).toBeVisible()
 
     const bitwardenSection = page.getByTestId('bitwarden-import-section')

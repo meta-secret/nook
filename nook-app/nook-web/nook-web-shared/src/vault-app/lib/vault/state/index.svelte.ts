@@ -43,6 +43,7 @@ const uiKeys = [
   "devicesAccessIdentityTransitionPending",
   "identityFocus",
   "identityCreationRequested",
+  "vaultCreationRequested",
   "helpOpen",
 ] as const satisfies readonly (keyof VaultUiState)[];
 
@@ -205,6 +206,7 @@ class VaultStateSlicesImplementation {
   declare devicesAccessIdentityTransitionPending: VaultUiState["devicesAccessIdentityTransitionPending"];
   declare identityFocus: VaultUiState["identityFocus"];
   declare identityCreationRequested: VaultUiState["identityCreationRequested"];
+  declare vaultCreationRequested: VaultUiState["vaultCreationRequested"];
   declare helpOpen: VaultUiState["helpOpen"];
 
   declare providers: VaultProviderState["providers"];

@@ -38,12 +38,12 @@
     >
       <button
         type="button"
-        class="group flex min-h-20 items-center gap-3 rounded-xl border border-border/55 bg-muted/10 px-3.5 py-3 text-left transition-colors hover:border-primary/35 hover:bg-primary/5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
+        class="nk-frame-nick nk-frame-interactive group flex min-h-20 items-center gap-3 px-3.5 py-3 text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
         data-testid="item-type-login"
         onclick={() => onSelect(SecretType.Login)}
       >
         <div
-          class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-background/70 text-primary shadow-xs"
+          class="flex size-10 shrink-0 items-center justify-center border border-border text-foreground"
         >
           <Globe class="size-5" />
         </div>
@@ -56,17 +56,17 @@
           >
         </span>
         <ChevronRight
-          class="size-4 shrink-0 text-muted-foreground/55 transition-transform group-hover:translate-x-0.5 group-hover:text-primary"
+          class="size-4 shrink-0 text-muted-foreground/55 transition-transform group-hover:translate-x-0.5 group-hover:text-foreground"
         />
       </button>
       <button
         type="button"
-        class="group flex min-h-20 items-center gap-3 rounded-xl border border-border/55 bg-muted/10 px-3.5 py-3 text-left transition-colors hover:border-primary/35 hover:bg-primary/5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
+        class="nk-frame-nick nk-frame-interactive group flex min-h-20 items-center gap-3 px-3.5 py-3 text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
         data-testid="item-type-authenticator"
         onclick={() => onSelect(SecretType.Authenticator)}
       >
         <div
-          class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-background/70 text-primary shadow-xs"
+          class="flex size-10 shrink-0 items-center justify-center border border-border text-foreground"
         >
           <ShieldCheck class="size-5" />
         </div>
@@ -79,17 +79,17 @@
           >
         </span>
         <ChevronRight
-          class="size-4 shrink-0 text-muted-foreground/55 transition-transform group-hover:translate-x-0.5 group-hover:text-primary"
+          class="size-4 shrink-0 text-muted-foreground/55 transition-transform group-hover:translate-x-0.5 group-hover:text-foreground"
         />
       </button>
       <button
         type="button"
-        class="group flex min-h-20 items-center gap-3 rounded-xl border border-border/55 bg-muted/10 px-3.5 py-3 text-left transition-colors hover:border-primary/35 hover:bg-primary/5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
+        class="nk-frame-nick nk-frame-interactive group flex min-h-20 items-center gap-3 px-3.5 py-3 text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
         data-testid="item-type-api-key"
         onclick={() => onSelect(SecretType.ApiKey)}
       >
         <div
-          class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-background/70 text-primary shadow-xs"
+          class="flex size-10 shrink-0 items-center justify-center border border-border text-foreground"
         >
           <Braces class="size-5" />
         </div>
@@ -102,17 +102,17 @@
           >
         </span>
         <ChevronRight
-          class="size-4 shrink-0 text-muted-foreground/55 transition-transform group-hover:translate-x-0.5 group-hover:text-primary"
+          class="size-4 shrink-0 text-muted-foreground/55 transition-transform group-hover:translate-x-0.5 group-hover:text-foreground"
         />
       </button>
       <button
         type="button"
-        class="group flex min-h-20 items-center gap-3 rounded-xl border border-border/55 bg-muted/10 px-3.5 py-3 text-left transition-colors hover:border-primary/35 hover:bg-primary/5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
+        class="nk-frame-nick nk-frame-interactive group flex min-h-20 items-center gap-3 px-3.5 py-3 text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
         data-testid="item-type-seed-phrase"
         onclick={() => onSelect(SecretType.SeedPhrase)}
       >
         <div
-          class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-background/70 text-primary shadow-xs"
+          class="flex size-10 shrink-0 items-center justify-center border border-border text-foreground"
         >
           <Sprout class="size-5" />
         </div>
@@ -125,17 +125,17 @@
           >
         </span>
         <ChevronRight
-          class="size-4 shrink-0 text-muted-foreground/55 transition-transform group-hover:translate-x-0.5 group-hover:text-primary"
+          class="size-4 shrink-0 text-muted-foreground/55 transition-transform group-hover:translate-x-0.5 group-hover:text-foreground"
         />
       </button>
       <button
         type="button"
-        class="group flex min-h-20 items-center gap-3 rounded-xl border border-border/55 bg-muted/10 px-3.5 py-3 text-left transition-colors hover:border-primary/35 hover:bg-primary/5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
+        class="nk-frame-nick nk-frame-interactive group flex min-h-20 items-center gap-3 px-3.5 py-3 text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
         data-testid="item-type-secure-note"
         onclick={() => onSelect(SecretType.SecureNote)}
       >
         <div
-          class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-background/70 text-primary shadow-xs"
+          class="flex size-10 shrink-0 items-center justify-center border border-border text-foreground"
         >
           <StickyNote class="size-5" />
         </div>
@@ -148,17 +148,17 @@
           >
         </span>
         <ChevronRight
-          class="size-4 shrink-0 text-muted-foreground/55 transition-transform group-hover:translate-x-0.5 group-hover:text-primary"
+          class="size-4 shrink-0 text-muted-foreground/55 transition-transform group-hover:translate-x-0.5 group-hover:text-foreground"
         />
       </button>
       <button
         type="button"
-        class="group flex min-h-20 items-center gap-3 rounded-xl border border-border/55 bg-muted/10 px-3.5 py-3 text-left transition-colors hover:border-primary/35 hover:bg-primary/5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
+        class="nk-frame-nick nk-frame-interactive group flex min-h-20 items-center gap-3 px-3.5 py-3 text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
         data-testid="item-type-credit-card"
         onclick={() => onSelect(SecretType.CreditCard)}
       >
         <div
-          class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-background/70 text-primary shadow-xs"
+          class="flex size-10 shrink-0 items-center justify-center border border-border text-foreground"
         >
           <CreditCard class="size-5" />
         </div>
@@ -171,17 +171,17 @@
           >
         </span>
         <ChevronRight
-          class="size-4 shrink-0 text-muted-foreground/55 transition-transform group-hover:translate-x-0.5 group-hover:text-primary"
+          class="size-4 shrink-0 text-muted-foreground/55 transition-transform group-hover:translate-x-0.5 group-hover:text-foreground"
         />
       </button>
       <button
         type="button"
-        class="group flex min-h-20 items-center gap-3 rounded-xl border border-border/55 bg-muted/10 px-3.5 py-3 text-left transition-colors hover:border-primary/35 hover:bg-primary/5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
+        class="nk-frame-nick nk-frame-interactive group flex min-h-20 items-center gap-3 px-3.5 py-3 text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
         data-testid="item-type-file-attachment"
         onclick={() => onSelect(SecretType.FileAttachment)}
       >
         <div
-          class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-background/70 text-primary shadow-xs"
+          class="flex size-10 shrink-0 items-center justify-center border border-border text-foreground"
         >
           <Paperclip class="size-5" />
         </div>
@@ -194,17 +194,17 @@
           >
         </span>
         <ChevronRight
-          class="size-4 shrink-0 text-muted-foreground/55 transition-transform group-hover:translate-x-0.5 group-hover:text-primary"
+          class="size-4 shrink-0 text-muted-foreground/55 transition-transform group-hover:translate-x-0.5 group-hover:text-foreground"
         />
       </button>
       <button
         type="button"
-        class="group flex min-h-20 items-center gap-3 rounded-xl border border-border/55 bg-muted/10 px-3.5 py-3 text-left transition-colors hover:border-primary/35 hover:bg-primary/5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
+        class="nk-frame-nick nk-frame-interactive group flex min-h-20 items-center gap-3 px-3.5 py-3 text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
         data-testid="item-type-passkey"
         onclick={() => onSelect(SecretType.Passkey)}
       >
         <div
-          class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-background/70 text-primary shadow-xs"
+          class="flex size-10 shrink-0 items-center justify-center border border-border text-foreground"
         >
           <KeyRound class="size-5" />
         </div>
@@ -217,7 +217,7 @@
           >
         </span>
         <ChevronRight
-          class="size-4 shrink-0 text-muted-foreground/55 transition-transform group-hover:translate-x-0.5 group-hover:text-primary"
+          class="size-4 shrink-0 text-muted-foreground/55 transition-transform group-hover:translate-x-0.5 group-hover:text-foreground"
         />
       </button>
     </div>

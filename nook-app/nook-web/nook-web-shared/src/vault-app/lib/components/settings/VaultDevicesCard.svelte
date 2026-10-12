@@ -303,7 +303,7 @@
         </div>
         {#if extensionSetup}
           <span
-            class="shrink-0 rounded-full border border-border/40 bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
+            class="nk-tag shrink-0"
             data-testid="extension-setup-settings-status"
           >
             {extensionStatusLabel(extensionSetup.status)}
@@ -559,7 +559,7 @@
                   <div class="flex flex-wrap items-center gap-1.5">
                     {#if isCurrent}
                       <span
-                        class="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary"
+                        class="nk-tag nk-tag-success"
                         data-testid="current-device-badge"
                       >
                         {vault.t(I18N_KEYS.DevicesCardCurrent)}

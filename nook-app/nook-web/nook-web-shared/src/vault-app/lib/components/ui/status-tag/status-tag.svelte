@@ -26,8 +26,8 @@
 
 <span
   class={cn('nk-tag', toneClass, className)}
-  title={title || undefined}
-  data-testid={testId || undefined}
+  {...title ? { title } : {}}
+  {...testId ? { 'data-testid': testId } : {}}
   data-tone={tone}
 >
   {#if mark === StatusMark.Dot}

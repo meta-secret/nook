@@ -53,11 +53,11 @@ flowchart TD
    - Backup-password unlock opens the local vault directly.
    - After device authorization, the vault may auto-unlock when device keys work.
    - See [auth-providers.md](../../../nook-platform/.cortex/docs/architecture/auth-providers.md) §3.
-5. **Authenticated navigation:** **Vault** lists saved items. **Onboard** is a standalone page that generates a QR/link from two dropdowns: auth provider and vault password. **Settings** lists storage providers, reconnect, and vault password management.
+5. **Authenticated navigation:** see [unified-workspace.md](unified-workspace.md). The **Vault** page lists saved items. **Devices & onboarding** holds the enrolled-device roster, join approvals, and the onboarding wizard that generates a QR/link from the sync provider and vault password. **Sync** lists storage providers and reconnect; **Backup passwords** manages vault passwords; **Import** holds the password-manager imports.
    - On desktop, the fixed authenticated shell owns vertical content scrolling.
      On mobile, the min-height shell may use document scrolling.
    - Expanded security guidance keeps its full content height.
-   - Every recommendation and action remains reachable while bottom navigation stays visible.
+   - Every recommendation and action remains reachable while the page bar and the management navigation stay visible.
 6. **Encryption keys (auto-managed):**
    - Before first connect, the user creates passkey-PRF protection or, when PRF is unavailable, a local PIN wrapper.
    - Rust/WASM derives the AES key and stores the device private key as `device_identity_wrapped`.

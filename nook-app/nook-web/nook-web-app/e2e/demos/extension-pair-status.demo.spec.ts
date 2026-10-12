@@ -3,6 +3,8 @@ import {
   connectLocalVault,
   readLocalVaultYamlFromIdb,
   UI_TIMEOUT_MS,
+  openManagePage,
+  ManagePage,
 } from '../helpers'
 import {
   ExtensionPairedVaultIdentityDiscoveryMessageType,
@@ -57,14 +59,10 @@ test('show paired and unpaired vault status before extension unlock', async ({
   await connectLocalVault(page)
   const pairedVaultStoreId = parseStoreId(await readLocalVaultYamlFromIdb(page))
   const pairedVaultName = (
-    await page.getByTestId('vault-switcher-trigger').innerText()
+    await page.getByTestId('page-bar-title').innerText()
   ).trim()
 
-  await page.getByTestId('vault-switcher-trigger').click()
-  await expect(page.getByTestId('vault-switcher-menu')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
-  await page.getByTestId('vault-switcher-admin-btn').click()
+  await openManagePage(page, ManagePage.Vaults)
   await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
   await page.getByTestId('vault-admin-create-input').fill('Vault B')
   await page.getByTestId('vault-admin-create-btn').click()

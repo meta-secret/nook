@@ -33,6 +33,7 @@ import {
   waitForVaultUnlocked,
   openVaultPage,
   openManagePage,
+  ManagePage,
 } from './helpers'
 import {
   createSyncTarget,
@@ -105,7 +106,7 @@ test.describe('vault password envelope with sync provider', () => {
   test('device A issues an enrollment link without plaintext provider credentials', async () => {
     await openVaultPage(deviceA)
     await expect(deviceA.getByTestId('vault-panel')).toBeVisible()
-    await openManagePage(deviceA, 'devices')
+    await openManagePage(deviceA, ManagePage.Devices)
     const linkInput = await submitOnboardEnrollmentCode(deviceA, vaultPassword)
     const link = (await linkInput.inputValue()).trim()
     expect(link).toContain('#enroll=')

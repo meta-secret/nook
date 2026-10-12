@@ -28,7 +28,7 @@
   >
     {#snippet badge()}
       <span
-        class="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2 py-0.5 text-xs font-medium text-muted-foreground"
+        class="nk-tag"
       >
         <Globe class="size-3" />
         {vault.locale === "en" ? "English" : "Русский"}
@@ -73,7 +73,7 @@
   >
     {#snippet badge()}
       <span
-        class="inline-flex items-center gap-1 rounded-full border border-destructive/25 bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive"
+        class="nk-tag nk-tag-danger"
       >
         <TriangleAlert class="size-3" />
         {vault.t(I18N_KEYS.SettingsDangerZone)}

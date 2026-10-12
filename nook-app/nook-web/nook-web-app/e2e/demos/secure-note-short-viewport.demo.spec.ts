@@ -42,7 +42,7 @@ test('keep secure-note editing usable above a short mobile viewport', async ({
   await page.getByTestId('markdown-editor').scrollIntoViewIfNeeded()
   await expect(page.getByTestId('extension-install-setup')).toHaveCount(0)
   await expect(page.getByTestId('markdown-editor')).toBeInViewport()
-  await expect(page.getByTestId('vault-bottom-nav')).toBeInViewport()
+  await expect(page.getByTestId('page-bar-back')).toBeInViewport()
   await demoBeat(page)
 
   await page.getByTestId('save-secret-btn').click()

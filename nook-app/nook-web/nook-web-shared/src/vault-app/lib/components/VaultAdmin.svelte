@@ -219,6 +219,18 @@
   })
 
   let newVaultName = $state('')
+  let createInput = $state<HTMLInputElement>()
+
+  $effect(() => {
+    if (
+      section !== WorkspaceSection.Vaults ||
+      !vault.vaultCreationRequested ||
+      !createInput
+    )
+      return
+    vault.vaultCreationRequested = false
+    createInput.focus()
+  })
   let drafts = $state<Record<string, string>>({})
   let draftSeed = $state('')
   let creating = $state(false)
@@ -401,13 +413,14 @@
 <div class="grid min-w-0 grid-cols-1 gap-6" data-testid="vault-admin-panel" data-section={section}>
   {#if section === WorkspaceSection.Vaults}
   <ManageSection
+    compact
     title={vault.t(I18N_KEYS.VaultAdminVaultsTitle)}
-    subtitle={vault.t(I18N_KEYS.VaultAdminVaultsDesc)}
+    subtitle={vault.t(I18N_KEYS.WorkspaceSectionVaultsDescription)}
     testId="vault-admin-vaults-section"
   >
     {#snippet badge()}
       <span
-        class="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400"
+        class="nk-tag nk-tag-success"
         data-testid="vault-admin-vault-count"
       >
         <CheckCircle2 class="size-3" />
@@ -434,6 +447,7 @@
           </label>
           <input
             id="vault-admin-create-input"
+            bind:this={createInput}
             class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
             placeholder={vault.t(I18N_KEYS.LoginVaultNamePlaceholder)}
             data-testid="vault-admin-create-input"
@@ -621,14 +635,15 @@
 
   {#if section === WorkspaceSection.Sync}
   <ManageSection
+    compact
     title={vault.t(I18N_KEYS.SettingsStorage)}
-    subtitle={vault.t(I18N_KEYS.SettingsStorageDesc)}
+    subtitle={vault.t(I18N_KEYS.WorkspaceSectionSyncDescription)}
     testId="storage-providers-section"
   >
     {#snippet badge()}
       {#if isAuthenticated}
         <span
-          class="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-500"
+          class="nk-tag nk-tag-success shrink-0"
           data-testid="connected-badge"
         >
           <CheckCircle2 class="size-3" />
@@ -657,15 +672,14 @@
 
   {#if section === WorkspaceSection.Passwords}
   <ManageSection
+    compact
     title={vault.t(I18N_KEYS.SettingsPasswords)}
-    subtitle={vault.t(I18N_KEYS.SettingsPasswordsDesc)}
+    subtitle={vault.t(I18N_KEYS.WorkspaceSectionPasswordsDescription)}
     testId="vault-unlock-section"
   >
     {#snippet badge()}
       <span
-        class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium {hasPasswords
-          ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-          : 'border-border bg-muted/40 text-muted-foreground'}"
+        class="nk-tag {hasPasswords ? 'nk-tag-success' : ''}"
         data-testid="vault-password-status"
       >
         {#if hasPasswords}
@@ -707,8 +721,9 @@
 
   {#if section === WorkspaceSection.Import}
   <ManageSection
+    compact
     title={vault.t(I18N_KEYS.SettingsImportExport)}
-    subtitle={vault.t(I18N_KEYS.SettingsImportExportDesc)}
+    subtitle={vault.t(I18N_KEYS.WorkspaceSectionImportDescription)}
     testId="vault-import-export-section"
   >
     <div class="space-y-2">

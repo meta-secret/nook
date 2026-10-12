@@ -11,6 +11,7 @@ import {
   openVaultPage,
   openManagePage,
   openIdentitiesPage,
+  ManagePage,
 } from './helpers'
 import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
 
@@ -244,7 +245,7 @@ test.describe('multi-vault on one browser profile', () => {
       '2 vaults',
     )
 
-    await openManagePage(page, 'sync')
+    await openManagePage(page, ManagePage.Sync)
     await page
       .getByTestId('storage-providers-section')
       .getByTestId('add-provider-btn')
@@ -308,7 +309,7 @@ test.describe('multi-vault on one browser profile', () => {
     expect(parseStoreId(activeYaml)).toEqual(storeB)
 
     await seedScopedSyncProviders(page, storeA, storeB)
-    await openManagePage(page, 'sync')
+    await openManagePage(page, ManagePage.Sync)
     await expect(page.getByTestId('settings-provider-oauth-file')).toBeVisible()
     await expect(page.getByTestId('settings-providers-list')).toContainText(
       'nook-multi-vault-a',

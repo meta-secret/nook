@@ -58,7 +58,7 @@
 </script>
 
 <div
-  class="grid grid-cols-3 gap-1 rounded-md border border-border/60 bg-muted/20 p-1"
+  class="grid grid-cols-3 gap-1 border border-border bg-muted/20 p-1"
   role="tablist"
   aria-label={vault.t(I18N_KEYS.LoginVaultWorkflowLabel)}
   data-testid="login-vault-workflow-nav"
@@ -68,7 +68,7 @@
       type="button"
       size="sm"
       variant={active === workflow.id ? 'secondary' : 'ghost'}
-      class="min-w-0 px-2"
+      class="h-auto min-h-9 min-w-0 flex-col gap-1 px-1.5 py-1.5 text-[0.6875rem] sm:flex-row sm:gap-2 sm:px-2 sm:text-sm"
       role="tab"
       aria-selected={active === workflow.id}
       tabindex={active === workflow.id ? 0 : -1}
@@ -85,7 +85,7 @@
         })()}
     >
       <workflow.icon class="size-4" />
-      <span class="truncate">{vault.t(workflow.label)}</span>
+      <span class="max-w-full truncate">{vault.t(workflow.label)}</span>
     </Button>
   {/each}
 </div>

@@ -4,13 +4,14 @@ import {
   expandSettingsSection,
   UI_TIMEOUT_MS,
   openManagePage,
+  ManagePage,
 } from '../helpers'
 
 const DEMO_BEAT_MS = 700
 
 test('browse concise password import source labels', async ({ page }) => {
   await connectLocalVault(page)
-  await openManagePage(page, 'import')
+  await openManagePage(page, ManagePage.Import)
   await expandSettingsSection(page, 'import')
 
   const sources = [

@@ -801,7 +801,6 @@ main:not(.dark) .markdown-body {
     place-content: center;
     justify-items: center;
     gap: 0.625rem;
-    min-height: 15rem;
     padding: 1.5rem;
     text-align: center;
     color: var(--muted-foreground);

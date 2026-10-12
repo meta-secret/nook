@@ -5,6 +5,7 @@ import {
   UI_TIMEOUT_MS,
   openVaultPage,
   openManagePage,
+  ManagePage,
 } from './helpers'
 
 test.describe('authenticated shell height', () => {
@@ -29,25 +30,25 @@ test.describe('authenticated shell height', () => {
     )
     expect(vaultHeight).toBeGreaterThan(0)
 
-    await openManagePage(page, 'sync')
+    await openManagePage(page, ManagePage.Sync)
     await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
     const adminHeight = ((v) => (v ? v : 0))(
       (await shell.boundingBox())?.height,
     )
     expect(adminHeight).toBeCloseTo(vaultHeight, 0)
 
-    await openManagePage(page, 'devices')
+    await openManagePage(page, ManagePage.Devices)
     await expect(page.getByTestId('onboard-device-panel')).toBeVisible()
     const onboardHeight = ((v) => (v ? v : 0))(
       (await shell.boundingBox())?.height,
     )
     expect(onboardHeight).toBeCloseTo(vaultHeight, 0)
 
-    await openManagePage(page, 'keys')
+    await openManagePage(page, ManagePage.Keys)
     const keysHeight = ((v) => (v ? v : 0))((await shell.boundingBox())?.height)
     expect(keysHeight).toBeCloseTo(vaultHeight, 0)
 
-    await openManagePage(page, 'devices')
+    await openManagePage(page, ManagePage.Devices)
     await expect(page.getByTestId('vault-devices-section')).toBeVisible()
     await expect(page.getByTestId('extension-setup-settings')).toBeVisible()
     await expect(page.getByTestId('extension-setup-settings')).toHaveAttribute(
@@ -167,7 +168,7 @@ test.describe('authenticated shell height', () => {
       )
       .toEqual({ clientWidth: 390, scrollWidth: 390 })
 
-    await openManagePage(page, 'sync')
+    await openManagePage(page, ManagePage.Sync)
     await expect(page.getByTestId('manage-nav')).toBeInViewport()
     await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
     await openVaultPage(page)

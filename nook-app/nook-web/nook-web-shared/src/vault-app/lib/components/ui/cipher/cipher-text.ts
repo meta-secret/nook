@@ -51,7 +51,8 @@ export class CipherBlock {
     if (bodyRows <= 0) return;
     for (let change = 0; change < changes; change += 1) {
       const row = 1 + Math.floor(Math.random() * bodyRows);
-      this.lines[row] = replaceCharacter(this.lines[row] ?? "");
+      const line = this.lines[row];
+      if (line) this.lines[row] = replaceCharacter(line);
     }
     this.hotLine = 1 + Math.floor(Math.random() * bodyRows);
     this.hotStart = Math.floor(Math.random() * this.dimensions.columns);

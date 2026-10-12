@@ -258,8 +258,7 @@
 
   <Button
     type="submit"
-    variant="outline"
-    class="w-full border-primary/30 bg-primary/5 font-medium text-foreground hover:bg-primary/10 hover:text-foreground sm:w-auto sm:min-w-[160px]"
+    class="nk-go w-full font-medium sm:w-auto sm:min-w-[160px]"
     data-testid="unlock-vault-btn"
     disabled={isVerifying || isInitializing || !canUnlock}
   >

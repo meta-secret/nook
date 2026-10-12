@@ -9,12 +9,15 @@ needs to collapse; the title row carries the section's status tag.
     title,
     subtitle = '',
     testId,
+    compact = false,
     badge,
     children,
   }: {
     title: string
     subtitle?: string
     testId?: string
+    /** The page bar already names the page: show only the lead and status. */
+    compact?: boolean
     badge?: Snippet
     children?: Snippet
   } = $props()
@@ -23,7 +26,11 @@ needs to collapse; the title row carries the section's status tag.
 <section class="grid min-w-0 grid-cols-1 gap-3" data-testid={testId}>
   <header class="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
     <div class="min-w-0">
-      <h2 class="text-base font-semibold tracking-tight text-foreground">
+      <h2
+        class={compact
+          ? 'sr-only'
+          : 'text-base font-semibold tracking-tight text-foreground'}
+      >
         {title}
       </h2>
       {#if subtitle}

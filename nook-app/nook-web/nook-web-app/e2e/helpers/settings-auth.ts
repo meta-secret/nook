@@ -17,7 +17,7 @@ import {
   UI_TIMEOUT_MS,
   sleep,
 } from './environment'
-import { openManagePage, type ManagePage } from './workspace-navigation'
+import { ManagePage, openManagePage } from './workspace-navigation'
 import { readLocalVaultYamlFromIdb } from './local-sync'
 import {
   disableVaultIdleLock,
@@ -146,7 +146,7 @@ export async function openStorageSettings(page: Page) {
     .poll(
       async () => {
         try {
-          await openManagePage(page, 'sync')
+          await openManagePage(page, ManagePage.Sync)
           return await page.getByTestId('vault-admin-panel').isVisible()
         } catch {
           return false
@@ -195,10 +195,10 @@ export const SETTINGS_SECTION_TEST_IDS = {
 export type SettingsSection = keyof typeof SETTINGS_SECTION_TEST_IDS
 
 const SETTINGS_SECTION_PAGES: Record<SettingsSection, ManagePage> = {
-  storage: 'sync',
-  unlock: 'passwords',
-  import: 'import',
-  devices: 'devices',
+  storage: ManagePage.Sync,
+  unlock: ManagePage.Passwords,
+  import: ManagePage.Import,
+  devices: ManagePage.Devices,
 }
 
 /** Open the management page that owns one former settings section. */
@@ -405,7 +405,7 @@ export async function openOnboardDevicePanel(page: Page) {
   await assertVaultReady(page)
   await waitForVaultOperationsIdle(page)
   await forceVaultQuiescentForE2e(page)
-  await openManagePage(page, 'devices')
+  await openManagePage(page, ManagePage.Devices)
   await expect(page.getByTestId('onboard-device-panel')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })

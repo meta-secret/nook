@@ -185,7 +185,7 @@ export class IdentityCardProjection {
     for (const vault of entry.vaults) {
       seen.add(vault.storeId);
       const localLabel = local.get(vault.storeId);
-      const label = localLabel ?? vault.label;
+      const label = localLabel ? localLabel : vault.label;
       const stateRequest: VaultRowStateRequest = {
         storeId: vault.storeId,
         local: current && local.has(vault.storeId),
@@ -235,7 +235,7 @@ export class IdentityCardProjection {
     return {
       identityId: entry.identityId,
       label,
-      monogram: (label[0] ?? "?").toUpperCase(),
+      monogram: (label.length > 0 ? label.charAt(0) : "?").toUpperCase(),
       hue: identityHue(entry.identityId),
       fingerprint: identityFingerprint(entry.identityId),
       keyCount: entry.members.length,

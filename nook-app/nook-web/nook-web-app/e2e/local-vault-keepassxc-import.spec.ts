@@ -7,6 +7,7 @@ import {
   mockBip39Wordlist,
   openVaultPage,
   openManagePage,
+  ManagePage,
 } from './helpers'
 
 async function openKeePassXcImport(page: Page) {
@@ -37,7 +38,7 @@ test.describe('local vault KeePassXC import', () => {
       'Root/Personal,Imported KeePassXC note,,,,"# KeePassXC note\n\nKeep offline",',
     ].join('\n')
 
-    await openManagePage(page, 'import')
+    await openManagePage(page, ManagePage.Import)
     await openKeePassXcImport(page)
     await page.getByTestId('keepassxc-csv-file').setInputFiles({
       name: 'keepassxc_export.csv',
@@ -57,7 +58,7 @@ test.describe('local vault KeePassXC import', () => {
       'Imported KeePassXC note',
     )
 
-    await openManagePage(page, 'import')
+    await openManagePage(page, ManagePage.Import)
     await openKeePassXcImport(page)
     await page.getByTestId('keepassxc-csv-file').setInputFiles({
       name: 'keepassxc_export.csv',

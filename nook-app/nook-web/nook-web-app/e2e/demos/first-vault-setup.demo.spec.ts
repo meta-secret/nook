@@ -75,10 +75,8 @@ test('open an empty local vault without a browser-data reload alert', async ({
   expect(await page.evaluate(() => window.__nookVault?.deviceId)).toBe(
     websiteDeviceId,
   )
-  await expect(page.getByTestId('vault-switcher-trigger')).toHaveAttribute(
-    'data-extension-connected',
-    'false',
-  )
+  await expect(page.getByTestId('vault-pair-extension-btn')).toHaveCount(0)
+  await expect(page.getByTestId('page-bar-title')).toBeVisible()
 
   const languageSelect = page.getByTestId('header-language-select')
   await languageSelect.click()

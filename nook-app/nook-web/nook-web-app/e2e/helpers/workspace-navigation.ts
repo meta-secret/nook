@@ -2,17 +2,24 @@ import { expect, type Page } from '@playwright/test'
 import { UI_TIMEOUT_MS } from './environment'
 
 /** Management pages of the unified identity and vault workspace. */
-export type ManagePage =
-  'keys' | 'vaults' | 'settings' | 'devices' | 'sync' | 'passwords' | 'import'
+export enum ManagePage {
+  Keys = 'keys',
+  Vaults = 'vaults',
+  Settings = 'settings',
+  Devices = 'devices',
+  Sync = 'sync',
+  Passwords = 'passwords',
+  Import = 'import',
+}
 
 const MANAGE_PAGE_MARKERS: Record<ManagePage, string> = {
-  keys: 'devices-access-dashboard',
-  vaults: 'vault-admin-vaults-section',
-  settings: 'browser-settings-panel',
-  devices: 'vault-devices-panel',
-  sync: 'storage-providers-section',
-  passwords: 'vault-unlock-section',
-  import: 'vault-import-export-section',
+  [ManagePage.Keys]: 'devices-access-dashboard',
+  [ManagePage.Vaults]: 'vault-admin-vaults-section',
+  [ManagePage.Settings]: 'browser-settings-panel',
+  [ManagePage.Devices]: 'vault-devices-panel',
+  [ManagePage.Sync]: 'storage-providers-section',
+  [ManagePage.Passwords]: 'vault-unlock-section',
+  [ManagePage.Import]: 'vault-import-export-section',
 }
 
 /** Return to the open vault's secret list from any workspace page. */
@@ -51,7 +58,7 @@ export async function openManagePage(
   const navItem = page.getByTestId(`manage-nav-${target}`)
   if (!(await navItem.isVisible())) {
     await openVaultPage(page)
-    if (target === 'import') {
+    if (target === ManagePage.Import) {
       await page.getByTestId('vault-import-btn').click()
       await expect(marker).toBeVisible({ timeout: UI_TIMEOUT_MS })
       return
@@ -71,7 +78,7 @@ export async function openKeysPage(page: Page): Promise<void> {
   const dashboard = page.getByTestId('devices-access-dashboard')
   if (await dashboard.isVisible()) return
   if (await page.getByTestId('header-identities-btn').isVisible()) {
-    await openManagePage(page, 'keys')
+    await openManagePage(page, ManagePage.Keys)
     return
   }
   const currentCard = page.locator(

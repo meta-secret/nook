@@ -22,6 +22,8 @@ create, connect, join) sits between the hero and the cards.
   let {
     vault,
     selectedStoreId = '',
+    extensionStoreIds = [],
+    extensionNote = '',
     canAddVault = false,
     showCards = true,
     busy = false,
@@ -35,6 +37,9 @@ create, connect, join) sits between the hero and the cards.
   }: {
     vault: VaultState
     selectedStoreId?: string
+    extensionStoreIds?: readonly string[]
+    /** Shown when the extension is paired with a vault not on this browser. */
+    extensionNote?: string
     canAddVault?: boolean
     showCards?: boolean
     busy?: boolean
@@ -119,6 +124,7 @@ create, connect, join) sits between the hero and the cards.
             {vault}
             {card}
             {selectedStoreId}
+            {extensionStoreIds}
             {busy}
             canAddVault={canAddVault && card.current}
             {onOpenVault}
@@ -130,7 +136,7 @@ create, connect, join) sits between the hero and the cards.
         {/each}
         <button
           type="button"
-          class="nk-frame-keytag nk-new-tile"
+          class="nk-frame-keytag nk-new-tile min-h-40 md:min-h-60"
           data-testid="identity-new"
           disabled={busy}
           onclick={onNewIdentity}
@@ -149,6 +155,14 @@ create, connect, join) sits between the hero and the cards.
           </span>
         </button>
       </section>
+      {#if extensionNote}
+        <p
+          class="nk-tag whitespace-normal"
+          data-testid="identities-extension-note"
+        >
+          {extensionNote}
+        </p>
+      {/if}
     {/if}
   {/if}
 </div>

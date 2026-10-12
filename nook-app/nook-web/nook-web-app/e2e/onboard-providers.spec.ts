@@ -12,6 +12,7 @@ import {
   waitForLoadedSyncProviders,
   readLocalVaultYamlFromIdb,
   openManagePage,
+  ManagePage,
 } from './helpers'
 
 const INLINE_ONBOARD_PASSWORD = 'onboard-pass-1'
@@ -94,7 +95,7 @@ test.describe('onboard provider picker', () => {
     await expect(page.getByTestId('onboard-device-submit')).toHaveCount(0)
 
     await seedOauthFileSyncProvidersWhileUnlocked(page)
-    await openManagePage(page, 'devices')
+    await openManagePage(page, ManagePage.Devices)
     await expect(page.getByTestId('onboard-wizard-generate-step')).toBeVisible()
     await expect(page.getByTestId('onboard-device-submit')).toBeVisible()
     await expect(page.getByTestId('onboard-device-submit')).toBeEnabled({

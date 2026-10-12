@@ -2,8 +2,11 @@
 
 ## Product statement
 
-- **Surface:** **Devices & access** is Nook's identity-management surface.
-  - It is available before a vault exists, while every vault is locked, and
+- **Surface:** The identities hub and the identity **Keys** page are Nook's
+  identity-management surface (see
+  [unified-workspace.md](unified-workspace.md)). The former Devices & access
+  page lives on as Keys at `/identity/keys`.
+  - Keys is available before a vault exists, while every vault is locked, and
     while a vault is open.
 - **Identity:** An identity is a logical account.
   - It connects protected Nook apps to vault access.
@@ -286,16 +289,19 @@ The Access canvas is identity-centric:
 
 Current dashboard requirements:
 
-- Login and authenticated **Access** share the same identity dashboard.
-- Login opens `/devices-access`.
+- The locked identities hub and the authenticated workspace share the same
+  Keys dashboard.
+- Keys opens at `/identity/keys`; `/devices-access` remains an alias.
 - Browser Back and Forward must update the locked dashboard from the current
   workspace route.
 - `/vault` remains the secrets workspace only.
 - Create-vault flows require identity creation first when no identity exists.
-- The primary desktop layout uses a persistent identity rail.
+- The Keys page leads with an identity chip row.
   - Every local identity remains visible while one identity is selected.
-  - Each identity row shows its app count and vault count.
-  - Narrow screens stack the identity navigator above the selected identity.
+  - Each identity chip shows its app count and vault count.
+  - The selected identity's detail follows below the chips on every width.
+- Identity cards on the hub open Keys focused on their identity; the **New
+  identity** card opens Keys with identity creation already started.
 - Selecting an identity changes the local browse context without changing the
   persisted authorization selection.
 - The directory and access evidence derive current-installation ownership from
@@ -317,7 +323,7 @@ Current dashboard requirements:
     public app ID after lock must not present the identity as unlocked.
   - Each local identity's vault rows use only access profiles belonging to that
     identity's local app keys.
-- **Add identity** is the primary rail action.
+- **Add identity** is the primary chip-row action.
   - It reveals the existing browser-protection widget in the detail column.
   - Opening or cancelling the widget is non-persistent and must not advance the
     cross-tab storage generation.

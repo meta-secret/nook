@@ -20,15 +20,15 @@ import {
 
 const BEAT_MS = 650
 
-test('keeps access reachable in the compact authenticated header', async ({
+test('keeps identities reachable in the compact authenticated header', async ({
   page,
 }) => {
   await connectLocalVault(page)
   await page.setViewportSize({ width: 320, height: 844 })
 
-  const headerDevicesAccess = page.getByTestId('header-devices-access-btn')
-  await expect(headerDevicesAccess).toBeVisible()
-  await expect(headerDevicesAccess).toBeInViewport()
+  const headerIdentities = page.getByTestId('header-identities-btn')
+  await expect(headerIdentities).toBeVisible()
+  await expect(headerIdentities).toBeInViewport()
   await page.getByTestId('header-mobile-tools-btn').click()
   const mobileTools = page.getByTestId('header-mobile-tools')
   await expect(mobileTools.getByTestId('header-language-select')).toBeVisible()
@@ -47,7 +47,11 @@ test('keeps access reachable in the compact authenticated header', async ({
   await page.waitForTimeout(BEAT_MS)
   await page.keyboard.press('Escape')
 
-  await headerDevicesAccess.click()
+  await headerIdentities.click()
+  await expect(page.getByTestId('identities-hub')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await page.getByTestId('identity-manage').first().click()
   await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })

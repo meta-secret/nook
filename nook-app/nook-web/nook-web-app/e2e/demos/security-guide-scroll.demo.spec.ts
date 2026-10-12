@@ -17,6 +17,6 @@ test('reach every security guide recommendation in a short vault shell', async (
   const addDevice = page.getByTestId('security-guide-add-device')
   await addDevice.scrollIntoViewIfNeeded()
   await expect(addDevice).toBeInViewport()
-  await expect(page.getByTestId('vault-bottom-nav')).toBeInViewport()
+  await expect(page.getByTestId('vault-status-bar')).toBeInViewport()
   await page.waitForTimeout(DEMO_BEAT_MS)
 })

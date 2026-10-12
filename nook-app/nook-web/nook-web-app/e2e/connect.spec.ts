@@ -13,6 +13,7 @@ import {
   UI_TIMEOUT_MS,
   waitForPersistedAppLog,
   openManagePage,
+  ManagePage,
 } from './helpers'
 
 test.describe('vault connect flow', () => {
@@ -223,7 +224,7 @@ test.describe('vault connect flow', () => {
       timeout: UI_TIMEOUT_MS,
     })
 
-    await openManagePage(page, 'sync')
+    await openManagePage(page, ManagePage.Sync)
     await expect(page.getByTestId('sync-providers-empty')).toBeVisible()
     await page.getByTestId('add-provider-btn').click()
     await expect(page.getByTestId('provider-picker-list')).toBeVisible()
@@ -311,7 +312,7 @@ test.describe('vault connect flow', () => {
     })
 
     await dismissSyncConflictIfVisible(page)
-    await openManagePage(page, 'sync')
+    await openManagePage(page, ManagePage.Sync)
     const driveProvider = page.getByTestId('settings-provider-oauth-file')
     await expect(driveProvider).toBeVisible()
 

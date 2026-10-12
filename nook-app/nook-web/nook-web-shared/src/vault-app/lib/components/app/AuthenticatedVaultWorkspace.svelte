@@ -46,13 +46,21 @@ bar on phones.
   import { IdentityDirectoryLoadKind } from "$lib/components/devices-access/identity-directory-view";
   import PageBar from "$lib/components/workspace/PageBar.svelte";
   import ManageNav from "$lib/components/workspace/ManageNav.svelte";
-  import { ManageNavLookup } from "$lib/components/workspace/manage-nav";
+  import {
+    ManageNavEntryKind,
+    ManageNavLookup,
+  } from "$lib/components/workspace/manage-nav";
   import { Button } from "$lib/components/ui/button";
   import { StatusTag, StatusTone } from "$lib/components/ui/status-tag";
   import {
+    ConnectedVaultMenuNoteKind,
+    ConnectedVaultMenuPresentation,
     VaultExtensionPresentation,
+    VaultGrantPresentation,
     VaultPairingPresentation,
+    type ConnectedVaultMenuNoteRequest,
     type CurrentVaultPairingAvailabilityRequest,
+    type ExtensionConnectedEntryRequest,
     type VaultExtensionLinkRequest,
     type VaultSwitcherEntryLabel,
   } from "$lib/components/vault-switcher-extension";
@@ -130,7 +138,7 @@ bar on phones.
   const section = $derived(vault.workspaceSection);
   const scope = $derived(new WorkspaceSectionScope(section).scope);
   const managing = $derived(scope !== ManageSectionScope.None);
-  const navItem = $derived(new ManageNavLookup(section).item);
+  const navEntry = $derived(new ManageNavLookup(section).entry);
 
   const directory = new IdentityDirectoryLoader(untrack(() => vault));
   $effect(() => {
@@ -170,17 +178,44 @@ bar on phones.
       return label;
     }),
   );
-  const canPairCurrentVault = $derived.by(() => {
+  const extensionLink = $derived.by(() => {
     const linkRequest: VaultExtensionLinkRequest = {
       offer: extensionSetupState,
       activeStoreId,
       entries: extensionEntryLabels,
     };
+    return new VaultExtensionPresentation(linkRequest).link;
+  });
+  const canPairCurrentVault = $derived.by(() => {
     const request: CurrentVaultPairingAvailabilityRequest = {
-      link: new VaultExtensionPresentation(linkRequest).link,
+      link: extensionLink,
       activeStoreId,
     };
     return new VaultPairingPresentation(request).available;
+  });
+  const extensionStoreIds = $derived(
+    vault.localVaults
+      .filter((entry) => {
+        const grantRequest: ExtensionConnectedEntryRequest = {
+          link: extensionLink,
+          storeId: entry.storeId,
+        };
+        return new VaultGrantPresentation(grantRequest).connected;
+      })
+      .map((entry) => entry.storeId),
+  );
+  const extensionNote = $derived.by(() => {
+    const noteRequest: ConnectedVaultMenuNoteRequest = {
+      link: extensionLink,
+      entries: extensionEntryLabels,
+    };
+    const note = new ConnectedVaultMenuPresentation(noteRequest).note;
+    if (note.kind !== ConnectedVaultMenuNoteKind.MissingLocally) return "";
+    const noteText: Parameters<typeof vault.t>[0] = {
+      key: I18N_KEYS.VaultSwitcherExtensionConnected,
+      replacements: { vault: note.vaultName },
+    };
+    return vault.t(noteText);
   });
 
   const identityName = $derived(
@@ -196,8 +231,8 @@ bar on phones.
   const barTitle = $derived(
     section === WorkspaceSection.Vault
       ? vaultLabel
-      : navItem
-        ? vault.t(navItem.labelKey)
+      : navEntry.kind === ManageNavEntryKind.Listed
+        ? vault.t(navEntry.item.labelKey)
         : vaultLabel,
   );
 
@@ -307,9 +342,14 @@ bar on phones.
     <IdentitiesHub
       {vault}
       canAddVault
+      {extensionStoreIds}
+      {extensionNote}
       busy={vault.isVerifying || vault.isInitializing}
       onOpenVault={(storeId: string) => void openVaultFromCard(storeId)}
-      onNewVault={() => openSection(WorkspaceSection.Vaults)}
+      onNewVault={() => {
+        vault.vaultCreationRequested = true;
+        openSection(WorkspaceSection.Vaults);
+      }}
       onManage={manageIdentity}
       onNewIdentity={newIdentity}
       onUseIdentity={manageIdentity}
@@ -426,12 +466,12 @@ bar on phones.
           ? "grid min-w-0 grid-cols-1 content-start gap-6 px-0.5 py-4 md:px-6 md:py-5"
           : "flex min-h-0 flex-1 flex-col gap-4 px-0.5 py-1"}
       >
-        {#if managing && navItem}
+        {#if navEntry.kind === ManageNavEntryKind.Listed && (section === WorkspaceSection.Keys || section === WorkspaceSection.Devices || section === WorkspaceSection.Settings)}
           <p
             class="max-w-[64ch] text-sm text-pretty text-muted-foreground"
             data-testid="manage-section-description"
           >
-            {vault.t(navItem.descriptionKey)}
+            {vault.t(navEntry.item.descriptionKey)}
           </p>
         {/if}
 
