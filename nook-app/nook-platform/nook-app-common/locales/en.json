@@ -16,7 +16,6 @@
     "done": "Done",
     "none": "None",
     "switch": "Switch",
-    "lock_vault": "Lock vault",
     "switch_vault": "Switch vault",
     "copy": "Copy",
     "copied": "Copied",
@@ -26,16 +25,11 @@
     "import_progress_description": "Nook is reading, encrypting, and saving your items. Keep this page open."
   },
   "session": {
-    "lock_desc": "Clear decrypted secrets from memory and return to the login screen. Your encrypted vault and sync providers stay on this device.",
     "expired_idle": "Session expired — unlock again to continue.",
     "idle_warning": "Locking in 30 seconds due to inactivity…"
   },
   "nav": {
-    "vault": "Vault",
-    "devices_access": "Access",
-    "onboard": "Onboard",
-    "admin": "Admin",
-    "settings": "Settings"
+    "devices_access": "Access"
   },
   "onboarding": {
     "welcome": "Welcome to Nook",
@@ -70,13 +64,13 @@
     "unlock_device_keys_unavailable": "This device is not enrolled in the selected vault. Use a backup password, or request access from an enrolled device.",
     "identity_context_title": "Identity for this vault",
     "identity_context_loading": "Checking linked identities…",
-    "identity_context_failed": "Nook could not check which identity opens this vault. Review Devices & access or use a backup password.",
-    "identity_context_empty": "No linked identity is known in this browser. Review Devices & access or use a backup password.",
+    "identity_context_failed": "Nook could not check which identity opens this vault. Review your identities' keys or use a backup password.",
+    "identity_context_empty": "No linked identity is known in this browser. Review your identities' keys or use a backup password.",
     "identity_context_current": "Current browser",
     "identity_context_linked": "Linked identity",
     "identity_context_current_uses_keys": "{identity} is active here. Device-key unlock will use this identity.",
-    "identity_context_current_keys_unavailable": "{identity} is active here, but its device-key unlock is not available for this vault. Review Devices & access or use a backup password.",
-    "identity_context_mismatch": "The current browser identity is not linked to this vault. Review Devices & access or use a backup password.",
+    "identity_context_current_keys_unavailable": "{identity} is active here, but its device-key unlock is not available for this vault. Review the identity's keys or use a backup password.",
+    "identity_context_mismatch": "The current browser identity is not linked to this vault. Review your identities' keys or use a backup password.",
     "identity_context_review": "Review identities",
     "identity_context_backup_direct": "A backup password opens this vault directly; it does not unlock an identity.",
     "password_selected_placeholder": "Password for selected entry",
@@ -130,11 +124,6 @@
     "vault_picker_on_device": "On this device",
     "vault_picker_start_fresh": "Start fresh",
     "create_vault_intro": "Choose the vault model you want to create on this device.",
-    "landing_eyebrow": "Vault Auth Workflow · Landing handoff",
-    "landing_headline": "Keys, not accounts.",
-    "landing_supporting": "Create a Simple or Sentinel vault, or connect a provider to open one that already exists.",
-    "landing_supporting_simple": "Create a new Simple vault, or connect the provider for one that already exists.",
-    "landing_supporting_sentinel": "Create a new Sentinel vault, or connect the provider for one that already exists.",
     "landing_step_name": "Name vault",
     "landing_step_choose": "Create a new vault",
     "landing_step_simple": "Create locally",
@@ -331,7 +320,7 @@
     "password_too_short": "Password must be at least 8 characters.",
     "local_vault_description": "Unlock your vault with device keys or a backup password.",
     "local_vault_hint": "Your vault",
-    "sync_after_unlock": "Cloud sync providers can be connected in Settings after you unlock.",
+    "sync_after_unlock": "Cloud sync providers can be connected on the vault's Sync page after you unlock.",
     "use_storage_provider": "Use a cloud storage provider instead"
   },
   "security_guide": {
@@ -403,15 +392,10 @@
     "previous_page": "Previous",
     "next_page": "Next",
     "page_status": "Page {page} of {total}",
-    "switcher_your_vaults": "Your vaults",
-    "switcher_one_on_device": "One vault on this device — create another anytime.",
-    "switcher_count_on_device": "{count} vaults on this device",
     "switcher_open_badge": "Open",
     "switcher_create_new": "Create another vault",
     "switcher_import_existing": "Import existing vault",
     "switcher_manage_vaults": "Manage vaults",
-    "switcher_admin": "Open Admin",
-    "switcher_choose": "Switch vault",
     "switcher_extension_badge": "Browser extension",
     "switcher_pair_this_vault": "Pair this vault with the browser extension",
     "switcher_extension_connected": "Browser extension connected to {vault}",
@@ -420,7 +404,6 @@
     "manager_name_label": "Vault name",
     "admin_title": "Admin",
     "admin_vaults_title": "Vaults",
-    "admin_vaults_desc": "Create, rename, and switch local vaults on this device.",
     "admin_vault_count": "{count} vaults on this device",
     "admin_new_vault_label": "New vault",
     "expand_secret": "Expand secret",
@@ -643,11 +626,8 @@
   "settings": {
     "title": "Settings",
     "storage": "Sync providers",
-    "storage_desc": "Replicate your vault to sync providers",
     "passwords": "Passwords & Unlocks",
-    "passwords_desc": "Passwords available for unlock and device onboarding",
     "import_export": "Import & Export",
-    "import_export_desc": "Move supported data into or out of this vault",
     "devices": "Devices & Roster",
     "devices_desc": "Enrolled browsers and pending access requests",
     "add_provider": "Add Storage Provider",
@@ -694,8 +674,6 @@
     "delete_local_error": "Could not delete all local browser data."
   },
   "devices_access": {
-    "title": "Devices & access",
-    "description": "Manage identities, their apps, and the vaults they can open.",
     "identity_directory_loading": "Loading identities…",
     "identity_directory_failed": "Nook could not load your identities.",
     "identity_summary": "{keys} · {vaults}",
@@ -769,7 +747,7 @@
     "bridge_no_verified_vaults": "No verified vault access",
     "bridge_no_verified_vaults_desc": "This identity has not opened any known vault yet.",
     "bridge_no_selected_vault": "No vault selected",
-    "bridge_no_selected_vault_desc": "Create or connect a vault, or select one from the Vault menu to inspect its access evidence.",
+    "bridge_no_selected_vault_desc": "Create or connect a vault, or open one from its identity card to inspect its access evidence.",
     "bridge_device_vault_relation": "This app opened {vault}",
     "bridge_identity_vault_relation": "This identity holds the DEK for {vault}",
     "bridge_app_key_identity_relation": "App is linked to this identity",
@@ -937,11 +915,7 @@
     "manage_devices": "Manage enrolled devices",
     "backup_passwords": "Vault backup passwords",
     "no_backup_passwords": "No backup password is configured for this vault.",
-    "manage_backup_passwords": "Manage backup passwords",
-    "nudge_title": "Want to understand your keys before choosing a vault?",
-    "nudge_description": "Review this local identity, passkey or PIN/passphrase protection, and last-known vault access first.",
-    "review_action": "Review devices & access",
-    "dont_show_again": "Don't show this suggestion again"
+    "manage_backup_passwords": "Manage backup passwords"
   },
   "help": {
     "title": "Your vault, optional sync replicas",
@@ -996,7 +970,7 @@
       "onboard": {
         "title": "Onboard another browser",
         "summary": "Generate a QR code that points a new device at a sync provider copy, then share the vault password separately.",
-        "bullet1": "Pick a connected sync provider (for example GitHub) on the Onboard tab.",
+        "bullet1": "Pick a connected sync provider (for example GitHub) on the vault's Devices page.",
         "bullet2": "Confirm a vault password entry — the QR encrypts provider access, not the password itself.",
         "bullet3": "The new browser downloads the vault from the provider into its local cache, then unlocks with the password you share.",
         "bullet4": "Onboarding skips the manual join-approval round trip when a password envelope is used."
@@ -1219,8 +1193,8 @@
   "vault_passwords": {
     "title": "Onboard another device",
     "desc": "Generate a QR/link that carries provider access and a vault password so another browser can join this vault.",
-    "warning_banner": "Create a vault password to unlock from another browser or generate an onboarding QR from the Onboard page. Use a long, unique value.",
-    "info_desc": "These passwords can unlock the vault and can be selected on the Onboard page when you generate a QR/link for another device.",
+    "warning_banner": "Create a vault password to unlock from another browser or generate an onboarding QR from the Devices page. Use a long, unique value.",
+    "info_desc": "These passwords can unlock the vault and can be selected on the Devices page when you generate a QR/link for another device.",
     "create_another": "Create another password",
     "create_password": "Create vault password",
     "label": "Label",
@@ -1419,7 +1393,7 @@
   "pending_joins": {
     "one_wants_join": "1 device wants to join",
     "count_wants_join": "{count} devices want to join",
-    "instructions": "Join requests sync from your cloud providers into the local vault. Approve here or in Settings → Devices.",
+    "instructions": "Join requests sync from your cloud providers into the local vault. Approve here or on the vault's Devices page.",
     "devices": "Devices",
     "refresh_aria": "Refresh join requests from sync providers"
   },
@@ -1612,7 +1586,7 @@
     "desc_pending": "Your join request was sent to the vault copy on the sync provider. Try unlocking again after an enrolled device approves you.",
     "this_browser": "This browser",
     "explainer_item1": "Join uses device keys — your master password unlocks secrets after enrollment, but cannot replace the approval step.",
-    "explainer_item2": "Send a request; an enrolled device approves it under Vault → Settings → Devices.",
+    "explainer_item2": "Send a request; an enrolled device approves it on the vault's Devices page.",
     "explainer_item3": "Approval wraps the vault keys for this browser’s public key — no plaintext secrets are shared.",
     "explainer_item4": "Approved roster changes fan out to every connected sync provider automatically.",
     "sending": "Sending…",

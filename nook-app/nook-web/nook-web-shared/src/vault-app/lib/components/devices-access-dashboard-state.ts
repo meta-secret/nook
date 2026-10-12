@@ -1,14 +1,3 @@
-type DevicesAccessNudgeVisibility = {
-  readonly hasActiveLocalVault: boolean;
-  readonly localVaultCount: number;
-  readonly preference: DevicesAccessNudgePreference;
-};
-
-type DevicesAccessNudgeStorageRead = {
-  readonly storage: Storage;
-  readonly storageKey: string;
-};
-
 export enum DashboardLoadKind {
   Loading = "loading",
   Ready = "ready",
@@ -197,28 +186,9 @@ export type DashboardView = {
   vaults: VaultAccessView[];
 };
 
-export enum DevicesAccessNudgePreference {
-  Visible = "visible",
-  Dismissed = "dismissed",
-}
-
-export class DevicesAccessNudgePresentation {
-  constructor(private readonly request: DevicesAccessNudgeVisibility) {}
-  get visible(): boolean {
-    const { hasActiveLocalVault, localVaultCount, preference } = this.request;
-
-    return (
-      !hasActiveLocalVault &&
-      localVaultCount === 0 &&
-      preference === DevicesAccessNudgePreference.Visible
-    );
-  }
-}
-
 export enum DevicesAccessTriggerKind {
   Header = "header",
   IdentityContext = "identity-context",
-  Nudge = "nudge",
 }
 
 export enum DevicesAccessHostMountKind {
@@ -233,42 +203,6 @@ export type DevicesAccessHostMount =
       element: HTMLDivElement;
     };
 
-export enum DevicesAccessNudgeStorageKind {
-  Missing = "missing",
-  Stored = "stored",
-}
-
-export type DevicesAccessNudgeStorageState =
-  | { kind: typeof DevicesAccessNudgeStorageKind.Missing }
-  | {
-      kind: typeof DevicesAccessNudgeStorageKind.Stored;
-      serialized: string;
-    };
-
-export class DevicesAccessNudgeStorage {
-  constructor(private readonly request: DevicesAccessNudgeStorageRead) {}
-  get state(): DevicesAccessNudgeStorageState {
-    const { storage, storageKey } = this.request;
-
-    const serialized = storage.getItem(storageKey);
-    return typeof serialized === "string"
-      ? { kind: DevicesAccessNudgeStorageKind.Stored, serialized }
-      : { kind: DevicesAccessNudgeStorageKind.Missing };
-  }
-}
-
-export class StoredDevicesAccessNudge {
-  constructor(private readonly request: DevicesAccessNudgeStorageState) {}
-  get preference(): DevicesAccessNudgePreference {
-    const storageState = this.request;
-
-    return storageState.kind === DevicesAccessNudgeStorageKind.Stored &&
-      (storageState.serialized === DevicesAccessNudgePreference.Dismissed ||
-        storageState.serialized === "1")
-      ? DevicesAccessNudgePreference.Dismissed
-      : DevicesAccessNudgePreference.Visible;
-  }
-}
 import type {
   DeviceAccessIdentityState,
   DeviceAccessProtectionKind,
