@@ -1,10 +1,4 @@
-import {
-  expect,
-  test,
-  type Page,
-  type Route,
-  type TestInfo,
-} from '@playwright/test'
+import { expect, type Page, type Route, type TestInfo } from '@playwright/test'
 import { Effect } from 'effect'
 import { launchPairedPinExtension } from './helpers/paired-pin-extension'
 
@@ -13,7 +7,7 @@ type NamedLoginEnvironment = Awaited<
 >
 type NamedLoginScenarioContext = { readonly self: NamedLoginScenario }
 
-class NamedLoginScenario {
+export class NamedLoginScenario {
   private readonly generatorContext: NamedLoginScenarioContext = { self: this }
   constructor(private readonly testInfo: TestInfo) {}
 
@@ -103,11 +97,3 @@ class NamedLoginScenario {
     },
   )
 }
-
-test('detects login and focused credentials when form controls shadow DOM metadata', ({
-  browserName,
-}, testInfo) => {
-  test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
-  test.setTimeout(180_000)
-  return new NamedLoginScenario(testInfo).run()
-})

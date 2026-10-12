@@ -4,13 +4,7 @@ export class AuthenticationContainerIdentity {
   // Form controls named id/className shadow reflected DOM properties.
   // Read the authored attributes without consulting the form's named controls.
   private attribute(name: string): string {
-    const value = this.request.getAttribute(name);
-    switch (typeof value === "string") {
-      case true:
-        return value;
-      case false:
-        return "";
-    }
+    return this.request.getAttribute(name) || "";
   }
   get id(): string {
     return this.attribute("id");

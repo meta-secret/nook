@@ -7,8 +7,16 @@ import {
 } from './helpers/paired-pin-extension'
 import { MOCK_AUTH_SECOND_TOTP_SECRET, startMockAuthServer } from './mock-auth'
 import { MockAuthProviderScenarios } from './mock-auth-provider-scenarios'
+import { NamedLoginScenario } from './login-form-named-properties'
 test.describe('PIN Pilot mock-auth coverage', () => {
   test.describe.configure({ timeout: 180_000 })
+  test('detects login and focused credentials when form controls shadow DOM metadata', ({
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+    return new NamedLoginScenario(testInfo).run()
+  })
+
   test('surfaces no-match and empty authenticator states', async ({
     browserName,
   }, testInfo) => {
