@@ -1,5 +1,5 @@
-import { Schema } from 'effect'
-import type { Page } from '@playwright/test'
+import { Effect, Schema } from 'effect'
+import type { Page, Route } from '@playwright/test'
 import { CompanionWasmSessionMessageType } from '../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
 import { expect, test } from '../fixtures'
 import {
@@ -14,6 +14,8 @@ import {
 } from './static-chrome-stub'
 
 type RequiredCatalogEntryFields = { readonly message: typeof Schema.String }
+type PilotDemoDocumentResponse = Parameters<Route['fulfill']>[0]
+type PilotDemoButtonOptions = Parameters<Page['getByRole']>[1]
 const requiredCatalogEntryFields: RequiredCatalogEntryFields = {
   message: Schema.String,
 }
@@ -636,15 +638,18 @@ test('shows no matching credentials as a distinct Pilot state', async ({
   await demoBeat(page)
 })
 
-test('fill a Namecheap-like OTP challenge through Nook Pilot', async ({
+test('fill the standalone Namecheap OTP route through Nook Pilot', async ({
   page,
 }) => {
   const messages = await loadPilotMessages()
 
   await page.addInitScript(installDemoChromeStub, totpPilotStubArgs(messages))
 
-  await page.goto('/')
-  await page.setContent(`<!doctype html>
+  const challengeUrl =
+    'https://namecheap.com/twofa/totp/?ReturnUrl=%2Fmyaccount%2F'
+  const challengeDocument: PilotDemoDocumentResponse = {
+    contentType: 'text/html',
+    body: `<!doctype html>
     <html>
       <head>
         <title>Enter OTP Code</title>
@@ -711,23 +716,46 @@ test('fill a Namecheap-like OTP challenge through Nook Pilot', async ({
           </form>
         </main>
       </body>
-    </html>`)
-  await page.evaluate(installDemoChromeStub, totpPilotStubArgs(messages))
+    </html>`,
+  }
+  const codeInput = page.getByPlaceholder('Enter OTP Code')
+  const fulfillChallenge = (route: Route): Promise<void> =>
+    route.fulfill(challengeDocument)
+  const serveChallenge = Effect.tryPromise(() =>
+    page.route('https://namecheap.com/**', fulfillChallenge),
+  )
+  const openChallenge = Effect.tryPromise(() => page.goto(challengeUrl))
+  const installRuntime = Effect.tryPromise(() =>
+    page.evaluate(installDemoChromeStub, totpPilotStubArgs(messages)),
+  )
+  const focusChallenge = Effect.tryPromise(() => codeInput.focus())
+  await Effect.runPromise(
+    serveChallenge.pipe(
+      Effect.andThen(openChallenge),
+      Effect.andThen(installRuntime),
+      Effect.andThen(focusChallenge),
+    ),
+  )
+  await expect(codeInput).toBeFocused()
   await injectPilotAutofill(page)
 
   const widget = page.locator('#nook-auth-widget')
+  await expect(widget.getByText('namecheap.com')).toBeVisible()
   await expect(widget.getByText('Nook Pilot · 2/3')).toBeVisible()
   await expect(widget.getByText('Fill your 2FA code')).toBeVisible()
+  await expect(codeInput).toHaveValue('')
   await demoBeat(page)
 
-  await widget.getByRole('button', { name: 'Fill 2FA code' }).click()
+  const fillButton: PilotDemoButtonOptions = { name: 'Fill 2FA code' }
+  await widget.getByRole('button', fillButton).click()
   await expect(
     widget.getByText(
       'Choose a saved 2FA item in the Nook window. You can search all 2FA items in your vault.',
     ),
   ).toBeVisible()
   await demoBeat(page)
-  await expect(page.getByPlaceholder('Enter OTP Code')).toHaveValue('482913')
+  await expect(codeInput).toHaveValue('482913')
+  await expect(page).toHaveURL(challengeUrl)
   await expect(
     widget.getByText(
       'The code is filled. Review the site and submit it manually.',
