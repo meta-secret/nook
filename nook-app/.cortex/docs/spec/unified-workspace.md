@@ -9,17 +9,15 @@ and no Vault/Admin/Onboard/Settings bottom navigation.
 
 ## Pages and routes
 
-| Page | Route | Earlier route kept as an alias |
-| --- | --- | --- |
-| Identities hub | `/identities` | — |
-| Vault (secret list) | `/vault` (also `/`, `/app`) | — |
-| Identity → Keys | `/identity/keys` | `/devices-access` |
-| Identity → Vaults | `/identity/vaults` | `/admin` |
-| Identity → Settings | `/identity/settings` | `/settings` |
-| Open vault → Devices & onboarding | `/vault/devices` | `/onboard` |
-| Open vault → Sync | `/vault/sync` | — |
-| Open vault → Backup passwords | `/vault/passwords` | — |
-| Open vault → Import | `/vault/import` | — |
+- **Identities hub:** `/identities`.
+- **Vault (secret list):** `/vault`; `/` and `/app` resolve here.
+- **Identity → Keys:** `/identity/keys`; alias `/devices-access`.
+- **Identity → Vaults:** `/identity/vaults`; alias `/admin`.
+- **Identity → Settings:** `/identity/settings`; alias `/settings`.
+- **Open vault → Devices & onboarding:** `/vault/devices`; alias `/onboard`.
+- **Open vault → Sync:** `/vault/sync`.
+- **Open vault → Backup passwords:** `/vault/passwords`.
+- **Open vault → Import:** `/vault/import`.
 
 - Earlier routes resolve to their current page and the URL is rewritten to the
   canonical path. Query strings and fragments are discarded as before.

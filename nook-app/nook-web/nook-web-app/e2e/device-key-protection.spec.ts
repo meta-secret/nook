@@ -11,6 +11,8 @@ import {
   waitForPersistedAppLog,
   openVaultPage,
   openKeysPage,
+  pushWorkspacePath,
+  type WorkspacePathPush,
 } from './helpers'
 
 declare global {
@@ -518,12 +520,7 @@ test.describe('passkey device-key protection', () => {
       localStorage.setItem('nook_e2e_manual_passkey', 'true')
     })
     await page.goto('/app/')
-    await page.getByTestId('get-started-path-sentinel').click()
-    await page.getByTestId('sentinel-dashboard-card-stack').click()
-    await page.getByTestId('sentinel-onboarding-create-keys').click()
-    await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
+    await queueSentinelInitiatorKeys(page)
 
     await page.evaluate(() => {
       history.pushState({}, '', '/privacy')
@@ -540,12 +537,7 @@ test.describe('passkey device-key protection', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
 
-    await page.getByTestId('get-started-path-sentinel').click()
-    await page.getByTestId('sentinel-dashboard-card-stack').click()
-    await page.getByTestId('sentinel-onboarding-create-keys').click()
-    await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
+    await queueSentinelInitiatorKeys(page)
     await page.evaluate(() => {
       history.pushState({}, '', '/help')
       window.dispatchEvent(new PopStateEvent('popstate'))
@@ -559,16 +551,9 @@ test.describe('passkey device-key protection', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
 
-    await page.getByTestId('get-started-path-sentinel').click()
-    await page.getByTestId('sentinel-dashboard-card-stack').click()
-    await page.getByTestId('sentinel-onboarding-create-keys').click()
-    await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    await page.evaluate(() => {
-      history.pushState({}, '', '/identity/keys')
-      window.dispatchEvent(new PopStateEvent('popstate'))
-    })
+    await queueSentinelInitiatorKeys(page)
+    const keysPath: WorkspacePathPush = { page, path: '/identity/keys' }
+    await pushWorkspacePath(keysPath)
     await expect(page).toHaveURL(/\/identity\/keys$/)
     await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
     await page.getByTestId('page-bar-back').click()
@@ -577,12 +562,7 @@ test.describe('passkey device-key protection', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
 
-    await page.getByTestId('get-started-path-sentinel').click()
-    await page.getByTestId('sentinel-dashboard-card-stack').click()
-    await page.getByTestId('sentinel-onboarding-create-keys').click()
-    await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
+    await queueSentinelInitiatorKeys(page)
     await page.goBack()
     await expect(page).toHaveURL(/\/identity\/keys$/)
     await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
@@ -590,12 +570,7 @@ test.describe('passkey device-key protection', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await page.getByTestId('page-bar-back').click()
-    await page.getByTestId('get-started-path-sentinel').click()
-    await page.getByTestId('sentinel-dashboard-card-stack').click()
-    await page.getByTestId('sentinel-onboarding-create-keys').click()
-    await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
+    await queueSentinelInitiatorKeys(page)
   })
 
   test('resumes an invitation response after participant protection setup', async ({
@@ -1002,3 +977,13 @@ test.describe('passkey device-key protection', () => {
     ).toBeHidden()
   })
 })
+
+/** Start Sentinel creation up to the queued initiator-key passkey prompt. */
+async function queueSentinelInitiatorKeys(page: Page): Promise<void> {
+  await page.getByTestId('get-started-path-sentinel').click()
+  await page.getByTestId('sentinel-dashboard-card-stack').click()
+  await page.getByTestId('sentinel-onboarding-create-keys').click()
+  await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+}

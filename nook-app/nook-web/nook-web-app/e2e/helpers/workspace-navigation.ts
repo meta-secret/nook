@@ -91,3 +91,19 @@ export async function openKeysPage(page: Page): Promise<void> {
   await manage.click()
   await expect(dashboard).toBeVisible({ timeout: UI_TIMEOUT_MS })
 }
+
+export type WorkspacePathPush = {
+  readonly page: Page
+  readonly path: string
+}
+
+/** Move the SPA to a workspace path the way browser history would. */
+export async function pushWorkspacePath({
+  page,
+  path,
+}: WorkspacePathPush): Promise<void> {
+  await page.evaluate((target) => {
+    history.pushState({}, '', target)
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  }, path)
+}
