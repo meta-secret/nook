@@ -211,19 +211,6 @@ export class AuthenticationScanRenderLifecycle {
     }
     const fieldClassification =
       passwordFieldDiscovery.prepareCompanionClassification(document)
-    const pendingOffer = await loginSaveInteraction.loadPendingSaveOffer()
-    if (sequence !== this.request.scanState.sequence)
-      return AuthenticationScanOutcome.Stale
-    if (pendingOffer.kind === PendingSaveOfferLoadKind.Loaded) {
-      loginSaveInteraction.beginPendingSaveWatch(pendingOffer.offer)
-      const diagnostic: AuthenticationDiagnosticObservation = {
-        gate: AuthenticationDiagnosticGate.Scan,
-        outcome: AuthenticationDiagnosticGateOutcome.Skipped,
-        candidateCount: 0,
-      }
-      this.recordDiagnostic(diagnostic)
-      return AuthenticationScanOutcome.Watching
-    }
     await fieldClassification
     await recoveryCopyObservation.prepareAuthenticationRecoveryEvidence()
     const setupSnapshot =
@@ -257,6 +244,19 @@ export class AuthenticationScanRenderLifecycle {
     await passwordFormInteraction.prepareCompanionWorkflowPolicies(
       companionPoliciesRequest,
     )
+    const pendingOffer = await loginSaveInteraction.loadPendingSaveOffer()
+    if (sequence !== this.request.scanState.sequence)
+      return AuthenticationScanOutcome.Stale
+    if (pendingOffer.kind === PendingSaveOfferLoadKind.Loaded) {
+      loginSaveInteraction.beginPendingSaveWatch(pendingOffer.offer)
+      const diagnostic: AuthenticationDiagnosticObservation = {
+        gate: AuthenticationDiagnosticGate.Scan,
+        outcome: AuthenticationDiagnosticGateOutcome.Skipped,
+        candidateCount: 0,
+      }
+      this.recordDiagnostic(diagnostic)
+      return AuthenticationScanOutcome.Watching
+    }
     const workflowForms = passwordFormInteraction
       .summarizeAuthenticationWorkflowForms()
       .slice(0, MAX_AUTHENTICATION_WORKFLOW_TRANSPORT_OBSERVATIONS)

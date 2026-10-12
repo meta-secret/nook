@@ -32,6 +32,44 @@ import { recoveryCopyObservation } from '../../../../nook-web-extension/src/lib/
 import { pageQrCapture } from '../../../../nook-web-extension/src/lib/page-qr-capture'
 import { authenticatorEnrollmentInteraction } from '../../../../nook-web-extension/src/content/enrollment-flow'
 
+enum AuthenticationScanPreparationStage {
+  Fields = 'fields',
+  Policies = 'policies',
+  PendingOffer = 'pending-offer',
+}
+type AuthenticationScanPreparationStages = AuthenticationScanPreparationStage[]
+
+class AuthenticationScanPreparationFixture {
+  readonly stages: AuthenticationScanPreparationStages = []
+  prepareFields(): Promise<void> {
+    return Effect.runPromise(
+      Effect.sync(() => {
+        this.stages.push(AuthenticationScanPreparationStage.Fields)
+      }),
+    )
+  }
+  preparePolicies(): Promise<void> {
+    return Effect.runPromise(
+      Effect.sync(() => {
+        this.stages.push(AuthenticationScanPreparationStage.Policies)
+      }),
+    )
+  }
+  loadPendingOffer(): ReturnType<
+    typeof loginSaveInteraction.loadPendingSaveOffer
+  > {
+    return Effect.runPromise(
+      Effect.sync(() => {
+        this.stages.push(AuthenticationScanPreparationStage.PendingOffer)
+        const absent: Awaited<
+          ReturnType<typeof loginSaveInteraction.loadPendingSaveOffer>
+        > = { kind: PendingSaveOfferLoadKind.Absent }
+        return absent
+      }),
+    )
+  }
+}
+
 vi.mock(
   '../../../../nook-web-extension/src/content/autofill/companion-wasm-gate',
   () => ({
@@ -55,6 +93,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 test('an unavailable whole-page snapshot never enters focused render', async () => {
+  const preparation = new AuthenticationScanPreparationFixture()
   const browserFixture = { runtime: { id: '' } }
   vi.stubGlobal('chrome', browserFixture)
   widgetState.dismissed = false
@@ -67,16 +106,13 @@ test('an unavailable whole-page snapshot never enters focused render', async () 
   vi.spyOn(
     passwordFieldDiscovery,
     'prepareCompanionClassification',
-  ).mockResolvedValue()
+  ).mockImplementation(preparation.prepareFields.bind(preparation))
   vi.spyOn(
     passwordFormInteraction,
     'prepareCompanionWorkflowPolicies',
-  ).mockResolvedValue()
-  const absent: Awaited<
-    ReturnType<typeof loginSaveInteraction.loadPendingSaveOffer>
-  > = { kind: PendingSaveOfferLoadKind.Absent }
+  ).mockImplementation(preparation.preparePolicies.bind(preparation))
   vi.spyOn(loginSaveInteraction, 'loadPendingSaveOffer').mockImplementation(
-    () => Effect.runPromise(Effect.succeed(absent)),
+    preparation.loadPendingOffer.bind(preparation),
   )
   vi.spyOn(
     recoveryCopyObservation,
@@ -113,4 +149,10 @@ test('an unavailable whole-page snapshot never enters focused render', async () 
   await new AuthenticationScanRenderLifecycle(request).scanAndRender()
   expect(transport).toHaveBeenCalledOnce()
   expect(focused).not.toHaveBeenCalled()
+  const expectedPreparations: AuthenticationScanPreparationStages = [
+    AuthenticationScanPreparationStage.Fields,
+    AuthenticationScanPreparationStage.Policies,
+    AuthenticationScanPreparationStage.PendingOffer,
+  ]
+  expect(preparation.stages).toEqual(expectedPreparations)
 })
