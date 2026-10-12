@@ -616,9 +616,8 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     ).toContainText('Choose this vault to connect it to the browser extension.')
     await pairingPage.close()
 
-    await simplePage.getByTestId('vault-settings-tab').click()
-    const dangerSection = simplePage.getByTestId('vault-danger-section')
-    await dangerSection.getByRole('button').first().click()
+    await simplePage.getByTestId('vault-manage-btn').click()
+    await simplePage.getByTestId('manage-nav-settings').click()
     await simplePage.getByTestId('delete-local-vault-button').click()
     await simplePage.getByTestId('delete-local-vault-confirm').click()
 
