@@ -2158,6 +2158,7 @@
     "nav_short_devices": "Devices",
     "nav_short_sync": "Sync",
     "nav_short_passwords": "Backups",
-    "back_to_vault": "Back to vault"
+    "back_to_vault": "Back to vault",
+    "card_no_vaults": "No vaults yet"
   }
 }

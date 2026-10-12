@@ -244,6 +244,14 @@ the unlock, so there is no separate unlock button.
           </button>
         </li>
       {/each}
+      {#if card.vaults.length === 0 && !canAddVault}
+        <li
+          class="px-2.5 py-2.5 text-sm text-muted-foreground"
+          data-testid="identity-card-no-vaults"
+        >
+          {vault.t(I18N_KEYS.WorkspaceCardNoVaults)}
+        </li>
+      {/if}
       {#if canAddVault}
         <li>
           <button

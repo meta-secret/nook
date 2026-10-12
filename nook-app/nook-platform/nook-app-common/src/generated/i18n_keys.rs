@@ -2352,6 +2352,7 @@ pub const WORKSPACE_BACK_TO_IDENTITIES: &str = "workspace.back_to_identities";
 pub const WORKSPACE_BACK_TO_VAULT: &str = "workspace.back_to_vault";
 pub const WORKSPACE_CARD_KEY_COUNT_PLURAL: &str = "workspace.card_key_count_plural";
 pub const WORKSPACE_CARD_KEY_COUNT_SINGULAR: &str = "workspace.card_key_count_singular";
+pub const WORKSPACE_CARD_NO_VAULTS: &str = "workspace.card_no_vaults";
 pub const WORKSPACE_CARD_VAULTS: &str = "workspace.card_vaults";
 pub const WORKSPACE_CARDS_LABEL: &str = "workspace.cards_label";
 pub const WORKSPACE_FINGERPRINT_TITLE: &str = "workspace.fingerprint_title";

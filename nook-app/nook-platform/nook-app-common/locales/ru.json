@@ -2158,6 +2158,7 @@
     "nav_short_devices": "Устройства",
     "nav_short_sync": "Синхр.",
     "nav_short_passwords": "Пароли",
-    "back_to_vault": "Назад к сейфу"
+    "back_to_vault": "Назад к сейфу",
+    "card_no_vaults": "Сейфов пока нет"
   }
 }

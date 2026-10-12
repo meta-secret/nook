@@ -1962,6 +1962,7 @@ export const I18N_KEYS = {
   WorkspaceBackToVault: 'workspace.back_to_vault',
   WorkspaceCardKeyCountPlural: 'workspace.card_key_count_plural',
   WorkspaceCardKeyCountSingular: 'workspace.card_key_count_singular',
+  WorkspaceCardNoVaults: 'workspace.card_no_vaults',
   WorkspaceCardVaults: 'workspace.card_vaults',
   WorkspaceCardsLabel: 'workspace.cards_label',
   WorkspaceFingerprintTitle: 'workspace.fingerprint_title',
