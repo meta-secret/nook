@@ -1,14 +1,14 @@
 import { DEFAULT_SITE_URL } from "$lib/content/sitemap";
-import { Effect, Schema } from "effect";
 import {
   InstalledExtensionRuntimeKind,
   extensionConnectionBrowser,
 } from "$lib/extension/connect";
-import { ExtensionPairedVaultIdentityStatusMessageStatus } from "$web-shared/extension/paired-vault-identity-status";
 import {
   ActiveVaultKind,
   type ActiveVault,
 } from "$lib/vault/state/provider.svelte";
+import { ExtensionPairedVaultIdentityStatusMessageStatus } from "$web-shared/extension/paired-vault-identity-status";
+import { Effect, Schema } from "effect";
 
 export enum ExtensionInstallMethod {
   ChromeWebStore = "chrome_web_store",
@@ -49,7 +49,7 @@ type BrowserExtensionEnvironment = {
   maxTouchPoints: number;
   platform: string;
   userAgent: string;
-  userAgentData?: Navigator["userAgentData"] | { mobile?: boolean };
+  userAgentData?: { readonly mobile?: boolean };
 };
 
 type ExtensionDeploymentMetadata = {

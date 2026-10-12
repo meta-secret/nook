@@ -12,12 +12,6 @@ export type StubSyncTarget = GithubE2eTarget & {
   stub: VaultEventLogRemote
 }
 
-/** Unique remote id per suite — no live provider registration or cleanup. */
-export function createE2eRemoteName(prefix = 'nook-e2e'): string {
-  const suffix = crypto.randomUUID().replace(/-/g, '').slice(0, 12)
-  return `${prefix}-${suffix}`
-}
-
 /** Poll in-memory provider events (mirrors waitForGithubVaultState without API calls). */
 export async function waitForStubVaultState(
   target: StubSyncTarget,

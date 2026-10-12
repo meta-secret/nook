@@ -42,20 +42,15 @@ test.describe('legal pages', () => {
 
   test('shows public links in the vault app footer', async ({ page }) => {
     await page.goto('/app/')
-    // Empty-device create uses the landing handoff (no ProductIntro panel).
-    await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible()
-    await expect(page.getByTestId('footer-about-link')).toHaveAttribute(
-      'href',
-      '/',
-    )
-    await expect(page.getByTestId('footer-privacy-link')).toHaveAttribute(
-      'href',
-      '/privacy.html',
-    )
-    await expect(page.getByTestId('footer-terms-link')).toHaveAttribute(
-      'href',
-      '/terms.html',
-    )
+    await expect(
+      page.getByRole('heading', { name: 'A quiet place for your secrets.' }),
+    ).toBeVisible()
+    await expect(
+      page.getByRole('link', { name: 'Privacy Policy' }),
+    ).toHaveAttribute('href', '/privacy.html')
+    await expect(
+      page.getByRole('link', { name: 'Terms of Service' }),
+    ).toHaveAttribute('href', '/terms.html')
   })
 
   test('serves the public landing page at the site root', async ({ page }) => {

@@ -1,14 +1,23 @@
 import { chromium, expect, test } from '@playwright/test'
 import { mkdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
+import { authorizeWorkspace } from '../../nook-web-app/e2e/helpers/workspace'
+import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
+import {
+  belongs_to_sentinel_vault,
+  belongs_to_simple_vault,
+  simple_vault_url,
+} from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { ExtensionPairingApprovedMessageType } from '../../nook-web-shared/src/extension/runtime-messages'
+import { ExtensionSessionMessageType } from '../src/offscreen/session-message-dispatch'
 import {
   advanceCreateVaultWizardToFinalStep,
   connectedSetupState,
+  e2eSentinelVaultBaseUrl,
   extensionDir,
   getServiceWorker,
   installMockPasskeyRuntime,
   launchExtensionContext,
-  e2eSentinelVaultBaseUrl,
   openSimpleVaultConnection,
   pairingGrantStorageKey,
   readExtensionPersistenceSnapshot,
@@ -23,21 +32,12 @@ import {
   writeExtensionStorage,
   type ExtensionPairingApprovedMessage,
 } from './helpers/extension-smoke-runtime'
-import {
-  belongs_to_sentinel_vault,
-  belongs_to_simple_vault,
-  simple_vault_url,
-} from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
+import { lockExtensionSession } from './helpers/paired-pin-extension'
+import { unlockExtensionThroughCompanion } from './helpers/paired-vault-companion-unlock'
 import {
   ensurePinProtectedPopup,
   installForcePinDeviceProtection,
 } from './helpers/pin-device'
-import { lockExtensionSession } from './helpers/paired-pin-extension'
-import { unlockExtensionThroughCompanion } from './helpers/paired-vault-companion-unlock'
-import { ExtensionSessionMessageType } from '../src/offscreen/session-message-dispatch'
-import { ExtensionPairingApprovedMessageType } from '../../nook-web-shared/src/extension/runtime-messages'
-import { authorizeDeviceProtection } from '../../nook-web-app/e2e/helpers/settings-auth'
 
 const chromiumExecutablePath = ((v) => (v ? v : ''))(
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim(),
@@ -88,15 +88,6 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await expect(
       popupPage.getByTestId('device-protection-use-existing-choice'),
     ).toHaveText('Authenticate')
-    await expect(popupPage.getByTestId('device-mode-select')).toBeHidden()
-    await expect(
-      popupPage.getByTestId('device-protection-create-new-choice'),
-    ).toHaveText('Create passkey')
-    await expect(
-      popupPage.getByTestId('device-protection-setup-btn'),
-    ).toBeHidden()
-
-    await popupPage.getByTestId('device-protection-create-new-choice').click()
     await expect(
       popupPage.getByTestId('device-mode-select').locator('option:checked'),
     ).toHaveText('Standard')
@@ -534,13 +525,18 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     await expect(
       simplePage.getByTestId('login-local-unlock-step'),
     ).toBeVisible()
-    await simplePage.getByTestId('login-vault-workflow-create').click()
     await simplePage
-      .getByTestId('login-vault-name-input')
+      .getByRole('button', { name: 'Create a vault', exact: true })
+      .click()
+    await simplePage
+      .getByRole('button', { name: 'Continue with passkey', exact: true })
+      .click()
+    await simplePage
+      .getByLabel('Vault name', { exact: true })
       .fill('Second local vault')
-    await simplePage.getByTestId('login-create-additional-vault-btn').click()
-    await expect(simplePage.getByTestId('passkey-auth-overlay')).toBeVisible()
-    await authorizeDeviceProtection(simplePage)
+    await simplePage
+      .getByRole('button', { name: 'Create a vault', exact: true })
+      .click()
     await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
 
     const companionUnlock: Parameters<
@@ -569,62 +565,37 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     )
     // The vault picker requires an explicit lock in this tab's session storage.
     // Enter consent without approving pairing, then lock this fresh tab.
-    await authorizeDeviceProtection(pairingPage)
+    await authorizeWorkspace(pairingPage)
     await expect(
       pairingPage.getByTestId('extension-connect-consent'),
     ).toBeVisible()
     await pairingPage.getByTestId('header-lock-vault-btn').click()
 
-    const pairedVaultOption = pairingPage
-      .getByTestId('login-vault-option')
-      .filter({
-        has: pairingPage.getByText('Unpair test vault', { exact: true }),
-      })
-    const unpairedVaultOption = pairingPage
-      .getByTestId('login-vault-option')
-      .filter({
-        has: pairingPage.getByText('Second local vault', { exact: true }),
-      })
-    await expect(pairingPage.getByTestId('login-vault-option')).toHaveCount(2)
-    await expect(
-      pairedVaultOption.getByTestId('login-vault-extension-pairing-status'),
-    ).toHaveText('Paired with this extension')
-    await expect(
-      unpairedVaultOption.getByTestId('login-vault-extension-pairing-status'),
-    ).toHaveText('Not paired with this extension')
-    await expect(
-      unpairedVaultOption.getByTestId('login-vault-extension-connected-vault'),
-    ).toContainText('Unpair test vault')
-    await unpairedVaultOption.click()
-
-    await expect(
-      pairingPage.getByTestId('login-local-unlock-step'),
-    ).toBeVisible()
-    const selectedVaultCard = pairingPage
-      .getByTestId('login-vault-card')
-      .filter({
-        has: pairingPage.getByText('Second local vault', { exact: true }),
-      })
-    await expect(
-      selectedVaultCard.getByTestId('login-vault-extension-pairing-status'),
-    ).toHaveText('Not paired with this extension')
-    await expect(
-      selectedVaultCard.getByTestId('login-vault-extension-connected-vault'),
-    ).toContainText('Unpair test vault')
-    await expect(
-      pairingPage.getByTestId('login-vault-extension-pairing-purpose'),
-    ).toContainText('Choose this vault to connect it to the browser extension.')
+    const choices = pairingPage.locator('.vault-choice')
+    await expect(choices).toHaveCount(2)
+    await expect(choices.filter({ hasText: 'Unpair test vault' })).toBeVisible()
+    const unpaired = choices.filter({ hasText: 'Second local vault' })
+    await unpaired.click()
+    await expect(unpaired).toHaveClass(/chosen/)
+    const beforeApproval = await readExtensionStorage(context)
+    expect(beforeApproval[setupStorageKey]).toMatchObject({
+      selectedVaultName: 'Unpair test vault',
+    })
     await pairingPage.close()
 
-    await simplePage.getByTestId('vault-settings-tab').click()
-    const dangerSection = simplePage.getByTestId('vault-danger-section')
-    await dangerSection.getByRole('button').first().click()
-    await simplePage.getByTestId('delete-local-vault-button').click()
-    await simplePage.getByTestId('delete-local-vault-confirm').click()
-
-    await expect(simplePage).toHaveURL((url) => url.pathname === '/', {
-      timeout: 15_000,
-    })
+    await simplePage
+      .getByRole('button', { name: 'Settings', exact: true })
+      .click()
+    await simplePage
+      .getByRole('button', {
+        name: 'Delete data from this browser',
+        exact: true,
+      })
+      .click()
+    await simplePage
+      .getByRole('button', { name: 'Delete', exact: true })
+      .click()
+    await expect(simplePage.getByTestId('login-gate')).toBeVisible()
 
     const storageAfterWebsiteDeletion = await readExtensionStorage(context)
     expect(storageAfterWebsiteDeletion[setupStorageKey]).toMatchObject({
@@ -927,7 +898,7 @@ test('translates malformed device-action responses in the popup', async ({
       .getByTestId('device-protection-pin-unlock-input')
       .fill('123456')
     await popupPage.getByTestId('device-protection-pin-unlock-btn').click()
-    const error = popupPage.getByTestId('device-protection-error')
+    const error = popupPage.getByTestId('extension-runtime-error')
     await expect(error).toHaveText(
       'PIN или кодовая фраза не разблокировали этот браузер. Проверьте их и повторите попытку.',
     )

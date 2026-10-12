@@ -1,95 +1,7 @@
-import {
-  expect,
-  type Browser,
-  type BrowserContext,
-  type Page,
-} from '@playwright/test'
-import { installMockPasskeyRuntime } from '../passkey-mock'
+import { expect, type Page } from '@playwright/test'
 import { keepVaultIdleLockDisabled } from './device-enrollment'
 import { ENROLLMENT_UNLOCK_TIMEOUT_MS, UI_TIMEOUT_MS } from './environment'
 import { assertNoVaultErrors } from './github-sync'
-import { openLoginProviderSetup } from './vault-setup'
-
-export async function clearBrowserVault(page: Page) {
-  const appMountReadinessOptions: { timeout: number } = {
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  }
-  await expect(page.getByTestId('app-shell-content')).toBeAttached(
-    appMountReadinessOptions,
-  )
-  await expect
-    .poll(() => page.evaluate(() => '__nookVault' in window), {
-      timeout: UI_TIMEOUT_MS,
-    })
-    .toBe(true)
-
-  const cleared = await page.evaluate(async () => {
-    const vault = window.__nookVault
-    if (!vault) throw new Error('__nookVault is not available on the page')
-    await vault.init()
-    vault.stopVaultSync()
-    await vault.waitForStorageChain()
-    if (!vault.hasManager) return { ok: true as const, value: false }
-    const manager = vault.admitManager()
-    if (manager.isErr())
-      return { ok: false as const, error: manager.error.translationKey }
-    try {
-      await manager.value.delete_local_browser_data()
-    } catch {
-      return { ok: false as const, error: 'Native local data deletion failed' }
-    }
-    return { ok: true as const, value: true }
-  })
-  if (!cleared.ok) throw new Error(cleared.error)
-  const clearedThroughManager = cleared.value
-  await page.evaluate(
-    (vaultAlreadyCleared) =>
-      new Promise<void>((resolve, reject) => {
-        localStorage.clear()
-        if (vaultAlreadyCleared) {
-          resolve()
-          return
-        }
-        let pending = 2
-        const done = () => {
-          pending -= 1
-          if (pending === 0) resolve()
-        }
-        const vaultDb = indexedDB.deleteDatabase('nook_db')
-        vaultDb.onsuccess = done
-        vaultDb.onerror = () =>
-          reject(
-            ((v) => (v ? v : new Error('Vault database failed to open')))(
-              vaultDb.error,
-            ),
-          )
-        vaultDb.onblocked = done
-
-        const authDb = indexedDB.deleteDatabase('nook_auth')
-        authDb.onsuccess = done
-        authDb.onerror = () =>
-          reject(
-            ((v) => (v ? v : new Error('Auth database failed to open')))(
-              authDb.error,
-            ),
-          )
-        authDb.onblocked = done
-      }),
-    clearedThroughManager,
-  )
-}
-
-export async function createIsolatedContext(
-  browser: Browser,
-): Promise<BrowserContext> {
-  const context = await browser.newContext()
-  await context.addInitScript(installMockPasskeyRuntime)
-  return context
-}
-
-export async function installPasskeyMock(page: Page): Promise<void> {
-  await page.addInitScript(installMockPasskeyRuntime)
-}
 
 /**
  * Serial multi-device specs leave one browser idle while another acts; the e2e
@@ -134,31 +46,6 @@ export async function forceVaultSyncQuiescentForE2e(page: Page) {
     ).__nookVault
     if (!vault) return
     vault.stopVaultSync?.()
-    vault.isSyncing = false
-    vault.isFanOutSyncing = false
-    vault.clearSyncingProvider()
-    vault.isPasswordBusy = false
-  })
-}
-
-/** Stop timers and clear stuck sync flags so wasm storage ops can proceed in e2e. */
-export async function forceVaultQuiescentForE2e(page: Page) {
-  await page.evaluate(() => {
-    const vault = (
-      window as Window & {
-        __nookVault?: {
-          stopVaultSync?: () => void
-          stopIdleSessionTracking?: () => void
-          isSyncing?: boolean
-          isFanOutSyncing?: boolean
-          clearSyncingProvider: () => void
-          isPasswordBusy?: boolean
-        }
-      }
-    ).__nookVault
-    if (!vault) return
-    vault.stopVaultSync?.()
-    vault.stopIdleSessionTracking?.()
     vault.isSyncing = false
     vault.isFanOutSyncing = false
     vault.clearSyncingProvider()
@@ -232,46 +119,6 @@ export async function waitForVaultOperationsIdle(
   await forceVaultSyncQuiescentForE2e(page)
 }
 
-/** Wait until background vault sync / fan-out is idle (e2e dev build only). */
-export async function waitForVaultSyncIdle(
-  page: Page,
-  timeoutMs = ENROLLMENT_UNLOCK_TIMEOUT_MS,
-) {
-  await pauseVaultBackgroundSync(page)
-  await expect
-    .poll(
-      async () =>
-        page.evaluate(() => {
-          const vault = (
-            window as Window & {
-              __nookVault?: { isSyncActivityVisible?: boolean }
-            }
-          ).__nookVault
-          return vault ? !vault.isSyncActivityVisible : true
-        }),
-      { timeout: timeoutMs },
-    )
-    .toBe(true)
-}
-
-export function uniqueSecretKey(prefix: string) {
-  return `${prefix}-${Date.now()}`
-}
-
-export async function waitForEngine(page: Page) {
-  const button = page.getByTestId('connect-provider-btn')
-  await expect(button.first()).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-  await expect(button.first()).toBeEnabled({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-  await expect(button.first()).not.toContainText('Loading engine', {
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-  return button.first()
-}
-
 export async function assertGithubConnected(page: Page) {
   await assertNoVaultErrors(page, { allowTransient: true })
   if (!(await page.getByTestId('vault-panel').isVisible())) {
@@ -281,17 +128,6 @@ export async function assertGithubConnected(page: Page) {
     timeout: UI_TIMEOUT_MS,
   })
   await keepVaultIdleLockDisabled(page)
-}
-
-export async function setupGithubProvider(
-  page: Page,
-  pat: string,
-  repoName: string,
-) {
-  await openLoginProviderSetup(page)
-  await page.getByTestId('provider-option-github').click()
-  await page.getByTestId('github-repo-input').fill(repoName)
-  await page.getByTestId('github-pat-input').fill(pat)
 }
 
 export enum GoogleOAuthErrorStateKind {
@@ -336,17 +172,6 @@ export async function waitForGoogleOAuthSignedIn(page: Page) {
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
     .toBe(true)
-}
-
-export async function setupGoogleDriveProvider(page: Page, fileName: string) {
-  await openLoginProviderSetup(page)
-  await page.getByTestId('provider-option-oauth-file').click()
-  await expect(page.getByTestId('google-oauth-setup')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
-  await page.getByTestId('drive-file-input').fill(fileName)
-  await page.getByTestId('google-sign-in-btn').click()
-  await waitForGoogleOAuthSignedIn(page)
 }
 
 export function installGoogleTokenClient(token: string) {
@@ -396,57 +221,4 @@ export async function installGoogleOAuthMock(
     },
   )
   await page.evaluate(installGoogleTokenClient, accessToken)
-}
-
-export async function waitForVaultUnlocked(
-  page: Page,
-  timeout = UI_TIMEOUT_MS,
-) {
-  try {
-    await expect(page.getByTestId('vault-panel')).toBeVisible({ timeout })
-  } catch (error) {
-    const errorText = (
-      await page
-        .getByTestId('vault-error')
-        .or(page.getByTestId('onboard-error'))
-        .or(page.getByTestId('vault-password-error'))
-        .allTextContents()
-    )
-      .map((text) => text.trim())
-      .filter(Boolean)
-      .join(' | ')
-    throw new Error(
-      errorText
-        ? `Vault did not unlock. Visible error: ${errorText}`
-        : `Vault did not unlock: ${error instanceof Error ? error.message : String(error)}`,
-      { cause: error },
-    )
-  }
-}
-
-export async function wipeDeviceIdentity(page: Page): Promise<void> {
-  await page.evaluate(
-    () =>
-      new Promise<void>((resolve, reject) => {
-        const request = indexedDB.open('nook_db')
-        request.onerror = () =>
-          reject(((v) => (v ? v : new Error('idb open failed')))(request.error))
-        request.onsuccess = () => {
-          const db = request.result
-          const tx = db.transaction('vault', 'readwrite')
-          const store = tx.objectStore('vault')
-          store.delete('local_identity_keyring_v1')
-          store.delete('device_id')
-          store.delete('device_identity_wrapped')
-          store.delete('app_id')
-          store.delete('app_key_wrapped')
-          tx.oncomplete = () => {
-            db.close()
-            resolve()
-          }
-          tx.onerror = () =>
-            reject(((v) => (v ? v : new Error('idb delete failed')))(tx.error))
-        }
-      }),
-  )
 }

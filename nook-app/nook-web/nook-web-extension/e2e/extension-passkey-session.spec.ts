@@ -1,16 +1,18 @@
 import { chromium, expect, test, type Page } from '@playwright/test'
 import {
-  PasskeyVaultDiscovery,
-  WebsitePasskeyStateKind,
-  type WebsitePasskeyState,
-} from './helpers/passkey-vault-discovery'
+  authorizeWorkspace,
+  createLocalWorkspace,
+} from '../../nook-web-app/e2e/helpers/workspace'
+import { OpenCompanionLauncherIntent } from '../../nook-web-shared/src/extension/companion-launcher-message'
+import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
+import { belongs_to_simple_vault } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
+  advanceCreateVaultWizardToFinalStep,
   assertWebsitePasskeyThroughExtension,
   attachNookLogsForTest,
-  advanceCreateVaultWizardToFinalStep,
+  EXTENSION_UNLOCK_TIMEOUT_MS,
   extensionApprovalVaultName,
   extensionDir,
-  EXTENSION_UNLOCK_TIMEOUT_MS,
   getServiceWorker,
   installMockPasskeyRuntime,
   isHostedSmoke,
@@ -18,9 +20,9 @@ import {
   lockExtensionSession,
   openSimpleVaultConnection,
   readExtensionStorage,
-  removeExtensionStorageKeys,
   readPersistedAppLogs,
   registerWebsitePasskeyThroughExtension,
+  removeExtensionStorageKeys,
   sendExternalMessage,
   setupPasskeyExtensionPopup,
   setupStorageKey,
@@ -37,13 +39,11 @@ import {
   unlockPairedVaultThroughCompanion,
   type PairedVaultCompanionUnlock,
 } from './helpers/paired-vault-companion-unlock'
-import { belongs_to_simple_vault } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
-import { OpenCompanionLauncherIntent } from '../../nook-web-shared/src/extension/companion-launcher-message'
 import {
-  authorizeDeviceProtection,
-  createLocalVaultOnLogin,
-} from '../../nook-web-app/e2e/helpers'
+  PasskeyVaultDiscovery,
+  WebsitePasskeyStateKind,
+  type WebsitePasskeyState,
+} from './helpers/passkey-vault-discovery'
 
 const chromiumExecutablePath = ((v) => (v ? v : ''))(
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim(),
@@ -208,11 +208,6 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await simplePage
       .getByTestId('login-vault-name-input')
       .fill(extensionApprovalVaultName)
-    await expect(
-      simplePage.getByText(
-        `Create “${extensionApprovalVaultName}” locally using the extension's protected device key.`,
-      ),
-    ).toBeVisible()
     await expect(simplePage.getByText(/passkey is required/i)).toHaveCount(0)
     await simplePage.getByTestId('login-create-device-vault-btn').click()
     await expect(simplePage.getByTestId('passkey-auth-overlay')).toHaveCount(0)
@@ -422,58 +417,79 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     })
 
     await test.step('save website credentials in paired vault', async () => {
-      await reopenedVaultPage.getByTestId('add-secret-btn').click()
-      await reopenedVaultPage.getByTestId('item-type-login').click()
       await reopenedVaultPage
-        .getByTestId('secret-label')
+        .getByRole('button', { name: 'Add Secret', exact: true })
+        .first()
+        .click()
+      await reopenedVaultPage
+        .getByLabel('Item type')
+        .selectOption({ label: 'Login' })
+      await reopenedVaultPage
+        .getByLabel('Website', { exact: true })
         .fill(loginServer.origin)
       await reopenedVaultPage
-        .getByTestId('login-username')
+        .getByLabel('Username', { exact: true })
         .fill('alice@nook.test')
       await reopenedVaultPage
-        .getByTestId('secret-value')
+        .getByLabel('Password', { exact: true })
         .fill('extension-fill-password')
-      await reopenedVaultPage.getByTestId('save-secret-btn').click()
+      await reopenedVaultPage
+        .getByRole('button', { name: 'Save', exact: true })
+        .click()
       await expect(
         reopenedVaultPage
-          .getByTestId('vault-group-login')
-          .getByTestId('secret-row'),
+          .locator('.item-row')
+          .filter({ hasText: /alice@nook.test|bob@nook.test/ }),
       ).toBeVisible({ timeout: 15_000 })
 
-      await reopenedVaultPage.getByTestId('add-secret-btn').click()
-      await reopenedVaultPage.getByTestId('item-type-login').click()
       await reopenedVaultPage
-        .getByTestId('secret-label')
+        .getByRole('button', { name: 'Add Secret', exact: true })
+        .first()
+        .click()
+      await reopenedVaultPage
+        .getByLabel('Item type')
+        .selectOption({ label: 'Login' })
+      await reopenedVaultPage
+        .getByLabel('Website', { exact: true })
         .fill(loginServer.origin)
       await reopenedVaultPage
-        .getByTestId('login-username')
+        .getByLabel('Username', { exact: true })
         .fill('bob@nook.test')
       await reopenedVaultPage
-        .getByTestId('secret-value')
+        .getByLabel('Password', { exact: true })
         .fill('second-extension-password')
-      await reopenedVaultPage.getByTestId('save-secret-btn').click()
+      await reopenedVaultPage
+        .getByRole('button', { name: 'Save', exact: true })
+        .click()
       await expect(
         reopenedVaultPage
-          .getByTestId('vault-group-login')
-          .getByTestId('secret-row'),
+          .locator('.item-row')
+          .filter({ hasText: /alice@nook.test|bob@nook.test/ }),
       ).toHaveCount(2)
 
-      await reopenedVaultPage.getByTestId('add-secret-btn').click()
-      await reopenedVaultPage.getByTestId('item-type-authenticator').click()
       await reopenedVaultPage
-        .getByTestId('authenticator-issuer')
+        .getByRole('button', { name: 'Add Secret', exact: true })
+        .first()
+        .click()
+      await reopenedVaultPage
+        .getByLabel('Item type')
+        .selectOption({ label: 'Authenticator' })
+      await reopenedVaultPage
+        .getByLabel('Issuer', { exact: true })
         .fill('Nook extension e2e')
       await reopenedVaultPage
-        .getByTestId('authenticator-account')
+        .getByLabel('Account', { exact: true })
         .fill('alice@nook.test')
       await reopenedVaultPage
-        .getByTestId('authenticator-secret')
+        .getByLabel('Setup key', { exact: true })
         .fill('JBSWY3DPEHPK3PXP')
-      await reopenedVaultPage.getByTestId('save-secret-btn').click()
+      await reopenedVaultPage
+        .getByRole('button', { name: 'Save', exact: true })
+        .click()
       await expect(
         reopenedVaultPage
-          .getByTestId('vault-group-authenticator')
-          .getByTestId('secret-row'),
+          .locator('.item-row')
+          .filter({ hasText: 'Nook extension e2e' }),
       ).toBeVisible({ timeout: 15_000 })
     })
 
@@ -798,7 +814,7 @@ test('re-approves an existing local vault after reload without event-log-access-
     const popupPage = await setupPasskeyExtensionPopup(context)
     const simplePage = await context.newPage()
     await simplePage.goto(simpleVaultBaseUrl)
-    await createLocalVaultOnLogin(simplePage, vaultName, 'authenticated-shell')
+    await createLocalWorkspace(simplePage, vaultName)
 
     const worker = await getServiceWorker(context)
     const extensionId = new URL(worker.url()).host
@@ -828,7 +844,7 @@ test('re-approves an existing local vault after reload without event-log-access-
     await expect(consent.or(unlockStep)).toBeVisible({
       timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
     })
-    await authorizeDeviceProtection(connectPage)
+    await authorizeWorkspace(connectPage)
     await expect(consent).toBeVisible({
       timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
     })
@@ -866,11 +882,7 @@ test('re-approves an existing local vault after reload without event-log-access-
       timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
     })
     if (await reloadedUnlock.isVisible()) {
-      await simplePage.getByTestId('unlock-vault-btn').click()
-      const reloadOverlay = simplePage.getByTestId('passkey-auth-overlay')
-      if (await reloadOverlay.isVisible()) {
-        await simplePage.getByTestId('device-protection-unlock-btn').click()
-      }
+      await authorizeWorkspace(simplePage)
       await expect(reloadedShell).toBeVisible({
         timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
       })
@@ -909,11 +921,7 @@ test('re-approves an existing local vault after reload without event-log-access-
       timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
     })
     if (await reconnectUnlock.isVisible()) {
-      await reconnectPage.getByTestId('unlock-vault-btn').click()
-      const reconnectOverlay = reconnectPage.getByTestId('passkey-auth-overlay')
-      if (await reconnectOverlay.isVisible()) {
-        await reconnectPage.getByTestId('device-protection-unlock-btn').click()
-      }
+      await authorizeWorkspace(reconnectPage)
       await expect(reconnectConsent).toBeVisible({
         timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
       })

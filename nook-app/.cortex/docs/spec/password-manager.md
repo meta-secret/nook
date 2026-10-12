@@ -1,5 +1,13 @@
 # Nook Password Manager Specification
 
+## Current web presentation scope
+
+The [workspace UI rebuild](../../../nook-web/.cortex/docs/spec/workspace-ui.md)
+defines the current smaller browser interface: access, items, and settings.
+The domain and security requirements below still apply. Provider setup, imports,
+and administration require subsequent replacement screens before becoming
+available again in the browser UI.
+
 ## Overview
 
 This document defines the functional and technical specifications for Nook's Zero-Knowledge Password and Secret Manager.

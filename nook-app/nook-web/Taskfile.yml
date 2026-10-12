@@ -9,7 +9,7 @@ includes:
 tasks:
   web:verify:
     desc: Run the PR web verification and production builds with only the required WASM preparation.
-    dir: '{{.REPO_ROOT}}'
+    dir: "{{.REPO_ROOT}}"
     deps:
       - sccache:ensure
       - registry-cache:ensure
@@ -66,6 +66,14 @@ tasks:
     cmds:
       - task: docker:task
         vars: { TASK: _web:check }
+
+  remote:web:lint:
+    desc: Run web quality checks sequentially in the focused image for memory-bounded diagnostics.
+    deps:
+      - setup:web:focused
+    cmds:
+      - task: docker:task
+        vars: { TASK: _web:lint }
 
   web:test:
     desc: Run web unit tests in Docker.
@@ -646,12 +654,12 @@ tasks:
 
   web:e2e:windows:artifact:
     desc: Export production E2E preview and WASM for the native Windows job.
-    dir: '{{.REPO_ROOT}}'
+    dir: "{{.REPO_ROOT}}"
     deps:
       - sccache:ensure
       - registry-cache:ensure
     env:
-      WASM_BUILD_MODE: '{{.WASM_BUILD_MODE}}'
+      WASM_BUILD_MODE: "{{.WASM_BUILD_MODE}}"
     cmds:
       - |
         set -eu

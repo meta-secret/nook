@@ -1,6 +1,3 @@
-import { companionWasmReady } from './companion-wasm-ready'
-
-await companionWasmReady
 import {
   chromium,
   expect,
@@ -10,36 +7,39 @@ import {
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { ExtensionPairingApprovedMessage } from '../../../nook-web-shared/src/extension/runtime-messages'
-import type { ExtensionEventLogRecord } from '../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
 import {
   attachNookLogsForTest,
   readPersistedAppLogs,
 } from '../../../nook-web-app/e2e/helpers'
 import { installMockPasskeyRuntime } from '../../../nook-web-app/e2e/passkey-mock'
+import type { ExtensionEventLogRecord } from '../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
 import {
   belongs_to_simple_vault,
   normalize_simple_vault_base_url,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import type { ExtensionPairingApprovedMessage } from '../../../nook-web-shared/src/extension/runtime-messages'
 import { SimpleVaultTarget } from '../../src/lib/simple-vault-target'
 import { startMockAuthServer } from '../mock-auth'
+import { reportExtensionBrowserErrors } from './browser-errors'
+import { companionWasmReady } from './companion-wasm-ready'
 import { waitForExtensionPairingReady } from './extension-approval'
 import {
-  readExtensionPersistenceSnapshot,
   readExtensionPairingStorage,
+  readExtensionPersistenceSnapshot,
   removeExtensionPairingStorageKeys,
   writeExtensionPairingStorage,
 } from './extension-pairing-storage'
 import { lockExtensionSession } from './paired-pin-extension'
-import { reportExtensionBrowserErrors } from './browser-errors'
+
+await companionWasmReady
 
 export {
   attachNookLogsForTest,
   installMockPasskeyRuntime,
   lockExtensionSession,
-  SimpleVaultTarget,
-  readPersistedAppLogs,
   readExtensionPersistenceSnapshot,
+  readPersistedAppLogs,
+  SimpleVaultTarget,
   waitForExtensionPairingReady,
 }
 export type { ExtensionPairingApprovedMessage }
@@ -237,25 +237,20 @@ export async function waitForNewPage(
 }
 
 export async function advanceCreateVaultWizardToFinalStep(page: Page) {
-  const chooser = page.getByTestId('login-create-vault-chooser')
-  await expect(chooser).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
-
-  const finalStep = page.getByTestId('create-vault-wizard-create')
-  if (await finalStep.isVisible()) return
-
-  const simplePath = page.getByTestId('get-started-path-simple')
-  await expect(simplePath).toBeVisible({
+  await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible({
     timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
   })
-  await simplePath.click()
-
-  await expect(finalStep).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
-  const nameInput = page.getByTestId('login-vault-name-input')
-  if (!(await nameInput.inputValue()).trim()) {
-    await nameInput.fill('Test vault', {
-      timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
-    })
-  }
+  const nameInput = page.getByLabel('Vault name', { exact: true })
+  const authorize = page.getByRole('button', {
+    name: 'Enable browser access',
+    exact: true,
+  })
+  await expect(nameInput.or(authorize)).toBeVisible({
+    timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+  })
+  if (await authorize.isVisible()) await authorize.click()
+  await expect(nameInput).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
+  if (!(await nameInput.inputValue()).trim()) await nameInput.fill('Test vault')
 }
 
 const rootDir = path.resolve(
@@ -676,7 +671,6 @@ export async function setupPasskeyExtensionPopup(
   const popupPage = await context.newPage()
   await popupPage.goto(`chrome-extension://${extensionId}/popup/index.html`)
   await expect(popupPage.getByTestId('extension-device-setup')).toBeVisible()
-  await popupPage.getByTestId('device-protection-create-new-choice').click()
   await popupPage.getByTestId('device-protection-setup-btn').click()
   await expect(popupPage.getByTestId('extension-toolbar-menu')).toBeVisible()
   return popupPage

@@ -1,0 +1,861 @@
+import type { OAuthFailure } from "$lib/auth/oauth-failure";
+import { ProviderSyncOutcome } from "$lib/vault/provider-sync.svelte";
+import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
+import { err as storageErr, ok as storageOk, type Result } from "neverthrow";
+import {
+  VaultStorageFailure as StorageOperationFailure,
+  VaultStorageFailureKind as StorageOperationFailureKind,
+} from "$lib/runtime/storage-failure";
+
+/** Sync actions that snapshot reactive Svelte state at WASM boundaries. */
+import type {
+  EventOutboxFlushOutcome,
+  LocalSaveFanOutOutcome,
+  RosterHydrationOutcome,
+  SyncActionsContext,
+  SyncFromProvidersRequest,
+  NookStorageConnectArgs,
+  VaultSyncApplicationOutcome,
+} from "$lib/vault/action-contexts";
+import {
+  EventOutboxFlushKind,
+  RosterHydrationKind,
+} from "$lib/vault/action-contexts";
+import { browserLogRuntime } from "$lib/runtime/log";
+import {
+  isoTimestamp,
+  VaultStorageSynchronization,
+  type JoinRequest,
+} from "$lib/nook";
+import {
+  NookManagerStoreScope,
+  NookLocalFolderHealthState,
+  NookPendingSyncConflict,
+  NookProviderSyncRevision,
+  ProviderSyncFailureHandling,
+  ProviderSyncFreshness,
+  ProviderSyncVisibility,
+  update_provider_sync_metadata,
+  VaultStorageSyncDecision,
+  VaultSyncTimerStartDecision,
+  VaultSyncTimerTickDecision,
+} from "$app-wasm";
+import {
+  activeVaultScope,
+  type AuthProvidersSnapshot,
+  LOCAL_FOLDER_PROVIDER_TYPE,
+  unselectedVaultScope,
+} from "$lib/auth/providers";
+import {
+  ProviderEventOutbox,
+  EventOutboxRequestKind,
+  EventOutboxTargetKind,
+  type EventOutboxRequest,
+  type EventOutboxTarget,
+} from "$lib/vault/sync-operation-state";
+import { AdminAccordionSection } from "$lib/vault/state/ui.svelte";
+import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
+import { ExtensionSyncPublication } from "$lib/vault/sync-extension-bridge";
+import { ProviderSyncActions } from "$lib/vault/provider-sync.svelte";
+import { VaultOperationStale } from "$lib/runtime/vault-operation-stale";
+
+export { VaultSyncRuntimeActions } from "$lib/vault/sync-runtime";
+
+export { ExtensionSyncPublication };
+
+export * from "$lib/vault/sync-resolution";
+
+export { SyncConflictPresentation } from "$lib/vault/sync-conflict-label";
+
+export type VaultSynchronizationResult = Result<
+  ProviderSyncOutcome,
+  StorageOperationFailure | OAuthFailure
+>;
+
+interface AutomaticSyncResult {
+  readonly sessionEpoch: number;
+  readonly errorMsgRevision: number;
+  readonly synchronized: VaultSynchronizationResult;
+}
+
+export enum ProviderSyncMetadataUpdateOutcome {
+  Updated = "updated",
+}
+
+const log = browserLogRuntime.createLogger("vault-sync");
+
+interface EventOutboxTargetSelection {
+  readonly request: EventOutboxRequest;
+}
+
+interface RemoteEventOutboxFlush {
+  readonly request: EventOutboxRequest;
+}
+
+interface ProviderSyncMetadataUpdate {
+  readonly providerId: string;
+  readonly yaml: string;
+  readonly revision: NookProviderSyncRevision;
+}
+
+interface SyncConflictStaging {
+  readonly conflict: NookPendingSyncConflict;
+}
+
+type SyncFromProvidersExecution = SyncFromProvidersRequest;
+
+type RosterHydrationSnapshot = {
+  readonly pendingJoins: JoinRequest[];
+  readonly vaultMembers: SyncActionsContext["vaultMembers"];
+};
+
+type FanOutSyncExecution = {
+  readonly visibility: ProviderSyncVisibility;
+};
+
+type StorageSyncExecution = {
+  readonly freshness: ProviderSyncFreshness;
+};
+
+export { ProviderSyncActions } from "$lib/vault/provider-sync.svelte";
+
+export type RosterHydrationResult = Result<
+  RosterHydrationOutcome,
+  StorageOperationFailure | OAuthFailure
+>;
+
+/** Owns browser orchestration for one sync.svelte context. */
+export class VaultSyncActions {
+  constructor(private readonly state: SyncActionsContext) {}
+
+  private automaticSyncBelongsToCurrentSession(sessionEpoch: number): boolean {
+    const state = this.state;
+    return (
+      state.sessionEpoch === sessionEpoch &&
+      state.clientPolicy.vault_sync_timer_start_decision(
+        state.isAuthenticated,
+        state.deviceProtectionReady,
+        state.joinEnrollmentPrompt,
+        state.awaitingJoinApproval,
+      ) === VaultSyncTimerStartDecision.Start
+    );
+  }
+
+  private handleAutomaticSyncResult({
+    sessionEpoch,
+    errorMsgRevision,
+    synchronized,
+  }: AutomaticSyncResult): void {
+    const state = this.state;
+    if (synchronized.isErr()) {
+      if (!this.automaticSyncBelongsToCurrentSession(sessionEpoch)) {
+        log.warn(
+          `discarded late automatic sync failure: ${synchronized.error.kind}`,
+        );
+        return;
+      }
+      const message = state.t(synchronized.error.translationKey);
+      state.errorMsg = message;
+      if (
+        synchronized.error.kind ===
+        StorageOperationFailureKind.GenerationUnavailable
+      ) {
+        const ownership: Parameters<
+          typeof state.recordScheduledSyncInvalidationAlert
+        >[0] = { sessionEpoch, message };
+        state.recordScheduledSyncInvalidationAlert(ownership);
+      }
+      return;
+    }
+    if (
+      synchronized.value !== ProviderSyncOutcome.Synced ||
+      !this.automaticSyncBelongsToCurrentSession(sessionEpoch) ||
+      state.localDataDeletionStarted
+    )
+      return;
+    const clearance: Parameters<
+      typeof state.clearScheduledSyncInvalidationAlert
+    >[0] = { sessionEpoch, errorMsgRevision };
+    state.clearScheduledSyncInvalidationAlert(clearance);
+  }
+
+  async hydrateMultiDeviceState(): Promise<RosterHydrationResult> {
+    const state = this.state;
+    if (!state.hasManager || !state.isAuthenticated) {
+      const outcome: RosterHydrationOutcome = {
+        kind: RosterHydrationKind.Skipped,
+      };
+      return storageOk(outcome);
+    }
+    const mergedJoins: JoinRequest[] = [];
+    try {
+      for (const provider of state.syncProviders) {
+        if (provider.type === LOCAL_FOLDER_PROVIDER_TYPE) {
+          const localSync: Parameters<
+            ProviderSyncActions["syncLocalFolderProvider"]
+          >[0] = { provider };
+          const synced = await new ProviderSyncActions(
+            state,
+          ).syncLocalFolderProvider(localSync);
+          if (synced.isErr()) {
+            return storageErr(synced.error);
+          }
+          continue;
+        }
+        const { mode, pat, repo } = state.providerWasmArgs(provider);
+        const joins = await state.enqueueStorage(async () => {
+          const admitted = state.admitManager();
+          if (admitted.isErr()) return storageErr(admitted.error);
+          try {
+            return storageOk(
+              await admitted.value.merge_remote_joins_from_provider(
+                mode,
+                pat,
+                repo,
+              ),
+            );
+          } catch (failure) {
+            return storageErr(new NativeVaultStorageFailure(failure));
+          }
+        });
+        if (joins.isErr()) {
+          return storageErr(joins.error);
+        }
+        mergedJoins.push(...joins.value);
+      }
+      const snapshot = await state.enqueueStorage(async () => {
+        const admitted = state.admitManager();
+        if (admitted.isErr()) return storageErr(admitted.error);
+        try {
+          await admitted.value.ensure_vault_roster_hydrated_js();
+        } catch (failure) {
+          return storageErr(new NativeVaultStorageFailure(failure));
+        }
+        let pendingJoins: JoinRequest[];
+        try {
+          pendingJoins = admitted.value.list_pending_joins();
+        } catch (failure) {
+          return storageErr(new NativeVaultStorageFailure(failure));
+        }
+        try {
+          const rosterSnapshot: RosterHydrationSnapshot = {
+            pendingJoins,
+            vaultMembers: admitted.value.list_vault_members(),
+          };
+          return storageOk(rosterSnapshot);
+        } catch (failure) {
+          for (const join of pendingJoins) join.free();
+          return storageErr(new NativeVaultStorageFailure(failure));
+        }
+      });
+      if (snapshot.isErr()) {
+        return storageErr(snapshot.error);
+      }
+      for (const join of state.pendingJoins) join.free();
+      for (const member of state.vaultMembers) member.free();
+      state.pendingJoins =
+        snapshot.value.pendingJoins.length > 0
+          ? snapshot.value.pendingJoins
+          : mergedJoins.splice(0);
+      state.vaultMembers = snapshot.value.vaultMembers;
+      const passwordRefresh1 = await state.refreshPasswordEntriesList();
+      if (passwordRefresh1.isErr()) {
+        return storageErr(passwordRefresh1.error);
+      }
+      const outcome: RosterHydrationOutcome = {
+        kind: RosterHydrationKind.Hydrated,
+        pendingJoinCount: state.pendingJoins.length,
+        vaultMemberCount: state.vaultMembers.length,
+        passwordEntryCount: passwordRefresh1.value.entries.length,
+      };
+      return storageOk(outcome);
+    } finally {
+      for (const join of mergedJoins) join.free();
+    }
+  }
+
+  async syncFromSyncProviders({
+    visibility,
+    freshness,
+  }: SyncFromProvidersExecution): Promise<VaultSynchronizationResult> {
+    const state = this.state;
+    const manager = state.admitManager();
+    if (manager.isErr()) return storageErr(manager.error);
+    let shouldSync: boolean;
+    try {
+      shouldSync = state.clientPolicy.should_sync_from_providers(
+        state.syncBlocked,
+        freshness === ProviderSyncFreshness.Forced,
+        state.isVerifying,
+        state.isSaving,
+        state.isPasswordBusy,
+        state.isSyncing,
+        state.syncProviders.length,
+      );
+    } catch (failure) {
+      return storageErr(new NativeVaultStorageFailure(failure));
+    }
+    if (!shouldSync) return storageOk(ProviderSyncOutcome.Skipped);
+    state.isSyncing = true;
+    try {
+      const synchronized = await this.synchronizeProviders(visibility);
+      if (synchronized.isErr()) return synchronized;
+      if (state.isAuthenticated) {
+        const roster = await this.hydrateMultiDeviceState();
+        if (roster.isErr()) return storageErr(roster.error);
+      }
+      const publication = await new ExtensionSyncPublication(
+        state,
+      ).publishExtensionEventLogUpdateForVault();
+      if (publication.isErr()) return storageErr(publication.error);
+      if (synchronized.value === ProviderSyncOutcome.Synced)
+        state.markSynced(Date.now());
+      return synchronized;
+    } finally {
+      state.isSyncing = false;
+    }
+  }
+
+  private async synchronizeProviders(
+    visibility: ProviderSyncVisibility,
+  ): Promise<VaultSynchronizationResult> {
+    const state = this.state;
+    let outcome = ProviderSyncOutcome.Synced;
+    for (const provider of state.syncProviders) {
+      if (state.syncBlocked) return storageOk(ProviderSyncOutcome.Skipped);
+      const syncRequest: Parameters<typeof state.syncProviderById>[0] = {
+        providerId: provider.id,
+        visibility,
+        failureHandling: ProviderSyncFailureHandling.Capture,
+      };
+      const synchronized = await state.syncProviderById(syncRequest);
+      if (synchronized.isErr()) return synchronized;
+      if (synchronized.value !== ProviderSyncOutcome.Synced)
+        outcome = synchronized.value;
+    }
+    return storageOk(outcome);
+  }
+
+  async runFanOutSyncToProviders({
+    visibility,
+  }: FanOutSyncExecution): Promise<VaultSynchronizationResult> {
+    const state = this.state;
+    if (state.isFanOutSyncing) return storageOk(ProviderSyncOutcome.Skipped);
+    state.isFanOutSyncing = true;
+    try {
+      return await this.synchronizeProviders(visibility);
+    } finally {
+      state.isFanOutSyncing = false;
+    }
+  }
+
+  async runFanOutSyncAfterLocalSave(): Promise<
+    Result<LocalSaveFanOutOutcome, StorageOperationFailure>
+  > {
+    const state = this.state;
+    const publication = await new ExtensionSyncPublication(
+      state,
+    ).publishExtensionEventLogUpdateForVault();
+    if (publication.isErr()) return storageErr(publication.error);
+    if (!state.deviceProtectionReady) {
+      const outcome: LocalSaveFanOutOutcome = {
+        publishedEventRecordCount: publication.value.publishedRecordCount,
+        outboxFlushes: [],
+      };
+      return storageOk(outcome);
+    }
+    if (state.syncProviders.length === 0) {
+      const request: EventOutboxRequest = {
+        kind: EventOutboxRequestKind.Default,
+      };
+      const flush = await state.flushRemoteEventOutboxNow(request);
+      if (flush.isErr()) return storageErr(flush.error);
+      const outcome: LocalSaveFanOutOutcome = {
+        publishedEventRecordCount: publication.value.publishedRecordCount,
+        outboxFlushes: [flush.value],
+      };
+      return storageOk(outcome);
+    }
+    const outboxFlushes: EventOutboxFlushOutcome[] = [];
+    for (const provider of state.syncProviders) {
+      if (state.syncBlocked) break;
+      const flushed = await state.flushRemoteEventOutboxNow(
+        new ProviderEventOutbox(provider).request(),
+      );
+      if (flushed.isErr()) return storageErr(flushed.error);
+      outboxFlushes.push(flushed.value);
+    }
+    const outcome: LocalSaveFanOutOutcome = {
+      publishedEventRecordCount: publication.value.publishedRecordCount,
+      outboxFlushes,
+    };
+    return storageOk(outcome);
+  }
+
+  eventOutboxTarget({
+    request,
+  }: EventOutboxTargetSelection): EventOutboxTarget {
+    const state = this.state;
+    if (request.kind === EventOutboxRequestKind.LocalFolder) {
+      return {
+        kind: EventOutboxTargetKind.LocalFolder,
+        provider: request.provider,
+      };
+    }
+    if (request.kind === EventOutboxRequestKind.Remote) {
+      return {
+        kind: EventOutboxTargetKind.Remote,
+        args: state.providerWasmArgs(request.provider),
+      };
+    }
+    if (state.syncProviders[0]?.type === LOCAL_FOLDER_PROVIDER_TYPE) {
+      return {
+        kind: EventOutboxTargetKind.LocalFolder,
+        provider: state.syncProviders[0],
+      };
+    }
+    if (state.syncProviders.length > 0) {
+      const [syncProvider] = state.syncProviders;
+      if (!syncProvider) return { kind: EventOutboxTargetKind.Unavailable };
+      return {
+        kind: EventOutboxTargetKind.Remote,
+        args: state.providerWasmArgs(syncProvider),
+      };
+    }
+    return state.hasRemoteCredentials()
+      ? {
+          kind: EventOutboxTargetKind.Remote,
+          args: state.wasmStorageArgs(),
+        }
+      : { kind: EventOutboxTargetKind.Unavailable };
+  }
+
+  async flushRemoteEventOutboxNow({
+    request,
+  }: RemoteEventOutboxFlush): Promise<
+    Result<EventOutboxFlushOutcome, StorageOperationFailure>
+  > {
+    const state = this.state;
+    const admitted = state.admitManager();
+    if (admitted.isErr()) return storageErr(admitted.error);
+    const targetSelection: EventOutboxTargetSelection = { request };
+    const target = this.eventOutboxTarget(targetSelection);
+    if (target.kind === EventOutboxTargetKind.LocalFolder) {
+      const localSync: Parameters<
+        ProviderSyncActions["syncLocalFolderProvider"]
+      >[0] = {
+        provider: target.provider,
+      };
+      const synced = await new ProviderSyncActions(
+        state,
+      ).syncLocalFolderProvider(localSync);
+      if (synced.isErr()) return storageErr(synced.error);
+      const localFolderOutcome: EventOutboxFlushOutcome = {
+        kind: EventOutboxFlushKind.LocalFolderSynchronized,
+        outcome: ProviderSyncOutcome.Synced,
+      };
+      return storageOk(localFolderOutcome);
+    }
+    if (target.kind === EventOutboxTargetKind.Unavailable) {
+      const outcome: EventOutboxFlushOutcome = {
+        kind: EventOutboxFlushKind.Unavailable,
+      };
+      return storageOk(outcome);
+    }
+    const flushed = await state.enqueueStorage(async () => {
+      const admitted = state.admitManager();
+      if (admitted.isErr()) return storageErr(admitted.error);
+      try {
+        await admitted.value.flush_event_outbox_for_provider(
+          target.args.mode,
+          target.args.pat,
+          target.args.repo,
+        );
+        const remoteOutboxOutcome: EventOutboxFlushOutcome = {
+          kind: EventOutboxFlushKind.RemoteOutboxFlushed,
+          requestKind: request.kind,
+        };
+        return storageOk(remoteOutboxOutcome);
+      } catch (failure) {
+        return storageErr(new NativeVaultStorageFailure(failure));
+      }
+    });
+    return flushed;
+  }
+
+  async updateProviderSyncMetadata({
+    providerId,
+    yaml,
+    revision,
+  }: ProviderSyncMetadataUpdate): Promise<
+    Result<ProviderSyncMetadataUpdateOutcome, StorageOperationFailure>
+  > {
+    const state = this.state;
+    try {
+      const updated = await state.enqueueStorage(() => {
+        const admitted = state.admitManager();
+        if (admitted.isErr()) return storageErr(admitted.error);
+        let managerStoreScope: NookManagerStoreScope;
+        try {
+          const storeId = admitted.value.vaultStoreId;
+          managerStoreScope = storeId
+            ? NookManagerStoreScope.scoped(storeId)
+            : NookManagerStoreScope.unscoped();
+        } catch (failure) {
+          return storageErr(new NativeVaultStorageFailure(failure));
+        }
+        try {
+          const providerSnapshot: AuthProvidersSnapshot = {
+            providers: state.providers,
+            activeVaultStoreId:
+              state.activeVault.kind === ActiveVaultKind.Open
+                ? activeVaultScope(state.activeVault.storeId)
+                : unselectedVaultScope(),
+          };
+          const snapshot = $state.snapshot(providerSnapshot);
+          try {
+            return storageOk(
+              update_provider_sync_metadata(
+                snapshot,
+                providerId,
+                yaml,
+                revision,
+                managerStoreScope,
+                isoTimestamp(),
+              ),
+            );
+          } catch (failure) {
+            return storageErr(new NativeVaultStorageFailure(failure));
+          }
+        } finally {
+          managerStoreScope.free();
+        }
+      });
+      if (updated.isErr()) return storageErr(updated.error);
+      const persistence: Parameters<typeof state.persistProviders>[0] = {
+        replace: false,
+        providers: updated.value.providers,
+      };
+      const persisted = await state.persistProviders(persistence);
+      if (persisted.isErr()) return storageErr(persisted.error);
+      return storageOk(ProviderSyncMetadataUpdateOutcome.Updated);
+    } finally {
+      revision.free();
+    }
+  }
+
+  dismissLocalFolderMultipleVaultsIssue(): void {
+    const state = this.state;
+    state.clearLocalFolderMultipleVaultsIssue();
+  }
+
+  async disconnectLocalFolderMultipleVaultsProvider(): Promise<void> {
+    const state = this.state;
+    const health = state.localFolderHealth;
+    if (health.state !== NookLocalFolderHealthState.MultipleVaults) return;
+    const providerId = health.providerId;
+    const removed = await state.removeProvider(providerId);
+    if (removed.isErr()) {
+      state.errorMsg = state.t(removed.error.translationKey);
+      return;
+    }
+    state.clearLocalFolderMultipleVaultsIssue();
+  }
+
+  async chooseReplacementLocalFolderForIssue(): Promise<void> {
+    const state = this.state;
+    const health = state.localFolderHealth;
+    if (health.state !== NookLocalFolderHealthState.MultipleVaults) return;
+    const providerId = health.providerId;
+    if (state.providers.some((provider) => provider.id === providerId)) {
+      const removed = await state.removeProvider(providerId);
+      if (removed.isErr()) {
+        state.errorMsg = state.t(removed.error.translationKey);
+        return;
+      }
+    }
+    state.clearLocalFolderMultipleVaultsIssue();
+    state.errorMsg = "";
+    state.openAdmin(AdminAccordionSection.Storage);
+    state.beginAddProvider();
+    const setupRequest: Parameters<typeof state.beginProviderSetup>[0] = {
+      type: LOCAL_FOLDER_PROVIDER_TYPE,
+    };
+    state.beginProviderSetup(setupRequest);
+  }
+
+  startVaultSync() {
+    const state = this.state;
+    state.stopVaultSync();
+    const startDecision = state.clientPolicy.vault_sync_timer_start_decision(
+      state.isAuthenticated,
+      state.deviceProtectionReady,
+      state.joinEnrollmentPrompt,
+      state.awaitingJoinApproval,
+    );
+    switch (startDecision) {
+      case VaultSyncTimerStartDecision.SkipDeviceProtectionLocked:
+        log.debug("vault sync timer skipped (device identity locked)");
+        return;
+      case VaultSyncTimerStartDecision.SkipNoRemoteUpdates:
+        log.debug("vault sync timer skipped (no remote updates needed)");
+        return;
+      case VaultSyncTimerStartDecision.Start:
+        break;
+    }
+    const syncIntervalConfig = import.meta.env.VITE_VAULT_SYNC_INTERVAL_MS;
+    const intervalMs =
+      typeof syncIntervalConfig === "string"
+        ? state.runtimeConfig.resolve_vault_sync_interval_ms(syncIntervalConfig)
+        : state.runtimeConfig.resolve_default_vault_sync_interval_ms();
+    log.info("vault sync timer started");
+    if (state.isAuthenticated) {
+      const sessionEpoch = state.sessionEpoch;
+      const errorMsgRevision = state.errorMsgRevision;
+      void state
+        .syncFromStorage(ProviderSyncFreshness.Scheduled)
+        .then((synchronized) => {
+          const automaticSyncResult: AutomaticSyncResult = {
+            sessionEpoch,
+            errorMsgRevision,
+            synchronized,
+          };
+          this.handleAutomaticSyncResult(automaticSyncResult);
+        });
+    }
+    const scheduleSyncArgs: Parameters<typeof state.scheduleSync>[0] = {
+      callback: () => {
+        const tickDecision = state.clientPolicy.vault_sync_timer_tick_decision(
+          state.isVerifying,
+          state.isSaving,
+          state.isSyncing,
+          state.isPasswordBusy,
+          state.isAuthenticated,
+          state.joinEnrollmentPrompt,
+          state.awaitingJoinApproval,
+          state.syncProviders.length,
+        );
+        if (tickDecision !== VaultSyncTimerTickDecision.Sync) {
+          return;
+        }
+        const sessionEpoch = state.sessionEpoch;
+        const errorMsgRevision = state.errorMsgRevision;
+        void state
+          .syncFromStorage(ProviderSyncFreshness.Scheduled)
+          .then((synchronized) => {
+            const automaticSyncResult: AutomaticSyncResult = {
+              sessionEpoch,
+              errorMsgRevision,
+              synchronized,
+            };
+            this.handleAutomaticSyncResult(automaticSyncResult);
+          });
+      },
+      intervalMs,
+    };
+    state.scheduleSync(scheduleSyncArgs);
+  }
+
+  stopVaultSync() {
+    const state = this.state;
+    if (state.stopScheduledSync()) {
+      log.debug("vault sync timer stopped");
+    }
+  }
+
+  async syncFromStorage({
+    freshness,
+  }: StorageSyncExecution): Promise<VaultSynchronizationResult> {
+    const state = this.state;
+    const manager = state.admitManager();
+    if (manager.isErr()) return storageErr(manager.error);
+    let decision: VaultStorageSyncDecision;
+    const remoteCredentials = state.hasRemoteCredentials();
+    try {
+      decision = state.clientPolicy.vault_storage_sync_decision(
+        state.syncBlocked,
+        freshness,
+        state.isVerifying,
+        state.isSaving,
+        state.isPasswordBusy,
+        state.isSyncing,
+        state.isAuthenticated,
+        state.syncProviders.length,
+        remoteCredentials,
+        state.localVaultPresent,
+      );
+    } catch (failure) {
+      return storageErr(new NativeVaultStorageFailure(failure));
+    }
+    if (decision === VaultStorageSyncDecision.Skip)
+      return storageOk(ProviderSyncOutcome.Skipped);
+    if (decision === VaultStorageSyncDecision.SyncProviders) {
+      const syncRequest: Parameters<typeof state.syncFromSyncProviders>[0] = {
+        visibility: ProviderSyncVisibility.Quiet,
+        freshness,
+      };
+      return state.syncFromSyncProviders(syncRequest);
+    }
+    if (
+      decision !== VaultStorageSyncDecision.SyncFirstProviderUnauthenticated
+    ) {
+      const tokens = await state.ensureOAuthTokensFresh();
+      if (tokens.isErr()) return storageErr(tokens.error);
+      if (tokens.value instanceof VaultOperationStale)
+        return storageOk(ProviderSyncOutcome.Skipped);
+    }
+    state.isSyncing = true;
+    try {
+      if (
+        decision === VaultStorageSyncDecision.SyncFirstProviderUnauthenticated
+      ) {
+        const provider = state.syncProviders[0];
+        if (!provider)
+          return storageErr(
+            new StorageOperationFailure(
+              StorageOperationFailureKind.VaultSelectionFailed,
+            ),
+          );
+        if (provider.type === "local-folder") {
+          const localSync: Parameters<
+            ProviderSyncActions["syncLocalFolderProvider"]
+          >[0] = { provider };
+          const synchronized = await new ProviderSyncActions(
+            state,
+          ).syncLocalFolderProvider(localSync);
+          if (synchronized.isErr()) return storageErr(synchronized.error);
+        } else {
+          const applied = await this.synchronizeStorage(
+            state.providerWasmArgs(provider),
+          );
+          if (applied.isErr()) return storageErr(applied.error);
+        }
+      } else {
+        const applied = await this.synchronizeStorage(state.wasmStorageArgs());
+        if (applied.isErr()) return storageErr(applied.error);
+      }
+      // Join approval can synchronize the encrypted roster before a vault session exists.
+      switch (state.isAuthenticated) {
+        case false:
+          state.markSynced(Date.now());
+          return storageOk(ProviderSyncOutcome.Synced);
+        case true:
+          break;
+      }
+      const refreshed = await state.refreshSecretsFromSession();
+      if (refreshed.isErr()) return storageErr(refreshed.error);
+      state.markSynced(Date.now());
+      return storageOk(ProviderSyncOutcome.Synced);
+    } finally {
+      state.isSyncing = false;
+    }
+  }
+
+  private async synchronizeStorage({
+    mode,
+    pat,
+    repo,
+  }: NookStorageConnectArgs): Promise<
+    Result<VaultSyncApplicationOutcome, StorageOperationFailure>
+  > {
+    const state = this.state;
+    const synchronized = await state.enqueueStorage(async () => {
+      const manager = state.admitManager();
+      if (manager.isErr()) return storageErr(manager.error);
+      const synchronizationArgs: ConstructorParameters<
+        typeof VaultStorageSynchronization
+      >[0] = {
+        manager: manager.value,
+        mode,
+        pat,
+        repo,
+      };
+      return new VaultStorageSynchronization(synchronizationArgs).run();
+    });
+    if (synchronized.isErr()) return storageErr(synchronized.error);
+    return state.applyVaultSyncResult(synchronized.value);
+  }
+
+  private clearDeviceRoster(): void {
+    const state = this.state;
+    for (const join of state.pendingJoins) join.free();
+    for (const member of state.vaultMembers) member.free();
+    state.pendingJoins = [];
+    state.vaultMembers = [];
+  }
+
+  async manualSync(): Promise<VaultSynchronizationResult> {
+    const state = this.state;
+    const manager = state.admitManager();
+    if (manager.isErr()) return storageErr(manager.error);
+    if (state.syncBlocked || state.isSyncing)
+      return storageOk(ProviderSyncOutcome.Skipped);
+    let hasTarget: boolean;
+    try {
+      hasTarget = state.clientPolicy.manual_sync_has_target(
+        state.localVaultPresent,
+        state.syncProviders.length,
+      );
+    } catch (failure) {
+      return storageErr(new NativeVaultStorageFailure(failure));
+    }
+    if (!hasTarget) {
+      this.clearDeviceRoster();
+      return storageOk(ProviderSyncOutcome.Skipped);
+    }
+    state.isSyncing = true;
+    try {
+      const initialized = await state.initDeviceIdentity();
+      if (initialized.isErr()) return storageErr(initialized.error);
+      if (state.syncProviders.length === 0) {
+        if (state.hasRemoteCredentials()) {
+          // Hand the synchronization lease to the storage operation before awaiting it.
+          state.isSyncing = false;
+          return await state.syncFromStorage(ProviderSyncFreshness.Forced);
+        }
+        this.clearDeviceRoster();
+        return storageOk(ProviderSyncOutcome.Skipped);
+      }
+      const synchronized = await this.synchronizeProviders(
+        ProviderSyncVisibility.Visible,
+      );
+      if (synchronized.isErr()) return synchronized;
+      if (state.isAuthenticated) {
+        const roster = await state.hydrateMultiDeviceState();
+        if (roster.isErr()) return storageErr(roster.error);
+      } else {
+        this.clearDeviceRoster();
+      }
+      return synchronized;
+    } finally {
+      state.isSyncing = false;
+    }
+  }
+
+  async fanOutSyncToProviders({
+    visibility,
+  }: FanOutSyncExecution): Promise<VaultSynchronizationResult> {
+    const state = this.state;
+    const manager = state.admitManager();
+    if (manager.isErr()) return storageErr(manager.error);
+    if (
+      !state.isAuthenticated ||
+      state.syncBlocked ||
+      state.syncProviders.length === 0
+    )
+      return storageOk(ProviderSyncOutcome.Skipped);
+    const run = state.fanOutSyncChain.then(() =>
+      state.runFanOutSyncToProviders(visibility),
+    );
+    // The shared promise is only a completion barrier; each caller receives its own outcome.
+    state.fanOutSyncChain = run.then(() => {});
+    return run;
+  }
+
+  stageSyncConflict({ conflict }: SyncConflictStaging) {
+    const state = this.state;
+    log.warn("sync conflict staged");
+    state.stageSyncConflict(conflict);
+    state.errorMsg = "";
+  }
+}

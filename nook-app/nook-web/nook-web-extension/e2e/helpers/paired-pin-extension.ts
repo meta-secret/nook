@@ -14,13 +14,13 @@ import {
   normalize_simple_vault_base_url,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { MOCK_AUTH_DEFAULT_PIN } from '../mock-auth'
+import { reportExtensionBrowserErrors } from './browser-errors'
+import { waitForExtensionPairingReady } from './extension-approval'
+import { readExtensionPairingStorage } from './extension-pairing-storage'
 import {
   ensurePinProtectedPopup,
   installForcePinDeviceProtection,
 } from './pin-device'
-import { waitForExtensionPairingReady } from './extension-approval'
-import { readExtensionPairingStorage } from './extension-pairing-storage'
-import { reportExtensionBrowserErrors } from './browser-errors'
 
 /** Local Simple Vault from playwright webServer / test-e2e.sh. */
 const LOCAL_E2E_SIMPLE_VAULT_URL = 'http://127.0.0.1:5174/'
@@ -115,22 +115,19 @@ async function readExtensionStorage(context: BrowserContext) {
 }
 
 async function advanceCreateVaultWizardToFinalStep(page: Page) {
-  const chooser = page.getByTestId('login-create-vault-chooser')
-  await expect(chooser).toBeVisible({ timeout: EXTENSION_TIMEOUT_MS })
-
-  const finalStep = page.getByTestId('create-vault-wizard-create')
-  if (await finalStep.isVisible()) return
-
-  const simplePath = page.getByTestId('get-started-path-simple')
-  await expect(simplePath).toBeVisible({ timeout: EXTENSION_TIMEOUT_MS })
-  await simplePath.click()
-  await expect(finalStep).toBeVisible({ timeout: EXTENSION_TIMEOUT_MS })
-  const nameInput = page.getByTestId('login-vault-name-input')
-  if (!(await nameInput.inputValue()).trim()) {
-    await nameInput.fill('Mock auth vault', {
-      timeout: EXTENSION_TIMEOUT_MS,
-    })
-  }
+  await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible({
+    timeout: EXTENSION_TIMEOUT_MS,
+  })
+  const nameInput = page.getByLabel('Vault name', { exact: true })
+  const authorize = page.getByRole('button', {
+    name: 'Enable browser access',
+    exact: true,
+  })
+  await expect(nameInput.or(authorize)).toBeVisible({
+    timeout: EXTENSION_TIMEOUT_MS,
+  })
+  if (await authorize.isVisible()) await authorize.click()
+  await expect(nameInput).toBeVisible({ timeout: EXTENSION_TIMEOUT_MS })
 }
 
 export async function launchPairedPinExtension(
@@ -225,15 +222,17 @@ export async function saveVaultLogin(
   username: string,
   password: string,
 ): Promise<void> {
-  await vaultPage.getByTestId('add-secret-btn').click()
-  await vaultPage.getByTestId('item-type-login').click()
-  await vaultPage.getByTestId('secret-label').fill(websiteOrigin)
-  await vaultPage.getByTestId('login-username').fill(username)
-  await vaultPage.getByTestId('secret-value').fill(password)
-  await vaultPage.getByTestId('save-secret-btn').click()
+  await vaultPage
+    .getByRole('button', { name: 'Add Secret', exact: true })
+    .first()
+    .click()
+  await vaultPage.getByLabel('Website', { exact: true }).fill(websiteOrigin)
+  await vaultPage.getByLabel('Username', { exact: true }).fill(username)
+  await vaultPage.getByLabel('Password', { exact: true }).fill(password)
+  await vaultPage.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(
-    vaultPage.getByTestId('vault-group-login').getByTestId('secret-row').last(),
-  ).toBeVisible({ timeout: 15_000 })
+    vaultPage.locator('.item-row').filter({ hasText: username }).last(),
+  ).toBeVisible({ timeout: 15000 })
   const context = vaultPage.context()
   const extensionId = new URL((await getServiceWorker(context)).url()).host
   await unlockExtensionPopupPin(context, extensionId)
@@ -245,18 +244,20 @@ export async function saveVaultAuthenticator(
   account: string,
   secret: string,
 ): Promise<void> {
-  await vaultPage.getByTestId('add-secret-btn').click()
-  await vaultPage.getByTestId('item-type-authenticator').click()
-  await vaultPage.getByTestId('authenticator-issuer').fill(issuer)
-  await vaultPage.getByTestId('authenticator-account').fill(account)
-  await vaultPage.getByTestId('authenticator-secret').fill(secret)
-  await vaultPage.getByTestId('save-secret-btn').click()
+  await vaultPage
+    .getByRole('button', { name: 'Add Secret', exact: true })
+    .first()
+    .click()
+  await vaultPage
+    .getByLabel('Item type')
+    .selectOption({ label: 'Authenticator' })
+  await vaultPage.getByLabel('Issuer', { exact: true }).fill(issuer)
+  await vaultPage.getByLabel('Account', { exact: true }).fill(account)
+  await vaultPage.getByLabel('Setup key', { exact: true }).fill(secret)
+  await vaultPage.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(
-    vaultPage
-      .getByTestId('vault-group-authenticator')
-      .getByTestId('secret-row')
-      .last(),
-  ).toBeVisible({ timeout: 15_000 })
+    vaultPage.locator('.item-row').filter({ hasText: account }).last(),
+  ).toBeVisible({ timeout: 15000 })
   const context = vaultPage.context()
   const extensionId = new URL((await getServiceWorker(context)).url()).host
   await unlockExtensionPopupPin(context, extensionId)

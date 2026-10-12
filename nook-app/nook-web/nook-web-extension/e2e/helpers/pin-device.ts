@@ -56,9 +56,7 @@ export async function ensurePinProtectedPopup(
 ): Promise<void> {
   const companionHome = popupPage.getByTestId('extension-toolbar-menu')
   const pinUnlock = popupPage.getByTestId('device-protection-pin-unlock-btn')
-  const initialSetup = popupPage.getByTestId(
-    'device-protection-create-new-choice',
-  )
+  const initialSetup = popupPage.getByTestId('device-protection-setup-btn')
   const visibleSurface = companionHome.or(pinUnlock).or(initialSetup).first()
   await expect(visibleSurface).toBeVisible({
     timeout: 45_000,
@@ -89,7 +87,6 @@ export async function ensurePinProtectedPopup(
   }
 
   await initialSetup.click()
-  await popupPage.getByTestId('device-protection-setup-btn').click()
   await expect(
     popupPage.getByTestId('device-protection-pin-input'),
   ).toBeVisible({ timeout: 45_000 })

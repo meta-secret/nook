@@ -1,0 +1,331 @@
+<script lang="ts">
+  import {
+    DetectionFixtureRenderKind,
+    type DetectionFixtureRenderState,
+  } from '../lib/detection-fixture-state'
+  import {
+    completePlainLogin,
+    plainLoginIsValid,
+    PlainLoginResult,
+    type PlainLoginCredentials,
+  } from '../lib/plain-login'
+  import { navigate } from '../lib/navigation'
+  import {
+    getSiteFixture,
+    getTemplateFixture,
+    SiteFixtureLookupKind,
+    SiteFixtureSubmitType,
+    type SiteFixtureLookup,
+    type SiteFixtureField,
+  } from '../lib/site-fixtures'
+
+  let {
+    siteId,
+    templateId,
+  }: {
+    siteId?: string
+    templateId?: string
+  } = $props()
+
+  let stepIndex = $state(0)
+  let previousUsername = $state('')
+  let error = $state('')
+
+  const renderState: DetectionFixtureRenderState = $derived.by(() => {
+    const selectedFixture: SiteFixtureLookup = templateId
+      ? getTemplateFixture(templateId)
+      : siteId
+        ? getSiteFixture(siteId)
+        : { kind: SiteFixtureLookupKind.Missing }
+    if (selectedFixture.kind === SiteFixtureLookupKind.Missing) {
+      return { kind: DetectionFixtureRenderKind.Missing }
+    }
+    const selectedStep = selectedFixture.fixture.steps.find(
+      (_candidate, index) => index === stepIndex,
+    )
+    return selectedStep
+      ? {
+          kind: DetectionFixtureRenderKind.Ready,
+          fixture: selectedFixture.fixture,
+          step: selectedStep,
+        }
+      : { kind: DetectionFixtureRenderKind.Missing }
+  })
+  const label = $derived(
+    ((...[v = 'unknown']) => v)(((...[v = siteId]) => v)(templateId)),
+  )
+  const wrapAriaHidden = $derived(
+    renderState.kind === DetectionFixtureRenderKind.Ready &&
+      renderState.fixture.quirks.includes('aria-hidden-ancestor'),
+  )
+  const selectedAccountDisplay = $derived(
+    renderState.kind === DetectionFixtureRenderKind.Ready &&
+      renderState.fixture.quirks.includes('selected-account-display') &&
+      renderState.step.fields.some((field) => field.type === 'password'),
+  )
+  const zeroHeightPasswordContainer = $derived(
+    renderState.kind === DetectionFixtureRenderKind.Ready &&
+      renderState.fixture.quirks.includes(
+        'zero-height-overflow-password-container',
+      ),
+  )
+  const omitFormMethod = $derived(
+    renderState.kind === DetectionFixtureRenderKind.Ready &&
+      renderState.fixture.quirks.includes('form-method-omitted'),
+  )
+  const omitFormAction = $derived(
+    renderState.kind === DetectionFixtureRenderKind.Ready &&
+      renderState.fixture.quirks.includes('form-action-omitted'),
+  )
+  const fixtureFormAttributes = $derived({
+    ...(zeroHeightPasswordContainer
+      ? { class: 'nw-signin' }
+      : { id: 'login_form' }),
+    ...(omitFormMethod ? {} : { method: 'post' }),
+    ...(omitFormAction ? {} : { action: '/auth/login' }),
+  })
+
+  function fieldSelector(field: SiteFixtureField): string {
+    if (field.id) return `#${CSS.escape(field.id)}`
+    if (field.name) return `[name="${CSS.escape(field.name)}"]`
+    if (field['data-qa']) return `[data-qa="${CSS.escape(field['data-qa'])}"]`
+    if (field['data-testid']) {
+      return `[data-testid="${CSS.escape(field['data-testid'])}"]`
+    }
+    if (field.autocomplete) {
+      return `input[autocomplete="${CSS.escape(field.autocomplete)}"]`
+    }
+    return field.type ? `input[type="${CSS.escape(field.type)}"]` : 'input'
+  }
+
+  function preservedFieldValue(field: SiteFixtureField): string {
+    if (field.type === 'password' || field.autocomplete === 'one-time-code') {
+      return ''
+    }
+    return previousUsername
+  }
+
+  function readUsername(form: HTMLFormElement): string {
+    if (renderState.kind === DetectionFixtureRenderKind.Missing) return ''
+    const identity = renderState.step.fields.find(
+      (field) => field.type !== 'password',
+    )
+    if (!identity) return ''
+    return ((v) => (v ? v : ''))(
+      form.querySelector<HTMLInputElement>(fieldSelector(identity))?.value,
+    )
+  }
+
+  function readPassword(form: HTMLFormElement): string {
+    if (renderState.kind === DetectionFixtureRenderKind.Missing) return ''
+    const password = renderState.step.fields.find(
+      (field) => field.type === 'password',
+    )
+    if (!password) return ''
+    return ((v) => (v ? v : ''))(
+      form.querySelector<HTMLInputElement>(fieldSelector(password))?.value,
+    )
+  }
+
+  function advanceOrComplete(form: HTMLFormElement): void {
+    if (renderState.kind === DetectionFixtureRenderKind.Missing) return
+    const { fixture, step } = renderState
+    const isOneTimeCodeStep = step.fields.some(
+      (field) => field.autocomplete === 'one-time-code',
+    )
+    if (isOneTimeCodeStep) {
+      const oneTimeCode = readUsername(form)
+      if (!/^\d{6}$/u.test(oneTimeCode)) return
+      navigate('/plain/success')
+      return
+    }
+    const hasPassword = step.fields.some((field) => field.type === 'password')
+    if (!hasPassword && stepIndex < fixture.steps.length - 1) {
+      previousUsername = readUsername(form)
+      stepIndex += 1
+      error = ''
+      return
+    }
+    if (!hasPassword) {
+      error = 'Password step required for fixture login.'
+      return
+    }
+    const username = readUsername(form)
+    const hasUsernameField = step.fields.some(
+      (field) => field.type !== 'password',
+    )
+    const submittedUsername = hasUsernameField ? username : previousUsername
+    const password = readPassword(form)
+    const credentials: PlainLoginCredentials = {
+      username: submittedUsername,
+      password,
+    }
+    if (!plainLoginIsValid(credentials)) {
+      error = 'Invalid username or password.'
+      return
+    }
+    const nextStep = fixture.steps[stepIndex + 1]
+    const nextStepIsOneTimeCode = nextStep
+      ? nextStep.fields.some((field) => field.autocomplete === 'one-time-code')
+      : false
+    if (nextStepIsOneTimeCode) {
+      previousUsername = submittedUsername
+      stepIndex += 1
+      error = ''
+      return
+    }
+    if (
+      completePlainLogin(submittedUsername, password) ===
+      PlainLoginResult.Invalid
+    ) {
+      error = 'Invalid username or password.'
+    }
+  }
+
+  function requiredRenderStep(state: DetectionFixtureRenderState) {
+    if (state.kind !== DetectionFixtureRenderKind.Ready) {
+      throw new Error('render step is unavailable')
+    }
+    return state.step
+  }
+
+  function onsubmit(event: SubmitEvent): void {
+    event.preventDefault()
+    const form = event.currentTarget
+    if (!(form instanceof HTMLFormElement)) return
+    advanceOrComplete(form)
+  }
+
+  function onButtonAdvance(event: MouseEvent): void {
+    const button = event.currentTarget
+    if (!(button instanceof HTMLButtonElement) || !button.form) return
+    advanceOrComplete(button.form)
+  }
+</script>
+
+{#snippet fixtureInput(field: SiteFixtureField)}
+  {#if field.label}
+    <label for={field.id}
+      >{field.label}<input
+        type={((...[v = 'text']) => v)(field.type)}
+        name={field.name}
+        id={field.id}
+        autocomplete={field.autocomplete}
+        value={preservedFieldValue(field)}
+        inputmode={field.inputmode}
+        placeholder={field.placeholder}
+        aria-label={field['aria-label']}
+        aria-hidden={field['aria-hidden']}
+        tabindex={field.tabindex}
+        data-qa={field['data-qa']}
+        data-testid={field['data-testid']}
+      /></label
+    >
+  {:else}
+    <input
+      type={((...[v = 'text']) => v)(field.type)}
+      name={field.name}
+      id={field.id}
+      autocomplete={field.autocomplete}
+      value={preservedFieldValue(field)}
+      inputmode={field.inputmode}
+      placeholder={field.placeholder}
+      aria-label={field['aria-label']}
+      aria-hidden={field['aria-hidden']}
+      tabindex={field.tabindex}
+      data-qa={field['data-qa']}
+      data-testid={field['data-testid']}
+    />
+  {/if}
+{/snippet}
+
+{#snippet fixtureField(field: SiteFixtureField)}
+  {#if zeroHeightPasswordContainer && field.id === 'hidden-password'}
+    <div style="height: 0; overflow: hidden">
+      {@render fixtureInput(field)}
+    </div>
+  {:else}
+    {@render fixtureInput(field)}
+  {/if}
+{/snippet}
+
+{#if renderState.kind === DetectionFixtureRenderKind.Missing}
+  <main>
+    <h1>Unknown site fixture</h1>
+    <p data-testid="mock-auth-scenario">missing-fixture</p>
+    <p class="error" role="alert">No fixture for {label}</p>
+  </main>
+{:else if wrapAriaHidden}
+  {@const step = requiredRenderStep(renderState)}
+  <div aria-hidden="true">
+    <main>
+      <h1>{label}</h1>
+      <p data-testid="mock-auth-scenario">{label}-login</p>
+      {#if error}
+        <p class="error" role="alert">{error}</p>
+      {/if}
+      <form {...fixtureFormAttributes} {onsubmit}>
+        {#each step.fields as field, fieldIndex (`${stepIndex}:${fieldIndex}`)}
+          {@render fixtureField(field)}
+        {/each}
+        {#if step.submit.type === SiteFixtureSubmitType.Button}
+          <button
+            type="button"
+            name={step.submit.name}
+            id={step.submit.id}
+            data-qa={step.submit['data-qa']}
+            onclick={onButtonAdvance}
+          >
+            {step.submit.label}
+          </button>
+        {:else}
+          <button
+            type="submit"
+            name={step.submit.name}
+            id={step.submit.id}
+            data-qa={step.submit['data-qa']}
+          >
+            {step.submit.label}
+          </button>
+        {/if}
+      </form>
+    </main>
+  </div>
+{:else}
+  {@const step = requiredRenderStep(renderState)}
+  <main>
+    <h1>{label}</h1>
+    <p data-testid="mock-auth-scenario">{label}-login</p>
+    {#if selectedAccountDisplay}
+      <p data-testid="google-selected-account">{previousUsername}</p>
+    {/if}
+    {#if error}
+      <p class="error" role="alert">{error}</p>
+    {/if}
+    <form {...fixtureFormAttributes} {onsubmit}>
+      {#each step.fields as field, fieldIndex (`${stepIndex}:${fieldIndex}`)}
+        {@render fixtureField(field)}
+      {/each}
+      {#if step.submit.type === SiteFixtureSubmitType.Button}
+        <button
+          type="button"
+          name={step.submit.name}
+          id={step.submit.id}
+          data-qa={step.submit['data-qa']}
+          onclick={onButtonAdvance}
+        >
+          {step.submit.label}
+        </button>
+      {:else}
+        <button
+          type="submit"
+          name={step.submit.name}
+          id={step.submit.id}
+          data-qa={step.submit['data-qa']}
+        >
+          {step.submit.label}
+        </button>
+      {/if}
+    </form>
+  </main>
+{/if}

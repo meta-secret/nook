@@ -1,32 +1,29 @@
-import { describe, expect, test, vi } from 'vitest'
-import { render } from '@testing-library/svelte'
-import type { ComponentProps } from 'svelte'
 import {
   DeviceAccessIdentityState,
   DeviceAccessProtectionKind,
   NookIdentityLocalAccessKind,
   PasskeyKeeperKind,
 } from '$app-wasm'
+import { describe, expect, test, vi } from 'vitest'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import {
   type DashboardText,
   type DashboardTimestamp,
+  DashboardTimestampKind,
   type DashboardView,
   KnownDashboardText,
   UnknownDashboardText,
-  DashboardTimestampKind,
 } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access-dashboard-state'
 import { AccessChainStage } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/access-chain'
 import {
-  IdentityAccessPresentation,
   IdentityAccessKeyKind,
+  IdentityAccessPresentation,
 } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/identity-access-list'
 import type { IdentityDirectoryEntry } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/identity-directory-view'
 import {
   IdentityKeyInventory,
   IdentityKeyInventoryRowKind,
 } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/identity-key-inventory'
-import IdentityKeyInventoryComponent from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/IdentityKeyInventory.svelte'
 import { PasskeyCardSummaryKind } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/passkey-card'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
@@ -205,67 +202,6 @@ describe('identity key inventory', () => {
           break
       }
     }
-    const renderRequest: ComponentProps<typeof IdentityKeyInventoryComponent> =
-      {
-        vault,
-        identity,
-        view,
-        onRenamePasskey: async () => true,
-      }
-    const rendered = render(IdentityKeyInventoryComponent, renderRequest)
-    expect(
-      rendered.getAllByTestId('devices-access-passkey-facts'),
-    ).toHaveLength(2)
-    expect(
-      rendered.getAllByTestId('devices-access-rename-passkey'),
-    ).toHaveLength(1)
-  })
-
-  test('renders connected apps without a local Add app action', () => {
-    const addAppLabel = 'Add app'
-    const addAppHelper =
-      'Another Nook installation must request identity enrollment before it can be added.'
-    const renderedVault = VaultStateTestFixture.create()
-    vi.spyOn(renderedVault, 't').mockImplementation(
-      (request: TranslationRequest) => {
-        const key = typeof request === 'string' ? request : request.key
-        if (key === 'devices_access.add_key') return addAppLabel
-        if (key === 'devices_access.add_key_unavailable') return addAppHelper
-        return vault.t(request)
-      },
-    )
-    const identity: IdentityDirectoryEntry = {
-      identityId: 'identity_personal',
-      label: 'Personal',
-      localAccess: NookIdentityLocalAccessKind.CurrentBrowser,
-      members: [
-        {
-          appId: 'device_5678',
-          label: known('Nook on MacBook'),
-          currentBrowser: true,
-          localProtection: DeviceAccessProtectionKind.PasskeyStandard,
-          protectionAssociation: DeviceAccessProtectionKind.Missing,
-          associatedPasskeyName: unknownText,
-          associatedPasskeyFingerprint: unknownText,
-        },
-      ],
-      vaults: [],
-    }
-
-    const rendered = render(IdentityKeyInventoryComponent, {
-      vault: renderedVault,
-      identity,
-      view: passkeyView(),
-      onRenamePasskey: async () => true,
-    })
-
-    expect(rendered.getByTestId('devices-access-app').textContent).toContain(
-      'Nook on MacBook',
-    )
-    expect(
-      rendered.queryByRole('button', { name: addAppLabel }),
-    ).not.toBeTruthy()
-    expect(rendered.queryByText(addAppHelper)).not.toBeTruthy()
   })
 
   test('nests the protected app and keeps remote apps in a linked group', () => {

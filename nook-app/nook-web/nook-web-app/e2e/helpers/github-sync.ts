@@ -1,33 +1,22 @@
-import { expect, type Page } from '@playwright/test'
+import { type Page } from '@playwright/test'
 import {
-  GITHUB_VAULT_PATH,
+  GithubEventLogFetchKind,
+  GithubVaultYamlFetchKind,
   fetchGithubEventLog,
   fetchGithubVaultYaml,
-  GithubVaultYamlFetchKind,
-  GithubEventLogFetchKind,
-  githubApiFetch,
-  githubApiHeaders,
-  githubFetch,
-  githubRepoContext,
 } from '../github-api'
 import {
-  assertGenesisVaultYaml,
   parseVaultEventLogSnapshot,
   parseVaultYamlSnapshot,
   waitForVaultEventLogSnapshot,
   type VaultYamlSnapshot,
 } from '../vault-yaml'
-import { keepVaultIdleLockDisabled } from './device-enrollment'
 import {
-  DEFAULT_GITHUB_REPO,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   GITHUB_SYNC_INTERVAL_MS,
   GITHUB_SYNC_TIMEOUT_MS,
   sleep,
 } from './environment'
-import { readStringProperty, requireRecord } from './guards'
-import { assertVaultReady } from './settings-auth'
-import { waitForVaultOperationsIdle } from './vault-runtime'
 
 export type VaultEventLogRemote = {
   getEventFileContents(): string[]
@@ -79,72 +68,6 @@ export function summarizeVaultError(text: string): string {
     return 'WASM busy (transient — retrying)'
   }
   return normalized.length > 160 ? `${normalized.slice(0, 157)}…` : normalized
-}
-
-/** Between suites: wipe vault YAML only. Repo deletion happens once in global teardown. */
-export async function finishE2eGithubSuite(pat: string, repoName: string) {
-  await resetGithubVault(pat, repoName)
-}
-
-export async function deleteGithubFileIfExists(
-  pat: string,
-  headers: ReturnType<typeof githubApiHeaders>,
-  repo: string,
-  vaultPath: string,
-) {
-  const contentsUrl = `https://api.github.com/repos/${repo}/contents/${vaultPath}`
-
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const fileRes = await githubApiFetch(pat, contentsUrl, { headers })
-    if (fileRes.status === 404) {
-      return
-    }
-    if (!fileRes.ok) {
-      throw new Error(
-        `GitHub vault fetch failed for ${vaultPath}: ${fileRes.status}`,
-      )
-    }
-
-    const file = requireRecord(await fileRes.json(), 'GitHub vault file')
-    const sha = readStringProperty(file, 'sha', 'GitHub vault file')
-    const deleteRes = await githubFetch(contentsUrl, {
-      method: 'DELETE',
-      headers: { ...headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message: 'Reset nook e2e vault',
-        sha,
-      }),
-    })
-
-    if (deleteRes.ok || deleteRes.status === 404) {
-      await sleep(2_000)
-      continue
-    }
-
-    if (deleteRes.status === 409 || deleteRes.status === 422) {
-      await sleep(2_000)
-      continue
-    }
-
-    throw new Error(
-      `GitHub vault delete failed for ${vaultPath}: ${deleteRes.status}`,
-    )
-  }
-
-  const verify = await githubApiFetch(pat, contentsUrl, { headers })
-  if (verify.status === 404) {
-    return
-  }
-  throw new Error(`GitHub vault ${vaultPath} still present after reset`)
-}
-
-/** Wipe remote vault file so a fresh local encryption key can connect. */
-export async function resetGithubVault(
-  pat: string,
-  repoName = DEFAULT_GITHUB_REPO,
-) {
-  const { headers, repo } = await githubRepoContext(pat, repoName)
-  await deleteGithubFileIfExists(pat, headers, repo, GITHUB_VAULT_PATH)
 }
 
 export async function waitForVaultYaml(
@@ -223,63 +146,6 @@ export async function assertNoVaultErrors(
   throw new Error(`Vault error: ${summarizeVaultError(text)}`)
 }
 
-export const KNOWN_VAULT_FAILURE_PATTERNS = [
-  /vault crypto not initialized/i,
-  /failed to save secret/i,
-  /encryption failed/i,
-] as const
-
-/** Fail when the vault error banner shows a known save/sync failure. */
-export async function assertNoVaultError(page: Page) {
-  const vaultError = page.getByTestId('vault-error')
-  if (!(await vaultError.isVisible())) {
-    return
-  }
-  const text = ((v) => (v ? v : ''))(await vaultError.textContent()).trim()
-  if (
-    KNOWN_VAULT_FAILURE_PATTERNS.some((pattern) => pattern.test(text)) ||
-    text.length > 0
-  ) {
-    throw new Error(`Vault error: ${summarizeVaultError(text)}`)
-  }
-}
-
-/** Click the vault sync refresh control when available. */
-export async function triggerVaultSyncRefresh(page: Page) {
-  await keepVaultIdleLockDisabled(page)
-  await assertVaultReady(page)
-  await waitForVaultOperationsIdle(page)
-  const refresh = page.getByTestId('vault-sync-refresh-btn')
-  await expect(refresh).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-  await expect
-    .poll(
-      async () => {
-        if (!(await refresh.isVisible())) return false
-        return refresh.isEnabled()
-      },
-      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
-    )
-    .toBe(true)
-  await refresh.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-  await expect
-    .poll(
-      async () =>
-        page.evaluate(() => {
-          const vault = (
-            window as Window & {
-              __nookVault?: { isSyncing?: boolean }
-            }
-          ).__nookVault
-          return vault ? Boolean(vault.isSyncing) : false
-        }),
-      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
-    )
-    .toBe(true)
-  await waitForVaultOperationsIdle(page)
-}
-
 /** Wait until the e2e sync remote has the expected vault state. */
 export async function waitForSyncRemoteVaultState(
   remote: { getEventFileContents: () => string[] },
@@ -292,25 +158,6 @@ export async function waitForSyncRemoteVaultState(
     ),
     intervalMs: ((...[v = 100]) => v)(options?.intervalMs),
   })
-}
-
-export async function flushRemoteEventsToSyncProviders(page: Page) {
-  await page.evaluate(async () => {
-    const vault = window.__nookVault
-    await vault?.runFanOutSyncAfterLocalSave?.()
-  })
-  await waitForVaultOperationsIdle(page)
-}
-
-export async function assertGenesisVaultOnSyncRemote(remote: {
-  getEventFileContents: () => string[]
-}) {
-  const snapshot = await waitForSyncRemoteVaultState(
-    remote,
-    (yaml) => yaml.authPkIds.length >= 1 && yaml.memberPkIds.length >= 1,
-  )
-  assertGenesisVaultYaml(snapshot)
-  return snapshot
 }
 
 /** Wait until sync target has the expected vault state (local e2e remote or live GitHub). */

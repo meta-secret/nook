@@ -5,3 +5,5 @@
 ## Extension specifications
 
 - [Browser extension](../../../nook-web-extension/.cortex/docs/spec/index.md)
+
+- [Workspace UI rebuild](workspace-ui.md): reduced access, item, and settings screens.

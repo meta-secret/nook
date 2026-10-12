@@ -1,31 +1,20 @@
 import { I18N_KEYS } from '../../nook-web-shared/src/generated/i18n-keys'
-import { expect, test } from './fixtures'
-import { createLocalVaultOnLogin, UI_TIMEOUT_MS } from './helpers'
-import { installMockPasskeyRuntime } from './passkey-mock'
+import { expect as baseExpect, test } from './fixtures'
+import { createWorkspace } from './helpers/workspace'
 
-const SIMPLE_APP_URL = (
-  process.env.VITE_SIMPLE_APP_URL?.trim() || 'https://simple.nokey.sh'
-).replace(/\/+$/, '')
+const expect = baseExpect.configure({ timeout: 30000 })
+test.use({ actionTimeout: 30000 })
 
-type RejectedPairingRuntime = {
-  sendMessage(
-    extensionId: string,
-    message: { readonly type: string },
-    callback: (response: { readonly ok: false }) => void,
-  ): void
-}
-
-test.beforeEach(async ({ page }) => {
-  await page.goto('/')
-  await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible({
-    timeout: UI_TIMEOUT_MS * 2,
-  })
-  await expect(page.getByTestId('migrate-legacy-vaults-link')).toHaveCount(0)
-})
-
-test('exposes only the project capability and rejects the opposite vault type', async ({
+test('exposes only the project capability and Rust rejects the opposite vault type', async ({
   page,
 }, testInfo) => {
+  await page.addInitScript(() =>
+    localStorage.setItem('nook_e2e_manual_passkey', 'true'),
+  )
+  await page.goto('/')
+  await page
+    .getByRole('button', { name: 'Create new passkey', exact: true })
+    .click()
   const isSimple = testInfo.project.name === 'simple-isolation'
   const expectedKind = isSimple ? 'simple' : 'sentinel'
   await expect(page.locator('meta[name="nook-app-kind"]')).toHaveAttribute(
@@ -41,34 +30,10 @@ test('exposes only the project capability and rejects the opposite vault type', 
       ),
     )
     .toBe(expectedKind)
-
-  if (isSimple) {
-    await expect(page.getByTestId('get-started-path-chooser')).toBeVisible()
-    await expect(page.getByTestId('get-started-path-simple')).toBeVisible()
-    await expect(page.getByTestId('get-started-path-sentinel')).toHaveCount(0)
-    await expect(page.getByTestId('login-connect-storage-btn')).toContainText(
-      'Open an existing vault',
-    )
-    await expect(page.getByTestId('sentinel-dashboard-choice')).toHaveCount(0)
-    await expect(page.getByTestId('sibling-vault-app-link')).toHaveCount(0)
-    await page.getByTestId('get-started-path-simple').click()
-    await expect(page.getByTestId('create-vault-wizard-create')).toBeVisible()
-  } else {
-    await expect(page.getByTestId('get-started-path-chooser')).toBeVisible()
-    await expect(page.getByTestId('get-started-path-simple')).toHaveCount(0)
-    await expect(page.getByTestId('get-started-path-sentinel')).toBeVisible()
-    await expect(page.getByTestId('login-connect-storage-btn')).toContainText(
-      'Open an existing vault',
-    )
-    await expect(page.getByTestId('create-vault-wizard-create')).toHaveCount(0)
-    await expect(page.getByTestId('sibling-vault-app-link')).toHaveAttribute(
-      'href',
-      `${SIMPLE_APP_URL}/`,
-    )
-    await page.getByTestId('get-started-path-sentinel').click()
-    await expect(page.getByTestId('sentinel-dashboard-choice')).toBeVisible()
-  }
-
+  await expect(page.getByLabel('Vault name', { exact: true })).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Create a vault', exact: true }),
+  ).toHaveCount(isSimple ? 1 : 0)
   const error = await page.evaluate((simpleApp) => {
     const vault = window.__nookVault
     if (!vault) return 'Vault debug hooks are unavailable'
@@ -101,109 +66,128 @@ test('exposes only the project capability and rejects the opposite vault type', 
   )
 })
 
-test('keeps extension routing and local session behavior app-specific', async ({
+test('rejects extension routing on Sentinel and isolates local vault storage by origin', async ({
+  page,
+  context,
+}, testInfo) => {
+  const isSimple = testInfo.project.name === 'simple-isolation'
+  const response = await page.request.get('/extension-connect')
+  expect(response.status()).toBe(isSimple ? 200 : 404)
+  if (!isSimple) return
+  await createWorkspace(page, 'Origin-local vault', '/')
+  const sentinel = await context.newPage()
+  await sentinel.goto('http://127.0.0.1:5175/')
+  await expect(
+    sentinel.getByRole('heading', { name: 'A quiet place for your secrets.' }),
+  ).toBeVisible()
+  await expect(
+    sentinel.getByRole('button').filter({ hasText: 'Origin-local vault' }),
+  ).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'All items' })).toBeVisible()
+})
+
+test('Sentinel creates protected participant shares and requires a quorum to unlock', async ({
   page,
   browser,
 }, testInfo) => {
-  const isSimple = testInfo.project.name === 'simple-isolation'
-  const extensionResponse = await page.request.get('/extension-connect')
-  expect(extensionResponse.status()).toBe(isSimple ? 200 : 404)
-
-  if (!isSimple) {
-    await expect(page.getByTestId('approve-extension-device-btn')).toHaveCount(
-      0,
+  test.skip(
+    testInfo.project.name !== 'sentinel-isolation',
+    'Sentinel capability only',
+  )
+  const { installMockPasskeyRuntime } = await import('./passkey-mock')
+  const participantContext = await browser.newContext()
+  await participantContext.addInitScript(installMockPasskeyRuntime)
+  await participantContext.addInitScript(() =>
+    localStorage.setItem('nook_e2e_manual_passkey', 'true'),
+  )
+  const participant = await participantContext.newPage()
+  try {
+    await page.addInitScript(() =>
+      localStorage.setItem('nook_e2e_manual_passkey', 'true'),
     )
-    return
-  }
-
-  await createLocalVaultOnLogin(page, 'Isolated Simple vault')
-  await expect(page.getByTestId('vault-panel')).toBeVisible()
-
-  const extensionContext = await browser.newContext()
-  await extensionContext.addInitScript(installMockPasskeyRuntime)
-  const extensionPage = await extensionContext.newPage()
-  await extensionPage.goto(new URL(page.url()).origin)
-  await expect(
-    extensionPage.getByTestId('login-create-vault-chooser'),
-  ).toBeVisible({
-    timeout: UI_TIMEOUT_MS * 2,
-  })
-  await createLocalVaultOnLogin(extensionPage, 'Isolated extension device')
-  await expect(extensionPage.getByTestId('vault-panel')).toBeVisible()
-  const extensionDevice = await extensionPage.evaluate(async () => {
-    const vault = window.__nookVault
-    if (!vault)
-      return { ok: false as const, error: 'Vault debug hooks are unavailable' }
-    const admission = vault.admitManager()
-    if (admission.isErr())
-      return { ok: false as const, error: admission.error.translationKey }
-    const manager = admission.value
-    const deviceId = manager.device_id
-    const devicePublicKey = manager.device_public_key
-    const deviceSigningPublicKey = await manager.device_signing_public_key_js()
-    return {
-      ok: true as const,
-      deviceId,
-      devicePublicKey,
-      deviceSigningPublicKey,
+    for (const device of [page, participant]) {
+      await device.goto('http://127.0.0.1:5175/')
+      await device
+        .getByRole('button', { name: 'Create new passkey', exact: true })
+        .click()
+      await expect(
+        device.getByLabel('Vault name', { exact: true }),
+      ).toBeVisible()
     }
-  })
-  await extensionContext.close()
-  if (!extensionDevice.ok) throw new Error(extensionDevice.error)
-  await page.getByTestId('header-lock-vault-btn').click()
-  await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
-  await page.goto(
-    `/extension-connect?device_id=${extensionDevice.deviceId}&device_public_key=${encodeURIComponent(extensionDevice.devicePublicKey)}&device_signing_public_key=${extensionDevice.deviceSigningPublicKey}&extension_id=test-extension&device_label=Nook%20Extension&nonce=test-nonce&scopes=vault-access,password-filling`,
-  )
-  await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
-  await page.getByTestId('unlock-vault-btn').click()
-  await expect(page.getByTestId('extension-connect-consent')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
-  await page.evaluate(() => {
-    const runtime: RejectedPairingRuntime = {
-      sendMessage: (
-        _extensionId: string,
-        _message: { readonly type: string },
-        callback: (response: { readonly ok: false }) => void,
-      ) => callback({ ok: false }),
-    }
-    Object.defineProperty(globalThis, 'chrome', {
-      configurable: true,
-      value: { runtime },
+    await page.getByLabel('Vault name', { exact: true }).fill('Quorum vault')
+    await page
+      .getByRole('button', { name: 'Start Sentinel setup', exact: true })
+      .click()
+    const invitation = await page
+      .getByLabel('Participant request', { exact: true })
+      .inputValue()
+    const join = participant.locator('details').filter({
+      has: participant.getByText('Sentinel invitation', { exact: true }),
     })
-  })
-  await page.getByTestId('approve-extension-device-btn').click()
-  await expect(
-    page.getByTestId('extension-connect-consent').getByRole('alert'),
-  ).toContainText(
-    'The extension did not accept the Simple Vault pairing grant.',
-  )
-  await expect(page.getByTestId('extension-connect-approved')).toBeVisible()
-
-  await page.getByTestId('header-lock-vault-btn').click()
-  await expect(page.getByTestId('login-local-unlock-step')).toBeVisible()
-})
-
-test('opens the existing-vault workflow without starting creation', async ({
-  page,
-}, testInfo) => {
-  const expectedKind =
-    testInfo.project.name === 'simple-isolation' ? 'simple' : 'sentinel'
-
-  await page.getByTestId('login-connect-storage-btn').click()
-
-  await expect(page.locator('meta[name="nook-app-kind"]')).toHaveAttribute(
-    'content',
-    expectedKind,
-  )
-  await expect(page.getByTestId('login-provider-setup')).toBeVisible()
-  await expect(page.getByTestId('create-vault-wizard-create')).toHaveCount(0)
-  await expect(page.getByTestId('sentinel-dashboard-choice')).toHaveCount(0)
-  await expect(page.getByTestId('login-create-vault-chooser')).toHaveCount(0)
-  await expect(page.getByTestId('login-back-to-get-started')).toBeVisible()
+    await join.locator('summary').click()
+    await join.getByLabel('Owner invitation', { exact: true }).fill(invitation)
+    await join
+      .getByRole('button', { name: 'Create response', exact: true })
+      .click()
+    const response = await join
+      .getByLabel('Authentication response', { exact: true })
+      .inputValue()
+    await page
+      .getByLabel('Authentication response', { exact: true })
+      .fill(response)
+    await page.getByLabel('Participant', { exact: true }).fill('Second device')
+    await page
+      .getByRole('button', { name: 'Verify participant', exact: true })
+      .click()
+    await page
+      .getByRole('button', { name: 'Create Sentinel vault', exact: true })
+      .click()
+    const delivery = page.locator('textarea[readonly]').last()
+    await expect(delivery).not.toHaveValue(invitation)
+    const share = await delivery.inputValue()
+    await join
+      .getByLabel('Encrypted share from initiator', { exact: true })
+      .fill(share)
+    await join
+      .getByRole('button', { name: "Protect this device's share", exact: true })
+      .click()
+    await expect(participant.getByRole('status')).toContainText(
+      'protected locally',
+    )
+    await page.getByRole('button', { name: 'Done', exact: true }).click()
+    await page
+      .getByRole('button', { name: 'Start quorum unlock', exact: true })
+      .click()
+    await expect(
+      page.getByRole('button', { name: 'Open vault', exact: true }),
+    ).toBeDisabled()
+    const request = await page
+      .getByLabel('Unlock request', { exact: true })
+      .inputValue()
+    const help = participant.locator('details').filter({
+      has: participant.getByText('Help another device unlock', {
+        exact: true,
+      }),
+    })
+    await help.locator('summary').click()
+    await expect(
+      help.getByLabel('Protected Sentinel share').locator('option'),
+    ).toHaveCount(2)
+    await help.getByLabel('Protected Sentinel share').selectOption({ index: 1 })
+    await help.getByLabel('Request from the other device').fill(request)
+    await help
+      .getByRole('button', { name: 'Create response', exact: true })
+      .click()
+    const unlockResponse = await help
+      .getByLabel('One-time response')
+      .inputValue()
+    await page
+      .getByLabel('Participant response', { exact: true })
+      .fill(unlockResponse)
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await page.getByRole('button', { name: 'Open vault', exact: true }).click()
+    await expect(page.getByRole('heading', { name: 'All items' })).toBeVisible()
+  } finally {
+    await participantContext.close()
+  }
 })

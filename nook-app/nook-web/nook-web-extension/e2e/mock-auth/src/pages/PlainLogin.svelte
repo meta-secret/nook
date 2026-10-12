@@ -1,0 +1,60 @@
+<script lang="ts">
+  import { onMount } from 'svelte'
+  import { MOCK_AUTH_ACCOUNTS } from '../../accounts'
+  import FixtureCredentials from '../lib/FixtureCredentials.svelte'
+  import {
+    credentialsFromLoginSubmit,
+    LoginSubmissionKind,
+    resetLoginSubmission,
+  } from '../lib/login-form'
+  import { completePlainLogin, PlainLoginResult } from '../lib/plain-login'
+
+  const fixtureAccountCandidate = MOCK_AUTH_ACCOUNTS.find(
+    (account) => !account.totpSecret,
+  )
+  if (!fixtureAccountCandidate) {
+    throw new Error('plain-login fixture account is missing')
+  }
+  const fixtureAccount = fixtureAccountCandidate
+
+  let error = $state('')
+
+  onMount(resetLoginSubmission)
+
+  function onsubmit(event: SubmitEvent) {
+    const credentials = credentialsFromLoginSubmit(event)
+    if (
+      credentials.kind === LoginSubmissionKind.Credentials &&
+      completePlainLogin(credentials.username, credentials.password) ===
+        PlainLoginResult.Invalid
+    ) {
+      error = 'Invalid username or password.'
+    }
+  }
+</script>
+
+<main>
+  <h1>Sign in</h1>
+  <p data-testid="mock-auth-scenario">plain-login</p>
+  <FixtureCredentials account={fixtureAccount} />
+  {#if error}
+    <p class="error" role="alert" data-nook-auth-outcome="error">{error}</p>
+  {/if}
+  <form id="login-form" method="post" action="/auth/login" {onsubmit}>
+    <label
+      >Email <input
+        autocomplete="username"
+        name="username"
+        type="email"
+      /></label
+    >
+    <label
+      >Password <input
+        autocomplete="current-password"
+        name="password"
+        type="password"
+      /></label
+    >
+    <button type="submit">Sign in</button>
+  </form>
+</main>

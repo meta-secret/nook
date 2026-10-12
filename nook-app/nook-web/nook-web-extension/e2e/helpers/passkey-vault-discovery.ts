@@ -26,18 +26,19 @@ export class PasskeyVaultDiscovery {
   }
 
   private async discover(): Promise<void> {
-    const passkeyGroup = this.page.getByTestId('vault-group-passkey')
-    await expect(passkeyGroup).toBeVisible()
-    await expect(passkeyGroup).toContainText('Alice')
-    const siteGroup: Parameters<ReturnType<Page['getByTestId']>['filter']>[0] =
-      { has: passkeyGroup }
+    const row = this.page.locator('.item-row').filter({ hasText: 'Alice' })
+    await expect(row).toBeVisible()
+    await row.click()
+    const details = this.page.locator('.detail-pane')
+    await expect(details).toContainText('Alice')
     await expect(
-      this.page.getByTestId('vault-site-group').filter(siteGroup),
-    ).toContainText('localhost')
-    await passkeyGroup.getByTestId('secret-row-toggle').click()
-    await expect(passkeyGroup).toContainText('alice@example.com')
-    await expect(passkeyGroup.getByTestId('reveal-secret-btn')).toHaveCount(0)
-    await expect(passkeyGroup.getByTestId('edit-secret-btn')).toHaveCount(0)
-    await expect(passkeyGroup.getByTestId('delete-secret-btn')).toBeVisible()
+      details.getByRole('button', { name: 'Show value', exact: true }),
+    ).toHaveCount(0)
+    await expect(
+      details.getByRole('button', { name: 'Edit', exact: true }),
+    ).toHaveCount(0)
+    await expect(
+      details.getByRole('button', { name: 'Delete', exact: true }),
+    ).toBeVisible()
   }
 }
