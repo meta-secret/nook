@@ -34,7 +34,13 @@ export async function workspaceReady(page: Page) {
     timeout: 60000,
   })
   await expect
-    .poll(() => page.evaluate(() => window.__nookVault?.isVerifying))
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as Window & { __nookVault?: { isVerifying: boolean } })
+            .__nookVault?.isVerifying,
+      ),
+    )
     .toBe(false)
   await waitForStorageChainIdle(page)
   await disableVaultIdleLock(page)

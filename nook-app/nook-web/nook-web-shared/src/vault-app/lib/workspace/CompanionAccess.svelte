@@ -33,7 +33,13 @@
     try {
       const admission =
         await browser.discoverAdmittedPairedExtensionIdentity(storeId);
-      if (!active) return;
+      if (
+        !active ||
+        vault.isAuthenticated ||
+        vault.isVerifying ||
+        vault.deviceAuthorizationInProgress
+      )
+        return;
       if (admission.isErr()) {
         vault.errorMsg = vault.t(admission.error.translationKey);
         stop();

@@ -62,7 +62,8 @@ export class ExtensionVaultEventLogExport {
     message: ExtensionVaultEventLogRequestMessage,
   ): Effect.fn.Return<ExtensionVaultEventLogResponse, ExportRejected> {
     const storage: ExportTransportAttempt<ExtensionPairingItems> = {
-      try: this.dependencies.loadPairingStorage,
+      // Effect supplies an AbortSignal to tryPromise callbacks; it is not a storage key.
+      try: () => this.dependencies.loadPairingStorage(),
       catch: () => ({ kind: 'Rejected', reason: 'Failed' }),
     }
     const stored = yield* Effect.tryPromise(storage)

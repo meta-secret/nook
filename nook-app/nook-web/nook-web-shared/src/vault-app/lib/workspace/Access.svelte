@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import { ArrowRight, LockKeyhole } from "@lucide/svelte";
   import type { VaultState } from "$lib/vault.svelte";
   import { LoginVaultSelectionKind } from "$lib/vault/state/provider.svelte";
@@ -12,6 +13,7 @@
     type ExtensionConnectIntent,
   } from "$lib/app/route-state";
   import { extensionConnectionBrowser } from "$lib/extension/connect";
+  import { ExistingVaultImportLifecycle } from "$lib/vault/existing-vault-import.svelte";
   import {
     ConfiguredSiteUrlEnvironment,
     SiteUrlConfiguration,
@@ -25,6 +27,7 @@
     extension: ExtensionConnectIntent;
   }
   let { vault, extension }: AccessWorkspace = $props();
+  const existingVault = untrack(() => new ExistingVaultImportLifecycle(vault));
   let creating = $state(false);
   let name = $state("");
   let password = $state("");
@@ -145,11 +148,13 @@
             >
           {/each}
         </div>
+        {#if extension.kind === ExtensionConnectIntentKind.Absent && existingVault.unlockStoreId}
+          {#key existingVault.unlockStoreId}<CompanionAccess
+              {vault}
+              storeId={existingVault.unlockStoreId}
+            />{/key}
+        {/if}
         {#if vault.selectedLoginVault.kind === LoginVaultSelectionKind.Selected}
-          {#if extension.kind === ExtensionConnectIntentKind.Absent}{#key vault.selectedLoginVault.storeId}<CompanionAccess
-                {vault}
-                storeId={vault.selectedLoginVault.storeId}
-              />{/key}{/if}
           {#if !vault.deviceProtectionReady && !usePassword && !vault.loginPasswordPrompt}<DeviceAuthorization
               {vault}
             />

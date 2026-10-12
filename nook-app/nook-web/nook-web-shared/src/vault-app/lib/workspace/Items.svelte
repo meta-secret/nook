@@ -8,6 +8,7 @@
     ArrowRight,
   } from "@lucide/svelte";
   import type { VaultState } from "$lib/vault.svelte";
+  import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
   import { workspaceItem, type WorkspaceItem } from "./item-metadata";
   import { SecretEditorKind } from "$lib/components/secret-vault-state";
   import { I18N_KEYS as K } from "../../../generated/i18n-keys";
@@ -19,6 +20,14 @@
   let query = $state(untrack(() => vault.secretQuery));
   let loading = $state(false);
   const items = $derived(vault.secrets.map(workspaceItem));
+  const vaultLabel = $derived.by(() => {
+    const active = vault.activeVault;
+    const local =
+      active.kind === ActiveVaultKind.Open
+        ? vault.localVaults.find((entry) => entry.storeId === active.storeId)
+        : undefined;
+    return local?.label || vault.t(K.NavVault);
+  });
   async function page(offset = 0) {
     loading = true;
     selected = undefined;
@@ -41,7 +50,7 @@
   <section class="item-list" aria-label={vault.t(K.WorkspaceItems)}>
     <header class="list-heading">
       <div>
-        <p class="eyebrow">{vault.t(K.NavVault)}</p>
+        <p class="eyebrow">{vaultLabel}</p>
         <h1>
           {vault.t(K.WorkspaceItems)}<span class="count"
             >{vault.secretTotal}</span

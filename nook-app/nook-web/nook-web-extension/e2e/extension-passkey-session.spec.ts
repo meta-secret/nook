@@ -1,3 +1,7 @@
+import {
+  ExtensionConnectionParametersParseKind,
+  parseExtensionConnectionParameters,
+} from './helpers/extension-connection-parameters'
 import { chromium, expect, test, type Page } from '@playwright/test'
 import {
   authorizeWorkspace,
@@ -59,83 +63,6 @@ enum WebsitePageStateKind {
 type WebsitePageState =
   | { kind: WebsitePageStateKind.Skipped }
   | { kind: WebsitePageStateKind.Opened; page: Page }
-enum ExtensionConnectionParameter {
-  DeviceId = 'device_id',
-  DevicePublicKey = 'device_public_key',
-  DeviceSigningPublicKey = 'device_signing_public_key',
-  HandoffNonce = 'nonce',
-}
-enum ExtensionConnectionParametersParseKind {
-  Valid = 'valid',
-  Invalid = 'invalid',
-}
-type ExtensionConnectionParametersParseResult =
-  | {
-      kind: ExtensionConnectionParametersParseKind.Valid
-      deviceId: string
-      devicePublicKey: string
-      deviceSigningPublicKey: string
-      handoffNonce: string
-    }
-  | {
-      kind: ExtensionConnectionParametersParseKind.Invalid
-      missingParameter: ExtensionConnectionParameter
-    }
-
-function parseExtensionConnectionParameters(
-  connectionUrl: URL,
-): ExtensionConnectionParametersParseResult {
-  const deviceId = connectionUrl.searchParams.get(
-    ExtensionConnectionParameter.DeviceId,
-  )
-  if (typeof deviceId !== 'string' || deviceId.trim().length === 0) {
-    return {
-      kind: ExtensionConnectionParametersParseKind.Invalid,
-      missingParameter: ExtensionConnectionParameter.DeviceId,
-    }
-  }
-  const devicePublicKey = connectionUrl.searchParams.get(
-    ExtensionConnectionParameter.DevicePublicKey,
-  )
-  if (
-    typeof devicePublicKey !== 'string' ||
-    devicePublicKey.trim().length === 0
-  ) {
-    return {
-      kind: ExtensionConnectionParametersParseKind.Invalid,
-      missingParameter: ExtensionConnectionParameter.DevicePublicKey,
-    }
-  }
-  const deviceSigningPublicKey = connectionUrl.searchParams.get(
-    ExtensionConnectionParameter.DeviceSigningPublicKey,
-  )
-  if (
-    typeof deviceSigningPublicKey !== 'string' ||
-    deviceSigningPublicKey.trim().length === 0
-  ) {
-    return {
-      kind: ExtensionConnectionParametersParseKind.Invalid,
-      missingParameter: ExtensionConnectionParameter.DeviceSigningPublicKey,
-    }
-  }
-  const handoffNonce = connectionUrl.searchParams.get(
-    ExtensionConnectionParameter.HandoffNonce,
-  )
-  if (typeof handoffNonce !== 'string' || handoffNonce.trim().length === 0) {
-    return {
-      kind: ExtensionConnectionParametersParseKind.Invalid,
-      missingParameter: ExtensionConnectionParameter.HandoffNonce,
-    }
-  }
-  return {
-    kind: ExtensionConnectionParametersParseKind.Valid,
-    deviceId,
-    devicePublicKey,
-    deviceSigningPublicKey,
-    handoffNonce,
-  }
-}
-
 test('creates a passkey from browser-native WASM options after extension messaging', async ({
   browserName,
 }, testInfo) => {
@@ -475,7 +402,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         .getByLabel('Item type')
         .selectOption({ label: 'Authenticator' })
       await reopenedVaultPage
-        .getByLabel('Issuer', { exact: true })
+        .getByLabel('Service', { exact: true })
         .fill('Nook extension e2e')
       await reopenedVaultPage
         .getByLabel('Account', { exact: true })

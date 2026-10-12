@@ -251,7 +251,7 @@ export async function saveVaultAuthenticator(
   await vaultPage
     .getByLabel('Item type')
     .selectOption({ label: 'Authenticator' })
-  await vaultPage.getByLabel('Issuer', { exact: true }).fill(issuer)
+  await vaultPage.getByLabel('Service', { exact: true }).fill(issuer)
   await vaultPage.getByLabel('Account', { exact: true }).fill(account)
   await vaultPage.getByLabel('Setup key', { exact: true }).fill(secret)
   await vaultPage.getByRole('button', { name: 'Save', exact: true }).click()

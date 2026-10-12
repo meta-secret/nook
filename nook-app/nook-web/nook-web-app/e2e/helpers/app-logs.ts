@@ -10,6 +10,19 @@ export type NookLogEntry = {
   data?: string
 }
 
+type AppLogWindow = Window & {
+  __nookLog?: {
+    dump: (query: {
+      minLevel: LogLevel
+      limit: number
+      offset: number
+    }) => Promise<NookLogEntry[]>
+    count: () => Promise<number>
+    flush: () => Promise<void>
+    getLevel: () => LogLevel
+  }
+}
+
 const APP_LOGS_SCHEMA = 'nook.app-logs.v1' as const
 const APP_LOGS_ATTACHMENT_LIMIT = 5000
 const APP_LOGS_FAILURE_PRINT_LIMIT = 500
@@ -61,7 +74,7 @@ async function readNookLogEntries(
 ): Promise<NookLogEntry[]> {
   return page.evaluate<NookLogEntry[], { lim: number; minLevel: LogLevel }>(
     async ({ lim, minLevel }) => {
-      const log = window.__nookLog
+      const log = (window as AppLogWindow).__nookLog
       if (!log) throw new Error('__nookLog is not available on the page')
       return log.dump({
         minLevel,
@@ -84,7 +97,7 @@ export async function readNookLogSnapshot(
     offset: ((v) => (v ? v : 0))(options?.offset),
   }
   return page.evaluate(async (opts) => {
-    const log = window.__nookLog
+    const log = (window as AppLogWindow).__nookLog
     if (!log) throw new Error('__nookLog is not available on the page')
     await log.flush()
     const [total, entries] = await Promise.all([
