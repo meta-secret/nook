@@ -74,13 +74,13 @@
   }
   function watch() {
     stop();
-    busy = true;
     void refresh();
     timer = setInterval(() => void refresh(), 500);
     expiry = setTimeout(stop, 30000);
   }
   async function unlock() {
     watch();
+    busy = true;
     const requested = await browser.requestPairedExtensionUnlock(storeId);
     if (!requested && active && !vault.isAuthenticated) {
       vault.errorMsg = vault.t(K.ExtensionCompanionUnavailable);
@@ -102,7 +102,10 @@
 </script>
 
 {#if browser.companionProviderPresence() === CompanionProviderPresence.Present}
-  <button disabled={busy} onclick={unlock} data-testid="unlock-vault-btn"
+  <button
+    disabled={busy || vault.deviceAuthorizationInProgress || vault.isVerifying}
+    onclick={unlock}
+    data-testid="unlock-vault-btn"
     >{vault.t(
       busy ? K.ExtensionSetupUnlockPending : K.ExtensionConnectContinue,
     )}</button

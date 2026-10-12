@@ -3,6 +3,12 @@ import { cleanup, fireEvent, render } from '@testing-library/svelte'
 import { ok } from 'neverthrow'
 import { tick } from 'svelte'
 import { SecretType } from '$lib/nook'
+import {
+  CompanionProviderPresence,
+  VaultStartupUnlockDecision,
+} from '$app-wasm'
+import { extensionConnectionBrowser } from '$lib/extension/connect'
+import CompanionAccess from '$lib/workspace/CompanionAccess.svelte'
 import Items from '$lib/workspace/Items.svelte'
 import ItemDetail from '$lib/workspace/ItemDetail.svelte'
 import ItemEditor from '$lib/workspace/ItemEditor.svelte'
@@ -25,6 +31,31 @@ function fixture() {
 }
 
 describe('replacement workspace', () => {
+  test('allows explicit companion unlock while background discovery is pending', async () => {
+    const vault = fixture()
+    vault.isAuthenticated = false
+    vi.spyOn(vault, 'shouldAutoUnlock').mockReturnValue(true)
+    vi.spyOn(vault, 'startupUnlockDecision').mockReturnValue(
+      VaultStartupUnlockDecision.DiscoverCompanion,
+    )
+    vi.spyOn(
+      extensionConnectionBrowser,
+      'companionProviderPresence',
+    ).mockReturnValue(CompanionProviderPresence.Present)
+    vi.spyOn(
+      extensionConnectionBrowser,
+      'discoverAdmittedPairedExtensionIdentity',
+    ).mockImplementation(() => new Promise(() => {}))
+    const view = render(CompanionAccess, {
+      vault,
+      storeId: 'store_abcdefghijk',
+    })
+    await tick()
+    expect(view.getByTestId('unlock-vault-btn').hasAttribute('disabled')).toBe(
+      false,
+    )
+    view.unmount()
+  })
   test('never offers plaintext exposure for a managed passkey', () => {
     const vault = fixture()
     const decrypt = vi.spyOn(vault, 'decryptSecret')
