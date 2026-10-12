@@ -43,13 +43,6 @@ function writeRegisteredRepos(repos: string[]) {
   )
 }
 
-export function registerE2eGithubRepo(repoName: string) {
-  const repos = readRegisteredE2eGithubRepos()
-  if (!repos.includes(repoName)) {
-    writeRegisteredRepos([...repos, repoName])
-  }
-}
-
 export function unregisterE2eGithubRepo(repoName: string) {
   writeRegisteredRepos(
     readRegisteredE2eGithubRepos().filter((name) => name !== repoName),

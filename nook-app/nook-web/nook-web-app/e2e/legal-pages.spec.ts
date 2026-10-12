@@ -47,10 +47,10 @@ test.describe('legal pages', () => {
     ).toBeVisible()
     await expect(
       page.getByRole('link', { name: 'Privacy Policy' }),
-    ).toHaveAttribute('href', '/privacy.html')
+    ).toHaveAttribute('href', `${SITE_URL}/privacy.html`)
     await expect(
       page.getByRole('link', { name: 'Terms of Service' }),
-    ).toHaveAttribute('href', '/terms.html')
+    ).toHaveAttribute('href', `${SITE_URL}/terms.html`)
   })
 
   test('serves the public landing page at the site root', async ({ page }) => {

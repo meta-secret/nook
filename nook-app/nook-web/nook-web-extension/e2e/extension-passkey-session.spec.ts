@@ -873,6 +873,15 @@ test('re-approves an existing local vault after reload without event-log-access-
     )
     expect(grantKeys.length).toBeGreaterThan(0)
     await removeExtensionStorageKeys(context, grantKeys)
+    // Direct IndexedDB edits do not emit a runtime revocation event. Lock the
+    // companion explicitly so re-approval exercises a fresh, grant-less session.
+    const withoutGrants = await readExtensionStorage(context)
+    expect(
+      Object.keys(withoutGrants).filter((key) =>
+        key.startsWith('nook:extension-pairing-grant:'),
+      ),
+    ).toHaveLength(0)
+    await lockExtensionSession(context)
 
     // Reload, restore the IndexedDB signing seed, then unlock and re-approve.
     await simplePage.goto(simpleVaultBaseUrl)
@@ -892,7 +901,7 @@ test('re-approves an existing local vault after reload without event-log-access-
     await repairPopup.goto(
       `chrome-extension://${extensionId}/popup/index.html?intent=pair`,
     )
-    // Removing the active grant must close the session before re-approval.
+    // The companion remains locked until its explicit authorization below.
     await expect(repairPopup.getByTestId('extension-device-setup')).toBeVisible(
       {
         timeout: EXTENSION_UNLOCK_TIMEOUT_MS,

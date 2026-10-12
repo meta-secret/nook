@@ -660,6 +660,11 @@ export async function launchExtensionContext(userDataDir: string) {
     ],
   })
   reportExtensionBrowserErrors(context)
+  // Exercise the same explicit device authorization as the production UI.
+  await context.addInitScript((origin) => {
+    if (window.location.origin === origin)
+      localStorage.setItem('nook_e2e_manual_passkey', 'true')
+  }, new URL(simpleVaultBaseUrl).origin)
   return context
 }
 

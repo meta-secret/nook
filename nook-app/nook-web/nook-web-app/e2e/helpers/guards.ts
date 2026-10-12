@@ -1,9 +1,3 @@
-/** Parse untrusted JSON without allowing its `any` result into the test code. */
-export function parseJson(value: string): unknown {
-  const parsed: unknown = JSON.parse(value)
-  return parsed
-}
-
 export function requireRecord(
   value: unknown,
   label: string,

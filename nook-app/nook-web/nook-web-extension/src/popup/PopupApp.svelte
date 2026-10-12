@@ -374,9 +374,13 @@
     </p>{/if}
   {#if showToolbarMenu}
     <p>{companionDescription()}</p>
-    <section class="connection-summary" data-testid="companion-vault-status">
+    <section
+      class="connection-summary"
+      data-testid="companion-vault-status"
+      data-connected={isConnected}
+    >
       <strong
-        >{vaultName
+        >{isConnected && vaultName
           ? connectedVaultLabel(vaultName)
           : translatePlain(I18N_KEYS.ExtensionCompanionNotConnected)}</strong
       ><span

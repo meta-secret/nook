@@ -8,26 +8,13 @@ import {
 import {
   parseVaultEventLogSnapshot,
   parseVaultYamlSnapshot,
-  waitForVaultEventLogSnapshot,
   type VaultYamlSnapshot,
 } from '../vault-yaml'
 import {
-  ENROLLMENT_UNLOCK_TIMEOUT_MS,
   GITHUB_SYNC_INTERVAL_MS,
   GITHUB_SYNC_TIMEOUT_MS,
   sleep,
 } from './environment'
-
-export type VaultEventLogRemote = {
-  getEventFileContents(): string[]
-}
-
-export type GithubE2eTarget = {
-  pat: string
-  repoName: string
-  /** In-memory GitHub REST stub — avoids api.github.com (PR/main CI). */
-  stub?: VaultEventLogRemote
-}
 
 export { fetchGithubVaultYaml }
 
@@ -144,35 +131,4 @@ export async function assertNoVaultErrors(
   }
 
   throw new Error(`Vault error: ${summarizeVaultError(text)}`)
-}
-
-/** Wait until the e2e sync remote has the expected vault state. */
-export async function waitForSyncRemoteVaultState(
-  remote: { getEventFileContents: () => string[] },
-  predicate: (snapshot: VaultYamlSnapshot) => boolean,
-  options?: { timeoutMs?: number; intervalMs?: number; page?: Page },
-): Promise<VaultYamlSnapshot> {
-  return waitForVaultEventLogSnapshot(remote.getEventFileContents, predicate, {
-    timeoutMs: ((...[v = ENROLLMENT_UNLOCK_TIMEOUT_MS]) => v)(
-      options?.timeoutMs,
-    ),
-    intervalMs: ((...[v = 100]) => v)(options?.intervalMs),
-  })
-}
-
-/** Wait until sync target has the expected vault state (local e2e remote or live GitHub). */
-export async function waitForGithubVaultState(
-  target: GithubE2eTarget,
-  predicate: (snapshot: VaultYamlSnapshot) => boolean,
-  options?: { timeoutMs?: number; intervalMs?: number; page?: Page },
-): Promise<VaultYamlSnapshot> {
-  if (target.stub) {
-    const { waitForStubVaultState } = await import('../sync-stub')
-    return waitForStubVaultState(
-      { pat: target.pat, repoName: target.repoName, stub: target.stub },
-      predicate,
-      options,
-    )
-  }
-  return waitForVaultYaml(target.pat, target.repoName, predicate, options)
 }

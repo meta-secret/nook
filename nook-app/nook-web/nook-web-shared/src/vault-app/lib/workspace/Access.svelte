@@ -12,6 +12,10 @@
     type ExtensionConnectIntent,
   } from "$lib/app/route-state";
   import { extensionConnectionBrowser } from "$lib/extension/connect";
+  import {
+    ConfiguredSiteUrlEnvironment,
+    SiteUrlConfiguration,
+  } from "$lib/content/sitemap";
   import { I18N_KEYS as K } from "../../../generated/i18n-keys";
   import CompanionAccess from "./CompanionAccess.svelte";
   import DeviceAuthorization from "./DeviceAuthorization.svelte";
@@ -27,6 +31,9 @@
   let entryId = $state("");
   let usePassword = $state(false);
   const sentinel = configured_vault_application() === VaultApplication.Sentinel;
+  const siteUrl = new SiteUrlConfiguration(
+    new ConfiguredSiteUrlEnvironment(import.meta.env.VITE_SITE_URL ?? ""),
+  ).url;
   async function authorizeExtension() {
     if (extension.kind !== ExtensionConnectIntentKind.Requested) return;
     const request = extension.request;
@@ -201,8 +208,8 @@
     </div>
   </section>
   <footer class="access-links">
-    <a href="/privacy.html">{vault.t(K.LegalPrivacyPolicy)}</a><a
-      href="/terms.html">{vault.t(K.LegalTermsOfService)}</a
+    <a href={`${siteUrl}/privacy.html`}>{vault.t(K.LegalPrivacyPolicy)}</a><a
+      href={`${siteUrl}/terms.html`}>{vault.t(K.LegalTermsOfService)}</a
     >
   </footer>
 </div>
