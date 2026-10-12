@@ -16,26 +16,34 @@ function installMicrosoftLoginStages(element: HTMLElement | SVGElement): void {
   element.addEventListener('submit', (event) => {
     event.preventDefault()
     switch (stage) {
-      case MicrosoftLoginStage.Identifier:
-        element.setAttribute(
-          'data-identifier',
-          element.querySelector<HTMLInputElement>('#usernameEntry')!.value,
-        )
+      case MicrosoftLoginStage.Identifier: {
+        const identifier: HTMLInputElement | undefined =
+          element.querySelectorAll<HTMLInputElement>('#usernameEntry')[0]
+        switch (identifier) {
+          case undefined:
+            throw new Error('Microsoft identifier fixture input missing')
+        }
+        element.setAttribute('data-identifier', identifier.value)
         element.innerHTML =
           '<label>Password<input id="passwordEntry" type="password" autocomplete="current-password"></label><button type="submit" data-testid="primaryButton">Sign in</button>'
         stage = MicrosoftLoginStage.Password
         element.setAttribute('data-stage', stage)
         break
-      case MicrosoftLoginStage.Password:
-        element.setAttribute(
-          'data-password',
-          element.querySelector<HTMLInputElement>('#passwordEntry')!.value,
-        )
+      }
+      case MicrosoftLoginStage.Password: {
+        const password: HTMLInputElement | undefined =
+          element.querySelectorAll<HTMLInputElement>('#passwordEntry')[0]
+        switch (password) {
+          case undefined:
+            throw new Error('Microsoft password fixture input missing')
+        }
+        element.setAttribute('data-password', password.value)
         stage = MicrosoftLoginStage.Complete
         element.setAttribute('data-stage', stage)
         element.innerHTML =
           '<p role="status">Microsoft authentication complete</p>'
         break
+      }
       case MicrosoftLoginStage.Complete:
         break
     }

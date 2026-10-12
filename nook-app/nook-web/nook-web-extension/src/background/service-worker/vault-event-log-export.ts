@@ -106,15 +106,16 @@ export class ExtensionVaultEventLogExport {
         switch (authority.reason) {
           case 'MissingActiveAuthority':
             yield* this.closeActiveSession()
-            return authority
+            break
           case 'Unavailable':
           case 'Locked':
           case 'NoMatchingAuthority':
           case 'InvalidStoredAuthority':
           case 'AccessDenied':
           case 'Failed':
-            return authority
+            break
         }
+        return authority
       case 'Authorized':
         break
     }
