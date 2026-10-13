@@ -669,6 +669,7 @@ export class VaultProviderActions {
     this.resetICloudSignInState();
     state.addProviderOpen = false;
     state.providerSaveLayout = "legacyVaultRoot";
+    state.providerSaveTarget = "fresh";
     state.clearLoginSetup();
     state.clearExistingVaultRecoverySummary();
     state.applyActiveProviderCredentials();
@@ -844,6 +845,7 @@ export class ProviderPersistenceActions {
       newProviderId: generate_id(),
       createdAt: isoTimestamp(),
       layout: state.providerSaveLayout,
+      remoteTarget: state.providerSaveTarget,
     };
     const outcome = apply_provider_save_policy(request);
     try {
@@ -881,6 +883,7 @@ export class ProviderPersistenceActions {
       state.clearLoginSetup();
       state.loginRequiresExistingVault = false;
       state.providerSaveLayout = "legacyVaultRoot";
+      state.providerSaveTarget = "fresh";
       state.addProviderOpen = false;
       state.applyActiveProviderCredentials();
       log.info("sync provider saved");

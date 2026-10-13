@@ -2,10 +2,9 @@
 use crate::{
     EnrollmentProvider, EnrollmentProviderDataRef, OAuthAccountIdentity, OAuthFileConfigData,
     OAuthRefreshCredential, OAuthRemoteFile, OAuthTokenExpiry, OauthFilePreset,
-    PersonalEnrollmentProviderData, StoredOAuthAccessCredential, StoredOAuthAccountIdentity,
-    StoredGoogleDrivePrivateTarget, StoredOAuthRefreshCredential, StoredOAuthRemoteFileId,
-    StoredOAuthRemoteFileName,
-    StoredOAuthTokenExpiry, ValidationError,
+    PersonalEnrollmentProviderData, StoredGoogleDrivePrivateTarget, StoredOAuthAccessCredential,
+    StoredOAuthAccountIdentity, StoredOAuthRefreshCredential, StoredOAuthRemoteFileId,
+    StoredOAuthRemoteFileName, StoredOAuthTokenExpiry, ValidationError,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -63,26 +62,38 @@ impl EnrollmentOAuthConfigurationRequest<'_> {
                 StoredOAuthRemoteFileName::FileName(file_name.clone()),
             ),
         };
-        // A private Drive code carries its event folder as a connect reference.
-        let file_id = match file_id {
+        // A private Drive code carries its event folder as a connect
+        // reference. Without one, the issuer reads the legacy appData root,
+        // and the joiner must read the same root rather than a new folder.
+        let (file_id, drive_private_target) = match file_id {
             StoredOAuthRemoteFileId::FileId(reference)
                 if reference == crate::DRIVE_PRIVATE_FOLDER_PENDING_REF =>
             {
-                config.drive_private_target = StoredGoogleDrivePrivateTarget::Pending;
-                StoredOAuthRemoteFileId::Unresolved
+                (
+                    StoredOAuthRemoteFileId::Unresolved,
+                    StoredGoogleDrivePrivateTarget::Pending,
+                )
             }
             StoredOAuthRemoteFileId::FileId(reference) => {
                 match reference.strip_prefix(crate::DRIVE_PRIVATE_FOLDER_REF_PREFIX) {
-                    Some(folder_id) => {
-                        config.drive_private_target =
-                            StoredGoogleDrivePrivateTarget::FolderId(folder_id.to_owned());
-                        StoredOAuthRemoteFileId::Unresolved
-                    }
-                    None => StoredOAuthRemoteFileId::FileId(reference),
+                    Some(folder_id) => (
+                        StoredOAuthRemoteFileId::Unresolved,
+                        StoredGoogleDrivePrivateTarget::FolderId(folder_id.to_owned()),
+                    ),
+                    None => (
+                        StoredOAuthRemoteFileId::FileId(reference),
+                        StoredGoogleDrivePrivateTarget::LegacyAppDataFolder,
+                    ),
                 }
             }
-            StoredOAuthRemoteFileId::Unresolved => StoredOAuthRemoteFileId::Unresolved,
+            StoredOAuthRemoteFileId::Unresolved => (
+                StoredOAuthRemoteFileId::Unresolved,
+                StoredGoogleDrivePrivateTarget::LegacyAppDataFolder,
+            ),
         };
+        if config.preset == OauthFilePreset::GoogleDrive {
+            config.drive_private_target = drive_private_target;
+        }
         config.file_id = file_id;
         config.file_name = file_name;
         config.account_email = match account {
@@ -145,7 +156,7 @@ mod tests {
         );
         assert_eq!(
             legacy.drive_private_target,
-            OAuthFileConfigData::default().drive_private_target
+            StoredGoogleDrivePrivateTarget::LegacyAppDataFolder
         );
         Ok(())
     }

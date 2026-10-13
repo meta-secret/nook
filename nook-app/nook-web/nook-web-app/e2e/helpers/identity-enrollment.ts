@@ -5,8 +5,10 @@ import {
   localizeAppLinkForE2e,
   submitOnboardEnrollmentCode,
 } from './settings-auth'
+import { keepVaultIdleLockDisabled } from './device-enrollment'
 import {
   clearBrowserVault,
+  disableVaultIdleLock,
   waitForVaultOperationsIdle,
   waitForVaultUnlocked,
 } from './vault-runtime'
@@ -130,8 +132,11 @@ export async function openVaultAfterIdentityApproval(
     await dumpNookLogs(page, 'openVaultAfterIdentityApproval')
     throw error
   }
+  // Every unlock starts a new idle tracker; keep the e2e idle lock off.
+  await keepVaultIdleLockDisabled(page)
   await openVault.click()
   await waitForVaultUnlocked(page, ENROLLMENT_UNLOCK_TIMEOUT_MS)
+  await disableVaultIdleLock(page)
 }
 
 /** Named values required by `joinIdentityThroughCode`. */

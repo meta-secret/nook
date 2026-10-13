@@ -302,6 +302,9 @@ vault. Earlier vault-named codes fail closed as invalid codes.
   its connect reference in `remote_file.file_id`: `private-folder-v2:{id}`, or
   the pending reference. The joiner projects it into its `drive_private_target`
   so both apps read the identity log under the same folder.
+- A code without that reference means the issuer reads the legacy appData root.
+- The joiner saves its row with `remote_target: adopted`, so saving keeps the
+  issuer's target instead of resolving a fresh private folder.
 
 **Rust typestates**
 

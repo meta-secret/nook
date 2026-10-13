@@ -616,6 +616,7 @@ export class PasswordEnrollmentActions {
           }
           // The mount the join went through becomes this app's identity mount.
           state.providerSaveLayout = "identityNamespaced";
+          state.providerSaveTarget = "adopted";
           const savedProvider = await state.ensureProviderSaved();
           if (savedProvider.isErr()) {
             state.errorMsg = state.t(savedProvider.error.translationKey);

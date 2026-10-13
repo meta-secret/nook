@@ -61,7 +61,9 @@ pub use oauth::{
     GoogleOAuthTokenInput, ICloudOAuthTokenInput, OAuthRemoteConfigurationUpdate,
     OAuthRemoteStorageReference, OAuthStorageReference,
 };
-pub use save::{ProviderSaveOutcome, ProviderSaveRequest, ProviderSaveSetup};
+pub use save::{
+    ProviderSaveOutcome, ProviderSaveRemoteTarget, ProviderSaveRequest, ProviderSaveSetup,
+};
 pub use scope::{
     ActiveVaultProviderRows, LocalProviderSelection, ProviderEventFlushTarget, ProviderRows,
     RemoteEventFlushProviderRequest,
