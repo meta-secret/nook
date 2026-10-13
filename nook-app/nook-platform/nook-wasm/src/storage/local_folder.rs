@@ -699,7 +699,10 @@ mod tests {
             content: "second".to_owned(),
         };
         match folder
-            .write_events(&nook_core::EventLogLocation::LegacyVaultRoot, &[EventFixture::record("first"), invalid])
+            .write_events(
+                &nook_core::EventLogLocation::LegacyVaultRoot,
+                &[EventFixture::record("first"), invalid],
+            )
             .await
         {
             Err(NookError::Database(message)) => {
@@ -742,8 +745,16 @@ mod tests {
             FolderFailure::new(&error.unchecked_into()).into_error("fixture directory")
         })?;
         let folder = OpenedLocalFolder { root: directory };
-        assert!(folder.read_events(&nook_core::EventLogLocation::LegacyVaultRoot).await?.is_empty());
-        match folder.write_events(&nook_core::EventLogLocation::LegacyVaultRoot, &[]).await {
+        assert!(
+            folder
+                .read_events(&nook_core::EventLogLocation::LegacyVaultRoot)
+                .await?
+                .is_empty()
+        );
+        match folder
+            .write_events(&nook_core::EventLogLocation::LegacyVaultRoot, &[])
+            .await
+        {
             Err(NookError::Database(message)) => {
                 assert_eq!(
                     message,

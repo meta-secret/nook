@@ -49,11 +49,16 @@ impl NookDatabase {
             .map_err(|error| NookError::IndexedDb(format!("Identity log key error: {error:?}")))
     }
 
-    async fn read_identity_index(store: &rexie::Store, identity_id: &IdentityId) -> Result<Vec<String>, NookError> {
+    async fn read_identity_index(
+        store: &rexie::Store,
+        identity_id: &IdentityId,
+    ) -> Result<Vec<String>, NookError> {
         let value = store
             .get(Self::js_key(&Self::identity_event_index_key(identity_id))?)
             .await
-            .map_err(|error| NookError::IndexedDb(format!("Identity index read error: {error:?}")))?;
+            .map_err(|error| {
+                NookError::IndexedDb(format!("Identity index read error: {error:?}"))
+            })?;
         match value.filter(|value| !value.is_undefined() && !value.is_null()) {
             None => Ok(Vec::new()),
             Some(value) => {
@@ -87,10 +92,14 @@ impl NookDatabase {
             let value = store
                 .get(Self::js_key(&key)?)
                 .await
-                .map_err(|error| NookError::IndexedDb(format!("Identity event read error: {error:?}")))?
+                .map_err(|error| {
+                    NookError::IndexedDb(format!("Identity event read error: {error:?}"))
+                })?
                 .filter(|value| !value.is_undefined() && !value.is_null())
                 .ok_or_else(|| {
-                    NookError::IndexedDb(format!("Identity index references missing event {raw_id}."))
+                    NookError::IndexedDb(format!(
+                        "Identity index references missing event {raw_id}."
+                    ))
                 })?;
             let text: String = serde_wasm_bindgen::from_value(value).map_err(|error| {
                 NookError::IndexedDb(format!("Identity event decode error: {error:?}"))
@@ -107,7 +116,9 @@ impl NookDatabase {
     }
 
     /// Persist identity events and extend the identity index atomically.
-    pub(crate) async fn save_identity_events(request: IdentityLogWrite<'_>) -> Result<(), NookError> {
+    pub(crate) async fn save_identity_events(
+        request: IdentityLogWrite<'_>,
+    ) -> Result<(), NookError> {
         let IdentityLogWrite {
             identity_id,
             events,
@@ -134,25 +145,31 @@ impl NookDatabase {
                 identity_id,
                 event_id: event_id.as_str(),
             });
-            let value = serde_wasm_bindgen::to_value(&text)
-                .map_err(|error| NookError::IndexedDb(format!("Identity event value error: {error:?}")))?;
+            let value = serde_wasm_bindgen::to_value(&text).map_err(|error| {
+                NookError::IndexedDb(format!("Identity event value error: {error:?}"))
+            })?;
             store
                 .put(&value, Some(&Self::js_key(&key)?))
                 .await
-                .map_err(|error| NookError::IndexedDb(format!("Identity event write error: {error:?}")))?;
+                .map_err(|error| {
+                    NookError::IndexedDb(format!("Identity event write error: {error:?}"))
+                })?;
             index.insert(event_id.as_str().to_owned());
         }
         let index_json = serde_json::to_string(&index.into_iter().collect::<Vec<_>>())
             .map_err(|error| NookError::Serialization(error.to_string()))?;
-        let index_value = serde_wasm_bindgen::to_value(&index_json)
-            .map_err(|error| NookError::IndexedDb(format!("Identity index value error: {error:?}")))?;
+        let index_value = serde_wasm_bindgen::to_value(&index_json).map_err(|error| {
+            NookError::IndexedDb(format!("Identity index value error: {error:?}"))
+        })?;
         store
             .put(
                 &index_value,
                 Some(&Self::js_key(&Self::identity_event_index_key(identity_id))?),
             )
             .await
-            .map_err(|error| NookError::IndexedDb(format!("Identity index write error: {error:?}")))?;
+            .map_err(|error| {
+                NookError::IndexedDb(format!("Identity index write error: {error:?}"))
+            })?;
         transaction
             .done()
             .await

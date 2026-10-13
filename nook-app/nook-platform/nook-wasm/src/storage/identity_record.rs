@@ -46,7 +46,9 @@ pub(crate) use handoff::{
 };
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 pub(crate) use keyring::LOCAL_IDENTITY_KEYRING_KEY;
-pub(crate) use keyring::{LocalIdentitySigner, ProtectedLocalIdentitySave};
+pub(crate) use keyring::{
+    KeyringDbRebindLocalIdentity, LocalIdentitySigner, ProtectedLocalIdentitySave,
+};
 
 /// Named values required by `NookDatabase::local_keyring_entry_for_app_id_from_store`.
 pub(crate) struct IdentityDbLocalKeyringEntryForAppIdFromStore<'a> {

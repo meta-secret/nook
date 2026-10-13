@@ -46,6 +46,7 @@ mod diagnostics;
 mod event_log;
 mod genesis;
 mod identity;
+mod identity_control;
 mod identity_handoff;
 mod local_identity;
 mod login_fill;

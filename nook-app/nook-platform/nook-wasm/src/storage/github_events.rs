@@ -109,10 +109,12 @@ impl GitHubEventStore<'_> {
         entries
             .iter()
             .filter(|entry| entry.entry_type == "blob")
-            .filter_map(|entry| match Self::event_id_from_tree_path(root, &entry.path) {
-                TreeEvent::Event(id) => Some(id),
-                TreeEvent::Unrelated => None,
-            })
+            .filter_map(
+                |entry| match Self::event_id_from_tree_path(root, &entry.path) {
+                    TreeEvent::Event(id) => Some(id),
+                    TreeEvent::Unrelated => None,
+                },
+            )
             .collect()
     }
 
@@ -164,11 +166,36 @@ impl GitHubEventStore<'_> {
     }
 
     pub(crate) async fn list_github_event_ids(&self) -> Result<Vec<String>, NookError> {
+        let root = self.location.root();
+        Ok(Self::event_ids_from_tree(
+            &self.tree_entries(&root).await?,
+            &root,
+        ))
+    }
+
+    /// Identity ids with a namespace in this repository.
+    pub(crate) async fn list_github_identity_ids(&self) -> Result<Vec<String>, NookError> {
+        let mut ids = self
+            .tree_entries("nook-identity/v1")
+            .await?
+            .iter()
+            .filter(|entry| entry.entry_type == "blob")
+            .filter_map(|entry| {
+                let rest = entry.path.strip_prefix("nook-identity/v1/")?;
+                let (identity_id, tail) = rest.split_once('/')?;
+                tail.starts_with("events/").then(|| identity_id.to_owned())
+            })
+            .collect::<Vec<_>>();
+        ids.sort();
+        ids.dedup();
+        Ok(ids)
+    }
+
+    async fn tree_entries(&self, root: &str) -> Result<Vec<GitTreeEntry>, NookError> {
         let pat = self.pat;
         let repo = self.repo;
         let pat = pat.trim();
         let client = Client::new();
-        let mut event_ids = Vec::new();
 
         let repo_response = client
             .get(format!("https://api.github.com/repos/{repo}"))
@@ -210,15 +237,12 @@ impl GitHubEventStore<'_> {
             .text()
             .await
             .map_err(|e| NookError::Serialization(e.to_string()))?;
-        let root = self.location.root();
         let TreeDiscovery::Loaded(tree) =
-            Self::github_tree_response(tree_status, &tree_text, &root)?
+            Self::github_tree_response(tree_status, &tree_text, root)?
         else {
             return Ok(Vec::new());
         };
-
-        event_ids.extend(Self::event_ids_from_tree(&tree.tree, &root));
-        Ok(event_ids)
+        Ok(tree.tree)
     }
 
     pub(crate) async fn fetch_github_event(
@@ -348,21 +372,29 @@ mod tests {
     fn tree_path_filter_accepts_only_flat_event_yaml_files() {
         let digest = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
         assert_eq!(
-            GitHubEventStore::event_id_from_tree_path(EVENT_LOG_ROOT, &format!("{EVENT_LOG_ROOT}/{digest}.yaml")),
+            GitHubEventStore::event_id_from_tree_path(
+                EVENT_LOG_ROOT,
+                &format!("{EVENT_LOG_ROOT}/{digest}.yaml")
+            ),
             TreeEvent::Event(format!("sha256u:{digest}"))
         );
         assert_eq!(
-            GitHubEventStore::event_id_from_tree_path(EVENT_LOG_ROOT, &format!(
-                "{EVENT_LOG_ROOT}/aa/{digest}.yaml"
-            )),
+            GitHubEventStore::event_id_from_tree_path(
+                EVENT_LOG_ROOT,
+                &format!("{EVENT_LOG_ROOT}/aa/{digest}.yaml")
+            ),
             TreeEvent::Unrelated
         );
         assert_eq!(
-            GitHubEventStore::event_id_from_tree_path(EVENT_LOG_ROOT, &format!("{EVENT_LOG_ROOT}/{digest}.json")),
+            GitHubEventStore::event_id_from_tree_path(
+                EVENT_LOG_ROOT,
+                &format!("{EVENT_LOG_ROOT}/{digest}.json")
+            ),
             TreeEvent::Unrelated
         );
         assert_eq!(
-            GitHubEventStore::event_id_from_tree_path(EVENT_LOG_ROOT, 
+            GitHubEventStore::event_id_from_tree_path(
+                EVENT_LOG_ROOT,
                 "other/path/ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0.yaml"
             ),
             TreeEvent::Unrelated
@@ -381,23 +413,29 @@ mod tests {
     -> anyhow::Result<()> {
         let digest = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
         assert_eq!(
-            GitHubEventStore::event_id_from_tree_path(EVENT_LOG_ROOT, &format!("{EVENT_LOG_ROOT}/{digest}.YaMl")),
+            GitHubEventStore::event_id_from_tree_path(
+                EVENT_LOG_ROOT,
+                &format!("{EVENT_LOG_ROOT}/{digest}.YaMl")
+            ),
             TreeEvent::Event(format!("sha256u:{digest}"))
         );
         assert_eq!(
-            GitHubEventStore::event_id_from_tree_path(EVENT_LOG_ROOT, &format!(
-                "{EVENT_LOG_ROOT}/{}!.yaml",
-                digest
-                    .get(..42)
-                    .ok_or_else(|| anyhow::anyhow!("digest prefix fixture must be present"))?
-            )),
+            GitHubEventStore::event_id_from_tree_path(
+                EVENT_LOG_ROOT,
+                &format!(
+                    "{EVENT_LOG_ROOT}/{}!.yaml",
+                    digest
+                        .get(..42)
+                        .ok_or_else(|| anyhow::anyhow!("digest prefix fixture must be present"))?
+                )
+            ),
             TreeEvent::Unrelated
         );
         assert_eq!(
-            GitHubEventStore::event_id_from_tree_path(EVENT_LOG_ROOT, &format!(
-                "{EVENT_LOG_ROOT}/{}.yaml.bak",
-                digest
-            )),
+            GitHubEventStore::event_id_from_tree_path(
+                EVENT_LOG_ROOT,
+                &format!("{EVENT_LOG_ROOT}/{}.yaml.bak", digest)
+            ),
             TreeEvent::Unrelated
         );
         assert!(!GitHubEventStore::is_sha256_base64url_digest("short"));
@@ -492,13 +530,15 @@ mod tests {
             TreeDiscovery::Missing
         ));
 
-        let unavailable = GitHubEventStore::github_tree_response(StatusCode::BAD_GATEWAY, "", EVENT_LOG_ROOT);
+        let unavailable =
+            GitHubEventStore::github_tree_response(StatusCode::BAD_GATEWAY, "", EVENT_LOG_ROOT);
         assert!(matches!(
             unavailable,
             Err(NookError::GitHub(message)) if message.contains(EVENT_LOG_ROOT) && message.contains("502")
         ));
 
-        let malformed = GitHubEventStore::github_tree_response(StatusCode::OK, "not-json", EVENT_LOG_ROOT);
+        let malformed =
+            GitHubEventStore::github_tree_response(StatusCode::OK, "not-json", EVENT_LOG_ROOT);
         assert!(matches!(malformed, Err(NookError::Serialization(_))));
 
         let truncated = GitHubEventStore::github_tree_response(
@@ -648,13 +688,21 @@ mod namespace_tests {
             ]"#
         ))?;
         let expected = vec![format!("sha256u:{digest}")];
-        assert_eq!(GitHubEventStore::event_ids_from_tree(&entries, EVENT_LOG_ROOT), expected);
-        assert_eq!(GitHubEventStore::event_ids_from_tree(&entries, &vault_root), expected);
-        assert_eq!(GitHubEventStore::event_ids_from_tree(&entries, &identity_root), expected);
-        let other_vault = nook_core::EventLogLocation::Vault(nook_core::StoreId::parse(
-            "store_zyxwvutsrqp",
-        )?)
-        .root();
+        assert_eq!(
+            GitHubEventStore::event_ids_from_tree(&entries, EVENT_LOG_ROOT),
+            expected
+        );
+        assert_eq!(
+            GitHubEventStore::event_ids_from_tree(&entries, &vault_root),
+            expected
+        );
+        assert_eq!(
+            GitHubEventStore::event_ids_from_tree(&entries, &identity_root),
+            expected
+        );
+        let other_vault =
+            nook_core::EventLogLocation::Vault(nook_core::StoreId::parse("store_zyxwvutsrqp")?)
+                .root();
         assert!(GitHubEventStore::event_ids_from_tree(&entries, &other_vault).is_empty());
         Ok(())
     }

@@ -232,6 +232,11 @@ pub use auth::identity_control::{
     ReplicatedIdentityStanding, ReplicatedMembershipProjection, ReplicatedMembershipRequest,
     VaultFounder, VaultRevocationDue,
 };
+pub use auth::identity_control_snapshot::{
+    IdentityControlSnapshot, IdentityControlSnapshotRequest, IdentityControlStanding,
+    IdentityJoinView, IdentityMemberView, IdentityMountKind, IdentityMountLayoutView,
+    IdentityMountView, IdentityVaultView,
+};
 pub use auth::vault_meta_actions::{
     DeviceAuthorization, EventGraphAuthorizationProjection, EventGraphDeviceAccess,
     EventGraphDeviceAccessRequest, SentinelMemberRecordProjection,
@@ -250,6 +255,7 @@ pub use nook_auth2::{
     IdentityVaultDekReconciliation, IdentityVaultEventId, IdentityVaultKeyOpening,
     IdentityVaultKeys, LegacyDirectoryBase, LocalIdentityKeyRetirement, MemberDekEnvelope,
     MigratedIdentityDirectory, PreparedLegacyDirectoryMigration, RecoveryRetirement,
+    ReplicatedIdentityAdoption, ReplicatedIdentityMembership, ReplicatedVaultGrant,
     SentinelShareEnvelope, StagedIdentityRebase, VaultMember,
 };
 

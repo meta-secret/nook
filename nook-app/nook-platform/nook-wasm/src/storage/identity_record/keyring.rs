@@ -461,3 +461,62 @@ impl NookDatabase {
 }
 
 pub(crate) use legacy::LegacyIdentityKeyMigration;
+
+/// Named values required by `NookDatabase::rebind_local_identity`.
+pub(crate) struct KeyringDbRebindLocalIdentity<'a> {
+    pub(crate) local_identity_id: &'a nook_core::IdentityId,
+    pub(crate) replicated_identity_id: &'a nook_core::IdentityId,
+}
+
+impl NookDatabase {
+    /// Rename a local identity to the replicated identity it belongs to. The
+    /// directory and keyring change in one transaction.
+    pub(crate) async fn rebind_local_identity(
+        request: KeyringDbRebindLocalIdentity<'_>,
+    ) -> Result<(), NookError> {
+        let KeyringDbRebindLocalIdentity {
+            local_identity_id,
+            replicated_identity_id,
+        } = request;
+        let rexie = NookDatabase::open_nook_database().await?;
+        let transaction = rexie
+            .transaction(&["vault"], TransactionMode::ReadWrite)
+            .map_err(|error| NookError::IndexedDb(format!("Identity rebind error: {error:?}")))?;
+        let store = transaction.store("vault").map_err(|error| {
+            NookError::IndexedDb(format!("Identity rebind store error: {error:?}"))
+        })?;
+        IdentityTransitionAdmission { store: &store }
+            .check()
+            .await?;
+        let directory = NookDatabase::load_directory_for_write(&store).await?;
+        let keyring = NookDatabase::load_keyring_for_store(KeyringDbLoadKeyringForStore {
+            store: &store,
+            directory: &directory,
+        })
+        .await?;
+        let request = nook_core::ReplicatedIdentityAdoption {
+            local_identity_id,
+            replicated_identity_id,
+        };
+        let directory = directory
+            .adopt_replicated_identity(&request)
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
+        let keyring = keyring
+            .rebind_identity(local_identity_id, replicated_identity_id)
+            .map_err(|rejected| NookDatabase::map_domain_error(rejected.cause))?;
+        NookDatabase::write_identity_directory(IdentityDbWriteIdentityDirectory {
+            store: &store,
+            directory: &directory,
+        })
+        .await?;
+        NookDatabase::write_keyring(KeyringDbWriteKeyring {
+            store: &store,
+            keyring: &keyring,
+        })
+        .await?;
+        transaction.done().await.map_err(|error| {
+            NookError::IndexedDb(format!("Identity rebind completion error: {error:?}"))
+        })?;
+        Ok(())
+    }
+}

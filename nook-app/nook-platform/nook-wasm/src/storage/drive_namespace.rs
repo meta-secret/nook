@@ -135,11 +135,9 @@ impl DriveNamespace<'_> {
                 .json()
                 .await
                 .map_err(|error| NookError::Serialization(error.to_string()))?;
-            folders.extend(
-                body.files
-                    .into_iter()
-                    .filter(|folder| folder.name == name && folder.mime_type == DRIVE_FOLDER_MIME_TYPE),
-            );
+            folders.extend(body.files.into_iter().filter(|folder| {
+                folder.name == name && folder.mime_type == DRIVE_FOLDER_MIME_TYPE
+            }));
             page_token = body.next_page_token;
             if page_token.is_none() {
                 return Ok(folders);
@@ -175,6 +173,50 @@ impl DriveNamespace<'_> {
             ));
         }
         Ok(created.id.trim().to_owned())
+    }
+
+    /// Identity ids that have a namespace folder under this parent.
+    pub(crate) async fn list_identity_ids(&self) -> Result<Vec<String>, NookError> {
+        let client = Client::new();
+        let escaped_parent = Self::parent_id(self.parent).replace('\'', "\\'");
+        let query = format!(
+            "name contains 'nook-identity-' and mimeType = '{DRIVE_FOLDER_MIME_TYPE}' and '{escaped_parent}' in parents and trashed = false"
+        );
+        let mut request = client
+            .get("https://www.googleapis.com/drive/v3/files")
+            .header("Authorization", format!("Bearer {}", self.token.trim()))
+            .query(&[
+                ("q", query.as_str()),
+                ("fields", "files(id,name,mimeType)"),
+                ("pageSize", "1000"),
+            ]);
+        if Self::in_app_data(self.parent) {
+            request = request.query(&[("spaces", "appDataFolder")]);
+        }
+        let response = request.send().await?;
+        if !response.status().is_success() {
+            return Err(NookError::Drive(format!(
+                "Google Drive identity lookup failed with status {}",
+                response.status()
+            )));
+        }
+        let body: NamespaceFolderList = response
+            .json()
+            .await
+            .map_err(|error| NookError::Serialization(error.to_string()))?;
+        let mut ids = body
+            .files
+            .into_iter()
+            .filter_map(|folder| {
+                folder
+                    .name
+                    .strip_prefix("nook-identity-")
+                    .map(str::to_owned)
+            })
+            .collect::<Vec<_>>();
+        ids.sort();
+        ids.dedup();
+        Ok(ids)
     }
 
     /// The legacy root is the parent itself. Other namespaces resolve or

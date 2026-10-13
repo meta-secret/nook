@@ -14,8 +14,8 @@ use crate::storage::identity_record::StoredIdentityRecord;
 use crate::storage::remote_event::RemoteEventRead;
 use nook_core::StoredSigningSeed;
 
-use crate::storage::identity_record;
 use crate::storage::drive_namespace::DriveNamespace;
+use crate::storage::identity_record;
 use nook_core::{
     DriveEventParent, EventLogLocation, IsoTimestamp, MemberLabel, SigningIdentity, StorageMode,
     StoreId, SymmetricKey, VaultEvent, VaultEventSchemaVersion, VaultType,
@@ -180,7 +180,10 @@ impl NookVaultManager {
         }
     }
 
-    async fn drive_parent_for(&self, location: &EventLogLocation) -> Result<DriveEventParent, NookError> {
+    async fn drive_parent_for(
+        &self,
+        location: &EventLogLocation,
+    ) -> Result<DriveEventParent, NookError> {
         if let Some(parent) = self.storage.drive_namespace_parent(location) {
             return Ok(parent);
         }
@@ -336,6 +339,38 @@ impl NookVaultManager {
             }
             StorageMode::Local => Ok(()),
         }
+    }
+
+    /// Identities with a namespace at the prepared provider. Providers that
+    /// cannot list namespaces report none.
+    pub(in crate::manager) async fn list_identity_ids_at_current_provider(
+        &self,
+    ) -> Result<Vec<nook_core::IdentityId>, NookError> {
+        let raw = match self.storage.mode {
+            StorageMode::Github => {
+                (GitHubEventStore {
+                    pat: &self.storage.access_token,
+                    repo: &self.storage.remote_ref,
+                    location: &EventLogLocation::LegacyVaultRoot,
+                })
+                .list_github_identity_ids()
+                .await?
+            }
+            StorageMode::GoogleDrive => {
+                (DriveNamespace {
+                    token: &self.storage.access_token,
+                    parent: &self.storage.drive_event_parent,
+                    location: &EventLogLocation::LegacyVaultRoot,
+                })
+                .list_identity_ids()
+                .await?
+            }
+            StorageMode::ICloud | StorageMode::Local => Vec::new(),
+        };
+        Ok(raw
+            .iter()
+            .filter_map(|id| nook_core::IdentityId::parse(id).ok())
+            .collect())
     }
 
     pub(super) async fn list_current_provider_event_ids(
