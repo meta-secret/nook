@@ -120,7 +120,10 @@ export async function openVaultAfterIdentityApproval(
             timeout: 1_000,
           }
           if (await check.isVisible()) {
-            await check.click(checkOptions).catch(() => undefined)
+            await check.click(checkOptions).then(
+              () => true,
+              () => false,
+            )
           }
           return openVault.isVisible()
         },
