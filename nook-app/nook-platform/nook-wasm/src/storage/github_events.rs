@@ -173,11 +173,9 @@ impl GitHubEventStore<'_> {
         ))
     }
 
-    /// Identity ids with a namespace in this repository.
-    pub(crate) async fn list_github_identity_ids(&self) -> Result<Vec<String>, NookError> {
-        let mut ids = self
-            .tree_entries("nook-identity/v1")
-            .await?
+    /// Identity ids with an event namespace among the repository's blobs.
+    fn identity_ids_from_tree(entries: &[GitTreeEntry]) -> Vec<String> {
+        let mut ids = entries
             .iter()
             .filter(|entry| entry.entry_type == "blob")
             .filter_map(|entry| {
@@ -188,7 +186,14 @@ impl GitHubEventStore<'_> {
             .collect::<Vec<_>>();
         ids.sort();
         ids.dedup();
-        Ok(ids)
+        ids
+    }
+
+    /// Identity ids with a namespace in this repository.
+    pub(crate) async fn list_github_identity_ids(&self) -> Result<Vec<String>, NookError> {
+        Ok(Self::identity_ids_from_tree(
+            &self.tree_entries("nook-identity/v1").await?,
+        ))
     }
 
     async fn tree_entries(&self, root: &str) -> Result<Vec<GitTreeEntry>, NookError> {
@@ -704,6 +709,32 @@ mod namespace_tests {
             nook_core::EventLogLocation::Vault(nook_core::StoreId::parse("store_zyxwvutsrqp")?)
                 .root();
         assert!(GitHubEventStore::event_ids_from_tree(&entries, &other_vault).is_empty());
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test callback"
+        )
+    )]
+    fn identity_listing_reads_each_namespace_once() -> anyhow::Result<()> {
+        let entries: Vec<GitTreeEntry> = serde_json::from_str(
+            r#"[
+                {"path":"nook-identity/v1/idn_bbbbbbbbbbb/events/a.yaml","type":"blob"},
+                {"path":"nook-identity/v1/idn_aaaaaaaaaaa/events/a.yaml","type":"blob"},
+                {"path":"nook-identity/v1/idn_aaaaaaaaaaa/events/b.yaml","type":"blob"},
+                {"path":"nook-identity/v1/idn_ccccccccccc/notes/a.yaml","type":"blob"},
+                {"path":"nook-identity/v1/idn_ddddddddddd/events","type":"tree"},
+                {"path":"nook-log/v1/events/a.yaml","type":"blob"}
+            ]"#,
+        )?;
+        assert_eq!(
+            GitHubEventStore::identity_ids_from_tree(&entries),
+            vec!["idn_aaaaaaaaaaa".to_owned(), "idn_bbbbbbbbbbb".to_owned()]
+        );
         Ok(())
     }
 }

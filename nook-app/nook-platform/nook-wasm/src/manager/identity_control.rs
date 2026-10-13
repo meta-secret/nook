@@ -491,6 +491,52 @@ mod browser_tests {
         .to_rust()
         .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         assert_eq!(vault_row.id, "github-personal");
+        // No saved row replicates an unknown vault.
+        assert!(
+            founder
+                .manager
+                .identity_vault_provider(&providers, nook_core::StoreId::generate()?.as_str())
+                .is_err()
+        );
+        // An empty provider snapshot records no mount and aligns no row.
+        let empty = Tsify::into_ts(&AuthProvidersSnapshotData {
+            providers: Vec::new(),
+            active_vault_store_id: ActiveVaultScope::Unselected,
+        })
+        .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        assert!(!Founder::js(
+            founder
+                .manager
+                .record_identity_provider_mounts(&empty)
+                .await
+        )?);
+        assert!(
+            Founder::js(founder.manager.align_identity_provider_rows(&empty).await)?
+                .to_rust()
+                .map_err(|error| anyhow::anyhow!("{error:?}"))?
+                .providers
+                .is_empty()
+        );
+        // A browser-local row is never an identity mount.
+        let local_row = Tsify::into_ts(&StorageProviderData {
+            provider_type: StorageProviderType::Local,
+            ..vault_row.clone()
+        })
+        .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        assert!(!Founder::js(
+            founder
+                .manager
+                .remove_identity_provider_mount(&local_row)
+                .await
+        )?);
+        // An invitation must name a valid identity.
+        assert!(
+            founder
+                .manager
+                .bind_local_identity_to_invitation("not-an-identity".to_owned())
+                .await
+                .is_err()
+        );
 
         // A join request is approved with the vault DEK, renamed, then revoked.
         let identity_id = IdentityId::parse(&snapshot.identity_id)?;
