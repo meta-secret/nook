@@ -117,7 +117,7 @@
     "open_vault_subtitle": "This browser can hold multiple vaults. Unlock one below or start fresh.",
     "vault_on_device": "On this device",
     "unlock_section_title": "Unlock",
-    "unlock_section_description": "Use this device's keys or a backup password for the vault above.",
+    "unlock_section_description": "Use this device’s keys or a backup password for this vault.",
     "switch_vault": "Switch vault",
     "other_vaults_heading": "Another vault",
     "other_vaults_description": "Each vault is independent — its own secrets and sync providers.",
@@ -291,10 +291,6 @@
     "sentinel_genesis_receive_share_success": "This device's encrypted Sentinel share is protected locally.",
     "vault_picker_title": "Choose a vault",
     "vault_picker_subtitle": "Open an existing vault on this device, create another, or import one from a sync provider.",
-    "vault_workflow_label": "Vault action",
-    "vault_workflow_open": "Open existing",
-    "vault_workflow_create": "Create new",
-    "vault_workflow_import": "Import",
     "vault_workflow_create_description": "Create a separate vault with its own secrets and sync providers.",
     "vault_workflow_import_description": "Connect a sync provider to open a vault that already exists elsewhere.",
     "vault_picker_hint": "Each vault has its own secrets and sync providers.",
@@ -321,7 +317,18 @@
     "local_vault_description": "Unlock your vault with device keys or a backup password.",
     "local_vault_hint": "Your vault",
     "sync_after_unlock": "Cloud sync providers can be connected on the vault's Sync page after you unlock.",
-    "use_storage_provider": "Use a cloud storage provider instead"
+    "use_storage_provider": "Use a cloud storage provider instead",
+    "unlock_panel": {
+      "eyebrow": "unlock identity · no server involved",
+      "title": "Unlock {vault}",
+      "other_vault": "Choose another vault on an identity card to unlock it instead."
+    },
+    "new_vault": {
+      "title": "New vault",
+      "description": "A vault keeps its own secrets and sync providers. Create one on this browser, or bring one you already have from a sync provider.",
+      "close": "Close"
+    },
+    "choose_vault_hint": "Choose a vault on an identity card to unlock it."
   },
   "security_guide": {
     "title": "Vault security guide",
@@ -469,7 +476,25 @@
     "copy_expiration": "Copy expiration",
     "copy_cardholder_name": "Copy name on card",
     "download_file": "Download file",
-    "reveal_to_download": "Reveal the item to download the file."
+    "reveal_to_download": "Reveal the item to download the file.",
+    "strength": {
+      "weak": "weak",
+      "fair": "fair",
+      "strong": "strong",
+      "summary": "{count} chars · {level}",
+      "hint": "Estimated from length and character mix"
+    },
+    "detail": {
+      "pick_title": "Pick an item",
+      "pick_body": "Choose an item from the list. Values stay sealed until you reveal them.",
+      "empty_title": "This vault is empty",
+      "empty_body": "Add a login, note, key or card. Each value is encrypted on its own before it is saved.",
+      "no_match_title": "No secrets found",
+      "no_match_body": "Try another search or type.",
+      "reveal": "Reveal",
+      "hide": "Hide",
+      "list_label": "Secrets"
+    }
   },
   "bitwarden_import": {
     "button": "Import Bitwarden",
@@ -915,7 +940,9 @@
     "manage_devices": "Manage enrolled devices",
     "backup_passwords": "Vault backup passwords",
     "no_backup_passwords": "No backup password is configured for this vault.",
-    "manage_backup_passwords": "Manage backup passwords"
+    "manage_backup_passwords": "Manage backup passwords",
+    "single_key_warning": "Only one key unlocks {identity}. If this browser’s storage is cleared, its vaults open only with a backup password. Add a key by opening Nook on another device and joining one of its vaults.",
+    "keys_covered": "{count} keys can unlock {identity}. Losing this browser does not lose its vaults."
   },
   "help": {
     "title": "Your vault, optional sync replicas",

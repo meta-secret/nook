@@ -45,3 +45,13 @@ export enum SecretEditorKind {
 export type SecretEditor =
   | { kind: SecretEditorKind.Creating }
   | { kind: SecretEditorKind.Editing; record: NookSecretRecord };
+
+export enum SecretSelectionKind {
+  None = "none",
+  Selected = "selected",
+}
+
+/** The item shown in the vault's detail sheet. */
+export type SecretSelection =
+  | { kind: SecretSelectionKind.None }
+  | { kind: SecretSelectionKind.Selected; id: string };

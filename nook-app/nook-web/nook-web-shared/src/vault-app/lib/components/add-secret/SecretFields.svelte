@@ -85,7 +85,7 @@
 
 {#if selectedType === SecretType.Login}
   <div class="space-y-1.5">
-    <label class="text-xs font-medium" for="secret-label"
+    <label class="nk-field-label" for="secret-label"
       >{vault.t(I18N_KEYS.AddSecretWebsiteLabel)}</label
     >
     <input
@@ -95,12 +95,12 @@
       bind:value={state.websiteUrl}
       placeholder={vault.t(I18N_KEYS.AddSecretPlaceholderWebsite)}
       required
-      class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+      class="flex h-10 w-full rounded-none border border-input bg-background px-3 text-sm focus:outline-hidden focus:border-foreground/40 focus:ring-2 focus:ring-ring"
     />
   </div>
 {:else if selectedType === SecretType.ApiKey}
   <div class="space-y-1.5">
-    <label class="text-xs font-medium" for="secret-label"
+    <label class="nk-field-label" for="secret-label"
       >{vault.t(I18N_KEYS.AddSecretWebsiteLabel)}</label
     >
     <input
@@ -109,7 +109,7 @@
       data-testid="secret-label"
       bind:value={state.websiteUrl}
       placeholder={vault.t(I18N_KEYS.AddSecretPlaceholderWebsite)}
-      class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+      class="flex h-10 w-full rounded-none border border-input bg-background px-3 text-sm focus:outline-hidden focus:border-foreground/40 focus:ring-2 focus:ring-ring"
     />
     <p class="text-xs text-muted-foreground text-pretty">
       {vault.t(I18N_KEYS.AddSecretApiKeyWebsiteHint)}
@@ -120,7 +120,7 @@
 {#if selectedType === SecretType.Login}
   <div class="grid gap-4 sm:grid-cols-2">
     <div class="space-y-1.5">
-      <label class="text-xs font-medium" for="login-username"
+      <label class="nk-field-label" for="login-username"
         >{vault.t(I18N_KEYS.VaultFieldsUsername)}</label
       >
       <input
@@ -129,11 +129,11 @@
         bind:value={state.username}
         autocomplete="username"
         required
-        class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+        class="flex h-10 w-full rounded-none border border-input bg-background px-3 text-sm focus:outline-hidden focus:border-foreground/40 focus:ring-2 focus:ring-ring"
       />
     </div>
     <div class="space-y-1.5">
-      <label class="text-xs font-medium" for="secret-value"
+      <label class="nk-field-label" for="secret-value"
         >{vault.t(I18N_KEYS.VaultFieldsPassword)}</label
       >
       <div class="relative">
@@ -144,11 +144,11 @@
           bind:value={state.password}
           autocomplete="new-password"
           required
-          class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 py-2 pl-3 pr-10 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+          class="flex h-10 w-full rounded-none border border-input bg-background py-2 pl-3 pr-10 text-sm focus:outline-hidden focus:border-foreground/40 focus:ring-2 focus:ring-ring"
         />
         <button
           type="button"
-          class="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           aria-label={state.showPasswordValue
             ? vault.t(I18N_KEYS.VaultHideValue)
             : vault.t(I18N_KEYS.VaultShowValue)}
@@ -165,7 +165,7 @@
     </div>
   </div>
   <div class="space-y-1.5">
-    <label class="text-xs font-medium" for="login-notes"
+    <label class="nk-field-label" for="login-notes"
       >{vault.t(I18N_KEYS.AddSecretNotesLabel)}</label
     >
     <textarea
@@ -173,11 +173,11 @@
       data-testid="login-notes"
       bind:value={state.notes}
       rows="3"
-      class="flex w-full rounded-md border border-border/45 bg-background/80 px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+      class="flex w-full rounded-none border border-input bg-background px-3 py-2 text-sm focus:outline-hidden focus:border-foreground/40 focus:ring-2 focus:ring-ring"
     ></textarea>
   </div>
 
-  <div class="rounded-xl border border-border/40 bg-muted/15 sm:border-border">
+  <div class="nk-list">
     <button
       type="button"
       class="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-muted-foreground hover:text-foreground"
@@ -244,7 +244,7 @@
   </div>
 {:else if selectedType === SecretType.ApiKey}
   <div class="space-y-1.5">
-    <label class="text-xs font-medium" for="secret-value"
+    <label class="nk-field-label" for="secret-value"
       >{vault.t(I18N_KEYS.VaultFieldsKey)}</label
     >
     <textarea
@@ -255,11 +255,11 @@
       placeholder={vault.t(I18N_KEYS.AddSecretPlaceholderKey)}
       required
       spellcheck="false"
-      class="flex w-full rounded-md border border-border/45 bg-background/80 px-3 py-2 font-mono text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+      class="flex w-full rounded-none border border-input bg-background px-3 py-2 font-mono text-sm focus:outline-hidden focus:border-foreground/40 focus:ring-2 focus:ring-ring"
     ></textarea>
   </div>
   <div class="space-y-1.5">
-    <label class="text-xs font-medium" for="api-key-expiration"
+    <label class="nk-field-label" for="api-key-expiration"
       >{vault.t(I18N_KEYS.VaultFieldsExpiresAt)}</label
     >
     <input
@@ -267,12 +267,12 @@
       type="date"
       data-testid="api-key-expiration"
       bind:value={state.expiresAt}
-      class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+      class="flex h-10 w-full rounded-none border border-input bg-background px-3 text-sm focus:outline-hidden focus:border-foreground/40 focus:ring-2 focus:ring-ring"
     />
   </div>
 {:else if selectedType === SecretType.SeedPhrase}
   <div class="space-y-1.5">
-    <label class="text-xs font-medium" for="secret-label"
+    <label class="nk-field-label" for="secret-label"
       >{vault.t(I18N_KEYS.VaultFieldsAccount)}</label
     >
     <input
@@ -281,12 +281,11 @@
       bind:value={state.accountName}
       placeholder="Main wallet"
       required
-      class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+      class="flex h-10 w-full rounded-none border border-input bg-background px-3 text-sm focus:outline-hidden focus:border-foreground/40 focus:ring-2 focus:ring-ring"
     />
   </div>
   <div class="space-y-1.5">
-    <span class="text-xs font-medium"
-      >{vault.t(I18N_KEYS.VaultTypesSeedPhrase)}</span
+    <span class="nk-field-label">{vault.t(I18N_KEYS.VaultTypesSeedPhrase)}</span
     >
     <SeedPhraseGrid
       {vault}
@@ -297,7 +296,7 @@
 {:else if selectedType === SecretType.Authenticator}
   <div class="grid gap-4 sm:grid-cols-2">
     <div class="space-y-1.5">
-      <label class="text-xs font-medium" for="authenticator-issuer"
+      <label class="nk-field-label" for="authenticator-issuer"
         >{vault.t(I18N_KEYS.VaultFieldsIssuer)}</label
       >
       <input
@@ -305,11 +304,11 @@
         data-testid="authenticator-issuer"
         bind:value={state.authenticatorIssuer}
         placeholder={vault.t(I18N_KEYS.AddSecretPlaceholderIssuer)}
-        class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+        class="flex h-10 w-full rounded-none border border-input bg-background px-3 text-sm focus:outline-hidden focus:border-foreground/40 focus:ring-2 focus:ring-ring"
       />
     </div>
     <div class="space-y-1.5">
-      <label class="text-xs font-medium" for="authenticator-account"
+      <label class="nk-field-label" for="authenticator-account"
         >{vault.t(I18N_KEYS.VaultFieldsAccount)}</label
       >
       <input
@@ -319,12 +318,12 @@
         placeholder={vault.t(
           I18N_KEYS.AddSecretPlaceholderAuthenticatorAccount,
         )}
-        class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+        class="flex h-10 w-full rounded-none border border-input bg-background px-3 text-sm focus:outline-hidden focus:border-foreground/40 focus:ring-2 focus:ring-ring"
       />
     </div>
   </div>
   <div class="space-y-1.5">
-    <label class="text-xs font-medium" for="authenticator-website"
+    <label class="nk-field-label" for="authenticator-website"
       >{vault.t(I18N_KEYS.VaultFieldsWebsite)}</label
     >
     <input
@@ -333,14 +332,14 @@
       data-testid="authenticator-website"
       bind:value={state.websiteUrl}
       placeholder={vault.t(I18N_KEYS.AddSecretPlaceholderAuthenticatorWebsite)}
-      class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+      class="flex h-10 w-full rounded-none border border-input bg-background px-3 text-sm focus:outline-hidden focus:border-foreground/40 focus:ring-2 focus:ring-ring"
     />
     <p class="text-xs text-muted-foreground text-pretty">
       {vault.t(I18N_KEYS.AddSecretAuthenticatorWebsiteHint)}
     </p>
   </div>
   <div class="space-y-1.5">
-    <label class="text-xs font-medium" for="authenticator-secret"
+    <label class="nk-field-label" for="authenticator-secret"
       >{vault.t(I18N_KEYS.VaultFieldsAuthenticatorSecret)}</label
     >
     <textarea
@@ -351,7 +350,7 @@
       required
       spellcheck="false"
       placeholder={vault.t(I18N_KEYS.AddSecretPlaceholderAuthenticatorSecret)}
-      class="flex w-full rounded-md border border-border/45 bg-background/80 px-3 py-2 font-mono text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+      class="flex w-full rounded-none border border-input bg-background px-3 py-2 font-mono text-sm focus:outline-hidden focus:border-foreground/40 focus:ring-2 focus:ring-ring"
     ></textarea>
     <p class="text-xs text-muted-foreground text-pretty">
       {vault.t(I18N_KEYS.AddSecretAuthenticatorSecretHint)}
@@ -359,7 +358,7 @@
   </div>
 {:else if selectedType === SecretType.CreditCard}
   <div class="space-y-1.5">
-    <label class="text-xs font-medium" for="secret-label"
+    <label class="nk-field-label" for="secret-label"
       >{vault.t(I18N_KEYS.VaultFieldsTitle)}</label
     >
     <input
@@ -369,11 +368,11 @@
       bind:value={state.cardTitle}
       placeholder={vault.t(I18N_KEYS.AddSecretPlaceholderTitle)}
       required
-      class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+      class="flex h-10 w-full rounded-none border border-input bg-background px-3 text-sm focus:outline-hidden focus:border-foreground/40 focus:ring-2 focus:ring-ring"
     />
   </div>
   <div class="space-y-1.5">
-    <label class="text-xs font-medium" for="credit-card-cardholder"
+    <label class="nk-field-label" for="credit-card-cardholder"
       >{vault.t(I18N_KEYS.VaultFieldsCardholderName)}</label
     >
     <input
@@ -383,11 +382,11 @@
       bind:value={state.cardholderName}
       placeholder={vault.t(I18N_KEYS.AddSecretPlaceholderCardholder)}
       autocomplete="cc-name"
-      class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+      class="flex h-10 w-full rounded-none border border-input bg-background px-3 text-sm focus:outline-hidden focus:border-foreground/40 focus:ring-2 focus:ring-ring"
     />
   </div>
   <div class="space-y-1.5">
-    <label class="text-xs font-medium" for="credit-card-number"
+    <label class="nk-field-label" for="credit-card-number"
       >{vault.t(I18N_KEYS.VaultFieldsCardNumber)}</label
     >
     <div class="relative">
@@ -401,11 +400,11 @@
         inputmode="numeric"
         required
         spellcheck="false"
-        class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 py-2 pl-3 pr-10 font-mono text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+        class="flex h-10 w-full rounded-none border border-input bg-background py-2 pl-3 pr-10 font-mono text-sm focus:outline-hidden focus:border-foreground/40 focus:ring-2 focus:ring-ring"
       />
       <button
         type="button"
-        class="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         aria-label={state.showCardNumber
           ? vault.t(I18N_KEYS.VaultHideValue)
           : vault.t(I18N_KEYS.VaultShowValue)}
@@ -422,7 +421,7 @@
   </div>
   <div class="grid gap-4 sm:grid-cols-3">
     <div class="space-y-1.5 sm:col-span-2">
-      <span class="text-xs font-medium"
+      <span class="nk-field-label"
         >{vault.t(I18N_KEYS.VaultFieldsExpiration)}</span
       >
       <div class="grid grid-cols-2 gap-3">
@@ -436,7 +435,7 @@
           autocomplete="cc-exp-month"
           inputmode="numeric"
           maxlength="2"
-          class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+          class="flex h-10 w-full rounded-none border border-input bg-background px-3 text-sm focus:outline-hidden focus:border-foreground/40 focus:ring-2 focus:ring-ring"
         />
         <input
           id="credit-card-exp-year"
@@ -448,12 +447,12 @@
           autocomplete="cc-exp-year"
           inputmode="numeric"
           maxlength="4"
-          class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+          class="flex h-10 w-full rounded-none border border-input bg-background px-3 text-sm focus:outline-hidden focus:border-foreground/40 focus:ring-2 focus:ring-ring"
         />
       </div>
     </div>
     <div class="space-y-1.5">
-      <label class="text-xs font-medium" for="credit-card-cvv"
+      <label class="nk-field-label" for="credit-card-cvv"
         >{vault.t(I18N_KEYS.VaultFieldsCvv)}</label
       >
       <div class="relative">
@@ -466,11 +465,11 @@
           autocomplete="cc-csc"
           inputmode="numeric"
           spellcheck="false"
-          class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 py-2 pl-3 pr-10 font-mono text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+          class="flex h-10 w-full rounded-none border border-input bg-background py-2 pl-3 pr-10 font-mono text-sm focus:outline-hidden focus:border-foreground/40 focus:ring-2 focus:ring-ring"
         />
         <button
           type="button"
-          class="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           aria-label={state.showCvv
             ? vault.t(I18N_KEYS.VaultHideValue)
             : vault.t(I18N_KEYS.VaultShowValue)}
@@ -487,7 +486,7 @@
     </div>
   </div>
   <div class="space-y-1.5">
-    <label class="text-xs font-medium" for="credit-card-notes"
+    <label class="nk-field-label" for="credit-card-notes"
       >{vault.t(I18N_KEYS.AddSecretNotesLabel)}</label
     >
     <textarea
@@ -496,12 +495,12 @@
       bind:value={state.cardNotes}
       rows="3"
       placeholder={vault.t(I18N_KEYS.AddSecretPlaceholderNotes)}
-      class="flex w-full rounded-md border border-border/45 bg-background/80 px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+      class="flex w-full rounded-none border border-input bg-background px-3 py-2 text-sm focus:outline-hidden focus:border-foreground/40 focus:ring-2 focus:ring-ring"
     ></textarea>
   </div>
 {:else if selectedType === SecretType.FileAttachment}
   <div class="space-y-1.5">
-    <label class="text-xs font-medium" for="file-attachment-title"
+    <label class="nk-field-label" for="file-attachment-title"
       >{vault.t(I18N_KEYS.VaultFieldsTitle)}</label
     >
     <input
@@ -509,11 +508,11 @@
       data-testid="file-attachment-title"
       bind:value={state.fileTitle}
       placeholder={vault.t(I18N_KEYS.AddSecretPlaceholderFileTitle)}
-      class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+      class="flex h-10 w-full rounded-none border border-input bg-background px-3 text-sm focus:outline-hidden focus:border-foreground/40 focus:ring-2 focus:ring-ring"
     />
   </div>
   <div class="space-y-1.5">
-    <label class="text-xs font-medium" for="file-attachment-input"
+    <label class="nk-field-label" for="file-attachment-input"
       >{vault.t(I18N_KEYS.VaultFieldsFile)}</label
     >
     <input
@@ -521,7 +520,7 @@
       type="file"
       data-testid="file-attachment-input"
       onchange={(event) => void handleFileSelected(event)}
-      class="flex w-full rounded-md border border-border/45 bg-background/80 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm file:font-medium focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+      class="flex w-full rounded-none border border-input bg-background px-3 py-2 text-sm file:mr-3 file:rounded-none file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm file:font-medium focus:outline-hidden focus:border-foreground/40 focus:ring-2 focus:ring-ring"
     />
     <p class="text-xs text-muted-foreground text-pretty">
       {(() => {
@@ -545,7 +544,7 @@
     {/if}
     {#if state.fileName}
       <div
-        class="rounded-md border border-border/40 bg-muted/15 px-3 py-2 text-xs"
+        class="nk-banner px-3 py-2 text-xs"
         data-testid="file-attachment-selected"
       >
         <p class="truncate font-medium text-foreground">{state.fileName}</p>
@@ -560,7 +559,7 @@
   </div>
 {:else}
   <div class="shrink-0 space-y-1.5">
-    <label class="text-xs font-medium" for="secret-label"
+    <label class="nk-field-label" for="secret-label"
       >{vault.t(I18N_KEYS.VaultFieldsTitle)}</label
     >
     <input
@@ -569,7 +568,7 @@
       bind:value={state.noteTitle}
       placeholder="Recovery instructions"
       required
-      class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+      class="flex h-10 w-full rounded-none border border-input bg-background px-3 text-sm focus:outline-hidden focus:border-foreground/40 focus:ring-2 focus:ring-ring"
     />
   </div>
   <div class="flex min-h-0 min-w-0 max-w-full flex-1 flex-col gap-1.5">

@@ -297,10 +297,8 @@
     <div class="flex flex-wrap items-center gap-2">
       <button
         type="button"
-        class="rounded-md border px-2.5 py-1 text-xs font-medium transition-colors {wordCount ===
-        12
-          ? 'border-primary bg-primary/10 text-primary'
-          : 'border-border/50 text-muted-foreground hover:bg-accent'}"
+        class="nk-chip"
+        aria-pressed={wordCount === 12}
         data-testid="seed-word-count-12"
         onclick={() => setWordCount(12)}
       >
@@ -308,10 +306,8 @@
       </button>
       <button
         type="button"
-        class="rounded-md border px-2.5 py-1 text-xs font-medium transition-colors {wordCount ===
-        24
-          ? 'border-primary bg-primary/10 text-primary'
-          : 'border-border/50 text-muted-foreground hover:bg-accent'}"
+        class="nk-chip"
+        aria-pressed={wordCount === 24}
         data-testid="seed-word-count-24"
         onclick={() => setWordCount(24)}
       >
@@ -319,7 +315,7 @@
       </button>
       <button
         type="button"
-        class="ml-auto rounded-md border border-border/50 px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+        class="nk-chip ml-auto disabled:pointer-events-none disabled:opacity-40"
         data-testid="seed-phrase-clear-btn"
         disabled={!hasPhraseContent}
         onclick={clearPhrase}
@@ -429,7 +425,7 @@
               id="seed-word-suggestions-{index + 1}"
               role="listbox"
               data-testid="seed-word-suggestions"
-              class="absolute left-0 right-0 top-full z-20 mt-1 max-h-40 overflow-y-auto rounded-md border border-border/45 bg-popover py-1 shadow-md"
+              class="absolute left-0 right-0 top-full z-20 mt-1 max-h-40 overflow-y-auto border border-border bg-popover py-1 shadow-md"
             >
               {#each suggestions as suggestion, suggestionIdx (suggestion)}
                 <li role="presentation">
@@ -471,10 +467,7 @@
   </div>
 
   {#if !readonly && perWordValid && allWordsFilled && checksumValid.kind === ChecksumStatusKind.Checked && checksumValid.valid}
-    <p
-      class="nk-tag nk-tag-success"
-      data-testid="seed-phrase-valid"
-    >
+    <p class="nk-tag nk-tag-success" data-testid="seed-phrase-valid">
       <Check class="size-3.5 shrink-0" aria-hidden="true" />
       {vault.t(I18N_KEYS.AddSecretSeedPhraseValid)}
     </p>

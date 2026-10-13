@@ -6,7 +6,6 @@ import { Effect } from 'effect'
 import SecretVault from '$lib/components/SecretVault.svelte'
 import { NookSecretTypeFilter, secret_type_name } from '$app-wasm'
 import { SecretType } from '$lib/nook'
-import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { SecretMutationOutcome } from '$lib/vault/secret-operation-failure'
 import type { SecretPageRefreshSnapshot } from '$lib/vault/action-contexts'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
@@ -144,16 +143,10 @@ test('requests the Passkey filter and displays the returned passkey page', async
   const fixture = new PasskeyVaultDiscoveryFixture()
   const props = fixture.props()
   const view = render(SecretVault, props)
-  const openFilter: Parameters<typeof fireEvent.keyDown>[1] = { key: 'Enter' }
-  await fireEvent.keyDown(view.getByTestId('secret-type-filter'), openFilter)
-  const chooseFilter: Parameters<typeof fireEvent.pointerUp>[1] = {
-    pointerType: 'mouse',
-  }
-  await fireEvent.pointerUp(
+  await fireEvent.click(
     view.getByTestId(
       `secret-type-filter-${secret_type_name(SecretType.Passkey)}`,
     ),
-    chooseFilter,
   )
   expect(fixture.vault.secretTypeFilter).toBe(NookSecretTypeFilter.Passkey)
   const request: Parameters<typeof fixture.vault.loadSecretPage>[0] = {
@@ -165,9 +158,11 @@ test('requests the Passkey filter and displays the returned passkey page', async
   await view.rerender(received)
   expect(view.getAllByTestId('vault-site-group')).toHaveLength(1)
   expect(view.getByTestId('vault-site-group').textContent).toContain('Alice')
-  expect(view.getByTestId('secret-type-filter').textContent).toContain(
-    I18N_KEYS.VaultTypesPasskey,
-  )
+  expect(
+    view
+      .getByTestId(`secret-type-filter-${secret_type_name(SecretType.Passkey)}`)
+      .getAttribute('aria-pressed'),
+  ).toBe('true')
 })
 
 test('searches RP or account through the vault page contract and keeps passkey metadata visible', async () => {

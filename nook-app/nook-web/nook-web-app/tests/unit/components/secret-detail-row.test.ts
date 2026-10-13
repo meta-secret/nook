@@ -44,7 +44,7 @@ function authenticatorProps(
 ) {
   return {
     item: authenticatorItem,
-    index: 0,
+    row: 1,
     expanded: true,
     pageInteraction: SecretPageInteractionKind.Ready,
     reveal,
@@ -80,7 +80,7 @@ function loginItem(
 function renderLogin(item: NookSecretListItem) {
   return render(SecretDetailRow, {
     item,
-    index: 0,
+    row: 1,
     expanded: false,
     pageInteraction: SecretPageInteractionKind.Ready,
     onToggleExpand: vi.fn(),
@@ -92,7 +92,6 @@ function renderLogin(item: NookSecretListItem) {
     onCopyToClipboard: vi.fn(async () => {}),
     onCopySecret: vi.fn(async () => {}),
     vault,
-    titleAsHeader: true,
   })
 }
 

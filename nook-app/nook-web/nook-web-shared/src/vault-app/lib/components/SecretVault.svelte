@@ -35,8 +35,6 @@
     readonly selection: SecretTypeSelection;
   };
 
-  type SecretListItemCollection = ReadonlyArray<NookSecretListItem>;
-
   type SecretListItemComparison = readonly [
     left: NookSecretListItem,
     right: NookSecretListItem,
@@ -45,6 +43,24 @@
   type SecretGroup = {
     readonly site: string;
     readonly items: NookSecretListItem[];
+  };
+
+  type VaultListEntry = {
+    readonly item: NookSecretListItem;
+    readonly row: number;
+    readonly first: boolean;
+  };
+
+  type VaultListGroup = {
+    readonly site: string;
+    readonly heading: boolean;
+    readonly headRow: number;
+    readonly entries: readonly VaultListEntry[];
+  };
+
+  type VaultListLayout = {
+    readonly groups: readonly VaultListGroup[];
+    readonly rows: number;
   };
 
   type SecretGroupComparison = readonly [left: SecretGroup, right: SecretGroup];
@@ -62,21 +78,13 @@
     ChevronRight,
     Plus,
     Search,
-    ListFilter,
-    Globe,
-    Braces,
-    Sprout,
-    StickyNote,
-    ShieldCheck,
-    KeyRound,
-    CreditCard,
-    Paperclip,
+    SearchX,
     TriangleAlert,
+    Vault,
+    MousePointerClick,
   } from "@lucide/svelte";
   import type { VaultEditRestriction, VaultState } from "$lib/vault.svelte";
   import { Button } from "$lib/components/ui/button";
-  import { Card, CardContent } from "$lib/components/ui/card";
-  import * as Select from "$lib/components/ui/select";
   import AddSecretForm from "./AddSecretForm.svelte";
   import SecretDetailRow from "./SecretDetailRow.svelte";
   import type {
@@ -100,6 +108,8 @@
     SecretEditorKind,
     SecretRevealKind,
     SecretPageInteractionKind,
+    SecretSelectionKind,
+    type SecretSelection,
     type AuthenticatorCodePresentation,
     type ClipboardNotice,
     type SecretEditor,
@@ -157,7 +167,7 @@
   let decryptedSecrets = $state<DecryptedSecrets>({});
   const initialDecryptedSecrets: DecryptedSecrets = {};
   let secretExposure = new SecretExposure(initialDecryptedSecrets);
-  let expandedSecrets = $state<Record<string, boolean>>({});
+  let selection = $state<SecretSelection>({ kind: SecretSelectionKind.None });
   let copiedKey = $state<ClipboardNotice>({ kind: ClipboardNoticeKind.Hidden });
   let addSecretOpen = $state(false);
   let formSelectedType = $state<SecretTypeSelection>({
@@ -236,38 +246,12 @@
   const filteredItems = $derived(secrets);
 
   const visibleItemCount = $derived(secrets.length);
-  const activeTypeFilterLabel = $derived.by(() => {
-    if (vault.secretTypeFilter === NookSecretTypeFilter.All) {
-      return vault.t(I18N_KEYS.VaultFilterAllTypes);
-    }
-    const active = typeFilters.find(
-      ({ filter }) => filter === vault.secretTypeFilter,
-    );
-    return active
-      ? vault.t(active.labelKey)
-      : vault.t(I18N_KEYS.VaultFilterAllTypes);
-  });
   const currentPage = $derived(
     Math.floor(vault.secretPageOffset / vault.secretPageSize) + 1,
   );
   const pageCount = $derived(
     Math.max(1, Math.ceil(vault.secretTotal / vault.secretPageSize)),
   );
-
-  function getGroupIcon(items: SecretListItemCollection) {
-    if (items.some((item) => item.type === SecretType.Login)) return Globe;
-    if (items.some((item) => item.type === SecretType.ApiKey)) return Braces;
-    if (items.some((item) => item.type === SecretType.SeedPhrase))
-      return Sprout;
-    if (items.some((item) => item.type === SecretType.Authenticator))
-      return ShieldCheck;
-    if (items.some((item) => item.type === SecretType.CreditCard))
-      return CreditCard;
-    if (items.some((item) => item.type === SecretType.FileAttachment))
-      return Paperclip;
-    if (items.some((item) => item.type === SecretType.Passkey)) return KeyRound;
-    return StickyNote;
-  }
 
   const groups = $derived.by(() => {
     const dict: Record<string, NookSecretListItem[]> = {};
@@ -285,6 +269,40 @@
       }))
       .sort(SecretVaultOrdering.bySite);
   });
+
+  const listLayout = $derived.by((): VaultListLayout => {
+    let row = 1;
+    const laidOut: VaultListGroup[] = [];
+    for (const group of groups) {
+      const heading = group.items.length > 1;
+      const headRow = row;
+      if (heading) row += 1;
+      const entries = group.items.map((item) => {
+        const entry: VaultListEntry = { item, row, first: row === 1 };
+        row += 1;
+        return entry;
+      });
+      const laidOutGroup: VaultListGroup = {
+        site: group.site,
+        heading,
+        headRow,
+        entries,
+      };
+      laidOut.push(laidOutGroup);
+    }
+    return { groups: laidOut, rows: Math.max(1, row - 1) };
+  });
+
+  const filtersNarrowed = $derived(
+    vault.secretQuery.trim() !== "" ||
+      vault.secretTypeFilter !== NookSecretTypeFilter.All,
+  );
+
+  function isSelected(id: string): boolean {
+    return (
+      selection.kind === SecretSelectionKind.Selected && selection.id === id
+    );
+  }
 
   function notifyAddMode() {
     const onAddModeChangeArgs: Parameters<
@@ -529,7 +547,7 @@
     if (toggled.value instanceof VaultOperationStale) return;
     decryptedSecrets = toggled.value;
     if (revealing) {
-      expandedSecrets = { ...expandedSecrets, [id]: true };
+      selection = { kind: SecretSelectionKind.Selected, id };
       if (
         filteredItems.find((item) => item.id === id)?.type ===
         SecretType.Authenticator
@@ -584,9 +602,18 @@
     authenticatorCodes = { ...authenticatorCodes, [id]: code.value };
   }
 
+  /** Select an item for the detail sheet; selecting it again closes it. */
   function toggleExpand(id: string) {
-    const expanding = !expandedSecrets[id];
-    expandedSecrets = { ...expandedSecrets, [id]: expanding };
+    const previous = selection;
+    selection = isSelected(id)
+      ? { kind: SecretSelectionKind.None }
+      : { kind: SecretSelectionKind.Selected, id };
+    if (
+      previous.kind === SecretSelectionKind.Selected &&
+      previous.id in decryptedSecrets
+    ) {
+      void toggleReveal(previous.id);
+    }
   }
 
   $effect(() => {
@@ -670,47 +697,84 @@
     </div>
   {:else}
     <div class="flex min-h-0 flex-1 flex-col gap-4">
-      <div
-        class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
-      >
-        <div>
-          <p class="nk-label" data-testid="vault-secret-count">
-            {vault.secretTotal !== visibleItemCount
-              ? (() => {
-                  const tArgs2: Parameters<typeof vault.t>[0] = {
-                    key: I18N_KEYS.VaultSecretCountPage,
-                    replacements: {
-                      count: String(visibleItemCount),
-                      total: String(vault.secretTotal),
-                    },
-                  };
-                  return vault.t(tArgs2);
-                })()
-              : (() => {
-                  const tArgs: Parameters<typeof vault.t>[0] = {
-                    key: I18N_KEYS.VaultSecretCount,
-                    replacements: {
-                      count: String(visibleItemCount),
-                    },
-                  };
-                  return vault.t(tArgs);
-                })()}
-          </p>
+      <div class="flex flex-col gap-3" data-testid="secret-search-and-filter">
+        <div class="flex flex-wrap items-center gap-2.5">
+          <label class="nk-search">
+            <Search
+              class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+            />
+            <input
+              type="search"
+              bind:value={searchPattern}
+              data-testid="search-secrets"
+              placeholder={vault.t(I18N_KEYS.VaultSearchPlaceholder)}
+              aria-label={vault.t(I18N_KEYS.VaultSearchPlaceholder)}
+              class="flex h-10 w-full rounded-none border border-border bg-card py-2 pl-9 pr-3 text-sm focus:border-foreground/40 focus:outline-hidden focus:ring-2 focus:ring-ring"
+            />
+          </label>
+          <div class="ml-auto flex items-center gap-3">
+            <span class="nk-label" data-testid="vault-secret-count">
+              {vault.secretTotal !== visibleItemCount
+                ? (() => {
+                    const pageCountArgs: Parameters<typeof vault.t>[0] = {
+                      key: I18N_KEYS.VaultSecretCountPage,
+                      replacements: {
+                        count: String(visibleItemCount),
+                        total: String(vault.secretTotal),
+                      },
+                    };
+                    return vault.t(pageCountArgs);
+                  })()
+                : (() => {
+                    const countArgs: Parameters<typeof vault.t>[0] = {
+                      key: I18N_KEYS.VaultSecretCount,
+                      replacements: {
+                        count: String(visibleItemCount),
+                      },
+                    };
+                    return vault.t(countArgs);
+                  })()}
+            </span>
+            <Button
+              size="sm"
+              data-testid="add-secret-btn"
+              disabled={editsBlocked}
+              {...editRestriction.decision !== VaultEditDecision.Allowed
+                ? { title: editRestriction.reason }
+                : {}}
+              onclick={openAddSecret}
+            >
+              <Plus class="size-3.5" />
+              {vault.t(I18N_KEYS.VaultAddSecret)}
+            </Button>
+          </div>
         </div>
-        <div class="flex w-full shrink-0 items-center gap-2 sm:w-auto">
-          <Button
-            size="sm"
-            class="flex-1 sm:flex-none"
-            data-testid="add-secret-btn"
-            disabled={editsBlocked}
-            {...editRestriction.decision !== VaultEditDecision.Allowed
-              ? { title: editRestriction.reason }
-              : {}}
-            onclick={openAddSecret}
+        <div
+          class="nk-chips"
+          role="group"
+          aria-label={vault.t(I18N_KEYS.VaultFilterByType)}
+          data-testid="secret-type-filter"
+        >
+          <button
+            type="button"
+            class="nk-chip"
+            aria-pressed={vault.secretTypeFilter === NookSecretTypeFilter.All}
+            data-testid="secret-type-filter-all"
+            onclick={() => selectTypeFilter("all")}
           >
-            <Plus class="size-3.5" />
-            {vault.t(I18N_KEYS.VaultAddSecret)}
-          </Button>
+            {vault.t(I18N_KEYS.VaultFilterAllTypes)}
+          </button>
+          {#each typeFilters as filter (filter.filter)}
+            <button
+              type="button"
+              class="nk-chip"
+              aria-pressed={vault.secretTypeFilter === filter.filter}
+              data-testid={`secret-type-filter-${filter.testId}`}
+              onclick={() => selectTypeFilter(String(filter.filter))}
+            >
+              {vault.t(filter.labelKey)}
+            </button>
+          {/each}
         </div>
       </div>
 
@@ -726,209 +790,149 @@
         </div>
       {/if}
 
-      <div class="relative" data-testid="secret-search-and-filter">
-        <Search class="absolute left-3 top-3 size-4 text-muted-foreground/60" />
-        <input
-          type="search"
-          bind:value={searchPattern}
-          data-testid="search-secrets"
-          placeholder={vault.t(I18N_KEYS.VaultSearchPlaceholder)}
-          class="flex h-10 w-full rounded-none border border-border bg-card py-2 pl-10 pr-36 text-sm focus:border-foreground/40 focus:outline-hidden focus:ring-2 focus:ring-ring"
-        />
-        <div class="absolute right-1 top-1/2 -translate-y-1/2">
-          <Select.Root
-            type="single"
-            value={vault.secretTypeFilter === NookSecretTypeFilter.All
-              ? "all"
-              : String(vault.secretTypeFilter)}
-            onValueChange={selectTypeFilter}
-          >
-            <Select.Trigger
-              class="h-8 max-w-32 rounded-none border-transparent bg-muted/45 px-2 font-mono text-[0.6875rem] tracking-wide hover:bg-muted/70 {vault.secretTypeFilter !==
-              NookSecretTypeFilter.All
-                ? 'border-primary/40 bg-primary/10 text-foreground'
-                : 'text-muted-foreground'}"
-              data-testid="secret-type-filter"
-              aria-label={vault.t(I18N_KEYS.VaultFilterByType)}
-              title={vault.t(I18N_KEYS.VaultFilterByType)}
-            >
-              <ListFilter class="size-3.5" />
-              <span class="truncate">{activeTypeFilterLabel}</span>
-            </Select.Trigger>
-            <Select.Content>
-              <Select.Item value="all" data-testid="secret-type-filter-all">
-                {vault.t(I18N_KEYS.VaultFilterAllTypes)}
-              </Select.Item>
-              {#each typeFilters as filter (filter.filter)}
-                <Select.Item
-                  value={String(filter.filter)}
-                  data-testid={`secret-type-filter-${filter.testId}`}
-                >
-                  {vault.t(filter.labelKey)}
-                </Select.Item>
-              {/each}
-            </Select.Content>
-          </Select.Root>
-        </div>
-      </div>
-
       {#if filteredItems.length === 0}
-        <Card
-          class="flex min-h-0 flex-1 flex-col gap-0 rounded-none border-dashed border-border bg-transparent py-0 shadow-none"
+        <div
+          class="nk-frame-sheet nk-empty flex-1"
+          data-testid="vault-empty-search"
         >
-          <CardContent
-            class="flex flex-1 items-center justify-center p-10 text-center text-muted-foreground"
-            data-testid="vault-empty-search"
-          >
-            <p>
-              {secrets.length === 0
-                ? vault.t(I18N_KEYS.VaultNoSecrets)
-                : vault.t(I18N_KEYS.VaultNoSecrets)}
-            </p>
-          </CardContent>
-        </Card>
+          <span class="nk-tile nk-tile-lg">
+            {#if filtersNarrowed}<SearchX class="size-5" />{:else}<Vault
+                class="size-5"
+              />{/if}
+          </span>
+          <strong>
+            {filtersNarrowed
+              ? vault.t(I18N_KEYS.VaultNoSecrets)
+              : vault.t(I18N_KEYS.VaultDetailEmptyTitle)}
+          </strong>
+          <span class="max-w-sm text-sm">
+            {filtersNarrowed
+              ? vault.t(I18N_KEYS.VaultDetailNoMatchBody)
+              : vault.t(I18N_KEYS.VaultDetailEmptyBody)}
+          </span>
+        </div>
       {:else}
-        <div class="space-y-3">
-          {#each groups as group (group.site)}
-            {@const Icon = getGroupIcon(group.items)}
-            {@const [firstItem] = group.items}
-            {@const titleAsCardHeader = Boolean(
-              group.items.length === 1 &&
-              firstItem &&
-              (firstItem.type === SecretType.SecureNote ||
-                firstItem.type === SecretType.FileAttachment ||
-                firstItem.type === SecretType.Login ||
-                firstItem.type === SecretType.CreditCard),
-            )}
-            <Card
-              class="nk-list gap-0 overflow-hidden py-0"
-              data-testid="vault-site-group"
-            >
-              {#if !titleAsCardHeader}
+        <div
+          class="nk-vault-grid"
+          style:--nk-vault-rows={String(listLayout.rows)}
+          aria-label={vault.t(I18N_KEYS.VaultDetailListLabel)}
+          data-testid="vault-secret-list"
+        >
+          {#each listLayout.groups as group (group.site)}
+            <div class="contents" data-testid="vault-site-group">
+              {#if group.heading}
                 <div
-                  class="flex items-center gap-2.5 border-b border-border px-3 py-2.5"
+                  class="nk-vault-group-head"
+                  style:grid-row={String(group.headRow)}
+                  data-edge={group.headRow === 1 ? "first" : "inner"}
                 >
-                  <div
-                    class="flex size-6 items-center justify-center border border-border text-muted-foreground"
-                  >
-                    <Icon class="size-3.5" />
-                  </div>
-                  <h3
-                    class="truncate text-sm font-semibold tracking-wide text-foreground"
-                  >
-                    {group.site}
-                  </h3>
-                  {#if group.items.length > 1}
-                    <span class="nk-tag ml-auto">
-                      {(() => {
-                        const tArgs3: Parameters<typeof vault.t>[0] = {
-                          key: I18N_KEYS.VaultSecretCount,
-                          replacements: {
-                            count: String(group.items.length),
-                          },
-                        };
-                        return vault.t(tArgs3);
-                      })()}
-                    </span>
-                  {/if}
+                  <span class="truncate">{group.site}</span>
+                  <span class="nk-tag">{group.entries.length}</span>
                 </div>
               {/if}
-
-              <CardContent
-                class="space-y-3 divide-y divide-border/30 p-3 sm:divide-border/45 {titleAsCardHeader
-                  ? '!p-0'
-                  : ''}"
-              >
-                {#each group.items as item, index (item.id)}
-                  <SecretDetailRow
-                    {item}
-                    {index}
-                    {pageInteraction}
-                    titleAsHeader={titleAsCardHeader}
-                    expanded={Boolean(expandedSecrets[item.id])}
-                    reveal={secretReveal(item.id)}
-                    authenticatorCode={authenticatorCodePresentation(item.id)}
-                    copiedNotice={copiedKey}
-                    onToggleExpand={toggleExpand}
-                    onToggleReveal={toggleReveal}
-                    onEditItem={openEditItem}
-                    {editRestriction}
-                    {onDeleteSecret}
-                    onCopyToClipboard={copySecretField}
-                    onCopySecret={copySecret}
-                    {vault}
-                  />
-                {/each}
-              </CardContent>
-            </Card>
+              {#each group.entries as entry (entry.item.id)}
+                <SecretDetailRow
+                  item={entry.item}
+                  row={entry.row}
+                  first={entry.first}
+                  {pageInteraction}
+                  expanded={isSelected(entry.item.id)}
+                  reveal={secretReveal(entry.item.id)}
+                  authenticatorCode={authenticatorCodePresentation(
+                    entry.item.id,
+                  )}
+                  copiedNotice={copiedKey}
+                  onToggleExpand={toggleExpand}
+                  onToggleReveal={toggleReveal}
+                  onEditItem={openEditItem}
+                  {editRestriction}
+                  {onDeleteSecret}
+                  onCopyToClipboard={copySecretField}
+                  onCopySecret={copySecret}
+                  {vault}
+                />
+              {/each}
+            </div>
           {/each}
-          {#if vault.secretTotal > vault.secretPageSize}
+          {#if !filteredItems.some((item) => isSelected(item.id))}
             <div
-              class="flex items-center justify-between gap-3 pt-1"
-              data-testid="secret-pagination"
+              class="nk-frame-sheet nk-secret-detail-pane nk-secret-detail-idle nk-empty"
+              data-testid="secret-detail-idle"
             >
-              <Button
-                size="sm"
-                variant="outline"
-                data-testid="secret-page-previous"
-                disabled={vault.secretPageOffset === 0}
-                onclick={() => {
-                  const pageRequest: Parameters<
-                    typeof vault.loadSecretPage
-                  >[0] = {
+              <span class="nk-tile nk-tile-lg"
+                ><MousePointerClick class="size-5" /></span
+              >
+              <strong>{vault.t(I18N_KEYS.VaultDetailPickTitle)}</strong>
+              <span class="max-w-xs text-sm"
+                >{vault.t(I18N_KEYS.VaultDetailPickBody)}</span
+              >
+            </div>
+          {/if}
+        </div>
+        {#if vault.secretTotal > vault.secretPageSize}
+          <div
+            class="flex items-center justify-between gap-3"
+            data-testid="secret-pagination"
+          >
+            <Button
+              size="sm"
+              variant="outline"
+              data-testid="secret-page-previous"
+              disabled={vault.secretPageOffset === 0}
+              onclick={() => {
+                const pageRequest: Parameters<typeof vault.loadSecretPage>[0] =
+                  {
                     query: vault.secretQuery,
                     requestedOffset: Math.max(
                       0,
                       vault.secretPageOffset - vault.secretPageSize,
                     ),
                   };
-                  void vault.loadSecretPage(pageRequest).then((result) => {
-                    if (result.isErr())
-                      vault.errorMsg = vault.t(result.error.translationKey);
-                  });
-                }}
-              >
-                <ChevronLeft class="size-3.5" />
-                {vault.t(I18N_KEYS.VaultPreviousPage)}
-              </Button>
-              <span class="text-xs text-muted-foreground">
-                {(() => {
-                  const tArgs4: Parameters<typeof vault.t>[0] = {
-                    key: I18N_KEYS.VaultPageStatus,
-                    replacements: {
-                      page: String(currentPage),
-                      total: String(pageCount),
-                    },
-                  };
-                  return vault.t(tArgs4);
-                })()}
-              </span>
-              <Button
-                size="sm"
-                variant="outline"
-                data-testid="secret-page-next"
-                disabled={vault.secretPageOffset + vault.secretPageSize >=
-                  vault.secretTotal}
-                onclick={() => {
-                  const pageRequest: Parameters<
-                    typeof vault.loadSecretPage
-                  >[0] = {
+                void vault.loadSecretPage(pageRequest).then((result) => {
+                  if (result.isErr())
+                    vault.errorMsg = vault.t(result.error.translationKey);
+                });
+              }}
+            >
+              <ChevronLeft class="size-3.5" />
+              {vault.t(I18N_KEYS.VaultPreviousPage)}
+            </Button>
+            <span class="nk-label">
+              {(() => {
+                const pageStatusArgs: Parameters<typeof vault.t>[0] = {
+                  key: I18N_KEYS.VaultPageStatus,
+                  replacements: {
+                    page: String(currentPage),
+                    total: String(pageCount),
+                  },
+                };
+                return vault.t(pageStatusArgs);
+              })()}
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              data-testid="secret-page-next"
+              disabled={vault.secretPageOffset + vault.secretPageSize >=
+                vault.secretTotal}
+              onclick={() => {
+                const pageRequest: Parameters<typeof vault.loadSecretPage>[0] =
+                  {
                     query: vault.secretQuery,
                     requestedOffset:
                       vault.secretPageOffset + vault.secretPageSize,
                   };
-                  void vault.loadSecretPage(pageRequest).then((result) => {
-                    if (result.isErr())
-                      vault.errorMsg = vault.t(result.error.translationKey);
-                  });
-                }}
-              >
-                {vault.t(I18N_KEYS.VaultNextPage)}
-                <ChevronRight class="size-3.5" />
-              </Button>
-            </div>
-          {/if}
-        </div>
+                void vault.loadSecretPage(pageRequest).then((result) => {
+                  if (result.isErr())
+                    vault.errorMsg = vault.t(result.error.translationKey);
+                });
+              }}
+            >
+              {vault.t(I18N_KEYS.VaultNextPage)}
+              <ChevronRight class="size-3.5" />
+            </Button>
+          </div>
+        {/if}
       {/if}
     </div>
   {/if}

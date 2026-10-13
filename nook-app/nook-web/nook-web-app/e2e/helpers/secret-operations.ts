@@ -207,6 +207,7 @@ export async function deleteSecret(
     : 0
   const row = page.getByTestId('secret-row').filter({ hasText: key })
   await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  await expandSecretRow(page, key)
   const deleteBtn = row.getByTestId('delete-secret-btn')
   await expect(deleteBtn).toBeVisible({ timeout: UI_TIMEOUT_MS })
   await deleteBtn.click()
