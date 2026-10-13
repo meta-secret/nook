@@ -4,7 +4,7 @@
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
-use crate::{ActiveVaultScope, ProviderVaultScope, StorageProviderType};
+use crate::{ActiveVaultScope, ProviderRowLayout, ProviderVaultScope, StorageProviderType};
 
 use super::{AuthProvidersSnapshotData, StorageProviderData};
 
@@ -40,9 +40,14 @@ impl ActiveVaultProviderRows<'_> {
         match active_store_id {
             ActiveVaultScope::Unselected => providers.to_vec(),
             ActiveVaultScope::StoreId(id) if id.trim().is_empty() => providers.to_vec(),
-            ActiveVaultScope::StoreId(id) => providers.iter().filter(|provider| {
-                matches!(&provider.store_id, ProviderVaultScope::StoreId(stored) if stored == id.trim())
-            }).cloned().collect(),
+            ActiveVaultScope::StoreId(id) => providers
+                .iter()
+                .filter(|provider| {
+                    provider.layout == ProviderRowLayout::IdentityNamespaced
+                        || matches!(&provider.store_id, ProviderVaultScope::StoreId(stored) if stored == id.trim())
+                })
+                .cloned()
+                .collect(),
         }
     }
 }
@@ -61,11 +66,24 @@ impl AuthProvidersSnapshotData {
         if active_store_id.is_empty() {
             return incoming.clone();
         }
-        let mut providers = existing.providers.iter().filter(|provider| {
-            matches!(&provider.store_id, ProviderVaultScope::StoreId(id) if !id.trim().is_empty() && id.trim() != active_store_id)
-        }).cloned().collect::<Vec<_>>();
+        let incoming_ids = incoming
+            .providers
+            .iter()
+            .map(|provider| provider.id.as_str())
+            .collect::<Vec<_>>();
+        let mut providers = existing
+            .providers
+            .iter()
+            .filter(|provider| match provider.layout {
+                ProviderRowLayout::IdentityNamespaced => !incoming_ids.contains(&provider.id.as_str()),
+                ProviderRowLayout::LegacyVaultRoot => matches!(&provider.store_id, ProviderVaultScope::StoreId(id) if !id.trim().is_empty() && id.trim() != active_store_id),
+            })
+            .cloned()
+            .collect::<Vec<_>>();
         providers.extend(incoming.providers.iter().cloned().map(|mut provider| {
-            provider.store_id = ProviderVaultScope::StoreId(active_store_id.to_owned());
+            if provider.layout == ProviderRowLayout::LegacyVaultRoot {
+                provider.store_id = ProviderVaultScope::StoreId(active_store_id.to_owned());
+            }
             provider
         }));
         AuthProvidersSnapshotData {
@@ -156,6 +174,7 @@ mod tests {
                     oauth_file: StoredOAuthFileConfiguration::NotApplicable,
                     local_folder: StoredLocalFolderConfiguration::NotApplicable,
                     store_id: ProviderVaultScope::Unscoped,
+                    layout: crate::ProviderRowLayout::LegacyVaultRoot,
                     sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                     created_at: "2026-06-24T00:00:00.000Z".to_owned(),
                 },

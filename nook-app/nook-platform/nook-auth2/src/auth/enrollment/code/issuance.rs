@@ -8,7 +8,8 @@ use super::{
     ENROLLMENT_CIPHER, ENROLLMENT_KDF, EnrollmentKeyDerivation, IV_LEN, PBKDF2_ITERATIONS, SALT_LEN,
 };
 use crate::auth::enrollment::{
-    EnrollmentCodeEnvelope, EnrollmentEntryLabel, EnrollmentIssueInput, EnrollmentProviderPayload,
+    EnrollmentCodeEnvelope, EnrollmentEntryLabel, EnrollmentIdentityTarget, EnrollmentIssueInput,
+    EnrollmentProviderPayload,
 };
 use crate::{EnrollmentError, EnrollmentResult};
 use aes_gcm::{
@@ -37,7 +38,7 @@ pub struct EnrollmentIssuance<'a> {
 /// ```compile_fail,E0451
 /// use nook_auth2::{CheckedEnrollmentIssuance, EnrollmentIssueInput};
 /// let forge = |input: &EnrollmentIssueInput| CheckedEnrollmentIssuance {
-///     input, password: "", entry_id: "", vault_name: "", entry_label: "",
+///     input, password: "", entry_id: "", identity_label: "", entry_label: "",
 /// };
 /// ```
 ///
@@ -71,7 +72,7 @@ pub struct EnrollmentIssuance<'a> {
 /// use nook_auth2::{EnrollmentIssueInput, EnrollmentIssuance, EnrollmentResult};
 /// let change = |input: &mut EnrollmentIssueInput| -> EnrollmentResult<String> {
 ///     let checked = EnrollmentIssuance { input, password: "password", entry_label: "" }.check()?;
-///     input.vault_name.clear();
+///     input.identity.label.clear();
 ///     checked.issue()
 /// };
 /// ```
@@ -79,7 +80,7 @@ pub struct CheckedEnrollmentIssuance<'a> {
     input: &'a EnrollmentIssueInput,
     password: &'a str,
     entry_id: &'a str,
-    vault_name: &'a str,
+    identity_label: &'a str,
     entry_label: &'a str,
 }
 impl<'a> EnrollmentIssuance<'a> {
@@ -95,18 +96,14 @@ impl<'a> EnrollmentIssuance<'a> {
         }
 
         self.input.provider.validate()?;
-        let vault_name = self.input.vault_name.trim();
-        if vault_name.is_empty() {
-            return Err(EnrollmentError::MissingField {
-                field: "vault_name",
-            });
-        }
+        self.input.identity.check()?;
+        let identity_label = self.input.identity.label.trim();
 
         Ok(CheckedEnrollmentIssuance {
             input: self.input,
             password,
             entry_id,
-            vault_name,
+            identity_label,
             entry_label: self.entry_label,
         })
     }
@@ -115,7 +112,10 @@ impl CheckedEnrollmentIssuance<'_> {
     pub fn issue(self) -> EnrollmentResult<String> {
         let inner = EnrollmentProviderPayload {
             provider: self.input.provider.clone(),
-            vault_name: self.vault_name.to_owned(),
+            identity: EnrollmentIdentityTarget {
+                identity_id: self.input.identity.identity_id.clone(),
+                label: self.identity_label.to_owned(),
+            },
         };
         let mut salt = [0u8; SALT_LEN];
         let mut iv = [0u8; IV_LEN];
@@ -159,10 +159,10 @@ mod tests {
     use super::{CheckedEnrollmentIssuance, EnrollmentIssuance};
     use crate::EnrollmentError;
     use crate::auth::enrollment::{
-        CheckedEnrollmentEnvelope, EnrollmentEntryLabel, EnrollmentIssueInput, EnrollmentProvider,
-        EnrollmentProviderDataRef, OAuthAccountIdentity, OAuthRefreshCredential, OAuthRemoteFile,
-        OAuthTokenExpiry, PersonalEnrollmentProvider, SharedEnrollmentProvider,
-        SharedEnrollmentProviderData,
+        CheckedEnrollmentEnvelope, EnrollmentEntryLabel, EnrollmentIdentityTarget,
+        EnrollmentIssueInput, EnrollmentProvider, EnrollmentProviderDataRef, OAuthAccountIdentity,
+        OAuthRefreshCredential, OAuthRemoteFile, OAuthTokenExpiry, PersonalEnrollmentProvider,
+        SharedEnrollmentProvider, SharedEnrollmentProviderData,
     };
     use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
     use serde_json::json;
@@ -173,7 +173,7 @@ mod tests {
                     "github_pat_11AAAAbbbbCCCC".to_owned(),
                     "team-vault".to_owned(),
                 )),
-                vault_name: "Team vault".to_owned(),
+                identity: EnrollmentIdentityTarget::fixture("Team vault"),
                 entry_id: "entry-1".to_owned(),
                 issued_at: "2026-06-23T12:00:00Z".to_owned(),
             }
@@ -196,7 +196,7 @@ mod tests {
     fn issuance_validation_keeps_password_entry_provider_vault_order() -> anyhow::Result<()> {
         let mut input = EnrollmentIssueInput::github_fixture();
         input.entry_id = " ".to_owned();
-        input.vault_name = "\n".to_owned();
+        input.identity.label = "\n".to_owned();
         input.provider = EnrollmentProvider::personal(PersonalEnrollmentProvider::github(
             String::new(),
             "repo".to_owned(),
@@ -227,7 +227,7 @@ mod tests {
             entry_label: "",
         }
         .expect_rejection(&EnrollmentError::MissingField {
-            field: "vault_name",
+            field: "identity_label",
         })?;
         Ok(())
     }
@@ -240,7 +240,7 @@ mod tests {
                 " token ".to_owned(),
                 " repo ".to_owned(),
             )),
-            vault_name: "  Vault \n".to_owned(),
+            identity: EnrollmentIdentityTarget::fixture("  Vault \n"),
             entry_id: "  entry  ".to_owned(),
             issued_at: "  timestamp  ".to_owned(),
         };
@@ -272,7 +272,7 @@ mod tests {
         );
         let decrypted = checked.decrypt("password")?;
         assert_eq!(decrypted.provider, input.provider);
-        assert_eq!(decrypted.vault_name, "Vault");
+        assert_eq!(decrypted.identity.label, "Vault");
         Ok(())
     }
 
@@ -302,7 +302,7 @@ mod tests {
     fn preserves_local_provider() -> anyhow::Result<()> {
         let input = EnrollmentIssueInput {
             provider: EnrollmentProvider::personal(PersonalEnrollmentProvider::local()),
-            vault_name: "Local vault".to_owned(),
+            identity: EnrollmentIdentityTarget::fixture("Local vault"),
             entry_id: "entry-local".to_owned(),
             issued_at: "2026-06-23T12:00:00Z".to_owned(),
         };
@@ -328,7 +328,7 @@ mod tests {
                 "joiner@example.com".to_owned(),
                 "shared-folder-abc".to_owned(),
             )),
-            vault_name: "Shared vault".to_owned(),
+            identity: EnrollmentIdentityTarget::fixture("Shared vault"),
             entry_id: "entry-shared".to_owned(),
             issued_at: "2026-06-23T12:00:00Z".to_owned(),
         };
@@ -371,7 +371,7 @@ mod tests {
             provider: EnrollmentProvider::shared(SharedEnrollmentProvider::icloud(
                 storage_target_id.clone(),
             )),
-            vault_name: "Shared iCloud vault".to_owned(),
+            identity: EnrollmentIdentityTarget::fixture("Shared iCloud vault"),
             entry_id: "entry-icloud-shared".to_owned(),
             issued_at: "2026-06-23T12:00:00Z".to_owned(),
         };
@@ -403,7 +403,7 @@ mod tests {
                 },
                 OAuthAccountIdentity::Email("owner@example.com".to_owned()),
             )),
-            vault_name: "OAuth vault".to_owned(),
+            identity: EnrollmentIdentityTarget::fixture("OAuth vault"),
             entry_id: "entry-oauth".to_owned(),
             issued_at: "2026-07-09T00:00:00Z".to_owned(),
         };
@@ -433,7 +433,7 @@ mod tests {
                 OAuthRemoteFile::Unresolved,
                 OAuthAccountIdentity::Unknown,
             )),
-            vault_name: "OAuth vault".to_owned(),
+            identity: EnrollmentIdentityTarget::fixture("OAuth vault"),
             entry_id: "entry-oauth".to_owned(),
             issued_at: "2026-07-09T00:00:00Z".to_owned(),
         };
@@ -497,7 +497,7 @@ mod tests {
         assert_eq!(checked.envelope().entry_id, input.entry_id);
         let decrypted = checked.decrypt("  vault-pass-99  ")?;
         assert_eq!(decrypted.provider, input.provider);
-        assert_eq!(decrypted.vault_name, "Team vault");
+        assert_eq!(decrypted.identity.label, "Team vault");
         assert_eq!(decrypted.entry_id, input.entry_id);
         assert_eq!(decrypted.issued_at, input.issued_at);
         Ok(())

@@ -635,6 +635,7 @@ mod browser_tests {
                 ),
                 local_folder: StoredLocalFolderConfiguration::NotApplicable,
                 store_id: ProviderVaultScope::Unscoped,
+                layout: nook_core::ProviderRowLayout::LegacyVaultRoot,
                 sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-01-01T00:00:00Z".into(),
             }

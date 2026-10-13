@@ -64,6 +64,10 @@ impl StoredLocalFolderConfiguration {
 struct LegacyStorageProvider<'a>(&'a StorageProviderData);
 impl LegacyStorageProvider<'_> {
     fn is_rollback_compatible(&self) -> bool {
+        // An older build would route a namespaced row to the legacy root.
+        if self.0.layout == crate::ProviderRowLayout::IdentityNamespaced {
+            return false;
+        }
         match self.0.provider_type {
             crate::StorageProviderType::OauthFile => match &self.0.oauth_file {
                 StoredOAuthFileConfiguration::Configured(config) => {
@@ -246,6 +250,7 @@ mod tests {
             oauth_file: StoredOAuthFileConfiguration::configured(config),
             local_folder: StoredLocalFolderConfiguration::NotApplicable,
             store_id: ProviderVaultScope::Unscoped,
+            layout: crate::ProviderRowLayout::LegacyVaultRoot,
             sync_checkpoint: crate::ProviderSyncCheckpoint::NeverSynced,
             created_at: "now".to_owned(),
         }

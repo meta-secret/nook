@@ -5,6 +5,7 @@ use nook_auth2::ValidationError;
 use thiserror::Error;
 
 use crate::event::VaultEventSchemaVersion;
+use crate::identity_control::IdentityEventSchemaVersion;
 
 pub type EventResult<T> = Result<T, EventError>;
 
@@ -119,4 +120,13 @@ pub enum EventError {
 
     #[error("genesis event bytes missing")]
     MissingGenesisBytes,
+
+    #[error("unsupported identity event schema version {version}")]
+    UnsupportedIdentitySchemaVersion { version: IdentityEventSchemaVersion },
+
+    #[error("invalid identity control event: {0}")]
+    IdentityControlInvalid(String),
+
+    #[error("identity approval must wrap the DEK of vault {store_id}")]
+    IdentityApprovalIncomplete { store_id: String },
 }

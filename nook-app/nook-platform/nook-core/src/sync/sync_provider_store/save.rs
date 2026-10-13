@@ -59,6 +59,12 @@ pub struct ProviderSaveRequest {
     pub local_folder: StoredLocalFolderConfiguration,
     pub new_provider_id: String,
     pub created_at: String,
+    /// Identity mounts namespace the identity log and every owned vault.
+    /// `CloudKit` cannot list a namespace yet, so iCloud rows stay bound to the
+    /// vault in `provider_store_id`.
+    #[serde(default)]
+    #[tsify(optional)]
+    pub layout: crate::ProviderRowLayout,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Tsify)]
@@ -97,8 +103,20 @@ impl ProviderSaveRequest {
             oauth_file: StoredOAuthFileConfiguration::NotApplicable,
             local_folder: StoredLocalFolderConfiguration::NotApplicable,
             store_id: request.provider_store_id.clone(),
+            layout: request.effective_layout(provider_type),
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: request.created_at.clone(),
+        }
+    }
+
+    fn effective_layout(&self, provider_type: StorageProviderType) -> crate::ProviderRowLayout {
+        match (self.layout, provider_type, self.oauth_preset) {
+            (
+                crate::ProviderRowLayout::IdentityNamespaced,
+                StorageProviderType::OauthFile,
+                OAuthFilePreset::ICloud,
+            ) => crate::ProviderRowLayout::LegacyVaultRoot,
+            (layout, _, _) => layout,
         }
     }
 
@@ -273,6 +291,7 @@ impl OAuthUpdateTarget<'_> {
             oauth_file: StoredOAuthFileConfiguration::configured(active_oauth.clone()),
             local_folder: StoredLocalFolderConfiguration::NotApplicable,
             store_id: ProviderVaultScope::Unscoped,
+            layout: crate::ProviderRowLayout::LegacyVaultRoot,
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: String::new(),
         };
@@ -461,6 +480,7 @@ mod tests {
                 local_folder: StoredLocalFolderConfiguration::NotApplicable,
                 new_provider_id: "provider-new".to_owned(),
                 created_at: "2026-08-11T00:00:00Z".to_owned(),
+                layout: crate::ProviderRowLayout::LegacyVaultRoot,
             }
         }
     }

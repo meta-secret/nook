@@ -43,11 +43,12 @@ See
 4. The identity generates each vault DEK and wraps it to current app public
    keys.
    A vault cannot hold a DEK by itself.
-5. Adding or removing an app key updates identity DEK envelopes.
-   The vault log does not rewrite membership for that change.
+5. Adding or removing an app key is an identity control log event.
+   Approval wraps every owned vault's DEK to the new app key.
+   The joined app key then self-enrolls into each Simple vault log.
 6. A vault backup password opens only its owning vault.
    It does not replace identity or app-key unlock.
-7. Sync providers are replication transports.
+7. Sync providers are replication transports mounted on the identity.
    They never grant identity membership or vault decryption by themselves.
 8. Passwords and other secret items are vault content, not identity state.
 
@@ -222,8 +223,8 @@ It is never shown as stored on one physical laptop.
   directory.
   - Delete the legacy key only after the new directory is durable.
   - Do not support downgrade to a pre-directory build after migration.
-  - Keep the local directory separate from the future replicated identity
-    control log.
+  - Treat the local directory as a cache of the replicated identity control
+    log. Identity sync applies its members and DEK envelopes locally.
 - **Dashboard persistence:** Store non-secret metadata only.
   - Never persist private app keys, PRF output, PIN/passphrases, vault DEKs,
     backup-password values, or plaintext vault contents.
@@ -372,10 +373,12 @@ Current dashboard requirements:
 - The relationship graph labels the internal app-key node as **App**.
   - It reads as protection method → app → identity → vault.
   - Raw app-key identifiers and cryptographic terminology remain internal.
-- App enrollment begins from the Nook installation that creates or joins a
-  vault.
-  - The selected-identity inventory only lists connected apps; it does not
-    offer a local **Add app** action.
+- App enrollment begins from **Identity → Devices**.
+  - A member issues an identity enrollment code there.
+  - The joining installation connects the code's mount and requests to join.
+  - A member approves, denies, renames, or revokes apps there.
+  - The selected-identity inventory lists connected apps; it does not create
+    a local app key itself.
 - The primary surface omits access-evidence inspection and browser-reported
   ceremony fields.
 - Raw passkey credential bytes never appear.

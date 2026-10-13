@@ -13,9 +13,10 @@ and no Vault/Admin/Onboard/Settings bottom navigation.
 - **Vault (secret list):** `/vault`; `/` and `/app` resolve here.
 - **Identity → Keys:** `/identity/keys`; alias `/devices-access`.
 - **Identity → Vaults:** `/identity/vaults`; alias `/admin`.
+- **Identity → Devices & onboarding:** `/identity/devices`; aliases
+  `/vault/devices` and `/onboard`.
+- **Identity → Sync:** `/identity/sync`; alias `/vault/sync`.
 - **Identity → Settings:** `/identity/settings`; alias `/settings`.
-- **Open vault → Devices & onboarding:** `/vault/devices`; alias `/onboard`.
-- **Open vault → Sync:** `/vault/sync`.
 - **Open vault → Backup passwords:** `/vault/passwords`.
 - **Open vault → Import:** `/vault/import`.
 
@@ -83,10 +84,14 @@ and no Vault/Admin/Onboard/Settings bottom navigation.
 - The vault page bar offers Import, Pair extension (when available), and
   Manage vault.
 - Identity management and vault management are separate. Manage identity
-  (from an identity card) lists Keys, Vaults and Settings; Manage vault (from
-  the vault page bar) lists Devices, Sync, Backup passwords and Import. Each
-  uses one navigation element: a rail on wide screens and a pinned bottom
-  bar on phones.
+  (from an identity card) lists Keys, Vaults, Devices, Sync and Settings.
+  Manage vault (from the vault page bar) lists Backup passwords and Import.
+  Each uses one navigation element: a rail on wide screens and a pinned
+  bottom bar on phones.
+- Devices and Sync act on the identity. They need the identity's app key
+  unlocked, not an open vault. Devices issues identity enrollment codes and approves, denies,
+  renames, and revokes the identity's apps. Sync mounts providers on the
+  identity and shows which vaults each mount replicates.
 - Identity → Vaults renames and switches the identity's vaults; it does not
   create them. Vaults are created from the identity card.
 - Every vault belongs to exactly one identity. Cards list a vault under the

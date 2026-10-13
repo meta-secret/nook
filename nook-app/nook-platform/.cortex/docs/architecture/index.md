@@ -14,7 +14,7 @@
   - Status: Active
 - **[identity-vault-architecture.md](identity-vault-architecture.md)**
   - Description: Identity and vault ownership boundaries
-  - Status: Local directory implemented
+  - Status: Implemented, including replicated identity control
 - **[vault-session-and-lock.md](vault-session-and-lock.md)**
   - Description: Lock session, vault vs sync providers, multi-vault model
   - Status: Active; compatibility storage examples are explicitly non-authoritative

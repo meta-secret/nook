@@ -6,7 +6,7 @@
   - Status: Active; historical storage claims are labeled migration context
 - **[devices-and-access.md](devices-and-access.md)**
   - Description: Multi-identity management, local key protection, onboarding, and verified vault grants
-  - Status: Local multi-identity keyring implemented; replicated identity control remains active
+  - Status: Local multi-identity keyring and replicated identity control implemented
 - **[unified-workspace.md](unified-workspace.md)**
   - Description: Identities hub, vault page, grouped management pages, routes, and visual language
   - Status: Implemented

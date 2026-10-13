@@ -28,9 +28,9 @@ how provider transports relate independently to identities and vaults.
   clears the session and returns to the login gate.
 - **Remember sync credentials:** GitHub PAT and provider labels persist in
   IndexedDB — no repeated token prompts.
-- **Many mounts:** Multiple providers may replicate the same vault `store_id`;
-  identities may separately use provider targets for encrypted identity-control
-  events before any vault exists.
+- **Identity mounts:** Providers are mounted on an identity. One mount
+  replicates the identity control log and every vault the identity owns.
+  An identity may mount providers before any vault exists.
 - **Separation of concerns:** Provider tokens are storage convenience. Vault keys
   remain vault authorization material; provider credentials are sealed locally
   to an installation-specific device key and never prove identity membership.
@@ -112,6 +112,10 @@ A domain-type refactor alone never authorizes a wire format change.
   - **Notes:** File System Access directory handle metadata (`directoryName?`, `handleId?`)
 - **`storeId?`**
   - **Notes:** Logical secret store (`store_{token}`) — see [secret-store-identity.md](../../../nook-core/.cortex/docs/architecture/secret-store-identity.md)
+  - **Notes:** For a legacy vault root row, the one vault stored at the root.
+- **`layout?`**
+  - **Notes:** `legacyVaultRoot` (default for earlier rows) or
+    `identityNamespaced`. See [identity-vault-architecture.md](identity-vault-architecture.md#mount-sync-providers-on-the-identity).
 - **`lastSyncedVersion?`, `lastSyncedAt?`, `lastSyncRevision?`, `lastCommonContentHash?`**
   - **Notes:** Sync bookkeeping
 
@@ -275,17 +279,15 @@ and never enter this grant path.
 
 ### Shared-provider onboarding
 
-This section documents the current vault-coupled enrollment wire.
-
-In the target architecture:
-
-- device/member onboarding first extends an identity; and
-- a separate authorization step grants that identity access to a vault.
+This section documents the identity enrollment wire. A code invites an
+installation into an identity through one mount. Identity approval then grants
+every owned vault, as
+[identity-vault-architecture.md](identity-vault-architecture.md#join-an-installation-to-an-identity)
+describes.
 
 The same credential-free provider-target rule applies to both identity-control
-and vault event-log replication. Migration of the existing wire requires an
-explicit versioned design. This architecture decision does not silently
-reinterpret old enrollment payloads.
+and vault event-log replication. The payload names `identity` instead of a
+vault. Earlier vault-named codes fail closed as invalid codes.
 
 **Provider target handoff**
 
@@ -367,8 +369,8 @@ Shared components live under
   - **When shown:** Authenticated
   - **Purpose:** Primary app — secrets CRUD
 - **`AuthStorage`**
-  - **When shown:** Settings → Sync providers
-  - **Purpose:** Manage replica targets for **current** vault
+  - **When shown:** Identity → Sync
+  - **Purpose:** Manage the identity's mounts and their per-vault replication
 - **Header** **Lock vault**
   - **When shown:** Authenticated
   - **Purpose:** `VaultState.lockVault()` — clear session
@@ -431,9 +433,9 @@ projection cache and fans events out to sync providers listed in `nook_auth`
 - **Multi-vault on one browser profile**
   - **Status:** Partial — e2e coverage in `nook-web-app/e2e/multi-vault.spec.ts`; full picker UX still evolving ([vault-session-and-lock.md](vault-session-and-lock.md) §3)
 
-**Do not confuse:** adding a sync provider **replicates** the active vault;
-opening a **different** vault requires Lock and connect/import flow (or the
-multi-vault picker when available).
+**Do not confuse:** adding a sync provider mounts it on the identity, so it
+replicates every vault that identity owns. Opening a vault of another identity
+still requires selecting that identity.
 
 Whole-blob reconciliation and scalar `vault_version` comparison are
 historical context in [unified-vault.md](unified-vault.md), not the primary
