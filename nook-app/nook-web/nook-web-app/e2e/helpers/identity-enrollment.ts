@@ -1,4 +1,5 @@
 import { expect, type Page } from '@playwright/test'
+import type { VaultDebugWindow } from '$lib/app/browser-lifecycle'
 import { dumpNookLogs } from './app-logs'
 import { ENROLLMENT_UNLOCK_TIMEOUT_MS, UI_TIMEOUT_MS } from './environment'
 import {
@@ -121,7 +122,7 @@ export async function openVaultAfterIdentityApproval(
       .toBe(true)
   } catch (error) {
     const state = await page.evaluate(() => {
-      const vault = window.__nookVault
+      const vault = (window as VaultDebugWindow).__nookVault
       return JSON.stringify({
         error: vault?.errorMsg,
         snapshot: vault?.identityControl?.snapshot,

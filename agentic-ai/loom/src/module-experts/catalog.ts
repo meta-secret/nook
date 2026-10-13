@@ -148,6 +148,11 @@ export const INTERNAL_API_EXPERT_RUST_BOUNDARY_SCOPE_PATHS = [
 ] as const;
 
 const INTERNAL_API_EXPERT_AUTHORED_CONSUMER_SCOPE_PATHS = [
+  'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/PendingJoinsBanner.svelte',
+  'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/identity-control/IdentityMountsPanel.svelte',
+  'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/identity-control/identity-mount.ts',
+  'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/identity-control/identity-standing.ts',
+  'nook-app/nook-web/nook-web-shared/src/vault-app/lib/vault/identity-control.svelte.ts',
   'nook-app/nook-web/nook-vault-sentinel/src/extension-connect-disabled.ts',
   'nook-app/nook-web/nook-vault-sentinel/src/main.ts',
   'nook-app/nook-web/nook-vault-sentinel/vite.config.ts',
@@ -320,8 +325,6 @@ const INTERNAL_API_EXPERT_AUTHORED_CONSUMER_SCOPE_PATHS = [
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/login/login-vault-identity-context.ts',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/login/sentinel-card-stack-contract.ts',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/login/sentinel-dashboard-surface-contract.ts',
-  'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/onboard-device-state.ts',
-  'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/onboard-device/OnboardDevicePasswordStep.svelte',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/settings/BrowserSettingsPanel.svelte',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/settings/VaultDevicesCard.svelte',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/vault-admin-state.ts',

@@ -293,3 +293,359 @@ impl NookVaultManager {
         Tsify::into_ts(&snapshot).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
     }
 }
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::migration::{NookIdentityAdoptionOutcome, NookIdentityLogEnsureOutcome};
+    use super::*;
+    use nook_core::{
+        ActiveVaultScope, ProviderRowLayout, ProviderSyncCheckpoint, ProviderVaultScope,
+        SigningIdentity, StorageProviderData, StorageProviderType, StoredGithubPat,
+        StoredGithubRepository, StoredLocalFolderConfiguration, StoredOAuthFileConfiguration,
+    };
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    /// An installation that is not yet part of the founder's identity.
+    struct Joiner {
+        app: AppKey,
+        signer: SigningIdentity,
+    }
+
+    impl Joiner {
+        fn new() -> anyhow::Result<Self> {
+            Ok(Self {
+                app: AppKey::generate()?,
+                signer: SigningIdentity::generate()?.0,
+            })
+        }
+
+        /// Write a self-signed join request into the founder's local log, as
+        /// a union with a mount would.
+        async fn request_join(&self, identity_id: &IdentityId) -> anyhow::Result<()> {
+            let log = NookDatabase::load_identity_log(identity_id).await?;
+            let at = IsoTimestamp::from_trusted("2026-10-13T00:00:00Z".to_owned());
+            let event = log.build_append(
+                vec![IdentityControlOperation::MemberJoinRequested {
+                    member: IdentityMemberKeys {
+                        app_id: self.app.app_id().clone(),
+                        encryption_public_key: self.app.public_key(),
+                        signing_public_key: self.signer.public_key(),
+                        label: MemberLabel::from_trusted(String::new()),
+                    },
+                }],
+                &IdentityEventSigning {
+                    signing_key: self.signer.signing_key(),
+                    created_at: &at,
+                },
+            )?;
+            NookDatabase::save_identity_events(IdentityLogWrite {
+                identity_id,
+                events: &[(event.id()?, event.serialize_storage_yaml()?)],
+            })
+            .await?;
+            Ok(())
+        }
+    }
+
+    /// A PIN-protected installation with one local vault.
+    struct Founder {
+        manager: NookVaultManager,
+    }
+
+    impl Founder {
+        async fn new(pin: &str) -> anyhow::Result<Self> {
+            let mut manager = NookVaultManager::new();
+            Founder::js(manager.delete_local_browser_data().await)?;
+            Founder::js(manager.finish_pin_device_protection(pin.to_owned()).await)?;
+            Founder::js(
+                manager
+                    .connect_fresh("local".to_owned(), String::new(), String::new())
+                    .await,
+            )?;
+            Ok(Self { manager })
+        }
+
+        fn js<T>(result: Result<T, JsError>) -> anyhow::Result<T> {
+            result.map_err(|error| anyhow::anyhow!("{error:?}"))
+        }
+
+        fn store_id(&self) -> String {
+            self.manager.vault.store_id.clone()
+        }
+
+        fn providers(&self) -> anyhow::Result<tsify::Ts<AuthProvidersSnapshotData>> {
+            let row = StorageProviderData {
+                id: "github-personal".to_owned(),
+                provider_type: StorageProviderType::Github,
+                label: "GitHub".to_owned(),
+                github_pat: StoredGithubPat::Token("github_pat_fixture".to_owned()),
+                github_repo: StoredGithubRepository::Repository("owner/personal".to_owned()),
+                oauth_file: StoredOAuthFileConfiguration::NotApplicable,
+                local_folder: StoredLocalFolderConfiguration::NotApplicable,
+                store_id: ProviderVaultScope::StoreId(self.store_id()),
+                layout: ProviderRowLayout::LegacyVaultRoot,
+                sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
+                created_at: "2026-10-13T00:00:00Z".to_owned(),
+            };
+            Tsify::into_ts(&AuthProvidersSnapshotData {
+                providers: vec![row],
+                active_vault_store_id: ActiveVaultScope::Unselected,
+            })
+            .map_err(|error| anyhow::anyhow!("{error:?}"))
+        }
+
+        async fn snapshot(&mut self) -> anyhow::Result<IdentityControlSnapshot> {
+            let providers = self.providers()?;
+            Founder::js(self.manager.identity_control_snapshot(&providers).await)?
+                .to_rust()
+                .map_err(|error| anyhow::anyhow!("{error:?}"))
+        }
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    async fn founder_replicates_its_identity_and_manages_member_apps() -> anyhow::Result<()> {
+        let mut founder = Founder::new("identity founder pin").await?;
+        let created = Founder::js(founder.manager.ensure_identity_control_log(false).await)?
+            .to_rust()
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        assert!(matches!(
+            created,
+            NookIdentityLogEnsureOutcome::Created { .. }
+        ));
+        let existing = Founder::js(founder.manager.ensure_identity_control_log(true).await)?
+            .to_rust()
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        assert_eq!(existing, NookIdentityLogEnsureOutcome::Existing);
+
+        // Creating the log registered the open vault's DEK epoch, so
+        // reconciling the open vault has nothing left to record.
+        assert!(!Founder::js(
+            founder
+                .manager
+                .reconcile_open_vault_with_identity_log()
+                .await
+        )?);
+
+        let snapshot = founder.snapshot().await?;
+        assert_eq!(snapshot.members.len(), 1);
+        let [vault] = snapshot.vaults.as_slice() else {
+            anyhow::bail!("the founder's identity owns one vault");
+        };
+        assert_eq!(vault.store_id, founder.store_id());
+        assert!(vault.granted_to_current_installation);
+
+        // The legacy-root provider becomes a recorded mount once.
+        let providers = founder.providers()?;
+        assert!(Founder::js(
+            founder
+                .manager
+                .record_identity_provider_mounts(&providers)
+                .await
+        )?);
+        assert!(!Founder::js(
+            founder
+                .manager
+                .record_identity_provider_mounts(&providers)
+                .await
+        )?);
+        let mounted = founder.snapshot().await?;
+        let [mount] = mounted.mounts.as_slice() else {
+            anyhow::bail!("one mount is recorded");
+        };
+        assert!(mount.connected_here);
+        let replicating = Founder::js(
+            founder
+                .manager
+                .identity_replication_providers(&providers)
+                .await,
+        )?
+        .to_rust()
+        .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        assert_eq!(replicating.providers.len(), 1);
+        let aligned = Founder::js(
+            founder
+                .manager
+                .align_identity_provider_rows(&providers)
+                .await,
+        )?
+        .to_rust()
+        .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        assert_eq!(
+            aligned.providers.first().map(|row| row.layout),
+            Some(ProviderRowLayout::LegacyVaultRoot)
+        );
+        let vault_row = Founder::js(
+            founder
+                .manager
+                .identity_vault_provider(&providers, &founder.store_id()),
+        )?
+        .to_rust()
+        .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        assert_eq!(vault_row.id, "github-personal");
+
+        // A join request is approved with the vault DEK, renamed, then revoked.
+        let identity_id = IdentityId::parse(&snapshot.identity_id)?;
+        let phone = Joiner::new()?;
+        phone.request_join(&identity_id).await?;
+        let pending = founder.snapshot().await?;
+        assert_eq!(pending.pending_joins.len(), 1);
+        let phone_id = phone.app.app_id().as_str().to_owned();
+        Founder::js(
+            founder
+                .manager
+                .approve_identity_join(phone_id.clone())
+                .await,
+        )?;
+        let approved = founder.snapshot().await?;
+        assert_eq!(approved.members.len(), 2);
+        assert!(approved.pending_joins.is_empty());
+        assert!(
+            approved
+                .vaults
+                .iter()
+                .all(|vault| vault.members_missing_dek.is_empty())
+        );
+        Founder::js(
+            founder
+                .manager
+                .rename_identity_member(phone_id.clone(), "Phone".to_owned())
+                .await,
+        )?;
+        assert!(
+            founder
+                .snapshot()
+                .await?
+                .members
+                .iter()
+                .any(|member| member.label == "Phone")
+        );
+        Founder::js(founder.manager.revoke_identity_member(phone_id).await)?;
+        assert_eq!(founder.snapshot().await?.members.len(), 1);
+
+        // A second request is denied without changing membership.
+        let tablet = Joiner::new()?;
+        tablet.request_join(&identity_id).await?;
+        Founder::js(
+            founder
+                .manager
+                .deny_identity_join(tablet.app.app_id().as_str().to_owned())
+                .await,
+        )?;
+        let denied = founder.snapshot().await?;
+        assert!(denied.pending_joins.is_empty());
+        assert_eq!(denied.members.len(), 1);
+
+        // The browser-local cache has no remote namespace to union with.
+        Founder::js(
+            founder
+                .manager
+                .sync_identity_log_with_provider("local".to_owned(), String::new(), String::new())
+                .await,
+        )?;
+        let adoption = Founder::js(
+            founder
+                .manager
+                .adopt_identity_from_provider("local".to_owned(), String::new(), String::new())
+                .await,
+        )?
+        .to_rust()
+        .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        assert_eq!(adoption, NookIdentityAdoptionOutcome::AlreadyReplicated);
+
+        // An identity that owns a vault cannot be rebound to an invitation.
+        assert!(
+            founder
+                .manager
+                .bind_local_identity_to_invitation(IdentityId::generate()?.as_str().to_owned())
+                .await
+                .is_err()
+        );
+
+        let removal = founder.providers()?;
+        let row = removal
+            .to_rust()
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?
+            .providers
+            .into_iter()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("fixture row"))?;
+        let row = Tsify::into_ts(&row).map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        assert!(Founder::js(
+            founder.manager.remove_identity_provider_mount(&row).await
+        )?);
+        assert!(founder.snapshot().await?.mounts.is_empty());
+
+        // A member's join request is already satisfied.
+        Founder::js(
+            founder
+                .manager
+                .request_identity_join("local".to_owned(), String::new(), String::new())
+                .await,
+        )?;
+        Founder::js(founder.manager.delete_local_browser_data().await)?;
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    async fn a_fresh_app_binds_its_local_identity_to_an_invitation() -> anyhow::Result<()> {
+        let mut manager = NookVaultManager::new();
+        Founder::js(manager.delete_local_browser_data().await)?;
+        Founder::js(
+            manager
+                .finish_pin_device_protection("identity joiner pin".to_owned())
+                .await,
+        )?;
+        let invited = IdentityId::generate()?;
+        Founder::js(
+            manager
+                .bind_local_identity_to_invitation(invited.as_str().to_owned())
+                .await,
+        )?;
+        // Binding again to the same identity is a no-op.
+        Founder::js(
+            manager
+                .bind_local_identity_to_invitation(invited.as_str().to_owned())
+                .await,
+        )?;
+        let app_key = manager.unlocked_app_key()?;
+        assert_eq!(
+            NookVaultManager::current_identity_id(&app_key).await?,
+            invited
+        );
+        let empty = Tsify::into_ts(&AuthProvidersSnapshotData {
+            providers: Vec::new(),
+            active_vault_store_id: ActiveVaultScope::Unselected,
+        })
+        .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        let snapshot = Founder::js(manager.identity_control_snapshot(&empty).await)?
+            .to_rust()
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        assert_eq!(snapshot.identity_id, invited.as_str());
+        assert!(snapshot.members.is_empty());
+        // Without the invited identity's log there is nothing to join.
+        assert!(
+            manager
+                .request_identity_join("local".to_owned(), String::new(), String::new())
+                .await
+                .is_err()
+        );
+        Founder::js(manager.delete_local_browser_data().await)?;
+        Ok(())
+    }
+}
