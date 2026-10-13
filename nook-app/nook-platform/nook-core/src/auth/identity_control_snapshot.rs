@@ -56,7 +56,7 @@ pub struct IdentityVaultView {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(tag = "kind", rename_all = "camelCase")]
+#[serde(tag = "state", rename_all = "camelCase")]
 pub enum IdentityMountLayoutView {
     Namespaced,
     #[serde(rename_all = "camelCase")]
@@ -67,7 +67,7 @@ pub enum IdentityMountLayoutView {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-pub enum IdentityMountKind {
+pub enum IdentityMountProvider {
     Github,
     GoogleDrive,
     #[serde(rename = "icloud")]
@@ -80,7 +80,7 @@ pub enum IdentityMountKind {
 pub struct IdentityMountView {
     pub mount_id: String,
     pub label: String,
-    pub kind: IdentityMountKind,
+    pub provider: IdentityMountProvider,
     /// Credential-free routing shown to the user (repository, folder, share).
     pub target: String,
     pub layout: IdentityMountLayoutView,
@@ -92,6 +92,8 @@ pub struct IdentityMountView {
 #[serde(rename_all = "camelCase")]
 pub struct IdentityControlSnapshot {
     pub identity_id: String,
+    /// The local name of the identity. Names never enter the replicated log.
+    pub identity_label: String,
     pub standing: IdentityControlStanding,
     pub members: Vec<IdentityMemberView>,
     pub pending_joins: Vec<IdentityJoinView>,
@@ -102,38 +104,39 @@ pub struct IdentityControlSnapshot {
 /// Named values required to project a snapshot for one installation.
 pub struct IdentityControlSnapshotRequest<'a> {
     pub state: &'a IdentityControlState,
+    pub identity_label: &'a str,
     pub current_app_id: &'a AppId,
     pub providers: &'a [StorageProviderData],
 }
 
 impl IdentityMountView {
     fn from_mount(mount: &IdentityProviderMount, providers: &[StorageProviderData]) -> Self {
-        let (kind, target) = match &mount.target {
+        let (provider, target) = match &mount.target {
             IdentityMountTarget::Github { repository } => {
-                (IdentityMountKind::Github, repository.clone())
+                (IdentityMountProvider::Github, repository.clone())
             }
             IdentityMountTarget::GoogleDrive { drive } => (
-                IdentityMountKind::GoogleDrive,
+                IdentityMountProvider::GoogleDrive,
                 match drive {
                     DriveMountTarget::Private { folder_name } => folder_name.clone(),
                     DriveMountTarget::Shared { folder_id } => folder_id.clone(),
                 },
             ),
             IdentityMountTarget::ICloud { icloud } => (
-                IdentityMountKind::ICloud,
+                IdentityMountProvider::ICloud,
                 match icloud {
                     ICloudMountTarget::Private => String::new(),
                     ICloudMountTarget::Shared { share_target } => share_target.clone(),
                 },
             ),
             IdentityMountTarget::LocalFolder { directory_name } => {
-                (IdentityMountKind::LocalFolder, directory_name.clone())
+                (IdentityMountProvider::LocalFolder, directory_name.clone())
             }
         };
         Self {
             mount_id: mount.mount_id.as_str().to_owned(),
             label: mount.label.clone(),
-            kind,
+            provider,
             target,
             layout: match &mount.layout {
                 ProviderMountLayout::Namespaced => IdentityMountLayoutView::Namespaced,
@@ -154,9 +157,10 @@ impl IdentityMountView {
 impl IdentityControlSnapshot {
     /// A local identity whose control log has not been created or adopted.
     #[must_use]
-    pub fn not_replicated(identity_id: &IdentityId) -> Self {
+    pub fn not_replicated(identity_id: &IdentityId, identity_label: &str) -> Self {
         Self {
             identity_id: identity_id.as_str().to_owned(),
+            identity_label: identity_label.to_owned(),
             standing: IdentityControlStanding::NotReplicated,
             members: Vec::new(),
             pending_joins: Vec::new(),
@@ -169,6 +173,7 @@ impl IdentityControlSnapshot {
     pub fn project(request: &IdentityControlSnapshotRequest<'_>) -> Self {
         let IdentityControlSnapshotRequest {
             state,
+            identity_label,
             current_app_id,
             providers,
         } = request;
@@ -180,6 +185,7 @@ impl IdentityControlSnapshot {
         };
         Self {
             identity_id: state.identity_id.as_str().to_owned(),
+            identity_label: (*identity_label).to_owned(),
             standing,
             members: state
                 .members

@@ -127,6 +127,10 @@ impl NookVaultManager {
             return Ok(false);
         }
         let state = IdentityControlState::project(&log)?;
+        // Only an active member signs identity operations for the vault.
+        if state.member(app_key.app_id()).is_none() {
+            return Ok(false);
+        }
         let graph = NookDatabase::load_local_event_store(store_id.as_str())
             .await?
             .load_graph(store_id.as_str())?;

@@ -27,6 +27,7 @@ pub(crate) struct IdentityLogWrite<'a> {
 }
 
 /// Named values required by `NookDatabase::identity_event_key`.
+#[derive(Clone, Copy)]
 struct IdentityEventKey<'a> {
     identity_id: &'a IdentityId,
     event_id: &'a str,

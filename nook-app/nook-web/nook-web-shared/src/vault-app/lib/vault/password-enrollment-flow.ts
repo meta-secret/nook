@@ -27,8 +27,6 @@ import {
   JoinEnrollmentState,
   OnboardingType,
   decrypt_enrollment_payload,
-  has_active_local_vault,
-  set_local_vault_label,
 } from "$app-wasm";
 import {
   DEFAULT_DRIVE_BACKUP_NAME,
@@ -39,6 +37,8 @@ import {
   ICLOUD_OAUTH_FILE_PRESET,
   githubPatValue,
   githubRepositoryValue,
+  storedGithubPat,
+  storedGithubRepository,
   StorageProviderPresentation,
   LocalFolderProviderConfigurationKind,
   decodeStoredOAuthFileConfiguration,
@@ -78,10 +78,9 @@ type SavedEnrollmentProviderApplication = {
   readonly selection: SavedEnrollmentProvider;
 };
 
-type VaultNameUpdate = {
-  readonly storeId: string;
-  readonly label: string;
-};
+enum IdentityJoinRequestOutcome {
+  Requested = "requested",
+}
 
 export enum OAuthFilePresetDecodeFailureKind {
   Invalid = "invalid-oauth-file-preset",
@@ -116,7 +115,7 @@ export type EnrollmentCodeConnection = {
   readonly password: string;
 };
 
-export { PasswordEnrollmentIssue } from "$lib/vault/password-enrollment-issue";
+export { IdentityEnrollmentIssue } from "$lib/vault/password-enrollment-issue";
 
 /** Owns browser orchestration for one password enrollment flow context. */
 export class PasswordEnrollmentActions {
@@ -200,34 +199,6 @@ export class PasswordEnrollmentActions {
     return storageOk(state.storageMode);
   }
 
-  private async localVaultHasPasswordEntries(): Promise<
-    Result<boolean, StorageOperationFailure>
-  > {
-    const state = this.state;
-    let present = state.localVaultPresent;
-    if (!present) {
-      try {
-        present = await has_active_local_vault();
-      } catch (failure) {
-        return storageErr(new NativeVaultStorageFailure(failure));
-      }
-    }
-    if (!present) return storageOk(false);
-    const entries = await state.enqueueStorage(async () => {
-      const manager = state.admitManager();
-      if (manager.isErr()) return storageErr(manager.error);
-      try {
-        return storageOk(
-          await manager.value.fetch_vault_password_entries("local", "", ""),
-        );
-      } catch (failure) {
-        return storageErr(new NativeVaultStorageFailure(failure));
-      }
-    });
-    if (entries.isErr()) return storageErr(entries.error);
-    return storageOk(entries.value.length > 0);
-  }
-
   async connectWithEnrollmentCode({
     code,
     password,
@@ -281,11 +252,17 @@ export class PasswordEnrollmentActions {
             state.githubPat = githubPat;
             state.githubRepo = githubRepo;
             state.activateLoginSetup("github");
-            enrollmentStorageArgs = {
-              mode: "github",
-              pat: githubPat,
-              repo: githubRepo,
+            const githubMount: StorageProvider = {
+              ...providerPersistenceDefaults(),
+              id: "enrollment-github",
+              type: GITHUB_PROVIDER_TYPE,
+              label: "GitHub",
+              githubPat: storedGithubPat(githubPat),
+              githubRepo: storedGithubRepository(githubRepo),
+              layout: "identityNamespaced",
+              createdAt: isoTimestamp(),
             };
+            enrollmentStorageArgs = state.providerWasmArgs(githubMount);
           } else if (
             payload.onboardingType === OnboardingType.SharedProviderGrant
           ) {
@@ -544,7 +521,11 @@ export class PasswordEnrollmentActions {
             if (sharedProviderNeedsSave) {
               state.activateLoginSetup("oauth-file");
             }
-            enrollmentStorageArgs = state.providerWasmArgs(provider);
+            const sharedMount: StorageProvider = {
+              ...provider,
+              layout: "identityNamespaced",
+            };
+            enrollmentStorageArgs = state.providerWasmArgs(sharedMount);
           } else if (enrollmentProvider.type === OAUTH_FILE_PROVIDER_TYPE) {
             const presetValue = enrollmentProvider.oauthPreset;
             const decodedPreset = await Effect.runPromise(
@@ -578,6 +559,7 @@ export class PasswordEnrollmentActions {
               type: OAUTH_FILE_PROVIDER_TYPE,
               label: "Enrollment OAuth provider",
               oauthFile: configuredOAuthFile(oauthFile),
+              layout: "identityNamespaced",
               createdAt: isoTimestamp(),
             };
             state.storageMode = "oauth-file";
@@ -593,55 +575,11 @@ export class PasswordEnrollmentActions {
             state.clearLocalFolder();
             enrollmentStorageArgs = state.providerWasmArgs(oauthProvider);
           } else {
-            const providerLoadOptions2: Parameters<
-              typeof state.loadProviders
-            >[0] = {
-              ensureLocalRow: false,
-            };
-            const loadedProviders2 =
-              await state.loadProviders(providerLoadOptions2);
-            if (loadedProviders2.isErr()) {
-              state.errorMsg = state.t(loadedProviders2.error.translationKey);
-              return;
-            }
-            const hasLocalPasswordEntries =
-              await this.localVaultHasPasswordEntries();
-            let selection: SavedEnrollmentProvider = {
-              kind: SavedEnrollmentProviderKind.Local,
-            };
-            if (hasLocalPasswordEntries.isErr()) {
-              state.errorMsg = state.t(
-                hasLocalPasswordEntries.error.translationKey,
-              );
-              return;
-            }
-            if (!hasLocalPasswordEntries.value) {
-              const [
-                candidate = state.providers.find(
-                  (provider) => provider.type !== "local",
-                ),
-              ] = [state.syncProviders[0]];
-              if (candidate && candidate.type !== "local") {
-                selection = {
-                  kind: SavedEnrollmentProviderKind.Remote,
-                  provider: candidate,
-                };
-              }
-            }
-            const applySavedEnrollmentProviderArgs: Parameters<
-              PasswordEnrollmentActions["applySavedEnrollmentProvider"]
-            >[0] = { selection };
-            const applied = this.applySavedEnrollmentProvider(
-              applySavedEnrollmentProviderArgs,
+            // A local provider cannot carry an identity to another app.
+            state.errorMsg = state.t(
+              I18N_KEYS.IdentityControlJoinLocalProvider,
             );
-            if (applied.isErr()) {
-              state.errorMsg = state.t(applied.error.translationKey);
-              return;
-            }
-            enrollmentStorageArgs =
-              selection.kind === SavedEnrollmentProviderKind.Remote
-                ? state.providerWasmArgs(selection.provider)
-                : { mode: "local", pat: "", repo: "" };
+            return;
           }
 
           const identityInitialization = await state.initDeviceIdentity();
@@ -652,134 +590,46 @@ export class PasswordEnrollmentActions {
             return;
           }
 
-          const page = await state.enqueueStorage(async () => {
+          const identityId = payload.identityId;
+          const identityLabel = payload.identityLabel;
+          const joined = await state.enqueueStorage(async () => {
             const admittedManager = state.admitManager();
             if (admittedManager.isErr())
               return storageErr(admittedManager.error);
             try {
-              return storageOk(
-                await admittedManager.value.connect_with_password(
-                  enrollmentStorageArgs.mode,
-                  enrollmentStorageArgs.pat,
-                  enrollmentStorageArgs.repo,
-                  entryId,
-                  unlockPassword,
-                  state.secretPageSize,
-                ),
+              await admittedManager.value.bind_local_identity_to_invitation(
+                identityId,
               );
+              await admittedManager.value.request_identity_join(
+                enrollmentStorageArgs.mode,
+                enrollmentStorageArgs.pat,
+                enrollmentStorageArgs.repo,
+              );
+              return storageOk(IdentityJoinRequestOutcome.Requested);
             } catch (nativeFailure) {
               return storageErr(new NativeVaultStorageFailure(nativeFailure));
             }
           });
-          if (page.isErr()) {
-            state.errorMsg = state.t(page.error.translationKey);
+          if (joined.isErr()) {
+            state.errorMsg = state.t(joined.error.translationKey);
             return;
           }
-          const connectedPageArgs: Parameters<
-            typeof state.applyConnectedSecretPage
-          >[0] = { page: page.value, query: "" };
-          state.applyConnectedSecretPage(connectedPageArgs);
-          const vaultName = payload.vaultName.trim();
-          const storedId = await state.enqueueStorage(async () => {
-            const manager = state.admitManager();
-            if (manager.isErr()) return storageErr(manager.error);
-            try {
-              return storageOk(manager.value.vaultStoreId);
-            } catch (failure) {
-              return storageErr(new NativeVaultStorageFailure(failure));
-            }
-          });
-          if (storedId.isErr()) {
-            state.errorMsg = state.t(storedId.error.translationKey);
+          // The mount the join went through becomes this app's identity mount.
+          state.providerSaveLayout = "identityNamespaced";
+          const savedProvider = await state.ensureProviderSaved();
+          if (savedProvider.isErr()) {
+            state.errorMsg = state.t(savedProvider.error.translationKey);
             return;
           }
-          const vaultStoreId = storedId.value.trim();
-          if (vaultName && vaultStoreId) {
-            const renamed = await state.enqueueStorage(async () => {
-              const admittedManager = state.admitManager();
-              if (admittedManager.isErr())
-                return storageErr(admittedManager.error);
-              try {
-                await admittedManager.value.set_vault_name(vaultName);
-                const vaultNameUpdate: VaultNameUpdate = {
-                  storeId: vaultStoreId,
-                  label: vaultName,
-                };
-                return storageOk(vaultNameUpdate);
-              } catch (nativeFailure) {
-                return storageErr(new NativeVaultStorageFailure(nativeFailure));
-              }
-            });
-            if (renamed.isErr()) {
-              state.errorMsg = state.t(renamed.error.translationKey);
-              return;
-            }
-            try {
-              await set_local_vault_label(
-                renamed.value.storeId,
-                renamed.value.label,
-              );
-            } catch (failure) {
-              state.errorMsg = state.t(
-                new NativeVaultStorageFailure(failure).translationKey,
-              );
-              return;
-            }
-          }
-          // Password enrollment downloads an existing vault into this browser. Make
-          // that inherited store the active local catalog entry before saving the
-          // transferred provider credentials.
-          const catalogRefresh1 = await state.refreshLocalVaultCatalog();
-          if (catalogRefresh1.isErr()) {
-            state.errorMsg = state.t(catalogRefresh1.error.translationKey);
-            return;
-          }
-          const activeVaultPersistence =
-            await state.syncActiveVaultStoreIdToAuth();
-          if (activeVaultPersistence.isErr()) {
-            state.errorMsg = state.t(
-              activeVaultPersistence.error.translationKey,
-            );
-            return;
-          }
-          const savedProvider1 = await state.ensureProviderSaved();
-          if (savedProvider1.isErr()) {
-            state.errorMsg = state.t(savedProvider1.error.translationKey);
-            return;
-          }
-          const providerLoadOptions3: Parameters<
-            typeof state.loadProviders
-          >[0] = {
-            ensureLocalRow: false,
-          };
-          const loadedProviders3 =
-            await state.loadProviders(providerLoadOptions3);
-          if (loadedProviders3.isErr()) {
-            state.errorMsg = state.t(loadedProviders3.error.translationKey);
-            return;
-          }
-          const passwordRefresh1 = await state.refreshPasswordEntriesList();
-          if (passwordRefresh1.isErr()) {
-            state.errorMsg = state.t(passwordRefresh1.error.translationKey);
-            return;
-          }
-          const rosterRefresh1 = await state.hydrateMultiDeviceState();
-          if (rosterRefresh1.isErr()) {
-            state.errorMsg = state.t(rosterRefresh1.error.translationKey);
-            return;
-          }
-          const unlocked = state.markVaultUnlocked();
-          if (unlocked.isErr()) {
-            state.errorMsg = state.t(unlocked.error.translationKey);
-            return;
-          }
+          state.identityControl.markJoinPending(identityLabel);
           state.joinEnrollmentPrompt = JoinEnrollmentState.None;
           state.loginEnrollmentCode = "";
           state.prefillEnrollmentCode = "";
           state.enrollmentFromUrlPending = false;
-          state.showSuccess(state.t(I18N_KEYS.ToastsDeviceEnrolled));
-          state.startIdleSessionTracking();
-          state.startVaultSync();
+          const checked = await state.identityControl.checkJoinApproval();
+          if (checked.isErr()) {
+            state.errorMsg = state.t(checked.error.translationKey);
+          }
         } finally {
           enrollmentProvider.free();
         }

@@ -267,7 +267,6 @@ pub struct StorageProvider {
     #[serde(default)]
     pub sync_checkpoint: ProviderSyncCheckpoint,
     #[serde(default)]
-    #[tsify(optional)]
     pub layout: ProviderRowLayout,
     pub created_at: String,
 }

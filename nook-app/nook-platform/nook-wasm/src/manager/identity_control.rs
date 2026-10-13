@@ -10,6 +10,7 @@ mod membership;
 mod migration;
 mod vault_access;
 
+use nook_core::i18n_keys;
 use nook_core::{
     AppKey, AppKeyIdentityMembership, AuthProvidersSnapshotData, EventLogLocation,
     IdentityControlLog, IdentityControlOperation, IdentityControlSnapshot,
@@ -44,7 +45,7 @@ impl NookVaultManager {
     pub(in crate::manager) fn unlocked_app_key(&self) -> Result<AppKey, NookError> {
         if self.device.identity_private_key.is_empty() {
             return Err(NookError::Decryption(
-                nook_core::i18n_keys::ERRORS_DEVICE_PROTECTION_AUTHORIZATION_REQUIRED.to_owned(),
+                i18n_keys::ERRORS_DEVICE_PROTECTION_AUTHORIZATION_REQUIRED.to_owned(),
             ));
         }
         self.device_identity()
@@ -272,11 +273,19 @@ impl NookVaultManager {
         let app_key = self.unlocked_app_key()?;
         let identity_id = Self::current_identity_id(&app_key).await?;
         let log = NookDatabase::load_identity_log(&identity_id).await?;
+        let identity_label = NookDatabase::load_identity_directory()
+            .await?
+            .identities()
+            .iter()
+            .find(|record| record.identity_id == identity_id)
+            .map(|record| record.label.clone())
+            .unwrap_or_default();
         let snapshot = if log.is_empty() {
-            IdentityControlSnapshot::not_replicated(&identity_id)
+            IdentityControlSnapshot::not_replicated(&identity_id, &identity_label)
         } else {
             IdentityControlSnapshot::project(&IdentityControlSnapshotRequest {
                 state: &IdentityControlState::project(&log)?,
+                identity_label: &identity_label,
                 current_app_id: app_key.app_id(),
                 providers: &providers,
             })

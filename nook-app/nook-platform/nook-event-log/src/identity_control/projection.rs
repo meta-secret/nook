@@ -102,6 +102,7 @@ struct ProjectionAccumulator {
     mounts: BTreeMap<ProviderMountId, IdentityProviderMount>,
 }
 
+#[derive(Clone, Copy)]
 struct VaultRecipients<'a> {
     store_id: &'a StoreId,
     key_epoch: &'a EventId,

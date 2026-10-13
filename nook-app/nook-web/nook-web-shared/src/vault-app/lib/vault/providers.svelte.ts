@@ -281,7 +281,7 @@ export class VaultProviderActions {
       return staged.state === NookStagedStorageArgsState.Ready
         ? {
             kind: StagedRemoteStorageKind.Available,
-            args: staged.args,
+            args: staged.argsForLayout(state.providerSaveLayout),
           }
         : { kind: StagedRemoteStorageKind.Unavailable };
     } finally {
@@ -656,6 +656,10 @@ export class VaultProviderActions {
       state.resetVaultSessionState();
     }
     state.addProviderOpen = true;
+    // Providers added while signed in are mounted on the identity.
+    state.providerSaveLayout = state.isAuthenticated
+      ? "identityNamespaced"
+      : "legacyVaultRoot";
     state.clearLoginSetup();
     state.errorMsg = "";
   }
@@ -664,6 +668,7 @@ export class VaultProviderActions {
     const state = this.state;
     this.resetICloudSignInState();
     state.addProviderOpen = false;
+    state.providerSaveLayout = "legacyVaultRoot";
     state.clearLoginSetup();
     state.clearExistingVaultRecoverySummary();
     state.applyActiveProviderCredentials();
@@ -838,6 +843,7 @@ export class ProviderPersistenceActions {
       localFolder,
       newProviderId: generate_id(),
       createdAt: isoTimestamp(),
+      layout: state.providerSaveLayout,
     };
     const outcome = apply_provider_save_policy(request);
     try {
@@ -874,6 +880,7 @@ export class ProviderPersistenceActions {
       }
       state.clearLoginSetup();
       state.loginRequiresExistingVault = false;
+      state.providerSaveLayout = "legacyVaultRoot";
       state.addProviderOpen = false;
       state.applyActiveProviderCredentials();
       log.info("sync provider saved");

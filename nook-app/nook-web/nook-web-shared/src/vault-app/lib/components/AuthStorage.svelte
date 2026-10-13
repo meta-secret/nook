@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { ProviderRowLayoutPresentation } from '$lib/components/identity-control/identity-mount'
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import {
     NookManualProviderSyncState,
@@ -340,6 +341,14 @@
                           )}
                         {/if}
                       </span>
+                      {#if new ProviderRowLayoutPresentation(provider).isIdentityMount()}
+                        <span
+                          class="block text-[11px] text-muted-foreground"
+                          data-testid="provider-identity-mount-{provider.id}"
+                        >
+                          {vault.t(I18N_KEYS.IdentityControlMountNamespaced)}
+                        </span>
+                      {/if}
                     </span>
                   </div>
                   {#if onSyncProvider}

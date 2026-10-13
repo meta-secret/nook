@@ -4,7 +4,10 @@
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { RefreshCw, UserPlus } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
-  import type { JoinRequest } from '$lib/nook'
+  import type { IdentityJoinView } from '$app-wasm'
+  import type { Result } from 'neverthrow'
+  import type { VaultStorageFailure } from '$lib/runtime/storage-failure'
+  import type { IdentityActionOutcome } from '$lib/vault/identity-control.svelte'
 
   import type { VaultState } from '$lib/vault.svelte'
 
@@ -17,9 +20,11 @@
     onOpenDevicesSettings,
   }: {
     vault: VaultState
-    pendingJoins: JoinRequest[]
+    pendingJoins: IdentityJoinView[]
     isBusy?: boolean
-    onApproveJoin: (deviceId: string) => void | Promise<void>
+    onApproveJoin: (
+      appId: string,
+    ) => Promise<Result<IdentityActionOutcome, VaultStorageFailure>>
     onRefresh?: () => void | Promise<void>
     onOpenDevicesSettings?: () => void
   } = $props()
@@ -82,18 +87,21 @@
     </div>
 
     <ul class="mt-3 space-y-2" data-testid="pending-joins-list">
-      {#each pendingJoins as join (join.deviceId)}
+      {#each pendingJoins as join (join.appId)}
         <li
           class="flex items-center justify-between gap-3 border border-border bg-background/70 px-3 py-2.5"
           data-testid="device-join-row"
+          data-app-id={join.appId}
         >
           <div class="min-w-0">
-            <p class="font-mono text-xs text-foreground">{join.deviceId}</p>
+            <p class="truncate text-xs text-foreground">
+              {join.label || vault.t(I18N_KEYS.IdentityControlUnnamedApp)}
+            </p>
             <p
               class="truncate text-[11px] text-muted-foreground"
-              title={join.publicKey}
+              title={join.appId}
             >
-              {(() => { const truncateArgs: Parameters<typeof truncate>[0] = { value: join.publicKey, head: 10, tail: 8 }; return truncate(truncateArgs); })()}
+              {(() => { const truncateArgs: Parameters<typeof truncate>[0] = { value: join.appId, head: 10, tail: 8 }; return truncate(truncateArgs); })()}
             </p>
           </div>
           <Button
@@ -101,7 +109,7 @@
             size="sm"
             disabled={isBusy}
             data-testid="approve-join-btn"
-            onclick={() => void onApproveJoin(join.deviceId)}
+            onclick={() => void onApproveJoin(join.appId)}
           >
             {vault.t(I18N_KEYS.SettingsApprove)}
           </Button>

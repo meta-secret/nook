@@ -50,6 +50,7 @@ pub(super) struct CheckedEventWrite<'a> {
 }
 
 /// Named values required to check one content-addressed write.
+#[derive(Clone, Copy)]
 pub(super) struct CheckedEventWriteRequest<'a> {
     pub(super) bytes: &'a [u8],
     pub(super) event_id: &'a EventId,

@@ -2,7 +2,6 @@
   import type { ComponentProps } from 'svelte'
   import type { PasswordOperationResult } from '$lib/vault/password-unlock'
   import { type SecretOperationResult } from '$lib/vault/secret-operation-failure'
-  import type { EnrollmentCodeIssueResult } from '$lib/vault/enrollment-issue-failure'
   type VaultNameDraftChange = {
     readonly entry: NookLocalVaultEntry
     readonly value: string
@@ -12,10 +11,6 @@
     readonly password: string
   }
   type VaultPasswordEntryUpdate = {
-    readonly entryId: PasswordEntryId
-    readonly password: string
-  }
-  type EnrollmentCodeIssue = {
     readonly entryId: PasswordEntryId
     readonly password: string
   }
@@ -48,6 +43,7 @@
   import ManageSection from '$lib/components/settings/ManageSection.svelte'
   import AuthStorage from '$lib/components/AuthStorage.svelte'
   import VaultPasswordCard from '$lib/components/VaultPasswordCard.svelte'
+  import IdentityMountsPanel from '$lib/components/identity-control/IdentityMountsPanel.svelte'
   import BitwardenImportPanel from '$lib/components/BitwardenImportPanel.svelte'
   import KeePassXcImportPanel from '$lib/components/KeePassXcImportPanel.svelte'
   import LastPassImportPanel from '$lib/components/LastPassImportPanel.svelte'
@@ -103,7 +99,6 @@
     passwordEntries,
     isPasswordBusy,
     passwordError,
-    enrollmentCode,
     canManageExistingPasswords,
     onReconnect,
     onSyncProvider,
@@ -115,8 +110,6 @@
     onAddPassword,
     onUpdatePassword,
     onRemovePassword,
-    onIssueCode,
-    onClearCode,
     onImportBitwarden,
     onImportKeePassXc,
     onImportLastPass,
@@ -144,7 +137,6 @@
     passwordEntries: NookPasswordEntrySummary[]
     isPasswordBusy: boolean
     passwordError: string
-    enrollmentCode: string
     canManageExistingPasswords: boolean
     onReconnect: () => void | Promise<void>
     onSyncProvider?: (id: string) => void | Promise<void>
@@ -162,10 +154,6 @@
     onRemovePassword: (
       entryId: PasswordEntryId,
     ) => Promise<PasswordOperationResult>
-    onIssueCode: (
-      args: EnrollmentCodeIssue,
-    ) => Promise<EnrollmentCodeIssueResult>
-    onClearCode: () => void
     onImportBitwarden: (
       args: BitwardenVaultImport,
     ) => Promise<SecretOperationResult<NookImportResult>>
@@ -599,6 +587,9 @@
           </span>
         {/if}
       {/snippet}
+      {#if isAuthenticated}
+        <IdentityMountsPanel {vault} />
+      {/if}
       <AuthStorage
         {vault}
         embedded
@@ -655,14 +646,10 @@
         {passwordEntries}
         isBusy={isPasswordBusy}
         {passwordError}
-        {enrollmentCode}
         {canManageExistingPasswords}
         {onAddPassword}
         {onUpdatePassword}
         {onRemovePassword}
-        {onIssueCode}
-        {onClearCode}
-        allowIssueCode={false}
       />
     </ManageSection>
   {/if}

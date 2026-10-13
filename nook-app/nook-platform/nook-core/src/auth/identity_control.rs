@@ -228,12 +228,14 @@ impl IdentityVaultEpochStatus<'_> {
 mod tests {
     use super::*;
     use crate::{
-        IdentityApprovalRequest, IdentityControlLog, IdentityControlOperation, IdentityEvent,
-        IdentityEventSigning, IdentityGenesisRequest, IdentityVaultRegistration, OpenedVaultDek,
-        VaultRosterMember,
+        IdentityApprovalRequest, IdentityControlLog, IdentityControlOperation,
+        IdentityControlSnapshot, IdentityControlSnapshotRequest, IdentityControlStanding,
+        IdentityEvent, IdentityEventSigning, IdentityGenesisRequest, IdentityVaultRegistration,
+        OpenedVaultDek, VaultRosterMember,
     };
     use nook_auth2::{IsoTimestamp, MemberLabel, VaultKeys};
     use nook_event_log::EventId;
+    use std::slice;
 
     struct Member {
         app: AppKey,
@@ -404,11 +406,11 @@ mod tests {
             .choose()
         };
         assert_eq!(
-            choose(std::slice::from_ref(&state), scenario.joiner.app.app_id()),
+            choose(slice::from_ref(&state), scenario.joiner.app.app_id()),
             IdentityAdoption::Adopt(state.identity_id.clone())
         );
         assert_eq!(
-            choose(std::slice::from_ref(&state), AppKey::generate()?.app_id()),
+            choose(slice::from_ref(&state), AppKey::generate()?.app_id()),
             IdentityAdoption::NoneListed
         );
         let mut other = state.clone();
@@ -421,7 +423,7 @@ mod tests {
             IdentityAdoptionChoice {
                 local_identity_id: &state.identity_id,
                 app_id: scenario.founder.app.app_id(),
-                candidates: std::slice::from_ref(&state),
+                candidates: slice::from_ref(&state),
             }
             .choose(),
             IdentityAdoption::AlreadyReplicated
@@ -484,6 +486,56 @@ mod tests {
         assert_eq!(
             ReplicatedIdentityStanding::of(&state, scenario.joiner.app.app_id()),
             ReplicatedIdentityStanding::Revoked
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn snapshot_shows_each_installation_its_own_standing_and_grants() -> anyhow::Result<()> {
+        let scenario = Scenario::approved()?;
+        let state = IdentityControlState::project(&scenario.log)?;
+        let joiner = IdentityControlSnapshot::project(&IdentityControlSnapshotRequest {
+            state: &state,
+            identity_label: "Personal",
+            current_app_id: scenario.joiner.app.app_id(),
+            providers: &[],
+        });
+        assert_eq!(joiner.standing, IdentityControlStanding::Member);
+        assert_eq!(joiner.identity_label, "Personal");
+        assert!(joiner.pending_joins.is_empty());
+        let current = joiner
+            .members
+            .iter()
+            .filter(|member| member.is_current_installation)
+            .map(|member| member.label.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(current, vec!["Phone"]);
+        let [vault] = joiner.vaults.as_slice() else {
+            anyhow::bail!("the identity owns exactly one vault");
+        };
+        assert_eq!(vault.store_id, scenario.store_id.as_str());
+        assert!(vault.granted_to_current_installation);
+        assert!(vault.members_missing_dek.is_empty());
+
+        let outsider = AppKey::generate()?;
+        let outsider_view = IdentityControlSnapshot::project(&IdentityControlSnapshotRequest {
+            state: &state,
+            identity_label: "Personal",
+            current_app_id: outsider.app_id(),
+            providers: &[],
+        });
+        assert_eq!(outsider_view.standing, IdentityControlStanding::NotListed);
+        assert!(
+            outsider_view
+                .vaults
+                .iter()
+                .all(|vault| !vault.granted_to_current_installation)
+        );
+        assert!(
+            outsider_view
+                .members
+                .iter()
+                .all(|member| !member.is_current_installation)
         );
         Ok(())
     }

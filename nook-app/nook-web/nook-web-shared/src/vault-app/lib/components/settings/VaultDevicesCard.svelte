@@ -1,15 +1,24 @@
+<!--
+Apps in the current identity: pending joins, members, rename, and removal.
+Membership is identity-level; every vault the identity owns follows it.
+-->
 <script lang="ts">
-  import type {
-    DeviceRenameResult,
-    DeviceRevocationResult,
-  } from "$lib/vault/multi-device";
+  import type { Result } from "neverthrow";
+  import type { IdentityJoinView, IdentityMemberView } from "$app-wasm";
+  import type { VaultStorageFailure } from "$lib/runtime/storage-failure";
+  import type { OAuthFailure } from "$lib/auth/oauth-failure";
+  import type { IdentityActionOutcome } from "$lib/vault/identity-control.svelte";
   type IdentityTextTruncation = {
     readonly value: string;
     readonly head: number;
     readonly tail: number;
   };
 
-  type DeviceRename = { readonly authId: string; readonly label: string };
+  type AppRename = { readonly appId: string; readonly label: string };
+  type IdentityActionResult = Result<
+    IdentityActionOutcome,
+    VaultStorageFailure | OAuthFailure
+  >;
 
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import {
@@ -33,7 +42,6 @@
     ExtensionSetupStatus,
     extensionInstallationBrowser,
   } from "$lib/extension/install";
-  import type { JoinRequest, VaultMember } from "$lib/nook";
   import type { VaultState } from "$lib/vault.svelte";
   import { VaultType } from "$lib/vault/architecture-model";
   import {
@@ -41,8 +49,6 @@
     type ExtensionSetupOffer,
   } from "$lib/app/extension-setup";
   import {
-    type JoinApprovalHandlingOutcome,
-    type JoinDenialHandlingOutcome,
     MemberDetailsKind,
     MemberRenameKind,
     MemberRevocationKind,
@@ -55,36 +61,30 @@
 
   let {
     vault,
-    deviceId,
-    devicePublicKey,
+    members = [],
     pendingJoins = [],
-    vaultMembers = [] as VaultMember[],
     isBusy,
-    hasPasswordEnvelope = false,
     onApproveJoin,
     onDenyJoin,
-    onRenameDevice,
-    onRevokeDevice,
+    onRenameApp,
+    onRevokeApp,
   }: {
     vault: VaultState;
-    deviceId: string;
-    devicePublicKey: string;
-    pendingJoins?: JoinRequest[];
-    vaultMembers?: VaultMember[];
+    members?: IdentityMemberView[];
+    pendingJoins?: IdentityJoinView[];
     isBusy: boolean;
-    hasPasswordEnvelope?: boolean;
-    onApproveJoin: (deviceId: string) => Promise<JoinApprovalHandlingOutcome>;
-    onDenyJoin: (deviceId: string) => Promise<JoinDenialHandlingOutcome>;
-    onRenameDevice: (args: DeviceRename) => Promise<DeviceRenameResult>;
-    onRevokeDevice: (authId: string) => Promise<DeviceRevocationResult>;
+    onApproveJoin: (appId: string) => Promise<IdentityActionResult>;
+    onDenyJoin: (appId: string) => Promise<IdentityActionResult>;
+    onRenameApp: (args: AppRename) => Promise<IdentityActionResult>;
+    onRevokeApp: (appId: string) => Promise<IdentityActionResult>;
   } = $props();
 
-  let detailsAuthId = $state<MemberDetails>({
+  let detailsAppId = $state<MemberDetails>({
     kind: MemberDetailsKind.Collapsed,
   });
-  let renameAuthId = $state<MemberRename>({ kind: MemberRenameKind.Idle });
+  let renameAppId = $state<MemberRename>({ kind: MemberRenameKind.Idle });
   let renameLabel = $state("");
-  let revokeAuthId = $state<MemberRevocation>({
+  let revokeAppId = $state<MemberRevocation>({
     kind: MemberRevocationKind.Idle,
   });
   let extensionSetupState = $state<ExtensionSetupOffer>({
@@ -190,21 +190,21 @@
     };
   });
 
-  type VaultMemberComparison = readonly [
-    left: (typeof vaultMembers)[number],
-    right: (typeof vaultMembers)[number],
+  type MemberComparison = readonly [
+    left: IdentityMemberView,
+    right: IdentityMemberView,
   ];
 
-  class VaultMemberOrdering {
-    static currentDeviceFirst(...[a, b]: VaultMemberComparison): number {
-      if (a.deviceId === deviceId) return -1;
-      if (b.deviceId === deviceId) return 1;
+  class MemberOrdering {
+    static currentAppFirst(...[a, b]: MemberComparison): number {
+      if (a.isCurrentInstallation) return -1;
+      if (b.isCurrentInstallation) return 1;
       return displayName(a).localeCompare(displayName(b));
     }
   }
 
   const sortedMembers = $derived(
-    [...vaultMembers].sort(VaultMemberOrdering.currentDeviceFirst),
+    [...members].sort(MemberOrdering.currentAppFirst),
   );
 
   function currentDeviceName(): string {
@@ -231,15 +231,6 @@
     return `${value.slice(0, head)}…${value.slice(-tail)}`;
   }
 
-  function formatDate(value: string): string {
-    if (!value || value === "genesis" || value === "self-sync")
-      return vault.t(I18N_KEYS.DevicesCardEnrolled);
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime()))
-      return vault.t(I18N_KEYS.DevicesCardEnrolled);
-    return `${vault.t(I18N_KEYS.DevicesCardEnrolledDatePrefix)}${date.toLocaleDateString()}`;
-  }
-
   function formatRequestDate(value: string): string {
     const date = new Date(value);
     if (Number.isNaN(date.getTime()))
@@ -247,35 +238,40 @@
     return date.toLocaleDateString();
   }
 
-  function displayName(member: VaultMember): string {
+  function displayName(member: IdentityMemberView): string {
     const label = member.label.trim();
     if (label) return label;
-    if (member.deviceId === deviceId) return currentDeviceName();
+    if (member.isCurrentInstallation) return currentDeviceName();
     const truncateArgs: Parameters<typeof truncate>[0] = {
-      value: member.deviceId,
+      value: member.appId,
       head: 6,
       tail: 4,
     };
     return `${vault.t(I18N_KEYS.DevicesCardDevicePrefix)}${truncate(truncateArgs)}`;
   }
 
-  function beginRename(member: VaultMember) {
-    renameAuthId = { kind: MemberRenameKind.Editing, authId: member.authId };
-    renameLabel = member.label.trim();
-    revokeAuthId = { kind: MemberRevocationKind.Idle };
+  function joinName(join: IdentityJoinView): string {
+    const label = join.label.trim();
+    if (label) return label;
+    const truncateArgs: Parameters<typeof truncate>[0] = {
+      value: join.appId,
+      head: 14,
+      tail: 10,
+    };
+    return `${vault.t(I18N_KEYS.DevicesCardDevicePrefix)}${truncate(truncateArgs)}`;
   }
 
-  async function saveRename(member: VaultMember) {
-    const deviceRename: Parameters<typeof onRenameDevice>[0] = {
-      authId: member.authId,
-      label: renameLabel,
-    };
-    const renamed = await onRenameDevice(deviceRename);
-    if (renamed.isErr()) {
-      vault.errorMsg = vault.t(renamed.error.translationKey);
-      return;
-    }
-    renameAuthId = { kind: MemberRenameKind.Idle };
+  function beginRename(member: IdentityMemberView) {
+    renameAppId = { kind: MemberRenameKind.Editing, appId: member.appId };
+    renameLabel = member.label.trim();
+    revokeAppId = { kind: MemberRevocationKind.Idle };
+  }
+
+  async function saveRename(member: IdentityMemberView) {
+    const rename: AppRename = { appId: member.appId, label: renameLabel };
+    const renamed = await onRenameApp(rename);
+    if (renamed.isErr()) return;
+    renameAppId = { kind: MemberRenameKind.Idle };
     renameLabel = "";
   }
 
@@ -284,6 +280,7 @@
     await navigator.clipboard.writeText(value);
   }
 </script>
+
 
 <div class="space-y-4" data-testid="vault-devices-card">
   {#if SUPPORTS_EXTENSION && extensionSetupState.kind === ExtensionSetupOfferKind.Visible}
@@ -374,7 +371,7 @@
     </section>
   {/if}
 
-  {#if vaultMembers.length <= 1}
+  {#if members.length <= 1}
     <div
       class="nk-banner nk-banner-warning flex items-start gap-2 px-3 py-2 text-xs leading-relaxed text-foreground"
       role="alert"
@@ -406,27 +403,26 @@
     <section class="space-y-2" data-testid="pending-join-list">
       <div class="flex items-center justify-between gap-3">
         <h3 class="text-sm font-semibold text-foreground">
-          {vault.t(I18N_KEYS.DevicesCardPendingRequests)}
+          {vault.t(I18N_KEYS.IdentityControlPendingTitle)}
         </h3>
         <span class="text-xs text-muted-foreground">
           {pendingJoins.length === 1
             ? vault.t(I18N_KEYS.DevicesCardRequestsCountSingular)
             : (() => {
-                const tArgs2: Parameters<typeof vault.t>[0] = {
+                const countArgs: Parameters<typeof vault.t>[0] = {
                   key: I18N_KEYS.DevicesCardRequestsCountPlural,
-                  replacements: {
-                    count: String(pendingJoins.length),
-                  },
+                  replacements: { count: String(pendingJoins.length) },
                 };
-                return vault.t(tArgs2);
+                return vault.t(countArgs);
               })()}
         </span>
       </div>
       <ul class="space-y-2">
-        {#each pendingJoins as join (join.deviceId)}
+        {#each pendingJoins as join (join.appId)}
           <li
             class="rounded-lg border border-border/40 bg-background/60 p-3 sm:border-border/60"
             data-testid="pending-join-row"
+            data-app-id={join.appId}
           >
             <div class="flex items-center justify-between gap-3">
               <div class="flex min-w-0 items-center gap-3">
@@ -437,14 +433,10 @@
                 </div>
                 <div class="min-w-0">
                   <p class="truncate text-sm font-medium text-foreground">
-                    {vault.t(I18N_KEYS.DevicesCardDevicePrefix)}{(() => {
-                      const truncateArgs2: Parameters<typeof truncate>[0] = {
-                        value: join.deviceId,
-                        head: 14,
-                        tail: 10,
-                      };
-                      return truncate(truncateArgs2);
-                    })()}
+                    {joinName(join)}
+                  </p>
+                  <p class="font-mono text-[11px] text-muted-foreground">
+                    {join.appId}
                   </p>
                   <p class="text-xs text-muted-foreground">
                     {vault.t(
@@ -461,8 +453,8 @@
                   class="border-border/50 px-2"
                   disabled={isBusy}
                   data-testid="deny-join-btn"
-                  aria-label={vault.t(I18N_KEYS.SettingsDeny)}
-                  onclick={() => void onDenyJoin(join.deviceId)}
+                  aria-label={vault.t(I18N_KEYS.IdentityControlDeny)}
+                  onclick={() => void onDenyJoin(join.appId)}
                 >
                   <X class="size-3.5" />
                 </Button>
@@ -471,10 +463,10 @@
                   size="sm"
                   disabled={isBusy}
                   data-testid="approve-join-btn"
-                  onclick={() => void onApproveJoin(join.deviceId)}
+                  onclick={() => void onApproveJoin(join.appId)}
                 >
                   <Check class="size-3.5" />
-                  {vault.t(I18N_KEYS.DevicesCardApprove)}
+                  {vault.t(I18N_KEYS.IdentityControlApprove)}
                 </Button>
               </div>
             </div>
@@ -486,20 +478,23 @@
 
   <section class="space-y-2">
     <div class="flex items-center justify-between gap-3">
-      <h3 class="text-sm font-semibold text-foreground">
-        {vault.t(I18N_KEYS.DevicesCardEnrolledDevices)}
-      </h3>
-      <span class="text-xs text-muted-foreground">
-        {vaultMembers.length === 1
+      <div class="min-w-0 space-y-1">
+        <h3 class="text-sm font-semibold text-foreground">
+          {vault.t(I18N_KEYS.IdentityControlMembersTitle)}
+        </h3>
+        <p class="text-xs leading-relaxed text-muted-foreground">
+          {vault.t(I18N_KEYS.IdentityControlMembersDescription)}
+        </p>
+      </div>
+      <span class="shrink-0 text-xs text-muted-foreground">
+        {members.length === 1
           ? vault.t(I18N_KEYS.DevicesCardDeviceCountSingular)
           : (() => {
-              const tArgs3: Parameters<typeof vault.t>[0] = {
+              const countArgs: Parameters<typeof vault.t>[0] = {
                 key: I18N_KEYS.DevicesCardDeviceCountPlural,
-                replacements: {
-                  count: String(vaultMembers.length),
-                },
+                replacements: { count: String(members.length) },
               };
-              return vault.t(tArgs3);
+              return vault.t(countArgs);
             })()}
       </span>
     </div>
@@ -513,18 +508,19 @@
       </div>
     {:else}
       <ul class="space-y-2" data-testid="vault-members-list">
-        {#each sortedMembers as member (member.authId)}
-          {@const isCurrent = member.deviceId === deviceId}
+        {#each sortedMembers as member (member.appId)}
+          {@const isCurrent = member.isCurrentInstallation}
           {@const isRenaming =
-            renameAuthId.kind === MemberRenameKind.Editing &&
-            renameAuthId.authId === member.authId}
+            renameAppId.kind === MemberRenameKind.Editing &&
+            renameAppId.appId === member.appId}
           {@const isConfirmingRevoke =
-            revokeAuthId.kind === MemberRevocationKind.Confirming &&
-            revokeAuthId.authId === member.authId}
-          {@const canRevoke = vaultMembers.length > 1 && !isSentinelVault}
+            revokeAppId.kind === MemberRevocationKind.Confirming &&
+            revokeAppId.appId === member.appId}
+          {@const canRevoke = members.length > 1}
           <li
             class="rounded-lg border border-border/40 bg-background/60 p-3 sm:border-border/60"
             data-testid="vault-member-row"
+            data-app-id={member.appId}
           >
             <div class="flex items-start justify-between gap-3">
               <div class="flex min-w-0 items-start gap-3">
@@ -539,11 +535,11 @@
                 </div>
                 <div class="min-w-0 space-y-1">
                   {#if isRenaming}
-                    <label class="sr-only" for={`rename-${member.authId}`}>
+                    <label class="sr-only" for={`rename-${member.appId}`}>
                       {vault.t(I18N_KEYS.DevicesCardDeviceNameLabel)}
                     </label>
                     <input
-                      id={`rename-${member.authId}`}
+                      id={`rename-${member.appId}`}
                       bind:value={renameLabel}
                       maxlength="80"
                       class="h-9 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm text-foreground focus:outline-hidden focus:ring-2 focus:ring-ring"
@@ -563,21 +559,13 @@
                         class="nk-tag nk-tag-success"
                         data-testid="current-device-badge"
                       >
-                        {vault.t(I18N_KEYS.DevicesCardCurrent)}
+                        {vault.t(I18N_KEYS.IdentityControlCurrentApp)}
                       </span>
                     {:else}
                       <span
                         class="rounded-full border border-border/40 bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
                       >
                         {vault.t(I18N_KEYS.DevicesCardEnrolled)}
-                      </span>
-                    {/if}
-                    <span class="text-xs text-muted-foreground">
-                      {formatDate(member.enrolledAt)}
-                    </span>
-                    {#if isCurrent && hasPasswordEnvelope}
-                      <span class="text-xs text-muted-foreground">
-                        {vault.t(I18N_KEYS.DevicesCardPwRecoveryAvailable)}
                       </span>
                     {/if}
                   </div>
@@ -605,7 +593,7 @@
                     disabled={isBusy}
                     aria-label={vault.t(I18N_KEYS.DevicesCardCancelRename)}
                     onclick={() => {
-                      renameAuthId = { kind: MemberRenameKind.Idle };
+                      renameAppId = { kind: MemberRenameKind.Idle };
                       renameLabel = "";
                     }}
                   >
@@ -631,13 +619,13 @@
                     class="px-2 text-muted-foreground hover:text-destructive"
                     disabled={isBusy || !canRevoke}
                     data-testid="device-revoke-btn"
-                    aria-label={vault.t(I18N_KEYS.DevicesCardRevokeDevice)}
+                    aria-label={vault.t(I18N_KEYS.IdentityControlRevoke)}
                     onclick={() => {
-                      revokeAuthId = {
+                      revokeAppId = {
                         kind: MemberRevocationKind.Confirming,
-                        authId: member.authId,
+                        appId: member.appId,
                       };
-                      renameAuthId = { kind: MemberRenameKind.Idle };
+                      renameAppId = { kind: MemberRenameKind.Idle };
                     }}
                   >
                     <ShieldOff class="size-3.5" />
@@ -649,24 +637,24 @@
                   variant="ghost"
                   class="px-2 text-muted-foreground"
                   aria-label={vault.t(I18N_KEYS.DevicesCardToggleDetails)}
-                  aria-expanded={detailsAuthId.kind ===
+                  aria-expanded={detailsAppId.kind ===
                     MemberDetailsKind.Expanded &&
-                    detailsAuthId.authId === member.authId}
+                    detailsAppId.appId === member.appId}
                   data-testid="device-details-toggle"
                   onclick={() =>
-                    (detailsAuthId =
-                      detailsAuthId.kind === MemberDetailsKind.Expanded &&
-                      detailsAuthId.authId === member.authId
+                    (detailsAppId =
+                      detailsAppId.kind === MemberDetailsKind.Expanded &&
+                      detailsAppId.appId === member.appId
                         ? { kind: MemberDetailsKind.Collapsed }
                         : {
                             kind: MemberDetailsKind.Expanded,
-                            authId: member.authId,
+                            appId: member.appId,
                           })}
                 >
                   <ChevronDown
-                    class="size-3.5 transition-transform {detailsAuthId.kind ===
+                    class="size-3.5 transition-transform {detailsAppId.kind ===
                       MemberDetailsKind.Expanded &&
-                    detailsAuthId.authId === member.authId
+                    detailsAppId.appId === member.appId
                       ? 'rotate-180'
                       : ''}"
                   />
@@ -685,7 +673,13 @@
                   <p>
                     {isCurrent
                       ? vault.t(I18N_KEYS.DevicesCardConfirmRevokeCurrent)
-                      : vault.t(I18N_KEYS.DevicesCardConfirmRevokeOther)}
+                      : (() => {
+                          const confirmArgs: Parameters<typeof vault.t>[0] = {
+                            key: I18N_KEYS.IdentityControlRevokeConfirm,
+                            replacements: { label: displayName(member) },
+                          };
+                          return vault.t(confirmArgs);
+                        })()}
                   </p>
                   <div class="flex shrink-0 items-center gap-2">
                     <Button
@@ -696,7 +690,7 @@
                       disabled={isBusy}
                       data-testid="device-revoke-cancel"
                       onclick={() =>
-                        (revokeAuthId = {
+                        (revokeAppId = {
                           kind: MemberRevocationKind.Idle,
                         })}
                     >
@@ -710,21 +704,18 @@
                       disabled={isBusy}
                       data-testid="device-revoke-confirm-btn"
                       onclick={() =>
-                        void onRevokeDevice(member.authId).then((result) => {
-                          if (result.isErr())
-                            vault.errorMsg = vault.t(
-                              result.error.translationKey,
-                            );
+                        void onRevokeApp(member.appId).then(() => {
+                          revokeAppId = { kind: MemberRevocationKind.Idle };
                         })}
                     >
-                      {vault.t(I18N_KEYS.DevicesCardRevoke)}
+                      {vault.t(I18N_KEYS.IdentityControlRevoke)}
                     </Button>
                   </div>
                 </div>
               </div>
             {/if}
 
-            {#if detailsAuthId.kind === MemberDetailsKind.Expanded && detailsAuthId.authId === member.authId}
+            {#if detailsAppId.kind === MemberDetailsKind.Expanded && detailsAppId.appId === member.appId}
               <dl
                 class="mt-3 space-y-2 border-t border-border/30 pt-3 text-xs"
                 data-testid="device-technical-details"
@@ -734,52 +725,12 @@
                     {vault.t(I18N_KEYS.DevicesCardDeviceId)}
                   </dt>
                   <dd class="flex min-w-0 items-center gap-1 font-mono">
-                    <span class="truncate">{member.deviceId}</span>
+                    <span class="truncate">{member.appId}</span>
                     <button
                       type="button"
                       class="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
                       aria-label={vault.t(I18N_KEYS.DevicesCardCopyDeviceId)}
-                      onclick={() => void copyText(member.deviceId)}
-                    >
-                      <Copy class="size-3" />
-                    </button>
-                  </dd>
-                </div>
-                <div class="flex items-center justify-between gap-3">
-                  <dt class="text-muted-foreground">
-                    {vault.t(I18N_KEYS.DevicesCardAuthId)}
-                  </dt>
-                  <dd class="font-mono" title={member.authId}>
-                    {(() => {
-                      const truncateArgs3: Parameters<typeof truncate>[0] = {
-                        value: member.authId,
-                        head: 10,
-                        tail: 8,
-                      };
-                      return truncate(truncateArgs3);
-                    })()}
-                  </dd>
-                </div>
-                <div class="flex items-start justify-between gap-3">
-                  <dt class="shrink-0 text-muted-foreground">
-                    {vault.t(I18N_KEYS.DevicesCardPublicKey)}
-                  </dt>
-                  <dd class="flex min-w-0 items-center gap-1 font-mono">
-                    <span class="truncate" title={member.publicKey}>
-                      {(() => {
-                        const truncateArgs4: Parameters<typeof truncate>[0] = {
-                          value: member.publicKey,
-                          head: 12,
-                          tail: 10,
-                        };
-                        return truncate(truncateArgs4);
-                      })()}
-                    </span>
-                    <button
-                      type="button"
-                      class="shrink-0 rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-                      aria-label={vault.t(I18N_KEYS.DevicesCardCopyPublicKey)}
-                      onclick={() => void copyText(member.publicKey)}
+                      onclick={() => void copyText(member.appId)}
                     >
                       <Copy class="size-3" />
                     </button>
@@ -792,15 +743,4 @@
       </ul>
     {/if}
   </section>
-
-  <div
-    class="rounded-lg border border-border/35 bg-muted/15 px-3 py-2 text-xs text-muted-foreground"
-  >
-    {vault.t(I18N_KEYS.DevicesCardThisBrowserPrefix)}<span class="font-mono"
-      >{deviceId || vault.t(I18N_KEYS.DevicesCardNotInitialized)}</span
-    >
-    {#if devicePublicKey}
-      <span class="sr-only">{devicePublicKey}</span>
-    {/if}
-  </div>
 </div>

@@ -80,9 +80,6 @@
   import RemoteVaultRecoveryPanel from "$lib/components/login/RemoteVaultRecoveryPanel.svelte";
   import * as sentinelGenesisActions from "$lib/vault/sentinel-genesis";
   import {
-    peek_enrollment_entry_id,
-    peek_enrollment_entry_label,
-    NookEnrollmentEntryLabelState,
     SentinelGenesisPhase,
     type VaultApplication,
   } from "$app-wasm";
@@ -404,18 +401,6 @@
     };
     window.addEventListener("popstate", syncDevicesAccessRoute);
     return () => window.removeEventListener("popstate", syncDevicesAccessRoute);
-  });
-
-  const prefillEnrollmentEntryLabel = $derived.by(() => {
-    if (!prefillEnrollmentCode) return "";
-    const label = peek_enrollment_entry_label(prefillEnrollmentCode);
-    try {
-      return label.state === NookEnrollmentEntryLabelState.Labeled
-        ? label.value
-        : "";
-    } finally {
-      label.free();
-    }
   });
 
   const hasProviders = $derived(providers.length > 0);
@@ -790,8 +775,6 @@
           <EnrollmentQrOnboardCard
             {vault}
             code={prefillEnrollmentCode}
-            passwordEntryId={peek_enrollment_entry_id(prefillEnrollmentCode)}
-            passwordEntryLabel={prefillEnrollmentEntryLabel}
             {isVerifying}
             onSubmit={(
               password: Parameters<EnrollmentQrOnboardCardProps["onSubmit"]>[0],

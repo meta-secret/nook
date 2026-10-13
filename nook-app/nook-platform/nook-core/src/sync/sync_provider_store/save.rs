@@ -63,7 +63,6 @@ pub struct ProviderSaveRequest {
     /// `CloudKit` cannot list a namespace yet, so iCloud rows stay bound to the
     /// vault in `provider_store_id`.
     #[serde(default)]
-    #[tsify(optional)]
     pub layout: crate::ProviderRowLayout,
 }
 

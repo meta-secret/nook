@@ -343,6 +343,23 @@ impl NookStagedStorageArgs {
         }?;
         Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
     }
+
+    /// Connect arguments addressed at the remote layout the staged provider
+    /// row will be saved with.
+    #[wasm_bindgen(js_name = argsForLayout)]
+    pub fn args_for_layout(
+        &self,
+        layout: &tsify::Ts<nook_core::ProviderRowLayout>,
+    ) -> Result<tsify::Ts<NookStorageConnectArgs>, JsError> {
+        let layout = layout
+            .to_rust()
+            .map_err(|_| JsError::new("Typed WASM input could not be decoded."))?;
+        let StagedStorageConnection::Ready(args) = &self.0 else {
+            return Err(JsError::new("staged storage is incomplete"));
+        };
+        Tsify::into_ts(&args.clone().with_layout(layout))
+            .map_err(|_| JsError::new("Typed WASM output could not be encoded."))
+    }
 }
 
 impl NookStagedStorageArgs {

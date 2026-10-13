@@ -14,6 +14,7 @@ join) sit between the hero and the cards.
   import IdentitiesHero from './IdentitiesHero.svelte'
   import IdentityCard from './IdentityCard.svelte'
   import IdentityDraftCard from './IdentityDraftCard.svelte'
+  import IdentityJoinPanel from '$lib/components/identity-control/IdentityJoinPanel.svelte'
   import { IdentityDirectoryLoader } from './identity-directory-loader.svelte'
   import {
     IdentityCardProjection,
@@ -204,6 +205,8 @@ join) sit between the hero and the cards.
     totals={projection.totals}
     showStats={cards.length > 0}
   />
+
+  <IdentityJoinPanel {vault} />
 
   {@render children?.()}
 

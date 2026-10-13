@@ -147,7 +147,7 @@
               for="enrollment-password-input"
               class="text-sm font-medium text-muted-foreground"
             >
-              {vault.t(I18N_KEYS.OnboardDeviceVaultPassword)}
+              {vault.t(I18N_KEYS.IdentityControlOnboardPassphrase)}
             </label>
             <input
               id="enrollment-password-input"

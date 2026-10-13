@@ -33,8 +33,8 @@ const WORKSPACE_PATHS: Record<WorkspaceRoute, string> = {
   [WorkspaceRoute.Keys]: "/identity/keys",
   [WorkspaceRoute.Vaults]: "/identity/vaults",
   [WorkspaceRoute.Settings]: "/identity/settings",
-  [WorkspaceRoute.Devices]: "/vault/devices",
-  [WorkspaceRoute.Sync]: "/vault/sync",
+  [WorkspaceRoute.Devices]: "/identity/devices",
+  [WorkspaceRoute.Sync]: "/identity/sync",
   [WorkspaceRoute.Passwords]: "/vault/passwords",
   [WorkspaceRoute.Import]: "/vault/import",
   [WorkspaceRoute.Help]: "/help",
@@ -52,6 +52,8 @@ const LEGACY_WORKSPACE_PATHS: Readonly<Record<string, WorkspaceRoute>> = {
   "/devices-access": WorkspaceRoute.Keys,
   "/admin": WorkspaceRoute.Vaults,
   "/onboard": WorkspaceRoute.Devices,
+  "/vault/devices": WorkspaceRoute.Devices,
+  "/vault/sync": WorkspaceRoute.Sync,
   "/settings": WorkspaceRoute.Settings,
 };
 

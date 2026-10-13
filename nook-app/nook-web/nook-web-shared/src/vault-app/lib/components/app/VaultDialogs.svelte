@@ -43,8 +43,6 @@
   isBusy={vault.isVerifying}
   bind:enrollSecretsKey={vault.enrollSecretsKey}
   bind:enrollMembersKey={vault.enrollMembersKey}
-  onConfirm={() =>
-    new multiDeviceActions.VaultDeviceActions(vault).confirmJoinRequest()}
   onEnrollWithKeys={() => vault.enrollAndConnect()}
   onCreateFreshVault={() => vault.createFreshVault()}
   onCancel={() =>

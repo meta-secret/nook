@@ -31,6 +31,7 @@ pub struct IdentityGenesisRequest<'a> {
 }
 
 /// One vault's DEK at a key epoch, opened by the acting member.
+#[derive(Clone, Copy)]
 pub struct OpenedVaultDek<'a> {
     pub store_id: &'a StoreId,
     pub key_epoch: &'a EventId,
@@ -45,6 +46,7 @@ pub struct IdentityApprovalRequest<'a> {
 }
 
 /// Named values required to register a vault with its owning identity.
+#[derive(Clone, Copy)]
 pub struct IdentityVaultRegistration<'a> {
     pub dek: OpenedVaultDek<'a>,
 }

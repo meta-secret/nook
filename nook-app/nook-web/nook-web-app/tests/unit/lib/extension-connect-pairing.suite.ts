@@ -319,6 +319,7 @@ describe('extension pairing approved message', () => {
       oauthFile: { state: 'notApplicable' },
       localFolder: { state: 'notApplicable' },
       storeId: { state: 'unscoped' },
+      layout: 'legacyVaultRoot',
       syncCheckpoint: { state: 'neverSynced' },
       createdAt: '2026-07-07T00:00:00.000Z',
     }

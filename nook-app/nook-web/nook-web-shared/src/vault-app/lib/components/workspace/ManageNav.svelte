@@ -1,6 +1,6 @@
 <!--
-Management navigation for one subject: the identity (keys, vaults,
-settings) or the open vault (devices, sync, passwords, import). One element:
+Management navigation for one subject: the identity (keys, vaults, devices,
+sync, settings) or the open vault (backup passwords, import). One element:
 a rail on wide screens and a bottom bar on phones.
 -->
 <script lang="ts">

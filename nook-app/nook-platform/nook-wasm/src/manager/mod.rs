@@ -574,8 +574,7 @@ impl NookVaultManager {
         let previous_mode = self.storage.mode;
         let previous_remote_ref = self.storage.remote_ref.clone();
         self.storage.mode = mode;
-        self.storage.layout = remote.layout;
-        self.storage.drive_namespaces.borrow_mut().clear();
+        self.storage.select_layout(remote.layout);
 
         match mode {
             StorageMode::Local => {

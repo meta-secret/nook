@@ -30,10 +30,10 @@ export class WorkspaceSectionScope {
     switch (this.section) {
       case WorkspaceSection.Keys:
       case WorkspaceSection.Vaults:
-      case WorkspaceSection.Settings:
-        return ManageSectionScope.Identity;
       case WorkspaceSection.Devices:
       case WorkspaceSection.Sync:
+      case WorkspaceSection.Settings:
+        return ManageSectionScope.Identity;
       case WorkspaceSection.Passwords:
       case WorkspaceSection.Import:
         return ManageSectionScope.Vault;

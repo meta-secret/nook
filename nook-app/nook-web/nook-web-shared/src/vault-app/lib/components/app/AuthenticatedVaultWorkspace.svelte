@@ -25,7 +25,6 @@ bar on phones.
   } from "$app-wasm";
   import { ExtensionSetupStatus } from "$lib/extension/install";
   import ExtensionInstallSetupCard from "$lib/components/ExtensionInstallSetupCard.svelte";
-  import OnboardDevice from "$lib/components/OnboardDevice.svelte";
   import PendingJoinsBanner from "$lib/components/PendingJoinsBanner.svelte";
   import SecretVault from "$lib/components/SecretVault.svelte";
   import VaultAdmin from "$lib/components/VaultAdmin.svelte";
@@ -33,12 +32,7 @@ bar on phones.
   import type { KeysPageLeave } from "$lib/components/devices-access-dashboard-state";
   import VaultSecurityGuideBanner from "$lib/components/VaultSecurityGuideBanner.svelte";
   import BrowserSettingsPanel from "$lib/components/settings/BrowserSettingsPanel.svelte";
-  import ManageSection from "$lib/components/settings/ManageSection.svelte";
-  import VaultDevicesCard from "$lib/components/settings/VaultDevicesCard.svelte";
-  import {
-    JoinApprovalHandlingOutcome,
-    JoinDenialHandlingOutcome,
-  } from "$lib/components/settings/vault-devices-card-state";
+  import IdentityDevicesPanel from "$lib/components/identity-control/IdentityDevicesPanel.svelte";
   import VaultStatusBar from "$lib/components/VaultStatusBar.svelte";
   import { VaultStatusBarVariant } from "$lib/components/vault-status-bar-state";
   import IdentitiesHub from "$lib/components/identities/IdentitiesHub.svelte";
@@ -83,14 +77,8 @@ bar on phones.
   } from "./authenticated-vault-workspace-state";
 
   type VaultAdminProps = ComponentProps<typeof VaultAdmin>;
-  type OnboardDeviceProps = ComponentProps<typeof OnboardDevice>;
   type PendingJoinsBannerProps = ComponentProps<typeof PendingJoinsBanner>;
   type SecretVaultProps = ComponentProps<typeof SecretVault>;
-  type VaultDevicesCardProps = ComponentProps<typeof VaultDevicesCard>;
-  type EnrollmentCodeInput = Pick<
-    Parameters<VaultState["issueEnrollmentCode"]>[0],
-    "entryId" | "password"
-  >;
 
   const SUPPORTS_EXTENSION = configured_vault_application_supports_extension();
 
@@ -137,6 +125,10 @@ bar on phones.
   );
 
   const section = $derived(vault.workspaceSection);
+  const identityPendingJoins = $derived.by(() => {
+    const snapshot = vault.identityControl.snapshot;
+    return snapshot === false ? [] : snapshot.pendingJoins;
+  });
   const scope = $derived(new WorkspaceSectionScope(section).scope);
   const managing = $derived(scope !== ManageSectionScope.None);
   const navEntry = $derived(new ManageNavLookup(section).entry);
@@ -456,7 +448,7 @@ bar on phones.
               variant="outline"
               size="sm"
               data-testid="vault-manage-btn"
-              onclick={() => openSection(WorkspaceSection.Devices)}
+              onclick={() => openSection(WorkspaceSection.Passwords)}
             >
               <Settings2 class="size-4" />
               <span class="hidden sm:inline"
@@ -521,11 +513,11 @@ bar on phones.
           {#if !secretsNoteEditorOpen}
             <PendingJoinsBanner
               {vault}
-              pendingJoins={vault.pendingJoins}
-              isBusy={vault.isSaving || vault.isVerifying}
+              pendingJoins={identityPendingJoins}
+              isBusy={vault.identityControl.busy || vault.isSaving}
               onApproveJoin={(
-                id: Parameters<PendingJoinsBannerProps["onApproveJoin"]>[0],
-              ) => vault.approveJoin(id)}
+                appId: Parameters<PendingJoinsBannerProps["onApproveJoin"]>[0],
+              ) => vault.identityControl.approve(appId)}
               onRefresh={syncAll}
               onOpenDevicesSettings={() =>
                 openSection(WorkspaceSection.Devices)}
@@ -561,95 +553,10 @@ bar on phones.
             onLeaveReady={(leave: KeysPageLeave) => (leaveKeysPage = leave)}
           />
         {:else if section === WorkspaceSection.Devices}
-          <div
-            class="grid min-w-0 grid-cols-1 gap-8"
-            data-testid="vault-devices-panel"
-          >
-            <ManageSection
-              title={vault.t(I18N_KEYS.SettingsDevices)}
-              subtitle={vault.t(I18N_KEYS.SettingsDevicesDesc)}
-              testId="vault-devices-section"
-            >
-              {#snippet badge()}
-                <StatusTag
-                  tone={vault.vaultMembers.length > 0
-                    ? StatusTone.Success
-                    : StatusTone.Neutral}
-                  label={vault.vaultMembers.length === 1
-                    ? vault.t(I18N_KEYS.SettingsDeviceCountSingular)
-                    : (() => {
-                        const countRequest: Parameters<typeof vault.t>[0] = {
-                          key: I18N_KEYS.SettingsDeviceCountPlural,
-                          replacements: {
-                            count: String(vault.vaultMembers.length),
-                          },
-                        };
-                        return vault.t(countRequest);
-                      })()}
-                  testId="vault-devices-status"
-                />
-              {/snippet}
-              <VaultDevicesCard
-                {vault}
-                deviceId={vault.deviceId}
-                devicePublicKey={vault.devicePublicKey}
-                pendingJoins={vault.pendingJoins}
-                vaultMembers={vault.vaultMembers}
-                isBusy={vault.isSaving || vault.isVerifying}
-                hasPasswordEnvelope={vault.hasPasswordEnvelope}
-                onApproveJoin={async (
-                  id: Parameters<VaultDevicesCardProps["onApproveJoin"]>[0],
-                ) => {
-                  await vault.approveJoin(id);
-                  return JoinApprovalHandlingOutcome.Handled;
-                }}
-                onDenyJoin={async (
-                  id: Parameters<VaultDevicesCardProps["onDenyJoin"]>[0],
-                ) => {
-                  await vault.denyJoin(id);
-                  return JoinDenialHandlingOutcome.Handled;
-                }}
-                onRenameDevice={(
-                  renameRequest: Parameters<
-                    VaultDevicesCardProps["onRenameDevice"]
-                  >[0],
-                ) => vault.renameDevice(renameRequest)}
-                onRevokeDevice={(
-                  id: Parameters<VaultDevicesCardProps["onRevokeDevice"]>[0],
-                ) => vault.revokeDevice(id)}
-              />
-            </ManageSection>
-            <OnboardDevice
-              {vault}
-              syncProviders={vault.syncProviders}
-              passwordEntries={vault.passwordEntries}
-              enrollmentCode={vault.enrollmentCode}
-              isBusy={vault.isPasswordBusy}
-              passwordError={vault.passwordError}
-              isVerifying={vault.isVerifying}
-              isInitializing={vault.isInitializing}
-              addProviderOpen={vault.addProviderOpen}
-              loginSetup={vault.loginSetup}
-              bind:githubPat={vault.githubPat}
-              bind:githubRepo={vault.githubRepo}
-              onIssueCode={(
-                issueRequest: Parameters<OnboardDeviceProps["onIssueCode"]>[0],
-              ) => vault.issueEnrollmentCode(issueRequest)}
-              onClearCode={() => vault.clearEnrollmentCode()}
-              onAddPassword={(
-                passwordRequest: Parameters<
-                  OnboardDeviceProps["onAddPassword"]
-                >[0],
-              ) => vault.addVaultPassword(passwordRequest)}
-              onBeginAddProvider={() => vault.beginAddProvider()}
-              onCancelAddProvider={() => vault.cancelAddProvider()}
-              onBeginSetup={(
-                setupRequest: Parameters<OnboardDeviceProps["onBeginSetup"]>[0],
-              ) => vault.beginProviderSetup(setupRequest)}
-              onCancelSetup={() => vault.cancelProviderSetup()}
-              onConnectProvider={onSettingsReconnect}
-            />
-          </div>
+          <IdentityDevicesPanel
+            {vault}
+            onOpenSync={() => openSection(WorkspaceSection.Sync)}
+          />
         {:else if section === WorkspaceSection.Settings}
           <BrowserSettingsPanel {vault} />
         {:else}
@@ -670,7 +577,6 @@ bar on phones.
             passwordEntries={vault.passwordEntries}
             isPasswordBusy={vault.isPasswordBusy}
             passwordError={vault.passwordError}
-            enrollmentCode={vault.enrollmentCode}
             canManageExistingPasswords={vault.deviceProtectionReady}
             onReconnect={onSettingsReconnect}
             onSyncProvider={async (
@@ -712,23 +618,6 @@ bar on phones.
             onRemovePassword={(
               id: Parameters<VaultAdminProps["onRemovePassword"]>[0],
             ) => vault.removeVaultPasswordEntry(id)}
-            onIssueCode={(enrollment: EnrollmentCodeInput) => {
-              const provider = vault.syncProviders[0];
-              if (!provider) {
-                throw new Error(
-                  vault.t(I18N_KEYS.OnboardDeviceChooseSyncProviderErr),
-                );
-              }
-              const issueRequest: Parameters<
-                typeof vault.issueEnrollmentCode
-              >[0] = {
-                entryId: enrollment.entryId,
-                password: enrollment.password,
-                providerId: provider.id,
-              };
-              return vault.issueEnrollmentCode(issueRequest);
-            }}
-            onClearCode={() => vault.clearEnrollmentCode()}
             onImportBitwarden={(
               importRequest: Parameters<
                 VaultAdminProps["onImportBitwarden"]

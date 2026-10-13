@@ -34,7 +34,7 @@ pub struct IdentityControlLog {
 #[derive(Debug, thiserror::Error)]
 #[error("{cause}")]
 pub struct IdentityControlRejection {
-    pub log: IdentityControlLog,
+    pub log: Box<IdentityControlLog>,
     #[source]
     pub cause: EventError,
 }
@@ -102,7 +102,12 @@ impl IdentityControlLog {
     ) -> Result<IdentityControlInsertion, IdentityControlRejection> {
         let id = match event.validate_envelope(&self.identity_id) {
             Ok(id) => id,
-            Err(cause) => return Err(IdentityControlRejection { log: self, cause }),
+            Err(cause) => {
+                return Err(IdentityControlRejection {
+                    log: Box::new(self),
+                    cause,
+                });
+            }
         };
         if self.events.contains_key(&id) {
             return Ok(IdentityControlInsertion {
@@ -112,7 +117,7 @@ impl IdentityControlLog {
         }
         if event.body.is_genesis() && self.genesis_id().is_some() {
             return Err(IdentityControlRejection {
-                log: self,
+                log: Box::new(self),
                 cause: EventError::MultipleGenesisRoots,
             });
         }
@@ -159,7 +164,12 @@ impl IdentityControlLog {
         for bytes in batch {
             let event = match IdentityEvent::parse_storage_bytes(bytes) {
                 Ok(event) => event,
-                Err(cause) => return Err(IdentityControlRejection { log, cause }),
+                Err(cause) => {
+                    return Err(IdentityControlRejection {
+                        log: Box::new(log),
+                        cause,
+                    });
+                }
             };
             log = log.insert(event)?.log;
         }

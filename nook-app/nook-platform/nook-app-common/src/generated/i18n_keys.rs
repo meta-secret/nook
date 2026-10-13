@@ -1326,6 +1326,58 @@ pub const HELP_SECTIONS_UNLOCK_SUMMARY: &str = "help.sections.unlock.summary";
 pub const HELP_SECTIONS_UNLOCK_TITLE: &str = "help.sections.unlock.title";
 pub const HELP_SUBTITLE: &str = "help.subtitle";
 pub const HELP_TITLE: &str = "help.title";
+pub const IDENTITY_CONTROL_APPROVE: &str = "identity_control.approve";
+pub const IDENTITY_CONTROL_AWAITING_FOUNDER_DESCRIPTION: &str =
+    "identity_control.awaiting_founder_description";
+pub const IDENTITY_CONTROL_AWAITING_FOUNDER_TITLE: &str = "identity_control.awaiting_founder_title";
+pub const IDENTITY_CONTROL_CHECK_PROVIDERS: &str = "identity_control.check_providers";
+pub const IDENTITY_CONTROL_CURRENT_APP: &str = "identity_control.current_app";
+pub const IDENTITY_CONTROL_DENY: &str = "identity_control.deny";
+pub const IDENTITY_CONTROL_ERROR_PASSPHRASE_SHORT: &str = "identity_control.error_passphrase_short";
+pub const IDENTITY_CONTROL_ERROR_PROVIDER_NOT_MOUNT: &str =
+    "identity_control.error_provider_not_mount";
+pub const IDENTITY_CONTROL_JOIN_APPROVED: &str = "identity_control.join_approved";
+pub const IDENTITY_CONTROL_JOIN_CHECK: &str = "identity_control.join_check";
+pub const IDENTITY_CONTROL_JOIN_LOCAL_PROVIDER: &str = "identity_control.join_local_provider";
+pub const IDENTITY_CONTROL_JOIN_WAITING_DESCRIPTION: &str =
+    "identity_control.join_waiting_description";
+pub const IDENTITY_CONTROL_JOIN_WAITING_TITLE: &str = "identity_control.join_waiting_title";
+pub const IDENTITY_CONTROL_MEMBERS_DESCRIPTION: &str = "identity_control.members_description";
+pub const IDENTITY_CONTROL_MEMBERS_TITLE: &str = "identity_control.members_title";
+pub const IDENTITY_CONTROL_MOUNT_ICLOUD: &str = "identity_control.mount_icloud";
+pub const IDENTITY_CONTROL_MOUNT_LEGACY: &str = "identity_control.mount_legacy";
+pub const IDENTITY_CONTROL_MOUNT_NAMESPACED: &str = "identity_control.mount_namespaced";
+pub const IDENTITY_CONTROL_MOUNT_UNCONNECTED_DESCRIPTION: &str =
+    "identity_control.mount_unconnected_description";
+pub const IDENTITY_CONTROL_MOUNT_UNCONNECTED_TITLE: &str =
+    "identity_control.mount_unconnected_title";
+pub const IDENTITY_CONTROL_NO_MOUNTS: &str = "identity_control.no_mounts";
+pub const IDENTITY_CONTROL_NOT_REPLICATED_DESCRIPTION: &str =
+    "identity_control.not_replicated_description";
+pub const IDENTITY_CONTROL_NOT_REPLICATED_TITLE: &str = "identity_control.not_replicated_title";
+pub const IDENTITY_CONTROL_ONBOARD_CODE_READY: &str = "identity_control.onboard_code_ready";
+pub const IDENTITY_CONTROL_ONBOARD_DESCRIPTION: &str = "identity_control.onboard_description";
+pub const IDENTITY_CONTROL_ONBOARD_GENERATE: &str = "identity_control.onboard_generate";
+pub const IDENTITY_CONTROL_ONBOARD_NEW_PASSPHRASE: &str = "identity_control.onboard_new_passphrase";
+pub const IDENTITY_CONTROL_ONBOARD_PASSPHRASE: &str = "identity_control.onboard_passphrase";
+pub const IDENTITY_CONTROL_ONBOARD_PASSPHRASE_HINT: &str =
+    "identity_control.onboard_passphrase_hint";
+pub const IDENTITY_CONTROL_ONBOARD_PROVIDER: &str = "identity_control.onboard_provider";
+pub const IDENTITY_CONTROL_ONBOARD_TITLE: &str = "identity_control.onboard_title";
+pub const IDENTITY_CONTROL_OPEN_SYNC: &str = "identity_control.open_sync";
+pub const IDENTITY_CONTROL_PENDING_TITLE: &str = "identity_control.pending_title";
+pub const IDENTITY_CONTROL_REQUESTED_AT: &str = "identity_control.requested_at";
+pub const IDENTITY_CONTROL_REVOKE: &str = "identity_control.revoke";
+pub const IDENTITY_CONTROL_REVOKE_CONFIRM: &str = "identity_control.revoke_confirm";
+pub const IDENTITY_CONTROL_REVOKED: &str = "identity_control.revoked";
+pub const IDENTITY_CONTROL_SYNC_DESCRIPTION: &str = "identity_control.sync_description";
+pub const IDENTITY_CONTROL_SYNC_NOW: &str = "identity_control.sync_now";
+pub const IDENTITY_CONTROL_SYNC_TITLE: &str = "identity_control.sync_title";
+pub const IDENTITY_CONTROL_UNNAMED_APP: &str = "identity_control.unnamed_app";
+pub const IDENTITY_CONTROL_UPGRADE: &str = "identity_control.upgrade";
+pub const IDENTITY_CONTROL_UPGRADE_HERE: &str = "identity_control.upgrade_here";
+pub const IDENTITY_CONTROL_VAULT_OPEN_THROUGH_IDENTITY: &str =
+    "identity_control.vault_open_through_identity";
 pub const JOIN_ENROLLMENT_APPROVE_ON_ENROLLED: &str = "join_enrollment.approve_on_enrolled";
 pub const JOIN_ENROLLMENT_CREATE_NEW_VAULT: &str = "join_enrollment.create_new_vault";
 pub const JOIN_ENROLLMENT_CREATING: &str = "join_enrollment.creating";
@@ -1341,8 +1393,6 @@ pub const JOIN_ENROLLMENT_HAVE_TRANSFER_KEYS: &str = "join_enrollment.have_trans
 pub const JOIN_ENROLLMENT_MEMBERS_KEY: &str = "join_enrollment.members_key";
 pub const JOIN_ENROLLMENT_SECRETS_KEY: &str = "join_enrollment.secrets_key";
 pub const JOIN_ENROLLMENT_SECRETS_KEY_PLACEHOLDER: &str = "join_enrollment.secrets_key_placeholder";
-pub const JOIN_ENROLLMENT_SEND_REQUEST: &str = "join_enrollment.send_request";
-pub const JOIN_ENROLLMENT_SENDING: &str = "join_enrollment.sending";
 pub const JOIN_ENROLLMENT_SETUP_FROM_SCRATCH: &str = "join_enrollment.setup_from_scratch";
 pub const JOIN_ENROLLMENT_SETUP_FROM_SCRATCH_DESC: &str = "join_enrollment.setup_from_scratch_desc";
 pub const JOIN_ENROLLMENT_STARTING_OVER: &str = "join_enrollment.starting_over";

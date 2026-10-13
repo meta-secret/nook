@@ -234,7 +234,7 @@ pub use auth::identity_control::{
 };
 pub use auth::identity_control_snapshot::{
     IdentityControlSnapshot, IdentityControlSnapshotRequest, IdentityControlStanding,
-    IdentityJoinView, IdentityMemberView, IdentityMountKind, IdentityMountLayoutView,
+    IdentityJoinView, IdentityMemberView, IdentityMountLayoutView, IdentityMountProvider,
     IdentityMountView, IdentityVaultView,
 };
 pub use auth::vault_meta_actions::{

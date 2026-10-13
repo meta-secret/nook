@@ -12,7 +12,6 @@ import {
 } from "$lib/runtime/storage-failure";
 
 import { VaultState } from "$lib/vault.svelte";
-import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
 import { isoTimestamp } from "$lib/nook";
 import { browserLogRuntime } from "$lib/runtime/log";
 import {
@@ -23,13 +22,12 @@ import {
 import {
   NookEnrollmentIssueInput,
   type NookEnrollmentProvider,
-  NookVaultNameState,
   OnboardingType,
   enrollment_icloud_shared_provider_for_architecture,
   enrollment_provider_for_architecture,
   enrollment_shared_provider_for_architecture,
-  encrypt_labeled_enrollment_payload,
   encrypt_unlabeled_enrollment_payload,
+  generate_id,
 } from "$app-wasm";
 import {
   bind_google_drive_shared_folder,
@@ -54,15 +52,6 @@ import {
   unavailableSharedStorageGrantCredential,
 } from "$lib/vault/architecture-model";
 
-enum CatalogVaultLabelKind {
-  Missing = "missing",
-  Present = "present",
-}
-
-type CatalogVaultLabel =
-  | { kind: CatalogVaultLabelKind.Missing }
-  | { kind: CatalogVaultLabelKind.Present; label: string };
-
 enum StorageChainReadinessKind {
   Idle = "idle",
 }
@@ -86,21 +75,21 @@ type ProviderEventOutboxFlush = {
   readonly target: SharedStorageTarget;
 };
 
-const log = browserLogRuntime.createLogger("vault-password");
+const log = browserLogRuntime.createLogger("identity-enrollment");
 
 export type EnrollmentCodeIssueRequest = {
-  readonly entryId: string;
-  readonly password: string;
+  readonly passphrase: string;
   readonly providerId: string;
 };
 
-/** Owns browser orchestration for one password enrollment issue context. */
-export class PasswordEnrollmentIssue {
+const PASSPHRASE_MIN_LENGTH = 8;
+
+/** Issues one-time codes that invite a new app into the current identity. */
+export class IdentityEnrollmentIssue {
   constructor(private readonly state: VaultState) {}
 
   async issueEnrollmentCode({
-    entryId,
-    password,
+    passphrase,
     providerId,
   }: EnrollmentCodeIssueRequest): Promise<EnrollmentCodeIssueResult> {
     const state = this.state;
@@ -111,10 +100,9 @@ export class PasswordEnrollmentIssue {
         ),
       );
     }
-    // Password verification borrows the wasm manager synchronously (`&self`).
-    // `isPasswordBusy` makes the periodic sync tick skip, but we still have to
-    // wait for any *already in-flight* `&mut self` storage future to release its
-    // borrow before verify runs, or wasm-bindgen's borrow detector trips.
+    // `isPasswordBusy` makes the periodic sync tick skip, but we still wait for
+    // any already in-flight `&mut self` storage future before pushing the
+    // identity log, or wasm-bindgen's borrow detector trips.
     state.isPasswordBusy = true;
     log.info("enrollment code issue started");
     try {
@@ -137,51 +125,25 @@ export class PasswordEnrollmentIssue {
       if (idle.isErr()) return storageErr(idle.error);
       await new Promise((resolve) => setTimeout(resolve, 0));
 
-      // The target entry is already loaded in memory after `addVaultPassword`.
-      // Only hit storage when it is genuinely missing — a redundant refresh can
-      // otherwise queue behind (or race) background sync work and stall
-      // enrollment on the shared storage chain.
-      if (!state.passwordEntries.some((entry) => entry.id === entryId)) {
-        const refreshed = await state.refreshPasswordEntriesList();
-        if (refreshed.isErr()) return storageErr(refreshed.error);
-        if (state.passwordEntries.length === 0) {
-          return storageErr(
-            new EnrollmentIssueFailure(
-              EnrollmentIssueRejection.BackupPasswordRequired,
-            ),
-          );
-        }
-        if (!state.passwordEntries.some((entry) => entry.id === entryId)) {
-          return storageErr(
-            new EnrollmentIssueFailure(
-              EnrollmentIssueRejection.PasswordEntryMissing,
-            ),
-          );
-        }
-      }
-      // `verify_vault_password` returns false on a wrong password but can also
-      // throw if the underlying age decryptor rejects — treat both as "wrong
-      // password" so the UI message stays predictable.
-      const verification = await state.enqueueStorage(async () => {
-        const admitted = state.admitManager();
-        if (admitted.isErr()) return storageErr(admitted.error);
-        try {
-          return storageOk(
-            admitted.value.verify_vault_password(entryId, password),
-          );
-        } catch {
-          return storageOk(false);
-        }
-      });
-      if (verification.isErr()) return storageErr(verification.error);
-      const verified = verification.value;
-      if (!verified) {
+      if (passphrase.trim().length < PASSPHRASE_MIN_LENGTH) {
         return storageErr(
-          new EnrollmentIssueFailure(EnrollmentIssueRejection.PasswordRejected),
+          new EnrollmentIssueFailure(
+            EnrollmentIssueRejection.PassphraseTooShort,
+          ),
         );
       }
-      log.info("enrollment password verified");
-      const selectedProvider = state.providers.find((p) => p.id === providerId);
+      const identity = state.identityControl.snapshot;
+      const selectedProvider = state.identityControl.mounts.find(
+        (p) => p.id === providerId,
+      );
+      if (!identity || !selectedProvider) {
+        return storageErr(
+          new EnrollmentIssueFailure(EnrollmentIssueRejection.ProviderNotMount),
+        );
+      }
+      // The joiner reads the identity log from this mount, so publish it first.
+      const published = await state.identityControl.syncWithMounts();
+      if (published.isErr()) return storageErr(published.error);
       if (!selectedProvider) {
         return storageErr(
           new EnrollmentIssueFailure(EnrollmentIssueRejection.ProviderRequired),
@@ -398,7 +360,7 @@ export class PasswordEnrollmentIssue {
                 if (admittedManager.isErr())
                   return storageErr(admittedManager.error);
                 try {
-                  await admittedManager.value.flush_event_outbox_for_provider(
+                  await admittedManager.value.sync_identity_log_with_provider(
                     targetArgs.mode,
                     targetArgs.pat,
                     targetArgs.repo,
@@ -426,7 +388,7 @@ export class PasswordEnrollmentIssue {
             if (admittedManager.isErr())
               return storageErr(admittedManager.error);
             try {
-              await admittedManager.value.flush_event_outbox_for_provider(
+              await admittedManager.value.sync_identity_log_with_provider(
                 targetArgs.mode,
                 targetArgs.pat,
                 targetArgs.repo,
@@ -468,74 +430,27 @@ export class PasswordEnrollmentIssue {
         return storageErr(new NativeVaultStorageFailure(failure));
       }
       log.info("enrollment provider payload prepared");
-      let catalogVaultName: CatalogVaultLabel = {
-        kind: CatalogVaultLabelKind.Missing,
-      };
-      if (state.activeVault.kind === ActiveVaultKind.Open) {
-        for (const entry of state.localVaults) {
-          const label = entry.label.trim();
-          if (entry.storeId === state.activeVault.storeId && label) {
-            catalogVaultName = {
-              kind: CatalogVaultLabelKind.Present,
-              label,
-            };
-            break;
-          }
-        }
-      }
-      // The local catalog is the durable browser-level label index. Keep it as
-      // the enrollment fallback while older/synced projections without
-      // `vault_name` are still supported.
-      const admitted = state.admitManager();
-      if (admitted.isErr()) return storageErr(admitted.error);
-      const manager = admitted.value;
-      let vaultName: CatalogVaultLabel;
-      try {
-        vaultName =
-          manager.vaultNameState === NookVaultNameState.Named
-            ? { kind: CatalogVaultLabelKind.Present, label: manager.vaultName }
-            : catalogVaultName;
-      } catch (failure) {
-        return storageErr(new NativeVaultStorageFailure(failure));
-      }
       let payload: NookEnrollmentIssueInput;
       try {
-        payload =
-          vaultName.kind === CatalogVaultLabelKind.Present
-            ? NookEnrollmentIssueInput.named(
-                provider,
-                vaultName.label,
-                entryId,
-                isoTimestamp(),
-              )
-            : NookEnrollmentIssueInput.unnamed(
-                provider,
-                entryId,
-                isoTimestamp(),
-              );
+        payload = NookEnrollmentIssueInput.for_identity(
+          provider,
+          identity.identityId,
+          identity.identityLabel,
+          generate_id(),
+          isoTimestamp(),
+        );
       } catch (failure) {
         return storageErr(new NativeVaultStorageFailure(failure));
       }
-      const selectedPassword = state.passwordEntries.find(
-        (entry) => entry.id === entryId,
-      );
       let code: string;
       try {
-        code =
-          selectedPassword && selectedPassword.label.trim()
-            ? encrypt_labeled_enrollment_payload(
-                payload,
-                password,
-                selectedPassword.label,
-              )
-            : encrypt_unlabeled_enrollment_payload(payload, password);
+        code = encrypt_unlabeled_enrollment_payload(payload, passphrase.trim());
       } catch (failure) {
         return storageErr(new NativeVaultStorageFailure(failure));
       } finally {
         payload.free();
       }
       state.enrollmentCode = code;
-      state.beginEnrollmentEntry(entryId);
       log.info("enrollment code issued");
       return storageOk(code);
     } finally {

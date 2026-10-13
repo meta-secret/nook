@@ -42,14 +42,6 @@ const DEFINITIONS: readonly ManageNavDefinition[] = [
     placement: ManageNavPlacement.Everywhere,
   },
   {
-    section: WorkspaceSection.Settings,
-    labelKey: I18N_KEYS.WorkspaceSectionSettings,
-    shortLabelKey: I18N_KEYS.WorkspaceNavShortSettings,
-    descriptionKey: I18N_KEYS.WorkspaceSectionSettingsDescription,
-    testId: "manage-nav-settings",
-    placement: ManageNavPlacement.Everywhere,
-  },
-  {
     section: WorkspaceSection.Devices,
     labelKey: I18N_KEYS.WorkspaceSectionDevices,
     shortLabelKey: I18N_KEYS.WorkspaceNavShortDevices,
@@ -63,6 +55,14 @@ const DEFINITIONS: readonly ManageNavDefinition[] = [
     shortLabelKey: I18N_KEYS.WorkspaceNavShortSync,
     descriptionKey: I18N_KEYS.WorkspaceSectionSyncDescription,
     testId: "manage-nav-sync",
+    placement: ManageNavPlacement.Everywhere,
+  },
+  {
+    section: WorkspaceSection.Settings,
+    labelKey: I18N_KEYS.WorkspaceSectionSettings,
+    shortLabelKey: I18N_KEYS.WorkspaceNavShortSettings,
+    descriptionKey: I18N_KEYS.WorkspaceSectionSettingsDescription,
+    testId: "manage-nav-settings",
     placement: ManageNavPlacement.Everywhere,
   },
   {
