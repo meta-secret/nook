@@ -172,6 +172,13 @@ pub fn generate_password(
     Ok::<_, wasm_bindgen::JsError>(PasswordGenerationOptions::generate(options)?)
 }
 
+/// Display-only strength estimate shown beside a revealed password or key.
+#[wasm_bindgen]
+#[must_use]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn password_strength_level(password: &str) -> nook_core::PasswordStrengthLevel {
+    nook_core::PasswordStrengthLevel::estimate(password)
+}
+
 /// Generate an RFC 6238 TOTP code from a base32 secret via `nook-core`.
 #[wasm_bindgen]
 #[cfg_attr(

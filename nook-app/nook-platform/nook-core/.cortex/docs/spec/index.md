@@ -12,3 +12,6 @@
 - **[file-attachments.md](file-attachments.md)**
   - Description: Encrypted file attachment vault item type (upload/download)
   - Status: Active
+- **[password-strength.md](password-strength.md)**
+  - Description: Display-only password strength estimate for revealed passwords and API keys
+  - Status: Implemented

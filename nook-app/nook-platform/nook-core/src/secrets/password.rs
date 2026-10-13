@@ -3,6 +3,7 @@ use tsify::Tsify;
 
 use crate::PasswordCharacterCount;
 use crate::errors::{PasswordError, PasswordResult};
+use wasm_bindgen::prelude::wasm_bindgen;
 
 const LOWERCASE: &str = "abcdefghijklmnopqrstuvwxyz";
 const UPPERCASE: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -141,6 +142,51 @@ impl PasswordGeneration {
 
         password.truncate(password_length);
         Ok(password)
+    }
+}
+
+/// Display-only estimate of how hard a stored password is to guess.
+///
+/// It looks at length and which character classes appear, so it cannot see
+/// dictionary words or reuse. It is a nudge shown next to a revealed value,
+/// never a policy gate.
+#[wasm_bindgen]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PasswordStrengthLevel {
+    Weak,
+    Fair,
+    Strong,
+}
+
+impl PasswordStrengthLevel {
+    const WEAK_BELOW_BITS: f64 = 45.0;
+    const STRONG_FROM_BITS: f64 = 70.0;
+
+    /// Estimate the strength of `password` from its length and alphabet.
+    #[must_use]
+    pub fn estimate(password: &str) -> Self {
+        let mut pool = 0_u32;
+        if password.chars().any(|c| c.is_ascii_lowercase()) {
+            pool += 26;
+        }
+        if password.chars().any(|c| c.is_ascii_uppercase()) {
+            pool += 26;
+        }
+        if password.chars().any(|c| c.is_ascii_digit()) {
+            pool += 10;
+        }
+        if password.chars().any(|c| !c.is_ascii_alphanumeric()) {
+            pool += 33;
+        }
+        let length = f64::from(u32::try_from(password.chars().count()).unwrap_or(u32::MAX));
+        let bits = length * f64::from(pool.max(2)).log2();
+        if bits < Self::WEAK_BELOW_BITS {
+            Self::Weak
+        } else if bits < Self::STRONG_FROM_BITS {
+            Self::Fair
+        } else {
+            Self::Strong
+        }
     }
 }
 
@@ -295,6 +341,36 @@ mod tests {
         assert!(serde_json::from_str::<PasswordGenerationOptions>(
         r#"{"length":20,"lowercase":"Included","uppercase":false,"numbers":true,"symbols":false}"#
     ).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn strength_grows_with_length_and_alphabet() {
+        assert_eq!(
+            PasswordStrengthLevel::estimate(""),
+            PasswordStrengthLevel::Weak
+        );
+        assert_eq!(
+            PasswordStrengthLevel::estimate("password"),
+            PasswordStrengthLevel::Weak
+        );
+        assert_eq!(
+            PasswordStrengthLevel::estimate("correcthorse"),
+            PasswordStrengthLevel::Fair
+        );
+        assert_eq!(
+            PasswordStrengthLevel::estimate("Tr0ub4dor&3-xkcd-936!"),
+            PasswordStrengthLevel::Strong
+        );
+    }
+
+    #[test]
+    fn generated_default_passwords_estimate_strong() -> anyhow::Result<()> {
+        let password = PasswordGenerationOptions::default().generate()?;
+        assert_eq!(
+            PasswordStrengthLevel::estimate(&password),
+            PasswordStrengthLevel::Strong
+        );
         Ok(())
     }
 }

@@ -273,7 +273,7 @@ pub use nook_event_log::{
 };
 pub use password::{
     MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordCharacterSet, PasswordGeneration,
-    PasswordGenerationOptions,
+    PasswordGenerationOptions, PasswordStrengthLevel,
 };
 pub use password_envelope::{
     PASSWORD_MIN_LENGTH, PASSWORD_SCRYPT_LOG_N, PasswordEntryIssuance, PasswordEntryResolution,
