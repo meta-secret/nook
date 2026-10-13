@@ -13,6 +13,7 @@ join) sit between the hero and the cards.
   import { IdentityDirectoryLoadKind } from '$lib/components/devices-access/identity-directory-view'
   import IdentitiesHero from './IdentitiesHero.svelte'
   import IdentityCard from './IdentityCard.svelte'
+  import IdentityDraftCard from './IdentityDraftCard.svelte'
   import { IdentityDirectoryLoader } from './identity-directory-loader.svelte'
   import {
     IdentityCardProjection,
@@ -43,6 +44,7 @@ join) sit between the hero and the cards.
       kind: LoginVaultExtensionPairingStatusKind.NotShown,
     }),
     unlockPanel,
+    vaultSetup,
     vaultPicker,
     children,
   }: {
@@ -63,6 +65,9 @@ join) sit between the hero and the cards.
     pairingStatusFor?: (storeId: string) => LoginVaultExtensionPairingStatus
     /** Unlock panel for `selectedStoreId`, placed inside its identity card. */
     unlockPanel?: Snippet
+    /** First-vault setup. It belongs to the current identity, or to the
+     * identity about to be created when this browser has none yet. */
+    vaultSetup?: Snippet
     /** Plain vault list, shown only when no identity card lists the vaults. */
     vaultPicker?: Snippet
     children?: Snippet
@@ -121,14 +126,32 @@ join) sit between the hero and the cards.
     }
     return ''
   })
+  /** The current identity, which receives the first-vault setup. */
+  const setupIdentityId = $derived.by(() => {
+    if (!vaultSetup || !cardsReady) return ''
+    for (const card of projection.cards) {
+      if (card.current) return card.identityId
+    }
+    return ''
+  })
+  /** With several identities, the current one opens its first-vault setup
+   * from its New vault row. */
+  let setupOpen = $state(false)
+  /** On a fresh browser the only identity opens its setup straight away. */
+  const setupShown = $derived(
+    Boolean(setupIdentityId) && (setupOpen || projection.cards.length === 1),
+  )
+  const featuredIdentityId = $derived(
+    unlockingIdentityId || (setupShown ? setupIdentityId : ''),
+  )
   const cards = $derived(
-    unlockingIdentityId
+    featuredIdentityId
       ? [
           ...projection.cards.filter(
-            (card) => card.identityId === unlockingIdentityId,
+            (card) => card.identityId === featuredIdentityId,
           ),
           ...projection.cards.filter(
-            (card) => card.identityId !== unlockingIdentityId,
+            (card) => card.identityId !== featuredIdentityId,
           ),
         ]
       : projection.cards,
@@ -199,6 +222,14 @@ join) sit between the hero and the cards.
     {/if}
   {/if}
 
+  {#if vaultSetup && !setupIdentityId && loader.state.kind !== IdentityDirectoryLoadKind.Loading}
+    <div class="grid min-w-0 grid-cols-1">
+      <IdentityDraftCard {vault}>
+        {@render vaultSetup()}
+      </IdentityDraftCard>
+    </div>
+  {/if}
+
   {#if showCards}
     {#if loader.state.kind === IdentityDirectoryLoadKind.Loading && vault.hasManager}
       <p
@@ -225,16 +256,22 @@ join) sit between the hero and the cards.
             {selectedStoreId}
             {extensionStoreIds}
             {busy}
-            canAddVault={canAddVault && card.current}
+            canAddVault={(canAddVault ||
+              (card.identityId === setupIdentityId && !setupShown)) &&
+              card.current}
             {onOpenVault}
-            {onNewVault}
+            onNewVault={card.identityId === setupIdentityId
+              ? () => (setupOpen = true)
+              : onNewVault}
             {onManage}
             {onLock}
             {onUseIdentity}
             {pairingStatusFor}
             {...unlockPanel && card.identityId === unlockingIdentityId
               ? { unlockPanel }
-              : {}}
+              : vaultSetup && setupShown && card.identityId === setupIdentityId
+                ? { unlockPanel: vaultSetup }
+                : {}}
           />
         {/each}
         <button

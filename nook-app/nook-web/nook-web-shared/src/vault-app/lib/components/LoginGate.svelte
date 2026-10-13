@@ -574,6 +574,114 @@
   });
 </script>
 
+{#snippet vaultSetupPanel()}
+  <LoginCreateVaultChooser
+    {vault}
+    {appKind}
+    {isVerifying}
+    {isInitializing}
+    {usesExtensionDeviceIdentity}
+    {onCreateDeviceVault}
+    {onStartSentinelGenesis}
+    onAddSentinelGenesisParticipantResponse={({
+      payload,
+      participantLabel,
+    }: SentinelGenesisParticipation) => {
+      const participantRequest: Parameters<
+        sentinelGenesisActions.SentinelGenesisActions["addParticipantResponse"]
+      >[0] = {
+        payload,
+        participantLabel: participantLabel ? participantLabel : "",
+      };
+      return new sentinelGenesisActions.SentinelGenesisActions(
+        vault,
+      ).addParticipantResponse(participantRequest);
+    }}
+    onFinalizeSentinelGenesis={() =>
+      new sentinelGenesisActions.SentinelGenesisActions(
+        vault,
+      ).finalize()}
+    onCreateSentinelGenesisParticipantResponse={((
+      ...[
+        v = (payload) =>
+          (() => {
+            const createParticipantResponseArgs: Parameters<
+              sentinelGenesisActions.SentinelGenesisActions["createParticipantResponse"]
+            >[0] = { requestPayload: payload };
+            return new sentinelGenesisActions.SentinelGenesisActions(
+              vault,
+            ).createParticipantResponse(createParticipantResponseArgs);
+          })(),
+      ]
+    ) => v)(onCreateSentinelGenesisParticipantResponse)}
+    onCreateSentinelGenesisPublicKeyAnnouncement={((
+      ...[
+        v = () =>
+          new sentinelGenesisActions.SentinelGenesisActions(
+            vault,
+          ).createPublicKeyAnnouncement(),
+      ]
+    ) => v)(onCreateSentinelGenesisPublicKeyAnnouncement)}
+    onRememberSentinelGenesisRequest={(
+      payload: Parameters<
+        NonNullable<
+          CreateVaultChooserProps["onRememberSentinelGenesisRequest"]
+        >
+      >[0],
+    ) =>
+      (() => {
+        const rememberRequestArgs: Parameters<
+          sentinelGenesisActions.SentinelGenesisActions["rememberRequest"]
+        >[0] = { requestPayload: payload };
+        return new sentinelGenesisActions.SentinelGenesisActions(
+          vault,
+        ).rememberRequest(rememberRequestArgs);
+      })()}
+    onReceiveSentinelGenesisShare={(
+      payload: Parameters<
+        NonNullable<
+          CreateVaultChooserProps["onReceiveSentinelGenesisShare"]
+        >
+      >[0],
+    ) =>
+      (() => {
+        const acceptShareDeliveryArgs: Parameters<
+          sentinelGenesisActions.SentinelGenesisActions["acceptShareDelivery"]
+        >[0] = { payload };
+        return new sentinelGenesisActions.SentinelGenesisActions(
+          vault,
+        ).acceptShareDelivery(acceptShareDeliveryArgs);
+      })()}
+    onCompleteSentinelGenesisDelivery={() =>
+      new sentinelGenesisActions.SentinelGenesisActions(
+        vault,
+      ).completeDelivery()}
+    sentinelGenesisPhase={vault.sentinelGenesisPhase}
+    sentinelGenesisRequest={vault.sentinelGenesisRequest}
+    sentinelGenesisParticipants={vault.sentinelGenesisParticipants}
+    sentinelGenesisDeliveries={vault.sentinelGenesisDeliveries}
+    {sentinelInvitationRequest}
+    {sentinelParticipantResponsePending}
+    {sentinelParticipantResponse}
+    {sentinelOnboardingPackage}
+    {...createVaultChooserOptionalProps}
+    onConnectStorage={() => {
+      vault.beginExistingVaultOpen();
+      showProviderSetupLink = true;
+    }}
+  />
+
+  {#if showEnrollmentAccess}
+    <LoginEnrollmentPanel
+      {vault}
+      bind:open={enrollmentPanelOpen}
+      {isVerifying}
+      initialCode={prefillEnrollmentCode}
+      openFormInitially={false}
+      {...enrollmentPanelOptionalProps}
+    />
+  {/if}
+{/snippet}
 {#snippet unlockPanel()}
   <LoginUnlockStep
     {vault}
@@ -653,6 +761,10 @@
         pairingStatusLookup.statusForStore(storeId)}
       {...showLocalUnlock && !newVaultOpen ? { unlockPanel } : {}}
       {...showVaultPicker && !newVaultOpen ? { vaultPicker } : {}}
+      {...(showCreateVault || sentinelInvitationRequest.trim()) &&
+      !showQrOnboarding
+        ? { vaultSetup: vaultSetupPanel }
+        : {}}
     >
       <div class="grid min-w-0 grid-cols-1 gap-3 empty:hidden">
         {#if vault.sessionExpiredByIdle}
@@ -684,114 +796,7 @@
               return onUseEnrollmentCode(enrollmentRequest);
             }}
           />
-        {:else if showCreateVault || sentinelInvitationRequest.trim()}
-          <LoginCreateVaultChooser
-            {vault}
-            {appKind}
-            {isVerifying}
-            {isInitializing}
-            {usesExtensionDeviceIdentity}
-            {onCreateDeviceVault}
-            {onStartSentinelGenesis}
-            onAddSentinelGenesisParticipantResponse={({
-              payload,
-              participantLabel,
-            }: SentinelGenesisParticipation) => {
-              const participantRequest: Parameters<
-                sentinelGenesisActions.SentinelGenesisActions["addParticipantResponse"]
-              >[0] = {
-                payload,
-                participantLabel: participantLabel ? participantLabel : "",
-              };
-              return new sentinelGenesisActions.SentinelGenesisActions(
-                vault,
-              ).addParticipantResponse(participantRequest);
-            }}
-            onFinalizeSentinelGenesis={() =>
-              new sentinelGenesisActions.SentinelGenesisActions(
-                vault,
-              ).finalize()}
-            onCreateSentinelGenesisParticipantResponse={((
-              ...[
-                v = (payload) =>
-                  (() => {
-                    const createParticipantResponseArgs: Parameters<
-                      sentinelGenesisActions.SentinelGenesisActions["createParticipantResponse"]
-                    >[0] = { requestPayload: payload };
-                    return new sentinelGenesisActions.SentinelGenesisActions(
-                      vault,
-                    ).createParticipantResponse(createParticipantResponseArgs);
-                  })(),
-              ]
-            ) => v)(onCreateSentinelGenesisParticipantResponse)}
-            onCreateSentinelGenesisPublicKeyAnnouncement={((
-              ...[
-                v = () =>
-                  new sentinelGenesisActions.SentinelGenesisActions(
-                    vault,
-                  ).createPublicKeyAnnouncement(),
-              ]
-            ) => v)(onCreateSentinelGenesisPublicKeyAnnouncement)}
-            onRememberSentinelGenesisRequest={(
-              payload: Parameters<
-                NonNullable<
-                  CreateVaultChooserProps["onRememberSentinelGenesisRequest"]
-                >
-              >[0],
-            ) =>
-              (() => {
-                const rememberRequestArgs: Parameters<
-                  sentinelGenesisActions.SentinelGenesisActions["rememberRequest"]
-                >[0] = { requestPayload: payload };
-                return new sentinelGenesisActions.SentinelGenesisActions(
-                  vault,
-                ).rememberRequest(rememberRequestArgs);
-              })()}
-            onReceiveSentinelGenesisShare={(
-              payload: Parameters<
-                NonNullable<
-                  CreateVaultChooserProps["onReceiveSentinelGenesisShare"]
-                >
-              >[0],
-            ) =>
-              (() => {
-                const acceptShareDeliveryArgs: Parameters<
-                  sentinelGenesisActions.SentinelGenesisActions["acceptShareDelivery"]
-                >[0] = { payload };
-                return new sentinelGenesisActions.SentinelGenesisActions(
-                  vault,
-                ).acceptShareDelivery(acceptShareDeliveryArgs);
-              })()}
-            onCompleteSentinelGenesisDelivery={() =>
-              new sentinelGenesisActions.SentinelGenesisActions(
-                vault,
-              ).completeDelivery()}
-            sentinelGenesisPhase={vault.sentinelGenesisPhase}
-            sentinelGenesisRequest={vault.sentinelGenesisRequest}
-            sentinelGenesisParticipants={vault.sentinelGenesisParticipants}
-            sentinelGenesisDeliveries={vault.sentinelGenesisDeliveries}
-            {sentinelInvitationRequest}
-            {sentinelParticipantResponsePending}
-            {sentinelParticipantResponse}
-            {sentinelOnboardingPackage}
-            {...createVaultChooserOptionalProps}
-            onConnectStorage={() => {
-              vault.beginExistingVaultOpen();
-              showProviderSetupLink = true;
-            }}
-          />
-
-          {#if showEnrollmentAccess}
-            <LoginEnrollmentPanel
-              {vault}
-              bind:open={enrollmentPanelOpen}
-              {isVerifying}
-              initialCode={prefillEnrollmentCode}
-              openFormInitially={false}
-              {...enrollmentPanelOptionalProps}
-            />
-          {/if}
-        {:else}
+        {:else if !showCreateVault && !sentinelInvitationRequest.trim()}
           {#if !hasProviders && !showSetup && !showLocalUnlock && onOpenHelp}
             <ProductIntro {vault} {onOpenHelp} />
           {/if}

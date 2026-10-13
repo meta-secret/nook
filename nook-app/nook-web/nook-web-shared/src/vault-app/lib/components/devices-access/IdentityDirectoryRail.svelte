@@ -16,6 +16,8 @@ creation as the primary interactions.
     selectedIdentityId: string
     onSelectIdentity: (identityId: string) => void
     onAddIdentity: () => void
+    /** An identity is being created: the add action would repeat it. */
+    adding?: boolean
   }
 
   let {
@@ -24,6 +26,7 @@ creation as the primary interactions.
     selectedIdentityId,
     onSelectIdentity,
     onAddIdentity,
+    adding = false,
   }: IdentityDirectoryRailProps = $props()
 
   type CountLabelRequest = {
@@ -104,17 +107,19 @@ creation as the primary interactions.
         </button>
       </li>
     {/each}
-    <li>
-      <Button
-        type="button"
-        variant="outline"
-        class="min-h-14 border-dashed"
-        data-testid="devices-access-add-identity"
-        onclick={onAddIdentity}
-      >
-        <Plus class="size-4" />
-        {vault.t(I18N_KEYS.DevicesAccessAddIdentity)}
-      </Button>
-    </li>
+    {#if !adding}
+      <li>
+        <Button
+          type="button"
+          variant="outline"
+          class="min-h-14 border-dashed"
+          data-testid="devices-access-add-identity"
+          onclick={onAddIdentity}
+        >
+          <Plus class="size-4" />
+          {vault.t(I18N_KEYS.DevicesAccessAddIdentity)}
+        </Button>
+      </li>
+    {/if}
   </ul>
 </aside>

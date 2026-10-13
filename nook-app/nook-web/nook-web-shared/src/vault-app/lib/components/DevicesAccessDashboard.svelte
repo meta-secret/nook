@@ -514,13 +514,16 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
           ? directory.selection.identityId
           : ""}
       <div class="grid min-w-0 grid-cols-1 gap-6">
+        {#if !(identityCreationOpen && directory.identities.length === 0)}
         <IdentityDirectoryRail
           {vault}
+          adding={identityCreationOpen}
           identities={directory.identities}
           {selectedIdentityId}
           onSelectIdentity={chooseIdentity}
           onAddIdentity={() => void beginAddIdentity()}
         />
+        {/if}
 
         <div class="min-w-0">
           {#if identityCreationOpen}

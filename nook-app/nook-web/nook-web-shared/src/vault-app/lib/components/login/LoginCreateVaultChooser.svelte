@@ -532,7 +532,7 @@
               ? "sentinel-card-stack-panel rounded-none border border-[#657580] border-l-4 border-l-[#6ed9ff] bg-[#242d35] p-6 sm:p-10"
               : sentinelDashboardActive
                 ? "rounded-none border border-[#294323] bg-black/40 p-5 shadow-[0_0_80px_rgb(94_255_112/0.05)] sm:p-8"
-                : "nk-frame-sheet p-5 sm:p-8",
+                : "",
           ]}
         >
           {#if sentinelDashboardActive}
@@ -584,7 +584,7 @@
                 <li class="flex items-start gap-4">
                   <span
                     class={[
-                      "mt-0.5 grid size-7 shrink-0 place-items-center rounded-full text-xs font-bold",
+                      "mt-0.5 grid size-7 shrink-0 place-items-center font-mono text-xs font-bold",
                       index < stepIndex
                         ? "bg-emerald-700 text-white"
                         : index === stepIndex
@@ -601,7 +601,7 @@
                   <div class="min-w-0 flex-1">
                     <p
                       class={[
-                        "text-lg",
+                        "text-base",
                         index === stepIndex
                           ? "font-semibold text-foreground"
                           : "text-muted-foreground",
@@ -626,13 +626,13 @@
                             {#if appKind !== VaultApplication.Sentinel}
                               <button
                                 type="button"
-                                class="group grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-lg border border-border bg-background px-4 py-3 text-left text-foreground transition-[border-color,background-color,box-shadow] hover:border-foreground/25 hover:bg-muted/30 hover:shadow-sm disabled:opacity-60"
+                                class="group grid grid-cols-[auto_1fr_auto] items-center gap-3 nk-frame-nick nk-frame-interactive px-4 py-3 text-left text-foreground transition-colors hover:bg-accent/40 disabled:opacity-60"
                                 data-testid="get-started-path-simple"
                                 disabled={isBusy}
                                 onclick={chooseSimplePath}
                               >
                                 <span
-                                  class="grid size-9 place-items-center rounded-full border border-border bg-muted/30"
+                                  class="nk-tile"
                                 >
                                   <KeyRound class="size-4" />
                                 </span>
@@ -658,13 +658,13 @@
                             {#if appKind !== VaultApplication.Simple}
                               <button
                                 type="button"
-                                class="group grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-lg border border-border bg-background px-4 py-3 text-left text-foreground transition-[border-color,background-color,box-shadow] hover:border-foreground/25 hover:bg-muted/30 hover:shadow-sm disabled:opacity-60"
+                                class="group grid grid-cols-[auto_1fr_auto] items-center gap-3 nk-frame-nick nk-frame-interactive px-4 py-3 text-left text-foreground transition-colors hover:bg-accent/40 disabled:opacity-60"
                                 data-testid="get-started-path-sentinel"
                                 disabled={isBusy}
                                 onclick={chooseSentinelCreatePath}
                               >
                                 <span
-                                  class="grid size-9 place-items-center rounded-full bg-foreground text-background"
+                                  class="nk-tile border-foreground bg-foreground text-background"
                                 >
                                   <Users class="size-4" />
                                 </span>
@@ -701,13 +701,13 @@
                             </div>
                             <button
                               type="button"
-                              class="group grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 rounded-lg border border-border bg-background px-4 py-3 text-left text-foreground transition-[border-color,background-color,box-shadow] hover:border-foreground/25 hover:bg-muted/30 hover:shadow-sm disabled:opacity-60"
+                              class="group grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 nk-frame-nick nk-frame-interactive px-4 py-3 text-left text-foreground transition-colors hover:bg-accent/40 disabled:opacity-60"
                               data-testid="login-connect-storage-btn"
                               disabled={isBusy}
                               onclick={onConnectStorage}
                             >
                               <span
-                                class="grid size-9 place-items-center rounded-full border border-border bg-muted/30"
+                                class="nk-tile"
                               >
                                 <Cloud class="size-4" />
                               </span>

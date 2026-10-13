@@ -2186,6 +2186,13 @@
     "nav_short_sync": "Sync",
     "nav_short_passwords": "Backups",
     "back_to_vault": "Back to vault",
-    "card_no_vaults": "No vaults yet"
+    "card_no_vaults": "No vaults yet",
+    "first_identity": {
+      "title": "Your first identity",
+      "description": "An identity holds your keys and owns your vaults. Nook creates it together with its first vault, protected by this browser’s passkey or PIN.",
+      "status": "Not created yet",
+      "vault_label": "First vault"
+    },
+    "identity_vault_setup": "New vault for this identity"
   }
 }

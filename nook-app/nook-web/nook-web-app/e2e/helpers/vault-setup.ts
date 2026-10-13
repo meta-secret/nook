@@ -46,11 +46,28 @@ export async function openLoginProviderSetup(page: Page) {
   })
 }
 
+/**
+ * A vault is created from an identity: the first-identity card shows the
+ * setup directly, and an identity without vaults opens it from its card's
+ * New vault row.
+ */
+export async function openFirstVaultSetup(page: Page) {
+  const chooser = page.getByTestId('login-create-vault-chooser')
+  const newVaultRow = page.getByTestId('identity-new-vault')
+  await expect(chooser.or(newVaultRow).first()).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  if (!(await chooser.isVisible()) && (await newVaultRow.isVisible())) {
+    await newVaultRow.click()
+  }
+}
+
 export async function createLocalVaultOnLogin(
   page: Page,
   vaultName = 'Test vault',
   readyTestId = 'vault-panel',
 ) {
+  await openFirstVaultSetup(page)
   const chooser = page.getByTestId('login-create-vault-chooser')
   await expect(chooser).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -149,7 +166,8 @@ export async function connectLocalVault(page: Page) {
   }
 
   const chooser = page.getByTestId('login-create-vault-chooser')
-  if (await chooser.isVisible()) {
+  const newVaultRow = page.getByTestId('identity-new-vault')
+  if ((await chooser.isVisible()) || (await newVaultRow.isVisible())) {
     await createLocalVaultOnLogin(page)
     await disableVaultIdleLock(page)
     return
