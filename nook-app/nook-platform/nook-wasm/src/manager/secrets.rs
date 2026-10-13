@@ -397,8 +397,9 @@ impl NookVaultManager {
     pub async fn sync_local_folder_provider_js(
         &mut self,
         handle_id: &str,
+        layout: tsify::Ts<nook_core::ProviderRowLayout>,
     ) -> Result<String, JsError> {
-        self.sync_local_folder_provider(handle_id)
+        self.sync_local_folder_provider(handle_id, layout.to_rust()?)
             .await
             .map_err(Into::into)
     }

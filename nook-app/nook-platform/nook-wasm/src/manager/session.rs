@@ -15,6 +15,12 @@ use crate::{NookError, NookEventLogSyncIssue};
 
 pub(in crate::manager) struct StorageSession {
     pub(in crate::manager) mode: nook_core::StorageMode,
+    /// Remote layout of the prepared provider row.
+    pub(in crate::manager) layout: nook_core::ProviderRowLayout,
+    /// Resolved Drive child folders for namespaced event logs.
+    pub(in crate::manager) drive_namespaces: std::cell::RefCell<
+        std::collections::BTreeMap<nook_core::EventLogLocation, nook_core::DriveEventParent>,
+    >,
     pub(in crate::manager) access_token: String,
     pub(in crate::manager) remote_ref: String,
     pub(in crate::manager) remote_path: String,
@@ -24,10 +30,31 @@ pub(in crate::manager) struct StorageSession {
     pub(in crate::manager) use_local_cache_for_connect: bool,
 }
 
+impl StorageSession {
+    pub(in crate::manager) fn drive_namespace_parent(
+        &self,
+        location: &nook_core::EventLogLocation,
+    ) -> Option<nook_core::DriveEventParent> {
+        self.drive_namespaces.borrow().get(location).cloned()
+    }
+
+    pub(in crate::manager) fn remember_drive_namespace(
+        &self,
+        location: &nook_core::EventLogLocation,
+        parent: &nook_core::DriveEventParent,
+    ) {
+        self.drive_namespaces
+            .borrow_mut()
+            .insert(location.clone(), parent.clone());
+    }
+}
+
 impl Default for StorageSession {
     fn default() -> Self {
         Self {
             mode: StorageMode::Local,
+            layout: nook_core::ProviderRowLayout::LegacyVaultRoot,
+            drive_namespaces: std::cell::RefCell::default(),
             access_token: String::new(),
             remote_ref: String::new(),
             remote_path: String::new(),

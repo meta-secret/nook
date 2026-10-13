@@ -11,15 +11,14 @@ use nook_auth2::{AppId, IdentityId};
 
 use super::builder::{IdentityEventSigning, IdentityGenesisRequest, OpenedVaultDek};
 use super::wire::{
-    IdentityControlOperation, IdentityEvent, IdentityLabel, IdentityMemberKeys,
-    IdentityProviderMount, IdentityVaultLabel, MemberVaultDek,
+    IdentityControlOperation, IdentityEvent, IdentityMemberKeys, IdentityProviderMount,
+    MemberVaultDek,
 };
 use crate::{EventResult, VaultAuthorizedRoster};
 
 /// One Simple vault the identity owns, opened by the migrating installation.
 pub struct LegacyVaultMembership<'a> {
     pub dek: OpenedVaultDek<'a>,
-    pub label: IdentityVaultLabel,
     pub roster: &'a VaultAuthorizedRoster,
 }
 
@@ -27,7 +26,6 @@ pub struct LegacyVaultMembership<'a> {
 /// identity control log.
 pub struct IdentityControlMigration<'a> {
     pub identity_id: &'a IdentityId,
-    pub label: IdentityLabel,
     pub founder: IdentityMemberKeys,
     pub vaults: &'a [LegacyVaultMembership<'a>],
     pub mounts: Vec<IdentityProviderMount>,
@@ -51,7 +49,6 @@ impl IdentityControlMigration<'_> {
     pub fn events(self) -> EventResult<IdentityControlMigrationOutcome> {
         let Self {
             identity_id,
-            label,
             founder,
             vaults,
             mounts,
@@ -101,7 +98,6 @@ impl IdentityControlMigration<'_> {
             recipients.dedup_by(|left, right| left.app_id == right.app_id);
             operations.push(IdentityControlOperation::VaultRegistered {
                 store_id: vault.dek.store_id.clone(),
-                label: vault.label.clone(),
                 key_epoch: vault.dek.key_epoch.clone(),
                 recipients,
             });
@@ -114,7 +110,6 @@ impl IdentityControlMigration<'_> {
 
         let genesis = IdentityEvent::genesis(IdentityGenesisRequest {
             identity_id,
-            label,
             founder,
             signing: IdentityEventSigning {
                 signing_key: signing.signing_key,

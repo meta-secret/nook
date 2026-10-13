@@ -1,8 +1,12 @@
 //! Portable identity collection and active-identity selection policy.
 mod enrollment;
 mod recovery;
+mod replication;
 pub use crate::MemberLabelState;
 pub use recovery::RecoveryRetirement;
+pub use replication::{
+    ReplicatedIdentityAdoption, ReplicatedIdentityMembership, ReplicatedVaultGrant,
+};
 
 /// Membership of an admitted app key in the local identity directory.
 #[derive(Debug, Clone, PartialEq, Eq)]

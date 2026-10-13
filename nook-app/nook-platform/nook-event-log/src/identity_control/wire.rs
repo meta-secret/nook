@@ -40,40 +40,6 @@ impl fmt::Display for IdentityEventSchemaVersion {
     }
 }
 
-/// User-visible identity name carried by the replicated control log.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct IdentityLabel(String);
-
-impl IdentityLabel {
-    #[must_use]
-    pub fn new(label: &str) -> Self {
-        Self(label.trim().to_owned())
-    }
-
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-/// User-visible vault name registered with its owning identity.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct IdentityVaultLabel(String);
-
-impl IdentityVaultLabel {
-    #[must_use]
-    pub fn new(label: &str) -> Self {
-        Self(label.trim().to_owned())
-    }
-
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
 const PROVIDER_MOUNT_ID_PREFIX: &str = "mnt_";
 
 /// Stable identifier of one provider mount in an identity (`mnt_{token}`).
@@ -240,11 +206,7 @@ pub struct IdentityProviderMount {
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum IdentityControlOperation {
     IdentityCreated {
-        label: IdentityLabel,
         founder: IdentityMemberKeys,
-    },
-    IdentityRenamed {
-        label: IdentityLabel,
     },
     MemberJoinRequested {
         member: IdentityMemberKeys,
@@ -265,7 +227,6 @@ pub enum IdentityControlOperation {
     },
     VaultRegistered {
         store_id: StoreId,
-        label: IdentityVaultLabel,
         key_epoch: EventId,
         recipients: Vec<MemberVaultDek>,
     },
@@ -398,7 +359,7 @@ impl IdentityEvent {
             })
             .count();
         match (body.is_genesis(), body.operations.as_slice()) {
-            (true, [IdentityControlOperation::IdentityCreated { founder, .. }]) => {
+            (true, [IdentityControlOperation::IdentityCreated { founder }]) => {
                 if founder.signing_actor()? != body.actor_id {
                     return Err(EventError::IdentityControlInvalid(
                         "identity genesis must be signed by its founder".to_owned(),
@@ -457,7 +418,6 @@ impl IdentityEvent {
                     }
                 }
                 IdentityControlOperation::IdentityCreated { .. }
-                | IdentityControlOperation::IdentityRenamed { .. }
                 | IdentityControlOperation::MemberJoinDenied { .. }
                 | IdentityControlOperation::MemberRevoked { .. }
                 | IdentityControlOperation::MemberRenamed { .. }

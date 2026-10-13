@@ -23,6 +23,45 @@ use crate::{
     OAuthFilePreset, StorageProviderType,
 };
 
+/// Prefix marking an identity namespaced row in the connect `repo` slot.
+pub const IDENTITY_NAMESPACED_REF_PREFIX: &str = "identity-namespaced:";
+
+/// A provider remote reference paired with the row layout it was built from.
+///
+/// The prefix keeps the WASM connect arguments a 3-tuple, as the Drive target
+/// prefixes do. Rust produces and parses it; the web layer only forwards it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LayoutRemoteRef<'a> {
+    pub layout: ProviderRowLayout,
+    pub inner: &'a str,
+}
+
+impl<'a> LayoutRemoteRef<'a> {
+    #[must_use]
+    pub fn parse(raw: &'a str) -> Self {
+        match raw.strip_prefix(IDENTITY_NAMESPACED_REF_PREFIX) {
+            Some(inner) => Self {
+                layout: ProviderRowLayout::IdentityNamespaced,
+                inner,
+            },
+            None => Self {
+                layout: ProviderRowLayout::LegacyVaultRoot,
+                inner: raw,
+            },
+        }
+    }
+
+    #[must_use]
+    pub fn format(self) -> String {
+        match self.layout {
+            ProviderRowLayout::IdentityNamespaced => {
+                format!("{IDENTITY_NAMESPACED_REF_PREFIX}{}", self.inner)
+            }
+            ProviderRowLayout::LegacyVaultRoot => self.inner.to_owned(),
+        }
+    }
+}
+
 /// Whether a provider row can carry an identity's control log.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IdentityMountCapability {
@@ -257,8 +296,8 @@ mod tests {
     use super::super::OAuthFileConfig;
     use super::*;
     use crate::{
-        ActiveVaultScope, AuthProvidersSnapshotData, ProviderSyncCheckpoint,
-        StoredGithubPat, StoredLocalFolderConfiguration, StoredOAuthFileConfiguration,
+        ActiveVaultScope, AuthProvidersSnapshotData, ProviderSyncCheckpoint, StoredGithubPat,
+        StoredLocalFolderConfiguration, StoredOAuthFileConfiguration,
     };
 
     struct Row(StorageProviderData);
@@ -456,6 +495,46 @@ mod tests {
             .filter_map(|row| row.get("id").and_then(serde_json::Value::as_str))
             .collect::<Vec<_>>();
         assert_eq!(ids, vec!["legacy"]);
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod remote_ref_tests {
+    use super::*;
+    use crate::{ProviderSyncCheckpoint, StoredGithubPat, StoredOAuthFileConfiguration};
+
+    #[test]
+    fn namespaced_rows_mark_their_connect_ref_and_legacy_rows_stay_unchanged() -> anyhow::Result<()>
+    {
+        let mut row = StorageProviderData {
+            id: "github".to_owned(),
+            provider_type: StorageProviderType::Github,
+            label: "GitHub".to_owned(),
+            github_pat: StoredGithubPat::Token("pat".to_owned()),
+            github_repo: StoredGithubRepository::Repository("owner/repo".to_owned()),
+            oauth_file: StoredOAuthFileConfiguration::NotApplicable,
+            local_folder: StoredLocalFolderConfiguration::NotApplicable,
+            store_id: ProviderVaultScope::Unscoped,
+            layout: ProviderRowLayout::LegacyVaultRoot,
+            sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
+            created_at: String::new(),
+        };
+        assert_eq!(row.connection_args()?.repo, "owner/repo");
+        row.layout = ProviderRowLayout::IdentityNamespaced;
+        let args = row.connection_args()?;
+        assert_eq!(args.repo, "identity-namespaced:owner/repo");
+        assert_eq!(
+            LayoutRemoteRef::parse(&args.repo),
+            LayoutRemoteRef {
+                layout: ProviderRowLayout::IdentityNamespaced,
+                inner: "owner/repo",
+            }
+        );
+        assert_eq!(
+            LayoutRemoteRef::parse("private-folder-v2:abc").layout,
+            ProviderRowLayout::LegacyVaultRoot
+        );
         Ok(())
     }
 }

@@ -12,7 +12,7 @@ use super::graph::IdentityControlLog;
 use super::projection::IdentityControlState;
 use super::wire::{
     IdentityControlOperation, IdentityEvent, IdentityEventBody, IdentityEventSchemaVersion,
-    IdentityLabel, IdentityMemberKeys, IdentityVaultDekGrant, IdentityVaultLabel, MemberVaultDek,
+    IdentityMemberKeys, IdentityVaultDekGrant, MemberVaultDek,
 };
 use crate::signing::SigningIdentity;
 use crate::{EventError, EventId, EventResult};
@@ -26,7 +26,6 @@ pub struct IdentityEventSigning<'a> {
 /// Named values required to create an identity's genesis event.
 pub struct IdentityGenesisRequest<'a> {
     pub identity_id: &'a IdentityId,
-    pub label: IdentityLabel,
     pub founder: IdentityMemberKeys,
     pub signing: IdentityEventSigning<'a>,
 }
@@ -47,7 +46,6 @@ pub struct IdentityApprovalRequest<'a> {
 
 /// Named values required to register a vault with its owning identity.
 pub struct IdentityVaultRegistration<'a> {
-    pub label: IdentityVaultLabel,
     pub dek: OpenedVaultDek<'a>,
 }
 
@@ -77,14 +75,13 @@ impl IdentityEvent {
     pub fn genesis(request: IdentityGenesisRequest<'_>) -> EventResult<Self> {
         let IdentityGenesisRequest {
             identity_id,
-            label,
             founder,
             signing,
         } = request;
         Self::signed(
             identity_id,
             Vec::new(),
-            vec![IdentityControlOperation::IdentityCreated { label, founder }],
+            vec![IdentityControlOperation::IdentityCreated { founder }],
             &signing,
         )
     }
@@ -209,7 +206,6 @@ impl IdentityControlState {
         }
         Ok(IdentityControlOperation::VaultRegistered {
             store_id: request.dek.store_id.clone(),
-            label: request.label,
             key_epoch: request.dek.key_epoch.clone(),
             recipients: self.recipients(request.dek.keys)?,
         })

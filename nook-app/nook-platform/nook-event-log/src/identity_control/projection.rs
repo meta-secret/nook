@@ -11,8 +11,8 @@ use nook_auth2::{AppId, IdentityId, IsoTimestamp, StoreId};
 
 use super::graph::IdentityControlLog;
 use super::wire::{
-    IdentityControlOperation, IdentityLabel, IdentityMemberKeys, IdentityProviderMount,
-    IdentityVaultLabel, MemberVaultDek, ProviderMountId,
+    IdentityControlOperation, IdentityMemberKeys, IdentityProviderMount, MemberVaultDek,
+    ProviderMountId,
 };
 use crate::{EventError, EventId, EventResult};
 
@@ -42,7 +42,6 @@ pub struct IdentityVaultEpochDeks {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IdentityControlVault {
     pub store_id: StoreId,
-    pub label: IdentityVaultLabel,
     pub registered_in: EventId,
     /// Key epoch of the latest registration or rewrap in causal order.
     pub current_key_epoch: EventId,
@@ -78,7 +77,6 @@ impl IdentityControlVault {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IdentityControlState {
     pub identity_id: IdentityId,
-    pub label: IdentityLabel,
     pub members: Vec<IdentityControlMember>,
     pub revoked: Vec<AppId>,
     pub pending_joins: Vec<IdentityJoinRequest>,
@@ -89,14 +87,14 @@ pub struct IdentityControlState {
 
 #[derive(Default)]
 struct VaultAccumulator {
-    label: Option<(IdentityVaultLabel, EventId)>,
+    registered_in: Option<EventId>,
     current_key_epoch: Option<EventId>,
     epochs: BTreeMap<EventId, BTreeMap<AppId, MemberVaultDek>>,
 }
 
 #[derive(Default)]
 struct ProjectionAccumulator {
-    label: Option<IdentityLabel>,
+    created: bool,
     member_keys: BTreeMap<AppId, (IdentityMemberKeys, EventId)>,
     requests: Vec<IdentityJoinRequest>,
     resolutions: Vec<(EventId, AppId)>,
@@ -127,12 +125,11 @@ impl ProjectionAccumulator {
         operation: &IdentityControlOperation,
     ) {
         match operation {
-            IdentityControlOperation::IdentityCreated { label, founder } => {
-                self.label = Some(label.clone());
+            IdentityControlOperation::IdentityCreated { founder } => {
+                self.created = true;
                 self.member_keys
                     .insert(founder.app_id.clone(), (founder.clone(), id.clone()));
             }
-            IdentityControlOperation::IdentityRenamed { label } => self.label = Some(label.clone()),
             IdentityControlOperation::MemberJoinRequested { member } => {
                 self.requests.push(IdentityJoinRequest {
                     member: member.clone(),
@@ -171,7 +168,6 @@ impl ProjectionAccumulator {
             }
             IdentityControlOperation::VaultRegistered {
                 store_id,
-                label,
                 key_epoch,
                 recipients,
             } => {
@@ -181,7 +177,7 @@ impl ProjectionAccumulator {
                     recipients,
                 });
                 if let Some(vault) = self.vaults.get_mut(store_id) {
-                    vault.label = Some((label.clone(), id.clone()));
+                    vault.registered_in = Some(id.clone());
                 }
             }
             IdentityControlOperation::VaultDekGranted {
@@ -218,9 +214,11 @@ impl IdentityControlState {
                 accumulator.apply(id, &event.body.created_at, operation);
             }
         }
-        let label = accumulator.label.clone().ok_or_else(|| {
-            EventError::IdentityControlInvalid("identity log has no applicable genesis".to_owned())
-        })?;
+        if !accumulator.created {
+            return Err(EventError::IdentityControlInvalid(
+                "identity log has no applicable genesis".to_owned(),
+            ));
+        }
         let active = log.effective_members(&applicable)?;
         let members = accumulator
             .member_keys
@@ -253,7 +251,7 @@ impl IdentityControlState {
             .vaults
             .into_iter()
             .filter_map(|(store_id, vault)| {
-                let (label, registered_in) = vault.label?;
+                let registered_in = vault.registered_in?;
                 let current_key_epoch = vault.current_key_epoch?;
                 let epochs = vault
                     .epochs
@@ -268,7 +266,6 @@ impl IdentityControlState {
                     .collect();
                 Some(IdentityControlVault {
                     store_id,
-                    label,
                     registered_in,
                     current_key_epoch,
                     epochs,
@@ -277,7 +274,6 @@ impl IdentityControlState {
             .collect();
         Ok(Self {
             identity_id: log.identity_id().clone(),
-            label,
             members,
             revoked,
             pending_joins,

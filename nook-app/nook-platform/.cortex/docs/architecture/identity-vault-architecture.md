@@ -47,7 +47,7 @@ flowchart TD
 
     subgraph IdentityDomain["Identity Domain"]
         Identity["Identity (A, B, ...)"]
-        IdentityLog["Encrypted Identity Control Log<br/>(Members, public keys, passkey records)"]
+        IdentityLog["Signed Identity Control Log<br/>(Members, public keys, mounts)"]
         DekEnvelopes["Per-Vault DEK Envelopes<br/>(DEK encrypted to App Public Keys)"]
 
         Person -->|"owns or joins 0..n"| Identity
@@ -84,16 +84,18 @@ it may create a vault.
 That protector unwraps a local app key.
 The app public key is a member of the identity.
 
-The identity control log owns:
+The [identity control log](../../../nook-event-log/.cortex/docs/architecture/identity-control-log.md)
+owns:
 
-- a stable identity id and label;
-- passkey credential records;
-- app public keys (`app_id`, X25519 encryption public key, Ed25519 signing
-  public key, status);
+- a stable identity id;
+- app-key members (`app_id`, X25519 encryption public key, Ed25519 signing
+  public key, label), pending joins, and revocations;
 - per-vault DEK records: vault `store_id` plus envelopes of that vault DEK to
-  each active app public key;
-- recovery and control events;
-- zero or more sync-provider mounts for the control log.
+  each active app public key, per vault key epoch;
+- zero or more credential-free sync-provider mounts.
+
+Passkey credential records, the identity name, and vault names stay in local
+storage. The log is signed, not encrypted.
 
 Private app keys never enter the replicated identity record.
 Local private app keys live in `local_identity_keyring_v1`.

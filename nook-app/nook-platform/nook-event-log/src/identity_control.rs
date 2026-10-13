@@ -32,7 +32,7 @@ pub use projection::{
 };
 pub use wire::{
     DriveMountTarget, ICloudMountTarget, IdentityControlOperation, IdentityEvent,
-    IdentityEventBody, IdentityEventSchemaVersion, IdentityLabel, IdentityMemberKeys,
-    IdentityMountTarget, IdentityProviderMount, IdentityVaultDekGrant, IdentityVaultLabel,
-    MemberVaultDek, ProviderMountId, ProviderMountLayout,
+    IdentityEventBody, IdentityEventSchemaVersion, IdentityMemberKeys, IdentityMountTarget,
+    IdentityProviderMount, IdentityVaultDekGrant, MemberVaultDek, ProviderMountId,
+    ProviderMountLayout,
 };

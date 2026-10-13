@@ -566,9 +566,15 @@ impl NookVaultManager {
         // method pattern-matches on `StorageMode` instead of comparing
         // strings.
         let mode = StorageMode::parse(storage_mode)?;
+        // Rust produced this ref from the provider row; the layout prefix
+        // selects the event namespaces and never reaches a provider API.
+        let remote = nook_core::LayoutRemoteRef::parse(github_repo_name);
+        let github_repo_name = remote.inner;
         let previous_mode = self.storage.mode;
         let previous_remote_ref = self.storage.remote_ref.clone();
         self.storage.mode = mode;
+        self.storage.layout = remote.layout;
+        self.storage.drive_namespaces.borrow_mut().clear();
 
         match mode {
             StorageMode::Local => {

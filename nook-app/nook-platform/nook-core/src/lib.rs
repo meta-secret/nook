@@ -102,12 +102,12 @@ pub use device_key_protection::{
 };
 pub use enrollment::{
     CheckedEnrollmentEnvelope, CheckedEnrollmentIssuance, DecryptedEnrollmentPayload,
-    EnrollmentCodeEnvelope, EnrollmentEntryLabel, EnrollmentIssuance, EnrollmentIssueInput,
-    EnrollmentLinkInput, EnrollmentProvider, EnrollmentProviderDataRef, EnrollmentState,
-    OAuthAccountIdentity, OAuthRefreshCredential, OAuthRemoteFile, OAuthTokenExpiry,
-    PersonalCredentialTransfer, PersonalEnrollmentProvider, PersonalEnrollmentProviderData,
-    SharedEnrollmentProvider, SharedEnrollmentProviderData, SharedProviderGrant,
-    TypedEnrollmentProvider,
+    EnrollmentCodeEnvelope, EnrollmentEntryLabel, EnrollmentIdentityTarget, EnrollmentIssuance,
+    EnrollmentIssueInput, EnrollmentLinkInput, EnrollmentProvider, EnrollmentProviderDataRef,
+    EnrollmentState, OAuthAccountIdentity, OAuthRefreshCredential, OAuthRemoteFile,
+    OAuthTokenExpiry, PersonalCredentialTransfer, PersonalEnrollmentProvider,
+    PersonalEnrollmentProviderData, SharedEnrollmentProvider, SharedEnrollmentProviderData,
+    SharedProviderGrant, TypedEnrollmentProvider,
 };
 pub use errors::{
     DatabaseError, DeviceKeyProtectionError, EnrollmentError, EventError, EventResult,
@@ -227,6 +227,11 @@ pub use nook_auth2::{
     SentinelRecordCount, SentinelShareCount, SentinelShareIndex, SentinelThreshold,
 };
 
+pub use auth::identity_control::{
+    IdentityAdoption, IdentityAdoptionChoice, IdentityVaultEpochAction, IdentityVaultEpochStatus,
+    ReplicatedIdentityStanding, ReplicatedMembershipProjection, ReplicatedMembershipRequest,
+    VaultFounder, VaultRevocationDue,
+};
 pub use auth::vault_meta_actions::{
     DeviceAuthorization, EventGraphAuthorizationProjection, EventGraphDeviceAccess,
     EventGraphDeviceAccessRequest, SentinelMemberRecordProjection,
@@ -271,6 +276,17 @@ pub use nook_event_log::{
     SecretReplacementConflict, SecurityConflict, SentinelShareIssuedPayload, SigningIdentity,
     VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation, VaultProjection,
 };
+pub use nook_event_log::{
+    DriveMountTarget, EventLogLocation, ICloudMountTarget, IdentityApprovalRequest,
+    IdentityControlInsertion, IdentityControlLog, IdentityControlMember, IdentityControlMigration,
+    IdentityControlMigrationOutcome, IdentityControlOperation, IdentityControlRejection,
+    IdentityControlState, IdentityControlVault, IdentityEvent, IdentityEventBody,
+    IdentityEventInsertStatus, IdentityEventSchemaVersion, IdentityEventSigning,
+    IdentityGenesisRequest, IdentityJoinRequest, IdentityMemberKeys, IdentityMountTarget,
+    IdentityProviderMount, IdentityVaultDekGrant, IdentityVaultDekLookup, IdentityVaultEpochDeks,
+    IdentityVaultRegistration, LegacyVaultMembership, MemberVaultDek, OpenedVaultDek,
+    ProviderMountId, ProviderMountLayout, VaultAuthorizedRoster, VaultRosterMember,
+};
 pub use password::{
     MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordCharacterSet, PasswordGeneration,
     PasswordGenerationOptions, PasswordStrengthLevel,
@@ -296,7 +312,7 @@ pub use sync_provider_store::{
     ActiveProviderCredentialsRequest, ActiveProviderLoginSetup, ActiveVaultProviderRows,
     ActiveVaultScope, AuthProvidersSnapshotData, DraftStorageConnection, DuplicateCandidatePolicy,
     DuplicateProviderSelection, DuplicateSyncProvider, EnrollmentAudience, GithubStorageDraft,
-    GoogleOAuthTokenInput, ICloudOAuthTokenInput, IdentityMountCapability,
+    GoogleOAuthTokenInput, ICloudOAuthTokenInput, IdentityMountCapability, LayoutRemoteRef,
     LegacyAuthProvidersSnapshot, LocalFolderConfigData, LocalProviderRowChange,
     LocalProviderRowOutcome, LocalProviderRowRequest, LocalProviderSelection, ManagerStoreScopeRef,
     NormalizedAuthSnapshot, OAuthAccessToken, OAuthAccessTokenRef, OAuthFileConfigData,

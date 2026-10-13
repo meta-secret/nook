@@ -52,7 +52,6 @@ impl Fixture {
         let founder = Installation::new()?;
         let genesis = IdentityEvent::genesis(IdentityGenesisRequest {
             identity_id: &identity_id,
-            label: IdentityLabel::new("Personal"),
             founder: founder.keys("Laptop"),
             signing: founder.signing(&at),
         })?;
@@ -100,7 +99,6 @@ impl Fixture {
         let operation = self
             .state()?
             .vault_registration_operation(IdentityVaultRegistration {
-                label: IdentityVaultLabel::new("Main"),
                 dek: OpenedVaultDek {
                     store_id,
                     key_epoch: &key_epoch,
@@ -123,6 +121,20 @@ impl Fixture {
     }
 }
 
+fn rename(app_id: &nook_auth2::AppId, label: &str) -> IdentityControlOperation {
+    IdentityControlOperation::MemberRenamed {
+        app_id: app_id.clone(),
+        label: MemberLabel::from_trusted(label.to_owned()),
+    }
+}
+
+fn member_label(state: &IdentityControlState, app_id: &nook_auth2::AppId) -> String {
+    state
+        .member(app_id)
+        .map(|member| member.keys.label.as_str().to_owned())
+        .unwrap_or_default()
+}
+
 fn epoch_id(seed: &str) -> anyhow::Result<EventId> {
     Ok(EventId::from_sha256_hex(&hex::encode(
         <sha2::Sha256 as sha2::Digest>::digest(seed.as_bytes()),
@@ -133,7 +145,7 @@ fn epoch_id(seed: &str) -> anyhow::Result<EventId> {
 fn founder_creates_identity_and_owns_it_alone() -> anyhow::Result<()> {
     let fixture = Fixture::new()?;
     let state = fixture.state()?;
-    assert_eq!(state.label.as_str(), "Personal");
+    assert_eq!(member_label(&state, fixture.founder.app.app_id()), "Laptop");
     assert_eq!(state.members.len(), 1);
     assert!(state.member(fixture.founder.app.app_id()).is_some());
     assert!(state.pending_joins.is_empty());
@@ -209,14 +221,12 @@ fn approval_wraps_every_owned_vault_dek_to_the_joiner() -> anyhow::Result<()> {
     }
 
     // The approved joiner may now act for the identity.
-    let (_, status) = fixture.append(
-        &joiner,
-        vec![IdentityControlOperation::IdentityRenamed {
-            label: IdentityLabel::new("Family"),
-        }],
-    )?;
+    let (_, status) = fixture.append(&joiner, vec![rename(joiner.app.app_id(), "Pixel")])?;
     assert_eq!(status, IdentityEventInsertStatus::Applied);
-    assert_eq!(fixture.state()?.label.as_str(), "Family");
+    assert_eq!(
+        member_label(&fixture.state()?, joiner.app.app_id()),
+        "Pixel"
+    );
     Ok(())
 }
 
@@ -226,15 +236,16 @@ fn outsiders_can_only_request_to_join() -> anyhow::Result<()> {
     let outsider = Installation::new()?;
     let (_, status) = fixture.append(
         &outsider,
-        vec![IdentityControlOperation::IdentityRenamed {
-            label: IdentityLabel::new("Taken over"),
-        }],
+        vec![rename(fixture.founder.app.app_id(), "Taken over")],
     )?;
     assert!(matches!(
         status,
         IdentityEventInsertStatus::Quarantined { .. }
     ));
-    assert_eq!(fixture.state()?.label.as_str(), "Personal");
+    assert_eq!(
+        member_label(&fixture.state()?, fixture.founder.app.app_id()),
+        "Laptop"
+    );
 
     // A join request must be signed by the member it names.
     let impersonated = fixture.log.build_append(
@@ -299,12 +310,8 @@ fn revocation_drops_envelopes_and_blocks_later_actions() -> anyhow::Result<()> {
         IdentityVaultDekLookup::NotGranted
     ));
 
-    let (_, status) = fixture.append(
-        &joiner,
-        vec![IdentityControlOperation::IdentityRenamed {
-            label: IdentityLabel::new("Revoked rename"),
-        }],
-    )?;
+    let (_, status) =
+        fixture.append(&joiner, vec![rename(joiner.app.app_id(), "Revoked rename")])?;
     assert!(matches!(
         status,
         IdentityEventInsertStatus::Quarantined { .. }
@@ -433,16 +440,15 @@ fn projection_is_independent_of_delivery_order_and_resolves_pending_parents() ->
     let orphan = {
         let mut log_with_child = fixture.log.clone().insert(child.clone())?.log;
         let orphan = log_with_child.build_append(
-            vec![IdentityControlOperation::IdentityRenamed {
-                label: IdentityLabel::new("Renamed"),
-            }],
+            vec![rename(founder.app.app_id(), "Renamed")],
             &founder.signing(&fixture.at),
         )?;
         log_with_child = log_with_child.insert(orphan.clone())?.log;
         assert_eq!(
-            IdentityControlState::project(&log_with_child)?
-                .label
-                .as_str(),
+            member_label(
+                &IdentityControlState::project(&log_with_child)?,
+                founder.app.app_id()
+            ),
             "Renamed"
         );
         orphan
@@ -458,7 +464,7 @@ fn projection_is_independent_of_delivery_order_and_resolves_pending_parents() ->
     detached = detached.insert(child)?.log;
     let resolved = IdentityControlState::project(&detached)?;
     assert!(resolved.mounts.is_empty());
-    assert_eq!(resolved.label.as_str(), "Renamed");
+    assert_eq!(member_label(&resolved, founder.app.app_id()), "Renamed");
     Ok(())
 }
 
@@ -467,9 +473,7 @@ fn envelopes_bind_to_one_identity_and_one_founder_genesis() -> anyhow::Result<()
     let fixture = Fixture::new()?;
     let other = IdentityControlLog::new(IdentityId::generate()?);
     let foreign = fixture.log.build_append(
-        vec![IdentityControlOperation::IdentityRenamed {
-            label: IdentityLabel::new("Elsewhere"),
-        }],
+        vec![rename(fixture.founder.app.app_id(), "Elsewhere")],
         &fixture.founder.signing(&fixture.at),
     )?;
     assert!(other.insert(foreign).is_err());
@@ -477,7 +481,6 @@ fn envelopes_bind_to_one_identity_and_one_founder_genesis() -> anyhow::Result<()
     let impostor = Installation::new()?;
     let forged_genesis = IdentityEvent::genesis(IdentityGenesisRequest {
         identity_id: &fixture.identity_id,
-        label: IdentityLabel::new("Forged"),
         founder: fixture.founder.keys("Laptop"),
         signing: impostor.signing(&fixture.at),
     })?;
@@ -489,7 +492,6 @@ fn envelopes_bind_to_one_identity_and_one_founder_genesis() -> anyhow::Result<()
 
     let second_genesis = IdentityEvent::genesis(IdentityGenesisRequest {
         identity_id: &fixture.identity_id,
-        label: IdentityLabel::new("Second"),
         founder: impostor.keys("Other"),
         signing: impostor.signing(&fixture.at),
     })?;
@@ -504,7 +506,7 @@ fn envelopes_bind_to_one_identity_and_one_founder_genesis() -> anyhow::Result<()
         .into_iter()
         .map(|(_, bytes)| bytes)
         .collect::<Vec<_>>();
-    let tampered = String::from_utf8(Vec::from(bytes.remove(0)))?.replace("Personal", "Stolen");
+    let tampered = String::from_utf8(Vec::from(bytes.remove(0)))?.replace("Laptop", "Stolen");
     assert!(
         IdentityControlLog::new(fixture.identity_id.clone())
             .union_storage_bytes(&[tampered.into_bytes().into()])
@@ -597,7 +599,6 @@ fn migration_carries_authorized_vault_devices_into_the_identity() -> anyhow::Res
                 key_epoch: &personal_epoch,
                 keys: &personal_keys,
             },
-            label: IdentityVaultLabel::new("Personal"),
             roster: &personal_roster,
         },
         LegacyVaultMembership {
@@ -606,13 +607,11 @@ fn migration_carries_authorized_vault_devices_into_the_identity() -> anyhow::Res
                 key_epoch: &work_epoch,
                 keys: &work_keys,
             },
-            label: IdentityVaultLabel::new("Work"),
             roster: &work_roster,
         },
     ];
     let outcome = IdentityControlMigration {
         identity_id: &identity_id,
-        label: IdentityLabel::new("Personal"),
         founder: founder.keys("Laptop"),
         vaults: &vaults,
         mounts: vec![mount.clone()],

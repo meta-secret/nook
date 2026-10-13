@@ -15,9 +15,10 @@ use crate::storage::remote_event::RemoteEventRead;
 use nook_core::StoredSigningSeed;
 
 use crate::storage::identity_record;
+use crate::storage::drive_namespace::DriveNamespace;
 use nook_core::{
-    IsoTimestamp, MemberLabel, SigningIdentity, StorageMode, StoreId, SymmetricKey, VaultEvent,
-    VaultEventSchemaVersion, VaultType,
+    DriveEventParent, EventLogLocation, IsoTimestamp, MemberLabel, SigningIdentity, StorageMode,
+    StoreId, SymmetricKey, VaultEvent, VaultEventSchemaVersion, VaultType,
 };
 use std::collections::BTreeSet;
 
@@ -164,27 +165,72 @@ impl NookVaultManager {
 }
 
 impl NookVaultManager {
-    pub(super) async fn list_current_provider_event_ids(
+    /// Where the open vault's events live at the prepared provider.
+    pub(in crate::manager) fn current_vault_location(&self) -> Result<EventLogLocation, NookError> {
+        match self.storage.layout {
+            nook_core::ProviderRowLayout::LegacyVaultRoot => Ok(EventLogLocation::LegacyVaultRoot),
+            nook_core::ProviderRowLayout::IdentityNamespaced => {
+                let store_id = StoreId::parse(self.vault.store_id.trim()).map_err(|_| {
+                    NookError::Database(
+                        "Choose a vault of this identity before syncing its events.".to_owned(),
+                    )
+                })?;
+                Ok(EventLogLocation::Vault(store_id))
+            }
+        }
+    }
+
+    async fn drive_parent_for(&self, location: &EventLogLocation) -> Result<DriveEventParent, NookError> {
+        if let Some(parent) = self.storage.drive_namespace_parent(location) {
+            return Ok(parent);
+        }
+        let parent = (DriveNamespace {
+            token: &self.storage.access_token,
+            parent: &self.storage.drive_event_parent,
+            location,
+        })
+        .resolve()
+        .await?;
+        self.storage.remember_drive_namespace(location, &parent);
+        Ok(parent)
+    }
+
+    fn icloud_namespace_guard(location: &EventLogLocation) -> Result<(), NookError> {
+        match location {
+            EventLogLocation::LegacyVaultRoot => Ok(()),
+            EventLogLocation::Vault(_) | EventLogLocation::Identity(_) => Err(NookError::ICloud(
+                "iCloud cannot list identity logs or namespaced vaults until its CloudKit schema is deployed."
+                    .to_owned(),
+            )),
+        }
+    }
+
+    pub(in crate::manager) async fn list_provider_event_ids_at(
         &self,
+        location: &EventLogLocation,
     ) -> Result<BTreeSet<EventId>, NookError> {
         let raw_ids = match self.storage.mode {
             StorageMode::Github => {
                 (GitHubEventStore {
                     pat: &self.storage.access_token,
                     repo: &self.storage.remote_ref,
+                    location,
                 })
                 .list_github_event_ids()
                 .await?
             }
             StorageMode::GoogleDrive => {
+                let parent = self.drive_parent_for(location).await?;
                 (DriveEventStore {
                     token: &self.storage.access_token,
-                    parent: &self.storage.drive_event_parent,
+                    parent: &parent,
+                    location,
                 })
                 .list_drive_event_ids()
                 .await?
             }
             StorageMode::ICloud => {
+                Self::icloud_namespace_guard(location)?;
                 (ICloudEventStore {
                     web_auth_token: &self.storage.access_token,
                     target: &self.storage.icloud_event_target,
@@ -200,8 +246,9 @@ impl NookVaultManager {
             .collect()
     }
 
-    pub(super) async fn read_current_provider_event(
+    pub(in crate::manager) async fn read_provider_event_at(
         &self,
+        location: &EventLogLocation,
         event_id: &EventId,
     ) -> Result<RemoteEventRead, NookError> {
         match self.storage.mode {
@@ -209,6 +256,7 @@ impl NookVaultManager {
                 match (GitHubEventStore {
                     pat: &self.storage.access_token,
                     repo: &self.storage.remote_ref,
+                    location,
                 })
                 .fetch_github_event(event_id)
                 .await
@@ -221,14 +269,17 @@ impl NookVaultManager {
                 }
             }
             StorageMode::GoogleDrive => {
+                let parent = self.drive_parent_for(location).await?;
                 (DriveEventStore {
                     token: &self.storage.access_token,
-                    parent: &self.storage.drive_event_parent,
+                    parent: &parent,
+                    location,
                 })
                 .read_drive_event(event_id)
                 .await
             }
             StorageMode::ICloud => {
+                Self::icloud_namespace_guard(location)?;
                 match (ICloudEventStore {
                     web_auth_token: &self.storage.access_token,
                     target: &self.storage.icloud_event_target,
@@ -247,8 +298,9 @@ impl NookVaultManager {
         }
     }
 
-    pub(super) async fn put_current_provider_event_if_absent(
+    pub(in crate::manager) async fn put_provider_event_at(
         &self,
+        location: &EventLogLocation,
         event_id: &EventId,
         bytes: &[u8],
     ) -> Result<(), NookError> {
@@ -257,18 +309,24 @@ impl NookVaultManager {
                 (GitHubEventStore {
                     pat: &self.storage.access_token,
                     repo: &self.storage.remote_ref,
+                    location,
                 })
                 .put_github_event_if_absent(event_id, bytes)
                 .await
             }
-            StorageMode::GoogleDrive => (DriveEventStore {
-                token: &self.storage.access_token,
-                parent: &self.storage.drive_event_parent,
-            })
-            .put_drive_event_if_absent(event_id, bytes)
-            .await
-            .map(|_| ()),
+            StorageMode::GoogleDrive => {
+                let parent = self.drive_parent_for(location).await?;
+                (DriveEventStore {
+                    token: &self.storage.access_token,
+                    parent: &parent,
+                    location,
+                })
+                .put_drive_event_if_absent(event_id, bytes)
+                .await
+                .map(|_| ())
+            }
             StorageMode::ICloud => {
+                Self::icloud_namespace_guard(location)?;
                 (ICloudEventStore {
                     web_auth_token: &self.storage.access_token,
                     target: &self.storage.icloud_event_target,
@@ -278,6 +336,30 @@ impl NookVaultManager {
             }
             StorageMode::Local => Ok(()),
         }
+    }
+
+    pub(super) async fn list_current_provider_event_ids(
+        &self,
+    ) -> Result<BTreeSet<EventId>, NookError> {
+        let location = self.current_vault_location()?;
+        self.list_provider_event_ids_at(&location).await
+    }
+
+    pub(super) async fn read_current_provider_event(
+        &self,
+        event_id: &EventId,
+    ) -> Result<RemoteEventRead, NookError> {
+        let location = self.current_vault_location()?;
+        self.read_provider_event_at(&location, event_id).await
+    }
+
+    pub(super) async fn put_current_provider_event_if_absent(
+        &self,
+        event_id: &EventId,
+        bytes: &[u8],
+    ) -> Result<(), NookError> {
+        let location = self.current_vault_location()?;
+        self.put_provider_event_at(&location, event_id, bytes).await
     }
 
     pub(in crate::manager) async fn bootstrap_event_log_genesis(

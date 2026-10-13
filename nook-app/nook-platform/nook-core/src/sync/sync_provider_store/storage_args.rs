@@ -144,13 +144,19 @@ pub struct ProviderLabelLabels {
 
 impl StorageProviderData {
     pub fn connection_args(&self) -> ValidationResult<StorageConnectArgs> {
-        match self.provider_type {
+        let mut args = match self.provider_type {
             StorageProviderType::Local | StorageProviderType::LocalFolder => {
-                Ok(StorageConnectArgs::local())
+                return Ok(StorageConnectArgs::local());
             }
-            StorageProviderType::Github => Ok(self.github_connection_args()),
-            StorageProviderType::OauthFile => self.oauth_file_connection_args(),
+            StorageProviderType::Github => self.github_connection_args(),
+            StorageProviderType::OauthFile => self.oauth_file_connection_args()?,
+        };
+        args.repo = super::LayoutRemoteRef {
+            layout: self.layout,
+            inner: &args.repo,
         }
+        .format();
+        Ok(args)
     }
 
     fn github_connection_args(&self) -> StorageConnectArgs {

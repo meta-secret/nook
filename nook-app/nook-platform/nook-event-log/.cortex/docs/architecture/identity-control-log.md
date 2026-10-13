@@ -45,7 +45,7 @@ Envelope validation rejects a wrong identity, an unsupported schema, a second
 genesis, a malformed member tuple, or a bad signature before the event is
 indexed.
 
-**Prohibited:** accept a remote `identity-renamed` event because its signature
+**Prohibited:** accept a remote `member-renamed` event because its signature
 verifies, even though its `identity_id` names a different identity.
 
 **Required:** reject the event at envelope validation. A valid signature proves
@@ -56,9 +56,7 @@ who wrote the bytes. It does not move the event into another identity's log.
 The operation set is closed. Every operation is kebab-case tagged on the wire.
 
 - **`identity-created`**
-  - Holds the identity label and the founder's member keys.
-- **`identity-renamed`**
-  - Replaces the identity label.
+  - Holds the founder's member keys.
 - **`member-join-requested`**
   - Holds the joiner's member keys. It must be the event's only operation.
   - The actor must be the joiner's own signing key.
@@ -72,7 +70,7 @@ The operation set is closed. Every operation is kebab-case tagged on the wire.
 - **`member-renamed`**
   - Replaces a member's label.
 - **`vault-registered`**
-  - Binds a vault `store_id` and label to the identity.
+  - Binds a vault `store_id` to the identity.
   - Holds the vault's key epoch and DEK envelopes for every active member.
 - **`vault-dek-granted`**
   - Wraps one vault key epoch to every active member after a rotation.
@@ -92,6 +90,23 @@ a joining installation can sync without signing in.
 local folder name. Each installation supplies and seals its own credential
 locally, as [auth-providers.md](../../../../.cortex/docs/architecture/auth-providers.md)
 requires.
+
+### Keep names out of the signed log
+
+The identity log is signed, not encrypted. Every mount's operator can read it.
+
+- It carries public keys, device labels, wrapped DEKs, vault `store_id`s, and
+  credential-free mount targets.
+- Device labels follow the vault log's `join-approved` precedent.
+- Identity names stay in the local directory and in the encrypted enrollment
+  code.
+- Vault names stay in the local vault registry and encrypted vault metadata.
+
+**Prohibited:** add an `identity-renamed` operation so a rename on one
+installation appears on the others.
+
+**Required:** keep the identity name local. A provider operator must not learn
+that the identity is called "Work" or that a vault is called "Taxes".
 
 ### Authorize actors from causal history
 

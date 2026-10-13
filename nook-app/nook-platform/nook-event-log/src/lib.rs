@@ -62,10 +62,10 @@ pub use identity_control::{
     IdentityControlMigrationOutcome, IdentityControlOperation, IdentityControlRejection,
     IdentityControlState, IdentityControlVault, IdentityEvent, IdentityEventBody,
     IdentityEventInsertStatus, IdentityEventSchemaVersion, IdentityEventSigning,
-    IdentityGenesisRequest, IdentityJoinRequest, IdentityLabel, IdentityMemberKeys,
-    IdentityMountTarget, IdentityProviderMount, IdentityVaultDekGrant, IdentityVaultDekLookup,
-    IdentityVaultEpochDeks, IdentityVaultLabel, IdentityVaultRegistration, LegacyVaultMembership,
-    MemberVaultDek, OpenedVaultDek, ProviderMountId, ProviderMountLayout,
+    IdentityGenesisRequest, IdentityJoinRequest, IdentityMemberKeys, IdentityMountTarget,
+    IdentityProviderMount, IdentityVaultDekGrant, IdentityVaultDekLookup, IdentityVaultEpochDeks,
+    IdentityVaultRegistration, LegacyVaultMembership, MemberVaultDek, OpenedVaultDek,
+    ProviderMountId, ProviderMountLayout,
 };
 pub use location::EventLogLocation;
 pub use nook_replication::CausalGraphEventCount as EventCount;

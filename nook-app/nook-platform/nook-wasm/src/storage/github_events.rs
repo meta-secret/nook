@@ -16,7 +16,7 @@ use reqwest::{Client, StatusCode};
 use std::path::Path;
 use std::str;
 
-use super::checked_event_write::CheckedEventWrite;
+use super::checked_event_write::{CheckedEventWrite, CheckedEventWriteRequest};
 use super::github::{GitHubFileWrite, GitHubRootDiscovery, GitHubVaultDiscovery};
 use super::remote_event::RemoteEventRead;
 use crate::NookError;
@@ -45,8 +45,10 @@ use serde::Deserialize;
 pub(crate) struct GitHubEventStore<'a> {
     pub(crate) pat: &'a str,
     pub(crate) repo: &'a str,
+    pub(crate) location: &'a nook_core::EventLogLocation,
 }
 
+#[cfg(test)]
 const EVENT_LOG_ROOT: &str = "nook-log/v1/events";
 const SHA256_BASE64URL_LEN: usize = 43;
 
@@ -77,14 +79,18 @@ impl GitHubEventStore<'_> {
             .map_err(|e| NookError::Serialization(e.to_string()))
     }
 
-    fn github_tree_response(status: StatusCode, text: &str) -> Result<TreeDiscovery, NookError> {
+    fn github_tree_response(
+        status: StatusCode,
+        text: &str,
+        root: &str,
+    ) -> Result<TreeDiscovery, NookError> {
         if status == StatusCode::NOT_FOUND {
             return Ok(TreeDiscovery::Missing);
         }
         if !status.is_success() {
             return Err(GitHubStorageClient::github_api_failure(
                 status,
-                format!("Failed to list GitHub tree for {EVENT_LOG_ROOT}: {status}"),
+                format!("Failed to list GitHub tree for {root}: {status}"),
             ));
         }
 
@@ -99,11 +105,11 @@ impl GitHubEventStore<'_> {
         Ok(TreeDiscovery::Loaded(tree))
     }
 
-    fn event_ids_from_tree(entries: &[GitTreeEntry]) -> Vec<String> {
+    fn event_ids_from_tree(entries: &[GitTreeEntry], root: &str) -> Vec<String> {
         entries
             .iter()
             .filter(|entry| entry.entry_type == "blob")
-            .filter_map(|entry| match Self::event_id_from_tree_path(&entry.path) {
+            .filter_map(|entry| match Self::event_id_from_tree_path(root, &entry.path) {
                 TreeEvent::Event(id) => Some(id),
                 TreeEvent::Unrelated => None,
             })
@@ -139,9 +145,9 @@ struct GitTreeEntry {
 }
 
 impl GitHubEventStore<'_> {
-    fn event_id_from_tree_path(path: &str) -> TreeEvent {
+    fn event_id_from_tree_path(root: &str, path: &str) -> TreeEvent {
         let Some(name) = path
-            .strip_prefix(&format!("{EVENT_LOG_ROOT}/"))
+            .strip_prefix(&format!("{root}/"))
             .filter(|relative| !relative.contains('/'))
         else {
             return TreeEvent::Unrelated;
@@ -204,12 +210,14 @@ impl GitHubEventStore<'_> {
             .text()
             .await
             .map_err(|e| NookError::Serialization(e.to_string()))?;
-        let TreeDiscovery::Loaded(tree) = Self::github_tree_response(tree_status, &tree_text)?
+        let root = self.location.root();
+        let TreeDiscovery::Loaded(tree) =
+            Self::github_tree_response(tree_status, &tree_text, &root)?
         else {
             return Ok(Vec::new());
         };
 
-        event_ids.extend(Self::event_ids_from_tree(&tree.tree));
+        event_ids.extend(Self::event_ids_from_tree(&tree.tree, &root));
         Ok(event_ids)
     }
 
@@ -229,7 +237,7 @@ impl GitHubEventStore<'_> {
     async fn read_github_event(&self, event_id: &EventId) -> Result<RemoteEventRead, NookError> {
         let pat = self.pat;
         let repo = self.repo;
-        let path = event_id.storage_path();
+        let path = self.location.event_path(event_id);
         if let GitHubVaultDiscovery::FileLoaded(file) = GitHubStorageClient::new(pat)
             .fetch_github_vault(GitHubStorageClientFetchGithubVault {
                 repo,
@@ -251,7 +259,12 @@ impl GitHubEventStore<'_> {
         event_id: &EventId,
         bytes: &[u8],
     ) -> Result<(), NookError> {
-        let checked = CheckedEventWrite::parse(bytes, event_id, "GitHub")?;
+        let checked = CheckedEventWrite::parse(CheckedEventWriteRequest {
+            bytes,
+            event_id,
+            location: self.location,
+            provider: "GitHub",
+        })?;
         self.put_checked(checked).await
     }
 
@@ -272,7 +285,7 @@ impl GitHubEventStore<'_> {
             RemoteEventRead::Unavailable => {}
         }
 
-        let path = event_id.storage_path();
+        let path = self.location.event_path(event_id);
         let content = Self::event_content(bytes)?;
 
         for attempt in 0..3 {
@@ -335,21 +348,21 @@ mod tests {
     fn tree_path_filter_accepts_only_flat_event_yaml_files() {
         let digest = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
         assert_eq!(
-            GitHubEventStore::event_id_from_tree_path(&format!("{EVENT_LOG_ROOT}/{digest}.yaml")),
+            GitHubEventStore::event_id_from_tree_path(EVENT_LOG_ROOT, &format!("{EVENT_LOG_ROOT}/{digest}.yaml")),
             TreeEvent::Event(format!("sha256u:{digest}"))
         );
         assert_eq!(
-            GitHubEventStore::event_id_from_tree_path(&format!(
+            GitHubEventStore::event_id_from_tree_path(EVENT_LOG_ROOT, &format!(
                 "{EVENT_LOG_ROOT}/aa/{digest}.yaml"
             )),
             TreeEvent::Unrelated
         );
         assert_eq!(
-            GitHubEventStore::event_id_from_tree_path(&format!("{EVENT_LOG_ROOT}/{digest}.json")),
+            GitHubEventStore::event_id_from_tree_path(EVENT_LOG_ROOT, &format!("{EVENT_LOG_ROOT}/{digest}.json")),
             TreeEvent::Unrelated
         );
         assert_eq!(
-            GitHubEventStore::event_id_from_tree_path(
+            GitHubEventStore::event_id_from_tree_path(EVENT_LOG_ROOT, 
                 "other/path/ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0.yaml"
             ),
             TreeEvent::Unrelated
@@ -368,11 +381,11 @@ mod tests {
     -> anyhow::Result<()> {
         let digest = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
         assert_eq!(
-            GitHubEventStore::event_id_from_tree_path(&format!("{EVENT_LOG_ROOT}/{digest}.YaMl")),
+            GitHubEventStore::event_id_from_tree_path(EVENT_LOG_ROOT, &format!("{EVENT_LOG_ROOT}/{digest}.YaMl")),
             TreeEvent::Event(format!("sha256u:{digest}"))
         );
         assert_eq!(
-            GitHubEventStore::event_id_from_tree_path(&format!(
+            GitHubEventStore::event_id_from_tree_path(EVENT_LOG_ROOT, &format!(
                 "{EVENT_LOG_ROOT}/{}!.yaml",
                 digest
                     .get(..42)
@@ -381,7 +394,7 @@ mod tests {
             TreeEvent::Unrelated
         );
         assert_eq!(
-            GitHubEventStore::event_id_from_tree_path(&format!(
+            GitHubEventStore::event_id_from_tree_path(EVENT_LOG_ROOT, &format!(
                 "{EVENT_LOG_ROOT}/{}.yaml.bak",
                 digest
             )),
@@ -475,22 +488,23 @@ mod tests {
     )]
     fn github_tree_response_projects_missing_errors_truncation_and_entries() -> anyhow::Result<()> {
         assert!(matches!(
-            GitHubEventStore::github_tree_response(StatusCode::NOT_FOUND, "")?,
+            GitHubEventStore::github_tree_response(StatusCode::NOT_FOUND, "", EVENT_LOG_ROOT)?,
             TreeDiscovery::Missing
         ));
 
-        let unavailable = GitHubEventStore::github_tree_response(StatusCode::BAD_GATEWAY, "");
+        let unavailable = GitHubEventStore::github_tree_response(StatusCode::BAD_GATEWAY, "", EVENT_LOG_ROOT);
         assert!(matches!(
             unavailable,
             Err(NookError::GitHub(message)) if message.contains(EVENT_LOG_ROOT) && message.contains("502")
         ));
 
-        let malformed = GitHubEventStore::github_tree_response(StatusCode::OK, "not-json");
+        let malformed = GitHubEventStore::github_tree_response(StatusCode::OK, "not-json", EVENT_LOG_ROOT);
         assert!(matches!(malformed, Err(NookError::Serialization(_))));
 
         let truncated = GitHubEventStore::github_tree_response(
             StatusCode::OK,
             r#"{"truncated":true,"tree":[]}"#,
+            EVENT_LOG_ROOT,
         );
         assert!(matches!(
             truncated,
@@ -500,6 +514,7 @@ mod tests {
         let TreeDiscovery::Loaded(tree) = GitHubEventStore::github_tree_response(
             StatusCode::OK,
             r#"{"truncated":false,"tree":[{"path":"event.yaml","type":"blob"}]}"#,
+            EVENT_LOG_ROOT,
         )?
         else {
             panic!("complete tree response must decode")
@@ -527,7 +542,7 @@ mod tests {
             ]"#
         ))?;
         assert_eq!(
-            GitHubEventStore::event_ids_from_tree(&entries),
+            GitHubEventStore::event_ids_from_tree(&entries, EVENT_LOG_ROOT),
             vec![format!("sha256u:{digest}")]
         );
         assert!(GitHubEventStore::is_retryable_event_write_error(
@@ -587,7 +602,11 @@ mod tests {
         })?;
         let bytes: Vec<u8> = VaultEvent::serialize_event_storage_yaml(&event)?.into();
         let requested_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
-        let store = GitHubEventStore { pat: "", repo: "" };
+        let store = GitHubEventStore {
+            pat: "",
+            repo: "",
+            location: &nook_core::EventLogLocation::LegacyVaultRoot,
+        };
         let Err(error) = store
             .put_github_event_if_absent(&requested_id, &bytes)
             .await
@@ -598,6 +617,45 @@ mod tests {
             error,
             NookError::Serialization(message) if message.contains("GitHub event id mismatch")
         ));
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod namespace_tests {
+    use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test callback"
+        )
+    )]
+    fn namespaced_listing_never_sees_another_namespace() -> anyhow::Result<()> {
+        let digest = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
+        let store = nook_core::StoreId::parse("store_abcdefghijk")?;
+        let identity = nook_core::IdentityId::parse("idn_abcdefghijk")?;
+        let vault_root = nook_core::EventLogLocation::Vault(store).root();
+        let identity_root = nook_core::EventLogLocation::Identity(identity).root();
+        let entries: Vec<GitTreeEntry> = serde_json::from_str(&format!(
+            r#"[
+                {{"path":"{EVENT_LOG_ROOT}/{digest}.yaml","type":"blob"}},
+                {{"path":"{vault_root}/{digest}.yaml","type":"blob"}},
+                {{"path":"{identity_root}/{digest}.yaml","type":"blob"}}
+            ]"#
+        ))?;
+        let expected = vec![format!("sha256u:{digest}")];
+        assert_eq!(GitHubEventStore::event_ids_from_tree(&entries, EVENT_LOG_ROOT), expected);
+        assert_eq!(GitHubEventStore::event_ids_from_tree(&entries, &vault_root), expected);
+        assert_eq!(GitHubEventStore::event_ids_from_tree(&entries, &identity_root), expected);
+        let other_vault = nook_core::EventLogLocation::Vault(nook_core::StoreId::parse(
+            "store_zyxwvutsrqp",
+        )?)
+        .root();
+        assert!(GitHubEventStore::event_ids_from_tree(&entries, &other_vault).is_empty());
         Ok(())
     }
 }
