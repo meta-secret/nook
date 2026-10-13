@@ -329,7 +329,7 @@
     {#each activeCells as word, index (index)}
       <label class="relative block" data-testid="seed-word-cell-{index + 1}">
         <span
-          class="pointer-events-none absolute left-2 top-1.5 font-mono text-[10px] font-medium tracking-wider text-muted-foreground"
+          class="pointer-events-none absolute left-2 top-1.5 z-10 font-mono text-[10px] font-medium tracking-wider text-muted-foreground"
         >
           {index + 1}
         </span>
@@ -348,112 +348,115 @@
             {/if}
           </div>
         {:else}
-          <input
-            bind:this={inputRefs[index]}
-            type="text"
-            value={word}
-            autocomplete="off"
-            spellcheck="false"
-            inputmode="text"
-            role="combobox"
-            aria-autocomplete="list"
-            aria-expanded={focusedIndex.kind === FocusedWordKind.Focused &&
+          <span class="relative block">
+            <input
+              bind:this={inputRefs[index]}
+              type="text"
+              value={word}
+              autocomplete="off"
+              spellcheck="false"
+              inputmode="text"
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded={focusedIndex.kind === FocusedWordKind.Focused &&
+                focusedIndex.index === index &&
+                suggestions.length > 0}
+              {...focusedIndex.kind === FocusedWordKind.Focused &&
               focusedIndex.index === index &&
-              suggestions.length > 0}
-            {...focusedIndex.kind === FocusedWordKind.Focused &&
-            focusedIndex.index === index &&
-            suggestions.length > 0
-              ? { 'aria-controls': `seed-word-suggestions-${index + 1}` }
-              : {}}
-            data-testid="seed-word-{index + 1}"
-            aria-invalid={cellInvalid(index)}
-            {...cellInvalid(index)
-              ? { 'aria-describedby': `seed-word-error-${index + 1}` }
-              : {}}
-            class="flex h-11 w-full rounded-none border bg-card px-2 pt-3 font-mono text-xs focus:border-foreground/40 focus:outline-hidden focus:ring-2 focus:ring-ring {cellInvalid(
-              index,
-            )
-              ? 'border-destructive focus:ring-destructive/40'
-              : 'border-border/45'}"
-            oninput={(event) =>
-              (() => {
-                const onCellInputArgs: Parameters<typeof onCellInput>[0] = {
-                  index,
-                  nextValue: event.currentTarget.value,
-                }
-                return onCellInput(onCellInputArgs)
-              })()}
-            onpaste={(event) =>
-              (() => {
-                const onCellPasteArgs: Parameters<typeof onCellPaste>[0] = {
-                  index,
-                  event,
-                }
-                return onCellPaste(onCellPasteArgs)
-              })()}
-            onfocus={() => {
-              focusedIndex = { kind: FocusedWordKind.Focused, index }
-              suggestionIndex = 0
-            }}
-            onblur={() => {
-              queueMicrotask(() => {
-                if (
-                  document.activeElement?.closest(
-                    '[data-testid^="seed-word-suggestion-"]',
+              suggestions.length > 0
+                ? { 'aria-controls': `seed-word-suggestions-${index + 1}` }
+                : {}}
+              data-testid="seed-word-{index + 1}"
+              aria-invalid={cellInvalid(index)}
+              {...cellInvalid(index)
+                ? { 'aria-describedby': `seed-word-error-${index + 1}` }
+                : {}}
+              class="flex h-11 w-full rounded-none border bg-card px-2 pt-3 font-mono text-xs focus:border-foreground/40 focus:outline-hidden focus:ring-2 focus:ring-ring {cellInvalid(
+                index,
+              )
+                ? 'border-destructive focus:ring-destructive/40'
+                : 'border-border/45'}"
+              oninput={(event) =>
+                (() => {
+                  const onCellInputArgs: Parameters<typeof onCellInput>[0] = {
+                    index,
+                    nextValue: event.currentTarget.value,
+                  }
+                  return onCellInput(onCellInputArgs)
+                })()}
+              onpaste={(event) =>
+                (() => {
+                  const onCellPasteArgs: Parameters<typeof onCellPaste>[0] = {
+                    index,
+                    event,
+                  }
+                  return onCellPaste(onCellPasteArgs)
+                })()}
+              onfocus={() => {
+                focusedIndex = { kind: FocusedWordKind.Focused, index }
+                suggestionIndex = 0
+              }}
+              onblur={() => {
+                queueMicrotask(() => {
+                  if (
+                    document.activeElement?.closest(
+                      '[data-testid^="seed-word-suggestion-"]',
+                    )
+                  ) {
+                    return
+                  }
+                  if (
+                    focusedIndex.kind === FocusedWordKind.Focused &&
+                    focusedIndex.index === index
                   )
-                ) {
-                  return
-                }
-                if (
-                  focusedIndex.kind === FocusedWordKind.Focused &&
-                  focusedIndex.index === index
-                )
-                  focusedIndex = { kind: FocusedWordKind.None }
-              })
-            }}
-            onkeydown={(event) =>
-              (() => {
-                const onCellKeyDownArgs: Parameters<typeof onCellKeyDown>[0] = {
-                  index,
-                  event,
-                }
-                return onCellKeyDown(onCellKeyDownArgs)
-              })()}
-          />
-          {#if focusedIndex.kind === FocusedWordKind.Focused && focusedIndex.index === index && suggestions.length > 0}
-            <ul
-              id="seed-word-suggestions-{index + 1}"
-              role="listbox"
-              data-testid="seed-word-suggestions"
-              class="absolute left-0 right-0 top-full z-20 mt-1 max-h-40 overflow-y-auto border border-border bg-popover py-1 shadow-md"
-            >
-              {#each suggestions as suggestion, suggestionIdx (suggestion)}
-                <li role="presentation">
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={suggestionIdx === suggestionIndex}
-                    data-testid="seed-word-suggestion-{suggestion}"
-                    class="block w-full px-2.5 py-1.5 text-left font-mono text-xs transition-colors {suggestionIdx ===
-                    suggestionIndex
-                      ? 'bg-accent text-accent-foreground'
-                      : 'text-foreground hover:bg-accent/60'}"
-                    onmousedown={(event) => event.preventDefault()}
-                    onclick={() =>
-                      (() => {
-                        const selectSuggestionArgs3: Parameters<
-                          typeof selectSuggestion
-                        >[0] = { word: suggestion, index }
-                        return selectSuggestion(selectSuggestionArgs3)
-                      })()}
-                  >
-                    {suggestion}
-                  </button>
-                </li>
-              {/each}
-            </ul>
-          {/if}
-          {#if cellInvalid(index)}
+                    focusedIndex = { kind: FocusedWordKind.None }
+                })
+              }}
+              onkeydown={(event) =>
+                (() => {
+                  const onCellKeyDownArgs: Parameters<typeof onCellKeyDown>[0] =
+                    {
+                      index,
+                      event,
+                    }
+                  return onCellKeyDown(onCellKeyDownArgs)
+                })()}
+            />
+            {#if focusedIndex.kind === FocusedWordKind.Focused && focusedIndex.index === index && suggestions.length > 0}
+              <ul
+                id="seed-word-suggestions-{index + 1}"
+                role="listbox"
+                data-testid="seed-word-suggestions"
+                class="absolute left-0 right-0 top-full z-30 mt-px max-h-48 overflow-y-auto border border-foreground/30 bg-popover py-1 shadow-lg"
+              >
+                {#each suggestions as suggestion, suggestionIdx (suggestion)}
+                  <li role="presentation">
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={suggestionIdx === suggestionIndex}
+                      data-testid="seed-word-suggestion-{suggestion}"
+                      class="block w-full px-2.5 py-1.5 text-left font-mono text-xs transition-colors {suggestionIdx ===
+                      suggestionIndex
+                        ? 'bg-accent text-accent-foreground'
+                        : 'text-foreground hover:bg-accent/60'}"
+                      onmousedown={(event) => event.preventDefault()}
+                      onclick={() =>
+                        (() => {
+                          const selectSuggestionArgs3: Parameters<
+                            typeof selectSuggestion
+                          >[0] = { word: suggestion, index }
+                          return selectSuggestion(selectSuggestionArgs3)
+                        })()}
+                    >
+                      {suggestion}
+                    </button>
+                  </li>
+                {/each}
+              </ul>
+            {/if}
+          </span>
+          {#if cellInvalid(index) && !(focusedIndex.kind === FocusedWordKind.Focused && focusedIndex.index === index && suggestions.length > 0)}
             <span
               id="seed-word-error-{index + 1}"
               class="mt-1 block text-[10px] text-destructive"

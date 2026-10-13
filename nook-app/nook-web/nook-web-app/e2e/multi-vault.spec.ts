@@ -184,10 +184,9 @@ test.describe('multi-vault on one browser profile', () => {
     await openIdentitiesPage(page)
     await expect(page.getByTestId('identity-vault-row')).toHaveCount(1)
     await page.getByTestId('identity-new-vault').click()
-    await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
-    await expect(page.getByTestId('vault-admin-vault-count')).toContainText('1')
-    await page.getByTestId('vault-admin-create-input').fill('Vault B')
-    await page.getByTestId('vault-admin-create-btn').click()
+    await expect(page.getByTestId('login-new-vault-panel')).toBeVisible()
+    await page.getByTestId('login-vault-name-input').fill('Vault B')
+    await page.getByTestId('login-create-additional-vault-btn').click()
     await expect
       .poll(
         async () => {
@@ -199,6 +198,7 @@ test.describe('multi-vault on one browser profile', () => {
       .not.toBe(storeA)
     const vaultBYaml = await readLocalVaultYamlFromIdb(page)
     const storeB = parseStoreId(vaultBYaml)
+    await openManagePage(page, ManagePage.Vaults)
     await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
 
     const registry = await listLocalVaultEntries(page)
@@ -239,7 +239,11 @@ test.describe('multi-vault on one browser profile', () => {
         return entries.find((entry) => entry.store_id === storeB)?.label
       })
       .toBe('Vault Bee')
-    await expect(page.getByTestId('manage-nav')).toContainText('Vault Bee')
+    await expect(
+      page.locator(
+        '[data-testid="vault-admin-name"][data-store-id="' + storeB + '"]',
+      ),
+    ).toContainText('Vault Bee')
     await expect(page.getByTestId('vault-admin-vaults-section')).toBeVisible()
     await expect(page.getByTestId('vault-admin-vault-count')).toContainText(
       '2 vaults',

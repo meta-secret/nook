@@ -29,11 +29,14 @@ test.describe('persistent workspace routing', () => {
     await expect(page).toHaveURL(/\/vault\/devices$/)
     await expect(page.getByTestId('vault-devices-panel')).toBeVisible()
 
-    await page.getByTestId('manage-nav-keys').click()
+    await expect(page.getByTestId('manage-nav-keys')).toHaveCount(0)
+    await page.getByTestId('header-identities-btn').click()
+    await page.getByTestId('identity-manage').first().click()
     await expect(page).toHaveURL(/\/identity\/keys$/)
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    await expect(page.getByTestId('manage-nav-devices')).toHaveCount(0)
 
     await page.getByTestId('manage-nav-vaults').click()
     await expect(page).toHaveURL(/\/identity\/vaults$/)
@@ -265,11 +268,8 @@ test.describe('persistent workspace routing', () => {
     await connectLocalVault(page)
 
     await page.getByTestId('vault-manage-btn').click()
-    await page.getByTestId('manage-nav-keys').click()
-    await expect(page).toHaveURL(/\/identity\/keys$/)
-    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
+    await page.getByTestId('manage-nav-sync').click()
+    await expect(page).toHaveURL(/\/vault\/sync$/)
     await page.getByTestId('page-bar-back').click()
     await expect(page).toHaveURL(/\/vault$/)
     await expect(page.getByTestId('vault-panel')).toBeVisible()
@@ -302,6 +302,7 @@ test.describe('persistent workspace routing', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await page.getByTestId('page-bar-back').click()
+    await openVaultPage(page)
 
     await expect(page.getByTestId('vault-panel')).toBeVisible()
     await expect(page.getByTestId('add-secret-panel')).toHaveCount(0)

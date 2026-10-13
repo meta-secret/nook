@@ -111,9 +111,9 @@ test('list every vault on its identity card and pair the open vault with the com
 
   await openIdentitiesPage(page)
   await page.getByTestId('identity-new-vault').click()
-  await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
-  await page.getByTestId('vault-admin-create-input').fill('Vault B')
-  await page.getByTestId('vault-admin-create-btn').click()
+  await expect(page.getByTestId('login-new-vault-panel')).toBeVisible()
+  await page.getByTestId('login-vault-name-input').fill('Vault B')
+  await page.getByTestId('login-create-additional-vault-btn').click()
   await expect
     .poll(
       async () => {

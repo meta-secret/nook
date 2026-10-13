@@ -139,9 +139,53 @@ function keyKind(entry: IdentityDirectoryEntry): IdentityKeyKind {
   return IdentityKeyKind.None;
 }
 
-/** Project the identity directory and local vault catalog into cards. */
+type IdentityVaultOwnership = {
+  readonly storeId: string;
+  readonly identityId: string;
+};
+
+/**
+ * Project the identity directory and local vault catalog into cards. Every
+ * vault belongs to exactly one identity: the identity with a verified access
+ * record for it (the current identity first when several claim it), or the
+ * current identity for local vaults no identity has opened yet.
+ */
 export class IdentityCardProjection {
-  constructor(private readonly source: IdentityCardSource) {}
+  private readonly owners: ReadonlyMap<string, string>;
+
+  constructor(private readonly source: IdentityCardSource) {
+    this.owners = this.vaultOwners();
+  }
+
+  private vaultOwners(): Map<string, string> {
+    const owners = new Map<string, string>();
+    const isCurrent = (entry: IdentityDirectoryEntry): boolean =>
+      entry.localAccess === NookIdentityLocalAccessKind.CurrentBrowser;
+    const ordered = [
+      ...this.source.identities.filter(isCurrent),
+      ...this.source.identities.filter((entry) => !isCurrent(entry)),
+    ];
+    for (const entry of ordered) {
+      for (const vault of entry.vaults) {
+        if (!owners.has(vault.storeId)) {
+          owners.set(vault.storeId, entry.identityId);
+        }
+      }
+    }
+    for (const entry of ordered) {
+      if (!isCurrent(entry)) continue;
+      for (const vault of this.source.localVaults) {
+        if (!owners.has(vault.storeId)) {
+          owners.set(vault.storeId, entry.identityId);
+        }
+      }
+    }
+    return owners;
+  }
+
+  private owns(request: IdentityVaultOwnership): boolean {
+    return this.owners.get(request.storeId) === request.identityId;
+  }
 
   get cards(): IdentityCardView[] {
     return this.source.identities.map((entry) => this.card(entry));
@@ -184,6 +228,11 @@ export class IdentityCardProjection {
     const seen = new Set<string>();
     for (const vault of entry.vaults) {
       seen.add(vault.storeId);
+      const ownership: IdentityVaultOwnership = {
+        storeId: vault.storeId,
+        identityId: entry.identityId,
+      };
+      if (!this.owns(ownership)) continue;
       const localLabel = local.get(vault.storeId);
       const label = localLabel ? localLabel : vault.label;
       const stateRequest: VaultRowStateRequest = {
@@ -197,11 +246,16 @@ export class IdentityCardProjection {
       };
       rows.push(row);
     }
-    // The current identity owns every vault in the local catalog, including
-    // ones it has not opened yet and so has no verified access record for.
+    // The current identity also owns local vaults that no identity has a
+    // verified access record for yet (created here, not opened since).
     if (current) {
       for (const vault of this.source.localVaults) {
         if (seen.has(vault.storeId)) continue;
+        const ownership: IdentityVaultOwnership = {
+          storeId: vault.storeId,
+          identityId: entry.identityId,
+        };
+        if (!this.owns(ownership)) continue;
         const stateRequest: VaultRowStateRequest = {
           storeId: vault.storeId,
           local: true,
@@ -246,3 +300,24 @@ export class IdentityCardProjection {
     };
   }
 }
+
+export enum VaultSetupHostKind {
+  /** Waiting for the identity directory before placing the setup. */
+  Pending = "pending",
+  /** No identity yet: the "Your first identity" card holds the setup. */
+  Draft = "draft",
+  /** The current identity's card holds the setup. */
+  Card = "card",
+}
+
+/**
+ * Where the first-vault setup lives. It is fixed once placed, so creating
+ * keys mid-setup (which adds an identity) never remounts the wizard.
+ */
+export type VaultSetupHost =
+  | { readonly kind: VaultSetupHostKind.Pending }
+  | { readonly kind: VaultSetupHostKind.Draft }
+  | {
+      readonly kind: VaultSetupHostKind.Card;
+      readonly identityId: string;
+    };

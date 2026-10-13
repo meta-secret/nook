@@ -160,3 +160,36 @@ describe('identity card projection', () => {
     })
   })
 })
+
+describe('IdentityCardProjection vault ownership', () => {
+  test('lists every vault under exactly one identity', () => {
+    const sharedClaim: IdentityDirectoryEntry = {
+      ...work,
+      vaults: [vaultAccess('store_w', 'Acme'), vaultAccess('store_a', 'A')],
+    }
+    const ownershipSource: IdentityCardSource = {
+      identities: [sharedClaim, personal],
+      localVaults: [
+        { storeId: 'store_a', label: 'Personal vault' },
+        { storeId: 'store_w', label: 'Acme' },
+        { storeId: 'store_new', label: 'Fresh' },
+      ],
+      openStoreId: '',
+      authenticated: false,
+    }
+    const cards = new IdentityCardProjection(ownershipSource).cards
+    const rowsOf = (identityId: string) =>
+      cards
+        .filter((card) => card.identityId === identityId)
+        .flatMap((card) => card.vaults.map((row) => row.storeId))
+
+    expect(rowsOf(personal.identityId)).toEqual([
+      'store_a',
+      'store_gone',
+      'store_new',
+    ])
+    expect(rowsOf(work.identityId)).toEqual(['store_w'])
+    const all = cards.flatMap((card) => card.vaults.map((row) => row.storeId))
+    expect(new Set(all).size).toBe(all.length)
+  })
+})

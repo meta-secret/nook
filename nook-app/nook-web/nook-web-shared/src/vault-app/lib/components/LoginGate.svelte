@@ -598,9 +598,7 @@
       ).addParticipantResponse(participantRequest);
     }}
     onFinalizeSentinelGenesis={() =>
-      new sentinelGenesisActions.SentinelGenesisActions(
-        vault,
-      ).finalize()}
+      new sentinelGenesisActions.SentinelGenesisActions(vault).finalize()}
     onCreateSentinelGenesisParticipantResponse={((
       ...[
         v = (payload) =>
@@ -624,9 +622,7 @@
     ) => v)(onCreateSentinelGenesisPublicKeyAnnouncement)}
     onRememberSentinelGenesisRequest={(
       payload: Parameters<
-        NonNullable<
-          CreateVaultChooserProps["onRememberSentinelGenesisRequest"]
-        >
+        NonNullable<CreateVaultChooserProps["onRememberSentinelGenesisRequest"]>
       >[0],
     ) =>
       (() => {
@@ -639,9 +635,7 @@
       })()}
     onReceiveSentinelGenesisShare={(
       payload: Parameters<
-        NonNullable<
-          CreateVaultChooserProps["onReceiveSentinelGenesisShare"]
-        >
+        NonNullable<CreateVaultChooserProps["onReceiveSentinelGenesisShare"]>
       >[0],
     ) =>
       (() => {
@@ -681,6 +675,16 @@
       {...enrollmentPanelOptionalProps}
     />
   {/if}
+{/snippet}
+{#snippet newVaultPanel()}
+  <LoginNewVaultPanel
+    {vault}
+    {isVerifying}
+    {isInitializing}
+    onCreateVault={onCreateDeviceVault}
+    onImportVault={importExistingVault}
+    onClose={() => (newVaultOpen = false)}
+  />
 {/snippet}
 {#snippet unlockPanel()}
   <LoginUnlockStep
@@ -764,7 +768,12 @@
       {...(showCreateVault || sentinelInvitationRequest.trim()) &&
       !showQrOnboarding
         ? { vaultSetup: vaultSetupPanel }
-        : {}}
+        : newVaultOpen && (showLocalUnlock || showVaultPicker)
+          ? { vaultSetup: newVaultPanel }
+          : {}}
+      vaultSetupOpen={newVaultOpen ||
+        Boolean(sentinelInvitationRequest.trim()) ||
+        vault.sentinelGenesisPhase === SentinelGenesisPhase.DeliveringShares}
     >
       <div class="grid min-w-0 grid-cols-1 gap-3 empty:hidden">
         {#if vault.sessionExpiredByIdle}
@@ -799,17 +808,6 @@
         {:else if !showCreateVault && !sentinelInvitationRequest.trim()}
           {#if !hasProviders && !showSetup && !showLocalUnlock && onOpenHelp}
             <ProductIntro {vault} {onOpenHelp} />
-          {/if}
-
-          {#if newVaultOpen && (showLocalUnlock || showVaultPicker) && onCreateDeviceVault}
-            <LoginNewVaultPanel
-              {vault}
-              {isVerifying}
-              {isInitializing}
-              onCreateVault={onCreateDeviceVault}
-              onImportVault={importExistingVault}
-              onClose={() => (newVaultOpen = false)}
-            />
           {/if}
 
           {#if showAccessSheet}

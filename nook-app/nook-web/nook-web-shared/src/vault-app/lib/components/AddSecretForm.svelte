@@ -225,8 +225,8 @@
   <form
     onsubmit={handleSubmit}
     class={isSecureNoteForm
-      ? "nk-frame-sheet flex min-h-0 min-w-0 max-w-full flex-1 flex-col gap-4 overflow-y-auto overscroll-y-contain p-4 sm:p-5"
-      : "nk-frame-sheet space-y-4 p-4 sm:p-5"}
+      ? "nk-panel flex min-h-0 min-w-0 max-w-full flex-1 flex-col gap-4 overflow-y-auto overscroll-y-contain p-4 sm:p-5"
+      : "nk-panel space-y-4 p-4 sm:p-5"}
     {...isEditMode ? { "data-testid": "edit-secret-form" } : {}}
   >
     <div

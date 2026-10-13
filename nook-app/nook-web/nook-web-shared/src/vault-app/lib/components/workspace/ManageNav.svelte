@@ -1,6 +1,7 @@
 <!--
-Management navigation. One element: a grouped rail on wide screens and a
-bottom bar on phones, so every destination has exactly one control.
+Management navigation for one subject: the identity (keys, vaults,
+settings) or the open vault (devices, sync, passwords, import). One element:
+a rail on wide screens and a bottom bar on phones.
 -->
 <script lang="ts">
   import {
@@ -27,20 +28,27 @@ bottom bar on phones, so every destination has exactly one control.
   let {
     vault,
     active,
+    scope,
     vaultLabel = '',
+    identityLabel = '',
     onSelect,
   }: {
     vault: VaultState
     active: WorkspaceSection
+    /** Which subject is being managed; only its pages are listed. */
+    scope: ManageSectionScope
     vaultLabel?: string
+    identityLabel?: string
     onSelect: (section: WorkspaceSection) => void
   } = $props()
 
-  const identityItems = MANAGE_NAV_ITEMS.filter(
-    (item) => item.scope === ManageSectionScope.Identity,
+  const items = $derived(
+    MANAGE_NAV_ITEMS.filter((item) => item.scope === scope),
   )
-  const vaultItems = MANAGE_NAV_ITEMS.filter(
-    (item) => item.scope === ManageSectionScope.Vault,
+  const groupLabel = $derived(
+    scope === ManageSectionScope.Identity
+      ? `${vault.t(I18N_KEYS.WorkspaceNavGroupIdentity)}${identityLabel ? ` · ${identityLabel}` : ''}`
+      : `${vault.t(I18N_KEYS.WorkspaceNavGroupVault)}${vaultLabel ? ` · ${vaultLabel}` : ''}`,
   )
 </script>
 
@@ -63,7 +71,11 @@ bottom bar on phones, so every destination has exactly one control.
 {/snippet}
 
 {#snippet entry(item: ManageNavItem)}
-  <li class={item.placement === ManageNavPlacement.RailOnly ? 'hidden md:block' : 'min-w-0 flex-1 md:flex-none'}>
+  <li
+    class={item.placement === ManageNavPlacement.RailOnly
+      ? 'hidden md:block'
+      : 'min-w-0 flex-1 md:flex-none'}
+  >
     <button
       type="button"
       class="nk-manage-item"
@@ -83,24 +95,11 @@ bottom bar on phones, so every destination has exactly one control.
   aria-label={vault.t(I18N_KEYS.WorkspaceNavLabel)}
   data-testid="manage-nav"
 >
-  <p class="nk-label hidden px-2.5 pb-1 md:block">
-    {vault.t(I18N_KEYS.WorkspaceNavGroupIdentity)}
+  <p class="nk-label hidden truncate px-2.5 pb-1 md:block" title={groupLabel}>
+    {groupLabel}
   </p>
   <ul class="contents md:grid md:gap-0.5">
-    {#each identityItems as item (item.section)}
-      {@render entry(item)}
-    {/each}
-  </ul>
-  <p
-    class="nk-label hidden truncate px-2.5 pb-1 pt-4 md:block"
-    title={vaultLabel}
-  >
-    {vault.t(I18N_KEYS.WorkspaceNavGroupVault)}{vaultLabel
-      ? ` · ${vaultLabel}`
-      : ''}
-  </p>
-  <ul class="contents md:grid md:gap-0.5">
-    {#each vaultItems as item (item.section)}
+    {#each items as item (item.section)}
       {@render entry(item)}
     {/each}
   </ul>

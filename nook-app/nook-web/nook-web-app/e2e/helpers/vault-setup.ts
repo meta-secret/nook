@@ -167,6 +167,21 @@ export async function connectLocalVault(page: Page) {
 
   const chooser = page.getByTestId('login-create-vault-chooser')
   const newVaultRow = page.getByTestId('identity-new-vault')
+  // The first-vault setup appears once the identity cards have loaded, so
+  // wait for a settled login state before choosing between create and unlock.
+  await expect(
+    chooser
+      .or(newVaultRow)
+      .or(page.getByTestId('login-local-unlock-step'))
+      .or(page.getByTestId('login-vault-picker'))
+      .or(page.getByTestId('login-choose-vault-hint'))
+      .or(page.getByTestId('vault-panel'))
+      .first(),
+  ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  if (await page.getByTestId('vault-panel').isVisible()) {
+    await disableVaultIdleLock(page)
+    return
+  }
   if ((await chooser.isVisible()) || (await newVaultRow.isVisible())) {
     await createLocalVaultOnLogin(page)
     await disableVaultIdleLock(page)

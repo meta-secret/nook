@@ -616,7 +616,13 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     ).toContainText('Choose this vault to connect it to the browser extension.')
     await pairingPage.close()
 
-    await simplePage.getByTestId('vault-manage-btn').click()
+    await simplePage.getByTestId('header-identities-btn').click()
+    await simplePage
+      .locator(
+        '[data-testid="identity-card"][data-status="unlocked"] [data-testid="identity-manage"]',
+      )
+      .first()
+      .click()
     await simplePage.getByTestId('manage-nav-settings').click()
     await simplePage.getByTestId('delete-local-vault-button').click()
     await simplePage.getByTestId('delete-local-vault-confirm').click()

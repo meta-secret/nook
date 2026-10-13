@@ -285,7 +285,7 @@ test.describe('devices and access dashboard', () => {
       page.getByTestId('devices-access-identity-protection-flow'),
     ).toBeVisible()
     await page.goBack()
-    await expect(page).toHaveURL(/\/vault(\/devices)?$/)
+    await expect(page).toHaveURL(/\/(vault(\/devices)?|identities)$/)
     await expect(page.getByTestId('login-local-vault-detected')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
@@ -302,7 +302,7 @@ test.describe('devices and access dashboard', () => {
     })
     await page.getByTestId('device-protection-unlock-btn').click()
     await page.goBack()
-    await expect(page).toHaveURL(/\/vault(\/devices)?$/)
+    await expect(page).toHaveURL(/\/(vault(\/devices)?|identities)$/)
     await expect(page.getByTestId('login-local-vault-detected')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
@@ -530,6 +530,7 @@ test.describe('devices and access dashboard', () => {
       bridge.getByRole('article', { name: /Vault access/ }),
     ).toHaveCount(1)
     await page.getByTestId('page-bar-back').click()
+    await openVaultPage(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible()
   })
 

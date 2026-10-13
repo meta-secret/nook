@@ -53,7 +53,5 @@ export class VaultUiState {
   identityFocus = $state("");
   /** Set by the "New identity" card so the Keys page starts identity creation. */
   identityCreationRequested = $state(false);
-  /** Set by "New vault" on an identity card so Vaults focuses its name field. */
-  vaultCreationRequested = $state(false);
   helpOpen = $state(false);
 }

@@ -1,6 +1,6 @@
 <!--
-New vault for the identity on this browser: create one here, or bring an
-existing one in from a sync provider. Opened from an identity card.
+New vault for an identity: create one here, or (while locked) bring an
+existing one in from a sync provider. It opens inside the identity card.
 -->
 <script lang="ts">
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
@@ -14,14 +14,17 @@ existing one in from a sync provider. Opened from an identity card.
     isVerifying,
     isInitializing,
     onCreateVault,
-    onImportVault,
+    onImportVault = () => {},
+    importable = true,
     onClose,
   }: {
     vault: VaultState
     isVerifying: boolean
     isInitializing: boolean
     onCreateVault: (label: string) => void | Promise<void>
-    onImportVault: () => void
+    onImportVault?: () => void
+    /** Offer "import from a sync provider" next to creating a vault. */
+    importable?: boolean
     onClose: () => void
   } = $props()
 
@@ -29,7 +32,7 @@ existing one in from a sync provider. Opened from an identity card.
 </script>
 
 <section
-  class="nk-frame-sheet grid min-w-0 gap-5 p-5 sm:p-6"
+  class="grid min-w-0 gap-5"
   aria-labelledby="login-new-vault-title"
   data-testid="login-new-vault-panel"
 >
@@ -57,7 +60,7 @@ existing one in from a sync provider. Opened from an identity card.
     </button>
   </header>
 
-  <div class="grid gap-4 md:grid-cols-2">
+  <div class="grid gap-4 {importable ? 'xl:grid-cols-2' : ''}">
     <section
       class="nk-frame-nick grid content-start gap-3 p-4"
       data-testid="login-vault-create-workflow"
@@ -82,32 +85,34 @@ existing one in from a sync provider. Opened from an identity card.
         onCreate={onCreateVault}
       />
     </section>
-    <section
-      class="nk-frame-nick grid content-start gap-3 p-4"
-      data-testid="login-vault-import-workflow"
-    >
-      <span class="nk-tile" aria-hidden="true"
-        ><CloudDownload class="size-4" /></span
+    {#if importable}
+      <section
+        class="nk-frame-nick grid content-start gap-3 p-4"
+        data-testid="login-vault-import-workflow"
       >
-      <div class="grid gap-1">
-        <h3 class="text-[0.9375rem] font-semibold text-foreground">
+        <span class="nk-tile" aria-hidden="true"
+          ><CloudDownload class="size-4" /></span
+        >
+        <div class="grid gap-1">
+          <h3 class="text-[0.9375rem] font-semibold text-foreground">
+            {vault.t(I18N_KEYS.LoginVaultPickerImport)}
+          </h3>
+          <p class="text-sm text-pretty text-muted-foreground">
+            {vault.t(I18N_KEYS.LoginVaultWorkflowImportDescription)}
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          class="justify-self-start"
+          data-testid="login-import-vault-btn"
+          disabled={isBusy}
+          onclick={onImportVault}
+        >
+          <CloudDownload class="size-4" />
           {vault.t(I18N_KEYS.LoginVaultPickerImport)}
-        </h3>
-        <p class="text-sm text-pretty text-muted-foreground">
-          {vault.t(I18N_KEYS.LoginVaultWorkflowImportDescription)}
-        </p>
-      </div>
-      <Button
-        type="button"
-        variant="outline"
-        class="justify-self-start"
-        data-testid="login-import-vault-btn"
-        disabled={isBusy}
-        onclick={onImportVault}
-      >
-        <CloudDownload class="size-4" />
-        {vault.t(I18N_KEYS.LoginVaultPickerImport)}
-      </Button>
-    </section>
+        </Button>
+      </section>
+    {/if}
   </div>
 </section>

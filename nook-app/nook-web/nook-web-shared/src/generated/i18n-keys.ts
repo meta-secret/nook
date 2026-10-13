@@ -445,7 +445,9 @@ export const I18N_KEYS = {
   DevicesAccessBrowserSafari: 'devices_access.browser_safari',
   DevicesAccessBrowserSection: 'devices_access.browser_section',
   DevicesAccessChainHint: 'devices_access.chain_hint',
+  DevicesAccessChainHolds: 'devices_access.chain_holds',
   DevicesAccessChainLabel: 'devices_access.chain_label',
+  DevicesAccessChainUnlocks: 'devices_access.chain_unlocks',
   DevicesAccessClientDescription: 'devices_access.client_description',
   DevicesAccessCompanionIdentity: 'devices_access.companion_identity',
   DevicesAccessCompanionSession: 'devices_access.companion_session',
@@ -2018,6 +2020,7 @@ export const I18N_KEYS = {
   WorkspaceNewIdentityDescription: 'workspace.new_identity_description',
   WorkspaceNewIdentityTitle: 'workspace.new_identity_title',
   WorkspaceNewVault: 'workspace.new_vault',
+  WorkspaceOpenIdentities: 'workspace.open_identities',
   WorkspaceOpenVaultSheet: 'workspace.open_vault_sheet',
   WorkspaceSectionDevices: 'workspace.section_devices',
   WorkspaceSectionDevicesDescription: 'workspace.section_devices_description',
@@ -2049,6 +2052,7 @@ export const I18N_KEYS = {
   WorkspaceVaultOpen: 'workspace.vault_open',
   WorkspaceVaultSelected: 'workspace.vault_selected',
   WorkspaceVaultUnavailable: 'workspace.vault_unavailable',
+  WorkspaceVaultsCreatedFromIdentity: 'workspace.vaults_created_from_identity',
 } as const
 
 export type I18nKey = (typeof I18N_KEYS)[keyof typeof I18N_KEYS]

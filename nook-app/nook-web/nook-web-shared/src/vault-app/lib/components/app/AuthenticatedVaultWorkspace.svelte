@@ -42,6 +42,7 @@ bar on phones.
   import VaultStatusBar from "$lib/components/VaultStatusBar.svelte";
   import { VaultStatusBarVariant } from "$lib/components/vault-status-bar-state";
   import IdentitiesHub from "$lib/components/identities/IdentitiesHub.svelte";
+  import LoginNewVaultPanel from "$lib/components/login/LoginNewVaultPanel.svelte";
   import { IdentityDirectoryLoader } from "$lib/components/identities/identity-directory-loader.svelte";
   import { IdentityDirectoryLoadKind } from "$lib/components/devices-access/identity-directory-view";
   import PageBar from "$lib/components/workspace/PageBar.svelte";
@@ -332,13 +333,34 @@ bar on phones.
       vault.errorMsg = vault.t(synchronized.error.translationKey);
   }
 
+  /** "New vault" on the identity card: the new vault belongs to it. */
+  let newVaultOpen = $state(false);
+  async function createVaultFromCard(label: string): Promise<void> {
+    await vault.createLocalVaultWithDeviceKeys(label);
+    if (!vault.errorMsg) newVaultOpen = false;
+  }
+
   onDestroy(() => {
     onEditorOpenChange(false);
   });
 </script>
 
+{#snippet newVaultPanel()}
+  <LoginNewVaultPanel
+    {vault}
+    isVerifying={vault.isVerifying}
+    isInitializing={vault.isInitializing}
+    importable={false}
+    onCreateVault={createVaultFromCard}
+    onClose={() => (newVaultOpen = false)}
+  />
+{/snippet}
+
 {#if section === WorkspaceSection.Identities}
-  <div class="grid min-w-0 grid-cols-1 gap-4" data-testid="identities-workspace">
+  <div
+    class="grid min-w-0 grid-cols-1 gap-4"
+    data-testid="identities-workspace"
+  >
     <IdentitiesHub
       {vault}
       canAddVault
@@ -346,10 +368,9 @@ bar on phones.
       {extensionNote}
       busy={vault.isVerifying || vault.isInitializing}
       onOpenVault={(storeId: string) => void openVaultFromCard(storeId)}
-      onNewVault={() => {
-        vault.vaultCreationRequested = true;
-        openSection(WorkspaceSection.Vaults);
-      }}
+      onNewVault={() => (newVaultOpen = true)}
+      {...newVaultOpen ? { vaultSetup: newVaultPanel } : {}}
+      vaultSetupOpen={newVaultOpen}
       onManage={manageIdentity}
       onNewIdentity={newIdentity}
       onUseIdentity={manageIdentity}
@@ -451,7 +472,9 @@ bar on phones.
       <ManageNav
         {vault}
         active={section}
+        {scope}
         {vaultLabel}
+        {identityLabel}
         onSelect={openSection}
       />
     {/if}
@@ -538,7 +561,10 @@ bar on phones.
             onLeaveReady={(leave: KeysPageLeave) => (leaveKeysPage = leave)}
           />
         {:else if section === WorkspaceSection.Devices}
-          <div class="grid min-w-0 grid-cols-1 gap-8" data-testid="vault-devices-panel">
+          <div
+            class="grid min-w-0 grid-cols-1 gap-8"
+            data-testid="vault-devices-panel"
+          >
             <ManageSection
               title={vault.t(I18N_KEYS.SettingsDevices)}
               subtitle={vault.t(I18N_KEYS.SettingsDevicesDesc)}
@@ -737,9 +763,7 @@ bar on phones.
               >[0],
             ) => vault.handleGoogleAuthenticatorImport(migrationUris)}
             onImportProtonPass={(
-              exportBytes: Parameters<
-                VaultAdminProps["onImportProtonPass"]
-              >[0],
+              exportBytes: Parameters<VaultAdminProps["onImportProtonPass"]>[0],
             ) => vault.handleProtonPassImport(exportBytes)}
           />
         {/if}

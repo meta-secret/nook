@@ -79,7 +79,7 @@ const DEFINITIONS: readonly ManageNavDefinition[] = [
     shortLabelKey: I18N_KEYS.WorkspaceSectionImport,
     descriptionKey: I18N_KEYS.WorkspaceSectionImportDescription,
     testId: "manage-nav-import",
-    placement: ManageNavPlacement.RailOnly,
+    placement: ManageNavPlacement.Everywhere,
   },
 ];
 

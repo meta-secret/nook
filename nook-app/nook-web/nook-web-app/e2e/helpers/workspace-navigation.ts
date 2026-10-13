@@ -22,6 +22,13 @@ const MANAGE_PAGE_MARKERS: Record<ManagePage, string> = {
   [ManagePage.Import]: 'vault-import-export-section',
 }
 
+/** Pages that manage the identity; the rest manage the open vault. */
+const IDENTITY_PAGES: ReadonlySet<ManagePage> = new Set([
+  ManagePage.Keys,
+  ManagePage.Vaults,
+  ManagePage.Settings,
+])
+
 /** Return to the open vault's secret list from any workspace page. */
 export async function openVaultPage(page: Page): Promise<void> {
   const vaultPanel = page.getByTestId('vault-panel')
@@ -30,6 +37,11 @@ export async function openVaultPage(page: Page): Promise<void> {
     const openRow = page.locator(
       '[data-testid="identity-vault-row"][data-state="open"]',
     )
+    // The hub's cards load after the page; wait for a way back to the vault.
+    await expect(
+      vaultPanel.or(openRow).or(page.getByTestId('page-bar-back')).first(),
+    ).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    if (await vaultPanel.isVisible()) return
     if (await openRow.isVisible()) {
       await openRow.click()
     } else {
@@ -57,13 +69,26 @@ export async function openManagePage(
   if (await marker.isVisible()) return
   const navItem = page.getByTestId(`manage-nav-${target}`)
   if (!(await navItem.isVisible())) {
-    await openVaultPage(page)
-    if (target === ManagePage.Import) {
-      await page.getByTestId('vault-import-btn').click()
-      await expect(marker).toBeVisible({ timeout: UI_TIMEOUT_MS })
-      return
+    if (IDENTITY_PAGES.has(target)) {
+      // Identity pages are reached from the current identity's card.
+      await openIdentitiesPage(page)
+      const currentManage = page.locator(
+        '[data-testid="identity-card"][data-status="unlocked"] [data-testid="identity-manage"]',
+      )
+      await currentManage.first().click()
+      if (target === ManagePage.Keys) {
+        await expect(marker).toBeVisible({ timeout: UI_TIMEOUT_MS })
+        return
+      }
+    } else {
+      await openVaultPage(page)
+      if (target === ManagePage.Import) {
+        await page.getByTestId('vault-import-btn').click()
+        await expect(marker).toBeVisible({ timeout: UI_TIMEOUT_MS })
+        return
+      }
+      await page.getByTestId('vault-manage-btn').click()
     }
-    await page.getByTestId('vault-manage-btn').click()
   }
   await expect(navItem).toBeVisible({ timeout: UI_TIMEOUT_MS })
   await navItem.click()

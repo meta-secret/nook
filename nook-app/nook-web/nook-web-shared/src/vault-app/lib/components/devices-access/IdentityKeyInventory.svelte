@@ -7,6 +7,7 @@ on request.
   import {
     AppWindow,
     Fingerprint,
+    KeyRound,
     MonitorSmartphone,
     Pencil,
     ShieldCheck,
@@ -113,168 +114,198 @@ on request.
     </div>
   {/if}
   <p class="nk-label">{keysHeading()}</p>
-  <ul class="nk-list">
+  <ul class="grid gap-3">
     {#each rows as row (row.key)}
       {@const Icon =
         row.kind === IdentityKeyInventoryRowKind.Protector
           ? Fingerprint
           : AppWindow}
-      <li class="nk-row">
-        <span class="nk-tile" aria-hidden="true"><Icon class="size-4" /></span>
-        <div
-          class="min-w-0"
-          data-testid="devices-access-key-row"
-          data-kind={row.kind}
-        >
-          {#if row.kind === IdentityKeyInventoryRowKind.Protector && row.renamable && editingPasskey}
-            <span class="flex min-w-0 flex-wrap items-center gap-2">
-              <input
-                class="h-9 min-w-48 flex-1 rounded-none border border-input bg-background px-2.5 text-sm outline-none focus:border-foreground/40 focus:ring-2 focus:ring-ring"
-                bind:value={passkeyDraft}
-                disabled={savingPasskey}
-                aria-label={vault.t(I18N_KEYS.DevicesAccessNookPasskeyName)}
-                data-testid="devices-access-passkey-name-input"
-              />
-              <Button
-                type="button"
-                size="sm"
-                disabled={savingPasskey}
-                onclick={() => void savePasskeyRename()}
-              >
-                {vault.t(I18N_KEYS.CommonSave)}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                disabled={savingPasskey}
-                onclick={() => (editingPasskey = false)}
-              >
-                {vault.t(I18N_KEYS.CommonCancel)}
-              </Button>
-            </span>
-          {:else}
-            <div class="nk-row-title">
-              <span class="min-w-0 break-words">{row.title}</span>
-              <span class="nk-tag">{row.typeLabel}</span>
-            </div>
-          {/if}
-          {#if row.passkeySummary.kind === PasskeyCardSummaryKind.Present}
-            <dl
-              class="mt-1 grid min-w-0 gap-2"
-              data-testid="devices-access-passkey-facts"
-            >
-              {#each row.passkeySummary.summary.facts as fact (fact.kind)}
-                {#if fact.kind === PasskeyCardFactKind.Keeper}
-                  <div
-                    class="nk-row-sub flex flex-wrap gap-x-1.5"
-                    data-kind={fact.kind}
-                    data-priority="primary"
-                  >
-                    <dt>{fact.label}</dt>
-                    <dd class="font-medium text-foreground">{fact.value}</dd>
-                  </div>
-                {/if}
-              {/each}
-              <div class="nk-spec">
-                {#each row.passkeySummary.summary.facts as fact (fact.kind)}
-                  {#if fact.kind === PasskeyCardFactKind.Created || fact.kind === PasskeyCardFactKind.LastUsed}
-                    <div
-                      class="inline-flex items-baseline"
-                      data-kind={fact.kind}
-                      data-priority="supporting"
-                    >
-                      <dt class="nk-spec-key">{fact.label}</dt>
-                      <dd>{fact.value}</dd>
-                    </div>
-                  {/if}
-                {/each}
-              </div>
-              {#each row.passkeySummary.summary.facts as fact (fact.kind)}
-                {#if fact.kind === PasskeyCardFactKind.Fingerprint}
-                  <div
-                    class="flex min-w-0 flex-wrap items-baseline font-mono text-xs"
-                    data-kind={fact.kind}
-                    data-priority="secondary"
-                  >
-                    <dt class="nk-spec-key">{fact.label}</dt>
-                    <dd class="min-w-0 break-all text-muted-foreground">
-                      {fact.value}
-                    </dd>
-                  </div>
-                {/if}
-              {/each}
-            </dl>
-          {:else if row.kind === IdentityKeyInventoryRowKind.Protector}
-            <div class="nk-spec mt-1">
-              <span class="inline-flex items-baseline"
-                ><span class="nk-spec-key"
-                  >{vault.t(I18N_KEYS.DevicesAccessLastUsedColumn)}</span
-                >{row.lastUsed}</span
-              >
-            </div>
-          {/if}
-
-          <div
-            class="mt-3 grid gap-1.5 border-l-2 border-border pl-3"
-            role="group"
-            aria-label={vault.t(I18N_KEYS.DevicesAccessAppsHeading)}
-            data-testid="devices-access-apps-group"
+      {@const facts =
+        row.passkeySummary.kind === PasskeyCardSummaryKind.Present
+          ? row.passkeySummary.summary.facts
+          : []}
+      <li
+        class="nk-panel grid min-w-0 gap-4 p-4 sm:p-5"
+        data-testid="devices-access-key-row"
+        data-kind={row.kind}
+      >
+        <header class="flex min-w-0 flex-wrap items-start gap-3">
+          <span class="nk-tile nk-tile-lg text-foreground" aria-hidden="true"
+            ><Icon class="size-5" /></span
           >
-            <p class="nk-spec-key">
-              {vault.t(I18N_KEYS.DevicesAccessAppsHeading)}
-            </p>
-            <ul class="grid gap-2">
-              {#each row.apps as app (app.key)}
-                <li
-                  class="flex min-w-0 items-start gap-2.5"
-                  data-testid="devices-access-app"
+          <div class="min-w-0 flex-1">
+            {#if row.kind === IdentityKeyInventoryRowKind.Protector && row.renamable && editingPasskey}
+              <span class="flex min-w-0 flex-wrap items-center gap-2">
+                <input
+                  class="h-9 min-w-48 flex-1 rounded-none border border-input bg-background px-2.5 text-sm outline-none focus:border-foreground/40 focus:ring-2 focus:ring-ring"
+                  bind:value={passkeyDraft}
+                  disabled={savingPasskey}
+                  aria-label={vault.t(I18N_KEYS.DevicesAccessNookPasskeyName)}
+                  data-testid="devices-access-passkey-name-input"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={savingPasskey}
+                  onclick={() => void savePasskeyRename()}
                 >
-                  <MonitorSmartphone
-                    class="mt-0.5 size-4 shrink-0 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                  <div class="min-w-0 flex-1">
-                    <p class="break-words text-sm font-medium text-foreground">
-                      {app.title}
-                      <span class="font-normal text-muted-foreground"
-                        >· {app.relationship}</span
-                      >
-                    </p>
-                    <details class="mt-1 text-xs text-muted-foreground">
-                      <summary
-                        class="w-fit cursor-pointer select-none font-mono tracking-wide hover:text-foreground"
-                      >
-                        {vault.t(I18N_KEYS.DevicesAccessAdvancedDetails)}
-                      </summary>
-                      <p
-                        class="mt-2 break-all border-l-2 border-border bg-muted/40 px-3 py-2"
-                        data-testid="devices-access-app-id"
-                      >
-                        <span class="font-medium text-foreground"
-                          >{vault.t(I18N_KEYS.DevicesAccessDeviceId)}:</span
-                        >
-                        <code class="ml-1">{app.appId}</code>
-                      </p>
-                    </details>
-                  </div>
-                </li>
-              {/each}
-            </ul>
+                  {vault.t(I18N_KEYS.CommonSave)}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  disabled={savingPasskey}
+                  onclick={() => (editingPasskey = false)}
+                >
+                  {vault.t(I18N_KEYS.CommonCancel)}
+                </Button>
+              </span>
+            {:else}
+              <div
+                class="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1"
+              >
+                <h3
+                  class="min-w-0 break-words text-lg font-semibold tracking-tight text-foreground"
+                >
+                  {row.title}
+                </h3>
+                <span class="nk-tag border border-border px-1.5 py-0.5"
+                  >{row.typeLabel}</span
+                >
+              </div>
+            {/if}
+            {#if row.passkeySummary.kind === PasskeyCardSummaryKind.Absent && row.kind === IdentityKeyInventoryRowKind.Protector}
+              <div class="nk-spec mt-1.5">
+                <span class="inline-flex items-baseline"
+                  ><span class="nk-spec-key"
+                    >{vault.t(I18N_KEYS.DevicesAccessLastUsedColumn)}</span
+                  >{row.lastUsed}</span
+                >
+              </div>
+            {/if}
           </div>
-        </div>
-        <div class="nk-row-actions">
           {#if row.kind === IdentityKeyInventoryRowKind.Protector && row.renamable && !editingPasskey}
             <Button
               type="button"
               size="sm"
-              variant="ghost"
+              variant="outline"
               onclick={() => beginPasskeyRename(row.title)}
               data-testid="devices-access-rename-passkey"
             >
               <Pencil class="size-3.5" />
               {vault.t(I18N_KEYS.CommonRename)}
             </Button>
+          {/if}
+        </header>
+
+        <div
+          class="grid min-w-0 gap-3"
+          data-testid="devices-access-passkey-facts"
+        >
+          <ol class="nk-chain" aria-label={row.title}>
+            {#each facts as fact (fact.kind)}
+              {#if fact.kind === PasskeyCardFactKind.Keeper}
+                <li
+                  class="nk-chain-node"
+                  data-kind={fact.kind}
+                  data-priority="primary"
+                >
+                  <span class="nk-chain-icon" aria-hidden="true"
+                    ><KeyRound class="size-4" /></span
+                  >
+                  <span class="min-w-0">
+                    <span class="nk-chain-label">{fact.label}</span>
+                    <span class="nk-chain-value">{fact.value}</span>
+                  </span>
+                </li>
+                <li class="nk-chain-link" aria-hidden="true">
+                  {vault.t(I18N_KEYS.DevicesAccessChainHolds)}
+                </li>
+              {/if}
+            {/each}
+            <li class="nk-chain-node nk-chain-node-key">
+              <span class="nk-chain-icon" aria-hidden="true"
+                ><Icon class="size-4" /></span
+              >
+              <span class="min-w-0">
+                <span class="nk-chain-label">{row.typeLabel}</span>
+                <span class="nk-chain-value">{row.title}</span>
+                {#each facts as fact (fact.kind)}
+                  {#if fact.kind === PasskeyCardFactKind.Fingerprint}
+                    <span
+                      class="mt-0.5 block truncate font-mono text-[0.6875rem] text-muted-foreground"
+                      data-kind={fact.kind}
+                      data-priority="secondary"
+                      title={fact.value}
+                      ><span class="sr-only"
+                        >{fact.label}:
+                      </span>{fact.value}</span
+                    >
+                  {/if}
+                {/each}
+              </span>
+            </li>
+            <li class="nk-chain-link" aria-hidden="true">
+              {vault.t(I18N_KEYS.DevicesAccessChainUnlocks)}
+            </li>
+            <li
+              class="nk-chain-group"
+              role="group"
+              aria-label={vault.t(I18N_KEYS.DevicesAccessAppsHeading)}
+              data-testid="devices-access-apps-group"
+            >
+              <span class="nk-chain-label px-1"
+                >{vault.t(I18N_KEYS.DevicesAccessAppsHeading)}</span
+              >
+              <ul class="grid gap-1.5">
+                {#each row.apps as app (app.key)}
+                  <li class="nk-chain-node" data-testid="devices-access-app">
+                    <span class="nk-chain-icon" aria-hidden="true"
+                      ><MonitorSmartphone class="size-4" /></span
+                    >
+                    <span class="min-w-0 flex-1">
+                      <span class="nk-chain-value">{app.title}</span>
+                      <span class="block text-xs text-muted-foreground"
+                        >{app.relationship}</span
+                      >
+                      <details class="mt-1 text-xs text-muted-foreground">
+                        <summary
+                          class="w-fit cursor-pointer select-none font-mono tracking-wide hover:text-foreground"
+                        >
+                          {vault.t(I18N_KEYS.DevicesAccessAdvancedDetails)}
+                        </summary>
+                        <p
+                          class="mt-1.5 break-all border-l-2 border-border bg-muted/40 px-2.5 py-1.5"
+                          data-testid="devices-access-app-id"
+                        >
+                          <span class="font-medium text-foreground"
+                            >{vault.t(I18N_KEYS.DevicesAccessDeviceId)}:</span
+                          >
+                          <code class="ml-1">{app.appId}</code>
+                        </p>
+                      </details>
+                    </span>
+                  </li>
+                {/each}
+              </ul>
+            </li>
+          </ol>
+
+          {#if facts.some((fact) => fact.kind === PasskeyCardFactKind.Created || fact.kind === PasskeyCardFactKind.LastUsed)}
+            <div class="nk-spec">
+              {#each facts as fact (fact.kind)}
+                {#if fact.kind === PasskeyCardFactKind.Created || fact.kind === PasskeyCardFactKind.LastUsed}
+                  <span
+                    class="inline-flex items-baseline"
+                    data-kind={fact.kind}
+                    data-priority="supporting"
+                  >
+                    <span class="nk-spec-key">{fact.label}</span>{fact.value}
+                  </span>
+                {/if}
+              {/each}
+            </div>
           {/if}
         </div>
       </li>

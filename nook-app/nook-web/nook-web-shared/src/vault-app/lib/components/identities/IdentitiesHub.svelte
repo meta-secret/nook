@@ -18,6 +18,8 @@ join) sit between the hero and the cards.
   import {
     IdentityCardProjection,
     IdentityVaultRowState,
+    VaultSetupHostKind,
+    type VaultSetupHost,
     type IdentityCardSource,
     type IdentityLocalVault,
   } from './identity-card-model'
@@ -45,6 +47,7 @@ join) sit between the hero and the cards.
     }),
     unlockPanel,
     vaultSetup,
+    vaultSetupOpen = false,
     vaultPicker,
     children,
   }: {
@@ -68,6 +71,8 @@ join) sit between the hero and the cards.
     /** First-vault setup. It belongs to the current identity, or to the
      * identity about to be created when this browser has none yet. */
     vaultSetup?: Snippet
+    /** Open the setup at once (an invitation or a ceremony in progress). */
+    vaultSetupOpen?: boolean
     /** Plain vault list, shown only when no identity card lists the vaults. */
     vaultPicker?: Snippet
     children?: Snippet
@@ -126,23 +131,46 @@ join) sit between the hero and the cards.
     }
     return ''
   })
-  /** The current identity, which receives the first-vault setup. */
-  const setupIdentityId = $derived.by(() => {
-    if (!vaultSetup || !cardsReady) return ''
+  let setupHost = $state<VaultSetupHost>({ kind: VaultSetupHostKind.Pending })
+  /** With several identities, the current one opens its first-vault setup
+   * from its New vault row; a lone identity opens it straight away. */
+  let setupOpen = $state(false)
+
+  function currentIdentityId(): string {
+    if (!cardsReady) return ''
     for (const card of projection.cards) {
       if (card.current) return card.identityId
     }
     return ''
+  }
+
+  $effect(() => {
+    if (!vaultSetup) {
+      setupHost = { kind: VaultSetupHostKind.Pending }
+      setupOpen = false
+      return
+    }
+    if (untrack(() => setupHost.kind) !== VaultSetupHostKind.Pending) return
+    if (loader.state.kind === IdentityDirectoryLoadKind.Loading) return
+    const identityId = currentIdentityId()
+    if (!identityId) {
+      setupHost = { kind: VaultSetupHostKind.Draft }
+      return
+    }
+    setupHost = { kind: VaultSetupHostKind.Card, identityId }
+    setupOpen = untrack(() => vaultSetupOpen) || projection.cards.length === 1
   })
-  /** With several identities, the current one opens its first-vault setup
-   * from its New vault row. */
-  let setupOpen = $state(false)
-  /** On a fresh browser the only identity opens its setup straight away. */
-  const setupShown = $derived(
-    Boolean(setupIdentityId) && (setupOpen || projection.cards.length === 1),
+
+  $effect(() => {
+    if (vaultSetupOpen) setupOpen = true
+  })
+
+  const setupIdentityId = $derived(
+    setupHost.kind === VaultSetupHostKind.Card ? setupHost.identityId : '',
   )
+  const setupShown = $derived(Boolean(setupIdentityId) && setupOpen)
   const featuredIdentityId = $derived(
-    unlockingIdentityId || (setupShown ? setupIdentityId : ''),
+    (setupShown ? setupIdentityId : '') || unlockingIdentityId,
   )
   const cards = $derived(
     featuredIdentityId
@@ -222,7 +250,7 @@ join) sit between the hero and the cards.
     {/if}
   {/if}
 
-  {#if vaultSetup && !setupIdentityId && loader.state.kind !== IdentityDirectoryLoadKind.Loading}
+  {#if vaultSetup && setupHost.kind === VaultSetupHostKind.Draft}
     <div class="grid min-w-0 grid-cols-1">
       <IdentityDraftCard {vault}>
         {@render vaultSetup()}
@@ -267,10 +295,10 @@ join) sit between the hero and the cards.
             {onLock}
             {onUseIdentity}
             {pairingStatusFor}
-            {...unlockPanel && card.identityId === unlockingIdentityId
-              ? { unlockPanel }
-              : vaultSetup && setupShown && card.identityId === setupIdentityId
-                ? { unlockPanel: vaultSetup }
+            {...vaultSetup && setupShown && card.identityId === setupIdentityId
+              ? { unlockPanel: vaultSetup }
+              : unlockPanel && card.identityId === unlockingIdentityId
+                ? { unlockPanel }
                 : {}}
           />
         {/each}

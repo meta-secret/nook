@@ -48,9 +48,15 @@ and no Vault/Admin/Onboard/Settings bottom navigation.
   browser, or import one from a sync provider.
   **New identity** opens Keys with identity creation started.
   **Manage identity** / **Use identity** open Keys focused on that identity.
+- A vault always belongs to an identity, so there is no standalone "create
+  a vault" sheet. On a browser without an identity, a "Your first identity"
+  card holds the first-vault setup (Simple, Sentinel, or open an existing
+  vault); the identity and its key are created with that vault. An identity
+  without vaults shows a New vault row that opens the setup inside its card,
+  opened straight away when it is the only identity or an invitation is
+  pending. Once placed, the setup stays in its card for the whole flow.
 - While locked, the hub is the login gate: the hero, then any setup flow
-  (first vault, connect provider, QR join, Sentinel ceremony), then the
-  cards. There is no separate "open a vault" sheet: with several vaults and
+  (connect provider, QR join, Sentinel ceremony), then the cards. There is no separate "open a vault" sheet: with several vaults and
   none chosen, a hint asks for a vault row; a plain vault list appears only
   when no identity card lists the browser's vaults. The Keys page stays
   available before a vault is open.
@@ -64,8 +70,10 @@ and no Vault/Admin/Onboard/Settings bottom navigation.
 - The detail sheet shows each field as a slot. Secret slots stay sealed
   (hatched, masked) until Reveal; revealed passwords and API keys show a
   strength estimate computed by nook-core from length and character mix.
-- Keys page rows show each key's keeper, dates, and apps as spec lines, with
-  a banner when only one key unlocks the identity.
+- Keys page rows draw each key as a chain: the keeper that holds it, the key
+  itself, and the apps it unlocks, joined by labelled arrows, with dates on
+  a spec line and a banner when only one key unlocks the identity. Add
+  identity is hidden while an identity is being created.
 
 ## Shell
 
@@ -74,9 +82,17 @@ and no Vault/Admin/Onboard/Settings bottom navigation.
   page title, session tag, and the page's own actions.
 - The vault page bar offers Import, Pair extension (when available), and
   Manage vault.
-- Management pages share one grouped navigation element: a rail on wide
-  screens and a pinned bottom bar on phones. Import is reached from the vault
-  page bar on phones.
+- Identity management and vault management are separate. Manage identity
+  (from an identity card) lists Keys, Vaults and Settings; Manage vault (from
+  the vault page bar) lists Devices, Sync, Backup passwords and Import. Each
+  uses one navigation element: a rail on wide screens and a pinned bottom
+  bar on phones.
+- Identity → Vaults renames and switches the identity's vaults; it does not
+  create them. Vaults are created from the identity card.
+- Every vault belongs to exactly one identity. Cards list a vault under the
+  identity with a verified access record for it (the current identity first
+  when several claim it), and local vaults no identity has opened yet under
+  the current identity.
 - Back on a management page returns to the page management was entered from
   (the vault or the hub). Back on the vault page returns to the hub.
 - Locking keeps the current route so unlocking resumes it; locking from the

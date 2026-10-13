@@ -942,7 +942,9 @@
     "no_backup_passwords": "No backup password is configured for this vault.",
     "manage_backup_passwords": "Manage backup passwords",
     "single_key_warning": "Only one key unlocks {identity}. If this browser’s storage is cleared, its vaults open only with a backup password. Add a key by opening Nook on another device and joining one of its vaults.",
-    "keys_covered": "{count} keys can unlock {identity}. Losing this browser does not lose its vaults."
+    "keys_covered": "{count} keys can unlock {identity}. Losing this browser does not lose its vaults.",
+    "chain_holds": "holds",
+    "chain_unlocks": "unlocks"
   },
   "help": {
     "title": "Your vault, optional sync replicas",
@@ -2193,6 +2195,8 @@
       "status": "Not created yet",
       "vault_label": "First vault"
     },
-    "identity_vault_setup": "New vault for this identity"
+    "identity_vault_setup": "New vault for this identity",
+    "vaults_created_from_identity": "New vaults are created from the identity’s card on the Identities page, so each vault belongs to one identity.",
+    "open_identities": "Open identities"
   }
 }
