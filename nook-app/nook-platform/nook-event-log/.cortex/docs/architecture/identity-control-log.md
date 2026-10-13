@@ -7,15 +7,15 @@ identity mount plan in `nook-core`, and browser storage and sync in
 `nook-wasm`.
 
 The identity control log is the replicated membership authority of one
-identity. It records the identity's app-key members, pending joins,
-revocations, per-vault DEK envelopes, and credential-free sync-provider mounts.
-Vaults are built on top of it: a vault belongs to exactly one identity, and an
-installation reaches a vault through the identity that owns it.
+identity. Vaults are built on top of it: a vault belongs to exactly one
+identity, and an installation reaches a vault through the identity that owns it.
 
-The log reuses the vault log's canonical JSON, Ed25519 actor signatures, and
-causal DAG mechanics. It lives in its own remote and local namespace. Identity
-events never enter a vault event set, and vault events never enter an identity
-event set.
+- **Records:** app-key members, pending joins, revocations, per-vault DEK
+  envelopes, and credential-free sync-provider mounts.
+- **Mechanics:** the vault log's canonical JSON, Ed25519 actor signatures, and
+  causal DAG.
+- **Namespace:** its own remote and local namespace. Identity events never
+  enter a vault event set, and vault events never enter an identity event set.
 
 See [identity-vault-architecture.md](../../../../.cortex/docs/architecture/identity-vault-architecture.md)
 for the identity and vault domain model and

@@ -123,12 +123,20 @@ impl ProviderSaveRequest {
         }
     }
 
+    /// `CloudKit` cannot list a namespace yet, and a browser-local folder
+    /// cannot carry an identity to another app, so both keep their vault at
+    /// the legacy root.
     fn effective_layout(&self, provider_type: StorageProviderType) -> crate::ProviderRowLayout {
         match (self.layout, provider_type, self.oauth_preset) {
             (
                 crate::ProviderRowLayout::IdentityNamespaced,
                 StorageProviderType::OauthFile,
                 OAuthFilePreset::ICloud,
+            )
+            | (
+                crate::ProviderRowLayout::IdentityNamespaced,
+                StorageProviderType::Local | StorageProviderType::LocalFolder,
+                _,
             ) => crate::ProviderRowLayout::LegacyVaultRoot,
             (layout, _, _) => layout,
         }
@@ -508,6 +516,24 @@ mod tests {
                 _ => Err("expected saved provider outcome"),
             }
         }
+    }
+
+    #[test]
+    fn local_folder_rows_keep_their_vault_at_the_legacy_root() -> Result<(), &'static str> {
+        let mut request = ProviderSaveRequest::fixture(StorageProviderType::LocalFolder);
+        request.local_folder = StoredLocalFolderConfiguration::Configured(LocalFolderConfigData {
+            directory_name: StoredLocalFolderDirectory::DirectoryName("Nook Backup".to_owned()),
+            handle_id: StoredLocalFolderHandle::HandleId("handle-1".to_owned()),
+        });
+        request.layout = crate::ProviderRowLayout::IdentityNamespaced;
+        let snapshot = request.apply().saved()?;
+        let row = snapshot
+            .providers
+            .iter()
+            .find(|row| row.provider_type == StorageProviderType::LocalFolder)
+            .ok_or("expected a saved local folder row")?;
+        assert_eq!(row.layout, crate::ProviderRowLayout::LegacyVaultRoot);
+        Ok(())
     }
 
     #[test]

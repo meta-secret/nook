@@ -32,24 +32,6 @@ impl StorageConnectArgs {
             repo: String::new(),
         }
     }
-
-    /// Address the remote layout a provider row will be saved with. Local
-    /// and iCloud connections keep the legacy root: they have no namespace.
-    #[must_use]
-    pub fn with_layout(mut self, layout: super::ProviderRowLayout) -> Self {
-        let namespaced = matches!(
-            StorageMode::parse(&self.mode),
-            Ok(StorageMode::Github | StorageMode::GoogleDrive)
-        );
-        if namespaced {
-            self.repo = super::LayoutRemoteRef {
-                layout,
-                inner: &self.repo,
-            }
-            .format();
-        }
-        self
-    }
 }
 
 impl super::OAuthFileConfig {

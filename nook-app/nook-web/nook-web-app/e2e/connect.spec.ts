@@ -12,6 +12,8 @@ import {
   reloadUnlockWithSyncProvider,
   UI_TIMEOUT_MS,
   waitForPersistedAppLog,
+  waitForVaultOperationsIdle,
+  waitForVaultSyncIdle,
   openManagePage,
   ManagePage,
 } from './helpers'
@@ -320,6 +322,10 @@ test.describe('vault connect flow', () => {
     await expect(removeBtn).toBeEnabled({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    // An in-flight periodic sync reads the provider snapshot; removing a row
+    // while it runs lets that read restore the previous provider set.
+    await waitForVaultSyncIdle(page)
+    await waitForVaultOperationsIdle(page)
 
     page.once('dialog', (dialog) => dialog.accept())
     await removeBtn.click()

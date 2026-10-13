@@ -6,7 +6,7 @@ import {
   disableVaultIdleLock,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   installGoogleOAuthMock,
-  openOnboardDevicePanel,
+  openStorageSettings,
   readLocalVaultYamlFromIdb,
   seedOauthFileSyncProvidersWhileUnlocked,
   triggerVaultSyncRefresh,
@@ -204,15 +204,11 @@ test.describe('sync conflict resolution', () => {
 
     stub.setVaultYaml(vaultAYaml)
     await addVaultPassword(page, 'onboard', 'onboard-pass-1')
-    await openOnboardDevicePanel(page)
-    await page
-      .getByTestId('onboard-password-entry-list')
-      .getByRole('radio')
-      .first()
-      .click()
+    // Sync providers are added on the identity Sync page.
+    await openStorageSettings(page)
 
     await installGoogleOAuthMock(page, 'ya29.e2e_file_sync_token')
-    await page.getByTestId('add-provider-btn').click()
+    await page.getByTestId('add-provider-btn').first().click()
     await page.getByTestId('provider-option-oauth-file').click()
     await page.getByTestId('drive-file-input').fill(fileName)
     await page.getByTestId('google-sign-in-btn').click()
@@ -337,15 +333,11 @@ test.describe('sync conflict resolution', () => {
 
     stub.setVaultYaml(vaultAYaml)
     await addVaultPassword(page, 'onboard', 'onboard-pass-1')
-    await openOnboardDevicePanel(page)
-    await page
-      .getByTestId('onboard-password-entry-list')
-      .getByRole('radio')
-      .first()
-      .click()
+    // Sync providers are added on the identity Sync page.
+    await openStorageSettings(page)
 
     await installGoogleOAuthMock(page, 'ya29.e2e_file_sync_token')
-    await page.getByTestId('add-provider-btn').click()
+    await page.getByTestId('add-provider-btn').first().click()
     await page.getByTestId('provider-option-oauth-file').click()
     await page.getByTestId('drive-file-input').fill(fileName)
     await page.getByTestId('google-sign-in-btn').click()

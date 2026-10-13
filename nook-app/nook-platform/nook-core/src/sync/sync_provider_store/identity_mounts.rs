@@ -639,41 +639,4 @@ mod remote_ref_tests {
         );
         Ok(())
     }
-
-    #[test]
-    fn staged_connections_address_the_layout_only_where_a_namespace_exists() {
-        let github = super::super::StorageConnectArgs {
-            mode: "github".to_owned(),
-            pat: "token".to_owned(),
-            repo: "owner/repo".to_owned(),
-        };
-        assert_eq!(
-            github
-                .clone()
-                .with_layout(ProviderRowLayout::IdentityNamespaced)
-                .repo,
-            "identity-namespaced:owner/repo"
-        );
-        assert_eq!(
-            github.with_layout(ProviderRowLayout::LegacyVaultRoot).repo,
-            "owner/repo"
-        );
-        let icloud = super::super::StorageConnectArgs {
-            mode: "icloud".to_owned(),
-            pat: "token".to_owned(),
-            repo: "private-zone".to_owned(),
-        };
-        assert_eq!(
-            icloud
-                .with_layout(ProviderRowLayout::IdentityNamespaced)
-                .repo,
-            "private-zone"
-        );
-        assert_eq!(
-            super::super::StorageConnectArgs::local()
-                .with_layout(ProviderRowLayout::IdentityNamespaced)
-                .repo,
-            ""
-        );
-    }
 }
