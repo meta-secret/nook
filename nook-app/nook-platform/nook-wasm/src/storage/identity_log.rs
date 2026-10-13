@@ -14,7 +14,6 @@ use std::collections::BTreeSet;
 
 use nook_core::{EventId, EventStorageBytes, IdentityControlLog, IdentityId};
 use rexie::TransactionMode;
-use wasm_bindgen::JsValue;
 
 use crate::{NookDatabase, NookError};
 
@@ -45,9 +44,8 @@ impl NookDatabase {
         format!("identity_event_index:{identity_id}")
     }
 
-    fn js_key(key: &str) -> Result<JsValue, NookError> {
-        serde_wasm_bindgen::to_value(key)
-            .map_err(|error| NookError::IndexedDb(format!("Identity log key error: {error:?}")))
+    fn key_error(error: &serde_wasm_bindgen::Error) -> NookError {
+        NookError::IndexedDb(format!("Identity log key error: {error:?}"))
     }
 
     async fn read_identity_index(
@@ -55,7 +53,10 @@ impl NookDatabase {
         identity_id: &IdentityId,
     ) -> Result<Vec<String>, NookError> {
         let value = store
-            .get(Self::js_key(&Self::identity_event_index_key(identity_id))?)
+            .get(
+                serde_wasm_bindgen::to_value(&Self::identity_event_index_key(identity_id))
+                    .map_err(|error| Self::key_error(&error))?,
+            )
             .await
             .map_err(|error| {
                 NookError::IndexedDb(format!("Identity index read error: {error:?}"))
@@ -91,7 +92,7 @@ impl NookDatabase {
                 event_id: &raw_id,
             });
             let value = store
-                .get(Self::js_key(&key)?)
+                .get(serde_wasm_bindgen::to_value(&key).map_err(|error| Self::key_error(&error))?)
                 .await
                 .map_err(|error| {
                     NookError::IndexedDb(format!("Identity event read error: {error:?}"))
@@ -150,7 +151,13 @@ impl NookDatabase {
                 NookError::IndexedDb(format!("Identity event value error: {error:?}"))
             })?;
             store
-                .put(&value, Some(&Self::js_key(&key)?))
+                .put(
+                    &value,
+                    Some(
+                        &serde_wasm_bindgen::to_value(&key)
+                            .map_err(|error| Self::key_error(&error))?,
+                    ),
+                )
                 .await
                 .map_err(|error| {
                     NookError::IndexedDb(format!("Identity event write error: {error:?}"))
@@ -165,7 +172,10 @@ impl NookDatabase {
         store
             .put(
                 &index_value,
-                Some(&Self::js_key(&Self::identity_event_index_key(identity_id))?),
+                Some(
+                    &serde_wasm_bindgen::to_value(&Self::identity_event_index_key(identity_id))
+                        .map_err(|error| Self::key_error(&error))?,
+                ),
             )
             .await
             .map_err(|error| {
