@@ -802,7 +802,7 @@
       />
       {#if vault.sharedGrantInstructions}
         <div
-          class="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-foreground"
+          class="nk-banner nk-banner-warning p-3 text-sm text-foreground"
           data-testid="shared-grant-instructions"
         >
           {vault.sharedGrantInstructions}

@@ -182,13 +182,13 @@ test.describe('sync conflict resolution', () => {
       timeout: UI_TIMEOUT_MS,
     })
 
-    await page.getByTestId('login-vault-workflow-import').click()
+    await page.getByTestId('identity-new-vault').click()
     await page.getByTestId('login-import-vault-btn').click()
     await expect(page.getByTestId('provider-picker-list')).toBeVisible()
     await page.getByTestId('login-back-to-get-started').click()
     await expect(page.getByTestId('login-local-unlock-step')).toBeVisible()
 
-    await page.getByTestId('login-vault-workflow-create').click()
+    await page.getByTestId('identity-new-vault').click()
     await expect(page.getByTestId('login-unlock-section')).toBeHidden()
     await page.getByTestId('login-vault-name-input').fill('test-2')
     await page.getByTestId('login-create-additional-vault-btn').click()
@@ -322,7 +322,7 @@ test.describe('sync conflict resolution', () => {
       timeout: UI_TIMEOUT_MS,
     })
 
-    await page.getByTestId('login-vault-workflow-create').click()
+    await page.getByTestId('identity-new-vault').click()
     await page.getByTestId('login-vault-name-input').fill('test-2')
     await page.getByTestId('login-create-additional-vault-btn').click()
     await authorizeDeviceProtection(page)
@@ -372,15 +372,15 @@ test.describe('sync conflict resolution', () => {
       ),
     ).toBeVisible()
     await page.getByTestId('login-switch-vault-btn').click()
-    await expect(page.getByTestId('login-vault-option')).toHaveCount(2)
+    await expect(page.getByTestId('identity-vault-row')).toHaveCount(2)
     await expect(
       page.locator(
-        `[data-testid="login-vault-option"][data-store-id="${storeA}"]`,
+        `[data-testid="identity-vault-row"][data-store-id="${storeA}"]`,
       ),
     ).toBeVisible()
     await expect(
       page.locator(
-        `[data-testid="login-vault-option"][data-store-id="${storeB}"]`,
+        `[data-testid="identity-vault-row"][data-store-id="${storeB}"]`,
       ),
     ).toBeVisible()
   })

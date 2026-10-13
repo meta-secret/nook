@@ -99,9 +99,10 @@
   async function refreshExtensionSetupStatus() {
     if (!SUPPORTS_EXTENSION) return;
     try {
-      const state = await extensionInstallationBrowser.resolveExtensionSetupState(
-        vault.activeVault,
-      );
+      const state =
+        await extensionInstallationBrowser.resolveExtensionSetupState(
+          vault.activeVault,
+        );
       extensionSetupState = (() => {
         const shouldOfferExtensionSetupArgs: Parameters<
           typeof extensionInstallationBrowser.shouldOfferExtensionSetup
@@ -375,7 +376,7 @@
 
   {#if vaultMembers.length <= 1}
     <div
-      class="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-700 dark:text-amber-300"
+      class="nk-banner nk-banner-warning flex items-start gap-2 px-3 py-2 text-xs leading-relaxed text-foreground"
       role="alert"
       data-testid="single-device-warning"
     >
@@ -392,7 +393,7 @@
 
   {#if isSentinelVault}
     <div
-      class="flex items-start gap-2 rounded-lg border border-border/50 bg-muted/25 px-3 py-2 text-xs leading-relaxed text-muted-foreground"
+      class="nk-banner flex items-start gap-2 px-3 py-2 text-xs leading-relaxed text-muted-foreground"
       role="status"
       data-testid="sentinel-device-change-guidance"
     >

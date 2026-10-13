@@ -34,17 +34,38 @@ and no Vault/Admin/Onboard/Settings bottom navigation.
 - Vault rows list the identity's verified vault access plus, for the current
   identity, every vault in the local catalog. Rows for vaults that are not on
   this browser are shown but cannot be opened.
-- Opening a row is the unlock: while locked it selects that vault for the
-  access sheet; while unlocked it switches the session to that vault.
+- Opening a row is the unlock: while locked it opens that vault's unlock
+  panel inside the identity card, which then spans the full row and is listed
+  first; while unlocked it switches the session to that vault.
+- The unlock panel names the vault, shows extension pairing status, offers
+  this device's keys or a backup password, and explains which identity the
+  device keys use. Sentinel vaults show their ceremony in the same panel.
 - A row shows **Browser extension** when the paired extension holds that
   vault's grant. A note names an extension-paired vault that is not on this
   browser.
-- **New vault** (current identity, unlocked) opens Identity → Vaults.
+- **New vault** on the current identity's card opens Identity → Vaults while
+  unlocked. While locked it opens a New vault panel: create a vault on this
+  browser, or import one from a sync provider.
   **New identity** opens Keys with identity creation started.
   **Manage identity** / **Use identity** open Keys focused on that identity.
-- While locked, the hub is the login gate: the hero, then the access sheet
-  (unlock, create, connect provider, QR join, Sentinel ceremony), then the
-  cards. The Keys page stays available before a vault is open.
+- While locked, the hub is the login gate: the hero, then any setup flow
+  (first vault, connect provider, QR join, Sentinel ceremony), then the
+  cards. There is no separate "open a vault" sheet: with several vaults and
+  none chosen, a hint asks for a vault row; a plain vault list appears only
+  when no identity card lists the browser's vaults. The Keys page stays
+  available before a vault is open.
+
+## Vault page
+
+- A search field, type chips, the item count, and Add sit above a two-pane
+  list: items on the left, the selected item's detail sheet on the right. On
+  phones the sheet opens under its row. Selecting another item seals the
+  previous one again.
+- The detail sheet shows each field as a slot. Secret slots stay sealed
+  (hatched, masked) until Reveal; revealed passwords and API keys show a
+  strength estimate computed by nook-core from length and character mix.
+- Keys page rows show each key's keeper, dates, and apps as spec lines, with
+  a banner when only one key unlocks the identity.
 
 ## Shell
 
@@ -64,9 +85,9 @@ and no Vault/Admin/Onboard/Settings bottom navigation.
 ## Visual language
 
 - Shapes carry roles: key-tag frames for identity cards, tab frames for the
-  hero and page bars, sheet frames for the access sheet and dialogs, nick
-  frames for slots and chips; lists and banners stay square with a heavy left
-  edge.
+  hero and page bars, sheet frames for setup panels, dialogs, and the secret
+  detail, nick frames for slots; lists and banners stay square with a heavy
+  left edge. Filters and method choices are monospace chips.
 - Status uses monospace tags with a dot or icon, never coloured pills.
 - Live ciphertext is decorative, `aria-hidden`, and stops for reduced motion
   and hidden tabs.

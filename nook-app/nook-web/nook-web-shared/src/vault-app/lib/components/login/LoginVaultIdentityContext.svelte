@@ -46,16 +46,11 @@
   })
 </script>
 
-<section
-  class="space-y-2 border-y border-border/50 py-3"
-  data-testid="login-vault-identity-context"
->
-  <div class="flex items-center gap-2">
-    <Fingerprint class="size-4 shrink-0 text-primary" />
-    <h3 class="text-sm font-semibold text-foreground">
-      {vault.t(I18N_KEYS.LoginIdentityContextTitle)}
-    </h3>
-  </div>
+<section class="grid gap-2" data-testid="login-vault-identity-context">
+  <h3 class="nk-label inline-flex items-center gap-1.5">
+    <Fingerprint class="size-3.5 shrink-0" aria-hidden="true" />
+    {vault.t(I18N_KEYS.LoginIdentityContextTitle)}
+  </h3>
 
   {#if context.kind === LoginVaultIdentityContextKind.Loading}
     <p
@@ -81,21 +76,21 @@
       {vault.t(I18N_KEYS.LoginIdentityContextEmpty)}
     </p>
   {:else}
-    <ul class="space-y-1.5" data-testid="login-vault-linked-identities">
+    <ul class="nk-list" data-testid="login-vault-linked-identities">
       {#each context.identities as identity (identity.identityId)}
         <li
-          class="flex min-h-9 items-center justify-between gap-3 rounded-md bg-muted/25 px-3 py-2 text-sm"
+          class="flex min-h-10 items-center justify-between gap-3 px-3.5 py-2 text-sm [&+&]:border-t [&+&]:border-border"
           data-testid="login-vault-linked-identity"
         >
           <span class="min-w-0 truncate font-medium text-foreground">
             {identity.label}
           </span>
           <span
-            class="shrink-0 text-xs {context.kind ===
+            class="nk-tag shrink-0 {context.kind ===
               NookSelectedVaultIdentityContextKind.LinkedWithCurrent &&
             identity.identityId === context.currentIdentity.identityId
-              ? 'font-medium text-primary'
-              : 'text-muted-foreground'}"
+              ? 'nk-tag-success'
+              : ''}"
           >
             {context.kind ===
               NookSelectedVaultIdentityContextKind.LinkedWithCurrent &&
@@ -123,7 +118,7 @@
     <Button
       type="button"
       variant="ghost"
-      class="min-h-9 px-0 text-sm text-primary hover:bg-transparent hover:text-primary/80"
+      class="min-h-9 justify-self-start px-0 text-sm text-foreground underline underline-offset-4 hover:bg-transparent hover:text-foreground/80"
       data-testid="login-review-identities"
       onclick={onReviewIdentities}
     >

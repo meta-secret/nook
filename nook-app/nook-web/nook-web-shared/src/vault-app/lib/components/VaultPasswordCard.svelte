@@ -320,7 +320,7 @@
 
   {#if !hasPasswords && showWarningBanner}
     <div
-      class="mb-4 flex items-start gap-2.5 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-700 dark:text-amber-300"
+      class="nk-banner nk-banner-warning mb-4 flex items-start gap-2.5 px-4 py-3 text-sm text-foreground"
     >
       <ShieldAlert class="size-4 mt-0.5 shrink-0" />
       <span class="text-pretty">

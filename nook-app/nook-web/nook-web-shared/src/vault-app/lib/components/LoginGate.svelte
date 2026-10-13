@@ -57,10 +57,12 @@
   import LoginCreateVaultChooser from "$lib/components/login/LoginCreateVaultChooser.svelte";
   import type { SentinelGenesisParticipation } from "$lib/components/login/login-create-vault-chooser-contract";
   import {
+    LoginVaultExtensionPairingStatusLookup,
     statusForActiveVault,
     type LoginVaultExtensionPairingStatusEntry,
   } from "$lib/components/login/login-vault-extension-pairing-status";
   import LoginVaultPicker from "$lib/components/login/LoginVaultPicker.svelte";
+  import LoginNewVaultPanel from "$lib/components/login/LoginNewVaultPanel.svelte";
   import LoginProviderManagement from "$lib/components/login/LoginProviderManagement.svelte";
   import { LoginProviderManagementVariant } from "$lib/components/login/login-provider-management-state";
   import {
@@ -235,7 +237,7 @@
     kind: DevicesAccessHostMountKind.Unmounted,
   });
   let leaveKeysPage = $state<KeysPageLeave>();
-  let accessSheet = $state<HTMLDivElement>();
+  let newVaultOpen = $state(false);
   let managedIdentityId = "";
 
   function captureDevicesAccessHost(element: HTMLDivElement) {
@@ -354,8 +356,9 @@
     await focusIdentityManageWhenAvailable();
   }
 
-  /** A vault row on an identity card selects that vault for unlocking. */
+  /** A vault row on an identity card opens that vault's unlock panel. */
   async function openVaultFromCard(storeId: string): Promise<void> {
+    newVaultOpen = false;
     if (showProviderSetupLink) {
       vault.cancelExistingVaultOpen();
       showProviderSetupLink = false;
@@ -368,7 +371,20 @@
       block: "nearest",
       behavior: "smooth",
     };
-    accessSheet?.scrollIntoView(scrollRequest);
+    document
+      .querySelector('[data-testid="login-local-unlock-step"]')
+      ?.scrollIntoView(scrollRequest);
+  }
+
+  /** "New vault" on the identity card: create one here or import one. */
+  function openNewVault(): void {
+    newVaultOpen = true;
+  }
+
+  function importExistingVault(): void {
+    newVaultOpen = false;
+    vault.beginExistingVaultOpen();
+    showProviderSetupLink = true;
   }
 
   function manageIdentity(identityId: string): void {
@@ -457,6 +473,11 @@
       ? activeLoginVault.entry.storeId
       : "",
   );
+  const pairingStatusLookup = $derived(
+    new LoginVaultExtensionPairingStatusLookup(
+      extensionConnectPairingStatusEntries,
+    ),
+  );
   const activeVaultExtensionPairingStatus = $derived(
     statusForActiveVault(extensionConnectPairingStatusEntries)(
       activeLoginVault,
@@ -485,6 +506,11 @@
       !showSetup &&
       !showLocalUnlock &&
       !showCreateVault,
+  );
+  const showAccessSheet = $derived(
+    (showSentinelCeremony && !showLocalUnlock && !showVaultPicker) ||
+      showSetup ||
+      showProviderSetup,
   );
   const isUnlocking = $derived(
     isVerifying && (showLocalUnlock || showSetup) && !showSetup,
@@ -548,6 +574,44 @@
   });
 </script>
 
+{#snippet unlockPanel()}
+  <LoginUnlockStep
+    {vault}
+    vaultEntry={activeLoginVault}
+    extensionPairingStatus={activeVaultExtensionPairingStatus}
+    hasMultipleVaults={vault.hasMultipleLocalVaults}
+    passwordEntries={vault.passwordEntries.length > 0
+      ? vault.passwordEntries
+      : recoveryPasswordEntries}
+    selectedPasswordEntry={vault.selectedPasswordEntry}
+    onSelectPasswordEntry={(
+      selection: Parameters<LoginUnlockStepProps["onSelectPasswordEntry"]>[0],
+    ) => {
+      vault.selectedPasswordEntry = selection;
+    }}
+    {isVerifying}
+    {isInitializing}
+    {isUnlocking}
+    {onUnlock}
+    {onUnlockWithPassword}
+    onOpenDevicesAccess={() =>
+      openDevicesAccess(DevicesAccessTriggerKind.IdentityContext)}
+    {onSwitchVault}
+  />
+{/snippet}
+{#snippet vaultPicker()}
+  <LoginVaultPicker
+    {vault}
+    vaults={vault.localVaults}
+    {extensionConnectPairingStatusEntries}
+    {isVerifying}
+    {isInitializing}
+    onChooseVault={(
+      storeId: Parameters<LoginVaultPickerProps["onChooseVault"]>[0],
+    ) => vault.chooseLoginVault(storeId)}
+  />
+{/snippet}
+
 <div
   use:captureDevicesAccessHost
   class="w-full animate-in fade-in duration-300"
@@ -579,395 +643,356 @@
       selectedStoreId={selectedCardStoreId}
       showCards={!showQrOnboarding}
       busy={isVerifying || isInitializing}
+      canAddVault={!showCreateVault && !showQrOnboarding}
       onOpenVault={(storeId: string) => void openVaultFromCard(storeId)}
+      onNewVault={openNewVault}
       onManage={manageIdentity}
       onNewIdentity={newIdentity}
       onUseIdentity={manageIdentity}
+      pairingStatusFor={(storeId: string) =>
+        pairingStatusLookup.statusForStore(storeId)}
+      {...showLocalUnlock && !newVaultOpen ? { unlockPanel } : {}}
+      {...showVaultPicker && !newVaultOpen ? { vaultPicker } : {}}
     >
-    <div class="grid min-w-0 grid-cols-1 gap-3" bind:this={accessSheet}>
-    {#if vault.sessionExpiredByIdle}
-      <p
-        class="nk-banner nk-banner-warning px-4 py-3 text-sm text-foreground"
-        data-testid="login-session-expired"
-        role="status"
-      >
-        {vault.t(I18N_KEYS.SessionExpiredIdle)}
-      </p>
-    {/if}
+      <div class="grid min-w-0 grid-cols-1 gap-3 empty:hidden">
+        {#if vault.sessionExpiredByIdle}
+          <p
+            class="nk-banner nk-banner-warning px-4 py-3 text-sm text-foreground"
+            data-testid="login-session-expired"
+            role="status"
+          >
+            {vault.t(I18N_KEYS.SessionExpiredIdle)}
+          </p>
+        {/if}
 
-    {#if showQrOnboarding && onUseEnrollmentCode}
-      <EnrollmentQrOnboardCard
-        {vault}
-        code={prefillEnrollmentCode}
-        passwordEntryId={peek_enrollment_entry_id(prefillEnrollmentCode)}
-        passwordEntryLabel={prefillEnrollmentEntryLabel}
-        {isVerifying}
-        onSubmit={(
-          password: Parameters<EnrollmentQrOnboardCardProps["onSubmit"]>[0],
-        ) => {
-          const enrollmentRequest: Parameters<typeof onUseEnrollmentCode>[0] = {
-            code: prefillEnrollmentCode,
-            password,
-          };
-          return onUseEnrollmentCode(enrollmentRequest);
-        }}
-      />
-    {:else if showCreateVault || sentinelInvitationRequest.trim()}
-      <LoginCreateVaultChooser
-        {vault}
-        {appKind}
-        {isVerifying}
-        {isInitializing}
-        {usesExtensionDeviceIdentity}
-        {onCreateDeviceVault}
-        {onStartSentinelGenesis}
-        onAddSentinelGenesisParticipantResponse={({
-          payload,
-          participantLabel,
-        }: SentinelGenesisParticipation) => {
-          const participantRequest: Parameters<
-            sentinelGenesisActions.SentinelGenesisActions["addParticipantResponse"]
-          >[0] = {
-            payload,
-            participantLabel: participantLabel ? participantLabel : "",
-          };
-          return new sentinelGenesisActions.SentinelGenesisActions(
-            vault,
-          ).addParticipantResponse(participantRequest);
-        }}
-        onFinalizeSentinelGenesis={() =>
-          new sentinelGenesisActions.SentinelGenesisActions(vault).finalize()}
-        onCreateSentinelGenesisParticipantResponse={((
-          ...[
-            v = (payload) =>
+        {#if showQrOnboarding && onUseEnrollmentCode}
+          <EnrollmentQrOnboardCard
+            {vault}
+            code={prefillEnrollmentCode}
+            passwordEntryId={peek_enrollment_entry_id(prefillEnrollmentCode)}
+            passwordEntryLabel={prefillEnrollmentEntryLabel}
+            {isVerifying}
+            onSubmit={(
+              password: Parameters<EnrollmentQrOnboardCardProps["onSubmit"]>[0],
+            ) => {
+              const enrollmentRequest: Parameters<
+                typeof onUseEnrollmentCode
+              >[0] = {
+                code: prefillEnrollmentCode,
+                password,
+              };
+              return onUseEnrollmentCode(enrollmentRequest);
+            }}
+          />
+        {:else if showCreateVault || sentinelInvitationRequest.trim()}
+          <LoginCreateVaultChooser
+            {vault}
+            {appKind}
+            {isVerifying}
+            {isInitializing}
+            {usesExtensionDeviceIdentity}
+            {onCreateDeviceVault}
+            {onStartSentinelGenesis}
+            onAddSentinelGenesisParticipantResponse={({
+              payload,
+              participantLabel,
+            }: SentinelGenesisParticipation) => {
+              const participantRequest: Parameters<
+                sentinelGenesisActions.SentinelGenesisActions["addParticipantResponse"]
+              >[0] = {
+                payload,
+                participantLabel: participantLabel ? participantLabel : "",
+              };
+              return new sentinelGenesisActions.SentinelGenesisActions(
+                vault,
+              ).addParticipantResponse(participantRequest);
+            }}
+            onFinalizeSentinelGenesis={() =>
+              new sentinelGenesisActions.SentinelGenesisActions(
+                vault,
+              ).finalize()}
+            onCreateSentinelGenesisParticipantResponse={((
+              ...[
+                v = (payload) =>
+                  (() => {
+                    const createParticipantResponseArgs: Parameters<
+                      sentinelGenesisActions.SentinelGenesisActions["createParticipantResponse"]
+                    >[0] = { requestPayload: payload };
+                    return new sentinelGenesisActions.SentinelGenesisActions(
+                      vault,
+                    ).createParticipantResponse(createParticipantResponseArgs);
+                  })(),
+              ]
+            ) => v)(onCreateSentinelGenesisParticipantResponse)}
+            onCreateSentinelGenesisPublicKeyAnnouncement={((
+              ...[
+                v = () =>
+                  new sentinelGenesisActions.SentinelGenesisActions(
+                    vault,
+                  ).createPublicKeyAnnouncement(),
+              ]
+            ) => v)(onCreateSentinelGenesisPublicKeyAnnouncement)}
+            onRememberSentinelGenesisRequest={(
+              payload: Parameters<
+                NonNullable<
+                  CreateVaultChooserProps["onRememberSentinelGenesisRequest"]
+                >
+              >[0],
+            ) =>
               (() => {
-                const createParticipantResponseArgs: Parameters<
-                  sentinelGenesisActions.SentinelGenesisActions["createParticipantResponse"]
+                const rememberRequestArgs: Parameters<
+                  sentinelGenesisActions.SentinelGenesisActions["rememberRequest"]
                 >[0] = { requestPayload: payload };
                 return new sentinelGenesisActions.SentinelGenesisActions(
                   vault,
-                ).createParticipantResponse(createParticipantResponseArgs);
-              })(),
-          ]
-        ) => v)(onCreateSentinelGenesisParticipantResponse)}
-        onCreateSentinelGenesisPublicKeyAnnouncement={((
-          ...[
-            v = () =>
+                ).rememberRequest(rememberRequestArgs);
+              })()}
+            onReceiveSentinelGenesisShare={(
+              payload: Parameters<
+                NonNullable<
+                  CreateVaultChooserProps["onReceiveSentinelGenesisShare"]
+                >
+              >[0],
+            ) =>
+              (() => {
+                const acceptShareDeliveryArgs: Parameters<
+                  sentinelGenesisActions.SentinelGenesisActions["acceptShareDelivery"]
+                >[0] = { payload };
+                return new sentinelGenesisActions.SentinelGenesisActions(
+                  vault,
+                ).acceptShareDelivery(acceptShareDeliveryArgs);
+              })()}
+            onCompleteSentinelGenesisDelivery={() =>
               new sentinelGenesisActions.SentinelGenesisActions(
                 vault,
-              ).createPublicKeyAnnouncement(),
-          ]
-        ) => v)(onCreateSentinelGenesisPublicKeyAnnouncement)}
-        onRememberSentinelGenesisRequest={(
-          payload: Parameters<
-            NonNullable<
-              CreateVaultChooserProps["onRememberSentinelGenesisRequest"]
-            >
-          >[0],
-        ) =>
-          (() => {
-            const rememberRequestArgs: Parameters<
-              sentinelGenesisActions.SentinelGenesisActions["rememberRequest"]
-            >[0] = { requestPayload: payload };
-            return new sentinelGenesisActions.SentinelGenesisActions(
-              vault,
-            ).rememberRequest(rememberRequestArgs);
-          })()}
-        onReceiveSentinelGenesisShare={(
-          payload: Parameters<
-            NonNullable<
-              CreateVaultChooserProps["onReceiveSentinelGenesisShare"]
-            >
-          >[0],
-        ) =>
-          (() => {
-            const acceptShareDeliveryArgs: Parameters<
-              sentinelGenesisActions.SentinelGenesisActions["acceptShareDelivery"]
-            >[0] = { payload };
-            return new sentinelGenesisActions.SentinelGenesisActions(
-              vault,
-            ).acceptShareDelivery(acceptShareDeliveryArgs);
-          })()}
-        onCompleteSentinelGenesisDelivery={() =>
-          new sentinelGenesisActions.SentinelGenesisActions(
-            vault,
-          ).completeDelivery()}
-        sentinelGenesisPhase={vault.sentinelGenesisPhase}
-        sentinelGenesisRequest={vault.sentinelGenesisRequest}
-        sentinelGenesisParticipants={vault.sentinelGenesisParticipants}
-        sentinelGenesisDeliveries={vault.sentinelGenesisDeliveries}
-        {sentinelInvitationRequest}
-        {sentinelParticipantResponsePending}
-        {sentinelParticipantResponse}
-        {sentinelOnboardingPackage}
-        {...createVaultChooserOptionalProps}
-        onConnectStorage={() => {
-          vault.beginExistingVaultOpen();
-          showProviderSetupLink = true;
-        }}
-      />
+              ).completeDelivery()}
+            sentinelGenesisPhase={vault.sentinelGenesisPhase}
+            sentinelGenesisRequest={vault.sentinelGenesisRequest}
+            sentinelGenesisParticipants={vault.sentinelGenesisParticipants}
+            sentinelGenesisDeliveries={vault.sentinelGenesisDeliveries}
+            {sentinelInvitationRequest}
+            {sentinelParticipantResponsePending}
+            {sentinelParticipantResponse}
+            {sentinelOnboardingPackage}
+            {...createVaultChooserOptionalProps}
+            onConnectStorage={() => {
+              vault.beginExistingVaultOpen();
+              showProviderSetupLink = true;
+            }}
+          />
 
-      {#if showEnrollmentAccess}
-        <LoginEnrollmentPanel
-          {vault}
-          bind:open={enrollmentPanelOpen}
-          {isVerifying}
-          initialCode={prefillEnrollmentCode}
-          openFormInitially={false}
-          {...enrollmentPanelOptionalProps}
-        />
-      {/if}
-    {:else}
-      {#if !hasProviders && !showSetup && !showLocalUnlock && onOpenHelp}
-        <ProductIntro {vault} {onOpenHelp} />
-      {/if}
-
-      {#if showLocalUnlock}
-        <p
-          class="text-xs text-muted-foreground"
-          data-testid="login-local-vault-detected"
-        >
-          {vault.t(I18N_KEYS.LoginVaultPickerHint)}
-        </p>
-      {/if}
-
-      <section class="nk-frame-sheet min-w-0" data-testid="login-access-sheet">
-        <header class="border-b border-border px-5 pb-4 pt-5 sm:px-6">
-          <div class="space-y-1">
-            <h2 class="text-lg font-semibold tracking-tight text-foreground">
-              {#if showVaultPicker}
-                {vault.t(I18N_KEYS.LoginVaultPickerTitle)}
-              {:else if showLocalUnlock}
-                {vault.t(I18N_KEYS.LoginOpenVaultTitle)}
-              {:else if showSetup}
-                {(() => {
-                  const tArgs: Parameters<typeof vault.t>[0] = {
-                    key: I18N_KEYS.OnboardingConnectTo,
-                    replacements: {
-                      provider: setupIs("github")
-                        ? "GitHub"
-                        : setupIs("local-folder")
-                          ? vault.t(I18N_KEYS.ProviderPickerLocalFolder)
-                          : vault.t(I18N_KEYS.OnboardingLocalStorage),
-                    },
-                  };
-                  return vault.t(tArgs);
-                })()}
-              {:else if addProviderOpen}
-                {vault.t(I18N_KEYS.OnboardingAddProvider)}
-              {:else}
-                {vault.t(I18N_KEYS.OnboardingSetupStorage)}
-              {/if}
-            </h2>
-            {#if isUnlocking}
-              <p class="text-sm text-pretty text-muted-foreground"
-                >{vault.t(I18N_KEYS.LoginUnlocking)}</p
-              >
-            {:else if showVaultPicker}
-              <p class="text-sm text-pretty text-muted-foreground">
-                {vault.t(I18N_KEYS.LoginVaultPickerSubtitle)}
-              </p>
-            {:else if showLocalUnlock}
-              <p class="text-sm text-pretty text-muted-foreground">
-                {vault.t(I18N_KEYS.LoginOpenVaultSubtitle)}
-              </p>
-            {:else if showSetup && setupIs("github")}
-              <p class="text-sm text-pretty text-muted-foreground">
-                {vault.t(I18N_KEYS.OnboardingGithubDescription)}
-              </p>
-            {:else if showSetup}
-              <p class="text-sm text-pretty text-muted-foreground">
-                {vault.t(I18N_KEYS.OnboardingLocalDescription)}
-              </p>
-            {:else if addProviderOpen}
-              <p class="text-sm text-pretty text-muted-foreground">
-                {vault.t(I18N_KEYS.OnboardingAnotherProvider)}
-              </p>
-            {/if}
-          </div>
-        </header>
-
-        <div class="px-5 pb-5 pt-4 sm:px-6 sm:pb-6">
-          {#if showSentinelCeremony && !showVaultPicker}
-            <SentinelCeremonyPanel
+          {#if showEnrollmentAccess}
+            <LoginEnrollmentPanel
               {vault}
+              bind:open={enrollmentPanelOpen}
               {isVerifying}
-              {isInitializing}
-              {...sentinelCeremonyOptionalProps}
-            />
-          {:else if showVaultPicker && onCreateDeviceVault}
-            <LoginVaultPicker
-              {vault}
-              vaults={vault.localVaults}
-              {extensionConnectPairingStatusEntries}
-              {isVerifying}
-              {isInitializing}
-              onChooseVault={(
-                storeId: Parameters<LoginVaultPickerProps["onChooseVault"]>[0],
-              ) => vault.chooseLoginVault(storeId)}
-              onCreateVault={onCreateDeviceVault}
-              onConnectStorage={() => {
-                vault.beginExistingVaultOpen();
-                showProviderSetupLink = true;
-              }}
-            />
-          {:else if showLocalUnlock}
-            <LoginUnlockStep
-              {vault}
-              vaultEntry={activeLoginVault}
-              extensionPairingStatus={activeVaultExtensionPairingStatus}
-              hasMultipleVaults={vault.hasMultipleLocalVaults}
-              passwordEntries={vault.passwordEntries.length > 0
-                ? vault.passwordEntries
-                : recoveryPasswordEntries}
-              selectedPasswordEntry={vault.selectedPasswordEntry}
-              onSelectPasswordEntry={(
-                selection: Parameters<
-                  LoginUnlockStepProps["onSelectPasswordEntry"]
-                >[0],
-              ) => {
-                vault.selectedPasswordEntry = selection;
-              }}
-              {isVerifying}
-              {isInitializing}
-              {isUnlocking}
-              {onUnlock}
-              {onUnlockWithPassword}
-              onOpenDevicesAccess={() =>
-                openDevicesAccess(DevicesAccessTriggerKind.IdentityContext)}
-              {onSwitchVault}
-              onCreateAnotherVault={onCreateDeviceVault}
-              onImportFromSync={() => {
-                vault.beginExistingVaultOpen();
-                showProviderSetupLink = true;
-              }}
-            />
-            <p class="mt-4 text-center text-xs text-muted-foreground">
-              {vault.t(I18N_KEYS.LoginSyncAfterUnlock)}
-            </p>
-          {:else if showSetup}
-            {#if setupIs("oauth-file")}
-              <OAuthProviderSetupWizard
-                {vault}
-                bind:githubRepo
-                idPrefix="login"
-                preset={oauthPreset}
-                {isVerifying}
-                {isInitializing}
-                {onCancelSetup}
-                onConnect={onUnlock}
-              />
-            {:else if setupIs("github")}
-              <GitHubProviderSetupWizard
-                {vault}
-                bind:githubPat
-                bind:githubRepo
-                idPrefix="login"
-                {isVerifying}
-                {isInitializing}
-                connectDisabled={vault.clientPolicy.remote_recovery_prompt_visible(
-                  vault.remoteVaultRecoveryState,
-                )}
-                {onCancelSetup}
-                onConnect={onUnlock}
-              >
-                {#snippet beforeConnect()}
-                  {#if vault.clientPolicy.remote_recovery_prompt_visible(vault.remoteVaultRecoveryState)}
-                    <RemoteVaultRecoveryPanel
-                      {vault}
-                      state={vault.remoteVaultRecoveryState}
-                      isBusy={isVerifying}
-                      onRecover={() => vault.confirmRecoverRemoteVault()}
-                      onCreateFresh={() =>
-                        vault.confirmCreateFreshRemoteVault()}
-                      onDismiss={() => {
-                        const cleared = vault.clearRemoteVaultRecovery();
-                        if (cleared.isErr())
-                          vault.errorMsg = vault.t(
-                            cleared.error.translationKey,
-                          );
-                      }}
-                    />
-                  {/if}
-                {/snippet}
-              </GitHubProviderSetupWizard>
-            {:else if setupIs("local-folder")}
-              <LocalFolderProviderSetupWizard
-                {vault}
-                idPrefix="login"
-                {isVerifying}
-                {isInitializing}
-                {onCancelSetup}
-                onConnect={onUnlock}
-              />
-            {:else}
-              <form
-                novalidate
-                onsubmit={handleFirstConnectSubmit}
-                class="space-y-4"
-              >
-                <ProviderSetupFields {vault} {onCancelSetup} />
-                <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
-                  <Button
-                    type="submit"
-                    class="sm:min-w-[180px]"
-                    data-testid="connect-provider-btn"
-                    disabled={!setupCanConnect}
-                  >
-                    {#if isInitializing}
-                      <RefreshCw class="size-4 animate-spin" />
-                      {vault.t(I18N_KEYS.OnboardingLoadingEngine)}
-                    {:else if isVerifying}
-                      <RefreshCw class="size-4 animate-spin" />
-                      {vault.t(I18N_KEYS.CommonConnecting)}
-                    {:else}
-                      <ShieldCheck class="size-4" />
-                      {vault.t(I18N_KEYS.CommonConnect)}
-                    {/if}
-                  </Button>
-                </div>
-              </form>
-            {/if}
-          {:else if showProviderSetup}
-            {#if showProviderSetupLink && !addProviderOpen}
-              <button
-                type="button"
-                class="mb-3 text-sm font-medium text-primary underline-offset-4 hover:underline"
-                data-testid="login-back-to-get-started"
-                onclick={() => {
-                  vault.cancelExistingVaultOpen();
-                  showProviderSetupLink = false;
-                }}
-              >
-                {vault.t(I18N_KEYS.LoginBackToGetStarted)}
-              </button>
-            {/if}
-            <LoginProviderManagement
-              {vault}
-              variant={LoginProviderManagementVariant.Setup}
-              {providers}
-              {isVerifying}
-              {isInitializing}
-              addingProvider={addProviderOpen}
-              {...providerManagementOptionalProps}
-              {onBeginSetup}
+              initialCode={prefillEnrollmentCode}
+              openFormInitially={false}
+              {...enrollmentPanelOptionalProps}
             />
           {/if}
-        </div>
-      </section>
+        {:else}
+          {#if !hasProviders && !showSetup && !showLocalUnlock && onOpenHelp}
+            <ProductIntro {vault} {onOpenHelp} />
+          {/if}
 
-      {#if showEnrollmentAccess}
-        <LoginEnrollmentPanel
-          {vault}
-          bind:open={enrollmentPanelOpen}
-          {isVerifying}
-          initialCode={prefillEnrollmentCode}
-          openFormInitially={false}
-          {...enrollmentPanelOptionalProps}
-        />
-      {/if}
-    {/if}
-    </div>
+          {#if newVaultOpen && (showLocalUnlock || showVaultPicker) && onCreateDeviceVault}
+            <LoginNewVaultPanel
+              {vault}
+              {isVerifying}
+              {isInitializing}
+              onCreateVault={onCreateDeviceVault}
+              onImportVault={importExistingVault}
+              onClose={() => (newVaultOpen = false)}
+            />
+          {/if}
+
+          {#if showAccessSheet}
+            <section
+              class="nk-frame-sheet min-w-0"
+              data-testid="login-access-sheet"
+            >
+              <header class="border-b border-border px-5 pb-4 pt-5 sm:px-6">
+                <div class="space-y-1">
+                  <h2
+                    class="text-lg font-semibold tracking-tight text-foreground"
+                  >
+                    {#if showSentinelCeremony && !showSetup && !showProviderSetup}
+                      {vault.t(I18N_KEYS.LoginUnlockVault)}
+                    {:else if showSetup}
+                      {(() => {
+                        const tArgs: Parameters<typeof vault.t>[0] = {
+                          key: I18N_KEYS.OnboardingConnectTo,
+                          replacements: {
+                            provider: setupIs("github")
+                              ? "GitHub"
+                              : setupIs("local-folder")
+                                ? vault.t(I18N_KEYS.ProviderPickerLocalFolder)
+                                : vault.t(I18N_KEYS.OnboardingLocalStorage),
+                          },
+                        };
+                        return vault.t(tArgs);
+                      })()}
+                    {:else if addProviderOpen}
+                      {vault.t(I18N_KEYS.OnboardingAddProvider)}
+                    {:else}
+                      {vault.t(I18N_KEYS.OnboardingSetupStorage)}
+                    {/if}
+                  </h2>
+                  {#if isUnlocking}
+                    <p class="text-sm text-pretty text-muted-foreground">
+                      {vault.t(I18N_KEYS.LoginUnlocking)}
+                    </p>
+                  {:else if showSetup && setupIs("github")}
+                    <p class="text-sm text-pretty text-muted-foreground">
+                      {vault.t(I18N_KEYS.OnboardingGithubDescription)}
+                    </p>
+                  {:else if showSetup}
+                    <p class="text-sm text-pretty text-muted-foreground">
+                      {vault.t(I18N_KEYS.OnboardingLocalDescription)}
+                    </p>
+                  {:else if addProviderOpen}
+                    <p class="text-sm text-pretty text-muted-foreground">
+                      {vault.t(I18N_KEYS.OnboardingAnotherProvider)}
+                    </p>
+                  {/if}
+                </div>
+              </header>
+
+              <div class="px-5 pb-5 pt-4 sm:px-6 sm:pb-6">
+                {#if showSentinelCeremony && !showSetup && !showProviderSetup}
+                  <SentinelCeremonyPanel
+                    {vault}
+                    {isVerifying}
+                    {isInitializing}
+                    {...sentinelCeremonyOptionalProps}
+                  />
+                {:else if showSetup}
+                  {#if setupIs("oauth-file")}
+                    <OAuthProviderSetupWizard
+                      {vault}
+                      bind:githubRepo
+                      idPrefix="login"
+                      preset={oauthPreset}
+                      {isVerifying}
+                      {isInitializing}
+                      {onCancelSetup}
+                      onConnect={onUnlock}
+                    />
+                  {:else if setupIs("github")}
+                    <GitHubProviderSetupWizard
+                      {vault}
+                      bind:githubPat
+                      bind:githubRepo
+                      idPrefix="login"
+                      {isVerifying}
+                      {isInitializing}
+                      connectDisabled={vault.clientPolicy.remote_recovery_prompt_visible(
+                        vault.remoteVaultRecoveryState,
+                      )}
+                      {onCancelSetup}
+                      onConnect={onUnlock}
+                    >
+                      {#snippet beforeConnect()}
+                        {#if vault.clientPolicy.remote_recovery_prompt_visible(vault.remoteVaultRecoveryState)}
+                          <RemoteVaultRecoveryPanel
+                            {vault}
+                            state={vault.remoteVaultRecoveryState}
+                            isBusy={isVerifying}
+                            onRecover={() => vault.confirmRecoverRemoteVault()}
+                            onCreateFresh={() =>
+                              vault.confirmCreateFreshRemoteVault()}
+                            onDismiss={() => {
+                              const cleared = vault.clearRemoteVaultRecovery();
+                              if (cleared.isErr())
+                                vault.errorMsg = vault.t(
+                                  cleared.error.translationKey,
+                                );
+                            }}
+                          />
+                        {/if}
+                      {/snippet}
+                    </GitHubProviderSetupWizard>
+                  {:else if setupIs("local-folder")}
+                    <LocalFolderProviderSetupWizard
+                      {vault}
+                      idPrefix="login"
+                      {isVerifying}
+                      {isInitializing}
+                      {onCancelSetup}
+                      onConnect={onUnlock}
+                    />
+                  {:else}
+                    <form
+                      novalidate
+                      onsubmit={handleFirstConnectSubmit}
+                      class="space-y-4"
+                    >
+                      <ProviderSetupFields {vault} {onCancelSetup} />
+                      <div
+                        class="flex flex-col gap-2 sm:flex-row sm:justify-end"
+                      >
+                        <Button
+                          type="submit"
+                          class="sm:min-w-[180px]"
+                          data-testid="connect-provider-btn"
+                          disabled={!setupCanConnect}
+                        >
+                          {#if isInitializing}
+                            <RefreshCw class="size-4 animate-spin" />
+                            {vault.t(I18N_KEYS.OnboardingLoadingEngine)}
+                          {:else if isVerifying}
+                            <RefreshCw class="size-4 animate-spin" />
+                            {vault.t(I18N_KEYS.CommonConnecting)}
+                          {:else}
+                            <ShieldCheck class="size-4" />
+                            {vault.t(I18N_KEYS.CommonConnect)}
+                          {/if}
+                        </Button>
+                      </div>
+                    </form>
+                  {/if}
+                {:else if showProviderSetup}
+                  {#if showProviderSetupLink && !addProviderOpen}
+                    <button
+                      type="button"
+                      class="mb-3 text-sm font-medium text-primary underline-offset-4 hover:underline"
+                      data-testid="login-back-to-get-started"
+                      onclick={() => {
+                        vault.cancelExistingVaultOpen();
+                        showProviderSetupLink = false;
+                      }}
+                    >
+                      {vault.t(I18N_KEYS.LoginBackToGetStarted)}
+                    </button>
+                  {/if}
+                  <LoginProviderManagement
+                    {vault}
+                    variant={LoginProviderManagementVariant.Setup}
+                    {providers}
+                    {isVerifying}
+                    {isInitializing}
+                    addingProvider={addProviderOpen}
+                    {...providerManagementOptionalProps}
+                    {onBeginSetup}
+                  />
+                {/if}
+              </div>
+            </section>
+          {/if}
+
+          {#if showEnrollmentAccess}
+            <LoginEnrollmentPanel
+              {vault}
+              bind:open={enrollmentPanelOpen}
+              {isVerifying}
+              initialCode={prefillEnrollmentCode}
+              openFormInitially={false}
+              {...enrollmentPanelOptionalProps}
+            />
+          {/if}
+        {/if}
+      </div>
     </IdentitiesHub>
   {/if}
 </div>

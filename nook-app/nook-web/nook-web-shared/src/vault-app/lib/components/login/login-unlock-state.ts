@@ -5,12 +5,6 @@ export enum UnlockMethod {
   Password = "password",
 }
 
-export enum LoginVaultWorkflow {
-  Open = "open",
-  Create = "create",
-  Import = "import",
-}
-
 export enum LoginVaultEntryKind {
   Unavailable = "unavailable",
   Available = "available",

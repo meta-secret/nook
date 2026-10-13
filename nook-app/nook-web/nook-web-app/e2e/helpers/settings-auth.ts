@@ -27,6 +27,24 @@ import {
   waitForVaultOperationsIdle,
 } from './vault-runtime'
 
+/** The locked hub asks for a vault: a hint over the identity cards, or the
+ * plain vault list when no identity card lists the vaults. */
+export function vaultChoice(page: Page) {
+  return page
+    .locator(
+      '[data-testid="login-choose-vault-hint"], [data-testid="login-vault-picker"]',
+    )
+    .first()
+}
+
+/** A vault row to unlock: on an identity card, or in the plain vault list. */
+export function vaultChoiceOption(page: Page, storeId?: string) {
+  const selector = storeId
+    ? `[data-testid="identity-vault-row"][data-store-id="${storeId}"], [data-testid="login-vault-option"][data-store-id="${storeId}"]`
+    : '[data-testid="identity-vault-row"][data-state="available"], [data-testid="login-vault-option"]'
+  return page.locator(selector).first()
+}
+
 export type DeviceProtectionAuthorizationObservation = {
   readonly overlayVisible: boolean
   readonly unlockReady: boolean
@@ -516,7 +534,7 @@ export async function authorizeDeviceProtection(
   await keepVaultIdleLockDisabled(page)
   const overlay = page.getByTestId('passkey-auth-overlay')
   const loginGate = page.getByTestId('login-gate')
-  const vaultPicker = page.getByTestId('login-vault-picker')
+  const vaultPicker = vaultChoice(page)
   const unlockVaultButton = page.getByTestId('unlock-vault-btn')
   const vaultError = page.getByTestId('vault-error')
   const lockedAccessDashboard = loginGate.getByTestId(
@@ -643,11 +661,7 @@ export async function authorizeDeviceProtection(
 
   if (!(await overlay.isVisible())) {
     if (await vaultPicker.isVisible()) {
-      const option = opts?.storeId
-        ? page.locator(
-            `[data-testid="login-vault-option"][data-store-id="${opts.storeId}"]`,
-          )
-        : page.getByTestId('login-vault-option').first()
+      const option = vaultChoiceOption(page, opts?.storeId)
       await expect(option).toBeVisible({
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })
@@ -707,7 +721,9 @@ export async function authorizeDeviceProtection(
         overlayVisible: isVisible('passkey-auth-overlay'),
         authorizeReady: isEnabled('device-protection-unlock-btn'),
         unlockReady: isEnabled('unlock-vault-btn'),
-        pickerVisible: isVisible('login-vault-picker'),
+        pickerVisible:
+          isVisible('login-vault-picker') ||
+          isVisible('login-choose-vault-hint'),
         errorVisible: isVisible('vault-error'),
         errorText:
           visibleVaultError instanceof HTMLElement && isVisible('vault-error')
@@ -833,7 +849,7 @@ async function ensureLoginLocalUnlockReady(page: Page) {
   })
 
   const localUnlock = page.getByTestId('login-local-unlock-step')
-  const vaultPicker = page.getByTestId('login-vault-picker')
+  const vaultPicker = vaultChoice(page)
 
   await expect
     .poll(
@@ -863,13 +879,9 @@ export async function unlockVaultOnLogin(
   }
   await ensureLoginLocalUnlockReady(page)
 
-  const vaultPicker = page.getByTestId('login-vault-picker')
+  const vaultPicker = vaultChoice(page)
   if (await vaultPicker.isVisible()) {
-    const option = opts?.storeId
-      ? page.locator(
-          `[data-testid="login-vault-option"][data-store-id="${opts.storeId}"]`,
-        )
-      : page.getByTestId('login-vault-option').first()
+    const option = vaultChoiceOption(page, opts?.storeId)
     await expect(option).toBeVisible({ timeout: UI_TIMEOUT_MS })
     await option.click()
     await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({

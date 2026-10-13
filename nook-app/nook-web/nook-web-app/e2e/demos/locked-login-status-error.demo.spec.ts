@@ -72,7 +72,7 @@ test('keeps the create workflow usable after locked-login Sentinel status errors
 
   const vaultError = page.getByTestId('vault-error')
   await expect(vaultError).toBeVisible({ timeout: UI_TIMEOUT_MS })
-  await page.getByTestId('login-vault-workflow-create').click()
+  await page.getByTestId('identity-new-vault').click()
 
   await expect(page.getByTestId('login-vault-create-workflow')).toBeVisible()
   const vaultNameInput = page.getByTestId('login-vault-name-input')

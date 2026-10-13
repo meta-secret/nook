@@ -62,7 +62,7 @@
   {@render children(identity, view)}
   {#if identity.localAccess === NookIdentityLocalAccessKind.OtherInstallation}
     <div
-      class="mt-8 rounded-lg border border-border bg-muted/30 p-5"
+      class="nk-banner mt-6 bg-card p-5"
       data-testid="devices-access-other-identity-notice"
     >
       <p class="text-sm font-medium text-foreground">

@@ -1,7 +1,8 @@
 <!--
 Identities hub: the main page of the unified UI. It lists every identity on
-this browser with the vaults it opens. While locked, the access sheet (unlock,
-create, connect, join) sits between the hero and the cards.
+this browser with the vaults it opens. While locked, the selected vault's
+unlock panel opens inside its identity card; setup flows (create, connect,
+join) sit between the hero and the cards.
 -->
 <script lang="ts">
   import { untrack, type Snippet } from 'svelte'
@@ -15,9 +16,14 @@ create, connect, join) sits between the hero and the cards.
   import { IdentityDirectoryLoader } from './identity-directory-loader.svelte'
   import {
     IdentityCardProjection,
+    IdentityVaultRowState,
     type IdentityCardSource,
     type IdentityLocalVault,
   } from './identity-card-model'
+  import {
+    LoginVaultExtensionPairingStatusKind,
+    type LoginVaultExtensionPairingStatus,
+  } from '$lib/components/login/login-vault-extension-pairing-status'
 
   let {
     vault,
@@ -33,6 +39,11 @@ create, connect, join) sits between the hero and the cards.
     onNewIdentity,
     onUseIdentity,
     onLock = () => {},
+    pairingStatusFor = () => ({
+      kind: LoginVaultExtensionPairingStatusKind.NotShown,
+    }),
+    unlockPanel,
+    vaultPicker,
     children,
   }: {
     vault: VaultState
@@ -49,6 +60,11 @@ create, connect, join) sits between the hero and the cards.
     onNewIdentity: () => void
     onUseIdentity: (identityId: string) => void
     onLock?: () => void
+    pairingStatusFor?: (storeId: string) => LoginVaultExtensionPairingStatus
+    /** Unlock panel for `selectedStoreId`, placed inside its identity card. */
+    unlockPanel?: Snippet
+    /** Plain vault list, shown only when no identity card lists the vaults. */
+    vaultPicker?: Snippet
     children?: Snippet
   } = $props()
 
@@ -88,7 +104,47 @@ create, connect, join) sits between the hero and the cards.
     }
     return new IdentityCardProjection(source)
   })
-  const cards = $derived(projection.cards)
+  const cardsReady = $derived(
+    loader.state.kind === IdentityDirectoryLoadKind.Ready,
+  )
+
+  /** The card that holds the vault being unlocked; it is shown first. */
+  const unlockingIdentityId = $derived.by(() => {
+    if (!unlockPanel || !selectedStoreId || !cardsReady) return ''
+    for (const card of projection.cards) {
+      const opensSelected = card.vaults.some(
+        (row) =>
+          row.storeId === selectedStoreId &&
+          row.state !== IdentityVaultRowState.Unavailable,
+      )
+      if (opensSelected) return card.identityId
+    }
+    return ''
+  })
+  const cards = $derived(
+    unlockingIdentityId
+      ? [
+          ...projection.cards.filter(
+            (card) => card.identityId === unlockingIdentityId,
+          ),
+          ...projection.cards.filter(
+            (card) => card.identityId !== unlockingIdentityId,
+          ),
+        ]
+      : projection.cards,
+  )
+  /** The current identity's card, which carries the "New vault" row. */
+  const currentCardShown = $derived(
+    cardsReady && showCards && projection.cards.some((card) => card.current),
+  )
+  const cardsListVaults = $derived(
+    cardsReady &&
+      projection.cards.some((card) =>
+        card.vaults.some(
+          (row) => row.state !== IdentityVaultRowState.Unavailable,
+        ),
+      ),
+  )
 </script>
 
 <div class="grid min-w-0 grid-cols-1 gap-6" data-testid="identities-hub">
@@ -99,6 +155,49 @@ create, connect, join) sits between the hero and the cards.
   />
 
   {@render children?.()}
+
+  {#if unlockPanel && !unlockingIdentityId}
+    <div
+      class="nk-frame-sheet min-w-0 p-5 sm:p-6"
+      data-testid="identity-unlock-standalone"
+    >
+      {@render unlockPanel()}
+      {#if canAddVault && !currentCardShown}
+        <div class="mt-5 border-t border-border pt-3">
+          <button
+            type="button"
+            class="nk-vault-row nk-vault-row-add text-muted-foreground hover:text-foreground"
+            data-testid="identity-new-vault"
+            disabled={busy}
+            onclick={onNewVault}
+          >
+            <span class="nk-vault-icon" aria-hidden="true">
+              <Plus class="size-4" />
+            </span>
+            <span class="text-sm font-medium"
+              >{vault.t(I18N_KEYS.WorkspaceNewVault)}</span
+            >
+          </button>
+        </div>
+      {/if}
+    </div>
+  {/if}
+
+  {#if vaultPicker}
+    {#if cardsListVaults}
+      <p
+        class="nk-banner px-4 py-3 text-sm text-foreground"
+        data-testid="login-choose-vault-hint"
+        role="status"
+      >
+        {vault.t(I18N_KEYS.LoginChooseVaultHint)}
+      </p>
+    {:else}
+      <div class="nk-frame-sheet min-w-0 p-5 sm:p-6">
+        {@render vaultPicker()}
+      </div>
+    {/if}
+  {/if}
 
   {#if showCards}
     {#if loader.state.kind === IdentityDirectoryLoadKind.Loading && vault.hasManager}
@@ -132,6 +231,10 @@ create, connect, join) sits between the hero and the cards.
             {onManage}
             {onLock}
             {onUseIdentity}
+            {pairingStatusFor}
+            {...unlockPanel && card.identityId === unlockingIdentityId
+              ? { unlockPanel }
+              : {}}
           />
         {/each}
         <button

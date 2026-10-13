@@ -336,8 +336,6 @@ class SentinelFinalizationFixture {
           },
           onSelectPasswordEntry: vi.fn(),
           onOpenDevicesAccess: vi.fn(),
-          onCreateAnotherVault: vi.fn(),
-          onImportFromSync: vi.fn(),
         })
   }
 

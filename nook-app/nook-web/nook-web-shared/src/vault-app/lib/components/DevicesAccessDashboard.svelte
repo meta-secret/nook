@@ -436,7 +436,6 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
 </script>
 
 <section class="w-full space-y-6 pb-4" data-testid="devices-access-dashboard">
-
   {#if loadState.kind === DashboardLoadKind.Loading}
     <div
       class="flex min-h-56 items-center justify-center gap-2 text-sm text-muted-foreground"
@@ -447,7 +446,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     </div>
   {:else if loadState.kind === DashboardLoadKind.Failed}
     <div
-      class="rounded-xl border border-destructive/30 bg-destructive/5 p-5"
+      class="nk-banner border-l-destructive bg-destructive/5 p-5"
       role="alert"
     >
       <p class="font-medium text-foreground">
@@ -474,7 +473,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     </div>
   {:else if directoryLoadState.kind === IdentityDirectoryLoadKind.Failed}
     <div
-      class="rounded-xl border border-destructive/30 bg-destructive/5 p-5"
+      class="nk-banner border-l-destructive bg-destructive/5 p-5"
       role="alert"
     >
       <p class="font-medium text-foreground">
@@ -523,7 +522,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
           onAddIdentity={() => void beginAddIdentity()}
         />
 
-        <div class="min-w-0 border-t border-border pt-6">
+        <div class="min-w-0">
           {#if identityCreationOpen}
             <div data-testid="devices-access-add-identity-flow">
               <div class="flex justify-end">
@@ -552,30 +551,34 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
             {#if readyProjection.kind === DashboardReadyProjectionKind.Empty}
               {#if directory.identities.length === 0}
                 <div
-                  class="flex min-h-64 flex-col items-center justify-center rounded-lg border border-dashed border-border px-6 text-center"
+                  class="nk-frame-sheet nk-empty min-h-64 content-center"
                   data-testid="devices-access-no-identities"
                 >
-                  <Fingerprint class="size-8 text-muted-foreground" />
-                  <h2 class="mt-4 text-lg font-semibold text-foreground">
+                  <span class="nk-tile nk-tile-lg"
+                    ><Fingerprint class="size-5" /></span
+                  >
+                  <h2 class="text-lg font-semibold text-foreground">
                     {vault.t(I18N_KEYS.DevicesAccessNoIdentities)}
                   </h2>
                   <p
-                    class="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground"
+                    class="max-w-md text-sm leading-relaxed text-muted-foreground"
                   >
                     {vault.t(I18N_KEYS.DevicesAccessNoIdentitiesDescription)}
                   </p>
                 </div>
               {:else}
                 <div
-                  class="flex min-h-64 flex-col items-center justify-center rounded-lg border border-dashed border-border px-6 text-center"
+                  class="nk-frame-sheet nk-empty min-h-64 content-center"
                   data-testid="devices-access-no-session-identity"
                 >
-                  <Fingerprint class="size-8 text-muted-foreground" />
-                  <h2 class="mt-4 text-lg font-semibold text-foreground">
+                  <span class="nk-tile nk-tile-lg"
+                    ><Fingerprint class="size-5" /></span
+                  >
+                  <h2 class="text-lg font-semibold text-foreground">
                     {vault.t(I18N_KEYS.DevicesAccessNoSessionIdentity)}
                   </h2>
                   <p
-                    class="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground"
+                    class="max-w-md text-sm leading-relaxed text-muted-foreground"
                   >
                     {vault.t(
                       I18N_KEYS.DevicesAccessNoSessionIdentityDescription,
@@ -623,7 +626,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                   {:else}
                     {#if identity.localAccess === NookIdentityLocalAccessKind.ThisBrowser}
                       <div
-                        class="mb-6 rounded-lg border border-border bg-muted/30 p-5"
+                        class="nk-banner nk-banner-warning mb-6 flex flex-wrap items-center justify-between gap-3 px-4 py-3"
                       >
                         <p class="text-sm font-medium text-foreground">
                           {vault.t(
@@ -632,7 +635,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                         </p>
                         <Button
                           type="button"
-                          class="mt-3"
+                          size="sm"
                           onclick={() => void useIdentity(identity.identityId)}
                           data-testid="devices-access-use-identity"
                         >
@@ -641,14 +644,14 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                       </div>
                     {:else if identity.localAccess === NookIdentityLocalAccessKind.CurrentBrowser && vault.deviceProtectionStatus !== DeviceProtectionStatus.Unlocked && accessView.protection !== DeviceAccessProtectionKind.Missing}
                       <div
-                        class="mb-6 rounded-lg border border-border bg-muted/30 p-5"
+                        class="nk-banner nk-banner-warning mb-6 flex flex-wrap items-center justify-between gap-3 px-4 py-3"
                       >
                         <p class="text-sm font-medium text-foreground">
                           {vault.t(I18N_KEYS.DevicesAccessIdentityLocked)}
                         </p>
                         <Button
                           type="button"
-                          class="mt-3"
+                          size="sm"
                           onclick={() =>
                             (vault.devicesAccessIdentityProtectionOpen = true)}
                           data-testid="devices-access-unlock-identity"
@@ -669,7 +672,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                     />
 
                     {#if selectedRepresentation === DevicesAccessRepresentationKind.List}
-                      <div class="mt-6">
+                      <div class="mt-5">
                         <IdentityKeyInventory
                           {vault}
                           {identity}

@@ -534,7 +534,7 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     await expect(
       simplePage.getByTestId('login-local-unlock-step'),
     ).toBeVisible()
-    await simplePage.getByTestId('login-vault-workflow-create').click()
+    await simplePage.getByTestId('identity-new-vault').click()
     await simplePage
       .getByTestId('login-vault-name-input')
       .fill('Second local vault')
@@ -576,16 +576,16 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     await pairingPage.getByTestId('header-lock-vault-btn').click()
 
     const pairedVaultOption = pairingPage
-      .getByTestId('login-vault-option')
+      .getByTestId('identity-vault-row')
       .filter({
         has: pairingPage.getByText('Unpair test vault', { exact: true }),
       })
     const unpairedVaultOption = pairingPage
-      .getByTestId('login-vault-option')
+      .getByTestId('identity-vault-row')
       .filter({
         has: pairingPage.getByText('Second local vault', { exact: true }),
       })
-    await expect(pairingPage.getByTestId('login-vault-option')).toHaveCount(2)
+    await expect(pairingPage.getByTestId('identity-vault-row')).toHaveCount(2)
     await expect(
       pairedVaultOption.getByTestId('login-vault-extension-pairing-status'),
     ).toHaveText('Paired with this extension')

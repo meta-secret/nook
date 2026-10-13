@@ -130,10 +130,10 @@ test('show paired and unpaired vault status before extension unlock', async ({
   })
 
   const pairedVaultOption = page.locator(
-    `[data-testid="login-vault-option"][data-store-id="${pairedVaultStoreId}"]`,
+    `[data-testid="identity-vault-row"][data-store-id="${pairedVaultStoreId}"]`,
   )
   const unpairedVaultOption = page.locator(
-    `[data-testid="login-vault-option"][data-store-id="${unpairedVaultStoreId}"]`,
+    `[data-testid="identity-vault-row"][data-store-id="${unpairedVaultStoreId}"]`,
   )
   await expect(pairedVaultOption).toBeVisible({ timeout: UI_TIMEOUT_MS })
   await expect(

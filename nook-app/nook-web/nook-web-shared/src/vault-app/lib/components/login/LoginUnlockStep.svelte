@@ -12,12 +12,9 @@
     type NookPasswordEntrySummary,
   } from "$app-wasm";
   import { ShieldCheck } from "@lucide/svelte";
-  import { Button } from "$lib/components/ui/button";
   import LoginAuthorizationStep from "$lib/components/login/LoginAuthorizationStep.svelte";
   import LoginVaultIdentityContext from "$lib/components/login/LoginVaultIdentityContext.svelte";
   import LoginVaultCard from "$lib/components/login/LoginVaultCard.svelte";
-  import LoginVaultNameForm from "$lib/components/login/LoginVaultNameForm.svelte";
-  import LoginVaultWorkflowNav from "$lib/components/login/LoginVaultWorkflowNav.svelte";
   import {
     LoginVaultExtensionPairingStatusKind,
     type LoginVaultExtensionPairingStatus,
@@ -33,7 +30,6 @@
   import {
     DeviceKeysUnlockCapabilityKind,
     LoginVaultEntryKind,
-    LoginVaultWorkflow,
     PasswordUnlockCapabilityKind,
     type DeviceKeysUnlockCapability,
     type LoginVaultEntry,
@@ -67,8 +63,6 @@
     onSelectPasswordEntry,
     onOpenDevicesAccess,
     onSwitchVault,
-    onCreateAnotherVault,
-    onImportFromSync,
   }: {
     vault: VaultState;
     vaultEntry: LoginVaultEntry;
@@ -84,16 +78,23 @@
     onSelectPasswordEntry: (selection: PasswordEntrySelection) => void;
     onOpenDevicesAccess: () => void | Promise<void>;
     onSwitchVault: () => void | Promise<void>;
-    onCreateAnotherVault: (label: string) => void | Promise<void>;
-    onImportFromSync: () => void;
   } = $props();
 
   const isBusy = $derived(isVerifying || isInitializing);
-  let workflow = $state<LoginVaultWorkflow>(LoginVaultWorkflow.Open);
-
-  function selectWorkflow(selected: LoginVaultWorkflow): void {
-    workflow = selected;
-  }
+  const vaultLabel = $derived(
+    vaultEntry.kind === LoginVaultEntryKind.Available
+      ? vaultEntry.entry.display_label(
+          vault.t(I18N_KEYS.LoginVaultPickerUnnamed),
+        )
+      : vault.t(I18N_KEYS.LoginVaultPickerUnnamed),
+  );
+  const title = $derived.by(() => {
+    const titleArgs: Parameters<typeof vault.t>[0] = {
+      key: I18N_KEYS.LoginUnlockPanelTitle,
+      replacements: { vault: vaultLabel },
+    };
+    return vault.t(titleArgs);
+  });
   const sentinelPresentation = $derived(
     new SentinelLoginPresentationReader(vault),
   );
@@ -190,21 +191,35 @@
   );
 </script>
 
-<div class="space-y-5" data-testid="login-local-unlock-step">
-  <LoginVaultWorkflowNav {vault} active={workflow} onSelect={selectWorkflow} />
-
-  {#if workflow === LoginVaultWorkflow.Open}
+<section
+  class="grid min-w-0 gap-5"
+  aria-label={title}
+  data-testid="login-local-unlock-step"
+>
+  <header class="grid gap-3">
+    <p class="nk-eyebrow">
+      <ShieldCheck class="size-3.5" aria-hidden="true" />
+      {vault.t(I18N_KEYS.LoginUnlockPanelEyebrow)}<span
+        class="nk-caret"
+        aria-hidden="true"
+      ></span>
+    </p>
+    <h2
+      class="text-xl font-semibold tracking-tight text-foreground [overflow-wrap:anywhere]"
+    >
+      {title}
+    </h2>
+    <p
+      class="text-sm text-pretty text-muted-foreground"
+      data-testid="login-local-vault-detected"
+    >
+      {vault.t(I18N_KEYS.LoginVaultPickerHint)}
+    </p>
     {#if vaultEntry.kind === LoginVaultEntryKind.Available}
-      <section class="space-y-2" data-testid="login-vault-context">
-        <h3
-          class="text-xs font-medium tracking-wide text-muted-foreground uppercase"
-        >
-          {vault.t(I18N_KEYS.LoginVaultOnDevice)}
-        </h3>
+      <div class="grid gap-2" data-testid="login-vault-context">
         <LoginVaultCard
           {vault}
           entry={vaultEntry.entry}
-          active
           {extensionPairingStatus}
         />
         {#if extensionPairingStatus.kind !== LoginVaultExtensionPairingStatusKind.NotShown}
@@ -215,100 +230,55 @@
             {vault.t(I18N_KEYS.LoginVaultPickerExtensionPairingPurpose)}
           </p>
         {/if}
-        {#if hasMultipleVaults}
-          <button
-            type="button"
-            class="text-sm font-medium text-primary underline-offset-4 hover:underline"
-            data-testid="login-switch-vault-btn"
-            disabled={isBusy}
-            onclick={() => onSwitchVault()}
-          >
-            {vault.t(I18N_KEYS.LoginSwitchVault)}
-          </button>
-        {/if}
-      </section>
-    {/if}
-
-    {#if showSentinelCeremony}
-      <SentinelCeremonyPanel {vault} {isVerifying} {isInitializing} />
-    {:else}
-      <LoginVaultIdentityContext
-        {vault}
-        context={identityContext}
-        deviceKeysCapable={vault.loginDeviceKeysCapable}
-        onReviewIdentities={onOpenDevicesAccess}
-      />
-
-      <section
-        class="space-y-3 rounded-lg border border-border/60 bg-muted/10 p-4"
-        data-testid="login-unlock-section"
-      >
-        <div class="space-y-1">
-          <h3 class="text-sm font-semibold text-foreground">
-            {vault.t(I18N_KEYS.LoginUnlockSectionTitle)}
-          </h3>
-          <p class="text-sm text-pretty text-muted-foreground">
-            {vault.t(I18N_KEYS.LoginUnlockSectionDescription)}
-          </p>
-        </div>
-
-        <LoginAuthorizationStep
-          {vault}
-          {passwordEntries}
-          {selectedPasswordEntry}
-          {isVerifying}
-          {isInitializing}
-          {isUnlocking}
-          loginPasswordPrompt={vault.loginPasswordPrompt}
-          {deviceKeysUnlock}
-          onConsumeLoginPasswordPrompt={() => {
-            vault.loginPasswordPrompt = false;
-          }}
-          {onUnlock}
-          {passwordUnlock}
-          {onSelectPasswordEntry}
-        />
-      </section>
-    {/if}
-  {:else if workflow === LoginVaultWorkflow.Create}
-    <section class="space-y-3" data-testid="login-vault-create-workflow">
-      <div class="space-y-1">
-        <h3 class="text-sm font-semibold text-foreground">
-          {vault.t(I18N_KEYS.LoginVaultPickerCreateNew)}
-        </h3>
-        <p class="text-sm text-pretty text-muted-foreground">
-          {vault.t(I18N_KEYS.LoginVaultWorkflowCreateDescription)}
-        </p>
       </div>
-      <LoginVaultNameForm
+    {/if}
+  </header>
+
+  {#if showSentinelCeremony}
+    <SentinelCeremonyPanel {vault} {isVerifying} {isInitializing} />
+  {:else}
+    <section class="grid gap-3" data-testid="login-unlock-section">
+      <p class="text-sm text-pretty text-muted-foreground">
+        {vault.t(I18N_KEYS.LoginUnlockSectionDescription)}
+      </p>
+      <LoginAuthorizationStep
         {vault}
+        {passwordEntries}
+        {selectedPasswordEntry}
         {isVerifying}
         {isInitializing}
-        testId="login-create-additional-vault-btn"
-        submitLabel={vault.t(I18N_KEYS.LoginVaultPickerCreateNew)}
-        onCreate={onCreateAnotherVault}
+        {isUnlocking}
+        loginPasswordPrompt={vault.loginPasswordPrompt}
+        {deviceKeysUnlock}
+        onConsumeLoginPasswordPrompt={() => {
+          vault.loginPasswordPrompt = false;
+        }}
+        {onUnlock}
+        {passwordUnlock}
+        {onSelectPasswordEntry}
       />
     </section>
-  {:else if workflow === LoginVaultWorkflow.Import}
-    <section class="space-y-3" data-testid="login-vault-import-workflow">
-      <div class="space-y-1">
-        <h3 class="text-sm font-semibold text-foreground">
-          {vault.t(I18N_KEYS.LoginVaultPickerImport)}
-        </h3>
-        <p class="text-sm text-pretty text-muted-foreground">
-          {vault.t(I18N_KEYS.LoginVaultWorkflowImportDescription)}
-        </p>
-      </div>
-      <Button
-        type="button"
-        class="sm:min-w-[180px]"
-        data-testid="login-import-vault-btn"
-        disabled={isBusy}
-        onclick={onImportFromSync}
-      >
-        <ShieldCheck class="size-4" />
-        {vault.t(I18N_KEYS.LoginVaultPickerImport)}
-      </Button>
-    </section>
+
+    <LoginVaultIdentityContext
+      {vault}
+      context={identityContext}
+      deviceKeysCapable={vault.loginDeviceKeysCapable}
+      onReviewIdentities={onOpenDevicesAccess}
+    />
   {/if}
-</div>
+
+  {#if hasMultipleVaults}
+    <p class="text-xs text-pretty text-muted-foreground">
+      {vault.t(I18N_KEYS.LoginUnlockPanelOtherVault)}
+      <button
+        type="button"
+        class="font-medium text-foreground underline underline-offset-4"
+        data-testid="login-switch-vault-btn"
+        disabled={isBusy}
+        onclick={() => onSwitchVault()}
+      >
+        {vault.t(I18N_KEYS.LoginSwitchVault)}
+      </button>
+    </p>
+  {/if}
+</section>
