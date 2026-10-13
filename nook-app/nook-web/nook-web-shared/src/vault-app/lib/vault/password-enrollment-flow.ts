@@ -621,6 +621,11 @@ export class PasswordEnrollmentActions {
             state.errorMsg = state.t(savedProvider.error.translationKey);
             return;
           }
+          const aligned = await state.identityControl.alignProviderRows();
+          if (aligned.isErr()) {
+            state.errorMsg = state.t(aligned.error.translationKey);
+            return;
+          }
           state.identityControl.markJoinPending(identityLabel);
           state.joinEnrollmentPrompt = JoinEnrollmentState.None;
           state.loginEnrollmentCode = "";

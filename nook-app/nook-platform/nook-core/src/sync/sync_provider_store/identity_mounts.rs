@@ -273,6 +273,57 @@ impl ProviderRows<'_> {
         Ok(mounts)
     }
 
+    /// Rows with the layout the identity's mount records give their targets.
+    /// A joining installation saves its row before it can read the log; the
+    /// recorded layout decides where the identity's vaults already live. A
+    /// namespaced record wins over a legacy root record for the same target.
+    #[must_use]
+    pub fn aligned_with_mounts(
+        &self,
+        recorded: &[IdentityProviderMount],
+    ) -> Vec<StorageProviderData> {
+        self.providers
+            .iter()
+            .map(|provider| {
+                let IdentityMountCapability::Mountable(target) =
+                    provider.identity_mount_capability()
+                else {
+                    return provider.clone();
+                };
+                let mut layouts = recorded
+                    .iter()
+                    .filter(|mount| mount.target == target)
+                    .map(|mount| &mount.layout);
+                let chosen = layouts
+                    .clone()
+                    .find(|layout| matches!(layout, ProviderMountLayout::Namespaced))
+                    .or_else(|| layouts.next());
+                match chosen {
+                    Some(ProviderMountLayout::Namespaced) => StorageProviderData {
+                        layout: ProviderRowLayout::IdentityNamespaced,
+                        ..provider.clone()
+                    },
+                    Some(ProviderMountLayout::LegacySingleVault { store_id }) => {
+                        StorageProviderData {
+                            layout: ProviderRowLayout::LegacyVaultRoot,
+                            store_id: ProviderVaultScope::StoreId(store_id.as_str().to_owned()),
+                            ..provider.clone()
+                        }
+                    }
+                    None => provider.clone(),
+                }
+            })
+            .collect()
+    }
+
+    /// The first row that replicates one vault.
+    #[must_use]
+    pub fn vault_row(&self, store_id: &StoreId) -> Option<&StorageProviderData> {
+        self.providers
+            .iter()
+            .find(|provider| provider.vault_location(store_id).is_some())
+    }
+
     /// Recorded mounts this installation has no credentials for yet.
     #[must_use]
     pub fn unconnected_mounts<'m>(
@@ -299,6 +350,7 @@ mod tests {
         ActiveVaultScope, AuthProvidersSnapshotData, ProviderSyncCheckpoint, StoredGithubPat,
         StoredLocalFolderConfiguration, StoredOAuthFileConfiguration,
     };
+    use std::slice;
 
     struct Row(StorageProviderData);
 
@@ -470,6 +522,56 @@ mod tests {
             Some(&IdentityMountTarget::Github {
                 repository: "owner/personal".to_owned()
             })
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn joined_rows_take_the_layout_the_identity_recorded_for_their_target() -> anyhow::Result<()> {
+        let personal = StoreId::generate()?;
+        let legacy_mount = IdentityProviderMount {
+            mount_id: ProviderMountId::generate()?,
+            label: "GitHub".to_owned(),
+            target: IdentityMountTarget::Github {
+                repository: "owner/personal".to_owned(),
+            },
+            layout: ProviderMountLayout::LegacySingleVault {
+                store_id: personal.clone(),
+            },
+        };
+        let rows = [
+            Row::github("joined", "owner/personal").namespaced().0,
+            Row::github("other", "owner/other").namespaced().0,
+        ];
+        let aligned =
+            ProviderRows { providers: &rows }.aligned_with_mounts(slice::from_ref(&legacy_mount));
+        let [joined, other] = aligned.as_slice() else {
+            anyhow::bail!("alignment keeps every row");
+        };
+        assert_eq!(
+            joined.vault_location(&personal),
+            Some(EventLogLocation::LegacyVaultRoot)
+        );
+        assert_eq!(joined.vault_location(&StoreId::generate()?), None);
+        assert_eq!(other, &rows[1]);
+        let selected = ProviderRows {
+            providers: &aligned,
+        };
+        assert_eq!(
+            selected.vault_row(&personal).map(|row| row.id.as_str()),
+            Some("joined")
+        );
+
+        let namespaced_mount = IdentityProviderMount {
+            mount_id: ProviderMountId::generate()?,
+            layout: ProviderMountLayout::Namespaced,
+            ..legacy_mount.clone()
+        };
+        let aligned = ProviderRows { providers: &rows }
+            .aligned_with_mounts(&[legacy_mount, namespaced_mount]);
+        assert_eq!(
+            aligned.first().map(|row| row.layout),
+            Some(ProviderRowLayout::IdentityNamespaced)
         );
         Ok(())
     }

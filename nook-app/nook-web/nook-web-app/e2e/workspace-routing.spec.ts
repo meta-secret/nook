@@ -26,17 +26,25 @@ test.describe('persistent workspace routing', () => {
     })
 
     await page.getByTestId('vault-manage-btn').click()
-    await expect(page).toHaveURL(/\/vault\/devices$/)
-    await expect(page.getByTestId('vault-devices-panel')).toBeVisible()
+    await expect(page).toHaveURL(/\/vault\/passwords$/)
+    await expect(page.getByTestId('vault-unlock-section')).toBeVisible()
 
     await expect(page.getByTestId('manage-nav-keys')).toHaveCount(0)
+    await expect(page.getByTestId('manage-nav-devices')).toHaveCount(0)
+    await expect(page.getByTestId('manage-nav-sync')).toHaveCount(0)
     await page.getByTestId('header-identities-btn').click()
     await page.getByTestId('identity-manage').first().click()
     await expect(page).toHaveURL(/\/identity\/keys$/)
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await expect(page.getByTestId('manage-nav-devices')).toHaveCount(0)
+    await expect(page.getByTestId('manage-nav-passwords')).toHaveCount(0)
+    await page.getByTestId('manage-nav-devices').click()
+    await expect(page).toHaveURL(/\/identity\/devices$/)
+    await expect(page.getByTestId('vault-devices-panel')).toBeVisible()
+    await page.getByTestId('manage-nav-sync').click()
+    await expect(page).toHaveURL(/\/identity\/sync$/)
+    await expect(page.getByTestId('storage-providers-section')).toBeVisible()
 
     await page.getByTestId('manage-nav-vaults').click()
     await expect(page).toHaveURL(/\/identity\/vaults$/)
@@ -89,7 +97,9 @@ test.describe('persistent workspace routing', () => {
     await connectLocalVault(page)
     for (const [legacy, current, marker] of [
       ['/admin', /\/identity\/vaults$/, 'vault-admin-vaults-section'],
-      ['/onboard', /\/vault\/devices$/, 'vault-devices-panel'],
+      ['/onboard', /\/identity\/devices$/, 'vault-devices-panel'],
+      ['/vault/devices', /\/identity\/devices$/, 'vault-devices-panel'],
+      ['/vault/sync', /\/identity\/sync$/, 'storage-providers-section'],
       ['/settings', /\/identity\/settings$/, 'browser-settings-panel'],
     ] as const) {
       await page.evaluate((path) => {
@@ -323,7 +333,7 @@ test.describe('persistent workspace routing', () => {
     await expect(page.getByTestId('onboard-device-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await expect(page).toHaveURL(/\/vault\/devices$/)
+    await expect(page).toHaveURL(/\/identity\/devices$/)
     expect(new URL(page.url()).search).toBe('')
     expect(new URL(page.url()).hash).toBe('')
 

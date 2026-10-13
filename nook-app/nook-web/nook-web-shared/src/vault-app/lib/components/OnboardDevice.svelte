@@ -12,7 +12,7 @@ approves the join on the Devices page.
 
   import { untrack } from 'svelte'
   import { I18N_KEYS } from '../../../generated/i18n-keys'
-  import { QrCode, RefreshCw, KeyRound } from '@lucide/svelte'
+  import { Cloud, QrCode, RefreshCw, KeyRound } from '@lucide/svelte'
   import EnrollmentOnboardResult from '$lib/components/EnrollmentOnboardResult.svelte'
   import SentinelOnboardingGuidance from '$lib/components/onboard-device/SentinelOnboardingGuidance.svelte'
   import { Button } from '$lib/components/ui/button'
@@ -20,6 +20,7 @@ approves the join on the Devices page.
   import {
     StorageProviderPresentation,
     localizeProviderLabel,
+    localizedProviderStorageDetail,
     type StorageProvider,
   } from '$lib/auth/providers'
   import { peek_enrollment_issued_at } from '$app-wasm'
@@ -28,6 +29,7 @@ approves the join on the Devices page.
     OnboardingType,
     VaultType,
     provider_onboarding_type,
+    provider_supports_replication,
   } from '$lib/vault/architecture-model'
 
   let {
@@ -54,15 +56,34 @@ approves the join on the Devices page.
   let localError = $state('')
   let isGenerating = $state(false)
 
+  /** Mounts that can replicate this vault's architecture. */
+  const compatibleMounts = $derived(
+    mounts.filter((provider) =>
+      provider_supports_replication(
+        provider,
+        vault.vaultArchitecture.replication_type,
+      ),
+    ),
+  )
   const selectedProvider = $derived(
-    mounts.find((provider) => provider.id === chosenProviderId) ||
-      mounts[0] ||
+    compatibleMounts.find((provider) => provider.id === chosenProviderId) ||
+      compatibleMounts[0] ||
       false,
   )
   const usesSharedGrant = $derived(
     selectedProvider !== false &&
       provider_onboarding_type(selectedProvider, vault.vaultArchitecture) ===
         OnboardingType.SharedProviderGrant,
+  )
+  const onboardingTypeTitleKey = $derived(
+    usesSharedGrant
+      ? I18N_KEYS.ArchitectureModesOnboardingTypeSharedProviderGrantTitle
+      : I18N_KEYS.ArchitectureModesOnboardingTypePersonalCredentialTransferTitle,
+  )
+  const onboardingTypeDescriptionKey = $derived(
+    usesSharedGrant
+      ? I18N_KEYS.ArchitectureModesOnboardingTypeSharedProviderGrantDescription
+      : I18N_KEYS.ArchitectureModesOnboardingTypePersonalCredentialTransferDescription,
   )
   const requiresSharedJoinerIdentity = $derived(
     usesSharedGrant &&
@@ -93,6 +114,12 @@ approves the join on the Devices page.
       t: vault.t,
     }
     return localizeProviderLabel(labelRequest)
+  }
+
+  function providerDetail(provider: StorageProvider): string {
+    const detailRequest: Parameters<typeof localizedProviderStorageDetail>[0] =
+      { provider, t: vault.t }
+    return localizedProviderStorageDetail(detailRequest)
   }
 
   async function submitOnboard() {
@@ -133,7 +160,7 @@ approves the join on the Devices page.
     </p>
   </div>
 
-  {#if mounts.length === 0}
+  {#if compatibleMounts.length === 0}
     <div
       class="nk-banner nk-banner-warning flex flex-col gap-2 p-3 text-sm text-foreground sm:flex-row sm:items-center sm:justify-between"
       data-testid="onboard-no-identity-mount"
@@ -157,31 +184,56 @@ approves the join on the Devices page.
         void submitOnboard()
       }}
     >
-      <fieldset class="space-y-2">
-        <legend class="text-xs font-medium text-foreground">
+      <div class="space-y-2">
+        <p class="text-xs font-medium text-foreground">
           {vault.t(I18N_KEYS.IdentityControlOnboardProvider)}
-        </legend>
-        <ul class="space-y-2" data-testid="onboard-provider-list">
-          {#each mounts as provider (provider.id)}
-            <li>
-              <label
-                class="flex cursor-pointer items-center gap-3 rounded-lg border border-border/50 bg-background/60 p-3 text-sm"
-                data-testid="onboard-provider-{provider.id}"
+        </p>
+        <div
+          class="space-y-1.5"
+          role="radiogroup"
+          aria-label={vault.t(I18N_KEYS.IdentityControlOnboardProvider)}
+          data-testid="onboard-provider-list"
+        >
+          {#each compatibleMounts as provider (provider.id)}
+            {@const selected =
+              selectedProvider !== false && selectedProvider.id === provider.id}
+            <button
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              class="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-all {selected
+                ? 'border-primary/35 bg-primary/[0.08] text-foreground shadow-sm ring-1 ring-inset ring-primary/35'
+                : 'border-border text-muted-foreground hover:bg-muted/50 hover:text-foreground'}"
+              data-testid="onboard-provider-{provider.id}"
+              disabled={isBusy || isGenerating}
+              onclick={() => (chosenProviderId = provider.id)}
+            >
+              <span
+                class="inline-flex size-[18px] shrink-0 items-center justify-center rounded-full border-2 {selected
+                  ? 'border-primary'
+                  : 'border-muted-foreground/35'}"
+                aria-hidden="true"
               >
-                <input
-                  type="radio"
-                  name="onboard-provider"
-                  value={provider.id}
-                  checked={selectedProvider !== false &&
-                    selectedProvider.id === provider.id}
-                  onchange={() => (chosenProviderId = provider.id)}
-                />
-                <span class="truncate">{providerLabel(provider)}</span>
-              </label>
-            </li>
+                {#if selected}
+                  <span class="size-2 rounded-full bg-primary"></span>
+                {/if}
+              </span>
+              <Cloud class="size-4 shrink-0 opacity-80" />
+              <div class="min-w-0 flex-1">
+                <span class="block truncate font-medium"
+                  >{providerLabel(provider)}</span
+                >
+                <span
+                  class="block truncate text-xs text-muted-foreground"
+                  data-testid="onboard-provider-detail-{provider.id}"
+                >
+                  {providerDetail(provider)}
+                </span>
+              </div>
+            </button>
           {/each}
-        </ul>
-      </fieldset>
+        </div>
+      </div>
 
       <div class="space-y-2">
         <label
@@ -215,6 +267,24 @@ approves the join on the Devices page.
         </div>
         <p class="text-xs text-muted-foreground">
           {vault.t(I18N_KEYS.IdentityControlOnboardPassphraseHint)}
+        </p>
+      </div>
+
+      <div
+        class="rounded-md border border-border bg-muted/20 px-3 py-2.5"
+        data-testid="onboarding-type-summary"
+      >
+        <p
+          class="text-xs font-medium text-foreground"
+          data-testid="onboarding-type-label"
+        >
+          {vault.t(onboardingTypeTitleKey)}
+        </p>
+        <p
+          class="mt-1 text-xs text-muted-foreground text-pretty"
+          data-testid="onboarding-type-description"
+        >
+          {vault.t(onboardingTypeDescriptionKey)}
         </p>
       </div>
 
@@ -342,7 +412,7 @@ approves the join on the Devices page.
       requiredParticipants={((v) => (v ? v : 0))(
         vault.vaultArchitecture.sentinel_required_participants,
       )}
-      compatibleProviderCount={mounts.length}
+      compatibleProviderCount={compatibleMounts.length}
     />
   {/if}
 </section>

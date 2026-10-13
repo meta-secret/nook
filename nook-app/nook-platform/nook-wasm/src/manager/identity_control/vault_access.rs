@@ -7,12 +7,15 @@
 //! current key epoch for every active member.
 
 use nook_core::{
-    EventId, IdentityControlState, IdentityVaultEpochAction, IdentityVaultEpochStatus,
-    IdentityVaultKeyOpening, IdentityVaultRegistration, MultiDeviceError, OpenedVaultDek,
-    SecretTypeFilter, StoreId, SymmetricKey, VaultKeys, VaultMetaState, VaultRevocationDue,
-    VaultType, VaultUnlock,
+    AuthProvidersSnapshotData, EventId, IdentityControlState, IdentityVaultEpochAction,
+    IdentityVaultEpochStatus, IdentityVaultKeyOpening, IdentityVaultRegistration, MultiDeviceError,
+    OpenedVaultDek, ProviderRows, SecretTypeFilter, StorageProviderData, StoreId, SymmetricKey,
+    VaultKeys, VaultMetaState, VaultRevocationDue, VaultType, VaultUnlock,
 };
+use tsify::Tsify;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
+
+use super::{INVALID_TYPED_INPUT, UNENCODABLE_TYPED_OUTPUT};
 
 use crate::manager::NookVaultManager;
 use crate::manager::verified_access::VerifiedVaultAccessFlow;
@@ -39,6 +42,48 @@ impl NookVaultManager {
 
 #[wasm_bindgen]
 impl NookVaultManager {
+    /// Provider rows with the layout this identity's mount records give their
+    /// targets, so a joined app reads each vault where it already lives.
+    #[wasm_bindgen]
+    pub async fn align_identity_provider_rows(
+        &self,
+        snapshot: &tsify::Ts<AuthProvidersSnapshotData>,
+    ) -> Result<tsify::Ts<AuthProvidersSnapshotData>, JsError> {
+        let snapshot = snapshot
+            .to_rust()
+            .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?;
+        let state = self.current_identity_state().await?;
+        let aligned = AuthProvidersSnapshotData {
+            providers: ProviderRows {
+                providers: &snapshot.providers,
+            }
+            .aligned_with_mounts(&state.mounts),
+            active_vault_store_id: snapshot.active_vault_store_id,
+        };
+        Tsify::into_ts(&aligned).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
+    }
+
+    /// The saved row that replicates one identity vault.
+    #[wasm_bindgen]
+    pub fn identity_vault_provider(
+        &self,
+        snapshot: &tsify::Ts<AuthProvidersSnapshotData>,
+        store_id: &str,
+    ) -> Result<tsify::Ts<StorageProviderData>, JsError> {
+        let providers = snapshot
+            .to_rust()
+            .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?
+            .providers;
+        let store_id = StoreId::parse(store_id)?;
+        let rows = ProviderRows {
+            providers: &providers,
+        };
+        let row = rows.vault_row(&store_id).ok_or_else(|| {
+            NookError::Database("No saved provider replicates this vault.".to_owned())
+        })?;
+        Tsify::into_ts(row).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
+    }
+
     /// Open a vault of the current identity from one of its mounts with the
     /// DEK the identity granted this installation, then self-enroll.
     #[wasm_bindgen]

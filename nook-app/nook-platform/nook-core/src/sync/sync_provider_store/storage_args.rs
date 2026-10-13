@@ -119,6 +119,30 @@ impl super::OAuthFileConfig {
         }
     }
 
+    /// The remote file id an enrollment code carries. A private Google Drive
+    /// row addresses its event folder through `drive_private_target`, so the
+    /// code carries that target as its connect reference; the joining app
+    /// projects it back into its own `drive_private_target`.
+    pub(super) fn enrollment_file_id(&self) -> StoredOAuthRemoteFileId {
+        let private_drive = self.preset == OauthFilePreset::GoogleDrive
+            && self.resolved_google_drive_mode() == GoogleDriveMode::Private;
+        match (&self.drive_private_target, private_drive) {
+            (StoredGoogleDrivePrivateTarget::Pending, true) => {
+                StoredOAuthRemoteFileId::FileId(crate::DRIVE_PRIVATE_FOLDER_PENDING_REF.to_owned())
+            }
+            (StoredGoogleDrivePrivateTarget::FolderId(folder_id), true)
+                if !folder_id.trim().is_empty() =>
+            {
+                StoredOAuthRemoteFileId::FileId(format!(
+                    "{}{}",
+                    crate::DRIVE_PRIVATE_FOLDER_REF_PREFIX,
+                    folder_id.trim()
+                ))
+            }
+            _ => self.file_id.clone(),
+        }
+    }
+
     fn private_drive_connection_storage_id(
         &self,
         storage_id: OAuthStorageReference,

@@ -3,8 +3,11 @@ import { expect, test, type Page } from './fixtures'
 import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
 import {
   addSecret,
+  approveIdentityJoin,
   attachNookLogsForTest,
   assertVaultReady,
+  openVaultAfterIdentityApproval,
+  redeemIdentityEnrollmentCode,
   clearBrowserVault,
   createIsolatedContext,
   createLocalVaultOnLogin,
@@ -24,7 +27,6 @@ import {
   signedSentinelInvitation,
   UI_TIMEOUT_MS,
   uniqueSecretKey,
-  waitForVaultUnlocked,
   parseJson,
   requireRecord,
 } from './helpers'
@@ -47,23 +49,6 @@ const SHARED_PROVIDER = {
   fileName: 'architecture-shared.yaml',
   accessToken: 'ya29.architecture-shared-provider-token',
   accountEmail: 'owner@example.com',
-}
-
-async function createOnboardPasswordInline(page: Page) {
-  await expect(page.getByTestId('onboard-wizard-password-step')).toBeVisible()
-  await page.getByTestId('vault-password-label').fill('Architecture onboard')
-  await page.getByTestId('vault-password-input').fill(ONBOARD_PASSWORD)
-  await page.getByTestId('vault-password-confirm').fill(ONBOARD_PASSWORD)
-  await page.getByTestId('submit-vault-password').click()
-  await expect(page.getByTestId('app-success')).toContainText(/password/i, {
-    timeout: UI_TIMEOUT_MS,
-  })
-}
-
-async function chooseFirstOnboardPassword(page: Page) {
-  const entryList = page.getByTestId('onboard-password-entry-list')
-  await expect(entryList).toBeVisible()
-  await entryList.getByRole('radio').first().click()
 }
 
 async function assertAppLogsDoNotLeak(page: Page, sensitiveValues: string[]) {
@@ -673,29 +658,20 @@ test.describe('vault architecture modes', () => {
     ).toContainText(/personal and shared replication/i)
 
     await openOnboardDevicePanel(page)
-    await createOnboardPasswordInline(page)
-    await chooseFirstOnboardPassword(page)
-    await page
-      .getByTestId('onboard-wizard-sync-step')
-      .getByRole('button')
-      .click()
-
+    await expect(
+      page.getByTestId(`onboard-provider-${SHARED_PROVIDER.id}`),
+    ).toHaveAttribute('aria-checked', 'true', {
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
     await expect(
       page.getByTestId(`onboard-provider-${PERSONAL_ONLY_PROVIDER.id}`),
     ).toHaveCount(0)
-    await expect(
-      page.getByTestId(`onboard-provider-${SHARED_PROVIDER.id}`),
-    ).toHaveAttribute('aria-checked', 'true')
-
-    await expect(page.getByTestId('onboard-wizard-sync-step')).toContainText(
-      'Shared architecture drive connected',
-    )
 
     await expect(page.getByTestId('onboarding-type-label')).toContainText(
       'Shared provider grant',
     )
     await expect(page.getByTestId('shared-joiner-identity-input')).toBeVisible()
-    await page.getByTestId('onboard-password-input').fill(ONBOARD_PASSWORD)
+    await page.getByTestId('onboard-passphrase-input').fill(ONBOARD_PASSWORD)
     await page.getByTestId('onboard-device-submit').click()
     await expect(page.getByTestId('onboard-error')).toContainText(
       /joiner provider identity/i,
@@ -773,11 +749,9 @@ test.describe('vault architecture modes', () => {
       await expect(joiner.getByTestId('enrollment-scan-panel')).toBeVisible({
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })
-      await joiner
-        .getByTestId('enrollment-password-input')
-        .fill(ONBOARD_PASSWORD)
-      await joiner.getByTestId('submit-enrollment-code-btn').click()
-      await waitForVaultUnlocked(joiner, ENROLLMENT_UNLOCK_TIMEOUT_MS)
+      await redeemIdentityEnrollmentCode(joiner, ONBOARD_PASSWORD)
+      await approveIdentityJoin(page, 2)
+      await openVaultAfterIdentityApproval(joiner)
       await assertVaultReady(joiner)
       const revealed = await revealSecretValue(joiner, sharedSecretKey)
       expect(revealed).toBe(SHARED_SECRET_VALUE)
@@ -825,12 +799,10 @@ test.describe('vault architecture modes', () => {
       sharedPermissionStatus: 403,
     })
     await openOnboardDevicePanel(page)
-    await createOnboardPasswordInline(page)
-    await chooseFirstOnboardPassword(page)
     await page
       .getByTestId('shared-joiner-identity-input')
       .fill(SHARED_JOINER_IDENTITY)
-    await page.getByTestId('onboard-password-input').fill(ONBOARD_PASSWORD)
+    await page.getByTestId('onboard-passphrase-input').fill(ONBOARD_PASSWORD)
     await page.getByTestId('onboard-device-submit').click()
 
     await expect(page.getByTestId('onboarding-link-url')).toBeVisible({

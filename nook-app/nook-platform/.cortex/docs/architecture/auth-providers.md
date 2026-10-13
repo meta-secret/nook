@@ -298,6 +298,10 @@ vault. Earlier vault-named codes fail closed as invalid codes.
 - The joining browser signs into its own Google account and saves its own token.
 - The owner may grant that account access to the already-persisted folder.
 - Onboarding must not create a replacement folder or transfer owner credentials.
+- A personal private Drive code carries the issuer's private event folder as
+  its connect reference in `remote_file.file_id`: `private-folder-v2:{id}`, or
+  the pending reference. The joiner projects it into its `drive_private_target`
+  so both apps read the identity log under the same folder.
 
 **Rust typestates**
 

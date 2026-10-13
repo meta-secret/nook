@@ -7,7 +7,12 @@ import {
   clearBrowserVault,
   connectLocalVault,
   createIsolatedContext,
+  E2E_IDENTITY_PASSPHRASE,
   E2E_SYNC_ONBOARD_PROVIDER,
+  approveIdentityJoin,
+  issueIdentityEnrollmentCode,
+  openVaultAfterIdentityApproval,
+  redeemIdentityEnrollmentCode,
   expandSettingsSection,
   expectNoVaultPasswords,
   expectVaultPasswordStatus,
@@ -28,7 +33,6 @@ import {
   unlockVaultOnLogin,
   waitForStorageChainIdle,
   waitForSyncRemoteVaultState,
-  waitForVaultUnlocked,
   wipeDeviceIdentity,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   openVaultPage,
@@ -161,58 +165,35 @@ test.describe('vault password envelope (local)', () => {
     await expectNoVaultPasswords(page)
   })
 
-  test('issuing an enrollment code rejects the wrong password', async ({
+  test('issuing an identity code rejects a short passphrase', async ({
     page,
   }) => {
-    await openStorageSettings(page)
-    await addVaultPassword(page, 'Enrollment test', 'hunter2-secure')
-    await expectVaultPasswordStatus(page, 1)
-
     await seedSyncProvidersWhileUnlocked(page)
 
     await openOnboardDevicePanel(page)
     await waitForStorageChainIdle(page)
-    const entryList = page.getByTestId('onboard-password-entry-list')
-    await expect(entryList).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    await entryList.getByRole('radio').first().click()
-    await page.getByTestId('onboard-password-input').fill('wrong-typo-99')
+    await page.getByTestId('onboard-passphrase-input').fill('short')
     await page.getByTestId('onboard-device-submit').click({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await expect(page.getByTestId('onboard-error')).toContainText(
-      'Failed to issue code.',
+      'at least 8 characters',
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
     await expect(page.getByTestId('onboarding-link-url')).toHaveCount(0)
-
-    // NOTE: We intentionally do not chain a "now try the correct password"
-    // assertion onto the same page. The wasm `age` 0.11.3 scrypt decryptor
-    // aborts via a `unreachable!()` trap on wrong passwords, and that trap
-    // leaves wasm-bindgen's manager borrow in an unusable state until the
-    // page is reloaded. The correct-password generate-code happy path is
-    // covered by the next test from a fresh page.
   })
 
-  test('issuing an enrollment code with the correct password renders a QR + link', async ({
+  test('issuing an identity code renders a QR + link that names no vault', async ({
     page,
     context,
   }) => {
-    await openStorageSettings(page)
-    await addVaultPassword(page, 'Enrollment test', 'hunter2-secure')
-    await expectVaultPasswordStatus(page, 1)
-
     await seedSyncProvidersWhileUnlocked(page)
 
     await openOnboardDevicePanel(page)
-    const linkInput = await submitOnboardEnrollmentCode(page, 'hunter2-secure')
-    await expect(
-      page
-        .getByTestId('onboard-wizard-generate-step')
-        .getByRole('button')
-        .first(),
-    ).toHaveAttribute('aria-expanded', 'false')
+    const linkInput = await submitOnboardEnrollmentCode(
+      page,
+      E2E_IDENTITY_PASSPHRASE,
+    )
     await expect(linkInput).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
@@ -234,13 +215,14 @@ test.describe('vault password envelope (local)', () => {
     expect(Date.parse(issuedAt)).not.toBeNaN()
     expect(Math.abs(Date.now() - Date.parse(issuedAt))).toBeLessThan(60_000)
     expect(outer.entry_id).toBeTruthy()
-    expect(outer.entry_label).toEqual({
-      label: 'Enrollment test',
-      state: 'labeled',
-    })
+    expect(outer.entry_label).toEqual({ state: 'unlabeled' })
     expect(outer.ct).toBeTruthy()
     expect(Object.hasOwn(outer, 'password')).toBe(false)
     expect(Object.hasOwn(outer, 'provider')).toBe(false)
+    expect(Object.hasOwn(outer, 'vault_name')).toBe(false)
+    await expect(page.getByTestId('onboard-passphrase-display')).toHaveText(
+      E2E_IDENTITY_PASSPHRASE,
+    )
 
     // The QR/link wraps the raw code so phone cameras open a browser tab.
     const srLink = await page.getByTestId('onboard-link').textContent()
@@ -292,7 +274,8 @@ test.describe('vault password envelope (local)', () => {
 })
 
 test.describe('enrollment link deep link (local)', () => {
-  test('opens the app and enrolls from the URL hash in a second tab', async ({
+  test('joins the identity from the URL hash and opens its vault after approval', async ({
+    browser,
     context,
   }) => {
     const pageA = await context.newPage()
@@ -303,10 +286,7 @@ test.describe('enrollment link deep link (local)', () => {
     const secretKey = uniqueSecretKey('e2e-link')
     await addSecret(pageA, secretKey, 'via-hash-enroll')
 
-    await openStorageSettings(pageA)
-    await addVaultPassword(pageA, 'Link test', 'link-pass')
-
-    // Shared file-sync stub so device B sees the same event log device A flushed.
+    // Shared file-sync stub so app B sees the logs app A flushed.
     const stub = createLocalE2eFileSyncVaultStub(
       '',
       E2E_SYNC_ONBOARD_PROVIDER.fileName,
@@ -314,41 +294,30 @@ test.describe('enrollment link deep link (local)', () => {
     await reloadUnlockLocalVaultWithSync(pageA, stub)
     await waitForSyncRemoteVaultState(
       stub,
-      (snapshot) =>
-        snapshot.secretIds.length >= 1 && snapshot.hasPasswordEnvelope,
+      (snapshot) => snapshot.secretIds.length >= 1,
     )
 
-    await openOnboardDevicePanel(pageA)
-    await submitOnboardEnrollmentCode(pageA, 'link-pass')
-    const linkText = await pageA.getByTestId('onboard-link').textContent()
-    if (typeof linkText !== 'string') {
-      throw new Error('onboarding link text was not available.')
-    }
-    const link = linkText.trim()
-    expect(link).toContain('#enroll=')
+    const issued = await issueIdentityEnrollmentCode(pageA)
+    await expect.poll(() => stub.getIdentityEventFileCount()).toBeGreaterThan(0)
 
-    const pageB = await context.newPage()
+    const contextB = await createIsolatedContext(browser)
+    const pageB = await contextB.newPage()
     await stub.install(pageB, {
       fileName: E2E_SYNC_ONBOARD_PROVIDER.fileName,
     })
-    await pageB.goto(localizeAppLinkForE2e(pageA, link))
+    await pageB.goto(localizeAppLinkForE2e(pageA, issued.link))
     await expect(pageB.getByTestId('login-gate')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await expect(pageB.getByTestId('enrollment-scan-panel')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
-    await expect(
-      pageB.getByTestId('enrollment-password-entry-hint'),
-    ).toContainText('Link test')
-    await pageB.getByTestId('enrollment-password-input').fill('link-pass')
-    await pageB.getByTestId('submit-enrollment-code-btn').click()
-    await waitForVaultUnlocked(pageB, ENROLLMENT_UNLOCK_TIMEOUT_MS)
+    await redeemIdentityEnrollmentCode(pageB, issued.passphrase)
+
+    await approveIdentityJoin(pageA, 2)
+    await openVaultAfterIdentityApproval(pageB)
     const row = pageB.getByTestId('secret-row').filter({ hasText: secretKey })
     await expect(row).toBeVisible()
 
     await pageA.close()
-    await pageB.close()
+    await contextB.close()
   })
 
   test('empty browser without auto-passkey shows onboarding, not create vault', async ({
@@ -363,9 +332,6 @@ test.describe('enrollment link deep link (local)', () => {
     const secretKey = uniqueSecretKey('e2e-link-manual')
     await addSecret(pageA, secretKey, 'via-hash-enroll-manual')
 
-    await openStorageSettings(pageA)
-    await addVaultPassword(pageA, 'Manual link test', 'manual-link-pass')
-
     const stub = createLocalE2eFileSyncVaultStub(
       '',
       E2E_SYNC_ONBOARD_PROVIDER.fileName,
@@ -373,18 +339,11 @@ test.describe('enrollment link deep link (local)', () => {
     await reloadUnlockLocalVaultWithSync(pageA, stub)
     await waitForSyncRemoteVaultState(
       stub,
-      (snapshot) =>
-        snapshot.secretIds.length >= 1 && snapshot.hasPasswordEnvelope,
+      (snapshot) => snapshot.secretIds.length >= 1,
     )
 
-    await openOnboardDevicePanel(pageA)
-    await submitOnboardEnrollmentCode(pageA, 'manual-link-pass')
-    const linkText = await pageA.getByTestId('onboard-link').textContent()
-    if (typeof linkText !== 'string') {
-      throw new Error('onboarding link text was not available.')
-    }
-    const link = linkText.trim()
-    expect(link).toContain('#enroll=')
+    const issued = await issueIdentityEnrollmentCode(pageA)
+    const link = issued.link
 
     // Fresh empty browser: deferred-passkey create landing must not win over
     // `#enroll=` onboarding (production path; e2e normally auto-creates passkeys).
@@ -418,18 +377,9 @@ test.describe('enrollment link deep link (local)', () => {
     await expect(pageB.getByTestId('passkey-auth-overlay')).toBeHidden({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await expect(pageB.getByTestId('enrollment-scan-panel')).toBeVisible()
-    await expect(
-      pageB.getByTestId('enrollment-password-entry-hint'),
-    ).toContainText('Manual link test')
-    await pageB
-      .getByTestId('enrollment-password-input')
-      .fill('manual-link-pass')
-    await pageB.getByTestId('submit-enrollment-code-btn').click()
-    await waitForVaultUnlocked(pageB, ENROLLMENT_UNLOCK_TIMEOUT_MS)
-    await expect(pageB.getByTestId('page-bar-title')).toContainText(
-      'Test vault',
-    )
+    await redeemIdentityEnrollmentCode(pageB, issued.passphrase)
+    await approveIdentityJoin(pageA, 2)
+    await openVaultAfterIdentityApproval(pageB)
     const row = pageB.getByTestId('secret-row').filter({ hasText: secretKey })
     await expect(row).toBeVisible()
 

@@ -42,7 +42,7 @@ impl NookVaultManager {
             .collect()
     }
 
-    async fn current_identity_state(&self) -> Result<IdentityControlState, NookError> {
+    pub(super) async fn current_identity_state(&self) -> Result<IdentityControlState, NookError> {
         let app_key = self.unlocked_app_key()?;
         let identity_id = Self::current_identity_id(&app_key).await?;
         let log = NookDatabase::load_identity_log(&identity_id).await?;

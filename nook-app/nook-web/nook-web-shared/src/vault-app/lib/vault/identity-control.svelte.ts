@@ -3,7 +3,6 @@ import type { OAuthFailure } from "$lib/auth/oauth-failure";
 import {
   NativeVaultStorageFailure,
   VaultStorageFailure,
-  VaultStorageFailureKind,
 } from "$lib/runtime/storage-failure";
 import {
   generate_password,
@@ -100,6 +99,15 @@ export class IdentityControlModel {
       : false;
   }
 
+  /**
+   * Apps that can open this identity's vaults. Before the identity log is
+   * projected, the open vault's roster is that same set of apps.
+   */
+  memberCount(vaultRosterCount: number): number {
+    const snapshot = this.snapshot;
+    return snapshot === false ? vaultRosterCount : snapshot.members.length;
+  }
+
   newPassphrase(): string {
     return generate_password(PASSPHRASE_OPTIONS);
   }
@@ -149,10 +157,11 @@ export class IdentityControlModel {
             storeIds: ensured.value.storeIds,
           }
         : { kind: IdentityUpgradeKind.NotNeeded };
-    return this.reloadSnapshot();
+    return this.loadSnapshot();
   }
 
-  private async reloadSnapshot(): Promise<
+  /** Project the identity log this app already holds, without creating one. */
+  async loadSnapshot(): Promise<
     Result<IdentityActionOutcome, VaultStorageFailure>
   > {
     const providers = this.providersSnapshot();
@@ -205,7 +214,7 @@ export class IdentityControlModel {
       if (synced.isErr()) return err(synced.error);
     }
     log.info("identity log synchronized with mounts");
-    return this.reloadSnapshot();
+    return this.loadSnapshot();
   }
 
   private async syncOneMount(
@@ -270,7 +279,7 @@ export class IdentityControlModel {
       manager.remove_identity_provider_mount(row),
     );
     if (removed.isErr()) return err(removed.error);
-    return removed.value ? this.syncWithMounts() : this.reloadSnapshot();
+    return removed.value ? this.syncWithMounts() : this.loadSnapshot();
   }
 
   /** Upgrade vaults that another app of this identity created, here. */
@@ -329,6 +338,33 @@ export class IdentityControlModel {
     return this.reconcileOpenVault();
   }
 
+  /**
+   * Save provider rows with the layout the identity's mount records give
+   * their targets. A joined app saved its row before it could read the log.
+   */
+  async alignProviderRows(): Promise<
+    Result<IdentityActionOutcome, VaultStorageFailure>
+  > {
+    const providers = this.providersSnapshot();
+    const aligned = await this.withManager((manager) =>
+      manager.align_identity_provider_rows(providers),
+    );
+    if (aligned.isErr()) return err(aligned.error);
+    if (
+      JSON.stringify(aligned.value.providers) ===
+      JSON.stringify(providers.providers)
+    )
+      return ok(IdentityActionOutcome.Completed);
+    const persistence: Parameters<typeof this.vault.persistProviders>[0] = {
+      replace: true,
+      providers: aligned.value.providers,
+    };
+    const persisted = await this.vault.persistProviders(persistence);
+    if (persisted.isErr()) return err(persisted.error);
+    log.info("provider rows aligned with identity mounts");
+    return ok(IdentityActionOutcome.Completed);
+  }
+
   markJoinPending(identityLabel: string): void {
     this.join = { kind: IdentityJoinKind.Pending, identityLabel };
   }
@@ -351,12 +387,14 @@ export class IdentityControlModel {
   ): Promise<
     Result<IdentityActionOutcome, VaultStorageFailure | OAuthFailure>
   > {
-    const [mount] = this.mounts;
-    if (!mount)
-      return err(
-        new VaultStorageFailure(VaultStorageFailureKind.VaultSelectionFailed),
-      );
-    const args = this.vault.providerWasmArgs(mount);
+    const aligned = await this.alignProviderRows();
+    if (aligned.isErr()) return err(aligned.error);
+    const providers = this.providersSnapshot();
+    const row = await this.withManager(async (manager) =>
+      manager.identity_vault_provider(providers, storeId),
+    );
+    if (row.isErr()) return err(row.error);
+    const args = this.vault.providerWasmArgs(row.value);
     const pageSize = this.vault.secretPageSize;
     const page = await this.withManager((manager) =>
       manager.connect_identity_vault(

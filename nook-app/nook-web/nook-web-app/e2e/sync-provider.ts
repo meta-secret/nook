@@ -385,38 +385,3 @@ export async function connectSyncGenesisDevice(
     `connectSyncGenesisDevice: icloud not wired in e2e yet (provider=${target.providerId})`,
   )
 }
-
-export async function connectSyncJoinerDevice(
-  page: Page,
-  target: SyncE2eTarget,
-) {
-  if (
-    target.providerId === E2eSyncProviderId.GoogleDrive ||
-    target.providerId === E2eSyncProviderId.File ||
-    target.providerId === E2eSyncProviderId.Local
-  ) {
-    const remote = target.stub
-    const { assertGenesisVaultOnSyncRemote, connectLocalE2eJoinerDevice } =
-      await import('./helpers')
-    await assertGenesisVaultOnSyncRemote(remote)
-    await remote.install(page, {
-      fileName: target.repoName,
-      accessToken: target.pat,
-    })
-    await connectLocalE2eJoinerDevice(page, target.repoName, target.pat)
-    return
-  }
-  if (target.providerId === E2eSyncProviderId.GitHub) {
-    const { connectGithubJoinerDevice } = await import('./helpers')
-    await connectGithubJoinerDevice(
-      page,
-      target.pat,
-      target.repoName,
-      target.stub,
-    )
-    return
-  }
-  throw new Error(
-    `connectSyncJoinerDevice: icloud not wired in e2e yet (provider=${target.providerId})`,
-  )
-}

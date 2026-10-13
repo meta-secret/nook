@@ -97,7 +97,10 @@
     secretsAddOpen = open
   }
   const vaultSecurityRecommendations = $derived(
-    assess_vault_security(vault.syncProviders.length, vault.vaultMembers.length),
+    assess_vault_security(
+      vault.syncProviders.length,
+      vault.identityControl.memberCount(vault.vaultMembers.length),
+    ),
   )
   let colorMode = $state<ColorMode>(browserColorMode.systemColorMode())
   let followsSystemColorMode = $state(true)

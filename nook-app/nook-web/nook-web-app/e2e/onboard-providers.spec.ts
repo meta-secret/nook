@@ -15,30 +15,7 @@ import {
   ManagePage,
 } from './helpers'
 
-const INLINE_ONBOARD_PASSWORD = 'onboard-pass-1'
-
-async function createOnboardPasswordInline(
-  page: import('@playwright/test').Page,
-) {
-  await expect(page.getByTestId('onboard-wizard-password-step')).toBeVisible()
-  await page.getByTestId('vault-password-label').fill('test')
-  await page.getByTestId('vault-password-input').fill(INLINE_ONBOARD_PASSWORD)
-  await page.getByTestId('vault-password-confirm').fill(INLINE_ONBOARD_PASSWORD)
-  await page.getByTestId('submit-vault-password').click()
-  await expect(page.getByTestId('app-success')).toContainText(/password/i, {
-    timeout: UI_TIMEOUT_MS,
-  })
-}
-
-async function chooseFirstOnboardPassword(
-  page: import('@playwright/test').Page,
-) {
-  const entryList = page.getByTestId('onboard-password-entry-list')
-  await expect(entryList).toBeVisible()
-  await entryList.getByRole('radio').first().click()
-}
-
-test.describe('onboard provider picker', () => {
+test.describe('identity onboarding provider picker', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/app/')
     await clearBrowserVault(page)
@@ -46,64 +23,43 @@ test.describe('onboard provider picker', () => {
     await connectLocalVault(page)
   })
 
-  test('wizard starts on vault password step when no passwords exist', async ({
+  test('asks for a sync provider before an identity code can be created', async ({
     page,
   }) => {
     await openOnboardDevicePanel(page)
 
-    await expect(page.getByTestId('onboard-wizard-password-step')).toBeVisible()
-    await expect(
-      page.getByTestId('onboard-password-prerequisite'),
-    ).toBeVisible()
-    await expect(page.getByTestId('onboard-wizard-sync-step')).toBeVisible()
-    await expect(page.getByTestId('onboard-wizard-generate-step')).toBeVisible()
+    await expect(page.getByTestId('onboard-no-identity-mount')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
     await expect(page.getByTestId('onboard-device-submit')).toHaveCount(0)
     await expect(page.getByTestId('onboard-provider-list')).toHaveCount(0)
-  })
 
-  test('wizard requires an explicit password choice before sync setup', async ({
-    page,
-  }) => {
-    await openOnboardDevicePanel(page)
-    await createOnboardPasswordInline(page)
-
-    await expect(page.getByTestId('onboard-password-prerequisite')).toHaveCount(
-      0,
-    )
-    const entryList = page.getByTestId('onboard-password-entry-list')
-    await expect(entryList).toBeVisible()
-    await expect(entryList.getByRole('radio')).toHaveCount(1)
-    await expect(page.getByTestId('add-provider-btn')).toHaveCount(0)
-    await expect(page.getByTestId('onboard-device-submit')).toHaveCount(0)
-
-    await chooseFirstOnboardPassword(page)
-
-    await expect(page.getByTestId('onboard-wizard-sync-step')).toBeVisible()
-    await expect(page.getByTestId('add-provider-btn')).toBeVisible()
-    await expect(page.getByTestId('onboard-wizard-generate-step')).toBeVisible()
-    await expect(page.getByTestId('onboard-device-submit')).toHaveCount(0)
-  })
-
-  test('generate step stays locked until a sync provider exists', async ({
-    page,
-  }) => {
-    await openOnboardDevicePanel(page)
-    await createOnboardPasswordInline(page)
-    await chooseFirstOnboardPassword(page)
-
-    await expect(page.getByTestId('add-provider-btn')).toBeVisible()
-    await expect(page.getByTestId('onboard-device-submit')).toHaveCount(0)
-
-    await seedOauthFileSyncProvidersWhileUnlocked(page)
-    await openManagePage(page, ManagePage.Devices)
-    await expect(page.getByTestId('onboard-wizard-generate-step')).toBeVisible()
-    await expect(page.getByTestId('onboard-device-submit')).toBeVisible()
-    await expect(page.getByTestId('onboard-device-submit')).toBeEnabled({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    await page.getByTestId('onboard-open-sync-btn').click()
+    await expect(page.getByTestId('storage-providers-section')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
     })
   })
 
-  test('shows file and account hints for multiple oauth-file sync providers', async ({
+  test('creates codes through an identity mount with a generated passphrase', async ({
+    page,
+  }) => {
+    await seedOauthFileSyncProvidersWhileUnlocked(page)
+    await openManagePage(page, ManagePage.Devices)
+    await expect(page.getByTestId('onboard-provider-list')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await expect(page.getByTestId('onboard-device-submit')).toBeEnabled({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+
+    const passphrase = page.getByTestId('onboard-passphrase-input')
+    const generated = await passphrase.inputValue()
+    expect(generated).toMatch(/^[A-Za-z0-9]{20}$/)
+    await page.getByTestId('onboard-new-passphrase-btn').click()
+    await expect(passphrase).not.toHaveValue(generated)
+  })
+
+  test('shows file and account hints for multiple oauth-file identity mounts', async ({
     page,
   }) => {
     const personalToken = 'ya29.e2e-personal-access-token-secret'
@@ -147,15 +103,10 @@ test.describe('onboard provider picker', () => {
     await waitForLoadedSyncProviders(page, 2)
 
     await openOnboardDevicePanel(page)
-    await createOnboardPasswordInline(page)
-    await chooseFirstOnboardPassword(page)
-
-    await page
-      .getByTestId('onboard-wizard-sync-step')
-      .getByRole('button')
-      .click()
     const providerList = page.getByTestId('onboard-provider-list')
-    await expect(providerList).toBeVisible()
+    await expect(providerList).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
 
     const personal = page.getByTestId('onboard-provider-file-personal')
     const work = page.getByTestId('onboard-provider-file-work')
@@ -177,15 +128,5 @@ test.describe('onboard provider picker', () => {
     await work.click()
     await expect(work).toHaveAttribute('aria-checked', 'true')
     await expect(personal).toHaveAttribute('aria-checked', 'false')
-  })
-
-  test('sync step offers inline add-provider flow', async ({ page }) => {
-    await openOnboardDevicePanel(page)
-    await createOnboardPasswordInline(page)
-    await chooseFirstOnboardPassword(page)
-
-    await page.getByTestId('add-provider-btn').click()
-    await expect(page.getByTestId('provider-picker-list')).toBeVisible()
-    await expect(page.getByTestId('provider-option-github')).toBeVisible()
   })
 })

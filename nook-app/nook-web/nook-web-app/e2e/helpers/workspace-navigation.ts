@@ -26,6 +26,8 @@ const MANAGE_PAGE_MARKERS: Record<ManagePage, string> = {
 const IDENTITY_PAGES: ReadonlySet<ManagePage> = new Set([
   ManagePage.Keys,
   ManagePage.Vaults,
+  ManagePage.Devices,
+  ManagePage.Sync,
   ManagePage.Settings,
 ])
 

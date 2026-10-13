@@ -748,10 +748,6 @@ export function parseVaultEventLogSnapshot(
   return parseVaultYamlSnapshot(projectionLikeYaml)
 }
 
-export function joinCountFromYaml(yaml: string): number {
-  return parseVaultYamlSnapshot(yaml).joinEntries.length
-}
-
 export function assertGenesisVaultYaml(snapshot: VaultYamlSnapshot) {
   if (snapshot.authPkIds.length < 1) {
     throw new Error('Expected at least one auth pk_id in genesis vault')
@@ -773,58 +769,6 @@ export function assertGenesisVaultYaml(snapshot: VaultYamlSnapshot) {
   }
   if (snapshot.raw.includes('dek:') || snapshot.raw.includes('dec:')) {
     throw new Error('Vault must not use unsupported dek/dec fields')
-  }
-}
-
-export function assertJoinPendingYaml(
-  snapshot: VaultYamlSnapshot,
-  deviceId?: string,
-) {
-  if (snapshot.joinEntries.length < 1) {
-    throw new Error('Expected a pending join entry in vault YAML')
-  }
-  const join = deviceId
-    ? snapshot.joinEntries.find((entry) => entry.deviceId === deviceId)
-    : snapshot.joinEntries[0]
-  if (!join) {
-    throw new Error(
-      `Join request for device ${((...[v = '(any)']) => v)(deviceId)} not found`,
-    )
-  }
-  if (!join.publicKey.startsWith('age1')) {
-    throw new Error('Join request must include age1 public_key while pending')
-  }
-  // Simple vaults keep genesis auth while a join is pending. Sentinel genesis
-  // never writes auth envelopes, so an empty auth section is expected there.
-}
-
-export function assertEnrolledVaultYaml(
-  snapshot: VaultYamlSnapshot,
-  expectedMembers: number,
-) {
-  if (snapshot.joinEntries.length > 0) {
-    throw new Error('Approved vault must not contain pending joins')
-  }
-  if (snapshot.authPkIds.length !== expectedMembers) {
-    throw new Error(
-      `Expected ${expectedMembers} auth entries, got ${snapshot.authPkIds.length}`,
-    )
-  }
-  if (snapshot.memberPkIds.length !== expectedMembers) {
-    throw new Error(
-      `Expected ${expectedMembers} members entries, got ${snapshot.memberPkIds.length}`,
-    )
-  }
-
-  const parsed: unknown = parseYaml(snapshot.raw)
-  const vault = vaultYamlDecoder.decodeStoredVault(parsed)
-  const authHasPlaintextAgeKey = ((v) => (v ? v : []))(vault.auth).some(
-    (record) =>
-      record.secrets_key.includes('age1') ||
-      record.members_key.includes('age1'),
-  )
-  if (authHasPlaintextAgeKey) {
-    throw new Error('Auth section must not store plaintext age1 public keys')
   }
 }
 

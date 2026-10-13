@@ -360,7 +360,7 @@ export class IdentityEnrollmentIssue {
                 if (admittedManager.isErr())
                   return storageErr(admittedManager.error);
                 try {
-                  await admittedManager.value.sync_identity_log_with_provider(
+                  await admittedManager.value.flush_event_outbox_for_provider(
                     targetArgs.mode,
                     targetArgs.pat,
                     targetArgs.repo,
@@ -388,7 +388,7 @@ export class IdentityEnrollmentIssue {
             if (admittedManager.isErr())
               return storageErr(admittedManager.error);
             try {
-              await admittedManager.value.sync_identity_log_with_provider(
+              await admittedManager.value.flush_event_outbox_for_provider(
                 targetArgs.mode,
                 targetArgs.pat,
                 targetArgs.repo,
@@ -404,6 +404,12 @@ export class IdentityEnrollmentIssue {
           });
           if (flushed.isErr()) return storageErr(flushed.error);
         }
+      }
+      if (sharedStorageTarget.kind === SharedStorageTargetKind.Bound) {
+        // The shared target is a new identity mount: record it and publish
+        // the identity log there before the joiner reads it.
+        const mounted = await state.identityControl.syncWithMounts();
+        if (mounted.isErr()) return storageErr(mounted.error);
       }
       let provider: NookEnrollmentProvider;
       try {

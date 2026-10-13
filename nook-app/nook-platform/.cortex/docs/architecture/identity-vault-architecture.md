@@ -469,6 +469,9 @@ already one local identity's storage. Each row records its remote layout.
   - The identity log records each remote row's credential-free target.
   - A joining installation sees recorded mounts it has not connected and
     connects each with its own credential.
+  - A joining installation saves its row before it can read the log. Once
+    the log arrives, the row takes the layout recorded for its target: a
+    namespaced record wins, and a legacy record binds the row to that vault.
 
 **Prohibited:** add a GitHub provider while vault A is open and leave vault B
 of the same identity without replication.

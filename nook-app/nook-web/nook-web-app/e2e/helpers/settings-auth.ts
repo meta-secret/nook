@@ -360,10 +360,13 @@ export async function expectNoVaultPasswords(
   })
 }
 
-/** Issue an onboard enrollment code and return the onboarding link input locator. */
+/**
+ * Issue an identity enrollment code with a one-time passphrase and return the
+ * onboarding link input locator. The joining app enters the same passphrase.
+ */
 export async function submitOnboardEnrollmentCode(
   page: Page,
-  password: string,
+  passphrase: string,
 ) {
   await assertVaultReady(page)
   await waitForVaultOperationsIdle(page)
@@ -372,14 +375,10 @@ export async function submitOnboardEnrollmentCode(
     timeout: UI_TIMEOUT_MS,
   })
   await dismissSyncConflictIfVisible(page)
-  const entryList = page.getByTestId('onboard-password-entry-list')
-  if (await entryList.isVisible()) {
-    await entryList.getByRole('radio').first().click()
-  }
   await expect(page.getByTestId('onboard-device-submit')).toBeEnabled({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-  await page.getByTestId('onboard-password-input').fill(password)
+  await page.getByTestId('onboard-passphrase-input').fill(passphrase)
   await page.getByTestId('onboard-device-submit').click()
 
   const linkInput = page.getByTestId('onboarding-link-url')

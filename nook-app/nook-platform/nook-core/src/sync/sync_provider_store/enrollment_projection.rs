@@ -3,7 +3,8 @@ use crate::{
     EnrollmentProvider, EnrollmentProviderDataRef, OAuthAccountIdentity, OAuthFileConfigData,
     OAuthRefreshCredential, OAuthRemoteFile, OAuthTokenExpiry, OauthFilePreset,
     PersonalEnrollmentProviderData, StoredOAuthAccessCredential, StoredOAuthAccountIdentity,
-    StoredOAuthRefreshCredential, StoredOAuthRemoteFileId, StoredOAuthRemoteFileName,
+    StoredGoogleDrivePrivateTarget, StoredOAuthRefreshCredential, StoredOAuthRemoteFileId,
+    StoredOAuthRemoteFileName,
     StoredOAuthTokenExpiry, ValidationError,
 };
 
@@ -62,6 +63,26 @@ impl EnrollmentOAuthConfigurationRequest<'_> {
                 StoredOAuthRemoteFileName::FileName(file_name.clone()),
             ),
         };
+        // A private Drive code carries its event folder as a connect reference.
+        let file_id = match file_id {
+            StoredOAuthRemoteFileId::FileId(reference)
+                if reference == crate::DRIVE_PRIVATE_FOLDER_PENDING_REF =>
+            {
+                config.drive_private_target = StoredGoogleDrivePrivateTarget::Pending;
+                StoredOAuthRemoteFileId::Unresolved
+            }
+            StoredOAuthRemoteFileId::FileId(reference) => {
+                match reference.strip_prefix(crate::DRIVE_PRIVATE_FOLDER_REF_PREFIX) {
+                    Some(folder_id) => {
+                        config.drive_private_target =
+                            StoredGoogleDrivePrivateTarget::FolderId(folder_id.to_owned());
+                        StoredOAuthRemoteFileId::Unresolved
+                    }
+                    None => StoredOAuthRemoteFileId::FileId(reference),
+                }
+            }
+            StoredOAuthRemoteFileId::Unresolved => StoredOAuthRemoteFileId::Unresolved,
+        };
         config.file_id = file_id;
         config.file_name = file_name;
         config.account_email = match account {
@@ -87,6 +108,48 @@ mod tests {
             Err(EnrollmentOAuthConfigurationError::NotPersonalOAuth)
         ));
     }
+    #[test]
+    fn private_drive_codes_restore_the_joiners_event_folder() -> anyhow::Result<()> {
+        let project = |file_id: &str| {
+            EnrollmentOAuthConfigurationRequest {
+                provider: &EnrollmentProvider::personal(PersonalEnrollmentProvider::oauth_file(
+                    "google-drive".into(),
+                    "access".into(),
+                    OAuthRefreshCredential::NotIssued,
+                    OAuthTokenExpiry::Unknown,
+                    OAuthRemoteFile::Identified {
+                        file_id: file_id.into(),
+                        file_name: "nook-events".into(),
+                    },
+                    OAuthAccountIdentity::Unknown,
+                )),
+                defaults: OAuthFileConfigData::default(),
+            }
+            .project()
+        };
+        let folder = project("private-folder-v2:folder-abc")?;
+        assert_eq!(
+            folder.drive_private_target,
+            StoredGoogleDrivePrivateTarget::FolderId("folder-abc".into())
+        );
+        assert_eq!(folder.file_id, StoredOAuthRemoteFileId::Unresolved);
+        let pending = project("private-folder-v2:pending")?;
+        assert_eq!(
+            pending.drive_private_target,
+            StoredGoogleDrivePrivateTarget::Pending
+        );
+        let legacy = project("legacy-file-id")?;
+        assert_eq!(
+            legacy.file_id,
+            StoredOAuthRemoteFileId::FileId("legacy-file-id".into())
+        );
+        assert_eq!(
+            legacy.drive_private_target,
+            OAuthFileConfigData::default().drive_private_target
+        );
+        Ok(())
+    }
+
     #[test]
     fn oauth_projection_preserves_missing_state_and_complete_remote_identity() -> anyhow::Result<()>
     {

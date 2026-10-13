@@ -5,7 +5,7 @@ browser yet. Opening one pulls it from an identity mount and self-enrolls.
 -->
 <script lang="ts">
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
-  import { onMount } from "svelte";
+  import { untrack } from "svelte";
   import { Clock, LockOpen, RefreshCw } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button";
   import type { VaultState } from "$lib/vault.svelte";
@@ -45,12 +45,20 @@ browser yet. Opening one pulls it from an identity mount and self-enrolls.
     if (opened.isErr()) vault.errorMsg = vault.t(opened.error.translationKey);
   }
 
-  onMount(() => {
-    if (!vault.hasManager || vault.isAuthenticated) return;
-    void control.refresh().then((refreshed) => {
-      // The hub opens before the device key is unlocked; the panel stays
-      // hidden until a later refresh succeeds.
-      if (refreshed.isErr()) log.info("identity snapshot not available yet");
+  let snapshotRequested = false;
+  // Read the identity log this app already holds once the app key is
+  // unlocked. Reading never creates a log: a fresh app that redeems a code
+  // must still be free to join the invited identity.
+  $effect(() => {
+    const ready =
+      vault.hasManager &&
+      !vault.isInitializing &&
+      !vault.isAuthenticated &&
+      vault.deviceProtectionReady;
+    if (!ready || snapshotRequested) return;
+    snapshotRequested = true;
+    void untrack(() => control.loadSnapshot()).then((loaded) => {
+      if (loaded.isErr()) log.info("identity snapshot not available yet");
     });
   });
 </script>
