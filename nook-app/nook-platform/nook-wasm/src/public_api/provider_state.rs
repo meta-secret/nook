@@ -346,7 +346,7 @@ impl NookStagedStorageArgs {
 
     /// Connect arguments addressed at the remote layout the staged provider
     /// row will be saved with.
-    #[wasm_bindgen(js_name = argsForLayout)]
+    #[wasm_bindgen]
     pub fn args_for_layout(
         &self,
         layout: &tsify::Ts<nook_core::ProviderRowLayout>,

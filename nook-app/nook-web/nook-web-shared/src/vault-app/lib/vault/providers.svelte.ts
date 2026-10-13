@@ -281,7 +281,7 @@ export class VaultProviderActions {
       return staged.state === NookStagedStorageArgsState.Ready
         ? {
             kind: StagedRemoteStorageKind.Available,
-            args: staged.argsForLayout(state.providerSaveLayout),
+            args: staged.args_for_layout(state.providerSaveLayout),
           }
         : { kind: StagedRemoteStorageKind.Unavailable };
     } finally {

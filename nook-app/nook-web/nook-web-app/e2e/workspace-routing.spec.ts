@@ -278,8 +278,8 @@ test.describe('persistent workspace routing', () => {
     await connectLocalVault(page)
 
     await page.getByTestId('vault-manage-btn').click()
-    await page.getByTestId('manage-nav-sync').click()
-    await expect(page).toHaveURL(/\/vault\/sync$/)
+    await page.getByTestId('manage-nav-import').click()
+    await expect(page).toHaveURL(/\/vault\/import$/)
     await page.getByTestId('page-bar-back').click()
     await expect(page).toHaveURL(/\/vault$/)
     await expect(page.getByTestId('vault-panel')).toBeVisible()

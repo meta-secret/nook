@@ -38,7 +38,7 @@ identity upgrade notices, and adding a new app through an identity mount.
   }
 
   onMount(() => {
-    void control.refresh().then((refreshed) => {
+    void control.followOpenVault().then((refreshed) => {
       if (refreshed.isErr()) reportFailure(refreshed.error.translationKey);
     });
   });

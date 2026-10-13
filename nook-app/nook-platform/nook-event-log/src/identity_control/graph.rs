@@ -359,3 +359,99 @@ impl IdentityControlLog {
             .collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::too_many_lines)]
+
+    use crate::identity_control::test_fixtures::*;
+
+    #[test]
+    fn outsiders_can_only_request_to_join() -> anyhow::Result<()> {
+        let mut fixture = Fixture::new()?;
+        let outsider = Installation::new()?;
+        let (_, status) = fixture.append(
+            &outsider,
+            vec![rename(fixture.founder.app.app_id(), "Taken over")],
+        )?;
+        assert!(matches!(
+            status,
+            IdentityEventInsertStatus::Quarantined { .. }
+        ));
+        assert_eq!(
+            member_label(&fixture.state()?, fixture.founder.app.app_id()),
+            "Laptop"
+        );
+
+        // A join request must be signed by the member it names.
+        let impersonated = fixture.log.build_append(
+            vec![IdentityControlOperation::MemberJoinRequested {
+                member: Installation::new()?.keys("Someone else"),
+            }],
+            &outsider.signing(&fixture.at),
+        )?;
+        assert!(fixture.log.clone().insert(impersonated).is_err());
+
+        // An outsider cannot approve itself.
+        let self_approval = fixture.log.build_append(
+            vec![IdentityControlOperation::MemberApproved {
+                member: outsider.keys("Intruder"),
+                vault_deks: Vec::new(),
+            }],
+            &outsider.signing(&fixture.at),
+        )?;
+        let inserted = fixture.log.clone().insert(self_approval)?;
+        assert!(matches!(
+            inserted.status,
+            IdentityEventInsertStatus::Quarantined { .. }
+        ));
+        assert_eq!(
+            IdentityControlState::project(&inserted.log)?.members.len(),
+            1
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn concurrent_revocation_wins_over_concurrent_reapproval() -> anyhow::Result<()> {
+        let mut fixture = Fixture::new()?;
+        let second = Installation::new()?;
+        fixture.request_join(&second)?;
+        let approval = fixture
+            .state()?
+            .approval_operation(&IdentityApprovalRequest {
+                app_id: second.app.app_id(),
+                vaults: &[],
+            })?;
+        let founder = fixture.founder();
+        fixture.append(&founder, vec![approval])?;
+
+        // Two members act concurrently from the same heads.
+        let base = fixture.log.clone();
+        let revoke = base.build_append(
+            vec![IdentityControlOperation::MemberRevoked {
+                app_id: second.app.app_id().clone(),
+            }],
+            &founder.signing(&fixture.at),
+        )?;
+        let reapprove = base.build_append(
+            vec![IdentityControlOperation::MemberApproved {
+                member: second.keys("Phone"),
+                vault_deks: Vec::new(),
+            }],
+            &second.signing(&fixture.at),
+        )?;
+        let one_order = base
+            .clone()
+            .insert(revoke.clone())?
+            .log
+            .insert(reapprove.clone())?
+            .log;
+        let other_order = base.insert(reapprove)?.log.insert(revoke)?.log;
+        let first = IdentityControlState::project(&one_order)?;
+        let second_state = IdentityControlState::project(&other_order)?;
+        assert_eq!(first, second_state);
+        assert!(first.member(second.app.app_id()).is_none());
+        Ok(())
+    }
+}

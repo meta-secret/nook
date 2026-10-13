@@ -456,3 +456,57 @@ impl IdentityEvent {
             .map_err(|e| EventError::ParseStoredEvent(format!("YAML parse failed: {e}")))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::too_many_lines)]
+
+    use crate::identity_control::test_fixtures::*;
+
+    #[test]
+    fn envelopes_bind_to_one_identity_and_one_founder_genesis() -> anyhow::Result<()> {
+        let fixture = Fixture::new()?;
+        let other = IdentityControlLog::new(IdentityId::generate()?);
+        let foreign = fixture.log.build_append(
+            vec![rename(fixture.founder.app.app_id(), "Elsewhere")],
+            &fixture.founder.signing(&fixture.at),
+        )?;
+        assert!(other.insert(foreign).is_err());
+
+        let impostor = Installation::new()?;
+        let forged_genesis = IdentityEvent::genesis(IdentityGenesisRequest {
+            identity_id: &fixture.identity_id,
+            founder: fixture.founder.keys("Laptop"),
+            signing: impostor.signing(&fixture.at),
+        })?;
+        assert!(
+            IdentityControlLog::new(fixture.identity_id.clone())
+                .insert(forged_genesis)
+                .is_err()
+        );
+
+        let second_genesis = IdentityEvent::genesis(IdentityGenesisRequest {
+            identity_id: &fixture.identity_id,
+            founder: impostor.keys("Other"),
+            signing: impostor.signing(&fixture.at),
+        })?;
+        assert!(matches!(
+            fixture.log.clone().insert(second_genesis),
+            Err(rejection) if matches!(rejection.cause, EventError::MultipleGenesisRoots)
+        ));
+
+        let mut bytes = fixture
+            .log
+            .storage_bytes()?
+            .into_iter()
+            .map(|(_, bytes)| bytes)
+            .collect::<Vec<_>>();
+        let tampered = String::from_utf8(Vec::from(bytes.remove(0)))?.replace("Laptop", "Stolen");
+        assert!(
+            IdentityControlLog::new(fixture.identity_id.clone())
+                .union_storage_bytes(&[tampered.into_bytes().into()])
+                .is_err()
+        );
+        Ok(())
+    }
+}

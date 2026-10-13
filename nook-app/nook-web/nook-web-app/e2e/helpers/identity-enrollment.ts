@@ -105,17 +105,31 @@ export async function openVaultAfterIdentityApproval(
   page: Page,
 ): Promise<void> {
   const openVault = page.getByTestId('identity-open-vault-btn').first()
-  await expect
-    .poll(
-      async () => {
-        if (await openVault.isVisible()) return true
-        const check = page.getByTestId('identity-join-check-btn')
-        if (await check.isEnabled()) await check.click()
-        return openVault.isVisible()
-      },
-      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
-    )
-    .toBe(true)
+  try {
+    await expect
+      .poll(
+        async () => {
+          if (await openVault.isVisible()) return true
+          const check = page.getByTestId('identity-join-check-btn')
+          if (await check.isVisible()) await check.click()
+          return openVault.isVisible()
+        },
+        { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+      )
+      .toBe(true)
+  } catch (error) {
+    const state = await page.evaluate(() => {
+      const vault = window.__nookVault
+      return JSON.stringify({
+        error: vault?.errorMsg,
+        snapshot: vault?.identityControl?.snapshot,
+        join: vault?.identityControl?.join,
+      })
+    })
+    console.log(`[openVaultAfterIdentityApproval] joiner state: ${state}`)
+    await dumpNookLogs(page, 'openVaultAfterIdentityApproval')
+    throw error
+  }
   await openVault.click()
   await waitForVaultUnlocked(page, ENROLLMENT_UNLOCK_TIMEOUT_MS)
 }

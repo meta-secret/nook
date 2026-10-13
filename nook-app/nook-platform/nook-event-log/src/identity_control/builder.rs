@@ -232,3 +232,158 @@ impl IdentityControlState {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::too_many_lines)]
+
+    use crate::identity_control::test_fixtures::*;
+
+    #[test]
+    fn approval_wraps_every_owned_vault_dek_to_the_joiner() -> anyhow::Result<()> {
+        let mut fixture = Fixture::new()?;
+        let first_keys = VaultKeys::generate()?;
+        let second_keys = VaultKeys::generate()?;
+        let first = StoreId::generate()?;
+        let second = StoreId::generate()?;
+        let first_epoch = fixture.register_vault(&first_keys, &first)?;
+        let second_epoch = fixture.register_vault(&second_keys, &second)?;
+
+        let joiner = Installation::new()?;
+        fixture.request_join(&joiner)?;
+        let state = fixture.state()?;
+        assert_eq!(state.pending_joins.len(), 1);
+
+        let incomplete = state.approval_operation(&IdentityApprovalRequest {
+            app_id: joiner.app.app_id(),
+            vaults: &[OpenedVaultDek {
+                store_id: &first,
+                key_epoch: &first_epoch,
+                keys: &first_keys,
+            }],
+        });
+        assert!(matches!(
+            incomplete,
+            Err(EventError::IdentityApprovalIncomplete { store_id }) if store_id == second.as_str()
+        ));
+
+        let approval = state.approval_operation(&IdentityApprovalRequest {
+            app_id: joiner.app.app_id(),
+            vaults: &[
+                OpenedVaultDek {
+                    store_id: &first,
+                    key_epoch: &first_epoch,
+                    keys: &first_keys,
+                },
+                OpenedVaultDek {
+                    store_id: &second,
+                    key_epoch: &second_epoch,
+                    keys: &second_keys,
+                },
+            ],
+        })?;
+        let founder = fixture.founder();
+        fixture.append(&founder, vec![approval])?;
+
+        let state = fixture.state()?;
+        assert!(state.pending_joins.is_empty());
+        assert_eq!(state.members.len(), 2);
+        for (store_id, keys) in [(&first, &first_keys), (&second, &second_keys)] {
+            let vault = state
+                .vault(store_id)
+                .ok_or_else(|| anyhow::anyhow!("vault must stay registered"))?;
+            let IdentityVaultDekLookup::Granted(dek) = vault.current_dek_for(joiner.app.app_id())
+            else {
+                anyhow::bail!("joiner must hold the current DEK of {store_id}");
+            };
+            assert_eq!(
+                joiner.app.decrypt_envelope(&dek.secrets_key_ciphertext)?,
+                keys.secrets_key
+            );
+            assert_eq!(
+                joiner.app.decrypt_envelope(&dek.members_key_ciphertext)?,
+                keys.members_key
+            );
+        }
+
+        // The approved joiner may now act for the identity.
+        let (_, status) = fixture.append(&joiner, vec![rename(joiner.app.app_id(), "Pixel")])?;
+        assert_eq!(status, IdentityEventInsertStatus::Applied);
+        assert_eq!(
+            member_label(&fixture.state()?, joiner.app.app_id()),
+            "Pixel"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn revocation_drops_envelopes_and_blocks_later_actions() -> anyhow::Result<()> {
+        let mut fixture = Fixture::new()?;
+        let keys = VaultKeys::generate()?;
+        let store_id = StoreId::generate()?;
+        let key_epoch = fixture.register_vault(&keys, &store_id)?;
+        let joiner = Installation::new()?;
+        fixture.request_join(&joiner)?;
+        let approval = fixture
+            .state()?
+            .approval_operation(&IdentityApprovalRequest {
+                app_id: joiner.app.app_id(),
+                vaults: &[OpenedVaultDek {
+                    store_id: &store_id,
+                    key_epoch: &key_epoch,
+                    keys: &keys,
+                }],
+            })?;
+        let founder = fixture.founder();
+        fixture.append(&founder, vec![approval])?;
+
+        let revoke = fixture.state()?.revocation_operation(joiner.app.app_id())?;
+        fixture.append(&founder, vec![revoke])?;
+        let state = fixture.state()?;
+        assert_eq!(state.members.len(), 1);
+        assert_eq!(state.revoked, vec![joiner.app.app_id().clone()]);
+        let vault = state
+            .vault(&store_id)
+            .ok_or_else(|| anyhow::anyhow!("vault must stay registered"))?;
+        assert!(matches!(
+            vault.current_dek_for(joiner.app.app_id()),
+            IdentityVaultDekLookup::NotGranted
+        ));
+
+        let (_, status) =
+            fixture.append(&joiner, vec![rename(joiner.app.app_id(), "Revoked rename")])?;
+        assert!(matches!(
+            status,
+            IdentityEventInsertStatus::Quarantined { .. }
+        ));
+        assert!(matches!(
+            fixture.state()?.revocation_operation(founder.app.app_id()),
+            Err(EventError::IdentityControlInvalid(_))
+        ));
+
+        // A rotated vault epoch is rewrapped to remaining members only.
+        let rotated = VaultKeys::generate()?;
+        let rotated_epoch = epoch_id("rotation")?;
+        let rewrap = fixture.state()?.vault_rewrap_operation(&OpenedVaultDek {
+            store_id: &store_id,
+            key_epoch: &rotated_epoch,
+            keys: &rotated,
+        })?;
+        fixture.append(&founder, vec![rewrap])?;
+        let state = fixture.state()?;
+        let vault = state
+            .vault(&store_id)
+            .ok_or_else(|| anyhow::anyhow!("vault must stay registered"))?;
+        assert_eq!(vault.current_key_epoch, rotated_epoch);
+        let IdentityVaultDekLookup::Granted(dek) = vault.current_dek_for(founder.app.app_id())
+        else {
+            anyhow::bail!("founder must hold the rotated DEK");
+        };
+        assert_eq!(
+            founder.app.decrypt_envelope(&dek.secrets_key_ciphertext)?,
+            rotated.secrets_key
+        );
+        assert!(state.members_missing_current_dek(&store_id).is_empty());
+        Ok(())
+    }
+}

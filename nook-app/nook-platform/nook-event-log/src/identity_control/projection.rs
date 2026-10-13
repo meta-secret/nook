@@ -321,3 +321,128 @@ impl IdentityControlState {
             .collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::too_many_lines)]
+
+    use crate::identity_control::test_fixtures::*;
+
+    #[test]
+    fn founder_creates_identity_and_owns_it_alone() -> anyhow::Result<()> {
+        let fixture = Fixture::new()?;
+        let state = fixture.state()?;
+        assert_eq!(member_label(&state, fixture.founder.app.app_id()), "Laptop");
+        assert_eq!(state.members.len(), 1);
+        assert!(state.member(fixture.founder.app.app_id()).is_some());
+        assert!(state.pending_joins.is_empty());
+        assert_eq!(state.heads.len(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn projection_is_independent_of_delivery_order_and_resolves_pending_parents()
+    -> anyhow::Result<()> {
+        let mut fixture = Fixture::new()?;
+        let store_id = StoreId::generate()?;
+        fixture.register_vault(&VaultKeys::generate()?, &store_id)?;
+        let joiner = Installation::new()?;
+        fixture.request_join(&joiner)?;
+        let founder = fixture.founder();
+        let mount = IdentityProviderMount {
+            mount_id: ProviderMountId::generate()?,
+            label: "Backup repo".to_owned(),
+            target: IdentityMountTarget::Github {
+                repository: "owner/nook-backup".to_owned(),
+            },
+            layout: ProviderMountLayout::Namespaced,
+        };
+        fixture.append(
+            &founder,
+            vec![IdentityControlOperation::ProviderMounted {
+                mount: mount.clone(),
+            }],
+        )?;
+        let expected = fixture.state()?;
+        assert_eq!(expected.mounts, vec![mount.clone()]);
+
+        let mut stored = fixture
+            .log
+            .storage_bytes()?
+            .into_iter()
+            .map(|(_, bytes)| bytes)
+            .collect::<Vec<EventStorageBytes>>();
+        stored.reverse();
+        let reversed =
+            IdentityControlLog::new(fixture.identity_id.clone()).union_storage_bytes(&stored)?;
+        assert_eq!(IdentityControlState::project(&reversed)?, expected);
+
+        // A child that arrives before its parent stays pending, then applies.
+        let child = fixture.log.build_append(
+            vec![IdentityControlOperation::ProviderUnmounted {
+                mount_id: mount.mount_id.clone(),
+            }],
+            &founder.signing(&fixture.at),
+        )?;
+        let grandchild_parent = child.id()?;
+        let without_parent =
+            IdentityControlLog::new(fixture.identity_id.clone()).union_storage_bytes(&stored)?;
+        let mut detached = without_parent.clone();
+        let orphan = {
+            let mut log_with_child = fixture.log.clone().insert(child.clone())?.log;
+            let orphan = log_with_child.build_append(
+                vec![rename(founder.app.app_id(), "Renamed")],
+                &founder.signing(&fixture.at),
+            )?;
+            log_with_child = log_with_child.insert(orphan.clone())?.log;
+            assert_eq!(
+                member_label(
+                    &IdentityControlState::project(&log_with_child)?,
+                    founder.app.app_id()
+                ),
+                "Renamed"
+            );
+            orphan
+        };
+        assert!(orphan.body.parents.contains(&grandchild_parent));
+        let pending = detached.insert(orphan)?;
+        assert!(matches!(
+            pending.status,
+            IdentityEventInsertStatus::Pending { .. }
+        ));
+        detached = pending.log;
+        assert_eq!(IdentityControlState::project(&detached)?, expected);
+        detached = detached.insert(child)?.log;
+        let resolved = IdentityControlState::project(&detached)?;
+        assert!(resolved.mounts.is_empty());
+        assert_eq!(member_label(&resolved, founder.app.app_id()), "Renamed");
+        Ok(())
+    }
+
+    #[test]
+    fn denied_and_rerequested_joins_follow_causal_resolution() -> anyhow::Result<()> {
+        let mut fixture = Fixture::new()?;
+        let joiner = Installation::new()?;
+        fixture.request_join(&joiner)?;
+        let deny = fixture.state()?.denial_operation(joiner.app.app_id())?;
+        let founder = fixture.founder();
+        fixture.append(&founder, vec![deny])?;
+        assert!(fixture.state()?.pending_joins.is_empty());
+        assert!(
+            fixture
+                .state()?
+                .denial_operation(joiner.app.app_id())
+                .is_err()
+        );
+
+        fixture.request_join(&joiner)?;
+        let state = fixture.state()?;
+        assert_eq!(state.pending_joins.len(), 1);
+        assert!(
+            state
+                .members_missing_current_dek(&StoreId::generate()?)
+                .is_empty()
+        );
+        Ok(())
+    }
+}

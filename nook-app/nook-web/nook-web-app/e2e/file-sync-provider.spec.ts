@@ -126,6 +126,8 @@ test.describe('file sync provider event log', () => {
     })
     await expectFileTargetsToHaveSameEvents([commonVault, commonVaultBackup])
 
+    // The joining browser reaches the identity through the common vault mount.
+    await installSyncRemote(deviceB, commonVault)
     await joinIdentityThroughCode({
       member: deviceA,
       joiner: deviceB,

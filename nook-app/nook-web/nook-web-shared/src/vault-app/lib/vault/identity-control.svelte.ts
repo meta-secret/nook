@@ -246,7 +246,18 @@ export class IdentityControlModel {
     }
   }
 
-  approve(appId: string) {
+  /**
+   * Approve a join. The open vault is registered with the identity first, so
+   * the approval wraps its DEK for the new app.
+   */
+  async approve(
+    appId: string,
+  ): Promise<Result<IdentityActionOutcome, VaultStorageFailure>> {
+    const reconciled = await this.reconcileOpenVault();
+    if (reconciled.isErr()) {
+      this.report(reconciled.error);
+      return reconciled;
+    }
     return this.act((manager) => manager.approve_identity_join(appId));
   }
 

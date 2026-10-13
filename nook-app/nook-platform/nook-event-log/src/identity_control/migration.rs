@@ -130,3 +130,136 @@ impl IdentityControlMigration<'_> {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::too_many_lines)]
+
+    use crate::identity_control::test_fixtures::*;
+
+    #[test]
+    fn migration_carries_authorized_vault_devices_into_the_identity() -> anyhow::Result<()> {
+        use crate::{VaultAuthorizedRoster, VaultRosterMember};
+
+        let identity_id = IdentityId::generate()?;
+        let at = IsoTimestamp::from_trusted("2026-10-12T00:00:00Z".to_owned());
+        let founder = Installation::new()?;
+        let phone = Installation::new()?;
+        let tablet = Installation::new()?;
+        let roster_member = |installation: &Installation, label: &str| VaultRosterMember {
+            device_id: installation.app.app_id().clone(),
+            encryption_public_key: installation.app.public_key(),
+            signing_public_key: public_key(&installation.signer),
+            label: MemberLabel::from_trusted(label.to_owned()),
+        };
+        let malformed = VaultRosterMember {
+            device_id: nook_auth2::AppId::parse("0123456789abcdef")?,
+            encryption_public_key: phone.app.public_key(),
+            signing_public_key: public_key(&phone.signer),
+            label: MemberLabel::from_trusted("Mismatched".to_owned()),
+        };
+        let personal_roster = VaultAuthorizedRoster {
+            members: vec![
+                roster_member(&founder, "Laptop"),
+                roster_member(&phone, "Phone"),
+                roster_member(&tablet, "Tablet"),
+                malformed,
+            ],
+            revoked: Vec::new(),
+        };
+        let work_roster = VaultAuthorizedRoster {
+            members: vec![roster_member(&founder, "Laptop")],
+            revoked: vec![tablet.app.app_id().clone()],
+        };
+        let personal_keys = VaultKeys::generate()?;
+        let work_keys = VaultKeys::generate()?;
+        let personal = StoreId::generate()?;
+        let work = StoreId::generate()?;
+        let personal_epoch = epoch_id("personal")?;
+        let work_epoch = epoch_id("work")?;
+        let mount = IdentityProviderMount {
+            mount_id: ProviderMountId::generate()?,
+            label: "GitHub".to_owned(),
+            target: IdentityMountTarget::Github {
+                repository: "owner/personal".to_owned(),
+            },
+            layout: ProviderMountLayout::LegacySingleVault {
+                store_id: personal.clone(),
+            },
+        };
+        let vaults = [
+            LegacyVaultMembership {
+                dek: OpenedVaultDek {
+                    store_id: &personal,
+                    key_epoch: &personal_epoch,
+                    keys: &personal_keys,
+                },
+                roster: &personal_roster,
+            },
+            LegacyVaultMembership {
+                dek: OpenedVaultDek {
+                    store_id: &work,
+                    key_epoch: &work_epoch,
+                    keys: &work_keys,
+                },
+                roster: &work_roster,
+            },
+        ];
+        let outcome = IdentityControlMigration {
+            identity_id: &identity_id,
+            founder: founder.keys("Laptop"),
+            vaults: &vaults,
+            mounts: vec![mount.clone()],
+            signing: founder.signing(&at),
+        }
+        .events()?;
+        assert_eq!(outcome.events.len(), 2);
+        assert_eq!(
+            outcome.skipped,
+            vec![nook_auth2::AppId::parse("0123456789abcdef")?]
+        );
+
+        let bytes = outcome
+            .events
+            .iter()
+            .map(IdentityEvent::serialize_storage_yaml)
+            .collect::<Result<Vec<_>, _>>()?;
+        let log = IdentityControlLog::new(identity_id).union_storage_bytes(&bytes)?;
+        let state = IdentityControlState::project(&log)?;
+        // The tablet is still listed by the personal vault, but its revocation
+        // from the work vault keeps it out of the identity.
+        assert_eq!(state.members.len(), 2);
+        assert!(state.member(phone.app.app_id()).is_some());
+        assert!(state.member(tablet.app.app_id()).is_none());
+        assert_eq!(state.mounts, vec![mount]);
+
+        let personal_vault = state
+            .vault(&personal)
+            .ok_or_else(|| anyhow::anyhow!("personal vault must be registered"))?;
+        let IdentityVaultDekLookup::Granted(dek) =
+            personal_vault.current_dek_for(phone.app.app_id())
+        else {
+            anyhow::bail!("phone keeps access to the vault that authorized it");
+        };
+        assert_eq!(
+            phone.app.decrypt_envelope(&dek.secrets_key_ciphertext)?,
+            personal_keys.secrets_key
+        );
+        let work_vault = state
+            .vault(&work)
+            .ok_or_else(|| anyhow::anyhow!("work vault must be registered"))?;
+        assert!(matches!(
+            work_vault.current_dek_for(phone.app.app_id()),
+            IdentityVaultDekLookup::NotGranted
+        ));
+        assert_eq!(
+            state
+                .members_missing_current_dek(&work)
+                .iter()
+                .map(|member| member.keys.app_id.clone())
+                .collect::<Vec<_>>(),
+            vec![phone.app.app_id().clone()]
+        );
+        Ok(())
+    }
+}

@@ -142,6 +142,11 @@ test.describe('vault password envelope with sync provider', () => {
     await expect(deviceB.getByTestId('login-gate')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
+    // A fresh browser offers the paste-a-link form beside provider setup.
+    await deviceB.getByTestId('login-connect-storage-btn').click()
+    await expect(deviceB.getByTestId('login-provider-setup')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
     await expandLoginEnrollmentPanel(deviceB)
     await deviceB.getByTestId('open-enrollment-code-btn').click()
     await deviceB.getByTestId('enrollment-code-input').fill(link)
