@@ -114,7 +114,14 @@ export async function openVaultAfterIdentityApproval(
         async () => {
           if (await openVault.isVisible()) return true
           const check = page.getByTestId('identity-join-check-btn')
-          if (await check.isVisible()) await check.click()
+          // Approval replaces the waiting panel, so its button can detach
+          // between the visibility probe and the click; the next poll retries.
+          const checkOptions: Parameters<typeof check.click>[0] = {
+            timeout: 1_000,
+          }
+          if (await check.isVisible()) {
+            await check.click(checkOptions).catch(() => undefined)
+          }
           return openVault.isVisible()
         },
         { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
