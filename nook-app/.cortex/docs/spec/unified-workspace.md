@@ -57,15 +57,16 @@ and no Vault/Admin/Onboard/Settings bottom navigation.
     step that is recommended but never gates creation. Providers are mounted
     on the identity, so one added later replicates every vault it owns.
   - Below the steps, under "Already have a vault?", **Join from another
-    device** comes first and expands the enrollment-code panel in place. **Restore from a sync provider**
-    is the recovery path. Sentinel apps join through their own invitation.
+    device** comes first and expands the enrollment-code panel in place.
+    **Restore from a sync provider** is the recovery path. Sentinel apps
+    join through their own invitation.
   - After creation, the vault page's security guide repeats the sync step
     while the vault lives only in this browser.
 
-  An identity
-  without vaults shows a New vault row that opens the setup inside its card,
-  opened straight away when it is the only identity or an invitation is
-  pending. Once placed, the setup stays in its card for the whole flow.
+  An identity without vaults shows a New vault row that opens the setup
+  inside its card, opened straight away when it is the only identity or an
+  invitation is pending. Once placed, the setup stays in its card for the
+  whole flow.
 - While locked, the hub is the login gate: the hero, then any setup flow
   (connect provider, QR join, Sentinel ceremony), then the cards. There is no separate "open a vault" sheet: with several vaults and
   none chosen, a hint asks for a vault row; a plain vault list appears only
