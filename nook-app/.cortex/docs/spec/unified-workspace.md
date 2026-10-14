@@ -50,18 +50,22 @@ and no Vault/Admin/Onboard/Settings bottom navigation.
   **New identity** opens Keys with identity creation started.
   **Manage identity** / **Use identity** open Keys focused on that identity.
 - A vault always belongs to an identity, so there is no standalone "create
-  a vault" sheet. On a browser without an identity, a "Your first identity"
-  card holds the first-vault setup; the identity and its key are created
-  with that vault.
-  - The setup lists the vault paths (Simple, Sentinel), then a sync-provider
-    step that is recommended but never gates creation. Providers are mounted
+  a vault" sheet. On a browser without an identity, the Simple and unified
+  apps show one first-run flow in place of the hub; the identity and its key
+  are created with the first vault.
+  - **Name**: "Name your first vault", one field (empty takes the suggested
+    name) and Create vault. Two quiet links: **I use Nook on another
+    device** expands the enrollment-code panel in place; **Restore from a
+    sync provider** opens provider setup. Sentinel is never offered.
+  - **Protect** ("This is you"): the identity is introduced where its
+    passkey is made. A preview of its card lists the named vault; passkey or
+    PIN setup sits beside it instead of the corner overlay. Back returns to
+    the name.
+  - **Back up**: once the vault exists, offer a sync provider (Set up backup
+    opens Sync with Add provider started) or Skip for now. Providers mount
     on the identity, so one added later replicates every vault it owns.
-  - Below the steps, under "Already have a vault?", **Join from another
-    device** comes first and expands the enrollment-code panel in place.
-    **Restore from a sync provider** is the recovery path. Sentinel apps
-    join through their own invitation.
-  - After creation, the vault page's security guide repeats the sync step
-    while the vault lives only in this browser.
+  - Sentinel apps keep the creation chooser and its ceremony; Sentinel
+    invitations open the participant flow in any app.
 
   An identity without vaults shows a New vault row that opens the setup
   inside its card, opened straight away when it is the only identity or an

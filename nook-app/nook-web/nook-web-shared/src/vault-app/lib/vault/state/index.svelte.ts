@@ -44,6 +44,8 @@ const uiKeys = [
   "identityFocus",
   "identityCreationRequested",
   "helpOpen",
+  "firstRun",
+  "firstRunVaultName",
 ] as const satisfies readonly (keyof VaultUiState)[];
 
 const providerKeys = [
@@ -208,6 +210,8 @@ class VaultStateSlicesImplementation {
   declare identityFocus: VaultUiState["identityFocus"];
   declare identityCreationRequested: VaultUiState["identityCreationRequested"];
   declare helpOpen: VaultUiState["helpOpen"];
+  declare firstRun: VaultUiState["firstRun"];
+  declare firstRunVaultName: VaultUiState["firstRunVaultName"];
 
   declare providers: VaultProviderState["providers"];
   declare providersLoaded: VaultProviderState["providersLoaded"];

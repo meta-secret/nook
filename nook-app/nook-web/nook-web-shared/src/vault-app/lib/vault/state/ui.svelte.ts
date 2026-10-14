@@ -44,6 +44,16 @@ export class WorkspaceSectionScope {
   }
 }
 
+/** Where a first-vault setup stands after its name was given. */
+export enum FirstRunStage {
+  /** No first-vault setup in progress. */
+  Off = "off",
+  /** The vault waits for this browser's passkey or PIN. */
+  Protect = "protect",
+  /** The vault exists; offer to back up its identity. */
+  Backup = "backup",
+}
+
 export class VaultUiState {
   workspaceSection = $state<WorkspaceSection>(WorkspaceSection.Vault);
   devicesAccessIdentityProtectionOpen = $state(false);
@@ -54,4 +64,7 @@ export class VaultUiState {
   /** Set by the "New identity" card so the Keys page starts identity creation. */
   identityCreationRequested = $state(false);
   helpOpen = $state(false);
+  firstRun = $state<FirstRunStage>(FirstRunStage.Off);
+  /** The name given on the first-vault screen, shown by the later steps. */
+  firstRunVaultName = $state("");
 }

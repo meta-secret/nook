@@ -108,31 +108,20 @@ test.describe('vault connect flow', () => {
     await page.goto('/app/')
 
     await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible()
-    await expect(page.getByTestId('get-started-path-chooser')).toBeVisible()
-    await expect(page.getByTestId('get-started-path-simple')).toBeVisible()
-    await expect(page.getByTestId('get-started-path-sentinel')).toBeVisible()
+    await expect(page.getByTestId('first-vault-start')).toBeVisible()
+    await expect(page.getByTestId('get-started-path-sentinel')).toHaveCount(0)
     await expect(page.getByTestId('get-started-path-join')).toHaveCount(0)
-    await expect(page.getByTestId('login-path-cloud')).toBeVisible()
     await expect(page.getByTestId('replication-mode-select')).toHaveCount(0)
 
-    await page.getByTestId('get-started-path-simple').click()
-    await expect(page.getByTestId('create-vault-wizard-create')).toBeVisible()
+    // Creating and restoring share the first screen as separate actions.
     await page.getByTestId('login-vault-name-input').fill('Workflow vault')
-    await expect(page.getByTestId('login-path-cloud')).toHaveCount(0)
-    await expect(
-      page.getByTestId('login-create-device-vault-btn'),
-    ).toBeVisible()
     await expect(
       page.getByTestId('login-create-device-vault-btn'),
     ).toBeEnabled()
-    await page.getByTestId('create-vault-wizard-back').click()
-    await expect(page.getByTestId('get-started-path-chooser')).toBeVisible()
-    await expect(page.getByTestId('login-connect-storage-btn')).toBeVisible()
+    await expect(page.getByTestId('login-path-cloud')).toBeVisible()
     await page.getByTestId('login-connect-storage-btn').click()
     await expect(page.getByTestId('login-provider-setup')).toBeVisible()
-    await expect(
-      page.getByTestId('create-vault-wizard-create'),
-    ).not.toBeVisible()
+    await expect(page.getByTestId('first-vault-start')).not.toBeVisible()
     await expect(page.getByTestId('vault-panel')).not.toBeVisible()
     await expect(page.getByTestId('github-source-link')).toHaveAttribute(
       'href',

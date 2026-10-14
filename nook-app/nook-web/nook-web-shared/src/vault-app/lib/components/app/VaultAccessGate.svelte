@@ -17,6 +17,8 @@
   import { onDestroy } from 'svelte'
   import LoginGate from '$lib/components/LoginGate.svelte'
   import PasskeyAuthOverlay from '$lib/components/PasskeyAuthOverlay.svelte'
+  import FirstRunProtectStep from '$lib/components/login/FirstRunProtectStep.svelte'
+  import { FirstRunStage } from '$lib/vault/state/ui.svelte'
   import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
   import { VaultStatusBarVariant } from '$lib/components/vault-status-bar-state'
   import { keysRouteOpen } from '$lib/app/workspace-route'
@@ -93,6 +95,16 @@
     return sentinelInvitationRequest.trim().length > 0
   }
 
+  /** A first vault waiting for its passkey shows the guided step in place. */
+  const firstRunProtect = $derived(
+    showPasskeyOverlay && vault.firstRun === FirstRunStage.Protect,
+  )
+
+  function leaveFirstRunProtect(): void {
+    vault.firstRun = FirstRunStage.Off
+    onDismissPasskey()
+  }
+
   function identityTransitionPending(): boolean {
     return vault.devicesAccessIdentityTransitionPending
   }
@@ -107,7 +119,9 @@
 
 <div class="space-y-6">
   {#if showAccessGate || vault.errorMsg || devicesAccessRouteOpen() || sentinelInvitationOpen() || identityTransitionPending()}
-    {#if vault.providersLoaded || existingVaultNeedsDeviceUnlock || devicesAccessRouteOpen() || sentinelInvitationOpen() || identityTransitionPending()}
+    {#if firstRunProtect}
+      <FirstRunProtectStep {vault} onBack={leaveFirstRunProtect} />
+    {:else if vault.providersLoaded || existingVaultNeedsDeviceUnlock || devicesAccessRouteOpen() || sentinelInvitationOpen() || identityTransitionPending()}
       <LoginGate
         {vault}
         appKind={APP_KIND}
@@ -161,7 +175,7 @@
       onDismissSuccess={() => vault.dismissSuccess()}
       onDismissError={() => vault.dismissError()}
     />
-    {#if showPasskeyOverlay}
+    {#if showPasskeyOverlay && !firstRunProtect}
       <PasskeyAuthOverlay {vault} onDismiss={onDismissPasskey} />
     {/if}
   {/if}

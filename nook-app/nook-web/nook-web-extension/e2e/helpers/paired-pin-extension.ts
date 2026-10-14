@@ -118,14 +118,9 @@ async function advanceCreateVaultWizardToFinalStep(page: Page) {
   const chooser = page.getByTestId('login-create-vault-chooser')
   await expect(chooser).toBeVisible({ timeout: EXTENSION_TIMEOUT_MS })
 
-  const finalStep = page.getByTestId('create-vault-wizard-create')
-  if (await finalStep.isVisible()) return
-
-  const simplePath = page.getByTestId('get-started-path-simple')
-  await expect(simplePath).toBeVisible({ timeout: EXTENSION_TIMEOUT_MS })
-  await simplePath.click()
-  await expect(finalStep).toBeVisible({ timeout: EXTENSION_TIMEOUT_MS })
+  // The Simple app starts with one name field; nothing to choose.
   const nameInput = page.getByTestId('login-vault-name-input')
+  await expect(nameInput).toBeVisible({ timeout: EXTENSION_TIMEOUT_MS })
   if (!(await nameInput.inputValue()).trim()) {
     await nameInput.fill('Mock auth vault', {
       timeout: EXTENSION_TIMEOUT_MS,
