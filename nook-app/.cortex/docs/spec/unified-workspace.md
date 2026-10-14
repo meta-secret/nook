@@ -56,8 +56,8 @@ and no Vault/Admin/Onboard/Settings bottom navigation.
   - The setup lists the vault paths (Simple, Sentinel), then a sync-provider
     step that is recommended but never gates creation. Providers are mounted
     on the identity, so one added later replicates every vault it owns.
-  - Under "Already have a vault?", **Join from another device** opens the
-    enrollment-code panel and comes first. **Restore from a sync provider**
+  - Below the steps, under "Already have a vault?", **Join from another
+    device** comes first and expands the enrollment-code panel in place. **Restore from a sync provider**
     is the recovery path. Sentinel apps join through their own invitation.
   - After creation, the vault page's security guide repeats the sync step
     while the vault lives only in this browser.

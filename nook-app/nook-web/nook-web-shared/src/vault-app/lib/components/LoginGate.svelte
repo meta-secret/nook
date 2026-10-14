@@ -179,7 +179,7 @@
       ComponentProps<typeof LoginCreateVaultChooser>,
       | "onAcceptSentinelOnboardingPackage"
       | "onFinishSentinelInvitation"
-      | "onJoinIdentity"
+      | "onUseEnrollmentCode"
     >
   >;
   type CreateVaultChooserProps = ComponentProps<typeof LoginCreateVaultChooser>;
@@ -202,7 +202,7 @@
   >;
   const createVaultChooserOptionalProps = $derived.by(() => {
     const props: CreateVaultChooserOptionalProps = {};
-    if (onUseEnrollmentCode) props.onJoinIdentity = openJoinIdentity;
+    if (onUseEnrollmentCode) props.onUseEnrollmentCode = onUseEnrollmentCode;
     if (onAcceptSentinelOnboardingPackage)
       props.onAcceptSentinelOnboardingPackage =
         onAcceptSentinelOnboardingPackage;
@@ -229,11 +229,6 @@
   });
 
   let enrollmentPanelOpen = $state(false);
-  let joinIdentityRequested = $state(false);
-  function openJoinIdentity(): void {
-    joinIdentityRequested = true;
-    enrollmentPanelOpen = true;
-  }
   let showProviderSetupLink = $state(false);
   let devicesAccessOpen = $state(keysRouteOpen());
   let devicesAccessTrigger = $state(DevicesAccessTriggerKind.Header);
@@ -511,7 +506,7 @@
   const showEnrollmentAccess = $derived(
     Boolean(onUseEnrollmentCode) &&
       !showQrOnboarding &&
-      (showProviderSetup || showSetup || joinIdentityRequested),
+      (showProviderSetup || showSetup),
   );
 
   const setupCanConnect = $derived(

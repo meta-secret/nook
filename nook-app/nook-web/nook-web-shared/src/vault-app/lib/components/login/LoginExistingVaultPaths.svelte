@@ -6,25 +6,33 @@ the recovery path when no other app is at hand.
 <script lang="ts">
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import { ArrowRight, Cloud, QrCode } from "@lucide/svelte";
+  import LoginEnrollmentPanel from "$lib/components/login/LoginEnrollmentPanel.svelte";
+  import type { EnrollmentCodeUnlock } from "./login-create-vault-chooser-contract";
   import type { VaultState } from "$lib/vault.svelte";
 
   let {
     vault,
     isBusy,
+    isVerifying,
     restoreDescription,
     onConnectStorage,
-    onJoinIdentity,
+    onUseEnrollmentCode,
   }: {
     vault: VaultState;
     isBusy: boolean;
+    isVerifying: boolean;
     restoreDescription: string;
     onConnectStorage: () => void;
     /** Present when this app can join an identity with an enrollment code. */
-    onJoinIdentity?: () => void;
+    onUseEnrollmentCode?: (code: EnrollmentCodeUnlock) => void | Promise<void>;
   } = $props();
+
+  // The code panel replaces the join button; collapsing it brings the
+  // button back.
+  let joinOpen = $state(false);
 </script>
 
-<div class="pt-3" data-testid="login-path-cloud">
+<div class="pt-5 pl-11" data-testid="login-path-cloud">
   <div
     class="mb-3 flex items-center gap-3 text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border"
   >
@@ -33,13 +41,20 @@ the recovery path when no other app is at hand.
     </span>
   </div>
   <div class="grid gap-2">
-    {#if onJoinIdentity}
+    {#if onUseEnrollmentCode && joinOpen}
+      <LoginEnrollmentPanel
+        {vault}
+        bind:open={joinOpen}
+        {isVerifying}
+        {onUseEnrollmentCode}
+      />
+    {:else if onUseEnrollmentCode}
       <button
         type="button"
         class="group grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 nk-frame-nick nk-frame-interactive px-4 py-3 text-left text-foreground transition-colors hover:bg-accent/40 disabled:opacity-60"
         data-testid="login-join-identity-btn"
         disabled={isBusy}
-        onclick={onJoinIdentity}
+        onclick={() => (joinOpen = true)}
       >
         <span class="nk-tile">
           <QrCode class="size-4" />

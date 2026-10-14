@@ -59,7 +59,7 @@
     usesExtensionDeviceIdentity = false,
     onCreateDeviceVault,
     onConnectStorage,
-    onJoinIdentity,
+    onUseEnrollmentCode,
     onStartSentinelGenesis,
     onAddSentinelGenesisParticipantResponse,
     onFinalizeSentinelGenesis,
@@ -120,13 +120,13 @@
   });
 
   type JoinIdentityProps = Partial<
-    Pick<ComponentProps<typeof LoginExistingVaultPaths>, "onJoinIdentity">
+    Pick<ComponentProps<typeof LoginExistingVaultPaths>, "onUseEnrollmentCode">
   >;
   const joinIdentityProps = $derived.by(() => {
     const props: JoinIdentityProps = {};
     // Sentinel apps join through their own invitation ceremony.
-    if (onJoinIdentity && appKind !== VaultApplication.Sentinel)
-      props.onJoinIdentity = onJoinIdentity;
+    if (onUseEnrollmentCode && appKind !== VaultApplication.Sentinel)
+      props.onUseEnrollmentCode = onUseEnrollmentCode;
     return props;
   });
 
@@ -717,13 +717,6 @@
                             {/if}
                           </div>
 
-                          <LoginExistingVaultPaths
-                            {vault}
-                            {isBusy}
-                            restoreDescription={existingVaultDescription}
-                            {onConnectStorage}
-                            {...joinIdentityProps}
-                          />
                         </div>
                       </section>
                     {:else if index === stepIndex && wizardStep === VaultCreationWizardStep.SimpleCreate}
@@ -872,6 +865,16 @@
                 </li>
               {/each}
             </ol>
+            {#if wizardStep === VaultCreationWizardStep.Choose}
+              <LoginExistingVaultPaths
+                {vault}
+                {isBusy}
+                {isVerifying}
+                restoreDescription={existingVaultDescription}
+                {onConnectStorage}
+                {...joinIdentityProps}
+              />
+            {/if}
           {/if}
 
           {#if wizardStep === VaultCreationWizardStep.Join}
