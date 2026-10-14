@@ -38,7 +38,8 @@ Vault/Admin/Onboard/Settings bottom navigation.
   **Locked** (current identity), **Not active here** (stored on this
   browser), or **Other installation**.
 - Lock and Unlock act on the identity, never on a vault. **Unlock** asks for
-  this device's passkey and leaves the hub with the card unlocked; **Lock**
+  this device's passkey (or, for an identity protected by a PIN, shows a PIN
+  field on the card) and leaves the hub with the card unlocked; **Lock**
   locks it again. A vault row opens that vault (asking for the passkey first
   when the identity is locked). **Use identity** makes a not-active identity
   this browser's own and unlocks it with its passkey. **Manage** unlocks if
@@ -47,6 +48,11 @@ Vault/Admin/Onboard/Settings bottom navigation.
   one: one field inside the card opens that vault directly. There is no
   separate unlock panel; a running Sentinel quorum ceremony is the only
   panel the hub shows for unlocking.
+- When this browser lost an identity's key, the vaults it still stores keep
+  opening from their rows (which starts key recovery) and from their backup
+  passwords. Local vaults no card lists, or every local vault when the
+  identity directory cannot be read, are listed on their own so they always
+  open.
 - **New vault** on the current identity's card creates a vault for it.
   **New identity** starts the new-identity flow (below).
 - A locked identity never opens the old Keys page; the URL is kept and
