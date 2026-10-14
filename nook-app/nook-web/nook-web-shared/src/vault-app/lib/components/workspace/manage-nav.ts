@@ -14,7 +14,7 @@ export enum ManageNavPlacement {
 
 /** How prominently the rail shows a page. */
 export enum ManageNavTier {
-  /** The identity's home: its vaults and where they sync. */
+  /** The identity's home: its vaults, where they sync, and its devices. */
   Home = "home",
   /** Who and what can open the identity. */
   Security = "security",
@@ -52,15 +52,6 @@ const DEFINITIONS: readonly ManageNavDefinition[] = [
     shortLabelKey: I18N_KEYS.WorkspaceNavShortKeys,
     descriptionKey: I18N_KEYS.WorkspaceSectionKeysDescription,
     testId: "manage-nav-keys",
-    placement: ManageNavPlacement.Everywhere,
-  },
-  {
-    section: WorkspaceSection.Devices,
-    tier: ManageNavTier.Security,
-    labelKey: I18N_KEYS.WorkspaceSectionDevices,
-    shortLabelKey: I18N_KEYS.WorkspaceNavShortDevices,
-    descriptionKey: I18N_KEYS.WorkspaceSectionDevicesDescription,
-    testId: "manage-nav-devices",
     placement: ManageNavPlacement.Everywhere,
   },
   {
@@ -118,9 +109,10 @@ export type ManageNavEntry =
 export class ManageNavLookup {
   constructor(private readonly section: WorkspaceSection) {}
 
-  /** Sync is part of the identity home, not a page of its own. */
+  /** Sync and Devices are blocks of the identity home, not pages. */
   get navSection(): WorkspaceSection {
-    return this.section === WorkspaceSection.Sync
+    return this.section === WorkspaceSection.Sync ||
+      this.section === WorkspaceSection.Devices
       ? WorkspaceSection.Vaults
       : this.section;
   }

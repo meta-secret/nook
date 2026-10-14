@@ -338,16 +338,27 @@ band, the scrolling page and the status line.
   }
 
   /** Leave the first-vault setup for the new vault. */
+  /** Open the provider picker in the home's Sync block. Opening the
+   * section resets provider setup, so the picker opens after it. */
+  function addSyncProvider(): void {
+    openSection(WorkspaceSection.Sync);
+    vault.beginAddProvider();
+  }
+
   /** Sync renders as part of the identity home. */
   const pageSection = $derived(new ManageNavLookup(section).navSection);
-  /** The page that takes the identity's next health step; its own action
-   * makes the band's button redundant there. */
+  /** Every health step is taken on the identity home, whose blocks carry
+   * the action; the band's button is redundant there. */
   const healthStepHere = $derived(
-    identityHealth.nextStep === NookIdentityNextStep.AddDevice
-      ? pageSection === WorkspaceSection.Devices
-      : identityHealth.nextStep !== NookIdentityNextStep.Done &&
-          pageSection === WorkspaceSection.Vaults,
+    identityHealth.nextStep !== NookIdentityNextStep.Done &&
+      pageSection === WorkspaceSection.Vaults,
   );
+  let devicesBlock = $state<HTMLElement>();
+  const devicesScroll: ScrollIntoViewOptions = { block: "start" };
+  $effect(() => {
+    if (section === WorkspaceSection.Devices)
+      devicesBlock?.scrollIntoView(devicesScroll);
+  });
 
   function finishFirstRun(next: WorkspaceSection): void {
     vault.firstRun = FirstRunStage.Off;
@@ -545,7 +556,7 @@ band, the scrolling page and the status line.
           />
         {/if}
 
-        {#if navEntry.kind === ManageNavEntryKind.Listed && (section === WorkspaceSection.Keys || section === WorkspaceSection.Devices || section === WorkspaceSection.Settings)}
+        {#if navEntry.kind === ManageNavEntryKind.Listed && (section === WorkspaceSection.Keys || section === WorkspaceSection.Settings)}
           <p
             class="max-w-[64ch] text-sm text-pretty text-muted-foreground"
             data-testid="manage-section-description"
@@ -583,11 +594,6 @@ band, the scrolling page and the status line.
             {vault}
             onBack={leaveManagement}
             onLeaveReady={(leave: KeysPageLeave) => (leaveKeysPage = leave)}
-          />
-        {:else if section === WorkspaceSection.Devices}
-          <IdentityDevicesPanel
-            {vault}
-            onOpenSync={() => openSection(WorkspaceSection.Sync)}
           />
         {:else if section === WorkspaceSection.Settings}
           <BrowserSettingsPanel {vault} />
@@ -689,6 +695,13 @@ band, the scrolling page and the status line.
               exportBytes: Parameters<VaultAdminProps["onImportProtonPass"]>[0],
             ) => vault.handleProtonPassImport(exportBytes)}
           />
+          {#if pageSection === WorkspaceSection.Vaults}
+            <!-- Devices close the identity home: they join through the
+                 sync providers above. -->
+            <div class="scroll-mt-4" bind:this={devicesBlock}>
+              <IdentityDevicesPanel {vault} onOpenSync={addSyncProvider} />
+            </div>
+          {/if}
         {/if}
       </div>
     </div>

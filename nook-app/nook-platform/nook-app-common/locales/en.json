@@ -320,7 +320,8 @@
     },
     "new_vault": {
       "title": "New vault",
-      "description": "A vault keeps its own secrets and sync providers. Create one on this browser, or bring one you already have from a sync provider.",
+      "description": "A vault holds its own secrets and syncs through this identity’s providers. Create one on this browser, or bring one you already have from a sync provider.",
+      "description_create": "A vault holds its own secrets and syncs through this identity’s providers.",
       "close": "Close"
     },
     "choose_vault_hint": "Choose a vault on an identity card to unlock it."
@@ -2131,7 +2132,6 @@
     "section_settings": "Settings",
     "section_settings_description": "Language and the encrypted data this browser keeps.",
     "section_devices": "Devices",
-    "section_devices_description": "Apps in this identity, join requests, and adding a new app.",
     "section_sync": "Sync",
     "section_sync_description": "Sync providers mounted on this identity. Each replicates the identity and its vaults.",
     "section_passwords": "Backup passwords",
@@ -2148,7 +2148,6 @@
     "nav_short_keys": "Keys",
     "nav_short_vaults": "Vaults",
     "nav_short_settings": "Settings",
-    "nav_short_devices": "Devices",
     "nav_short_passwords": "Backups",
     "back_to_vault": "Back to vault",
     "card_no_vaults": "No vaults yet",
@@ -2163,7 +2162,6 @@
     "nav_group_security": "Security"
   },
   "identity_control": {
-    "members_title": "Apps in this identity",
     "members_description": "Every app here can open this identity's vaults. Removing an app rotates each vault's keys before its next change.",
     "current_app": "This app",
     "unnamed_app": "Unnamed app",
@@ -2182,7 +2180,7 @@
     "upgrade_here": "Upgrade here",
     "revoked": "This app was removed from the identity.",
     "sync_now": "Sync identity",
-    "open_sync": "Open Sync",
+    "open_sync": "Add sync provider",
     "onboard_title": "Add an app",
     "onboard_description": "Create a one-time code. The new app joins through a sync provider, then you approve it here.",
     "onboard_provider": "Join through",
@@ -2204,7 +2202,7 @@
     "vault_open_through_identity": "Open through identity",
     "error_provider_not_mount": "Choose a provider that carries this identity.",
     "error_passphrase_short": "Use a passphrase of at least 8 characters.",
-    "no_device_join_mounts": "Devices join through a cloud provider. Add GitHub or Google Drive on the Sync page."
+    "no_device_join_mounts": "Devices join through a cloud provider. Add GitHub or Google Drive under Sync."
   },
   "first_run": {
     "title": "Name your first vault",

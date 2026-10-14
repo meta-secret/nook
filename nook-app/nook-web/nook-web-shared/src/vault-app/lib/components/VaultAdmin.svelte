@@ -191,10 +191,12 @@
     section: WorkspaceSection
   } = $props()
 
-  /** Vaults and sync together are the identity home; Sync deep-links to
-   * its half of the page. */
+  /** Vaults and sync lead the identity home (devices follow, from the
+   * workspace); Sync deep-links to its block. */
   const home = $derived(
-    section === WorkspaceSection.Vaults || section === WorkspaceSection.Sync,
+    section === WorkspaceSection.Vaults ||
+      section === WorkspaceSection.Sync ||
+      section === WorkspaceSection.Devices,
   )
   let newVaultOpen = $state(false)
   let syncSection = $state<HTMLElement>()

@@ -1,6 +1,6 @@
 <!--
 Identity management navigation. The identity sits on top and leads back to
-the identities hub. Its home (vaults and sync) comes first and stands apart;
+the identities hub. Its home (vaults, sync, devices) comes first and stands apart;
 security pages and settings follow. Vault pages never show it: a vault has
 only its items and imports. One element: a rail inside the shell on wide
 screens and a scrolling bottom bar on phones.
@@ -12,7 +12,6 @@ screens and a scrolling bottom bar on phones.
     Fingerprint,
     FolderKey,
     KeyRound,
-    MonitorSmartphone,
     ShieldCheck,
     SlidersHorizontal,
   } from '@lucide/svelte'
@@ -72,8 +71,6 @@ screens and a scrolling bottom bar on phones.
     <FolderKey class="size-[1.125rem] shrink-0" aria-hidden="true" />
   {:else if section === WorkspaceSection.Settings}
     <SlidersHorizontal class="size-[1.125rem] shrink-0" aria-hidden="true" />
-  {:else if section === WorkspaceSection.Devices}
-    <MonitorSmartphone class="size-[1.125rem] shrink-0" aria-hidden="true" />
   {:else if section === WorkspaceSection.Passwords}
     <ShieldCheck class="size-[1.125rem] shrink-0" aria-hidden="true" />
   {:else}
@@ -82,21 +79,21 @@ screens and a scrolling bottom bar on phones.
 {/snippet}
 
 {#snippet status(section: WorkspaceSection)}
-  {#if section === WorkspaceSection.Devices && pendingJoinCount > 0}
+  {#if section === WorkspaceSection.Vaults && pendingJoinCount > 0}
     <span class="nk-manage-badge" data-testid="manage-nav-pending-joins">
       {pendingJoinCount}
     </span>
-  {:else if section === WorkspaceSection.Devices && deviceMissing}
-    <span
-      class="nk-manage-dot"
-      title={vault.t(I18N_KEYS.IdentityHealthDeviceTitle)}
-      data-testid="manage-nav-device-missing"
-    ></span>
   {:else if section === WorkspaceSection.Vaults && syncMissing}
     <span
       class="nk-manage-dot"
       title={vault.t(I18N_KEYS.WorkspaceNavSyncMissing)}
       data-testid="manage-nav-sync-missing"
+    ></span>
+  {:else if section === WorkspaceSection.Vaults && deviceMissing}
+    <span
+      class="nk-manage-dot"
+      title={vault.t(I18N_KEYS.IdentityHealthDeviceTitle)}
+      data-testid="manage-nav-device-missing"
     ></span>
   {/if}
 {/snippet}

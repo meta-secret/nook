@@ -1,6 +1,7 @@
 <!--
-Identity Devices page: the apps in the current identity, pending joins,
-identity upgrade notices, and adding a new app through an identity mount.
+Devices block of the identity home: the apps in the current identity,
+pending joins, identity upgrade notices, and adding a new app through an
+identity mount.
 -->
 <script lang="ts">
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
@@ -111,7 +112,7 @@ identity upgrade notices, and adding a new app through an identity mount.
   {/if}
 
   <ManageSection
-    title={vault.t(I18N_KEYS.IdentityControlMembersTitle)}
+    title={vault.t(I18N_KEYS.WorkspaceSectionDevices)}
     subtitle={vault.t(I18N_KEYS.IdentityControlMembersDescription)}
     testId="vault-devices-section"
   >
