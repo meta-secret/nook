@@ -15,6 +15,10 @@ export default defineConfig({
   testDir: 'e2e',
   testMatch: playwrightGates.isolation.map((file) => `**/${file}`),
   timeout: 90_000,
+  // Both apps run on Vite dev servers that compile on first request, and
+  // the Sentinel tests drive several browsers at once; in parallel they
+  // starve each other's first page loads.
+  workers: 1,
   reporter: process.env.CI ? 'line' : 'list',
   use: {
     trace: 'on-first-retry',

@@ -191,6 +191,13 @@ test.describe('sync conflict resolution', () => {
     await page.getByTestId('identity-new-vault').click()
     await page.getByTestId('login-vault-name-input').fill('test-2')
     await page.getByTestId('login-create-additional-vault-btn').click()
+    // Creating a vault on a locked identity asks for its passkey first.
+    await expect(
+      page
+        .getByTestId('passkey-auth-overlay')
+        .or(page.getByTestId('vault-panel'))
+        .first(),
+    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
     await authorizeDeviceProtection(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -320,6 +327,13 @@ test.describe('sync conflict resolution', () => {
     await page.getByTestId('identity-new-vault').click()
     await page.getByTestId('login-vault-name-input').fill('test-2')
     await page.getByTestId('login-create-additional-vault-btn').click()
+    // Creating a vault on a locked identity asks for its passkey first.
+    await expect(
+      page
+        .getByTestId('passkey-auth-overlay')
+        .or(page.getByTestId('vault-panel'))
+        .first(),
+    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
     await authorizeDeviceProtection(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,

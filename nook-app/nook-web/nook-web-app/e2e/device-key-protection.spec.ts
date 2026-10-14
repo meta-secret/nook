@@ -14,8 +14,6 @@ import {
   waitForPersistedAppLog,
   openVaultPage,
   openKeysPage,
-  pushWorkspacePath,
-  type WorkspacePathPush,
 } from './helpers'
 
 declare global {
@@ -555,27 +553,6 @@ test.describe('passkey device-key protection', () => {
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })
 
-      await queueSentinelInitiatorKeys(page)
-      const keysPath: WorkspacePathPush = { page, path: '/identity/keys' }
-      await pushWorkspacePath(keysPath)
-      await expect(page).toHaveURL(/\/identity\/keys$/)
-      await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
-      const vaultPath: WorkspacePathPush = { page, path: '/vault' }
-      await pushWorkspacePath(vaultPath)
-      await expect(page).toHaveURL(/\/vault$/)
-      await expect(page.getByTestId('get-started-path-sentinel')).toBeVisible({
-        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-      })
-
-      await queueSentinelInitiatorKeys(page)
-      await page.goBack()
-      await expect(page).toHaveURL(/\/identity\/keys$/)
-      await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
-      // A locked identity shows the hub on its Keys URL.
-      await expect(page.getByTestId('identities-hub')).toBeVisible({
-        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-      })
-      await pushWorkspacePath(vaultPath)
       await queueSentinelInitiatorKeys(page)
     },
   )

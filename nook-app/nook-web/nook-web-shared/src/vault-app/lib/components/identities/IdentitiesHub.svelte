@@ -74,8 +74,8 @@ join) sit between the hero and the cards.
     /** Unlock a locked identity with this device's passkey. */
     onUnlock?: (target: IdentityVaultTarget) => void
     pairingStatusFor?: (storeId: string) => LoginVaultExtensionPairingStatus
-    /** Unlock panel for `selectedStoreId`, shown only when no identity card
-     * lists that vault; a card unlocks from its own footer. */
+    /** A running Sentinel quorum ceremony for `selectedStoreId`: on the
+     * card that lists that vault, or on its own when no card does. */
     unlockPanel?: Snippet
     /** Backup-password unlock, placed on the card that holds the selected
      * vault. */
@@ -413,7 +413,9 @@ join) sit between the hero and the cards.
               ? { unlockPanel: vaultSetup }
               : identityPrompt && card.current
                 ? { unlockPanel: identityPrompt }
-                : {}}
+                : unlockPanel && card.identityId === unlockingIdentityId
+                  ? { unlockPanel }
+                  : {}}
             {...passwordFallback &&
             card.identityId === passwordIdentityId &&
             !(setupShown && card.identityId === setupIdentityId)
