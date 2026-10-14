@@ -2261,5 +2261,22 @@
     "submit": "Join",
     "submitting": "Joining…",
     "requirement": "Needs a cloud sync provider, such as GitHub or Google Drive."
+  },
+  "new_identity": {
+    "title": "Name your new identity",
+    "subtitle": "An identity has its own passkey and its own vaults. Nothing is shared with your other identities.",
+    "name_label": "Identity name",
+    "name_placeholder": "Work",
+    "continue": "Continue",
+    "cancel": "Cancel",
+    "step_name": "Name",
+    "step_key": "Key",
+    "key_title": "This is {identity}",
+    "key_body": "Create a passkey for {identity}. It is separate from your other identities’ passkeys, so each identity unlocks on its own.",
+    "ready_title": "{identity} is ready",
+    "ready_body": "Give it a first vault. A vault belongs to one identity and syncs through that identity’s providers.",
+    "vault_label": "Vault name",
+    "create_vault": "Create vault",
+    "later": "Later"
   }
 }

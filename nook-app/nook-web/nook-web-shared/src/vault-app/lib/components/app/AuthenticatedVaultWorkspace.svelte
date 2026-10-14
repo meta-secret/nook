@@ -70,6 +70,7 @@ band, the scrolling page and the status line.
     ManageSectionScope,
     WorkspaceSection,
     WorkspaceSectionScope,
+    NewIdentityStage,
   } from "$lib/vault/state/ui.svelte";
   import {
     SecretEditorModeKind,
@@ -308,8 +309,7 @@ band, the scrolling page and the status line.
   }
 
   function newIdentity(): void {
-    vault.identityCreationRequested = true;
-    openSection(WorkspaceSection.Keys);
+    vault.newIdentity = NewIdentityStage.Name;
   }
 
   async function focusPageBar(): Promise<void> {

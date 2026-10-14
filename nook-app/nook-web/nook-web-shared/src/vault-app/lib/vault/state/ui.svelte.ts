@@ -54,6 +54,18 @@ export enum FirstRunStage {
   Backup = "backup",
 }
 
+/** Where creating another identity stands. */
+export enum NewIdentityStage {
+  /** No identity being created. */
+  Off = "off",
+  /** The new identity is being named. */
+  Name = "name",
+  /** The new identity waits for its own passkey. */
+  Key = "key",
+  /** The identity exists; offer its first vault. */
+  Ready = "ready",
+}
+
 export class VaultUiState {
   workspaceSection = $state<WorkspaceSection>(WorkspaceSection.Vault);
   devicesAccessIdentityProtectionOpen = $state(false);
@@ -67,4 +79,7 @@ export class VaultUiState {
   firstRun = $state<FirstRunStage>(FirstRunStage.Off);
   /** The name given on the first-vault screen, shown by the later steps. */
   firstRunVaultName = $state("");
+  newIdentity = $state<NewIdentityStage>(NewIdentityStage.Off);
+  /** The name given to the identity being created. */
+  newIdentityName = $state("");
 }

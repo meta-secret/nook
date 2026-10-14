@@ -70,6 +70,7 @@
     type IdentityContextFocusSchedule,
   } from "./login-gate-focus";
   import JoinThisDevice from "$lib/components/join/JoinThisDevice.svelte";
+  import { NewIdentityStage } from "$lib/vault/state/ui.svelte";
   import CardPasswordUnlock from "$lib/components/identities/CardPasswordUnlock.svelte";
   import { DeviceProtectionActions } from "$lib/vault/device-protection.svelte";
   import SentinelCeremonyPanel from "$lib/components/login/SentinelCeremonyPanel.svelte";
@@ -456,8 +457,7 @@
   }
 
   function newIdentity(): void {
-    vault.identityCreationRequested = true;
-    void openDevicesAccess(DevicesAccessTriggerKind.Header);
+    vault.newIdentity = NewIdentityStage.Name;
   }
 
   onMount(() => {

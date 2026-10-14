@@ -20,6 +20,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
   import DeviceProtectionGate from "$lib/components/DeviceProtectionGate.svelte";
   import { DeviceProtectionGateFrame } from "$lib/components/device-protection-gate-state";
   import type { VaultState } from "$lib/vault.svelte";
+  import { NewIdentityStage } from "$lib/vault/state/ui.svelte";
   import {
     DashboardLoadKind,
     IdentityLifecycleMutationOutcome,
@@ -521,7 +522,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
           identities={directory.identities}
           {selectedIdentityId}
           onSelectIdentity={chooseIdentity}
-          onAddIdentity={() => void beginAddIdentity()}
+          onAddIdentity={() => (vault.newIdentity = NewIdentityStage.Name)}
         />
         {/if}
 

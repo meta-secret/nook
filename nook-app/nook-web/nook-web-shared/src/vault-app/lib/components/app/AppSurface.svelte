@@ -19,6 +19,8 @@
   import AppHeader from '$lib/components/app/AppHeader.svelte'
   import AuthenticatedVaultWorkspace from '$lib/components/app/AuthenticatedVaultWorkspace.svelte'
   import VaultAccessGate from '$lib/components/app/VaultAccessGate.svelte'
+  import NewIdentityFlow from '$lib/components/identities/NewIdentityFlow.svelte'
+  import { NewIdentityStage } from '$lib/vault/state/ui.svelte'
 
   type AccessGateProps = ComponentProps<typeof VaultAccessGate>
   type AuthenticatedWorkspaceProps = ComponentProps<
@@ -98,6 +100,8 @@
         <AppHelpWorkspace {vault} {colorMode} {appVersion} />
       {:else if extensionConnectRoute && extensionConnectRequestState.kind === ExtensionConnectIntentKind.Absent}
         <InvalidExtensionConnectWorkspace {vault} onClose={onNavigateHome} />
+      {:else if vault.newIdentity !== NewIdentityStage.Off}
+        <NewIdentityFlow {vault} />
       {:else if !vault.isAuthenticated || preserveAccessGate}
         <VaultAccessGate {...accessGateProps} />
       {:else if extensionConnectRequestState.kind === ExtensionConnectIntentKind.Requested}
