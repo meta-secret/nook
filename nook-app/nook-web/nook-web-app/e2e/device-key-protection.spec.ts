@@ -696,9 +696,7 @@ test.describe('passkey device-key protection', () => {
     await expect(
       page.getByTestId('sentinel-genesis-generated-response'),
     ).toHaveCount(0)
-    await expect(
-      page.getByTestId('sentinel-genesis-invitation-required'),
-    ).toBeVisible()
+    await expect(page.getByTestId('first-vault-start')).toBeVisible()
   })
 
   test('derives the device identity and requires passkey authorization after reload', async ({
