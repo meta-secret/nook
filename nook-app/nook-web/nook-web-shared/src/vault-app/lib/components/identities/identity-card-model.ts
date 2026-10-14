@@ -193,6 +193,13 @@ export class IdentityCardProjection {
     return owners;
   }
 
+  private get hasCurrentIdentity(): boolean {
+    return this.source.identities.some(
+      (entry) =>
+        entry.localAccess === NookIdentityLocalAccessKind.CurrentBrowser,
+    );
+  }
+
   private owns(request: IdentityVaultOwnership): boolean {
     return this.owners.get(request.storeId) === request.identityId;
   }
@@ -256,9 +263,12 @@ export class IdentityCardProjection {
       if (!this.owns(ownership)) continue;
       const localLabel = local.get(vault.storeId);
       const label = localLabel ? localLabel : vault.label;
+      // With no identity current here (its key was lost), a vault stored on
+      // this browser still opens: unlocking it is how the key is recovered.
       const stateRequest: VaultRowStateRequest = {
         storeId: vault.storeId,
-        local: current && local.has(vault.storeId),
+        local:
+          (current || !this.hasCurrentIdentity) && local.has(vault.storeId),
       };
       const row: IdentityVaultRow = {
         storeId: vault.storeId,

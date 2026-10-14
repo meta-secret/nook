@@ -22,6 +22,7 @@ Technical identifiers stay behind "Details".
   import { NativeVaultStorageFailure } from "$lib/runtime/storage-failure";
   import { DashboardTextKind } from "$lib/components/devices-access-dashboard-state";
   import { IdentityDirectoryReader } from "$lib/components/devices-access/identity-directory-view";
+  import { IDENTITY_DIRECTORY_RETRY_DELAYS_MS } from "$lib/components/identities/identity-directory-loader.svelte";
   import { KeysLoadKind, type KeysLoad } from "./identity-keys-load";
   import {
     IdentityKeyInventory,
@@ -48,22 +49,37 @@ Technical identifiers stay behind "Details".
   let draft = $state("");
   let saving = $state(false);
 
+  let generation = 0;
+
+  /** Read this identity's keys. A busy vault engine can refuse a read, so
+   * retry before showing a failure. */
   async function reload(): Promise<void> {
+    const current = ++generation;
+    for (const delay of IDENTITY_DIRECTORY_RETRY_DELAYS_MS) {
+      if (delay > 0) {
+        await new Promise<void>((resolve) => setTimeout(resolve, delay));
+      }
+      if (current !== generation) return;
+      const next = await readKeys();
+      if (current !== generation) return;
+      if (next.kind === KeysLoadKind.Ready) {
+        load = next;
+        return;
+      }
+    }
+    load = { kind: KeysLoadKind.Failed };
+  }
+
+  async function readKeys(): Promise<KeysLoad> {
     const manager = vault.admitManager();
-    if (manager.isErr()) {
-      load = { kind: KeysLoadKind.Failed };
-      return;
-    }
+    if (manager.isErr()) return { kind: KeysLoadKind.Failed };
     const loaded = await new IdentityDirectoryReader(manager.value).load();
-    if (loaded.isErr()) {
-      load = { kind: KeysLoadKind.Failed };
-      return;
-    }
+    if (loaded.isErr()) return { kind: KeysLoadKind.Failed };
     const identity = loaded.value.directory.identities.find(
       (entry) =>
         entry.localAccess === NookIdentityLocalAccessKind.CurrentBrowser,
     );
-    load = identity
+    return identity
       ? { kind: KeysLoadKind.Ready, identity, view: loaded.value.access }
       : { kind: KeysLoadKind.Failed };
   }

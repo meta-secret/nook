@@ -120,13 +120,11 @@ test.describe('identities hub', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     const work = card(page, 'Work')
-    const first = page
-      .getByTestId('identity-card')
-      .filter({
-        hasNot: page
-          .getByTestId('identity-card-label')
-          .getByText('Work', { exact: true }),
-      })
+    const first = page.getByTestId('identity-card').filter({
+      hasNot: page
+        .getByTestId('identity-card-label')
+        .getByText('Work', { exact: true }),
+    })
     await expect(work).toHaveAttribute('data-status', 'unlocked')
     await expect(work.getByTestId('identity-card-keys')).toContainText('PIN')
     await expect(first).toHaveAttribute('data-status', 'inactive')

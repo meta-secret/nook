@@ -6,7 +6,9 @@ import {
 } from "$lib/components/devices-access/identity-directory-view";
 
 /** A busy vault engine can refuse a read; retry before showing a failure. */
-const RETRY_DELAYS_MS: readonly number[] = [0, 300, 1000, 3000];
+export const IDENTITY_DIRECTORY_RETRY_DELAYS_MS: readonly number[] = [
+  0, 300, 1000, 3000,
+];
 
 /**
  * Reads the identity directory for the identities hub. A re-read keeps the
@@ -22,7 +24,7 @@ export class IdentityDirectoryLoader {
 
   async reload(): Promise<void> {
     const generation = ++this.generation;
-    for (const delay of RETRY_DELAYS_MS) {
+    for (const delay of IDENTITY_DIRECTORY_RETRY_DELAYS_MS) {
       if (delay > 0) {
         await new Promise<void>((resolve) => setTimeout(resolve, delay));
       }

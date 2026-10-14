@@ -480,7 +480,7 @@ band, the scrolling page and the status line.
                 >{vault.t(I18N_KEYS.WorkspaceImportAction)}</span
               >
             </Button>
-            {#if SUPPORTS_EXTENSION}
+            {#if SUPPORTS_EXTENSION && !secretsNoteEditorOpen}
               <VaultExtensionControl
                 {vault}
                 offer={extensionSetupState}

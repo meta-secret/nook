@@ -1,9 +1,21 @@
 import type { WorkspaceRoute } from "$lib/app/workspace-route";
 
-/** Where unlocking from a card leads: a vault, opened on a workspace page. */
+export enum UnlockPageKind {
+  /** Open the workspace on this page. */
+  Route = "route",
+  /** Stay where the URL is (an extension consent or another non-workspace
+   * page that waits for the unlock). */
+  Stay = "stay",
+}
+
+export type UnlockPage =
+  | { readonly kind: UnlockPageKind.Route; readonly route: WorkspaceRoute }
+  | { readonly kind: UnlockPageKind.Stay };
+
+/** Where unlocking from a card leads: a vault, and the page it opens on. */
 export type UnlockDestination = {
   readonly storeId: string;
-  readonly route: WorkspaceRoute;
+  readonly page: UnlockPage;
 };
 
 export enum PinPromptKind {

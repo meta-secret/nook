@@ -227,4 +227,30 @@ describe('IdentityCardProjection vault ownership', () => {
   test('lists no stray vaults when the current identity holds them all', () => {
     expect(new IdentityCardProjection(source(false)).unlistedVaults).toEqual([])
   })
+
+  test('a stored vault still opens after this browser lost its identity key', () => {
+    const lostKey: IdentityCardSource = {
+      identities: [
+        {
+          ...personal,
+          localAccess: NookIdentityLocalAccessKind.OtherInstallation,
+        },
+      ],
+      localVaults: [{ storeId: 'store_a', label: 'Personal vault' }],
+      openStoreId: '',
+      authenticated: false,
+      identityUnlocked: false,
+    }
+
+    const rows = new IdentityCardProjection(lostKey).cards.flatMap(
+      (card) => card.vaults,
+    )
+
+    expect(rows.find((row) => row.storeId === 'store_a')?.state).toBe(
+      IdentityVaultRowState.Available,
+    )
+    expect(rows.find((row) => row.storeId === 'store_gone')?.state).toBe(
+      IdentityVaultRowState.Unavailable,
+    )
+  })
 })

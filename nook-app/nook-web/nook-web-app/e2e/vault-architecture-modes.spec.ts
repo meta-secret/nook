@@ -458,6 +458,12 @@ test.describe('vault architecture modes', () => {
     page,
   }) => {
     const start = page.getByTestId('first-vault-start')
+    // Without the e2e auto-passkey, a fresh browser has no identity yet.
+    await clearBrowserVault(page)
+    await page.evaluate(() => {
+      localStorage.setItem('nook_e2e_manual_passkey', 'true')
+    })
+    await page.reload()
     await continueToPathChooser(page)
     // The first screen stands alone: no hub hero, no identity card yet.
     await expect(page.getByTestId('identities-hero')).toHaveCount(0)

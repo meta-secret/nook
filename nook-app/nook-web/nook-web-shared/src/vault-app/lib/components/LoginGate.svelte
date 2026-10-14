@@ -64,8 +64,10 @@
   import CardPinUnlock from "$lib/components/identities/CardPinUnlock.svelte";
   import {
     PinPromptKind,
+    UnlockPageKind,
     type PinPrompt,
     type UnlockDestination,
+    type UnlockPage,
   } from "$lib/components/identities/card-unlock";
   import { IdentitySwitch } from "$lib/components/identities/identity-switch";
   import { DeviceProtectionActions } from "$lib/vault/device-protection.svelte";
@@ -245,7 +247,7 @@
     if (!target.storeId) return;
     const home: UnlockDestination = {
       storeId: target.storeId,
-      route: WorkspaceRoute.Overview,
+      page: { kind: UnlockPageKind.Route, route: WorkspaceRoute.Overview },
     };
     void unlockTo(home);
   }
@@ -270,6 +272,14 @@
     await new DeviceProtectionActions(vault).unlockDeviceProtection(
       identityOnly,
     );
+    await loadUnlockedIdentityProviders();
+  }
+
+  /** An identity unlocked after "Use identity" has not read its providers
+   * yet; they need its key. */
+  async function loadUnlockedIdentityProviders(): Promise<void> {
+    if (!vault.deviceProtectionReady || vault.providersLoaded) return;
+    await new IdentitySwitch(vault).loadProviders();
   }
 
   async function unlockWithPin(pin: string): Promise<void> {
@@ -282,6 +292,7 @@
     );
     if (!vault.deviceProtectionReady) return;
     pinPrompt = { kind: PinPromptKind.Closed };
+    await loadUnlockedIdentityProviders();
     if (prompt.kind === PinPromptKind.Vault) {
       await openSelectedVault(prompt.destination);
     }
@@ -297,27 +308,36 @@
    * opens. */
   function unlockVault(storeId: string): void {
     const current = new WorkspacePath(window.location.pathname).route;
-    const resumed =
-      current.kind === WorkspaceRouteLookupKind.Workspace &&
-      current.route !== WorkspaceRoute.Identities
-        ? current.route
-        : WorkspaceRoute.Vault;
-    const destination: UnlockDestination = { storeId, route: resumed };
+    const page: UnlockPage =
+      current.kind === WorkspaceRouteLookupKind.Unknown
+        ? { kind: UnlockPageKind.Stay }
+        : {
+            kind: UnlockPageKind.Route,
+            route:
+              current.route === WorkspaceRoute.Identities
+                ? WorkspaceRoute.Vault
+                : current.route,
+          };
+    const destination: UnlockDestination = { storeId, page };
     void unlockTo(destination);
   }
 
   /** Unlock a vault right away, as its Unlock button would, and open the
    * workspace on `route` once it is unlocked. */
   async function unlockTo(destination: UnlockDestination): Promise<void> {
-    const navigation = new WorkspaceLocation(destination.route).navigate();
-    if (navigation.isErr()) {
-      vault.errorMsg = vault.t(navigation.error.translationKey);
-      return;
+    if (destination.page.kind === UnlockPageKind.Route) {
+      const navigation = new WorkspaceLocation(
+        destination.page.route,
+      ).navigate();
+      if (navigation.isErr()) {
+        vault.errorMsg = vault.t(navigation.error.translationKey);
+        return;
+      }
+      const routeRequest: Parameters<
+        VaultWorkspaceActions["applyWorkspaceRoute"]
+      >[0] = { route: destination.page.route };
+      new VaultWorkspaceActions(vault).applyWorkspaceRoute(routeRequest);
     }
-    const routeRequest: Parameters<
-      VaultWorkspaceActions["applyWorkspaceRoute"]
-    >[0] = { route: destination.route };
-    new VaultWorkspaceActions(vault).applyWorkspaceRoute(routeRequest);
     // Choosing a vault reads it with the device key, so the identity is
     // unlocked first: passkey (or PIN), then the vault, then open it.
     if (destination.storeId !== selectedCardStoreId) {

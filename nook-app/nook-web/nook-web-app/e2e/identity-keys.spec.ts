@@ -38,28 +38,36 @@ test.describe('identity keys', () => {
 
     await key.getByTestId('identity-key-rename').click()
     await page.getByTestId('identity-key-name-input').fill('Travel passkey')
-    // The name is written before the page re-reads the directory, so failing
-    // that read exercises "saved, but reload failed".
-    const preparationFailure = await page.evaluate(() => {
-      const vault = (
-        window as Window & { __nookVault?: Pick<VaultState, 'admitManager'> }
-      ).__nookVault
-      if (!vault) return 'Vault runtime is not exposed'
-      const admission = vault.admitManager()
-      if (admission.isErr()) return admission.error.translationKey
-      const manager = admission.value
-      manager.identity_directory_snapshot_request = () => {
-        Reflect.deleteProperty(manager, 'identity_directory_snapshot_request')
-        throw new Error('Forced keys reload failure')
-      }
-      return ''
-    })
-    expect(preparationFailure).toBe('')
+    // The name is written before the page re-reads the directory; while
+    // every read fails the page offers Retry, which recovers once reads work.
+    const failReads = (fail: boolean) =>
+      page.evaluate((shouldFail) => {
+        const vault = (
+          window as Window & { __nookVault?: Pick<VaultState, 'admitManager'> }
+        ).__nookVault
+        if (!vault) return 'Vault runtime is not exposed'
+        const admission = vault.admitManager()
+        if (admission.isErr()) return admission.error.translationKey
+        const manager = admission.value
+        if (shouldFail) {
+          manager.identity_directory_snapshot_request = () => {
+            throw new Error('Forced keys reload failure')
+          }
+        } else {
+          Reflect.deleteProperty(manager, 'identity_directory_snapshot_request')
+        }
+        return ''
+      }, fail)
+    expect(await failReads(true)).toBe('')
     await page.getByTestId('identity-key-save').click()
-    await expect(page.getByTestId('identity-keys-retry')).toBeVisible()
+    await expect(page.getByTestId('identity-keys-retry')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    expect(await failReads(false)).toBe('')
     await page.getByTestId('identity-keys-retry').click()
     await expect(page.getByTestId('identity-key')).toContainText(
       'Travel passkey',
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
   })
 })

@@ -140,14 +140,6 @@ export function deviceProtectionButtonReady(testId: string): boolean {
   )
 }
 
-/** Expand the login enrollment accordion on the login gate. */
-export async function expandLoginEnrollmentPanel(page: Page) {
-  const toggle = page.getByTestId('login-enrollment-toggle')
-  if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
-    await toggle.click()
-  }
-}
-
 /** Open the sync providers page (the admin surface that owns providers). */
 export async function openStorageSettings(page: Page) {
   await keepVaultIdleLockDisabled(page)
@@ -768,6 +760,9 @@ async function ensureLoginLocalUnlockReady(page: Page) {
       async () => {
         if (await vaultPanel.isVisible()) return 'ready'
         if (await vaultRow.isVisible()) return 'ready'
+        if (await page.getByTestId('card-password-unlock-open').isVisible()) {
+          return 'ready'
+        }
         await page.evaluate(async () => {
           const vault = window.__nookVault
           await vault?.refreshLocalVaultCatalog?.()

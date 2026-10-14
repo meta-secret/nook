@@ -113,7 +113,7 @@
   {#if showAccessGate || vault.errorMsg || sentinelInvitationOpen() || identityTransitionPending()}
     {#if firstRunProtect}
       <FirstRunProtectStep {vault} onBack={leaveFirstRunProtect} />
-    {:else if vault.providersLoaded || existingVaultNeedsDeviceUnlock || sentinelInvitationOpen() || identityTransitionPending()}
+    {:else if vault.providersLoaded || existingVaultNeedsDeviceUnlock || sentinelInvitationOpen() || identityTransitionPending() || (vault.hasManager && !vault.isInitializing)}
       <LoginGate
         {vault}
         appKind={APP_KIND}

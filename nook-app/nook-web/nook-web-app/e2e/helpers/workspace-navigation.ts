@@ -1,5 +1,5 @@
 import { expect, type Page } from '@playwright/test'
-import { UI_TIMEOUT_MS } from './environment'
+import { ENROLLMENT_UNLOCK_TIMEOUT_MS, UI_TIMEOUT_MS } from './environment'
 
 /** Management pages of the unified identity and vault workspace. */
 export enum ManagePage {
@@ -84,7 +84,9 @@ export async function openManagePage(
   }
   await expect(navItem).toBeVisible({ timeout: UI_TIMEOUT_MS })
   await navItem.click()
-  await expect(marker).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  // Identity pages read the identity directory, which retries while the
+  // vault engine is busy with a sync.
+  await expect(marker).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
 }
 
 /**

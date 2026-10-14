@@ -30,6 +30,7 @@ test.describe('login unlock flow (local-first)', () => {
     await addVaultPassword(page, 'Work backup', 'work-pass-1')
     await expectVaultPasswordStatus(page, 1, { timeout: UI_TIMEOUT_MS })
 
+    await disableLoginAutoUnlock(page)
     await page.reload()
     await expect(page.getByTestId('login-gate')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
@@ -105,6 +106,7 @@ test.describe('login unlock flow (local-first)', () => {
     })
     await addVaultPassword(page, 'Travel', 'travel-pass', { expectedCount: 2 })
 
+    await disableLoginAutoUnlock(page)
     await page.reload()
     const open = page.getByTestId('card-password-unlock-open')
     await expect(open).toBeVisible({ timeout: UI_TIMEOUT_MS })

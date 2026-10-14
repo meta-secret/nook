@@ -72,18 +72,29 @@ export class IdentitySwitch {
         identityOnly,
       );
     }
+    // Its providers are read with its key; a locked identity (a PIN, or a
+    // passkey prompt that was dismissed) loads them when it is unlocked.
+    if (!vault.deviceProtectionReady) {
+      vault.identityTransitionPending = false;
+      return IdentitySwitchOutcome.Locked;
+    }
+    const outcome = await this.loadProviders();
+    vault.identityTransitionPending = false;
+    return outcome;
+  }
+
+  /** Load the now-unlocked identity's sync providers. */
+  async loadProviders(): Promise<IdentitySwitchOutcome> {
+    const vault = this.vault;
     const providerLoad: Parameters<typeof vault.loadProviders>[0] = {
       ensureLocalRow: true,
     };
     const loaded = await vault.loadProviders(providerLoad);
-    vault.identityTransitionPending = false;
     if (loaded.isErr()) {
       vault.errorMsg = vault.t(loaded.error.translationKey);
       return IdentitySwitchOutcome.Failed;
     }
     vault.applyActiveProviderCredentials();
-    return vault.deviceProtectionReady
-      ? IdentitySwitchOutcome.Unlocked
-      : IdentitySwitchOutcome.Locked;
+    return IdentitySwitchOutcome.Unlocked;
   }
 }

@@ -609,9 +609,8 @@ test.describe('passkey device-key protection', () => {
     await expect(page.getByTestId('sentinel-genesis-connect-card')).toHaveCount(
       0,
     )
-    await expect(
-      page.getByTestId('sentinel-genesis-invitation-required'),
-    ).toBeVisible()
+    // Leaving the invitation URL returns to the first screen.
+    await expect(page.getByTestId('first-vault-start')).toBeVisible()
     await page.evaluate((request) => {
       history.pushState(
         {},
