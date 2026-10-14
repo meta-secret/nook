@@ -10,6 +10,7 @@ import {
 afterEach(() => {
   window.history.replaceState({}, '', '/')
   vi.restoreAllMocks()
+  vi.unstubAllEnvs()
 })
 
 describe('workspace routes', () => {
@@ -116,4 +117,35 @@ describe('workspace routes', () => {
       ).toBe(WorkspaceNavigationFailureKind.HistoryUpdateFailed)
     },
   )
+
+  // Simple and Sentinel build with a relative Vite base, so one bundle runs at
+  // a domain root and under /simple/ or /sentinel/ in the preview harness.
+  test.each([
+    ['/identity/devices', '/identity/keys'],
+    ['/vault/passwords', '/identity/keys'],
+    ['/simple/identity/devices', '/simple/identity/keys'],
+    ['/sentinel', '/sentinel/identity/keys'],
+  ])('builds an absolute path from %s under a relative base', (from, path) => {
+    vi.stubEnv('BASE_URL', './')
+    window.history.replaceState({}, '', from)
+
+    expect(new WorkspaceLocation(WorkspaceRoute.Keys).path).toBe(path)
+  })
+
+  test('moving between nested pages never stacks route segments', () => {
+    vi.stubEnv('BASE_URL', './')
+    window.history.replaceState({}, '', '/identity/devices')
+
+    for (const route of [
+      WorkspaceRoute.Sync,
+      WorkspaceRoute.Settings,
+      WorkspaceRoute.Passwords,
+      WorkspaceRoute.Import,
+      WorkspaceRoute.Vault,
+    ]) {
+      expect(new WorkspaceLocation(route).navigate().isOk()).toBe(true)
+    }
+
+    expect(window.location.pathname).toBe('/vault')
+  })
 })
