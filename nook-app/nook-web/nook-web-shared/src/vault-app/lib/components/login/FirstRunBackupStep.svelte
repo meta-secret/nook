@@ -1,10 +1,11 @@
 <!--
-Last step of the first-vault setup, shown once the vault exists. A sync
-provider is added right here, inside the step; when it connects, or the
-person skips, the new vault opens. Identity management is never visited.
+Shown once the first vault exists: setup is done, and keeping a copy is
+recommended, not required. A sync provider is added right here; when it
+connects, or the person declines, the new vault opens. Identity management
+is never visited.
 -->
 <script lang="ts">
-  import { Copy } from "@lucide/svelte";
+  import { CheckCircle2 } from "@lucide/svelte";
   import { untrack } from "svelte";
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import { Button } from "$lib/components/ui/button";
@@ -45,12 +46,12 @@ person skips, the new vault opens. Identity management is never visited.
     choosing = false;
   }
 
-  const body = $derived.by(() => {
-    const bodyRequest: Parameters<typeof vault.t>[0] = {
-      key: I18N_KEYS.FirstRunBackupBody,
+  const title = $derived.by(() => {
+    const titleRequest: Parameters<typeof vault.t>[0] = {
+      key: I18N_KEYS.FirstRunBackupTitle,
       replacements: { vault: vault.firstRunVaultName },
     };
-    return vault.t(bodyRequest);
+    return vault.t(titleRequest);
   });
 </script>
 
@@ -73,16 +74,16 @@ person skips, the new vault opens. Identity management is never visited.
   <div class="space-y-3">
     {#if !choosing}
       <span class="nk-tile nk-tile-lg" aria-hidden="true">
-        <Copy class="size-5" />
+        <CheckCircle2 class="size-5 text-success" />
       </span>
     {/if}
     <h1
       class="text-[1.75rem] leading-tight font-semibold tracking-[-0.02em] text-foreground"
     >
-      {vault.t(I18N_KEYS.FirstRunBackupTitle)}
+      {title}
     </h1>
     <p class="max-w-[60ch] text-sm text-pretty text-muted-foreground">
-      {body}
+      {vault.t(I18N_KEYS.FirstRunBackupBody)}
     </p>
   </div>
 

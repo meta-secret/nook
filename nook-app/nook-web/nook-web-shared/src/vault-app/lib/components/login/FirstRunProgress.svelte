@@ -1,6 +1,8 @@
 <!--
-Progress of the first-vault setup: name, protect, back up. The name step is
-the first screen, so the later steps open with it already checked.
+Progress of the first-vault setup: name, then key. The name step is the
+first screen, so the key step opens with it already checked; once the key
+exists, setup is complete and the copy screen shows both checked. Keeping a
+copy is offered there, not counted as a step, since it can be skipped.
 -->
 <script lang="ts">
   import { Check } from "@lucide/svelte";
@@ -22,16 +24,16 @@ the first screen, so the later steps open with it already checked.
     FirstRunStage.Protect,
     FirstRunStage.Backup,
   ];
+  // Backup sits past the last step: every step is done by then.
   const currentIndex = $derived(ORDER.indexOf(current));
   const steps = $derived([
     vault.t(I18N_KEYS.FirstRunStepName),
     vault.t(I18N_KEYS.FirstRunStepProtect),
-    vault.t(I18N_KEYS.FirstRunStepBackup),
   ]);
 </script>
 
 <ol
-  class="grid grid-cols-3 gap-2 font-mono text-[11px] tracking-[0.08em] uppercase"
+  class="grid grid-cols-2 gap-2 font-mono text-[11px] tracking-[0.08em] uppercase"
   data-testid="first-run-progress"
 >
   {#each steps as label, index (label)}

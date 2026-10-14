@@ -383,8 +383,9 @@
     showProviderSetupLink = true;
   }
 
-  /** Manage on a locked identity unlocks one of its vaults and lands on the
-   * identity home. With no vault here to open, only Keys can manage it. */
+  /** Manage on a locked identity unlocks it (one of its vaults, with this
+   * device's key) and lands on the identity home. With no vault here to
+   * open, only Keys can manage it. */
   function manageIdentity(request: IdentityManageRequest): void {
     const { identityId, storeId } = request;
     managedIdentityId = identityId;
@@ -402,7 +403,20 @@
       VaultWorkspaceActions["applyWorkspaceRoute"]
     >[0] = { route: WorkspaceRoute.Vaults };
     new VaultWorkspaceActions(vault).applyWorkspaceRoute(homeRoute);
-    void openVaultFromCard(storeId);
+    void unlockToManage(storeId);
+  }
+
+  /** Select the identity's vault and unlock it right away, as its Unlock
+   * button would; the workspace then opens on the identity home. */
+  async function unlockToManage(storeId: string): Promise<void> {
+    // Choosing the vault again would touch the device key before the
+    // passkey authorizes it; the selected one is ready to unlock as is.
+    if (storeId !== selectedCardStoreId) {
+      await openVaultFromCard(storeId);
+      await tick();
+    }
+    if (vault.errorMsg || isVerifying) return;
+    await onUnlock();
   }
 
   function newIdentity(): void {

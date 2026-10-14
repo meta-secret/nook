@@ -1,12 +1,12 @@
 <!--
-The one place a new browser joins an existing identity. It shows who is
-added where (this device, to the identity your other device already has),
-what happens (the sync provider carries the encrypted vaults here), and the
-steps on each device. An invite link opened on this device arrives with its
-code filled in; only the passphrase is left.
+The one place a new browser joins an existing identity: what happens in a
+sentence and a small diagram, where to get the invite, and the form. An
+invite link opened on this device arrives with its code filled in; only
+the passphrase is left. Once submitted, the identities hub shows the wait
+for approval.
 -->
 <script lang="ts">
-  import { CheckCircle2, Cloud, RefreshCw } from "@lucide/svelte";
+  import { CheckCircle2, RefreshCw } from "@lucide/svelte";
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import { Button } from "$lib/components/ui/button";
   import FirstRunBackLink from "$lib/components/login/FirstRunBackLink.svelte";
@@ -14,8 +14,7 @@ code filled in; only the passphrase is left.
   import type { VaultState } from "$lib/vault.svelte";
   import { IdentityJoinKind } from "$lib/vault/identity-control.svelte";
   import JoinFlowDiagram from "./JoinFlowDiagram.svelte";
-  import JoinSteps from "./JoinSteps.svelte";
-  import { JoinSide, JoinStep } from "./join-flow";
+  import { JoinSide } from "./join-flow";
 
   let {
     vault,
@@ -40,17 +39,9 @@ code filled in; only the passphrase is left.
 
   const linkReceived = $derived(Boolean(code));
   const joinCode = $derived(linkReceived ? code : linkInput.trim());
-  const current = $derived.by(() => {
-    switch (vault.identityControl.join.kind) {
-      case IdentityJoinKind.Pending:
-        return JoinStep.Approve;
-      case IdentityJoinKind.Approved:
-        return JoinStep.Download;
-      case IdentityJoinKind.Idle:
-        // Until a link is here, the invite may not exist yet.
-        return joinCode ? JoinStep.Redeem : JoinStep.Invite;
-    }
-  });
+  const requested = $derived(
+    vault.identityControl.join.kind !== IdentityJoinKind.Idle,
+  );
 
   function submit(event: SubmitEvent): void {
     event.preventDefault();
@@ -64,7 +55,7 @@ code filled in; only the passphrase is left.
 </script>
 
 <section
-  class="mx-auto grid w-full max-w-5xl gap-6 py-6 text-left sm:py-10"
+  class="mx-auto grid w-full max-w-md gap-7 py-10 sm:py-16"
   data-testid="join-this-device"
 >
   {#if onBack}
@@ -76,93 +67,83 @@ code filled in; only the passphrase is left.
     />
   {/if}
 
-  <header class="space-y-2">
-    <p class="nk-label">{vault.t(I18N_KEYS.JoinEyebrow)}</p>
+  <header class="space-y-2 text-center">
     <h1
       class="text-[1.75rem] leading-tight font-semibold tracking-[-0.02em] text-foreground"
     >
       {vault.t(I18N_KEYS.JoinTitle)}
     </h1>
-    <p class="max-w-[68ch] text-sm text-pretty text-muted-foreground">
-      {vault.t(I18N_KEYS.JoinLead)}
+    <p class="text-sm text-pretty text-muted-foreground">
+      {vault.t(I18N_KEYS.JoinSubtitle)}
     </p>
   </header>
 
   <JoinFlowDiagram {vault} side={JoinSide.Joining} />
 
-  <div
-    class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]"
-  >
-    <JoinSteps {vault} {current} />
-
-    {#if current === JoinStep.Invite || current === JoinStep.Redeem}
-      <form
-        class="grid gap-4 border border-foreground bg-card p-4 sm:p-5"
-        data-testid="join-form"
-        onsubmit={submit}
-      >
-        {#if linkReceived}
-          <p
-            class="inline-flex items-center gap-2 text-sm font-medium text-foreground"
-            data-testid="join-link-received"
-          >
-            <CheckCircle2 class="size-4 text-success" aria-hidden="true" />
-            {vault.t(I18N_KEYS.JoinLinkReceived)}
-          </p>
-        {:else}
-          <div class="grid gap-1.5">
-            <label
-              for="join-link-input"
-              class="text-sm font-medium text-foreground"
-            >
-              {vault.t(I18N_KEYS.JoinLinkLabel)}
-            </label>
-            <textarea
-              id="join-link-input"
-              rows="3"
-              class="w-full rounded-md border border-border bg-background p-3 font-mono text-xs leading-relaxed focus:ring-2 focus:ring-ring focus:outline-none"
-              placeholder={vault.t(I18N_KEYS.LoginPastePlaceholder)}
-              bind:value={linkInput}
-              data-testid="enrollment-code-input"
-            ></textarea>
-          </div>
-        {/if}
+  {#if !requested}
+    <form class="grid gap-4" data-testid="join-form" onsubmit={submit}>
+      {#if linkReceived}
+        <p
+          class="inline-flex items-center gap-2 text-sm font-medium text-foreground"
+          data-testid="join-link-received"
+        >
+          <CheckCircle2 class="size-4 text-success" aria-hidden="true" />
+          {vault.t(I18N_KEYS.JoinLinkReceived)}
+        </p>
+      {:else}
+        <p class="text-sm text-pretty text-muted-foreground">
+          {vault.t(I18N_KEYS.JoinInstruction)}
+        </p>
         <div class="grid gap-1.5">
-          <label
-            for="join-passphrase-input"
-            class="text-sm font-medium text-foreground"
-          >
-            {vault.t(I18N_KEYS.JoinPassphraseLabel)}
+          <label for="join-link-input" class="text-sm font-medium text-foreground">
+            {vault.t(I18N_KEYS.JoinLinkLabel)}
           </label>
           <input
-            id="join-passphrase-input"
-            type="password"
-            class="h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground focus:ring-2 focus:ring-ring focus:outline-none"
-            bind:value={passphraseInput}
-            autocomplete="one-time-code"
-            data-testid="enrollment-password-input"
+            id="join-link-input"
+            type="text"
+            class="h-10 w-full border border-border bg-card px-3 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-foreground/50 focus-visible:ring-2 focus-visible:ring-ring"
+            placeholder={vault.t(I18N_KEYS.LoginPastePlaceholder)}
+            autocomplete="off"
+            bind:value={linkInput}
+            data-testid="enrollment-code-input"
           />
         </div>
-        <Button
-          type="submit"
-          disabled={isVerifying || !joinCode || !passphraseInput.trim()}
-          data-testid="submit-enrollment-code-btn"
+      {/if}
+      <div class="grid gap-1.5">
+        <label
+          for="join-passphrase-input"
+          class="text-sm font-medium text-foreground"
         >
-          {#if isVerifying}
-            <RefreshCw class="size-4 animate-spin" />
-            {vault.t(I18N_KEYS.JoinSubmitting)}
-          {:else}
-            {vault.t(I18N_KEYS.JoinSubmit)}
-          {/if}
-        </Button>
-        <p
-          class="flex items-start gap-2 text-xs text-pretty text-muted-foreground"
-          data-testid="join-requirement"
-        >
-          <Cloud class="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-          {vault.t(I18N_KEYS.JoinRequirement)}
-        </p>
-      </form>
-    {/if}
-  </div>
+          {vault.t(I18N_KEYS.JoinPassphraseLabel)}
+        </label>
+        <input
+          id="join-passphrase-input"
+          type="password"
+          class="h-10 w-full border border-border bg-card px-3 text-sm text-foreground outline-none focus-visible:border-foreground/50 focus-visible:ring-2 focus-visible:ring-ring"
+          bind:value={passphraseInput}
+          autocomplete="one-time-code"
+          data-testid="enrollment-password-input"
+        />
+      </div>
+      <Button
+        type="submit"
+        class="h-10"
+        disabled={isVerifying || !joinCode || !passphraseInput.trim()}
+        data-testid="submit-enrollment-code-btn"
+      >
+        {#if isVerifying}
+          <RefreshCw class="size-4 animate-spin" />
+          {vault.t(I18N_KEYS.JoinSubmitting)}
+        {:else}
+          {vault.t(I18N_KEYS.JoinSubmit)}
+        {/if}
+      </Button>
+      <p
+        class="text-center font-mono text-[11px] tracking-[0.04em] text-muted-foreground"
+        data-testid="join-requirement"
+      >
+        {vault.t(I18N_KEYS.JoinRequirement)}
+      </p>
+    </form>
+  {/if}
 </section>
