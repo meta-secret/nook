@@ -51,9 +51,9 @@ export type IdentityCardView = {
   readonly vaults: readonly IdentityVaultRow[];
 };
 
-/** Manage on an identity card, with a vault the identity opens on this
+/** An identity card action (Unlock, Manage) with the vault it opens on this
  * browser ("" when it opens none), so a locked identity can be unlocked. */
-export type IdentityManageRequest = {
+export type IdentityVaultTarget = {
   readonly identityId: string;
   readonly storeId: string;
 };
@@ -69,6 +69,9 @@ export type IdentityCardSource = {
   /** The open vault's store id, or empty when no vault session is open. */
   readonly openStoreId: string;
   readonly authenticated: boolean;
+  /** This device's key is unlocked for the current identity, with or
+   * without a vault open. */
+  readonly identityUnlocked: boolean;
 };
 
 export type IdentityTotals = {
@@ -214,7 +217,7 @@ export class IdentityCardProjection {
   private status(entry: IdentityDirectoryEntry): IdentityCardStatus {
     switch (entry.localAccess) {
       case NookIdentityLocalAccessKind.CurrentBrowser:
-        return this.source.authenticated
+        return this.source.identityUnlocked
           ? IdentityCardStatus.Unlocked
           : IdentityCardStatus.Locked;
       case NookIdentityLocalAccessKind.ThisBrowser:

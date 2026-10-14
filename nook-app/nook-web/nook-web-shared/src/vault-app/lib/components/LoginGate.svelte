@@ -1,6 +1,6 @@
 <script lang="ts">
   import { WorkspaceLocation, keysRouteOpen } from "$lib/app/workspace-route";
-  import type { IdentityManageRequest } from "$lib/components/identities/identity-card-model";
+  import type { IdentityVaultTarget } from "$lib/components/identities/identity-card-model";
   import type { SentinelActionResult } from "$lib/vault/sentinel-genesis";
   type EnrollmentCodeUnlock = {
     readonly code: string;
@@ -70,6 +70,8 @@
     type IdentityContextFocusSchedule,
   } from "./login-gate-focus";
   import JoinThisDevice from "$lib/components/join/JoinThisDevice.svelte";
+  import CardPasswordUnlock from "$lib/components/identities/CardPasswordUnlock.svelte";
+  import { DeviceProtectionActions } from "$lib/vault/device-protection.svelte";
   import SentinelCeremonyPanel from "$lib/components/login/SentinelCeremonyPanel.svelte";
   import { SentinelCeremonyVisibility } from "$lib/vault/sentinel-unlock";
   import {
@@ -217,7 +219,10 @@
   let showProviderSetupLink = $state(false);
   /** Back from restore returns to the first screen even with saved rows. */
   let firstScreenRequested = $state(false);
-  let devicesAccessOpen = $state(keysRouteOpen());
+  /** Keys while locked, only for creating or switching identities. A
+   * locked identity is never managed here: its card unlocks it, and the
+   * workspace keeps the route for after the unlock. */
+  let devicesAccessOpen = $state(false);
   let devicesAccessTrigger = $state(DevicesAccessTriggerKind.Header);
   let devicesAccessReturnRoute = $state(WorkspaceRoute.Vault);
   let devicesAccessHost = $state<DevicesAccessHostMount>({
@@ -384,35 +389,66 @@
   }
 
   /** Manage on a locked identity unlocks it (one of its vaults, with this
-   * device's key) and lands on the identity home. With no vault here to
-   * open, only Keys can manage it. */
-  function manageIdentity(request: IdentityManageRequest): void {
-    const { identityId, storeId } = request;
-    managedIdentityId = identityId;
-    vault.identityFocus = identityId;
-    if (!storeId) {
-      void openDevicesAccess(DevicesAccessTriggerKind.Header);
-      return;
-    }
-    const navigation = new WorkspaceLocation(WorkspaceRoute.Vaults).navigate();
+   * device's key) and lands on the identity home. */
+  function manageIdentity(target: IdentityVaultTarget): void {
+    managedIdentityId = target.identityId;
+    vault.identityFocus = target.identityId;
+    // With no vault on this browser there is nothing to unlock it with.
+    if (!target.storeId) return;
+    const home: UnlockDestination = {
+      storeId: target.storeId,
+      route: WorkspaceRoute.Vaults,
+    };
+    void unlockTo(home);
+  }
+
+  /** Unlock on a locked card unlocks the identity: this device's passkey
+   * opens its key, and no vault is opened. A vault opens from its row. */
+  async function unlockIdentity(): Promise<void> {
+    if (vault.deviceProtectionReady || isVerifying) return;
+    const identityOnly: Parameters<
+      DeviceProtectionActions["unlockDeviceProtection"]
+    >[0] = { initializeSession: false };
+    await new DeviceProtectionActions(vault).unlockDeviceProtection(
+      identityOnly,
+    );
+  }
+
+  /** Lock on a card whose identity is unlocked without an open vault. */
+  function lockIdentity(): void {
+    void vault.lockDeviceProtection();
+  }
+
+  /** A vault row on a locked card unlocks that vault. */
+  function unlockVault(storeId: string): void {
+    const vaultPage: UnlockDestination = {
+      storeId,
+      route: WorkspaceRoute.Vault,
+    };
+    void unlockTo(vaultPage);
+  }
+
+  type UnlockDestination = {
+    readonly storeId: string;
+    readonly route: WorkspaceRoute;
+  };
+
+  /** Unlock a vault right away, as its Unlock button would, and open the
+   * workspace on `route` once it is unlocked. */
+  async function unlockTo(destination: UnlockDestination): Promise<void> {
+    const navigation = new WorkspaceLocation(destination.route).navigate();
     if (navigation.isErr()) {
       vault.errorMsg = vault.t(navigation.error.translationKey);
       return;
     }
-    const homeRoute: Parameters<
+    const routeRequest: Parameters<
       VaultWorkspaceActions["applyWorkspaceRoute"]
-    >[0] = { route: WorkspaceRoute.Vaults };
-    new VaultWorkspaceActions(vault).applyWorkspaceRoute(homeRoute);
-    void unlockToManage(storeId);
-  }
-
-  /** Select the identity's vault and unlock it right away, as its Unlock
-   * button would; the workspace then opens on the identity home. */
-  async function unlockToManage(storeId: string): Promise<void> {
+    >[0] = { route: destination.route };
+    new VaultWorkspaceActions(vault).applyWorkspaceRoute(routeRequest);
     // Choosing the vault again would touch the device key before the
     // passkey authorizes it; the selected one is ready to unlock as is.
-    if (storeId !== selectedCardStoreId) {
-      await openVaultFromCard(storeId);
+    if (destination.storeId !== selectedCardStoreId) {
+      await openVaultFromCard(destination.storeId);
       await tick();
     }
     if (vault.errorMsg || isVerifying) return;
@@ -426,7 +462,7 @@
 
   onMount(() => {
     const syncDevicesAccessRoute = () => {
-      devicesAccessOpen = keysRouteOpen();
+      if (!keysRouteOpen()) devicesAccessOpen = false;
     };
     window.addEventListener("popstate", syncDevicesAccessRoute);
     return () => window.removeEventListener("popstate", syncDevicesAccessRoute);
@@ -545,6 +581,12 @@
     vault.recoveryDiscovery.kind === RecoveryDiscoveryKind.Found
       ? vault.recoveryDiscovery.summary.passwordEntries
       : [],
+  );
+  /** Backup passwords of the selected vault, offered on its locked card. */
+  const cardPasswordEntries = $derived(
+    vault.passwordEntries.length > 0
+      ? vault.passwordEntries
+      : recoveryPasswordEntries,
   );
   const oauthPreset = $derived<OAuthFilePreset>(
     vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured
@@ -710,6 +752,19 @@
     {onSwitchVault}
   />
 {/snippet}
+{#snippet cardPasswordUnlock()}
+  <CardPasswordUnlock
+    {vault}
+    vaultLabel={activeLoginVault.kind === LoginVaultEntryKind.Available
+      ? activeLoginVault.entry.display_label(
+          vault.t(I18N_KEYS.LoginVaultPickerUnnamed),
+        )
+      : ""}
+    entries={cardPasswordEntries}
+    {isVerifying}
+    onUnlock={onUnlockWithPassword}
+  />
+{/snippet}
 {#snippet vaultPicker()}
   <LoginVaultPicker
     {vault}
@@ -755,17 +810,19 @@
       showCards={!showQrOnboarding}
       busy={isVerifying || isInitializing}
       canAddVault={!showCreateVault && !showQrOnboarding}
-      onOpenVault={(storeId: string) => void openVaultFromCard(storeId)}
+      onOpenVault={unlockVault}
       onNewVault={openNewVault}
       onManage={manageIdentity}
+      onUnlock={() => void unlockIdentity()}
+      onLock={lockIdentity}
       onNewIdentity={newIdentity}
-      onUseIdentity={(identityId: string) => {
-        const request: IdentityManageRequest = { identityId, storeId: "" };
-        manageIdentity(request);
-      }}
+      onUseIdentity={() => void unlockIdentity()}
       pairingStatusFor={(storeId: string) =>
         pairingStatusLookup.statusForStore(storeId)}
       {...showLocalUnlock && !newVaultOpen ? { unlockPanel } : {}}
+      {...showLocalUnlock && !newVaultOpen && cardPasswordEntries.length > 0
+        ? { passwordFallback: cardPasswordUnlock }
+        : {}}
       {...showVaultPicker && !newVaultOpen ? { vaultPicker } : {}}
       {...(showCreateVault || sentinelInvitationRequest.trim()) &&
       !showQrOnboarding

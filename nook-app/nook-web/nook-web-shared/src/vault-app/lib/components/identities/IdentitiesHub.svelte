@@ -23,7 +23,7 @@ join) sit between the hero and the cards.
     VaultSetupHostKind,
     type VaultSetupHost,
     type IdentityCardSource,
-    type IdentityManageRequest,
+    type IdentityVaultTarget,
     type IdentityLocalVault,
   } from './identity-card-model'
   import {
@@ -45,10 +45,12 @@ join) sit between the hero and the cards.
     onNewIdentity,
     onUseIdentity,
     onLock = () => {},
+    onUnlock = () => {},
     pairingStatusFor = () => ({
       kind: LoginVaultExtensionPairingStatusKind.NotShown,
     }),
     unlockPanel,
+    passwordFallback,
     vaultSetup,
     vaultSetupOpen = false,
     vaultPicker,
@@ -64,13 +66,19 @@ join) sit between the hero and the cards.
     busy?: boolean
     onOpenVault: (storeId: string) => void
     onNewVault?: () => void
-    onManage: (request: IdentityManageRequest) => void
+    onManage: (request: IdentityVaultTarget) => void
     onNewIdentity: () => void
-    onUseIdentity: (identityId: string) => void
+    onUseIdentity: (target: IdentityVaultTarget) => void
     onLock?: () => void
+    /** Unlock a locked identity with this device's passkey. */
+    onUnlock?: (target: IdentityVaultTarget) => void
     pairingStatusFor?: (storeId: string) => LoginVaultExtensionPairingStatus
-    /** Unlock panel for `selectedStoreId`, placed inside its identity card. */
+    /** Unlock panel for `selectedStoreId`, shown only when no identity card
+     * lists that vault; a card unlocks from its own footer. */
     unlockPanel?: Snippet
+    /** Backup-password unlock, placed on the card that holds the selected
+     * vault. */
+    passwordFallback?: Snippet
     /** First-vault setup. It belongs to the current identity, or to the
      * identity about to be created when this browser has none yet. */
     vaultSetup?: Snippet
@@ -114,6 +122,7 @@ join) sit between the hero and the cards.
           ? vault.activeVault.storeId
           : '',
       authenticated: vault.isAuthenticated,
+      identityUnlocked: vault.isAuthenticated || vault.deviceProtectionReady,
     }
     return new IdentityCardProjection(source)
   })
@@ -123,7 +132,7 @@ join) sit between the hero and the cards.
 
   /** The card that holds the vault being unlocked; it is shown first. */
   const unlockingIdentityId = $derived.by(() => {
-    if (!unlockPanel || !selectedStoreId || !cardsReady) return ''
+    if (!selectedStoreId || !cardsReady) return ''
     for (const card of projection.cards) {
       const opensSelected = card.vaults.some(
         (row) =>
@@ -194,18 +203,20 @@ join) sit between the hero and the cards.
       (cardsReady && projection.cards.length === 0)) &&
       configured_vault_application() !== VaultApplication.Sentinel,
   )
-  /** Manage names a vault the identity can open, so a locked identity can
-   * be unlocked on the way to its management. */
-  function manage(identityId: string): void {
+  /** Unlock and Manage name a vault the identity can open (the selected
+   * one first), so a locked identity can be unlocked on the way. */
+  function targetFor(identityId: string): IdentityVaultTarget {
     const card = projection.cards.find((each) => each.identityId === identityId)
-    const row = card?.vaults.find(
+    const openable = (card?.vaults ?? []).filter(
       (each) => each.state !== IdentityVaultRowState.Unavailable,
     )
-    const request: IdentityManageRequest = {
+    const row =
+      openable.find((each) => each.storeId === selectedStoreId) ?? openable[0]
+    const target: IdentityVaultTarget = {
       identityId,
       storeId: row ? row.storeId : '',
     }
-    onManage(request)
+    return target
   }
 
   /** The current identity's card, which carries the "New vault" row. */
@@ -321,14 +332,16 @@ join) sit between the hero and the cards.
             onNewVault={card.identityId === setupIdentityId
               ? () => (setupOpen = true)
               : onNewVault}
-            onManage={manage}
+            onManage={(identityId: string) => onManage(targetFor(identityId))}
+            onUnlock={(identityId: string) => onUnlock(targetFor(identityId))}
             {onLock}
-            {onUseIdentity}
+            onUseIdentity={(identityId: string) =>
+              onUseIdentity(targetFor(identityId))}
             {pairingStatusFor}
             {...vaultSetup && setupShown && card.identityId === setupIdentityId
               ? { unlockPanel: vaultSetup }
-              : unlockPanel && card.identityId === unlockingIdentityId
-                ? { unlockPanel }
+              : passwordFallback && card.identityId === unlockingIdentityId
+                ? { passwordFallback }
                 : {}}
           />
         {/each}

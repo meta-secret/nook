@@ -2153,7 +2153,11 @@
     },
     "identity_vault_setup": "New vault for this identity",
     "section_home": "Vaults & sync",
-    "nav_group_security": "Security"
+    "nav_group_security": "Security",
+    "unlock": "Unlock",
+    "unlock_identity_title": "Unlock with this device’s passkey",
+    "use_backup_password": "Use a backup password",
+    "backup_password_label": "Backup password for {vault}"
   },
   "identity_control": {
     "members_description": "Every app here can open this identity's vaults. Removing an app rotates each vault's keys before its next change.",
@@ -2204,7 +2208,7 @@
     "name_label": "Vault name",
     "name_placeholder": "Personal",
     "create": "Create vault",
-    "restore_link": "Restore from a sync provider",
+    "restore_link": "Lost access to your devices? Recover from a sync provider",
     "step_name": "Name",
     "step_protect": "Key",
     "back": "Back",
@@ -2220,9 +2224,9 @@
     "fact_no_server": "No Nook server",
     "fact_your_storage": "Your storage, your keys",
     "how_it_works": "How Nook works",
-    "restore_title": "Where is your vault?",
-    "restore_pick": "Pick the provider that holds it",
-    "restore_body": "Nook reads your encrypted vault there, then asks you to unlock it. Nothing is created or overwritten."
+    "restore_title": "Recover your vault",
+    "restore_pick": "Pick the sync provider that holds it",
+    "restore_body": "For when no device with your identity is left. You need your passkey synced to this device (iCloud Keychain or Google Password Manager) or the vault’s backup password. If another device still has your identity, add this device from there instead."
   },
   "identity_health": {
     "label": "Identity health",

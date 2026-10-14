@@ -35,7 +35,7 @@ band, the scrolling page and the status line.
   import { VaultStatusBarVariant } from "$lib/components/vault-status-bar-state";
   import IdentitiesHub from "$lib/components/identities/IdentitiesHub.svelte";
   import LoginNewVaultPanel from "$lib/components/login/LoginNewVaultPanel.svelte";
-  import type { IdentityManageRequest } from "$lib/components/identities/identity-card-model";
+  import type { IdentityVaultTarget } from "$lib/components/identities/identity-card-model";
   import { IdentityDirectoryLoader } from "$lib/components/identities/identity-directory-loader.svelte";
   import { IdentityDirectoryLoadKind } from "$lib/components/devices-access/identity-directory-view";
   import PageBar from "$lib/components/workspace/PageBar.svelte";
@@ -404,10 +404,11 @@ band, the scrolling page and the status line.
       onNewVault={() => (newVaultOpen = true)}
       {...newVaultOpen ? { vaultSetup: newVaultPanel } : {}}
       vaultSetupOpen={newVaultOpen}
-      onManage={(request: IdentityManageRequest) =>
+      onManage={(request: IdentityVaultTarget) =>
         manageIdentity(request.identityId)}
       onNewIdentity={newIdentity}
-      onUseIdentity={manageIdentity}
+      onUseIdentity={(target: IdentityVaultTarget) =>
+        manageIdentity(target.identityId)}
       onLock={lockIdentity}
     />
     <VaultStatusBar

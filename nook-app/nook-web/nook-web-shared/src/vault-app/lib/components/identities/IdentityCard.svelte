@@ -12,6 +12,7 @@ card, which then spans the full row.
     Fingerprint,
     FolderKey,
     Lock,
+    LockOpen,
     Plus,
     Puzzle,
     Settings2,
@@ -49,11 +50,13 @@ card, which then spans the full row.
     onNewVault = () => {},
     onManage,
     onLock = () => {},
+    onUnlock = () => {},
     onUseIdentity = () => {},
     pairingStatusFor = () => ({
       kind: LoginVaultExtensionPairingStatusKind.NotShown,
     }),
     unlockPanel,
+    passwordFallback,
   }: {
     vault: VaultState
     card: IdentityCardView
@@ -66,11 +69,15 @@ card, which then spans the full row.
     onNewVault?: () => void
     onManage: (identityId: string) => void
     onLock?: () => void
+    /** Unlock the identity with this device's passkey. */
+    onUnlock?: (identityId: string) => void
     onUseIdentity?: (identityId: string) => void
     /** Extension pairing status for a vault row, while pairing is offered. */
     pairingStatusFor?: (storeId: string) => LoginVaultExtensionPairingStatus
-    /** Unlock panel for the selected vault, shown beside the card's rows. */
+    /** Setup panel (a new vault), shown beside the card's rows. */
     unlockPanel?: Snippet
+    /** Backup-password unlock for the selected vault, while locked. */
+    passwordFallback?: Snippet
   } = $props()
 
   const live = $derived(card.status === IdentityCardStatus.Unlocked)
@@ -306,8 +313,23 @@ card, which then spans the full row.
       </ul>
     </section>
 
+    {#if card.status === IdentityCardStatus.Locked && passwordFallback}
+      {@render passwordFallback()}
+    {/if}
+
     <div class="nk-card-actions">
-      {#if live}
+      {#if card.status === IdentityCardStatus.Locked}
+        <button
+          type="button"
+          data-testid="identity-unlock"
+          title={vault.t(I18N_KEYS.WorkspaceUnlockIdentityTitle)}
+          disabled={busy}
+          onclick={() => onUnlock(card.identityId)}
+        >
+          <LockOpen class="size-4 text-muted-foreground" aria-hidden="true" />
+          {vault.t(I18N_KEYS.WorkspaceUnlock)}
+        </button>
+      {:else if live}
         <button
           type="button"
           data-testid="identity-lock"
@@ -339,7 +361,7 @@ card, which then spans the full row.
         onclick={() => onManage(card.identityId)}
       >
         <Settings2 class="size-4 text-muted-foreground" aria-hidden="true" />
-        {live
+        {live || card.status === IdentityCardStatus.Locked
           ? vault.t(I18N_KEYS.WorkspaceManage)
           : vault.t(I18N_KEYS.WorkspaceManageIdentity)}
       </button>
