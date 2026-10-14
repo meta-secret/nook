@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { ok, type Result } from 'neverthrow'
+import { ok } from 'neverthrow'
 import { NookVaultManager } from '$app-wasm'
 import { IdentityDirectoryLoader } from '$lib/components/identities/identity-directory-loader.svelte'
 import { IdentityDirectoryLoadKind } from '$lib/components/devices-access/identity-directory-view'
@@ -19,13 +19,8 @@ describe('identity directory loader', () => {
       },
     )
     vi.spyOn(vault, 'admitManager').mockReturnValue(ok(manager))
-    const queued = vi.fn(
-      async <Value, Failure>(
-        operation: () =>
-          Result<Value, Failure> | Promise<Result<Value, Failure>>,
-      ) => operation(),
-    )
-    vault.enqueueStorage = queued
+    VaultStateTestFixture.runStorageImmediately(vault)
+    const queued = vi.spyOn(vault, 'enqueueStorage')
     vi.useFakeTimers()
 
     const loader = new IdentityDirectoryLoader(vault)

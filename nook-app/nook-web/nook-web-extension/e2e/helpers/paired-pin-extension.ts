@@ -18,7 +18,10 @@ import {
   ensurePinProtectedPopup,
   installForcePinDeviceProtection,
 } from './pin-device'
-import { waitForExtensionPairingReady } from './extension-approval'
+import {
+  leaveFirstRunReady,
+  waitForExtensionPairingReady,
+} from './extension-approval'
 import { readExtensionPairingStorage } from './extension-pairing-storage'
 import { reportExtensionBrowserErrors } from './browser-errors'
 
@@ -201,6 +204,7 @@ export async function launchPairedPinExtension(
     vaultName,
   )
 
+  await leaveFirstRunReady(simplePage)
   await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible({
     timeout: EXTENSION_TIMEOUT_MS,
   })

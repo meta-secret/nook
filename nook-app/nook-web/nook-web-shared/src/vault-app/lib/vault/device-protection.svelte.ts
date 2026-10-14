@@ -163,8 +163,15 @@ export class DeviceProtectionActions {
       else {
         try {
           manager.value.lock_device_identity();
-        } catch (failure) {
-          locked = storageErr(new NativeVaultStorageFailure(failure));
+        } catch {
+          // An engine call still in flight holds the identity; lock it as
+          // soon as that call settles rather than leaving it unlocked.
+          await state.waitForStorageChain();
+          try {
+            manager.value.lock_device_identity();
+          } catch (failure) {
+            locked = storageErr(new NativeVaultStorageFailure(failure));
+          }
         }
       }
     }

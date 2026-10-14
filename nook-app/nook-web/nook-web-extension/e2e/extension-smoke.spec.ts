@@ -33,6 +33,7 @@ import {
   ensurePinProtectedPopup,
   installForcePinDeviceProtection,
 } from './helpers/pin-device'
+import { leaveFirstRunReady } from './helpers/extension-approval'
 import { lockExtensionSession } from './helpers/paired-pin-extension'
 import { unlockExtensionThroughCompanion } from './helpers/paired-vault-companion-unlock'
 import { ExtensionSessionMessageType } from '../src/offscreen/session-message-dispatch'
@@ -522,6 +523,7 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     ).toBeVisible()
     await expect(simplePage.getByTestId('app-success')).toBeVisible()
     await expect(simplePage).toHaveURL((url) => url.pathname.endsWith('/vault'))
+    await leaveFirstRunReady(simplePage)
     await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
 
     // Independent local creation requires a locked companion: an unlocked

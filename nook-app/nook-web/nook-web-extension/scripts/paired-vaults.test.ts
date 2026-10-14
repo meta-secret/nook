@@ -12,6 +12,10 @@ import {
   pairedVaultsMessages,
   type PairedVaultSummary,
 } from '../src/lib/paired-vaults'
+import {
+  isPopupSender,
+  type PopupSenderCheck,
+} from '../src/background/service-worker/paired-vaults'
 
 const personal: StoredExtensionPairingGrant = {
   vaultType: 'simple',
@@ -166,5 +170,30 @@ describe('paired vaults', () => {
       ['Me', ['Personal']],
       ['', ['Old']],
     ])
+  })
+
+  test('answers the popup in a toolbar or a tab, never a content script', () => {
+    const popupUrl = 'chrome-extension://nook-id/popup/index.html'
+    const check = (sender: chrome.runtime.MessageSender): boolean => {
+      const request: PopupSenderCheck = {
+        sender,
+        runtimeId: 'nook-id',
+        popupUrl,
+      }
+      return isPopupSender(request)
+    }
+
+    expect(check({ id: 'nook-id', url: popupUrl })).toBe(true)
+    expect(check({ id: 'nook-id', url: `${popupUrl}?intent=pair` })).toBe(true)
+    expect(
+      check({ id: 'nook-id', url: 'https://accounts.example.test/login' }),
+    ).toBe(false)
+    expect(
+      check({
+        id: 'nook-id',
+        url: 'chrome-extension://nook-id/login-picker/index.html',
+      }),
+    ).toBe(false)
+    expect(check({ id: 'other-id', url: popupUrl })).toBe(false)
   })
 })

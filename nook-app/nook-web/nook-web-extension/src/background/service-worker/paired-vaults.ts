@@ -20,9 +20,32 @@ type DefaultVaultSelectContext = PairedVaultsContext & {
   readonly vaultStoreId: string
 }
 
-/** Only the extension's own pages (the popup) list or change its vaults. */
+export type PopupSenderCheck = {
+  readonly sender: chrome.runtime.MessageSender
+  readonly runtimeId: string
+  readonly popupUrl: string
+}
+
+/** Only the extension's popup lists or changes its vaults, whether it
+ * opens from the toolbar or in a tab; content scripts never do. */
+export function isPopupSender({
+  sender,
+  runtimeId,
+  popupUrl,
+}: PopupSenderCheck): boolean {
+  if (sender.id !== runtimeId || typeof sender.url !== 'string') return false
+  const page = new URL(sender.url)
+  const popup = new URL(popupUrl)
+  return page.origin === popup.origin && page.pathname === popup.pathname
+}
+
 function fromExtensionPage(sender: chrome.runtime.MessageSender): boolean {
-  return sender.id === chrome.runtime.id && !sender.tab
+  const check: PopupSenderCheck = {
+    sender,
+    runtimeId: chrome.runtime.id,
+    popupUrl: chrome.runtime.getURL('popup/index.html'),
+  }
+  return isPopupSender(check)
 }
 
 async function pairedVaults(): Promise<PairedVaultSummary[]> {
