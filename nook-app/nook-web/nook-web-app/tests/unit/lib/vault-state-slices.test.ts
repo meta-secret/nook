@@ -44,8 +44,8 @@ describe('vault state slice transitions', () => {
     state.clearIdentityProviderSession()
     expect(state.localVaultPresent).toBe(true)
 
-    state.devicesAccessIdentityProtectionOpen = true
-    expect(state.devicesAccessIdentityProtectionOpen).toBe(true)
+    state.devicesAccessIdentityTransitionPending = true
+    expect(state.devicesAccessIdentityTransitionPending).toBe(true)
 
     const syncedAt = Date.parse('2026-07-30T00:00:00.000Z')
     state.markSynced(syncedAt)

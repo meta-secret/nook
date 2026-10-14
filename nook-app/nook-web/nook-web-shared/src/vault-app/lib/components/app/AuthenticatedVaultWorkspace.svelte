@@ -285,17 +285,9 @@ band, the scrolling page and the status line.
     await vault.switchToVault(storeId);
   }
 
-  /** The rail acts on the unlocked identity. */
-  function openFromNav(next: WorkspaceSection): void {
-    if (currentIdentity !== false)
-      vault.identityFocus = currentIdentity.identityId;
-    openSection(next);
-  }
-
   /** Manage on a card: the unlocked identity opens its overview; another
    * identity is managed from Keys, which lists them all. */
   function manageIdentity(identityId: string): void {
-    vault.identityFocus = identityId;
     const unlocked =
       currentIdentity !== false && currentIdentity.identityId === identityId;
     openSection(unlocked ? WorkspaceSection.Overview : WorkspaceSection.Keys);
@@ -510,7 +502,7 @@ band, the scrolling page and the status line.
           identityHealth.nextStep === NookIdentityNextStep.AddCloudProvider}
         deviceMissing={identityHealth.nextStep ===
           NookIdentityNextStep.AddDevice}
-        onSelect={openFromNav}
+        onSelect={openSection}
       />
     {/if}
 
@@ -564,7 +556,7 @@ band, the scrolling page and the status line.
               card={overviewCard}
               health={identityHealth}
               {canAddDevice}
-              onOpen={openFromNav}
+              onOpen={openSection}
               onOpenVault={(storeId: string) => void openVaultFromCard(storeId)}
               onNewVault={newVaultFromOverview}
               onAddSyncProvider={addSyncProvider}
@@ -573,7 +565,7 @@ band, the scrolling page and the status line.
         {:else if section === WorkspaceSection.Devices}
           <IdentityDevicesPanel {vault} onOpenSync={addSyncProvider} />
         {:else if section === WorkspaceSection.Keys}
-          <IdentityKeysPage {vault} onOpen={openFromNav} />
+          <IdentityKeysPage {vault} onOpen={openSection} />
         {:else if section === WorkspaceSection.Settings}
           <BrowserSettingsPanel {vault} />
         {:else}

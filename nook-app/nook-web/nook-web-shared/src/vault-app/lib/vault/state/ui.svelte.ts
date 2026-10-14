@@ -71,13 +71,8 @@ export enum NewIdentityStage {
 
 export class VaultUiState {
   workspaceSection = $state<WorkspaceSection>(WorkspaceSection.Vault);
-  devicesAccessIdentityProtectionOpen = $state(false);
   /** Survives panel cancellation and navigation until the identity authenticates. */
   devicesAccessIdentityTransitionPending = $state(false);
-  /** Identity the Keys page should present first, chosen from an identity card. */
-  identityFocus = $state("");
-  /** Set by the "New identity" card so the Keys page starts identity creation. */
-  identityCreationRequested = $state(false);
   helpOpen = $state(false);
   firstRun = $state<FirstRunStage>(FirstRunStage.Off);
   /** The name given on the first-vault screen, shown by the later steps. */

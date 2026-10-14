@@ -236,7 +236,6 @@
   /** Manage on a locked identity unlocks it (one of its vaults, with this
    * device's key) and lands on the identity home. */
   function manageIdentity(target: IdentityVaultTarget): void {
-    vault.identityFocus = target.identityId;
     // With no vault on this browser there is nothing to unlock it with.
     if (!target.storeId) return;
     const home: UnlockDestination = {

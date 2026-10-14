@@ -109,7 +109,6 @@
 
   onDestroy(() => {
     if (vault.isAuthenticated) {
-      vault.devicesAccessIdentityProtectionOpen = false
       vault.devicesAccessIdentityTransitionPending = false
     }
   })

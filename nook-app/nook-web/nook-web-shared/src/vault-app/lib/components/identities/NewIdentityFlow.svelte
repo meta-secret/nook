@@ -154,7 +154,6 @@ adopting the new identity ends the current identity's session midway.
   async function adopt(): Promise<void> {
     creationPending = false;
     new IdentitySessionTransition(vault).clearPriorIdentity();
-    vault.devicesAccessIdentityProtectionOpen = false;
     const providerLoad: Parameters<typeof vault.loadProviders>[0] = {
       ensureLocalRow: true,
     };

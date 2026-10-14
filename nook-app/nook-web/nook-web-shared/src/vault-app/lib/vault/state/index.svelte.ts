@@ -39,10 +39,7 @@ const runtimeKeys = [
 
 const uiKeys = [
   "workspaceSection",
-  "devicesAccessIdentityProtectionOpen",
   "devicesAccessIdentityTransitionPending",
-  "identityFocus",
-  "identityCreationRequested",
   "helpOpen",
   "firstRun",
   "firstRunVaultName",
@@ -207,10 +204,7 @@ class VaultStateSlicesImplementation {
   declare isInitializing: VaultRuntimeState["isInitializing"];
 
   declare workspaceSection: VaultUiState["workspaceSection"];
-  declare devicesAccessIdentityProtectionOpen: VaultUiState["devicesAccessIdentityProtectionOpen"];
   declare devicesAccessIdentityTransitionPending: VaultUiState["devicesAccessIdentityTransitionPending"];
-  declare identityFocus: VaultUiState["identityFocus"];
-  declare identityCreationRequested: VaultUiState["identityCreationRequested"];
   declare helpOpen: VaultUiState["helpOpen"];
   declare firstRun: VaultUiState["firstRun"];
   declare firstRunVaultName: VaultUiState["firstRunVaultName"];
