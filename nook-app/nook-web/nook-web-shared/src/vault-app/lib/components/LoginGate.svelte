@@ -252,11 +252,20 @@
     };
   }
 
-  function focusHostButton(testId: string): void {
-    if (devicesAccessHost.kind === DevicesAccessHostMountKind.Unmounted) return;
-    devicesAccessHost.element
-      .querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`)
-      ?.focus();
+  /** Focus a button in the Keys host once the page that owns it has rendered. */
+  async function focusHostButton(testId: string): Promise<void> {
+    for (let frame = 0; frame < 60; frame += 1) {
+      if (devicesAccessHost.kind === DevicesAccessHostMountKind.Mounted) {
+        const target = devicesAccessHost.element.querySelector<HTMLButtonElement>(
+          `[data-testid="${testId}"]`,
+        );
+        if (target) {
+          target.focus();
+          return;
+        }
+      }
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
   }
 
   /** Return focus to the card's Manage button once the cards have rendered. */
@@ -327,7 +336,7 @@
       applyWorkspaceRouteArgs,
     );
     await tick();
-    focusHostButton("page-bar-back");
+    await focusHostButton("page-bar-back");
   }
 
   async function closeDevicesAccess(): Promise<void> {
@@ -349,7 +358,7 @@
     );
     await tick();
     if (devicesAccessTrigger === DevicesAccessTriggerKind.IdentityContext) {
-      focusHostButton("login-review-identities");
+      await focusHostButton("login-review-identities");
       await focusIdentityContextWhenAvailable();
       return;
     }
