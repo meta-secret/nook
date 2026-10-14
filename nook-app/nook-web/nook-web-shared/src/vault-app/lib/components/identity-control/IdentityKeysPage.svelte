@@ -245,7 +245,7 @@ Technical identifiers stay behind "Details".
 
     <!-- How many keys, and whether that is enough. -->
     <section
-      class="flex flex-col gap-4 border border-border bg-card p-5 sm:flex-row sm:items-center sm:justify-between"
+      class="flex flex-col gap-4 border border-border bg-card p-4 sm:flex-row sm:p-5 sm:items-center sm:justify-between"
       data-testid="identity-keys-summary"
       data-key-count={keys.length}
     >
@@ -318,7 +318,9 @@ Technical identifiers stay behind "Details".
           data-key={row.key}
         >
           <div class="flex flex-wrap items-center justify-between gap-3">
-            <div class="flex min-w-0 items-center gap-3">
+            <div
+              class="flex min-w-0 flex-[1_1_14rem] flex-wrap items-center gap-x-3 gap-y-1.5"
+            >
               <span class="nk-tile shrink-0" aria-hidden="true">
                 {#if row.passkeySummary.kind === PasskeyCardSummaryKind.Present || row.renamable}
                   <Fingerprint class="size-4" />
@@ -335,7 +337,7 @@ Technical identifiers stay behind "Details".
                   }}
                 >
                   <input
-                    class="h-9 min-w-0 flex-1 border border-border bg-card px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    class="h-9 min-w-0 flex-[1_1_10rem] border border-border bg-card px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     aria-label={vault.t(I18N_KEYS.CommonRename)}
                     bind:value={draft}
                     data-testid="identity-key-name-input"
@@ -359,7 +361,9 @@ Technical identifiers stay behind "Details".
                   </Button>
                 </form>
               {:else}
-                <span class="truncate text-base font-semibold text-foreground">
+                <span
+                  class="min-w-0 truncate text-base font-semibold text-foreground"
+                >
                   {row.title}
                 </span>
                 <span class="nk-tag shrink-0">{row.typeLabel}</span>

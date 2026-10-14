@@ -245,12 +245,15 @@
     z-index: 40;
   }
 
+  /* Phones: the shell fills the screen under the sticky header (a 2.5rem
+   * control, 0.5rem padding on each side and its border). */
   .authenticated-shell {
-    min-height: calc(100svh - 11rem);
+    --app-header-height: calc(3.5rem + 1px);
+    min-height: calc(100svh - var(--app-header-height));
   }
 
   .authenticated-shell.authenticated-shell-editor {
-    height: calc(100dvh - 9rem);
+    height: calc(100dvh - var(--app-header-height));
     min-height: 0;
   }
 
@@ -287,6 +290,16 @@
 
   .shell-scroll::-webkit-scrollbar-thumb:hover {
     background: color-mix(in oklch, var(--muted-foreground) 55%, transparent);
+  }
+}
+
+/* Touch browsers zoom into fields set smaller than 16px when focused.
+ * Unlayered, so it outranks the text-size utilities on each field. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"], [type="radio"], [type="range"]),
+  select,
+  textarea {
+    font-size: max(1rem, 1em);
   }
 }
 

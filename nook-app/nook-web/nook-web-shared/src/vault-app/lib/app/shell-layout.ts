@@ -24,6 +24,6 @@ export class ApplicationShellLayout {
     ) {
       return "py-5 sm:py-6";
     }
-    return state.editorOpen ? "py-4 sm:py-8" : "pb-28 pt-4 sm:py-8";
+    return state.editorOpen ? "pt-4 sm:py-8" : "pb-6 pt-4 sm:py-8";
   }
 }

@@ -68,7 +68,7 @@ path and stands apart; restoring from a sync provider is a quiet link.
   />
 {:else}
 <section
-  class="mx-auto grid w-full max-w-md gap-7 py-10 text-center sm:py-16"
+  class="mx-auto grid w-full max-w-md gap-6 py-6 text-center sm:gap-7 sm:py-16"
   data-testid="first-vault-start"
 >
   <div class="space-y-2">
@@ -93,7 +93,7 @@ path and stands apart; restoring from a sync provider is a quiet link.
     <input
       id="first-vault-name"
       type="text"
-      class="h-10 min-w-0 flex-1 border border-border bg-card px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-foreground/50 focus-visible:ring-2 focus-visible:ring-ring"
+      class="h-11 min-w-0 border border-border bg-card px-3 text-sm text-foreground sm:h-10 sm:flex-1 outline-none placeholder:text-muted-foreground focus-visible:border-foreground/50 focus-visible:ring-2 focus-visible:ring-ring"
       placeholder={vault.t(I18N_KEYS.FirstRunNamePlaceholder)}
       maxlength="64"
       autocomplete="off"
@@ -103,7 +103,7 @@ path and stands apart; restoring from a sync provider is a quiet link.
     />
     <Button
       type="submit"
-      class="h-10 shrink-0"
+      class="h-11 shrink-0 sm:h-10"
       disabled={isBusy}
       data-testid="login-create-device-vault-btn"
     >
@@ -156,7 +156,7 @@ path and stands apart; restoring from a sync provider is a quiet link.
   <div class="flex justify-center text-sm" data-testid="login-path-cloud">
     <button
       type="button"
-      class="text-muted-foreground underline underline-offset-4 hover:text-foreground disabled:opacity-60"
+      class="text-balance text-muted-foreground underline decoration-muted-foreground/40 underline-offset-4 hover:text-foreground hover:decoration-foreground disabled:opacity-60"
       data-testid="login-connect-storage-btn"
       disabled={isBusy}
       onclick={onConnectStorage}
@@ -167,15 +167,15 @@ path and stands apart; restoring from a sync provider is a quiet link.
 
   <!-- What Nook is, in one line; the details live in Help. -->
   <p
-    class="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 font-mono text-[11px] tracking-[0.04em] text-muted-foreground"
+    class="flex flex-col items-center gap-1 font-mono text-[11px] tracking-[0.04em] text-muted-foreground sm:flex-row sm:flex-wrap sm:justify-center sm:gap-x-2"
     data-testid="first-vault-facts"
   >
     <span>{vault.t(I18N_KEYS.FirstRunFactEncrypted)}</span>
-    <span aria-hidden="true">·</span>
+    <span class="hidden sm:inline" aria-hidden="true">·</span>
     <span>{vault.t(I18N_KEYS.FirstRunFactNoServer)}</span>
-    <span aria-hidden="true">·</span>
+    <span class="hidden sm:inline" aria-hidden="true">·</span>
     <span>{vault.t(I18N_KEYS.FirstRunFactYourStorage)}</span>
-    <span aria-hidden="true">·</span>
+    <span class="hidden sm:inline" aria-hidden="true">·</span>
     <button
       type="button"
       class="underline underline-offset-4 hover:text-foreground"

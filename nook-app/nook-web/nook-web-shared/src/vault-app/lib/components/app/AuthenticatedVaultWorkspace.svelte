@@ -440,7 +440,7 @@ band, the scrolling page and the status line.
   <div
     class:authenticated-shell-editor={secretsAddOpen}
     class:nk-shell-manage={scope === ManageSectionScope.Identity}
-    class="authenticated-shell nk-shell w-full min-w-0 max-w-full [touch-action:pan-y_pinch-zoom]"
+    class="authenticated-shell nk-shell -mx-4 -mt-4 w-auto min-w-0 max-w-none sm:mx-0 sm:mt-0 sm:w-full sm:max-w-full [touch-action:pan-y_pinch-zoom]"
     data-testid="authenticated-shell"
     data-section={section}
   >

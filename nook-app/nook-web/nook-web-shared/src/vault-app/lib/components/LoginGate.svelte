@@ -710,7 +710,7 @@
         Boolean(sentinelInvitationRequest.trim()) ||
         vault.sentinelGenesisPhase === SentinelGenesisPhase.DeliveringShares}
     >
-      <div class="grid min-w-0 grid-cols-1 gap-3 empty:hidden">
+      <div class="grid min-w-0 grid-cols-1 gap-3 [&:not(:has(*))]:hidden">
         {#if vault.sessionExpiredByIdle}
           <p
             class="nk-banner nk-banner-warning px-4 py-3 text-sm text-foreground"

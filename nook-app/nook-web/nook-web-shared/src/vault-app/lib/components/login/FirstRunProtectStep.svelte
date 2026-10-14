@@ -85,7 +85,9 @@ identity card the hub will show once setup finishes.
   </div>
 
   <div class="space-y-2">
-    <h1 class="text-[1.75rem] leading-tight font-semibold tracking-[-0.02em] text-foreground">
+    <h1
+      class="text-[1.75rem] leading-tight font-semibold tracking-[-0.02em] text-foreground"
+    >
       {vault.t(I18N_KEYS.FirstRunProtectTitle)}
     </h1>
     <p class="max-w-[60ch] text-sm text-pretty text-muted-foreground">
@@ -93,8 +95,13 @@ identity card the hub will show once setup finishes.
     </p>
   </div>
 
-  <div class="grid items-start gap-8 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
-    <figure class="m-0 grid min-w-0 gap-2" aria-label={vault.t(I18N_KEYS.FirstRunPreviewLabel)}>
+  <div
+    class="grid items-start gap-6 sm:gap-8 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]"
+  >
+    <figure
+      class="m-0 grid min-w-0 gap-2"
+      aria-label={vault.t(I18N_KEYS.FirstRunPreviewLabel)}
+    >
       <figcaption class="nk-label">
         {vault.t(I18N_KEYS.FirstRunPreviewLabel)}
       </figcaption>
@@ -102,14 +109,18 @@ identity card the hub will show once setup finishes.
         <IdentityCard
           {vault}
           card={preview}
+          preview
           onOpenVault={() => {}}
           onManage={() => {}}
         />
       </div>
     </figure>
-    <div class="grid min-w-0 gap-3">
+    <div class="grid min-w-0 gap-3 max-lg:order-first">
       <p class="flex items-center gap-2 text-sm font-medium text-foreground">
-        <KeyRound class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <KeyRound
+          class="size-4 shrink-0 text-muted-foreground"
+          aria-hidden="true"
+        />
         {vault.t(I18N_KEYS.FirstRunProtectHint)}
       </p>
       <DeviceProtectionGate

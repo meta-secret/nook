@@ -1931,6 +1931,8 @@ export const I18N_KEYS = {
   WorkspaceNavGroupParts: 'workspace.nav_group_parts',
   WorkspaceNavGroupSecurity: 'workspace.nav_group_security',
   WorkspaceNavLabel: 'workspace.nav_label',
+  WorkspaceNavMore: 'workspace.nav_more',
+  WorkspaceNavMoreTitle: 'workspace.nav_more_title',
   WorkspaceNavShortKeys: 'workspace.nav_short_keys',
   WorkspaceNavShortPasswords: 'workspace.nav_short_passwords',
   WorkspaceNavShortSettings: 'workspace.nav_short_settings',

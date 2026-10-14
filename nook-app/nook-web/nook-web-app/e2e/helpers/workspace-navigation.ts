@@ -82,6 +82,11 @@ export async function openManagePage(
     })
     if (target === ManagePage.Overview) return
   }
+  // Phones keep security and settings behind the bottom bar's More slot.
+  const more = page.getByTestId('manage-nav-more')
+  if (!(await navItem.isVisible()) && (await more.isVisible())) {
+    await more.click()
+  }
   await expect(navItem).toBeVisible({ timeout: UI_TIMEOUT_MS })
   await navItem.click()
   // Identity pages read the identity directory, which retries while the

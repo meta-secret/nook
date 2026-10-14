@@ -425,7 +425,7 @@ join) sit between the hero and the cards.
         {/each}
         <button
           type="button"
-          class="nk-frame-keytag nk-new-tile min-h-40 md:min-h-60"
+          class="nk-frame-keytag nk-new-tile sm:min-h-40 md:min-h-60"
           data-testid="identity-new"
           disabled={busy}
           onclick={onNewIdentity}
