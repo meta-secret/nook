@@ -481,148 +481,26 @@ pub const DEVICE_PROTECTION_UNAVAILABLE_RECOVERY_WARNING: &str =
     "device_protection.unavailable_recovery_warning";
 pub const DEVICE_PROTECTION_UNLOCK_ACTION: &str = "device_protection.unlock_action";
 pub const DEVICE_PROTECTION_UNLOCK_DESCRIPTION: &str = "device_protection.unlock_description";
-pub const DEVICES_ACCESS_AAGUID: &str = "devices_access.aaguid";
-pub const DEVICES_ACCESS_ACCESS_UNKNOWN: &str = "devices_access.access_unknown";
-pub const DEVICES_ACCESS_ACCESS_VERIFIED: &str = "devices_access.access_verified";
-pub const DEVICES_ACCESS_ADD_IDENTITY: &str = "devices_access.add_identity";
-pub const DEVICES_ACCESS_ADVANCED_DETAILS: &str = "devices_access.advanced_details";
 pub const DEVICES_ACCESS_APP_LINKED_TO_IDENTITY: &str = "devices_access.app_linked_to_identity";
 pub const DEVICES_ACCESS_APP_PROTECTED_BY: &str = "devices_access.app_protected_by";
 pub const DEVICES_ACCESS_APPS_FOR_IDENTITY: &str = "devices_access.apps_for_identity";
 pub const DEVICES_ACCESS_APPS_HEADING: &str = "devices_access.apps_heading";
-pub const DEVICES_ACCESS_ATTACHMENT: &str = "devices_access.attachment";
-pub const DEVICES_ACCESS_ATTACHMENT_CROSS_PLATFORM: &str =
-    "devices_access.attachment_cross_platform";
-pub const DEVICES_ACCESS_ATTACHMENT_PLATFORM: &str = "devices_access.attachment_platform";
-pub const DEVICES_ACCESS_BACKUP_BACKED_UP: &str = "devices_access.backup_backed_up";
-pub const DEVICES_ACCESS_BACKUP_ELIGIBLE: &str = "devices_access.backup_eligible";
-pub const DEVICES_ACCESS_BACKUP_NOT_ELIGIBLE: &str = "devices_access.backup_not_eligible";
-pub const DEVICES_ACCESS_BACKUP_PASSWORD_BOUNDARY: &str = "devices_access.backup_password_boundary";
-pub const DEVICES_ACCESS_BACKUP_PASSWORD_BOUNDARY_COMPANION: &str =
-    "devices_access.backup_password_boundary_companion";
-pub const DEVICES_ACCESS_BACKUP_PASSWORDS: &str = "devices_access.backup_passwords";
-pub const DEVICES_ACCESS_BACKUP_STATUS: &str = "devices_access.backup_status";
-pub const DEVICES_ACCESS_BRIDGE_A11Y_EDGE: &str = "devices_access.bridge_a11y_edge";
-pub const DEVICES_ACCESS_BRIDGE_A11Y_FIT_VIEW: &str = "devices_access.bridge_a11y_fit_view";
-pub const DEVICES_ACCESS_BRIDGE_A11Y_HANDLE: &str = "devices_access.bridge_a11y_handle";
-pub const DEVICES_ACCESS_BRIDGE_A11Y_INTERACTIVITY: &str =
-    "devices_access.bridge_a11y_interactivity";
-pub const DEVICES_ACCESS_BRIDGE_A11Y_MINIMAP: &str = "devices_access.bridge_a11y_minimap";
-pub const DEVICES_ACCESS_BRIDGE_A11Y_NODE: &str = "devices_access.bridge_a11y_node";
-pub const DEVICES_ACCESS_BRIDGE_A11Y_NODE_MOVED: &str = "devices_access.bridge_a11y_node_moved";
-pub const DEVICES_ACCESS_BRIDGE_A11Y_ZOOM_IN: &str = "devices_access.bridge_a11y_zoom_in";
-pub const DEVICES_ACCESS_BRIDGE_A11Y_ZOOM_OUT: &str = "devices_access.bridge_a11y_zoom_out";
-pub const DEVICES_ACCESS_BRIDGE_APP_KEY_IDENTITY_RELATION: &str =
-    "devices_access.bridge_app_key_identity_relation";
-pub const DEVICES_ACCESS_BRIDGE_BROWSE_BY: &str = "devices_access.bridge_browse_by";
-pub const DEVICES_ACCESS_BRIDGE_COMPANION_IDENTITY: &str =
-    "devices_access.bridge_companion_identity";
-pub const DEVICES_ACCESS_BRIDGE_COMPANION_IDENTITY_CONTEXT: &str =
-    "devices_access.bridge_companion_identity_context";
-pub const DEVICES_ACCESS_BRIDGE_COMPANION_IDENTITY_DESC: &str =
-    "devices_access.bridge_companion_identity_desc";
-pub const DEVICES_ACCESS_BRIDGE_CURRENT_IDENTITY: &str = "devices_access.bridge_current_identity";
-pub const DEVICES_ACCESS_BRIDGE_CURRENT_IDENTITY_DESC: &str =
-    "devices_access.bridge_current_identity_desc";
-pub const DEVICES_ACCESS_BRIDGE_DETAIL_DEVICE: &str = "devices_access.bridge_detail_device";
-pub const DEVICES_ACCESS_BRIDGE_DETAIL_PROTECTION: &str = "devices_access.bridge_detail_protection";
-pub const DEVICES_ACCESS_BRIDGE_DETAIL_VAULTS: &str = "devices_access.bridge_detail_vaults";
-pub const DEVICES_ACCESS_BRIDGE_DETAILS: &str = "devices_access.bridge_details";
-pub const DEVICES_ACCESS_BRIDGE_DEVICE_EVIDENCE: &str = "devices_access.bridge_device_evidence";
-pub const DEVICES_ACCESS_BRIDGE_DEVICE_VAULT_RELATION: &str =
-    "devices_access.bridge_device_vault_relation";
-pub const DEVICES_ACCESS_BRIDGE_DISTRIBUTED_IDENTITY: &str =
-    "devices_access.bridge_distributed_identity";
-pub const DEVICES_ACCESS_BRIDGE_GRAPH_CONTROLS: &str = "devices_access.bridge_graph_controls";
-pub const DEVICES_ACCESS_BRIDGE_GRAPH_LABEL: &str = "devices_access.bridge_graph_label";
-pub const DEVICES_ACCESS_BRIDGE_IDENTITY: &str = "devices_access.bridge_identity";
-pub const DEVICES_ACCESS_BRIDGE_IDENTITY_HEADLINE: &str = "devices_access.bridge_identity_headline";
-pub const DEVICES_ACCESS_BRIDGE_IDENTITY_LEDE: &str = "devices_access.bridge_identity_lede";
-pub const DEVICES_ACCESS_BRIDGE_IDENTITY_PLURAL: &str = "devices_access.bridge_identity_plural";
-pub const DEVICES_ACCESS_BRIDGE_IDENTITY_SINGULAR: &str = "devices_access.bridge_identity_singular";
-pub const DEVICES_ACCESS_BRIDGE_IDENTITY_VAULT_RELATION: &str =
-    "devices_access.bridge_identity_vault_relation";
-pub const DEVICES_ACCESS_BRIDGE_IDENTITY_VIEW: &str = "devices_access.bridge_identity_view";
-pub const DEVICES_ACCESS_BRIDGE_NO_AUTHORIZED: &str = "devices_access.bridge_no_authorized";
-pub const DEVICES_ACCESS_BRIDGE_NO_AUTHORIZED_DESC: &str =
-    "devices_access.bridge_no_authorized_desc";
-pub const DEVICES_ACCESS_BRIDGE_NO_SELECTED_VAULT: &str = "devices_access.bridge_no_selected_vault";
-pub const DEVICES_ACCESS_BRIDGE_NO_SELECTED_VAULT_DESC: &str =
-    "devices_access.bridge_no_selected_vault_desc";
-pub const DEVICES_ACCESS_BRIDGE_NO_VERIFIED_VAULTS: &str =
-    "devices_access.bridge_no_verified_vaults";
-pub const DEVICES_ACCESS_BRIDGE_NO_VERIFIED_VAULTS_DESC: &str =
-    "devices_access.bridge_no_verified_vaults_desc";
-pub const DEVICES_ACCESS_BRIDGE_ONE_DEVICE_KEY: &str = "devices_access.bridge_one_device_key";
-pub const DEVICES_ACCESS_BRIDGE_PROTECTION_DEVICE_RELATION: &str =
-    "devices_access.bridge_protection_device_relation";
-pub const DEVICES_ACCESS_BRIDGE_PROTECTION_EVIDENCE: &str =
-    "devices_access.bridge_protection_evidence";
-pub const DEVICES_ACCESS_BRIDGE_SELECTED_IDENTITY: &str = "devices_access.bridge_selected_identity";
-pub const DEVICES_ACCESS_BRIDGE_SELECTED_VAULT: &str = "devices_access.bridge_selected_vault";
-pub const DEVICES_ACCESS_BRIDGE_VAULT: &str = "devices_access.bridge_vault";
-pub const DEVICES_ACCESS_BRIDGE_VAULT_DEVICE_RELATION: &str =
-    "devices_access.bridge_vault_device_relation";
-pub const DEVICES_ACCESS_BRIDGE_VAULT_GRANT: &str = "devices_access.bridge_vault_grant";
-pub const DEVICES_ACCESS_BRIDGE_VAULT_GRANTS: &str = "devices_access.bridge_vault_grants";
-pub const DEVICES_ACCESS_BRIDGE_VAULT_HEADLINE: &str = "devices_access.bridge_vault_headline";
-pub const DEVICES_ACCESS_BRIDGE_VAULT_LEDE: &str = "devices_access.bridge_vault_lede";
-pub const DEVICES_ACCESS_BRIDGE_VAULT_PLURAL: &str = "devices_access.bridge_vault_plural";
-pub const DEVICES_ACCESS_BRIDGE_VAULT_SINGULAR: &str = "devices_access.bridge_vault_singular";
-pub const DEVICES_ACCESS_BRIDGE_VAULT_VIEW: &str = "devices_access.bridge_vault_view";
-pub const DEVICES_ACCESS_BRIDGE_VERIFIED_DEVICE_KEY_COUNT: &str =
-    "devices_access.bridge_verified_device_key_count";
-pub const DEVICES_ACCESS_BRIDGE_VERIFIED_VAULT_COUNT: &str =
-    "devices_access.bridge_verified_vault_count";
-pub const DEVICES_ACCESS_BROWSER_CHROME: &str = "devices_access.browser_chrome";
-pub const DEVICES_ACCESS_BROWSER_EDGE: &str = "devices_access.browser_edge";
-pub const DEVICES_ACCESS_BROWSER_FIREFOX: &str = "devices_access.browser_firefox";
-pub const DEVICES_ACCESS_BROWSER_OTHER: &str = "devices_access.browser_other";
-pub const DEVICES_ACCESS_BROWSER_REPORTED: &str = "devices_access.browser_reported";
-pub const DEVICES_ACCESS_BROWSER_SAFARI: &str = "devices_access.browser_safari";
-pub const DEVICES_ACCESS_BROWSER_SECTION: &str = "devices_access.browser_section";
-pub const DEVICES_ACCESS_CHAIN_HINT: &str = "devices_access.chain_hint";
-pub const DEVICES_ACCESS_CHAIN_HOLDS: &str = "devices_access.chain_holds";
-pub const DEVICES_ACCESS_CHAIN_LABEL: &str = "devices_access.chain_label";
-pub const DEVICES_ACCESS_CHAIN_UNLOCKS: &str = "devices_access.chain_unlocks";
-pub const DEVICES_ACCESS_CLIENT_DESCRIPTION: &str = "devices_access.client_description";
 pub const DEVICES_ACCESS_COMPANION_IDENTITY: &str = "devices_access.companion_identity";
 pub const DEVICES_ACCESS_COMPANION_SESSION: &str = "devices_access.companion_session";
 pub const DEVICES_ACCESS_CREATED: &str = "devices_access.created";
 pub const DEVICES_ACCESS_CREDENTIAL_ID: &str = "devices_access.credential_id";
 pub const DEVICES_ACCESS_DEVICE_AGE_KEY: &str = "devices_access.device_age_key";
-pub const DEVICES_ACCESS_DEVICE_ID: &str = "devices_access.device_id";
 pub const DEVICES_ACCESS_DEVICE_KEY_PANEL_DESC: &str = "devices_access.device_key_panel_desc";
 pub const DEVICES_ACCESS_DEVICE_KEY_PANEL_DESC_DERIVED: &str =
     "devices_access.device_key_panel_desc_derived";
-pub const DEVICES_ACCESS_DEVICE_TECHNICAL_DETAILS: &str = "devices_access.device_technical_details";
-pub const DEVICES_ACCESS_ENROLLED_DEVICES: &str = "devices_access.enrolled_devices";
-pub const DEVICES_ACCESS_EVIDENCE_LEGEND: &str = "devices_access.evidence_legend";
-pub const DEVICES_ACCESS_IDENTITIES_SECTION: &str = "devices_access.identities_section";
 pub const DEVICES_ACCESS_IDENTITY_DEFAULT_LABEL: &str = "devices_access.identity_default_label";
-pub const DEVICES_ACCESS_IDENTITY_DETAILS: &str = "devices_access.identity_details";
 pub const DEVICES_ACCESS_IDENTITY_DIRECTORY_FAILED: &str =
     "devices_access.identity_directory_failed";
 pub const DEVICES_ACCESS_IDENTITY_DIRECTORY_LOADING: &str =
     "devices_access.identity_directory_loading";
-pub const DEVICES_ACCESS_IDENTITY_KEY_COUNT_PLURAL: &str =
-    "devices_access.identity_key_count_plural";
-pub const DEVICES_ACCESS_IDENTITY_KEY_COUNT_SINGULAR: &str =
-    "devices_access.identity_key_count_singular";
-pub const DEVICES_ACCESS_IDENTITY_KEYS_HEADING: &str = "devices_access.identity_keys_heading";
-pub const DEVICES_ACCESS_IDENTITY_KEYS_LEDE: &str = "devices_access.identity_keys_lede";
 pub const DEVICES_ACCESS_IDENTITY_LOCKED: &str = "devices_access.identity_locked";
 pub const DEVICES_ACCESS_IDENTITY_MISSING: &str = "devices_access.identity_missing";
-pub const DEVICES_ACCESS_IDENTITY_ON_THIS_BROWSER: &str = "devices_access.identity_on_this_browser";
-pub const DEVICES_ACCESS_IDENTITY_SUMMARY: &str = "devices_access.identity_summary";
 pub const DEVICES_ACCESS_IDENTITY_UNLOCKED: &str = "devices_access.identity_unlocked";
-pub const DEVICES_ACCESS_IDENTITY_VAULT_COUNT_PLURAL: &str =
-    "devices_access.identity_vault_count_plural";
-pub const DEVICES_ACCESS_IDENTITY_VAULT_COUNT_SINGULAR: &str =
-    "devices_access.identity_vault_count_singular";
-pub const DEVICES_ACCESS_INSIDE_CURRENT_VAULT: &str = "devices_access.inside_current_vault";
-pub const DEVICES_ACCESS_INSIDE_CURRENT_VAULT_DESC: &str =
-    "devices_access.inside_current_vault_desc";
 pub const DEVICES_ACCESS_KEEPER_APPLE_PASSWORDS: &str = "devices_access.keeper_apple_passwords";
 pub const DEVICES_ACCESS_KEEPER_BITWARDEN: &str = "devices_access.keeper_bitwarden";
 pub const DEVICES_ACCESS_KEEPER_CHROME: &str = "devices_access.keeper_chrome";
@@ -636,71 +514,21 @@ pub const DEVICES_ACCESS_KEEPER_NORDPASS: &str = "devices_access.keeper_nordpass
 pub const DEVICES_ACCESS_KEEPER_ONEPASSWORD: &str = "devices_access.keeper_onepassword";
 pub const DEVICES_ACCESS_KEEPER_PROTON_PASS: &str = "devices_access.keeper_proton_pass";
 pub const DEVICES_ACCESS_KEEPER_SAMSUNG_PASS: &str = "devices_access.keeper_samsung_pass";
-pub const DEVICES_ACCESS_KEEPER_STORAGE_APPLE_PASSWORDS: &str =
-    "devices_access.keeper_storage_apple_passwords";
-pub const DEVICES_ACCESS_KEEPER_STORAGE_BITWARDEN: &str = "devices_access.keeper_storage_bitwarden";
-pub const DEVICES_ACCESS_KEEPER_STORAGE_CHROME: &str = "devices_access.keeper_storage_chrome";
-pub const DEVICES_ACCESS_KEEPER_STORAGE_DASHLANE: &str = "devices_access.keeper_storage_dashlane";
-pub const DEVICES_ACCESS_KEEPER_STORAGE_ENPASS: &str = "devices_access.keeper_storage_enpass";
-pub const DEVICES_ACCESS_KEEPER_STORAGE_GOOGLE_PASSWORD_MANAGER: &str =
-    "devices_access.keeper_storage_google_password_manager";
-pub const DEVICES_ACCESS_KEEPER_STORAGE_KEEPER: &str = "devices_access.keeper_storage_keeper";
-pub const DEVICES_ACCESS_KEEPER_STORAGE_NORDPASS: &str = "devices_access.keeper_storage_nordpass";
-pub const DEVICES_ACCESS_KEEPER_STORAGE_ONEPASSWORD: &str =
-    "devices_access.keeper_storage_onepassword";
-pub const DEVICES_ACCESS_KEEPER_STORAGE_PROTON_PASS: &str =
-    "devices_access.keeper_storage_proton_pass";
-pub const DEVICES_ACCESS_KEEPER_STORAGE_SAMSUNG_PASS: &str =
-    "devices_access.keeper_storage_samsung_pass";
-pub const DEVICES_ACCESS_KEEPER_STORAGE_UNKNOWN: &str = "devices_access.keeper_storage_unknown";
-pub const DEVICES_ACCESS_KEEPER_STORAGE_WINDOWS_HELLO: &str =
-    "devices_access.keeper_storage_windows_hello";
 pub const DEVICES_ACCESS_KEEPER_UNKNOWN: &str = "devices_access.keeper_unknown";
 pub const DEVICES_ACCESS_KEEPER_WINDOWS_HELLO: &str = "devices_access.keeper_windows_hello";
-pub const DEVICES_ACCESS_KEY_COLUMN: &str = "devices_access.key_column";
 pub const DEVICES_ACCESS_KEY_TYPE_APP_KEY: &str = "devices_access.key_type_app_key";
 pub const DEVICES_ACCESS_KEY_TYPE_COMPANION: &str = "devices_access.key_type_companion";
 pub const DEVICES_ACCESS_KEY_TYPE_PASSKEY: &str = "devices_access.key_type_passkey";
 pub const DEVICES_ACCESS_KEY_TYPE_PIN: &str = "devices_access.key_type_pin";
-pub const DEVICES_ACCESS_KEYS_COVERED: &str = "devices_access.keys_covered";
-pub const DEVICES_ACCESS_KEYS_FOR_IDENTITY: &str = "devices_access.keys_for_identity";
-pub const DEVICES_ACCESS_KNOWN_VAULTS_UNPREPARED: &str = "devices_access.known_vaults_unprepared";
-pub const DEVICES_ACCESS_LAST_CLIENT: &str = "devices_access.last_client";
-pub const DEVICES_ACCESS_LAST_LOCAL_UPDATE: &str = "devices_access.last_local_update";
-pub const DEVICES_ACCESS_LAST_SUCCESSFUL_USE: &str = "devices_access.last_successful_use";
 pub const DEVICES_ACCESS_LAST_USED_COLUMN: &str = "devices_access.last_used_column";
-pub const DEVICES_ACCESS_LAYOUT_GRAPH: &str = "devices_access.layout_graph";
-pub const DEVICES_ACCESS_LAYOUT_GROUP: &str = "devices_access.layout_group";
-pub const DEVICES_ACCESS_LAYOUT_LIST: &str = "devices_access.layout_list";
 pub const DEVICES_ACCESS_LINK_OPENS: &str = "devices_access.link_opens";
 pub const DEVICES_ACCESS_LINK_UNLOCKS: &str = "devices_access.link_unlocks";
 pub const DEVICES_ACCESS_LINK_UNVERIFIED: &str = "devices_access.link_unverified";
-pub const DEVICES_ACCESS_LOAD_FAILED: &str = "devices_access.load_failed";
-pub const DEVICES_ACCESS_LOADING: &str = "devices_access.loading";
-pub const DEVICES_ACCESS_MANAGE_BACKUP_PASSWORDS: &str = "devices_access.manage_backup_passwords";
-pub const DEVICES_ACCESS_MANAGE_DEVICES: &str = "devices_access.manage_devices";
-pub const DEVICES_ACCESS_NO_BACKUP_PASSWORDS: &str = "devices_access.no_backup_passwords";
-pub const DEVICES_ACCESS_NO_IDENTITIES: &str = "devices_access.no_identities";
-pub const DEVICES_ACCESS_NO_IDENTITIES_DESCRIPTION: &str =
-    "devices_access.no_identities_description";
-pub const DEVICES_ACCESS_NO_LOCAL_UPDATE: &str = "devices_access.no_local_update";
-pub const DEVICES_ACCESS_NO_SESSION_IDENTITY: &str = "devices_access.no_session_identity";
-pub const DEVICES_ACCESS_NO_SESSION_IDENTITY_DESCRIPTION: &str =
-    "devices_access.no_session_identity_description";
-pub const DEVICES_ACCESS_NO_VAULTS: &str = "devices_access.no_vaults";
-pub const DEVICES_ACCESS_NO_VAULTS_READY: &str = "devices_access.no_vaults_ready";
 pub const DEVICES_ACCESS_NO_VAULTS_SHORT: &str = "devices_access.no_vaults_short";
 pub const DEVICES_ACCESS_NO_VERIFIED_VAULTS_SHORT: &str = "devices_access.no_verified_vaults_short";
-pub const DEVICES_ACCESS_NOOK_PASSKEY_NAME: &str = "devices_access.nook_passkey_name";
 pub const DEVICES_ACCESS_NOT_PREPARED: &str = "devices_access.not_prepared";
 pub const DEVICES_ACCESS_NOT_USED_YET: &str = "devices_access.not_used_yet";
-pub const DEVICES_ACCESS_OPENS_HERE: &str = "devices_access.opens_here";
 pub const DEVICES_ACCESS_OTHER_APP_KEY: &str = "devices_access.other_app_key";
-pub const DEVICES_ACCESS_OTHER_IDENTITY_EVIDENCE_TITLE: &str =
-    "devices_access.other_identity_evidence_title";
-pub const DEVICES_ACCESS_OTHER_IDENTITY_EVIDENCE_UNAVAILABLE: &str =
-    "devices_access.other_identity_evidence_unavailable";
-pub const DEVICES_ACCESS_OTHER_INSTALLATION: &str = "devices_access.other_installation";
 pub const DEVICES_ACCESS_PASSKEY_HIGH_SECURITY: &str = "devices_access.passkey_high_security";
 pub const DEVICES_ACCESS_PASSKEY_PANEL_DESC: &str = "devices_access.passkey_panel_desc";
 pub const DEVICES_ACCESS_PASSKEY_STANDARD: &str = "devices_access.passkey_standard";
@@ -708,65 +536,25 @@ pub const DEVICES_ACCESS_PASSKEY_UNNAMED: &str = "devices_access.passkey_unnamed
 pub const DEVICES_ACCESS_PIN_NODE_TITLE: &str = "devices_access.pin_node_title";
 pub const DEVICES_ACCESS_PIN_OR_PASSPHRASE: &str = "devices_access.pin_or_passphrase";
 pub const DEVICES_ACCESS_PIN_PANEL_DESC: &str = "devices_access.pin_panel_desc";
-pub const DEVICES_ACCESS_PLATFORM_ANDROID: &str = "devices_access.platform_android";
-pub const DEVICES_ACCESS_PLATFORM_APPLE_MOBILE: &str = "devices_access.platform_apple_mobile";
-pub const DEVICES_ACCESS_PLATFORM_LINUX: &str = "devices_access.platform_linux";
-pub const DEVICES_ACCESS_PLATFORM_MACOS: &str = "devices_access.platform_macos";
-pub const DEVICES_ACCESS_PLATFORM_OTHER: &str = "devices_access.platform_other";
-pub const DEVICES_ACCESS_PLATFORM_WINDOWS: &str = "devices_access.platform_windows";
-pub const DEVICES_ACCESS_PROTECTION_LABEL: &str = "devices_access.protection_label";
-pub const DEVICES_ACCESS_PROTECTOR_COLUMN: &str = "devices_access.protector_column";
-pub const DEVICES_ACCESS_PROVENANCE_BROWSER: &str = "devices_access.provenance_browser";
-pub const DEVICES_ACCESS_PROVENANCE_BROWSER_DESC: &str = "devices_access.provenance_browser_desc";
-pub const DEVICES_ACCESS_PROVENANCE_UNKNOWN: &str = "devices_access.provenance_unknown";
-pub const DEVICES_ACCESS_PROVENANCE_UNKNOWN_DESC: &str = "devices_access.provenance_unknown_desc";
-pub const DEVICES_ACCESS_PROVENANCE_USER: &str = "devices_access.provenance_user";
-pub const DEVICES_ACCESS_PROVENANCE_USER_DESC: &str = "devices_access.provenance_user_desc";
-pub const DEVICES_ACCESS_PROVENANCE_VERIFIED: &str = "devices_access.provenance_verified";
-pub const DEVICES_ACCESS_PROVENANCE_VERIFIED_DESC: &str = "devices_access.provenance_verified_desc";
-pub const DEVICES_ACCESS_PROVIDER_SAVE_FAILED: &str = "devices_access.provider_save_failed";
-pub const DEVICES_ACCESS_ROUTE_UNVERIFIED: &str = "devices_access.route_unverified";
-pub const DEVICES_ACCESS_ROUTE_VERIFIED: &str = "devices_access.route_verified";
-pub const DEVICES_ACCESS_SELECTED_IDENTITY: &str = "devices_access.selected_identity";
 pub const DEVICES_ACCESS_SESSION_NODE_TITLE: &str = "devices_access.session_node_title";
-pub const DEVICES_ACCESS_SINGLE_KEY_WARNING: &str = "devices_access.single_key_warning";
 pub const DEVICES_ACCESS_STAGE_DEVICE_KEY: &str = "devices_access.stage_device_key";
 pub const DEVICES_ACCESS_STAGE_PASSKEY: &str = "devices_access.stage_passkey";
 pub const DEVICES_ACCESS_STAGE_PIN: &str = "devices_access.stage_pin";
 pub const DEVICES_ACCESS_STAGE_SESSION: &str = "devices_access.stage_session";
 pub const DEVICES_ACCESS_STAGE_UNLOCK: &str = "devices_access.stage_unlock";
 pub const DEVICES_ACCESS_STAGE_VAULTS: &str = "devices_access.stage_vaults";
-pub const DEVICES_ACCESS_STATUS_LABEL: &str = "devices_access.status_label";
-pub const DEVICES_ACCESS_THIS_BROWSER: &str = "devices_access.this_browser";
 pub const DEVICES_ACCESS_THIS_BROWSER_APP_KEY: &str = "devices_access.this_browser_app_key";
 pub const DEVICES_ACCESS_THIS_BROWSER_COMPANION_DESC: &str =
     "devices_access.this_browser_companion_desc";
 pub const DEVICES_ACCESS_THIS_DEVICE: &str = "devices_access.this_device";
-pub const DEVICES_ACCESS_TRANSPORT_BLE: &str = "devices_access.transport_ble";
-pub const DEVICES_ACCESS_TRANSPORT_HYBRID: &str = "devices_access.transport_hybrid";
-pub const DEVICES_ACCESS_TRANSPORT_INTERNAL: &str = "devices_access.transport_internal";
-pub const DEVICES_ACCESS_TRANSPORT_NFC: &str = "devices_access.transport_nfc";
-pub const DEVICES_ACCESS_TRANSPORT_USB: &str = "devices_access.transport_usb";
-pub const DEVICES_ACCESS_TRANSPORTS: &str = "devices_access.transports";
 pub const DEVICES_ACCESS_TRY_AGAIN: &str = "devices_access.try_again";
 pub const DEVICES_ACCESS_UNKNOWN: &str = "devices_access.unknown";
 pub const DEVICES_ACCESS_UNKNOWN_LEGACY: &str = "devices_access.unknown_legacy";
-pub const DEVICES_ACCESS_UNLOCK_IDENTITY: &str = "devices_access.unlock_identity";
-pub const DEVICES_ACCESS_UNNAMED_DEVICE: &str = "devices_access.unnamed_device";
-pub const DEVICES_ACCESS_USE_IDENTITY: &str = "devices_access.use_identity";
-pub const DEVICES_ACCESS_USER_HANDLE_ID: &str = "devices_access.user_handle_id";
-pub const DEVICES_ACCESS_VAULT_ACCESS_SECTION: &str = "devices_access.vault_access_section";
 pub const DEVICES_ACCESS_VAULT_RELATIONSHIPS: &str = "devices_access.vault_relationships";
 pub const DEVICES_ACCESS_VAULT_RELATIONSHIPS_DESC: &str = "devices_access.vault_relationships_desc";
-pub const DEVICES_ACCESS_VAULT_TECHNICAL_DETAILS: &str = "devices_access.vault_technical_details";
 pub const DEVICES_ACCESS_VERIFIED_OF_TOTAL: &str = "devices_access.verified_of_total";
 pub const DEVICES_ACCESS_VERIFIED_PLUS_MORE: &str = "devices_access.verified_plus_more";
 pub const DEVICES_ACCESS_VERIFIED_SUMMARY: &str = "devices_access.verified_summary";
-pub const DEVICES_ACCESS_VERIFIED_VAULTS_LABEL: &str = "devices_access.verified_vaults_label";
-pub const DEVICES_ACCESS_WHERE_SAVED: &str = "devices_access.where_saved";
-pub const DEVICES_ACCESS_WHERE_SAVED_HELP: &str = "devices_access.where_saved_help";
-pub const DEVICES_ACCESS_WHERE_SAVED_PLACEHOLDER: &str = "devices_access.where_saved_placeholder";
-pub const DEVICES_ACCESS_WHERE_SAVED_UNKNOWN: &str = "devices_access.where_saved_unknown";
 pub const DEVICES_CARD_APPROVE: &str = "devices_card.approve";
 pub const DEVICES_CARD_AUTH_ID: &str = "devices_card.auth_id";
 pub const DEVICES_CARD_CANCEL: &str = "devices_card.cancel";
@@ -1410,6 +1198,17 @@ pub const IDENTITY_HEALTH_STAGE_MULTI_DEVICE: &str = "identity_health.stage_mult
 pub const IDENTITY_HEALTH_SYNC_BODY: &str = "identity_health.sync_body";
 pub const IDENTITY_HEALTH_SYNC_CTA: &str = "identity_health.sync_cta";
 pub const IDENTITY_HEALTH_SYNC_TITLE: &str = "identity_health.sync_title";
+pub const IDENTITY_KEYS_COUNT_MANY: &str = "identity_keys.count_many";
+pub const IDENTITY_KEYS_COUNT_ONE: &str = "identity_keys.count_one";
+pub const IDENTITY_KEYS_COVERED: &str = "identity_keys.covered";
+pub const IDENTITY_KEYS_DETAILS: &str = "identity_keys.details";
+pub const IDENTITY_KEYS_INTRO: &str = "identity_keys.intro";
+pub const IDENTITY_KEYS_KEPT_IN: &str = "identity_keys.kept_in";
+pub const IDENTITY_KEYS_LAST_USED: &str = "identity_keys.last_used";
+pub const IDENTITY_KEYS_OTHER_BODY: &str = "identity_keys.other_body";
+pub const IDENTITY_KEYS_OTHER_TITLE: &str = "identity_keys.other_title";
+pub const IDENTITY_KEYS_SINGLE_WARNING: &str = "identity_keys.single_warning";
+pub const IDENTITY_KEYS_UNLOCKS: &str = "identity_keys.unlocks";
 pub const IDENTITY_OVERVIEW_ADD_DEVICE: &str = "identity_overview.add_device";
 pub const IDENTITY_OVERVIEW_ALL_SET: &str = "identity_overview.all_set";
 pub const IDENTITY_OVERVIEW_COPIED_TO: &str = "identity_overview.copied_to";

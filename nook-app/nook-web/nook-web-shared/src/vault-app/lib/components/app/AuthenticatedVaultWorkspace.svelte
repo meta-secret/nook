@@ -26,8 +26,7 @@ band, the scrolling page and the status line.
   } from "$app-wasm";
   import SecretVault from "$lib/components/SecretVault.svelte";
   import VaultAdmin from "$lib/components/VaultAdmin.svelte";
-  import DevicesAccessDashboard from "$lib/components/DevicesAccessDashboard.svelte";
-  import type { KeysPageLeave } from "$lib/components/devices-access-dashboard-state";
+  import IdentityKeysPage from "$lib/components/identity-control/IdentityKeysPage.svelte";
   import IdentityOverview from "$lib/components/identity-control/IdentityOverview.svelte";
   import BrowserSettingsPanel from "$lib/components/settings/BrowserSettingsPanel.svelte";
   import IdentityDevicesPanel from "$lib/components/identity-control/IdentityDevicesPanel.svelte";
@@ -112,7 +111,6 @@ band, the scrolling page and the status line.
     kind: SecretEditorModeKind.Closed,
   });
   let secretsEditorResetKey = $state(0);
-  let leaveKeysPage = $state<KeysPageLeave>();
   /** The page management was entered from; Back returns there. */
   let manageOrigin = $state(WorkspaceSection.Vault);
   let manageOriginRecorded = $state(false);
@@ -271,11 +269,7 @@ band, the scrolling page and the status line.
   );
 
   /** Back leaves management for the page it was entered from. */
-  async function goBack(): Promise<void> {
-    if (section === WorkspaceSection.Keys && leaveKeysPage) {
-      await leaveKeysPage();
-      return;
-    }
+  function goBack(): void {
     leaveManagement();
   }
 
@@ -477,7 +471,7 @@ band, the scrolling page and the status line.
         backLabel={backDestination === WorkspaceSection.Vault
           ? vault.t(I18N_KEYS.WorkspaceBackToVault)
           : vault.t(I18N_KEYS.WorkspaceBackToIdentities)}
-        onBack={() => void goBack()}
+        onBack={goBack}
       >
         {#snippet tags()}
           <StatusTag
@@ -546,7 +540,7 @@ band, the scrolling page and the status line.
           ? "grid min-w-0 grid-cols-1 content-start gap-6 p-4 md:p-6"
           : "flex min-h-0 flex-1 flex-col"}
       >
-        {#if navEntry.kind === ManageNavEntryKind.Listed && (section === WorkspaceSection.Keys || section === WorkspaceSection.Settings)}
+        {#if navEntry.kind === ManageNavEntryKind.Listed && section === WorkspaceSection.Settings}
           <p
             class="max-w-[64ch] text-sm text-pretty text-muted-foreground"
             data-testid="manage-section-description"
@@ -595,11 +589,7 @@ band, the scrolling page and the status line.
         {:else if section === WorkspaceSection.Devices}
           <IdentityDevicesPanel {vault} onOpenSync={addSyncProvider} />
         {:else if section === WorkspaceSection.Keys}
-          <DevicesAccessDashboard
-            {vault}
-            onBack={leaveManagement}
-            onLeaveReady={(leave: KeysPageLeave) => (leaveKeysPage = leave)}
-          />
+          <IdentityKeysPage {vault} onOpen={openFromNav} />
         {:else if section === WorkspaceSection.Settings}
           <BrowserSettingsPanel {vault} />
         {:else}

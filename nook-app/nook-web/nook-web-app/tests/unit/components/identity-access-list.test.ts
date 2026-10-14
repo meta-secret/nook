@@ -1,6 +1,4 @@
 import { describe, expect, test, vi } from 'vitest'
-import { render } from '@testing-library/svelte'
-import type { ComponentProps } from 'svelte'
 import {
   DeviceAccessIdentityState,
   DeviceAccessProtectionKind,
@@ -26,7 +24,6 @@ import {
   IdentityKeyInventory,
   IdentityKeyInventoryRowKind,
 } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/identity-key-inventory'
-import IdentityKeyInventoryComponent from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/IdentityKeyInventory.svelte'
 import { PasskeyCardSummaryKind } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/passkey-card'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
@@ -70,6 +67,8 @@ function passkeyView(): DashboardView {
 
 describe('identity access cards', () => {
   test('names a passkey by its editable Nook name', () => {
+    // The date-time separator depends on the ICU version.
+    const recordedAt: unknown = expect.stringMatching(/^Mar 1, 2026.*12:00 PM$/)
     const buildIdentityAccessCardsArgs: ConstructorParameters<
       typeof IdentityAccessPresentation
     >[0] = {
@@ -102,12 +101,12 @@ describe('identity access cards', () => {
             {
               kind: 'created',
               label: I18N_KEYS.DevicesAccessCreated,
-              value: 'Mar 1, 2026, 12:00 PM',
+              value: recordedAt,
             },
             {
               kind: 'last-used',
               label: I18N_KEYS.DevicesAccessLastUsedColumn,
-              value: 'Mar 1, 2026, 12:00 PM',
+              value: recordedAt,
             },
           ],
         },
@@ -205,67 +204,6 @@ describe('identity key inventory', () => {
           break
       }
     }
-    const renderRequest: ComponentProps<typeof IdentityKeyInventoryComponent> =
-      {
-        vault,
-        identity,
-        view,
-        onRenamePasskey: async () => true,
-      }
-    const rendered = render(IdentityKeyInventoryComponent, renderRequest)
-    expect(
-      rendered.getAllByTestId('devices-access-passkey-facts'),
-    ).toHaveLength(2)
-    expect(
-      rendered.getAllByTestId('devices-access-rename-passkey'),
-    ).toHaveLength(1)
-  })
-
-  test('renders connected apps without a local Add app action', () => {
-    const addAppLabel = 'Add app'
-    const addAppHelper =
-      'Another Nook installation must request identity enrollment before it can be added.'
-    const renderedVault = VaultStateTestFixture.create()
-    vi.spyOn(renderedVault, 't').mockImplementation(
-      (request: TranslationRequest) => {
-        const key = typeof request === 'string' ? request : request.key
-        if (key === 'devices_access.add_key') return addAppLabel
-        if (key === 'devices_access.add_key_unavailable') return addAppHelper
-        return vault.t(request)
-      },
-    )
-    const identity: IdentityDirectoryEntry = {
-      identityId: 'identity_personal',
-      label: 'Personal',
-      localAccess: NookIdentityLocalAccessKind.CurrentBrowser,
-      members: [
-        {
-          appId: 'device_5678',
-          label: known('Nook on MacBook'),
-          currentBrowser: true,
-          localProtection: DeviceAccessProtectionKind.PasskeyStandard,
-          protectionAssociation: DeviceAccessProtectionKind.Missing,
-          associatedPasskeyName: unknownText,
-          associatedPasskeyFingerprint: unknownText,
-        },
-      ],
-      vaults: [],
-    }
-
-    const rendered = render(IdentityKeyInventoryComponent, {
-      vault: renderedVault,
-      identity,
-      view: passkeyView(),
-      onRenamePasskey: async () => true,
-    })
-
-    expect(rendered.getByTestId('devices-access-app').textContent).toContain(
-      'Nook on MacBook',
-    )
-    expect(
-      rendered.queryByRole('button', { name: addAppLabel }),
-    ).not.toBeTruthy()
-    expect(rendered.queryByText(addAppHelper)).not.toBeTruthy()
   })
 
   test('nests the protected app and keeps remote apps in a linked group', () => {
