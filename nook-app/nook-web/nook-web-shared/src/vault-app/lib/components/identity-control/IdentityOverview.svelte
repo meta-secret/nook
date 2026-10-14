@@ -233,7 +233,7 @@ the details; keys and backup passwords sit quietly below.
         {#each RUNGS as stage, index (stage)}
           <li
             class={[
-              "flex items-center gap-1.5 border-t-2 pt-2 font-mono text-[11px] tracking-[0.06em] uppercase",
+              "flex items-start gap-1.5 border-t-2 pt-2 font-mono text-[11px] leading-tight tracking-[0.06em] uppercase",
               index < reached
                 ? "border-success text-success"
                 : index === reached
@@ -245,7 +245,7 @@ the details; keys and backup passwords sit quietly below.
             {#if index < reached}
               <Check class="size-3.5 shrink-0" aria-hidden="true" />
             {/if}
-            <span class="truncate">{rungLabel(stage)}</span>
+            <span class="min-w-0">{rungLabel(stage)}</span>
           </li>
         {/each}
       </ol>
