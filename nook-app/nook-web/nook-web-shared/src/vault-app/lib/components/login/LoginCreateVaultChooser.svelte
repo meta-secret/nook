@@ -20,7 +20,6 @@
   import {
     ArrowRight,
     Check,
-    Cloud,
     KeyRound,
     Layers3,
     RefreshCw,
@@ -29,6 +28,7 @@
     Users,
   } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button";
+  import LoginExistingVaultPaths from "$lib/components/login/LoginExistingVaultPaths.svelte";
   import SentinelUnlockParticipantHelper from "$lib/components/login/SentinelUnlockParticipantHelper.svelte";
   import SentinelGenesisJoinFlow from "$lib/components/login/SentinelGenesisJoinFlow.svelte";
   import SentinelDashboardSurface from "$lib/components/login/SentinelDashboardSurface.svelte";
@@ -59,6 +59,7 @@
     usesExtensionDeviceIdentity = false,
     onCreateDeviceVault,
     onConnectStorage,
+    onJoinIdentity,
     onStartSentinelGenesis,
     onAddSentinelGenesisParticipantResponse,
     onFinalizeSentinelGenesis,
@@ -115,6 +116,17 @@
     if (onCompleteSentinelGenesisDelivery)
       props.onCompleteSentinelGenesisDelivery =
         onCompleteSentinelGenesisDelivery;
+    return props;
+  });
+
+  type JoinIdentityProps = Partial<
+    Pick<ComponentProps<typeof LoginExistingVaultPaths>, "onJoinIdentity">
+  >;
+  const joinIdentityProps = $derived.by(() => {
+    const props: JoinIdentityProps = {};
+    // Sentinel apps join through their own invitation ceremony.
+    if (onJoinIdentity && appKind !== VaultApplication.Sentinel)
+      props.onJoinIdentity = onJoinIdentity;
     return props;
   });
 
@@ -299,18 +311,26 @@
     }
   });
 
-  const progressSteps = $derived.by(() => {
-    const choose = vault.t(I18N_KEYS.LoginLandingStepChoose);
+  type ProgressStep = { readonly label: string; readonly hint: string };
+  const progressSteps = $derived.by((): ProgressStep[] => {
+    const step = (label: string): ProgressStep => ({ label, hint: "" });
+    const choose = step(vault.t(I18N_KEYS.LoginLandingStepChoose));
+    // Sync providers belong to the identity, so they are added after its
+    // first vault exists; the step names that follow-up without gating it.
+    const sync: ProgressStep = {
+      label: vault.t(I18N_KEYS.LoginLandingStepSync),
+      hint: vault.t(I18N_KEYS.LoginLandingStepSyncHint),
+    };
     if (chosenPath === ChosenVaultPath.Simple) {
-      return [choose, vault.t(I18N_KEYS.LoginLandingStepSimple)];
+      return [choose, step(vault.t(I18N_KEYS.LoginLandingStepSimple)), sync];
     }
     if (chosenPath === ChosenVaultPath.Sentinel) {
-      return [choose, vault.t(I18N_KEYS.LoginLandingStepSentinel)];
+      return [choose, step(vault.t(I18N_KEYS.LoginLandingStepSentinel))];
     }
     if (chosenPath === ChosenVaultPath.Join) {
-      return [choose, vault.t(I18N_KEYS.LoginLandingStepJoin)];
+      return [choose, step(vault.t(I18N_KEYS.LoginLandingStepJoin))];
     }
-    return [choose];
+    return appKind === VaultApplication.Sentinel ? [choose] : [choose, sync];
   });
 
   function chooseSimplePath() {
@@ -580,7 +600,7 @@
             </header>
           {:else}
             <ol class="space-y-4">
-              {#each progressSteps as label, index (`${chosenPath}-${label}`)}
+              {#each progressSteps as { label, hint }, index (`${chosenPath}-${label}`)}
                 <li class="flex items-start gap-4">
                   <span
                     class={[
@@ -609,6 +629,14 @@
                     >
                       {label}
                     </p>
+                    {#if hint && index > stepIndex}
+                      <p
+                        class="mt-1 text-xs leading-snug text-pretty text-muted-foreground"
+                        data-testid="landing-step-sync-hint"
+                      >
+                        {hint}
+                      </p>
+                    {/if}
 
                     {#if index === stepIndex && wizardStep === VaultCreationWizardStep.Choose}
                       <section
@@ -689,43 +717,13 @@
                             {/if}
                           </div>
 
-                          <div class="pt-3" data-testid="login-path-cloud">
-                            <div
-                              class="mb-3 flex items-center gap-3 text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border"
-                            >
-                              <span class="text-center text-xs">
-                                {vault.t(
-                                  I18N_KEYS.LoginExistingVaultAlternative,
-                                )}
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              class="group grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 nk-frame-nick nk-frame-interactive px-4 py-3 text-left text-foreground transition-colors hover:bg-accent/40 disabled:opacity-60"
-                              data-testid="login-connect-storage-btn"
-                              disabled={isBusy}
-                              onclick={onConnectStorage}
-                            >
-                              <span
-                                class="nk-tile"
-                              >
-                                <Cloud class="size-4" />
-                              </span>
-                              <span class="min-w-0">
-                                <span class="block text-sm font-semibold">
-                                  {vault.t(I18N_KEYS.LoginPathCloudTitle)}
-                                </span>
-                                <span
-                                  class="mt-1 block text-xs leading-snug text-muted-foreground"
-                                >
-                                  {existingVaultDescription}
-                                </span>
-                              </span>
-                              <ArrowRight
-                                class="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5"
-                              />
-                            </button>
-                          </div>
+                          <LoginExistingVaultPaths
+                            {vault}
+                            {isBusy}
+                            restoreDescription={existingVaultDescription}
+                            {onConnectStorage}
+                            {...joinIdentityProps}
+                          />
                         </div>
                       </section>
                     {:else if index === stepIndex && wizardStep === VaultCreationWizardStep.SimpleCreate}

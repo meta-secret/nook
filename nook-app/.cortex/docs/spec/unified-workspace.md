@@ -51,8 +51,18 @@ and no Vault/Admin/Onboard/Settings bottom navigation.
   **Manage identity** / **Use identity** open Keys focused on that identity.
 - A vault always belongs to an identity, so there is no standalone "create
   a vault" sheet. On a browser without an identity, a "Your first identity"
-  card holds the first-vault setup (Simple, Sentinel, or open an existing
-  vault); the identity and its key are created with that vault. An identity
+  card holds the first-vault setup; the identity and its key are created
+  with that vault.
+  - The setup lists the vault paths (Simple, Sentinel), then a sync-provider
+    step that is recommended but never gates creation. Providers are mounted
+    on the identity, so one added later replicates every vault it owns.
+  - Under "Already have a vault?", **Join from another device** opens the
+    enrollment-code panel and comes first. **Restore from a sync provider**
+    is the recovery path. Sentinel apps join through their own invitation.
+  - After creation, the vault page's security guide repeats the sync step
+    while the vault lives only in this browser.
+
+  An identity
   without vaults shows a New vault row that opens the setup inside its card,
   opened straight away when it is the only identity or an invitation is
   pending. Once placed, the setup stays in its card for the whole flow.

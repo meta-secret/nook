@@ -454,7 +454,7 @@ test.describe('vault architecture modes', () => {
       'Already have a vault?',
     )
     await expect(page.getByTestId('login-connect-storage-btn')).toContainText(
-      'Open an existing vault',
+      'Restore from a sync provider',
     )
     await expect(page.getByTestId('get-started-path-join')).toHaveCount(0)
 
@@ -524,6 +524,25 @@ test.describe('vault architecture modes', () => {
     await expect(page.getByTestId('get-started-path-sentinel')).toBeVisible()
     await expect(page.getByTestId('get-started-path-join')).toHaveCount(0)
     await expect(page.getByTestId('login-enrollment-toggle')).toHaveCount(0)
+  })
+
+  test('names sync as the next step and offers an identity join first', async ({
+    page,
+  }) => {
+    await continueToPathChooser(page)
+    await expect(page.getByTestId('landing-step-sync-hint')).toContainText(
+      'lives only in this browser',
+    )
+    await page.getByTestId('get-started-path-simple').click()
+    await expect(page.getByTestId('landing-step-sync-hint')).toBeVisible()
+    await page.getByTestId('create-vault-wizard-back').click()
+
+    await page.getByTestId('login-join-identity-btn').click()
+    await expect(page.getByTestId('login-enrollment-panel')).toContainText(
+      'open Devices to create a code',
+    )
+    await page.getByTestId('open-enrollment-code-btn').click()
+    await expect(page.getByTestId('enrollment-code-input')).toBeVisible()
   })
 
   test('opens participant response only from an owner invitation URL', async ({

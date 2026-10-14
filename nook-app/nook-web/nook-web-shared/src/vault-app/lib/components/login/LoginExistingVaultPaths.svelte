@@ -1,0 +1,83 @@
+<!--
+Ways to reach a vault that already exists. Joining the identity from another
+app is the usual path for a second device; restoring from a sync provider is
+the recovery path when no other app is at hand.
+-->
+<script lang="ts">
+  import { I18N_KEYS } from "../../../../generated/i18n-keys";
+  import { ArrowRight, Cloud, QrCode } from "@lucide/svelte";
+  import type { VaultState } from "$lib/vault.svelte";
+
+  let {
+    vault,
+    isBusy,
+    restoreDescription,
+    onConnectStorage,
+    onJoinIdentity,
+  }: {
+    vault: VaultState;
+    isBusy: boolean;
+    restoreDescription: string;
+    onConnectStorage: () => void;
+    /** Present when this app can join an identity with an enrollment code. */
+    onJoinIdentity?: () => void;
+  } = $props();
+</script>
+
+<div class="pt-3" data-testid="login-path-cloud">
+  <div
+    class="mb-3 flex items-center gap-3 text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border"
+  >
+    <span class="text-center text-xs">
+      {vault.t(I18N_KEYS.LoginExistingVaultAlternative)}
+    </span>
+  </div>
+  <div class="grid gap-2">
+    {#if onJoinIdentity}
+      <button
+        type="button"
+        class="group grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 nk-frame-nick nk-frame-interactive px-4 py-3 text-left text-foreground transition-colors hover:bg-accent/40 disabled:opacity-60"
+        data-testid="login-join-identity-btn"
+        disabled={isBusy}
+        onclick={onJoinIdentity}
+      >
+        <span class="nk-tile">
+          <QrCode class="size-4" />
+        </span>
+        <span class="min-w-0">
+          <span class="block text-sm font-semibold">
+            {vault.t(I18N_KEYS.LoginJoinDevice)}
+          </span>
+          <span class="mt-1 block text-xs leading-snug text-muted-foreground">
+            {vault.t(I18N_KEYS.LoginPathJoinDescription)}
+          </span>
+        </span>
+        <ArrowRight
+          class="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+        />
+      </button>
+    {/if}
+    <button
+      type="button"
+      class="group grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 nk-frame-nick nk-frame-interactive px-4 py-3 text-left text-foreground transition-colors hover:bg-accent/40 disabled:opacity-60"
+      data-testid="login-connect-storage-btn"
+      disabled={isBusy}
+      onclick={onConnectStorage}
+    >
+      <span class="nk-tile">
+        <Cloud class="size-4" />
+      </span>
+      <span class="min-w-0">
+        <span class="block text-sm font-semibold">
+          {vault.t(I18N_KEYS.LoginPathCloudTitle)}
+        </span>
+        <span class="mt-1 block text-xs leading-snug text-muted-foreground">
+          {restoreDescription}
+        </span>
+      </span>
+      <ArrowRight
+        class="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+      />
+    </button>
+  </div>
+</div>

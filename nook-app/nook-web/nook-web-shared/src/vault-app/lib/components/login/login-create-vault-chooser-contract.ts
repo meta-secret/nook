@@ -28,6 +28,8 @@ export type LoginCreateVaultChooserProps = {
   usesExtensionDeviceIdentity?: boolean;
   onCreateDeviceVault: (label: string) => void | Promise<void>;
   onConnectStorage: () => void;
+  /** Opens the enrollment-code panel so this app can join an identity. */
+  onJoinIdentity?: () => void;
   onStartSentinelGenesis: (args: StartSentinelGenesisArgs) => Promise<boolean>;
   onAddSentinelGenesisParticipantResponse?: (
     args: SentinelGenesisParticipation,
