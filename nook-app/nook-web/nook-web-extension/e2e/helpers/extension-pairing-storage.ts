@@ -192,12 +192,17 @@ export async function readExtensionPairingStorage(
   return evaluateExtensionScopeWithoutArgument([
     scope,
     async () => {
+      // Opening a database the extension has not created yet would create an
+      // empty one and keep the extension from adding its stores.
+      const existing = await indexedDB.databases()
+      if (!existing.some((entry) => entry.name === 'nook_extension')) return {}
       const database = await new Promise<IDBDatabase>((resolve, reject) => {
         const request = indexedDB.open('nook_extension', 1)
         request.onsuccess = () => resolve(request.result)
         request.onerror = () => reject(request.error)
       })
       try {
+        if (!database.objectStoreNames.contains('pairing')) return {}
         const transaction = database.transaction('pairing', 'readonly')
         const store = transaction.objectStore('pairing')
         const keys = await new Promise<IDBValidKey[]>((resolve, reject) => {

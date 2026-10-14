@@ -26,6 +26,7 @@ import {
   setupStorageKey,
   simpleVaultBaseUrl,
   startLoginServer,
+  leaveFirstRunReady,
   waitForExtensionPairingReady,
   waitForNewPage,
   withE2eDeadline,
@@ -325,7 +326,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       await website.page.close()
     }
 
-    await expect(simplePage.getByTestId('app-success')).toBeVisible()
+    await leaveFirstRunReady(simplePage)
     await expect(simplePage).toHaveURL((url) => url.pathname.endsWith('/vault'))
     await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
     await simplePage.close()

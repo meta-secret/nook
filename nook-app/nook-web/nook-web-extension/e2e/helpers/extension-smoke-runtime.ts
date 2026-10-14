@@ -23,7 +23,10 @@ import {
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { SimpleVaultTarget } from '../../src/lib/simple-vault-target'
 import { startMockAuthServer } from '../mock-auth'
-import { waitForExtensionPairingReady } from './extension-approval'
+import {
+  leaveFirstRunReady,
+  waitForExtensionPairingReady,
+} from './extension-approval'
 import {
   readExtensionPersistenceSnapshot,
   readExtensionPairingStorage,
@@ -36,6 +39,7 @@ import { reportExtensionBrowserErrors } from './browser-errors'
 export {
   attachNookLogsForTest,
   installMockPasskeyRuntime,
+  leaveFirstRunReady,
   lockExtensionSession,
   SimpleVaultTarget,
   readPersistedAppLogs,
