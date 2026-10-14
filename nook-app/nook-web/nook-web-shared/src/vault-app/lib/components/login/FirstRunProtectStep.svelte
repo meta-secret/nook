@@ -5,9 +5,8 @@ opens the vault named on the first screen. The card below is a preview of the
 identity card the hub will show once setup finishes.
 -->
 <script lang="ts">
-  import { ArrowLeft, KeyRound } from "@lucide/svelte";
+  import { KeyRound } from "@lucide/svelte";
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
-  import { Button } from "$lib/components/ui/button";
   import DeviceProtectionGate from "$lib/components/DeviceProtectionGate.svelte";
   import { DeviceProtectionGateFrame } from "$lib/components/device-protection-gate-state";
   import IdentityCard from "$lib/components/identities/IdentityCard.svelte";
@@ -17,6 +16,7 @@ identity card the hub will show once setup finishes.
     IdentityVaultRowState,
     type IdentityCardView,
   } from "$lib/components/identities/identity-card-model";
+  import FirstRunBackLink from "./FirstRunBackLink.svelte";
   import FirstRunProgress from "./FirstRunProgress.svelte";
   import type { VaultState } from "$lib/vault.svelte";
   import { FirstRunStage } from "$lib/vault/state/ui.svelte";
@@ -74,23 +74,14 @@ identity card the hub will show once setup finishes.
   class="mx-auto grid w-full max-w-4xl gap-6 py-6 sm:py-10"
   data-testid="first-run-protect-step"
 >
-  <div class="flex items-center gap-3">
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon"
-      class="-ml-2 size-9 shrink-0"
-      aria-label={vault.t(I18N_KEYS.FirstRunBack)}
-      title={vault.t(I18N_KEYS.FirstRunBack)}
-      data-testid="first-run-back"
+  <div class="grid gap-4">
+    <FirstRunBackLink
+      {vault}
+      testId="first-run-back"
       disabled={vault.isVerifying}
-      onclick={onBack}
-    >
-      <ArrowLeft class="size-4" />
-    </Button>
-    <div class="min-w-0 flex-1">
-      <FirstRunProgress {vault} current={FirstRunStage.Protect} />
-    </div>
+      {onBack}
+    />
+    <FirstRunProgress {vault} current={FirstRunStage.Protect} />
   </div>
 
   <div class="space-y-2">

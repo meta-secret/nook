@@ -1,13 +1,14 @@
 <!--
 The first screen of a browser with no vault: one name, one button. The
 identity is created with the vault and introduced on the next step, where
-its passkey is made. Returning users get two quiet links instead of a menu.
+its passkey is made. Joining an identity from another device is the second
+path and stands apart; restoring from a sync provider is a quiet link.
 -->
 <script lang="ts">
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
-  import { RefreshCw } from "@lucide/svelte";
+  import { ArrowRight, MonitorSmartphone, RefreshCw } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button";
-  import LoginEnrollmentPanel from "$lib/components/login/LoginEnrollmentPanel.svelte";
+  import JoinThisDevice from "$lib/components/join/JoinThisDevice.svelte";
   import type { EnrollmentCodeUnlock } from "./login-create-vault-chooser-contract";
   import type { VaultState } from "$lib/vault.svelte";
   import { FirstRunStage } from "$lib/vault/state/ui.svelte";
@@ -33,7 +34,8 @@ its passkey is made. Returning users get two quiet links instead of a menu.
   } = $props();
 
   let name = $state("");
-  let joinOpen = $state(false);
+  /** Joining an identity this person already has replaces the screen. */
+  let joining = $state(false);
   // An empty field takes the suggested name, so one click is enough.
   const vaultName = $derived(
     name.trim() || vault.t(I18N_KEYS.FirstRunNamePlaceholder),
@@ -57,6 +59,14 @@ its passkey is made. Returning users get two quiet links instead of a menu.
   }
 </script>
 
+{#if joining && onUseEnrollmentCode}
+  <JoinThisDevice
+    {vault}
+    {isVerifying}
+    {onUseEnrollmentCode}
+    onBack={() => (joining = false)}
+  />
+{:else}
 <section
   class="mx-auto grid w-full max-w-md gap-7 py-10 text-center sm:py-16"
   data-testid="first-vault-start"
@@ -112,22 +122,38 @@ its passkey is made. Returning users get two quiet links instead of a menu.
     </p>
   {/if}
 
-  <div
-    class="flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm"
-    data-testid="login-path-cloud"
-  >
-    {#if onUseEnrollmentCode}
-      <button
-        type="button"
-        class="text-muted-foreground underline underline-offset-4 hover:text-foreground disabled:opacity-60"
-        aria-expanded={joinOpen}
-        data-testid="login-join-identity-btn"
-        disabled={isBusy}
-        onclick={() => (joinOpen = !joinOpen)}
+  {#if onUseEnrollmentCode}
+    <button
+      type="button"
+      class="group flex w-full items-center gap-3 border border-border bg-card p-4 text-left transition-colors hover:border-foreground/40 disabled:opacity-60"
+      data-testid="login-join-identity-btn"
+      disabled={isBusy}
+      onclick={() => (joining = true)}
+    >
+      <span class="nk-tile shrink-0" aria-hidden="true">
+        <MonitorSmartphone class="size-4" />
+      </span>
+      <span class="min-w-0 flex-1">
+        <span class="block text-sm font-semibold text-foreground">
+          {vault.t(I18N_KEYS.JoinEntryTitle)}
+        </span>
+        <span class="block text-xs text-pretty text-muted-foreground">
+          {vault.t(I18N_KEYS.JoinEntryBody)}
+        </span>
+      </span>
+      <span
+        class="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-foreground"
       >
-        {vault.t(I18N_KEYS.FirstRunJoinLink)}
-      </button>
-    {/if}
+        <span class="hidden sm:inline">{vault.t(I18N_KEYS.JoinEntryCta)}</span>
+        <ArrowRight
+          class="size-4 transition-transform group-hover:translate-x-0.5"
+          aria-hidden="true"
+        />
+      </span>
+    </button>
+  {/if}
+
+  <div class="flex justify-center text-sm" data-testid="login-path-cloud">
     <button
       type="button"
       class="text-muted-foreground underline underline-offset-4 hover:text-foreground disabled:opacity-60"
@@ -159,15 +185,5 @@ its passkey is made. Returning users get two quiet links instead of a menu.
       {vault.t(I18N_KEYS.FirstRunHowItWorks)}
     </button>
   </p>
-
-  {#if onUseEnrollmentCode && joinOpen}
-    <div class="text-left">
-      <LoginEnrollmentPanel
-        {vault}
-        bind:open={joinOpen}
-        {isVerifying}
-        {onUseEnrollmentCode}
-      />
-    </div>
-  {/if}
 </section>
+{/if}

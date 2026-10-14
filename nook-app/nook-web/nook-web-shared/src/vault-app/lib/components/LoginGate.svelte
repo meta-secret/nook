@@ -69,8 +69,7 @@
     IdentityContextFocusRestoration,
     type IdentityContextFocusSchedule,
   } from "./login-gate-focus";
-  import LoginEnrollmentPanel from "$lib/components/login/LoginEnrollmentPanel.svelte";
-  import EnrollmentQrOnboardCard from "$lib/components/login/EnrollmentQrOnboardCard.svelte";
+  import JoinThisDevice from "$lib/components/join/JoinThisDevice.svelte";
   import SentinelCeremonyPanel from "$lib/components/login/SentinelCeremonyPanel.svelte";
   import { SentinelCeremonyVisibility } from "$lib/vault/sentinel-unlock";
   import {
@@ -181,14 +180,8 @@
     >
   >;
   type CreateVaultChooserProps = ComponentProps<typeof LoginCreateVaultChooser>;
-  type EnrollmentQrOnboardCardProps = ComponentProps<
-    typeof EnrollmentQrOnboardCard
-  >;
   type LoginUnlockStepProps = ComponentProps<typeof LoginUnlockStep>;
   type LoginVaultPickerProps = ComponentProps<typeof LoginVaultPicker>;
-  type EnrollmentPanelOptionalProps = Partial<
-    Pick<ComponentProps<typeof LoginEnrollmentPanel>, "onUseEnrollmentCode">
-  >;
   type SentinelCeremonyOptionalProps = Partial<
     Pick<ComponentProps<typeof SentinelCeremonyPanel>, "onUnlocked">
   >;
@@ -208,11 +201,6 @@
       props.onFinishSentinelInvitation = onSentinelUnlocked;
     return props;
   });
-  const enrollmentPanelOptionalProps = $derived.by(() => {
-    const props: EnrollmentPanelOptionalProps = {};
-    if (onUseEnrollmentCode) props.onUseEnrollmentCode = onUseEnrollmentCode;
-    return props;
-  });
   const sentinelCeremonyOptionalProps = $derived.by(() => {
     const props: SentinelCeremonyOptionalProps = {};
     if (onSentinelUnlocked) props.onUnlocked = onSentinelUnlocked;
@@ -226,7 +214,6 @@
     return props;
   });
 
-  let enrollmentPanelOpen = $state(false);
   let showProviderSetupLink = $state(false);
   /** Back from restore returns to the first screen even with saved rows. */
   let firstScreenRequested = $state(false);
@@ -528,12 +515,6 @@
   const isUnlocking = $derived(
     isVerifying && (showLocalUnlock || showSetup) && !showSetup,
   );
-  const showEnrollmentAccess = $derived(
-    Boolean(onUseEnrollmentCode) &&
-      !showQrOnboarding &&
-      (showProviderSetup || showSetup),
-  );
-
   const setupCanConnect = $derived(
     setupIs("local") ||
       (setupIs("local-folder") &&
@@ -679,16 +660,6 @@
     }}
   />
 
-  {#if showEnrollmentAccess}
-    <LoginEnrollmentPanel
-      {vault}
-      bind:open={enrollmentPanelOpen}
-      {isVerifying}
-      initialCode={prefillEnrollmentCode}
-      openFormInitially={false}
-      {...enrollmentPanelOptionalProps}
-    />
-  {/if}
 {/snippet}
 {#snippet newVaultPanel()}
   <LoginNewVaultPanel
@@ -804,21 +775,11 @@
         {/if}
 
         {#if showQrOnboarding && onUseEnrollmentCode}
-          <EnrollmentQrOnboardCard
+          <JoinThisDevice
             {vault}
-            code={prefillEnrollmentCode}
             {isVerifying}
-            onSubmit={(
-              password: Parameters<EnrollmentQrOnboardCardProps["onSubmit"]>[0],
-            ) => {
-              const enrollmentRequest: Parameters<
-                typeof onUseEnrollmentCode
-              >[0] = {
-                code: prefillEnrollmentCode,
-                password,
-              };
-              return onUseEnrollmentCode(enrollmentRequest);
-            }}
+            code={prefillEnrollmentCode}
+            {onUseEnrollmentCode}
           />
         {:else if !showCreateVault && !sentinelInvitationRequest.trim()}
           {#if showAccessSheet}
@@ -999,16 +960,6 @@
             </section>
           {/if}
 
-          {#if showEnrollmentAccess}
-            <LoginEnrollmentPanel
-              {vault}
-              bind:open={enrollmentPanelOpen}
-              {isVerifying}
-              initialCode={prefillEnrollmentCode}
-              openFormInitially={false}
-              {...enrollmentPanelOptionalProps}
-            />
-          {/if}
         {/if}
       </div>
     </IdentitiesHub>

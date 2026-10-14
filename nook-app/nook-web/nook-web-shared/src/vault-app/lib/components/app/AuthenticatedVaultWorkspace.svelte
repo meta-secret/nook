@@ -13,13 +13,12 @@ band, the scrolling page and the status line.
 
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import { onDestroy, tick, untrack, type ComponentProps } from "svelte";
-  import { Download, Fingerprint, Puzzle } from "@lucide/svelte";
+  import { Download, Puzzle } from "@lucide/svelte";
   import { type ExtensionSetupOffer } from "$lib/app/extension-setup";
   import {
     configured_vault_application_supports_extension,
     NookIdentityLocalAccessKind,
     NookIdentityNextStep,
-    NookIdentityNudge,
     type NookIdentityHealth,
     ProviderSyncFailureHandling,
     ProviderSyncVisibility,
@@ -460,35 +459,6 @@ band, the scrolling page and the status line.
         {/snippet}
         {#snippet actions()}
           {#if section === WorkspaceSection.Vault}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              title={vault.t(I18N_KEYS.WorkspaceManageIdentity)}
-              data-testid="vault-identity-btn"
-              onclick={() => openFromNav(WorkspaceSection.Vaults)}
-            >
-              <Fingerprint class="size-4" />
-              <span class="hidden max-w-[12rem] truncate sm:inline"
-                >{identityName}</span
-              >
-              {#if identityPendingJoins.length > 0}
-                <span
-                  class="min-w-4 bg-foreground px-1 font-mono text-[10px] leading-4 text-background"
-                  data-testid="vault-identity-pending-joins"
-                  >{identityPendingJoins.length}</span
-                >
-              {:else if identityHealth.nudge !== NookIdentityNudge.Quiet}
-                <span
-                  class="size-1.5 rounded-full {identityHealth.nudge ===
-                  NookIdentityNudge.Urge
-                    ? 'bg-warning'
-                    : 'bg-muted-foreground'}"
-                  title={vault.t(I18N_KEYS.IdentityHealthLabel)}
-                  data-testid="vault-identity-health-nudge"
-                ></span>
-              {/if}
-            </Button>
             <Button
               type="button"
               variant="outline"

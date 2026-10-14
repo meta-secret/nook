@@ -4,6 +4,8 @@ joins through, share a one-time passphrase, and create the code. A member
 approves the join on the Devices page.
 -->
 <script lang="ts">
+  import JoinFlowDiagram from '$lib/components/join/JoinFlowDiagram.svelte'
+  import { JoinSide } from '$lib/components/join/join-flow'
   import type { EnrollmentCodeIssueResult } from '$lib/vault/enrollment-issue-failure'
   type IdentityCodeIssue = {
     readonly providerId: string
@@ -165,6 +167,8 @@ approves the join on the Devices page.
       {vault.t(I18N_KEYS.IdentityControlOnboardDescription)}
     </p>
   </div>
+
+  <JoinFlowDiagram {vault} side={JoinSide.Inviting} />
 
   {#if compatibleMounts.length === 0}
     <div

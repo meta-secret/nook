@@ -4,11 +4,12 @@ provider is added right here, inside the step; when it connects, or the
 person skips, the new vault opens. Identity management is never visited.
 -->
 <script lang="ts">
-  import { ArrowLeft, Copy } from "@lucide/svelte";
+  import { Copy } from "@lucide/svelte";
   import { untrack } from "svelte";
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import { Button } from "$lib/components/ui/button";
   import AuthStorage from "$lib/components/AuthStorage.svelte";
+  import FirstRunBackLink from "./FirstRunBackLink.svelte";
   import FirstRunProgress from "./FirstRunProgress.svelte";
   import type { VaultState } from "$lib/vault.svelte";
   import { FirstRunStage } from "$lib/vault/state/ui.svelte";
@@ -57,25 +58,16 @@ person skips, the new vault opens. Identity management is never visited.
   class="mx-auto grid w-full max-w-2xl gap-6 py-6 sm:py-10"
   data-testid="first-run-backup-step"
 >
-  <div class="flex items-center gap-3">
+  <div class="grid gap-4">
     {#if choosing}
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        class="-ml-2 size-9 shrink-0"
-        aria-label={vault.t(I18N_KEYS.FirstRunBack)}
-        title={vault.t(I18N_KEYS.FirstRunBack)}
-        data-testid="first-run-backup-back"
+      <FirstRunBackLink
+        {vault}
+        testId="first-run-backup-back"
         disabled={vault.isVerifying}
-        onclick={stopChoosing}
-      >
-        <ArrowLeft class="size-4" />
-      </Button>
+        onBack={stopChoosing}
+      />
     {/if}
-    <div class="min-w-0 flex-1">
-      <FirstRunProgress {vault} current={FirstRunStage.Backup} />
-    </div>
+    <FirstRunProgress {vault} current={FirstRunStage.Backup} />
   </div>
 
   <div class="space-y-3">
