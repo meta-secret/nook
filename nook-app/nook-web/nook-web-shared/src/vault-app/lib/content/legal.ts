@@ -1,6 +1,6 @@
 import privacyPolicyMd from "../../../../../../../docs/privacy-policy.md?raw";
 import termsOfServiceMd from "../../../../../../../docs/terms-of-service.md?raw";
-import { ApplicationPath } from "$lib/runtime/routes";
+import { ApplicationBase, ApplicationPath } from "$lib/runtime/routes";
 
 export enum LegalPageId {
   Privacy = "privacy",
@@ -57,9 +57,10 @@ export class ApplicationRoutePresentation {
   constructor(private readonly value: string) {}
   appPath(): string {
     const path = this.value;
-    const base = import.meta.env.BASE_URL;
+    const pathname = "window" in globalThis ? window.location.pathname : "/";
+    const root = new ApplicationBase(pathname).root;
     const normalized = path.startsWith("/") ? path.slice(1) : path;
-    return `${base}${normalized}`;
+    return `${root}${normalized}`;
   }
 
   getLegalPageFromPath(): LegalPageLookup {
