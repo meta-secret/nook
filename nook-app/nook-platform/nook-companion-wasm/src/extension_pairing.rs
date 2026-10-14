@@ -207,6 +207,25 @@ pub fn extension_setup_after_pairing_grant_removal(
 }
 
 #[wasm_bindgen]
+#[allow(clippy::needless_pass_by_value)]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
+pub fn select_default_extension_pairing_vault(
+    input: &tsify::Ts<nook_companion_core::ExtensionDefaultVaultSelectionInput>,
+) -> Result<tsify::Ts<nook_companion_core::ExtensionPairingState>, wasm_bindgen::JsError> {
+    let input = input
+        .to_rust()
+        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
+    let result = input
+        .state
+        .select_default_vault(&input.vault_store_id)
+        .map_err(|error| JsError::new(&error.to_string()))?;
+    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
+}
+
+#[wasm_bindgen]
 #[must_use]
 #[cfg_attr(
     dylint_lib = "nook_domain_api",

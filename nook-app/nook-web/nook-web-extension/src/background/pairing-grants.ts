@@ -12,8 +12,10 @@ import {
   ordered_extension_pairing_grants,
   refresh_extension_pairing_grant,
   selected_extension_pairing_grant,
+  select_default_extension_pairing_vault,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type {
+  ExtensionDefaultVaultSelectionInput,
   CreateExtensionPairingStateInput,
   ExtensionPairingGrantApproval,
   ExtensionPairingGrantRemovalInput,
@@ -221,6 +223,22 @@ function setupAfterPairingGrantRemoval(
   return extension_setup_after_pairing_grant_removal(input)
 }
 
+type DefaultVaultSelectionArgs = {
+  stored: ExtensionPairingItems
+  vaultStoreId: string
+}
+
+/** Storage items that make a paired vault the extension's default one. */
+function defaultVaultSelectionItems(
+  args: DefaultVaultSelectionArgs,
+): ExtensionPairingItems {
+  const input: ExtensionDefaultVaultSelectionInput = {
+    state: stateFromItems(args.stored),
+    vaultStoreId: args.vaultStoreId,
+  }
+  return itemsFromState(select_default_extension_pairing_vault(input))
+}
+
 function selectedPairingGrantFirst(
   stored: ExtensionPairingItems,
 ): StoredExtensionPairingGrant[] {
@@ -261,6 +279,7 @@ export type ExtensionPairingGrantPolicy = {
   extensionPairingGrantStorageItems: typeof extensionPairingGrantStorageItems
   extensionStoredPairingGrantStorageItems: typeof extensionStoredPairingGrantStorageItems
   setupAfterPairingGrantRemoval: typeof setupAfterPairingGrantRemoval
+  defaultVaultSelectionItems: typeof defaultVaultSelectionItems
   selectedPairingGrantFirst: typeof selectedPairingGrantFirst
   selectedPairingGrant: typeof selectedPairingGrant
   firstStoredPairingGrant: typeof firstStoredPairingGrant
@@ -276,6 +295,7 @@ export const extensionPairingGrantPolicyReady: Promise<ExtensionPairingGrantPoli
     extensionPairingGrantStorageItems,
     extensionStoredPairingGrantStorageItems,
     setupAfterPairingGrantRemoval,
+    defaultVaultSelectionItems,
     selectedPairingGrantFirst,
     selectedPairingGrant,
     firstStoredPairingGrant,

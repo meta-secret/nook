@@ -149,91 +149,89 @@ body {
   line-height: 1.45;
 }
 
-.secret-summary {
-  padding: 14px 15px;
-  border: 1px solid var(--border);
-  border-radius: calc(var(--radius) + 6px);
-  background: var(--card);
+.vault-list-section,
+.vault-empty {
+  display: grid;
+  gap: 10px;
 }
 
-.secret-summary div {
+.vault-list-heading {
+  display: grid;
+  gap: 4px;
+}
+
+.toolbar-menu .vault-list-heading h1,
+.toolbar-menu .vault-empty h1 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.vault-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+}
+
+.vault-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 10px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
 }
 
-.secret-summary span {
-  color: var(--muted-foreground);
-  font-size: 12px;
-  font-weight: 650;
+.vault-row:first-child {
+  border-top: 0;
 }
 
-.secret-summary strong {
-  color: var(--foreground);
-  font-size: 30px;
-  font-variant-numeric: tabular-nums;
-  font-weight: 780;
-  letter-spacing: -0.04em;
-  line-height: 1;
+.vault-row.is-default {
+  background: var(--card);
+  box-shadow: inset 2px 0 0 var(--primary);
 }
 
-.companion-relationship {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 30px minmax(0, 1fr);
-  align-items: stretch;
-  margin: 0;
-}
-
-.relationship-node {
+.vault-row-main {
   display: grid;
   min-width: 0;
-  gap: 4px;
-  padding: 11px 12px;
-  border: 1px solid var(--border);
-  border-radius: calc(var(--radius) + 4px);
-  background: var(--card);
+  gap: 3px;
 }
 
-.relationship-node span,
-.relationship-node strong {
+.vault-row-name {
   overflow: hidden;
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.relationship-node span {
+.vault-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
   color: var(--muted-foreground);
-  font-size: 10px;
+  font-size: 11px;
+}
+
+.vault-default-tag {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  color: var(--primary);
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
-.relationship-node strong {
-  color: var(--foreground);
-  font-size: 12px;
-  font-weight: 720;
-}
-
-.relationship-connector {
-  display: grid;
-  align-items: center;
-}
-
-.relationship-connector span {
-  height: 1px;
-  background: repeating-linear-gradient(
-    90deg,
-    var(--muted-foreground) 0 3px,
-    transparent 3px 6px
-  );
-  opacity: 0.5;
-}
-
-.companion-relationship.connected .relationship-connector span {
-  background: var(--primary);
-  opacity: 0.72;
+.toolbar-menu .vault-make-default {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
 }
 
 .companion-actions {
@@ -441,6 +439,10 @@ button {
   font-size: 14px;
   font-weight: 740;
   padding: 10px 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 
 button:hover:not(:disabled) {
