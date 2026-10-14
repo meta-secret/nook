@@ -194,6 +194,7 @@ body {
 
 .vault-row-main {
   display: grid;
+  flex: 1 1 auto;
   min-width: 0;
   gap: 3px;
 }
@@ -218,6 +219,7 @@ body {
 .vault-default-tag {
   display: inline-flex;
   flex: 0 0 auto;
+  white-space: nowrap;
   align-items: center;
   gap: 4px;
   color: var(--primary);
@@ -229,6 +231,7 @@ body {
 
 .toolbar-menu .vault-make-default {
   flex: 0 0 auto;
+  white-space: nowrap;
   min-height: 28px;
   padding: 4px 8px;
   border: 1px solid var(--border);
