@@ -38,13 +38,13 @@ const runtimeKeys = [
 ] as const satisfies readonly (keyof VaultRuntimeState)[];
 
 const uiKeys = [
-  "settingsOpen",
-  "settingsSection",
-  "devicesAccessIdentityProtectionOpen",
-  "devicesAccessIdentityTransitionPending",
-  "settingsAccordionSection",
-  "adminAccordionSection",
+  "workspaceSection",
+  "identityTransitionPending",
   "helpOpen",
+  "firstRun",
+  "firstRunVaultName",
+  "newIdentity",
+  "newIdentityName",
 ] as const satisfies readonly (keyof VaultUiState)[];
 
 const providerKeys = [
@@ -66,6 +66,8 @@ const providerKeys = [
   "activateLoginSetup",
   "clearLoginSetup",
   "loginRequiresExistingVault",
+  "providerSaveLayout",
+  "providerSaveTarget",
   "recoveryDiscovery",
   "recordExistingVaultRecovery",
   "clearExistingVaultRecoverySummary",
@@ -116,7 +118,6 @@ const sessionKeys = [
   "joinEnrollmentPrompt",
   "awaitingJoinApproval",
   "loginPasswordPrompt",
-  "loginDeviceKeysCapable",
   "remoteVaultRecoveryState",
   "isPasswordBusy",
   "passwordError",
@@ -201,13 +202,13 @@ class VaultStateSlicesImplementation {
   declare isSaving: VaultRuntimeState["isSaving"];
   declare isInitializing: VaultRuntimeState["isInitializing"];
 
-  declare settingsOpen: VaultUiState["settingsOpen"];
-  declare settingsSection: VaultUiState["settingsSection"];
-  declare devicesAccessIdentityProtectionOpen: VaultUiState["devicesAccessIdentityProtectionOpen"];
-  declare devicesAccessIdentityTransitionPending: VaultUiState["devicesAccessIdentityTransitionPending"];
-  declare settingsAccordionSection: VaultUiState["settingsAccordionSection"];
-  declare adminAccordionSection: VaultUiState["adminAccordionSection"];
+  declare workspaceSection: VaultUiState["workspaceSection"];
+  declare identityTransitionPending: VaultUiState["identityTransitionPending"];
   declare helpOpen: VaultUiState["helpOpen"];
+  declare firstRun: VaultUiState["firstRun"];
+  declare firstRunVaultName: VaultUiState["firstRunVaultName"];
+  declare newIdentity: VaultUiState["newIdentity"];
+  declare newIdentityName: VaultUiState["newIdentityName"];
 
   declare providers: VaultProviderState["providers"];
   declare providersLoaded: VaultProviderState["providersLoaded"];
@@ -227,6 +228,8 @@ class VaultStateSlicesImplementation {
   declare activateLoginSetup: VaultProviderState["activateLoginSetup"];
   declare clearLoginSetup: VaultProviderState["clearLoginSetup"];
   declare loginRequiresExistingVault: VaultProviderState["loginRequiresExistingVault"];
+  declare providerSaveLayout: VaultProviderState["providerSaveLayout"];
+  declare providerSaveTarget: VaultProviderState["providerSaveTarget"];
   declare readonly recoveryDiscovery: VaultProviderState["recoveryDiscovery"];
   declare recordExistingVaultRecovery: VaultProviderState["recordExistingVaultRecovery"];
   declare clearExistingVaultRecoverySummary: VaultProviderState["clearExistingVaultRecoverySummary"];
@@ -275,7 +278,6 @@ class VaultStateSlicesImplementation {
   declare joinEnrollmentPrompt: VaultSessionState["joinEnrollmentPrompt"];
   declare awaitingJoinApproval: VaultSessionState["awaitingJoinApproval"];
   declare loginPasswordPrompt: VaultSessionState["loginPasswordPrompt"];
-  declare loginDeviceKeysCapable: VaultSessionState["loginDeviceKeysCapable"];
   declare remoteVaultRecoveryState: VaultSessionState["remoteVaultRecoveryState"];
   declare isPasswordBusy: VaultSessionState["isPasswordBusy"];
   declare passwordError: VaultSessionState["passwordError"];

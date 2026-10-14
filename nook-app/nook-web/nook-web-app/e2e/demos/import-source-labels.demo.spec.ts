@@ -3,13 +3,15 @@ import {
   connectLocalVault,
   expandSettingsSection,
   UI_TIMEOUT_MS,
+  openManagePage,
+  ManagePage,
 } from '../helpers'
 
 const DEMO_BEAT_MS = 700
 
 test('browse concise password import source labels', async ({ page }) => {
   await connectLocalVault(page)
-  await page.getByTestId('vault-admin-tab').click()
+  await openManagePage(page, ManagePage.Import)
   await expandSettingsSection(page, 'import')
 
   const sources = [

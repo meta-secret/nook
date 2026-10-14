@@ -3,10 +3,6 @@ import type { ComponentProps, MountOptions } from 'svelte'
 import { extensionLocaleCatalog } from '../lib/i18n'
 import { OpenCompanionLauncherIntent } from '../../../nook-web-shared/src/extension/companion-launcher-message'
 import {
-  extensionPairingStateLoader,
-  ExtensionSetupLoadKind,
-} from '../lib/pairing-state'
-import {
   ExtensionSessionDeviceStateKind,
   DeviceProtectionStatus,
   type ExtensionSessionDeviceState,
@@ -18,26 +14,6 @@ import PopupInitializationFailure from './PopupInitializationFailure.svelte'
 import { PopupInitializationPhase } from './popup-app-state'
 import AuthenticatorPicker from './AuthenticatorPicker.svelte'
 import './popup.css'
-
-async function loadCompanionVaultConnection(): Promise<
-  | {
-      isConnected: false
-    }
-  | {
-      isConnected: true
-      vaultName: string
-      vaultStoreId: string
-    }
-> {
-  const setup = await extensionPairingStateLoader.loadExtensionSetupState()
-  return setup.kind === ExtensionSetupLoadKind.Ready
-    ? {
-        isConnected: true,
-        vaultName: setup.setup.selectedVaultName,
-        vaultStoreId: setup.setup.selectedVaultStoreId,
-      }
-    : { isConnected: false }
-}
 
 async function main() {
   const target = document.getElementById('app')
@@ -75,7 +51,6 @@ async function main() {
 
   let initializationPhase = PopupInitializationPhase.PairingState
   try {
-    const vaultConnection = await loadCompanionVaultConnection()
     const { protectionStatus, activeSessionDevice } =
       await retryClosedExtensionSessionOnce(async () => {
         initializationPhase = PopupInitializationPhase.DeviceProtectionStatus
@@ -93,13 +68,6 @@ async function main() {
       target,
       props: {
         i18n,
-        isConnected: vaultConnection.isConnected,
-        ...(vaultConnection.isConnected
-          ? {
-              vaultName: vaultConnection.vaultName,
-              vaultStoreId: vaultConnection.vaultStoreId,
-            }
-          : {}),
         launcherIntent,
         protectionStatus,
         activeSessionDevice,

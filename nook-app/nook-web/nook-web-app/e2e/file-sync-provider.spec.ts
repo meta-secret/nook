@@ -1,7 +1,6 @@
 import { test, expect, type BrowserContext, type Page } from './fixtures'
 import {
   addSecret,
-  approveJoinFromBanner,
   assertVaultReady,
   createIsolatedContext,
   disableVaultIdleLock,
@@ -9,10 +8,9 @@ import {
   revealSecretValue,
   seedExtraOauthFileProviders,
   invokeInitializedVaultProviderReload,
-  sendJoinRequestLocalE2e,
+  joinIdentityThroughCode,
   uniqueSecretKey,
   waitForLoadedSyncProviders,
-  waitForJoinerVaultReady,
   waitForSecretOnDevice,
   waitForVaultOperationsIdle,
   waitForVaultSyncIdle,
@@ -20,7 +18,6 @@ import {
 import {
   E2eSyncProviderId,
   connectSyncGenesisDevice,
-  connectSyncJoinerDevice,
   createSyncTarget,
   installSyncRemote,
   installSyncRemoteOnPages,
@@ -92,13 +89,10 @@ test.describe('file sync provider event log', () => {
       expect.arrayContaining([expect.stringContaining('schema_version:')]),
     )
 
-    await connectSyncJoinerDevice(deviceB, target)
-    const join = await sendJoinRequestLocalE2e(deviceB, stub)
-    await approveJoinFromBanner(deviceA, join.deviceId, target, 2)
-    await waitForJoinerVaultReady({
-      page: deviceB,
-      target,
-      testInfo: test.info(),
+    await joinIdentityThroughCode({
+      member: deviceA,
+      joiner: deviceB,
+      expectedMembers: 2,
     })
 
     await waitForSecretOnDevice(deviceB, key, target)
@@ -132,14 +126,12 @@ test.describe('file sync provider event log', () => {
     })
     await expectFileTargetsToHaveSameEvents([commonVault, commonVaultBackup])
 
-    await connectSyncJoinerDevice(deviceB, commonVault)
-    if (!commonVault.stub) throw new Error('expected the file sync stub')
-    const join = await sendJoinRequestLocalE2e(deviceB, commonVault.stub)
-    await approveJoinFromBanner(deviceA, join.deviceId, commonVault, 2)
-    await waitForJoinerVaultReady({
-      page: deviceB,
-      target: commonVault,
-      testInfo: test.info(),
+    // The joining browser reaches the identity through the common vault mount.
+    await installSyncRemote(deviceB, commonVault)
+    await joinIdentityThroughCode({
+      member: deviceA,
+      joiner: deviceB,
+      expectedMembers: 2,
     })
     await assertVaultReady(deviceB)
 

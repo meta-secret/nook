@@ -1,0 +1,511 @@
+/* Nook vault UI — rows, tiles, the two-pane secret list, field slots and
+ * the strength meter. Builds on the shape vocabulary in nook-identity.css. */
+@layer components {
+  /* Square icon tile used by rows, list items and empty states. */
+  .nk-tile {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 2.5rem;
+    height: 2.5rem;
+    border: 1px solid var(--border);
+    color: var(--muted-foreground);
+  }
+  .nk-tile-sm {
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+  .nk-tile-lg {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+
+  /* Rows: title + status tag, muted subline, spec line, actions. */
+  .nk-row {
+    display: grid;
+    grid-template-columns: 2.5rem minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 0.5rem 1rem;
+    padding: 1rem 1.125rem;
+  }
+  .nk-row + .nk-row {
+    border-top: 1px solid var(--border);
+  }
+  .nk-row-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    color: var(--foreground);
+  }
+  .nk-row-sub {
+    margin-top: 0.125rem;
+    font-size: 0.8125rem;
+    color: var(--muted-foreground);
+    overflow-wrap: anywhere;
+  }
+  .nk-row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.25rem;
+    align-self: center;
+  }
+  .nk-row-wide {
+    grid-column: 2 / -1;
+  }
+  @media (width < 40rem) {
+    .nk-row {
+      grid-template-columns: 2.5rem minmax(0, 1fr);
+    }
+    .nk-row-actions {
+      grid-column: 2 / -1;
+      justify-content: flex-start;
+    }
+  }
+
+  .nk-empty {
+    display: grid;
+    justify-items: center;
+    gap: 0.75rem;
+    padding: 2.25rem 1.25rem;
+    text-align: center;
+    color: var(--muted-foreground);
+  }
+  .nk-empty strong {
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  /* Form field label: the slot label, outside the field. */
+  .nk-field-label {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+
+  /* Vault: search, type chips, list and detail. */
+  .nk-search {
+    position: relative;
+    flex: 1 1 16rem;
+    max-width: 26rem;
+  }
+  .nk-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+  }
+  @media (width < 40rem) {
+    .nk-chips {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      scrollbar-width: none;
+      margin-inline: -0.125rem;
+      padding-inline: 0.125rem;
+    }
+  }
+  .nk-chip {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 0.375rem;
+    height: 2rem;
+    padding: 0 0.75rem;
+    border: 1px solid var(--border);
+    background: transparent;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    color: var(--muted-foreground);
+    cursor: pointer;
+  }
+  .nk-chip:hover {
+    background: var(--accent);
+    color: var(--foreground);
+  }
+  .nk-chip[aria-pressed="true"],
+  .nk-chip[aria-checked="true"] {
+    border-color: var(--primary);
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+  .nk-chip:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  /* One outlined track of filters instead of a row of separate boxes. */
+  .nk-chips-track {
+    flex-wrap: nowrap;
+    gap: 0;
+    align-self: flex-start;
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+    border: 1px solid var(--border);
+  }
+  .nk-chips-track .nk-chip {
+    border: 0;
+    border-right: 1px solid var(--border);
+  }
+  .nk-chips-track .nk-chip:last-child {
+    border-right: 0;
+  }
+  .nk-chips-track .nk-chip:focus-visible {
+    outline-offset: -2px;
+  }
+  /* The list and the detail share one grid: rows and sheets are siblings, so
+   * phones show the sheet under its row and wide screens pin it to the right. */
+  .nk-vault-grid {
+    display: flex;
+    flex-direction: column;
+    padding-top: 1px;
+  }
+  .nk-vault-item,
+  .nk-vault-group-head {
+    margin-top: -1px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    box-shadow: inset 2px 0 0
+      color-mix(in oklch, var(--foreground) 45%, transparent);
+  }
+  .nk-vault-group-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    min-width: 0;
+    padding: 0.5rem 0.875rem;
+    background: color-mix(in oklch, var(--muted) 45%, var(--card));
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.08em;
+    color: var(--muted-foreground);
+  }
+  .nk-secret-detail-pane {
+    margin: 0.5rem 0 0.75rem;
+  }
+  .nk-secret-detail-idle {
+    display: none;
+  }
+  @media (width >= 56rem) {
+    .nk-vault-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 20rem) minmax(0, 1fr);
+      grid-template-rows: repeat(var(--nk-vault-rows, 1), auto) 1fr;
+      column-gap: 1rem;
+      align-items: stretch;
+    }
+    .nk-vault-item,
+    .nk-vault-group-head {
+      grid-column: 1;
+    }
+    .nk-secret-detail-pane {
+      position: sticky;
+      top: 1rem;
+      grid-column: 2;
+      grid-row: 1 / -1;
+      align-self: start;
+      margin: 0;
+    }
+    .nk-secret-detail-idle {
+      display: grid;
+      min-height: 16rem;
+      align-content: center;
+    }
+  }
+  .nk-vault-item {
+    display: grid;
+    grid-template-columns: 2.25rem minmax(0, 1fr);
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    min-width: 0;
+    padding: 0.75rem 0.875rem;
+    text-align: left;
+    cursor: pointer;
+  }
+  .nk-vault-item:hover {
+    background: color-mix(in oklch, var(--muted) 50%, var(--card));
+  }
+  .nk-vault-item[aria-expanded="true"] {
+    background: var(--accent);
+    box-shadow: inset 3px 0 0 var(--foreground);
+  }
+  .nk-vault-item:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
+  }
+  .nk-words {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.25rem 1rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+  }
+  @media (width >= 40rem) {
+    .nk-words {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+  .nk-words li {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    padding: 0.25rem 0;
+    border-bottom: 1px dotted var(--border);
+  }
+  .nk-words i {
+    min-width: 1.25rem;
+    font-style: normal;
+    font-size: 0.6875rem;
+    text-align: right;
+    color: var(--muted-foreground);
+  }
+  .nk-words b {
+    font-weight: 500;
+  }
+  /* Square panel for forms: no clip-path, so field popovers are not cut. */
+  .nk-panel {
+    border: 1px solid var(--border);
+    background: var(--card);
+    box-shadow: inset 2px 0 0
+      color-mix(in oklch, var(--foreground) 45%, transparent);
+  }
+  .nk-secret-detail {
+    display: grid;
+    gap: 1.125rem;
+    min-width: 0;
+    padding: 1.25rem;
+  }
+
+  /* Field slot: label set into the frame, value inside, actions at hand. */
+  .nk-slots {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-auto-flow: row dense;
+    gap: 0.625rem;
+  }
+  @media (width >= 40rem) {
+    .nk-slots {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  .nk-slot {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.375rem 0.5rem;
+    min-width: 0;
+    padding: 0.625rem 0.5rem 0.6875rem 0.875rem;
+  }
+  .nk-slot-wide {
+    grid-column: 1 / -1;
+  }
+  .nk-slot-label {
+    grid-column: 1 / -1;
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    font-weight: 500;
+    line-height: 1;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+  .nk-slot-value {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-size: 0.9375rem;
+    color: var(--foreground);
+  }
+  .nk-slot-value-mono {
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+  }
+  .nk-slot-actions {
+    display: flex;
+    gap: 0.125rem;
+    opacity: 0.65;
+    transition: opacity 0.15s;
+  }
+  .nk-slot:hover .nk-slot-actions,
+  .nk-slot:focus-within .nk-slot-actions {
+    opacity: 1;
+  }
+  .nk-slot-extra {
+    grid-column: 1 / -1;
+  }
+  .nk-meter {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.625rem;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    color: var(--muted-foreground);
+  }
+  .nk-meter-segments {
+    display: inline-flex;
+    gap: 2px;
+  }
+  .nk-meter-segments i {
+    width: clamp(0.5rem, 2.4vw, 1rem);
+    height: 0.25rem;
+    background: var(--muted);
+  }
+  .nk-meter-segments i[data-on="true"] {
+    background: color-mix(in oklch, var(--foreground) 70%, transparent);
+  }
+  .nk-meter[data-level="fair"] .nk-meter-segments i[data-on="true"] {
+    background: var(--warning);
+  }
+  .nk-meter[data-level="weak"] .nk-meter-segments i[data-on="true"] {
+    background: var(--destructive);
+  }
+  .nk-icon-btn {
+    display: inline-grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    border: 0;
+    background: transparent;
+    color: var(--muted-foreground);
+    cursor: pointer;
+  }
+  .nk-icon-btn:hover:not(:disabled) {
+    background: var(--accent);
+    color: var(--foreground);
+  }
+  .nk-icon-btn:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
+  }
+  .nk-icon-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+}
+
+/* Key chain on the Keys page: who holds the key, the key, what it unlocks. */
+@layer components {
+  .nk-chain {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  @media (width >= 56rem) {
+    .nk-chain {
+      flex-direction: row;
+      align-items: center;
+    }
+  }
+  .nk-chain-node {
+    --nk-cut: 6px;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.625rem;
+    min-width: 0;
+    padding: 0.625rem 0.75rem;
+    border: 1px solid var(--border);
+    background: var(--background);
+    clip-path: polygon(
+      0 0,
+      100% 0,
+      100% calc(100% - var(--nk-cut)),
+      calc(100% - var(--nk-cut)) 100%,
+      0 100%
+    );
+  }
+  .nk-chain-node-key {
+    border-color: color-mix(in oklch, var(--foreground) 45%, transparent);
+    box-shadow: inset 3px 0 0 var(--foreground);
+  }
+  .nk-chain-icon {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 2rem;
+    height: 2rem;
+    border: 1px solid var(--border);
+    color: var(--foreground);
+  }
+  .nk-chain-label {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+  .nk-chain-value {
+    display: block;
+    overflow-wrap: anywhere;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--foreground);
+  }
+  .nk-chain-group {
+    display: grid;
+    gap: 0.375rem;
+    min-width: 0;
+  }
+  @media (width >= 56rem) {
+    .nk-chain-node,
+    .nk-chain-group {
+      flex: 1 1 0;
+    }
+  }
+  /* Connector with its relation: a line and an arrowhead. */
+  .nk-chain-link {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.375rem 0 0.375rem 1.75rem;
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+  .nk-chain-link::before {
+    content: "";
+    width: 1px;
+    height: 1rem;
+    background: color-mix(in oklch, var(--foreground) 35%, transparent);
+  }
+  .nk-chain-link::after {
+    content: "↓";
+    color: color-mix(in oklch, var(--foreground) 55%, transparent);
+  }
+  @media (width >= 56rem) {
+    .nk-chain-link {
+      flex-direction: column;
+      gap: 0.25rem;
+      flex: none;
+      padding: 0 0.75rem;
+    }
+    .nk-chain-link::before {
+      width: 3.5rem;
+      height: 1px;
+      order: 1;
+    }
+    .nk-chain-link::after {
+      content: "→";
+      order: 2;
+      margin-top: -0.75rem;
+      align-self: flex-end;
+    }
+  }
+}

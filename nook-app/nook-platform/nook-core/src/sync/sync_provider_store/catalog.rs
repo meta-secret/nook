@@ -329,6 +329,7 @@ impl AuthProvidersSnapshotData {
             oauth_file: StoredOAuthFileConfiguration::NotApplicable,
             local_folder: StoredLocalFolderConfiguration::NotApplicable,
             store_id,
+            layout: crate::ProviderRowLayout::LegacyVaultRoot,
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: created_at.to_owned(),
         };
@@ -394,6 +395,7 @@ mod tests {
                 oauth_file: StoredOAuthFileConfiguration::NotApplicable,
                 local_folder: StoredLocalFolderConfiguration::NotApplicable,
                 store_id: ProviderVaultScope::Unscoped,
+                layout: crate::ProviderRowLayout::LegacyVaultRoot,
                 sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-06-24T00:00:00.000Z".to_owned(),
             }
@@ -418,6 +420,7 @@ mod tests {
                     handle_id: StoredLocalFolderHandle::HandleId(handle_id.to_owned()),
                 }),
                 store_id: ProviderVaultScope::Unscoped,
+                layout: crate::ProviderRowLayout::LegacyVaultRoot,
                 sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-06-24T00:00:00.000Z".to_owned(),
             }
@@ -448,6 +451,7 @@ mod tests {
                 }),
                 local_folder: StoredLocalFolderConfiguration::NotApplicable,
                 store_id: ProviderVaultScope::Unscoped,
+                layout: crate::ProviderRowLayout::LegacyVaultRoot,
                 sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-06-24T00:00:00.000Z".to_owned(),
             }
@@ -658,6 +662,7 @@ mod tests {
             oauth_file: StoredOAuthFileConfiguration::NotApplicable,
             local_folder: StoredLocalFolderConfiguration::NotApplicable,
             store_id: ProviderVaultScope::Unscoped,
+            layout: crate::ProviderRowLayout::LegacyVaultRoot,
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: "2026-06-24T00:00:00.000Z".to_owned(),
         };
@@ -762,6 +767,7 @@ mod tests {
         let existing = AuthProvidersSnapshotData {
             providers: vec![StorageProviderData {
                 store_id: ProviderVaultScope::StoreId("vault-1".to_owned()),
+                layout: crate::ProviderRowLayout::LegacyVaultRoot,
                 ..first.clone()
             }],
             active_vault_store_id: ActiveVaultScope::StoreId("vault-1".to_owned()),

@@ -2,8 +2,11 @@
 
 ## Product statement
 
-- **Surface:** **Devices & access** is Nook's identity-management surface.
-  - It is available before a vault exists, while every vault is locked, and
+- **Surface:** The identities hub and the identity **Keys** page are Nook's
+  identity-management surface (see
+  [unified-workspace.md](unified-workspace.md)). The former Devices & access
+  page lives on as Keys at `/identity/keys`.
+  - Keys is available before a vault exists, while every vault is locked, and
     while a vault is open.
 - **Identity:** An identity is a logical account.
   - It connects protected Nook apps to vault access.
@@ -40,11 +43,12 @@ See
 4. The identity generates each vault DEK and wraps it to current app public
    keys.
    A vault cannot hold a DEK by itself.
-5. Adding or removing an app key updates identity DEK envelopes.
-   The vault log does not rewrite membership for that change.
+5. Adding or removing an app key is an identity control log event.
+   Approval wraps every owned vault's DEK to the new app key.
+   The joined app key then self-enrolls into each Simple vault log.
 6. A vault backup password opens only its owning vault.
    It does not replace identity or app-key unlock.
-7. Sync providers are replication transports.
+7. Sync providers are replication transports mounted on the identity.
    They never grant identity membership or vault decryption by themselves.
 8. Passwords and other secret items are vault content, not identity state.
 
@@ -219,8 +223,8 @@ It is never shown as stored on one physical laptop.
   directory.
   - Delete the legacy key only after the new directory is durable.
   - Do not support downgrade to a pre-directory build after migration.
-  - Keep the local directory separate from the future replicated identity
-    control log.
+  - Treat the local directory as a cache of the replicated identity control
+    log. Identity sync applies its members and DEK envelopes locally.
 - **Dashboard persistence:** Store non-secret metadata only.
   - Never persist private app keys, PRF output, PIN/passphrases, vault DEKs,
     backup-password values, or plaintext vault contents.
@@ -286,16 +290,19 @@ The Access canvas is identity-centric:
 
 Current dashboard requirements:
 
-- Login and authenticated **Access** share the same identity dashboard.
-- Login opens `/devices-access`.
+- The locked identities hub and the authenticated workspace share the same
+  Keys dashboard.
+- Keys opens at `/identity/keys`; `/devices-access` remains an alias.
 - Browser Back and Forward must update the locked dashboard from the current
   workspace route.
 - `/vault` remains the secrets workspace only.
 - Create-vault flows require identity creation first when no identity exists.
-- The primary desktop layout uses a persistent identity rail.
+- The Keys page leads with an identity chip row.
   - Every local identity remains visible while one identity is selected.
-  - Each identity row shows its app count and vault count.
-  - Narrow screens stack the identity navigator above the selected identity.
+  - Each identity chip shows its app count and vault count.
+  - The selected identity's detail follows below the chips on every width.
+- Identity cards on the hub open Keys focused on their identity; the **New
+  identity** card opens Keys with identity creation already started.
 - Selecting an identity changes the local browse context without changing the
   persisted authorization selection.
 - The directory and access evidence derive current-installation ownership from
@@ -317,7 +324,7 @@ Current dashboard requirements:
     public app ID after lock must not present the identity as unlocked.
   - Each local identity's vault rows use only access profiles belonging to that
     identity's local app keys.
-- **Add identity** is the primary rail action.
+- **Add identity** is the primary chip-row action.
   - It reveals the existing browser-protection widget in the detail column.
   - Opening or cancelling the widget is non-persistent and must not advance the
     cross-tab storage generation.
@@ -366,10 +373,12 @@ Current dashboard requirements:
 - The relationship graph labels the internal app-key node as **App**.
   - It reads as protection method → app → identity → vault.
   - Raw app-key identifiers and cryptographic terminology remain internal.
-- App enrollment begins from the Nook installation that creates or joins a
-  vault.
-  - The selected-identity inventory only lists connected apps; it does not
-    offer a local **Add app** action.
+- App enrollment begins from **Identity → Devices**.
+  - A member issues an identity enrollment code there.
+  - The joining installation connects the code's mount and requests to join.
+  - A member approves, denies, renames, or revokes apps there.
+  - The selected-identity inventory lists connected apps; it does not create
+    a local app key itself.
 - The primary surface omits access-evidence inspection and browser-reported
   ceremony fields.
 - Raw passkey credential bytes never appear.

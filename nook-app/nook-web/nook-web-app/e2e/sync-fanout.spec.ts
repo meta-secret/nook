@@ -3,6 +3,8 @@ import {
   addSecret,
   createLocalVaultOnLogin,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  ManagePage,
+  openManagePage,
   reloadUnlockWithSyncProvider,
   uniqueSecretKey,
 } from './helpers'
@@ -23,15 +25,13 @@ test.describe('sync fan-out on save', () => {
     await expect(page.getByTestId('vault-sync-out-status')).toContainText(
       '1 sync provider',
     )
-    await expect(page.getByTestId('vault-security-guide')).toHaveAttribute(
-      'data-recommendations',
-      '1',
+    // With a copy kept, the identity's next step is a second device.
+    await openManagePage(page, ManagePage.Overview)
+    await expect(page.getByTestId('overview-count-sync')).toHaveText('1')
+    await expect(page.getByTestId('overview-next-step')).toHaveAttribute(
+      'data-next-step',
+      'AddDevice',
     )
-    await page.getByTestId('security-guide-toggle').click()
-    await expect(page.getByTestId('security-guide-device')).toBeVisible()
-    await expect(
-      page.getByTestId('security-guide-sync-provider'),
-    ).not.toBeVisible()
   })
 
   test('triggers fan-out sync indicator after saving a secret', async ({

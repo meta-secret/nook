@@ -32,7 +32,6 @@
     isBusy = false,
     enrollSecretsKey = $bindable(''),
     enrollMembersKey = $bindable(''),
-    onConfirm,
     onEnrollWithKeys,
     onCreateFreshVault,
     onCancel,
@@ -44,7 +43,6 @@
     isBusy?: boolean
     enrollSecretsKey: string
     enrollMembersKey: string
-    onConfirm?: () => void | Promise<void>
     onEnrollWithKeys?: () => void | Promise<void>
     onCreateFreshVault?: () => void | Promise<void>
     onCancel: () => void
@@ -162,18 +160,6 @@
               onclick={onCancel}
             >
               {vault.t(I18N_KEYS.CommonCancel)}
-            </Button>
-            <Button
-              type="button"
-              disabled={isBusy}
-              data-testid="join-enrollment-confirm"
-              onclick={() => void onConfirm?.()}
-            >
-              {#if isBusy}
-                {vault.t(I18N_KEYS.JoinEnrollmentSending)}
-              {:else}
-                {vault.t(I18N_KEYS.JoinEnrollmentSendRequest)}
-              {/if}
             </Button>
           </div>
 

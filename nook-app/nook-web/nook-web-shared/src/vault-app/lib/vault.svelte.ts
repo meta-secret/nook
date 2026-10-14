@@ -29,7 +29,6 @@ import { type ProviderSetupRequest } from "$lib/auth/providers";
 import type { ProviderVaultIdentitySelection } from "$lib/vault/provider-vault-decision";
 import type { VaultArchitecture } from "$lib/vault/architecture-model";
 import type {
-  SettingsNavigationRequest,
   ProviderActionsContext,
   ProviderSyncRequest,
   SyncFromProvidersRequest,
@@ -64,13 +63,14 @@ import {
   type SecretDeletionInput,
   type SecretReplacementInput,
 } from "$lib/vault/secret-mutations.svelte";
-import { AdminAccordionSection } from "$lib/vault/state/ui.svelte";
+import { WorkspaceSection } from "$lib/vault/state/ui.svelte";
 import { LoginSetupKind } from "$lib/vault/state/provider.svelte";
 import type {
   EventOutboxRequest,
   EventOutboxTarget,
 } from "$lib/vault/sync-operation-state";
 import { VaultRuntimeState } from "$lib/vault/runtime-state.svelte";
+import { IdentityControlModel } from "$lib/vault/identity-control.svelte";
 
 export {
   SyncProviderLabelKind,
@@ -113,11 +113,6 @@ interface ConnectedSecretPage {
   readonly query: string;
 }
 
-interface DeviceRename {
-  readonly authId: string;
-  readonly label: string;
-}
-
 interface VaultPasswordCreation {
   readonly label: string;
   readonly password: string;
@@ -129,8 +124,7 @@ interface VaultPasswordEntryUpdate {
 }
 
 interface EnrollmentCodeIssue {
-  readonly entryId: PasswordEntryId;
-  readonly password: string;
+  readonly passphrase: string;
   readonly providerId: string;
 }
 
@@ -175,6 +169,8 @@ export class VaultState extends VaultRuntimeState {
     new passwordUnlockActions.VaultPasswordActions(this);
   private readonly sentinelUnlockActions =
     new sentinelUnlockActions.SentinelUnlockActions(this);
+  /** Identity-level devices, onboarding, and sync-provider mounts. */
+  readonly identityControl = new IdentityControlModel(this);
   protected providerActionsContext(): ProviderActionsContext {
     return this;
   }
@@ -484,10 +480,17 @@ export class VaultState extends VaultRuntimeState {
   ): Promise<
     Result<providersActions.ProviderRemovalOutcome, VaultStorageFailure>
   > {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return new providersActions.VaultProviderActions(this).removeProvider({
-      id,
-    });
+    const removedRow = this.providers.find((provider) => provider.id === id);
+    const removal: Parameters<
+      providersActions.VaultProviderActions["removeProvider"]
+    >[0] = { id };
+    const removed = await new providersActions.VaultProviderActions(
+      this,
+    ).removeProvider(removal);
+    if (removed.isErr() || !removedRow || !this.isAuthenticated) return removed;
+    const unmounted = await this.identityControl.unmount(removedRow);
+    if (unmounted.isErr()) return err(unmounted.error);
+    return removed;
   }
 
   async ensureProviderSaved() {
@@ -521,7 +524,13 @@ export class VaultState extends VaultRuntimeState {
    * manager rather than racing it.
    */
   async hydrateMultiDeviceState(): Promise<syncActions.RosterHydrationResult> {
-    return new syncActions.VaultSyncActions(this).hydrateMultiDeviceState();
+    const hydrated = await new syncActions.VaultSyncActions(
+      this,
+    ).hydrateMultiDeviceState();
+    if (hydrated.isErr() || !this.isAuthenticated) return hydrated;
+    const followed = await this.identityControl.followOpenVault();
+    if (followed.isErr()) return err(followed.error);
+    return hydrated;
   }
 
   async syncFromStorage(freshness: ProviderSyncFreshness) {
@@ -702,9 +711,12 @@ export class VaultState extends VaultRuntimeState {
 
   /** Settings: connect a new sync provider and reconcile with local vault. */
   async connectAndSyncStagedProvider(): Promise<void> {
-    return new providersActions.ProviderConnectionActions(
+    await new providersActions.ProviderConnectionActions(
       this,
     ).connectAndSyncStagedProvider();
+    if (!this.isAuthenticated || this.errorMsg) return;
+    const mounted = await this.identityControl.syncWithMounts();
+    if (mounted.isErr()) this.errorMsg = this.t(mounted.error.translationKey);
   }
 
   async discoverStagedVaultStoreId() {
@@ -713,22 +725,9 @@ export class VaultState extends VaultRuntimeState {
     ).discoverStagedVaultStoreId();
   }
 
-  openSettings(options: SettingsNavigationRequest) {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return this.uiActions.openSettings({
-      ...options,
-    });
-  }
-
-  openAdmin(accordion: AdminAccordionSection = AdminAccordionSection.Vaults) {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return this.uiActions.openAdmin({
-      accordion,
-    });
-  }
-
-  closeSettings() {
-    return this.uiActions.closeSettings();
+  /** Navigate to one page of the unified identity and vault workspace. */
+  openSection(section: WorkspaceSection) {
+    return this.uiActions.openSection(section);
   }
 
   async deleteLocalBrowserData(): Promise<void> {
@@ -737,6 +736,16 @@ export class VaultState extends VaultRuntimeState {
 
   async handleRemoteLocalBrowserDataDeletion() {
     return this.uiActions.handleRemoteLocalBrowserDataDeletion();
+  }
+
+  /**
+   * Lock from the UI. The current page is kept so unlocking resumes it; the
+   * identities hub instead resumes into the vault that gets unlocked.
+   */
+  lockIdentity() {
+    if (this.workspaceSection === WorkspaceSection.Identities)
+      this.openSection(WorkspaceSection.Vault);
+    return this.lockVault();
   }
 
   /** End the in-memory session and return to the login gate (encrypted vault + sync providers stay on disk). */
@@ -784,28 +793,6 @@ export class VaultState extends VaultRuntimeState {
   /** Refresh event-log joins from providers (manual sync + provider poll). */
   async refreshPendingJoinsFromProviders() {
     return this.multiDeviceActions.refreshPendingJoinsFromProviders();
-  }
-
-  async approveJoin(joinDeviceId: string) {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return this.multiDeviceActions.approveJoin({ joinDeviceId });
-  }
-
-  async denyJoin(joinDeviceId: string) {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return this.multiDeviceActions.denyJoin({
-      joinDeviceId,
-    });
-  }
-
-  async renameDevice({ authId, label }: DeviceRename) {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return this.multiDeviceActions.renameDevice({ authId, label });
-  }
-
-  async revokeDevice(authId: string) {
-    // eslint-disable-next-line nook-typed-api/no-raw-object-arguments -- Existing call shape is preserved for this lint-only fix.
-    return this.multiDeviceActions.revokeDevice({ authId });
   }
 
   async createFreshVault() {
@@ -861,23 +848,15 @@ export class VaultState extends VaultRuntimeState {
   }
 
   /**
-   * Issue a base64url-encoded enrollment payload (provider creds + password
-   * entry id) for the joining device to scan or paste. The password is verified
-   * locally before any payload is generated but is not embedded in the QR.
-   *
-   * Async because the wasm manager has `&mut self` background tasks
-   * (`sync_vault_from_storage`); the verify call has to go through the
-   * shared storage chain or wasm-bindgen rejects it as a recursive borrow.
+   * Issue a one-time code that invites a new app into the current identity
+   * through one of its mounts. The passphrase encrypts the code and is shared
+   * separately; a member still approves the join.
    */
-  async issueEnrollmentCode({
-    entryId,
-    password,
-    providerId,
-  }: EnrollmentCodeIssue) {
+  async issueEnrollmentCode({ passphrase, providerId }: EnrollmentCodeIssue) {
     const enrollmentArgs: Parameters<
-      passwordUnlockActions.PasswordEnrollmentIssue["issueEnrollmentCode"]
-    >[0] = { entryId, password, providerId };
-    return new passwordUnlockActions.PasswordEnrollmentIssue(
+      passwordUnlockActions.IdentityEnrollmentIssue["issueEnrollmentCode"]
+    >[0] = { passphrase, providerId };
+    return new passwordUnlockActions.IdentityEnrollmentIssue(
       this,
     ).issueEnrollmentCode(enrollmentArgs);
   }

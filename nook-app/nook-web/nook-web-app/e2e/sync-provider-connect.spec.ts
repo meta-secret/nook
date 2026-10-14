@@ -4,6 +4,8 @@ import {
   E2E_OAUTH_ONBOARD_PROVIDER,
   reloadUnlockWithSyncProvider,
   UI_TIMEOUT_MS,
+  openManagePage,
+  ManagePage,
 } from './helpers'
 
 test.describe('sync provider settings', () => {
@@ -16,13 +18,7 @@ test.describe('sync provider settings', () => {
 
     await reloadUnlockWithSyncProvider(page)
 
-    await page.getByTestId('vault-admin-tab').click()
-    await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
-    await page
-      .getByTestId('storage-providers-section')
-      .getByRole('button')
-      .first()
-      .click()
+    await openManagePage(page, ManagePage.Sync)
     await expect(page.getByTestId('settings-provider-oauth-file')).toBeVisible()
     await expect(
       page.getByTestId(`sync-provider-${E2E_OAUTH_ONBOARD_PROVIDER.id}`),

@@ -92,6 +92,7 @@
   class="mx-auto w-full max-w-lg gap-4 py-5 rounded-none border-0 bg-transparent shadow-none animate-in fade-in duration-300"
   data-testid="device-protection-gate"
 >
+  {#if frame !== DeviceProtectionGateFrame.Embedded}
   <CardHeader class="gap-2 text-center">
     <!-- The step counter belongs to the two-step vault setup flow; a host that
          already frames this gate in its own narrative shows no step. -->
@@ -131,6 +132,7 @@
       {/if}
     </CardDescription>
   </CardHeader>
+  {/if}
 
   <CardContent class="space-y-3">
     {#if !creationOnly}

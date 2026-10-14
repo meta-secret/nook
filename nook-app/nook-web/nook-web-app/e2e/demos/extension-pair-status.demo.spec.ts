@@ -3,6 +3,7 @@ import {
   connectLocalVault,
   readLocalVaultYamlFromIdb,
   UI_TIMEOUT_MS,
+  openIdentitiesPage,
 } from '../helpers'
 import {
   ExtensionPairedVaultIdentityDiscoveryMessageType,
@@ -57,17 +58,13 @@ test('show paired and unpaired vault status before extension unlock', async ({
   await connectLocalVault(page)
   const pairedVaultStoreId = parseStoreId(await readLocalVaultYamlFromIdb(page))
   const pairedVaultName = (
-    await page.getByTestId('vault-switcher-trigger').innerText()
+    await page.getByTestId('page-bar-title').innerText()
   ).trim()
 
-  await page.getByTestId('vault-switcher-trigger').click()
-  await expect(page.getByTestId('vault-switcher-menu')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
-  await page.getByTestId('vault-switcher-admin-btn').click()
-  await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
-  await page.getByTestId('vault-admin-create-input').fill('Vault B')
-  await page.getByTestId('vault-admin-create-btn').click()
+  await openIdentitiesPage(page)
+  await page.getByTestId('identity-new-vault').click()
+  await page.getByTestId('login-vault-name-input').fill('Vault B')
+  await page.getByTestId('login-create-additional-vault-btn').click()
   await expect
     .poll(async () => parseStoreId(await readLocalVaultYamlFromIdb(page)), {
       timeout: UI_TIMEOUT_MS,
@@ -78,7 +75,7 @@ test('show paired and unpaired vault status before extension unlock', async ({
   )
 
   await page.getByTestId('header-lock-vault-btn').click()
-  await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
+  await expect(page.getByTestId('identity-vault-row').first()).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
 
@@ -127,15 +124,15 @@ test('show paired and unpaired vault status before extension unlock', async ({
     '/extension-connect?device_id=demo-device&device_public_key=demo-public-key&device_signing_public_key=demo-signing-key&extension_id=demo-extension-id&device_label=Browser%20extension&nonce=demo-nonce&scopes=vault-access,password-filling',
   )
   await expect(page).toHaveURL((url) => url.pathname === '/extension-connect')
-  await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
+  await expect(page.getByTestId('identity-vault-row').first()).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
 
   const pairedVaultOption = page.locator(
-    `[data-testid="login-vault-option"][data-store-id="${pairedVaultStoreId}"]`,
+    `[data-testid="identity-vault-row"][data-store-id="${pairedVaultStoreId}"]`,
   )
   const unpairedVaultOption = page.locator(
-    `[data-testid="login-vault-option"][data-store-id="${unpairedVaultStoreId}"]`,
+    `[data-testid="identity-vault-row"][data-store-id="${unpairedVaultStoreId}"]`,
   )
   await expect(pairedVaultOption).toBeVisible({ timeout: UI_TIMEOUT_MS })
   await expect(
@@ -148,21 +145,5 @@ test('show paired and unpaired vault status before extension unlock', async ({
   await expect(
     unpairedVaultOption.getByTestId('login-vault-extension-connected-vault'),
   ).toContainText(pairedVaultName)
-  await demoBeat(page)
-
-  await unpairedVaultOption.click()
-  await expect(page.getByTestId('login-local-unlock-step')).toBeVisible()
-  const selectedUnpairedVault = page.locator(
-    `[data-testid="login-vault-card"][data-store-id="${unpairedVaultStoreId}"]`,
-  )
-  await expect(
-    selectedUnpairedVault.getByTestId('login-vault-extension-pairing-status'),
-  ).toHaveText('Not paired with this extension')
-  await expect(
-    selectedUnpairedVault.getByTestId('login-vault-extension-connected-vault'),
-  ).toContainText(pairedVaultName)
-  await expect(
-    page.getByTestId('login-vault-extension-pairing-purpose'),
-  ).toContainText('Choose this vault to connect it to the browser extension.')
   await demoBeat(page)
 })

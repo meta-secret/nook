@@ -4,6 +4,7 @@ import {
   connectLocalVault,
   mockBip39Wordlist,
   openPasswordManagerImport,
+  openVaultPage,
 } from './helpers'
 
 test.describe('local vault Keeper import', () => {
@@ -35,7 +36,7 @@ test.describe('local vault Keeper import', () => {
       'Imported 2 items',
     )
 
-    await page.getByTestId('vault-secrets-tab').click()
+    await openVaultPage(page)
     await expect(page.getByTestId('vault-group-login')).toContainText(
       'keeper-alice',
     )

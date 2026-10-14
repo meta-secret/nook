@@ -4,8 +4,9 @@ import {
   connectLocalVault,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   readLocalVaultYamlFromIdb,
-  UI_TIMEOUT_MS,
   parseJson,
+  openIdentitiesPage,
+  openVaultPage,
 } from '../helpers'
 import {
   ExtensionPairedVaultIdentityDiscoveryMessageType,
@@ -99,7 +100,7 @@ function assertBoxVisibleInViewport(request: VisibleInViewportRequest): void {
   expect(request.box.x).toBeGreaterThanOrEqual(0)
 }
 
-test('list every local vault and pair the open vault with the companion', async ({
+test('list every vault on its identity card and pair the open vault with the companion', async ({
   page,
 }) => {
   await connectLocalVault(page)
@@ -108,14 +109,11 @@ test('list every local vault and pair the open vault with the companion', async 
   const vaultAYaml = await readLocalVaultYamlFromIdb(page)
   const storeA = parseStoreId(vaultAYaml)
 
-  await page.getByTestId('vault-switcher-trigger').click()
-  await expect(page.getByTestId('vault-switcher-menu')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
-  await page.getByTestId('vault-switcher-admin-btn').click()
-  await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
-  await page.getByTestId('vault-admin-create-input').fill('Vault B')
-  await page.getByTestId('vault-admin-create-btn').click()
+  await openIdentitiesPage(page)
+  await page.getByTestId('identity-new-vault').click()
+  await expect(page.getByTestId('login-new-vault-panel')).toBeVisible()
+  await page.getByTestId('login-vault-name-input').fill('Vault B')
+  await page.getByTestId('login-create-additional-vault-btn').click()
   await expect
     .poll(
       async () => {
@@ -201,57 +199,45 @@ test('list every local vault and pair the open vault with the companion', async 
   }, pairedElsewhereSimulation)
   await demoBeat(page)
 
-  await page.getByTestId('vault-switcher-trigger').click()
-  const menu = page.getByTestId('vault-switcher-menu')
-  await expect(menu).toBeVisible({ timeout: UI_TIMEOUT_MS })
-  const menuBox = await menu.boundingBox()
-  if (!menuBox) {
-    throw new Error('Vault switcher menu was not rendered in the viewport.')
-  }
+  await openIdentitiesPage(page)
   const viewport = page.viewportSize()
   if (!viewport) {
     throw new Error('Page viewport size was not available.')
   }
-  const menuVisibility: VisibleInViewportRequest = {
-    box: menuBox,
-    viewport,
-  }
-  assertBoxVisibleInViewport(menuVisibility)
-
-  const optionLocators = page.getByTestId('vault-switcher-option')
-  await expect(optionLocators).toHaveCount(2)
-  const options = await optionLocators.all()
-  for (const option of options) {
-    const optionBox = await option.boundingBox()
-    if (!optionBox) {
-      throw new Error('Vault switcher option was clipped out of the viewport.')
+  const rowLocators = page.getByTestId('identity-vault-row')
+  await expect(rowLocators).toHaveCount(2)
+  for (const row of await rowLocators.all()) {
+    const rowBox = await row.boundingBox()
+    if (!rowBox) {
+      throw new Error('Identity vault row was clipped out of the viewport.')
     }
-    const optionVisibility: VisibleInViewportRequest = {
-      box: optionBox,
+    const rowVisibility: VisibleInViewportRequest = {
+      box: rowBox,
       viewport,
     }
-    assertBoxVisibleInViewport(optionVisibility)
+    assertBoxVisibleInViewport(rowVisibility)
   }
 
   await expect(
     page.locator(
-      '[data-testid="vault-switcher-option"][data-store-id="' +
+      '[data-testid="identity-vault-row"][data-store-id="' +
         storeA +
         '"][data-extension-connected="true"]',
     ),
   ).toBeVisible()
   await expect(
     page.locator(
-      '[data-testid="vault-switcher-option"][data-store-id="' +
+      '[data-testid="identity-vault-row"][data-store-id="' +
         storeB +
         '"][data-extension-connected="true"]',
     ),
   ).toHaveCount(0)
   await expect(
-    page.getByTestId('vault-switcher-extension-badge'),
+    page.getByTestId('identity-vault-extension-badge'),
   ).toContainText('Browser extension')
-  await expect(page.getByTestId('vault-switcher-pair-btn')).toBeVisible()
-  await page.getByTestId('vault-switcher-pair-btn').click()
+  await openVaultPage(page)
+  await expect(page.getByTestId('vault-pair-extension-btn')).toBeVisible()
+  await page.getByTestId('vault-pair-extension-btn').click()
   await expect(page.locator('html')).toHaveAttribute(
     'data-demo-extension-message',
     JSON.stringify({

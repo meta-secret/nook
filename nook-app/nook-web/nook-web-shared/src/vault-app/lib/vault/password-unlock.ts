@@ -66,7 +66,7 @@ type PasswordUnlockRequest = {
 
 export {
   PasswordEnrollmentActions,
-  PasswordEnrollmentIssue,
+  IdentityEnrollmentIssue,
 } from "$lib/vault/password-enrollment-flow";
 
 /** Owns browser orchestration for one password unlock context. */

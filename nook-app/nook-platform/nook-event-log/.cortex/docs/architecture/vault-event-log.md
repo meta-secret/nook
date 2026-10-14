@@ -21,11 +21,18 @@ Do **not** use:
 The vault event log encrypts secrets under a DEK.
 That DEK is generated and held by an **identity**.
 The vault cannot exist without an authorizing identity.
-Member and app-key roster changes update identity DEK envelopes.
-They do not rewrite vault membership as the authority model.
+Member and app-key roster changes are written to the
+[identity control log](identity-control-log.md), the membership authority.
+The vault log keeps the causal actor record its replicas validate offline:
 
-Legacy `join-approved` and `auth:` envelopes remain a compatibility boundary.
-See [identity-vault-architecture.md](../../../../.cortex/docs/architecture/identity-vault-architecture.md).
+- An app key approved by the identity holds the vault DEK from its identity
+  envelope. On first open it appends a self-signed `join-approved` under the
+  Simple self-enrolment policy below.
+- An app key revoked from the identity is revoked from each vault with
+  `device-revoked` and a key-epoch rotation before that vault's next write.
+- The vault's `auth:` envelopes remain readable vault metadata.
+
+See [identity-vault-architecture.md](../../../../.cortex/docs/architecture/identity-vault-architecture.md#join-an-installation-to-an-identity).
 
 ## Architecture
 
@@ -57,7 +64,9 @@ artifact for event-log vaults.
 - **Event ID**
   - **Rule:** SHA-256 of canonical body bytes (`sha256u:{base64url_no_pad}`)
 - **Remote path**
-  - **Rule:** `nook-log/v1/events/{digest}.yaml`
+  - **Rule:** `nook-log/v1/vaults/{store_id}/events/{digest}.yaml` on an
+    identity namespaced mount; `nook-log/v1/events/{digest}.yaml` on a legacy
+    vault root row. `EventLogLocation` owns both shapes.
 - **Writes**
   - **Rule:** append-only; `put_event_if_absent`
 - **Duplicate identical event**

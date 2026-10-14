@@ -4,13 +4,15 @@ import {
   clearBrowserVault,
   connectLocalVault,
   disableVaultIdleLock,
-  expandSettingsSection,
   flushNookLogPersistQueue,
   mockBip39Wordlist,
   openPasswordManagerImport,
   readPersistedAppLogs,
   revealSecretInRow,
   storedZip,
+  openVaultPage,
+  openManagePage,
+  ManagePage,
 } from './helpers'
 
 declare global {
@@ -46,13 +48,8 @@ test.describe('local vault', () => {
   test('keeps password-manager import forms folded until selected', async ({
     page,
   }) => {
-    await page.getByTestId('vault-admin-tab').click()
-    const importSection = page.getByTestId('vault-import-export-section')
-    await expect(importSection).toBeVisible()
-    await expect(importSection).not.toContainText('Safari / Apple Passwords')
-    await expect(importSection).not.toContainText('Proton Pass')
-
-    await expandSettingsSection(page, 'import')
+    await openManagePage(page, ManagePage.Import)
+    await expect(page.getByTestId('vault-import-export-section')).toBeVisible()
 
     const bitwardenSection = page.getByTestId('bitwarden-import-section')
     const keepassXcSection = page.getByTestId('keepassxc-import-section')
@@ -219,7 +216,7 @@ test.describe('local vault', () => {
       page.getByTestId('chrome-passwords-import-result'),
     ).toContainText('Imported 1 logins')
 
-    await page.getByTestId('vault-secrets-tab').click()
+    await openVaultPage(page)
     const loginGroup = page.getByTestId('vault-group-login')
     await expect(loginGroup).toContainText('chrome-alice')
 
@@ -297,7 +294,7 @@ test.describe('local vault', () => {
       '1 unsupported',
     )
 
-    await page.getByTestId('vault-secrets-tab').click()
+    await openVaultPage(page)
     await expect(page.getByTestId('vault-group-login')).toContainText(
       'bitwarden-alice',
     )
@@ -401,7 +398,7 @@ test.describe('local vault', () => {
       '1 unsupported',
     )
 
-    await page.getByTestId('vault-secrets-tab').click()
+    await openVaultPage(page)
     await expect(page.getByTestId('vault-group-login')).toContainText(
       'onepassword-alice',
     )
@@ -512,7 +509,7 @@ test.describe('local vault', () => {
       'Imported 1 item',
     )
 
-    await page.getByTestId('vault-secrets-tab').click()
+    await openVaultPage(page)
     let rows = page
       .getByTestId('secret-row')
       .filter({ hasText: 'shared-alice' })
@@ -531,7 +528,7 @@ test.describe('local vault', () => {
     await expect(page.getByTestId('onepassword-import-result')).toContainText(
       'Imported 1 item',
     )
-    await page.getByTestId('vault-secrets-tab').click()
+    await openVaultPage(page)
     rows = page.getByTestId('secret-row').filter({ hasText: 'shared-alice' })
     await expect(rows).toHaveCount(2)
   })
@@ -556,7 +553,7 @@ test.describe('local vault', () => {
       'Imported 2 items',
     )
 
-    await page.getByTestId('vault-secrets-tab').click()
+    await openVaultPage(page)
     await expect(page.getByTestId('vault-group-login')).toContainText(
       'lastpass-alice',
     )
@@ -672,7 +669,7 @@ test.describe('local vault', () => {
       '1 unsupported',
     )
 
-    await page.getByTestId('vault-secrets-tab').click()
+    await openVaultPage(page)
     await expect(page.getByTestId('vault-group-login')).toContainText(
       'proton-alice',
     )
@@ -763,7 +760,7 @@ test.describe('local vault', () => {
     )
     expect(Date.now() - started).toBeLessThan(30_000)
 
-    await page.getByTestId('vault-secrets-tab').click()
+    await openVaultPage(page)
     await expect(page.getByTestId('secret-row')).toHaveCount(50)
     await expect(page.getByTestId('secret-pagination')).toBeVisible()
     await expect(page.getByText('Page 1 of 26')).toBeVisible()
@@ -807,7 +804,7 @@ test.describe('local vault', () => {
     await expect(page.getByTestId('bitwarden-import-result')).toContainText(
       'Imported 55 items',
     )
-    await page.getByTestId('vault-secrets-tab').click()
+    await openVaultPage(page)
 
     const decryptLogCount = async () => {
       await flushNookLogPersistQueue(page)

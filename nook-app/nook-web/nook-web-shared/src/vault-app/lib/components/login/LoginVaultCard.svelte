@@ -6,94 +6,39 @@
   import {
     LoginVaultExtensionPairingStatusKind,
     type LoginVaultExtensionPairingStatus,
-    type LoginVaultNotPairedExtensionPairingStatus,
   } from '$lib/components/login/login-vault-extension-pairing-status'
+  import LoginVaultPairingStatus from './LoginVaultPairingStatus.svelte'
 
   let {
     vault,
     entry,
-    active = false,
-    interactive = false,
-    extensionPairingStatus = { kind: LoginVaultExtensionPairingStatusKind.NotShown },
+    extensionPairingStatus = {
+      kind: LoginVaultExtensionPairingStatusKind.NotShown,
+    },
   }: {
     vault: VaultState
     entry: NookLocalVaultEntry
-    active?: boolean
-    interactive?: boolean
     extensionPairingStatus?: LoginVaultExtensionPairingStatus
   } = $props()
-
-  function connectedVaultDescription(
-    pairingStatus: LoginVaultNotPairedExtensionPairingStatus,
-  ): string {
-    const tArgs: Parameters<typeof vault.t>[0] = {
-      key: I18N_KEYS.ExtensionSetupConnectedVault,
-      replacements: {
-        vault: pairingStatus.connectedVault.name,
-        store: pairingStatus.connectedVault.storeId,
-      },
-    }
-    return vault.t(tArgs)
-  }
 </script>
 
 <div
-  class="flex items-start gap-3 rounded-lg border px-4 py-3 {active
-    ? 'border-primary/40 bg-primary/5'
-    : interactive
-      ? 'border-border/60 bg-muted/20 transition-colors hover:border-primary/40 hover:bg-muted/40'
-      : 'border-border/60 bg-muted/20'}"
+  class="flex min-w-0 items-start gap-3"
   data-testid="login-vault-card"
   data-store-id={entry.storeId}
 >
-  <FolderKey
-    class="mt-0.5 size-5 shrink-0 {active
-      ? 'text-primary'
-      : 'text-muted-foreground'}"
-  />
-  <span class="min-w-0 space-y-0.5">
-    <span class="block text-sm font-semibold text-foreground">
-      {entry.display_label(vault.t(I18N_KEYS.LoginVaultPickerUnnamed))}
+  <span class="nk-tile nk-tile-sm" aria-hidden="true">
+    <FolderKey class="size-4" />
+  </span>
+  <span class="grid min-w-0 gap-1">
+    <span class="flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
+      <span class="truncate text-[0.9375rem] font-semibold text-foreground">
+        {entry.display_label(vault.t(I18N_KEYS.LoginVaultPickerUnnamed))}
+      </span>
+      <span class="truncate font-mono text-xs text-muted-foreground">
+        {entry.storeId}
+      </span>
     </span>
-    <span class="block truncate font-mono text-xs text-muted-foreground">
-      {entry.storeId}
-    </span>
-    {#if extensionPairingStatus.kind === LoginVaultExtensionPairingStatusKind.Checking}
-      <span
-        class="block text-xs text-muted-foreground"
-        data-testid="login-vault-extension-pairing-status"
-      >
-        {vault.t(I18N_KEYS.LoginVaultPickerExtensionPairingChecking)}
-      </span>
-    {:else if extensionPairingStatus.kind === LoginVaultExtensionPairingStatusKind.Paired}
-      <span
-        class="block text-xs text-muted-foreground"
-        data-testid="login-vault-extension-pairing-status"
-      >
-        {vault.t(I18N_KEYS.LoginVaultPickerExtensionPaired)}
-      </span>
-    {:else if extensionPairingStatus.kind === LoginVaultExtensionPairingStatusKind.NotPaired}
-      <span
-        class="block text-xs text-muted-foreground"
-        data-testid="login-vault-extension-pairing-status"
-      >
-        {vault.t(I18N_KEYS.LoginVaultPickerExtensionNotPaired)}
-      </span>
-    {:else if extensionPairingStatus.kind === LoginVaultExtensionPairingStatusKind.Unavailable}
-      <span
-        class="block text-xs text-muted-foreground"
-        data-testid="login-vault-extension-pairing-status"
-      >
-        {vault.t(I18N_KEYS.LoginVaultPickerExtensionPairingUnavailable)}
-      </span>
-    {/if}
-    {#if extensionPairingStatus.kind === LoginVaultExtensionPairingStatusKind.NotPaired}
-      <span
-        class="block text-xs text-muted-foreground"
-        data-testid="login-vault-extension-connected-vault"
-      >
-        {connectedVaultDescription(extensionPairingStatus)}
-      </span>
-    {/if}
+    <LoginVaultPairingStatus {vault} status={extensionPairingStatus} />
   </span>
 </div>

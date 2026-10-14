@@ -2,11 +2,13 @@ use super::companion_protocol::PendingCompanionWebsiteHandoff;
 use super::device_protection::ExtensionIdentityPublication;
 use crate::ConfiguredVaultApplication;
 use nook_core::{
-    DriveEventParent, EventGraph, ICloudEventTarget, SentinelConfiguration, SentinelGenesisPhase,
-    SentinelPolicy, StorageMode, StoreId, StoredSecretRecord, VaultArchitecture,
-    VaultMetaGraphProjection, VaultMetaState, VaultProjection, VaultSessionProjection, VaultType,
-    VaultUnlock, VaultUserRecordBatch,
+    DriveEventParent, EventGraph, EventLogLocation, ICloudEventTarget, ProviderRowLayout,
+    SentinelConfiguration, SentinelGenesisPhase, SentinelPolicy, StorageMode, StoreId,
+    StoredSecretRecord, VaultArchitecture, VaultMetaGraphProjection, VaultMetaState,
+    VaultProjection, VaultSessionProjection, VaultType, VaultUnlock, VaultUserRecordBatch,
 };
+use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::rc::Rc;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::{Zeroize, Zeroizing};
@@ -15,6 +17,10 @@ use crate::{NookError, NookEventLogSyncIssue};
 
 pub(in crate::manager) struct StorageSession {
     pub(in crate::manager) mode: nook_core::StorageMode,
+    /// Remote layout of the prepared provider row.
+    pub(in crate::manager) layout: ProviderRowLayout,
+    /// Resolved Drive child folders for namespaced event logs.
+    pub(in crate::manager) drive_namespaces: RefCell<BTreeMap<EventLogLocation, DriveEventParent>>,
     pub(in crate::manager) access_token: String,
     pub(in crate::manager) remote_ref: String,
     pub(in crate::manager) remote_path: String,
@@ -24,10 +30,40 @@ pub(in crate::manager) struct StorageSession {
     pub(in crate::manager) use_local_cache_for_connect: bool,
 }
 
+impl StorageSession {
+    pub(in crate::manager) fn drive_namespace_parent(
+        &self,
+        location: &nook_core::EventLogLocation,
+    ) -> Option<nook_core::DriveEventParent> {
+        self.drive_namespaces.borrow().get(location).cloned()
+    }
+
+    pub(in crate::manager) fn remember_drive_namespace(
+        &self,
+        location: &nook_core::EventLogLocation,
+        parent: &nook_core::DriveEventParent,
+    ) {
+        self.drive_namespaces
+            .borrow_mut()
+            .insert(location.clone(), parent.clone());
+    }
+}
+
+impl StorageSession {
+    /// Address a prepared provider row's layout and forget folder lookups
+    /// resolved for the previous row.
+    pub(in crate::manager) fn select_layout(&mut self, layout: ProviderRowLayout) {
+        self.layout = layout;
+        self.drive_namespaces.get_mut().clear();
+    }
+}
+
 impl Default for StorageSession {
     fn default() -> Self {
         Self {
             mode: StorageMode::Local,
+            layout: ProviderRowLayout::LegacyVaultRoot,
+            drive_namespaces: RefCell::default(),
             access_token: String::new(),
             remote_ref: String::new(),
             remote_path: String::new(),

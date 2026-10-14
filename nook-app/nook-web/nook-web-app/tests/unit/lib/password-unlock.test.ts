@@ -42,6 +42,7 @@ function driveProvider(
     id,
     type: 'oauth-file',
     label: 'Google Drive',
+    layout: 'legacyVaultRoot',
     oauthFile: configuredOAuthFile(config),
     syncCheckpoint: { state: 'neverSynced' },
     createdAt: '2026-07-15T00:00:00.000Z',

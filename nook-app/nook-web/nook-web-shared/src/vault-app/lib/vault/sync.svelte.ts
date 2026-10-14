@@ -53,7 +53,7 @@ import {
   type EventOutboxRequest,
   type EventOutboxTarget,
 } from "$lib/vault/sync-operation-state";
-import { AdminAccordionSection } from "$lib/vault/state/ui.svelte";
+import { WorkspaceSection } from "$lib/vault/state/ui.svelte";
 import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
 import { ExtensionSyncPublication } from "$lib/vault/sync-extension-bridge";
 import { ProviderSyncActions } from "$lib/vault/provider-sync.svelte";
@@ -576,7 +576,7 @@ export class VaultSyncActions {
     }
     state.clearLocalFolderMultipleVaultsIssue();
     state.errorMsg = "";
-    state.openAdmin(AdminAccordionSection.Storage);
+    state.openSection(WorkspaceSection.Sync);
     state.beginAddProvider();
     const setupRequest: Parameters<typeof state.beginProviderSetup>[0] = {
       type: LOCAL_FOLDER_PROVIDER_TYPE,

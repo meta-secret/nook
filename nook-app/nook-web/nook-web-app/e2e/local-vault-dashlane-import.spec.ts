@@ -5,6 +5,7 @@ import {
   mockBip39Wordlist,
   openPasswordManagerImport,
   storedZip,
+  openVaultPage,
 } from './helpers'
 
 test.describe('local vault Dashlane import', () => {
@@ -45,7 +46,7 @@ test.describe('local vault Dashlane import', () => {
       'Imported 2 items',
     )
 
-    await page.getByTestId('vault-secrets-tab').click()
+    await openVaultPage(page)
     await expect(page.getByTestId('vault-group-login')).toContainText(
       'dash-alice',
     )
@@ -99,7 +100,7 @@ test.describe('local vault Dashlane import', () => {
       '1 unsupported',
     )
 
-    await page.getByTestId('vault-secrets-tab').click()
+    await openVaultPage(page)
     await expect(page.getByTestId('vault-group-login')).toContainText('bob')
     await expect(page.getByTestId('vault-group-secure-note')).toContainText(
       'Private',

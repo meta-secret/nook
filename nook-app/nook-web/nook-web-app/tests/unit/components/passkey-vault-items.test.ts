@@ -1,6 +1,6 @@
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { describe, expect, test, vi } from 'vitest'
-import { fireEvent, render } from '@testing-library/svelte'
+import { fireEvent, render, within } from '@testing-library/svelte'
 import { SecretType } from '$lib/nook'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import AddSecretForm from '$lib/components/AddSecretForm.svelte'
@@ -47,7 +47,7 @@ describe('passkey item discovery', () => {
     })
     const view = render(SecretDetailRow, {
       item,
-      index: 0,
+      row: 1,
       expanded: true,
       pageInteraction: SecretPageInteractionKind.Ready,
       onToggleExpand: vi.fn(),
@@ -61,10 +61,13 @@ describe('passkey item discovery', () => {
       vault,
     })
 
-    expect(view.getByText(I18N_KEYS.VaultTypesPasskey)).toBeTruthy()
-    expect(view.getByText('login.example.com')).toBeTruthy()
-    expect(view.getByText('Alice')).toBeTruthy()
-    expect(view.getByText('alice@example.com')).toBeTruthy()
+    const detail = within(view.getByTestId('secret-detail'))
+    expect(detail.getByText(I18N_KEYS.VaultTypesPasskey)).toBeTruthy()
+    expect(detail.getByTestId('secret-detail-title').textContent).toContain(
+      'login.example.com',
+    )
+    expect(detail.getByText('Alice')).toBeTruthy()
+    expect(detail.getByText('alice@example.com')).toBeTruthy()
     expect(view.queryAllByTestId('reveal-secret-btn')).toHaveLength(0)
     expect(view.queryAllByTestId('edit-secret-btn')).toHaveLength(0)
     expect(view.getByTestId('delete-secret-btn')).toBeTruthy()

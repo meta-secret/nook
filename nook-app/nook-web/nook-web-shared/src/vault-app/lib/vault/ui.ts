@@ -5,11 +5,7 @@ import {
   VaultStorageFailureKind as StorageOperationFailureKind,
 } from "$lib/runtime/storage-failure";
 
-import type {
-  OpenAdminAccordion,
-  SettingsNavigationRequest,
-  UiActionsContext,
-} from "$lib/vault/action-contexts";
+import type { UiActionsContext } from "$lib/vault/action-contexts";
 import {
   browserDataLifecycle,
   LocalDataRecoveryQuiescenceOutcome,
@@ -17,195 +13,166 @@ import {
   RemoteLocalBrowserDataDeletionOutcome,
 } from "$lib/runtime/browser-data";
 import { set_vault_session_locked } from "$app-wasm";
-import {
-  AdminAccordionSection,
-  SettingsAccordionSection,
-  SettingsSection,
-} from "$lib/vault/state/ui.svelte";
+import { WorkspaceSection } from "$lib/vault/state/ui.svelte";
 import { WorkspaceRoute, WorkspaceLocation } from "$lib/app/workspace-route";
-
-export type OpenSettingsRequest = SettingsNavigationRequest;
-
-type SettingsViewSelection = {
-  readonly section: SettingsSection;
-  readonly accordion: SettingsAccordionSection;
-};
-
-type AdminViewSelection = {
-  readonly accordion: OpenAdminAccordion;
-};
 
 /** Apply browser history to UI state without creating another history entry. */
 type WorkspaceRouteApplication = {
   readonly route: WorkspaceRoute;
 };
 
-type AdminPanelOpening = {
-  readonly accordion: OpenAdminAccordion;
-};
+/** Translate between the workspace section a page shows and its URL. */
+export class WorkspaceSectionRoute {
+  constructor(private readonly section: WorkspaceSection) {}
+
+  get route(): WorkspaceRoute {
+    switch (this.section) {
+      case WorkspaceSection.Vault:
+        return WorkspaceRoute.Vault;
+      case WorkspaceSection.Identities:
+        return WorkspaceRoute.Identities;
+      case WorkspaceSection.Overview:
+        return WorkspaceRoute.Overview;
+      case WorkspaceSection.Keys:
+        return WorkspaceRoute.Keys;
+      case WorkspaceSection.Vaults:
+        return WorkspaceRoute.Vaults;
+      case WorkspaceSection.Settings:
+        return WorkspaceRoute.Settings;
+      case WorkspaceSection.Devices:
+        return WorkspaceRoute.Devices;
+      case WorkspaceSection.Sync:
+        return WorkspaceRoute.Sync;
+      case WorkspaceSection.Passwords:
+        return WorkspaceRoute.Passwords;
+      case WorkspaceSection.Import:
+        return WorkspaceRoute.Import;
+    }
+  }
+}
 
 /** Owns browser orchestration for one ui context. */
 export class VaultWorkspaceActions {
   constructor(private readonly state: UiActionsContext) {}
 
-  private applySettings({ section, accordion }: SettingsViewSelection): void {
+  /** Refreshes read through the engine. A page opened by URL is applied
+   * before the engine is open; startup reads that state itself. */
+  private reportRefresh(): void {
     const state = this.state;
-    state.helpOpen = false;
-    state.settingsSection = section;
-    if (section === SettingsSection.Storage) {
-      state.cancelProviderSetup();
-      state.cancelAddProvider();
-      state.settingsAccordionSection = accordion;
-    }
-    state.settingsOpen = true;
-    // Access and enrolled-device settings read last-known evidence. A vault
-    // sync here races that snapshot when the dashboard remounts after leaving
-    // Access through "Manage enrolled devices".
-    const skipDeviceRefresh =
-      section === SettingsSection.DevicesAccess ||
-      (section === SettingsSection.Storage &&
-        accordion === SettingsAccordionSection.Devices);
-    if (!skipDeviceRefresh) {
-      void state.refreshDeviceState().then((refreshed) => {
-        if (refreshed.isErr())
-          state.errorMsg = state.t(refreshed.error.translationKey);
-      });
-    }
-  }
-
-  private applyAdmin({ accordion }: AdminViewSelection): void {
-    const state = this.state;
-    state.helpOpen = false;
-    state.cancelProviderSetup();
-    state.cancelAddProvider();
-    state.adminAccordionSection = accordion;
-    state.settingsSection = SettingsSection.Admin;
-    state.settingsOpen = true;
-    void state.refreshLocalVaultCatalog().then((result) => {
-      if (result.isErr()) state.errorMsg = state.t(result.error.translationKey);
-    });
+    if (!state.hasManager) return;
     void state.refreshDeviceState().then((refreshed) => {
-      if (refreshed.isErr())
+      if (refreshed.isOk()) return;
+      // A backup-password session has no device key to sync with; the
+      // page still shows what this browser last read.
+      const passwordSession =
+        refreshed.error instanceof StorageOperationFailure &&
+        refreshed.error.kind ===
+          StorageOperationFailureKind.DeviceAuthorizationRequired;
+      if (!passwordSession)
         state.errorMsg = state.t(refreshed.error.translationKey);
     });
   }
 
-  private applyVault(): void {
+  private refreshCatalog(): void {
     const state = this.state;
-    state.cancelProviderSetup();
-    state.cancelAddProvider();
-    state.settingsOpen = false;
+    if (!state.hasManager) return;
+    void state.refreshLocalVaultCatalog().then((result) => {
+      if (result.isErr()) state.errorMsg = state.t(result.error.translationKey);
+    });
+  }
+
+  private applySection(section: WorkspaceSection): void {
+    const state = this.state;
     state.helpOpen = false;
+    state.workspaceSection = section;
+    switch (section) {
+      case WorkspaceSection.Keys:
+        // Access reads last-known evidence. A vault sync here races that
+        // snapshot when the Keys page remounts.
+        return;
+      case WorkspaceSection.Devices:
+        // Enrolled devices read the same last-known evidence as Keys.
+        state.cancelProviderSetup();
+        state.cancelAddProvider();
+        return;
+      case WorkspaceSection.Vault:
+        state.cancelProviderSetup();
+        state.cancelAddProvider();
+        return;
+      case WorkspaceSection.Identities:
+        state.cancelProviderSetup();
+        state.cancelAddProvider();
+        this.refreshCatalog();
+        return;
+      case WorkspaceSection.Settings:
+        state.cancelProviderSetup();
+        state.cancelAddProvider();
+        this.reportRefresh();
+        return;
+      case WorkspaceSection.Overview:
+      case WorkspaceSection.Vaults:
+      case WorkspaceSection.Sync:
+      case WorkspaceSection.Passwords:
+      case WorkspaceSection.Import:
+        state.cancelProviderSetup();
+        state.cancelAddProvider();
+        this.refreshCatalog();
+        this.reportRefresh();
+        return;
+    }
   }
 
   applyWorkspaceRoute({ route }: WorkspaceRouteApplication): void {
     const state = this.state;
     switch (route) {
+      case WorkspaceRoute.Help:
+        state.workspaceSection = WorkspaceSection.Vault;
+        state.helpOpen = true;
+        return;
       case WorkspaceRoute.Vault:
-        this.applyVault();
+        this.applySection(WorkspaceSection.Vault);
         return;
-      case WorkspaceRoute.DevicesAccess:
-        (() => {
-          const applySettingsArgs: Parameters<
-            VaultWorkspaceActions["applySettings"]
-          >[0] = {
-            section: SettingsSection.DevicesAccess,
-            accordion: SettingsAccordionSection.Devices,
-          };
-          return this.applySettings(applySettingsArgs);
-        })();
+      case WorkspaceRoute.Identities:
+        this.applySection(WorkspaceSection.Identities);
         return;
-      case WorkspaceRoute.Admin:
-        (() => {
-          const applyAdminArgs: Parameters<
-            VaultWorkspaceActions["applyAdmin"]
-          >[0] = {
-            accordion: AdminAccordionSection.Vaults,
-          };
-          return this.applyAdmin(applyAdminArgs);
-        })();
+      case WorkspaceRoute.Overview:
+        this.applySection(WorkspaceSection.Overview);
         return;
-      case WorkspaceRoute.Onboard:
-        (() => {
-          const applySettingsArgs2: Parameters<
-            VaultWorkspaceActions["applySettings"]
-          >[0] = {
-            section: SettingsSection.Onboard,
-            accordion: SettingsAccordionSection.Devices,
-          };
-          return this.applySettings(applySettingsArgs2);
-        })();
+      case WorkspaceRoute.Keys:
+        this.applySection(WorkspaceSection.Keys);
+        return;
+      case WorkspaceRoute.Vaults:
+        this.applySection(WorkspaceSection.Vaults);
         return;
       case WorkspaceRoute.Settings:
-        (() => {
-          const applySettingsArgs3: Parameters<
-            VaultWorkspaceActions["applySettings"]
-          >[0] = {
-            section: SettingsSection.Storage,
-            accordion: SettingsAccordionSection.Devices,
-          };
-          return this.applySettings(applySettingsArgs3);
-        })();
+        this.applySection(WorkspaceSection.Settings);
         return;
-      case WorkspaceRoute.Help:
-        state.settingsOpen = false;
-        state.helpOpen = true;
+      case WorkspaceRoute.Devices:
+        this.applySection(WorkspaceSection.Devices);
+        return;
+      case WorkspaceRoute.Sync:
+        this.applySection(WorkspaceSection.Sync);
+        return;
+      case WorkspaceRoute.Passwords:
+        this.applySection(WorkspaceSection.Passwords);
+        return;
+      case WorkspaceRoute.Import:
+        this.applySection(WorkspaceSection.Import);
+        return;
     }
   }
 
-  private workspaceRouteForSettings(section: SettingsSection): WorkspaceRoute {
-    switch (section) {
-      case SettingsSection.DevicesAccess:
-        return WorkspaceRoute.DevicesAccess;
-      case SettingsSection.Admin:
-        return WorkspaceRoute.Admin;
-      case SettingsSection.Onboard:
-        return WorkspaceRoute.Onboard;
-      case SettingsSection.Storage:
-        return WorkspaceRoute.Settings;
-    }
-  }
-
-  openSettings({ section, accordion }: OpenSettingsRequest): void {
+  /** Navigate to a workspace page and apply it. */
+  openSection(section: WorkspaceSection): void {
     const state = this.state;
     const navigation = new WorkspaceLocation(
-      this.workspaceRouteForSettings(section),
+      new WorkspaceSectionRoute(section).route,
     ).navigate();
     if (navigation.isErr()) {
       state.errorMsg = state.t(navigation.error.translationKey);
       return;
     }
-    const applySettingsArgs4: Parameters<
-      VaultWorkspaceActions["applySettings"]
-    >[0] = {
-      section,
-      accordion,
-    };
-    this.applySettings(applySettingsArgs4);
-  }
-
-  openAdmin({ accordion }: AdminPanelOpening): void {
-    const state = this.state;
-    const navigation = new WorkspaceLocation(WorkspaceRoute.Admin).navigate();
-    if (navigation.isErr()) {
-      state.errorMsg = state.t(navigation.error.translationKey);
-      return;
-    }
-    const applyAdminArgs2: Parameters<VaultWorkspaceActions["applyAdmin"]>[0] =
-      {
-        accordion,
-      };
-    this.applyAdmin(applyAdminArgs2);
-  }
-
-  closeSettings(): void {
-    const state = this.state;
-    const navigation = new WorkspaceLocation(WorkspaceRoute.Vault).navigate();
-    if (navigation.isErr()) {
-      state.errorMsg = state.t(navigation.error.translationKey);
-      return;
-    }
-    this.applyVault();
+    this.applySection(section);
   }
 
   async deleteLocalData(): Promise<void> {
@@ -296,7 +263,7 @@ export class VaultWorkspaceActions {
       state.errorMsg = state.t(navigation.error.translationKey);
       return;
     }
-    state.settingsOpen = false;
+    state.workspaceSection = WorkspaceSection.Vault;
     state.helpOpen = true;
   }
 

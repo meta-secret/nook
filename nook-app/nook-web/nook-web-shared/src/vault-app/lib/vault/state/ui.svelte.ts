@@ -1,36 +1,83 @@
-export enum SettingsSection {
-  DevicesAccess = "devices-access",
-  Storage = "storage",
-  Onboard = "onboard",
-  Admin = "admin",
-}
-
-export enum SettingsAccordionSection {
-  Closed = "closed",
-  Devices = "devices",
-  Language = "language",
-  Danger = "danger",
-}
-
-export enum AdminAccordionSection {
-  Closed = "closed",
+/**
+ * The unified workspace: identities are the hub, a vault is opened from an
+ * identity, and management pages are grouped by what they act on — the
+ * identity (keys, vaults, devices, sync providers, backup passwords, browser
+ * settings) or the open vault (imports).
+ */
+export enum WorkspaceSection {
+  Vault = "vault",
+  Identities = "identities",
+  /** The identity's overview: its parts and how protected it is. */
+  Overview = "overview",
+  Keys = "keys",
   Vaults = "vaults",
-  Storage = "storage",
+  Settings = "settings",
+  Devices = "devices",
+  Sync = "sync",
   Passwords = "passwords",
-  ImportExport = "import-export",
+  Import = "import",
+}
+
+export enum ManageSectionScope {
+  Identity = "identity",
+  Vault = "vault",
+  None = "none",
+}
+
+/** Which management group a workspace section belongs to. */
+export class WorkspaceSectionScope {
+  constructor(private readonly section: WorkspaceSection) {}
+
+  get scope(): ManageSectionScope {
+    switch (this.section) {
+      case WorkspaceSection.Overview:
+      case WorkspaceSection.Keys:
+      case WorkspaceSection.Vaults:
+      case WorkspaceSection.Devices:
+      case WorkspaceSection.Sync:
+      case WorkspaceSection.Settings:
+      case WorkspaceSection.Passwords:
+        return ManageSectionScope.Identity;
+      case WorkspaceSection.Import:
+        return ManageSectionScope.Vault;
+      case WorkspaceSection.Vault:
+      case WorkspaceSection.Identities:
+        return ManageSectionScope.None;
+    }
+  }
+}
+
+/** Where a first-vault setup stands after its name was given. */
+export enum FirstRunStage {
+  /** No first-vault setup in progress. */
+  Off = "off",
+  /** The vault waits for this browser's passkey or PIN. */
+  Protect = "protect",
+  /** The vault exists; offer to back up its identity. */
+  Backup = "backup",
+}
+
+/** Where creating another identity stands. */
+export enum NewIdentityStage {
+  /** No identity being created. */
+  Off = "off",
+  /** The new identity is being named. */
+  Name = "name",
+  /** The new identity waits for its own passkey. */
+  Key = "key",
+  /** The identity exists; offer its first vault. */
+  Ready = "ready",
 }
 
 export class VaultUiState {
-  settingsOpen = $state(false);
-  settingsSection = $state<SettingsSection>(SettingsSection.Storage);
-  devicesAccessIdentityProtectionOpen = $state(false);
+  workspaceSection = $state<WorkspaceSection>(WorkspaceSection.Vault);
   /** Survives panel cancellation and navigation until the identity authenticates. */
-  devicesAccessIdentityTransitionPending = $state(false);
-  settingsAccordionSection = $state<SettingsAccordionSection>(
-    SettingsAccordionSection.Devices,
-  );
-  adminAccordionSection = $state<AdminAccordionSection>(
-    AdminAccordionSection.Vaults,
-  );
+  identityTransitionPending = $state(false);
   helpOpen = $state(false);
+  firstRun = $state<FirstRunStage>(FirstRunStage.Off);
+  /** The name given on the first-vault screen, shown by the later steps. */
+  firstRunVaultName = $state("");
+  newIdentity = $state<NewIdentityStage>(NewIdentityStage.Off);
+  /** The name given to the identity being created. */
+  newIdentityName = $state("");
 }

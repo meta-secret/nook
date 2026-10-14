@@ -22,6 +22,23 @@ type PrivateFolderResource = {
   mimeType: string
 }
 
+/** Event-log namespace folder (identity log or namespaced vault) below a parent. */
+type NamespaceFolderResource = PrivateFolderResource & { parent: string }
+
+const NAMESPACE_FOLDER_PREFIX = 'nook-'
+const VAULT_NAMESPACE_FOLDER_PREFIX = 'nook-vault-'
+const IDENTITY_NAMESPACE_FOLDER_PREFIX = 'nook-identity-'
+const NAMESPACE_LOOKUP_PATTERN =
+  /^name = '((?:[^'\\]|\\.)*)' and mimeType = 'application\/vnd\.google-apps\.folder' and '((?:[^'\\]|\\.)*)' in parents and trashed = false$/
+const IDENTITY_LISTING_PATTERN =
+  /^name contains 'nook-identity-' and mimeType = 'application\/vnd\.google-apps\.folder' and '((?:[^'\\]|\\.)*)' in parents and trashed = false$/
+const EVENT_PARENT_PATTERN = /'((?:[^'\\]|\\.)*)' in parents/
+const MULTIPART_PARENT_PATTERN = /"parents"\s*:\s*\[\s*"([^"]+)"/
+
+function unescapeDriveQueryValue(value: string): string {
+  return value.replace(/\\(.)/g, '$1')
+}
+
 function isPrivateFolderLookup(requestUrl: string, fileName: string): boolean {
   const expectedName = `${PRIVATE_EVENT_FOLDER_PREFIX}${fileName}`
   const escapedName = expectedName.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
@@ -79,18 +96,47 @@ export function createLocalE2eFileSyncVaultStub(
   let md5Checksum = 'e2e-file-stub-md5'
   let privateFolders: PrivateFolderResource[] = []
   let privateFolderCreateCount = 0
+  let namespaceFolders: NamespaceFolderResource[] = []
   const offlinePages = new WeakSet<Page>()
 
   function eventsDir() {
     return path.join(rootDir, EVENT_LOG_DIR)
   }
 
-  function ensureEventsDir() {
-    fs.mkdirSync(eventsDir(), { recursive: true })
+  function namespaceDir(folderId: string) {
+    return path.join(eventsDir(), 'namespaces', folderId)
   }
 
-  function eventPath(digest: string) {
-    return path.join(eventsDir(), `${digest}.yaml`)
+  function namespaceFolder(folderId: string) {
+    return namespaceFolders.find((folder) => folder.id === folderId)
+  }
+
+  /** The directory that stores the events of one Drive event parent. */
+  function eventDirFor(parentId: string) {
+    return namespaceFolder(parentId) ? namespaceDir(parentId) : eventsDir()
+  }
+
+  /** Legacy root plus namespaced vault folders; identity logs stay apart. */
+  function vaultEventDirs() {
+    return [
+      eventsDir(),
+      ...namespaceFolders
+        .filter((folder) =>
+          folder.name.startsWith(VAULT_NAMESPACE_FOLDER_PREFIX),
+        )
+        .map((folder) => namespaceDir(folder.id)),
+    ]
+  }
+
+  function allEventDirs() {
+    return [
+      eventsDir(),
+      ...namespaceFolders.map((folder) => namespaceDir(folder.id)),
+    ]
+  }
+
+  function eventPath(digest: string, dir = eventsDir()) {
+    return path.join(dir, `${digest}.yaml`)
   }
 
   function eventFileId(digest: string) {
@@ -106,28 +152,35 @@ export function createLocalE2eFileSyncVaultStub(
       : { kind: EventFileIdParseKind.NotEvent }
   }
 
-  function eventDigests() {
-    ensureEventsDir()
+  function eventDigests(dir = eventsDir()) {
+    fs.mkdirSync(dir, { recursive: true })
     return fs
-      .readdirSync(eventsDir())
+      .readdirSync(dir)
       .filter((name) => EVENT_FILE_NAME_PATTERN.test(name))
       .map((name) => name.slice(0, -'.yaml'.length))
       .sort()
   }
 
+  function vaultEventDigests() {
+    return vaultEventDirs().flatMap((dir) => eventDigests(dir))
+  }
+
   function readEvent(digest: string): EventFileRead {
-    const file = eventPath(digest)
-    return fs.existsSync(file)
-      ? {
+    for (const dir of allEventDirs()) {
+      const file = eventPath(digest, dir)
+      if (fs.existsSync(file)) {
+        return {
           kind: EventFileReadKind.Found,
           content: fs.readFileSync(file, 'utf8'),
         }
-      : { kind: EventFileReadKind.Missing }
+      }
+    }
+    return { kind: EventFileReadKind.Missing }
   }
 
-  function writeEvent(digest: string, content: string) {
-    ensureEventsDir()
-    const file = eventPath(digest)
+  function writeEvent(digest: string, content: string, dir = eventsDir()) {
+    fs.mkdirSync(dir, { recursive: true })
+    const file = eventPath(digest, dir)
     if (fs.existsSync(file)) {
       const existing = fs.readFileSync(file, 'utf8')
       return existing === content
@@ -136,14 +189,14 @@ export function createLocalE2eFileSyncVaultStub(
     return true
   }
 
-  function eventListEntries(digest?: string) {
+  function eventListEntries(digest?: string, dir = eventsDir()) {
     const entries: Array<{
       id: string
       name: string
       md5Checksum: string
       appProperties: { event_id: string }
     }> = []
-    for (const key of eventDigests()) {
+    for (const key of eventDigests(dir)) {
       if (digest && key !== digest) continue
       entries.push({
         id: eventFileId(key),
@@ -166,24 +219,32 @@ export function createLocalE2eFileSyncVaultStub(
         fileId = `e2e-file-vault-${fileName.replace(/\W/g, '-')}`
       }
     },
-    getEventFileCount: () => eventDigests().length,
+    getEventFileCount: () => vaultEventDigests().length,
+    getIdentityEventFileCount: () =>
+      namespaceFolders
+        .filter((folder) =>
+          folder.name.startsWith(IDENTITY_NAMESPACE_FOLDER_PREFIX),
+        )
+        .flatMap((folder) => eventDigests(namespaceDir(folder.id))).length,
     getPrivateFolderIds: () => privateFolders.map(({ id }) => id),
     getPrivateFolderCreateCount: () => privateFolderCreateCount,
     getEventFilePaths: () =>
-      eventDigests().map((digest) =>
+      vaultEventDigests().map((digest) =>
         toPosixPath(path.join(EVENT_LOG_DIR, `${digest}.yaml`)),
       ),
     getEventFileContents: () =>
-      eventDigests()
+      vaultEventDigests()
         .map((digest) => readEvent(digest))
         .flatMap((event) =>
           event.kind === EventFileReadKind.Found ? [event.content] : [],
         ),
     clearEventFiles: () => {
-      if (!fs.existsSync(eventsDir())) return
-      for (const name of fs.readdirSync(eventsDir())) {
-        if (EVENT_FILE_NAME_PATTERN.test(path.basename(name))) {
-          fs.unlinkSync(path.join(eventsDir(), name))
+      for (const dir of allEventDirs()) {
+        if (!fs.existsSync(dir)) continue
+        for (const name of fs.readdirSync(dir)) {
+          if (EVENT_FILE_NAME_PATTERN.test(path.basename(name))) {
+            fs.unlinkSync(path.join(dir, name))
+          }
         }
       }
     },
@@ -274,7 +335,40 @@ export function createLocalE2eFileSyncVaultStub(
             })
             return
           }
+          const [query = ''] = new URL(fullUrl).searchParams.getAll('q')
+          const namespaceLookup = query.match(NAMESPACE_LOOKUP_PATTERN)
+          const identityListing = query.match(IDENTITY_LISTING_PATTERN)
+          if (namespaceLookup || identityListing) {
+            const [, rawName = '', rawParent = ''] = namespaceLookup
+              ? namespaceLookup
+              : ['', '', ((v) => (v ? v : ''))(identityListing?.[1])]
+            const name = unescapeDriveQueryValue(rawName)
+            const parent = unescapeDriveQueryValue(rawParent)
+            const files = namespaceFolders
+              .filter(
+                (folder) =>
+                  folder.parent === parent &&
+                  (namespaceLookup
+                    ? folder.name === name
+                    : folder.name.startsWith(IDENTITY_NAMESPACE_FOLDER_PREFIX)),
+              )
+              .map(({ id, name: folderName, mimeType }) => ({
+                id,
+                name: folderName,
+                mimeType,
+              }))
+            await route.fulfill({
+              status: 200,
+              contentType: 'application/json',
+              headers: { 'access-control-allow-origin': '*' },
+              body: JSON.stringify({ files }),
+            })
+            return
+          }
           const decoded = decodeURIComponent(fullUrl)
+          const eventParent = unescapeDriveQueryValue(
+            ((v) => (v ? v : ''))(query.match(EVENT_PARENT_PATTERN)?.[1]),
+          )
           const eventDigest = decoded.match(
             new RegExp(`name\\s*=\\s*'(${EVENT_DIGEST_PATTERN})\\.yaml'`),
           )?.[1]
@@ -287,7 +381,7 @@ export function createLocalE2eFileSyncVaultStub(
               status: 200,
               contentType: 'application/json',
               body: JSON.stringify({
-                files: eventListEntries(eventDigest),
+                files: eventListEntries(eventDigest, eventDirFor(eventParent)),
               }),
             })
             return
@@ -318,6 +412,38 @@ export function createLocalE2eFileSyncVaultStub(
           }
           const folderName =
             typeof metadata.name === 'string' ? metadata.name : ''
+          const [folderParent = ''] = Array.isArray(metadata.parents)
+            ? metadata.parents.flatMap((parent) =>
+                typeof parent === 'string' ? [parent] : [],
+              )
+            : []
+          if (
+            metadata.mimeType === DRIVE_FOLDER_MIME_TYPE &&
+            folderName.startsWith(NAMESPACE_FOLDER_PREFIX) &&
+            !folderName.startsWith(PRIVATE_EVENT_FOLDER_PREFIX) &&
+            folderParent.length > 0
+          ) {
+            const folder: NamespaceFolderResource = {
+              id: `e2e-file-namespace-${Buffer.from(`${folderParent}/${folderName}`).toString('base64url')}`,
+              name: folderName,
+              mimeType: DRIVE_FOLDER_MIME_TYPE,
+              parent: folderParent,
+            }
+            namespaceFolders = namespaceFolders
+              .filter((existing) => existing.id !== folder.id)
+              .concat(folder)
+            await route.fulfill({
+              status: 200,
+              contentType: 'application/json',
+              headers: { 'access-control-allow-origin': '*' },
+              body: JSON.stringify({
+                id: folder.id,
+                name: folder.name,
+                mimeType: folder.mimeType,
+              }),
+            })
+            return
+          }
           if (
             metadata.mimeType === DRIVE_FOLDER_MIME_TYPE &&
             privateFolderHasAppDataParent(metadata.parents) &&
@@ -409,11 +535,15 @@ export function createLocalE2eFileSyncVaultStub(
           url === 'https://www.googleapis.com/upload/drive/v3/files' &&
           method === 'POST'
         ) {
-          const event = parseEventMultipart(
-            ((v) => (v ? v : ''))(request.postData()),
-          )
+          const multipart = ((v) => (v ? v : ''))(request.postData())
+          const event = parseEventMultipart(multipart)
           if (event.kind === EventMultipartParseKind.Valid) {
-            if (!writeEvent(event.digest, event.content)) {
+            const writeParent = ((v) => (v ? v : ''))(
+              multipart.match(MULTIPART_PARENT_PATTERN)?.[1],
+            )
+            if (
+              !writeEvent(event.digest, event.content, eventDirFor(writeParent))
+            ) {
               await route.fulfill({ status: 409, body: '{}' })
               return
             }

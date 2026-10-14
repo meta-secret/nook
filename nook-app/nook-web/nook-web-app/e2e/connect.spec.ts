@@ -12,6 +12,10 @@ import {
   reloadUnlockWithSyncProvider,
   UI_TIMEOUT_MS,
   waitForPersistedAppLog,
+  waitForVaultOperationsIdle,
+  waitForVaultSyncIdle,
+  openManagePage,
+  ManagePage,
 } from './helpers'
 
 test.describe('vault connect flow', () => {
@@ -58,32 +62,15 @@ test.describe('vault connect flow', () => {
       ),
     ).toBeFalsy()
     await expect(page.getByTestId('login-gate')).not.toBeVisible()
-    await expect(page.getByTestId('extension-install-setup')).toBeVisible()
-    await expect(page.getByTestId('extension-install-setup')).toHaveAttribute(
-      'data-status',
-      'not_installed',
-    )
-    await expect(page.getByTestId('extension-install-setup-cta')).toBeVisible()
-    await expect(page.getByTestId('vault-security-guide')).toBeVisible()
-    await expect(page.getByTestId('vault-security-guide')).toHaveAttribute(
-      'data-folded',
-      'true',
-    )
-    await expect(page.getByTestId('vault-security-guide')).toHaveAttribute(
-      'data-recommendations',
-      '2',
-    )
-    await expect(page.getByTestId('security-guide-details')).not.toBeVisible()
-    await page.getByTestId('security-guide-toggle').click()
-    await expect(page.getByTestId('security-guide-details')).toBeVisible()
-    await expect(page.getByTestId('security-guide-sync-provider')).toBeVisible()
-    await expect(page.getByTestId('security-guide-device')).toBeVisible()
-    await expect(page.getByTestId('vault-security-guide')).toHaveAttribute(
-      'data-folded',
-      'false',
-    )
-    await page.getByTestId('security-guide-add-device').click()
-    await expect(page.getByTestId('onboard-device-panel')).toBeVisible()
+    // The vault page offers the browser extension; the identity's overview
+    // carries the protection ladder and its single next step.
+    await expect(page.getByTestId('vault-extension-install')).toBeVisible()
+    await openManagePage(page, ManagePage.Overview)
+    await expect(page.getByTestId('overview-ladder')).toBeVisible()
+    await expect(page.getByTestId('overview-next-step')).toBeVisible()
+    await expect(page.getByTestId('overview-add-device')).toBeDisabled()
+    await page.getByTestId('overview-next-step-btn').click()
+    await expect(page.getByTestId('storage-providers-section')).toBeVisible()
   })
 
   test('github setup keeps sync step locked until token is entered', async ({
@@ -104,31 +91,20 @@ test.describe('vault connect flow', () => {
     await page.goto('/app/')
 
     await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible()
-    await expect(page.getByTestId('get-started-path-chooser')).toBeVisible()
-    await expect(page.getByTestId('get-started-path-simple')).toBeVisible()
-    await expect(page.getByTestId('get-started-path-sentinel')).toBeVisible()
+    await expect(page.getByTestId('first-vault-start')).toBeVisible()
+    await expect(page.getByTestId('get-started-path-sentinel')).toHaveCount(0)
     await expect(page.getByTestId('get-started-path-join')).toHaveCount(0)
-    await expect(page.getByTestId('login-path-cloud')).toBeVisible()
     await expect(page.getByTestId('replication-mode-select')).toHaveCount(0)
 
-    await page.getByTestId('get-started-path-simple').click()
-    await expect(page.getByTestId('create-vault-wizard-create')).toBeVisible()
+    // Creating and restoring share the first screen as separate actions.
     await page.getByTestId('login-vault-name-input').fill('Workflow vault')
-    await expect(page.getByTestId('login-path-cloud')).toHaveCount(0)
-    await expect(
-      page.getByTestId('login-create-device-vault-btn'),
-    ).toBeVisible()
     await expect(
       page.getByTestId('login-create-device-vault-btn'),
     ).toBeEnabled()
-    await page.getByTestId('create-vault-wizard-back').click()
-    await expect(page.getByTestId('get-started-path-chooser')).toBeVisible()
-    await expect(page.getByTestId('login-connect-storage-btn')).toBeVisible()
+    await expect(page.getByTestId('login-path-cloud')).toBeVisible()
     await page.getByTestId('login-connect-storage-btn').click()
     await expect(page.getByTestId('login-provider-setup')).toBeVisible()
-    await expect(
-      page.getByTestId('create-vault-wizard-create'),
-    ).not.toBeVisible()
+    await expect(page.getByTestId('first-vault-start')).not.toBeVisible()
     await expect(page.getByTestId('vault-panel')).not.toBeVisible()
     await expect(page.getByTestId('github-source-link')).toHaveAttribute(
       'href',
@@ -222,13 +198,7 @@ test.describe('vault connect flow', () => {
       timeout: UI_TIMEOUT_MS,
     })
 
-    await page.getByTestId('vault-admin-tab').click()
-    await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
-    await page
-      .getByTestId('storage-providers-section')
-      .getByRole('button')
-      .first()
-      .click()
+    await openManagePage(page, ManagePage.Sync)
     await expect(page.getByTestId('sync-providers-empty')).toBeVisible()
     await page.getByTestId('add-provider-btn').click()
     await expect(page.getByTestId('provider-picker-list')).toBeVisible()
@@ -316,13 +286,7 @@ test.describe('vault connect flow', () => {
     })
 
     await dismissSyncConflictIfVisible(page)
-    await page.getByTestId('vault-admin-tab').click()
-    await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
-    await page
-      .getByTestId('storage-providers-section')
-      .getByRole('button')
-      .first()
-      .click()
+    await openManagePage(page, ManagePage.Sync)
     const driveProvider = page.getByTestId('settings-provider-oauth-file')
     await expect(driveProvider).toBeVisible()
 
@@ -330,6 +294,10 @@ test.describe('vault connect flow', () => {
     await expect(removeBtn).toBeEnabled({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    // An in-flight periodic sync reads the provider snapshot; removing a row
+    // while it runs lets that read restore the previous provider set.
+    await waitForVaultSyncIdle(page)
+    await waitForVaultOperationsIdle(page)
 
     page.once('dialog', (dialog) => dialog.accept())
     await removeBtn.click()
@@ -337,7 +305,7 @@ test.describe('vault connect flow', () => {
     await expect(page.getByTestId('login-gate')).not.toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await expect(page.getByTestId('connected-badge')).toBeVisible()
+    await expect(page.getByTestId('authenticated-shell')).toBeVisible()
     await expect(page.getByTestId('settings-provider-oauth-file')).toHaveCount(
       0,
     )

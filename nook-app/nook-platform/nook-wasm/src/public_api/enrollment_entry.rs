@@ -192,15 +192,18 @@ mod tests {
 
     #[wasm_bindgen_test]
     fn enrollment_payload_round_trip_preserves_label_and_metadata() -> Result<(), JsError> {
-        let input = NookEnrollmentIssueInput::named(
+        let identity_id = nook_core::IdentityId::generate()?;
+        let input = NookEnrollmentIssueInput::for_identity(
             NookEnrollmentProvider::local(),
+            identity_id.to_string(),
             "Work".into(),
             "entry-1".into(),
             "2026-01-01".into(),
         );
         let unlabeled = encrypt_unlabeled_enrollment_payload(&input, "password")?;
         let decoded = decrypt_enrollment_payload(&unlabeled, "password")?;
-        assert_eq!(decoded.vault_name(), "Work");
+        assert_eq!(decoded.identity_label(), "Work");
+        assert_eq!(decoded.identity_id(), identity_id.to_string());
         assert_eq!(decoded.entry_id(), "entry-1");
         assert_eq!(decoded.issued_at(), "2026-01-01");
 

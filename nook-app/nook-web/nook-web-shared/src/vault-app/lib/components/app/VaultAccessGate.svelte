@@ -17,13 +17,10 @@
   import { onDestroy } from 'svelte'
   import LoginGate from '$lib/components/LoginGate.svelte'
   import PasskeyAuthOverlay from '$lib/components/PasskeyAuthOverlay.svelte'
+  import FirstRunProtectStep from '$lib/components/login/FirstRunProtectStep.svelte'
+  import { FirstRunStage } from '$lib/vault/state/ui.svelte'
   import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
   import { VaultStatusBarVariant } from '$lib/components/vault-status-bar-state'
-  import {
-    WorkspaceRoute,
-    WorkspaceRouteLookupKind,
-    WorkspacePath,
-  } from '$lib/app/workspace-route'
   import type { VaultState } from '$lib/vault.svelte'
   import type { ProviderSetupRequest } from '$lib/auth/providers'
   import type { LoginVaultExtensionPairingStatusEntry } from '$lib/components/login/login-vault-extension-pairing-status'
@@ -53,7 +50,6 @@
     onUseEnrollmentCode,
     onAcceptSentinelOnboardingPackage,
     onUnlockWithPassword,
-    onSwitchVault,
     onSentinelUnlocked,
     onCreateDeviceVault,
     extensionConnectPairingStatusEntries,
@@ -75,7 +71,6 @@
     onUseEnrollmentCode: (args: EnrollmentCodeUnlock) => Promise<void>
     onAcceptSentinelOnboardingPackage: (packageJson: string) => Promise<void>
     onUnlockWithPassword: (args: VaultPasswordUnlock) => Promise<void>
-    onSwitchVault: () => Promise<void>
     onSentinelUnlocked: () => Promise<void>
     onCreateDeviceVault: (label: string) => Promise<void>
     extensionConnectPairingStatusEntries: LoginVaultExtensionPairingStatusEntry[]
@@ -89,34 +84,36 @@
 
   const appVersion = '0.1.0'
 
-  function devicesAccessRouteOpen(): boolean {
-    if (!('window' in globalThis)) return false
-    const route = new WorkspacePath(window.location.pathname).route
-    return (
-      route.kind === WorkspaceRouteLookupKind.Workspace &&
-      route.route === WorkspaceRoute.DevicesAccess
-    )
-  }
-
   function sentinelInvitationOpen(): boolean {
     return sentinelInvitationRequest.trim().length > 0
   }
 
+  /** A first vault waiting for its passkey shows the guided step in place. */
+  const firstRunProtect = $derived(
+    showPasskeyOverlay && vault.firstRun === FirstRunStage.Protect,
+  )
+
+  function leaveFirstRunProtect(): void {
+    vault.firstRun = FirstRunStage.Off
+    onDismissPasskey()
+  }
+
   function identityTransitionPending(): boolean {
-    return vault.devicesAccessIdentityTransitionPending
+    return vault.identityTransitionPending
   }
 
   onDestroy(() => {
     if (vault.isAuthenticated) {
-      vault.devicesAccessIdentityProtectionOpen = false
-      vault.devicesAccessIdentityTransitionPending = false
+      vault.identityTransitionPending = false
     }
   })
 </script>
 
 <div class="space-y-6">
-  {#if showAccessGate || vault.errorMsg || devicesAccessRouteOpen() || sentinelInvitationOpen() || identityTransitionPending()}
-    {#if vault.providersLoaded || existingVaultNeedsDeviceUnlock || devicesAccessRouteOpen() || sentinelInvitationOpen() || identityTransitionPending()}
+  {#if showAccessGate || vault.errorMsg || sentinelInvitationOpen() || identityTransitionPending()}
+    {#if firstRunProtect}
+      <FirstRunProtectStep {vault} onBack={leaveFirstRunProtect} />
+    {:else if vault.providersLoaded || existingVaultNeedsDeviceUnlock || sentinelInvitationOpen() || identityTransitionPending() || (vault.hasManager && !vault.isInitializing)}
       <LoginGate
         {vault}
         appKind={APP_KIND}
@@ -134,7 +131,6 @@
         onCancelAddProvider={() => vault.cancelAddProvider()}
         onBeginSetup={beginProviderSetup}
         onCancelSetup={() => vault.cancelProviderSetup()}
-        onOpenHelp={() => vault.openHelp()}
         {onUseEnrollmentCode}
         prefillEnrollmentCode={vault.prefillEnrollmentCode}
         enrollmentFromUrlPending={vault.enrollmentFromUrlPending}
@@ -144,7 +140,6 @@
         {sentinelOnboardingPackage}
         {onAcceptSentinelOnboardingPackage}
         {onUnlockWithPassword}
-        {onSwitchVault}
         {onSentinelUnlocked}
         {onCreateDeviceVault}
         {extensionConnectPairingStatusEntries}
@@ -170,7 +165,7 @@
       onDismissSuccess={() => vault.dismissSuccess()}
       onDismissError={() => vault.dismissError()}
     />
-    {#if showPasskeyOverlay}
+    {#if showPasskeyOverlay && !firstRunProtect}
       <PasskeyAuthOverlay {vault} onDismiss={onDismissPasskey} />
     {/if}
   {/if}

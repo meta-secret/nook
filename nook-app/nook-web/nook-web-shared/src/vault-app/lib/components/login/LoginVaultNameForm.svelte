@@ -38,13 +38,13 @@
 
 <div class="space-y-3" data-testid="login-vault-name-form">
   <div class="space-y-1.5">
-    <label class="text-xs font-medium text-foreground" for="login-vault-name">
+    <label class="nk-field-label" for="login-vault-name">
       {vault.t(I18N_KEYS.LoginVaultNameLabel)}
     </label>
     <input
       id="login-vault-name"
       type="text"
-      class="w-full rounded-lg border border-border/60 bg-background px-3 py-2 text-sm text-foreground outline-none ring-offset-background transition-colors placeholder:text-muted-foreground focus-visible:border-primary/50 focus-visible:ring-2 focus-visible:ring-primary/20"
+      class="h-10 w-full rounded-none border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-foreground/40 focus-visible:ring-2 focus-visible:ring-ring"
       placeholder={vault.t(I18N_KEYS.LoginVaultNamePlaceholder)}
       maxlength={VAULT_NAME_MAX_LENGTH}
       autocomplete="off"
@@ -65,7 +65,7 @@
 
   <Button
     type="button"
-    class="w-full sm:w-auto sm:min-w-[180px]"
+    class="nk-go w-full sm:w-auto sm:min-w-[180px]"
     data-testid={testId}
     disabled={isBusy || !canSubmit}
     onclick={() => void handleSubmit()}

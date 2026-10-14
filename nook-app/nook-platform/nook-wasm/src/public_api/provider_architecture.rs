@@ -286,6 +286,22 @@ pub fn validate_provider_replication(
     dylint_lib = "nook_domain_api",
     expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
 )]
+pub fn provider_carries_device_join(
+    provider: &tsify::Ts<nook_core::StorageProviderData>,
+) -> Result<bool, wasm_bindgen::JsError> {
+    let provider = provider
+        .to_rust()
+        .map_err(|_| JsError::new("Invalid typed WASM input."))?;
+
+    Ok(provider.device_join_reach() == nook_core::DeviceJoinReach::OtherDevices)
+}
+
+#[wasm_bindgen]
+#[allow(clippy::needless_pass_by_value)]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
+)]
 pub fn provider_supports_replication(
     provider: &tsify::Ts<nook_core::StorageProviderData>,
     replication_type: nook_core::ReplicationType,

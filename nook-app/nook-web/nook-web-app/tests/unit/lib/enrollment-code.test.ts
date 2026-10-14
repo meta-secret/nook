@@ -17,9 +17,12 @@ import {
 
 await initNookWasm()
 
+const IDENTITY_ID = 'idn_abcdefghijk'
+
 function samplePayload(): NookEnrollmentIssueInput {
-  return NookEnrollmentIssueInput.named(
+  return NookEnrollmentIssueInput.for_identity(
     NookEnrollmentProvider.local(),
+    IDENTITY_ID,
     'Local vault',
     'entry-local',
     '2026-06-23T12:00:00Z',
@@ -27,8 +30,9 @@ function samplePayload(): NookEnrollmentIssueInput {
 }
 
 function githubPayload(): NookEnrollmentIssueInput {
-  return NookEnrollmentIssueInput.named(
+  return NookEnrollmentIssueInput.for_identity(
     NookEnrollmentProvider.github('team-vault', 'github_pat_11AAAAbbbbCCCC'),
+    IDENTITY_ID,
     'Team vault',
     'entry-1',
     '2026-06-23T12:00:00Z',
@@ -147,7 +151,8 @@ describe('enrollment payloads', () => {
 
     const decrypted = decrypt_enrollment_payload(code, 'vault-pass-99')
     expect(decrypted.entryId).toBe('entry-1')
-    expect(decrypted.vaultName).toBe('Team vault')
+    expect(decrypted.identityLabel).toBe('Team vault')
+    expect(decrypted.identityId).toBe(IDENTITY_ID)
     expect(decrypted.issuedAt).toBe('2026-06-23T12:00:00Z')
     expect(decrypted.provider.type).toBe('github')
     expect(decrypted.provider.githubPat).toBe('github_pat_11AAAAbbbbCCCC')

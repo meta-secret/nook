@@ -26,7 +26,7 @@ test('keeps the create workflow usable after locked-login Sentinel status errors
   await expect(page.getByTestId('login-gate')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
-  await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
+  await expect(page.getByTestId('identity-vault-row').first()).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
 
@@ -72,7 +72,7 @@ test('keeps the create workflow usable after locked-login Sentinel status errors
 
   const vaultError = page.getByTestId('vault-error')
   await expect(vaultError).toBeVisible({ timeout: UI_TIMEOUT_MS })
-  await page.getByTestId('login-vault-workflow-create').click()
+  await page.getByTestId('identity-new-vault').click()
 
   await expect(page.getByTestId('login-vault-create-workflow')).toBeVisible()
   const vaultNameInput = page.getByTestId('login-vault-name-input')

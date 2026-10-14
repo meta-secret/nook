@@ -380,6 +380,7 @@ mod tests {
                 }),
                 local_folder: StoredLocalFolderConfiguration::NotApplicable,
                 store_id: ProviderVaultScope::StoreId("current-store".to_owned()),
+                layout: nook_core::ProviderRowLayout::LegacyVaultRoot,
                 sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-09-25T00:00:00.000Z".to_owned(),
             }],

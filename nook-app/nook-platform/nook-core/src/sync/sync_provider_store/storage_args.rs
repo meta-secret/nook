@@ -101,6 +101,30 @@ impl super::OAuthFileConfig {
         }
     }
 
+    /// The remote file id an enrollment code carries. A private Google Drive
+    /// row addresses its event folder through `drive_private_target`, so the
+    /// code carries that target as its connect reference; the joining app
+    /// projects it back into its own `drive_private_target`.
+    pub(super) fn enrollment_file_id(&self) -> StoredOAuthRemoteFileId {
+        let private_drive = self.preset == OauthFilePreset::GoogleDrive
+            && self.resolved_google_drive_mode() == GoogleDriveMode::Private;
+        match (&self.drive_private_target, private_drive) {
+            (StoredGoogleDrivePrivateTarget::Pending, true) => {
+                StoredOAuthRemoteFileId::FileId(crate::DRIVE_PRIVATE_FOLDER_PENDING_REF.to_owned())
+            }
+            (StoredGoogleDrivePrivateTarget::FolderId(folder_id), true)
+                if !folder_id.trim().is_empty() =>
+            {
+                StoredOAuthRemoteFileId::FileId(format!(
+                    "{}{}",
+                    crate::DRIVE_PRIVATE_FOLDER_REF_PREFIX,
+                    folder_id.trim()
+                ))
+            }
+            _ => self.file_id.clone(),
+        }
+    }
+
     fn private_drive_connection_storage_id(
         &self,
         storage_id: OAuthStorageReference,
@@ -144,13 +168,19 @@ pub struct ProviderLabelLabels {
 
 impl StorageProviderData {
     pub fn connection_args(&self) -> ValidationResult<StorageConnectArgs> {
-        match self.provider_type {
+        let mut args = match self.provider_type {
             StorageProviderType::Local | StorageProviderType::LocalFolder => {
-                Ok(StorageConnectArgs::local())
+                return Ok(StorageConnectArgs::local());
             }
-            StorageProviderType::Github => Ok(self.github_connection_args()),
-            StorageProviderType::OauthFile => self.oauth_file_connection_args(),
+            StorageProviderType::Github => self.github_connection_args(),
+            StorageProviderType::OauthFile => self.oauth_file_connection_args()?,
+        };
+        args.repo = super::LayoutRemoteRef {
+            layout: self.layout,
+            inner: &args.repo,
         }
+        .format();
+        Ok(args)
     }
 
     fn github_connection_args(&self) -> StorageConnectArgs {
@@ -295,6 +325,7 @@ mod tests {
                 oauth_file: StoredOAuthFileConfiguration::NotApplicable,
                 local_folder: StoredLocalFolderConfiguration::NotApplicable,
                 store_id: ProviderVaultScope::Unscoped,
+                layout: crate::ProviderRowLayout::LegacyVaultRoot,
                 sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-06-24T00:00:00.000Z".to_owned(),
             }
@@ -314,6 +345,7 @@ mod tests {
                     handle_id: StoredLocalFolderHandle::HandleId(handle_id.to_owned()),
                 }),
                 store_id: ProviderVaultScope::Unscoped,
+                layout: crate::ProviderRowLayout::LegacyVaultRoot,
                 sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-06-24T00:00:00.000Z".to_owned(),
             }
@@ -339,6 +371,7 @@ mod tests {
                 }),
                 local_folder: StoredLocalFolderConfiguration::NotApplicable,
                 store_id: ProviderVaultScope::Unscoped,
+                layout: crate::ProviderRowLayout::LegacyVaultRoot,
                 sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-06-24T00:00:00.000Z".to_owned(),
             }

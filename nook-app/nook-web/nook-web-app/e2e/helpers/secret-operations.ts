@@ -1,6 +1,5 @@
 import type { VaultState } from '../../../nook-web-shared/src/vault-app/lib/vault.svelte'
 import { expect, type Page } from '@playwright/test'
-import { assertEnrolledVaultYaml, assertGenesisVaultYaml } from '../vault-yaml'
 import { keepVaultIdleLockDisabled } from './device-enrollment'
 import {
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -207,6 +206,7 @@ export async function deleteSecret(
     : 0
   const row = page.getByTestId('secret-row').filter({ hasText: key })
   await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  await expandSecretRow(page, key)
   const deleteBtn = row.getByTestId('delete-secret-btn')
   await expect(deleteBtn).toBeVisible({ timeout: UI_TIMEOUT_MS })
   await deleteBtn.click()
@@ -218,49 +218,6 @@ export async function deleteSecret(
       { page },
     )
   }
-}
-
-export async function assertGenesisVaultOnGithub(
-  target: GithubE2eTarget | string,
-  repoName?: string,
-) {
-  const resolved: GithubE2eTarget =
-    typeof target === 'string'
-      ? {
-          pat: target,
-          repoName: (() => {
-            if (typeof repoName !== 'string') {
-              throw new Error('GitHub repo name was not available.')
-            }
-            return repoName
-          })(),
-        }
-      : target
-  const snapshot = await waitForGithubVaultState(
-    resolved,
-    (yaml) => yaml.authPkIds.length >= 1 && yaml.memberPkIds.length >= 1,
-  )
-  assertGenesisVaultYaml(snapshot)
-  return snapshot
-}
-
-export async function assertEnrolledVaultOnGithub(
-  target: GithubE2eTarget,
-  expectedMembers: number,
-  page?: Page,
-) {
-  const waitOptions: { page?: Page } = {}
-  if (page) waitOptions.page = page
-  const snapshot = await waitForGithubVaultState(
-    target,
-    (yaml) =>
-      yaml.joinEntries.length === 0 &&
-      yaml.authPkIds.length === expectedMembers &&
-      yaml.memberPkIds.length === expectedMembers,
-    waitOptions,
-  )
-  assertEnrolledVaultYaml(snapshot, expectedMembers)
-  return snapshot
 }
 
 /** @deprecated Use {@link seedOauthFileSyncProvidersWhileUnlocked}. */

@@ -175,6 +175,7 @@ test('waits for the filtered page before revealing and frees the record when hid
   const fixture = new SecretVaultSearchFixture()
   const view = fixture.render()
   await tick()
+  await fireEvent.click(view.getByTestId('secret-row-toggle'))
   const inputEvent: Parameters<typeof fireEvent.input>[1] = {
     target: { value: 'demand-user-54' },
   }
@@ -189,7 +190,6 @@ test('waits for the filtered page before revealing and frees the record when hid
   await tick()
   await tick()
   expect(reveal.hasAttribute('disabled')).toBe(false)
-  await fireEvent.click(view.getByTestId('secret-row-toggle'))
   await fireEvent.click(reveal)
   expect(fixture.decrypt).toHaveBeenCalledTimes(1)
   expect(view.getByTestId('revealed-secret').textContent).toContain('••••')
@@ -232,29 +232,16 @@ test('keeps reveal disabled when a pending filter supersedes the search page', a
   const fixture = new SecretVaultSearchFixture()
   const view = fixture.render()
   await tick()
+  await fireEvent.click(view.getByTestId('secret-row-toggle'))
   const inputEvent: Parameters<typeof fireEvent.input>[1] = {
     target: { value: 'demand-user-54' },
   }
   await fireEvent.input(view.getByTestId('search-secrets'), inputEvent)
   await vi.advanceTimersByTimeAsync(200)
   expect(fixture.loadPage).toHaveBeenCalledTimes(1)
-  const openFilterEvent: Parameters<typeof fireEvent.keyDown>[1] = {
-    key: 'Enter',
-  }
-  await fireEvent.keyDown(
-    view.getByTestId('secret-type-filter'),
-    openFilterEvent,
-  )
-  expect(
-    view.getByTestId('secret-type-filter').getAttribute('aria-expanded'),
-  ).toBe('true')
   const loginType: Parameters<typeof secret_type_name>[0] = SecretType.Login
-  const selectFilterEvent: Parameters<typeof fireEvent.pointerUp>[1] = {
-    pointerType: 'mouse',
-  }
-  await fireEvent.pointerUp(
+  await fireEvent.click(
     view.getByTestId(`secret-type-filter-${secret_type_name(loginType)}`),
-    selectFilterEvent,
   )
   expect(fixture.loadPage).toHaveBeenCalledTimes(2)
   const reveal = view.getByTestId('reveal-secret-btn')

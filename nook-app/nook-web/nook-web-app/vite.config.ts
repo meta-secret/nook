@@ -16,6 +16,8 @@ import {
 import {
   VAULT_WORKSPACE_OUTPUT_ALIASES,
   VAULT_WORKSPACE_SPA_PATHS,
+  writeShellAlias,
+  type ShellAliasWrite,
 } from '../nook-web-shared/vite-config.ts'
 
 const viteBase = 'Bun' in globalThis ? Bun.env.VITE_BASE : process.env.VITE_BASE
@@ -146,7 +148,8 @@ function spaFallback(appKind: string, outputDirectory: string): Plugin {
           alias !== 'extension-connect' ||
           appKind === 'unified-development'
         ) {
-          copyFileSync(appShell, join(outDir, `${alias}.html`))
+          const aliasWrite: ShellAliasWrite = { shell: appShell, outDir, alias }
+          writeShellAlias(aliasWrite)
         }
       }
     },

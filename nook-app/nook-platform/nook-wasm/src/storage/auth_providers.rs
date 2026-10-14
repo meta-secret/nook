@@ -288,6 +288,7 @@ mod wasm_idb_tests {
                     }),
                     local_folder: StoredLocalFolderConfiguration::NotApplicable,
                     store_id: ProviderVaultScope::Unscoped,
+                    layout: nook_core::ProviderRowLayout::LegacyVaultRoot,
                     sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                     created_at: "2026-06-24T00:00:00.000Z".to_owned(),
                 },

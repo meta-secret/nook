@@ -1,36 +1,39 @@
-import { ProviderSyncFreshness } from '$app-wasm'
 import { test, expect, type BrowserContext, type Page } from './fixtures'
 import {
-  approveJoinLocalE2eFromBanner,
+  addSecret,
+  approveIdentityJoin,
   assertVaultReady,
-  connectLocalE2eJoinerDevice,
   connectLocalVault,
   createIsolatedContext,
   disableVaultIdleLock,
   E2E_SYNC_ONBOARD_PROVIDER,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  NOTIFICATION_TIMEOUT_MS,
+  issueIdentityEnrollmentCode,
+  localizeAppLinkForE2e,
+  openVaultAfterIdentityApproval,
   readLocalVaultYamlFromIdb,
+  redeemIdentityEnrollmentCode,
   reloadUnlockLocalVaultWithSync,
-  sendJoinRequestLocalE2e,
   triggerVaultSyncRefresh,
+  uniqueSecretKey,
+  UI_TIMEOUT_MS,
   waitForSyncRemoteVaultState,
-  waitForPendingJoinBanner,
+  type IssuedIdentityCode,
 } from './helpers'
 import { createLocalE2eFileSyncVaultStub } from './file-sync-stub'
-import { refreshJoinerVaultOnLoginGate } from './helpers/joiner-vault-refresh'
-import { I18N_KEYS } from '../../nook-web-shared/src/generated/i18n-keys'
 
-test.describe('multi-device local vault with sync provider', () => {
+test.describe('multi-device identity with a local sync provider', () => {
   test.describe.configure({ mode: 'serial' })
   test.setTimeout(120_000)
 
   const fileName = E2E_SYNC_ONBOARD_PROVIDER.fileName
+  const secretKey = uniqueSecretKey('e2e-identity-join')
   let deviceA: Page
   let deviceB: Page
   let contextA: BrowserContext
   let contextB: BrowserContext
   let stub: ReturnType<typeof createLocalE2eFileSyncVaultStub>
+  let issued: IssuedIdentityCode
 
   test.beforeAll(async ({ browser }) => {
     contextA = await createIsolatedContext(browser)
@@ -41,6 +44,7 @@ test.describe('multi-device local vault with sync provider', () => {
 
     await connectLocalVault(deviceA)
     await assertVaultReady(deviceA)
+    await addSecret(deviceA, secretKey, 'shared-through-identity')
 
     const genesisYaml = await readLocalVaultYamlFromIdb(deviceA)
     stub = createLocalE2eFileSyncVaultStub(genesisYaml, fileName)
@@ -58,7 +62,7 @@ test.describe('multi-device local vault with sync provider', () => {
     await waitForSyncRemoteVaultState(
       stub,
       (snapshot) =>
-        snapshot.authPkIds.length >= 1 && snapshot.memberPkIds.length >= 1,
+        snapshot.authPkIds.length >= 1 && snapshot.secretIds.length >= 1,
     )
   })
 
@@ -69,105 +73,45 @@ test.describe('multi-device local vault with sync provider', () => {
     await contextB?.close()
   })
 
-  test('joiner sends a request to the stubbed sync provider', async () => {
-    await connectLocalE2eJoinerDevice(deviceB, fileName)
-    const join = await sendJoinRequestLocalE2e(deviceB, stub)
-
-    expect(join.deviceId).toMatch(/^[a-f0-9]{16}$/)
-    expect(join.publicKey).toMatch(/^age1/)
-    await waitForSyncRemoteVaultState(
-      stub,
-      (snapshot) => snapshot.joinEntries.length === 1,
-    )
+  test('member publishes the identity log and issues an identity code', async () => {
+    issued = await issueIdentityEnrollmentCode(deviceA)
+    await expect
+      .poll(() => stub.getIdentityEventFileCount(), {
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
+      .toBeGreaterThan(0)
   })
 
-  test('genesis device sees pending join after sync refresh', async () => {
-    const join = (
-      await waitForSyncRemoteVaultState(
-        stub,
-        (snapshot) => snapshot.joinEntries.length === 1,
-      )
-    ).joinEntries[0]
-    if (!join) throw new Error('Expected a pending join entry in remote log')
-
-    await triggerVaultSyncRefresh(deviceA)
-    await expect(deviceA.getByTestId('vault-last-sync')).toContainText(
-      /just now|s ago/,
-      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
-    )
-    await waitForPendingJoinBanner(deviceA, join.deviceId)
-    await expect(
-      deviceA.getByTestId('device-join-row').filter({ hasText: join.deviceId }),
-    ).toBeVisible()
+  test('joining app requests to join through the identity mount', async () => {
+    const identityEventsBefore = stub.getIdentityEventFileCount()
+    await deviceB.goto(localizeAppLinkForE2e(deviceA, issued.link))
+    await expect(deviceB.getByTestId('login-gate')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await redeemIdentityEnrollmentCode(deviceB, issued.passphrase)
+    await expect
+      .poll(() => stub.getIdentityEventFileCount(), {
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
+      .toBeGreaterThan(identityEventsBefore)
   })
 
-  test('genesis device approves join and fan-out updates the stub', async () => {
-    const join = await parseJoinFromStub(stub)
-
-    await approveJoinLocalE2eFromBanner(deviceA, join.deviceId, stub, 2)
-    await expect(deviceA.getByTestId('vault-security-guide')).toHaveCount(0, {
+  test('member sees the pending join on Devices and approves it', async () => {
+    await approveIdentityJoin(deviceA, 2)
+    await expect(deviceA.getByTestId('pending-join-row')).toHaveCount(0, {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
   })
 
-  test('genesis device eventually sees pending join without manual refresh', async () => {
-    test.setTimeout(200_000)
-    await connectLocalE2eJoinerDevice(deviceB, fileName)
-    const join = await sendJoinRequestLocalE2e(deviceB, stub)
-
-    await expect
-      .poll(
-        () =>
-          waitForSyncRemoteVaultState(
-            stub,
-            (snapshot) => snapshot.joinEntries.length >= 1,
-            { timeoutMs: 1_000 },
-          ).then(
-            (snapshot) => snapshot.joinEntries.length,
-            () => 0,
-          ),
-        {
-          timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-        },
-      )
-      .toBeGreaterThanOrEqual(1)
-
-    await expect
-      .poll(
-        async () => {
-          if (await deviceA.getByTestId('pending-joins-banner').isVisible()) {
-            return true
-          }
-          await deviceA.evaluate(refreshJoinerVaultOnLoginGate, {
-            freshness: ProviderSyncFreshness.Forced,
-            authStorageSyncFailedKey: I18N_KEYS.AuthStorageSyncFailed,
-          })
-          await deviceA.evaluate(async () => {
-            const vault = window.__nookVault
-            await vault?.refreshPendingJoinsFromProviders?.()
-          })
-          return deviceA.getByTestId('pending-joins-banner').isVisible()
-        },
-        { timeout: NOTIFICATION_TIMEOUT_MS },
-      )
-      .toBe(true)
+  test('approved app opens the vault with its identity grant', async () => {
+    await openVaultAfterIdentityApproval(deviceB)
     await expect(
-      deviceA.getByTestId('device-join-row').filter({ hasText: join.deviceId }),
-    ).toBeVisible()
+      deviceB.getByTestId('secret-row').filter({ hasText: secretKey }),
+    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await waitForSyncRemoteVaultState(
+      stub,
+      (snapshot) => snapshot.authPkIds.length >= 2,
+      { timeoutMs: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
   })
 })
-
-async function parseJoinFromStub(stub: {
-  getEventFileContents: () => string[]
-}) {
-  const snapshot = await waitForSyncRemoteVaultState(
-    stub,
-    (state) => state.joinEntries.length > 0,
-  )
-  if (snapshot.joinEntries.length === 0) {
-    throw new Error('Expected a pending join entry in remote event log')
-  }
-  const join = snapshot.joinEntries[0]
-  if (!join) throw new Error('pending join entry was not available.')
-  return join
-}

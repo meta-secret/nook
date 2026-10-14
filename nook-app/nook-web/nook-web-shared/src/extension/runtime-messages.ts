@@ -238,6 +238,11 @@ export class ExtensionPairingApprovedGrantAdmission {
       deviceLabel: payload.deviceLabel,
       vaultStoreId: payload.vaultStoreId,
       vaultName: payload.vaultName,
+      // Approvals from a web app that predates identities carry none.
+      identityLabel:
+        "identityLabel" in payload && typeof payload.identityLabel === "string"
+          ? payload.identityLabel
+          : "",
       approvedAt: payload.approvedAt,
       scopes,
       providers,

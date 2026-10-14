@@ -12,7 +12,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize, de::IgnoredAny};
 use std::str;
 
-use super::checked_event_write::CheckedEventWrite;
+use super::checked_event_write::{CheckedEventWrite, CheckedEventWriteRequest, ParsedLogEvent};
 use super::drive::wire::{FileIdentity, FileName, PageCompletion};
 use super::remote_event::RemoteEventRead;
 use crate::NookError;
@@ -31,10 +31,11 @@ enum ListedEvent {
 }
 struct DriveEventCandidates<'a, I: IntoIterator<Item = Vec<u8>>> {
     event_id: &'a EventId,
+    location: &'a EventLogLocation,
     candidates: I,
 }
 struct AcceptedDriveEvent {
-    event: VaultEvent,
+    event: ParsedLogEvent,
     bytes: Vec<u8>,
 }
 enum DriveCandidateSelection {
@@ -65,11 +66,13 @@ enum DrivePageRequest {
     Continuation(String),
 }
 
-use nook_core::{DriveEventParent, EventId, VaultEvent};
+use nook_core::{DriveEventParent, EventId, EventLogLocation};
 
+/// Event IO under an already resolved namespace parent; see `DriveNamespace`.
 pub(crate) struct DriveEventStore<'a> {
     pub(crate) token: &'a str,
     pub(crate) parent: &'a DriveEventParent,
+    pub(crate) location: &'a EventLogLocation,
 }
 
 #[derive(Default, Deserialize)]
@@ -172,12 +175,12 @@ impl DriveEventStore<'_> {
     ) -> Result<RemoteEventRead, NookError> {
         let DriveEventCandidates {
             event_id,
+            location,
             candidates,
         } = request;
         let mut accepted = DriveCandidateSelection::NoMatchingEvent;
         for bytes in candidates {
-            let storage_bytes = bytes.clone().into();
-            let Ok(event) = VaultEvent::parse_remote_event_storage_bytes(&storage_bytes) else {
+            let Ok(event) = ParsedLogEvent::parse(&bytes, location) else {
                 continue;
             };
             let Ok(parsed_id) = event.id() else {
@@ -303,6 +306,7 @@ impl DriveEventStore<'_> {
         // can publish good local bytes beside the leftover name.
         Self::select_matching_drive_event_bytes(DriveEventCandidates {
             event_id,
+            location: self.location,
             candidates,
         })
     }
@@ -384,7 +388,12 @@ impl DriveEventStore<'_> {
         event_id: &EventId,
         bytes: &[u8],
     ) -> Result<String, NookError> {
-        let checked = CheckedEventWrite::parse(bytes, event_id, "Drive")?;
+        let checked = CheckedEventWrite::parse(CheckedEventWriteRequest {
+            bytes,
+            event_id,
+            location: self.location,
+            provider: "Drive",
+        })?;
         self.put_checked(checked).await
     }
 
@@ -514,6 +523,7 @@ mod tests {
     fn select_matching_skips_unreadable_duplicate_and_keeps_valid_event() -> anyhow::Result<()> {
         let EventFixture(event_id, _, bytes) = EventFixture::new()?;
         let selected = DriveEventStore::select_matching_drive_event_bytes(DriveEventCandidates {
+            location: &EventLogLocation::LegacyVaultRoot,
             event_id: &event_id,
             candidates: [b"not yaml".to_vec(), Vec::new(), bytes.clone()],
         })?;
@@ -532,6 +542,7 @@ mod tests {
     fn select_matching_treats_all_unreadable_candidates_as_absent() -> anyhow::Result<()> {
         let EventFixture(event_id, _, _) = EventFixture::new()?;
         let selected = DriveEventStore::select_matching_drive_event_bytes(DriveEventCandidates {
+            location: &EventLogLocation::LegacyVaultRoot,
             event_id: &event_id,
             candidates: [b"not yaml".to_vec(), b"{bad:".to_vec()],
         })?;
@@ -550,6 +561,7 @@ mod tests {
     fn select_matching_accepts_identical_duplicates() -> anyhow::Result<()> {
         let EventFixture(event_id, _, bytes) = EventFixture::new()?;
         let selected = DriveEventStore::select_matching_drive_event_bytes(DriveEventCandidates {
+            location: &EventLogLocation::LegacyVaultRoot,
             event_id: &event_id,
             candidates: [bytes.clone(), bytes.clone()],
         })?;
@@ -570,6 +582,7 @@ mod tests {
         event.signature = Ed25519Signature::from_trusted(format!("ed25519:{}", "11".repeat(64)));
         let divergent = VaultEvent::serialize_event_storage_yaml(&event)?.into();
         let err = DriveEventStore::select_matching_drive_event_bytes(DriveEventCandidates {
+            location: &EventLogLocation::LegacyVaultRoot,
             event_id: &event_id,
             candidates: [bytes, divergent],
         })
@@ -595,6 +608,7 @@ mod tests {
         let EventFixture(other_id, _, other_bytes) = EventFixture::new()?;
         assert_ne!(event_id, other_id);
         let selected = DriveEventStore::select_matching_drive_event_bytes(DriveEventCandidates {
+            location: &EventLogLocation::LegacyVaultRoot,
             event_id: &event_id,
             candidates: [other_bytes],
         })?;
@@ -640,6 +654,7 @@ mod tests {
         let store = DriveEventStore {
             token: "",
             parent: &DriveEventParent::AppDataFolder,
+            location: &EventLogLocation::LegacyVaultRoot,
         };
         let Err(error) = store.put_drive_event_if_absent(&requested_id, &bytes).await else {
             anyhow::bail!("mismatched event id must fail before network");

@@ -56,6 +56,11 @@ impl IdentityId {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    #[cfg(test)]
+    pub(crate) fn test_fixture() -> Self {
+        Self(format!("{IDENTITY_ID_PREFIX}abcdefghijk"))
+    }
 }
 
 impl fmt::Display for IdentityId {

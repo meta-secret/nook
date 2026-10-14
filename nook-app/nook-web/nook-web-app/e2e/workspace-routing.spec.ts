@@ -4,6 +4,8 @@ import {
   connectLocalVault,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   signedSentinelInvitation,
+  openVaultPage,
+  openKeysPage,
 } from './helpers'
 
 test.describe('persistent workspace routing', () => {
@@ -23,36 +25,42 @@ test.describe('persistent workspace routing', () => {
       })
     })
 
-    await expect(page.getByTestId('vault-devices-access-tab')).toHaveCount(0)
-
-    const headerDevicesAccess = page.getByTestId('header-devices-access-btn')
-    await headerDevicesAccess.click()
-    await expect(page).toHaveURL(/\/devices-access$/)
-    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
+    // Manage on the current identity opens its overview; the rail then
+    // lists the identity's pages.
+    await page.getByTestId('header-identities-btn').click()
+    await expect(page).toHaveURL(/\/identities$/)
+    await page.getByTestId('identity-manage').first().click()
+    await expect(page).toHaveURL(/\/identity$/)
+    await expect(page.getByTestId('identity-overview')).toBeVisible()
+    await page.getByTestId('manage-nav-passwords').click()
+    await expect(page).toHaveURL(/\/identity\/passwords$/)
+    await expect(page.getByTestId('vault-unlock-section')).toBeVisible()
+    await page.getByTestId('manage-nav-keys').click()
+    await expect(page).toHaveURL(/\/identity\/keys$/)
+    await expect(page.getByTestId('identity-keys')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await page.getByTestId('devices-access-back').click()
-    await expect(page).toHaveURL(/\/vault$/)
-    await expect(headerDevicesAccess).toBeFocused()
+    await page.getByTestId('manage-nav-devices').click()
+    await expect(page).toHaveURL(/\/identity\/devices$/)
+    await expect(page.getByTestId('vault-devices-panel')).toBeVisible()
+    await page.getByTestId('manage-nav-sync').click()
+    await expect(page).toHaveURL(/\/identity\/sync$/)
+    await expect(page.getByTestId('storage-providers-section')).toBeVisible()
 
-    await page.getByTestId('vault-admin-tab').click()
-    await expect(page).toHaveURL(/\/admin$/)
+    await page.getByTestId('manage-nav-vaults').click()
+    await expect(page).toHaveURL(/\/identity\/vaults$/)
     await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
 
-    expect(await page.evaluate(() => history.length)).toBeGreaterThanOrEqual(
-      initialHistoryLength + 1,
-    )
-
-    await page.getByTestId('vault-settings-tab').click()
-    await expect(page).toHaveURL(/\/settings$/)
-    await expect(page.getByTestId('storage-settings-panel')).toBeVisible()
+    await page.getByTestId('header-identities-btn').click()
+    await expect(page).toHaveURL(/\/identities$/)
+    await expect(page.getByTestId('identities-hub')).toBeVisible()
 
     await page.getByTestId('help-open-btn').click()
     await expect(page).toHaveURL(/\/help$/)
     await expect(page.getByTestId('help-page')).toBeVisible()
 
     expect(await page.evaluate(() => history.length)).toBeGreaterThanOrEqual(
-      initialHistoryLength + 3,
+      initialHistoryLength + 5,
     )
     expect(
       await page.evaluate(() =>
@@ -61,7 +69,7 @@ test.describe('persistent workspace routing', () => {
           10,
         ),
       ),
-    ).toBeGreaterThanOrEqual(3)
+    ).toBeGreaterThanOrEqual(5)
 
     await page.evaluate(
       () =>
@@ -81,9 +89,34 @@ test.describe('persistent workspace routing', () => {
           history.back()
         }),
     )
-    await expect(page).toHaveURL(/\/settings$/)
-    await expect(page.getByTestId('storage-settings-panel')).toBeVisible()
+    await expect(page).toHaveURL(/\/identities$/)
+    await expect(page.getByTestId('identities-hub')).toBeVisible()
     expect(new URL(page.url()).search).toBe('')
+  })
+
+  test('keeps earlier workspace paths working', async ({ page }) => {
+    await connectLocalVault(page)
+    for (const [legacy, current, marker] of [
+      ['/admin', /\/identity\/vaults$/, 'vault-admin-vaults-section'],
+      ['/onboard', /\/identity\/devices$/, 'vault-devices-panel'],
+      ['/vault/devices', /\/identity\/devices$/, 'vault-devices-panel'],
+      ['/vault/sync', /\/identity\/sync$/, 'storage-providers-section'],
+      ['/settings', /\/identity\/settings$/, 'browser-settings-panel'],
+    ] as const) {
+      await page.evaluate((path) => {
+        history.pushState({}, '', path)
+        window.dispatchEvent(new PopStateEvent('popstate'))
+      }, legacy)
+      await expect(page.getByTestId(marker)).toBeVisible({
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
+      await page.reload()
+      await authorizeDeviceProtection(page)
+      await expect(page.getByTestId(marker)).toBeVisible({
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
+      await expect(page).toHaveURL(current)
+    }
   })
 
   test('restores a locked Access deep link after authentication', async ({
@@ -96,16 +129,18 @@ test.describe('persistent workspace routing', () => {
     // Navigate the current canonical URL as a fresh document. Supplying the
     // deep-link target explicitly keeps Playwright from losing the SPA URL
     // while the locked WASM session tears down during reload.
-    await page.goto('/devices-access')
-    await expect(
-      page.getByTestId('login-gate').getByTestId('devices-access-dashboard'),
-    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-    await authorizeDeviceProtection(page)
-
-    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
+    await page.goto('/identity/keys')
+    // A locked identity shows the hub; the URL is kept and unlocking resumes it.
+    await expect(page.getByTestId('identities-hub')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await expect(page).toHaveURL(/\/devices-access$/)
+    await expect(page).toHaveURL(/\/identity\/keys$/)
+    await authorizeDeviceProtection(page)
+
+    await expect(page.getByTestId('identity-keys')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await expect(page).toHaveURL(/\/identity\/keys$/)
   })
 
   test('keeps authenticated access available without overflowing a narrow header', async ({
@@ -113,14 +148,14 @@ test.describe('persistent workspace routing', () => {
   }) => {
     await connectLocalVault(page)
 
-    const headerDevicesAccess = page.getByTestId('header-devices-access-btn')
+    const headerIdentities = page.getByTestId('header-identities-btn')
     const mobileToolsButton = page.getByTestId('header-mobile-tools-btn')
 
     for (const width of [320, 390]) {
       await page.setViewportSize({ width, height: 844 })
 
-      await expect(headerDevicesAccess).toBeVisible()
-      await expect(headerDevicesAccess).toBeInViewport()
+      await expect(headerIdentities).toBeVisible()
+      await expect(headerIdentities).toBeInViewport()
       await expect(page.getByTestId('header-lock-vault-btn')).toBeHidden()
       await expect(page.getByTestId('header-language-select')).toBeHidden()
       await expect(page.getByTestId('theme-toggle-btn')).toBeHidden()
@@ -156,8 +191,8 @@ test.describe('persistent workspace routing', () => {
     await expect(page.getByTestId('help-page')).toBeVisible()
     await page.getByTestId('help-header-close').click()
 
-    await headerDevicesAccess.click()
-    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
+    await headerIdentities.click()
+    await expect(page.getByTestId('identities-hub')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
   })
@@ -174,7 +209,7 @@ test.describe('persistent workspace routing', () => {
       }, route)
 
       await expect(page).toHaveURL(route)
-      await expect(page.getByTestId('header-devices-access-btn')).toHaveCount(0)
+      await expect(page.getByTestId('header-identities-btn')).toHaveCount(0)
       await expect(page.getByTestId('header-lock-vault-btn')).toBeVisible()
       await expect(page.getByTestId('header-lock-vault-btn')).toBeEnabled()
 
@@ -187,7 +222,7 @@ test.describe('persistent workspace routing', () => {
       await expect(
         page.getByTestId('header-mobile-lock-vault-btn'),
       ).toBeEnabled()
-      await expect(page.getByTestId('header-devices-access-btn')).toHaveCount(0)
+      await expect(page.getByTestId('header-identities-btn')).toHaveCount(0)
       await page.keyboard.press('Escape')
       await page.setViewportSize({ width: 1280, height: 720 })
 
@@ -195,7 +230,7 @@ test.describe('persistent workspace routing', () => {
 
       await expect(page).toHaveURL(/\/vault$/)
       await expect(page.getByTestId('vault-panel')).toBeVisible()
-      await expect(page.getByTestId('header-devices-access-btn')).toBeVisible()
+      await expect(page.getByTestId('header-identities-btn')).toBeVisible()
     }
   })
 
@@ -217,7 +252,7 @@ test.describe('persistent workspace routing', () => {
     await expect(
       page.getByTestId('sentinel-genesis-participant-step'),
     ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-    await expect(page.getByTestId('header-devices-access-btn')).toHaveCount(0)
+    await expect(page.getByTestId('header-identities-btn')).toHaveCount(0)
     await expect(page.getByTestId('header-lock-vault-btn')).toBeVisible()
     await expect(page.getByTestId('header-lock-vault-btn')).toBeEnabled()
 
@@ -226,7 +261,7 @@ test.describe('persistent workspace routing', () => {
     await page.getByTestId('header-mobile-tools-btn').click()
     await expect(page.getByTestId('header-mobile-lock-vault-btn')).toBeVisible()
     await expect(page.getByTestId('header-mobile-lock-vault-btn')).toBeEnabled()
-    await expect(page.getByTestId('header-devices-access-btn')).toHaveCount(0)
+    await expect(page.getByTestId('header-identities-btn')).toHaveCount(0)
     await page.keyboard.press('Escape')
 
     await page.evaluate(() => {
@@ -235,46 +270,30 @@ test.describe('persistent workspace routing', () => {
 
     await expect(page).toHaveURL(/\/vault$/)
     await expect(page.getByTestId('vault-panel')).toBeVisible()
-    await expect(page.getByTestId('header-devices-access-btn')).toBeVisible()
-    await expect(page.getByTestId('devices-access-dashboard')).toHaveCount(0)
+    await expect(page.getByTestId('header-identities-btn')).toBeVisible()
+    await expect(page.getByTestId('identity-keys')).toHaveCount(0)
   })
 
-  test('returns header access to the originating workspace route', async ({
+  test('returns from management to the page it was opened from', async ({
     page,
   }) => {
     await connectLocalVault(page)
 
-    for (const origin of [
-      {
-        tab: 'vault-admin-tab',
-        path: /\/admin$/,
-        panel: 'vault-admin-panel',
-      },
-      {
-        tab: 'vault-settings-tab',
-        path: /\/settings$/,
-        panel: 'storage-settings-panel',
-      },
-    ]) {
-      await page.getByTestId(origin.tab).click()
-      await expect(page).toHaveURL(origin.path)
-      await expect(page.getByTestId(origin.panel)).toBeVisible()
+    await page.getByTestId('vault-import-btn').click()
+    await expect(page).toHaveURL(/\/vault\/import$/)
+    await page.getByTestId('page-bar-back').click()
+    await expect(page).toHaveURL(/\/vault$/)
+    await expect(page.getByTestId('vault-panel')).toBeVisible()
 
-      const headerDevicesAccess = page.getByTestId('header-devices-access-btn')
-      await headerDevicesAccess.click()
-      await expect(page).toHaveURL(/\/devices-access$/)
-      await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
-        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-      })
-      await headerDevicesAccess.click()
-      await expect(page).toHaveURL(/\/devices-access$/)
-      await expect(page.getByTestId('devices-access-dashboard')).toBeVisible()
-      await page.getByTestId('devices-access-back').click()
-
-      await expect(page).toHaveURL(origin.path)
-      await expect(page.getByTestId(origin.panel)).toBeVisible()
-      await expect(headerDevicesAccess).toBeFocused()
-    }
+    await page.getByTestId('header-identities-btn').click()
+    await page.getByTestId('identity-manage').first().click()
+    await expect(page).toHaveURL(/\/identity$/)
+    await expect(page.getByTestId('identity-overview')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await page.getByTestId('page-bar-back').click()
+    await expect(page).toHaveURL(/\/identities$/)
+    await expect(page.getByTestId('identities-hub')).toBeVisible()
   })
 
   test('leaves an active secret draft cleanly before opening header access', async ({
@@ -289,11 +308,12 @@ test.describe('persistent workspace routing', () => {
       /authenticated-shell-editor/,
     )
 
-    await page.getByTestId('header-devices-access-btn').click()
-    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
+    await openKeysPage(page)
+    await expect(page.getByTestId('identity-keys')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await page.getByTestId('devices-access-back').click()
+    await page.getByTestId('page-bar-back').click()
+    await openVaultPage(page)
 
     await expect(page.getByTestId('vault-panel')).toBeVisible()
     await expect(page.getByTestId('add-secret-panel')).toHaveCount(0)
@@ -314,11 +334,11 @@ test.describe('persistent workspace routing', () => {
     await expect(page.getByTestId('onboard-device-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await expect(page).toHaveURL(/\/onboard$/)
+    await expect(page).toHaveURL(/\/identity\/devices$/)
     expect(new URL(page.url()).search).toBe('')
     expect(new URL(page.url()).hash).toBe('')
 
-    await page.getByTestId('vault-secrets-tab').click()
+    await openVaultPage(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible()
     await expect(page).toHaveURL(/\/vault$/)
   })

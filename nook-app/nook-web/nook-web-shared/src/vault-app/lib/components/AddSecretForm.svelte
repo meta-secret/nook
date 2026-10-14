@@ -225,12 +225,12 @@
   <form
     onsubmit={handleSubmit}
     class={isSecureNoteForm
-      ? "flex min-h-0 min-w-0 max-w-full flex-1 flex-col gap-4 overflow-y-auto overscroll-y-contain"
-      : "space-y-4"}
+      ? "nk-panel flex min-h-0 min-w-0 max-w-full flex-1 flex-col gap-4 overflow-y-auto overscroll-y-contain p-4 sm:p-5"
+      : "nk-panel space-y-4 p-4 sm:p-5"}
     {...isEditMode ? { "data-testid": "edit-secret-form" } : {}}
   >
     <div
-      class="flex min-w-0 shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border/40 pb-3"
+      class="flex min-w-0 shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border pb-3"
     >
       <div class="flex min-w-0 items-center gap-2">
         {#if !isEditMode}
@@ -248,7 +248,7 @@
           </button>
           <span class="text-muted-foreground/50" aria-hidden="true">·</span>
         {/if}
-        <h3 class="truncate text-sm font-semibold text-foreground">
+        <h3 class="truncate text-base font-semibold text-foreground">
           {typeTitle}
         </h3>
       </div>

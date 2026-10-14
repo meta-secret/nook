@@ -1,0 +1,709 @@
+/* Nook identity UI — shape vocabulary and shared primitives.
+ * One silhouette per role, drawn with clip-path; the element fill is the
+ * border colour and ::before is the face, so the border follows the cut.
+ *   nk-frame          two-corner cut ........ dialogs
+ *   nk-frame-keytag   deep top-right cut .... identity cards
+ *   nk-frame-tab      bottom-right cut ...... hero, page bars, logs
+ *   nk-frame-sheet    opposite diagonal ..... secret detail
+ *   nk-frame-nick     small bottom-right .... field slots
+ * Lists and banners stay square with a heavy left edge (nk-list). */
+@layer components {
+  .nk-frame,
+  .nk-frame-keytag,
+  .nk-frame-tab,
+  .nk-frame-sheet,
+  .nk-frame-nick {
+    --nk-cut: 12px;
+    --nk-cut-in: calc(var(--nk-cut) - 0.41px);
+    --nk-edge: var(--border);
+    --nk-face: var(--card);
+    --nk-shape: polygon(
+      0 0,
+      calc(100% - var(--nk-cut)) 0,
+      100% var(--nk-cut),
+      100% 100%,
+      var(--nk-cut) 100%,
+      0 calc(100% - var(--nk-cut))
+    );
+    --nk-shape-in: polygon(
+      0 0,
+      calc(100% - var(--nk-cut-in)) 0,
+      100% var(--nk-cut-in),
+      100% 100%,
+      var(--nk-cut-in) 100%,
+      0 calc(100% - var(--nk-cut-in))
+    );
+    position: relative;
+    isolation: isolate;
+    border: 0;
+    border-radius: 0;
+    background: var(--nk-edge);
+    clip-path: var(--nk-shape);
+    transition: background-color 0.2s;
+  }
+  .nk-frame::before,
+  .nk-frame-keytag::before,
+  .nk-frame-tab::before,
+  .nk-frame-sheet::before,
+  .nk-frame-nick::before {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    z-index: -1;
+    pointer-events: none;
+    background: var(--nk-face);
+    clip-path: var(--nk-shape-in);
+  }
+  .nk-frame-keytag {
+    --nk-cut: 22px;
+    --nk-shape: polygon(
+      0 0,
+      calc(100% - var(--nk-cut)) 0,
+      100% var(--nk-cut),
+      100% 100%,
+      0 100%
+    );
+    --nk-shape-in: polygon(
+      0 0,
+      calc(100% - var(--nk-cut-in)) 0,
+      100% var(--nk-cut-in),
+      100% 100%,
+      0 100%
+    );
+  }
+  .nk-frame-tab,
+  .nk-frame-nick {
+    --nk-shape: polygon(
+      0 0,
+      100% 0,
+      100% calc(100% - var(--nk-cut)),
+      calc(100% - var(--nk-cut)) 100%,
+      0 100%
+    );
+    --nk-shape-in: polygon(
+      0 0,
+      100% 0,
+      100% calc(100% - var(--nk-cut-in)),
+      calc(100% - var(--nk-cut-in)) 100%,
+      0 100%
+    );
+  }
+  .nk-frame-tab {
+    --nk-cut: 12px;
+  }
+  .nk-frame-nick {
+    --nk-cut: 6px;
+  }
+  .nk-frame-sheet {
+    --nk-shape: polygon(
+      var(--nk-cut) 0,
+      100% 0,
+      100% calc(100% - var(--nk-cut)),
+      calc(100% - var(--nk-cut)) 100%,
+      0 100%,
+      0 var(--nk-cut)
+    );
+    --nk-shape-in: polygon(
+      var(--nk-cut-in) 0,
+      100% 0,
+      100% calc(100% - var(--nk-cut-in)),
+      calc(100% - var(--nk-cut-in)) 100%,
+      0 100%,
+      0 var(--nk-cut-in)
+    );
+  }
+  .nk-frame-interactive:hover,
+  .nk-frame-interactive:focus-within {
+    --nk-edge: color-mix(in oklch, var(--foreground) 26%, transparent);
+  }
+  .nk-frame-live,
+  .nk-frame-live:hover {
+    --nk-edge: color-mix(in oklch, var(--success) 60%, transparent);
+  }
+
+  /* Lists and banners: square, heavy left edge. */
+  .nk-list {
+    border: 1px solid var(--border);
+    border-radius: 0;
+    background: var(--card);
+    box-shadow: inset 2px 0 0
+      color-mix(in oklch, var(--foreground) 45%, transparent);
+  }
+  .nk-banner {
+    border: 1px solid var(--border);
+    border-left-width: 3px;
+    border-radius: 0;
+  }
+  .nk-banner-success {
+    border-left-color: var(--success);
+    background: color-mix(in srgb, var(--success) 7%, var(--card));
+  }
+  .nk-banner-warning {
+    border-left-color: var(--warning);
+    background: color-mix(in srgb, var(--warning) 9%, var(--card));
+  }
+
+  /* Monospace label, status tag, spec line. */
+  .nk-label {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+  .nk-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+    color: var(--muted-foreground);
+  }
+  .nk-tag-success {
+    color: var(--success);
+  }
+  .nk-tag-warning {
+    color: var(--warning);
+  }
+  .nk-tag-danger {
+    color: var(--destructive);
+  }
+  .nk-tag-dot {
+    width: 0.375rem;
+    height: 0.375rem;
+    flex: none;
+    border-radius: 9999px;
+    background: currentColor;
+  }
+  .nk-spec {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 1.25rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: color-mix(in oklch, var(--foreground) 82%, transparent);
+  }
+  .nk-spec-key {
+    margin-right: 0.5rem;
+    font-size: 0.625rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+
+  /* Field slot: a sealed (hidden) secret gets a faint hatch. */
+  .nk-slot-sealed {
+    --nk-face: repeating-linear-gradient(
+      135deg,
+      color-mix(in oklch, var(--muted) 55%, var(--card)) 0 1px,
+      var(--card) 1px 7px
+    );
+  }
+  .nk-slot-open {
+    --nk-edge: color-mix(in oklch, var(--foreground) 42%, transparent);
+  }
+
+  /* Live ciphertext (decorative only). */
+  .nk-cipher {
+    margin: 0;
+    overflow: hidden;
+    white-space: pre;
+    pointer-events: none;
+    user-select: none;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    line-height: 1.45;
+    letter-spacing: 0.04em;
+    color: var(--muted-foreground);
+  }
+  .nk-cipher-hot {
+    color: var(--success);
+  }
+  .nk-cipher-strip {
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+    vertical-align: middle;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.08em;
+    color: var(--muted-foreground);
+    opacity: 0.6;
+    mask-image: linear-gradient(
+      90deg,
+      transparent,
+      #000 18%,
+      #000 80%,
+      transparent
+    );
+  }
+  .nk-caret {
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.9rem;
+    margin-left: 0.125rem;
+    vertical-align: -2px;
+    background: var(--success);
+    animation: nk-caret 1.1s steps(1) infinite;
+  }
+
+  /* Identities hub: hero, key-tag cards, vault rows. */
+  .nk-hero {
+    padding: clamp(1.25rem, 4vw, 2.25rem) clamp(1.125rem, 4vw, 2.25rem);
+    overflow: hidden;
+    --nk-cut: 16px;
+  }
+  .nk-hero-cipher {
+    position: absolute;
+    inset: 0;
+    padding: 0.75rem 1rem;
+    opacity: 0.2;
+    mask-image: linear-gradient(
+      90deg,
+      transparent 0%,
+      transparent 45%,
+      #000 85%
+    );
+  }
+  @media (width < 40rem) {
+    .nk-hero-cipher {
+      opacity: 0.1;
+      mask-image: linear-gradient(180deg, transparent 0%, #000 75%);
+    }
+  }
+  .nk-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.02em;
+    color: var(--muted-foreground);
+    overflow-wrap: anywhere;
+  }
+  .nk-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--muted-foreground);
+  }
+  .nk-stats b {
+    font-weight: 500;
+    color: var(--foreground);
+  }
+  .nk-stats .nk-stats-live b {
+    color: var(--success);
+  }
+  .nk-monogram {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 2.75rem;
+    height: 2.75rem;
+    font-size: 1.0625rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    clip-path: polygon(
+      0 0,
+      calc(100% - 7px) 0,
+      100% 7px,
+      100% 100%,
+      7px 100%,
+      0 calc(100% - 7px)
+    );
+    background: oklch(0.93 0.05 var(--nk-hue, 250));
+    color: oklch(0.4 0.12 var(--nk-hue, 250));
+  }
+  .dark .nk-monogram {
+    background: oklch(0.32 0.06 var(--nk-hue, 250));
+    color: oklch(0.88 0.08 var(--nk-hue, 250));
+  }
+  .nk-monogram-sm {
+    width: 2rem;
+    height: 2rem;
+    font-size: 0.875rem;
+  }
+  .nk-monogram-lg {
+    width: 3.5rem;
+    height: 3.5rem;
+    font-size: 1.375rem;
+  }
+  .nk-key-badge {
+    position: absolute;
+    right: -0.3125rem;
+    bottom: -0.3125rem;
+    display: grid;
+    place-items: center;
+    width: 1.375rem;
+    height: 1.375rem;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--muted-foreground);
+  }
+  .nk-eyelet {
+    position: absolute;
+    top: 0.8125rem;
+    right: 0.8125rem;
+    z-index: 1;
+    width: 0.5625rem;
+    height: 0.5625rem;
+    border: 1px solid color-mix(in oklch, var(--foreground) 40%, transparent);
+    border-radius: 9999px;
+    background: var(--background);
+  }
+  .nk-frame-live .nk-eyelet {
+    border-color: var(--success);
+    background: color-mix(in srgb, var(--success) 25%, var(--background));
+  }
+  .nk-fingerprint {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+    color: color-mix(in oklch, var(--muted-foreground) 80%, transparent);
+  }
+  .nk-vault-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    min-height: 2.75rem;
+    padding: 0.5rem 0.625rem;
+    border: 0;
+    background: none;
+    text-align: left;
+    color: var(--foreground);
+    cursor: pointer;
+  }
+  .nk-vault-row:hover:not(:disabled) {
+    background: color-mix(in oklch, var(--accent) 70%, transparent);
+  }
+  .nk-vault-row:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
+  }
+  .nk-vault-row:disabled {
+    cursor: default;
+    color: var(--muted-foreground);
+  }
+  .nk-vault-row[aria-current="true"],
+  .nk-vault-row[aria-pressed="true"] {
+    background: color-mix(in oklch, var(--accent) 55%, transparent);
+  }
+  .nk-vault-icon {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 1.75rem;
+    height: 1.75rem;
+    border: 1px solid var(--border);
+    color: var(--muted-foreground);
+  }
+  .nk-vault-row[data-state="open"] .nk-vault-icon {
+    border-color: var(--success);
+    color: var(--success);
+  }
+  .nk-vault-row-add .nk-vault-icon {
+    border-style: dashed;
+    border-color: var(--input);
+  }
+  .nk-lead {
+    flex: 1;
+    min-width: 1rem;
+    height: 0;
+    align-self: center;
+    border-bottom: 1px dotted
+      color-mix(in oklch, var(--foreground) 28%, transparent);
+    transform: translateY(0.25rem);
+  }
+  .nk-card-actions {
+    display: grid;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    margin-top: auto;
+    border-top: 1px solid var(--border);
+  }
+  .nk-card-actions > button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 2.75rem;
+    border: 0;
+    background: none;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--foreground);
+    cursor: pointer;
+  }
+  .nk-card-actions > button + button {
+    border-left: 1px solid var(--border);
+  }
+  .nk-card-actions > button:hover:not(:disabled) {
+    background: var(--accent);
+  }
+  .nk-card-actions > button:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
+  }
+  .nk-card-actions > button:disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
+  .nk-new-tile {
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 0.625rem;
+    padding: 1.5rem;
+    text-align: center;
+    color: var(--muted-foreground);
+    cursor: pointer;
+    --nk-edge: var(--input);
+    --nk-face: var(--background);
+  }
+  .nk-new-tile:hover,
+  .nk-new-tile:focus-visible {
+    --nk-edge: var(--ring);
+    --nk-face: color-mix(in oklch, var(--muted) 25%, var(--background));
+    color: var(--foreground);
+    outline: none;
+  }
+
+  /* Page bar: a framed tab on the access gate, a flat band in the shell. */
+  .nk-page-bar {
+    padding: 0.875rem 1.125rem 0.875rem 1.375rem;
+  }
+  .nk-page-band {
+    padding: 0.75rem 1rem;
+  }
+  @media (width >= 48rem) {
+    .nk-page-band {
+      padding: 0.875rem 1.5rem;
+    }
+  }
+
+  /* Workspace navigation: a rail inside the shell on wide screens, a
+   * scrolling bottom bar on phones. */
+  .nk-manage-nav {
+    grid-area: nav;
+    position: sticky;
+    bottom: 0;
+    z-index: 30;
+    display: flex;
+    align-items: stretch;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    border-top: 1px solid var(--border);
+    background: var(--card);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .nk-manage-group {
+    display: contents;
+  }
+  .nk-manage-item {
+    position: relative;
+    display: flex;
+    flex: 1 0 4.5rem;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    min-width: 4.5rem;
+    min-height: 3.25rem;
+    padding: 0.375rem 0.25rem;
+    border: 0;
+    background: none;
+    font-size: 0.625rem;
+    font-weight: 500;
+    white-space: nowrap;
+    color: var(--muted-foreground);
+    cursor: pointer;
+  }
+  .nk-manage-item:hover {
+    color: var(--foreground);
+  }
+  .nk-manage-item[aria-current="page"] {
+    color: var(--foreground);
+    box-shadow: inset 0 2px 0 var(--foreground);
+  }
+  .nk-manage-item:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
+  }
+  .nk-manage-badge {
+    position: absolute;
+    top: 0.375rem;
+    right: calc(50% - 1.125rem);
+    min-width: 1rem;
+    padding: 0 0.25rem;
+    background: var(--foreground);
+    color: var(--background);
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    line-height: 1rem;
+    text-align: center;
+  }
+  .nk-manage-dot {
+    position: absolute;
+    top: 0.5rem;
+    right: calc(50% - 0.875rem);
+    width: 0.4375rem;
+    height: 0.4375rem;
+    border-radius: 9999px;
+    background: var(--warning);
+  }
+  @media (width >= 48rem) {
+    .nk-manage-nav {
+      position: static;
+      flex-direction: column;
+      gap: 1.25rem;
+      overflow-x: visible;
+      overflow-y: auto;
+      padding: 1rem 0.75rem;
+      border-top: 0;
+      border-right: 1px solid var(--border);
+      background: color-mix(in oklch, var(--muted) 35%, var(--card));
+    }
+    .nk-manage-group {
+      display: grid;
+      gap: 0.125rem;
+    }
+    .nk-manage-item {
+      flex: none;
+      flex-direction: row;
+      justify-content: flex-start;
+      gap: 0.625rem;
+      min-width: 0;
+      min-height: 2.25rem;
+      padding: 0.4375rem 0.625rem;
+      font-size: 0.875rem;
+      text-align: left;
+    }
+    .nk-manage-item:hover {
+      background: color-mix(in oklch, var(--accent) 70%, transparent);
+    }
+    .nk-manage-item[aria-current="page"] {
+      background: var(--accent);
+      box-shadow: inset 2px 0 0 var(--foreground);
+    }
+    /* The identity home leads the rail: vaults and sync come first. */
+    .nk-manage-item-home {
+      min-height: 2.75rem;
+      border: 1px solid var(--border);
+      background: var(--card);
+      font-weight: 600;
+      color: var(--foreground);
+    }
+    .nk-manage-badge,
+    .nk-manage-dot {
+      position: static;
+      margin-left: auto;
+    }
+  }
+  .nk-manage-identity {
+    display: none;
+  }
+  @media (width >= 48rem) {
+    .nk-manage-identity {
+      display: flex;
+      align-items: center;
+      gap: 0.625rem;
+      width: 100%;
+      min-width: 0;
+      padding: 0.5rem;
+      border: 1px solid var(--border);
+      background: var(--card);
+      text-align: left;
+      cursor: pointer;
+    }
+    .nk-manage-identity:hover {
+      border-color: color-mix(in oklch, var(--foreground) 26%, transparent);
+    }
+    .nk-manage-identity:focus-visible {
+      outline: 2px solid var(--ring);
+      outline-offset: 2px;
+    }
+  }
+
+  /* Authenticated shell: one framed sheet with a page band, the scrolling
+   * page and the status line. Identity management adds its rail down the
+   * left (a bottom bar on phones); vault pages have none. */
+  .nk-shell {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      "bar"
+      "main"
+      "status"
+      "nav";
+    border: 1px solid var(--border);
+    background: var(--card);
+  }
+  .nk-shell-bar {
+    grid-area: bar;
+    border-bottom: 1px solid var(--border);
+  }
+  .nk-shell-main {
+    grid-area: main;
+  }
+  .nk-shell-status {
+    grid-area: status;
+  }
+  @media (width >= 48rem) {
+    .nk-shell-manage {
+      grid-template-columns: 15rem minmax(0, 1fr);
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      grid-template-areas:
+        "nav bar"
+        "nav main"
+        "nav status";
+    }
+  }
+
+  /* A full-width strip at the top of a shell page: setup, pending joins. */
+  .nk-band {
+    border-bottom: 1px solid var(--border);
+  }
+  .nk-band-success {
+    box-shadow: inset 2px 0 0 var(--success);
+  }
+
+  /* Primary action that takes you somewhere: pointed right edge. */
+  .nk-go {
+    border-radius: 0;
+    padding-right: 1.375rem;
+    clip-path: polygon(
+      0 0,
+      calc(100% - 9px) 0,
+      100% 50%,
+      calc(100% - 9px) 100%,
+      0 100%
+    );
+  }
+}
+
+@keyframes nk-caret {
+  50% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nk-caret {
+    animation: none;
+  }
+}

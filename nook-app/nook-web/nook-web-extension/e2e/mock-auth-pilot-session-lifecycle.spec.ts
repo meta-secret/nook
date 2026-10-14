@@ -145,10 +145,10 @@ test.describe('PIN Pilot session lifecycle', () => {
         reopenedAuthTab.getByTestId('extension-toolbar-menu'),
       ).toBeVisible()
       await expect(
-        reopenedAuthTab.getByTestId('companion-description'),
-      ).toHaveText(
-        'Your protected browser identity can use secrets from Mock auth reopen vault.',
-      )
+        reopenedAuthTab.locator(
+          '[data-testid="companion-vault"][data-default="true"]',
+        ),
+      ).toContainText('Mock auth reopen vault')
       await expect(
         reopenedAuthTab.getByTestId('device-protection-pin-unlock-btn'),
       ).toHaveCount(0)

@@ -44,6 +44,19 @@ impl ProviderSaveSetup {
     }
 }
 
+/// Whether a saved provider row starts its own remote target or adopts one
+/// another app of the identity already uses.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub enum ProviderSaveRemoteTarget {
+    /// A provider added on this app resolves its own private Drive folder.
+    #[default]
+    Fresh,
+    /// A provider adopted from an enrollment code keeps the issuer's folder,
+    /// so both apps read the same identity log and vault events.
+    Adopted,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderSaveRequest {
@@ -59,6 +72,13 @@ pub struct ProviderSaveRequest {
     pub local_folder: StoredLocalFolderConfiguration,
     pub new_provider_id: String,
     pub created_at: String,
+    /// Identity mounts namespace the identity log and every owned vault.
+    /// `CloudKit` cannot list a namespace yet, so iCloud rows stay bound to the
+    /// vault in `provider_store_id`.
+    #[serde(default)]
+    pub layout: crate::ProviderRowLayout,
+    #[serde(default)]
+    pub remote_target: ProviderSaveRemoteTarget,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Tsify)]
@@ -97,8 +117,28 @@ impl ProviderSaveRequest {
             oauth_file: StoredOAuthFileConfiguration::NotApplicable,
             local_folder: StoredLocalFolderConfiguration::NotApplicable,
             store_id: request.provider_store_id.clone(),
+            layout: request.effective_layout(provider_type),
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: request.created_at.clone(),
+        }
+    }
+
+    /// `CloudKit` cannot list a namespace yet, and a browser-local folder
+    /// cannot carry an identity to another app, so both keep their vault at
+    /// the legacy root.
+    fn effective_layout(&self, provider_type: StorageProviderType) -> crate::ProviderRowLayout {
+        match (self.layout, provider_type, self.oauth_preset) {
+            (
+                crate::ProviderRowLayout::IdentityNamespaced,
+                StorageProviderType::OauthFile,
+                OAuthFilePreset::ICloud,
+            )
+            | (
+                crate::ProviderRowLayout::IdentityNamespaced,
+                StorageProviderType::Local | StorageProviderType::LocalFolder,
+                _,
+            ) => crate::ProviderRowLayout::LegacyVaultRoot,
+            (layout, _, _) => layout,
         }
     }
 
@@ -168,6 +208,7 @@ impl ProviderSaveRequest {
                 oauth.file_name = StoredOAuthRemoteFileName::FileName(drive_file.clone());
                 if oauth.preset == OauthFilePreset::GoogleDrive
                     && oauth.resolved_google_drive_mode() == GoogleDriveMode::Private
+                    && request.remote_target == ProviderSaveRemoteTarget::Fresh
                 {
                     oauth.drive_private_target = StoredGoogleDrivePrivateTarget::Pending;
                 }
@@ -273,6 +314,7 @@ impl OAuthUpdateTarget<'_> {
             oauth_file: StoredOAuthFileConfiguration::configured(active_oauth.clone()),
             local_folder: StoredLocalFolderConfiguration::NotApplicable,
             store_id: ProviderVaultScope::Unscoped,
+            layout: crate::ProviderRowLayout::LegacyVaultRoot,
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: String::new(),
         };
@@ -461,6 +503,8 @@ mod tests {
                 local_folder: StoredLocalFolderConfiguration::NotApplicable,
                 new_provider_id: "provider-new".to_owned(),
                 created_at: "2026-08-11T00:00:00Z".to_owned(),
+                layout: crate::ProviderRowLayout::LegacyVaultRoot,
+                remote_target: super::ProviderSaveRemoteTarget::Fresh,
             }
         }
     }
@@ -472,6 +516,61 @@ mod tests {
                 _ => Err("expected saved provider outcome"),
             }
         }
+    }
+
+    #[test]
+    fn local_folder_rows_keep_their_vault_at_the_legacy_root() -> Result<(), &'static str> {
+        let mut request = ProviderSaveRequest::fixture(StorageProviderType::LocalFolder);
+        request.local_folder = StoredLocalFolderConfiguration::Configured(LocalFolderConfigData {
+            directory_name: StoredLocalFolderDirectory::DirectoryName("Nook Backup".to_owned()),
+            handle_id: StoredLocalFolderHandle::HandleId("handle-1".to_owned()),
+        });
+        request.layout = crate::ProviderRowLayout::IdentityNamespaced;
+        let snapshot = request.apply().saved()?;
+        let row = snapshot
+            .providers
+            .iter()
+            .find(|row| row.provider_type == StorageProviderType::LocalFolder)
+            .ok_or("expected a saved local folder row")?;
+        assert_eq!(row.layout, crate::ProviderRowLayout::LegacyVaultRoot);
+        Ok(())
+    }
+
+    #[test]
+    fn adopted_private_drive_rows_keep_the_issuers_event_folder() -> Result<(), &'static str> {
+        let oauth = OAuthFileConfigData {
+            preset: OauthFilePreset::GoogleDrive,
+            access_token: StoredOAuthAccessCredential::AccessToken("token".to_owned()),
+            file_id: StoredOAuthRemoteFileId::Unresolved,
+            drive_private_target: crate::StoredGoogleDrivePrivateTarget::LegacyAppDataFolder,
+            drive_mode: GoogleDriveMode::Private,
+            ..OAuthFileConfigData::default()
+        };
+        let saved_target = |remote_target| {
+            let mut request = ProviderSaveRequest::fixture(StorageProviderType::OauthFile);
+            request.oauth_file = StoredOAuthFileConfiguration::configured(oauth.clone());
+            request.remote_target = remote_target;
+            let snapshot = request.apply().saved()?;
+            snapshot
+                .providers
+                .iter()
+                .find_map(|row| match &row.oauth_file {
+                    StoredOAuthFileConfiguration::Configured(config) => {
+                        Some(config.drive_private_target.clone())
+                    }
+                    StoredOAuthFileConfiguration::NotApplicable => None,
+                })
+                .ok_or("expected a saved Drive row")
+        };
+        assert_eq!(
+            saved_target(super::ProviderSaveRemoteTarget::Adopted)?,
+            crate::StoredGoogleDrivePrivateTarget::LegacyAppDataFolder
+        );
+        assert_eq!(
+            saved_target(super::ProviderSaveRemoteTarget::Fresh)?,
+            crate::StoredGoogleDrivePrivateTarget::Pending
+        );
+        Ok(())
     }
 
     #[test]

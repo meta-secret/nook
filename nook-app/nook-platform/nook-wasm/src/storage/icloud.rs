@@ -11,7 +11,7 @@ use reqwest::Client;
 use std::collections;
 use std::str;
 
-use super::checked_event_write::CheckedEventWrite;
+use super::checked_event_write::{CheckedEventWrite, CheckedEventWriteRequest};
 use crate::NookError;
 use nook_core::{EventId, ICloudEventTarget, ICloudShareRole};
 #[cfg(test)]
@@ -563,7 +563,12 @@ impl ICloudEventStore<'_> {
         let token = nook_core::OauthAccessToken::parse(web_auth_token)?;
         let content = str::from_utf8(bytes)
             .map_err(|e| NookError::Serialization(format!("Event YAML must be UTF-8: {e}")))?;
-        let checked = CheckedEventWrite::parse(bytes, event_id, "CloudKit")?;
+        let checked = CheckedEventWrite::parse(CheckedEventWriteRequest {
+            bytes,
+            event_id,
+            location: &nook_core::EventLogLocation::LegacyVaultRoot,
+            provider: "CloudKit",
+        })?;
         self.put_checked(checked, token.as_ref(), content).await
     }
 

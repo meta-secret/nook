@@ -267,10 +267,43 @@ impl EnrollmentProvider {
     }
 }
 
+/// Identity an enrollment code invites the joining installation into. The
+/// provider is the mount through which the joiner reaches that identity's
+/// control log; no vault is named by the code.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EnrollmentIdentityTarget {
+    pub identity_id: crate::IdentityId,
+    pub label: String,
+}
+
+impl EnrollmentIdentityTarget {
+    fn check(&self) -> EnrollmentResult<()> {
+        crate::IdentityId::parse(self.identity_id.as_str()).map_err(|_| {
+            EnrollmentError::MissingField {
+                field: "identity_id",
+            }
+        })?;
+        if self.label.trim().is_empty() {
+            return Err(EnrollmentError::MissingField {
+                field: "identity_label",
+            });
+        }
+        Ok(())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn fixture(label: &str) -> Self {
+        Self {
+            identity_id: crate::IdentityId::test_fixture(),
+            label: label.to_owned(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EnrollmentIssueInput {
     pub provider: EnrollmentProvider,
-    pub vault_name: String,
+    pub identity: EnrollmentIdentityTarget,
     pub entry_id: String,
     pub issued_at: String,
 }
@@ -278,7 +311,7 @@ pub struct EnrollmentIssueInput {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DecryptedEnrollmentPayload {
     pub provider: EnrollmentProvider,
-    pub vault_name: String,
+    pub identity: EnrollmentIdentityTarget,
     pub entry_id: String,
     pub issued_at: String,
 }
@@ -306,7 +339,7 @@ pub struct EnrollmentCodeEnvelope {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct EnrollmentProviderPayload {
     provider: EnrollmentProvider,
-    vault_name: String,
+    identity: EnrollmentIdentityTarget,
 }
 
 impl EnrollmentProvider {
@@ -517,11 +550,11 @@ mod tests {
         ));
         let payload = EnrollmentProviderPayload {
             provider,
-            vault_name: "Shared vault".to_owned(),
+            identity: super::EnrollmentIdentityTarget::fixture("Shared identity"),
         };
         let encoded = serde_json::to_vec(&payload)?;
         let decoded: EnrollmentProviderPayload = serde_json::from_slice(&encoded)?;
-        assert_eq!(decoded.vault_name, "Shared vault");
+        assert_eq!(decoded.identity.label, "Shared identity");
         match decoded.provider.data() {
             EnrollmentProviderDataRef::Shared(SharedEnrollmentProviderData::GoogleDrive {
                 storage_target_id,

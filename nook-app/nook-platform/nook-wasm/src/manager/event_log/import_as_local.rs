@@ -158,7 +158,11 @@ impl NookVaultManager {
         let (prior_store_id, prior_blob_existed) =
             Self::snapshot_prior_local_vault(&self.vault.store_id).await?;
         self.reset_vault_session();
-        let remote_records = Self::read_external_local_folder_records(handle_id).await?;
+        let remote_records = Self::read_external_local_folder_records(
+            handle_id,
+            &nook_core::EventLogLocation::LegacyVaultRoot,
+        )
+        .await?;
         let _ = self.sync_external_event_log_records(remote_records).await?;
         if self.vault.store_id.trim().is_empty() {
             return Err(NookError::Database(

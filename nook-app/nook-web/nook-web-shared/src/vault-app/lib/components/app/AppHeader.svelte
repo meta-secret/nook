@@ -4,7 +4,6 @@
     ArrowLeft,
     BookOpen,
     EllipsisVertical,
-    KeyRound,
     Lock,
     Moon,
     Sun,
@@ -16,11 +15,10 @@
   import HeaderLanguageSelect from '$lib/components/HeaderLanguageSelect.svelte'
   import NookLogo from '$lib/components/NookLogo.svelte'
   import { LogoSize } from '$lib/components/nook-logo-state'
-  import VaultSwitcher from '$lib/components/VaultSwitcher.svelte'
   import { Button } from '$lib/components/ui/button'
   import { ColorMode } from '$lib/app/theme'
   import type { VaultState } from '$lib/vault.svelte'
-  import type { ExtensionSetupOffer } from '$lib/app/extension-setup'
+  import { WorkspaceSection } from '$lib/vault/state/ui.svelte'
 
   const IS_SENTINEL_APP = configured_vault_application_is_sentinel()
   const SIMPLE_VAULT_APP_URL = simple_vault_app_url(
@@ -34,12 +32,9 @@
     legalPageOpen,
     logsPage,
     extensionConnectRoute,
-    workspaceAccessAvailable,
-    extensionSetupState,
+    workspaceAvailable,
     onNavigateHome,
     onToggleColorMode,
-    onPairExtension,
-    onOpenDevicesAccess,
   }: {
     vault: VaultState
     colorMode: ColorMode
@@ -47,20 +42,17 @@
     legalPageOpen: boolean
     logsPage: boolean
     extensionConnectRoute: boolean
-    workspaceAccessAvailable: boolean
-    extensionSetupState: ExtensionSetupOffer
+    workspaceAvailable: boolean
     onNavigateHome: () => void
     onToggleColorMode: () => void
-    onPairExtension: () => void
-    onOpenDevicesAccess: () => void
   } = $props()
 
   const authenticatedSessionControlsVisible = $derived(
     vault.isAuthenticated && !vault.helpOpen && !legalPageOpen,
   )
-  const devicesAccessVisible = $derived(
+  const identitiesLinkVisible = $derived(
     authenticatedSessionControlsVisible &&
-      workspaceAccessAvailable &&
+      workspaceAvailable &&
       !logsPage &&
       !extensionConnectRoute,
   )
@@ -111,48 +103,53 @@
     class="mx-auto flex items-center justify-between gap-4 px-4 py-2 sm:px-6 {shellWidth}"
   >
     <div class="flex min-w-0 flex-1 items-center gap-3">
-      <NookLogo
-        {colorMode}
-        size={LogoSize.Small}
-        class="rounded-lg overflow-hidden"
-      />
-      {#if vault.isAuthenticated && !legalPageOpen && !logsPage && !vault.helpOpen}
-        <VaultSwitcher {vault} {extensionSetupState} {onPairExtension} />
+      {#if identitiesLinkVisible}
+        <button
+          type="button"
+          class="flex min-w-0 items-center gap-2.5 rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          data-testid="header-identities-btn"
+          aria-label={vault.t(I18N_KEYS.WorkspaceIdentitiesTitle)}
+          title={vault.t(I18N_KEYS.WorkspaceIdentitiesTitle)}
+          onclick={() => vault.openSection(WorkspaceSection.Identities)}
+        >
+          <NookLogo
+            {colorMode}
+            size={LogoSize.Small}
+            class="overflow-hidden rounded-lg"
+          />
+          <span
+            class="hidden text-[0.9375rem] font-semibold tracking-tight text-foreground sm:inline"
+            >Nook</span
+          >
+        </button>
+      {:else}
+        <NookLogo
+          {colorMode}
+          size={LogoSize.Small}
+          class="overflow-hidden rounded-lg"
+        />
+        <span
+          class="hidden text-[0.9375rem] font-semibold tracking-tight text-foreground sm:inline"
+          >Nook</span
+        >
       {/if}
     </div>
 
     <div class="flex shrink-0 items-center gap-2">
       {#if authenticatedSessionControlsVisible}
-        {#if devicesAccessVisible}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            class="h-10 rounded-lg border-border/40 bg-background/60 px-3.5 text-sm text-muted-foreground sm:bg-background [&_svg]:size-4"
-            data-testid="header-devices-access-btn"
-            title={vault.t(I18N_KEYS.DevicesAccessTitle)}
-            disabled={vault.isVerifying || vault.isInitializing}
-            onclick={onOpenDevicesAccess}
-          >
-            <KeyRound class="size-4" />
-            <span class="hidden lg:inline"
-              >{vault.t(I18N_KEYS.DevicesAccessTitle)}</span
-            >
-          </Button>
-        {/if}
         <Button
           type="button"
           variant="outline"
           size="sm"
           class="hidden h-10 rounded-lg border-border/40 bg-background/60 px-3.5 text-sm text-muted-foreground sm:inline-flex sm:bg-background [&_svg]:size-4"
           data-testid="header-lock-vault-btn"
-          title={vault.t(I18N_KEYS.SessionLockDesc)}
+          title={vault.t(I18N_KEYS.WorkspaceLockIdentityTitle)}
           disabled={vault.isVerifying || vault.isInitializing}
-          onclick={() => vault.lockVault()}
+          onclick={() => vault.lockIdentity()}
         >
           <Lock class="size-4" />
           <span class="hidden sm:inline"
-            >{vault.t(I18N_KEYS.CommonLockVault)}</span
+            >{vault.t(I18N_KEYS.WorkspaceLockIdentity)}</span
           >
         </Button>
         <div
@@ -227,11 +224,11 @@
                 disabled={vault.isVerifying || vault.isInitializing}
                 onclick={() => {
                   closeMobileTools()
-                  vault.lockVault()
+                  vault.lockIdentity()
                 }}
               >
                 <Lock class="size-4 shrink-0" />
-                <span>{vault.t(I18N_KEYS.CommonLockVault)}</span>
+                <span>{vault.t(I18N_KEYS.WorkspaceLockIdentity)}</span>
               </button>
             </div>
           {/if}

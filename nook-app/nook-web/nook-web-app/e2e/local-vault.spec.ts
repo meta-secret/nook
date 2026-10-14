@@ -17,6 +17,8 @@ import {
   uniqueSecretKey,
   unlockVaultOnLogin,
   waitForVaultUnlocked,
+  openManagePage,
+  ManagePage,
 } from './helpers'
 
 test.describe('local vault', () => {
@@ -50,17 +52,14 @@ test.describe('local vault', () => {
     await expect(page.getByTestId('vault-empty-search')).toBeVisible()
 
     await page.getByTestId('search-secrets').fill('')
-    await page.getByTestId('secret-type-filter').click()
     await expect(page.getByTestId('secret-type-filter-passkey')).toBeVisible()
     await page.getByTestId('secret-type-filter-secure-note').click()
     await expect(page.getByTestId('vault-empty-search')).toBeVisible()
 
-    await page.getByTestId('secret-type-filter').click()
     await page.getByTestId('secret-type-filter-api-key').click()
     await expect(row).toBeVisible()
     await expect(row.getByText('••••••••••••••••')).toBeVisible()
 
-    await page.getByTestId('secret-type-filter').click()
     await page.getByTestId('secret-type-filter-all').click()
     await expect(row).toBeVisible()
 
@@ -84,6 +83,7 @@ test.describe('local vault', () => {
     const originalRow = page
       .getByTestId('secret-row')
       .filter({ hasText: originalKey })
+    await expandSecretRow(page, originalKey)
     await originalRow.getByTestId('edit-secret-btn').click()
     const editForm = page.getByTestId('edit-secret-form')
     await expect(editForm).toBeVisible()
@@ -260,10 +260,8 @@ test.describe('local vault', () => {
       sessionStorage.setItem('nook_cleanup_probe', 'other-tab-session')
     })
 
-    await page.getByTestId('vault-settings-tab').click()
-    await expect(page.getByTestId('storage-settings-panel')).toBeVisible()
-    const dangerSection = page.getByTestId('vault-danger-section')
-    await dangerSection.getByRole('button').first().click()
+    await openManagePage(page, ManagePage.Settings)
+    await expect(page.getByTestId('vault-danger-section')).toBeVisible()
     await page.getByTestId('delete-local-vault-button').click()
     await expect(
       page.getByTestId('delete-local-vault-confirmation'),

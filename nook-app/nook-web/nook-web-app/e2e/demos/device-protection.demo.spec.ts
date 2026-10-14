@@ -8,11 +8,13 @@ import {
   connectLocalVault,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   expandSettingsSection,
+  expectFirstVaultOpen,
   expectEmptyLocalFolderRejected,
   installPasskeyMock,
   openStorageSettings,
   uniqueSecretKey,
   waitForVaultOperationsIdle,
+  openVaultPage,
 } from '../helpers'
 import {
   installLocalFolderPickerMock,
@@ -38,12 +40,13 @@ test('offer PIN device protection when passkeys are unavailable', async ({
   })
   await demoBeat(page)
 
-  await page.getByTestId('get-started-path-simple').click()
   await page.getByTestId('login-vault-name-input').fill('PIN demo vault')
   await page.getByTestId('login-create-device-vault-btn').click()
-  await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible({
+  // The passkey is asked for on the guided "This is you" step.
+  await expect(page.getByTestId('first-run-protect-step')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
+  await expect(page.getByTestId('first-run-identity-preview')).toBeVisible()
   await expect(
     page.getByTestId('device-protection-use-existing-choice'),
   ).toHaveText('Authenticate')
@@ -74,9 +77,11 @@ test('offer PIN device protection when passkeys are unavailable', async ({
   await page.getByTestId('device-protection-pin-input').fill('123456')
   await page.getByTestId('device-protection-pin-confirm').fill('123456')
   await page.getByTestId('device-protection-pin-setup-btn').click()
-  await expect(page.getByTestId('vault-panel')).toBeVisible({
+  await expect(page.getByTestId('first-run-backup-step')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
+  await demoBeat(page)
+  await expectFirstVaultOpen(page)
   await expect(page.getByTestId('authenticated-shell')).toBeVisible()
   await page.getByTestId('add-secret-btn').click()
   await expect(page.getByTestId('add-secret-panel')).toBeVisible()
@@ -100,7 +105,7 @@ test('offer PIN device protection when passkeys are unavailable', async ({
   await demoBeat(page)
 
   await page.getByTestId('header-lock-vault-btn').click()
-  await page.getByTestId('unlock-vault-btn').click()
+  await page.getByTestId('identity-vault-row').first().click()
   await expect(
     page.getByTestId('device-protection-pin-unlock-btn'),
   ).toBeVisible({
@@ -207,7 +212,7 @@ test('retains the folder import while showing matching passkeys and password rec
   await page.getByTestId('settings-choose-local-folder-btn').click()
   await page.getByTestId('settings-connect-local-folder-btn').click()
   await waitForVaultOperationsIdle(page)
-  await page.getByTestId('vault-secrets-tab').click()
+  await openVaultPage(page)
   await assertVaultReady(page)
   // Folder fan-out must finish before wipe; waitForVaultOperationsIdle alone can
   // pause sync before the mock directory has durable event YAML.

@@ -15,10 +15,6 @@
 /** @type {readonly NamedSuccessContractBaselineEntry[]} */
 export const namedSuccessContractBaseline = [
   {
-    file: "nook-web-shared/src/vault-app/lib/app/workspace-route.ts",
-    gitBlobSha1: "facdf1acdd824d7bb799c5f1d7a5e656af3b1a6f",
-  },
-  {
     file: "nook-web-shared/src/vault-app/lib/vault/identity-handoff.ts",
     gitBlobSha1: "bfb49a4e7a2a49629ab8a956baabb779da5c717e",
   },

@@ -10,21 +10,63 @@
 use crate::NookError;
 #[cfg(test)]
 use nook_core::GenesisImportRequest;
-use nook_core::{EventId, VaultEvent};
+use nook_core::{EventId, EventLogLocation, IdentityEvent, VaultEvent};
+
+/// Event bytes parsed with the schema of the namespace they are stored in.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum ParsedLogEvent {
+    Vault(VaultEvent),
+    Identity(IdentityEvent),
+}
+
+impl ParsedLogEvent {
+    pub(super) fn parse(bytes: &[u8], location: &EventLogLocation) -> Result<Self, NookError> {
+        let storage = bytes.to_vec().into();
+        match location {
+            EventLogLocation::Identity(_) => {
+                IdentityEvent::parse_storage_bytes(&storage).map(Self::Identity)
+            }
+            EventLogLocation::LegacyVaultRoot | EventLogLocation::Vault(_) => {
+                VaultEvent::parse_remote_event_storage_bytes(&storage).map(Self::Vault)
+            }
+        }
+        .map_err(NookError::from)
+    }
+
+    pub(super) fn id(&self) -> Result<EventId, NookError> {
+        match self {
+            Self::Vault(event) => event.id(),
+            Self::Identity(event) => event.id(),
+        }
+        .map_err(NookError::from)
+    }
+}
 
 pub(super) struct CheckedEventWrite<'a> {
     event_id: &'a EventId,
     bytes: &'a [u8],
-    event: VaultEvent,
+    location: &'a EventLogLocation,
+    event: ParsedLogEvent,
+}
+
+/// Named values required to check one content-addressed write.
+#[derive(Clone, Copy)]
+pub(super) struct CheckedEventWriteRequest<'a> {
+    pub(super) bytes: &'a [u8],
+    pub(super) event_id: &'a EventId,
+    pub(super) location: &'a EventLogLocation,
+    pub(super) provider: &'a str,
 }
 
 impl<'a> CheckedEventWrite<'a> {
-    pub(super) fn parse(
-        bytes: &'a [u8],
-        event_id: &'a EventId,
-        provider: &str,
-    ) -> Result<Self, NookError> {
-        let event = VaultEvent::parse_remote_event_storage_bytes(&bytes.to_vec().into())
+    pub(super) fn parse(request: CheckedEventWriteRequest<'a>) -> Result<Self, NookError> {
+        let CheckedEventWriteRequest {
+            bytes,
+            event_id,
+            location,
+            provider,
+        } = request;
+        let event = ParsedLogEvent::parse(bytes, location)
             .map_err(|e| NookError::Serialization(format!("{provider} event parse: {e}")))?;
         let actual = event.id()?;
         if actual != *event_id {
@@ -37,6 +79,7 @@ impl<'a> CheckedEventWrite<'a> {
         Ok(Self {
             event_id,
             bytes,
+            location,
             event,
         })
     }
@@ -53,12 +96,8 @@ impl<'a> CheckedEventWrite<'a> {
 
     #[must_use]
     pub(super) fn matches(&self, bytes: &[u8]) -> bool {
-        self.bytes == bytes || Self::matches_event(bytes, &self.event)
-    }
-
-    fn matches_event(bytes: &[u8], expected: &VaultEvent) -> bool {
-        VaultEvent::parse_remote_event_storage_bytes(&bytes.to_vec().into())
-            .is_ok_and(|event| &event == expected)
+        self.bytes == bytes
+            || ParsedLogEvent::parse(bytes, self.location).is_ok_and(|event| event == self.event)
     }
 }
 
@@ -113,7 +152,12 @@ mod tests {
     )]
     fn checked_write_preserves_bytes_and_compares_the_complete_event() -> anyhow::Result<()> {
         let mut fixture = EventFixture::new()?;
-        let checked = CheckedEventWrite::parse(&fixture.bytes, &fixture.event_id, "Fixture")?;
+        let checked = CheckedEventWrite::parse(CheckedEventWriteRequest {
+            bytes: &fixture.bytes,
+            event_id: &fixture.event_id,
+            location: &EventLogLocation::LegacyVaultRoot,
+            provider: "Fixture",
+        })?;
         assert_eq!(checked.event_id(), &fixture.event_id);
         assert_eq!(checked.bytes(), fixture.bytes);
         let mut equivalent = fixture.bytes.clone();
@@ -154,7 +198,12 @@ mod tests {
                 ),
             ),
         ] {
-            match CheckedEventWrite::parse(bytes, requested, "Fixture") {
+            match CheckedEventWrite::parse(CheckedEventWriteRequest {
+                bytes,
+                event_id: requested,
+                location: &EventLogLocation::LegacyVaultRoot,
+                provider: "Fixture",
+            }) {
                 Err(NookError::Serialization(message)) => assert!(message.starts_with(&expected)),
                 Err(_) => anyhow::bail!("unexpected checked-write error"),
                 Ok(_) => anyhow::bail!("invalid event admitted"),
@@ -173,10 +222,15 @@ mod tests {
     )]
     async fn provider_admission_preserves_validation_order_before_network() -> anyhow::Result<()> {
         let event_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
-        let github = GitHubEventStore { pat: "", repo: "" };
+        let github = GitHubEventStore {
+            pat: "",
+            repo: "",
+            location: &nook_core::EventLogLocation::LegacyVaultRoot,
+        };
         let drive = DriveEventStore {
             token: "",
             parent: &DriveEventParent::AppDataFolder,
+            location: &nook_core::EventLogLocation::LegacyVaultRoot,
         };
         let cloud = ICloudEventStore {
             web_auth_token: "fixture-token",

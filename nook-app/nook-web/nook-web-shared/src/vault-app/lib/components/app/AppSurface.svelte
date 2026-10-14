@@ -9,7 +9,6 @@
     type ExtensionConnectIntent,
     type LegalRoute,
   } from '$lib/app/route-state'
-  import type { ExtensionSetupOffer } from '$lib/app/extension-setup'
   import LegalDocumentPage from '$lib/components/LegalDocumentPage.svelte'
   import LogsPage from '$lib/components/LogsPage.svelte'
   import AppLogsApiPage from '$lib/components/AppLogsApiPage.svelte'
@@ -20,6 +19,8 @@
   import AppHeader from '$lib/components/app/AppHeader.svelte'
   import AuthenticatedVaultWorkspace from '$lib/components/app/AuthenticatedVaultWorkspace.svelte'
   import VaultAccessGate from '$lib/components/app/VaultAccessGate.svelte'
+  import NewIdentityFlow from '$lib/components/identities/NewIdentityFlow.svelte'
+  import { NewIdentityStage } from '$lib/vault/state/ui.svelte'
 
   type AccessGateProps = ComponentProps<typeof VaultAccessGate>
   type AuthenticatedWorkspaceProps = ComponentProps<
@@ -35,7 +36,6 @@
     legalPageState,
     logsPage,
     extensionConnectRoute,
-    extensionSetupState,
     appVersion,
     extensionConnectRequestState,
     preserveAccessGate,
@@ -43,7 +43,6 @@
     authenticatedWorkspaceProps,
     onNavigateHome,
     onToggleColorMode,
-    onExtensionConnect,
     onFinishExtensionConnect,
   }: {
     vault: VaultState
@@ -54,7 +53,6 @@
     legalPageState: LegalRoute
     logsPage: boolean
     extensionConnectRoute: boolean
-    extensionSetupState: ExtensionSetupOffer
     appVersion: string
     extensionConnectRequestState: ExtensionConnectIntent
     preserveAccessGate: boolean
@@ -62,15 +60,9 @@
     authenticatedWorkspaceProps: AuthenticatedWorkspaceProps
     onNavigateHome: () => void
     onToggleColorMode: () => void
-    onExtensionConnect: () => Promise<void>
     onFinishExtensionConnect: (outcome: ExtensionConsentCloseOutcome) => void
   } = $props()
 
-  let headerDevicesAccessRequestGeneration = $state(0)
-
-  $effect(() => {
-    if (preserveAccessGate) headerDevicesAccessRequestGeneration = 0
-  })
 </script>
 
 {#if appLogsPage}
@@ -87,15 +79,9 @@
       legalPageOpen={legalPageState.kind === LegalRouteKind.Legal}
       {logsPage}
       {extensionConnectRoute}
-      workspaceAccessAvailable={!preserveAccessGate}
-      {extensionSetupState}
+      workspaceAvailable={!preserveAccessGate}
       {onNavigateHome}
       {onToggleColorMode}
-      onPairExtension={() => void onExtensionConnect()}
-      onOpenDevicesAccess={() => {
-        if (preserveAccessGate) return
-        headerDevicesAccessRequestGeneration += 1
-      }}
     />
 
     <div
@@ -114,6 +100,8 @@
         <AppHelpWorkspace {vault} {colorMode} {appVersion} />
       {:else if extensionConnectRoute && extensionConnectRequestState.kind === ExtensionConnectIntentKind.Absent}
         <InvalidExtensionConnectWorkspace {vault} onClose={onNavigateHome} />
+      {:else if vault.newIdentity !== NewIdentityStage.Off}
+        <NewIdentityFlow {vault} />
       {:else if !vault.isAuthenticated || preserveAccessGate}
         <VaultAccessGate {...accessGateProps} />
       {:else if extensionConnectRequestState.kind === ExtensionConnectIntentKind.Requested}
@@ -124,13 +112,7 @@
           onClose={onFinishExtensionConnect}
         />
       {:else if vault.isAuthenticated}
-        <AuthenticatedVaultWorkspace
-          {...authenticatedWorkspaceProps}
-          {headerDevicesAccessRequestGeneration}
-          onHeaderDevicesAccessRequestHandled={() => {
-            headerDevicesAccessRequestGeneration = 0
-          }}
-        />
+        <AuthenticatedVaultWorkspace {...authenticatedWorkspaceProps} />
       {/if}
     </div>
 

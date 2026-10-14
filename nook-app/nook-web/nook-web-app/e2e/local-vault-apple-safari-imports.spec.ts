@@ -5,6 +5,7 @@ import {
   mockBip39Wordlist,
   openPasswordManagerImport,
   storedZip,
+  openVaultPage,
 } from './helpers'
 
 test.describe('local vault Apple / Safari imports', () => {
@@ -42,7 +43,7 @@ test.describe('local vault Apple / Safari imports', () => {
       page.getByTestId('apple-passwords-import-result'),
     ).toContainText('Imported 2 items')
 
-    await page.getByTestId('vault-secrets-tab').click()
+    await openVaultPage(page)
     await expect(page.getByTestId('vault-group-login')).toContainText(
       'apple-alice',
     )
@@ -94,7 +95,7 @@ test.describe('local vault Apple / Safari imports', () => {
       page.getByTestId('apple-passwords-import-result'),
     ).toContainText('Imported 1 items')
 
-    await page.getByTestId('vault-secrets-tab').click()
+    await openVaultPage(page)
     await expect(page.getByTestId('vault-group-login')).toContainText(
       'safari-alice',
     )

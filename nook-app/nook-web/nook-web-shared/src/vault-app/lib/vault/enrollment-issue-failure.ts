@@ -7,9 +7,8 @@ import type {
 import type { VaultStorageFailure } from "$lib/runtime/storage-failure";
 
 export enum EnrollmentIssueRejection {
-  BackupPasswordRequired = "backup-password-required",
-  PasswordEntryMissing = "password-entry-missing",
-  PasswordRejected = "password-rejected",
+  PassphraseTooShort = "passphrase-too-short",
+  ProviderNotMount = "provider-not-mount",
   ProviderRequired = "provider-required",
   LocalProvider = "local-provider",
   LocalFolderProvider = "local-folder-provider",
@@ -24,11 +23,10 @@ export class EnrollmentIssueFailure {
   constructor(readonly rejection: EnrollmentIssueRejection) {}
   get translationKey() {
     switch (this.rejection) {
-      case EnrollmentIssueRejection.BackupPasswordRequired:
-      case EnrollmentIssueRejection.PasswordEntryMissing:
-        return I18N_KEYS.ErrorsVaultPasswordRequired;
-      case EnrollmentIssueRejection.PasswordRejected:
-        return I18N_KEYS.VaultPasswordsFailedIssueError;
+      case EnrollmentIssueRejection.PassphraseTooShort:
+        return I18N_KEYS.IdentityControlErrorPassphraseShort;
+      case EnrollmentIssueRejection.ProviderNotMount:
+        return I18N_KEYS.IdentityControlErrorProviderNotMount;
       case EnrollmentIssueRejection.ProviderRequired:
       case EnrollmentIssueRejection.LocalProvider:
       case EnrollmentIssueRejection.LocalFolderProvider:

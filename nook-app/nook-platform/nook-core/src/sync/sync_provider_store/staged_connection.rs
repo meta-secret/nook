@@ -120,6 +120,7 @@ impl StagedRemoteConnection<'_> {
                     oauth_file: StoredOAuthFileConfiguration::configured(oauth),
                     local_folder: StoredLocalFolderConfiguration::NotApplicable,
                     store_id: ProviderVaultScope::Unscoped,
+                    layout: crate::ProviderRowLayout::LegacyVaultRoot,
                     sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                     created_at: String::new(),
                 }

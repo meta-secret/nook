@@ -8,7 +8,6 @@ import {
   VaultAccessStatus,
   login_unlock_decision,
   PasswordEntryPresence,
-  LoginDeviceKeyAvailability,
   LoginPasswordPromptUpdate,
   type NookPasswordEntrySummary,
 } from "$app-wasm";
@@ -16,7 +15,6 @@ import {
 type LoginUnlockCapabilityState = {
   hasManager: boolean;
   localVaultPresent: boolean;
-  loginDeviceKeysCapable: boolean;
   loginPasswordPrompt: boolean;
   passwordEntries: readonly NookPasswordEntrySummary[];
   assessVaultConnectStatus(
@@ -29,7 +27,7 @@ export enum LoginUnlockRefreshOutcome {
   UnlockOptionsAssessed = "unlock-options-assessed",
 }
 
-/** Assess whether device keys or backup passwords can unlock the active vault. */
+/** Assess whether the active vault should offer its backup password. */
 export class LoginUnlockPresentation {
   constructor(private readonly request: LoginUnlockCapabilityState) {}
   async refresh(): Promise<
@@ -37,7 +35,6 @@ export class LoginUnlockPresentation {
   > {
     const state = this.request;
     if (!state.hasManager || !state.localVaultPresent) {
-      state.loginDeviceKeysCapable = true;
       return ok(LoginUnlockRefreshOutcome.DefaultCapabilityApplied);
     }
     const connectRequest: Parameters<typeof state.assessVaultConnectStatus>[0] =
@@ -56,8 +53,6 @@ export class LoginUnlockPresentation {
           : PasswordEntryPresence.Absent,
       );
       try {
-        state.loginDeviceKeysCapable =
-          decision.device_keys === LoginDeviceKeyAvailability.Enabled;
         if (decision.password_prompt === LoginPasswordPromptUpdate.Offer)
           state.loginPasswordPrompt = true;
       } finally {

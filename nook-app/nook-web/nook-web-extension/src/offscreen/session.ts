@@ -182,8 +182,10 @@ function ensureWasm(): ReturnType<typeof initNookWasm> {
   if (wasmStartup.kind === WasmStartupKind.Initializing) {
     return wasmStartup.operation
   }
+  // The offscreen document shares the background's copy of the vault WASM;
+  // one copy keeps the hosted extension ZIP under the Pages file limit.
   const initArgs: Parameters<typeof initNookWasm>[0] = {
-    module_or_path: chrome.runtime.getURL('offscreen/nook_wasm_bg.wasm'),
+    module_or_path: chrome.runtime.getURL('background/nook_wasm_bg.wasm'),
   }
   const operation = initNookWasm(initArgs).then((value) => {
     configure_vault_application(VaultApplication.Extension)

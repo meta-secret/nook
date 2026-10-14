@@ -12,7 +12,7 @@
 
 <div
   class={cn(
-    'bg-card text-card-foreground flex flex-col gap-6 rounded-lg border py-6 shadow-sm',
+    'bg-card text-card-foreground flex flex-col gap-6 rounded-none border py-6',
     className,
   )}
   {...restProps}

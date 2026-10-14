@@ -460,7 +460,7 @@ impl NookVaultManager {
         Ok((false, retained))
     }
 
-    async fn persist_password_unlock_membership(
+    pub(in crate::manager) async fn persist_password_unlock_membership(
         &mut self,
         records: &[nook_core::StoredSecretRecord],
         identity: &nook_core::DeviceIdentity,
