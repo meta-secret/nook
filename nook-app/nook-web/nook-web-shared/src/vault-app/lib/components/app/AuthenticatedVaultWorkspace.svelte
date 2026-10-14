@@ -13,7 +13,7 @@ band, the scrolling page and the status line.
 
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import { onDestroy, tick, untrack, type ComponentProps } from "svelte";
-  import { Download, Puzzle } from "@lucide/svelte";
+  import { Download } from "@lucide/svelte";
   import { type ExtensionSetupOffer } from "$lib/app/extension-setup";
   import {
     configured_vault_application_supports_extension,
@@ -27,6 +27,7 @@ band, the scrolling page and the status line.
   import SecretVault from "$lib/components/SecretVault.svelte";
   import VaultAdmin from "$lib/components/VaultAdmin.svelte";
   import IdentityKeysPage from "$lib/components/identity-control/IdentityKeysPage.svelte";
+  import VaultExtensionControl from "./VaultExtensionControl.svelte";
   import IdentityOverview from "$lib/components/identity-control/IdentityOverview.svelte";
   import BrowserSettingsPanel from "$lib/components/settings/BrowserSettingsPanel.svelte";
   import IdentityDevicesPanel from "$lib/components/identity-control/IdentityDevicesPanel.svelte";
@@ -57,9 +58,7 @@ band, the scrolling page and the status line.
     ConnectedVaultMenuPresentation,
     VaultExtensionPresentation,
     VaultGrantPresentation,
-    VaultPairingPresentation,
     type ConnectedVaultMenuNoteRequest,
-    type CurrentVaultPairingAvailabilityRequest,
     type ExtensionConnectedEntryRequest,
     type VaultExtensionLinkRequest,
     type VaultSwitcherEntryLabel,
@@ -177,13 +176,6 @@ band, the scrolling page and the status line.
       entries: extensionEntryLabels,
     };
     return new VaultExtensionPresentation(linkRequest).link;
-  });
-  const canPairCurrentVault = $derived.by(() => {
-    const request: CurrentVaultPairingAvailabilityRequest = {
-      link: extensionLink,
-      activeStoreId,
-    };
-    return new VaultPairingPresentation(request).available;
   });
   const extensionStoreIds = $derived(
     vault.localVaults
@@ -495,20 +487,12 @@ band, the scrolling page and the status line.
                 >{vault.t(I18N_KEYS.WorkspaceImportAction)}</span
               >
             </Button>
-            {#if SUPPORTS_EXTENSION && canPairCurrentVault}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                data-testid="vault-pair-extension-btn"
-                disabled={vault.isVerifying}
-                onclick={onExtensionConnect}
-              >
-                <Puzzle class="size-4" />
-                <span class="hidden sm:inline"
-                  >{vault.t(I18N_KEYS.VaultSwitcherPairThisVault)}</span
-                >
-              </Button>
+            {#if SUPPORTS_EXTENSION}
+              <VaultExtensionControl
+                {vault}
+                offer={extensionSetupState}
+                onConnect={onExtensionConnect}
+              />
             {/if}
           {/if}
         {/snippet}
