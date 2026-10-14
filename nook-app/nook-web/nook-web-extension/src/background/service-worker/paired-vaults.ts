@@ -35,6 +35,7 @@ async function pairedVaults(): Promise<PairedVaultSummary[]> {
     const summary: PairedVaultSummary = {
       vaultStoreId: grant.vaultStoreId,
       vaultName: grant.vaultName,
+      identityLabel: ((v) => (v ? v : ''))(grant.identityLabel),
       isDefault: grant.vaultStoreId === defaultStoreId,
       fillsPasswords: grant.scopes.includes(
         ExtensionConnectScope.PasswordFilling,

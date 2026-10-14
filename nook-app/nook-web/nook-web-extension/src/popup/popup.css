@@ -166,6 +166,23 @@ body {
   font-size: 16px;
 }
 
+.vault-group {
+  display: grid;
+  gap: 6px;
+}
+
+.vault-group-label {
+  margin: 0;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
 .vault-list {
   display: grid;
   margin: 0;

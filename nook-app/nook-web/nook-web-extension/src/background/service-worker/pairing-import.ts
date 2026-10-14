@@ -168,6 +168,7 @@ async function importDecodedApprovedPairing(
     deviceLabel: message.payload.deviceLabel,
     vaultStoreId: message.payload.vaultStoreId,
     vaultName: message.payload.vaultName,
+    identityLabel: ((v) => (v ? v : ''))(message.payload.identityLabel),
     approvedAt: message.payload.approvedAt,
     scopes: message.payload.scopes,
     syncProviderCount: providers.length,

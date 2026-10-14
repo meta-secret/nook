@@ -8,7 +8,9 @@ import {
 } from '../src/background/pairing-grants'
 import {
   PairedVaultsMessageType,
+  pairedVaultGroups,
   pairedVaultsMessages,
+  type PairedVaultSummary,
 } from '../src/lib/paired-vaults'
 
 const personal: StoredExtensionPairingGrant = {
@@ -18,6 +20,7 @@ const personal: StoredExtensionPairingGrant = {
   devicePublicKey: 'public',
   deviceSigningPublicKey: 'signing',
   vaultName: 'Personal',
+  identityLabel: 'Me',
   deviceLabel: 'Laptop',
   approvedAt: 1_786_320_000_000,
   scopes: ['password-filling'],
@@ -30,6 +33,7 @@ const work: StoredExtensionPairingGrant = {
   ...personal,
   vaultStoreId: 'store_lmnopqrstuv',
   vaultName: 'Work',
+  identityLabel: 'Acme',
   approvedAt: 1_786_406_400_000,
   scopes: ['password-filling', 'passkey-management'],
 }
@@ -117,5 +121,50 @@ describe('paired vaults', () => {
     expect(query._tag).toBe('Success')
     expect(select._tag).toBe('Success')
     expect(missingVault._tag).toBe('Failure')
+  })
+
+  test('keeps the identity a vault was approved under', async () => {
+    const policy = await extensionPairingGrantPolicyReady
+    const stored = await twoVaultStorage()
+
+    const identities = policy
+      .selectedPairingGrantFirst(stored)
+      .map((grant) => [grant.vaultName, grant.identityLabel])
+
+    expect(identities).toEqual([
+      ['Personal', 'Me'],
+      ['Work', 'Acme'],
+    ])
+  })
+
+  test('groups vaults by identity and lists vaults with none last', () => {
+    const summary = (
+      vaultName: string,
+      identityLabel: string,
+    ): PairedVaultSummary => ({
+      vaultStoreId: `store_${vaultName}`,
+      vaultName,
+      identityLabel,
+      isDefault: false,
+      fillsPasswords: true,
+      managesPasskeys: false,
+    })
+    const vaults = [
+      summary('Old', ''),
+      summary('Work', 'Acme'),
+      summary('Personal', 'Me'),
+      summary('Clients', 'Acme'),
+    ]
+
+    const groups = pairedVaultGroups(vaults).map((group) => [
+      group.identityLabel,
+      group.vaults.map((vault) => vault.vaultName),
+    ])
+
+    expect(groups).toEqual([
+      ['Acme', ['Work', 'Clients']],
+      ['Me', ['Personal']],
+      ['', ['Old']],
+    ])
   })
 })

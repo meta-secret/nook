@@ -1670,7 +1670,8 @@
       "no_vaults_body": "Откройте сейф в Nook и выберите «Подключить к расширению» или подключите его отсюда.",
       "connect_vault": "Подключить сейф",
       "open_nook": "Открыть Nook",
-      "make_default_failed": "Не удалось сменить основной сейф. Попробуйте ещё раз."
+      "make_default_failed": "Не удалось сменить основной сейф. Попробуйте ещё раз.",
+      "other_vaults": "Другие сейфы"
     },
     "authenticator_picker": {
       "step_label": "2FA через Nook",

@@ -42,6 +42,11 @@ pub struct StoredExtensionPairingGrant {
     pub device_label: String,
     pub vault_store_id: StoreId,
     pub vault_name: String,
+    /// Name of the identity the vault belongs to, so the extension can group
+    /// vaults the way Nook does. Grants stored before it was recorded read
+    /// back empty and show under no identity until the vault is re-paired.
+    #[serde(default)]
+    pub identity_label: String,
     pub approved_at: ExtensionPairingApprovalEpochMilliseconds,
     pub scopes: Vec<ExtensionConnectScope>,
     pub sync_provider_count: ExtensionSyncProviderCount,
@@ -60,6 +65,11 @@ pub struct ExtensionPairingGrantApproval {
     pub device_label: String,
     pub vault_store_id: StoreId,
     pub vault_name: String,
+    /// Name of the identity the vault belongs to, so the extension can group
+    /// vaults the way Nook does. Grants stored before it was recorded read
+    /// back empty and show under no identity until the vault is re-paired.
+    #[serde(default)]
+    pub identity_label: String,
     pub approved_at: ExtensionPairingApprovalEpochMilliseconds,
     pub scopes: Vec<ExtensionConnectScope>,
     pub sync_provider_count: ExtensionSyncProviderCount,
@@ -450,6 +460,7 @@ impl ExtensionPairingState {
             device_label: input.grant.device_label,
             vault_store_id: input.grant.vault_store_id,
             vault_name: input.grant.vault_name,
+            identity_label: input.grant.identity_label,
             approved_at: input.grant.approved_at,
             scopes: input.grant.scopes,
             sync_provider_count: input.grant.sync_provider_count,
@@ -626,6 +637,7 @@ mod tests {
                 device_label: "Nook Extension".to_owned(),
                 vault_store_id: Fixture::store(),
                 vault_name: "Personal".to_owned(),
+                identity_label: "Personal identity".to_owned(),
                 approved_at: Fixture::approved_at("1753401600000")?,
                 scopes: vec![ExtensionConnectScope::PasswordFilling],
                 sync_provider_count: 1.into(),
@@ -657,6 +669,7 @@ mod tests {
                 device_label: "Nook Extension".to_owned(),
                 vault_store_id: Fixture::store(),
                 vault_name: "Personal".to_owned(),
+                identity_label: "Personal identity".to_owned(),
                 approved_at: Fixture::approved_at("1753401600000")?,
                 scopes: vec![ExtensionConnectScope::PasswordFilling],
                 sync_provider_count: 1.into(),
@@ -820,6 +833,37 @@ mod tests {
             ],
         };
         Ok((state, other))
+    }
+
+    #[test]
+    fn a_grant_stored_before_identities_reads_back_with_no_identity() -> anyhow::Result<()> {
+        let mut stored = serde_json::to_value(Fixture::grant())?;
+        if let Some(fields) = stored.as_object_mut() {
+            fields.remove("identityLabel");
+        }
+
+        let grant = StoredExtensionPairingGrant::decode_json(&stored.to_string())?;
+
+        assert_eq!(grant.identity_label, "");
+        assert_eq!(grant.vault_name, "Personal");
+        Ok(())
+    }
+
+    #[test]
+    fn a_paired_vault_keeps_the_identity_it_was_approved_under() -> anyhow::Result<()> {
+        let mut input = Fixture::refresh_input(PairingSelection::Select);
+        input.grant.identity_label = "Work".to_owned();
+
+        let state = ExtensionPairingState::refresh_grant(input)?;
+
+        assert_eq!(
+            state
+                .ordered_grants()
+                .first()
+                .map(|grant| grant.identity_label.as_str()),
+            Some("Work")
+        );
+        Ok(())
     }
 
     #[test]
@@ -1004,6 +1048,7 @@ mod tests {
                 device_label: "Nook Extension".to_owned(),
                 vault_store_id: Self::store(),
                 vault_name: "Personal".to_owned(),
+                identity_label: "Personal identity".to_owned(),
                 approved_at: ExtensionPairingApprovalEpochMilliseconds::MINIMUM,
                 scopes: vec![ExtensionConnectScope::PasswordFilling],
                 sync_provider_count: 1.into(),

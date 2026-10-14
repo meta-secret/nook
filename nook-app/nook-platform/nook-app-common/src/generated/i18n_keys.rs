@@ -712,6 +712,7 @@ pub const EXTENSION_COMPANION_MANAGES_PASSKEYS: &str = "extension.companion.mana
 pub const EXTENSION_COMPANION_NO_VAULTS_BODY: &str = "extension.companion.no_vaults_body";
 pub const EXTENSION_COMPANION_NO_VAULTS_TITLE: &str = "extension.companion.no_vaults_title";
 pub const EXTENSION_COMPANION_OPEN_NOOK: &str = "extension.companion.open_nook";
+pub const EXTENSION_COMPANION_OTHER_VAULTS: &str = "extension.companion.other_vaults";
 pub const EXTENSION_COMPANION_PILOT_RETURN_GUIDANCE: &str =
     "extension.companion.pilot_return_guidance";
 pub const EXTENSION_COMPANION_STEP_LABEL: &str = "extension.companion.step_label";

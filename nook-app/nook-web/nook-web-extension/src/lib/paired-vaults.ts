@@ -51,6 +51,9 @@ export const pairedVaultsMessages = {
 export type PairedVaultSummary = {
   readonly vaultStoreId: string
   readonly vaultName: string
+  /** The identity the vault belongs to; empty for vaults paired before
+   * the extension recorded identities. */
+  readonly identityLabel: string
   /** New logins are saved here, and it leads every list. */
   readonly isDefault: boolean
   readonly fillsPasswords: boolean
@@ -59,6 +62,7 @@ export type PairedVaultSummary = {
 type PairedVaultSummaryFields = {
   readonly vaultStoreId: Schema.Codec<string>
   readonly vaultName: Schema.Codec<string>
+  readonly identityLabel: Schema.Codec<string>
   readonly isDefault: Schema.Codec<boolean>
   readonly fillsPasswords: Schema.Codec<boolean>
   readonly managesPasskeys: Schema.Codec<boolean>
@@ -66,6 +70,7 @@ type PairedVaultSummaryFields = {
 const pairedVaultSummaryFields: PairedVaultSummaryFields = {
   vaultStoreId: Schema.String,
   vaultName: Schema.String,
+  identityLabel: Schema.String,
   isDefault: Schema.Boolean,
   fillsPasswords: Schema.Boolean,
   managesPasskeys: Schema.Boolean,
@@ -113,6 +118,41 @@ const defaultVaultSelectResponseSchema = Schema.Union([
   Schema.Struct(defaultVaultSelectedFields),
   refusalSchema,
 ]) satisfies Schema.Codec<DefaultVaultSelectResponse>
+
+/** Paired vaults under one identity, as the popup lists them. */
+export type PairedVaultGroup = {
+  readonly identityLabel: string
+  readonly vaults: readonly PairedVaultSummary[]
+}
+
+/**
+ * Group paired vaults by identity, keeping list order (so the default
+ * vault's identity comes first). Vaults paired before the extension
+ * recorded identities have none and come last.
+ */
+export function pairedVaultGroups(
+  vaults: readonly PairedVaultSummary[],
+): PairedVaultGroup[] {
+  type GrowingGroup = { identityLabel: string; vaults: PairedVaultSummary[] }
+  const groups: GrowingGroup[] = []
+  for (const vault of vaults) {
+    const group = groups.find(
+      (candidate) => candidate.identityLabel === vault.identityLabel,
+    )
+    if (group) {
+      group.vaults.push(vault)
+      continue
+    }
+    const started: GrowingGroup = {
+      identityLabel: vault.identityLabel,
+      vaults: [vault],
+    }
+    groups.push(started)
+  }
+  const named = groups.filter((group) => group.identityLabel !== '')
+  const unnamed = groups.filter((group) => group.identityLabel === '')
+  return [...named, ...unnamed]
+}
 
 export enum PairedVaultsLoadKind {
   Ready = 'ready',

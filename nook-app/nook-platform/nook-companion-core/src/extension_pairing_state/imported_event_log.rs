@@ -64,6 +64,7 @@ impl StoredExtensionPairingGrant {
             device_label: grant.device_label,
             vault_store_id: grant.vault_store_id,
             vault_name: grant.vault_name,
+            identity_label: grant.identity_label,
             approved_at: grant.approved_at,
             scopes: grant.scopes,
             sync_provider_count: grant.sync_provider_count,

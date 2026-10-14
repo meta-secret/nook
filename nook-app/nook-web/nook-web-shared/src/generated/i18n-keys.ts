@@ -551,6 +551,7 @@ export const I18N_KEYS = {
   ExtensionCompanionNoVaultsBody: 'extension.companion.no_vaults_body',
   ExtensionCompanionNoVaultsTitle: 'extension.companion.no_vaults_title',
   ExtensionCompanionOpenNook: 'extension.companion.open_nook',
+  ExtensionCompanionOtherVaults: 'extension.companion.other_vaults',
   ExtensionCompanionPilotReturnGuidance: 'extension.companion.pilot_return_guidance',
   ExtensionCompanionStepLabel: 'extension.companion.step_label',
   ExtensionCompanionUnlocked: 'extension.companion.unlocked',

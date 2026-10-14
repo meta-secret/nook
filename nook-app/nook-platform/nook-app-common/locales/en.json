@@ -1663,7 +1663,8 @@
       "no_vaults_body": "Open a vault in Nook and choose Use with extension, or connect one from here.",
       "connect_vault": "Connect a vault",
       "open_nook": "Open Nook",
-      "make_default_failed": "Nook could not change the default vault. Try again."
+      "make_default_failed": "Nook could not change the default vault. Try again.",
+      "other_vaults": "Other vaults"
     },
     "authenticator_picker": {
       "step_label": "2FA with Nook",

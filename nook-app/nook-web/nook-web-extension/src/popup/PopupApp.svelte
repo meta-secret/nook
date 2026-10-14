@@ -40,6 +40,7 @@
   import { DeviceProtectionSetupWorkflow } from '../../../nook-web-shared/src/vault-app/lib/components/device-protection-gate-state'
   import {
     PairedVaultsLoadKind,
+    pairedVaultGroups,
     pairedVaultsClient,
     type PairedVaultsLoad,
     type PairedVaultSummary,
@@ -87,6 +88,12 @@
       status === DeviceProtectionStatus.Plaintext,
   )
   const showToolbarMenu = $derived(status === DeviceProtectionStatus.Unlocked)
+
+  const groups = $derived(
+    vaults.kind === PairedVaultsLoadKind.Ready
+      ? pairedVaultGroups(vaults.vaults)
+      : [],
+  )
 
   function itemCount(vaultStoreId: string): string {
     const count = counts[vaultStoreId]
@@ -346,53 +353,61 @@
             {translatePlain(I18N_KEYS.ExtensionCompanionVaultsHint)}
           </p>
         </div>
-        <ul class="vault-list">
-          {#each vaults.vaults as vault (vault.vaultStoreId)}
-            <li
-              class="vault-row"
-              class:is-default={vault.isDefault}
-              data-testid="companion-vault"
-              data-vault-store-id={vault.vaultStoreId}
-              data-default={vault.isDefault}
-            >
-              <div class="vault-row-main">
-                <span class="vault-row-name">{vault.vaultName}</span>
-                <span class="vault-row-meta">
-                  {#if vault.fillsPasswords}
-                    <span>{translatePlain(I18N_KEYS.ExtensionCompanionFillsPasswords)}</span>
-                  {/if}
-                  {#if vault.managesPasskeys}
-                    <span>{translatePlain(I18N_KEYS.ExtensionCompanionManagesPasskeys)}</span>
-                  {/if}
-                  {#if itemCount(vault.vaultStoreId)}
-                    <span data-testid="companion-vault-count">{itemCount(vault.vaultStoreId)}</span>
-                  {/if}
-                </span>
-              </div>
-              {#if vault.isDefault}
-                <span
-                  class="vault-default-tag"
-                  title={translatePlain(I18N_KEYS.ExtensionCompanionDefaultVaultHint)}
-                  data-testid="companion-default-vault"
+        {#each groups as group (group.identityLabel)}
+          <div class="vault-group" data-testid="companion-vault-group">
+            <p class="vault-group-label">
+              {group.identityLabel ||
+                translatePlain(I18N_KEYS.ExtensionCompanionOtherVaults)}
+            </p>
+            <ul class="vault-list">
+              {#each group.vaults as vault (vault.vaultStoreId)}
+                <li
+                  class="vault-row"
+                  class:is-default={vault.isDefault}
+                  data-testid="companion-vault"
+                  data-vault-store-id={vault.vaultStoreId}
+                  data-default={vault.isDefault}
                 >
-                  <Check size={12} aria-hidden="true" />
-                  {translatePlain(I18N_KEYS.ExtensionCompanionDefaultVault)}
-                </span>
-              {:else}
-                <button
-                  type="button"
-                  class="menu-secondary-action vault-make-default"
-                  disabled={busy}
-                  title={translatePlain(I18N_KEYS.ExtensionCompanionDefaultVaultHint)}
-                  data-testid="companion-make-default"
-                  onclick={() => void makeDefault(vault.vaultStoreId)}
-                >
-                  {translatePlain(I18N_KEYS.ExtensionCompanionMakeDefault)}
-                </button>
-              {/if}
-            </li>
-          {/each}
-        </ul>
+                  <div class="vault-row-main">
+                    <span class="vault-row-name">{vault.vaultName}</span>
+                    <span class="vault-row-meta">
+                      {#if vault.fillsPasswords}
+                        <span>{translatePlain(I18N_KEYS.ExtensionCompanionFillsPasswords)}</span>
+                      {/if}
+                      {#if vault.managesPasskeys}
+                        <span>{translatePlain(I18N_KEYS.ExtensionCompanionManagesPasskeys)}</span>
+                      {/if}
+                      {#if itemCount(vault.vaultStoreId)}
+                        <span data-testid="companion-vault-count">{itemCount(vault.vaultStoreId)}</span>
+                      {/if}
+                    </span>
+                  </div>
+                  {#if vault.isDefault}
+                    <span
+                      class="vault-default-tag"
+                      title={translatePlain(I18N_KEYS.ExtensionCompanionDefaultVaultHint)}
+                      data-testid="companion-default-vault"
+                    >
+                      <Check size={12} aria-hidden="true" />
+                      {translatePlain(I18N_KEYS.ExtensionCompanionDefaultVault)}
+                    </span>
+                  {:else}
+                    <button
+                      type="button"
+                      class="menu-secondary-action vault-make-default"
+                      disabled={busy}
+                      title={translatePlain(I18N_KEYS.ExtensionCompanionDefaultVaultHint)}
+                      data-testid="companion-make-default"
+                      onclick={() => void makeDefault(vault.vaultStoreId)}
+                    >
+                      {translatePlain(I18N_KEYS.ExtensionCompanionMakeDefault)}
+                    </button>
+                  {/if}
+                </li>
+              {/each}
+            </ul>
+          </div>
+        {/each}
       </section>
     {:else}
       <section class="vault-empty" data-testid="companion-no-vaults">
