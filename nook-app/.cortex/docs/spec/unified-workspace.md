@@ -90,15 +90,18 @@ and no Vault/Admin/Onboard/Settings bottom navigation.
 ## Shell
 
 - The identities hero (live ciphertext, caret, decrypting title) appears only
-  on the hub. Inner pages use a quiet page bar: identity / context eyebrow,
-  page title, session tag, and the page's own actions.
-- The vault page bar offers Import, Pair extension (when available), and
-  Manage vault.
-- Identity management and vault management are separate. Manage identity
-  (from an identity card) lists Keys, Vaults, Devices, Sync and Settings.
-  Manage vault (from the vault page bar) lists Backup passwords and Import.
-  Each uses one navigation element: a rail on wide screens and a pinned
-  bottom bar on phones.
+  on the hub. Every unlocked page shares one framed sheet; nothing inside it
+  is a separate card.
+  - The workspace rail runs down the left: the identity (it opens the hub),
+    the open vault's pages (Items, Backup passwords, Import), then the
+    identity's pages (Keys, Vaults, Devices, Sync, Settings). Devices shows
+    the pending join count; Sync shows a warning dot while the identity has
+    no provider. On phones the rail becomes a scrolling bottom bar.
+  - The right column stacks a page band (title, session tag, Pair extension
+    when available), the scrolling page, and the status line, divided by
+    hairlines.
+  - Setup work (extension install, the security guide) and pending joins are
+    bands at the top of the vault page, not banners.
 - Devices and Sync act on the identity. They need the identity's app key
   unlocked, not an open vault. Devices issues identity enrollment codes and approves, denies,
   renames, and revokes the identity's apps. Sync mounts providers on the
@@ -110,16 +113,18 @@ and no Vault/Admin/Onboard/Settings bottom navigation.
   when several claim it), and local vaults no identity has opened yet under
   the current identity.
 - Back on a management page returns to the page management was entered from
-  (the vault or the hub). Back on the vault page returns to the hub.
+  (the vault or the hub). On phones, where the rail has no identity entry,
+  Back on the vault page returns to the hub.
 - Locking keeps the current route so unlocking resumes it; locking from the
   hub resumes into the vault that gets unlocked.
 
 ## Visual language
 
 - Shapes carry roles: key-tag frames for identity cards, tab frames for the
-  hero and page bars, sheet frames for setup panels, dialogs, and the secret
-  detail, nick frames for slots; lists and banners stay square with a heavy
-  left edge. Filters and method choices are monospace chips.
+  hero and the access gate's page bar, sheet frames for setup panels, dialogs,
+  and the secret detail, nick frames for slots; lists and bands stay square.
+  Filters and method choices are monospace chips; the vault's type filter is
+  one outlined track.
 - Status uses monospace tags with a dot or icon, never coloured pills.
 - Live ciphertext is decorative, `aria-hidden`, and stops for reduced motion
   and hidden tabs.

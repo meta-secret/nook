@@ -138,6 +138,26 @@
     outline: 2px solid var(--ring);
     outline-offset: 2px;
   }
+  /* One outlined track of filters instead of a row of separate boxes. */
+  .nk-chips-track {
+    flex-wrap: nowrap;
+    gap: 0;
+    align-self: flex-start;
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+    border: 1px solid var(--border);
+  }
+  .nk-chips-track .nk-chip {
+    border: 0;
+    border-right: 1px solid var(--border);
+  }
+  .nk-chips-track .nk-chip:last-child {
+    border-right: 0;
+  }
+  .nk-chips-track .nk-chip:focus-visible {
+    outline-offset: -2px;
+  }
   /* The list and the detail share one grid: rows and sheets are siblings, so
    * phones show the sheet under its row and wide screens pin it to the right. */
   .nk-vault-grid {

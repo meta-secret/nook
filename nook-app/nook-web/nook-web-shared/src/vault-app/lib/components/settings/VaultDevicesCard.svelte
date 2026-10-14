@@ -477,27 +477,6 @@ Membership is identity-level; every vault the identity owns follows it.
   {/if}
 
   <section class="space-y-2">
-    <div class="flex items-center justify-between gap-3">
-      <div class="min-w-0 space-y-1">
-        <h3 class="text-sm font-semibold text-foreground">
-          {vault.t(I18N_KEYS.IdentityControlMembersTitle)}
-        </h3>
-        <p class="text-xs leading-relaxed text-muted-foreground">
-          {vault.t(I18N_KEYS.IdentityControlMembersDescription)}
-        </p>
-      </div>
-      <span class="shrink-0 text-xs text-muted-foreground">
-        {members.length === 1
-          ? vault.t(I18N_KEYS.DevicesCardDeviceCountSingular)
-          : (() => {
-              const countArgs: Parameters<typeof vault.t>[0] = {
-                key: I18N_KEYS.DevicesCardDeviceCountPlural,
-                replacements: { count: String(members.length) },
-              };
-              return vault.t(countArgs);
-            })()}
-      </span>
-    </div>
 
     {#if sortedMembers.length === 0}
       <div

@@ -37,14 +37,16 @@
 </script>
 
 <aside
-  class="nk-banner bg-card p-4 animate-in fade-in slide-in-from-top-2"
+  class="px-4 py-3 animate-in fade-in md:px-6"
   data-testid="extension-install-setup"
   data-status={state.status}
 >
   <div class="flex items-start gap-3">
-    <Puzzle class="mt-0.5 size-5 shrink-0 text-primary" />
-    <div class="min-w-0 flex-1 space-y-3">
-      <div class="space-y-1">
+    <Puzzle class="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+    <div
+      class="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+    >
+      <div class="min-w-0 space-y-1">
         <p class="text-sm font-semibold text-foreground">
           {vault.t(
             isNotInstalled
@@ -95,6 +97,8 @@
         <Button
           type="button"
           size="sm"
+          variant="outline"
+          class="shrink-0 self-start border-border sm:self-center"
           disabled={installBusy}
           data-testid="extension-install-setup-cta"
           onclick={onInstall}
@@ -108,7 +112,7 @@
           type="button"
           size="sm"
           variant="outline"
-          class="border-border"
+          class="shrink-0 self-start border-border sm:self-center"
           disabled={installBusy}
           data-testid="extension-install-setup-connect"
           onclick={onConnect}

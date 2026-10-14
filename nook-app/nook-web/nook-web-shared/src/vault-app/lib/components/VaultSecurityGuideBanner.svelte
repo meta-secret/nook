@@ -64,16 +64,14 @@
 
 <aside
   role="alert"
-  class="nk-banner nk-banner-warning shrink-0 overflow-hidden font-sans text-sm text-amber-900/80 animate-in fade-in slide-in-from-top-2 dark:text-amber-100/80"
+  class="shrink-0 overflow-hidden font-sans text-sm text-muted-foreground animate-in fade-in"
   data-testid="vault-security-guide"
   data-folded={folded ? "true" : "false"}
   data-recommendations={recommendationCount}
 >
   <button
     type="button"
-    class="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-amber-500/10 {folded
-      ? ''
-      : 'bg-amber-500/10'}"
+    class="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-accent/40 md:px-6"
     aria-expanded={!folded}
     aria-label={vault.t(
       folded ? I18N_KEYS.SecurityGuideExpand : I18N_KEYS.SecurityGuideCollapse,
@@ -81,16 +79,16 @@
     data-testid="security-guide-toggle"
     onclick={toggleFold}
   >
-    <TriangleAlert class="size-5 shrink-0 text-amber-600 dark:text-amber-400" />
+    <TriangleAlert class="size-4 shrink-0 text-warning" />
     <span class="min-w-0 flex-1">
       <span
-        class="block text-sm font-medium text-amber-950 dark:text-amber-100"
+        class="block text-sm font-medium text-foreground"
       >
         {vault.t(I18N_KEYS.SecurityGuideTitle)}
       </span>
       {#if folded}
         <span
-          class="block truncate text-xs leading-5 text-amber-900/75 dark:text-amber-100/75"
+          class="block truncate text-xs leading-5 text-muted-foreground"
         >
           {(() => { const translationRequest: Parameters<typeof vault.t>[0] = {
             key: recommendationCount === 1
@@ -102,7 +100,7 @@
       {/if}
     </span>
     <ChevronDown
-      class="size-5 shrink-0 text-amber-800 transition-transform duration-200 dark:text-amber-200 {folded
+      class="size-4 shrink-0 text-muted-foreground transition-transform duration-200 {folded
         ? ''
         : 'rotate-180'}"
     />
@@ -110,33 +108,33 @@
 
   {#if !folded}
     <div
-      class="space-y-3 border-t border-amber-500/25 bg-background/40 px-4 py-4"
+      class="space-y-3 px-4 pb-4 md:px-6 md:pl-[3.25rem]"
       data-testid="security-guide-details"
     >
       <p
-        class="text-sm leading-relaxed text-amber-900/90 dark:text-amber-100/90"
+        class="text-sm leading-relaxed text-muted-foreground"
       >
         {vault.t(I18N_KEYS.SecurityGuideIntro)}
       </p>
 
       {#if needsSyncProvider}
         <section
-          class="border border-amber-500/25 bg-background/55 p-3"
+          class="border-t border-border pt-3"
           data-testid="security-guide-sync-provider"
         >
           <div class="flex items-start gap-3">
             <Cloud
-              class="mt-0.5 size-4.5 shrink-0 text-amber-700 dark:text-amber-300"
+              class="mt-0.5 size-4 shrink-0 text-muted-foreground"
             />
             <div class="min-w-0 flex-1 space-y-2">
               <div>
                 <h3
-                  class="text-sm font-semibold text-amber-950 dark:text-amber-100"
+                  class="text-sm font-semibold text-foreground"
                 >
                   {vault.t(I18N_KEYS.SecurityGuideSyncTitle)}
                 </h3>
                 <p
-                  class="mt-1 text-xs leading-relaxed text-amber-900/80 dark:text-amber-100/80"
+                  class="mt-1 text-xs leading-relaxed text-muted-foreground"
                 >
                   {vault.t(I18N_KEYS.SecurityGuideSyncBody)}
                 </p>
@@ -145,7 +143,7 @@
                 type="button"
                 size="sm"
                 variant="outline"
-                class="border-amber-500/45 bg-background/85 text-amber-950 hover:bg-amber-500/15 dark:text-amber-50"
+                class="border-border"
                 data-testid="security-guide-add-sync-provider"
                 onclick={onAddSyncProvider}
               >
@@ -158,28 +156,28 @@
 
       {#if needsAnotherDevice}
         <section
-          class="border border-amber-500/25 bg-background/55 p-3"
+          class="border-t border-border pt-3"
           data-testid="security-guide-device"
         >
           <div class="flex items-start gap-3">
             <Laptop
-              class="mt-0.5 size-4.5 shrink-0 text-amber-700 dark:text-amber-300"
+              class="mt-0.5 size-4 shrink-0 text-muted-foreground"
             />
             <div class="min-w-0 flex-1 space-y-2">
               <div>
                 <h3
-                  class="text-sm font-semibold text-amber-950 dark:text-amber-100"
+                  class="text-sm font-semibold text-foreground"
                 >
                   {vault.t(I18N_KEYS.SecurityGuideDeviceTitle)}
                 </h3>
                 <p
-                  class="mt-1 text-xs leading-relaxed text-amber-900/80 dark:text-amber-100/80"
+                  class="mt-1 text-xs leading-relaxed text-muted-foreground"
                 >
                   {vault.t(I18N_KEYS.SecurityGuideDeviceBody)}
                 </p>
               </div>
               <div
-                class="flex items-start gap-2 text-xs leading-relaxed text-amber-900/75 dark:text-amber-100/75"
+                class="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground"
               >
                 <ShieldCheck class="mt-0.5 size-3.5 shrink-0" />
                 <span>{vault.t(I18N_KEYS.SecurityGuideDistinctSafeguards)}</span>
@@ -188,7 +186,7 @@
                 type="button"
                 size="sm"
                 variant="outline"
-                class="border-amber-500/45 bg-background/85 text-amber-950 hover:bg-amber-500/15 dark:text-amber-50"
+                class="border-border"
                 data-testid="security-guide-add-device"
                 onclick={onAddDevice}
               >

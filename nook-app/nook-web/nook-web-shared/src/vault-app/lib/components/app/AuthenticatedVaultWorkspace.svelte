@@ -1,8 +1,8 @@
 <!--
-Unified identity and vault workspace. Identities are the hub; a vault page
-and the management pages share one shell: a quiet page bar, the page, the
-status line, and (on management pages) a grouped rail that becomes a bottom
-bar on phones.
+Unified identity and vault workspace. Identities are the hub; every unlocked
+page shares one framed shell: the workspace rail (a bottom bar on phones),
+then a page band, the scrolling page and the status line. Setup and pending
+joins are bands at the top of the page, not separate cards.
 -->
 <script lang="ts">
   type SecretAddModeChange = {
@@ -12,7 +12,7 @@ bar on phones.
 
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import { onDestroy, tick, untrack, type ComponentProps } from "svelte";
-  import { Download, Puzzle, Settings2 } from "@lucide/svelte";
+  import { Puzzle } from "@lucide/svelte";
   import {
     ExtensionSetupOfferKind,
     type ExtensionSetupOffer,
@@ -140,14 +140,17 @@ bar on phones.
     void vault.localVaults.length;
     void directory.reload();
   });
-  const identityLabel = $derived.by(() => {
-    if (directory.state.kind !== IdentityDirectoryLoadKind.Ready) return "";
+  const currentIdentity = $derived.by(() => {
+    if (directory.state.kind !== IdentityDirectoryLoadKind.Ready) return false;
     for (const identity of directory.state.view.identities) {
       if (identity.localAccess === NookIdentityLocalAccessKind.CurrentBrowser)
-        return identity.label;
+        return identity;
     }
-    return "";
+    return false;
   });
+  const identityLabel = $derived(
+    currentIdentity === false ? "" : currentIdentity.label,
+  );
 
   const activeStoreId = $derived(
     vault.activeVault.kind === ActiveVaultKind.Open
@@ -179,6 +182,11 @@ bar on phones.
     };
     return new VaultExtensionPresentation(linkRequest).link;
   });
+  const extensionSetupVisible = $derived(
+    SUPPORTS_EXTENSION &&
+      extensionSetupState.kind === ExtensionSetupOfferKind.Visible &&
+      extensionSetupState.setup.status !== ExtensionSetupStatus.Paired,
+  );
   const canPairCurrentVault = $derived.by(() => {
     const request: CurrentVaultPairingAvailabilityRequest = {
       link: extensionLink,
@@ -298,6 +306,15 @@ bar on phones.
     await vault.switchToVault(storeId);
   }
 
+  /** The rail acts on the unlocked identity, like its card's Manage. */
+  function openFromNav(next: WorkspaceSection): void {
+    if (next === WorkspaceSection.Keys && currentIdentity !== false) {
+      manageIdentity(currentIdentity.identityId);
+      return;
+    }
+    openSection(next);
+  }
+
   function manageIdentity(identityId: string): void {
     vault.identityFocus = identityId;
     openSection(WorkspaceSection.Keys);
@@ -388,14 +405,15 @@ bar on phones.
 {:else}
   <div
     class:authenticated-shell-editor={secretsAddOpen}
-    class:nk-shell-manage={managing}
     class="authenticated-shell nk-shell w-full min-w-0 max-w-full [touch-action:pan-y_pinch-zoom]"
     data-testid="authenticated-shell"
     data-section={section}
   >
-    <div class="nk-shell-bar min-w-0 pb-3">
+    <div class="nk-shell-bar min-w-0">
       <PageBar
         {vault}
+        band
+        backOnPhonesOnly={section === WorkspaceSection.Vault}
         eyebrow={barEyebrow}
         title={barTitle}
         testId={section === WorkspaceSection.Vault
@@ -431,45 +449,20 @@ bar on phones.
                 >
               </Button>
             {/if}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              data-testid="vault-import-btn"
-              onclick={() => openSection(WorkspaceSection.Import)}
-            >
-              <Download class="size-4" />
-              <span class="hidden sm:inline"
-                >{vault.t(I18N_KEYS.WorkspaceImportAction)}</span
-              >
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              data-testid="vault-manage-btn"
-              onclick={() => openSection(WorkspaceSection.Passwords)}
-            >
-              <Settings2 class="size-4" />
-              <span class="hidden sm:inline"
-                >{vault.t(I18N_KEYS.WorkspaceManageVault)}</span
-              >
-            </Button>
           {/if}
         {/snippet}
       </PageBar>
     </div>
 
-    {#if managing}
-      <ManageNav
-        {vault}
-        active={section}
-        {scope}
-        {vaultLabel}
-        {identityLabel}
-        onSelect={openSection}
-      />
-    {/if}
+    <ManageNav
+      {vault}
+      active={section}
+      {vaultLabel}
+      identityLabel={identityName}
+      pendingJoinCount={identityPendingJoins.length}
+      syncMissing={needsSyncProvider}
+      onSelect={openFromNav}
+    />
 
     <div
       class="nk-shell-main shell-scroll flex min-h-0 min-w-0 flex-col {secretsNoteEditorOpen
@@ -478,8 +471,8 @@ bar on phones.
     >
       <div
         class={managing
-          ? "grid min-w-0 grid-cols-1 content-start gap-6 px-0.5 py-4 md:px-6 md:py-5"
-          : "flex min-h-0 flex-1 flex-col gap-4 px-0.5 py-1"}
+          ? "grid min-w-0 grid-cols-1 content-start gap-6 p-4 md:p-6"
+          : "flex min-h-0 flex-1 flex-col"}
       >
         {#if navEntry.kind === ManageNavEntryKind.Listed && (section === WorkspaceSection.Keys || section === WorkspaceSection.Devices || section === WorkspaceSection.Settings)}
           <p
@@ -491,24 +484,32 @@ bar on phones.
         {/if}
 
         {#if section === WorkspaceSection.Vault}
-          {#if !secretsAddOpen && SUPPORTS_EXTENSION && extensionSetupState.kind === ExtensionSetupOfferKind.Visible && extensionSetupState.setup.status !== ExtensionSetupStatus.Paired}
-            <ExtensionInstallSetupCard
-              {vault}
-              state={extensionSetupState.setup}
-              installBusy={extensionInstallBusy}
-              onInstall={onExtensionInstall}
-              onConnect={onExtensionConnect}
-              connectError={extensionConnectError}
-            />
-          {/if}
-          {#if !secretsAddOpen && hasSecurityRecommendations}
-            <VaultSecurityGuideBanner
-              {vault}
-              {needsSyncProvider}
-              {needsAnotherDevice}
-              onAddSyncProvider={() => openSection(WorkspaceSection.Sync)}
-              onAddDevice={() => openSection(WorkspaceSection.Devices)}
-            />
+          {#if !secretsAddOpen && (extensionSetupVisible || hasSecurityRecommendations)}
+            <section
+              class="nk-band divide-y divide-border"
+              aria-label={vault.t(I18N_KEYS.WorkspaceSetupLabel)}
+              data-testid="vault-setup-band"
+            >
+              {#if extensionSetupVisible && extensionSetupState.kind === ExtensionSetupOfferKind.Visible}
+                <ExtensionInstallSetupCard
+                  {vault}
+                  state={extensionSetupState.setup}
+                  installBusy={extensionInstallBusy}
+                  onInstall={onExtensionInstall}
+                  onConnect={onExtensionConnect}
+                  connectError={extensionConnectError}
+                />
+              {/if}
+              {#if hasSecurityRecommendations}
+                <VaultSecurityGuideBanner
+                  {vault}
+                  {needsSyncProvider}
+                  {needsAnotherDevice}
+                  onAddSyncProvider={() => openSection(WorkspaceSection.Sync)}
+                  onAddDevice={() => openSection(WorkspaceSection.Devices)}
+                />
+              {/if}
+            </section>
           {/if}
           {#if !secretsNoteEditorOpen}
             <PendingJoinsBanner
@@ -523,7 +524,7 @@ bar on phones.
                 openSection(WorkspaceSection.Devices)}
             />
           {/if}
-          <div class="flex min-h-0 flex-1 flex-col">
+          <div class="flex min-h-0 flex-1 flex-col p-4 md:p-5">
             {#key secretsEditorResetKey}
               <SecretVault
                 {vault}
@@ -659,7 +660,7 @@ bar on phones.
       </div>
     </div>
 
-    <div class="nk-shell-status min-w-0 pt-2">
+    <div class="nk-shell-status min-w-0 px-3 md:px-5">
       <VaultStatusBar
         {vault}
         storageMode={vault.storageMode}

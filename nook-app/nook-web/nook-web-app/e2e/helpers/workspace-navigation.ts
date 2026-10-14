@@ -70,9 +70,10 @@ export async function openManagePage(
   const marker = page.getByTestId(MANAGE_PAGE_MARKERS[target])
   if (await marker.isVisible()) return
   const navItem = page.getByTestId(`manage-nav-${target}`)
+  // The workspace rail lists every page while a vault is open; the
+  // identities hub has no rail, so leave it through the open vault first.
   if (!(await navItem.isVisible())) {
     if (IDENTITY_PAGES.has(target)) {
-      // Identity pages are reached from the current identity's card.
       await openIdentitiesPage(page)
       const currentManage = page.locator(
         '[data-testid="identity-card"][data-status="unlocked"] [data-testid="identity-manage"]',
@@ -84,12 +85,6 @@ export async function openManagePage(
       }
     } else {
       await openVaultPage(page)
-      if (target === ManagePage.Import) {
-        await page.getByTestId('vault-import-btn').click()
-        await expect(marker).toBeVisible({ timeout: UI_TIMEOUT_MS })
-        return
-      }
-      await page.getByTestId('vault-manage-btn').click()
     }
   }
   await expect(navItem).toBeVisible({ timeout: UI_TIMEOUT_MS })
