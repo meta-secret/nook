@@ -272,6 +272,7 @@ mod tests {
                 device_label: "Nook Extension".to_owned(),
                 vault_store_id: PairingVaultId::before_genesis_placeholder(),
                 vault_name: "Personal".to_owned(),
+                identity_label: "Personal".to_owned(),
                 approved_at: ExtensionPairingApprovalEpochMilliseconds::MINIMUM,
                 scopes: vec![ExtensionConnectScope::PasswordFilling],
                 sync_provider_count: 0.into(),

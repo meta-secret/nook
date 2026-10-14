@@ -85,8 +85,9 @@ Technical identifiers stay behind "Details".
     rows.filter((row) => row.kind === IdentityKeyInventoryRowKind.Protector),
   );
   const otherApps = $derived(
-    rows.find((row) => row.kind === IdentityKeyInventoryRowKind.Apps)?.apps ??
-      [],
+    ((v) => (v ? v.apps : []))(
+      rows.find((row) => row.kind === IdentityKeyInventoryRowKind.Apps),
+    ),
   );
   const currentAppIds = $derived(
     load.kind === KeysLoadKind.Ready

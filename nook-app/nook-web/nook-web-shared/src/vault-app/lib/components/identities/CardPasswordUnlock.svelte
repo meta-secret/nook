@@ -36,7 +36,7 @@ vault directly, without this device's passkey.
   const entryId = $derived(
     entries.some((entry) => entry.id === chosenId)
       ? chosenId
-      : (entries[0]?.id ?? ""),
+      : ((v) => (v ? v.id : ""))(entries[0]),
   );
   const fieldLabel = $derived.by(() => {
     const labelRequest: Parameters<typeof vault.t>[0] = {

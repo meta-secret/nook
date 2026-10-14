@@ -357,9 +357,8 @@ band, the scrolling page and the status line.
       authenticated: true,
       identityUnlocked: true,
     };
-    return (
-      new IdentityCardProjection(source).cards.find((card) => card.current) ??
-      false
+    return ((v) => (v ? v : false))(
+      new IdentityCardProjection(source).cards.find((card) => card.current),
     );
   });
   /** Another app can join once a cloud provider carries the identity. */

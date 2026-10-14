@@ -8,12 +8,14 @@
 
 mod approval_timestamp;
 mod authority;
+mod default_vault;
 mod imported_event_log;
 mod legacy;
 mod value_types;
 
 pub use approval_timestamp::*;
 pub use authority::*;
+pub use default_vault::*;
 pub use imported_event_log::*;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
@@ -98,14 +100,6 @@ pub struct RefreshExtensionPairingGrantInput {
 pub struct ExtensionPairingGrantRemovalInput {
     pub state: ExtensionPairingState,
     pub removed_vault_store_id: StoreId,
-}
-
-/// Named values for choosing which paired vault the extension uses first.
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, Tsify)]
-#[serde(rename_all = "camelCase")]
-pub struct ExtensionDefaultVaultSelectionInput {
-    pub state: ExtensionPairingState,
-    pub vault_store_id: StoreId,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, Tsify)]
@@ -353,24 +347,6 @@ impl ExtensionPairingState {
                 setup: ExtensionReadySetup::from_grant(&grant),
             },
             None => ExtensionSetupAfterRemoval::NoPairedVault,
-        }
-    }
-
-    /// Make a paired vault the default one: new logins are saved there and
-    /// it leads every list. Returns the setup record to store; the vault's
-    /// grant is kept as it is.
-    pub fn select_default_vault(
-        &self,
-        vault_store_id: &StoreId,
-    ) -> Result<ExtensionPairingState, ExtensionPairingStateError> {
-        match self.grant(vault_store_id) {
-            PairingGrantObservation::NotStored => Err(ExtensionPairingStateError::VaultNotPaired),
-            PairingGrantObservation::Stored(grant) => Ok(ExtensionPairingState {
-                entries: vec![ExtensionPairingEntry {
-                    key: EXTENSION_SETUP_KEY.to_owned(),
-                    record: ExtensionPairingRecord::Setup(ExtensionReadySetup::from_grant(grant)),
-                }],
-            }),
         }
     }
 
@@ -808,33 +784,6 @@ mod tests {
         Ok(())
     }
 
-    fn two_vault_state() -> anyhow::Result<(ExtensionPairingState, StoredExtensionPairingGrant)> {
-        let selected = Fixture::grant();
-        let mut other = Fixture::grant();
-        other.vault_store_id = Fixture::other_store();
-        other.vault_name = "Work".to_owned();
-        other.approved_at = Fixture::approved_at("1753488000000")?;
-        let state = ExtensionPairingState {
-            entries: vec![
-                ExtensionPairingEntry {
-                    key: EXTENSION_SETUP_KEY.to_owned(),
-                    record: ExtensionPairingRecord::Setup(ExtensionReadySetup::from_grant(
-                        &selected,
-                    )),
-                },
-                ExtensionPairingEntry {
-                    key: StoredExtensionPairingGrant::storage_key_for(&selected.vault_store_id),
-                    record: ExtensionPairingRecord::Grant(selected),
-                },
-                ExtensionPairingEntry {
-                    key: StoredExtensionPairingGrant::storage_key_for(&other.vault_store_id),
-                    record: ExtensionPairingRecord::Grant(other.clone()),
-                },
-            ],
-        };
-        Ok((state, other))
-    }
-
     #[test]
     fn a_grant_stored_before_identities_reads_back_with_no_identity() -> anyhow::Result<()> {
         let mut stored = serde_json::to_value(Fixture::grant())?;
@@ -862,55 +811,6 @@ mod tests {
                 .first()
                 .map(|grant| grant.identity_label.as_str()),
             Some("Work")
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn choosing_a_default_vault_rewrites_only_the_setup() -> anyhow::Result<()> {
-        let (state, other) = two_vault_state()?;
-
-        let written = state.select_default_vault(&Fixture::other_store())?;
-
-        assert_eq!(
-            written.entries,
-            vec![ExtensionPairingEntry {
-                key: EXTENSION_SETUP_KEY.to_owned(),
-                record: ExtensionPairingRecord::Setup(ExtensionReadySetup::from_grant(&other)),
-            }]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn the_chosen_default_vault_leads_the_list_and_is_selected() -> anyhow::Result<()> {
-        let (state, other) = two_vault_state()?;
-        let written = state.select_default_vault(&Fixture::other_store())?;
-        let mut items = state.to_entries();
-        items.extend(written.to_entries());
-        let updated = ExtensionPairingState::from_entries(items);
-
-        assert_eq!(
-            updated.selected_grant(),
-            SelectedExtensionPairingGrant::Selected {
-                grant: Box::new(other.clone())
-            }
-        );
-        assert_eq!(
-            updated.ordered_grants().first().map(|grant| &grant.vault_store_id),
-            Some(&other.vault_store_id)
-        );
-        assert_eq!(updated.ordered_grants().len(), 2);
-        Ok(())
-    }
-
-    #[test]
-    fn a_vault_that_is_not_paired_cannot_become_the_default() -> anyhow::Result<()> {
-        let (state, _) = two_vault_state()?;
-
-        assert_eq!(
-            state.select_default_vault(&Fixture::newer_store()),
-            Err(ExtensionPairingStateError::VaultNotPaired)
         );
         Ok(())
     }
@@ -1013,33 +913,35 @@ mod tests {
         Ok(())
     }
 
-    struct Fixture;
+    pub(super) struct Fixture;
 
     impl Fixture {
-        fn store() -> StoreId {
+        pub(super) fn store() -> StoreId {
             StoreId::before_genesis_placeholder()
         }
 
-        fn other_store() -> StoreId {
+        pub(super) fn other_store() -> StoreId {
             Self::valid_store("store_lmnopqrstuv")
         }
 
-        fn newer_store() -> StoreId {
+        pub(super) fn newer_store() -> StoreId {
             Self::valid_store("store_uvwxyzABCDE")
         }
 
-        fn valid_store(value: &str) -> StoreId {
+        pub(super) fn valid_store(value: &str) -> StoreId {
             match StoreId::parse(value) {
                 Ok(store_id) => store_id,
                 Err(error) => panic!("invalid fixture store id: {error}"),
             }
         }
 
-        fn approved_at(value: &str) -> anyhow::Result<ExtensionPairingApprovalEpochMilliseconds> {
+        pub(super) fn approved_at(
+            value: &str,
+        ) -> anyhow::Result<ExtensionPairingApprovalEpochMilliseconds> {
             Ok(serde_json::from_str(value)?)
         }
 
-        fn grant() -> StoredExtensionPairingGrant {
+        pub(super) fn grant() -> StoredExtensionPairingGrant {
             StoredExtensionPairingGrant {
                 vault_type: ExtensionPairingVaultType::Simple,
                 device_id: "device-test".to_owned(),
@@ -1058,7 +960,9 @@ mod tests {
             }
         }
 
-        fn refresh_input(selection: PairingSelection) -> RefreshExtensionPairingGrantInput {
+        pub(super) fn refresh_input(
+            selection: PairingSelection,
+        ) -> RefreshExtensionPairingGrantInput {
             let mut existing = Self::grant();
             existing.event_count = 2.into();
             existing.event_log_heads = vec!["event-2".to_owned()];

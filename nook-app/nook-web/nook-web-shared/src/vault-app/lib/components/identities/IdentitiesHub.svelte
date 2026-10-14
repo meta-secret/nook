@@ -242,11 +242,12 @@ join) sit between the hero and the cards.
    * one first), so a locked identity can be unlocked on the way. */
   function targetFor(identityId: string): IdentityVaultTarget {
     const card = projection.cards.find((each) => each.identityId === identityId)
-    const openable = (card?.vaults ?? []).filter(
+    const openable = (card ? card.vaults : []).filter(
       (each) => each.state !== IdentityVaultRowState.Unavailable,
     )
-    const row =
-      openable.find((each) => each.storeId === selectedStoreId) ?? openable[0]
+    const row = ((...[v = openable[0]]) => v)(
+      openable.find((each) => each.storeId === selectedStoreId),
+    )
     const target: IdentityVaultTarget = {
       identityId,
       storeId: row ? row.storeId : '',
