@@ -3,9 +3,11 @@ import { expect, test } from './fixtures'
 import {
   createIsolatedContext,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  expectFirstVaultOpen,
   keepVaultIdleLockDisabled,
   waitForVaultOperationsIdle,
   parseJson,
+  SENTINEL_APP,
   requireRecord,
   readStringProperty,
   signedSentinelInvitation,
@@ -122,13 +124,12 @@ async function unlockExistingVaultWithPasskey(page: Page) {
 }
 
 async function openPasskeyOverlayForSimpleCreate(page: Page) {
-  await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible({
+  await expect(page.getByTestId('first-vault-start')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-  await page.getByTestId('get-started-path-simple').click()
   await page.getByTestId('login-vault-name-input').fill('Passkey flow vault')
   await page.getByTestId('login-create-device-vault-btn').click()
-  await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible({
+  await expect(page.getByTestId('first-run-protect-step')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
   await expect(page.getByTestId('device-protection-gate')).toBeVisible()
@@ -366,213 +367,220 @@ test.describe('passkey device-key protection', () => {
     ).toHaveCount(0)
   })
 
-  test('uses participant passkeys and adds invitation-bound responses from the pre-genesis card', async ({
-    browser,
-    page,
-  }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem('nook_e2e_manual_passkey', 'true')
-    })
-    await page.goto('/app/')
+  test(
+    'uses participant passkeys and adds invitation-bound responses from the pre-genesis card',
+    SENTINEL_APP,
+    async ({ browser, page }) => {
+      await page.addInitScript(() => {
+        localStorage.setItem('nook_e2e_manual_passkey', 'true')
+      })
+      await page.goto('/app/')
 
-    await page.getByTestId('get-started-path-sentinel').click()
-    await page.getByTestId('sentinel-dashboard-card-stack').click()
-    await expect(page.getByTestId('sentinel-onboarding-identity')).toBeVisible()
-    await expect(page.getByTestId('sentinel-genesis-policy-step')).toHaveCount(
-      0,
-    )
-    await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
-    await expect(
-      page.getByTestId('sentinel-genesis-response-input'),
-    ).toHaveCount(0)
-    await page.getByTestId('sentinel-onboarding-create-keys').click()
-    await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    await expect(
-      page.getByTestId('sentinel-genesis-response-input'),
-    ).toHaveCount(0)
-    await clickDeviceProtectionSetup(page)
-    await expect(page.getByTestId('sentinel-genesis-name-step')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    await expect(
-      page.getByTestId('sentinel-genesis-response-input'),
-    ).toHaveCount(0)
-    await expect(
-      page.getByTestId('sentinel-card-stack-dashboard'),
-    ).toContainText('AUTOMATICALLY INCLUDED')
-    await page
-      .getByTestId('sentinel-genesis-name-input')
-      .fill('Passkey Sentinel')
-    await page.getByTestId('sentinel-onboarding-continue-policy').click()
-    await expect(page.getByTestId('sentinel-genesis-policy-step')).toBeVisible()
-    await page.getByTestId('sentinel-genesis-participant-count').click()
-    await page.getByTestId('sentinel-participant-count-option-3').click()
-    await page.getByTestId('sentinel-onboarding-continue-devices').click()
-    await expect(
-      page.getByTestId('sentinel-genesis-response-input'),
-    ).toBeVisible()
-    await expect(
-      page.getByTestId('sentinel-genesis-authentication-instructions'),
-    ).toContainText('Paste the signed response')
-    const invitationLink = await page
-      .getByTestId('sentinel-genesis-request-output')
-      .inputValue()
-    expect(invitationLink).toContain('/vault#sentinel-request=')
-    expect(invitationLink).toContain('#sentinel-request=')
+      await page.getByTestId('get-started-path-sentinel').click()
+      await page.getByTestId('sentinel-dashboard-card-stack').click()
+      await expect(
+        page.getByTestId('sentinel-onboarding-identity'),
+      ).toBeVisible()
+      await expect(
+        page.getByTestId('sentinel-genesis-policy-step'),
+      ).toHaveCount(0)
+      await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
+      await expect(
+        page.getByTestId('sentinel-genesis-response-input'),
+      ).toHaveCount(0)
+      await page.getByTestId('sentinel-onboarding-create-keys').click()
+      await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible({
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
+      await expect(
+        page.getByTestId('sentinel-genesis-response-input'),
+      ).toHaveCount(0)
+      await clickDeviceProtectionSetup(page)
+      await expect(page.getByTestId('sentinel-genesis-name-step')).toBeVisible({
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
+      await expect(
+        page.getByTestId('sentinel-genesis-response-input'),
+      ).toHaveCount(0)
+      await expect(
+        page.getByTestId('sentinel-card-stack-dashboard'),
+      ).toContainText('AUTOMATICALLY INCLUDED')
+      await page
+        .getByTestId('sentinel-genesis-name-input')
+        .fill('Passkey Sentinel')
+      await page.getByTestId('sentinel-onboarding-continue-policy').click()
+      await expect(
+        page.getByTestId('sentinel-genesis-policy-step'),
+      ).toBeVisible()
+      await page.getByTestId('sentinel-genesis-participant-count').click()
+      await page.getByTestId('sentinel-participant-count-option-3').click()
+      await page.getByTestId('sentinel-onboarding-continue-devices').click()
+      await expect(
+        page.getByTestId('sentinel-genesis-response-input'),
+      ).toBeVisible()
+      await expect(
+        page.getByTestId('sentinel-genesis-authentication-instructions'),
+      ).toContainText('Paste the signed response')
+      const invitationLink = await page
+        .getByTestId('sentinel-genesis-request-output')
+        .inputValue()
+      expect(invitationLink).toContain('/vault#sentinel-request=')
+      expect(invitationLink).toContain('#sentinel-request=')
 
-    const participantNameInput = page.getByTestId(
-      'sentinel-genesis-participant-name',
-    )
-    await expect(participantNameInput).toBeVisible()
-    await expect(
-      page.getByTestId('sentinel-genesis-add-participant'),
-    ).toBeDisabled()
-    await participantNameInput.fill("Ada's iPhone")
-    await expect(
-      page.getByTestId('sentinel-genesis-add-participant'),
-    ).toBeDisabled()
+      const participantNameInput = page.getByTestId(
+        'sentinel-genesis-participant-name',
+      )
+      await expect(participantNameInput).toBeVisible()
+      await expect(
+        page.getByTestId('sentinel-genesis-add-participant'),
+      ).toBeDisabled()
+      await participantNameInput.fill("Ada's iPhone")
+      await expect(
+        page.getByTestId('sentinel-genesis-add-participant'),
+      ).toBeDisabled()
 
-    const participantOne = await createSentinelParticipantResponse(
-      browser,
-      invitationLink,
-      page.url(),
-      'Sentinel participant one',
-    )
-    await page
-      .getByTestId('sentinel-genesis-response-input')
-      .fill(participantOne.responseLink)
-    await expect(
-      page.getByTestId('sentinel-genesis-authentication-ready'),
-    ).toContainText('Authentication response received')
-    await participantNameInput.fill("Ada's iPhone")
-    await expect(
-      page.getByTestId('sentinel-genesis-add-participant'),
-    ).toBeEnabled()
+      const participantOne = await createSentinelParticipantResponse(
+        browser,
+        invitationLink,
+        page.url(),
+        'Sentinel participant one',
+      )
+      await page
+        .getByTestId('sentinel-genesis-response-input')
+        .fill(participantOne.responseLink)
+      await expect(
+        page.getByTestId('sentinel-genesis-authentication-ready'),
+      ).toContainText('Authentication response received')
+      await participantNameInput.fill("Ada's iPhone")
+      await expect(
+        page.getByTestId('sentinel-genesis-add-participant'),
+      ).toBeEnabled()
 
-    await page.getByTestId('sentinel-genesis-add-participant').click()
-    await expect(
-      page.getByTestId('sentinel-card-stack-dashboard'),
-    ).toContainText("Ada's iPhone")
+      await page.getByTestId('sentinel-genesis-add-participant').click()
+      await expect(
+        page.getByTestId('sentinel-card-stack-dashboard'),
+      ).toContainText("Ada's iPhone")
 
-    const participantTwo = await createSentinelParticipantResponse(
-      browser,
-      invitationLink,
-      page.url(),
-      'Sentinel participant two',
-    )
-    expect(participantTwo.responseLink).toContain('/vault#sentinel-response=')
-    const participantResponseUrl = new URL(participantTwo.responseLink)
-    const localParticipantResponseUrl = new URL(
-      `${participantResponseUrl.pathname}${participantResponseUrl.search}${participantResponseUrl.hash}`,
-      new URL(page.url()).origin,
-    )
-    await page.evaluate((responseLink) => {
-      window.location.href = responseLink
-    }, localParticipantResponseUrl.href)
-    await expect(page).toHaveURL(/\/vault$/)
-    await expect(
-      page.getByTestId('sentinel-genesis-authentication-ready'),
-    ).toContainText('Authentication response received')
-    await participantNameInput.fill("Grace's Laptop")
-    await page.getByTestId('sentinel-genesis-add-participant').click()
-    await expect(
-      page.getByTestId('sentinel-card-stack-dashboard'),
-    ).toContainText("Grace's Laptop")
-    await expect(
-      page.getByTestId('sentinel-genesis-participant-fields'),
-    ).toHaveCount(0)
-    const ceremonyReadinessOptions: { timeout: number } = {
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    }
-    await expect(
-      page.getByTestId('sentinel-genesis-ceremony-step'),
-    ).toBeVisible(ceremonyReadinessOptions)
-    await expect(page.getByTestId('sentinel-genesis-progress')).toContainText(
-      '3 / 3',
-      ceremonyReadinessOptions,
-    )
-    await expect(page.getByTestId('sentinel-genesis-finalize')).toBeEnabled()
-    await expect(
-      page.getByTestId('sentinel-onboarding-progress').locator('li').nth(3),
-    ).toHaveAttribute('data-current', 'step')
-    await page.getByTestId('sentinel-genesis-finalize').click()
-    await expect(page.getByTestId('sentinel-genesis-deliveries')).toBeVisible(
-      ceremonyReadinessOptions,
-    )
-    await expect(
-      page.getByTestId('sentinel-genesis-ceremony-step'),
-    ).toHaveCount(0)
-    await expect(page.getByTestId('sentinel-genesis-progress')).toHaveCount(0)
-    await expect(page.getByTestId('sentinel-genesis-delivery')).toHaveCount(
-      2,
-      ceremonyReadinessOptions,
-    )
+      const participantTwo = await createSentinelParticipantResponse(
+        browser,
+        invitationLink,
+        page.url(),
+        'Sentinel participant two',
+      )
+      expect(participantTwo.responseLink).toContain('/vault#sentinel-response=')
+      const participantResponseUrl = new URL(participantTwo.responseLink)
+      const localParticipantResponseUrl = new URL(
+        `${participantResponseUrl.pathname}${participantResponseUrl.search}${participantResponseUrl.hash}`,
+        new URL(page.url()).origin,
+      )
+      await page.evaluate((responseLink) => {
+        window.location.href = responseLink
+      }, localParticipantResponseUrl.href)
+      await expect(page).toHaveURL(/\/vault$/)
+      await expect(
+        page.getByTestId('sentinel-genesis-authentication-ready'),
+      ).toContainText('Authentication response received')
+      await participantNameInput.fill("Grace's Laptop")
+      await page.getByTestId('sentinel-genesis-add-participant').click()
+      await expect(
+        page.getByTestId('sentinel-card-stack-dashboard'),
+      ).toContainText("Grace's Laptop")
+      await expect(
+        page.getByTestId('sentinel-genesis-participant-fields'),
+      ).toHaveCount(0)
+      const ceremonyReadinessOptions: { timeout: number } = {
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      }
+      await expect(
+        page.getByTestId('sentinel-genesis-ceremony-step'),
+      ).toBeVisible(ceremonyReadinessOptions)
+      await expect(page.getByTestId('sentinel-genesis-progress')).toContainText(
+        '3 / 3',
+        ceremonyReadinessOptions,
+      )
+      await expect(page.getByTestId('sentinel-genesis-finalize')).toBeEnabled()
+      await expect(
+        page.getByTestId('sentinel-onboarding-progress').locator('li').nth(3),
+      ).toHaveAttribute('data-current', 'step')
+      await page.getByTestId('sentinel-genesis-finalize').click()
+      await expect(page.getByTestId('sentinel-genesis-deliveries')).toBeVisible(
+        ceremonyReadinessOptions,
+      )
+      await expect(
+        page.getByTestId('sentinel-genesis-ceremony-step'),
+      ).toHaveCount(0)
+      await expect(page.getByTestId('sentinel-genesis-progress')).toHaveCount(0)
+      await expect(page.getByTestId('sentinel-genesis-delivery')).toHaveCount(
+        2,
+        ceremonyReadinessOptions,
+      )
 
-    await participantOne.context.close()
-    await participantTwo.context.close()
-  })
+      await participantOne.context.close()
+      await participantTwo.context.close()
+    },
+  )
 
-  test('cancels queued initiator keys when navigation unmounts the access gate', async ({
-    page,
-  }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem('nook_e2e_manual_passkey', 'true')
-    })
-    await page.goto('/app/')
-    await queueSentinelInitiatorKeys(page)
+  test(
+    'cancels queued initiator keys when navigation unmounts the access gate',
+    SENTINEL_APP,
+    async ({ page }) => {
+      await page.addInitScript(() => {
+        localStorage.setItem('nook_e2e_manual_passkey', 'true')
+      })
+      await page.goto('/app/')
+      await queueSentinelInitiatorKeys(page)
 
-    await page.evaluate(() => {
-      history.pushState({}, '', '/privacy')
-      window.dispatchEvent(new PopStateEvent('popstate'))
-    })
-    await expect(page.getByTestId('legal-document-page')).toHaveAttribute(
-      'data-legal-page',
-      'privacy',
-    )
-    await page.goBack()
-    await expect(page).toHaveURL(/\/vault$/)
-    await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
-    await expect(page.getByTestId('get-started-path-sentinel')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
+      await page.evaluate(() => {
+        history.pushState({}, '', '/privacy')
+        window.dispatchEvent(new PopStateEvent('popstate'))
+      })
+      await expect(page.getByTestId('legal-document-page')).toHaveAttribute(
+        'data-legal-page',
+        'privacy',
+      )
+      await page.goBack()
+      await expect(page).toHaveURL(/\/vault$/)
+      await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
+      await expect(page.getByTestId('get-started-path-sentinel')).toBeVisible({
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
 
-    await queueSentinelInitiatorKeys(page)
-    await page.evaluate(() => {
-      history.pushState({}, '', '/help')
-      window.dispatchEvent(new PopStateEvent('popstate'))
-    })
-    await expect(page.getByTestId('help-page')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    await page.getByTestId('help-header-close').click()
-    await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
-    await expect(page.getByTestId('get-started-path-sentinel')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
+      await queueSentinelInitiatorKeys(page)
+      await page.evaluate(() => {
+        history.pushState({}, '', '/help')
+        window.dispatchEvent(new PopStateEvent('popstate'))
+      })
+      await expect(page.getByTestId('help-page')).toBeVisible({
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
+      await page.getByTestId('help-header-close').click()
+      await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
+      await expect(page.getByTestId('get-started-path-sentinel')).toBeVisible({
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
 
-    await queueSentinelInitiatorKeys(page)
-    const keysPath: WorkspacePathPush = { page, path: '/identity/keys' }
-    await pushWorkspacePath(keysPath)
-    await expect(page).toHaveURL(/\/identity\/keys$/)
-    await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
-    await page.getByTestId('page-bar-back').click()
-    await expect(page).toHaveURL(/\/vault$/)
-    await expect(page.getByTestId('get-started-path-sentinel')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
+      await queueSentinelInitiatorKeys(page)
+      const keysPath: WorkspacePathPush = { page, path: '/identity/keys' }
+      await pushWorkspacePath(keysPath)
+      await expect(page).toHaveURL(/\/identity\/keys$/)
+      await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
+      await page.getByTestId('page-bar-back').click()
+      await expect(page).toHaveURL(/\/vault$/)
+      await expect(page.getByTestId('get-started-path-sentinel')).toBeVisible({
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
 
-    await queueSentinelInitiatorKeys(page)
-    await page.goBack()
-    await expect(page).toHaveURL(/\/identity\/keys$/)
-    await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
-    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    await page.getByTestId('page-bar-back').click()
-    await queueSentinelInitiatorKeys(page)
-  })
+      await queueSentinelInitiatorKeys(page)
+      await page.goBack()
+      await expect(page).toHaveURL(/\/identity\/keys$/)
+      await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
+      await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
+      await page.getByTestId('page-bar-back').click()
+      await queueSentinelInitiatorKeys(page)
+    },
+  )
 
   test('resumes an invitation response after participant protection setup', async ({
     page,
@@ -708,9 +716,7 @@ test.describe('passkey device-key protection', () => {
     await revealDeviceProtectionCreateWorkflow(page)
     await page.getByTestId('device-protection-label-input').fill('Work laptop')
     await clickDeviceProtectionSetup(page)
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
+    await expectFirstVaultOpen(page)
     const deviceId = await readDeviceId(page)
     const shortDeviceId = `${deviceId.slice(0, 6)}...${deviceId.slice(-4)}`
     await expect
@@ -745,9 +751,7 @@ test.describe('passkey device-key protection', () => {
     await page.getByTestId('device-mode-select').click()
     await page.getByRole('option', { name: 'High security' }).click()
     await clickDeviceProtectionSetup(page)
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
+    await expectFirstVaultOpen(page)
     await expect(page.getByTestId('mode-group-device')).toHaveCount(0)
 
     await page.getByTestId('header-lock-vault-btn').click()
@@ -768,9 +772,7 @@ test.describe('passkey device-key protection', () => {
 
     await openPasskeyOverlayForSimpleCreate(page)
     await clickDeviceProtectionSetup(page)
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
+    await expectFirstVaultOpen(page)
 
     await clearProtectedAppKeyMetadata(page)
 
@@ -809,9 +811,7 @@ test.describe('passkey device-key protection', () => {
     await page.getByTestId('device-protection-pin-input').fill('123456')
     await page.getByTestId('device-protection-pin-confirm').fill('123456')
     await page.getByTestId('device-protection-pin-setup-btn').click()
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
+    await expectFirstVaultOpen(page)
     // The PIN unlock finishes after the vault shows and starts a fresh idle
     // tracker; keep the e2e idle lock off for the rest of the test.
     await keepVaultIdleLockDisabled(page)
@@ -834,9 +834,7 @@ test.describe('passkey device-key protection', () => {
     // Leave Access before locking. PIN unlock uses the login Unlock button;
     // locking while Access stays open leaves neither Unlock nor an overlay.
     await openVaultPage(page)
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
+    await expectFirstVaultOpen(page)
     await page.getByTestId('header-lock-vault-btn').click()
     await openExistingVaultProtectionOverlay(page)
     await expect(
@@ -849,9 +847,7 @@ test.describe('passkey device-key protection', () => {
     )
     await page.getByTestId('device-protection-pin-unlock-input').fill('123456')
     await page.getByTestId('device-protection-pin-unlock-btn').click()
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
+    await expectFirstVaultOpen(page)
 
     await page.reload()
     await openExistingVaultProtectionOverlay(page)
@@ -860,9 +856,7 @@ test.describe('passkey device-key protection', () => {
     ).toBeVisible()
     await page.getByTestId('device-protection-pin-unlock-input').fill('123456')
     await page.getByTestId('device-protection-pin-unlock-btn').click()
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
+    await expectFirstVaultOpen(page)
   })
 
   test('falls back to PIN setup when passkeys are unavailable', async ({

@@ -34,6 +34,7 @@ joins are bands at the top of the page, not separate cards.
   import BrowserSettingsPanel from "$lib/components/settings/BrowserSettingsPanel.svelte";
   import IdentityDevicesPanel from "$lib/components/identity-control/IdentityDevicesPanel.svelte";
   import VaultStatusBar from "$lib/components/VaultStatusBar.svelte";
+  import FirstRunBackupStep from "$lib/components/login/FirstRunBackupStep.svelte";
   import { VaultStatusBarVariant } from "$lib/components/vault-status-bar-state";
   import IdentitiesHub from "$lib/components/identities/IdentitiesHub.svelte";
   import LoginNewVaultPanel from "$lib/components/login/LoginNewVaultPanel.svelte";
@@ -67,6 +68,7 @@ joins are bands at the top of the page, not separate cards.
   import type { VaultState } from "$lib/vault.svelte";
   import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
   import {
+    FirstRunStage,
     ManageSectionScope,
     WorkspaceSection,
     WorkspaceSectionScope,
@@ -349,6 +351,13 @@ joins are bands at the top of the page, not separate cards.
     if (!vault.errorMsg) newVaultOpen = false;
   }
 
+  /** Leave the first-vault setup for the Sync page or the new vault. */
+  function finishFirstRun(next: WorkspaceSection): void {
+    vault.firstRun = FirstRunStage.Off;
+    openSection(next);
+    if (next === WorkspaceSection.Sync) vault.beginAddProvider();
+  }
+
   onDestroy(() => {
     onEditorOpenChange(false);
   });
@@ -365,7 +374,13 @@ joins are bands at the top of the page, not separate cards.
   />
 {/snippet}
 
-{#if section === WorkspaceSection.Identities}
+{#if vault.firstRun !== FirstRunStage.Off}
+  <FirstRunBackupStep
+    {vault}
+    onSetUpBackup={() => finishFirstRun(WorkspaceSection.Sync)}
+    onSkip={() => finishFirstRun(WorkspaceSection.Vault)}
+  />
+{:else if section === WorkspaceSection.Identities}
   <div
     class="grid min-w-0 grid-cols-1 gap-4"
     data-testid="identities-workspace"

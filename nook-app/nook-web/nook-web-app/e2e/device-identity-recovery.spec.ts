@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures'
-import { ENROLLMENT_UNLOCK_TIMEOUT_MS } from './helpers'
+import { ENROLLMENT_UNLOCK_TIMEOUT_MS, expectFirstVaultOpen } from './helpers'
 
 declare global {
   interface Window {
@@ -28,15 +28,12 @@ async function createProtectedVault(page: Page): Promise<void> {
       `Protected vault setup failed: ${await vaultError.innerText()}`,
     )
   }
-  await page.getByTestId('get-started-path-simple').click()
   await page.getByTestId('login-vault-name-input').fill('Recovery test vault')
   await page.getByTestId('login-create-device-vault-btn').click()
   const createChoice = page.getByTestId('device-protection-create-new-choice')
   if (await createChoice.isVisible()) await createChoice.click()
   await page.getByTestId('device-protection-setup-btn').click()
-  await expect(page.getByTestId('vault-panel')).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
+  await expectFirstVaultOpen(page)
 }
 
 async function openProtectionOverlay(page: Page): Promise<void> {

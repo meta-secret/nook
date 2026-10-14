@@ -20,15 +20,13 @@
   import {
     ArrowRight,
     Check,
-    KeyRound,
     Layers3,
-    RefreshCw,
-    ShieldCheck,
     Terminal,
     Users,
   } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button";
   import LoginExistingVaultPaths from "$lib/components/login/LoginExistingVaultPaths.svelte";
+  import FirstVaultStart from "$lib/components/login/FirstVaultStart.svelte";
   import SentinelUnlockParticipantHelper from "$lib/components/login/SentinelUnlockParticipantHelper.svelte";
   import SentinelGenesisJoinFlow from "$lib/components/login/SentinelGenesisJoinFlow.svelte";
   import SentinelDashboardSurface from "$lib/components/login/SentinelDashboardSurface.svelte";
@@ -131,11 +129,17 @@
   });
 
   const isBusy = $derived(isVerifying || isInitializing);
+  /** Simple and unified apps start with one name field; Sentinel keeps its ceremony. */
+  const quickStart = $derived(
+    appKind !== VaultApplication.Sentinel &&
+      !sentinelInvitationRequest.trim() &&
+      !sentinelOnboardingPackage.trim() &&
+      sentinelGenesisPhase === SentinelGenesisPhase.Inactive,
+  );
   let wizardStep = $state<VaultCreationWizardStep>(
     VaultCreationWizardStep.Choose,
   );
   let chosenPath = $state<ChosenVaultPath>(ChosenVaultPath.Undecided);
-  let vaultName = $state("");
   let sentinelName = $state("");
   let sentinelDashboardState = $state<SentinelDashboardChoice>({
     kind: SentinelDashboardChoiceKind.NotChosen,
@@ -239,8 +243,6 @@
     }
   });
 
-  const trimmedVaultName = $derived(vaultName.trim());
-  const vaultNameReady = $derived(trimmedVaultName.length > 0);
   const sentinelNameReady = $derived(sentinelName.trim().length > 0);
   const sentinelPolicyRequest = $derived<
     Parameters<typeof evaluate_sentinel_policy_draft>[0]
@@ -292,8 +294,7 @@
     }
   });
   const canGoBack = $derived(
-    wizardStep === VaultCreationWizardStep.SimpleCreate ||
-      wizardStep === VaultCreationWizardStep.SentinelDashboard ||
+    wizardStep === VaultCreationWizardStep.SentinelDashboard ||
       wizardStep === VaultCreationWizardStep.SentinelPolicy ||
       wizardStep === VaultCreationWizardStep.Join,
   );
@@ -302,7 +303,6 @@
     switch (wizardStep) {
       case VaultCreationWizardStep.Choose:
         return 0;
-      case VaultCreationWizardStep.SimpleCreate:
       case VaultCreationWizardStep.SentinelDashboard:
       case VaultCreationWizardStep.SentinelPolicy:
       case VaultCreationWizardStep.Join:
@@ -311,33 +311,18 @@
     }
   });
 
-  type ProgressStep = { readonly label: string; readonly hint: string };
-  const progressSteps = $derived.by((): ProgressStep[] => {
-    const step = (label: string): ProgressStep => ({ label, hint: "" });
-    const choose = step(vault.t(I18N_KEYS.LoginLandingStepChoose));
-    // Sync providers belong to the identity, so they are added after its
-    // first vault exists; the step names that follow-up without gating it.
-    const sync: ProgressStep = {
-      label: vault.t(I18N_KEYS.LoginLandingStepSync),
-      hint: vault.t(I18N_KEYS.LoginLandingStepSyncHint),
-    };
-    if (chosenPath === ChosenVaultPath.Simple) {
-      return [choose, step(vault.t(I18N_KEYS.LoginLandingStepSimple)), sync];
-    }
+  // Simple and unified apps create through FirstVaultStart; this chooser
+  // carries the Sentinel paths and invitation flows.
+  const progressSteps = $derived.by(() => {
+    const choose = vault.t(I18N_KEYS.LoginLandingStepChoose);
     if (chosenPath === ChosenVaultPath.Sentinel) {
-      return [choose, step(vault.t(I18N_KEYS.LoginLandingStepSentinel))];
+      return [choose, vault.t(I18N_KEYS.LoginLandingStepSentinel)];
     }
     if (chosenPath === ChosenVaultPath.Join) {
-      return [choose, step(vault.t(I18N_KEYS.LoginLandingStepJoin))];
+      return [choose, vault.t(I18N_KEYS.LoginLandingStepJoin)];
     }
-    return appKind === VaultApplication.Sentinel ? [choose] : [choose, sync];
+    return [choose];
   });
-
-  function chooseSimplePath() {
-    vault.draftVaultType = VaultType.Simple;
-    chosenPath = ChosenVaultPath.Simple;
-    wizardStep = VaultCreationWizardStep.SimpleCreate;
-  }
 
   function chooseSentinelCreatePath() {
     vault.draftVaultType = VaultType.Sentinel;
@@ -408,10 +393,7 @@
       finishSentinelInvitation();
       return;
     }
-    if (
-      wizardStep === VaultCreationWizardStep.SimpleCreate ||
-      wizardStep === VaultCreationWizardStep.Join
-    ) {
+    if (wizardStep === VaultCreationWizardStep.Join) {
       chosenPath = ChosenVaultPath.Undecided;
       wizardStep = VaultCreationWizardStep.Choose;
       return;
@@ -432,10 +414,6 @@
     }
   }
 
-  async function createSimpleVault() {
-    if (!vaultNameReady || isBusy) return;
-    await onCreateDeviceVault(trimmedVaultName);
-  }
 
   async function startSentinelGenesis(): Promise<boolean> {
     if (
@@ -490,7 +468,17 @@
     choice: sentinelDashboardState,
   }}
 >
-  {#if sentinelDashboardActive && dashboardIs(SentinelDashboard.CardStack)}
+  {#if quickStart}
+    <FirstVaultStart
+      {vault}
+      {isBusy}
+      {isVerifying}
+      {usesExtensionDeviceIdentity}
+      onCreate={onCreateDeviceVault}
+      {onConnectStorage}
+      {...joinIdentityProps}
+    />
+  {:else if sentinelDashboardActive && dashboardIs(SentinelDashboard.CardStack)}
     <SentinelDashboardSurface
       {vault}
       dashboard={SentinelDashboard.CardStack}
@@ -600,7 +588,7 @@
             </header>
           {:else}
             <ol class="space-y-4">
-              {#each progressSteps as { label, hint }, index (`${chosenPath}-${label}`)}
+              {#each progressSteps as label, index (`${chosenPath}-${label}`)}
                 <li class="flex items-start gap-4">
                   <span
                     class={[
@@ -629,14 +617,6 @@
                     >
                       {label}
                     </p>
-                    {#if hint && index > stepIndex}
-                      <p
-                        class="mt-1 text-xs leading-snug text-pretty text-muted-foreground"
-                        data-testid="landing-step-sync-hint"
-                      >
-                        {hint}
-                      </p>
-                    {/if}
 
                     {#if index === stepIndex && wizardStep === VaultCreationWizardStep.Choose}
                       <section
@@ -651,38 +631,6 @@
                             class="grid gap-2"
                             data-testid="get-started-path-list"
                           >
-                            {#if appKind !== VaultApplication.Sentinel}
-                              <button
-                                type="button"
-                                class="group grid grid-cols-[auto_1fr_auto] items-center gap-3 nk-frame-nick nk-frame-interactive px-4 py-3 text-left text-foreground transition-colors hover:bg-accent/40 disabled:opacity-60"
-                                data-testid="get-started-path-simple"
-                                disabled={isBusy}
-                                onclick={chooseSimplePath}
-                              >
-                                <span
-                                  class="nk-tile"
-                                >
-                                  <KeyRound class="size-4" />
-                                </span>
-                                <span class="min-w-0">
-                                  <span class="block text-sm font-semibold">
-                                    {vault.t(
-                                      I18N_KEYS.LoginGetStartedPathSimpleTitle,
-                                    )}
-                                  </span>
-                                  <span
-                                    class="mt-1 block text-xs leading-snug text-muted-foreground"
-                                  >
-                                    {vault.t(
-                                      I18N_KEYS.LoginGetStartedPathSimpleDescription,
-                                    )}
-                                  </span>
-                                </span>
-                                <ArrowRight
-                                  class="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5"
-                                />
-                              </button>
-                            {/if}
                             {#if appKind !== VaultApplication.Simple}
                               <button
                                 type="button"
@@ -719,68 +667,6 @@
 
                         </div>
                       </section>
-                    {:else if index === stepIndex && wizardStep === VaultCreationWizardStep.SimpleCreate}
-                      <section
-                        class="mt-3 space-y-3"
-                        data-testid="landing-auth-step-simple"
-                      >
-                        <div
-                          class="space-y-3"
-                          data-testid="create-vault-wizard-create"
-                        >
-                          <input
-                            id="login-vault-name"
-                            type="text"
-                            class="w-full border-b border-border bg-transparent py-2 text-base text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-foreground/50"
-                            placeholder={vault.t(
-                              I18N_KEYS.LoginVaultNamePlaceholder,
-                            )}
-                            maxlength="64"
-                            autocomplete="off"
-                            data-testid="login-vault-name-input"
-                            bind:value={vaultName}
-                            disabled={isBusy}
-                            onkeydown={(event) => {
-                              if (event.key === "Enter" && vaultNameReady) {
-                                event.preventDefault();
-                                void createSimpleVault();
-                              }
-                            }}
-                          />
-                          {#if vaultNameReady}
-                            <p
-                              class="text-sm text-pretty text-muted-foreground"
-                            >
-                              {(() => {
-                                const tArgs2: Parameters<typeof vault.t>[0] = {
-                                  key: usesExtensionDeviceIdentity
-                                    ? I18N_KEYS.LoginLandingCreateSimpleWithExtension
-                                    : I18N_KEYS.LoginLandingCreateSimpleLocally,
-                                  replacements: { name: trimmedVaultName },
-                                };
-                                return vault.t(tArgs2);
-                              })()}
-                            </p>
-                          {/if}
-                          <Button
-                            type="button"
-                            data-testid="login-create-device-vault-btn"
-                            disabled={isBusy || !vaultNameReady}
-                            onclick={() => void createSimpleVault()}
-                          >
-                            {#if isVerifying}
-                              <RefreshCw class="size-4 animate-spin" />
-                              {vault.t(I18N_KEYS.LoginCreatingVault)}
-                            {:else if isInitializing}
-                              <RefreshCw class="size-4 animate-spin" />
-                              {vault.t(I18N_KEYS.OnboardingLoadingEngine)}
-                            {:else}
-                              <ShieldCheck class="size-4" />
-                              {vault.t(I18N_KEYS.LoginLandingCreateSimpleBtn)}
-                            {/if}
-                          </Button>
-                        </div>
-                      </section>
                     {:else if index === stepIndex && wizardStep === VaultCreationWizardStep.SentinelDashboard}
                       <section
                         class="mt-4 space-y-4"
@@ -793,7 +679,7 @@
                             const tArgs3: Parameters<typeof vault.t>[0] = {
                               key: I18N_KEYS.LoginSentinelDashboardChoiceDescription,
                               replacements: {
-                                name: trimmedVaultName,
+                                name: sentinelName.trim(),
                               },
                             };
                             return vault.t(tArgs3);

@@ -16,6 +16,7 @@ join) sit between the hero and the cards.
   import IdentityDraftCard from './IdentityDraftCard.svelte'
   import IdentityJoinPanel from '$lib/components/identity-control/IdentityJoinPanel.svelte'
   import { IdentityDirectoryLoader } from './identity-directory-loader.svelte'
+  import { configured_vault_application, VaultApplication } from '$app-wasm'
   import {
     IdentityCardProjection,
     IdentityVaultRowState,
@@ -185,6 +186,12 @@ join) sit between the hero and the cards.
         ]
       : projection.cards,
   )
+  /** A browser with no identity: the first-vault screen stands alone. */
+  const firstRun = $derived(
+    Boolean(vaultSetup) &&
+      setupHost.kind === VaultSetupHostKind.Draft &&
+      configured_vault_application() !== VaultApplication.Sentinel,
+  )
   /** The current identity's card, which carries the "New vault" row. */
   const currentCardShown = $derived(
     cardsReady && showCards && projection.cards.some((card) => card.current),
@@ -200,11 +207,13 @@ join) sit between the hero and the cards.
 </script>
 
 <div class="grid min-w-0 grid-cols-1 gap-6" data-testid="identities-hub">
-  <IdentitiesHero
-    {vault}
-    totals={projection.totals}
-    showStats={cards.length > 0}
-  />
+  {#if !firstRun}
+    <IdentitiesHero
+      {vault}
+      totals={projection.totals}
+      showStats={cards.length > 0}
+    />
+  {/if}
 
   <IdentityJoinPanel {vault} />
 
@@ -253,7 +262,9 @@ join) sit between the hero and the cards.
     {/if}
   {/if}
 
-  {#if vaultSetup && setupHost.kind === VaultSetupHostKind.Draft}
+  {#if firstRun && vaultSetup}
+    {@render vaultSetup()}
+  {:else if vaultSetup && setupHost.kind === VaultSetupHostKind.Draft}
     <div class="grid min-w-0 grid-cols-1">
       <IdentityDraftCard {vault}>
         {@render vaultSetup()}
@@ -261,7 +272,7 @@ join) sit between the hero and the cards.
     </div>
   {/if}
 
-  {#if showCards}
+  {#if showCards && !firstRun}
     {#if loader.state.kind === IdentityDirectoryLoadKind.Loading && vault.hasManager}
       <p
         class="flex items-center gap-2 text-sm text-muted-foreground"

@@ -43,16 +43,16 @@ test('exposes only the project capability and rejects the opposite vault type', 
     .toBe(expectedKind)
 
   if (isSimple) {
-    await expect(page.getByTestId('get-started-path-chooser')).toBeVisible()
-    await expect(page.getByTestId('get-started-path-simple')).toBeVisible()
+    // Simple opens on the one-field first screen; there is nothing to choose.
+    await expect(page.getByTestId('first-vault-start')).toBeVisible()
+    await expect(page.getByTestId('get-started-path-chooser')).toHaveCount(0)
     await expect(page.getByTestId('get-started-path-sentinel')).toHaveCount(0)
     await expect(page.getByTestId('login-connect-storage-btn')).toContainText(
       'Restore from a sync provider',
     )
     await expect(page.getByTestId('sentinel-dashboard-choice')).toHaveCount(0)
     await expect(page.getByTestId('sibling-vault-app-link')).toHaveCount(0)
-    await page.getByTestId('get-started-path-simple').click()
-    await expect(page.getByTestId('create-vault-wizard-create')).toBeVisible()
+    await expect(page.getByTestId('login-vault-name-input')).toBeVisible()
   } else {
     await expect(page.getByTestId('get-started-path-chooser')).toBeVisible()
     await expect(page.getByTestId('get-started-path-simple')).toHaveCount(0)

@@ -49,5 +49,17 @@ export default defineConfig({
       name: 'sentinel-isolation',
       use: { baseURL: 'http://127.0.0.1:5175' },
     },
+    {
+      // The unified and Simple apps never offer Sentinel; its creation and
+      // ceremony tests run here, against the Sentinel app itself.
+      name: 'sentinel-app',
+      testMatch: [
+        '**/vault-architecture-modes.spec.ts',
+        '**/device-key-protection.spec.ts',
+        '**/sentinel-unlock-ceremony.spec.ts',
+      ],
+      grep: /@sentinel/,
+      use: { baseURL: 'http://127.0.0.1:5175' },
+    },
   ],
 })

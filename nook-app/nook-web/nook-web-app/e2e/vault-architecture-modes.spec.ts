@@ -12,6 +12,7 @@ import {
   createIsolatedContext,
   createLocalVaultOnLogin,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  SENTINEL_APP,
   enrollmentCodeFromLink,
   localizeAppLinkForE2e,
   expandSettingsSection,
@@ -111,7 +112,14 @@ async function assertGroupsDoNotOverlap(page: Page, testIds: string[]) {
 }
 
 async function continueToPathChooser(page: Page) {
-  await expect(page.getByTestId('get-started-path-chooser')).toBeVisible()
+  // Simple and unified apps open on the one-field first screen; the Sentinel
+  // app keeps its creation chooser.
+  await expect(
+    page
+      .getByTestId('first-vault-start')
+      .or(page.getByTestId('get-started-path-chooser'))
+      .first(),
+  ).toBeVisible()
 }
 
 async function setLegacyReplicationForProviderTest(
@@ -168,309 +176,306 @@ test.describe('vault architecture modes', () => {
     await expect(app).not.toHaveClass(/dark/)
   })
 
-  test('routes simple and sentinel vaults into different creation workflows', async ({
+  test(
+    'routes a sentinel vault into its participant ceremony',
+    SENTINEL_APP,
+    async ({ page }) => {
+      await expect(page.getByTestId('mode-group-device')).toHaveCount(0)
+      await expect(page.getByTestId('identities-hero')).toBeVisible()
+      await expect(page.getByTestId('get-started-path-chooser')).toBeVisible()
+
+      await continueToPathChooser(page)
+      await expect(page.getByTestId('get-started-path-chooser')).toBeVisible()
+      await expect(page.getByTestId('get-started-path-simple')).toHaveCount(0)
+      await expect(page.getByTestId('get-started-path-sentinel')).toBeVisible()
+      await expect(page.getByTestId('get-started-path-join')).toHaveCount(0)
+      await expect(page.getByTestId('mode-group-vault')).toHaveCount(0)
+      await expect(page.getByTestId('mode-group-replication')).toHaveCount(0)
+      await expect(page.getByTestId('create-vault-wizard-create')).toHaveCount(
+        0,
+      )
+      await expect(page.getByTestId('mode-group-onboarding')).toHaveCount(0)
+      await expect(
+        page.getByTestId('mode-group-provider-capability'),
+      ).toHaveCount(0)
+      await expect(
+        page.getByTestId('sentinel-genesis-introduction'),
+      ).toHaveCount(0)
+      await expect(page.getByTestId('replication-mode-select')).toHaveCount(0)
+      await expect(
+        page.getByTestId('create-vault-wizard-nav-replication'),
+      ).toHaveCount(0)
+
+      await page.getByTestId('get-started-path-sentinel').click()
+      await expect(page.getByTestId('sentinel-dashboard-choice')).toBeVisible()
+      await expect(
+        page.getByTestId('sentinel-genesis-policy-step'),
+      ).toHaveCount(0)
+      await page.getByTestId('sentinel-dashboard-card-stack').click()
+      await expect(
+        page.getByTestId('sentinel-onboarding-roster-next'),
+      ).toHaveCount(0)
+      await expect(
+        page.getByTestId('sentinel-genesis-policy-step'),
+      ).toHaveCount(0)
+      await expect(page.getByTestId('login-connect-storage-btn')).toHaveCount(0)
+      await expect(
+        page.getByTestId('login-create-vault-chooser'),
+      ).toHaveAttribute('data-sentinel-dashboard', 'card-stack')
+      await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
+      await expect(
+        page.getByTestId('sentinel-onboarding-create-keys'),
+      ).toBeVisible()
+      const initialSummary = page.getByTestId(
+        'sentinel-onboarding-vault-summary',
+      )
+      const initialSummaryDetails = page.getByTestId(
+        'sentinel-onboarding-summary-details',
+      )
+      await expect(initialSummary).toHaveAttribute('data-layout', 'compact')
+      await expect(
+        page.getByTestId('sentinel-onboarding-guidance'),
+      ).toHaveCount(0)
+      await expect(
+        page.getByTestId('sentinel-onboarding-summary-name'),
+      ).toHaveText('NOT SET')
+      await expect(
+        page.getByTestId('sentinel-onboarding-summary-policy'),
+      ).toHaveText('NOT SET')
+      const initialSummaryDetailsBox = await initialSummaryDetails.boundingBox()
+      if (!initialSummaryDetailsBox) {
+        throw new Error('Initial Sentinel summary must have a layout box')
+      }
+      expect(initialSummaryDetailsBox.height).toBeLessThan(90)
+      const brandBox = await page
+        .getByTestId('sentinel-dashboard-brand')
+        .boundingBox()
+      const backButtonBox = await page
+        .getByTestId('sentinel-dashboard-back')
+        .boundingBox()
+      const progressBox = await page
+        .getByTestId('sentinel-onboarding-progress')
+        .boundingBox()
+      if (!brandBox || !backButtonBox || !progressBox) {
+        throw new Error('Sentinel masthead and progress must have layout boxes')
+      }
+      expect(brandBox.y).toBeLessThan(progressBox.y)
+      expect(brandBox.y).toBeLessThan(96)
+      expect(brandBox.height).toBeLessThan(64)
+      expect(
+        progressBox.y - (brandBox.y + brandBox.height),
+      ).toBeLessThanOrEqual(24)
+      expect(backButtonBox.x).toBeGreaterThan(brandBox.x + brandBox.width)
+      expect(
+        Math.abs(
+          backButtonBox.y +
+            backButtonBox.height / 2 -
+            (brandBox.y + brandBox.height / 2),
+        ),
+      ).toBeLessThan(8)
+      await expect(page.getByTestId('sentinel-genesis-name-input')).toHaveCount(
+        0,
+      )
+      await expect(
+        page.getByTestId('sentinel-genesis-response-input'),
+      ).toHaveCount(0)
+      await page.getByTestId('sentinel-onboarding-create-keys').click()
+      await expect(page.getByTestId('sentinel-genesis-name-step')).toBeVisible({
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
+      await expect(
+        page.getByTestId('sentinel-genesis-policy-step'),
+      ).toHaveCount(0)
+      const actionsColumn = page.getByTestId(
+        'sentinel-onboarding-actions-column',
+      )
+      const summaryColumn = page.getByTestId(
+        'sentinel-onboarding-summary-column',
+      )
+      const nameStep = actionsColumn.getByTestId('sentinel-genesis-name-step')
+      const vaultSummary = summaryColumn.getByTestId(
+        'sentinel-onboarding-vault-summary',
+      )
+      await expect(nameStep).toBeVisible()
+      await expect(nameStep).toContainText('Name vault')
+      await expect(nameStep).not.toContainText('login.')
+      await expect(
+        page.getByTestId('sentinel-onboarding-continue-policy'),
+      ).toHaveText('Continue')
+      await expect(vaultSummary).toBeVisible()
+      await expect(
+        summaryColumn.getByTestId('sentinel-onboarding-summary-name'),
+      ).toContainText('NOT SET')
+      await expect(
+        summaryColumn.locator('input, [role="combobox"]'),
+      ).toHaveCount(0)
+      const nameStepBox = await nameStep.boundingBox()
+      const vaultSummaryBox = await vaultSummary.boundingBox()
+      const actionsColumnBox = await actionsColumn.boundingBox()
+      const summaryColumnBox = await summaryColumn.boundingBox()
+      if (
+        !nameStepBox ||
+        !vaultSummaryBox ||
+        !actionsColumnBox ||
+        !summaryColumnBox
+      ) {
+        throw new Error('Sentinel setup columns must have layout boxes')
+      }
+      expect(nameStepBox.x).toBeLessThan(vaultSummaryBox.x)
+      expect(summaryColumnBox.width).toBeGreaterThan(actionsColumnBox.width)
+      await expect(
+        page.getByTestId('sentinel-genesis-response-input'),
+      ).toHaveCount(0)
+      await expect(
+        summaryColumn.getByTestId('sentinel-onboarding-summary-policy'),
+      ).toContainText('NOT SET')
+      await page
+        .getByTestId('sentinel-genesis-name-input')
+        .fill('Ordered Sentinel')
+      await expect(
+        summaryColumn.getByTestId('sentinel-onboarding-summary-name'),
+      ).toHaveText('Ordered Sentinel')
+      await page.getByTestId('sentinel-onboarding-continue-policy').click()
+      await expect(page.getByTestId('sentinel-genesis-name-step')).toHaveCount(
+        0,
+      )
+      const createKeysCard = actionsColumn.getByTestId(
+        'sentinel-onboarding-create-keys',
+      )
+      const nameSummaryCard = actionsColumn.getByTestId(
+        'sentinel-onboarding-name-summary-card',
+      )
+      await expect(nameSummaryCard).toBeVisible()
+      await expect(nameSummaryCard).toContainText('Ordered Sentinel')
+      await expect(nameSummaryCard).toBeEnabled()
+      const policyStep = actionsColumn.getByTestId(
+        'sentinel-genesis-policy-step',
+      )
+      await expect(policyStep).toBeVisible()
+      const createKeysCardBox = await createKeysCard.boundingBox()
+      const nameSummaryCardBox = await nameSummaryCard.boundingBox()
+      const policyStepBox = await policyStep.boundingBox()
+      if (!createKeysCardBox || !nameSummaryCardBox || !policyStepBox) {
+        throw new Error('Sentinel action sequence must have layout boxes')
+      }
+      expect(policyStepBox.x).toBeLessThan(vaultSummaryBox.x)
+      expect(nameSummaryCardBox.y).toBeGreaterThan(createKeysCardBox.y)
+      expect(policyStepBox.y).toBeGreaterThan(nameSummaryCardBox.y)
+      await page.getByTestId('sentinel-genesis-threshold').click()
+      await page.getByTestId('sentinel-threshold-option-3').click()
+      await page.getByTestId('sentinel-genesis-participant-count').click()
+      const participantCountOptions = page.locator(
+        '[data-testid^="sentinel-participant-count-option-"]',
+      )
+      await expect(participantCountOptions).toHaveCount(3)
+      await expect(
+        page.getByTestId('sentinel-participant-count-option-2'),
+      ).toHaveCount(0)
+      await expect(
+        page.getByTestId('sentinel-participant-count-option-3'),
+      ).toBeVisible()
+      await expect(
+        page.getByTestId('sentinel-participant-count-option-4'),
+      ).toBeVisible()
+      await expect(
+        page.getByTestId('sentinel-participant-count-option-5'),
+      ).toBeVisible()
+      await expect(
+        page.getByTestId('sentinel-participant-count-option-6'),
+      ).toHaveCount(0)
+      await page.getByTestId('sentinel-participant-count-option-5').click()
+      await expect(
+        page.getByTestId('sentinel-genesis-threshold'),
+      ).toHaveAttribute('data-value', '3')
+      await expect(
+        page.getByTestId('sentinel-genesis-participant-count'),
+      ).toHaveAttribute('data-value', '5')
+      await page.getByTestId('sentinel-genesis-threshold').click()
+      await page.getByTestId('sentinel-threshold-option-2').click()
+      await expect(
+        summaryColumn.getByTestId('sentinel-onboarding-summary-policy'),
+      ).toContainText('2 OF 5 SHARES REQUIRED')
+      await expect(
+        actionsColumn.getByTestId('sentinel-onboarding-continue-devices'),
+      ).toBeEnabled()
+      await page.getByTestId('sentinel-onboarding-continue-devices').click()
+      await expect(
+        page.getByTestId('sentinel-genesis-response-input'),
+      ).toBeVisible()
+      await expect(
+        page.getByTestId('sentinel-genesis-authentication-instructions'),
+      ).toContainText('Paste the signed response')
+      await expect(
+        page.getByTestId('sentinel-onboarding-roster-next'),
+      ).toBeVisible({ timeout: UI_TIMEOUT_MS })
+      await expect(vaultSummary).toHaveAttribute('data-layout', 'compact')
+      await expect(nameSummaryCard).toBeVisible()
+      await expect(nameSummaryCard).toContainText('Ordered Sentinel')
+      await expect(nameSummaryCard).toBeDisabled()
+      await expect(
+        page.getByTestId('sentinel-onboarding-devices-remaining'),
+      ).toContainText('4')
+      await expect(page.getByTestId('sentinel-genesis-finalize')).toBeDisabled()
+      await expect(
+        actionsColumn.getByTestId('sentinel-genesis-finalize'),
+      ).toBeVisible()
+      const summaryDetails = summaryColumn.getByTestId(
+        'sentinel-onboarding-summary-details',
+      )
+      const participantRequest = summaryColumn.getByTestId(
+        'sentinel-genesis-request',
+      )
+      await expect(participantRequest).toBeVisible()
+      const compactSummaryBox = await summaryDetails.boundingBox()
+      const participantRequestBox = await participantRequest.boundingBox()
+      const collectingSummaryBox = await vaultSummary.boundingBox()
+      if (
+        !compactSummaryBox ||
+        !participantRequestBox ||
+        !collectingSummaryBox
+      ) {
+        throw new Error('Sentinel collecting summary must have layout boxes')
+      }
+      expect(compactSummaryBox.height).toBeLessThan(90)
+      expect(participantRequestBox.y - collectingSummaryBox.y).toBeLessThan(360)
+      await expect(
+        page.getByTestId('sentinel-genesis-participant-fields'),
+      ).toBeVisible()
+      await expect(
+        page.getByTestId('sentinel-onboarding-progress'),
+      ).toContainText('Add devices')
+      const progressSteps = page
+        .getByTestId('sentinel-onboarding-progress')
+        .locator('li')
+      await expect(progressSteps.nth(1)).toContainText('Define shares')
+      await expect(progressSteps.nth(2)).toHaveAttribute('data-current', 'step')
+      await expect(page.getByTestId('login-vault-name-input')).toHaveCount(0)
+      await expect(page.getByTestId('replication-mode-select')).toHaveCount(0)
+    },
+  )
+
+  test('renders the first screen from the bundled locale catalogs', async ({
     page,
   }) => {
-    await expect(page.getByTestId('mode-group-device')).toHaveCount(0)
-    await expect(page.getByTestId('identities-hero')).toBeVisible()
-    await expect(page.getByTestId('get-started-path-chooser')).toBeVisible()
-
+    const start = page.getByTestId('first-vault-start')
     await continueToPathChooser(page)
-    await expect(page.getByTestId('get-started-path-chooser')).toBeVisible()
-    await expect(page.getByTestId('get-started-path-simple')).toBeVisible()
-    await expect(page.getByTestId('get-started-path-sentinel')).toBeVisible()
-    await expect(page.getByTestId('get-started-path-join')).toHaveCount(0)
-    await expect(page.getByTestId('mode-group-vault')).toHaveCount(0)
-    await expect(page.getByTestId('mode-group-replication')).toHaveCount(0)
-    await expect(page.getByTestId('create-vault-wizard-create')).toHaveCount(0)
-    await expect(page.getByTestId('mode-group-onboarding')).toHaveCount(0)
-    await expect(
-      page.getByTestId('mode-group-provider-capability'),
-    ).toHaveCount(0)
-    await expect(page.getByTestId('sentinel-genesis-introduction')).toHaveCount(
-      0,
-    )
-    await expect(page.getByTestId('replication-mode-select')).toHaveCount(0)
-    await expect(
-      page.getByTestId('create-vault-wizard-nav-replication'),
-    ).toHaveCount(0)
-
-    await page.getByTestId('get-started-path-simple').click()
-    await expect(page.getByTestId('create-vault-wizard-create')).toBeVisible()
-    await expect(page.getByTestId('login-vault-name-input')).toBeVisible()
-    await expect(
-      page.getByTestId('login-create-device-vault-btn'),
-    ).toBeVisible()
-    await expect(page.getByTestId('login-connect-storage-btn')).toHaveCount(0)
-    await page.getByTestId('create-vault-wizard-back').click()
-
-    await page.getByTestId('get-started-path-sentinel').click()
-    await expect(page.getByTestId('sentinel-dashboard-choice')).toBeVisible()
-    await expect(page.getByTestId('sentinel-genesis-policy-step')).toHaveCount(
-      0,
-    )
-    await page.getByTestId('sentinel-dashboard-card-stack').click()
-    await expect(
-      page.getByTestId('sentinel-onboarding-roster-next'),
-    ).toHaveCount(0)
-    await expect(page.getByTestId('sentinel-genesis-policy-step')).toHaveCount(
-      0,
-    )
-    await expect(page.getByTestId('login-connect-storage-btn')).toHaveCount(0)
-    await expect(
-      page.getByTestId('login-create-vault-chooser'),
-    ).toHaveAttribute('data-sentinel-dashboard', 'card-stack')
-    await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
-    await expect(
-      page.getByTestId('sentinel-onboarding-create-keys'),
-    ).toBeVisible()
-    const initialSummary = page.getByTestId('sentinel-onboarding-vault-summary')
-    const initialSummaryDetails = page.getByTestId(
-      'sentinel-onboarding-summary-details',
-    )
-    await expect(initialSummary).toHaveAttribute('data-layout', 'compact')
-    await expect(page.getByTestId('sentinel-onboarding-guidance')).toHaveCount(
-      0,
-    )
-    await expect(
-      page.getByTestId('sentinel-onboarding-summary-name'),
-    ).toHaveText('NOT SET')
-    await expect(
-      page.getByTestId('sentinel-onboarding-summary-policy'),
-    ).toHaveText('NOT SET')
-    const initialSummaryDetailsBox = await initialSummaryDetails.boundingBox()
-    if (!initialSummaryDetailsBox) {
-      throw new Error('Initial Sentinel summary must have a layout box')
-    }
-    expect(initialSummaryDetailsBox.height).toBeLessThan(90)
-    const brandBox = await page
-      .getByTestId('sentinel-dashboard-brand')
-      .boundingBox()
-    const backButtonBox = await page
-      .getByTestId('sentinel-dashboard-back')
-      .boundingBox()
-    const progressBox = await page
-      .getByTestId('sentinel-onboarding-progress')
-      .boundingBox()
-    if (!brandBox || !backButtonBox || !progressBox) {
-      throw new Error('Sentinel masthead and progress must have layout boxes')
-    }
-    expect(brandBox.y).toBeLessThan(progressBox.y)
-    expect(brandBox.y).toBeLessThan(96)
-    expect(brandBox.height).toBeLessThan(64)
-    expect(progressBox.y - (brandBox.y + brandBox.height)).toBeLessThanOrEqual(
-      24,
-    )
-    expect(backButtonBox.x).toBeGreaterThan(brandBox.x + brandBox.width)
-    expect(
-      Math.abs(
-        backButtonBox.y +
-          backButtonBox.height / 2 -
-          (brandBox.y + brandBox.height / 2),
-      ),
-    ).toBeLessThan(8)
-    await expect(page.getByTestId('sentinel-genesis-name-input')).toHaveCount(0)
-    await expect(
-      page.getByTestId('sentinel-genesis-response-input'),
-    ).toHaveCount(0)
-    await page.getByTestId('sentinel-onboarding-create-keys').click()
-    await expect(page.getByTestId('sentinel-genesis-name-step')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    await expect(page.getByTestId('sentinel-genesis-policy-step')).toHaveCount(
-      0,
-    )
-    const actionsColumn = page.getByTestId('sentinel-onboarding-actions-column')
-    const summaryColumn = page.getByTestId('sentinel-onboarding-summary-column')
-    const nameStep = actionsColumn.getByTestId('sentinel-genesis-name-step')
-    const vaultSummary = summaryColumn.getByTestId(
-      'sentinel-onboarding-vault-summary',
-    )
-    await expect(nameStep).toBeVisible()
-    await expect(nameStep).toContainText('Name vault')
-    await expect(nameStep).not.toContainText('login.')
-    await expect(
-      page.getByTestId('sentinel-onboarding-continue-policy'),
-    ).toHaveText('Continue')
-    await expect(vaultSummary).toBeVisible()
-    await expect(
-      summaryColumn.getByTestId('sentinel-onboarding-summary-name'),
-    ).toContainText('NOT SET')
-    await expect(summaryColumn.locator('input, [role="combobox"]')).toHaveCount(
-      0,
-    )
-    const nameStepBox = await nameStep.boundingBox()
-    const vaultSummaryBox = await vaultSummary.boundingBox()
-    const actionsColumnBox = await actionsColumn.boundingBox()
-    const summaryColumnBox = await summaryColumn.boundingBox()
-    if (
-      !nameStepBox ||
-      !vaultSummaryBox ||
-      !actionsColumnBox ||
-      !summaryColumnBox
-    ) {
-      throw new Error('Sentinel setup columns must have layout boxes')
-    }
-    expect(nameStepBox.x).toBeLessThan(vaultSummaryBox.x)
-    expect(summaryColumnBox.width).toBeGreaterThan(actionsColumnBox.width)
-    await expect(
-      page.getByTestId('sentinel-genesis-response-input'),
-    ).toHaveCount(0)
-    await expect(
-      summaryColumn.getByTestId('sentinel-onboarding-summary-policy'),
-    ).toContainText('NOT SET')
-    await page
-      .getByTestId('sentinel-genesis-name-input')
-      .fill('Ordered Sentinel')
-    await expect(
-      summaryColumn.getByTestId('sentinel-onboarding-summary-name'),
-    ).toHaveText('Ordered Sentinel')
-    await page.getByTestId('sentinel-onboarding-continue-policy').click()
-    await expect(page.getByTestId('sentinel-genesis-name-step')).toHaveCount(0)
-    const createKeysCard = actionsColumn.getByTestId(
-      'sentinel-onboarding-create-keys',
-    )
-    const nameSummaryCard = actionsColumn.getByTestId(
-      'sentinel-onboarding-name-summary-card',
-    )
-    await expect(nameSummaryCard).toBeVisible()
-    await expect(nameSummaryCard).toContainText('Ordered Sentinel')
-    await expect(nameSummaryCard).toBeEnabled()
-    const policyStep = actionsColumn.getByTestId('sentinel-genesis-policy-step')
-    await expect(policyStep).toBeVisible()
-    const createKeysCardBox = await createKeysCard.boundingBox()
-    const nameSummaryCardBox = await nameSummaryCard.boundingBox()
-    const policyStepBox = await policyStep.boundingBox()
-    if (!createKeysCardBox || !nameSummaryCardBox || !policyStepBox) {
-      throw new Error('Sentinel action sequence must have layout boxes')
-    }
-    expect(policyStepBox.x).toBeLessThan(vaultSummaryBox.x)
-    expect(nameSummaryCardBox.y).toBeGreaterThan(createKeysCardBox.y)
-    expect(policyStepBox.y).toBeGreaterThan(nameSummaryCardBox.y)
-    await page.getByTestId('sentinel-genesis-threshold').click()
-    await page.getByTestId('sentinel-threshold-option-3').click()
-    await page.getByTestId('sentinel-genesis-participant-count').click()
-    const participantCountOptions = page.locator(
-      '[data-testid^="sentinel-participant-count-option-"]',
-    )
-    await expect(participantCountOptions).toHaveCount(3)
-    await expect(
-      page.getByTestId('sentinel-participant-count-option-2'),
-    ).toHaveCount(0)
-    await expect(
-      page.getByTestId('sentinel-participant-count-option-3'),
-    ).toBeVisible()
-    await expect(
-      page.getByTestId('sentinel-participant-count-option-4'),
-    ).toBeVisible()
-    await expect(
-      page.getByTestId('sentinel-participant-count-option-5'),
-    ).toBeVisible()
-    await expect(
-      page.getByTestId('sentinel-participant-count-option-6'),
-    ).toHaveCount(0)
-    await page.getByTestId('sentinel-participant-count-option-5').click()
-    await expect(
-      page.getByTestId('sentinel-genesis-threshold'),
-    ).toHaveAttribute('data-value', '3')
-    await expect(
-      page.getByTestId('sentinel-genesis-participant-count'),
-    ).toHaveAttribute('data-value', '5')
-    await page.getByTestId('sentinel-genesis-threshold').click()
-    await page.getByTestId('sentinel-threshold-option-2').click()
-    await expect(
-      summaryColumn.getByTestId('sentinel-onboarding-summary-policy'),
-    ).toContainText('2 OF 5 SHARES REQUIRED')
-    await expect(
-      actionsColumn.getByTestId('sentinel-onboarding-continue-devices'),
-    ).toBeEnabled()
-    await page.getByTestId('sentinel-onboarding-continue-devices').click()
-    await expect(
-      page.getByTestId('sentinel-genesis-response-input'),
-    ).toBeVisible()
-    await expect(
-      page.getByTestId('sentinel-genesis-authentication-instructions'),
-    ).toContainText('Paste the signed response')
-    await expect(
-      page.getByTestId('sentinel-onboarding-roster-next'),
-    ).toBeVisible({ timeout: UI_TIMEOUT_MS })
-    await expect(vaultSummary).toHaveAttribute('data-layout', 'compact')
-    await expect(nameSummaryCard).toBeVisible()
-    await expect(nameSummaryCard).toContainText('Ordered Sentinel')
-    await expect(nameSummaryCard).toBeDisabled()
-    await expect(
-      page.getByTestId('sentinel-onboarding-devices-remaining'),
-    ).toContainText('4')
-    await expect(page.getByTestId('sentinel-genesis-finalize')).toBeDisabled()
-    await expect(
-      actionsColumn.getByTestId('sentinel-genesis-finalize'),
-    ).toBeVisible()
-    const summaryDetails = summaryColumn.getByTestId(
-      'sentinel-onboarding-summary-details',
-    )
-    const participantRequest = summaryColumn.getByTestId(
-      'sentinel-genesis-request',
-    )
-    await expect(participantRequest).toBeVisible()
-    const compactSummaryBox = await summaryDetails.boundingBox()
-    const participantRequestBox = await participantRequest.boundingBox()
-    const collectingSummaryBox = await vaultSummary.boundingBox()
-    if (!compactSummaryBox || !participantRequestBox || !collectingSummaryBox) {
-      throw new Error('Sentinel collecting summary must have layout boxes')
-    }
-    expect(compactSummaryBox.height).toBeLessThan(90)
-    expect(participantRequestBox.y - collectingSummaryBox.y).toBeLessThan(360)
-    await expect(
-      page.getByTestId('sentinel-genesis-participant-fields'),
-    ).toBeVisible()
-    await expect(
-      page.getByTestId('sentinel-onboarding-progress'),
-    ).toContainText('Add devices')
-    const progressSteps = page
-      .getByTestId('sentinel-onboarding-progress')
-      .locator('li')
-    await expect(progressSteps.nth(1)).toContainText('Define shares')
-    await expect(progressSteps.nth(2)).toHaveAttribute('data-current', 'step')
-    await expect(page.getByTestId('login-vault-name-input')).toHaveCount(0)
-    await expect(page.getByTestId('replication-mode-select')).toHaveCount(0)
-  })
-
-  test('renders wizard copy from the bundled locale catalogs', async ({
-    page,
-  }) => {
-    const chooser = page.getByTestId('login-create-vault-chooser')
-    await expect(page.getByTestId('identities-hero')).toContainText(
-      'Identities',
-    )
-    await continueToPathChooser(page)
-    await expect(chooser).toContainText('Create a new vault')
-    await expect(page.getByTestId('get-started-path-simple')).toContainText(
-      'Create simple vault',
-    )
-    await expect(page.getByTestId('get-started-path-sentinel')).toContainText(
-      'Create Sentinel vault',
-    )
-    await expect(page.getByTestId('login-path-cloud')).toContainText(
-      'Already have a vault?',
+    // The first screen stands alone: no hub hero, no identity card yet.
+    await expect(page.getByTestId('identities-hero')).toHaveCount(0)
+    await expect(start).toContainText('Name your first vault')
+    await expect(page.getByTestId('login-join-identity-btn')).toContainText(
+      'I use Nook on another device',
     )
     await expect(page.getByTestId('login-connect-storage-btn')).toContainText(
       'Restore from a sync provider',
     )
-    await expect(page.getByTestId('get-started-path-join')).toHaveCount(0)
 
     await page.getByTestId('header-language-select').click()
     await page.getByTestId('header-language-option-ru').click()
 
-    await expect(page.getByTestId('identities-hero')).toContainText(
-      'Идентификаторы',
-    )
-    await expect(chooser).toContainText('Создать новый сейф')
-    await expect(page.getByTestId('get-started-path-simple')).toContainText(
-      'Создать простой сейф',
-    )
-    await expect(page.getByTestId('get-started-path-sentinel')).toContainText(
-      'Sentinel',
-    )
+    await expect(start).toContainText('Назовите первый сейф')
+    await expect(
+      page.getByTestId('login-create-device-vault-btn'),
+    ).toContainText('Создать сейф')
   })
 
   test('creates a simple personal vault and keeps secret values out of app logs', async ({
@@ -490,59 +495,68 @@ test.describe('vault architecture modes', () => {
     await assertAppLogsDoNotLeak(page, [SIMPLE_SECRET_VALUE, prfOutput])
   })
 
-  test('does not create a sentinel vault before its participant ceremony', async ({
+  test(
+    'does not create a sentinel vault before its participant ceremony',
+    SENTINEL_APP,
+    async ({ page }) => {
+      await continueToPathChooser(page)
+      await page.getByTestId('get-started-path-sentinel').click()
+      await page.getByTestId('sentinel-dashboard-terminal').click()
+      const terminalDashboard = page.getByTestId('sentinel-terminal-dashboard')
+      await expect(terminalDashboard).toBeVisible()
+      await expect(terminalDashboard).toBeFocused()
+      await expect(
+        page.getByTestId('login-create-vault-chooser'),
+      ).toHaveAttribute('data-sentinel-dashboard', 'terminal')
+      await page.locator('[data-participant-count="16"]').click()
+      await expect(
+        page.getByTestId('sentinel-genesis-threshold'),
+      ).toContainText('2 of 16')
+      await page.getByTestId('sentinel-genesis-threshold').click()
+      await expect(page.getByTestId('sentinel-genesis-start')).toBeVisible()
+      await expect(page.getByTestId('vault-panel')).toHaveCount(0)
+      await expect(page.getByTestId('login-connect-storage-btn')).toHaveCount(0)
+
+      await page.getByTestId('sentinel-dashboard-back').click()
+      await expect(page.getByTestId('sentinel-dashboard-choice')).toBeVisible()
+      await expect(
+        page.getByTestId('sentinel-dashboard-terminal'),
+      ).toBeFocused()
+    },
+  )
+
+  test('offers neither Sentinel nor an unrestricted join on the first screen', async ({
     page,
   }) => {
     await continueToPathChooser(page)
-    await page.getByTestId('get-started-path-sentinel').click()
-    await page.getByTestId('sentinel-dashboard-terminal').click()
-    const terminalDashboard = page.getByTestId('sentinel-terminal-dashboard')
-    await expect(terminalDashboard).toBeVisible()
-    await expect(terminalDashboard).toBeFocused()
-    await expect(
-      page.getByTestId('login-create-vault-chooser'),
-    ).toHaveAttribute('data-sentinel-dashboard', 'terminal')
-    await page.locator('[data-participant-count="16"]').click()
-    await expect(page.getByTestId('sentinel-genesis-threshold')).toContainText(
-      '2 of 16',
-    )
-    await page.getByTestId('sentinel-genesis-threshold').click()
-    await expect(page.getByTestId('sentinel-genesis-start')).toBeVisible()
-    await expect(page.getByTestId('vault-panel')).toHaveCount(0)
-    await expect(page.getByTestId('login-connect-storage-btn')).toHaveCount(0)
-
-    await page.getByTestId('sentinel-dashboard-back').click()
-    await expect(page.getByTestId('sentinel-dashboard-choice')).toBeVisible()
-    await expect(page.getByTestId('sentinel-dashboard-terminal')).toBeFocused()
-  })
-
-  test('does not expose unrestricted Sentinel join as a creation path', async ({
-    page,
-  }) => {
-    await continueToPathChooser(page)
-    await expect(page.getByTestId('get-started-path-simple')).toBeVisible()
-    await expect(page.getByTestId('get-started-path-sentinel')).toBeVisible()
+    await expect(page.getByTestId('first-vault-start')).toBeVisible()
+    await expect(page.getByTestId('get-started-path-sentinel')).toHaveCount(0)
     await expect(page.getByTestId('get-started-path-join')).toHaveCount(0)
     await expect(page.getByTestId('login-enrollment-toggle')).toHaveCount(0)
   })
 
-  test('names sync as the next step and offers an identity join first', async ({
+  test('creates the first vault from one name and offers a backup next', async ({
     page,
   }) => {
     await continueToPathChooser(page)
-    await expect(page.getByTestId('landing-step-sync-hint')).toContainText(
-      'lives only in this browser',
-    )
-    await page.getByTestId('get-started-path-simple').click()
-    await expect(page.getByTestId('landing-step-sync-hint')).toBeVisible()
-    await page.getByTestId('create-vault-wizard-back').click()
-
     await page.getByTestId('login-join-identity-btn').click()
     await expect(page.getByTestId('login-enrollment-panel')).toContainText(
       'open Devices to create a code',
     )
     await page.getByTestId('open-enrollment-code-btn').click()
     await expect(page.getByTestId('enrollment-code-input')).toBeVisible()
+
+    // An empty name takes the suggested one, so one click creates the vault.
+    await page.getByTestId('login-create-device-vault-btn').click()
+    const backup = page.getByTestId('first-run-backup-step')
+    await expect(backup).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await expect(backup).toContainText('Personal')
+    await expect(
+      page.getByTestId('first-run-progress').locator('[aria-current="step"]'),
+    ).toContainText('Back up')
+    await page.getByTestId('first-run-backup-btn').click()
+    await expect(page).toHaveURL(/\/identity\/sync$/)
+    await expect(page.getByTestId('storage-providers-section')).toBeVisible()
   })
 
   test('opens participant response only from an owner invitation URL', async ({
@@ -850,28 +864,12 @@ test.describe('vault architecture modes', () => {
       page,
     }) => {
       await continueToPathChooser(page)
-      await expect(page.getByTestId('get-started-path-chooser')).toBeVisible()
+      await expect(page.getByTestId('first-vault-start')).toBeVisible()
       await expect(page.getByTestId('mode-group-vault')).toHaveCount(0)
       await expect(page.getByTestId('mode-group-onboarding')).toHaveCount(0)
       await expect(
         page.getByTestId('mode-group-provider-capability'),
       ).toHaveCount(0)
-      await page.getByTestId('get-started-path-sentinel').click()
-      await page.getByTestId('sentinel-dashboard-card-stack').click()
-      await expect(
-        page.getByTestId('sentinel-onboarding-roster-next'),
-      ).toHaveCount(0)
-      await expect(
-        page.getByTestId('sentinel-onboarding-create-keys'),
-      ).toBeVisible({ timeout: UI_TIMEOUT_MS })
-      await expect(
-        page.getByTestId('sentinel-genesis-policy-step'),
-      ).toHaveCount(0)
-      await page.getByTestId('sentinel-dashboard-back').click()
-      await page.getByTestId('create-vault-wizard-back').click()
-
-      // Sentinel genesis is provider-free and has its own creation ceremony.
-      // Return to the chooser before exercising the legacy provider gates.
       await setLegacyReplicationForProviderTest(page, ReplicationType.Shared)
       await openLoginProviderSetup(page)
       await expect(page.getByTestId('provider-picker-list')).toBeVisible()
