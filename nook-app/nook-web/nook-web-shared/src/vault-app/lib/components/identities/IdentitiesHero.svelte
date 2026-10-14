@@ -37,13 +37,15 @@ title that decrypts into place. Inner pages use quiet page bars instead.
     {#key vault.locale}
       <h1
         id="identities-hero-title"
-        class="mt-2.5 text-[clamp(1.875rem,4.5vw,2.5rem)] leading-[1.05] font-semibold tracking-[-0.03em] text-foreground"
+        class="mt-2.5 text-[clamp(1.75rem,4.5vw,2.5rem)] leading-[1.05] font-semibold tracking-[-0.03em] text-foreground"
         use:scramble
       >
         {vault.t(I18N_KEYS.WorkspaceIdentitiesTitle)}
       </h1>
     {/key}
-    <p class="mt-3 max-w-[52ch] text-pretty text-muted-foreground">
+    <p
+      class="mt-3 max-w-[52ch] text-sm text-pretty text-muted-foreground sm:text-base"
+    >
       {vault.t(I18N_KEYS.WorkspaceIdentitiesDescription)}
     </p>
     {#if showStats}

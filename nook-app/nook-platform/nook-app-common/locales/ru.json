@@ -1956,6 +1956,8 @@
     "nav_short_vaults": "Сейфы",
     "nav_short_settings": "Настройки",
     "nav_short_passwords": "Пароли",
+    "nav_more": "Ещё",
+    "nav_more_title": "Другие разделы",
     "back_to_vault": "Назад к сейфу",
     "card_no_vaults": "Сейфов пока нет",
     "first_identity": {

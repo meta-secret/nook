@@ -181,7 +181,7 @@
     <div
       class={isQuiet
         ? 'flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-[11px]'
-        : 'flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-[11px]'}
+        : 'flex items-center justify-between gap-x-3 gap-y-2 text-[11px] sm:flex-wrap'}
     >
       <div class="flex min-w-0 items-center gap-2 text-muted-foreground">
         {#if showStorageIcon}
@@ -219,7 +219,7 @@
             class="hidden text-muted-foreground sm:inline"
             aria-hidden="true">·</span
           >
-          <span class="shrink-0 text-muted-foreground/80">
+          <span class="hidden shrink-0 text-muted-foreground/80 sm:inline">
             v{appVersion}
           </span>
         {/if}
@@ -241,7 +241,7 @@
               aria-hidden="true">·</span
             >
             <span
-              class="shrink-0 text-muted-foreground"
+              class="min-w-0 truncate text-muted-foreground sm:shrink-0"
               data-testid="vault-sync-out-status"
               class:animate-pulse={vault?.isSyncActivityVisible}
             >
@@ -292,7 +292,7 @@
             onclick={() => void onRefresh?.()}
           >
             <RefreshCw class="size-3.5 {isSyncing ? 'animate-spin' : ''}" />
-            <span class="ml-1"
+            <span class="ml-1 hidden sm:inline"
               >{isAuthenticatedVault
                 ? vault
                   ? vault.t(I18N_KEYS.StatusBarSyncAll)

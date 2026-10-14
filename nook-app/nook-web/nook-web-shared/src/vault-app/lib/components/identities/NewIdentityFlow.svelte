@@ -200,7 +200,7 @@ adopting the new identity ends the current identity's session midway.
       <input
         id="new-identity-name-input"
         type="text"
-        class="h-10 min-w-0 flex-1 border border-border bg-card px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-foreground/50 focus-visible:ring-2 focus-visible:ring-ring"
+        class="h-11 min-w-0 border border-border bg-card px-3 text-sm text-foreground sm:h-10 sm:flex-1 outline-none placeholder:text-muted-foreground focus-visible:border-foreground/50 focus-visible:ring-2 focus-visible:ring-ring"
         placeholder={placeholderName}
         maxlength="64"
         autocomplete="off"
@@ -209,7 +209,7 @@ adopting the new identity ends the current identity's session midway.
       />
       <Button
         type="submit"
-        class="h-10 shrink-0"
+        class="h-11 shrink-0 sm:h-10"
         disabled={vault.isVerifying}
         data-testid="new-identity-continue"
       >
@@ -296,7 +296,7 @@ adopting the new identity ends the current identity's session midway.
       <input
         id="new-identity-vault-input"
         type="text"
-        class="h-10 min-w-0 flex-1 border border-border bg-card px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-foreground/50 focus-visible:ring-2 focus-visible:ring-ring"
+        class="h-11 min-w-0 border border-border bg-card px-3 text-sm text-foreground sm:h-10 sm:flex-1 outline-none placeholder:text-muted-foreground focus-visible:border-foreground/50 focus-visible:ring-2 focus-visible:ring-ring"
         placeholder={identityName}
         maxlength="64"
         autocomplete="off"
@@ -305,7 +305,7 @@ adopting the new identity ends the current identity's session midway.
       />
       <Button
         type="submit"
-        class="h-10 shrink-0"
+        class="h-11 shrink-0 sm:h-10"
         disabled={vault.isVerifying || vault.isInitializing}
         data-testid="new-identity-create-vault"
       >

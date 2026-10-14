@@ -307,6 +307,7 @@
           variant="outline"
           size="sm"
           class="h-10 rounded-lg border-border/40 bg-background/60 px-3.5 text-sm text-muted-foreground sm:bg-background [&_svg]:size-4"
+          aria-label={vault.t(I18N_KEYS.AppBack)}
           data-testid="legal-header-back"
           onclick={onNavigateHome}
         >
@@ -319,6 +320,7 @@
           variant="outline"
           size="sm"
           class="h-10 rounded-lg border-border/40 bg-background/60 px-3.5 text-sm text-muted-foreground sm:bg-background [&_svg]:size-4"
+          aria-label={vault.t(I18N_KEYS.AppBack)}
           data-testid="help-header-close"
           onclick={() => vault.closeHelp()}
         >
@@ -333,6 +335,7 @@
           class="h-10 rounded-lg border-border/40 bg-background/60 px-3.5 text-sm text-muted-foreground sm:bg-background [&_svg]:size-4 {vault.isAuthenticated
             ? 'hidden sm:inline-flex'
             : ''}"
+          aria-label={vault.t(I18N_KEYS.AppHelp)}
           data-testid="help-open-btn"
           onclick={() => vault.openHelp()}
         >

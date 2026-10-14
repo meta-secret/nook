@@ -1956,6 +1956,8 @@
     "nav_short_vaults": "Vaults",
     "nav_short_settings": "Settings",
     "nav_short_passwords": "Backups",
+    "nav_more": "More",
+    "nav_more_title": "More pages",
     "back_to_vault": "Back to vault",
     "card_no_vaults": "No vaults yet",
     "first_identity": {

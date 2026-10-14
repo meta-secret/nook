@@ -204,7 +204,7 @@ the details; keys and backup passwords sit quietly below.
 <div class="grid min-w-0 gap-6" data-testid="identity-overview">
   <!-- Who the identity is, and how protected. -->
   <section
-    class="grid gap-5 border border-border bg-card p-5 sm:p-6"
+    class="grid gap-5 border border-border bg-card p-4 sm:p-6"
     data-testid="overview-identity"
     data-stage={NookIdentityHealthStage[health.stage]}
   >

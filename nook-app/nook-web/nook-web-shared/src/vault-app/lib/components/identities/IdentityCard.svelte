@@ -57,6 +57,7 @@ card, which then spans the full row.
     }),
     unlockPanel,
     passwordFallback,
+    preview = false,
   }: {
     vault: VaultState
     card: IdentityCardView
@@ -78,6 +79,8 @@ card, which then spans the full row.
     unlockPanel?: Snippet
     /** Backup-password unlock for the selected vault, while locked. */
     passwordFallback?: Snippet
+    /** A preview of a card that does not exist yet: no actions. */
+    preview?: boolean
   } = $props()
 
   const live = $derived(card.status === IdentityCardStatus.Unlocked)
@@ -317,55 +320,57 @@ card, which then spans the full row.
       {@render passwordFallback()}
     {/if}
 
-    <div class="nk-card-actions">
-      {#if card.status === IdentityCardStatus.Locked}
+    {#if !preview}
+      <div class="nk-card-actions">
+        {#if card.status === IdentityCardStatus.Locked}
+          <button
+            type="button"
+            data-testid="identity-unlock"
+            title={vault.t(I18N_KEYS.WorkspaceUnlockIdentityTitle)}
+            disabled={busy}
+            onclick={() => onUnlock(card.identityId)}
+          >
+            <LockOpen class="size-4 text-muted-foreground" aria-hidden="true" />
+            {vault.t(I18N_KEYS.WorkspaceUnlock)}
+          </button>
+        {:else if live}
+          <button
+            type="button"
+            data-testid="identity-lock"
+            title={vault.t(I18N_KEYS.WorkspaceLockIdentityTitle)}
+            disabled={busy}
+            onclick={onLock}
+          >
+            <Lock class="size-4 text-muted-foreground" aria-hidden="true" />
+            {vault.t(I18N_KEYS.WorkspaceLock)}
+          </button>
+        {:else if card.status === IdentityCardStatus.Inactive}
+          <button
+            type="button"
+            data-testid="identity-use"
+            disabled={busy}
+            onclick={() => onUseIdentity(card.identityId)}
+          >
+            <UserRoundCheck
+              class="size-4 text-muted-foreground"
+              aria-hidden="true"
+            />
+            {vault.t(I18N_KEYS.WorkspaceUseIdentity)}
+          </button>
+        {/if}
         <button
           type="button"
-          data-testid="identity-unlock"
-          title={vault.t(I18N_KEYS.WorkspaceUnlockIdentityTitle)}
+          data-testid="identity-manage"
           disabled={busy}
-          onclick={() => onUnlock(card.identityId)}
+          onclick={() => onManage(card.identityId)}
         >
-          <LockOpen class="size-4 text-muted-foreground" aria-hidden="true" />
-          {vault.t(I18N_KEYS.WorkspaceUnlock)}
+          <Settings2 class="size-4 text-muted-foreground" aria-hidden="true" />
+          {live || card.status === IdentityCardStatus.Locked
+            ? vault.t(I18N_KEYS.WorkspaceManage)
+            : vault.t(I18N_KEYS.WorkspaceManageIdentity)}
         </button>
-      {:else if live}
-        <button
-          type="button"
-          data-testid="identity-lock"
-          title={vault.t(I18N_KEYS.WorkspaceLockIdentityTitle)}
-          disabled={busy}
-          onclick={onLock}
-        >
-          <Lock class="size-4 text-muted-foreground" aria-hidden="true" />
-          {vault.t(I18N_KEYS.WorkspaceLock)}
-        </button>
-      {:else if card.status === IdentityCardStatus.Inactive}
-        <button
-          type="button"
-          data-testid="identity-use"
-          disabled={busy}
-          onclick={() => onUseIdentity(card.identityId)}
-        >
-          <UserRoundCheck
-            class="size-4 text-muted-foreground"
-            aria-hidden="true"
-          />
-          {vault.t(I18N_KEYS.WorkspaceUseIdentity)}
-        </button>
-      {/if}
-      <button
-        type="button"
-        data-testid="identity-manage"
-        disabled={busy}
-        onclick={() => onManage(card.identityId)}
-      >
-        <Settings2 class="size-4 text-muted-foreground" aria-hidden="true" />
-        {live || card.status === IdentityCardStatus.Locked
-          ? vault.t(I18N_KEYS.WorkspaceManage)
-          : vault.t(I18N_KEYS.WorkspaceManageIdentity)}
-      </button>
-    </div>
+      </div>
+    {/if}
   </div>
   {#if unlockPanel}
     <div

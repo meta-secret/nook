@@ -434,7 +434,7 @@
               editingStoreId.kind === VaultLabelEditorKind.Editing &&
               editingStoreId.storeId === entry.storeId}
             <li
-              class="grid gap-3 border-b border-border/60 p-3 last:border-b-0 md:grid-cols-[2.5rem_minmax(0,1fr)_auto] md:items-start"
+              class="grid grid-cols-[2.5rem_minmax(0,1fr)] items-center gap-3 border-b border-border/60 p-3 last:border-b-0 md:grid-cols-[2.5rem_minmax(0,1fr)_auto] md:items-start"
               data-testid="vault-admin-entry"
               data-store-id={entry.storeId}
             >
@@ -512,7 +512,7 @@
               </div>
 
               <div
-                class="grid grid-cols-2 gap-2 md:w-[14.5rem] md:grid-cols-[7rem_6.5rem]"
+                class="col-span-2 grid grid-cols-2 gap-2 md:col-span-1 md:w-[14.5rem] md:grid-cols-[7rem_6.5rem]"
               >
                 {#if isEditing}
                   <Button

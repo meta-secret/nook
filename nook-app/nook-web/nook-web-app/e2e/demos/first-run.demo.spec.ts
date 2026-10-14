@@ -49,7 +49,7 @@ test('a first vault takes a name, then introduces its identity and offers a back
   // The vault exists; backing up is offered, never forced.
   const backup = page.getByTestId('first-run-backup-step')
   await expect(backup).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-  await expect(backup).toContainText('Back up your identity')
+  await expect(backup).toContainText('Personal is ready')
   await demoBeat(page)
 
   await expectFirstVaultOpen(page)

@@ -3,7 +3,7 @@
 </script>
 
 <footer
-  class="mx-auto mt-6 flex max-w-5xl flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 pb-6 text-xs text-muted-foreground sm:px-6"
+  class="mx-auto flex max-w-5xl sm:mt-6 flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 pb-6 text-xs text-muted-foreground sm:px-6"
   data-testid="site-footer"
 >
   <a

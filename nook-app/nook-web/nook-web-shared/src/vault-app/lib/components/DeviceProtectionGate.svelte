@@ -89,7 +89,10 @@
 </script>
 
 <Card
-  class="mx-auto w-full max-w-lg gap-4 py-5 rounded-none border-0 bg-transparent shadow-none animate-in fade-in duration-300"
+  class="w-full gap-4 rounded-none border-0 bg-transparent shadow-none animate-in fade-in duration-300 {frame ===
+  DeviceProtectionGateFrame.Embedded
+    ? 'max-w-md py-0'
+    : 'mx-auto max-w-lg py-5'}"
   data-testid="device-protection-gate"
 >
   {#if frame !== DeviceProtectionGateFrame.Embedded}
@@ -134,7 +137,12 @@
   </CardHeader>
   {/if}
 
-  <CardContent class="space-y-3">
+  <!-- Embedded in a host's own column, the content keeps that column's edge. -->
+  <CardContent
+    class="space-y-3 {frame === DeviceProtectionGateFrame.Embedded
+      ? 'px-0'
+      : ''}"
+  >
     {#if !creationOnly}
       <ExistingVaultRecoverySummary {vault} />
     {/if}
