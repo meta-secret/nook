@@ -1226,7 +1226,6 @@ export const I18N_KEYS = {
   LegalPrivacyPolicy: 'legal.privacy_policy',
   LegalSource: 'legal.source',
   LegalTermsOfService: 'legal.terms_of_service',
-  LoginBackToGetStarted: 'login.back_to_get_started',
   LoginChooseVaultHint: 'login.choose_vault_hint',
   LoginConfirmEnrollmentPassword: 'login.confirm_enrollment_password',
   LoginConfirmPasswordLabel: 'login.confirm_password_label',

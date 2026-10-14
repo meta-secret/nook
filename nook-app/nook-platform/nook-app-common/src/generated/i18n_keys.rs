@@ -1480,7 +1480,6 @@ pub const LEGAL_MANAGER_DESCRIPTION: &str = "legal.manager_description";
 pub const LEGAL_PRIVACY_POLICY: &str = "legal.privacy_policy";
 pub const LEGAL_SOURCE: &str = "legal.source";
 pub const LEGAL_TERMS_OF_SERVICE: &str = "legal.terms_of_service";
-pub const LOGIN_BACK_TO_GET_STARTED: &str = "login.back_to_get_started";
 pub const LOGIN_CHOOSE_VAULT_HINT: &str = "login.choose_vault_hint";
 pub const LOGIN_CONFIRM_ENROLLMENT_PASSWORD: &str = "login.confirm_enrollment_password";
 pub const LOGIN_CONFIRM_PASSWORD_LABEL: &str = "login.confirm_password_label";

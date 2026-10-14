@@ -334,11 +334,12 @@ band, the scrolling page and the status line.
     if (!vault.errorMsg) newVaultOpen = false;
   }
 
-  /** Leave the first-vault setup for the Sync page or the new vault. */
+  /** Leave the first-vault setup for the new vault. */
   function finishFirstRun(next: WorkspaceSection): void {
     vault.firstRun = FirstRunStage.Off;
     openSection(next);
-    if (next === WorkspaceSection.Sync) vault.beginAddProvider();
+    // The setup step can be long; the vault opens from its top.
+    window.scrollTo({ top: 0 });
   }
 
   onDestroy(() => {
@@ -360,8 +361,8 @@ band, the scrolling page and the status line.
 {#if vault.firstRun !== FirstRunStage.Off}
   <FirstRunBackupStep
     {vault}
-    onSetUpBackup={() => finishFirstRun(WorkspaceSection.Sync)}
-    onSkip={() => finishFirstRun(WorkspaceSection.Vault)}
+    onReconnect={onSettingsReconnect}
+    onDone={() => finishFirstRun(WorkspaceSection.Vault)}
   />
 {:else if section === WorkspaceSection.Identities}
   <div

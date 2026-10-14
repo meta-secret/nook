@@ -186,10 +186,11 @@ join) sit between the hero and the cards.
         ]
       : projection.cards,
   )
-  /** A browser with no identity: the first-vault screen stands alone. */
+  /** A browser with no identity: first-run screens (name, restore) stand
+   * alone, without the hub's hero or cards. */
   const firstRun = $derived(
-    Boolean(vaultSetup) &&
-      setupHost.kind === VaultSetupHostKind.Draft &&
+    (setupHost.kind === VaultSetupHostKind.Draft ||
+      (cardsReady && projection.cards.length === 0)) &&
       configured_vault_application() !== VaultApplication.Sentinel,
   )
   /** The current identity's card, which carries the "New vault" row. */

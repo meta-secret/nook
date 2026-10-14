@@ -151,16 +151,20 @@
       class="flex items-start justify-between gap-3 border-b border-border/60 pb-4"
     >
       <div class="space-y-1">
-        <button
-          type="button"
-          class="mb-2 inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-          data-testid="cancel-add-provider-btn"
-          onclick={() =>
-            showSetup ? onCancelSetup() : onCancelAddProvider?.()}
-        >
-          <ChevronLeft class="size-3.5" />
-          {vault.t(I18N_KEYS.OnboardingBackToSaved)}
-        </button>
+        <!-- Back to the saved list. With none saved, each setup wizard offers
+             "Change provider" and the host owns leaving the picker. -->
+        {#if syncProviders.length > 0}
+          <button
+            type="button"
+            class="mb-2 inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+            data-testid="cancel-add-provider-btn"
+            onclick={() =>
+              showSetup ? onCancelSetup() : onCancelAddProvider?.()}
+          >
+            <ChevronLeft class="size-3.5" />
+            {vault.t(I18N_KEYS.OnboardingBackToSaved)}
+          </button>
+        {/if}
         <h2 class="text-base font-semibold text-foreground">
           {#if showSetup}
             {(() => {

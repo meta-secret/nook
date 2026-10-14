@@ -12,7 +12,7 @@
   };
 
   import { I18N_KEYS } from "../../../generated/i18n-keys";
-  import { RefreshCw, ShieldCheck } from "@lucide/svelte";
+  import { ArrowLeft, RefreshCw, ShieldCheck } from "@lucide/svelte";
   import { onMount, tick, untrack, type ComponentProps } from "svelte";
   import type { VaultState } from "$lib/vault.svelte";
   import {
@@ -227,6 +227,8 @@
 
   let enrollmentPanelOpen = $state(false);
   let showProviderSetupLink = $state(false);
+  /** Back from restore returns to the first screen even with saved rows. */
+  let firstScreenRequested = $state(false);
   let devicesAccessOpen = $state(keysRouteOpen());
   let devicesAccessTrigger = $state(DevicesAccessTriggerKind.Header);
   let devicesAccessReturnRoute = $state(WorkspaceRoute.Vault);
@@ -486,7 +488,7 @@
     (vault.sentinelGenesisPhase === SentinelGenesisPhase.DeliveringShares ||
       (!vault.localVaultPresent &&
         vault.localVaults.length === 0 &&
-        !hasProviders)) &&
+        (!hasProviders || firstScreenRequested))) &&
       !showQrOnboarding &&
       !showSetup &&
       !addProviderOpen &&
@@ -656,6 +658,7 @@
     onConnectStorage={() => {
       vault.beginExistingVaultOpen();
       showProviderSetupLink = true;
+      firstScreenRequested = false;
     }}
   />
 
@@ -946,17 +949,19 @@
                     </form>
                   {/if}
                 {:else if showProviderSetup}
-                  {#if showProviderSetupLink && !addProviderOpen}
+                  {#if (showProviderSetupLink || !vault.localVaultPresent) && !addProviderOpen}
                     <button
                       type="button"
-                      class="mb-3 text-sm font-medium text-primary underline-offset-4 hover:underline"
+                      class="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
                       data-testid="login-back-to-get-started"
                       onclick={() => {
                         vault.cancelExistingVaultOpen();
                         showProviderSetupLink = false;
+                        firstScreenRequested = true;
                       }}
                     >
-                      {vault.t(I18N_KEYS.LoginBackToGetStarted)}
+                      <ArrowLeft class="size-4" />
+                      {vault.t(I18N_KEYS.FirstRunBack)}
                     </button>
                   {/if}
                   <LoginProviderManagement
