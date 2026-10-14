@@ -117,12 +117,28 @@ Technical identifiers stay behind "Details".
     return vault.t(request);
   }
 
-  function fact(row: IdentityKeyInventoryRow, kind: PasskeyCardFactKind): string {
-    if (row.passkeySummary.kind !== PasskeyCardSummaryKind.Present) return "";
-    const found = row.passkeySummary.summary.facts.find(
-      (each) => each.kind === kind,
-    );
-    return found && !unknownValues.has(found.value) ? found.value : "";
+  type KeyFacts = {
+    readonly keeper: string;
+    readonly credential: string;
+    readonly created: string;
+  };
+
+  /** A key's passkey facts that Nook actually knows; unknown ones are "". */
+  function factsOf(row: IdentityKeyInventoryRow): KeyFacts {
+    const facts =
+      row.passkeySummary.kind === PasskeyCardSummaryKind.Present
+        ? row.passkeySummary.summary.facts
+        : [];
+    const valueOf = (kind: PasskeyCardFactKind): string => {
+      const found = facts.find((each) => each.kind === kind);
+      return found && !unknownValues.has(found.value) ? found.value : "";
+    };
+    const known: KeyFacts = {
+      keeper: valueOf(PasskeyCardFactKind.Keeper),
+      credential: valueOf(PasskeyCardFactKind.Fingerprint),
+      created: valueOf(PasskeyCardFactKind.Created),
+    };
+    return known;
   }
 
   function known(value: string): string {
@@ -248,10 +264,11 @@ Technical identifiers stay behind "Details".
       {#each keys as row (row.key)}
         {@const app = row.apps[0]}
         {@const here = app ? currentAppIds.has(app.appId) : false}
-        {@const keeper = fact(row, PasskeyCardFactKind.Keeper)}
+        {@const facts = factsOf(row)}
+        {@const keeper = facts.keeper}
         {@const lastUsed = known(row.lastUsed)}
-        {@const credential = fact(row, PasskeyCardFactKind.Fingerprint)}
-        {@const created = fact(row, PasskeyCardFactKind.Created)}
+        {@const credential = facts.credential}
+        {@const created = facts.created}
         <li
           class="grid gap-3 border border-border p-4"
           data-testid="identity-key"
