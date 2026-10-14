@@ -1,5 +1,6 @@
 <script lang="ts">
   import { WorkspaceLocation, keysRouteOpen } from "$lib/app/workspace-route";
+  import type { IdentityManageRequest } from "$lib/components/identities/identity-card-model";
   import type { SentinelActionResult } from "$lib/vault/sentinel-genesis";
   type EnrollmentCodeUnlock = {
     readonly code: string;
@@ -395,10 +396,26 @@
     showProviderSetupLink = true;
   }
 
-  function manageIdentity(identityId: string): void {
+  /** Manage on a locked identity unlocks one of its vaults and lands on the
+   * identity home. With no vault here to open, only Keys can manage it. */
+  function manageIdentity(request: IdentityManageRequest): void {
+    const { identityId, storeId } = request;
     managedIdentityId = identityId;
     vault.identityFocus = identityId;
-    void openDevicesAccess(DevicesAccessTriggerKind.Header);
+    if (!storeId) {
+      void openDevicesAccess(DevicesAccessTriggerKind.Header);
+      return;
+    }
+    const navigation = new WorkspaceLocation(WorkspaceRoute.Vaults).navigate();
+    if (navigation.isErr()) {
+      vault.errorMsg = vault.t(navigation.error.translationKey);
+      return;
+    }
+    const homeRoute: Parameters<
+      VaultWorkspaceActions["applyWorkspaceRoute"]
+    >[0] = { route: WorkspaceRoute.Vaults };
+    new VaultWorkspaceActions(vault).applyWorkspaceRoute(homeRoute);
+    void openVaultFromCard(storeId);
   }
 
   function newIdentity(): void {
@@ -757,7 +774,10 @@
       onNewVault={openNewVault}
       onManage={manageIdentity}
       onNewIdentity={newIdentity}
-      onUseIdentity={manageIdentity}
+      onUseIdentity={(identityId: string) => {
+        const request: IdentityManageRequest = { identityId, storeId: "" };
+        manageIdentity(request);
+      }}
       pairingStatusFor={(storeId: string) =>
         pairingStatusLookup.statusForStore(storeId)}
       {...showLocalUnlock && !newVaultOpen ? { unlockPanel } : {}}

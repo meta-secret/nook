@@ -51,6 +51,13 @@ export type IdentityCardView = {
   readonly vaults: readonly IdentityVaultRow[];
 };
 
+/** Manage on an identity card, with a vault the identity opens on this
+ * browser ("" when it opens none), so a locked identity can be unlocked. */
+export type IdentityManageRequest = {
+  readonly identityId: string;
+  readonly storeId: string;
+};
+
 export type IdentityLocalVault = {
   readonly storeId: string;
   readonly label: string;

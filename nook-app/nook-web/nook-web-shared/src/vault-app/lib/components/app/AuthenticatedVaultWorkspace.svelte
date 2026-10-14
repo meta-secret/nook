@@ -36,6 +36,7 @@ band, the scrolling page and the status line.
   import { VaultStatusBarVariant } from "$lib/components/vault-status-bar-state";
   import IdentitiesHub from "$lib/components/identities/IdentitiesHub.svelte";
   import LoginNewVaultPanel from "$lib/components/login/LoginNewVaultPanel.svelte";
+  import type { IdentityManageRequest } from "$lib/components/identities/identity-card-model";
   import { IdentityDirectoryLoader } from "$lib/components/identities/identity-directory-loader.svelte";
   import { IdentityDirectoryLoadKind } from "$lib/components/devices-access/identity-directory-view";
   import PageBar from "$lib/components/workspace/PageBar.svelte";
@@ -291,18 +292,20 @@ band, the scrolling page and the status line.
     await vault.switchToVault(storeId);
   }
 
-  /** The rail acts on the unlocked identity, like its card's Manage. */
+  /** The rail acts on the unlocked identity. */
   function openFromNav(next: WorkspaceSection): void {
-    if (next === WorkspaceSection.Keys && currentIdentity !== false) {
-      manageIdentity(currentIdentity.identityId);
-      return;
-    }
+    if (currentIdentity !== false)
+      vault.identityFocus = currentIdentity.identityId;
     openSection(next);
   }
 
+  /** Manage on a card: the unlocked identity opens its home (vaults and
+   * sync); another identity is managed from Keys, which lists them all. */
   function manageIdentity(identityId: string): void {
     vault.identityFocus = identityId;
-    openSection(WorkspaceSection.Keys);
+    const unlocked =
+      currentIdentity !== false && currentIdentity.identityId === identityId;
+    openSection(unlocked ? WorkspaceSection.Vaults : WorkspaceSection.Keys);
   }
 
   function newIdentity(): void {
@@ -335,11 +338,23 @@ band, the scrolling page and the status line.
   }
 
   /** Leave the first-vault setup for the new vault. */
+  /** Sync renders as part of the identity home. */
+  const pageSection = $derived(new ManageNavLookup(section).navSection);
+  /** The page that takes the identity's next health step; its own action
+   * makes the band's button redundant there. */
+  const healthStepHere = $derived(
+    identityHealth.nextStep === NookIdentityNextStep.AddDevice
+      ? pageSection === WorkspaceSection.Devices
+      : identityHealth.nextStep !== NookIdentityNextStep.Done &&
+          pageSection === WorkspaceSection.Vaults,
+  );
+
   function finishFirstRun(next: WorkspaceSection): void {
     vault.firstRun = FirstRunStage.Off;
     openSection(next);
     // The setup step can be long; the vault opens from its top.
-    window.scrollTo({ top: 0 });
+    const pageTop: ScrollToOptions = { top: 0 };
+    window.scrollTo(pageTop);
   }
 
   onDestroy(() => {
@@ -379,7 +394,8 @@ band, the scrolling page and the status line.
       onNewVault={() => (newVaultOpen = true)}
       {...newVaultOpen ? { vaultSetup: newVaultPanel } : {}}
       vaultSetupOpen={newVaultOpen}
-      onManage={manageIdentity}
+      onManage={(request: IdentityManageRequest) =>
+        manageIdentity(request.identityId)}
       onNewIdentity={newIdentity}
       onUseIdentity={manageIdentity}
       onLock={lockIdentity}
@@ -439,7 +455,7 @@ band, the scrolling page and the status line.
               size="sm"
               title={vault.t(I18N_KEYS.WorkspaceManageIdentity)}
               data-testid="vault-identity-btn"
-              onclick={() => openFromNav(WorkspaceSection.Keys)}
+              onclick={() => openFromNav(WorkspaceSection.Vaults)}
             >
               <Fingerprint class="size-4" />
               <span class="hidden max-w-[12rem] truncate sm:inline"
@@ -525,6 +541,7 @@ band, the scrolling page and the status line.
             health={identityHealth}
             onAddSyncProvider={() => openSection(WorkspaceSection.Sync)}
             onAddDevice={() => openSection(WorkspaceSection.Devices)}
+            actionShown={!healthStepHere}
           />
         {/if}
 
@@ -579,6 +596,8 @@ band, the scrolling page and the status line.
             {vault}
             {extensionSetupState}
             {section}
+            onCreateVault={(label: string) =>
+              vault.createLocalVaultWithDeviceKeys(label)}
             syncProviders={vault.syncProviders}
             manualProviderSync={vault.manualProviderSync}
             isAuthenticated={vault.isAuthenticated}

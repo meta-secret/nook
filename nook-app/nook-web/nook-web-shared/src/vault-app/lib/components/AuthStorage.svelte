@@ -260,14 +260,9 @@
                 >
                   <Cloud class="size-4" />
                 </div>
-                <div class="min-w-0 space-y-1">
-                  <p class="text-sm font-medium text-foreground">
-                    {vault.t(I18N_KEYS.AuthStorageNoSyncProviders)}
-                  </p>
-                  <p class="text-xs text-pretty text-muted-foreground">
-                    {vault.t(I18N_KEYS.AuthStorageSyncProvidersDesc)}
-                  </p>
-                </div>
+                <p class="min-w-0 self-center text-sm font-medium text-foreground">
+                  {vault.t(I18N_KEYS.AuthStorageNoSyncProviders)}
+                </p>
               </div>
               <div class="mt-3">
                 <Button

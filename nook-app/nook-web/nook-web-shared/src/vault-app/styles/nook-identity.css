@@ -594,6 +594,14 @@
       background: var(--accent);
       box-shadow: inset 2px 0 0 var(--foreground);
     }
+    /* The identity home leads the rail: vaults and sync come first. */
+    .nk-manage-item-home {
+      min-height: 2.75rem;
+      border: 1px solid var(--border);
+      background: var(--card);
+      font-weight: 600;
+      color: var(--foreground);
+    }
     .nk-manage-badge,
     .nk-manage-dot {
       position: static;

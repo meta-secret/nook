@@ -23,6 +23,7 @@ join) sit between the hero and the cards.
     VaultSetupHostKind,
     type VaultSetupHost,
     type IdentityCardSource,
+    type IdentityManageRequest,
     type IdentityLocalVault,
   } from './identity-card-model'
   import {
@@ -63,7 +64,7 @@ join) sit between the hero and the cards.
     busy?: boolean
     onOpenVault: (storeId: string) => void
     onNewVault?: () => void
-    onManage: (identityId: string) => void
+    onManage: (request: IdentityManageRequest) => void
     onNewIdentity: () => void
     onUseIdentity: (identityId: string) => void
     onLock?: () => void
@@ -193,6 +194,20 @@ join) sit between the hero and the cards.
       (cardsReady && projection.cards.length === 0)) &&
       configured_vault_application() !== VaultApplication.Sentinel,
   )
+  /** Manage names a vault the identity can open, so a locked identity can
+   * be unlocked on the way to its management. */
+  function manage(identityId: string): void {
+    const card = projection.cards.find((each) => each.identityId === identityId)
+    const row = card?.vaults.find(
+      (each) => each.state !== IdentityVaultRowState.Unavailable,
+    )
+    const request: IdentityManageRequest = {
+      identityId,
+      storeId: row ? row.storeId : '',
+    }
+    onManage(request)
+  }
+
   /** The current identity's card, which carries the "New vault" row. */
   const currentCardShown = $derived(
     cardsReady && showCards && projection.cards.some((card) => card.current),
@@ -306,7 +321,7 @@ join) sit between the hero and the cards.
             onNewVault={card.identityId === setupIdentityId
               ? () => (setupOpen = true)
               : onNewVault}
-            {onManage}
+            onManage={manage}
             {onLock}
             {onUseIdentity}
             {pairingStatusFor}

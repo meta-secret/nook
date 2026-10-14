@@ -31,10 +31,10 @@
   } from './vault-switcher-extension'
   import {
     Check,
-    CheckCircle2,
     FolderKey,
     Lock,
     PencilLine,
+    Plus,
     RefreshCw,
     ShieldCheck,
     X,
@@ -42,6 +42,7 @@
   import SettingsAccordionSection from '$lib/components/settings/SettingsAccordionSection.svelte'
   import ManageSection from '$lib/components/settings/ManageSection.svelte'
   import AuthStorage from '$lib/components/AuthStorage.svelte'
+  import LoginNewVaultPanel from '$lib/components/login/LoginNewVaultPanel.svelte'
   import VaultPasswordCard from '$lib/components/VaultPasswordCard.svelte'
   import IdentityMountsPanel from '$lib/components/identity-control/IdentityMountsPanel.svelte'
   import BitwardenImportPanel from '$lib/components/BitwardenImportPanel.svelte'
@@ -120,6 +121,7 @@
     onImportDashlane,
     onImportGoogleAuthenticator,
     onImportProtonPass,
+    onCreateVault,
     section,
   }: {
     vault: VaultState
@@ -184,8 +186,29 @@
     onImportProtonPass: (
       exportBytes: Uint8Array,
     ) => Promise<SecretOperationResult<NookImportResult>>
+    /** Create a vault for this identity; it opens once created. */
+    onCreateVault: (label: string) => Promise<void>
     section: WorkspaceSection
   } = $props()
+
+  /** Vaults and sync together are the identity home; Sync deep-links to
+   * its half of the page. */
+  const home = $derived(
+    section === WorkspaceSection.Vaults || section === WorkspaceSection.Sync,
+  )
+  let newVaultOpen = $state(false)
+  let syncSection = $state<HTMLElement>()
+
+  const syncScroll: ScrollIntoViewOptions = { block: 'start' }
+  $effect(() => {
+    if (section === WorkspaceSection.Sync)
+      syncSection?.scrollIntoView(syncScroll)
+  })
+
+  async function createVault(label: string): Promise<void> {
+    await onCreateVault(label)
+    if (!vault.errorMsg) newVaultOpen = false
+  }
 
   type AuthStorageOptionalProps = Partial<
     Pick<
@@ -373,47 +396,41 @@
   data-testid="vault-admin-panel"
   data-section={section}
 >
-  {#if section === WorkspaceSection.Vaults}
+  {#if home}
     <ManageSection
-      compact
       title={vault.t(I18N_KEYS.VaultAdminVaultsTitle)}
       subtitle={vault.t(I18N_KEYS.WorkspaceSectionVaultsDescription)}
       testId="vault-admin-vaults-section"
     >
       {#snippet badge()}
-        <span
-          class="nk-tag nk-tag-success"
-          data-testid="vault-admin-vault-count"
-        >
-          <CheckCircle2 class="size-3" />
-          {(() => {
-            const tArgs: Parameters<typeof vault.t>[0] = {
-              key: I18N_KEYS.VaultAdminVaultCount,
-              replacements: { count: String(vaults.length) },
-            }
-            return vault.t(tArgs)
-          })()}
-        </span>
-      {/snippet}
-
-      <div class="space-y-4" data-testid="vault-admin-vaults-panel">
-        <div
-          class="nk-banner flex flex-wrap items-center justify-between gap-3 px-4 py-3"
-          data-testid="vault-admin-create-hint"
-        >
-          <p class="text-sm text-pretty text-muted-foreground">
-            {vault.t(I18N_KEYS.WorkspaceVaultsCreatedFromIdentity)}
-          </p>
+        {#if !newVaultOpen}
           <Button
             type="button"
             size="sm"
             variant="outline"
-            data-testid="vault-admin-open-identities"
-            onclick={() => vault.openSection(WorkspaceSection.Identities)}
+            data-testid="vault-admin-new-vault"
+            disabled={isBusy}
+            onclick={() => (newVaultOpen = true)}
           >
-            {vault.t(I18N_KEYS.WorkspaceOpenIdentities)}
+            <Plus class="size-4" />
+            {vault.t(I18N_KEYS.WorkspaceNewVault)}
           </Button>
-        </div>
+        {/if}
+      {/snippet}
+
+      <div class="space-y-4" data-testid="vault-admin-vaults-panel">
+        {#if newVaultOpen}
+          <div class="border border-border p-4 sm:p-5">
+            <LoginNewVaultPanel
+              {vault}
+              {isVerifying}
+              {isInitializing}
+              importable={false}
+              onCreateVault={createVault}
+              onClose={() => (newVaultOpen = false)}
+            />
+          </div>
+        {/if}
 
         <ul class="nk-list overflow-hidden">
           {#each vaults as entry (entry.storeId)}
@@ -569,27 +586,13 @@
     </ManageSection>
   {/if}
 
-  {#if section === WorkspaceSection.Sync}
+  {#if home}
+    <div class="scroll-mt-4" bind:this={syncSection}>
     <ManageSection
-      compact
-      title={vault.t(I18N_KEYS.SettingsStorage)}
+      title={vault.t(I18N_KEYS.WorkspaceSectionSync)}
       subtitle={vault.t(I18N_KEYS.WorkspaceSectionSyncDescription)}
       testId="storage-providers-section"
     >
-      {#snippet badge()}
-        {#if isAuthenticated}
-          <span
-            class="nk-tag nk-tag-success shrink-0"
-            data-testid="connected-badge"
-          >
-            <CheckCircle2 class="size-3" />
-            {vault.t(I18N_KEYS.SettingsVaultUnlocked)}
-          </span>
-        {/if}
-      {/snippet}
-      {#if isAuthenticated}
-        <IdentityMountsPanel {vault} />
-      {/if}
       <AuthStorage
         {vault}
         embedded
@@ -606,7 +609,11 @@
         {onBeginSetup}
         {onCancelSetup}
       />
+      {#if isAuthenticated}
+        <IdentityMountsPanel {vault} />
+      {/if}
     </ManageSection>
+    </div>
   {/if}
 
   {#if section === WorkspaceSection.Passwords}

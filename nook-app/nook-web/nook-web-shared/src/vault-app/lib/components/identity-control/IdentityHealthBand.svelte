@@ -20,11 +20,14 @@ management; it disappears once nothing is missing.
     health,
     onAddSyncProvider,
     onAddDevice,
+    actionShown = true,
   }: {
     vault: VaultState
     health: NookIdentityHealth
     onAddSyncProvider: () => void
     onAddDevice: () => void
+    /** Off on the page the step leads to: that page offers the action. */
+    actionShown?: boolean
   } = $props()
 
   const stage = $derived(health.stage)
@@ -97,7 +100,7 @@ management; it disappears once nothing is missing.
           </p>
         </div>
       </div>
-      {#if nextStep === NookIdentityNextStep.AddDevice}
+      {#if actionShown && nextStep === NookIdentityNextStep.AddDevice}
         <Button
           type="button"
           size="sm"
@@ -108,7 +111,7 @@ management; it disappears once nothing is missing.
         >
           {vault.t(I18N_KEYS.IdentityHealthDeviceCta)}
         </Button>
-      {:else}
+      {:else if actionShown}
         <Button
           type="button"
           size="sm"

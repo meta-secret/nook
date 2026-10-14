@@ -1,6 +1,7 @@
 <!--
 Identity management navigation. The identity sits on top and leads back to
-the identities hub; its pages follow. Vault pages never show it: a vault has
+the identities hub. Its home (vaults and sync) comes first and stands apart;
+security pages and settings follow. Vault pages never show it: a vault has
 only its items and imports. One element: a rail inside the shell on wide
 screens and a scrolling bottom bar on phones.
 -->
@@ -12,7 +13,6 @@ screens and a scrolling bottom bar on phones.
     FolderKey,
     KeyRound,
     MonitorSmartphone,
-    RefreshCw,
     ShieldCheck,
     SlidersHorizontal,
   } from '@lucide/svelte'
@@ -22,7 +22,12 @@ screens and a scrolling bottom bar on phones.
     ManageSectionScope,
     WorkspaceSection,
   } from '$lib/vault/state/ui.svelte'
-  import { MANAGE_NAV_ITEMS, type ManageNavItem } from './manage-nav'
+  import {
+    MANAGE_NAV_ITEMS,
+    ManageNavLookup,
+    ManageNavTier,
+    type ManageNavItem,
+  } from './manage-nav'
 
   let {
     vault,
@@ -45,11 +50,19 @@ screens and a scrolling bottom bar on phones.
     onSelect: (section: WorkspaceSection) => void
   } = $props()
 
-  const identityItems = $derived(
-    MANAGE_NAV_ITEMS.filter(
-      (item) => item.scope === ManageSectionScope.Identity,
-    ),
+  const identityItems = MANAGE_NAV_ITEMS.filter(
+    (item) => item.scope === ManageSectionScope.Identity,
   )
+  const homeItems = identityItems.filter(
+    (item) => item.tier === ManageNavTier.Home,
+  )
+  const securityItems = identityItems.filter(
+    (item) => item.tier === ManageNavTier.Security,
+  )
+  const generalItems = identityItems.filter(
+    (item) => item.tier === ManageNavTier.General,
+  )
+  const activeNavSection = $derived(new ManageNavLookup(active).navSection)
 </script>
 
 {#snippet itemIcon(section: WorkspaceSection)}
@@ -61,8 +74,6 @@ screens and a scrolling bottom bar on phones.
     <SlidersHorizontal class="size-[1.125rem] shrink-0" aria-hidden="true" />
   {:else if section === WorkspaceSection.Devices}
     <MonitorSmartphone class="size-[1.125rem] shrink-0" aria-hidden="true" />
-  {:else if section === WorkspaceSection.Sync}
-    <RefreshCw class="size-[1.125rem] shrink-0" aria-hidden="true" />
   {:else if section === WorkspaceSection.Passwords}
     <ShieldCheck class="size-[1.125rem] shrink-0" aria-hidden="true" />
   {:else}
@@ -81,7 +92,7 @@ screens and a scrolling bottom bar on phones.
       title={vault.t(I18N_KEYS.IdentityHealthDeviceTitle)}
       data-testid="manage-nav-device-missing"
     ></span>
-  {:else if section === WorkspaceSection.Sync && syncMissing}
+  {:else if section === WorkspaceSection.Vaults && syncMissing}
     <span
       class="nk-manage-dot"
       title={vault.t(I18N_KEYS.WorkspaceNavSyncMissing)}
@@ -95,8 +106,9 @@ screens and a scrolling bottom bar on phones.
     <button
       type="button"
       class="nk-manage-item"
+      class:nk-manage-item-home={section === WorkspaceSection.Vaults}
       data-testid={testId}
-      {...active === section ? { 'aria-current': 'page' } : {}}
+      {...activeNavSection === section ? { 'aria-current': 'page' } : {}}
       onclick={() => onSelect(section)}
     >
       {@render itemIcon(section)}
@@ -145,14 +157,26 @@ screens and a scrolling bottom bar on phones.
     />
   </button>
 
+  <ul class="contents md:grid md:gap-0.5">
+    {#each homeItems as item (item.section)}
+      {@render listed(item)}
+    {/each}
+  </ul>
+
   <div class="nk-manage-group">
     <p class="nk-label hidden truncate px-2.5 pb-1 md:block">
-      {vault.t(I18N_KEYS.WorkspaceNavGroupIdentity)}
+      {vault.t(I18N_KEYS.WorkspaceNavGroupSecurity)}
     </p>
     <ul class="contents md:grid md:gap-0.5">
-      {#each identityItems as item (item.section)}
+      {#each securityItems as item (item.section)}
         {@render listed(item)}
       {/each}
     </ul>
   </div>
+
+  <ul class="nk-manage-group contents md:mt-auto md:grid md:gap-0.5">
+    {#each generalItems as item (item.section)}
+      {@render listed(item)}
+    {/each}
+  </ul>
 </nav>
