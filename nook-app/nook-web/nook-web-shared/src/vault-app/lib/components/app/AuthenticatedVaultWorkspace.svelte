@@ -18,6 +18,7 @@ band, the scrolling page and the status line.
   import {
     configured_vault_application_supports_extension,
     NookIdentityLocalAccessKind,
+    NookIdentityHealthStage,
     NookIdentityNextStep,
     type NookIdentityHealth,
     ProviderSyncFailureHandling,
@@ -27,7 +28,7 @@ band, the scrolling page and the status line.
   import VaultAdmin from "$lib/components/VaultAdmin.svelte";
   import DevicesAccessDashboard from "$lib/components/DevicesAccessDashboard.svelte";
   import type { KeysPageLeave } from "$lib/components/devices-access-dashboard-state";
-  import IdentityHealthBand from "$lib/components/identity-control/IdentityHealthBand.svelte";
+  import IdentityOverview from "$lib/components/identity-control/IdentityOverview.svelte";
   import BrowserSettingsPanel from "$lib/components/settings/BrowserSettingsPanel.svelte";
   import IdentityDevicesPanel from "$lib/components/identity-control/IdentityDevicesPanel.svelte";
   import VaultStatusBar from "$lib/components/VaultStatusBar.svelte";
@@ -35,7 +36,13 @@ band, the scrolling page and the status line.
   import { VaultStatusBarVariant } from "$lib/components/vault-status-bar-state";
   import IdentitiesHub from "$lib/components/identities/IdentitiesHub.svelte";
   import LoginNewVaultPanel from "$lib/components/login/LoginNewVaultPanel.svelte";
-  import type { IdentityVaultTarget } from "$lib/components/identities/identity-card-model";
+  import {
+    IdentityCardProjection,
+    type IdentityCardSource,
+    type IdentityCardView,
+    type IdentityLocalVault,
+    type IdentityVaultTarget,
+  } from "$lib/components/identities/identity-card-model";
   import { IdentityDirectoryLoader } from "$lib/components/identities/identity-directory-loader.svelte";
   import { IdentityDirectoryLoadKind } from "$lib/components/devices-access/identity-directory-view";
   import PageBar from "$lib/components/workspace/PageBar.svelte";
@@ -299,13 +306,13 @@ band, the scrolling page and the status line.
     openSection(next);
   }
 
-  /** Manage on a card: the unlocked identity opens its home (vaults and
-   * sync); another identity is managed from Keys, which lists them all. */
+  /** Manage on a card: the unlocked identity opens its overview; another
+   * identity is managed from Keys, which lists them all. */
   function manageIdentity(identityId: string): void {
     vault.identityFocus = identityId;
     const unlocked =
       currentIdentity !== false && currentIdentity.identityId === identityId;
-    openSection(unlocked ? WorkspaceSection.Vaults : WorkspaceSection.Keys);
+    openSection(unlocked ? WorkspaceSection.Overview : WorkspaceSection.Keys);
   }
 
   function newIdentity(): void {
@@ -336,28 +343,50 @@ band, the scrolling page and the status line.
     if (!vault.errorMsg) newVaultOpen = false;
   }
 
-  /** Leave the first-vault setup for the new vault. */
-  /** Open the provider picker in the home's Sync block. Opening the
-   * section resets provider setup, so the picker opens after it. */
+  /** Open the provider picker on the Sync page. Opening the section resets
+   * provider setup, so the picker opens after it. */
   function addSyncProvider(): void {
     openSection(WorkspaceSection.Sync);
     vault.beginAddProvider();
   }
 
-  /** Sync renders as part of the identity home. */
-  const pageSection = $derived(new ManageNavLookup(section).navSection);
-  /** Every health step is taken on the identity home, whose blocks carry
-   * the action; the band's button is redundant there. */
-  const healthStepHere = $derived(
-    identityHealth.nextStep !== NookIdentityNextStep.Done &&
-      pageSection === WorkspaceSection.Vaults,
-  );
-  let devicesBlock = $state<HTMLElement>();
-  const devicesScroll: ScrollIntoViewOptions = { block: "start" };
+  /** "New vault" on the overview opens the Vaults page with its form. */
+  let startNewVault = $state(false);
+  function newVaultFromOverview(): void {
+    startNewVault = true;
+    openSection(WorkspaceSection.Vaults);
+  }
   $effect(() => {
-    if (section === WorkspaceSection.Devices)
-      devicesBlock?.scrollIntoView(devicesScroll);
+    if (section !== WorkspaceSection.Vaults) startNewVault = false;
   });
+
+  /** The unlocked identity, drawn the same way as its identity card. */
+  const overviewCard = $derived.by((): IdentityCardView | false => {
+    if (directory.state.kind !== IdentityDirectoryLoadKind.Ready) return false;
+    const localVaults = vault.localVaults.map((entry) => {
+      const local: IdentityLocalVault = {
+        storeId: entry.storeId,
+        label: entry.display_label(unnamedLabel),
+      };
+      return local;
+    });
+    const source: IdentityCardSource = {
+      identities: directory.state.view.identities,
+      localVaults,
+      openStoreId: activeStoreId,
+      authenticated: true,
+      identityUnlocked: true,
+    };
+    return (
+      new IdentityCardProjection(source).cards.find((card) => card.current) ??
+      false
+    );
+  });
+  /** Another app can join once a cloud provider carries the identity. */
+  const canAddDevice = $derived(
+    identityHealth.stage !== NookIdentityHealthStage.LocalOnly &&
+      identityHealth.nextStep !== NookIdentityNextStep.AddCloudProvider,
+  );
 
   function finishFirstRun(next: WorkspaceSection): void {
     vault.firstRun = FirstRunStage.Off;
@@ -517,16 +546,6 @@ band, the scrolling page and the status line.
           ? "grid min-w-0 grid-cols-1 content-start gap-6 p-4 md:p-6"
           : "flex min-h-0 flex-1 flex-col"}
       >
-        {#if scope === ManageSectionScope.Identity}
-          <IdentityHealthBand
-            {vault}
-            health={identityHealth}
-            onAddSyncProvider={() => openSection(WorkspaceSection.Sync)}
-            onAddDevice={() => openSection(WorkspaceSection.Devices)}
-            actionShown={!healthStepHere}
-          />
-        {/if}
-
         {#if navEntry.kind === ManageNavEntryKind.Listed && (section === WorkspaceSection.Keys || section === WorkspaceSection.Settings)}
           <p
             class="max-w-[64ch] text-sm text-pretty text-muted-foreground"
@@ -560,6 +579,21 @@ band, the scrolling page and the status line.
               />
             {/key}
           </div>
+        {:else if section === WorkspaceSection.Overview}
+          {#if overviewCard !== false}
+            <IdentityOverview
+              {vault}
+              card={overviewCard}
+              health={identityHealth}
+              {canAddDevice}
+              onOpen={openFromNav}
+              onOpenVault={(storeId: string) => void openVaultFromCard(storeId)}
+              onNewVault={newVaultFromOverview}
+              onAddSyncProvider={addSyncProvider}
+            />
+          {/if}
+        {:else if section === WorkspaceSection.Devices}
+          <IdentityDevicesPanel {vault} onOpenSync={addSyncProvider} />
         {:else if section === WorkspaceSection.Keys}
           <DevicesAccessDashboard
             {vault}
@@ -573,6 +607,7 @@ band, the scrolling page and the status line.
             {vault}
             {extensionSetupState}
             {section}
+            {startNewVault}
             onCreateVault={(label: string) =>
               vault.createLocalVaultWithDeviceKeys(label)}
             syncProviders={vault.syncProviders}
@@ -666,13 +701,6 @@ band, the scrolling page and the status line.
               exportBytes: Parameters<VaultAdminProps["onImportProtonPass"]>[0],
             ) => vault.handleProtonPassImport(exportBytes)}
           />
-          {#if pageSection === WorkspaceSection.Vaults}
-            <!-- Devices close the identity home: they join through the
-                 sync providers above. -->
-            <div class="scroll-mt-4" bind:this={devicesBlock}>
-              <IdentityDevicesPanel {vault} onOpenSync={addSyncProvider} />
-            </div>
-          {/if}
         {/if}
       </div>
     </div>

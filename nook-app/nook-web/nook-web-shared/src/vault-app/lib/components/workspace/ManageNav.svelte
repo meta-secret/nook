@@ -1,9 +1,9 @@
 <!--
 Identity management navigation. The identity sits on top and leads back to
-the identities hub. Its home (vaults, sync, devices) comes first and stands apart;
-security pages and settings follow. Vault pages never show it: a vault has
-only its items and imports. One element: a rail inside the shell on wide
-screens and a scrolling bottom bar on phones.
+the identities hub. Its overview comes first and stands apart, then the
+identity's parts (vaults, sync, devices), then security and settings. Vault
+pages never show it: a vault has only its items and imports. One element: a
+rail inside the shell on wide screens and a scrolling bottom bar on phones.
 -->
 <script lang="ts">
   import {
@@ -12,6 +12,9 @@ screens and a scrolling bottom bar on phones.
     Fingerprint,
     FolderKey,
     KeyRound,
+    LayoutGrid,
+    MonitorSmartphone,
+    RefreshCw,
     ShieldCheck,
     SlidersHorizontal,
   } from '@lucide/svelte'
@@ -23,7 +26,6 @@ screens and a scrolling bottom bar on phones.
   } from '$lib/vault/state/ui.svelte'
   import {
     MANAGE_NAV_ITEMS,
-    ManageNavLookup,
     ManageNavTier,
     type ManageNavItem,
   } from './manage-nav'
@@ -55,17 +57,25 @@ screens and a scrolling bottom bar on phones.
   const homeItems = identityItems.filter(
     (item) => item.tier === ManageNavTier.Home,
   )
+  const partItems = identityItems.filter(
+    (item) => item.tier === ManageNavTier.Parts,
+  )
   const securityItems = identityItems.filter(
     (item) => item.tier === ManageNavTier.Security,
   )
   const generalItems = identityItems.filter(
     (item) => item.tier === ManageNavTier.General,
   )
-  const activeNavSection = $derived(new ManageNavLookup(active).navSection)
 </script>
 
 {#snippet itemIcon(section: WorkspaceSection)}
-  {#if section === WorkspaceSection.Keys}
+  {#if section === WorkspaceSection.Overview}
+    <LayoutGrid class="size-[1.125rem] shrink-0" aria-hidden="true" />
+  {:else if section === WorkspaceSection.Sync}
+    <RefreshCw class="size-[1.125rem] shrink-0" aria-hidden="true" />
+  {:else if section === WorkspaceSection.Devices}
+    <MonitorSmartphone class="size-[1.125rem] shrink-0" aria-hidden="true" />
+  {:else if section === WorkspaceSection.Keys}
     <KeyRound class="size-[1.125rem] shrink-0" aria-hidden="true" />
   {:else if section === WorkspaceSection.Vaults}
     <FolderKey class="size-[1.125rem] shrink-0" aria-hidden="true" />
@@ -79,17 +89,17 @@ screens and a scrolling bottom bar on phones.
 {/snippet}
 
 {#snippet status(section: WorkspaceSection)}
-  {#if section === WorkspaceSection.Vaults && pendingJoinCount > 0}
+  {#if section === WorkspaceSection.Devices && pendingJoinCount > 0}
     <span class="nk-manage-badge" data-testid="manage-nav-pending-joins">
       {pendingJoinCount}
     </span>
-  {:else if section === WorkspaceSection.Vaults && syncMissing}
+  {:else if section === WorkspaceSection.Sync && syncMissing}
     <span
       class="nk-manage-dot"
       title={vault.t(I18N_KEYS.WorkspaceNavSyncMissing)}
       data-testid="manage-nav-sync-missing"
     ></span>
-  {:else if section === WorkspaceSection.Vaults && deviceMissing}
+  {:else if section === WorkspaceSection.Devices && deviceMissing}
     <span
       class="nk-manage-dot"
       title={vault.t(I18N_KEYS.IdentityHealthDeviceTitle)}
@@ -103,9 +113,9 @@ screens and a scrolling bottom bar on phones.
     <button
       type="button"
       class="nk-manage-item"
-      class:nk-manage-item-home={section === WorkspaceSection.Vaults}
+      class:nk-manage-item-home={section === WorkspaceSection.Overview}
       data-testid={testId}
-      {...activeNavSection === section ? { 'aria-current': 'page' } : {}}
+      {...active === section ? { 'aria-current': 'page' } : {}}
       onclick={() => onSelect(section)}
     >
       {@render itemIcon(section)}
@@ -159,6 +169,17 @@ screens and a scrolling bottom bar on phones.
       {@render listed(item)}
     {/each}
   </ul>
+
+  <div class="nk-manage-group">
+    <p class="nk-label hidden truncate px-2.5 pb-1 md:block">
+      {vault.t(I18N_KEYS.WorkspaceNavGroupParts)}
+    </p>
+    <ul class="contents md:grid md:gap-0.5">
+      {#each partItems as item (item.section)}
+        {@render listed(item)}
+      {/each}
+    </ul>
+  </div>
 
   <div class="nk-manage-group">
     <p class="nk-label hidden truncate px-2.5 pb-1 md:block">

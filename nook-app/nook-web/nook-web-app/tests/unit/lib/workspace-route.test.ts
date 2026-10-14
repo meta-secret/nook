@@ -65,7 +65,7 @@ describe('workspace routes', () => {
     [WorkspaceRoute.Settings, '/identity/settings'],
     [WorkspaceRoute.Devices, '/identity/devices'],
     [WorkspaceRoute.Sync, '/identity/sync'],
-    [WorkspaceRoute.Passwords, '/vault/passwords'],
+    [WorkspaceRoute.Passwords, '/identity/passwords'],
     [WorkspaceRoute.Import, '/vault/import'],
     [WorkspaceRoute.Help, '/help'],
   ])('builds the canonical %s path', (route, path) => {

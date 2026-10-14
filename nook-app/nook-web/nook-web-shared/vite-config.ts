@@ -17,6 +17,7 @@ export const VAULT_WORKSPACE_OUTPUT_ALIASES = [
   "devices-access",
   "help",
   "identities",
+  "identity",
   "identity/devices",
   "identity/keys",
   "identity/passwords",

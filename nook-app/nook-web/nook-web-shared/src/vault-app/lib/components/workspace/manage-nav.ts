@@ -14,8 +14,11 @@ export enum ManageNavPlacement {
 
 /** How prominently the rail shows a page. */
 export enum ManageNavTier {
-  /** The identity's home: its vaults, where they sync, and its devices. */
+  /** The identity's overview. */
   Home = "home",
+  /** The parts of an identity: its vaults, where they are copied, and the
+   * devices that open them. */
+  Parts = "parts",
   /** Who and what can open the identity. */
   Security = "security",
   /** Browser preferences. */
@@ -37,12 +40,39 @@ type ManageNavDefinition = Omit<ManageNavItem, "scope">;
 
 const DEFINITIONS: readonly ManageNavDefinition[] = [
   {
-    section: WorkspaceSection.Vaults,
+    section: WorkspaceSection.Overview,
     tier: ManageNavTier.Home,
-    labelKey: I18N_KEYS.WorkspaceSectionHome,
+    labelKey: I18N_KEYS.WorkspaceSectionOverview,
+    shortLabelKey: I18N_KEYS.WorkspaceSectionOverview,
+    descriptionKey: I18N_KEYS.WorkspaceSectionOverviewDescription,
+    testId: "manage-nav-overview",
+    placement: ManageNavPlacement.Everywhere,
+  },
+  {
+    section: WorkspaceSection.Vaults,
+    tier: ManageNavTier.Parts,
+    labelKey: I18N_KEYS.WorkspaceSectionVaults,
     shortLabelKey: I18N_KEYS.WorkspaceNavShortVaults,
     descriptionKey: I18N_KEYS.WorkspaceSectionVaultsDescription,
     testId: "manage-nav-vaults",
+    placement: ManageNavPlacement.Everywhere,
+  },
+  {
+    section: WorkspaceSection.Sync,
+    tier: ManageNavTier.Parts,
+    labelKey: I18N_KEYS.WorkspaceSectionSync,
+    shortLabelKey: I18N_KEYS.WorkspaceSectionSync,
+    descriptionKey: I18N_KEYS.WorkspaceSectionSyncDescription,
+    testId: "manage-nav-sync",
+    placement: ManageNavPlacement.Everywhere,
+  },
+  {
+    section: WorkspaceSection.Devices,
+    tier: ManageNavTier.Parts,
+    labelKey: I18N_KEYS.WorkspaceSectionDevices,
+    shortLabelKey: I18N_KEYS.WorkspaceSectionDevices,
+    descriptionKey: I18N_KEYS.WorkspaceSectionDevicesDescription,
+    testId: "manage-nav-devices",
     placement: ManageNavPlacement.Everywhere,
   },
   {
@@ -109,18 +139,9 @@ export type ManageNavEntry =
 export class ManageNavLookup {
   constructor(private readonly section: WorkspaceSection) {}
 
-  /** Sync and Devices are blocks of the identity home, not pages. */
-  get navSection(): WorkspaceSection {
-    return this.section === WorkspaceSection.Sync ||
-      this.section === WorkspaceSection.Devices
-      ? WorkspaceSection.Vaults
-      : this.section;
-  }
-
   get entry(): ManageNavEntry {
-    const section = this.navSection;
     for (const item of MANAGE_NAV_ITEMS) {
-      if (item.section === section)
+      if (item.section === this.section)
         return { kind: ManageNavEntryKind.Listed, item };
     }
     return { kind: ManageNavEntryKind.Unlisted };

@@ -940,7 +940,6 @@
     onUseEnrollmentCode: handleUseEnrollmentCode,
     onAcceptSentinelOnboardingPackage: handleAcceptSentinelOnboarding,
     onUnlockWithPassword: unlockExistingVaultWithPassword,
-    onSwitchVault: () => existingVaultImportLifecycle.leave(),
     onSentinelUnlocked: () => {
       routeCoordinator.sentinelInvitationRequest = ''
       return existingVaultImportLifecycle.finish()

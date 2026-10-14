@@ -331,6 +331,11 @@
     height: 2rem;
     font-size: 0.875rem;
   }
+  .nk-monogram-lg {
+    width: 3.5rem;
+    height: 3.5rem;
+    font-size: 1.375rem;
+  }
   .nk-key-badge {
     position: absolute;
     right: -0.3125rem;

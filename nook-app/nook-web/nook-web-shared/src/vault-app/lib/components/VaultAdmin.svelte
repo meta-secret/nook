@@ -122,6 +122,7 @@
     onImportGoogleAuthenticator,
     onImportProtonPass,
     onCreateVault,
+    startNewVault = false,
     section,
   }: {
     vault: VaultState
@@ -188,23 +189,14 @@
     ) => Promise<SecretOperationResult<NookImportResult>>
     /** Create a vault for this identity; it opens once created. */
     onCreateVault: (label: string) => Promise<void>
+    /** Open the new-vault form at once (from the identity overview). */
+    startNewVault?: boolean
     section: WorkspaceSection
   } = $props()
 
-  /** Vaults and sync lead the identity home (devices follow, from the
-   * workspace); Sync deep-links to its block. */
-  const home = $derived(
-    section === WorkspaceSection.Vaults ||
-      section === WorkspaceSection.Sync ||
-      section === WorkspaceSection.Devices,
-  )
   let newVaultOpen = $state(false)
-  let syncSection = $state<HTMLElement>()
-
-  const syncScroll: ScrollIntoViewOptions = { block: 'start' }
   $effect(() => {
-    if (section === WorkspaceSection.Sync)
-      syncSection?.scrollIntoView(syncScroll)
+    if (startNewVault) newVaultOpen = true
   })
 
   async function createVault(label: string): Promise<void> {
@@ -398,8 +390,9 @@
   data-testid="vault-admin-panel"
   data-section={section}
 >
-  {#if home}
+  {#if section === WorkspaceSection.Vaults}
     <ManageSection
+      compact
       title={vault.t(I18N_KEYS.VaultAdminVaultsTitle)}
       subtitle={vault.t(I18N_KEYS.WorkspaceSectionVaultsDescription)}
       testId="vault-admin-vaults-section"
@@ -588,9 +581,9 @@
     </ManageSection>
   {/if}
 
-  {#if home}
-    <div class="scroll-mt-4" bind:this={syncSection}>
+  {#if section === WorkspaceSection.Sync}
     <ManageSection
+      compact
       title={vault.t(I18N_KEYS.WorkspaceSectionSync)}
       subtitle={vault.t(I18N_KEYS.WorkspaceSectionSyncDescription)}
       testId="storage-providers-section"
@@ -615,7 +608,6 @@
         <IdentityMountsPanel {vault} />
       {/if}
     </ManageSection>
-    </div>
   {/if}
 
   {#if section === WorkspaceSection.Passwords}

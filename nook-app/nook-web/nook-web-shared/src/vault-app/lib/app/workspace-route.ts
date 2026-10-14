@@ -8,6 +8,7 @@ import {
 export enum WorkspaceRoute {
   Vault = "vault",
   Identities = "identities",
+  Overview = "overview",
   Keys = "keys",
   Vaults = "vaults",
   Settings = "settings",
@@ -30,6 +31,7 @@ export type WorkspaceRouteLookup =
 const WORKSPACE_PATHS: Record<WorkspaceRoute, string> = {
   [WorkspaceRoute.Vault]: "/vault",
   [WorkspaceRoute.Identities]: "/identities",
+  [WorkspaceRoute.Overview]: "/identity",
   [WorkspaceRoute.Keys]: "/identity/keys",
   [WorkspaceRoute.Vaults]: "/identity/vaults",
   [WorkspaceRoute.Settings]: "/identity/settings",

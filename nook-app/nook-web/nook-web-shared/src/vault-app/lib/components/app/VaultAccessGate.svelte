@@ -51,7 +51,6 @@
     onUseEnrollmentCode,
     onAcceptSentinelOnboardingPackage,
     onUnlockWithPassword,
-    onSwitchVault,
     onSentinelUnlocked,
     onCreateDeviceVault,
     extensionConnectPairingStatusEntries,
@@ -73,7 +72,6 @@
     onUseEnrollmentCode: (args: EnrollmentCodeUnlock) => Promise<void>
     onAcceptSentinelOnboardingPackage: (packageJson: string) => Promise<void>
     onUnlockWithPassword: (args: VaultPasswordUnlock) => Promise<void>
-    onSwitchVault: () => Promise<void>
     onSentinelUnlocked: () => Promise<void>
     onCreateDeviceVault: (label: string) => Promise<void>
     extensionConnectPairingStatusEntries: LoginVaultExtensionPairingStatusEntry[]
@@ -148,7 +146,6 @@
         {sentinelOnboardingPackage}
         {onAcceptSentinelOnboardingPackage}
         {onUnlockWithPassword}
-        {onSwitchVault}
         {onSentinelUnlocked}
         {onCreateDeviceVault}
         {extensionConnectPairingStatusEntries}

@@ -2157,7 +2157,11 @@
     "unlock": "Разблокировать",
     "unlock_identity_title": "Разблокировать ключом доступа этого устройства",
     "use_backup_password": "Использовать резервный пароль",
-    "backup_password_label": "Резервный пароль для «{vault}»"
+    "backup_password_label": "Резервный пароль для «{vault}»",
+    "section_overview": "Обзор",
+    "section_overview_description": "Что хранит эта идентичность, где хранятся копии и где она открывается.",
+    "section_devices_description": "Приложения этой идентичности, запросы на подключение и добавление нового приложения.",
+    "nav_group_parts": "Идентичность"
   },
   "identity_control": {
     "members_description": "Каждое приложение здесь может открыть сейфы этого идентификатора. Удаление приложения меняет ключи каждого сейфа до его следующего изменения.",
@@ -2278,5 +2282,28 @@
     "vault_label": "Название сейфа",
     "create_vault": "Создать сейф",
     "later": "Позже"
+  },
+  "identity_overview": {
+    "eyebrow": "Идентичность",
+    "protection": "Защита",
+    "all_set": "Защищена: копия хранится вне этого браузера, и её может открыть другое устройство.",
+    "vaults_caption": "Что хранит",
+    "sync_caption": "Где копии",
+    "devices_caption": "Где открывается",
+    "copied_to": "копируется в",
+    "opens_on": "открывается на",
+    "vaults_empty": "Пока нет сейфов",
+    "sync_empty": "Копий пока нет",
+    "devices_empty": "Только этот браузер",
+    "this_browser": "Этот браузер",
+    "more": "ещё {count}",
+    "pending_joins": "Ожидают подтверждения: {count}",
+    "add_device": "Добавить устройство",
+    "needs_cloud": "Сначала нужен облачный провайдер синхронизации",
+    "security": "Безопасность",
+    "keys_link": "Ключи доступа и PIN-коды",
+    "passwords_link": "Резервные пароли",
+    "passwords_count": "задано: {count}",
+    "passwords_none": "не заданы"
   }
 }

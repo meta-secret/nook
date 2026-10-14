@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { WorkspaceLocation, keysRouteOpen } from "$lib/app/workspace-route";
+  import { WorkspaceLocation } from "$lib/app/workspace-route";
   import type { IdentityVaultTarget } from "$lib/components/identities/identity-card-model";
   import type { SentinelActionResult } from "$lib/vault/sentinel-genesis";
   type EnrollmentCodeUnlock = {
@@ -14,16 +14,9 @@
 
   import { I18N_KEYS } from "../../../generated/i18n-keys";
   import { ArrowLeft, RefreshCw, ShieldCheck } from "@lucide/svelte";
-  import { onMount, tick, untrack, type ComponentProps } from "svelte";
+  import { tick, untrack, type ComponentProps } from "svelte";
   import type { VaultState } from "$lib/vault.svelte";
-  import {
-    type DevicesAccessHostMount,
-    DevicesAccessHostMountKind,
-    DevicesAccessTriggerKind,
-    type KeysPageLeave,
-  } from "./devices-access-dashboard-state";
   import IdentitiesHub from "$lib/components/identities/IdentitiesHub.svelte";
-  import PageBar from "$lib/components/workspace/PageBar.svelte";
   import { type StartSentinelGenesisArgs } from "$app-wasm";
   import { Button } from "$lib/components/ui/button";
   import type {
@@ -38,18 +31,12 @@
     LocalFolderHandleKind,
     oauth_access_token,
   } from "$lib/auth/providers";
-  import DevicesAccessDashboard from "$lib/components/DevicesAccessDashboard.svelte";
-  import {
-    WorkspaceRoute,
-    WorkspaceRouteLookupKind,
-    WorkspacePath,
-  } from "$lib/app/workspace-route";
+  import { WorkspaceRoute } from "$lib/app/workspace-route";
   import { VaultWorkspaceActions } from "$lib/vault/ui";
   import ProviderSetupFields from "$lib/components/ProviderSetupFields.svelte";
   import OAuthProviderSetupWizard from "$lib/components/OAuthProviderSetupWizard.svelte";
   import GitHubProviderSetupWizard from "$lib/components/GitHubProviderSetupWizard.svelte";
   import LocalFolderProviderSetupWizard from "$lib/components/LocalFolderProviderSetupWizard.svelte";
-  import LoginUnlockStep from "$lib/components/login/LoginUnlockStep.svelte";
   import {
     LoginVaultEntryKind,
     type LoginVaultEntry,
@@ -58,20 +45,16 @@
   import type { SentinelGenesisParticipation } from "$lib/components/login/login-create-vault-chooser-contract";
   import {
     LoginVaultExtensionPairingStatusLookup,
-    statusForActiveVault,
     type LoginVaultExtensionPairingStatusEntry,
   } from "$lib/components/login/login-vault-extension-pairing-status";
   import LoginVaultPicker from "$lib/components/login/LoginVaultPicker.svelte";
   import LoginNewVaultPanel from "$lib/components/login/LoginNewVaultPanel.svelte";
   import LoginProviderManagement from "$lib/components/login/LoginProviderManagement.svelte";
   import { LoginProviderManagementVariant } from "$lib/components/login/login-provider-management-state";
-  import {
-    IdentityContextFocusRestoration,
-    type IdentityContextFocusSchedule,
-  } from "./login-gate-focus";
   import JoinThisDevice from "$lib/components/join/JoinThisDevice.svelte";
   import { NewIdentityStage } from "$lib/vault/state/ui.svelte";
   import CardPasswordUnlock from "$lib/components/identities/CardPasswordUnlock.svelte";
+  import { IdentitySwitch } from "$lib/components/identities/identity-switch";
   import { DeviceProtectionActions } from "$lib/vault/device-protection.svelte";
   import SentinelCeremonyPanel from "$lib/components/login/SentinelCeremonyPanel.svelte";
   import { SentinelCeremonyVisibility } from "$lib/vault/sentinel-unlock";
@@ -113,7 +96,6 @@
     onCancelSetup,
     onUseEnrollmentCode,
     onUnlockWithPassword,
-    onSwitchVault,
     onSentinelUnlocked,
     onCreateDeviceVault,
     onStartSentinelGenesis,
@@ -147,7 +129,6 @@
     onCancelSetup: () => void;
     onUseEnrollmentCode?: (args: EnrollmentCodeUnlock) => void | Promise<void>;
     onUnlockWithPassword: (args: VaultPasswordUnlock) => void | Promise<void>;
-    onSwitchVault: () => void | Promise<void>;
     onSentinelUnlocked?: () => void | Promise<void>;
     onCreateDeviceVault: (label: string) => void | Promise<void>;
     onStartSentinelGenesis: (
@@ -183,7 +164,6 @@
     >
   >;
   type CreateVaultChooserProps = ComponentProps<typeof LoginCreateVaultChooser>;
-  type LoginUnlockStepProps = ComponentProps<typeof LoginUnlockStep>;
   type LoginVaultPickerProps = ComponentProps<typeof LoginVaultPicker>;
   type SentinelCeremonyOptionalProps = Partial<
     Pick<ComponentProps<typeof SentinelCeremonyPanel>, "onUnlocked">
@@ -220,143 +200,7 @@
   let showProviderSetupLink = $state(false);
   /** Back from restore returns to the first screen even with saved rows. */
   let firstScreenRequested = $state(false);
-  /** Keys while locked, only for creating or switching identities. A
-   * locked identity is never managed here: its card unlocks it, and the
-   * workspace keeps the route for after the unlock. */
-  let devicesAccessOpen = $state(false);
-  let devicesAccessTrigger = $state(DevicesAccessTriggerKind.Header);
-  let devicesAccessReturnRoute = $state(WorkspaceRoute.Vault);
-  let devicesAccessHost = $state<DevicesAccessHostMount>({
-    kind: DevicesAccessHostMountKind.Unmounted,
-  });
-  let leaveKeysPage = $state<KeysPageLeave>();
   let newVaultOpen = $state(false);
-  let managedIdentityId = "";
-
-  function captureDevicesAccessHost(element: HTMLDivElement) {
-    devicesAccessHost = {
-      kind: DevicesAccessHostMountKind.Mounted,
-      element,
-    };
-    return {
-      destroy() {
-        devicesAccessHost = { kind: DevicesAccessHostMountKind.Unmounted };
-      },
-    };
-  }
-
-  /** Focus a button in the Keys host once the page that owns it has rendered. */
-  async function focusHostButton(testId: string): Promise<void> {
-    for (let frame = 0; frame < 60; frame += 1) {
-      if (devicesAccessHost.kind === DevicesAccessHostMountKind.Mounted) {
-        const target = devicesAccessHost.element.querySelector<HTMLButtonElement>(
-          `[data-testid="${testId}"]`,
-        );
-        if (target) {
-          target.focus();
-          return;
-        }
-      }
-      await new Promise((resolve) => requestAnimationFrame(resolve));
-    }
-  }
-
-  /** Return focus to the card's Manage button once the cards have rendered. */
-  async function focusIdentityManageWhenAvailable(): Promise<void> {
-    const preferred = managedIdentityId;
-    for (let frame = 0; frame < 60; frame += 1) {
-      if (devicesAccessHost.kind === DevicesAccessHostMountKind.Unmounted)
-        return;
-      const host = devicesAccessHost.element;
-      const preferredTarget = host.querySelector<HTMLButtonElement>(
-        `[data-identity-id="${CSS.escape(preferred)}"] [data-testid="identity-manage"]`,
-      );
-      const anyTarget = host.querySelector<HTMLButtonElement>(
-        '[data-testid="identity-manage"]',
-      );
-      const target = preferredTarget || anyTarget;
-      if (target) {
-        target.focus();
-        return;
-      }
-      await new Promise<void>((resolve) =>
-        requestAnimationFrame(() => resolve()),
-      );
-    }
-  }
-
-  async function focusIdentityContextWhenAvailable(): Promise<void> {
-    const focusIdentityContextArgs: IdentityContextFocusSchedule = {
-      waitForNextFrame: () =>
-        new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
-      identityContextLoading: () =>
-        Boolean(
-          document.querySelector(
-            '[data-testid="login-vault-identity-loading"]',
-          ),
-        ),
-      reviewButton: () =>
-        document.querySelector<HTMLButtonElement>(
-          '[data-testid="login-review-identities"]',
-        ) || false,
-    };
-    await new IdentityContextFocusRestoration(
-      focusIdentityContextArgs,
-    ).restoreWhenAvailable();
-  }
-
-  async function openDevicesAccess(
-    trigger: DevicesAccessTriggerKind,
-  ): Promise<void> {
-    const currentRoute = new WorkspacePath(window.location.pathname).route;
-    devicesAccessReturnRoute =
-      currentRoute.kind === WorkspaceRouteLookupKind.Workspace
-        ? currentRoute.route
-        : WorkspaceRoute.Vault;
-    devicesAccessTrigger = trigger;
-    const navigation = new WorkspaceLocation(WorkspaceRoute.Keys).navigate();
-    if (navigation.isErr()) {
-      vault.errorMsg = vault.t(navigation.error.translationKey);
-      return;
-    }
-    devicesAccessOpen = true;
-    const applyWorkspaceRouteArgs: Parameters<
-      VaultWorkspaceActions["applyWorkspaceRoute"]
-    >[0] = {
-      route: WorkspaceRoute.Keys,
-    };
-    new VaultWorkspaceActions(vault).applyWorkspaceRoute(
-      applyWorkspaceRouteArgs,
-    );
-    await tick();
-    await focusHostButton("page-bar-back");
-  }
-
-  async function closeDevicesAccess(): Promise<void> {
-    const navigation = new WorkspaceLocation(
-      devicesAccessReturnRoute,
-    ).navigate();
-    if (navigation.isErr()) {
-      vault.errorMsg = vault.t(navigation.error.translationKey);
-      return;
-    }
-    devicesAccessOpen = false;
-    const applyWorkspaceRouteArgs2: Parameters<
-      VaultWorkspaceActions["applyWorkspaceRoute"]
-    >[0] = {
-      route: devicesAccessReturnRoute,
-    };
-    new VaultWorkspaceActions(vault).applyWorkspaceRoute(
-      applyWorkspaceRouteArgs2,
-    );
-    await tick();
-    if (devicesAccessTrigger === DevicesAccessTriggerKind.IdentityContext) {
-      await focusHostButton("login-review-identities");
-      await focusIdentityContextWhenAvailable();
-      return;
-    }
-    await focusIdentityManageWhenAvailable();
-  }
 
   /** A vault row on an identity card opens that vault's unlock panel. */
   async function openVaultFromCard(storeId: string): Promise<void> {
@@ -392,13 +236,12 @@
   /** Manage on a locked identity unlocks it (one of its vaults, with this
    * device's key) and lands on the identity home. */
   function manageIdentity(target: IdentityVaultTarget): void {
-    managedIdentityId = target.identityId;
     vault.identityFocus = target.identityId;
     // With no vault on this browser there is nothing to unlock it with.
     if (!target.storeId) return;
     const home: UnlockDestination = {
       storeId: target.storeId,
-      route: WorkspaceRoute.Vaults,
+      route: WorkspaceRoute.Overview,
     };
     void unlockTo(home);
   }
@@ -446,9 +289,11 @@
       VaultWorkspaceActions["applyWorkspaceRoute"]
     >[0] = { route: destination.route };
     new VaultWorkspaceActions(vault).applyWorkspaceRoute(routeRequest);
-    // Choosing the vault again would touch the device key before the
-    // passkey authorizes it; the selected one is ready to unlock as is.
+    // Choosing a vault reads it with the device key, so the identity is
+    // unlocked first: passkey, then the vault, then open it.
     if (destination.storeId !== selectedCardStoreId) {
+      await unlockIdentity();
+      if (!vault.deviceProtectionReady) return;
       await openVaultFromCard(destination.storeId);
       await tick();
     }
@@ -459,14 +304,6 @@
   function newIdentity(): void {
     vault.newIdentity = NewIdentityStage.Name;
   }
-
-  onMount(() => {
-    const syncDevicesAccessRoute = () => {
-      if (!keysRouteOpen()) devicesAccessOpen = false;
-    };
-    window.addEventListener("popstate", syncDevicesAccessRoute);
-    return () => window.removeEventListener("popstate", syncDevicesAccessRoute);
-  });
 
   const hasProviders = $derived(providers.length > 0);
   const showSetup = $derived(loginSetup.kind === LoginSetupKind.Active);
@@ -493,8 +330,7 @@
     vault.localVaultPresent || vault.localVaults.length > 0,
   );
   const showLocalUnlock = $derived(
-    !devicesAccessOpen &&
-      hasKnownLocalVault &&
+    hasKnownLocalVault &&
       vault.sentinelGenesisPhase !== SentinelGenesisPhase.DeliveringShares &&
       !showSetup &&
       !addProviderOpen &&
@@ -526,11 +362,6 @@
   const pairingStatusLookup = $derived(
     new LoginVaultExtensionPairingStatusLookup(
       extensionConnectPairingStatusEntries,
-    ),
-  );
-  const activeVaultExtensionPairingStatus = $derived(
-    statusForActiveVault(extensionConnectPairingStatusEntries)(
-      activeLoginVault,
     ),
   );
   const showQrOnboarding = $derived(
@@ -727,30 +558,8 @@
     onClose={() => (newVaultOpen = false)}
   />
 {/snippet}
-{#snippet unlockPanel()}
-  <LoginUnlockStep
-    {vault}
-    vaultEntry={activeLoginVault}
-    extensionPairingStatus={activeVaultExtensionPairingStatus}
-    hasMultipleVaults={vault.hasMultipleLocalVaults}
-    passwordEntries={vault.passwordEntries.length > 0
-      ? vault.passwordEntries
-      : recoveryPasswordEntries}
-    selectedPasswordEntry={vault.selectedPasswordEntry}
-    onSelectPasswordEntry={(
-      selection: Parameters<LoginUnlockStepProps["onSelectPasswordEntry"]>[0],
-    ) => {
-      vault.selectedPasswordEntry = selection;
-    }}
-    {isVerifying}
-    {isInitializing}
-    {isUnlocking}
-    {onUnlock}
-    {onUnlockWithPassword}
-    onOpenDevicesAccess={() =>
-      openDevicesAccess(DevicesAccessTriggerKind.IdentityContext)}
-    {onSwitchVault}
-  />
+{#snippet sentinelCeremony()}
+  <SentinelCeremonyPanel {vault} {isVerifying} {isInitializing} />
 {/snippet}
 {#snippet cardPasswordUnlock()}
   <CardPasswordUnlock
@@ -779,31 +588,10 @@
 {/snippet}
 
 <div
-  use:captureDevicesAccessHost
   class="w-full animate-in fade-in duration-300"
   data-testid="login-gate"
   data-local-vault={vault.localVaultPresent ? "true" : "false"}
 >
-  {#if devicesAccessOpen && !isInitializing}
-    <div class="grid min-w-0 grid-cols-1 gap-5" data-testid="login-keys-page">
-      <PageBar
-        {vault}
-        eyebrow={vault.t(I18N_KEYS.WorkspaceManageIdentity)}
-        title={vault.t(I18N_KEYS.WorkspaceSectionKeys)}
-        testId="manage-page-bar"
-        onBack={() =>
-          leaveKeysPage ? void leaveKeysPage() : void closeDevicesAccess()}
-      />
-      <p class="max-w-[64ch] text-sm text-pretty text-muted-foreground">
-        {vault.t(I18N_KEYS.WorkspaceSectionKeysDescription)}
-      </p>
-      <DevicesAccessDashboard
-        {vault}
-        onBack={() => void closeDevicesAccess()}
-        onLeaveReady={(leave: KeysPageLeave) => (leaveKeysPage = leave)}
-      />
-    </div>
-  {:else if !devicesAccessOpen}
     <IdentitiesHub
       {vault}
       selectedStoreId={selectedCardStoreId}
@@ -816,10 +604,13 @@
       onUnlock={() => void unlockIdentity()}
       onLock={lockIdentity}
       onNewIdentity={newIdentity}
-      onUseIdentity={() => void unlockIdentity()}
+      onUseIdentity={(target: IdentityVaultTarget) =>
+        void new IdentitySwitch(vault).to(target.identityId)}
       pairingStatusFor={(storeId: string) =>
         pairingStatusLookup.statusForStore(storeId)}
-      {...showLocalUnlock && !newVaultOpen ? { unlockPanel } : {}}
+      {...showLocalUnlock && !newVaultOpen && showSentinelCeremony
+        ? { unlockPanel: sentinelCeremony }
+        : {}}
       {...showLocalUnlock && !newVaultOpen && cardPasswordEntries.length > 0
         ? { passwordFallback: cardPasswordUnlock }
         : {}}
@@ -1034,5 +825,4 @@
         {/if}
       </div>
     </IdentitiesHub>
-  {/if}
 </div>

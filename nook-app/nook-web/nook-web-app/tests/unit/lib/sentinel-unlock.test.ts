@@ -17,9 +17,7 @@ import {
   VaultRecoveryErrorKind,
 } from '$app-wasm'
 import LoginGate from '$lib/components/LoginGate.svelte'
-import LoginUnlockStep from '$lib/components/login/LoginUnlockStep.svelte'
 import SentinelUnlockParticipantHelper from '$lib/components/login/SentinelUnlockParticipantHelper.svelte'
-import { LoginVaultEntryKind } from '$lib/components/login/login-unlock-state'
 import { DeviceMode, ReplicationType } from '$lib/vault/architecture-model'
 import { PasswordEntrySelectionKind } from '$lib/vault/state/session.svelte'
 import { LoginSetupKind } from '$lib/vault/state/provider.svelte'
@@ -44,7 +42,6 @@ import { VaultType } from '$lib/vault/architecture-model'
 
 enum LoginSurface {
   Gate = 'gate',
-  Step = 'step',
 }
 
 enum DelayedAuthorization {
@@ -64,8 +61,6 @@ class DelayedLoginPresentationFixture {
   static readonly scenarios: readonly DelayedLoginScenario[] = [
     { surface: LoginSurface.Gate, outcome: DelayedAuthorization.Authorized },
     { surface: LoginSurface.Gate, outcome: DelayedAuthorization.Denied },
-    { surface: LoginSurface.Step, outcome: DelayedAuthorization.Authorized },
-    { surface: LoginSurface.Step, outcome: DelayedAuthorization.Denied },
   ]
   readonly login = new SentinelFinalizationFixture()
   readonly completion = Effect.runSync(Deferred.make<DelayedAuthorization>())
@@ -306,37 +301,24 @@ class SentinelFinalizationFixture {
   }
 
   renderLogin(surface: LoginSurface) {
-    const props = {
+    expect(surface).toBe(LoginSurface.Gate)
+    return render(LoginGate, {
       vault: this.vault,
       isVerifying: false,
       isInitializing: false,
       onUnlock: this.openVault,
       onUnlockWithPassword: vi.fn(),
-      onSwitchVault: vi.fn(),
-    }
-    return surface === LoginSurface.Gate
-      ? render(LoginGate, {
-          ...props,
-          appKind: VaultApplication.UnifiedDevelopment,
-          extensionConnectPairingStatusEntries: [],
-          providers: [],
-          loginSetup: { kind: LoginSetupKind.Inactive },
-          githubPat: '',
-          githubRepo: '',
-          onBeginSetup: vi.fn(),
-          onCancelSetup: vi.fn(),
-          onCreateDeviceVault: vi.fn(),
-          onStartSentinelGenesis: vi.fn(async () => false),
-        })
-      : render(LoginUnlockStep, {
-          ...props,
-          vaultEntry: { kind: LoginVaultEntryKind.Unavailable },
-          selectedPasswordEntry: {
-            kind: PasswordEntrySelectionKind.NotSelected,
-          },
-          onSelectPasswordEntry: vi.fn(),
-          onOpenDevicesAccess: vi.fn(),
-        })
+      appKind: VaultApplication.UnifiedDevelopment,
+      extensionConnectPairingStatusEntries: [],
+      providers: [],
+      loginSetup: { kind: LoginSetupKind.Inactive },
+      githubPat: '',
+      githubRepo: '',
+      onBeginSetup: vi.fn(),
+      onCancelSetup: vi.fn(),
+      onCreateDeviceVault: vi.fn(),
+      onStartSentinelGenesis: vi.fn(async () => false),
+    })
   }
 
   expectNoAutomaticCeremony(): void {
@@ -397,7 +379,7 @@ describe('Sentinel quorum completion presentation', () => {
       }
     },
   )
-  test.each([LoginSurface.Gate, LoginSurface.Step])(
+  test.each([LoginSurface.Gate])(
     'does not rewrite the same sentinel error during status refresh in %s',
     async (surface) => {
       const fixture = new SentinelFinalizationFixture()
@@ -656,18 +638,15 @@ describe('Sentinel quorum completion presentation', () => {
     expect(fixture.state.loadSecretPage).not.toHaveBeenCalled()
     fixture.expectNoAutomaticCeremony()
 
-    for (const surface of [LoginSurface.Gate, LoginSurface.Step]) {
+    for (const surface of [LoginSurface.Gate]) {
       fixture.openVault.mockClear()
       const view = fixture.renderLogin(surface)
       expect(view.queryAllByTestId('sentinel-ceremony-panel')).toHaveLength(0)
       expect(
         view.queryAllByTestId('login-unlock-method-password'),
       ).toHaveLength(0)
+      // The vault opens from its identity card, never on its own.
       expect(fixture.openVault).not.toHaveBeenCalled()
-      const open = requireButtonElement(view.getByTestId('unlock-vault-btn'))
-      expect(open.disabled).toBe(false)
-      await fireEvent.click(open)
-      expect(fixture.openVault).toHaveBeenCalledOnce()
       view.unmount()
     }
     await fixture.finalize()
@@ -705,7 +684,7 @@ describe('Sentinel quorum completion presentation', () => {
     expect(fixture.state.isVerifying).toBe(false)
     expect(fixture.state.markVaultUnlocked).not.toHaveBeenCalled()
     fixture.expectNoAutomaticCeremony()
-    for (const surface of [LoginSurface.Gate, LoginSurface.Step]) {
+    for (const surface of [LoginSurface.Gate]) {
       const view = fixture.renderLogin(surface)
       expect(await view.findByTestId('sentinel-unlock-initiator')).toBeTruthy()
       expect(view.queryAllByTestId('unlock-vault-btn')).toHaveLength(0)
@@ -723,7 +702,7 @@ describe('Sentinel quorum completion presentation', () => {
       new Error('waiting for shares'),
     )
     await fixture.finalize()
-    for (const surface of [LoginSurface.Gate, LoginSurface.Step]) {
+    for (const surface of [LoginSurface.Gate]) {
       const view = fixture.renderLogin(surface)
       expect(
         requireButtonElement(
@@ -784,7 +763,7 @@ describe('Sentinel quorum completion presentation', () => {
       fixture.expectNoAutomaticCeremony()
       // Rust's unlocked result also overrides a stale presentation hint.
       fixture.state.sentinelCeremonyPrompt = true
-      for (const surface of [LoginSurface.Gate, LoginSurface.Step]) {
+      for (const surface of [LoginSurface.Gate]) {
         const view = fixture.renderLogin(surface)
         expect(view.queryAllByTestId('sentinel-ceremony-panel')).toHaveLength(0)
         expect(view.queryAllByTestId('sentinel-unlock-start-btn')).toHaveLength(

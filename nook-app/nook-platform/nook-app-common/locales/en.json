@@ -2157,7 +2157,11 @@
     "unlock": "Unlock",
     "unlock_identity_title": "Unlock with this device’s passkey",
     "use_backup_password": "Use a backup password",
-    "backup_password_label": "Backup password for {vault}"
+    "backup_password_label": "Backup password for {vault}",
+    "section_overview": "Overview",
+    "section_overview_description": "What this identity holds, where it is copied, and where it opens.",
+    "section_devices_description": "Apps in this identity, join requests, and adding a new app.",
+    "nav_group_parts": "Identity"
   },
   "identity_control": {
     "members_description": "Every app here can open this identity's vaults. Removing an app rotates each vault's keys before its next change.",
@@ -2278,5 +2282,28 @@
     "vault_label": "Vault name",
     "create_vault": "Create vault",
     "later": "Later"
+  },
+  "identity_overview": {
+    "eyebrow": "Identity",
+    "protection": "Protection",
+    "all_set": "Protected: a copy is kept outside this browser and another device can open it.",
+    "vaults_caption": "What it holds",
+    "sync_caption": "Where it’s copied",
+    "devices_caption": "Where it opens",
+    "copied_to": "copied to",
+    "opens_on": "opens on",
+    "vaults_empty": "No vaults yet",
+    "sync_empty": "Not copied anywhere yet",
+    "devices_empty": "Only this browser",
+    "this_browser": "This browser",
+    "more": "+{count} more",
+    "pending_joins": "{count} waiting for approval",
+    "add_device": "Add a device",
+    "needs_cloud": "Needs a cloud sync provider first",
+    "security": "Security",
+    "keys_link": "Passkeys and PINs",
+    "passwords_link": "Backup passwords",
+    "passwords_count": "{count} set",
+    "passwords_none": "none set"
   }
 }
