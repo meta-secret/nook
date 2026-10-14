@@ -37,7 +37,7 @@
 
 {#if pendingJoins.length > 0}
   <div
-    class="nk-banner nk-banner-success p-4 animate-in fade-in slide-in-from-top-2"
+    class="nk-band nk-band-success px-4 py-3 animate-in fade-in md:px-6"
     data-testid="pending-joins-banner"
   >
     <div class="flex items-start justify-between gap-3">

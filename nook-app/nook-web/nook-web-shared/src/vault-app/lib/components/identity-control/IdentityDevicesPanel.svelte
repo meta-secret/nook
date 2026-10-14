@@ -111,7 +111,8 @@ identity upgrade notices, and adding a new app through an identity mount.
   {/if}
 
   <ManageSection
-    title={vault.t(I18N_KEYS.IdentityControlMembersTitle)}
+    compact
+    title={vault.t(I18N_KEYS.WorkspaceSectionDevices)}
     subtitle={vault.t(I18N_KEYS.IdentityControlMembersDescription)}
     testId="vault-devices-section"
   >

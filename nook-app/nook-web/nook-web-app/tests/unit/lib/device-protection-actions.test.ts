@@ -232,3 +232,27 @@ describe('device protection actions', () => {
     expect(state.lockDeviceProtection).toHaveBeenCalledOnce()
   })
 })
+
+describe('locking the device identity', () => {
+  test('locks once engine work in flight settles', async () => {
+    const state = VaultStateTestFixture.create()
+    const manager = new NookVaultManager()
+    state.openManager(manager)
+    let attempts = 0
+    vi.spyOn(manager, 'lock_device_identity').mockImplementation(() => {
+      attempts += 1
+      if (attempts === 1) {
+        throw new Error('recursive use of an object detected')
+      }
+    })
+    const settled = vi.spyOn(state, 'waitForStorageChain').mockResolvedValue()
+
+    const locked = await new DeviceProtectionActions(
+      state,
+    ).lockDeviceProtection()
+
+    expect(settled).toHaveBeenCalledOnce()
+    expect(attempts).toBe(2)
+    expect(locked.isOk()).toBe(true)
+  })
+})

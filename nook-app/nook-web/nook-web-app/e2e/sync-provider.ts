@@ -329,7 +329,7 @@ export async function connectSyncGenesisDevice(
     } = await import('./helpers')
     const genesisReadiness: Locator = page
       .getByTestId('login-create-vault-chooser')
-      .or(page.getByTestId('login-local-unlock-step'))
+      .or(page.getByTestId('identity-vault-row').first())
     const genesisReadinessOptions: { timeout: number } = {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     }

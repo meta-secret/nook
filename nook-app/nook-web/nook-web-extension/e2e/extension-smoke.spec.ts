@@ -33,6 +33,7 @@ import {
   ensurePinProtectedPopup,
   installForcePinDeviceProtection,
 } from './helpers/pin-device'
+import { leaveFirstRunReady } from './helpers/extension-approval'
 import { lockExtensionSession } from './helpers/paired-pin-extension'
 import { unlockExtensionThroughCompanion } from './helpers/paired-vault-companion-unlock'
 import { ExtensionSessionMessageType } from '../src/offscreen/session-message-dispatch'
@@ -522,6 +523,7 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     ).toBeVisible()
     await expect(simplePage.getByTestId('app-success')).toBeVisible()
     await expect(simplePage).toHaveURL((url) => url.pathname.endsWith('/vault'))
+    await leaveFirstRunReady(simplePage)
     await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
 
     // Independent local creation requires a locked companion: an unlocked
@@ -532,7 +534,7 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     // the website device for independent local creation.
     await simplePage.reload()
     await expect(
-      simplePage.getByTestId('login-local-unlock-step'),
+      simplePage.getByTestId('identity-vault-row').first(),
     ).toBeVisible()
     await simplePage.getByTestId('identity-new-vault').click()
     await simplePage
@@ -552,15 +554,10 @@ test('keeps the extension vault independent and switches after valid re-pairing'
       `chrome-extension://${extensionId}/popup/index.html?intent=pair`,
     )
     await expect(
-      pairingPopupPage.getByRole('button', {
-        name: 'Pair another vault',
-        exact: true,
-      }),
-    ).toBeVisible()
+      pairingPopupPage.getByTestId('connect-simple-vault-btn'),
+    ).toHaveText('Connect another vault')
     const pairingPagePromise = context.waitForEvent('page', { timeout: 30_000 })
-    await pairingPopupPage
-      .getByRole('button', { name: 'Pair another vault', exact: true })
-      .click()
+    await pairingPopupPage.getByTestId('connect-simple-vault-btn').click()
     const pairingPage = await pairingPagePromise
     await expect(pairingPage).toHaveURL(
       (url) =>
@@ -595,25 +592,6 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     await expect(
       unpairedVaultOption.getByTestId('login-vault-extension-connected-vault'),
     ).toContainText('Unpair test vault')
-    await unpairedVaultOption.click()
-
-    await expect(
-      pairingPage.getByTestId('login-local-unlock-step'),
-    ).toBeVisible()
-    const selectedVaultCard = pairingPage
-      .getByTestId('login-vault-card')
-      .filter({
-        has: pairingPage.getByText('Second local vault', { exact: true }),
-      })
-    await expect(
-      selectedVaultCard.getByTestId('login-vault-extension-pairing-status'),
-    ).toHaveText('Not paired with this extension')
-    await expect(
-      selectedVaultCard.getByTestId('login-vault-extension-connected-vault'),
-    ).toContainText('Unpair test vault')
-    await expect(
-      pairingPage.getByTestId('login-vault-extension-pairing-purpose'),
-    ).toContainText('Choose this vault to connect it to the browser extension.')
     await pairingPage.close()
 
     await simplePage.getByTestId('header-identities-btn').click()
@@ -704,7 +682,9 @@ test('keeps the extension vault independent and switches after valid re-pairing'
       verifiedPopupPage.getByTestId('extension-toolbar-menu'),
     ).toBeVisible()
     await expect(
-      verifiedPopupPage.getByTestId('companion-vault-status'),
+      verifiedPopupPage.locator(
+        '[data-testid="companion-vault"][data-default="true"]',
+      ),
     ).toContainText('Replacement vault')
     const replacementGrantEntry = repairedGrants.find(([, grant]) => {
       if (typeof grant !== 'object') return false

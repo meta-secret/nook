@@ -1,5 +1,10 @@
 <script lang="ts">
-  import { WorkspaceLocation, keysRouteOpen } from "$lib/app/workspace-route";
+  import {
+    WorkspaceLocation,
+    WorkspacePath,
+    WorkspaceRouteLookupKind,
+  } from "$lib/app/workspace-route";
+  import type { IdentityVaultTarget } from "$lib/components/identities/identity-card-model";
   import type { SentinelActionResult } from "$lib/vault/sentinel-genesis";
   type EnrollmentCodeUnlock = {
     readonly code: string;
@@ -12,18 +17,14 @@
   };
 
   import { I18N_KEYS } from "../../../generated/i18n-keys";
-  import { RefreshCw, ShieldCheck } from "@lucide/svelte";
-  import { onMount, tick, untrack, type ComponentProps } from "svelte";
+  import { ArrowLeft, RefreshCw, ShieldCheck } from "@lucide/svelte";
+  import { tick, untrack, type ComponentProps } from "svelte";
   import type { VaultState } from "$lib/vault.svelte";
-  import {
-    type DevicesAccessHostMount,
-    DevicesAccessHostMountKind,
-    DevicesAccessTriggerKind,
-    type KeysPageLeave,
-  } from "./devices-access-dashboard-state";
   import IdentitiesHub from "$lib/components/identities/IdentitiesHub.svelte";
-  import PageBar from "$lib/components/workspace/PageBar.svelte";
-  import { type StartSentinelGenesisArgs } from "$app-wasm";
+  import {
+    DeviceProtectionStatus,
+    type StartSentinelGenesisArgs,
+  } from "$app-wasm";
   import { Button } from "$lib/components/ui/button";
   import type {
     OAuthFilePreset,
@@ -37,19 +38,12 @@
     LocalFolderHandleKind,
     oauth_access_token,
   } from "$lib/auth/providers";
-  import ProductIntro from "$lib/components/ProductIntro.svelte";
-  import DevicesAccessDashboard from "$lib/components/DevicesAccessDashboard.svelte";
-  import {
-    WorkspaceRoute,
-    WorkspaceRouteLookupKind,
-    WorkspacePath,
-  } from "$lib/app/workspace-route";
+  import { WorkspaceRoute } from "$lib/app/workspace-route";
   import { VaultWorkspaceActions } from "$lib/vault/ui";
   import ProviderSetupFields from "$lib/components/ProviderSetupFields.svelte";
   import OAuthProviderSetupWizard from "$lib/components/OAuthProviderSetupWizard.svelte";
   import GitHubProviderSetupWizard from "$lib/components/GitHubProviderSetupWizard.svelte";
   import LocalFolderProviderSetupWizard from "$lib/components/LocalFolderProviderSetupWizard.svelte";
-  import LoginUnlockStep from "$lib/components/login/LoginUnlockStep.svelte";
   import {
     LoginVaultEntryKind,
     type LoginVaultEntry,
@@ -58,19 +52,28 @@
   import type { SentinelGenesisParticipation } from "$lib/components/login/login-create-vault-chooser-contract";
   import {
     LoginVaultExtensionPairingStatusLookup,
-    statusForActiveVault,
     type LoginVaultExtensionPairingStatusEntry,
   } from "$lib/components/login/login-vault-extension-pairing-status";
   import LoginVaultPicker from "$lib/components/login/LoginVaultPicker.svelte";
   import LoginNewVaultPanel from "$lib/components/login/LoginNewVaultPanel.svelte";
   import LoginProviderManagement from "$lib/components/login/LoginProviderManagement.svelte";
   import { LoginProviderManagementVariant } from "$lib/components/login/login-provider-management-state";
+  import JoinThisDevice from "$lib/components/join/JoinThisDevice.svelte";
+  import { NewIdentityStage } from "$lib/vault/state/ui.svelte";
+  import CardPasswordUnlock from "$lib/components/identities/CardPasswordUnlock.svelte";
+  import CardPinUnlock from "$lib/components/identities/CardPinUnlock.svelte";
   import {
-    IdentityContextFocusRestoration,
-    type IdentityContextFocusSchedule,
-  } from "./login-gate-focus";
-  import LoginEnrollmentPanel from "$lib/components/login/LoginEnrollmentPanel.svelte";
-  import EnrollmentQrOnboardCard from "$lib/components/login/EnrollmentQrOnboardCard.svelte";
+    PinPromptKind,
+    UnlockPageKind,
+    type PinPrompt,
+    type UnlockDestination,
+    type UnlockPage,
+  } from "$lib/components/identities/card-unlock";
+  import {
+    IdentitySwitch,
+    IdentitySwitchOutcome,
+  } from "$lib/components/identities/identity-switch";
+  import { DeviceProtectionActions } from "$lib/vault/device-protection.svelte";
   import SentinelCeremonyPanel from "$lib/components/login/SentinelCeremonyPanel.svelte";
   import { SentinelCeremonyVisibility } from "$lib/vault/sentinel-unlock";
   import {
@@ -109,10 +112,8 @@
     onCancelAddProvider,
     onBeginSetup,
     onCancelSetup,
-    onOpenHelp,
     onUseEnrollmentCode,
     onUnlockWithPassword,
-    onSwitchVault,
     onSentinelUnlocked,
     onCreateDeviceVault,
     onStartSentinelGenesis,
@@ -144,10 +145,8 @@
     onCancelAddProvider?: () => void;
     onBeginSetup: (request: ProviderSetupRequest) => void;
     onCancelSetup: () => void;
-    onOpenHelp?: () => void;
     onUseEnrollmentCode?: (args: EnrollmentCodeUnlock) => void | Promise<void>;
     onUnlockWithPassword: (args: VaultPasswordUnlock) => void | Promise<void>;
-    onSwitchVault: () => void | Promise<void>;
     onSentinelUnlocked?: () => void | Promise<void>;
     onCreateDeviceVault: (label: string) => void | Promise<void>;
     onStartSentinelGenesis: (
@@ -177,18 +176,13 @@
   type CreateVaultChooserOptionalProps = Partial<
     Pick<
       ComponentProps<typeof LoginCreateVaultChooser>,
-      "onAcceptSentinelOnboardingPackage" | "onFinishSentinelInvitation"
+      | "onAcceptSentinelOnboardingPackage"
+      | "onFinishSentinelInvitation"
+      | "onUseEnrollmentCode"
     >
   >;
   type CreateVaultChooserProps = ComponentProps<typeof LoginCreateVaultChooser>;
-  type EnrollmentQrOnboardCardProps = ComponentProps<
-    typeof EnrollmentQrOnboardCard
-  >;
-  type LoginUnlockStepProps = ComponentProps<typeof LoginUnlockStep>;
   type LoginVaultPickerProps = ComponentProps<typeof LoginVaultPicker>;
-  type EnrollmentPanelOptionalProps = Partial<
-    Pick<ComponentProps<typeof LoginEnrollmentPanel>, "onUseEnrollmentCode">
-  >;
   type SentinelCeremonyOptionalProps = Partial<
     Pick<ComponentProps<typeof SentinelCeremonyPanel>, "onUnlocked">
   >;
@@ -200,16 +194,12 @@
   >;
   const createVaultChooserOptionalProps = $derived.by(() => {
     const props: CreateVaultChooserOptionalProps = {};
+    if (onUseEnrollmentCode) props.onUseEnrollmentCode = onUseEnrollmentCode;
     if (onAcceptSentinelOnboardingPackage)
       props.onAcceptSentinelOnboardingPackage =
         onAcceptSentinelOnboardingPackage;
     if (onSentinelUnlocked)
       props.onFinishSentinelInvitation = onSentinelUnlocked;
-    return props;
-  });
-  const enrollmentPanelOptionalProps = $derived.by(() => {
-    const props: EnrollmentPanelOptionalProps = {};
-    if (onUseEnrollmentCode) props.onUseEnrollmentCode = onUseEnrollmentCode;
     return props;
   });
   const sentinelCeremonyOptionalProps = $derived.by(() => {
@@ -225,135 +215,12 @@
     return props;
   });
 
-  let enrollmentPanelOpen = $state(false);
   let showProviderSetupLink = $state(false);
-  let devicesAccessOpen = $state(keysRouteOpen());
-  let devicesAccessTrigger = $state(DevicesAccessTriggerKind.Header);
-  let devicesAccessReturnRoute = $state(WorkspaceRoute.Vault);
-  let devicesAccessHost = $state<DevicesAccessHostMount>({
-    kind: DevicesAccessHostMountKind.Unmounted,
-  });
-  let leaveKeysPage = $state<KeysPageLeave>();
+  /** Back from restore returns to the first screen even with saved rows. */
+  let firstScreenRequested = $state(false);
   let newVaultOpen = $state(false);
-  let managedIdentityId = "";
 
-  function captureDevicesAccessHost(element: HTMLDivElement) {
-    devicesAccessHost = {
-      kind: DevicesAccessHostMountKind.Mounted,
-      element,
-    };
-    return {
-      destroy() {
-        devicesAccessHost = { kind: DevicesAccessHostMountKind.Unmounted };
-      },
-    };
-  }
-
-  function focusHostButton(testId: string): void {
-    if (devicesAccessHost.kind === DevicesAccessHostMountKind.Unmounted) return;
-    devicesAccessHost.element
-      .querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`)
-      ?.focus();
-  }
-
-  /** Return focus to the card's Manage button once the cards have rendered. */
-  async function focusIdentityManageWhenAvailable(): Promise<void> {
-    const preferred = managedIdentityId;
-    for (let frame = 0; frame < 60; frame += 1) {
-      if (devicesAccessHost.kind === DevicesAccessHostMountKind.Unmounted)
-        return;
-      const host = devicesAccessHost.element;
-      const preferredTarget = host.querySelector<HTMLButtonElement>(
-        `[data-identity-id="${CSS.escape(preferred)}"] [data-testid="identity-manage"]`,
-      );
-      const anyTarget = host.querySelector<HTMLButtonElement>(
-        '[data-testid="identity-manage"]',
-      );
-      const target = preferredTarget || anyTarget;
-      if (target) {
-        target.focus();
-        return;
-      }
-      await new Promise<void>((resolve) =>
-        requestAnimationFrame(() => resolve()),
-      );
-    }
-  }
-
-  async function focusIdentityContextWhenAvailable(): Promise<void> {
-    const focusIdentityContextArgs: IdentityContextFocusSchedule = {
-      waitForNextFrame: () =>
-        new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
-      identityContextLoading: () =>
-        Boolean(
-          document.querySelector(
-            '[data-testid="login-vault-identity-loading"]',
-          ),
-        ),
-      reviewButton: () =>
-        document.querySelector<HTMLButtonElement>(
-          '[data-testid="login-review-identities"]',
-        ) || false,
-    };
-    await new IdentityContextFocusRestoration(
-      focusIdentityContextArgs,
-    ).restoreWhenAvailable();
-  }
-
-  async function openDevicesAccess(
-    trigger: DevicesAccessTriggerKind,
-  ): Promise<void> {
-    const currentRoute = new WorkspacePath(window.location.pathname).route;
-    devicesAccessReturnRoute =
-      currentRoute.kind === WorkspaceRouteLookupKind.Workspace
-        ? currentRoute.route
-        : WorkspaceRoute.Vault;
-    devicesAccessTrigger = trigger;
-    const navigation = new WorkspaceLocation(WorkspaceRoute.Keys).navigate();
-    if (navigation.isErr()) {
-      vault.errorMsg = vault.t(navigation.error.translationKey);
-      return;
-    }
-    devicesAccessOpen = true;
-    const applyWorkspaceRouteArgs: Parameters<
-      VaultWorkspaceActions["applyWorkspaceRoute"]
-    >[0] = {
-      route: WorkspaceRoute.Keys,
-    };
-    new VaultWorkspaceActions(vault).applyWorkspaceRoute(
-      applyWorkspaceRouteArgs,
-    );
-    await tick();
-    focusHostButton("page-bar-back");
-  }
-
-  async function closeDevicesAccess(): Promise<void> {
-    const navigation = new WorkspaceLocation(
-      devicesAccessReturnRoute,
-    ).navigate();
-    if (navigation.isErr()) {
-      vault.errorMsg = vault.t(navigation.error.translationKey);
-      return;
-    }
-    devicesAccessOpen = false;
-    const applyWorkspaceRouteArgs2: Parameters<
-      VaultWorkspaceActions["applyWorkspaceRoute"]
-    >[0] = {
-      route: devicesAccessReturnRoute,
-    };
-    new VaultWorkspaceActions(vault).applyWorkspaceRoute(
-      applyWorkspaceRouteArgs2,
-    );
-    await tick();
-    if (devicesAccessTrigger === DevicesAccessTriggerKind.IdentityContext) {
-      focusHostButton("login-review-identities");
-      await focusIdentityContextWhenAvailable();
-      return;
-    }
-    await focusIdentityManageWhenAvailable();
-  }
-
-  /** A vault row on an identity card opens that vault's unlock panel. */
+  /** Select the vault a card row names, closing any open setup panel. */
   async function openVaultFromCard(storeId: string): Promise<void> {
     newVaultOpen = false;
     if (showProviderSetupLink) {
@@ -363,14 +230,6 @@
     if (addProviderOpen) onCancelAddProvider?.();
     if (showSetup) onCancelSetup();
     await vault.chooseLoginVault(storeId);
-    await tick();
-    const scrollRequest: ScrollIntoViewOptions = {
-      block: "nearest",
-      behavior: "smooth",
-    };
-    document
-      .querySelector('[data-testid="login-local-unlock-step"]')
-      ?.scrollIntoView(scrollRequest);
   }
 
   /** "New vault" on the identity card: create one here or import one. */
@@ -384,24 +243,142 @@
     showProviderSetupLink = true;
   }
 
-  function manageIdentity(identityId: string): void {
-    managedIdentityId = identityId;
-    vault.identityFocus = identityId;
-    void openDevicesAccess(DevicesAccessTriggerKind.Header);
+  /** Manage on a locked identity unlocks it (one of its vaults, with this
+   * device's key) and lands on the identity home. */
+  function manageIdentity(target: IdentityVaultTarget): void {
+    // With no vault on this browser there is nothing to unlock it with.
+    if (!target.storeId) return;
+    const home: UnlockDestination = {
+      storeId: target.storeId,
+      page: { kind: UnlockPageKind.Route, route: WorkspaceRoute.Overview },
+    };
+    void unlockTo(home);
+  }
+
+  let pinPrompt = $state<PinPrompt>({ kind: PinPromptKind.Closed });
+  const pinProtected = $derived(
+    vault.deviceProtectionStatus === DeviceProtectionStatus.Pin,
+  );
+
+  /** Unlock on a locked card unlocks the identity: this device's passkey
+   * (or PIN) opens its key, and no vault is opened. A vault opens from its
+   * row. */
+  async function unlockIdentity(): Promise<void> {
+    if (vault.deviceProtectionReady || isVerifying) return;
+    if (pinProtected) {
+      pinPrompt = { kind: PinPromptKind.Identity };
+      return;
+    }
+    const identityOnly: Parameters<
+      DeviceProtectionActions["unlockDeviceProtection"]
+    >[0] = { initializeSession: false };
+    await new DeviceProtectionActions(vault).unlockDeviceProtection(
+      identityOnly,
+    );
+    await loadUnlockedIdentityProviders();
+  }
+
+  /** "Use identity" left the identity locked (a PIN, or a dismissed
+   * passkey prompt), so its providers are still unread. */
+  let providersAwaitUnlock = false;
+
+  async function useIdentity(target: IdentityVaultTarget): Promise<void> {
+    const outcome = await new IdentitySwitch(vault).to(target.identityId);
+    providersAwaitUnlock = outcome === IdentitySwitchOutcome.Locked;
+  }
+
+  /** Read the providers of an identity switched to while locked, now that
+   * its key is unlocked. */
+  async function loadUnlockedIdentityProviders(): Promise<void> {
+    if (!providersAwaitUnlock || !vault.deviceProtectionReady) return;
+    providersAwaitUnlock = false;
+    await new IdentitySwitch(vault).loadProviders();
+  }
+
+  async function unlockWithPin(pin: string): Promise<void> {
+    const prompt = pinPrompt;
+    const pinRequest: Parameters<
+      DeviceProtectionActions["unlockPinDeviceProtection"]
+    >[0] = { pin, initializeSession: false };
+    await new DeviceProtectionActions(vault).unlockPinDeviceProtection(
+      pinRequest,
+    );
+    if (!vault.deviceProtectionReady) return;
+    pinPrompt = { kind: PinPromptKind.Closed };
+    await loadUnlockedIdentityProviders();
+    if (prompt.kind === PinPromptKind.Vault) {
+      await openSelectedVault(prompt.destination);
+    }
+  }
+
+  /** Lock on a card whose identity is unlocked without an open vault. */
+  function lockIdentity(): void {
+    void vault.lockDeviceProtection();
+  }
+
+  /** A vault row on a locked card unlocks that vault. Locking keeps the
+   * page the URL names, so a management page resumes; otherwise the vault
+   * opens. */
+  function unlockVault(storeId: string): void {
+    const current = new WorkspacePath(window.location.pathname).route;
+    const page: UnlockPage =
+      current.kind === WorkspaceRouteLookupKind.Unknown
+        ? { kind: UnlockPageKind.Stay }
+        : {
+            kind: UnlockPageKind.Route,
+            route:
+              current.route === WorkspaceRoute.Identities
+                ? WorkspaceRoute.Vault
+                : current.route,
+          };
+    const destination: UnlockDestination = { storeId, page };
+    void unlockTo(destination);
+  }
+
+  /** Unlock a vault right away, as its Unlock button would, and open the
+   * workspace on `route` once it is unlocked. */
+  async function unlockTo(destination: UnlockDestination): Promise<void> {
+    if (destination.page.kind === UnlockPageKind.Route) {
+      const navigation = new WorkspaceLocation(
+        destination.page.route,
+      ).navigate();
+      if (navigation.isErr()) {
+        vault.errorMsg = vault.t(navigation.error.translationKey);
+        return;
+      }
+      const routeRequest: Parameters<
+        VaultWorkspaceActions["applyWorkspaceRoute"]
+      >[0] = { route: destination.page.route };
+      new VaultWorkspaceActions(vault).applyWorkspaceRoute(routeRequest);
+    }
+    // Choosing a vault reads it with the device key, so the identity is
+    // unlocked first: passkey (or PIN), then the vault, then open it.
+    if (destination.storeId !== selectedCardStoreId) {
+      if (pinProtected && !vault.deviceProtectionReady) {
+        pinPrompt = { kind: PinPromptKind.Vault, destination };
+        return;
+      }
+      await unlockIdentity();
+      if (!vault.deviceProtectionReady) return;
+    }
+    await openSelectedVault(destination);
+  }
+
+  /** With the identity unlocked, select the destination's vault and open it. */
+  async function openSelectedVault(
+    destination: UnlockDestination,
+  ): Promise<void> {
+    if (destination.storeId !== selectedCardStoreId) {
+      await openVaultFromCard(destination.storeId);
+      await tick();
+    }
+    if (vault.errorMsg || isVerifying) return;
+    await onUnlock();
   }
 
   function newIdentity(): void {
-    vault.identityCreationRequested = true;
-    void openDevicesAccess(DevicesAccessTriggerKind.Header);
+    vault.newIdentity = NewIdentityStage.Name;
   }
-
-  onMount(() => {
-    const syncDevicesAccessRoute = () => {
-      devicesAccessOpen = keysRouteOpen();
-    };
-    window.addEventListener("popstate", syncDevicesAccessRoute);
-    return () => window.removeEventListener("popstate", syncDevicesAccessRoute);
-  });
 
   const hasProviders = $derived(providers.length > 0);
   const showSetup = $derived(loginSetup.kind === LoginSetupKind.Active);
@@ -428,8 +405,7 @@
     vault.localVaultPresent || vault.localVaults.length > 0,
   );
   const showLocalUnlock = $derived(
-    !devicesAccessOpen &&
-      hasKnownLocalVault &&
+    hasKnownLocalVault &&
       vault.sentinelGenesisPhase !== SentinelGenesisPhase.DeliveringShares &&
       !showSetup &&
       !addProviderOpen &&
@@ -463,11 +439,6 @@
       extensionConnectPairingStatusEntries,
     ),
   );
-  const activeVaultExtensionPairingStatus = $derived(
-    statusForActiveVault(extensionConnectPairingStatusEntries)(
-      activeLoginVault,
-    ),
-  );
   const showQrOnboarding = $derived(
     Boolean(
       enrollmentFromUrlPending && prefillEnrollmentCode && onUseEnrollmentCode,
@@ -477,7 +448,7 @@
     (vault.sentinelGenesisPhase === SentinelGenesisPhase.DeliveringShares ||
       (!vault.localVaultPresent &&
         vault.localVaults.length === 0 &&
-        !hasProviders)) &&
+        (!hasProviders || firstScreenRequested))) &&
       !showQrOnboarding &&
       !showSetup &&
       !addProviderOpen &&
@@ -500,12 +471,6 @@
   const isUnlocking = $derived(
     isVerifying && (showLocalUnlock || showSetup) && !showSetup,
   );
-  const showEnrollmentAccess = $derived(
-    Boolean(onUseEnrollmentCode) &&
-      !showQrOnboarding &&
-      (showProviderSetup || showSetup),
-  );
-
   const setupCanConnect = $derived(
     setupIs("local") ||
       (setupIs("local-folder") &&
@@ -522,6 +487,12 @@
     vault.recoveryDiscovery.kind === RecoveryDiscoveryKind.Found
       ? vault.recoveryDiscovery.summary.passwordEntries
       : [],
+  );
+  /** Backup passwords of the selected vault, offered on its locked card. */
+  const cardPasswordEntries = $derived(
+    vault.passwordEntries.length > 0
+      ? vault.passwordEntries
+      : recoveryPasswordEntries,
   );
   const oauthPreset = $derived<OAuthFilePreset>(
     vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured
@@ -647,19 +618,10 @@
     onConnectStorage={() => {
       vault.beginExistingVaultOpen();
       showProviderSetupLink = true;
+      firstScreenRequested = false;
     }}
   />
 
-  {#if showEnrollmentAccess}
-    <LoginEnrollmentPanel
-      {vault}
-      bind:open={enrollmentPanelOpen}
-      {isVerifying}
-      initialCode={prefillEnrollmentCode}
-      openFormInitially={false}
-      {...enrollmentPanelOptionalProps}
-    />
-  {/if}
 {/snippet}
 {#snippet newVaultPanel()}
   <LoginNewVaultPanel
@@ -671,29 +633,28 @@
     onClose={() => (newVaultOpen = false)}
   />
 {/snippet}
-{#snippet unlockPanel()}
-  <LoginUnlockStep
+{#snippet sentinelCeremony()}
+  <SentinelCeremonyPanel {vault} {isVerifying} {isInitializing} />
+{/snippet}
+{#snippet cardPinUnlock()}
+  <CardPinUnlock
     {vault}
-    vaultEntry={activeLoginVault}
-    extensionPairingStatus={activeVaultExtensionPairingStatus}
-    hasMultipleVaults={vault.hasMultipleLocalVaults}
-    passwordEntries={vault.passwordEntries.length > 0
-      ? vault.passwordEntries
-      : recoveryPasswordEntries}
-    selectedPasswordEntry={vault.selectedPasswordEntry}
-    onSelectPasswordEntry={(
-      selection: Parameters<LoginUnlockStepProps["onSelectPasswordEntry"]>[0],
-    ) => {
-      vault.selectedPasswordEntry = selection;
-    }}
     {isVerifying}
-    {isInitializing}
-    {isUnlocking}
-    {onUnlock}
-    {onUnlockWithPassword}
-    onOpenDevicesAccess={() =>
-      openDevicesAccess(DevicesAccessTriggerKind.IdentityContext)}
-    {onSwitchVault}
+    onUnlock={unlockWithPin}
+    onCancel={() => (pinPrompt = { kind: PinPromptKind.Closed })}
+  />
+{/snippet}
+{#snippet cardPasswordUnlock()}
+  <CardPasswordUnlock
+    {vault}
+    vaultLabel={activeLoginVault.kind === LoginVaultEntryKind.Available
+      ? activeLoginVault.entry.display_label(
+          vault.t(I18N_KEYS.LoginVaultPickerUnnamed),
+        )
+      : ""}
+    entries={cardPasswordEntries}
+    {isVerifying}
+    onUnlock={onUnlockWithPassword}
   />
 {/snippet}
 {#snippet vaultPicker()}
@@ -705,50 +666,39 @@
     {isInitializing}
     onChooseVault={(
       storeId: Parameters<LoginVaultPickerProps["onChooseVault"]>[0],
-    ) => vault.chooseLoginVault(storeId)}
+    ) => unlockVault(storeId)}
   />
 {/snippet}
 
 <div
-  use:captureDevicesAccessHost
   class="w-full animate-in fade-in duration-300"
   data-testid="login-gate"
   data-local-vault={vault.localVaultPresent ? "true" : "false"}
 >
-  {#if devicesAccessOpen && !isInitializing}
-    <div class="grid min-w-0 grid-cols-1 gap-5" data-testid="login-keys-page">
-      <PageBar
-        {vault}
-        eyebrow={vault.t(I18N_KEYS.WorkspaceManageIdentity)}
-        title={vault.t(I18N_KEYS.WorkspaceSectionKeys)}
-        testId="manage-page-bar"
-        onBack={() =>
-          leaveKeysPage ? void leaveKeysPage() : void closeDevicesAccess()}
-      />
-      <p class="max-w-[64ch] text-sm text-pretty text-muted-foreground">
-        {vault.t(I18N_KEYS.WorkspaceSectionKeysDescription)}
-      </p>
-      <DevicesAccessDashboard
-        {vault}
-        onBack={() => void closeDevicesAccess()}
-        onLeaveReady={(leave: KeysPageLeave) => (leaveKeysPage = leave)}
-      />
-    </div>
-  {:else if !devicesAccessOpen}
     <IdentitiesHub
       {vault}
       selectedStoreId={selectedCardStoreId}
       showCards={!showQrOnboarding}
       busy={isVerifying || isInitializing}
       canAddVault={!showCreateVault && !showQrOnboarding}
-      onOpenVault={(storeId: string) => void openVaultFromCard(storeId)}
+      onOpenVault={unlockVault}
       onNewVault={openNewVault}
       onManage={manageIdentity}
+      onUnlock={() => void unlockIdentity()}
+      onLock={lockIdentity}
       onNewIdentity={newIdentity}
-      onUseIdentity={manageIdentity}
+      onUseIdentity={(target: IdentityVaultTarget) => void useIdentity(target)}
       pairingStatusFor={(storeId: string) =>
         pairingStatusLookup.statusForStore(storeId)}
-      {...showLocalUnlock && !newVaultOpen ? { unlockPanel } : {}}
+      {...showLocalUnlock && !newVaultOpen && showSentinelCeremony
+        ? { unlockPanel: sentinelCeremony }
+        : {}}
+      {...showLocalUnlock && !newVaultOpen && cardPasswordEntries.length > 0
+        ? { passwordFallback: cardPasswordUnlock }
+        : {}}
+      {...pinPrompt.kind !== PinPromptKind.Closed && !vault.deviceProtectionReady
+        ? { identityPrompt: cardPinUnlock }
+        : {}}
       {...showVaultPicker && !newVaultOpen ? { vaultPicker } : {}}
       {...(showCreateVault || sentinelInvitationRequest.trim()) &&
       !showQrOnboarding
@@ -772,27 +722,13 @@
         {/if}
 
         {#if showQrOnboarding && onUseEnrollmentCode}
-          <EnrollmentQrOnboardCard
+          <JoinThisDevice
             {vault}
-            code={prefillEnrollmentCode}
             {isVerifying}
-            onSubmit={(
-              password: Parameters<EnrollmentQrOnboardCardProps["onSubmit"]>[0],
-            ) => {
-              const enrollmentRequest: Parameters<
-                typeof onUseEnrollmentCode
-              >[0] = {
-                code: prefillEnrollmentCode,
-                password,
-              };
-              return onUseEnrollmentCode(enrollmentRequest);
-            }}
+            code={prefillEnrollmentCode}
+            {onUseEnrollmentCode}
           />
         {:else if !showCreateVault && !sentinelInvitationRequest.trim()}
-          {#if !hasProviders && !showSetup && !showLocalUnlock && onOpenHelp}
-            <ProductIntro {vault} {onOpenHelp} />
-          {/if}
-
           {#if showAccessSheet}
             <section
               class="nk-frame-sheet min-w-0"
@@ -821,6 +757,8 @@
                       })()}
                     {:else if addProviderOpen}
                       {vault.t(I18N_KEYS.OnboardingAddProvider)}
+                    {:else if vault.loginRequiresExistingVault}
+                      {vault.t(I18N_KEYS.FirstRunRestoreTitle)}
                     {:else}
                       {vault.t(I18N_KEYS.OnboardingSetupStorage)}
                     {/if}
@@ -939,17 +877,19 @@
                     </form>
                   {/if}
                 {:else if showProviderSetup}
-                  {#if showProviderSetupLink && !addProviderOpen}
+                  {#if (showProviderSetupLink || !vault.localVaultPresent) && !addProviderOpen}
                     <button
                       type="button"
-                      class="mb-3 text-sm font-medium text-primary underline-offset-4 hover:underline"
+                      class="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
                       data-testid="login-back-to-get-started"
                       onclick={() => {
                         vault.cancelExistingVaultOpen();
                         showProviderSetupLink = false;
+                        firstScreenRequested = true;
                       }}
                     >
-                      {vault.t(I18N_KEYS.LoginBackToGetStarted)}
+                      <ArrowLeft class="size-4" />
+                      {vault.t(I18N_KEYS.FirstRunBack)}
                     </button>
                   {/if}
                   <LoginProviderManagement
@@ -967,18 +907,7 @@
             </section>
           {/if}
 
-          {#if showEnrollmentAccess}
-            <LoginEnrollmentPanel
-              {vault}
-              bind:open={enrollmentPanelOpen}
-              {isVerifying}
-              initialCode={prefillEnrollmentCode}
-              openFormInitially={false}
-              {...enrollmentPanelOptionalProps}
-            />
-          {/if}
         {/if}
       </div>
     </IdentitiesHub>
-  {/if}
 </div>

@@ -433,10 +433,9 @@ class ExtensionPairingIdentity {
       }
       return ok(unavailablePresence)
     }
-    const decodedGrant = grantDecode.value
-    const selected = pairingPolicy.selectedPairingGrant(stored)
-    const currentGrant =
-      selected.kind === 'selected' ? selected.grant : decodedGrant
+    // Presence for a vault is that vault's own grant: each paired vault
+    // approved this extension separately.
+    const currentGrant = grantDecode.value
 
     const statusRequest: Parameters<typeof this.sendSessionMessage>[0] = {
       type: 'nook:extension-session-status',
@@ -626,18 +625,8 @@ class ExtensionPairingIdentity {
       const stored = await this.getPairingStorage()
       const grant = stored[key]
       const selectedGrant = pairingPolicy.selectedPairingGrant(stored)
-      if (
-        selectedGrant.kind === 'selected' &&
-        selectedGrant.grant.vaultStoreId !== vaultStoreId
-      ) {
-        const selectedPresence: CompanionExtensionPresence = {
-          kind: 'locked',
-          vault_type: selectedGrant.grant.vaultType,
-          vault_store_id: selectedGrant.grant.vaultStoreId,
-          vault_name: selectedGrant.grant.vaultName,
-        }
-        return await discover(selectedPresence)
-      }
+      // The extension serves every vault it holds a grant for; only a vault
+      // without one is reported as connected elsewhere (below).
       const grantDecode = runConcreteDecoder(
         pairingPolicy.decodeStoredExtensionPairingGrant,
         grant,

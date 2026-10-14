@@ -331,6 +331,11 @@ export class ExtensionVaultApproval {
           deviceLabel: this.request.deviceLabel,
           vaultStoreId: browserVaultStoreId.value,
           vaultName,
+          // Lets the extension group vaults under their identity.
+          identityLabel:
+            this.vault.identityControl.snapshot === false
+              ? ""
+              : this.vault.identityControl.snapshot.identityLabel,
           approvedAt: authorization.approvedAt,
           scopes: this.request.scopes,
           providers,

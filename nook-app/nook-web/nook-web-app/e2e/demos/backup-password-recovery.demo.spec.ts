@@ -1,5 +1,4 @@
 import { expect, test } from '../fixtures'
-import { UnlockMethod } from '$lib/components/login/login-unlock-state'
 import {
   addVaultPassword,
   clearBrowserVault,
@@ -7,7 +6,7 @@ import {
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   expectVaultPasswordStatus,
   openStorageSettings,
-  selectLoginUnlockMethod,
+  unlockWithCardPassword,
   wipeDeviceIdentity,
 } from '../helpers'
 
@@ -29,7 +28,7 @@ test('recover a local vault with its backup password after device-key loss', asy
 
   await wipeDeviceIdentity(page)
   await page.reload()
-  await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
+  await expect(page.getByTestId('card-password-unlock-open')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
   await expect
@@ -51,16 +50,10 @@ test('recover a local vault with its backup password after device-key loss', asy
   if (await joinClose.isVisible()) {
     await joinClose.click()
   }
-  await selectLoginUnlockMethod(page, UnlockMethod.Password)
-  await page
-    .getByTestId('login-password-entry-list')
-    .getByRole('button', { name: 'Recovery' })
-    .click()
-  await page.getByTestId('login-password-input').fill('recovery-pass-99')
-  await page.getByTestId('unlock-vault-btn').click()
+  await unlockWithCardPassword(page, { password: 'recovery-pass-99' })
   await expect(page.getByTestId('vault-admin-panel')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-  await expect(page).toHaveURL(/\/admin$/)
+  await expect(page).toHaveURL(/\/identity\/passwords$/)
   await page.waitForTimeout(DEMO_BEAT_MS)
 })

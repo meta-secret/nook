@@ -75,6 +75,7 @@ pub use types::{
     NookAuthenticationWorkflowSnapshot, NookBrowserLocale, NookClientRunMode,
     NookClientRunModeUtil, NookDecryptedEnrollmentPayload, NookDiagnosticEpochState,
     NookEnrollmentIssueInput, NookEnrollmentProvider, NookEventLogSyncIssue, NookGoogleDriveFolder,
+    NookIdentityHealth, NookIdentityHealthStage, NookIdentityNextStep, NookIdentityNudge,
     NookImportResult, NookJoinRequest, NookLocalFolderHealth, NookLocalFolderHealthState,
     NookLoginAccount, NookLoginFillCredential, NookManualProviderSync, NookManualProviderSyncState,
     NookOtpauthPreview, NookPasskeyAccount, NookPasskeyAssertion, NookPasskeyRegistration,
@@ -88,8 +89,8 @@ pub use types::{
     NookSyncConflictReviewState, NookTotpCode, NookVaultAccessReport, NookVaultArchitecture,
     NookVaultClientPolicy, NookVaultEpochHistoryDiagnostic, NookVaultEventAccessDiagnostic,
     NookVaultLastSync, NookVaultLastSyncState, NookVaultMember, NookVaultSecretAccessDiagnostic,
-    NookVaultSecurityRecommendations, NookVaultStartupUnlockRequest, NookVaultSyncResult,
-    NookWebsiteLoginSaveDecision, NookWebsiteLoginSavePlan,
+    NookVaultStartupUnlockRequest, NookVaultSyncResult, NookWebsiteLoginSaveDecision,
+    NookWebsiteLoginSavePlan,
 };
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 

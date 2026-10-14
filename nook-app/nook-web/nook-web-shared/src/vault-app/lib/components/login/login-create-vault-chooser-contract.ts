@@ -15,6 +15,11 @@ import type {
 } from "$lib/vault/sentinel-genesis";
 import type { VaultState } from "$lib/vault.svelte";
 
+export type EnrollmentCodeUnlock = {
+  readonly code: string;
+  readonly password: string;
+};
+
 export type SentinelGenesisParticipation = {
   readonly payload: string;
   readonly participantLabel?: string;
@@ -28,6 +33,8 @@ export type LoginCreateVaultChooserProps = {
   usesExtensionDeviceIdentity?: boolean;
   onCreateDeviceVault: (label: string) => void | Promise<void>;
   onConnectStorage: () => void;
+  /** Redeems an identity enrollment code so this app can join the identity. */
+  onUseEnrollmentCode?: (code: EnrollmentCodeUnlock) => void | Promise<void>;
   onStartSentinelGenesis: (args: StartSentinelGenesisArgs) => Promise<boolean>;
   onAddSentinelGenesisParticipantResponse?: (
     args: SentinelGenesisParticipation,

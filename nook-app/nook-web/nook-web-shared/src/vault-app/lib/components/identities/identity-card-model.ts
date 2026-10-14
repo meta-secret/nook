@@ -51,6 +51,13 @@ export type IdentityCardView = {
   readonly vaults: readonly IdentityVaultRow[];
 };
 
+/** An identity card action (Unlock, Manage) with the vault it opens on this
+ * browser ("" when it opens none), so a locked identity can be unlocked. */
+export type IdentityVaultTarget = {
+  readonly identityId: string;
+  readonly storeId: string;
+};
+
 export type IdentityLocalVault = {
   readonly storeId: string;
   readonly label: string;
@@ -62,6 +69,9 @@ export type IdentityCardSource = {
   /** The open vault's store id, or empty when no vault session is open. */
   readonly openStoreId: string;
   readonly authenticated: boolean;
+  /** This device's key is unlocked for the current identity, with or
+   * without a vault open. */
+  readonly identityUnlocked: boolean;
 };
 
 export type IdentityTotals = {
@@ -183,12 +193,30 @@ export class IdentityCardProjection {
     return owners;
   }
 
+  private get hasCurrentIdentity(): boolean {
+    return this.source.identities.some(
+      (entry) =>
+        entry.localAccess === NookIdentityLocalAccessKind.CurrentBrowser,
+    );
+  }
+
   private owns(request: IdentityVaultOwnership): boolean {
     return this.owners.get(request.storeId) === request.identityId;
   }
 
   get cards(): IdentityCardView[] {
     return this.source.identities.map((entry) => this.card(entry));
+  }
+
+  /** Local vaults no card lists, as when this browser has no current
+   * identity to hold them. They still open from their own row. */
+  get unlistedVaults(): IdentityLocalVault[] {
+    const listed = new Set(
+      this.cards.flatMap((card) => card.vaults.map((row) => row.storeId)),
+    );
+    return this.source.localVaults.filter(
+      (vault) => !listed.has(vault.storeId),
+    );
   }
 
   get totals(): IdentityTotals {
@@ -207,7 +235,7 @@ export class IdentityCardProjection {
   private status(entry: IdentityDirectoryEntry): IdentityCardStatus {
     switch (entry.localAccess) {
       case NookIdentityLocalAccessKind.CurrentBrowser:
-        return this.source.authenticated
+        return this.source.identityUnlocked
           ? IdentityCardStatus.Unlocked
           : IdentityCardStatus.Locked;
       case NookIdentityLocalAccessKind.ThisBrowser:
@@ -235,9 +263,12 @@ export class IdentityCardProjection {
       if (!this.owns(ownership)) continue;
       const localLabel = local.get(vault.storeId);
       const label = localLabel ? localLabel : vault.label;
+      // With no identity current here (its key was lost), a vault stored on
+      // this browser still opens: unlocking it is how the key is recovered.
       const stateRequest: VaultRowStateRequest = {
         storeId: vault.storeId,
-        local: current && local.has(vault.storeId),
+        local:
+          (current || !this.hasCurrentIdentity) && local.has(vault.storeId),
       };
       const row: IdentityVaultRow = {
         storeId: vault.storeId,

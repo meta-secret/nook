@@ -8,6 +8,7 @@ import {
 export enum WorkspaceRoute {
   Vault = "vault",
   Identities = "identities",
+  Overview = "overview",
   Keys = "keys",
   Vaults = "vaults",
   Settings = "settings",
@@ -30,12 +31,13 @@ export type WorkspaceRouteLookup =
 const WORKSPACE_PATHS: Record<WorkspaceRoute, string> = {
   [WorkspaceRoute.Vault]: "/vault",
   [WorkspaceRoute.Identities]: "/identities",
+  [WorkspaceRoute.Overview]: "/identity",
   [WorkspaceRoute.Keys]: "/identity/keys",
   [WorkspaceRoute.Vaults]: "/identity/vaults",
   [WorkspaceRoute.Settings]: "/identity/settings",
   [WorkspaceRoute.Devices]: "/identity/devices",
   [WorkspaceRoute.Sync]: "/identity/sync",
-  [WorkspaceRoute.Passwords]: "/vault/passwords",
+  [WorkspaceRoute.Passwords]: "/identity/passwords",
   [WorkspaceRoute.Import]: "/vault/import",
   [WorkspaceRoute.Help]: "/help",
 };
@@ -54,6 +56,7 @@ const LEGACY_WORKSPACE_PATHS: Readonly<Record<string, WorkspaceRoute>> = {
   "/onboard": WorkspaceRoute.Devices,
   "/vault/devices": WorkspaceRoute.Devices,
   "/vault/sync": WorkspaceRoute.Sync,
+  "/vault/passwords": WorkspaceRoute.Passwords,
   "/settings": WorkspaceRoute.Settings,
 };
 
@@ -123,14 +126,4 @@ export class WorkspacePath {
     }
     return { kind: WorkspaceRouteLookupKind.Unknown };
   }
-}
-
-/** Whether the current browser location is the identity Keys page. */
-export function keysRouteOpen(): boolean {
-  if (!("window" in globalThis)) return false;
-  const route = new WorkspacePath(window.location.pathname).route;
-  return (
-    route.kind === WorkspaceRouteLookupKind.Workspace &&
-    route.route === WorkspaceRoute.Keys
-  );
 }

@@ -98,6 +98,7 @@ const storedGrant: StoredExtensionPairingGrant = {
   devicePublicKey: 'public',
   deviceSigningPublicKey: 'signing',
   vaultName: 'Private vault',
+  identityLabel: '',
   deviceLabel: 'Laptop',
   approvedAt: 1_786_320_000_000,
   scopes: ['password-filling'],

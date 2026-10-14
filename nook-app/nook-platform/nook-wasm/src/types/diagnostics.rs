@@ -2,37 +2,71 @@ use super::{NookError, wasm_bindgen};
 use nook_core::DiagnosticEpoch;
 use wasm_bindgen::JsError;
 
+/// How far an identity is protected against loss.
 #[wasm_bindgen]
-#[derive(Clone, Copy)]
-pub struct NookVaultSecurityRecommendations {
-    needs_sync_provider: bool,
-    needs_another_device: bool,
-    has_recommendations: bool,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NookIdentityHealthStage {
+    LocalOnly,
+    CopyKept,
+    MultiDevice,
 }
 
+/// The one step that protects the identity most right now.
 #[wasm_bindgen]
-impl NookVaultSecurityRecommendations {
-    #[wasm_bindgen(getter, js_name = needsSyncProvider)]
-    pub fn needs_sync_provider(&self) -> bool {
-        self.needs_sync_provider
-    }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NookIdentityNextStep {
+    AddSyncProvider,
+    AddCloudProvider,
+    AddDevice,
+    Done,
+}
 
-    #[wasm_bindgen(getter, js_name = needsAnotherDevice)]
-    pub fn needs_another_device(&self) -> bool {
-        self.needs_another_device
-    }
+/// How firmly the next step is asked for outside identity management.
+#[wasm_bindgen]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NookIdentityNudge {
+    Quiet,
+    Suggest,
+    Urge,
+}
 
-    #[wasm_bindgen(getter, js_name = hasRecommendations)]
-    pub fn has_recommendations(&self) -> bool {
-        self.has_recommendations
-    }
+/// Day-2 health of an identity, assessed by `nook-core`.
+#[wasm_bindgen]
+#[derive(Clone, Copy)]
+pub struct NookIdentityHealth(nook_core::IdentityHealth);
 
-    pub(crate) fn from_core(recommendations: nook_core::VaultSecurityRecommendations) -> Self {
-        Self {
-            needs_sync_provider: recommendations.needs_sync_provider,
-            needs_another_device: recommendations.needs_another_device,
-            has_recommendations: recommendations.has_recommendations(),
+#[wasm_bindgen]
+impl NookIdentityHealth {
+    #[wasm_bindgen(getter)]
+    pub fn stage(&self) -> NookIdentityHealthStage {
+        match self.0.stage {
+            nook_core::IdentityHealthStage::LocalOnly => NookIdentityHealthStage::LocalOnly,
+            nook_core::IdentityHealthStage::CopyKept => NookIdentityHealthStage::CopyKept,
+            nook_core::IdentityHealthStage::MultiDevice => NookIdentityHealthStage::MultiDevice,
         }
+    }
+
+    #[wasm_bindgen(getter, js_name = nextStep)]
+    pub fn next_step(&self) -> NookIdentityNextStep {
+        match self.0.next_step {
+            nook_core::IdentityNextStep::AddSyncProvider => NookIdentityNextStep::AddSyncProvider,
+            nook_core::IdentityNextStep::AddCloudProvider => NookIdentityNextStep::AddCloudProvider,
+            nook_core::IdentityNextStep::AddDevice => NookIdentityNextStep::AddDevice,
+            nook_core::IdentityNextStep::Done => NookIdentityNextStep::Done,
+        }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn nudge(&self) -> NookIdentityNudge {
+        match self.0.nudge {
+            nook_core::IdentityNudge::Quiet => NookIdentityNudge::Quiet,
+            nook_core::IdentityNudge::Suggest => NookIdentityNudge::Suggest,
+            nook_core::IdentityNudge::Urge => NookIdentityNudge::Urge,
+        }
+    }
+
+    pub(crate) const fn from_core(health: nook_core::IdentityHealth) -> Self {
+        Self(health)
     }
 }
 
@@ -316,14 +350,14 @@ mod browser_tests {
 
     #[wasm_bindgen_test]
     fn diagnostic_projection_getters_cover_known_and_unknown_epochs() {
-        let recommendations =
-            NookVaultSecurityRecommendations::from_core(nook_core::VaultSecurityRecommendations {
-                needs_sync_provider: true,
-                needs_another_device: false,
-            });
-        assert!(recommendations.needs_sync_provider());
-        assert!(!recommendations.needs_another_device());
-        assert!(recommendations.has_recommendations());
+        let health = NookIdentityHealth::from_core(nook_core::IdentityHealth {
+            stage: nook_core::IdentityHealthStage::CopyKept,
+            next_step: nook_core::IdentityNextStep::AddCloudProvider,
+            nudge: nook_core::IdentityNudge::Urge,
+        });
+        assert_eq!(health.stage(), NookIdentityHealthStage::CopyKept);
+        assert_eq!(health.next_step(), NookIdentityNextStep::AddCloudProvider);
+        assert_eq!(health.nudge(), NookIdentityNudge::Urge);
 
         let history = NookVaultEpochHistoryDiagnostic {
             epoch_id: "epoch-1".into(),

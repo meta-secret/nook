@@ -49,7 +49,7 @@ export async function redeemIdentityEnrollmentCode(
   page: Page,
   passphrase: string,
 ): Promise<void> {
-  await expect(page.getByTestId('enrollment-scan-panel')).toBeVisible({
+  await expect(page.getByTestId('join-this-device')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
   const consoleErrors: string[] = []

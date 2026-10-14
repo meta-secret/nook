@@ -8,6 +8,7 @@ import {
   connectLocalVault,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   expandSettingsSection,
+  expectFirstVaultOpen,
   expectEmptyLocalFolderRejected,
   installPasskeyMock,
   openStorageSettings,
@@ -39,12 +40,13 @@ test('offer PIN device protection when passkeys are unavailable', async ({
   })
   await demoBeat(page)
 
-  await page.getByTestId('get-started-path-simple').click()
   await page.getByTestId('login-vault-name-input').fill('PIN demo vault')
   await page.getByTestId('login-create-device-vault-btn').click()
-  await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible({
+  // The passkey is asked for on the guided "This is you" step.
+  await expect(page.getByTestId('first-run-protect-step')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
+  await expect(page.getByTestId('first-run-identity-preview')).toBeVisible()
   await expect(
     page.getByTestId('device-protection-use-existing-choice'),
   ).toHaveText('Authenticate')
@@ -75,9 +77,11 @@ test('offer PIN device protection when passkeys are unavailable', async ({
   await page.getByTestId('device-protection-pin-input').fill('123456')
   await page.getByTestId('device-protection-pin-confirm').fill('123456')
   await page.getByTestId('device-protection-pin-setup-btn').click()
-  await expect(page.getByTestId('vault-panel')).toBeVisible({
+  await expect(page.getByTestId('first-run-backup-step')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
+  await demoBeat(page)
+  await expectFirstVaultOpen(page)
   await expect(page.getByTestId('authenticated-shell')).toBeVisible()
   await page.getByTestId('add-secret-btn').click()
   await expect(page.getByTestId('add-secret-panel')).toBeVisible()
@@ -101,7 +105,7 @@ test('offer PIN device protection when passkeys are unavailable', async ({
   await demoBeat(page)
 
   await page.getByTestId('header-lock-vault-btn').click()
-  await page.getByTestId('unlock-vault-btn').click()
+  await page.getByTestId('identity-vault-row').first().click()
   await expect(
     page.getByTestId('device-protection-pin-unlock-btn'),
   ).toBeVisible({

@@ -19,6 +19,8 @@ state, and the page's own actions. Only the identities hub gets a hero.
     tags,
     actions,
     visual,
+    band = false,
+    backOnPhonesOnly = false,
   }: {
     vault: VaultState
     eyebrow?: string
@@ -29,17 +31,26 @@ state, and the page's own actions. Only the identities hub gets a hero.
     tags?: Snippet
     actions?: Snippet
     visual?: Snippet
+    /** A flat band at the top of the workspace shell instead of a framed tab. */
+    band?: boolean
+    /** The workspace rail already leads back on wide screens. */
+    backOnPhonesOnly?: boolean
   } = $props()
 </script>
 
-<header class="nk-frame-tab nk-page-bar grid min-w-0 grid-cols-1 gap-3" data-testid={testId}>
+<header
+  class="{band
+    ? 'nk-page-band'
+    : 'nk-frame-tab nk-page-bar'} grid min-w-0 grid-cols-1 gap-3"
+  data-testid={testId}
+>
   <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
     {#if onBack}
       <Button
         type="button"
         variant="ghost"
         size="icon"
-        class="-ml-2 size-9 shrink-0"
+        class="-ml-2 size-9 shrink-0 {backOnPhonesOnly ? 'md:hidden' : ''}"
         aria-label={backLabel || vault.t(I18N_KEYS.WorkspaceBackToIdentities)}
         title={backLabel || vault.t(I18N_KEYS.WorkspaceBackToIdentities)}
         data-testid="page-bar-back"
@@ -50,7 +61,10 @@ state, and the page's own actions. Only the identities hub gets a hero.
     {/if}
     <div class="min-w-0 flex-1">
       {#if eyebrow}
-        <p class="nk-eyebrow truncate" data-testid="page-bar-eyebrow">
+        <p
+          class="nk-eyebrow truncate {band ? 'md:hidden' : ''}"
+          data-testid="page-bar-eyebrow"
+        >
           {eyebrow}
         </p>
       {/if}

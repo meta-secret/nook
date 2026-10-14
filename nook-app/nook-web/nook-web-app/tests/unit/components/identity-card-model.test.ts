@@ -85,6 +85,7 @@ function source(authenticated: boolean): IdentityCardSource {
     ],
     openStoreId: authenticated ? 'store_a' : '',
     authenticated,
+    identityUnlocked: authenticated,
   }
 }
 
@@ -98,6 +99,18 @@ describe('identity card projection', () => {
     ])
     const locked = new IdentityCardProjection(source(false)).cards
     expect(locked[0]?.status).toBe(IdentityCardStatus.Locked)
+  })
+
+  test('an unlocked identity stays unlocked with no vault open', () => {
+    const identityOnly: IdentityCardSource = {
+      ...source(false),
+      identityUnlocked: true,
+    }
+    const [current] = new IdentityCardProjection(identityOnly).cards
+    expect(current?.status).toBe(IdentityCardStatus.Unlocked)
+    expect(
+      current?.vaults.some((row) => row.state === IdentityVaultRowState.Open),
+    ).toBe(false)
   })
 
   test('lists the current identity vaults with local labels and the open vault', () => {
@@ -176,6 +189,7 @@ describe('IdentityCardProjection vault ownership', () => {
       ],
       openStoreId: '',
       authenticated: false,
+      identityUnlocked: false,
     }
     const cards = new IdentityCardProjection(ownershipSource).cards
     const rowsOf = (identityId: string) =>
@@ -191,5 +205,52 @@ describe('IdentityCardProjection vault ownership', () => {
     expect(rowsOf(work.identityId)).toEqual(['store_w'])
     const all = cards.flatMap((card) => card.vaults.map((row) => row.storeId))
     expect(new Set(all).size).toBe(all.length)
+  })
+
+  test('keeps local vaults openable when no identity is current here', () => {
+    const noCurrent: IdentityCardSource = {
+      identities: [work, elsewhere],
+      localVaults: [
+        { storeId: 'store_w', label: 'Acme' },
+        { storeId: 'store_orphan', label: 'Orphan' },
+      ],
+      openStoreId: '',
+      authenticated: false,
+      identityUnlocked: false,
+    }
+
+    const unlisted = new IdentityCardProjection(noCurrent).unlistedVaults
+
+    expect(unlisted.map((vault) => vault.storeId)).toEqual(['store_orphan'])
+  })
+
+  test('lists no stray vaults when the current identity holds them all', () => {
+    expect(new IdentityCardProjection(source(false)).unlistedVaults).toEqual([])
+  })
+
+  test('a stored vault still opens after this browser lost its identity key', () => {
+    const lostKey: IdentityCardSource = {
+      identities: [
+        {
+          ...personal,
+          localAccess: NookIdentityLocalAccessKind.OtherInstallation,
+        },
+      ],
+      localVaults: [{ storeId: 'store_a', label: 'Personal vault' }],
+      openStoreId: '',
+      authenticated: false,
+      identityUnlocked: false,
+    }
+
+    const rows = new IdentityCardProjection(lostKey).cards.flatMap(
+      (card) => card.vaults,
+    )
+
+    expect(rows.find((row) => row.storeId === 'store_a')?.state).toBe(
+      IdentityVaultRowState.Available,
+    )
+    expect(rows.find((row) => row.storeId === 'store_gone')?.state).toBe(
+      IdentityVaultRowState.Unavailable,
+    )
   })
 })
