@@ -1,3 +1,4 @@
+import { err } from "neverthrow";
 import type { VaultState } from "$lib/vault.svelte";
 import {
   IdentityDirectoryLoadKind,
@@ -29,11 +30,17 @@ export class IdentityDirectoryLoader {
         await new Promise<void>((resolve) => setTimeout(resolve, delay));
       }
       if (generation !== this.generation) return;
-      const manager = this.vault.admitManager();
       // Before the vault engine is ready there is nothing to read yet; the
       // caller reloads once the manager is admitted.
-      if (manager.isErr()) return;
-      const loaded = await new IdentityDirectoryReader(manager.value).load();
+      if (this.vault.admitManager().isErr()) return;
+      // Read through the storage queue: a read that overlaps a lock or a
+      // sync would borrow the engine twice and fail that operation.
+      const loaded = await this.vault.enqueueStorage(() => {
+        const manager = this.vault.admitManager();
+        return manager.isErr()
+          ? err(manager.error)
+          : new IdentityDirectoryReader(manager.value).load();
+      });
       if (generation !== this.generation) return;
       if (loaded.isOk()) {
         this.state = {

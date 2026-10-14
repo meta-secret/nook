@@ -7,6 +7,7 @@ Technical identifiers stay behind "Details".
 -->
 <script lang="ts">
   import { onMount } from "svelte";
+  import { err, ok } from "neverthrow";
   import {
     Asterisk,
     Fingerprint,
@@ -71,9 +72,13 @@ Technical identifiers stay behind "Details".
   }
 
   async function readKeys(): Promise<KeysLoad> {
-    const manager = vault.admitManager();
-    if (manager.isErr()) return { kind: KeysLoadKind.Failed };
-    const loaded = await new IdentityDirectoryReader(manager.value).load();
+    // Through the storage queue, so the read never overlaps a sync or lock.
+    const loaded = await vault.enqueueStorage(() => {
+      const manager = vault.admitManager();
+      return manager.isErr()
+        ? err(manager.error)
+        : new IdentityDirectoryReader(manager.value).load();
+    });
     if (loaded.isErr()) return { kind: KeysLoadKind.Failed };
     const identity = loaded.value.directory.identities.find(
       (entry) =>
@@ -175,24 +180,31 @@ Technical identifiers stay behind "Details".
       view.deviceId.kind !== DashboardTextKind.Known
     )
       return;
-    const manager = vault.admitManager();
-    if (manager.isErr()) {
-      vault.errorMsg = vault.t(manager.error.translationKey);
-      return;
-    }
+    const deviceId = view.deviceId.value;
+    const credentialId = view.credentialId.value;
+    const name = draft.trim();
     saving = true;
     try {
-      await manager.value.set_device_access_passkey_name(
-        view.deviceId.value,
-        view.credentialId.value,
-        draft.trim(),
-      );
+      const renamed = await vault.enqueueStorage(async () => {
+        const manager = vault.admitManager();
+        if (manager.isErr()) return err(manager.error);
+        try {
+          await manager.value.set_device_access_passkey_name(
+            deviceId,
+            credentialId,
+            name,
+          );
+          return ok(name);
+        } catch (failure) {
+          return err(new NativeVaultStorageFailure(failure));
+        }
+      });
+      if (renamed.isErr()) {
+        vault.errorMsg = vault.t(renamed.error.translationKey);
+        return;
+      }
       renaming = "";
       await reload();
-    } catch (failure) {
-      vault.errorMsg = vault.t(
-        new NativeVaultStorageFailure(failure).translationKey,
-      );
     } finally {
       saving = false;
     }

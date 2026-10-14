@@ -69,7 +69,10 @@
     type UnlockDestination,
     type UnlockPage,
   } from "$lib/components/identities/card-unlock";
-  import { IdentitySwitch } from "$lib/components/identities/identity-switch";
+  import {
+    IdentitySwitch,
+    IdentitySwitchOutcome,
+  } from "$lib/components/identities/identity-switch";
   import { DeviceProtectionActions } from "$lib/vault/device-protection.svelte";
   import SentinelCeremonyPanel from "$lib/components/login/SentinelCeremonyPanel.svelte";
   import { SentinelCeremonyVisibility } from "$lib/vault/sentinel-unlock";
@@ -275,10 +278,20 @@
     await loadUnlockedIdentityProviders();
   }
 
-  /** An identity unlocked after "Use identity" has not read its providers
-   * yet; they need its key. */
+  /** "Use identity" left the identity locked (a PIN, or a dismissed
+   * passkey prompt), so its providers are still unread. */
+  let providersAwaitUnlock = false;
+
+  async function useIdentity(target: IdentityVaultTarget): Promise<void> {
+    const outcome = await new IdentitySwitch(vault).to(target.identityId);
+    providersAwaitUnlock = outcome === IdentitySwitchOutcome.Locked;
+  }
+
+  /** Read the providers of an identity switched to while locked, now that
+   * its key is unlocked. */
   async function loadUnlockedIdentityProviders(): Promise<void> {
-    if (!vault.deviceProtectionReady || vault.providersLoaded) return;
+    if (!providersAwaitUnlock || !vault.deviceProtectionReady) return;
+    providersAwaitUnlock = false;
     await new IdentitySwitch(vault).loadProviders();
   }
 
@@ -674,8 +687,7 @@
       onUnlock={() => void unlockIdentity()}
       onLock={lockIdentity}
       onNewIdentity={newIdentity}
-      onUseIdentity={(target: IdentityVaultTarget) =>
-        void new IdentitySwitch(vault).to(target.identityId)}
+      onUseIdentity={(target: IdentityVaultTarget) => void useIdentity(target)}
       pairingStatusFor={(storeId: string) =>
         pairingStatusLookup.statusForStore(storeId)}
       {...showLocalUnlock && !newVaultOpen && showSentinelCeremony
