@@ -89,6 +89,7 @@ test('generated WASM admits stored grant metadata and rejects malformed or forei
       devicePublicKey: 'public',
       deviceSigningPublicKey: 'signing',
       vaultName: 'Private vault',
+      identityLabel: '',
       deviceLabel: 'Laptop',
       approvedAt: 1_786_320_000_000,
       scopes: ['password-filling'],

@@ -1,12 +1,14 @@
 /**
  * The unified workspace: identities are the hub, a vault is opened from an
  * identity, and management pages are grouped by what they act on — the
- * identity itself (keys, vaults, browser settings) or the open vault (devices,
- * sync providers, backup passwords, imports).
+ * identity (keys, vaults, devices, sync providers, backup passwords, browser
+ * settings) or the open vault (imports).
  */
 export enum WorkspaceSection {
   Vault = "vault",
   Identities = "identities",
+  /** The identity's overview: its parts and how protected it is. */
+  Overview = "overview",
   Keys = "keys",
   Vaults = "vaults",
   Settings = "settings",
@@ -28,13 +30,14 @@ export class WorkspaceSectionScope {
 
   get scope(): ManageSectionScope {
     switch (this.section) {
+      case WorkspaceSection.Overview:
       case WorkspaceSection.Keys:
       case WorkspaceSection.Vaults:
       case WorkspaceSection.Devices:
       case WorkspaceSection.Sync:
       case WorkspaceSection.Settings:
-        return ManageSectionScope.Identity;
       case WorkspaceSection.Passwords:
+        return ManageSectionScope.Identity;
       case WorkspaceSection.Import:
         return ManageSectionScope.Vault;
       case WorkspaceSection.Vault:
@@ -44,14 +47,37 @@ export class WorkspaceSectionScope {
   }
 }
 
+/** Where a first-vault setup stands after its name was given. */
+export enum FirstRunStage {
+  /** No first-vault setup in progress. */
+  Off = "off",
+  /** The vault waits for this browser's passkey or PIN. */
+  Protect = "protect",
+  /** The vault exists; offer to back up its identity. */
+  Backup = "backup",
+}
+
+/** Where creating another identity stands. */
+export enum NewIdentityStage {
+  /** No identity being created. */
+  Off = "off",
+  /** The new identity is being named. */
+  Name = "name",
+  /** The new identity waits for its own passkey. */
+  Key = "key",
+  /** The identity exists; offer its first vault. */
+  Ready = "ready",
+}
+
 export class VaultUiState {
   workspaceSection = $state<WorkspaceSection>(WorkspaceSection.Vault);
-  devicesAccessIdentityProtectionOpen = $state(false);
   /** Survives panel cancellation and navigation until the identity authenticates. */
-  devicesAccessIdentityTransitionPending = $state(false);
-  /** Identity the Keys page should present first, chosen from an identity card. */
-  identityFocus = $state("");
-  /** Set by the "New identity" card so the Keys page starts identity creation. */
-  identityCreationRequested = $state(false);
+  identityTransitionPending = $state(false);
   helpOpen = $state(false);
+  firstRun = $state<FirstRunStage>(FirstRunStage.Off);
+  /** The name given on the first-vault screen, shown by the later steps. */
+  firstRunVaultName = $state("");
+  newIdentity = $state<NewIdentityStage>(NewIdentityStage.Off);
+  /** The name given to the identity being created. */
+  newIdentityName = $state("");
 }

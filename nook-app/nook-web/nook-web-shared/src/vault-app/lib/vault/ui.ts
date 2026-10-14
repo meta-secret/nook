@@ -31,6 +31,8 @@ export class WorkspaceSectionRoute {
         return WorkspaceRoute.Vault;
       case WorkspaceSection.Identities:
         return WorkspaceRoute.Identities;
+      case WorkspaceSection.Overview:
+        return WorkspaceRoute.Overview;
       case WorkspaceSection.Keys:
         return WorkspaceRoute.Keys;
       case WorkspaceSection.Vaults:
@@ -53,16 +55,27 @@ export class WorkspaceSectionRoute {
 export class VaultWorkspaceActions {
   constructor(private readonly state: UiActionsContext) {}
 
+  /** Refreshes read through the engine. A page opened by URL is applied
+   * before the engine is open; startup reads that state itself. */
   private reportRefresh(): void {
     const state = this.state;
+    if (!state.hasManager) return;
     void state.refreshDeviceState().then((refreshed) => {
-      if (refreshed.isErr())
+      if (refreshed.isOk()) return;
+      // A backup-password session has no device key to sync with; the
+      // page still shows what this browser last read.
+      const passwordSession =
+        refreshed.error instanceof StorageOperationFailure &&
+        refreshed.error.kind ===
+          StorageOperationFailureKind.DeviceAuthorizationRequired;
+      if (!passwordSession)
         state.errorMsg = state.t(refreshed.error.translationKey);
     });
   }
 
   private refreshCatalog(): void {
     const state = this.state;
+    if (!state.hasManager) return;
     void state.refreshLocalVaultCatalog().then((result) => {
       if (result.isErr()) state.errorMsg = state.t(result.error.translationKey);
     });
@@ -96,6 +109,7 @@ export class VaultWorkspaceActions {
         state.cancelAddProvider();
         this.reportRefresh();
         return;
+      case WorkspaceSection.Overview:
       case WorkspaceSection.Vaults:
       case WorkspaceSection.Sync:
       case WorkspaceSection.Passwords:
@@ -120,6 +134,9 @@ export class VaultWorkspaceActions {
         return;
       case WorkspaceRoute.Identities:
         this.applySection(WorkspaceSection.Identities);
+        return;
+      case WorkspaceRoute.Overview:
+        this.applySection(WorkspaceSection.Overview);
         return;
       case WorkspaceRoute.Keys:
         this.applySection(WorkspaceSection.Keys);

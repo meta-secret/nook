@@ -85,6 +85,8 @@
       <h2 class="text-sm font-semibold text-foreground">
         {#if addingProvider}
           {vault.t(I18N_KEYS.OnboardingAddProvider)}
+        {:else if vault.loginRequiresExistingVault}
+          {vault.t(I18N_KEYS.FirstRunRestorePick)}
         {:else}
           {vault.t(I18N_KEYS.LoginWizardChooseStoreVault)}
         {/if}
@@ -92,6 +94,8 @@
       <p class="text-xs text-muted-foreground text-pretty">
         {#if addingProvider}
           {vault.t(I18N_KEYS.LoginWizardAddProviderDesc)}
+        {:else if vault.loginRequiresExistingVault}
+          {vault.t(I18N_KEYS.FirstRunRestoreBody)}
         {:else}
           {vault.t(I18N_KEYS.LoginWizardBeforeConnectDesc)}
         {/if}

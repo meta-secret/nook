@@ -50,6 +50,9 @@ const SYNC_PROVIDER_SPECS = playwrightGates.unstable
 /** Real sync provider API — explicit manual runs only. */
 const SYNC_LIVE_SPECS = playwrightGates.manual
 
+/** Sentinel creation lives in the Sentinel app; see playwright.isolation.config.ts. */
+const SENTINEL_APP_TESTS = /@sentinel/
+
 const specPaths = (files: readonly string[]) =>
   files.map((file) => `**/${file}`)
 
@@ -58,22 +61,26 @@ const projectDefinitions: NonNullable<PlaywrightTestConfig['projects']> = [
     name: 'stable',
     testMatch: specPaths(PR_SPECS),
     fullyParallel: true,
+    grepInvert: SENTINEL_APP_TESTS,
   },
   {
     name: 'unstable',
     testMatch: specPaths(SYNC_PROVIDER_SPECS),
     fullyParallel: true,
+    grepInvert: SENTINEL_APP_TESTS,
   },
   {
     name: 'sync-live',
     testMatch: specPaths(SYNC_LIVE_SPECS),
     // Real GitHub: CI sets one NOOK_GITHUB_E2E_REPO per container — keep files serial.
     fullyParallel: false,
+    grepInvert: SENTINEL_APP_TESTS,
   },
   {
     name: 'ui-demo',
     testMatch: '**/demos/**/*.demo.spec.ts',
     fullyParallel: false,
+    grepInvert: SENTINEL_APP_TESTS,
     retries: 0,
     outputDir: uiDemoOutputDir,
     use: {

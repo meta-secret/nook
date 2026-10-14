@@ -104,6 +104,7 @@ impl LegacyStoredExtensionPairingGrant {
             vault_store_id: StoreId::parse(&self.vault_store_id)
                 .map_err(|_| ExtensionPairingStateError::InvalidLegacyState)?,
             vault_name: self.vault_name,
+            identity_label: String::new(),
             approved_at: ExtensionPairingApprovalEpochMilliseconds::from_legacy_date_to_iso_string(
                 &self.approved_at,
             )
@@ -378,6 +379,7 @@ mod tests {
                 device_label: "Nook Extension".to_owned(),
                 vault_store_id: StoreId::before_genesis_placeholder(),
                 vault_name: "Personal".to_owned(),
+                identity_label: "Personal identity".to_owned(),
                 approved_at: ExtensionPairingApprovalEpochMilliseconds::MINIMUM,
                 scopes: vec![ExtensionConnectScope::PasswordFilling],
                 sync_provider_count: 1.into(),

@@ -39,11 +39,12 @@ const runtimeKeys = [
 
 const uiKeys = [
   "workspaceSection",
-  "devicesAccessIdentityProtectionOpen",
-  "devicesAccessIdentityTransitionPending",
-  "identityFocus",
-  "identityCreationRequested",
+  "identityTransitionPending",
   "helpOpen",
+  "firstRun",
+  "firstRunVaultName",
+  "newIdentity",
+  "newIdentityName",
 ] as const satisfies readonly (keyof VaultUiState)[];
 
 const providerKeys = [
@@ -117,7 +118,6 @@ const sessionKeys = [
   "joinEnrollmentPrompt",
   "awaitingJoinApproval",
   "loginPasswordPrompt",
-  "loginDeviceKeysCapable",
   "remoteVaultRecoveryState",
   "isPasswordBusy",
   "passwordError",
@@ -203,11 +203,12 @@ class VaultStateSlicesImplementation {
   declare isInitializing: VaultRuntimeState["isInitializing"];
 
   declare workspaceSection: VaultUiState["workspaceSection"];
-  declare devicesAccessIdentityProtectionOpen: VaultUiState["devicesAccessIdentityProtectionOpen"];
-  declare devicesAccessIdentityTransitionPending: VaultUiState["devicesAccessIdentityTransitionPending"];
-  declare identityFocus: VaultUiState["identityFocus"];
-  declare identityCreationRequested: VaultUiState["identityCreationRequested"];
+  declare identityTransitionPending: VaultUiState["identityTransitionPending"];
   declare helpOpen: VaultUiState["helpOpen"];
+  declare firstRun: VaultUiState["firstRun"];
+  declare firstRunVaultName: VaultUiState["firstRunVaultName"];
+  declare newIdentity: VaultUiState["newIdentity"];
+  declare newIdentityName: VaultUiState["newIdentityName"];
 
   declare providers: VaultProviderState["providers"];
   declare providersLoaded: VaultProviderState["providersLoaded"];
@@ -277,7 +278,6 @@ class VaultStateSlicesImplementation {
   declare joinEnrollmentPrompt: VaultSessionState["joinEnrollmentPrompt"];
   declare awaitingJoinApproval: VaultSessionState["awaitingJoinApproval"];
   declare loginPasswordPrompt: VaultSessionState["loginPasswordPrompt"];
-  declare loginDeviceKeysCapable: VaultSessionState["loginDeviceKeysCapable"];
   declare remoteVaultRecoveryState: VaultSessionState["remoteVaultRecoveryState"];
   declare isPasswordBusy: VaultSessionState["isPasswordBusy"];
   declare passwordError: VaultSessionState["passwordError"];

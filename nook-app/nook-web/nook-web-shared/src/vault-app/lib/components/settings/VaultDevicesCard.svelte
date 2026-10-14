@@ -32,22 +32,9 @@ Membership is identity-level; every vault the identity owns follows it.
     TriangleAlert,
     X,
   } from "@lucide/svelte";
-  import { configured_vault_application_supports_extension } from "$app-wasm";
   import { Button } from "$lib/components/ui/button";
-  import {
-    extensionConnectionBrowser,
-    PairedExtensionDiscoveryFailure,
-  } from "$lib/extension/connect";
-  import {
-    ExtensionSetupStatus,
-    extensionInstallationBrowser,
-  } from "$lib/extension/install";
   import type { VaultState } from "$lib/vault.svelte";
   import { VaultType } from "$lib/vault/architecture-model";
-  import {
-    ExtensionSetupOfferKind,
-    type ExtensionSetupOffer,
-  } from "$lib/app/extension-setup";
   import {
     MemberDetailsKind,
     MemberRenameKind,
@@ -57,7 +44,6 @@ Membership is identity-level; every vault the identity owns follows it.
     type MemberRevocation,
   } from "./vault-devices-card-state";
 
-  const SUPPORTS_EXTENSION = configured_vault_application_supports_extension();
 
   let {
     vault,
@@ -87,108 +73,9 @@ Membership is identity-level; every vault the identity owns follows it.
   let revokeAppId = $state<MemberRevocation>({
     kind: MemberRevocationKind.Idle,
   });
-  let extensionSetupState = $state<ExtensionSetupOffer>({
-    kind: ExtensionSetupOfferKind.Hidden,
-  });
-  let extensionInstallBusy = $state(false);
-  let extensionConnectError = $state(false);
   const isSentinelVault = $derived(
     vault.vaultArchitecture.vault_type === VaultType.Sentinel,
   );
-
-  async function refreshExtensionSetupStatus() {
-    if (!SUPPORTS_EXTENSION) return;
-    try {
-      const state =
-        await extensionInstallationBrowser.resolveExtensionSetupState(
-          vault.activeVault,
-        );
-      extensionSetupState = (() => {
-        const shouldOfferExtensionSetupArgs: Parameters<
-          typeof extensionInstallationBrowser.shouldOfferExtensionSetup
-        >[0] = { status: state.status, environment: navigator };
-        return extensionInstallationBrowser.shouldOfferExtensionSetup(
-          shouldOfferExtensionSetupArgs,
-        );
-      })()
-        ? { kind: ExtensionSetupOfferKind.Visible, setup: state }
-        : { kind: ExtensionSetupOfferKind.Hidden };
-    } catch (failure) {
-      if (!(failure instanceof PairedExtensionDiscoveryFailure)) throw failure;
-      vault.errorMsg = vault.t(failure.translationKey);
-    }
-  }
-
-  async function handleExtensionInstall() {
-    extensionInstallBusy = true;
-    try {
-      const target =
-        await extensionInstallationBrowser.loadExtensionInstallTarget();
-      extensionInstallationBrowser.openExtensionInstallTarget(target);
-    } finally {
-      extensionInstallBusy = false;
-    }
-  }
-
-  async function handleExtensionConnect() {
-    extensionInstallBusy = true;
-    extensionConnectError = false;
-    try {
-      extensionConnectError =
-        !(await extensionConnectionBrowser.openInstalledExtension());
-    } finally {
-      extensionInstallBusy = false;
-    }
-  }
-
-  async function handleExtensionSetupAction() {
-    if (extensionSetupState.kind !== ExtensionSetupOfferKind.Visible) return;
-    const state = extensionSetupState.setup;
-    if (state.status === ExtensionSetupStatus.NotInstalled) {
-      await handleExtensionInstall();
-      return;
-    }
-    await handleExtensionConnect();
-  }
-
-  function extensionStatusLabel(status: ExtensionSetupStatus): string {
-    if (status === ExtensionSetupStatus.NotInstalled) {
-      return vault.t(I18N_KEYS.ExtensionSetupStatusNotInstalled);
-    }
-    if (status === ExtensionSetupStatus.InstalledUnpaired) {
-      return vault.t(I18N_KEYS.ExtensionSetupStatusInstalledUnpaired);
-    }
-    if (status === ExtensionSetupStatus.PairedElsewhere) {
-      return vault.t(I18N_KEYS.ExtensionSetupStatusPairedElsewhere);
-    }
-    return vault.t(I18N_KEYS.ExtensionSetupStatusPaired);
-  }
-
-  $effect(() => {
-    void vault.activeVault;
-    void refreshExtensionSetupStatus();
-
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        void refreshExtensionSetupStatus();
-      }
-    };
-    document.addEventListener("visibilitychange", onVisibilityChange);
-
-    const observer = new MutationObserver(() => {
-      void refreshExtensionSetupStatus();
-    });
-    const observeArgs: Parameters<typeof observer.observe>[1] = {
-      attributes: true,
-      attributeFilter: ["data-nook-extension-runtime-id"],
-    };
-    observer.observe(document.documentElement, observeArgs);
-
-    return () => {
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-      observer.disconnect();
-    };
-  });
 
   type MemberComparison = readonly [
     left: IdentityMemberView,
@@ -283,94 +170,6 @@ Membership is identity-level; every vault the identity owns follows it.
 
 
 <div class="space-y-4" data-testid="vault-devices-card">
-  {#if SUPPORTS_EXTENSION && extensionSetupState.kind === ExtensionSetupOfferKind.Visible}
-    {@const extensionSetup = extensionSetupState.setup}
-    <section
-      class="space-y-2 rounded-lg border border-border/40 bg-background/60 p-3 sm:border-border/60"
-      data-testid="extension-setup-settings"
-      data-status={extensionSetup.status}
-    >
-      <div class="flex items-start justify-between gap-3">
-        <div class="min-w-0 space-y-1">
-          <h3 class="text-sm font-semibold text-foreground">
-            {vault.t(I18N_KEYS.ExtensionSetupSettingsTitle)}
-          </h3>
-          <p class="text-xs leading-relaxed text-muted-foreground">
-            {vault.t(I18N_KEYS.ExtensionSetupSettingsBody)}
-          </p>
-        </div>
-        {#if extensionSetup}
-          <span
-            class="nk-tag shrink-0"
-            data-testid="extension-setup-settings-status"
-          >
-            {extensionStatusLabel(extensionSetup.status)}
-          </span>
-        {/if}
-      </div>
-      {#if extensionSetup.status === ExtensionSetupStatus.PairedElsewhere}
-        <p
-          class="font-mono text-[11px] leading-relaxed text-amber-700 dark:text-amber-300"
-          data-testid="extension-setup-settings-connected-vault"
-        >
-          {(() => {
-            const tArgs: Parameters<typeof vault.t>[0] = {
-              key: I18N_KEYS.ExtensionSetupConnectedVault,
-              replacements: {
-                vault: ((v) => (v ? v : ""))(extensionSetup.connectedVaultName),
-                store: ((v) => (v ? v : ""))(
-                  extensionSetup.connectedVaultStoreId,
-                ),
-              },
-            };
-            return vault.t(tArgs);
-          })()}
-        </p>
-      {/if}
-      {#if extensionSetup.status === ExtensionSetupStatus.InstalledUnpaired || extensionSetup.status === ExtensionSetupStatus.PairedElsewhere}
-        <p class="text-[11px] leading-relaxed text-muted-foreground/80">
-          {vault.t(I18N_KEYS.ExtensionSetupPairHint)}
-        </p>
-        {#if extensionConnectError}
-          <p class="text-xs text-destructive" role="alert">
-            {vault.t(I18N_KEYS.ExtensionSetupConnectFailed)}
-          </p>
-        {/if}
-      {/if}
-      {#if extensionSetup.status !== ExtensionSetupStatus.Paired}
-        <Button
-          type="button"
-          size="sm"
-          variant={extensionSetup.status === ExtensionSetupStatus.NotInstalled
-            ? "default"
-            : "outline"}
-          class={extensionSetup.status === ExtensionSetupStatus.NotInstalled
-            ? ""
-            : "border-border"}
-          disabled={extensionInstallBusy || isBusy}
-          data-testid="extension-setup-settings-cta"
-          onclick={() => void handleExtensionSetupAction()}
-        >
-          {#if extensionInstallBusy}
-            {vault.t(
-              extensionSetup.status === ExtensionSetupStatus.NotInstalled
-                ? I18N_KEYS.ExtensionSetupLoadingInstall
-                : I18N_KEYS.ExtensionSetupOpeningExtension,
-            )}
-          {:else if extensionSetup.status === ExtensionSetupStatus.NotInstalled}
-            {vault.t(I18N_KEYS.ExtensionSetupInstallCta)}
-          {:else}
-            {vault.t(
-              extensionSetup.status === ExtensionSetupStatus.PairedElsewhere
-                ? I18N_KEYS.ExtensionSetupSwitchCta
-                : I18N_KEYS.ExtensionSetupConnectCta,
-            )}
-          {/if}
-        </Button>
-      {/if}
-    </section>
-  {/if}
-
   {#if members.length <= 1}
     <div
       class="nk-banner nk-banner-warning flex items-start gap-2 px-3 py-2 text-xs leading-relaxed text-foreground"
@@ -477,27 +276,6 @@ Membership is identity-level; every vault the identity owns follows it.
   {/if}
 
   <section class="space-y-2">
-    <div class="flex items-center justify-between gap-3">
-      <div class="min-w-0 space-y-1">
-        <h3 class="text-sm font-semibold text-foreground">
-          {vault.t(I18N_KEYS.IdentityControlMembersTitle)}
-        </h3>
-        <p class="text-xs leading-relaxed text-muted-foreground">
-          {vault.t(I18N_KEYS.IdentityControlMembersDescription)}
-        </p>
-      </div>
-      <span class="shrink-0 text-xs text-muted-foreground">
-        {members.length === 1
-          ? vault.t(I18N_KEYS.DevicesCardDeviceCountSingular)
-          : (() => {
-              const countArgs: Parameters<typeof vault.t>[0] = {
-                key: I18N_KEYS.DevicesCardDeviceCountPlural,
-                replacements: { count: String(members.length) },
-              };
-              return vault.t(countArgs);
-            })()}
-      </span>
-    </div>
 
     {#if sortedMembers.length === 0}
       <div

@@ -92,10 +92,10 @@ test.describe('identity onboarding provider picker', () => {
     }
 
     await page.reload()
-    await expect(page.getByTestId('login-local-vault-detected')).toBeVisible({
+    await expect(page.getByTestId('identity-vault-row').first()).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await page.getByTestId('unlock-vault-btn').click()
+    await page.getByTestId('identity-vault-row').first().click()
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })

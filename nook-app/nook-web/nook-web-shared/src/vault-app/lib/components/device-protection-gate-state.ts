@@ -8,6 +8,8 @@ export enum DeviceProtectionGateFrame {
   SetupStep = "setup-step",
   /** @public Used from Svelte templates; Knip cannot trace enum members there. */
   HostSection = "host-section",
+  /** The host already titles and explains the step; the gate shows controls only. */
+  Embedded = "embedded",
 }
 
 export enum DeviceProtectionSetupWorkflow {

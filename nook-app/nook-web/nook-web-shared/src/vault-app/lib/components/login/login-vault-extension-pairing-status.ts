@@ -1,9 +1,5 @@
 import type { PairedExtensionIdentityDiscovery } from "$lib/extension/connect";
 import { ExtensionPairedVaultIdentityStatusMessageStatus } from "$web-shared/extension/paired-vault-identity-status";
-import {
-  LoginVaultEntryKind,
-  type LoginVaultEntry,
-} from "./login-unlock-state";
 
 export enum LoginVaultExtensionPairingStatusKind {
   NotShown = "not-shown",
@@ -97,16 +93,4 @@ export class LoginVaultExtensionPairingStatusLookup {
         return { kind: LoginVaultExtensionPairingStatusKind.Unavailable };
     }
   }
-}
-
-export function statusForActiveVault(
-  entries: readonly LoginVaultExtensionPairingStatusEntry[],
-): (activeLoginVault: LoginVaultEntry) => LoginVaultExtensionPairingStatus {
-  const lookup = new LoginVaultExtensionPairingStatusLookup(entries);
-  return (activeLoginVault) => {
-    if (activeLoginVault.kind !== LoginVaultEntryKind.Available) {
-      return { kind: LoginVaultExtensionPairingStatusKind.NotShown };
-    }
-    return lookup.statusForStore(activeLoginVault.entry.storeId);
-  };
 }

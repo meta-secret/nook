@@ -57,9 +57,9 @@ pub(crate) use sync::{
 };
 pub use vault::domain_numbers::*;
 pub(crate) use vault::{
-    database, device_access, vault_access_diagnostics, vault_architecture, vault_client_policy,
-    vault_connect, vault_event_session, vault_format, vault_ids, vault_runtime_policy,
-    vault_search_catalog, vault_security, vault_sentinel_genesis, vault_sentinel_onboarding,
+    database, device_access, identity_health, vault_access_diagnostics, vault_architecture,
+    vault_client_policy, vault_connect, vault_event_session, vault_format, vault_ids,
+    vault_runtime_policy, vault_search_catalog, vault_sentinel_genesis, vault_sentinel_onboarding,
     vault_sentinel_unlock, vault_session, vault_session_cache, vault_wire,
 };
 
@@ -124,6 +124,9 @@ pub use extension_identity_handoff::{
 pub use google_authenticator_import::{
     GoogleAuthenticatorImportError, GoogleAuthenticatorImportPlan,
     GoogleAuthenticatorMigrationInput, GoogleAuthenticatorMigrationQrCodeCount,
+};
+pub use identity_health::{
+    IdentityHealth, IdentityHealthAssessment, IdentityHealthStage, IdentityNextStep, IdentityNudge,
 };
 pub use import_support::{SecretImportSourceRecordCount, SecretImportUnsupportedRecordCount};
 pub use keepassxc_import::{KeePassXcCsvInput, KeePassXcImportError, KeePassXcImportPlan};
@@ -196,7 +199,6 @@ pub use secret_view::{
     LoginWebsiteHost, SecretFormFields, SecretGroupKey, SecretListItem, SecretListItemData,
     SecureNoteSecretForm, SeedPhraseSecretForm, SeedPhraseWordCount, WebsiteHost, WebsiteHostError,
 };
-pub use vault_security::{VaultSecurityAssessment, VaultSecurityRecommendations};
 pub use vault_sentinel_onboarding::{
     AcceptedSentinelOnboarding, SentinelOnboardingIssuance, SentinelOnboardingPackage,
     SentinelOnboardingRecipient, SentinelOnboardingVersion,
@@ -316,19 +318,20 @@ pub use sync_provider_credentials::{
 pub use sync_provider_store::{
     ActiveProviderCredentialDraft, ActiveProviderCredentialsProjection,
     ActiveProviderCredentialsRequest, ActiveProviderLoginSetup, ActiveVaultProviderRows,
-    ActiveVaultScope, AuthProvidersSnapshotData, DraftStorageConnection, DuplicateCandidatePolicy,
-    DuplicateProviderSelection, DuplicateSyncProvider, EnrollmentAudience, GithubStorageDraft,
-    GoogleOAuthTokenInput, ICloudOAuthTokenInput, IdentityMountCapability, LayoutRemoteRef,
-    LegacyAuthProvidersSnapshot, LocalFolderConfigData, LocalProviderRowChange,
-    LocalProviderRowOutcome, LocalProviderRowRequest, LocalProviderSelection, ManagerStoreScopeRef,
-    NormalizedAuthSnapshot, OAuthAccessToken, OAuthAccessTokenRef, OAuthFileConfigData,
-    OAuthRemoteConfigurationUpdate, OAuthRemoteStorageReference, OAuthStorageDraft,
-    OAuthStorageReference, ProviderEnrollmentRequest, ProviderEventFlushTarget, ProviderId,
-    ProviderLabelLabels, ProviderReplicationTarget, ProviderRowLayout, ProviderRows,
-    ProviderSaveOutcome, ProviderSaveRemoteTarget, ProviderSaveRequest, ProviderSaveSetup,
-    ProviderSelection, ProviderSelectionPolicy, ProviderSelectionRequest,
-    ProviderStorageDetailLabels, ProviderSyncCheckpoint, ProviderSyncRevision,
-    ProviderSyncRevisionRef, ProviderSyncedVaultVersion, ProviderVaultScope, ProviderWireMigration,
+    ActiveVaultScope, AuthProvidersSnapshotData, DeviceJoinReach, DraftStorageConnection,
+    DuplicateCandidatePolicy, DuplicateProviderSelection, DuplicateSyncProvider,
+    EnrollmentAudience, GithubStorageDraft, GoogleOAuthTokenInput, ICloudOAuthTokenInput,
+    IdentityMountCapability, LayoutRemoteRef, LegacyAuthProvidersSnapshot, LocalFolderConfigData,
+    LocalProviderRowChange, LocalProviderRowOutcome, LocalProviderRowRequest,
+    LocalProviderSelection, ManagerStoreScopeRef, NormalizedAuthSnapshot, OAuthAccessToken,
+    OAuthAccessTokenRef, OAuthFileConfigData, OAuthRemoteConfigurationUpdate,
+    OAuthRemoteStorageReference, OAuthStorageDraft, OAuthStorageReference,
+    ProviderEnrollmentRequest, ProviderEventFlushTarget, ProviderId, ProviderLabelLabels,
+    ProviderReplicationTarget, ProviderRowLayout, ProviderRows, ProviderSaveOutcome,
+    ProviderSaveRemoteTarget, ProviderSaveRequest, ProviderSaveSetup, ProviderSelection,
+    ProviderSelectionPolicy, ProviderSelectionRequest, ProviderStorageDetailLabels,
+    ProviderSyncCheckpoint, ProviderSyncRevision, ProviderSyncRevisionRef,
+    ProviderSyncedVaultVersion, ProviderVaultScope, ProviderWireMigration,
     RemoteEventFlushProviderRequest, SharedGoogleEnrollmentAudience, SharedGrantProviderSelection,
     StagedGithubConnection, StagedOAuthConnection, StagedRemoteConnection, StagedStorageConnection,
     StorageConnectArgs, StorageProvider, StorageProviderData, StoredGithubPat,

@@ -38,7 +38,7 @@ test.describe('authenticated shell height', () => {
     expect(adminHeight).toBeCloseTo(vaultHeight, 0)
 
     await openManagePage(page, ManagePage.Devices)
-    await expect(page.getByTestId('onboard-device-panel')).toBeVisible()
+    await expect(page.getByTestId('vault-devices-panel')).toBeVisible()
     const onboardHeight = ((v) => (v ? v : 0))(
       (await shell.boundingBox())?.height,
     )
@@ -48,18 +48,11 @@ test.describe('authenticated shell height', () => {
     const keysHeight = ((v) => (v ? v : 0))((await shell.boundingBox())?.height)
     expect(keysHeight).toBeCloseTo(vaultHeight, 0)
 
-    await openManagePage(page, ManagePage.Devices)
-    await expect(page.getByTestId('vault-devices-section')).toBeVisible()
-    await expect(page.getByTestId('extension-setup-settings')).toBeVisible()
-    await expect(page.getByTestId('extension-setup-settings')).toHaveAttribute(
-      'data-status',
-      'not_installed',
-    )
-    await expect(page.getByTestId('extension-setup-settings-cta')).toBeVisible()
-    const settingsHeight = ((v) => (v ? v : 0))(
+    await openManagePage(page, ManagePage.Overview)
+    const overviewHeight = ((v) => (v ? v : 0))(
       (await shell.boundingBox())?.height,
     )
-    expect(settingsHeight).toBeCloseTo(vaultHeight, 0)
+    expect(overviewHeight).toBeCloseTo(vaultHeight, 0)
 
     await openVaultPage(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible()
@@ -112,25 +105,15 @@ test.describe('authenticated shell height', () => {
     }
   })
 
-  test('keeps every expanded security recommendation reachable in a short viewport', async ({
-    page,
-  }) => {
+  test('keeps the overview reachable in a short viewport', async ({ page }) => {
     const viewport = { width: 1280, height: 600 }
     await page.setViewportSize(viewport)
-    await page.getByTestId('security-guide-toggle').click()
+    await openManagePage(page, ManagePage.Overview)
 
-    const shellScroll = page.locator('.shell-scroll')
-    const scrollRange = await shellScroll.evaluate(
-      (element) => element.scrollHeight - element.clientHeight,
-    )
-    expect(scrollRange).toBeGreaterThan(0)
-
-    const addDevice = page.getByTestId('security-guide-add-device')
-    await addDevice.scrollIntoViewIfNeeded()
-    await expect(addDevice).toBeInViewport()
-    await expect
-      .poll(() => shellScroll.evaluate((element) => element.scrollTop))
-      .toBeGreaterThan(0)
+    // The page scrolls inside the shell; the status line stays in view.
+    const security = page.getByTestId('overview-security')
+    await security.scrollIntoViewIfNeeded()
+    await expect(security).toBeInViewport()
     await expect(page.getByTestId('vault-status-bar')).toBeInViewport()
   })
 
@@ -142,7 +125,7 @@ test.describe('authenticated shell height', () => {
     await page.getByTestId('item-type-secure-note').click()
 
     await expect(page.getByTestId('page-bar-back')).toBeVisible()
-    await expect(page.getByTestId('extension-install-setup')).toHaveCount(0)
+    await expect(page.getByTestId('vault-extension-install')).toHaveCount(0)
     await expect(page.getByTestId('add-secret-cancel-btn')).toBeInViewport()
     await expect(page.getByTestId('save-secret-btn')).toBeInViewport()
 
@@ -156,7 +139,7 @@ test.describe('authenticated shell height', () => {
     await page.setViewportSize({ width: 390, height: 500 })
 
     await page.getByTestId('markdown-editor').scrollIntoViewIfNeeded()
-    await expect(page.getByTestId('extension-install-setup')).toHaveCount(0)
+    await expect(page.getByTestId('vault-extension-install')).toHaveCount(0)
     await expect(page.getByTestId('markdown-editor')).toBeInViewport()
     await expect(page.getByTestId('page-bar-back')).toBeInViewport()
     await expect

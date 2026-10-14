@@ -1,14 +1,12 @@
 use crate::types::NookAppLocale;
 use crate::{
     NookAuthenticationOutcomeObservation, NookAuthenticationOutcomeVerdict,
-    NookAuthenticationPageObservations, NookAuthenticationWorkflowMatch,
-    NookVaultSecurityRecommendations,
+    NookAuthenticationPageObservations, NookAuthenticationWorkflowMatch, NookIdentityHealth,
 };
 use nook_core::AuthenticationWorkflowMatch;
 use nook_core::SupportedAppLocale;
-use nook_core::VaultSecurityAssessment;
-use nook_core::VaultSecurityRecommendations;
 use nook_core::{AppLocale, VaultRecoveryErrorKind};
+use nook_core::{IdentityHealth, IdentityHealthAssessment};
 use nook_core::{
     LookupTranslationRequest, MergeTranslationCatalogsRequest, ResolveErrorMessageRequest,
     ResolveTranslationCatalogRequest, TranslateFromCatalogRequest, TranslateRequest,
@@ -64,19 +62,21 @@ impl From<nook_core::AppLocale> for NookAppLocaleParse {
     dylint_lib = "nook_domain_api",
     expect(
         raw_numeric_public_api,
-        reason = "FFI boundary: projects the `assess_vault_security` count through a JavaScript Number scalar"
+        reason = "FFI boundary: projects the `assess_identity_health` counts through JavaScript Number scalars"
     )
 )]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn assess_vault_security(
-    sync_provider_count: u32,
-    enrolled_device_count: u32,
-) -> NookVaultSecurityRecommendations {
-    NookVaultSecurityRecommendations::from_core(
-        VaultSecurityRecommendations::assess_vault_security(VaultSecurityAssessment {
-            sync_provider_count: (sync_provider_count as usize).into(),
-            enrolled_device_count: (enrolled_device_count as usize).into(),
-        }),
-    )
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn assess_identity_health(
+    copy_provider_count: u32,
+    device_join_provider_count: u32,
+    app_count: u32,
+    stored_item_count: u32,
+) -> NookIdentityHealth {
+    NookIdentityHealth::from_core(IdentityHealth::assess(IdentityHealthAssessment {
+        copy_provider_count: (copy_provider_count as usize).into(),
+        device_join_provider_count: (device_join_provider_count as usize).into(),
+        app_count: (app_count as usize).into(),
+        stored_item_count: (stored_item_count as usize).into(),
+    }))
 }
 
 #[wasm_bindgen]

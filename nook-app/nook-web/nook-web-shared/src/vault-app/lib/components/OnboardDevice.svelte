@@ -4,6 +4,8 @@ joins through, share a one-time passphrase, and create the code. A member
 approves the join on the Devices page.
 -->
 <script lang="ts">
+  import JoinFlowDiagram from '$lib/components/join/JoinFlowDiagram.svelte'
+  import { JoinSide } from '$lib/components/join/join-flow'
   import type { EnrollmentCodeIssueResult } from '$lib/vault/enrollment-issue-failure'
   type IdentityCodeIssue = {
     readonly providerId: string
@@ -23,7 +25,10 @@ approves the join on the Devices page.
     localizedProviderStorageDetail,
     type StorageProvider,
   } from '$lib/auth/providers'
-  import { peek_enrollment_issued_at } from '$app-wasm'
+  import {
+    peek_enrollment_issued_at,
+    provider_carries_device_join,
+  } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
   import {
     OnboardingType,
@@ -56,13 +61,16 @@ approves the join on the Devices page.
   let localError = $state('')
   let isGenerating = $state(false)
 
-  /** Mounts that can replicate this vault's architecture. */
+  /** Cloud mounts another device can reach that replicate this vault's
+   * architecture. A local folder keeps a copy but cannot carry a join. */
   const compatibleMounts = $derived(
-    mounts.filter((provider) =>
-      provider_supports_replication(
-        provider,
-        vault.vaultArchitecture.replication_type,
-      ),
+    mounts.filter(
+      (provider) =>
+        provider_carries_device_join(provider) &&
+        provider_supports_replication(
+          provider,
+          vault.vaultArchitecture.replication_type,
+        ),
     ),
   )
   const selectedProvider = $derived(
@@ -160,12 +168,14 @@ approves the join on the Devices page.
     </p>
   </div>
 
+  <JoinFlowDiagram {vault} side={JoinSide.Inviting} />
+
   {#if compatibleMounts.length === 0}
     <div
       class="nk-banner nk-banner-warning flex flex-col gap-2 p-3 text-sm text-foreground sm:flex-row sm:items-center sm:justify-between"
       data-testid="onboard-no-identity-mount"
     >
-      <span>{vault.t(I18N_KEYS.IdentityControlNoMounts)}</span>
+      <span>{vault.t(I18N_KEYS.IdentityControlNoDeviceJoinMounts)}</span>
       <Button
         type="button"
         size="sm"

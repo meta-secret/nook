@@ -3,6 +3,7 @@
 pub(crate) mod database;
 pub(crate) mod device_access;
 pub(crate) mod domain_numbers;
+pub(crate) mod identity_health;
 pub(crate) mod vault_access_diagnostics;
 pub(crate) mod vault_architecture;
 pub(crate) mod vault_client_policy;
@@ -13,7 +14,6 @@ pub(crate) mod vault_ids;
 pub(crate) mod vault_recovery_options;
 pub(crate) mod vault_runtime_policy;
 pub(crate) mod vault_search_catalog;
-pub(crate) mod vault_security;
 pub(crate) mod vault_sentinel_genesis;
 pub(crate) mod vault_sentinel_onboarding;
 pub(crate) mod vault_sentinel_unlock;

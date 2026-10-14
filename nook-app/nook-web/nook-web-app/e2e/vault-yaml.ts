@@ -1,5 +1,4 @@
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
-import { UnlockMethod } from '$lib/components/login/login-unlock-state'
 
 /** Parsed shape of nook-events (matches nook-core StoredVaultYaml). */
 enum StoredSecretRecordType {
@@ -443,6 +442,12 @@ export type PasswordEnvelopeCiphertextState =
       ciphertext: string
     }
 
+/** How a stored vault is opened: device-key rows, or backup passwords only. */
+export enum VaultUnlockMode {
+  Keys = 'keys',
+  Password = 'password',
+}
+
 export type VaultYamlSnapshot = {
   raw: string
   secretIds: string[]
@@ -451,7 +456,7 @@ export type VaultYamlSnapshot = {
   memberPkIds: string[]
   /** Count of sentinel share records / issued share payloads observed. */
   sentinelShareCount: number
-  unlockMode: UnlockMethod
+  unlockMode: VaultUnlockMode
   hasPasswordEnvelope: boolean
   /**
    * Raw ciphertext of the active password envelope (when present). Useful
@@ -504,10 +509,10 @@ export function parseVaultYamlSnapshot(yaml: string): VaultYamlSnapshot {
   // password_entries.
   const unlockMode =
     authPkIds.length > 0
-      ? UnlockMethod.Keys
+      ? VaultUnlockMode.Keys
       : hasPasswordEnvelope
-        ? UnlockMethod.Password
-        : UnlockMethod.Keys
+        ? VaultUnlockMode.Password
+        : VaultUnlockMode.Keys
   const activeEnvelope = passwordEntries[0]?.envelope
   const passwordEnvelopeCiphertext: PasswordEnvelopeCiphertextState =
     typeof activeEnvelope?.ciphertext === 'string'

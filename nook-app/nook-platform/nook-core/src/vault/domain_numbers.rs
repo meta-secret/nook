@@ -126,6 +126,16 @@ impl From<EnrolledDeviceCount> for usize {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct SecretRecordCount(usize);
 
+impl SecretRecordCount {
+    pub(crate) const fn is_zero(self) -> bool {
+        self.0 == 0
+    }
+
+    pub(crate) const fn is_at_least(self, threshold: usize) -> bool {
+        self.0 >= threshold
+    }
+}
+
 impl From<usize> for SecretRecordCount {
     fn from(value: usize) -> Self {
         Self(value)

@@ -57,6 +57,7 @@
     isInitializing,
     addProviderOpen = false,
     embedded = false,
+    backWithoutSaved = false,
     loginSetup,
     githubPat = $bindable(''),
     githubRepo = $bindable(DEFAULT_GITHUB_REPO),
@@ -75,6 +76,9 @@
     isInitializing: boolean
     addProviderOpen?: boolean
     embedded?: boolean
+    /** Offer Back while adding even with no saved provider; a host with
+     * its own Back (the first run) leaves this off. */
+    backWithoutSaved?: boolean
     loginSetup: LoginSetup
     githubPat: string
     githubRepo: string
@@ -151,16 +155,22 @@
       class="flex items-start justify-between gap-3 border-b border-border/60 pb-4"
     >
       <div class="space-y-1">
-        <button
-          type="button"
-          class="mb-2 inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-          data-testid="cancel-add-provider-btn"
-          onclick={() =>
-            showSetup ? onCancelSetup() : onCancelAddProvider?.()}
-        >
-          <ChevronLeft class="size-3.5" />
-          {vault.t(I18N_KEYS.OnboardingBackToSaved)}
-        </button>
+        <!-- Back to the saved list (or the empty list). A host with its own
+             Back leaves the picker itself when nothing is saved. -->
+        {#if syncProviders.length > 0 || backWithoutSaved}
+          <button
+            type="button"
+            class="mb-2 inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+            data-testid="cancel-add-provider-btn"
+            onclick={() =>
+              showSetup ? onCancelSetup() : onCancelAddProvider?.()}
+          >
+            <ChevronLeft class="size-3.5" />
+            {syncProviders.length > 0
+              ? vault.t(I18N_KEYS.OnboardingBackToSaved)
+              : vault.t(I18N_KEYS.CommonBack)}
+          </button>
+        {/if}
         <h2 class="text-base font-semibold text-foreground">
           {#if showSetup}
             {(() => {
@@ -256,14 +266,9 @@
                 >
                   <Cloud class="size-4" />
                 </div>
-                <div class="min-w-0 space-y-1">
-                  <p class="text-sm font-medium text-foreground">
-                    {vault.t(I18N_KEYS.AuthStorageNoSyncProviders)}
-                  </p>
-                  <p class="text-xs text-pretty text-muted-foreground">
-                    {vault.t(I18N_KEYS.AuthStorageSyncProvidersDesc)}
-                  </p>
-                </div>
+                <p class="min-w-0 self-center text-sm font-medium text-foreground">
+                  {vault.t(I18N_KEYS.AuthStorageNoSyncProviders)}
+                </p>
               </div>
               <div class="mt-3">
                 <Button
