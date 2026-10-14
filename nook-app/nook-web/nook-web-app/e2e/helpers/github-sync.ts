@@ -11,7 +11,6 @@ import {
   githubRepoContext,
 } from '../github-api'
 import {
-  assertGenesisVaultYaml,
   parseVaultEventLogSnapshot,
   parseVaultYamlSnapshot,
   waitForVaultEventLogSnapshot,
@@ -300,17 +299,6 @@ export async function flushRemoteEventsToSyncProviders(page: Page) {
     await vault?.runFanOutSyncAfterLocalSave?.()
   })
   await waitForVaultOperationsIdle(page)
-}
-
-export async function assertGenesisVaultOnSyncRemote(remote: {
-  getEventFileContents: () => string[]
-}) {
-  const snapshot = await waitForSyncRemoteVaultState(
-    remote,
-    (yaml) => yaml.authPkIds.length >= 1 && yaml.memberPkIds.length >= 1,
-  )
-  assertGenesisVaultYaml(snapshot)
-  return snapshot
 }
 
 /** Wait until sync target has the expected vault state (local e2e remote or live GitHub). */

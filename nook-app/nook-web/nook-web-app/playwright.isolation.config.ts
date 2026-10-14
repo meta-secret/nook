@@ -15,6 +15,10 @@ export default defineConfig({
   testDir: 'e2e',
   testMatch: playwrightGates.isolation.map((file) => `**/${file}`),
   timeout: 90_000,
+  // Both apps run on Vite dev servers that compile on first request, and
+  // the Sentinel tests drive several browsers at once; in parallel they
+  // starve each other's first page loads.
+  workers: 1,
   reporter: process.env.CI ? 'line' : 'list',
   use: {
     trace: 'on-first-retry',
@@ -47,6 +51,18 @@ export default defineConfig({
     },
     {
       name: 'sentinel-isolation',
+      use: { baseURL: 'http://127.0.0.1:5175' },
+    },
+    {
+      // The unified and Simple apps never offer Sentinel; its creation and
+      // ceremony tests run here, against the Sentinel app itself.
+      name: 'sentinel-app',
+      testMatch: [
+        '**/vault-architecture-modes.spec.ts',
+        '**/device-key-protection.spec.ts',
+        '**/sentinel-unlock-ceremony.spec.ts',
+      ],
+      grep: /@sentinel/,
       use: { baseURL: 'http://127.0.0.1:5175' },
     },
   ],

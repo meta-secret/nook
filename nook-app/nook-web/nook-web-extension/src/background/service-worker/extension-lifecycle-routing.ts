@@ -12,6 +12,8 @@ import type * as PairingIdentity from './pairing-identity'
 import type * as PairingImport from './pairing-import'
 import { LocalEventLogUpdateFailure } from './pairing-import'
 import type * as PairingStateQuery from './pairing-state-query'
+import type * as PairedVaults from './paired-vaults'
+import type * as PairedVaultsMessages from '../../lib/paired-vaults'
 import type * as SessionLifecycle from './session-lifecycle'
 import { ExtensionSessionLifecycle } from './session-lifecycle'
 import type * as SessionRuntimeMessages from './session-runtime-messages'
@@ -51,6 +53,10 @@ export type ExtensionLifecycleRoutingDependencies = {
   ensureExtensionSessionDocument: typeof SessionLifecycle.extensionSessionLifecycle.ensureExtensionSessionDocument
   extensionSessionDocument: typeof SessionLifecycle.extensionSessionDocument
   handlePairingStateQuery: typeof PairingStateQuery.handlePairingStateQuery
+  handlePairedVaultsQuery: typeof PairedVaults.handlePairedVaultsQuery
+  handleDefaultVaultSelect: typeof PairedVaults.handleDefaultVaultSelect
+  decodePairedVaultsQueryMessage: typeof PairedVaultsMessages.pairedVaultsMessages.decodeQuery
+  decodeDefaultVaultSelectMessage: typeof PairedVaultsMessages.pairedVaultsMessages.decodeSelectDefault
   decodePairingApprovedMessage: typeof RuntimeMessages.ExtensionPairingApprovedMessage.decode
   importLocalEventLogUpdate: typeof PairingImport.importLocalEventLogUpdate
   importPairingAfterCompanionReady: typeof PairingImport.importPairingAfterCompanionReady
@@ -456,6 +462,10 @@ export function routeExtensionLifecycleMessage({
     ensureExtensionSessionDocument,
     extensionSessionDocument,
     handlePairingStateQuery,
+    handlePairedVaultsQuery,
+    handleDefaultVaultSelect,
+    decodePairedVaultsQueryMessage,
+    decodeDefaultVaultSelectMessage,
     decodePairingApprovedMessage,
     importLocalEventLogUpdate,
     importPairingAfterCompanionReady,
@@ -485,6 +495,31 @@ export function routeExtensionLifecycleMessage({
       sendResponse,
     }
     return handlePairingStateQuery(queryContext)
+  }
+
+  const pairedVaultsQuery = runConcreteDecoder(
+    decodePairedVaultsQueryMessage,
+    message,
+  )
+  if (pairedVaultsQuery.kind === ConcreteDecoderResultKind.Decoded) {
+    const pairedVaultsContext: Parameters<typeof handlePairedVaultsQuery>[0] = {
+      sender,
+      sendResponse,
+    }
+    return handlePairedVaultsQuery(pairedVaultsContext)
+  }
+
+  const defaultVaultSelect = runConcreteDecoder(
+    decodeDefaultVaultSelectMessage,
+    message,
+  )
+  if (defaultVaultSelect.kind === ConcreteDecoderResultKind.Decoded) {
+    const selectContext: Parameters<typeof handleDefaultVaultSelect>[0] = {
+      sender,
+      sendResponse,
+      vaultStoreId: defaultVaultSelect.value.vaultStoreId,
+    }
+    return handleDefaultVaultSelect(selectContext)
   }
 
   const sessionEnsure = runConcreteDecoder(

@@ -113,6 +113,19 @@ pub enum StoredGithubRepository {
     Repository(String),
 }
 
+/// Remote layout of one provider row.
+///
+/// Rows saved before identity mounts keep their vault at the legacy event root
+/// named by `store_id`; nothing is moved remotely. Identity mounts namespace the
+/// identity control log and every vault the identity owns.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub enum ProviderRowLayout {
+    #[default]
+    LegacyVaultRoot,
+    IdentityNamespaced,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "value", rename_all = "camelCase")]
 pub enum ProviderVaultScope {

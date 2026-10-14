@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test'
+import { expect, type Locator, type Page } from '@playwright/test'
 import { ENROLLMENT_UNLOCK_TIMEOUT_MS } from './environment'
 import { unlockVaultOnLogin } from './settings-auth'
 import { disableVaultIdleLock, waitForStorageChainIdle } from './vault-runtime'
@@ -62,6 +62,29 @@ export async function openFirstVaultSetup(page: Page) {
   }
 }
 
+/** Leave the first-run backup step for the new vault when it shows. */
+export async function skipFirstRunBackup(
+  page: Page,
+  readySurface: Locator,
+): Promise<void> {
+  const backupStep = page.getByTestId('first-run-backup-step')
+  await expect(backupStep.or(readySurface).first()).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  if (await backupStep.isVisible()) {
+    await page.getByTestId('first-run-backup-skip').click()
+  }
+}
+
+/** The first vault opens after its setup steps; skip the backup offer. */
+export async function expectFirstVaultOpen(page: Page): Promise<void> {
+  const vaultPanel = page.getByTestId('vault-panel')
+  await skipFirstRunBackup(page, vaultPanel)
+  await expect(vaultPanel).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+}
+
 export async function createLocalVaultOnLogin(
   page: Page,
   vaultName = 'Test vault',
@@ -73,18 +96,7 @@ export async function createLocalVaultOnLogin(
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
 
-  const finalStep = page.getByTestId('create-vault-wizard-create')
-  if (!(await finalStep.isVisible())) {
-    const simplePath = page.getByTestId('get-started-path-simple')
-    await expect(simplePath).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    await simplePath.click()
-    await expect(finalStep).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-  }
-
+  // Simple and unified apps start with one name field; nothing to choose.
   const nameInput = page.getByTestId('login-vault-name-input')
   await expect(nameInput).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -100,15 +112,21 @@ export async function createLocalVaultOnLogin(
   })
   await createButton.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
 
-  // Deferred passkey: empty create may show the top-right overlay first.
-  const passkeyOverlay = page.getByTestId('passkey-auth-overlay')
+  // Deferred passkey: the first-run protect step (or, elsewhere, the
+  // top-right overlay) asks for it before the vault exists. The backup step
+  // follows creation; tests that need it open Sync themselves.
+  const passkeyOverlay = page
+    .getByTestId('passkey-auth-overlay')
+    .or(page.getByTestId('first-run-protect-step'))
   const readySurface = page.getByTestId(readyTestId)
+  const backupStep = page.getByTestId('first-run-backup-step')
   const vaultError = page.getByTestId('vault-error')
   await expect
     .poll(
       async () =>
         (await passkeyOverlay.isVisible()) ||
         (await readySurface.isVisible()) ||
+        (await backupStep.isVisible()) ||
         (await vaultError.isVisible()),
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
@@ -132,6 +150,7 @@ export async function createLocalVaultOnLogin(
     }
   }
 
+  await skipFirstRunBackup(page, readySurface)
   await expect(readySurface).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
@@ -167,14 +186,15 @@ export async function connectLocalVault(page: Page) {
 
   const chooser = page.getByTestId('login-create-vault-chooser')
   const newVaultRow = page.getByTestId('identity-new-vault')
+  const vaultRow = page.locator(
+    '[data-testid="identity-vault-row"][data-state="available"], [data-testid="login-vault-option"]',
+  )
   // The first-vault setup appears once the identity cards have loaded, so
   // wait for a settled login state before choosing between create and unlock.
   await expect(
     chooser
       .or(newVaultRow)
-      .or(page.getByTestId('login-local-unlock-step'))
-      .or(page.getByTestId('login-vault-picker'))
-      .or(page.getByTestId('login-choose-vault-hint'))
+      .or(vaultRow)
       .or(page.getByTestId('vault-panel'))
       .first(),
   ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
@@ -182,7 +202,11 @@ export async function connectLocalVault(page: Page) {
     await disableVaultIdleLock(page)
     return
   }
-  if ((await chooser.isVisible()) || (await newVaultRow.isVisible())) {
+  // A card that lists a vault unlocks it; its New vault row is not a first run.
+  if (
+    !(await vaultRow.first().isVisible()) &&
+    ((await chooser.isVisible()) || (await newVaultRow.isVisible()))
+  ) {
     await createLocalVaultOnLogin(page)
     await disableVaultIdleLock(page)
     return

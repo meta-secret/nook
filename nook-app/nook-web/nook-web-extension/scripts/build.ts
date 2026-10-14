@@ -298,10 +298,6 @@ await Promise.all([
     'background/nook_wasm_bg.wasm',
   ),
   copyStaticFile(
-    join(sharedRoot, 'src/vault-app/lib/nook-wasm/nook_wasm_bg.wasm'),
-    'offscreen/nook_wasm_bg.wasm',
-  ),
-  copyStaticFile(
     join(
       sharedRoot,
       'src/extension/nook-companion-wasm/nook_companion_wasm_bg.wasm',

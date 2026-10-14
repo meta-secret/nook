@@ -18,7 +18,6 @@ use handles::{
     ChildLookup, ChildLookupRequest, FolderCallArgument, FolderFailure, FolderMethod, FolderObject,
     FolderPromise,
 };
-const EVENT_LOG_PARTS: [&str; 3] = ["nook-log", "v1", "events"];
 
 #[wasm_bindgen]
 #[derive(Clone)]
@@ -175,10 +174,15 @@ impl FolderObject<'_> {
 }
 
 impl FolderObject<'_> {
-    async fn event_directory(&self, lookup: ChildLookup) -> Result<FolderDirectory, NookError> {
+    async fn event_directory(
+        &self,
+        location: &nook_core::EventLogLocation,
+        lookup: ChildLookup,
+    ) -> Result<FolderDirectory, NookError> {
         let root = self.object;
         let mut current = FolderDirectory::Opened(root.clone());
-        for part in EVENT_LOG_PARTS {
+        let path = location.root();
+        for part in path.split('/') {
             let FolderDirectory::Opened(parent) = current else {
                 return Ok(FolderDirectory::Unavailable);
             };
@@ -351,10 +355,13 @@ impl LocalFolderEventName<'_> {
 }
 
 impl OpenedLocalFolder {
-    pub(crate) async fn read_events(&self) -> Result<Vec<LocalFolderEventFile>, NookError> {
+    pub(crate) async fn read_events(
+        &self,
+        location: &nook_core::EventLogLocation,
+    ) -> Result<Vec<LocalFolderEventFile>, NookError> {
         let root = &self.root;
         let FolderDirectory::Opened(dir) = FolderObject::new(root)
-            .event_directory(ChildLookup::Existing)
+            .event_directory(location, ChildLookup::Existing)
             .await?
         else {
             return Ok(Vec::new());
@@ -367,7 +374,7 @@ impl OpenedLocalFolder {
             };
             records.push(LocalFolderEventFile {
                 event_id: event_id.as_str().to_owned(),
-                path: event_id.storage_path(),
+                path: location.event_path(&event_id),
                 content: FolderObject::new(&file_handle).read_text().await?,
             });
         }
@@ -376,11 +383,12 @@ impl OpenedLocalFolder {
     }
     pub(crate) async fn write_events(
         &self,
+        location: &nook_core::EventLogLocation,
         records: &[LocalFolderEventWrite],
     ) -> Result<(), NookError> {
         let root = &self.root;
         let FolderDirectory::Opened(dir) = FolderObject::new(root)
-            .event_directory(ChildLookup::Create)
+            .event_directory(location, ChildLookup::Create)
             .await?
         else {
             return Ok(());
@@ -691,7 +699,10 @@ mod tests {
             content: "second".to_owned(),
         };
         match folder
-            .write_events(&[EventFixture::record("first"), invalid])
+            .write_events(
+                &nook_core::EventLogLocation::LegacyVaultRoot,
+                &[EventFixture::record("first"), invalid],
+            )
             .await
         {
             Err(NookError::Database(message)) => {
@@ -734,8 +745,16 @@ mod tests {
             FolderFailure::new(&error.unchecked_into()).into_error("fixture directory")
         })?;
         let folder = OpenedLocalFolder { root: directory };
-        assert!(folder.read_events().await?.is_empty());
-        match folder.write_events(&[]).await {
+        assert!(
+            folder
+                .read_events(&nook_core::EventLogLocation::LegacyVaultRoot)
+                .await?
+                .is_empty()
+        );
+        match folder
+            .write_events(&nook_core::EventLogLocation::LegacyVaultRoot, &[])
+            .await
+        {
             Err(NookError::Database(message)) => {
                 assert_eq!(
                     message,
@@ -748,7 +767,7 @@ mod tests {
         match (OpenedLocalFolder {
             root: Object::new(),
         })
-        .read_events()
+        .read_events(&nook_core::EventLogLocation::LegacyVaultRoot)
         .await
         {
             Err(NookError::Database(message)) => {
@@ -887,7 +906,7 @@ mod tests {
             let records = (OpenedLocalFolder {
                 root: fixture.directory.clone(),
             })
-            .read_events()
+            .read_events(&nook_core::EventLogLocation::LegacyVaultRoot)
             .await?;
             assert_eq!(records.len(), 2);
             assert_eq!(records[0].event_id, first.as_str());

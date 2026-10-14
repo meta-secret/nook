@@ -13,7 +13,7 @@
     I18N_KEYS,
     type I18nKey,
   } from '../../../nook-web-shared/src/generated/i18n-keys'
-  import { KeyRound, ShieldCheck } from '@lucide/svelte'
+  import { Check, KeyRound, Plus, ShieldCheck } from '@lucide/svelte'
   import NookIcon from '../../../nook-web-shared/src/components/NookIcon.svelte'
   import {
     ExtensionTranslationRequestKind,
@@ -38,20 +38,21 @@
     type CompanionSecretCount,
   } from './popup-app-state'
   import { DeviceProtectionSetupWorkflow } from '../../../nook-web-shared/src/vault-app/lib/components/device-protection-gate-state'
+  import {
+    PairedVaultsLoadKind,
+    pairedVaultGroups,
+    pairedVaultsClient,
+    type PairedVaultsLoad,
+    type PairedVaultSummary,
+  } from '../lib/paired-vaults'
 
   let {
     i18n,
-    isConnected,
-    vaultName,
-    vaultStoreId,
     launcherIntent,
     protectionStatus,
     activeSessionDevice,
   }: {
     i18n: ExtensionI18n
-    isConnected: boolean
-    vaultName?: string
-    vaultStoreId?: string
     launcherIntent: OpenCompanionLauncherIntent
     protectionStatus: DeviceProtectionStatus
     activeSessionDevice: ExtensionSessionDeviceState
@@ -76,116 +77,82 @@
   let pairingCandidate = $state<PairingCandidate>({
     kind: PairingCandidateKind.NotSelected,
   })
-  let secretCount = $state<CompanionSecretCount>({
-    kind: CompanionSecretCountKind.Unavailable,
+  let vaults = $state<PairedVaultsLoad>({
+    kind: PairedVaultsLoadKind.Unavailable,
   })
+  /** Item counts per paired vault, filled in as each summary arrives. */
+  let counts = $state<Record<string, CompanionSecretCount>>({})
 
   const needsSetup = $derived(
     status === DeviceProtectionStatus.Missing ||
       status === DeviceProtectionStatus.Plaintext,
   )
   const showToolbarMenu = $derived(status === DeviceProtectionStatus.Unlocked)
-  const showExistingConnection = $derived(
-    isConnected && launcherIntent !== OpenCompanionLauncherIntent.Pair,
+
+  const groups = $derived(
+    vaults.kind === PairedVaultsLoadKind.Ready
+      ? pairedVaultGroups(vaults.vaults)
+      : [],
   )
 
-  function connectActionKey(): I18nKey {
-    switch (launcherIntent) {
-      case OpenCompanionLauncherIntent.Default:
-      case OpenCompanionLauncherIntent.PilotAuth:
-        return I18N_KEYS.ExtensionSetupConnectSimpleVault
-      case OpenCompanionLauncherIntent.Pair:
-        return I18N_KEYS.ExtensionCompanionPairAnotherVault
-    }
-  }
-
-  function connectedVaultLabel(vault: string): string {
+  function itemCount(vaultStoreId: string): string {
+    const count = counts[vaultStoreId]
+    if (!count || count.kind !== CompanionSecretCountKind.Available) return ''
     const request: ExtensionTranslationRequest = {
       kind: ExtensionTranslationRequestKind.WithReplacements,
-      key: I18N_KEYS.ExtensionCompanionReadyVault,
-      replacements: { vault },
+      key: I18N_KEYS.ExtensionCompanionItemCount,
+      replacements: { count: String(count.count) },
     }
     return i18n.t(request)
   }
 
-  function readyDescription(vault: string): string {
-    const request: ExtensionTranslationRequest = {
-      kind: ExtensionTranslationRequestKind.WithReplacements,
-      key: I18N_KEYS.ExtensionCompanionReadyDescription,
-      replacements: { vault },
-    }
-    return i18n.t(request)
+  type VaultCountRequest = {
+    readonly vault: PairedVaultSummary
+    readonly device: ExtensionSessionDeviceWire
   }
 
-  function connectDescription(): string {
-    return translatePlain(I18N_KEYS.ExtensionCompanionConnectDescription)
-  }
-
-  function connectedDescription(): string {
-    switch (typeof vaultName) {
-      case 'string':
-        return readyDescription(vaultName)
-      case 'undefined':
-        return connectDescription()
-      case 'number':
-      case 'bigint':
-      case 'boolean':
-      case 'symbol':
-      case 'object':
-      case 'function':
-        throw new Error('vault name has an invalid runtime type')
-    }
-  }
-
-  function companionDescription(): string {
-    switch (launcherIntent) {
-      case OpenCompanionLauncherIntent.PilotAuth:
-        return translatePlain(I18N_KEYS.ExtensionCompanionPilotReturnGuidance)
-      case OpenCompanionLauncherIntent.Default:
-      case OpenCompanionLauncherIntent.Pair:
-        switch (isConnected) {
-          case true:
-            return connectedDescription()
-          case false:
-            return connectDescription()
-        }
-    }
-  }
-
-  function secretCountValue(): string {
-    if (secretCount.kind === CompanionSecretCountKind.Available)
-      return String(secretCount.count)
-    return translatePlain(
-      secretCount.kind === CompanionSecretCountKind.Loading
-        ? I18N_KEYS.ExtensionCompanionLoading
-        : I18N_KEYS.ExtensionCompanionUnavailable,
-    )
-  }
-
-  async function loadSecretCount(
-    device: ExtensionSessionDeviceWire,
-  ): Promise<void> {
-    if (!isConnected || !vaultStoreId) {
-      secretCount = { kind: CompanionSecretCountKind.Unavailable }
-      return
-    }
-    secretCount = { kind: CompanionSecretCountKind.Loading }
+  async function loadCount(request: VaultCountRequest): Promise<void> {
+    const { vault, device } = request
+    counts[vault.vaultStoreId] = { kind: CompanionSecretCountKind.Loading }
     try {
       const summaryArgs: CompanionVaultSummaryArgs = {
-        vaultStoreId,
+        vaultStoreId: vault.vaultStoreId,
         appId: device.deviceId,
         appPublicKey: device.devicePublicKey,
         appSigningPublicKey: device.deviceSigningPublicKey,
       }
       const summary =
         await extensionWasmRuntime.extensionVaultSummary(summaryArgs)
-      secretCount = {
+      counts[vault.vaultStoreId] = {
         kind: CompanionSecretCountKind.Available,
         count: summary.secretCount,
       }
     } catch {
-      secretCount = { kind: CompanionSecretCountKind.Unavailable }
+      counts[vault.vaultStoreId] = {
+        kind: CompanionSecretCountKind.Unavailable,
+      }
     }
+  }
+
+  async function loadVaults(device: ExtensionSessionDeviceWire): Promise<void> {
+    vaults = await pairedVaultsClient.list()
+    if (vaults.kind !== PairedVaultsLoadKind.Ready) return
+    for (const vault of vaults.vaults) {
+      const countRequest: VaultCountRequest = { vault, device }
+      void loadCount(countRequest)
+    }
+  }
+
+  async function makeDefault(vaultStoreId: string): Promise<void> {
+    busy = true
+    error = ''
+    const changed = await pairedVaultsClient.makeDefault(vaultStoreId)
+    busy = false
+    if (!changed) {
+      error = translatePlain(I18N_KEYS.ExtensionCompanionMakeDefaultFailed)
+      return
+    }
+    vaults = await pairedVaultsClient.list()
   }
 
   function isOkResponse(response: unknown): boolean {
@@ -255,7 +222,7 @@
     status = DeviceProtectionStatus.Unlocked
     busy = false
     error = ''
-    void loadSecretCount(device)
+    void loadVaults(device)
   }
 
   $effect(() => {
@@ -360,121 +327,145 @@
             {translatePlain(I18N_KEYS.ExtensionCompanionStepLabel)}
           </p>
           <div
-            class:connected={isConnected}
-            class="companion-state"
-            data-testid="companion-vault-status"
-            data-connected={isConnected}
+            class="companion-state connected"
+            data-testid="companion-session-status"
           >
             <span aria-hidden="true"></span>
-            {isConnected && vaultName
-              ? connectedVaultLabel(vaultName)
-              : translatePlain(I18N_KEYS.ExtensionCompanionNotConnected)}
+            {translatePlain(I18N_KEYS.ExtensionCompanionUnlocked)}
           </div>
         </div>
       </div>
-
-      <h1 data-testid="companion-title">
-        {translatePlain(
-          isConnected
-            ? I18N_KEYS.ExtensionCompanionReadyTitle
-            : I18N_KEYS.ExtensionCompanionConnectTitle,
-        )}
-      </h1>
-      <p class="companion-description" data-testid="companion-description">
-        {companionDescription()}
-      </p>
+      {#if launcherIntent === OpenCompanionLauncherIntent.PilotAuth}
+        <p class="companion-description" data-testid="companion-description">
+          {translatePlain(I18N_KEYS.ExtensionCompanionPilotReturnGuidance)}
+        </p>
+      {/if}
     </header>
 
-    <section class="secret-summary" aria-live="polite">
-      <div>
-        <span
-          >{translatePlain(I18N_KEYS.ExtensionCompanionSecretsAvailable)}</span
-        >
-        <strong data-testid="companion-secret-count"
-          >{secretCountValue()}</strong
-        >
-      </div>
-    </section>
-
-    <section
-      class:connected={isConnected}
-      class="companion-relationship"
-      aria-label={translatePlain(I18N_KEYS.ExtensionCompanionRelationship)}
-    >
-      <div class="relationship-node">
-        <span>{translatePlain(I18N_KEYS.ExtensionCompanionIdentity)}</span>
-        <strong data-testid="companion-identity-status">
-          {translatePlain(
-            isConnected
-              ? I18N_KEYS.ExtensionCompanionLinked
-              : I18N_KEYS.ExtensionCompanionProtected,
-          )}
-        </strong>
-      </div>
-      <div class="relationship-connector" aria-hidden="true">
-        <span></span>
-      </div>
-      <div class="relationship-node">
-        <span>{translatePlain(I18N_KEYS.ExtensionCompanionVault)}</span>
-        <strong data-testid="companion-connection-status">
-          {translatePlain(
-            isConnected
-              ? I18N_KEYS.ExtensionCompanionConnected
-              : I18N_KEYS.ExtensionCompanionNotConnected,
-          )}
-        </strong>
-      </div>
-    </section>
+    {#if vaults.kind === PairedVaultsLoadKind.Ready && vaults.vaults.length > 0}
+      <section
+        class="vault-list-section"
+        aria-labelledby="companion-vaults-title"
+        data-testid="companion-vaults"
+      >
+        <div class="vault-list-heading">
+          <h1 id="companion-vaults-title">
+            {translatePlain(I18N_KEYS.ExtensionCompanionVaultsTitle)}
+          </h1>
+          <p class="companion-description">
+            {translatePlain(I18N_KEYS.ExtensionCompanionVaultsHint)}
+          </p>
+        </div>
+        {#each groups as group (group.identityLabel)}
+          <div class="vault-group" data-testid="companion-vault-group">
+            <p class="vault-group-label">
+              {group.identityLabel ||
+                translatePlain(I18N_KEYS.ExtensionCompanionOtherVaults)}
+            </p>
+            <ul class="vault-list">
+              {#each group.vaults as vault (vault.vaultStoreId)}
+                <li
+                  class="vault-row"
+                  class:is-default={vault.isDefault}
+                  data-testid="companion-vault"
+                  data-vault-store-id={vault.vaultStoreId}
+                  data-default={vault.isDefault}
+                >
+                  <div class="vault-row-main">
+                    <span class="vault-row-name">{vault.vaultName}</span>
+                    <span class="vault-row-meta">
+                      {#if vault.fillsPasswords}
+                        <span
+                          >{translatePlain(
+                            I18N_KEYS.ExtensionCompanionFillsPasswords,
+                          )}</span
+                        >
+                      {/if}
+                      {#if vault.managesPasskeys}
+                        <span
+                          >{translatePlain(
+                            I18N_KEYS.ExtensionCompanionManagesPasskeys,
+                          )}</span
+                        >
+                      {/if}
+                      {#if itemCount(vault.vaultStoreId)}
+                        <span data-testid="companion-vault-count"
+                          >{itemCount(vault.vaultStoreId)}</span
+                        >
+                      {/if}
+                    </span>
+                  </div>
+                  {#if vault.isDefault}
+                    <span
+                      class="vault-default-tag"
+                      title={translatePlain(
+                        I18N_KEYS.ExtensionCompanionDefaultVaultHint,
+                      )}
+                      data-testid="companion-default-vault"
+                    >
+                      <Check size={12} aria-hidden="true" />
+                      {translatePlain(I18N_KEYS.ExtensionCompanionDefaultVault)}
+                    </span>
+                  {:else}
+                    <button
+                      type="button"
+                      class="menu-secondary-action vault-make-default"
+                      disabled={busy}
+                      title={translatePlain(
+                        I18N_KEYS.ExtensionCompanionDefaultVaultHint,
+                      )}
+                      data-testid="companion-make-default"
+                      onclick={() => void makeDefault(vault.vaultStoreId)}
+                    >
+                      {translatePlain(I18N_KEYS.ExtensionCompanionMakeDefault)}
+                    </button>
+                  {/if}
+                </li>
+              {/each}
+            </ul>
+          </div>
+        {/each}
+      </section>
+    {:else}
+      <section class="vault-empty" data-testid="companion-no-vaults">
+        <h1>{translatePlain(I18N_KEYS.ExtensionCompanionNoVaultsTitle)}</h1>
+        <p class="companion-description">
+          {translatePlain(I18N_KEYS.ExtensionCompanionNoVaultsBody)}
+        </p>
+      </section>
+    {/if}
 
     <div class="companion-actions">
-      {#if showExistingConnection}
-        <button
-          type="button"
-          data-testid="open-simple-vault-btn"
-          onclick={openSimpleVault}
-        >
-          {translatePlain(I18N_KEYS.ExtensionSetupOpenSimpleVault)}
-        </button>
-      {:else}
-        <button
-          type="button"
-          disabled={busy ||
-            pairingCandidate.kind !== PairingCandidateKind.Selected}
-          data-testid="connect-simple-vault-btn"
-          onclick={() => {
-            if (pairingCandidate.kind === PairingCandidateKind.Selected)
-              beginPairing(pairingCandidate.device)
-          }}
-        >
-          {busy
-            ? translatePlain(I18N_KEYS.DeviceProtectionAuthorizing)
-            : translatePlain(connectActionKey())}
-        </button>
-        <button
-          type="button"
-          class="secondary-button"
-          data-testid="open-simple-vault-btn"
-          onclick={openSimpleVault}
-        >
-          {translatePlain(I18N_KEYS.ExtensionSetupOpenSimpleVault)}
-        </button>
-      {/if}
-
+      <button
+        type="button"
+        class:secondary-button={vaults.kind === PairedVaultsLoadKind.Ready &&
+          vaults.vaults.length > 0 &&
+          launcherIntent !== OpenCompanionLauncherIntent.Pair}
+        disabled={busy ||
+          pairingCandidate.kind !== PairingCandidateKind.Selected}
+        data-testid="connect-simple-vault-btn"
+        onclick={() => {
+          if (pairingCandidate.kind === PairingCandidateKind.Selected)
+            beginPairing(pairingCandidate.device)
+        }}
+      >
+        <Plus size={14} aria-hidden="true" />
+        {busy
+          ? translatePlain(I18N_KEYS.DeviceProtectionAuthorizing)
+          : vaults.kind === PairedVaultsLoadKind.Ready &&
+              vaults.vaults.length > 0
+            ? translatePlain(I18N_KEYS.ExtensionCompanionConnectAnother)
+            : translatePlain(I18N_KEYS.ExtensionCompanionConnectVault)}
+      </button>
+      <button
+        type="button"
+        class="secondary-button"
+        data-testid="open-simple-vault-btn"
+        onclick={openSimpleVault}
+      >
+        {translatePlain(I18N_KEYS.ExtensionCompanionOpenNook)}
+      </button>
       <div class="companion-footer-actions">
-        {#if showExistingConnection && pairingCandidate.kind === PairingCandidateKind.Selected}
-          <button
-            type="button"
-            class="menu-secondary-action"
-            disabled={busy}
-            data-testid="pair-another-vault-btn"
-            onclick={() => {
-              if (pairingCandidate.kind === PairingCandidateKind.Selected)
-                beginPairing(pairingCandidate.device)
-            }}
-          >
-            {translatePlain(I18N_KEYS.ExtensionCompanionPairAnotherVault)}
-          </button>
-        {/if}
         <button
           type="button"
           class="menu-secondary-action"
@@ -485,7 +476,6 @@
         </button>
       </div>
     </div>
-
     {#if error}
       <p class="error-message" role="alert">{error}</p>
     {/if}

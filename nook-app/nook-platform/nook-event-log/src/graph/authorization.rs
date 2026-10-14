@@ -198,7 +198,7 @@ impl EventGraph {
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     #![allow(unused_assignments)]
 
     use super::*;
@@ -216,7 +216,7 @@ mod tests {
         OpaqueCiphertext, SecretId, Sha256Hex,
     };
 
-    pub(super) const STORE_STR: &str = "store_testtoken11";
+    pub(in crate::graph) const STORE_STR: &str = "store_testtoken11";
 
     pub(super) fn genesis_source_hash() -> Sha256Hex {
         Sha256Hex::from_trusted("deadbeef".repeat(8))
@@ -252,7 +252,7 @@ mod tests {
         VaultEvent::sign(body, signing_key)
     }
 
-    pub(super) fn genesis_event(signing_key: &SigningKey) -> EventResult<VaultEvent> {
+    pub(in crate::graph) fn genesis_event(signing_key: &SigningKey) -> EventResult<VaultEvent> {
         VaultEvent::build_genesis_import_event(GenesisImportRequest {
             store_id: &store()?,
             actor_id: &actor(signing_key)?,
@@ -267,7 +267,7 @@ mod tests {
         })
     }
 
-    pub(super) fn signed_operation(
+    pub(in crate::graph) fn signed_operation(
         parents: Vec<EventId>,
         operation: VaultOperation,
         signing_key: &SigningKey,

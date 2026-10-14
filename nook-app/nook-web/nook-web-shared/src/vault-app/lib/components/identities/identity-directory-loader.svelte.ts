@@ -1,3 +1,4 @@
+import { err } from "neverthrow";
 import type { VaultState } from "$lib/vault.svelte";
 import {
   IdentityDirectoryLoadKind,
@@ -6,7 +7,9 @@ import {
 } from "$lib/components/devices-access/identity-directory-view";
 
 /** A busy vault engine can refuse a read; retry before showing a failure. */
-const RETRY_DELAYS_MS: readonly number[] = [0, 300, 1000, 3000];
+export const IDENTITY_DIRECTORY_RETRY_DELAYS_MS: readonly number[] = [
+  0, 300, 1000, 3000,
+];
 
 /**
  * Reads the identity directory for the identities hub. A re-read keeps the
@@ -22,16 +25,22 @@ export class IdentityDirectoryLoader {
 
   async reload(): Promise<void> {
     const generation = ++this.generation;
-    for (const delay of RETRY_DELAYS_MS) {
+    for (const delay of IDENTITY_DIRECTORY_RETRY_DELAYS_MS) {
       if (delay > 0) {
         await new Promise<void>((resolve) => setTimeout(resolve, delay));
       }
       if (generation !== this.generation) return;
-      const manager = this.vault.admitManager();
       // Before the vault engine is ready there is nothing to read yet; the
       // caller reloads once the manager is admitted.
-      if (manager.isErr()) return;
-      const loaded = await new IdentityDirectoryReader(manager.value).load();
+      if (this.vault.admitManager().isErr()) return;
+      // Read through the storage queue: a read that overlaps a lock or a
+      // sync would borrow the engine twice and fail that operation.
+      const loaded = await this.vault.enqueueStorage(() => {
+        const manager = this.vault.admitManager();
+        return manager.isErr()
+          ? err(manager.error)
+          : new IdentityDirectoryReader(manager.value).load();
+      });
       if (generation !== this.generation) return;
       if (loaded.isOk()) {
         this.state = {

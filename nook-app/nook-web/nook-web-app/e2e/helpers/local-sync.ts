@@ -1,10 +1,8 @@
 import { expect, type Page } from '@playwright/test'
-import { UnlockMethod } from '$lib/components/login/login-unlock-state'
 import { createLocalE2eGoogleDriveVaultStub } from '../drive-stub'
 import { createLocalE2eFileSyncVaultStub } from '../file-sync-stub'
 import { fetchGithubEventLog, GithubEventLogFetchKind } from '../github-api'
 import {
-  assertJoinPendingYaml,
   parseVaultEventLogSnapshot,
   parseVaultYamlSnapshot,
   type VaultYamlSnapshot,
@@ -16,11 +14,7 @@ import {
   seedExtraOauthFileProviders,
   type E2eOauthSyncProvider,
 } from './auth-providers'
-import {
-  keepVaultIdleLockDisabled,
-  waitForJoinEnrollmentDialog,
-  waitForPendingJoinOnDevice,
-} from './device-enrollment'
+import { keepVaultIdleLockDisabled } from './device-enrollment'
 import {
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   UI_TIMEOUT_MS,
@@ -35,18 +29,12 @@ import {
   dismissSyncConflictIfVisible,
   ensureLoginLocalUnlockReady,
   invokeInitializedVaultProviderReload,
-  selectLoginUnlockMethod,
   unlockVaultOnLogin,
   waitForStableLocalVaultState,
 } from './settings-auth'
 import {
-  clearBrowserVault,
   disableVaultIdleLock,
   forceVaultQuiescentForE2e,
-  installGoogleOAuthMock,
-  setupGoogleDriveProvider,
-  waitForEngine,
-  waitForStorageChainIdle,
   waitForVaultOperationsIdle,
   waitForVaultSyncIdle,
 } from './vault-runtime'
@@ -98,67 +86,6 @@ export async function readLocalVaultYamlFromIdb(page: Page): Promise<string> {
       }
     })
   })
-}
-
-/** Seed a joiner's local vault copy from remote YAML before password enrollment. */
-export async function seedLocalVaultYamlForEnrollment(
-  page: Page,
-  vaultYaml: string,
-) {
-  const trimmed = vaultYaml.trim()
-  if (!trimmed) {
-    throw new Error('seedLocalVaultYamlForEnrollment: vault YAML is empty')
-  }
-  const storeId = trimmed.match(/^store_id:\s*(\S+)/m)?.[1]
-  if (!storeId) {
-    throw new Error(
-      'seedLocalVaultYamlForEnrollment: store_id missing from yaml',
-    )
-  }
-
-  await page.evaluate(
-    ({ content, storeId: id }) => {
-      return new Promise<void>((resolve, reject) => {
-        const request = indexedDB.open('nook_db')
-        request.onerror = () =>
-          reject(((v) => (v ? v : new Error('idb open failed')))(request.error))
-        request.onupgradeneeded = () => {
-          const db = request.result
-          if (!db.objectStoreNames.contains('vault')) {
-            db.createObjectStore('vault')
-          }
-        }
-        request.onsuccess = () => {
-          const db = request.result
-          const tx = db.transaction('vault', 'readwrite')
-          const store = tx.objectStore('vault')
-          const now = new Date().toISOString()
-          const registry = {
-            vaults: [
-              {
-                store_id: id,
-                last_unlocked_at: now,
-              },
-            ],
-          }
-          store.put(content, `vault:${id}`)
-          store.put(id, 'active_vault_id')
-          store.put(JSON.stringify(registry), 'vault_registry')
-          tx.oncomplete = () => {
-            db.close()
-            resolve()
-          }
-          tx.onerror = () =>
-            reject(((v) => (v ? v : new Error('idb tx failed')))(tx.error))
-        }
-      })
-    },
-    { content: trimmed, storeId },
-  )
-
-  await expect
-    .poll(() => readLocalVaultYamlFromIdb(page), { timeout: UI_TIMEOUT_MS })
-    .toContain(storeId)
 }
 
 /** Poll local vault YAML until predicate passes (local-first canonical copy). */
@@ -229,6 +156,9 @@ export async function stubGithubVaultForLocalE2e(
   await stub.install(page, opts)
 }
 
+/** Identity control logs live outside the vault event roots. */
+const GITHUB_IDENTITY_LOG_PREFIX = 'nook-identity/'
+
 export enum ListGithubStubDirResultType {
   File = 'file',
   Dir = 'dir',
@@ -294,6 +224,11 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
     revision += 1
     sha = `e2e-stub-sha-${revision}`
   }
+  /** Vault events at the legacy root or a vault namespace, never identity logs. */
+  const vaultEventPaths = () =>
+    [...eventFiles.keys()].filter(
+      (path) => !path.startsWith(GITHUB_IDENTITY_LOG_PREFIX),
+    )
 
   return {
     getVaultYaml: () => vaultYaml,
@@ -302,9 +237,14 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
       vaultYaml = yaml
       bumpSha()
     },
-    getEventFileCount: () => eventFiles.size,
-    getEventFilePaths: () => [...eventFiles.keys()],
-    getEventFileContents: () => [...eventFiles.values()],
+    getEventFileCount: () => vaultEventPaths().length,
+    getEventFilePaths: () => vaultEventPaths(),
+    getEventFileContents: () =>
+      vaultEventPaths().flatMap((path) => {
+        const content = eventFiles.get(path)
+        return typeof content === 'string' ? [content] : []
+      }),
+    getIdentityEventFileCount: () => eventFiles.size - vaultEventPaths().length,
     getFailureResponses: () => [...failureResponses],
     setFailureScenario: (scenario: GithubStubFailureScenario) => {
       failureScenario = scenario
@@ -389,10 +329,17 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
               type: ListGithubStubDirResultType.File,
             })
           }
-          if (eventFiles.size > 0) {
+          if (vaultEventPaths().length > 0) {
             files.push({
               name: 'nook-log',
               path: 'nook-log',
+              type: ListGithubStubDirResultType.Dir,
+            })
+          }
+          if (eventFiles.size > vaultEventPaths().length) {
+            files.push({
+              name: 'nook-identity',
+              path: 'nook-identity',
               type: ListGithubStubDirResultType.Dir,
             })
           }
@@ -452,7 +399,10 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
           })
           return
         }
-        if (url.startsWith(`${contentsPrefix}nook-log/`)) {
+        if (
+          url.startsWith(`${contentsPrefix}nook-log/`) ||
+          url.startsWith(`${contentsPrefix}${GITHUB_IDENTITY_LOG_PREFIX}`)
+        ) {
           if (failureScenario === GithubStubFailureScenario.EventLogForbidden) {
             failureResponses.push({
               method,
@@ -585,9 +535,7 @@ export async function reloadUnlockLocalVaultWithSync(
     await expect(page.getByTestId('login-gate')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await ensureLoginLocalUnlockReady(page)
-    await selectLoginUnlockMethod(page, UnlockMethod.Keys)
-    await page.getByTestId('unlock-vault-btn').click()
+    await unlockVaultOnLogin(page)
     await expect(
       page.getByTestId('vault-panel').or(page.getByTestId('vault-admin-panel')),
     ).toBeVisible({
@@ -623,84 +571,6 @@ export async function reloadUnlockLocalVaultWithSync(
       }
     })
   }
-}
-
-/** Connect a joiner browser to a stubbed local sync remote (keys-mode join dialog). */
-export async function connectLocalE2eJoinerDevice(
-  page: Page,
-  fileName: string,
-  accessToken = E2E_OAUTH_ONBOARD_PROVIDER.accessToken,
-) {
-  await installGoogleOAuthMock(page, accessToken)
-  await page.goto('/app/')
-  await clearBrowserVault(page)
-  await page.reload()
-  await setupGoogleDriveProvider(page, fileName)
-  const connectButton = await waitForEngine(page)
-  await connectButton.click()
-  await waitForJoinEnrollmentDialog(page)
-}
-
-/** Send a join request against a stubbed local sync remote (local e2e). */
-export async function sendJoinRequestLocalE2e(
-  page: Page,
-  stub: { getEventFileContents: () => string[] },
-) {
-  await page.getByTestId('join-enrollment-confirm').click()
-  await waitForVaultOperationsIdle(page)
-  await waitForStorageChainIdle(page, ENROLLMENT_UNLOCK_TIMEOUT_MS)
-
-  await expect
-    .poll(
-      () =>
-        parseVaultEventLogSnapshot(stub.getEventFileContents()).joinEntries
-          .length,
-      {
-        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-      },
-    )
-    .toBeGreaterThanOrEqual(1)
-
-  const snapshot = parseVaultEventLogSnapshot(stub.getEventFileContents())
-  assertJoinPendingYaml(snapshot)
-  const join = snapshot.joinEntries[0]
-  if (!join) throw new Error('join request was not available.')
-
-  await expect(page.getByTestId('join-enrollment-dialog')).toContainText(
-    'Waiting for approval',
-    { timeout: UI_TIMEOUT_MS },
-  )
-  await page.getByTestId('join-enrollment-dismiss').click()
-  await expect(page.getByTestId('join-enrollment-dialog')).not.toBeVisible()
-
-  return join
-}
-
-export async function approveJoinLocalE2eFromBanner(
-  page: Page,
-  deviceId: string,
-  stub: { getEventFileContents: () => string[] },
-  expectedMembers: number,
-) {
-  await waitForPendingJoinOnDevice(page, deviceId)
-  const row = page.getByTestId('device-join-row').filter({ hasText: deviceId })
-  await row.getByTestId('approve-join-btn').click()
-  await expect
-    .poll(
-      () =>
-        parseVaultEventLogSnapshot(stub.getEventFileContents()).memberPkIds
-          .length,
-      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
-    )
-    .toBe(expectedMembers)
-  await expect
-    .poll(
-      () =>
-        parseVaultEventLogSnapshot(stub.getEventFileContents()).joinEntries
-          .length,
-    )
-    .toBe(0)
-  await expect(row).not.toBeVisible({ timeout: UI_TIMEOUT_MS })
 }
 
 /** Add GitHub sync provider stubs while vault stays unlocked (preserves password UI state). */

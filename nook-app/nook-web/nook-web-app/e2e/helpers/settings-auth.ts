@@ -1,5 +1,4 @@
 import { expect, type Page } from '@playwright/test'
-import { UnlockMethod } from '$lib/components/login/login-unlock-state'
 import type { ProviderLoadOptions } from '$lib/vault/providers.svelte'
 import { parseVaultYamlSnapshot, type VaultYamlSnapshot } from '../vault-yaml'
 import { E2E_OAUTH_ONBOARD_PROVIDER } from './auth-providers'
@@ -49,7 +48,6 @@ export type DeviceProtectionAuthorizationObservation = {
   readonly overlayVisible: boolean
   readonly unlockReady: boolean
   readonly pickerVisible: boolean
-  readonly lockedAccessVisible: boolean
   readonly authorizeReady: boolean
   readonly vaultAuthenticated: boolean
   readonly workspaceUnlocked: boolean
@@ -59,7 +57,6 @@ export enum DeviceProtectionAuthorizationGateState {
   Overlay = 'overlay',
   Unlock = 'unlock',
   Picker = 'picker',
-  LockedAccess = 'locked-access',
   Authorize = 'authorize',
   Unlocked = 'unlocked',
   Waiting = 'waiting',
@@ -116,7 +113,6 @@ export function deviceProtectionAuthorizationGateState({
   overlayVisible,
   unlockReady,
   pickerVisible,
-  lockedAccessVisible,
   authorizeReady,
   vaultAuthenticated,
   workspaceUnlocked,
@@ -127,9 +123,6 @@ export function deviceProtectionAuthorizationGateState({
   if (overlayVisible) return DeviceProtectionAuthorizationGateState.Overlay
   if (unlockReady) return DeviceProtectionAuthorizationGateState.Unlock
   if (pickerVisible) return DeviceProtectionAuthorizationGateState.Picker
-  if (lockedAccessVisible) {
-    return DeviceProtectionAuthorizationGateState.LockedAccess
-  }
   if (authorizeReady) return DeviceProtectionAuthorizationGateState.Authorize
   return DeviceProtectionAuthorizationGateState.Waiting
 }
@@ -145,14 +138,6 @@ export function deviceProtectionButtonReady(testId: string): boolean {
     style.visibility !== 'collapse' &&
     !button.disabled
   )
-}
-
-/** Expand the login enrollment accordion on the login gate. */
-export async function expandLoginEnrollmentPanel(page: Page) {
-  const toggle = page.getByTestId('login-enrollment-toggle')
-  if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
-    await toggle.click()
-  }
 }
 
 /** Open the sync providers page (the admin surface that owns providers). */
@@ -360,10 +345,13 @@ export async function expectNoVaultPasswords(
   })
 }
 
-/** Issue an onboard enrollment code and return the onboarding link input locator. */
+/**
+ * Issue an identity enrollment code with a one-time passphrase and return the
+ * onboarding link input locator. The joining app enters the same passphrase.
+ */
 export async function submitOnboardEnrollmentCode(
   page: Page,
-  password: string,
+  passphrase: string,
 ) {
   await assertVaultReady(page)
   await waitForVaultOperationsIdle(page)
@@ -372,14 +360,10 @@ export async function submitOnboardEnrollmentCode(
     timeout: UI_TIMEOUT_MS,
   })
   await dismissSyncConflictIfVisible(page)
-  const entryList = page.getByTestId('onboard-password-entry-list')
-  if (await entryList.isVisible()) {
-    await entryList.getByRole('radio').first().click()
-  }
   await expect(page.getByTestId('onboard-device-submit')).toBeEnabled({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-  await page.getByTestId('onboard-password-input').fill(password)
+  await page.getByTestId('onboard-passphrase-input').fill(passphrase)
   await page.getByTestId('onboard-device-submit').click()
 
   const linkInput = page.getByTestId('onboarding-link-url')
@@ -507,16 +491,21 @@ export async function revealSecretInRow(
   })
 }
 
-export async function selectLoginUnlockMethod(
-  page: Page,
-  method: UnlockMethod,
-) {
-  const button = page.getByTestId(`login-unlock-method-${method}`)
-  await expect(button).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-  await button.click()
+/** Observe whether a vault row can be clicked to unlock, in one browser turn. */
+function vaultRowReady(storeId: string): boolean {
+  const selector = storeId
+    ? `[data-testid="identity-vault-row"][data-store-id="${storeId}"], [data-testid="login-vault-option"][data-store-id="${storeId}"]`
+    : '[data-testid="identity-vault-row"][data-state="available"], [data-testid="login-vault-option"]'
+  const row = document.querySelector(selector)
+  if (!(row instanceof HTMLButtonElement)) return false
+  return row.getClientRects().length > 0 && !row.disabled
 }
 
-/** Authorize the wrapped device identity after an explicit or idle lock. */
+/**
+ * Authorize the wrapped device identity after an explicit or idle lock.
+ * A locked hub unlocks from a vault row: the identity's passkey, then the
+ * vault opens. An in-workspace authorization prompt is answered directly.
+ */
 export async function authorizeDeviceProtection(
   page: Page,
   opts?: { storeId?: string },
@@ -532,14 +521,10 @@ export async function authorizeDeviceProtection(
     )
     .toBe(true)
   await keepVaultIdleLockDisabled(page)
+  const storeId = ((...[v = '']) => v)(opts?.storeId)
   const overlay = page.getByTestId('passkey-auth-overlay')
   const loginGate = page.getByTestId('login-gate')
   const vaultPicker = vaultChoice(page)
-  const unlockVaultButton = page.getByTestId('unlock-vault-btn')
-  const vaultError = page.getByTestId('vault-error')
-  const lockedAccessDashboard = loginGate.getByTestId(
-    'devices-access-dashboard',
-  )
   const button = page.getByTestId('device-protection-unlock-btn')
 
   const isAuthenticatedWorkspace = async () => {
@@ -574,16 +559,11 @@ export async function authorizeDeviceProtection(
     )
   }
 
-  const unlockButtonReady = async () => {
-    return page.evaluate(deviceProtectionButtonReady, 'unlock-vault-btn')
-  }
-
   const authorizationGateState = async () => {
     const observation: DeviceProtectionAuthorizationObservation = {
       overlayVisible: await overlay.isVisible(),
-      unlockReady: await unlockButtonReady(),
+      unlockReady: await page.evaluate(vaultRowReady, storeId),
       pickerVisible: await vaultPicker.isVisible(),
-      lockedAccessVisible: await lockedAccessDashboard.isVisible(),
       authorizeReady: await authorizeButtonReady(),
       vaultAuthenticated: await page.evaluate(() =>
         Boolean(window.__nookVault?.isAuthenticated),
@@ -593,9 +573,14 @@ export async function authorizeDeviceProtection(
     return deviceProtectionAuthorizationGateState(observation)
   }
 
-  // Locked /devices-access keeps Access inside LoginGate with no Unlock.
-  // Multi-vault lock shows the vault picker before Unlock. Wait for a real
-  // unlock affordance, locked Access (leave via back), or true auth.
+  const authenticatedSurface = async () =>
+    deviceProtectionAuthenticatedSurface(
+      await isAuthenticatedWorkspace(),
+      await page.evaluate(() => Boolean(window.__nookVault?.isAuthenticated)),
+      await page.getByTestId('approve-extension-device-btn').isVisible(),
+    )
+
+  // Wait for a vault row, an authorization prompt, or true auth.
   await expect
     .poll(
       async () => {
@@ -605,89 +590,31 @@ export async function authorizeDeviceProtection(
     )
     .not.toBe('waiting')
 
-  if (
-    (await authorizationGateState()) ===
-    DeviceProtectionAuthorizationGateState.Unlocked
-  ) {
+  const initialState = await authorizationGateState()
+  if (initialState === DeviceProtectionAuthorizationGateState.Unlocked) {
     await waitForVaultOperationsIdle(page)
     return
   }
 
-  if (await authorizeButtonReady()) {
+  if (initialState === DeviceProtectionAuthorizationGateState.Authorize) {
     await button.click()
     await expect(loginGate).toBeHidden({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await expect
-      .poll(
-        async () =>
-          deviceProtectionAuthenticatedSurface(
-            await isAuthenticatedWorkspace(),
-            await page.evaluate(() =>
-              Boolean(window.__nookVault?.isAuthenticated),
-            ),
-            await page.getByTestId('approve-extension-device-btn').isVisible(),
-          ),
-        { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
-      )
+      .poll(authenticatedSurface, { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
       .toBe(true)
     await waitForVaultOperationsIdle(page)
     return
   }
 
-  // Unlock is unavailable on locked Access; leave to the login card, then
-  // restore /devices-access after auth so deep links survive the detour.
-  let restoreDevicesAccess = false
-  if (
-    (await lockedAccessDashboard.isVisible()) &&
-    !(await unlockVaultButton.isVisible()) &&
-    !(await vaultPicker.isVisible()) &&
-    !(await overlay.isVisible())
-  ) {
-    restoreDevicesAccess = true
-    await page.getByTestId('page-bar-back').click()
-    await expect
-      .poll(
-        async () => {
-          if (await overlay.isVisible()) return 'overlay'
-          if (await unlockVaultButton.isVisible()) return 'unlock'
-          if (await vaultPicker.isVisible()) return 'picker'
-          return 'waiting'
-        },
-        { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
-      )
-      .not.toBe('waiting')
-  }
-
   if (!(await overlay.isVisible())) {
-    if (await vaultPicker.isVisible()) {
-      const option = vaultChoiceOption(page, opts?.storeId)
-      await expect(option).toBeVisible({
-        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-      })
-      await option.click()
-      await expect
-        .poll(
-          async () => {
-            if (await unlockVaultButton.isVisible()) return 'unlock'
-            if (await overlay.isVisible()) return 'overlay'
-            if (await vaultError.isVisible()) return 'error'
-            if (await vaultPicker.isVisible()) return 'picker'
-            return 'waiting'
-          },
-          { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
-        )
-        .not.toBe('waiting')
-      if (await vaultError.isVisible()) {
-        throw new Error(
-          `Vault selection failed before unlock: ${await vaultError.textContent()}`,
-        )
-      }
-    }
-    await expect(unlockVaultButton).toBeVisible({
+    const option = vaultChoiceOption(page, storeId)
+    await expect(option).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await unlockVaultButton.click()
+    await dismissSyncConflictIfVisible(page)
+    await option.click()
   }
   let lastPostUnlockObservationText = 'unavailable'
   let firstVisibleVaultError = ''
@@ -720,7 +647,7 @@ export async function authorizeDeviceProtection(
         vaultAuthenticated: window.__nookVault?.isAuthenticated === true,
         overlayVisible: isVisible('passkey-auth-overlay'),
         authorizeReady: isEnabled('device-protection-unlock-btn'),
-        unlockReady: isEnabled('unlock-vault-btn'),
+        unlockReady: isEnabled('identity-vault-row'),
         pickerVisible:
           isVisible('login-vault-picker') ||
           isVisible('login-choose-vault-hint'),
@@ -777,30 +704,8 @@ export async function authorizeDeviceProtection(
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
   await expect
-    .poll(
-      async () =>
-        deviceProtectionAuthenticatedSurface(
-          await isAuthenticatedWorkspace(),
-          await page.evaluate(() =>
-            Boolean(window.__nookVault?.isAuthenticated),
-          ),
-          await page.getByTestId('approve-extension-device-btn').isVisible(),
-        ),
-      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
-    )
+    .poll(authenticatedSurface, { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
     .toBe(true)
-
-  if (restoreDevicesAccess) {
-    await page.evaluate(() => {
-      history.pushState(history.state, '', '/identity/keys')
-      window.dispatchEvent(new PopStateEvent('popstate'))
-    })
-    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    await expect(page).toHaveURL(/\/identity\/keys$/)
-  }
-
   await waitForVaultOperationsIdle(page)
 }
 
@@ -837,7 +742,7 @@ export async function invokeInitializedVaultProviderReload(page: Page) {
   })
 }
 
-export /** Wait until the login gate exposes local unlock or the vault is already open. */
+export /** Wait until the login gate offers a vault to unlock or the vault is already open. */
 async function ensureLoginLocalUnlockReady(page: Page) {
   const vaultPanel = page.getByTestId('vault-panel')
   if (await vaultPanel.isVisible()) {
@@ -848,15 +753,16 @@ async function ensureLoginLocalUnlockReady(page: Page) {
     timeout: UI_TIMEOUT_MS,
   })
 
-  const localUnlock = page.getByTestId('login-local-unlock-step')
-  const vaultPicker = vaultChoice(page)
+  const vaultRow = vaultChoiceOption(page)
 
   await expect
     .poll(
       async () => {
         if (await vaultPanel.isVisible()) return 'ready'
-        if (await localUnlock.isVisible()) return 'ready'
-        if (await vaultPicker.isVisible()) return 'ready'
+        if (await vaultRow.isVisible()) return 'ready'
+        if (await page.getByTestId('card-password-unlock-open').isVisible()) {
+          return 'ready'
+        }
         await page.evaluate(async () => {
           const vault = window.__nookVault
           await vault?.refreshLocalVaultCatalog?.()
@@ -869,68 +775,56 @@ async function ensureLoginLocalUnlockReady(page: Page) {
     .toBe('ready')
 }
 
-/** Unlock from the login gate — optional password when device keys are unavailable. */
+/** Open the backup-password field on the locked card and unlock with it. */
+export async function unlockWithCardPassword(
+  page: Page,
+  opts: { password: string; entryLabel?: string; storeId?: string },
+) {
+  if (opts.storeId) {
+    await page.evaluate(async (storeId) => {
+      await window.__nookVault?.chooseLoginVault(storeId)
+    }, opts.storeId)
+  }
+  const open = page.getByTestId('card-password-unlock-open')
+  await expect(open).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  await open.click()
+  if (opts.entryLabel) {
+    await page
+      .getByTestId('card-password-entry')
+      .selectOption({ label: opts.entryLabel })
+  }
+  await page.getByTestId('card-password-input').fill(opts.password)
+  await dismissSyncConflictIfVisible(page)
+  await page.getByTestId('card-password-submit').click()
+}
+
+/** Unlock from the login gate: the vault row (this device's passkey), or a
+ * backup password when one is given. */
 export async function unlockVaultOnLogin(
   page: Page,
   opts?: { password?: string; entryLabel?: string; storeId?: string },
 ) {
-  if (await page.getByTestId('vault-panel').isVisible()) {
+  const vaultPanel = page.getByTestId('vault-panel')
+  if (await vaultPanel.isVisible()) {
     return
   }
   await ensureLoginLocalUnlockReady(page)
-
-  const vaultPicker = vaultChoice(page)
-  if (await vaultPicker.isVisible()) {
-    const option = vaultChoiceOption(page, opts?.storeId)
-    await expect(option).toBeVisible({ timeout: UI_TIMEOUT_MS })
-    await option.click()
-    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
-  }
-
-  const localUnlock = page.getByTestId('login-local-unlock-step')
-  if (await localUnlock.isVisible()) {
-    if (opts?.password) {
-      await selectLoginUnlockMethod(page, UnlockMethod.Password)
-      await expect(
-        page.getByTestId('login-password-entry-list').getByRole('button', {
-          name: ((...[v = /.+/]) => v)(opts.entryLabel),
-        }),
-      ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-      if (opts.entryLabel) {
-        await page
-          .getByTestId('login-password-entry-list')
-          .getByRole('button', { name: opts.entryLabel })
-          .click()
-      }
-      await page.getByTestId('login-password-input').fill(opts.password)
-    } else {
-      const keysMethod = page.getByTestId('login-unlock-method-keys')
-      if (await keysMethod.isVisible()) {
-        const checked = await keysMethod.getAttribute('aria-checked')
-        if (checked !== 'true') {
-          await selectLoginUnlockMethod(page, UnlockMethod.Keys)
-        }
-      }
-    }
-    const unlockBtn = page.getByTestId('unlock-vault-btn')
-    const vaultPanel = page.getByTestId('vault-panel')
-    if (await vaultPanel.isVisible()) {
-      return
-    }
-    await expect(unlockBtn).toBeEnabled({ timeout: UI_TIMEOUT_MS })
-    if (await vaultPanel.isVisible()) {
-      return
-    }
-    await dismissSyncConflictIfVisible(page)
-    await unlockBtn.click()
+  if (await vaultPanel.isVisible()) {
     return
   }
-
-  throw new Error(
-    'Login gate has no local unlock step — use createLocalVaultOnLogin or openLoginProviderSetup.',
-  )
+  if (opts?.password) {
+    const passwordUnlock: Parameters<typeof unlockWithCardPassword>[1] = {
+      password: opts.password,
+      ...(opts.entryLabel ? { entryLabel: opts.entryLabel } : {}),
+      ...(opts.storeId ? { storeId: opts.storeId } : {}),
+    }
+    await unlockWithCardPassword(page, passwordUnlock)
+    return
+  }
+  const row = vaultChoiceOption(page, opts?.storeId)
+  await expect(row).toBeEnabled({ timeout: UI_TIMEOUT_MS })
+  await dismissSyncConflictIfVisible(page)
+  await row.click()
 }
 
 /** Mark the browser session as explicitly locked so auto-unlock stays off after reload. */

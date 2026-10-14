@@ -98,6 +98,11 @@ import {
   importPairingAfterCompanionReady,
 } from './service-worker/pairing-import'
 import { handlePairingStateQuery } from './service-worker/pairing-state-query'
+import {
+  handleDefaultVaultSelect,
+  handlePairedVaultsQuery,
+} from './service-worker/paired-vaults'
+import { pairedVaultsMessages } from '../lib/paired-vaults'
 import { ExtensionPairingStateQueryMessage as ExtensionPairingStateQueryMessageSchema } from '../lib/pairing-state'
 import { websitePasskeyRequests } from './service-worker/passkey-operations'
 import {
@@ -172,6 +177,10 @@ const extensionLifecycleRoutingDependencies: Parameters<
     ),
   extensionSessionDocument,
   handlePairingStateQuery,
+  handlePairedVaultsQuery,
+  handleDefaultVaultSelect,
+  decodePairedVaultsQueryMessage: pairedVaultsMessages.decodeQuery,
+  decodeDefaultVaultSelectMessage: pairedVaultsMessages.decodeSelectDefault,
   decodePairingApprovedMessage: ExtensionPairingApprovedMessageSchema.decode,
   importLocalEventLogUpdate,
   importPairingAfterCompanionReady,

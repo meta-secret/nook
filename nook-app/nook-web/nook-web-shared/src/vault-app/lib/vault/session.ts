@@ -65,7 +65,6 @@ export class VaultSessionActions {
     state.passwordEntries = [];
     state.clearSelectedPasswordEntry();
     state.loginPasswordPrompt = false;
-    state.loginDeviceKeysCapable = true;
     state.sentinelCeremonyPrompt = false;
     state.sentinelUnlockStatus = SentinelVaultUnlockState.NotSentinel;
     state.sentinelUnlockRequest = "";

@@ -303,7 +303,7 @@ export async function unlockPairedVaultThroughCompanion(
 ): Promise<void> {
   const { context, vaultPage, companionUnlock, extensionId } = request
   const authenticatedShell = vaultPage.getByTestId('authenticated-shell')
-  const unlockButton = vaultPage.getByTestId('unlock-vault-btn')
+  const unlockButton = vaultPage.getByTestId('identity-vault-row').first()
   const adoptionVisibilityOptions: CompanionAdoptionVisibilityOptions = {
     timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
   }

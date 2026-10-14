@@ -239,7 +239,7 @@ impl CheckedProviderEnrollment<'_> {
                         }
                         StoredOAuthTokenExpiry::Unknown => OAuthTokenExpiry::Unknown,
                     },
-                    match (&oauth.file_id, &oauth.file_name) {
+                    match (&oauth.enrollment_file_id(), &oauth.file_name) {
                         (
                             StoredOAuthRemoteFileId::FileId(file_id),
                             StoredOAuthRemoteFileName::FileName(file_name),
@@ -378,6 +378,7 @@ mod tests {
                     oauth_file: StoredOAuthFileConfiguration::NotApplicable,
                     local_folder: StoredLocalFolderConfiguration::NotApplicable,
                     store_id: ProviderVaultScope::Unscoped,
+                    layout: crate::ProviderRowLayout::LegacyVaultRoot,
                     sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                     created_at: "2026-06-24T00:00:00.000Z".to_owned(),
                 },
@@ -410,6 +411,7 @@ mod tests {
                     }),
                     local_folder: StoredLocalFolderConfiguration::NotApplicable,
                     store_id: ProviderVaultScope::Unscoped,
+                    layout: crate::ProviderRowLayout::LegacyVaultRoot,
                     sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                     created_at: "2026-06-24T00:00:00.000Z".to_owned(),
                 },
@@ -512,6 +514,46 @@ mod tests {
                 "joiner@example.com".to_owned(),
                 "persisted-shared-folder".to_owned(),
             ))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn private_drive_codes_carry_the_issuers_event_folder() -> anyhow::Result<()> {
+        let mut drive = ProviderEnrollmentFixture::oauth(
+            "drive",
+            OauthFilePreset::GoogleDrive,
+            StoredOAuthRemoteFileId::FileId("vault-file".to_owned()),
+            "nook-events",
+        )
+        .provider;
+        let config = (match &mut drive.oauth_file {
+            StoredOAuthFileConfiguration::Configured(config) => Ok(config),
+            StoredOAuthFileConfiguration::NotApplicable => {
+                Err(io::Error::other("OAuth config must exist"))
+            }
+        })?;
+        config.drive_private_target =
+            crate::StoredGoogleDrivePrivateTarget::FolderId("folder-abc".to_owned());
+        let personal = ProviderEnrollmentRequest {
+            provider: &drive,
+            architecture: &VaultArchitecture::default(),
+            audience: EnrollmentAudience::Personal,
+        }
+        .build()?;
+        let EnrollmentProviderDataRef::Personal(crate::PersonalEnrollmentProviderData::OauthFile {
+            remote_file,
+            ..
+        }) = personal.data()
+        else {
+            anyhow::bail!("a private Drive row builds a personal OAuth payload");
+        };
+        assert_eq!(
+            remote_file,
+            &crate::OAuthRemoteFile::Identified {
+                file_id: "private-folder-v2:folder-abc".to_owned(),
+                file_name: "nook-events".to_owned(),
+            }
         );
         Ok(())
     }

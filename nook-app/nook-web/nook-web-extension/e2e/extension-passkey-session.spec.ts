@@ -26,6 +26,7 @@ import {
   setupStorageKey,
   simpleVaultBaseUrl,
   startLoginServer,
+  leaveFirstRunReady,
   waitForExtensionPairingReady,
   waitForNewPage,
   withE2eDeadline,
@@ -289,9 +290,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await expect(
       pairingLauncher.getByTestId('extension-toolbar-menu'),
     ).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
-    await expect(
-      pairingLauncher.getByTestId('companion-vault-status'),
-    ).toHaveAttribute('data-connected', 'true')
+    await expect(pairingLauncher.getByTestId('companion-vaults')).toBeVisible()
     await expect(
       pairingLauncher.getByTestId('connect-simple-vault-btn'),
     ).toBeVisible()
@@ -327,7 +326,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       await website.page.close()
     }
 
-    await expect(simplePage.getByTestId('app-success')).toBeVisible()
+    await leaveFirstRunReady(simplePage)
     await expect(simplePage).toHaveURL((url) => url.pathname.endsWith('/vault'))
     await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible()
     await simplePage.close()
@@ -577,7 +576,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
 
     await reopenedVaultPage.getByTestId('header-lock-vault-btn').click()
     await expect(
-      reopenedVaultPage.getByTestId('login-local-unlock-step'),
+      reopenedVaultPage.getByTestId('identity-vault-row').first(),
     ).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
 
     const firstUnlock: PairedVaultCompanionUnlock = {
@@ -693,7 +692,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       expect(restartedExtensionId).toBe(extensionId)
       await lockedVaultPage.goto(simpleVaultBaseUrl)
       await expect(
-        lockedVaultPage.getByTestId('login-local-unlock-step'),
+        lockedVaultPage.getByTestId('identity-vault-row').first(),
       ).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
 
       const restartedUnlock: PairedVaultCompanionUnlock = {
@@ -824,7 +823,7 @@ test('re-approves an existing local vault after reload without event-log-access-
     )
 
     const consent = connectPage.getByTestId('extension-connect-consent')
-    const unlockStep = connectPage.getByTestId('login-local-unlock-step')
+    const unlockStep = connectPage.getByTestId('identity-vault-row').first()
     await expect(consent.or(unlockStep)).toBeVisible({
       timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
     })
@@ -861,12 +860,12 @@ test('re-approves an existing local vault after reload without event-log-access-
     // Reload, restore the IndexedDB signing seed, then unlock and re-approve.
     await simplePage.goto(simpleVaultBaseUrl)
     const reloadedShell = simplePage.getByTestId('authenticated-shell')
-    const reloadedUnlock = simplePage.getByTestId('login-local-unlock-step')
+    const reloadedUnlock = simplePage.getByTestId('identity-vault-row').first()
     await expect(reloadedShell.or(reloadedUnlock)).toBeVisible({
       timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
     })
     if (await reloadedUnlock.isVisible()) {
-      await simplePage.getByTestId('unlock-vault-btn').click()
+      await simplePage.getByTestId('identity-vault-row').first().click()
       const reloadOverlay = simplePage.getByTestId('passkey-auth-overlay')
       if (await reloadOverlay.isVisible()) {
         await simplePage.getByTestId('device-protection-unlock-btn').click()
@@ -904,12 +903,14 @@ test('re-approves an existing local vault after reload without event-log-access-
     const reconnectConsent = reconnectPage.getByTestId(
       'extension-connect-consent',
     )
-    const reconnectUnlock = reconnectPage.getByTestId('login-local-unlock-step')
+    const reconnectUnlock = reconnectPage
+      .getByTestId('identity-vault-row')
+      .first()
     await expect(reconnectConsent.or(reconnectUnlock)).toBeVisible({
       timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
     })
     if (await reconnectUnlock.isVisible()) {
-      await reconnectPage.getByTestId('unlock-vault-btn').click()
+      await reconnectPage.getByTestId('identity-vault-row').first().click()
       const reconnectOverlay = reconnectPage.getByTestId('passkey-auth-overlay')
       if (await reconnectOverlay.isVisible()) {
         await reconnectPage.getByTestId('device-protection-unlock-btn').click()

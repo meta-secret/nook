@@ -245,9 +245,7 @@ test.describe('multi-vault on one browser profile', () => {
       ),
     ).toContainText('Vault Bee')
     await expect(page.getByTestId('vault-admin-vaults-section')).toBeVisible()
-    await expect(page.getByTestId('vault-admin-vault-count')).toContainText(
-      '2 vaults',
-    )
+    await expect(page.getByTestId('vault-admin-name')).toHaveCount(2)
 
     await openManagePage(page, ManagePage.Sync)
     await page

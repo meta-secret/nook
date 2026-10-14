@@ -98,6 +98,7 @@ mod tests {
                 oauth_file: StoredOAuthFileConfiguration::NotApplicable,
                 local_folder: StoredLocalFolderConfiguration::NotApplicable,
                 store_id: ProviderVaultScope::Unscoped,
+                layout: crate::ProviderRowLayout::LegacyVaultRoot,
                 sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-06-24T00:00:00.000Z".to_owned(),
             }

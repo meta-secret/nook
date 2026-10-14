@@ -2,19 +2,17 @@ import { test, expect, type BrowserContext, type Page } from './fixtures'
 import {
   addSecret,
   addVaultPassword,
+  approveIdentityJoin,
   assertVaultReady,
+  E2E_IDENTITY_PASSPHRASE,
+  openVaultAfterIdentityApproval,
   createIsolatedContext,
   dismissSyncConflictIfVisible,
   expandSettingsSection,
-  expandLoginEnrollmentPanel,
   expectNoVaultPasswords,
   openStorageSettings,
-  invokeInitializedVaultProviderReload,
   revealSecretValue,
   rotateVaultPassword,
-  seedExtraOauthFileProviders,
-  seedLocalVaultYamlForEnrollment,
-  readLocalVaultYamlFromIdb,
   readNookLogEntries,
   readNookLogSnapshot,
   readRawAuthProvidersFromIdb,
@@ -30,7 +28,6 @@ import {
   parseJson,
   readStringProperty,
   requireRecord,
-  waitForVaultUnlocked,
   openVaultPage,
   openManagePage,
   ManagePage,
@@ -103,11 +100,14 @@ test.describe('vault password envelope with sync provider', () => {
     expect(yaml.secretIds.length).toBeGreaterThanOrEqual(1)
   })
 
-  test('device A issues an enrollment link without plaintext provider credentials', async () => {
+  test('device A issues an identity link without plaintext provider credentials', async () => {
     await openVaultPage(deviceA)
     await expect(deviceA.getByTestId('vault-panel')).toBeVisible()
     await openManagePage(deviceA, ManagePage.Devices)
-    const linkInput = await submitOnboardEnrollmentCode(deviceA, vaultPassword)
+    const linkInput = await submitOnboardEnrollmentCode(
+      deviceA,
+      E2E_IDENTITY_PASSPHRASE,
+    )
     const link = (await linkInput.inputValue()).trim()
     expect(link).toContain('#enroll=')
     const code = enrollmentCodeFromLink(link)
@@ -131,48 +131,33 @@ test.describe('vault password envelope with sync provider', () => {
     test.info().annotations.push({ type: 'enrollment-link', description: link })
   })
 
-  test('device B self-enrols via the pasted link without approval', async () => {
+  test('device B joins via the pasted link and opens the vault after approval', async () => {
     const linkInput = deviceA.getByTestId('onboarding-link-url')
     const link = (await linkInput.inputValue()).trim()
     expect(link).toContain('#enroll=')
-
-    const enrollmentYaml = await readLocalVaultYamlFromIdb(deviceA)
-    expect(enrollmentYaml.trim().length).toBeGreaterThan(0)
     await installSyncRemote(deviceB, target)
 
     await deviceB.goto('/app/')
     await expect(deviceB.getByTestId('login-gate')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await deviceB.waitForFunction(
-      () =>
-        Boolean(
-          (
-            window as Window & {
-              __nookVault?: unknown
-            }
-          ).__nookVault,
-        ),
-      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
-    )
-    await seedLocalVaultYamlForEnrollment(deviceB, enrollmentYaml)
-    await seedExtraOauthFileProviders(deviceB, [
-      {
-        id: 'e2e-enroll-sync',
-        label: 'File',
-        fileName: target.repoName,
-        accessToken: target.pat,
-      },
-    ])
-    await invokeInitializedVaultProviderReload(deviceB)
-
-    await expandLoginEnrollmentPanel(deviceB)
-    await deviceB.getByTestId('open-enrollment-code-btn').click()
+    // A fresh browser joins from its first screen: paste the invite link.
+    await deviceB.getByTestId('login-join-identity-btn').click()
+    await expect(deviceB.getByTestId('join-this-device')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
     await deviceB.getByTestId('enrollment-code-input').fill(link)
-    await deviceB.getByTestId('enrollment-password-input').fill(vaultPassword)
+    await deviceB
+      .getByTestId('enrollment-password-input')
+      .fill(E2E_IDENTITY_PASSPHRASE)
     await deviceB.getByTestId('submit-enrollment-code-btn').click()
+    await expect(deviceB.getByTestId('identity-join-pending')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
 
-    await waitForVaultUnlocked(deviceB, ENROLLMENT_UNLOCK_TIMEOUT_MS)
+    await approveIdentityJoin(deviceA, 2)
+    await openVaultPage(deviceA)
+    await openVaultAfterIdentityApproval(deviceB)
     await assertVaultReady(deviceB)
 
     const row = deviceB
@@ -181,14 +166,6 @@ test.describe('vault password envelope with sync provider', () => {
     await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
     const revealed = await revealSecretValue(deviceB, sharedSecretKey)
     expect(revealed).toBe(sharedSecretValue)
-
-    const localYaml = await waitForLocalVaultState(
-      deviceB,
-      (snapshot) =>
-        snapshot.authPkIds.length >= 1 && snapshot.secretIds.length >= 1,
-    )
-    expect(localYaml.unlockMode).toBe('keys')
-    expect(localYaml.secretIds.length).toBeGreaterThanOrEqual(1)
 
     const yaml = await waitForGithubVaultState(
       target,

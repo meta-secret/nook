@@ -2,9 +2,10 @@
 
 ## Overview
 
-**Status:** Architecture decision in implementation.
-The local identity directory and identity-owned DEKs are implemented.
-Replicated identity control remains an active delivery target.
+**Status:** Implemented.
+The local identity directory, identity-owned DEKs, and the replicated
+[identity control log](../../../nook-event-log/.cortex/docs/architecture/identity-control-log.md)
+are implemented. Device onboarding and sync-provider mounts are identity-level.
 
 Nook distinguishes a person, identities, passkeys, app keys, sync providers,
 and vaults. None of these names are interchangeable.
@@ -46,7 +47,7 @@ flowchart TD
 
     subgraph IdentityDomain["Identity Domain"]
         Identity["Identity (A, B, ...)"]
-        IdentityLog["Encrypted Identity Control Log<br/>(Members, public keys, passkey records)"]
+        IdentityLog["Signed Identity Control Log<br/>(Members, public keys, mounts)"]
         DekEnvelopes["Per-Vault DEK Envelopes<br/>(DEK encrypted to App Public Keys)"]
 
         Person -->|"owns or joins 0..n"| Identity
@@ -83,16 +84,18 @@ it may create a vault.
 That protector unwraps a local app key.
 The app public key is a member of the identity.
 
-The identity control log owns:
+The [identity control log](../../../nook-event-log/.cortex/docs/architecture/identity-control-log.md)
+owns:
 
-- a stable identity id and label;
-- passkey credential records;
-- app public keys (`app_id`, X25519 encryption public key, Ed25519 signing
-  public key, status);
+- a stable identity id;
+- app-key members (`app_id`, X25519 encryption public key, Ed25519 signing
+  public key, label), pending joins, and revocations;
 - per-vault DEK records: vault `store_id` plus envelopes of that vault DEK to
-  each active app public key;
-- recovery and control events;
-- zero or more sync-provider mounts for the control log.
+  each active app public key, per vault key epoch;
+- zero or more credential-free sync-provider mounts.
+
+Passkey credential records, the identity name, and vault names stay in local
+storage. The log is signed, not encrypted.
 
 Private app keys never enter the replicated identity record.
 Local private app keys live in `local_identity_keyring_v1`.
@@ -288,7 +291,8 @@ The first directory read migrates `identity_record_v1` when present:
 
 Pre-directory builds cannot read the new key.
 Downgrading after migration is unsupported.
-This local record is not the future replicated identity control log.
+The local directory caches the replicated identity control log. Identity sync
+applies the log's members and DEK envelopes to the matching local record.
 
 ## DEK ownership
 
@@ -301,8 +305,10 @@ The vault cannot be created without an identity that already has:
 2. a generated DEK for that vault.
 
 When an app key is added or removed, the identity re-wraps or drops DEK
-envelopes.
-The vault event log does not need a membership rewrite for that change.
+envelopes in its control log.
+The vault event log does not need an approver-written membership change.
+A joined app key self-enrolls into each Simple vault log with the DEK it
+already holds, and a revocation rotates each vault before its next write.
 
 Rejected model: vault stores identity-versioned DEK blobs that rewrite on every
 key add.
@@ -342,14 +348,155 @@ must not define the target model.
 
 ## Onboarding
 
-Creating a vault requires creating or selecting an identity first:
+An identity is built first. It gains app keys and sync-provider mounts, and its
+vaults function on top of that infrastructure. Device onboarding and provider
+mounts therefore act on the identity, never on one vault.
 
-1. create identity;
-2. enroll passkey or PIN and local app key;
-3. identity generates vault DEK and wraps it to current app public keys;
-4. create vault bound to that identity.
+### Create the first vault
 
-Adding another app key later updates identity DEK envelopes only.
+1. Create the identity.
+2. Enroll a passkey or PIN and the local app key.
+3. Generate the vault DEK and wrap it to the identity's current app keys.
+4. Create the vault bound to that identity.
+5. Register the vault in the identity control log with `vault-registered`.
+
+**Prohibited:** create a vault from the hub before any identity exists, then
+attach an identity later.
+
+**Required:** create the identity and its key with the first vault. The vault
+is registered in that identity's log from its genesis.
+
+### Join an installation to an identity
+
+1. An identity member issues an identity enrollment code.
+   - The code names the identity and the mount the joiner can reach.
+2. The joining installation decrypts the code and connects that mount.
+   - Personal credential transfer carries the provider credential.
+   - A shared grant carries only the target; the joiner signs in itself.
+3. The joiner syncs the identity log from the mount.
+4. The joiner appends a self-signed `member-join-requested` and pushes it.
+5. A member sees the pending join on **Identity → Devices** and approves it.
+   - The approver opens every owned Simple vault's DEK at its current key
+     epoch.
+   - `member-approved` wraps each DEK to the joiner's encryption key.
+   - Approval fails when the approver cannot open an owned vault.
+6. The joiner syncs again and adopts the identity.
+   - Its local directory record gains the members and DEK envelopes.
+   - Its identity card lists every vault the identity owns.
+7. On the first open of each Simple vault, the joiner appends a self-signed
+   `join-approved` to that vault's log with the DEK it holds.
+   - This uses the existing Simple self-enrolment policy in
+     [vault-event-log.md](../../../nook-event-log/.cortex/docs/architecture/vault-event-log.md).
+   - No approver writes into any vault log.
+
+A member may deny the request with `member-join-denied`.
+
+**Prohibited:** approve a joiner by writing `join-approved` into the open vault
+only, so the joiner sees one vault and must be approved again for each other
+vault.
+
+**Required:** approve once in the identity log. The approval wraps every owned
+vault's DEK, and the joiner reaches each vault through the identity.
+
+### Revoke an installation
+
+1. A member appends `member-revoked` for the app key.
+   - The identity always keeps at least one member.
+2. The open vault rotates immediately.
+   - Its log records `device-revoked` and an epoch checkpoint.
+   - The identity log records `vault-dek-granted` for the new epoch.
+3. Every other owned vault rotates before its next write.
+   - Opening a vault compares its signed roster with identity membership.
+   - A vault actor revoked from the identity is revoked from the vault first.
+   - The rotation and its identity rewrap complete before any edit.
+
+Revocation never protects data the revoked installation already decrypted. It
+stops that installation from reading anything written afterwards.
+
+**Prohibited:** revoke an app key in the identity log and let another vault
+accept new secrets under its old key epoch.
+
+**Required:** rotate that vault before its next write. The revoked app key
+holds no envelope for the new epoch, so it cannot read later secrets.
+
+### Keep Sentinel vaults on their ceremony
+
+Sentinel vault keys are threshold shares, not a DEK the identity can wrap.
+Identity approval grants a joiner the identity's Simple vaults only. A Sentinel
+vault keeps its participant ceremony in
+[sentinel-genesis.md](sentinel-genesis.md).
+
+**Prohibited:** wrap a reconstructed Sentinel key bundle to a joiner during
+identity approval.
+
+**Required:** list the Sentinel vault on the joiner's identity card as needing
+its ceremony. Identity membership never bypasses the threshold.
+
+### Issue identity enrollment codes
+
+The enrollment code invites an installation into an identity, not a vault.
+
+- The encrypted payload holds the provider transport and
+  `identity: { identity_id, label }`.
+- The provider transport keeps the personal and shared typestates described in
+  [auth-providers.md](auth-providers.md#shared-provider-onboarding).
+- The outer envelope and its PBKDF2 and AES-GCM parameters are unchanged.
+- Codes issued by earlier builds named a vault. They are short-lived invitations
+  and fail closed as invalid codes; the member issues a new code.
+
+**Prohibited:** keep `vault_name` in the payload so the joiner's identity card
+can show the vault before approval.
+
+**Required:** name only the identity. The joiner learns the identity's vaults
+from the approved control log, which also carries their DEKs.
+
+### Mount sync providers on the identity
+
+Provider rows stay in the app-scoped `providers:{app_id}` snapshot, which is
+already one local identity's storage. Each row records its remote layout.
+
+- **Identity namespaced rows**
+  - Replicate the identity log and every vault the identity owns.
+  - Use the namespaced paths in
+    [identity-control-log.md](../../../nook-event-log/.cortex/docs/architecture/identity-control-log.md#store-the-log-once-per-provider-mount).
+- **Legacy vault root rows**
+  - Rows saved before identity mounts keep their one vault at the legacy root.
+  - They also carry the identity log in its own namespace.
+- **iCloud rows**
+  - Stay bound to the vault they were added from until `CloudKit` can list a
+    namespace.
+- **Mount records**
+  - The identity log records each remote row's credential-free target.
+  - A joining installation sees recorded mounts it has not connected and
+    connects each with its own credential.
+  - A joining installation saves its row before it can read the log. Once
+    the log arrives, the row takes the layout recorded for its target: a
+    namespaced record wins, and a legacy record binds the row to that vault.
+
+**Prohibited:** add a GitHub provider while vault A is open and leave vault B
+of the same identity without replication.
+
+**Required:** add the provider on **Identity → Sync**. The namespaced row
+replicates the identity log and both vaults.
+
+### Migrate per-vault onboarding
+
+Existing data is migrated without moving remote files.
+
+- **Per-vault join events:** an installation that can open the identity's
+  vaults writes the identity genesis from their signed rosters. The
+  [migration rules](../../../nook-event-log/.cortex/docs/architecture/identity-control-log.md#migrate-per-vault-membership-once)
+  own which devices become members.
+- **Per-vault provider rows:** missing `layout` decodes as the legacy vault
+  root. Each row bound to a vault becomes a `legacy-single-vault` mount record.
+- **Rollback projection:** schema-1 rollback rows omit identity namespaced rows,
+  because an older build would route them to the legacy root.
+
+**Prohibited:** copy a legacy vault's remote events into
+`nook-log/v1/vaults/{store_id}/events` during migration.
+
+**Required:** keep them at the legacy root and record the row's layout. Remote
+history stays where every existing replica already reads it.
 
 ## Browser extension boundary
 
@@ -373,5 +520,6 @@ It acts through a selected identity after the matching app key is enrolled.
 - [devices-and-access.md](../../../../.cortex/docs/spec/devices-and-access.md)
 - [auth-providers.md](auth-providers.md)
 - [vault-event-log.md](../../../nook-event-log/.cortex/docs/architecture/vault-event-log.md)
+- [identity-control-log.md](../../../nook-event-log/.cortex/docs/architecture/identity-control-log.md)
 - [vault-session-and-lock.md](vault-session-and-lock.md)
 - [browser-extension.md](../../../../nook-web/nook-web-extension/.cortex/docs/spec/browser-extension.md)

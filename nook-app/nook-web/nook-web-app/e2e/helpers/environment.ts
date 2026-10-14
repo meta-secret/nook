@@ -97,6 +97,13 @@ export const GITHUB_SYNC_TIMEOUT_MS = configuredGithubSyncTimeoutMs()
 export const GITHUB_CONNECT_TIMEOUT_MS = configuredGithubConnectTimeoutMs()
 export const GITHUB_SYNC_INTERVAL_MS = configuredGithubPollIntervalMs()
 
+/**
+ * Sentinel vaults are created only in the Sentinel app; the unified and Simple
+ * apps never offer them. Tagged tests run in the isolation config's
+ * sentinel-app project and are skipped by the unified-app projects.
+ */
+export const SENTINEL_APP = { tag: '@sentinel' }
+
 export async function sleep(ms: number) {
   await new Promise((resolve) => setTimeout(resolve, ms))
 }

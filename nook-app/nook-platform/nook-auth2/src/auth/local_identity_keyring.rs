@@ -463,6 +463,44 @@ impl LocalIdentityKeyring {
             })
     }
 
+    /// Rebind a protected entry to the replicated identity it was adopted into.
+    pub fn rebind_identity(
+        mut self,
+        local_identity_id: &IdentityId,
+        replicated_identity_id: &IdentityId,
+    ) -> Result<Self, KeyringRejection> {
+        let admitted = self.validate().and_then(|()| {
+            if self
+                .entries
+                .iter()
+                .any(|entry| entry.identity_id() == replicated_identity_id)
+            {
+                return Err(MultiDeviceError::ReplicatedIdentityAlreadyLocal {
+                    identity_id: replicated_identity_id.to_string(),
+                });
+            }
+            self.entry_index(local_identity_id)
+        });
+        match admitted {
+            Ok(index) => match self.entries.get_mut(index) {
+                Some(entry) => {
+                    entry.identity_id = replicated_identity_id.clone();
+                    Ok(self)
+                }
+                None => Err(KeyringRejection {
+                    keyring: self,
+                    cause: MultiDeviceError::IdentityNotFound {
+                        identity_id: local_identity_id.to_string(),
+                    },
+                }),
+            },
+            Err(cause) => Err(KeyringRejection {
+                keyring: self,
+                cause,
+            }),
+        }
+    }
+
     pub fn remove(
         mut self,
         identity_id: &IdentityId,
@@ -709,6 +747,35 @@ mod tests {
                 })
                 .is_err()
         );
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod rebind_tests {
+    use super::*;
+
+    #[test]
+    fn rebinding_moves_one_entry_and_refuses_an_existing_target() -> anyhow::Result<()> {
+        let app = AppKey::generate()?;
+        let local = IdentityId::generate()?;
+        let replicated = IdentityId::generate()?;
+        let wrapped = crate::DeviceIdentityProtection::new(&app.secret_string())
+            .with_pin("correct horse battery staple")?;
+        let entry =
+            LocalIdentityKeyringEntry::protected(local.clone(), &app, wrapped, &"22".repeat(32))?;
+        let keyring = LocalIdentityKeyring::empty().insert(entry)?;
+        let rebound = keyring.rebind_identity(&local, &replicated)?;
+        assert_eq!(rebound.entries().len(), 1);
+        assert!(matches!(
+            rebound.entry(&replicated),
+            LocalIdentityProtection::Protected(_)
+        ));
+        assert!(matches!(
+            rebound.entry(&local),
+            LocalIdentityProtection::Unprotected
+        ));
+        assert!(rebound.rebind_identity(&replicated, &replicated).is_err());
         Ok(())
     }
 }

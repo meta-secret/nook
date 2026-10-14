@@ -1,6 +1,5 @@
 export enum VaultCreationWizardStep {
   Choose = "choose",
-  SimpleCreate = "simple-create",
   SentinelDashboard = "sentinel-dashboard",
   SentinelPolicy = "sentinel-policy",
   SentinelCeremony = "sentinel-ceremony",
@@ -9,7 +8,6 @@ export enum VaultCreationWizardStep {
 
 export enum ChosenVaultPath {
   Undecided = "undecided",
-  Simple = "simple",
   Sentinel = "sentinel",
   Join = "join",
 }

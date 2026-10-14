@@ -1,4 +1,3 @@
-import { UnlockMethod } from '$lib/components/login/login-unlock-state'
 import { LocalLoginPreparationState } from '$lib/vault/state/provider.svelte'
 import { expect, test } from '../fixtures'
 import {
@@ -7,7 +6,6 @@ import {
   connectLocalVault,
   disableLoginAutoUnlock,
   openStorageSettings,
-  selectLoginUnlockMethod,
   UI_TIMEOUT_MS,
 } from '../helpers'
 
@@ -25,7 +23,7 @@ test('shows backup-password unlock after locked local-vault startup', async ({
   await addVaultPassword(page, 'Startup recovery', 'startup-recovery-password')
 
   await page.getByTestId('header-lock-vault-btn').click()
-  await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
+  await expect(page.getByTestId('login-gate')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
   await disableLoginAutoUnlock(page)
@@ -34,7 +32,7 @@ test('shows backup-password unlock after locked local-vault startup', async ({
   await expect(page.getByTestId('login-gate')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
-  await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
+  await expect(page.getByTestId('identity-vault-row').first()).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
   await expect(page.getByTestId('vault-error')).not.toBeVisible()
@@ -79,13 +77,10 @@ test('shows backup-password unlock after locked local-vault startup', async ({
   expect(retryPreparation).toBe(LocalLoginPreparationState.Ready)
   await expect(vaultError).not.toBeVisible()
 
-  await selectLoginUnlockMethod(page, UnlockMethod.Password)
-  const passwordEntries = page.getByTestId('login-password-entry-list')
-  await expect(passwordEntries).toBeVisible({ timeout: UI_TIMEOUT_MS })
-  await expect(
-    passwordEntries.getByRole('button', { name: 'Startup recovery' }),
-  ).toBeVisible()
-  await expect(page.getByTestId('login-password-input')).toBeVisible()
+  await page.getByTestId('card-password-unlock-open').click()
+  await expect(page.getByTestId('card-password-input')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
   await expect(page.getByTestId('passkey-auth-overlay')).toBeHidden()
   await expect(vaultError).not.toBeVisible()
   await page.waitForTimeout(DEMO_BEAT_MS)

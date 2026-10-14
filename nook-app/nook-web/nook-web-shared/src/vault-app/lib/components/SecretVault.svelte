@@ -750,7 +750,7 @@
           </div>
         </div>
         <div
-          class="nk-chips"
+          class="nk-chips nk-chips-track"
           role="group"
           aria-label={vault.t(I18N_KEYS.VaultFilterByType)}
           data-testid="secret-type-filter"
@@ -792,7 +792,7 @@
 
       {#if filteredItems.length === 0}
         <div
-          class="nk-frame-sheet nk-empty flex-1"
+          class="nk-empty flex-1 content-center"
           data-testid="vault-empty-search"
         >
           <span class="nk-tile nk-tile-lg">

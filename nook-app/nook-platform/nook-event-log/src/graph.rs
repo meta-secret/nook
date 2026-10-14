@@ -1,12 +1,14 @@
 //! Causal event DAG: parent validation, ancestry, heads, and pending events.
 
 mod authorization;
+mod roster;
 use crate::canonical::EventId;
 use crate::event::VaultEvent;
 use crate::{EventCount, EventError, EventResult};
 use nook_replication::{
     CausalEventInsertion, CausalGraph, CausalGraphError, CausalInsertStatus, CausalQuarantine,
 };
+pub use roster::{VaultAuthorizedRoster, VaultRosterMember};
 use std::collections::BTreeMap;
 
 /// Why an event is not yet applicable to projection.

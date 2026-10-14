@@ -6,10 +6,18 @@ import {
   WorkspaceLocation,
   WorkspacePath,
 } from '$lib/app/workspace-route'
+import { VaultWorkspaceActions } from '$lib/vault/ui'
+import {
+  VaultStorageFailure,
+  VaultStorageFailureKind,
+} from '$lib/runtime/storage-failure'
+import { err } from 'neverthrow'
+import { VaultStateTestFixture } from '../vault-state-test-fixture'
 
 afterEach(() => {
   window.history.replaceState({}, '', '/')
   vi.restoreAllMocks()
+  vi.unstubAllEnvs()
 })
 
 describe('workspace routes', () => {
@@ -21,8 +29,8 @@ describe('workspace routes', () => {
     ['/identity/keys', WorkspaceRoute.Keys],
     ['/identity/vaults/', WorkspaceRoute.Vaults],
     ['/identity/settings', WorkspaceRoute.Settings],
-    ['/vault/devices', WorkspaceRoute.Devices],
-    ['/vault/sync', WorkspaceRoute.Sync],
+    ['/identity/devices', WorkspaceRoute.Devices],
+    ['/identity/sync', WorkspaceRoute.Sync],
     ['/vault/passwords', WorkspaceRoute.Passwords],
     ['/vault/import', WorkspaceRoute.Import],
     ['/simple/identity/keys', WorkspaceRoute.Keys],
@@ -39,6 +47,8 @@ describe('workspace routes', () => {
     ['/simple/devices-access', WorkspaceRoute.Keys],
     ['/admin', WorkspaceRoute.Vaults],
     ['/onboard', WorkspaceRoute.Devices],
+    ['/vault/devices', WorkspaceRoute.Devices],
+    ['/vault/sync', WorkspaceRoute.Sync],
     ['/settings', WorkspaceRoute.Settings],
     ['/sentinel/settings', WorkspaceRoute.Settings],
   ])('keeps the earlier %s path working', (pathname, route) => {
@@ -60,9 +70,9 @@ describe('workspace routes', () => {
     [WorkspaceRoute.Keys, '/identity/keys'],
     [WorkspaceRoute.Vaults, '/identity/vaults'],
     [WorkspaceRoute.Settings, '/identity/settings'],
-    [WorkspaceRoute.Devices, '/vault/devices'],
-    [WorkspaceRoute.Sync, '/vault/sync'],
-    [WorkspaceRoute.Passwords, '/vault/passwords'],
+    [WorkspaceRoute.Devices, '/identity/devices'],
+    [WorkspaceRoute.Sync, '/identity/sync'],
+    [WorkspaceRoute.Passwords, '/identity/passwords'],
     [WorkspaceRoute.Import, '/vault/import'],
     [WorkspaceRoute.Help, '/help'],
   ])('builds the canonical %s path', (route, path) => {
@@ -114,4 +124,85 @@ describe('workspace routes', () => {
       ).toBe(WorkspaceNavigationFailureKind.HistoryUpdateFailed)
     },
   )
+
+  // Simple and Sentinel build with a relative Vite base, so one bundle runs at
+  // a domain root and under /simple/ or /sentinel/ in the preview harness.
+  test.each([
+    ['/identity/devices', '/identity/keys'],
+    ['/vault/passwords', '/identity/keys'],
+    ['/simple/identity/devices', '/simple/identity/keys'],
+    ['/sentinel', '/sentinel/identity/keys'],
+  ])('builds an absolute path from %s under a relative base', (from, path) => {
+    vi.stubEnv('BASE_URL', './')
+    window.history.replaceState({}, '', from)
+
+    expect(new WorkspaceLocation(WorkspaceRoute.Keys).path).toBe(path)
+  })
+
+  test('moving between nested pages never stacks route segments', () => {
+    vi.stubEnv('BASE_URL', './')
+    window.history.replaceState({}, '', '/identity/devices')
+
+    for (const route of [
+      WorkspaceRoute.Sync,
+      WorkspaceRoute.Settings,
+      WorkspaceRoute.Passwords,
+      WorkspaceRoute.Import,
+      WorkspaceRoute.Vault,
+    ]) {
+      expect(new WorkspaceLocation(route).navigate().isOk()).toBe(true)
+    }
+
+    expect(window.location.pathname).toBe('/vault')
+  })
+})
+
+describe('workspace route application', () => {
+  test('a page opened by URL before the engine opens reads nothing yet', async () => {
+    const vault = VaultStateTestFixture.create()
+    const refreshDevice = vi.spyOn(vault, 'refreshDeviceState')
+    const refreshCatalog = vi.spyOn(vault, 'refreshLocalVaultCatalog')
+    const passwordsPage: Parameters<
+      InstanceType<typeof VaultWorkspaceActions>['applyWorkspaceRoute']
+    >[0] = { route: WorkspaceRoute.Passwords }
+
+    new VaultWorkspaceActions(vault).applyWorkspaceRoute(passwordsPage)
+    await Promise.resolve()
+
+    expect(vault.hasManager).toBe(false)
+    expect(refreshDevice).not.toHaveBeenCalled()
+    expect(refreshCatalog).not.toHaveBeenCalled()
+    expect(vault.errorMsg).toBe('')
+  })
+
+  test('a backup-password session opens a page without a device-key error', async () => {
+    const vault = VaultStateTestFixture.create()
+    vi.spyOn(vault, 'hasManager', 'get').mockReturnValue(true)
+    vi.spyOn(vault, 'refreshLocalVaultCatalog').mockResolvedValue(
+      err(new VaultStorageFailure(VaultStorageFailureKind.TimedOut)),
+    )
+    const deviceRefresh = vi
+      .spyOn(vault, 'refreshDeviceState')
+      .mockResolvedValue(
+        err(
+          new VaultStorageFailure(
+            VaultStorageFailureKind.DeviceAuthorizationRequired,
+          ),
+        ),
+      )
+    const syncPage: Parameters<
+      InstanceType<typeof VaultWorkspaceActions>['applyWorkspaceRoute']
+    >[0] = { route: WorkspaceRoute.Sync }
+
+    new VaultWorkspaceActions(vault).applyWorkspaceRoute(syncPage)
+    await vi.waitFor(() => expect(deviceRefresh).toHaveBeenCalled())
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(vault.errorMsg).toBe(
+      vault.t(
+        new VaultStorageFailure(VaultStorageFailureKind.TimedOut)
+          .translationKey,
+      ),
+    )
+  })
 })

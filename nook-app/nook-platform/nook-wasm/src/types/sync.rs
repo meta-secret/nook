@@ -252,33 +252,27 @@ impl From<nook_core::SyncProviderTarget> for NookSyncProviderTarget {
 #[wasm_bindgen]
 pub struct NookEnrollmentIssueInput {
     provider: NookEnrollmentProvider,
-    vault_name: String,
+    identity_id: String,
+    identity_label: String,
     entry_id: String,
     issued_at: String,
 }
 
 #[wasm_bindgen]
 impl NookEnrollmentIssueInput {
+    /// An invitation into one identity through the given provider mount.
     #[wasm_bindgen]
-    pub fn unnamed(provider: NookEnrollmentProvider, entry_id: String, issued_at: String) -> Self {
-        Self {
-            provider,
-            vault_name: String::new(),
-            entry_id,
-            issued_at,
-        }
-    }
-
-    #[wasm_bindgen]
-    pub fn named(
+    pub fn for_identity(
         provider: NookEnrollmentProvider,
-        vault_name: String,
+        identity_id: String,
+        identity_label: String,
         entry_id: String,
         issued_at: String,
     ) -> Self {
         Self {
             provider,
-            vault_name,
+            identity_id,
+            identity_label,
             entry_id,
             issued_at,
         }
@@ -289,7 +283,14 @@ impl NookEnrollmentIssueInput {
     ) -> Result<nook_core::EnrollmentIssueInput, nook_core::EnrollmentError> {
         Ok(nook_core::EnrollmentIssueInput {
             provider: self.provider.to_core(),
-            vault_name: self.vault_name.clone(),
+            identity: nook_core::EnrollmentIdentityTarget {
+                identity_id: nook_core::IdentityId::parse(&self.identity_id).map_err(|_| {
+                    nook_core::EnrollmentError::MissingField {
+                        field: "identity_id",
+                    }
+                })?,
+                label: self.identity_label.clone(),
+            },
             entry_id: self.entry_id.clone(),
             issued_at: self.issued_at.clone(),
         })
@@ -315,7 +316,8 @@ impl NookEnrollmentIssueInput {
 #[derive(Clone)]
 pub struct NookDecryptedEnrollmentPayload {
     provider: NookEnrollmentProvider,
-    vault_name: String,
+    identity_id: String,
+    identity_label: String,
     entry_id: String,
     issued_at: String,
 }
@@ -325,7 +327,8 @@ impl NookDecryptedEnrollmentPayload {
     pub(crate) fn from_core(payload: nook_core::DecryptedEnrollmentPayload) -> Self {
         Self {
             provider: NookEnrollmentProvider::from_core(payload.provider),
-            vault_name: payload.vault_name,
+            identity_id: payload.identity.identity_id.to_string(),
+            identity_label: payload.identity.label,
             entry_id: payload.entry_id,
             issued_at: payload.issued_at,
         }
@@ -336,9 +339,14 @@ impl NookDecryptedEnrollmentPayload {
         self.provider.clone()
     }
 
-    #[wasm_bindgen(getter, js_name = vaultName)]
-    pub fn vault_name(&self) -> String {
-        self.vault_name.clone()
+    #[wasm_bindgen(getter, js_name = identityId)]
+    pub fn identity_id(&self) -> String {
+        self.identity_id.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = identityLabel)]
+    pub fn identity_label(&self) -> String {
+        self.identity_label.clone()
     }
 
     #[wasm_bindgen(getter, js_name = onboardingType)]
@@ -587,30 +595,39 @@ mod tests {
     #[wasm_bindgen_test]
     fn enrollment_inputs_and_sync_targets_keep_typed_values() -> anyhow::Result<()> {
         let provider = NookEnrollmentProvider::github("repo".into(), "pat".into());
-        let unnamed = NookEnrollmentIssueInput::unnamed(
+        let malformed = NookEnrollmentIssueInput::for_identity(
             provider.clone(),
+            "not-an-identity".into(),
+            "Personal".into(),
             "entry-1".into(),
             "2026-01-01".into(),
         );
-        assert_eq!(unnamed.entry_id(), "entry-1");
-        assert_eq!(unnamed.issued_at(), "2026-01-01");
-        assert_eq!(unnamed.to_core()?.vault_name, "");
-        let named = NookEnrollmentIssueInput::named(
+        assert_eq!(malformed.entry_id(), "entry-1");
+        assert_eq!(malformed.issued_at(), "2026-01-01");
+        assert!(malformed.to_core().is_err());
+        let identity_id = nook_core::IdentityId::generate()?;
+        let named = NookEnrollmentIssueInput::for_identity(
             provider,
+            identity_id.to_string(),
             "Personal".into(),
             "entry-2".into(),
             "2026-01-02".into(),
         );
-        assert_eq!(named.to_core()?.vault_name, "Personal");
+        assert_eq!(named.to_core()?.identity.identity_id, identity_id);
+        assert_eq!(named.to_core()?.identity.label, "Personal");
 
         let payload =
             NookDecryptedEnrollmentPayload::from_core(nook_core::DecryptedEnrollmentPayload {
                 provider: NookEnrollmentProvider::local().to_core(),
-                vault_name: "Vault".into(),
+                identity: nook_core::EnrollmentIdentityTarget {
+                    identity_id: identity_id.clone(),
+                    label: "Family".into(),
+                },
                 entry_id: "entry-3".into(),
                 issued_at: "2026-01-03".into(),
             });
-        assert_eq!(payload.vault_name(), "Vault");
+        assert_eq!(payload.identity_label(), "Family");
+        assert_eq!(payload.identity_id(), identity_id.to_string());
         assert_eq!(payload.entry_id(), "entry-3");
         assert_eq!(payload.issued_at(), "2026-01-03");
         assert!(matches!(

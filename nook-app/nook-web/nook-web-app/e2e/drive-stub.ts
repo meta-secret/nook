@@ -33,6 +33,17 @@ function isPrivateFolderLookup(requestUrl: string, fileName: string): boolean {
   )
 }
 
+const NAMESPACE_FOLDER_PREFIX = 'nook-'
+const IDENTITY_NAMESPACE_FOLDER_PREFIX = 'nook-identity-'
+const NAMESPACE_LOOKUP_PATTERN =
+  /^name = '((?:[^'\\]|\\.)*)' and mimeType = 'application\/vnd\.google-apps\.folder' and '((?:[^'\\]|\\.)*)' in parents and trashed = false$/
+const IDENTITY_LISTING_PATTERN =
+  /^name contains 'nook-identity-' and mimeType = 'application\/vnd\.google-apps\.folder' and '((?:[^'\\]|\\.)*)' in parents and trashed = false$/
+
+function unescapeDriveQueryValue(value: string): string {
+  return value.replace(/\\(.)/g, '$1')
+}
+
 function privateFolderHasAppDataParent(value: unknown): boolean {
   return (
     Array.isArray(value) && value.length === 1 && value[0] === 'appDataFolder'
@@ -84,6 +95,29 @@ export function createLocalE2eGoogleDriveVaultStub(
       eventFilesByParent.set(parentId, map)
     }
     return map
+  }
+
+  function identityFolderIds() {
+    return new Set(
+      privateFolders
+        .filter((folder) =>
+          folder.name.startsWith(IDENTITY_NAMESPACE_FOLDER_PREFIX),
+        )
+        .map((folder) => folder.id),
+    )
+  }
+
+  /** Vault events in every parent; identity control logs stay apart. */
+  function vaultEventFiles() {
+    const identityFolders = identityFolderIds()
+    const merged = new Map<string, string>()
+    for (const [parentId, map] of eventFilesByParent) {
+      if (identityFolders.has(parentId)) continue
+      for (const [digest, content] of map) {
+        merged.set(digest, content)
+      }
+    }
+    return merged
   }
 
   function allEventFiles() {
@@ -162,10 +196,12 @@ export function createLocalE2eGoogleDriveVaultStub(
         fileId = `e2e-drive-file-${fileName.replace(/\W/g, '-')}`
       }
     },
-    getEventFileCount: () => allEventFiles().size,
+    getEventFileCount: () => vaultEventFiles().size,
+    getIdentityEventFileCount: () =>
+      allEventFiles().size - vaultEventFiles().size,
     getEventFileCountForParent: (parentId: string) =>
       eventFilesFor(parentId).size,
-    getEventFileContents: () => [...allEventFiles().values()],
+    getEventFileContents: () => [...vaultEventFiles().values()],
     clearEventFiles: () => {
       eventFilesByParent.clear()
     },
@@ -246,6 +282,38 @@ export function createLocalE2eGoogleDriveVaultStub(
           if (parsed.mimeType === DRIVE_FOLDER_MIME_TYPE) {
             const folderName =
               typeof parsed.name === 'string' ? parsed.name : ''
+            const [folderParent = ''] = Array.isArray(parsed.parents)
+              ? parsed.parents.flatMap((parent) =>
+                  typeof parent === 'string' ? [parent] : [],
+                )
+              : []
+            if (
+              folderName.startsWith(NAMESPACE_FOLDER_PREFIX) &&
+              folderParent.length > 0 &&
+              folderParent !== 'appDataFolder'
+            ) {
+              // Event-log namespaces below a private or shared event parent.
+              const folder: PrivateFolderResource = {
+                id: `e2e-drive-namespace-${Buffer.from(`${folderParent}/${folderName}`).toString('base64url')}`,
+                name: folderName,
+                mimeType: DRIVE_FOLDER_MIME_TYPE,
+                parents: [folderParent],
+              }
+              privateFolders = privateFolders
+                .filter((existing) => existing.id !== folder.id)
+                .concat(folder)
+              await route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                headers: { 'access-control-allow-origin': '*' },
+                body: JSON.stringify({
+                  id: folder.id,
+                  name: folder.name,
+                  mimeType: folder.mimeType,
+                }),
+              })
+              return
+            }
             if (
               privateFolderHasAppDataParent(parsed.parents) &&
               folderName.length > 0
@@ -363,6 +431,36 @@ export function createLocalE2eGoogleDriveVaultStub(
                   folder.parents.includes('appDataFolder'),
               )
               .map(({ id, name, mimeType }) => ({ id, name, mimeType }))
+            await route.fulfill({
+              status: 200,
+              contentType: 'application/json',
+              headers: { 'access-control-allow-origin': '*' },
+              body: JSON.stringify({ files }),
+            })
+            return
+          }
+          const [query = ''] = new URL(fullUrl).searchParams.getAll('q')
+          const namespaceLookup = query.match(NAMESPACE_LOOKUP_PATTERN)
+          const identityListing = query.match(IDENTITY_LISTING_PATTERN)
+          if (namespaceLookup || identityListing) {
+            const [, rawName = '', rawParent = ''] = namespaceLookup
+              ? namespaceLookup
+              : ['', '', ((v) => (v ? v : ''))(identityListing?.[1])]
+            const name = unescapeDriveQueryValue(rawName)
+            const parent = unescapeDriveQueryValue(rawParent)
+            const files = privateFolders
+              .filter(
+                (folder) =>
+                  folder.parents.includes(parent) &&
+                  (namespaceLookup
+                    ? folder.name === name
+                    : folder.name.startsWith(IDENTITY_NAMESPACE_FOLDER_PREFIX)),
+              )
+              .map(({ id, name: folderName, mimeType }) => ({
+                id,
+                name: folderName,
+                mimeType,
+              }))
             await route.fulfill({
               status: 200,
               contentType: 'application/json',

@@ -36,11 +36,6 @@ export type VaultEntryDisplayNameRequest = {
   fallbackName: string;
 };
 
-export type CurrentVaultPairingAvailabilityRequest = {
-  link: VaultExtensionLink;
-  activeStoreId: string;
-};
-
 export type ExtensionConnectedEntryRequest = {
   link: VaultExtensionLink;
   storeId: string;
@@ -101,20 +96,6 @@ export class VaultExtensionPresentation {
       storeId: setup.connectedVaultStoreId,
       vaultName: setup.connectedVaultName,
     };
-  }
-}
-export class VaultPairingPresentation {
-  constructor(
-    private readonly request: CurrentVaultPairingAvailabilityRequest,
-  ) {}
-  get available(): boolean {
-    const request = this.request;
-    if (request.activeStoreId.trim() === "") return false;
-    if (request.link.kind === VaultExtensionLinkKind.Unpaired) return true;
-    return (
-      request.link.kind === VaultExtensionLinkKind.Connected &&
-      request.link.storeId !== request.activeStoreId
-    );
   }
 }
 export class VaultGrantPresentation {

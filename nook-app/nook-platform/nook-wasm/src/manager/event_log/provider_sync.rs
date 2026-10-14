@@ -431,11 +431,12 @@ impl NookVaultManager {
 
     pub(super) async fn read_external_local_folder_records(
         handle_id: &str,
+        location: &nook_core::EventLogLocation,
     ) -> Result<Vec<ExternalEventLogRecord>, NookError> {
         LocalFolderHandles::current()
             .open_folder(handle_id)
             .await?
-            .read_events()
+            .read_events(location)
             .await?
             .into_iter()
             .map(|file| {
@@ -521,8 +522,11 @@ impl NookVaultManager {
     pub(in crate::manager) async fn sync_local_folder_provider(
         &mut self,
         handle_id: &str,
+        layout: nook_core::ProviderRowLayout,
     ) -> Result<String, NookError> {
-        let remote_records = Self::read_external_local_folder_records(handle_id).await?;
+        self.storage.layout = layout;
+        let location = self.current_vault_location()?;
+        let remote_records = Self::read_external_local_folder_records(handle_id, &location).await?;
         let remote_event_ids = remote_records
             .iter()
             .map(|record| record.event_id.clone())
@@ -554,7 +558,7 @@ impl NookVaultManager {
         LocalFolderHandles::current()
             .open_folder(handle_id)
             .await?
-            .write_events(&writes)
+            .write_events(&location, &writes)
             .await?;
         Ok(match NookDatabase::load_from_indexed_db().await? {
             VaultSnapshotLookup::Stored(content) => content,

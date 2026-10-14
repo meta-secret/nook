@@ -1,7 +1,8 @@
-import { copyFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { Connect } from "vite";
 import type { Plugin } from "vitest/config";
+import { shellForAlias } from "./shell-alias.ts";
 import { vaultAppHeaders } from "./src/vault-app/security-headers.ts";
 
 export type VaultSpaOptions = {
@@ -16,8 +17,12 @@ export const VAULT_WORKSPACE_OUTPUT_ALIASES = [
   "devices-access",
   "help",
   "identities",
+  "identity",
+  "identity/devices",
   "identity/keys",
+  "identity/passwords",
   "identity/settings",
+  "identity/sync",
   "identity/vaults",
   "onboard",
   "settings",
@@ -33,7 +38,10 @@ export function writeShellAlias(request: ShellAliasWrite): void {
   const target = join(request.outDir, `${request.alias}.html`);
   const folder: Parameters<typeof mkdirSync>[1] = { recursive: true };
   mkdirSync(dirname(target), folder);
-  copyFileSync(request.shell, target);
+  writeFileSync(
+    target,
+    shellForAlias(readFileSync(request.shell, "utf8"), request.alias),
+  );
 }
 
 export type ShellAliasWrite = {

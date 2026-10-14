@@ -60,10 +60,10 @@ pub use auth::device_key_protection::{
 };
 pub use auth::enrollment::{
     CheckedEnrollmentEnvelope, CheckedEnrollmentIssuance, DecryptedEnrollmentPayload,
-    EnrollmentCodeEnvelope, EnrollmentEmail, EnrollmentEntryLabel, EnrollmentIssuance,
-    EnrollmentIssueInput, EnrollmentLinkInput, EnrollmentProvider, EnrollmentProviderDataRef,
-    EnrollmentState, OAuthAccountIdentity, OAuthRefreshCredential, OAuthRemoteFile,
-    OAuthTokenExpiry, PersonalCredentialTransfer, PersonalEnrollmentProvider,
+    EnrollmentCodeEnvelope, EnrollmentEmail, EnrollmentEntryLabel, EnrollmentIdentityTarget,
+    EnrollmentIssuance, EnrollmentIssueInput, EnrollmentLinkInput, EnrollmentProvider,
+    EnrollmentProviderDataRef, EnrollmentState, OAuthAccountIdentity, OAuthRefreshCredential,
+    OAuthRemoteFile, OAuthTokenExpiry, PersonalCredentialTransfer, PersonalEnrollmentProvider,
     PersonalEnrollmentProviderData, SharedEnrollmentProvider, SharedEnrollmentProviderData,
     SharedProviderGrant, TypedEnrollmentProvider,
 };
@@ -80,7 +80,8 @@ pub use auth::identity_directory::{
     DirectoryVaultEnrollment, IdentityCreation, IdentityDirectory, IdentityDirectoryRejection,
     IdentityDirectoryResolution, IdentityDirectoryVaultKeys, IdentitySelection,
     LegacyDirectoryBase, LocalIdentityKeyRetirement, MigratedIdentityDirectory,
-    PreparedLegacyDirectoryMigration, RecoveryRetirement, StagedIdentityRebase,
+    PreparedLegacyDirectoryMigration, RecoveryRetirement, ReplicatedIdentityAdoption,
+    ReplicatedIdentityMembership, ReplicatedVaultGrant, StagedIdentityRebase,
 };
 
 pub use auth::local_identity_keyring::{

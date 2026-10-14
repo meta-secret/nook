@@ -149,7 +149,9 @@ export class ProviderSyncActions {
       if (admitted.isErr()) return err(admitted.error);
       try {
         return ok(
-          await admitted.value.sync_local_folder_provider_js(handle.handleId),
+          await admitted.value.sync_local_folder_provider_row_js(
+            $state.snapshot(provider),
+          ),
         );
       } catch (failure) {
         return err(new NativeVaultStorageFailure(failure));

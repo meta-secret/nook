@@ -104,7 +104,7 @@ test('discovers an existing Private Drive v2 vault, distinguishes an empty provi
         'Join this vault',
       )
       await expect(existingPage.locator('body')).toContainText(
-        'This browser is not enrolled yet',
+        "does not belong to this vault's identity yet",
       )
       const privateFolderName = `nook-events-v2-${PRIVATE_V2_DRIVE_FILE_NAME}`
       const privateFolderLookup = driveFileResponses.find(
@@ -154,9 +154,7 @@ test('discovers an existing Private Drive v2 vault, distinguishes an empty provi
     await expect(
       emptyPage.getByTestId('existing-vault-recovery-summary'),
     ).toHaveCount(0)
-    await expect(emptyPage.getByTestId('join-enrollment-confirm')).toHaveCount(
-      0,
-    )
+    await expect(emptyPage.getByTestId('join-this-device')).toHaveCount(0)
     await expect(emptyPage.getByTestId('vault-panel')).toHaveCount(0)
     const changeProviderButton = emptyPage.getByTestId('cancel-provider-setup')
     await expect(changeProviderButton).toBeVisible()
@@ -185,15 +183,12 @@ test('discovers an existing Private Drive v2 vault, distinguishes an empty provi
       PRIVATE_V2_DRIVE_TOKEN,
     )
 
-    const newVaultFolderName = `nook-events-v2-${PRIVATE_V2_NEW_VAULT_FILE_NAME}`
-    const newVaultFolderId = `e2e-drive-private-folder-${Buffer.from(
-      newVaultFolderName,
-    ).toString('base64url')}`
+    // A provider added on the identity Sync page keeps each vault in its own
+    // namespace folder below the private event folder.
     await expect
-      .poll(
-        () => newVaultDriveStub.getEventFileCountForParent(newVaultFolderId),
-        { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
-      )
+      .poll(() => newVaultDriveStub.getEventFileCount(), {
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
       .toBeGreaterThan(0)
     expect(newVaultDriveStub.getEventFileCountForParent('appDataFolder')).toBe(
       0,

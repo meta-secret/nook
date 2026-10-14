@@ -656,6 +656,10 @@ export class VaultProviderActions {
       state.resetVaultSessionState();
     }
     state.addProviderOpen = true;
+    // Providers added while signed in are mounted on the identity.
+    state.providerSaveLayout = state.isAuthenticated
+      ? "identityNamespaced"
+      : "legacyVaultRoot";
     state.clearLoginSetup();
     state.errorMsg = "";
   }
@@ -664,6 +668,8 @@ export class VaultProviderActions {
     const state = this.state;
     this.resetICloudSignInState();
     state.addProviderOpen = false;
+    state.providerSaveLayout = "legacyVaultRoot";
+    state.providerSaveTarget = "fresh";
     state.clearLoginSetup();
     state.clearExistingVaultRecoverySummary();
     state.applyActiveProviderCredentials();
@@ -838,6 +844,8 @@ export class ProviderPersistenceActions {
       localFolder,
       newProviderId: generate_id(),
       createdAt: isoTimestamp(),
+      layout: state.providerSaveLayout,
+      remoteTarget: state.providerSaveTarget,
     };
     const outcome = apply_provider_save_policy(request);
     try {
@@ -874,6 +882,8 @@ export class ProviderPersistenceActions {
       }
       state.clearLoginSetup();
       state.loginRequiresExistingVault = false;
+      state.providerSaveLayout = "legacyVaultRoot";
+      state.providerSaveTarget = "fresh";
       state.addProviderOpen = false;
       state.applyActiveProviderCredentials();
       log.info("sync provider saved");

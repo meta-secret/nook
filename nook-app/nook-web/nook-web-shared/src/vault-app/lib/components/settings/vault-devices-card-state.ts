@@ -5,7 +5,7 @@ export enum MemberDetailsKind {
 
 export type MemberDetails =
   | { kind: MemberDetailsKind.Collapsed }
-  | { kind: MemberDetailsKind.Expanded; authId: string };
+  | { kind: MemberDetailsKind.Expanded; appId: string };
 
 export enum MemberRenameKind {
   Idle = "idle",
@@ -14,7 +14,7 @@ export enum MemberRenameKind {
 
 export type MemberRename =
   | { kind: MemberRenameKind.Idle }
-  | { kind: MemberRenameKind.Editing; authId: string };
+  | { kind: MemberRenameKind.Editing; appId: string };
 
 export enum MemberRevocationKind {
   Idle = "idle",
@@ -23,12 +23,4 @@ export enum MemberRevocationKind {
 
 export type MemberRevocation =
   | { kind: MemberRevocationKind.Idle }
-  | { kind: MemberRevocationKind.Confirming; authId: string };
-
-export enum JoinApprovalHandlingOutcome {
-  Handled = "handled",
-}
-
-export enum JoinDenialHandlingOutcome {
-  Handled = "handled",
-}
+  | { kind: MemberRevocationKind.Confirming; appId: string };

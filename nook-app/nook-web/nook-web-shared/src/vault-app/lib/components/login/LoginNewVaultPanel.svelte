@@ -45,7 +45,9 @@ existing one in from a sync provider. It opens inside the identity card.
         {vault.t(I18N_KEYS.LoginNewVaultTitle)}
       </h2>
       <p class="max-w-[60ch] text-sm text-pretty text-muted-foreground">
-        {vault.t(I18N_KEYS.LoginNewVaultDescription)}
+        {importable
+          ? vault.t(I18N_KEYS.LoginNewVaultDescription)
+          : vault.t(I18N_KEYS.LoginNewVaultDescriptionCreate)}
       </p>
     </div>
     <button

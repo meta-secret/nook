@@ -1,8 +1,9 @@
 <!--
-Unified identity and vault workspace. Identities are the hub; a vault page
-and the management pages share one shell: a quiet page bar, the page, the
-status line, and (on management pages) a grouped rail that becomes a bottom
-bar on phones.
+Unified identity and vault workspace. Identities are the hub. A vault page
+holds only the vault: its items and imports, with a chip that opens the
+identity. Identity management (keys, vaults, devices, sync, backup
+passwords, settings) adds its rail. Every page is one framed sheet: a page
+band, the scrolling page and the status line.
 -->
 <script lang="ts">
   type SecretAddModeChange = {
@@ -12,37 +13,37 @@ bar on phones.
 
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import { onDestroy, tick, untrack, type ComponentProps } from "svelte";
-  import { Download, Puzzle, Settings2 } from "@lucide/svelte";
-  import {
-    ExtensionSetupOfferKind,
-    type ExtensionSetupOffer,
-  } from "$lib/app/extension-setup";
+  import { Download } from "@lucide/svelte";
+  import { type ExtensionSetupOffer } from "$lib/app/extension-setup";
   import {
     configured_vault_application_supports_extension,
     NookIdentityLocalAccessKind,
+    NookIdentityHealthStage,
+    NookIdentityNextStep,
+    type NookIdentityHealth,
     ProviderSyncFailureHandling,
     ProviderSyncVisibility,
   } from "$app-wasm";
-  import { ExtensionSetupStatus } from "$lib/extension/install";
-  import ExtensionInstallSetupCard from "$lib/components/ExtensionInstallSetupCard.svelte";
-  import OnboardDevice from "$lib/components/OnboardDevice.svelte";
   import PendingJoinsBanner from "$lib/components/PendingJoinsBanner.svelte";
   import SecretVault from "$lib/components/SecretVault.svelte";
   import VaultAdmin from "$lib/components/VaultAdmin.svelte";
-  import DevicesAccessDashboard from "$lib/components/DevicesAccessDashboard.svelte";
-  import type { KeysPageLeave } from "$lib/components/devices-access-dashboard-state";
-  import VaultSecurityGuideBanner from "$lib/components/VaultSecurityGuideBanner.svelte";
+  import IdentityKeysPage from "$lib/components/identity-control/IdentityKeysPage.svelte";
+  import VaultExtensionControl from "./VaultExtensionControl.svelte";
+  import IdentityOverview from "$lib/components/identity-control/IdentityOverview.svelte";
   import BrowserSettingsPanel from "$lib/components/settings/BrowserSettingsPanel.svelte";
-  import ManageSection from "$lib/components/settings/ManageSection.svelte";
-  import VaultDevicesCard from "$lib/components/settings/VaultDevicesCard.svelte";
-  import {
-    JoinApprovalHandlingOutcome,
-    JoinDenialHandlingOutcome,
-  } from "$lib/components/settings/vault-devices-card-state";
+  import IdentityDevicesPanel from "$lib/components/identity-control/IdentityDevicesPanel.svelte";
   import VaultStatusBar from "$lib/components/VaultStatusBar.svelte";
+  import FirstRunBackupStep from "$lib/components/login/FirstRunBackupStep.svelte";
   import { VaultStatusBarVariant } from "$lib/components/vault-status-bar-state";
   import IdentitiesHub from "$lib/components/identities/IdentitiesHub.svelte";
   import LoginNewVaultPanel from "$lib/components/login/LoginNewVaultPanel.svelte";
+  import {
+    IdentityCardProjection,
+    type IdentityCardSource,
+    type IdentityCardView,
+    type IdentityLocalVault,
+    type IdentityVaultTarget,
+  } from "$lib/components/identities/identity-card-model";
   import { IdentityDirectoryLoader } from "$lib/components/identities/identity-directory-loader.svelte";
   import { IdentityDirectoryLoadKind } from "$lib/components/devices-access/identity-directory-view";
   import PageBar from "$lib/components/workspace/PageBar.svelte";
@@ -58,9 +59,7 @@ bar on phones.
     ConnectedVaultMenuPresentation,
     VaultExtensionPresentation,
     VaultGrantPresentation,
-    VaultPairingPresentation,
     type ConnectedVaultMenuNoteRequest,
-    type CurrentVaultPairingAvailabilityRequest,
     type ExtensionConnectedEntryRequest,
     type VaultExtensionLinkRequest,
     type VaultSwitcherEntryLabel,
@@ -73,9 +72,11 @@ bar on phones.
   import type { VaultState } from "$lib/vault.svelte";
   import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
   import {
+    FirstRunStage,
     ManageSectionScope,
     WorkspaceSection,
     WorkspaceSectionScope,
+    NewIdentityStage,
   } from "$lib/vault/state/ui.svelte";
   import {
     SecretEditorModeKind,
@@ -83,38 +84,23 @@ bar on phones.
   } from "./authenticated-vault-workspace-state";
 
   type VaultAdminProps = ComponentProps<typeof VaultAdmin>;
-  type OnboardDeviceProps = ComponentProps<typeof OnboardDevice>;
   type PendingJoinsBannerProps = ComponentProps<typeof PendingJoinsBanner>;
   type SecretVaultProps = ComponentProps<typeof SecretVault>;
-  type VaultDevicesCardProps = ComponentProps<typeof VaultDevicesCard>;
-  type EnrollmentCodeInput = Pick<
-    Parameters<VaultState["issueEnrollmentCode"]>[0],
-    "entryId" | "password"
-  >;
 
   const SUPPORTS_EXTENSION = configured_vault_application_supports_extension();
 
   let {
     vault,
     extensionSetupState,
-    extensionInstallBusy,
-    extensionConnectError,
-    hasSecurityRecommendations,
-    needsSyncProvider,
-    needsAnotherDevice,
-    onExtensionInstall,
+    identityHealth,
     onExtensionConnect,
     onSettingsReconnect,
     onEditorOpenChange,
   }: {
     vault: VaultState;
     extensionSetupState: ExtensionSetupOffer;
-    extensionInstallBusy: boolean;
-    extensionConnectError: boolean;
-    hasSecurityRecommendations: boolean;
-    needsSyncProvider: boolean;
-    needsAnotherDevice: boolean;
-    onExtensionInstall: () => void;
+    /** Day-2 health of the identity, assessed by nook-core. */
+    identityHealth: NookIdentityHealth;
     onExtensionConnect: () => void;
     onSettingsReconnect: () => void;
     onEditorOpenChange: (open: boolean) => void;
@@ -126,7 +112,6 @@ bar on phones.
     kind: SecretEditorModeKind.Closed,
   });
   let secretsEditorResetKey = $state(0);
-  let leaveKeysPage = $state<KeysPageLeave>();
   /** The page management was entered from; Back returns there. */
   let manageOrigin = $state(WorkspaceSection.Vault);
   let manageOriginRecorded = $state(false);
@@ -137,6 +122,10 @@ bar on phones.
   );
 
   const section = $derived(vault.workspaceSection);
+  const identityPendingJoins = $derived.by(() => {
+    const snapshot = vault.identityControl.snapshot;
+    return snapshot === false ? [] : snapshot.pendingJoins;
+  });
   const scope = $derived(new WorkspaceSectionScope(section).scope);
   const managing = $derived(scope !== ManageSectionScope.None);
   const navEntry = $derived(new ManageNavLookup(section).entry);
@@ -148,14 +137,17 @@ bar on phones.
     void vault.localVaults.length;
     void directory.reload();
   });
-  const identityLabel = $derived.by(() => {
-    if (directory.state.kind !== IdentityDirectoryLoadKind.Ready) return "";
+  const currentIdentity = $derived.by(() => {
+    if (directory.state.kind !== IdentityDirectoryLoadKind.Ready) return false;
     for (const identity of directory.state.view.identities) {
       if (identity.localAccess === NookIdentityLocalAccessKind.CurrentBrowser)
-        return identity.label;
+        return identity;
     }
-    return "";
+    return false;
   });
+  const identityLabel = $derived(
+    currentIdentity === false ? "" : currentIdentity.label,
+  );
 
   const activeStoreId = $derived(
     vault.activeVault.kind === ActiveVaultKind.Open
@@ -186,13 +178,6 @@ bar on phones.
       entries: extensionEntryLabels,
     };
     return new VaultExtensionPresentation(linkRequest).link;
-  });
-  const canPairCurrentVault = $derived.by(() => {
-    const request: CurrentVaultPairingAvailabilityRequest = {
-      link: extensionLink,
-      activeStoreId,
-    };
-    return new VaultPairingPresentation(request).available;
   });
   const extensionStoreIds = $derived(
     vault.localVaults
@@ -278,11 +263,7 @@ bar on phones.
   );
 
   /** Back leaves management for the page it was entered from. */
-  async function goBack(): Promise<void> {
-    if (section === WorkspaceSection.Keys && leaveKeysPage) {
-      await leaveKeysPage();
-      return;
-    }
+  function goBack(): void {
     leaveManagement();
   }
 
@@ -306,14 +287,16 @@ bar on phones.
     await vault.switchToVault(storeId);
   }
 
+  /** Manage on a card: the unlocked identity opens its overview; another
+   * identity is managed from Keys, which lists them all. */
   function manageIdentity(identityId: string): void {
-    vault.identityFocus = identityId;
-    openSection(WorkspaceSection.Keys);
+    const unlocked =
+      currentIdentity !== false && currentIdentity.identityId === identityId;
+    openSection(unlocked ? WorkspaceSection.Overview : WorkspaceSection.Keys);
   }
 
   function newIdentity(): void {
-    vault.identityCreationRequested = true;
-    openSection(WorkspaceSection.Keys);
+    vault.newIdentity = NewIdentityStage.Name;
   }
 
   async function focusPageBar(): Promise<void> {
@@ -340,6 +323,58 @@ bar on phones.
     if (!vault.errorMsg) newVaultOpen = false;
   }
 
+  /** Open the provider picker on the Sync page. Opening the section resets
+   * provider setup, so the picker opens after it. */
+  function addSyncProvider(): void {
+    openSection(WorkspaceSection.Sync);
+    vault.beginAddProvider();
+  }
+
+  /** "New vault" on the overview opens the Vaults page with its form. */
+  let startNewVault = $state(false);
+  function newVaultFromOverview(): void {
+    startNewVault = true;
+    openSection(WorkspaceSection.Vaults);
+  }
+  $effect(() => {
+    if (section !== WorkspaceSection.Vaults) startNewVault = false;
+  });
+
+  /** The unlocked identity, drawn the same way as its identity card. */
+  const overviewCard = $derived.by((): IdentityCardView | false => {
+    if (directory.state.kind !== IdentityDirectoryLoadKind.Ready) return false;
+    const localVaults = vault.localVaults.map((entry) => {
+      const local: IdentityLocalVault = {
+        storeId: entry.storeId,
+        label: entry.display_label(unnamedLabel),
+      };
+      return local;
+    });
+    const source: IdentityCardSource = {
+      identities: directory.state.view.identities,
+      localVaults,
+      openStoreId: activeStoreId,
+      authenticated: true,
+      identityUnlocked: true,
+    };
+    return ((v) => (v ? v : false))(
+      new IdentityCardProjection(source).cards.find((card) => card.current),
+    );
+  });
+  /** Another app can join once a cloud provider carries the identity. */
+  const canAddDevice = $derived(
+    identityHealth.stage !== NookIdentityHealthStage.LocalOnly &&
+      identityHealth.nextStep !== NookIdentityNextStep.AddCloudProvider,
+  );
+
+  function finishFirstRun(next: WorkspaceSection): void {
+    vault.firstRun = FirstRunStage.Off;
+    openSection(next);
+    // The setup step can be long; the vault opens from its top.
+    const pageTop: ScrollToOptions = { top: 0 };
+    window.scrollTo(pageTop);
+  }
+
   onDestroy(() => {
     onEditorOpenChange(false);
   });
@@ -356,7 +391,13 @@ bar on phones.
   />
 {/snippet}
 
-{#if section === WorkspaceSection.Identities}
+{#if vault.firstRun !== FirstRunStage.Off}
+  <FirstRunBackupStep
+    {vault}
+    onReconnect={onSettingsReconnect}
+    onDone={() => finishFirstRun(WorkspaceSection.Vault)}
+  />
+{:else if section === WorkspaceSection.Identities}
   <div
     class="grid min-w-0 grid-cols-1 gap-4"
     data-testid="identities-workspace"
@@ -371,9 +412,11 @@ bar on phones.
       onNewVault={() => (newVaultOpen = true)}
       {...newVaultOpen ? { vaultSetup: newVaultPanel } : {}}
       vaultSetupOpen={newVaultOpen}
-      onManage={manageIdentity}
+      onManage={(request: IdentityVaultTarget) =>
+        manageIdentity(request.identityId)}
       onNewIdentity={newIdentity}
-      onUseIdentity={manageIdentity}
+      onUseIdentity={(target: IdentityVaultTarget) =>
+        manageIdentity(target.identityId)}
       onLock={lockIdentity}
     />
     <VaultStatusBar
@@ -396,14 +439,15 @@ bar on phones.
 {:else}
   <div
     class:authenticated-shell-editor={secretsAddOpen}
-    class:nk-shell-manage={managing}
+    class:nk-shell-manage={scope === ManageSectionScope.Identity}
     class="authenticated-shell nk-shell w-full min-w-0 max-w-full [touch-action:pan-y_pinch-zoom]"
     data-testid="authenticated-shell"
     data-section={section}
   >
-    <div class="nk-shell-bar min-w-0 pb-3">
+    <div class="nk-shell-bar min-w-0">
       <PageBar
         {vault}
+        band
         eyebrow={barEyebrow}
         title={barTitle}
         testId={section === WorkspaceSection.Vault
@@ -412,7 +456,7 @@ bar on phones.
         backLabel={backDestination === WorkspaceSection.Vault
           ? vault.t(I18N_KEYS.WorkspaceBackToVault)
           : vault.t(I18N_KEYS.WorkspaceBackToIdentities)}
-        onBack={() => void goBack()}
+        onBack={goBack}
       >
         {#snippet tags()}
           <StatusTag
@@ -424,21 +468,6 @@ bar on phones.
         {/snippet}
         {#snippet actions()}
           {#if section === WorkspaceSection.Vault}
-            {#if SUPPORTS_EXTENSION && canPairCurrentVault}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                data-testid="vault-pair-extension-btn"
-                disabled={vault.isVerifying}
-                onclick={onExtensionConnect}
-              >
-                <Puzzle class="size-4" />
-                <span class="hidden sm:inline"
-                  >{vault.t(I18N_KEYS.VaultSwitcherPairThisVault)}</span
-                >
-              </Button>
-            {/if}
             <Button
               type="button"
               variant="outline"
@@ -451,30 +480,29 @@ bar on phones.
                 >{vault.t(I18N_KEYS.WorkspaceImportAction)}</span
               >
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              data-testid="vault-manage-btn"
-              onclick={() => openSection(WorkspaceSection.Devices)}
-            >
-              <Settings2 class="size-4" />
-              <span class="hidden sm:inline"
-                >{vault.t(I18N_KEYS.WorkspaceManageVault)}</span
-              >
-            </Button>
+            {#if SUPPORTS_EXTENSION && !secretsNoteEditorOpen}
+              <VaultExtensionControl
+                {vault}
+                offer={extensionSetupState}
+                onConnect={onExtensionConnect}
+              />
+            {/if}
           {/if}
         {/snippet}
       </PageBar>
     </div>
 
-    {#if managing}
+    {#if scope === ManageSectionScope.Identity}
       <ManageNav
         {vault}
         active={section}
-        {scope}
-        {vaultLabel}
-        {identityLabel}
+        identityLabel={identityName}
+        pendingJoinCount={identityPendingJoins.length}
+        syncMissing={identityHealth.nextStep ===
+          NookIdentityNextStep.AddSyncProvider ||
+          identityHealth.nextStep === NookIdentityNextStep.AddCloudProvider}
+        deviceMissing={identityHealth.nextStep ===
+          NookIdentityNextStep.AddDevice}
         onSelect={openSection}
       />
     {/if}
@@ -486,10 +514,10 @@ bar on phones.
     >
       <div
         class={managing
-          ? "grid min-w-0 grid-cols-1 content-start gap-6 px-0.5 py-4 md:px-6 md:py-5"
-          : "flex min-h-0 flex-1 flex-col gap-4 px-0.5 py-1"}
+          ? "grid min-w-0 grid-cols-1 content-start gap-6 p-4 md:p-6"
+          : "flex min-h-0 flex-1 flex-col"}
       >
-        {#if navEntry.kind === ManageNavEntryKind.Listed && (section === WorkspaceSection.Keys || section === WorkspaceSection.Devices || section === WorkspaceSection.Settings)}
+        {#if navEntry.kind === ManageNavEntryKind.Listed && section === WorkspaceSection.Settings}
           <p
             class="max-w-[64ch] text-sm text-pretty text-muted-foreground"
             data-testid="manage-section-description"
@@ -499,39 +527,23 @@ bar on phones.
         {/if}
 
         {#if section === WorkspaceSection.Vault}
-          {#if !secretsAddOpen && SUPPORTS_EXTENSION && extensionSetupState.kind === ExtensionSetupOfferKind.Visible && extensionSetupState.setup.status !== ExtensionSetupStatus.Paired}
-            <ExtensionInstallSetupCard
-              {vault}
-              state={extensionSetupState.setup}
-              installBusy={extensionInstallBusy}
-              onInstall={onExtensionInstall}
-              onConnect={onExtensionConnect}
-              connectError={extensionConnectError}
-            />
-          {/if}
-          {#if !secretsAddOpen && hasSecurityRecommendations}
-            <VaultSecurityGuideBanner
-              {vault}
-              {needsSyncProvider}
-              {needsAnotherDevice}
-              onAddSyncProvider={() => openSection(WorkspaceSection.Sync)}
-              onAddDevice={() => openSection(WorkspaceSection.Devices)}
-            />
-          {/if}
           {#if !secretsNoteEditorOpen}
             <PendingJoinsBanner
               {vault}
-              pendingJoins={vault.pendingJoins}
+              pendingJoins={identityPendingJoins}
               isBusy={vault.isSaving || vault.isVerifying}
               onApproveJoin={(
-                id: Parameters<PendingJoinsBannerProps["onApproveJoin"]>[0],
-              ) => vault.approveJoin(id)}
-              onRefresh={syncAll}
-              onOpenDevicesSettings={() =>
-                openSection(WorkspaceSection.Devices)}
+                appId: Parameters<PendingJoinsBannerProps["onApproveJoin"]>[0],
+              ) => vault.identityControl.approve(appId)}
+              onRefresh={async () => {
+                const synced = await vault.identityControl.syncWithMounts();
+                if (synced.isErr())
+                  vault.errorMsg = vault.t(synced.error.translationKey);
+              }}
+              onOpenDevicesSettings={() => openSection(WorkspaceSection.Devices)}
             />
           {/if}
-          <div class="flex min-h-0 flex-1 flex-col">
+          <div class="flex min-h-0 flex-1 flex-col p-4 md:p-5">
             {#key secretsEditorResetKey}
               <SecretVault
                 {vault}
@@ -554,102 +566,23 @@ bar on phones.
               />
             {/key}
           </div>
-        {:else if section === WorkspaceSection.Keys}
-          <DevicesAccessDashboard
-            {vault}
-            onBack={leaveManagement}
-            onLeaveReady={(leave: KeysPageLeave) => (leaveKeysPage = leave)}
-          />
-        {:else if section === WorkspaceSection.Devices}
-          <div
-            class="grid min-w-0 grid-cols-1 gap-8"
-            data-testid="vault-devices-panel"
-          >
-            <ManageSection
-              title={vault.t(I18N_KEYS.SettingsDevices)}
-              subtitle={vault.t(I18N_KEYS.SettingsDevicesDesc)}
-              testId="vault-devices-section"
-            >
-              {#snippet badge()}
-                <StatusTag
-                  tone={vault.vaultMembers.length > 0
-                    ? StatusTone.Success
-                    : StatusTone.Neutral}
-                  label={vault.vaultMembers.length === 1
-                    ? vault.t(I18N_KEYS.SettingsDeviceCountSingular)
-                    : (() => {
-                        const countRequest: Parameters<typeof vault.t>[0] = {
-                          key: I18N_KEYS.SettingsDeviceCountPlural,
-                          replacements: {
-                            count: String(vault.vaultMembers.length),
-                          },
-                        };
-                        return vault.t(countRequest);
-                      })()}
-                  testId="vault-devices-status"
-                />
-              {/snippet}
-              <VaultDevicesCard
-                {vault}
-                deviceId={vault.deviceId}
-                devicePublicKey={vault.devicePublicKey}
-                pendingJoins={vault.pendingJoins}
-                vaultMembers={vault.vaultMembers}
-                isBusy={vault.isSaving || vault.isVerifying}
-                hasPasswordEnvelope={vault.hasPasswordEnvelope}
-                onApproveJoin={async (
-                  id: Parameters<VaultDevicesCardProps["onApproveJoin"]>[0],
-                ) => {
-                  await vault.approveJoin(id);
-                  return JoinApprovalHandlingOutcome.Handled;
-                }}
-                onDenyJoin={async (
-                  id: Parameters<VaultDevicesCardProps["onDenyJoin"]>[0],
-                ) => {
-                  await vault.denyJoin(id);
-                  return JoinDenialHandlingOutcome.Handled;
-                }}
-                onRenameDevice={(
-                  renameRequest: Parameters<
-                    VaultDevicesCardProps["onRenameDevice"]
-                  >[0],
-                ) => vault.renameDevice(renameRequest)}
-                onRevokeDevice={(
-                  id: Parameters<VaultDevicesCardProps["onRevokeDevice"]>[0],
-                ) => vault.revokeDevice(id)}
-              />
-            </ManageSection>
-            <OnboardDevice
+        {:else if section === WorkspaceSection.Overview}
+          {#if overviewCard !== false}
+            <IdentityOverview
               {vault}
-              syncProviders={vault.syncProviders}
-              passwordEntries={vault.passwordEntries}
-              enrollmentCode={vault.enrollmentCode}
-              isBusy={vault.isPasswordBusy}
-              passwordError={vault.passwordError}
-              isVerifying={vault.isVerifying}
-              isInitializing={vault.isInitializing}
-              addProviderOpen={vault.addProviderOpen}
-              loginSetup={vault.loginSetup}
-              bind:githubPat={vault.githubPat}
-              bind:githubRepo={vault.githubRepo}
-              onIssueCode={(
-                issueRequest: Parameters<OnboardDeviceProps["onIssueCode"]>[0],
-              ) => vault.issueEnrollmentCode(issueRequest)}
-              onClearCode={() => vault.clearEnrollmentCode()}
-              onAddPassword={(
-                passwordRequest: Parameters<
-                  OnboardDeviceProps["onAddPassword"]
-                >[0],
-              ) => vault.addVaultPassword(passwordRequest)}
-              onBeginAddProvider={() => vault.beginAddProvider()}
-              onCancelAddProvider={() => vault.cancelAddProvider()}
-              onBeginSetup={(
-                setupRequest: Parameters<OnboardDeviceProps["onBeginSetup"]>[0],
-              ) => vault.beginProviderSetup(setupRequest)}
-              onCancelSetup={() => vault.cancelProviderSetup()}
-              onConnectProvider={onSettingsReconnect}
+              card={overviewCard}
+              health={identityHealth}
+              {canAddDevice}
+              onOpen={openSection}
+              onOpenVault={(storeId: string) => void openVaultFromCard(storeId)}
+              onNewVault={newVaultFromOverview}
+              onAddSyncProvider={addSyncProvider}
             />
-          </div>
+          {/if}
+        {:else if section === WorkspaceSection.Devices}
+          <IdentityDevicesPanel {vault} onOpenSync={addSyncProvider} />
+        {:else if section === WorkspaceSection.Keys}
+          <IdentityKeysPage {vault} onOpen={openSection} />
         {:else if section === WorkspaceSection.Settings}
           <BrowserSettingsPanel {vault} />
         {:else}
@@ -657,6 +590,9 @@ bar on phones.
             {vault}
             {extensionSetupState}
             {section}
+            {startNewVault}
+            onCreateVault={(label: string) =>
+              vault.createLocalVaultWithDeviceKeys(label)}
             syncProviders={vault.syncProviders}
             manualProviderSync={vault.manualProviderSync}
             isAuthenticated={vault.isAuthenticated}
@@ -670,7 +606,6 @@ bar on phones.
             passwordEntries={vault.passwordEntries}
             isPasswordBusy={vault.isPasswordBusy}
             passwordError={vault.passwordError}
-            enrollmentCode={vault.enrollmentCode}
             canManageExistingPasswords={vault.deviceProtectionReady}
             onReconnect={onSettingsReconnect}
             onSyncProvider={async (
@@ -712,23 +647,6 @@ bar on phones.
             onRemovePassword={(
               id: Parameters<VaultAdminProps["onRemovePassword"]>[0],
             ) => vault.removeVaultPasswordEntry(id)}
-            onIssueCode={(enrollment: EnrollmentCodeInput) => {
-              const provider = vault.syncProviders[0];
-              if (!provider) {
-                throw new Error(
-                  vault.t(I18N_KEYS.OnboardDeviceChooseSyncProviderErr),
-                );
-              }
-              const issueRequest: Parameters<
-                typeof vault.issueEnrollmentCode
-              >[0] = {
-                entryId: enrollment.entryId,
-                password: enrollment.password,
-                providerId: provider.id,
-              };
-              return vault.issueEnrollmentCode(issueRequest);
-            }}
-            onClearCode={() => vault.clearEnrollmentCode()}
             onImportBitwarden={(
               importRequest: Parameters<
                 VaultAdminProps["onImportBitwarden"]
@@ -770,7 +688,7 @@ bar on phones.
       </div>
     </div>
 
-    <div class="nk-shell-status min-w-0 pt-2">
+    <div class="nk-shell-status min-w-0 px-3 md:px-5">
       <VaultStatusBar
         {vault}
         storageMode={vault.storageMode}

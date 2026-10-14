@@ -1,3 +1,4 @@
+import { pairedVaultsMessages } from '../src/lib/paired-vaults'
 import {
   ExtensionSessionTransportFailure,
   ExtensionSessionTransportFailureKind,
@@ -192,6 +193,10 @@ const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
   ensureExtensionSessionDocument,
   extensionSessionDocument: 'offscreen/session.html',
   handlePairingStateQuery: mock(() => false),
+  handlePairedVaultsQuery: mock(() => false),
+  handleDefaultVaultSelect: mock(() => false),
+  decodePairedVaultsQueryMessage: pairedVaultsMessages.decodeQuery,
+  decodeDefaultVaultSelectMessage: pairedVaultsMessages.decodeSelectDefault,
   decodePairingApprovedMessage: ExtensionPairingApprovedMessage.decode,
   importLocalEventLogUpdate: unusedAsyncDependency,
   importPairingAfterCompanionReady: unusedAsyncDependency,

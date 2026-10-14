@@ -2,7 +2,6 @@
   import type { ComponentProps } from 'svelte'
   import type { PasswordOperationResult } from '$lib/vault/password-unlock'
   import { type SecretOperationResult } from '$lib/vault/secret-operation-failure'
-  import type { EnrollmentCodeIssueResult } from '$lib/vault/enrollment-issue-failure'
   type VaultNameDraftChange = {
     readonly entry: NookLocalVaultEntry
     readonly value: string
@@ -12,10 +11,6 @@
     readonly password: string
   }
   type VaultPasswordEntryUpdate = {
-    readonly entryId: PasswordEntryId
-    readonly password: string
-  }
-  type EnrollmentCodeIssue = {
     readonly entryId: PasswordEntryId
     readonly password: string
   }
@@ -36,10 +31,10 @@
   } from './vault-switcher-extension'
   import {
     Check,
-    CheckCircle2,
     FolderKey,
     Lock,
     PencilLine,
+    Plus,
     RefreshCw,
     ShieldCheck,
     X,
@@ -47,7 +42,9 @@
   import SettingsAccordionSection from '$lib/components/settings/SettingsAccordionSection.svelte'
   import ManageSection from '$lib/components/settings/ManageSection.svelte'
   import AuthStorage from '$lib/components/AuthStorage.svelte'
+  import LoginNewVaultPanel from '$lib/components/login/LoginNewVaultPanel.svelte'
   import VaultPasswordCard from '$lib/components/VaultPasswordCard.svelte'
+  import IdentityMountsPanel from '$lib/components/identity-control/IdentityMountsPanel.svelte'
   import BitwardenImportPanel from '$lib/components/BitwardenImportPanel.svelte'
   import KeePassXcImportPanel from '$lib/components/KeePassXcImportPanel.svelte'
   import LastPassImportPanel from '$lib/components/LastPassImportPanel.svelte'
@@ -103,7 +100,6 @@
     passwordEntries,
     isPasswordBusy,
     passwordError,
-    enrollmentCode,
     canManageExistingPasswords,
     onReconnect,
     onSyncProvider,
@@ -115,8 +111,6 @@
     onAddPassword,
     onUpdatePassword,
     onRemovePassword,
-    onIssueCode,
-    onClearCode,
     onImportBitwarden,
     onImportKeePassXc,
     onImportLastPass,
@@ -127,6 +121,8 @@
     onImportDashlane,
     onImportGoogleAuthenticator,
     onImportProtonPass,
+    onCreateVault,
+    startNewVault = false,
     section,
   }: {
     vault: VaultState
@@ -144,7 +140,6 @@
     passwordEntries: NookPasswordEntrySummary[]
     isPasswordBusy: boolean
     passwordError: string
-    enrollmentCode: string
     canManageExistingPasswords: boolean
     onReconnect: () => void | Promise<void>
     onSyncProvider?: (id: string) => void | Promise<void>
@@ -162,10 +157,6 @@
     onRemovePassword: (
       entryId: PasswordEntryId,
     ) => Promise<PasswordOperationResult>
-    onIssueCode: (
-      args: EnrollmentCodeIssue,
-    ) => Promise<EnrollmentCodeIssueResult>
-    onClearCode: () => void
     onImportBitwarden: (
       args: BitwardenVaultImport,
     ) => Promise<SecretOperationResult<NookImportResult>>
@@ -196,8 +187,22 @@
     onImportProtonPass: (
       exportBytes: Uint8Array,
     ) => Promise<SecretOperationResult<NookImportResult>>
+    /** Create a vault for this identity; it opens once created. */
+    onCreateVault: (label: string) => Promise<void>
+    /** Open the new-vault form at once (from the identity overview). */
+    startNewVault?: boolean
     section: WorkspaceSection
   } = $props()
+
+  let newVaultOpen = $state(false)
+  $effect(() => {
+    if (startNewVault) newVaultOpen = true
+  })
+
+  async function createVault(label: string): Promise<void> {
+    await onCreateVault(label)
+    if (!vault.errorMsg) newVaultOpen = false
+  }
 
   type AuthStorageOptionalProps = Partial<
     Pick<
@@ -393,39 +398,34 @@
       testId="vault-admin-vaults-section"
     >
       {#snippet badge()}
-        <span
-          class="nk-tag nk-tag-success"
-          data-testid="vault-admin-vault-count"
-        >
-          <CheckCircle2 class="size-3" />
-          {(() => {
-            const tArgs: Parameters<typeof vault.t>[0] = {
-              key: I18N_KEYS.VaultAdminVaultCount,
-              replacements: { count: String(vaults.length) },
-            }
-            return vault.t(tArgs)
-          })()}
-        </span>
-      {/snippet}
-
-      <div class="space-y-4" data-testid="vault-admin-vaults-panel">
-        <div
-          class="nk-banner flex flex-wrap items-center justify-between gap-3 px-4 py-3"
-          data-testid="vault-admin-create-hint"
-        >
-          <p class="text-sm text-pretty text-muted-foreground">
-            {vault.t(I18N_KEYS.WorkspaceVaultsCreatedFromIdentity)}
-          </p>
+        {#if !newVaultOpen}
           <Button
             type="button"
             size="sm"
             variant="outline"
-            data-testid="vault-admin-open-identities"
-            onclick={() => vault.openSection(WorkspaceSection.Identities)}
+            data-testid="vault-admin-new-vault"
+            disabled={isBusy}
+            onclick={() => (newVaultOpen = true)}
           >
-            {vault.t(I18N_KEYS.WorkspaceOpenIdentities)}
+            <Plus class="size-4" />
+            {vault.t(I18N_KEYS.WorkspaceNewVault)}
           </Button>
-        </div>
+        {/if}
+      {/snippet}
+
+      <div class="space-y-4" data-testid="vault-admin-vaults-panel">
+        {#if newVaultOpen}
+          <div class="border border-border p-4 sm:p-5">
+            <LoginNewVaultPanel
+              {vault}
+              {isVerifying}
+              {isInitializing}
+              importable={false}
+              onCreateVault={createVault}
+              onClose={() => (newVaultOpen = false)}
+            />
+          </div>
+        {/if}
 
         <ul class="nk-list overflow-hidden">
           {#each vaults as entry (entry.storeId)}
@@ -584,24 +584,14 @@
   {#if section === WorkspaceSection.Sync}
     <ManageSection
       compact
-      title={vault.t(I18N_KEYS.SettingsStorage)}
+      title={vault.t(I18N_KEYS.WorkspaceSectionSync)}
       subtitle={vault.t(I18N_KEYS.WorkspaceSectionSyncDescription)}
       testId="storage-providers-section"
     >
-      {#snippet badge()}
-        {#if isAuthenticated}
-          <span
-            class="nk-tag nk-tag-success shrink-0"
-            data-testid="connected-badge"
-          >
-            <CheckCircle2 class="size-3" />
-            {vault.t(I18N_KEYS.SettingsVaultUnlocked)}
-          </span>
-        {/if}
-      {/snippet}
       <AuthStorage
         {vault}
         embedded
+        backWithoutSaved
         {syncProviders}
         {manualProviderSync}
         {isVerifying}
@@ -615,6 +605,9 @@
         {onBeginSetup}
         {onCancelSetup}
       />
+      {#if isAuthenticated}
+        <IdentityMountsPanel {vault} />
+      {/if}
     </ManageSection>
   {/if}
 
@@ -655,14 +648,10 @@
         {passwordEntries}
         isBusy={isPasswordBusy}
         {passwordError}
-        {enrollmentCode}
         {canManageExistingPasswords}
         {onAddPassword}
         {onUpdatePassword}
         {onRemovePassword}
-        {onIssueCode}
-        {onClearCode}
-        allowIssueCode={false}
       />
     </ManageSection>
   {/if}

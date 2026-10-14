@@ -284,17 +284,6 @@ export async function assertGithubConnected(page: Page) {
   await keepVaultIdleLockDisabled(page)
 }
 
-export async function setupGithubProvider(
-  page: Page,
-  pat: string,
-  repoName: string,
-) {
-  await openLoginProviderSetup(page)
-  await page.getByTestId('provider-option-github').click()
-  await page.getByTestId('github-repo-input').fill(repoName)
-  await page.getByTestId('github-pat-input').fill(pat)
-}
-
 export enum GoogleOAuthErrorStateKind {
   Hidden = 'hidden',
   Visible = 'visible',

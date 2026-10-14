@@ -26,5 +26,4 @@ export enum VaultPasswordPanel {
   Add = "add",
   Rotate = "rotate",
   Remove = "remove",
-  Issue = "issue",
 }

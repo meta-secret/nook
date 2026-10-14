@@ -164,16 +164,23 @@ private identity.
   that action lands on a companion home that explains the protected browser
   identity, its vault connection, and the actions available next.
 - After a grant and usable encrypted event-log projection are persisted, unlock
-  or a ready session shows the same companion home. Open Simple Vault is the
-  primary management action; pairing another vault is secondary. Closing and
-  reopening the tab during the live session lease leaves the companion ready for
-  site authentication. Grant metadata by
-  itself never produces connected state, and a connected unlock never auto-opens
-  Simple Vault.
-- The companion home summarizes the current secret total and whether the
-  protected extension app key is linked to an authorized Simple Vault. These
-  values come from the unlocked Rust/WASM vault projection; unavailable state
-  remains visible instead of treating event-log history as a secret count.
+  or a ready session shows the same companion home. Closing and reopening the
+  tab during the live session lease leaves the companion ready for site
+  authentication. Grant metadata by itself never produces connected state, and
+  a connected unlock never auto-opens Simple Vault.
+- The extension serves several vaults at once: it keeps one grant per paired
+  vault and fills passwords and passkeys from all of them. The companion home
+  lists every paired vault, grouped under the identity it belongs to (vaults
+  paired before identities were recorded sit under "Other vaults"). Each row
+  shows the vault's item count, from the unlocked Rust/WASM projection, and
+  what the grant allows (passwords, passkeys); unavailable counts stay hidden
+  rather than guessed.
+- One paired vault is the default: new logins are saved there and it leads
+  every list. Make default on another row rewrites only the setup record
+  (`select_default_vault` in the companion core); grants are untouched.
+- Connect another vault starts pairing (it is the primary action while no
+  vault is paired, or when the tab was opened to pair); Open Nook opens the
+  web app.
 - The tab starts the Simple Vault approval route only after an explicit
   Connect / pair action (or Open Simple Vault).
 - The Simple Vault header vault menu lists every local vault in the viewport.
@@ -724,6 +731,16 @@ submit stay out of scope. See
 [passkey-manager.md](../architecture/passkey-manager.md).
 
 ## Device-Key And Storage Boundary
+
+### Paired-vault identity label
+
+Each stored pairing grant carries `identityLabel`, the name of the identity
+the vault belongs to, taken from the web app's identity snapshot at approval.
+It is display-only: it groups vaults in the companion home and carries no
+authority. The field is additive and decoded with a serde default, so grants
+stored before it existed read back with an empty label and need no migration;
+re-pairing the vault records the label. Approvals from a web app that predates
+the field are admitted with an empty label.
 
 - **Installation key:** Create an extension-specific Nook device key instead of
   reusing or scraping the `simple.nokey.sh` browser private key.

@@ -1,8 +1,11 @@
 import { test, expect, type BrowserContext, type Page } from './fixtures'
 import {
   addSecret,
-  addVaultPassword,
+  approveIdentityJoin,
   assertVaultReady,
+  E2E_IDENTITY_PASSPHRASE,
+  openVaultAfterIdentityApproval,
+  redeemIdentityEnrollmentCode,
   clearBrowserVault,
   connectGoogleDriveGenesisDevice,
   createLocalVaultOnLogin,
@@ -20,7 +23,6 @@ import {
   waitForEngine,
   waitForVaultOperationsIdle,
   waitForSecretOnDevice,
-  waitForVaultUnlocked,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   UI_TIMEOUT_MS,
   openVaultPage,
@@ -37,7 +39,6 @@ import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
 import enLocale from '../../../nook-platform/nook-app-common/locales/en.json' with { type: 'json' }
 import ruLocale from '../../../nook-platform/nook-app-common/locales/ru.json' with { type: 'json' }
 
-const VAULT_PASSWORD = 'file-onboard-pass-1'
 const ICLOUD_CONTAINER_IDENTIFIER = 'iCloud.metasecret.project.com'
 
 test.describe('file sync provider onboarding', () => {
@@ -118,16 +119,11 @@ test.describe('file sync provider onboarding', () => {
     expect(target.stub.getPrivateFolderCreateCount()).toBe(1)
     expect(target.stub.getEventFileCount()).toBeGreaterThan(0)
 
-    await openStorageSettings(deviceA)
-    await addVaultPassword(deviceA, 'File onboarding', VAULT_PASSWORD)
-    await waitForSyncRemoteState(
-      target,
-      (snapshot) =>
-        snapshot.hasPasswordEnvelope && snapshot.secretIds.length >= 1,
-    )
-
     await openOnboardDevicePanel(deviceA)
-    const linkInput = await submitOnboardEnrollmentCode(deviceA, VAULT_PASSWORD)
+    const linkInput = await submitOnboardEnrollmentCode(
+      deviceA,
+      E2E_IDENTITY_PASSPHRASE,
+    )
     const enrollmentLink = (await linkInput.inputValue()).trim()
     expect(enrollmentLink).toContain('#enroll=')
 
@@ -135,17 +131,11 @@ test.describe('file sync provider onboarding', () => {
     const localEnrollmentLink = localizeAppLinkForE2e(deviceB, enrollmentLink)
     await deviceB.goto('about:blank')
     await deviceB.goto(localEnrollmentLink)
-    await expect(deviceB.getByTestId('enrollment-scan-panel')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
-    await expect(
-      deviceB.getByTestId('enrollment-password-entry-hint'),
-    ).toContainText('File onboarding')
-    await deviceB.getByTestId('enrollment-password-input').fill(VAULT_PASSWORD)
-    await deviceB.getByTestId('submit-enrollment-code-btn').click()
-
-    await waitForVaultUnlocked(deviceB, ENROLLMENT_UNLOCK_TIMEOUT_MS)
+    await redeemIdentityEnrollmentCode(deviceB, E2E_IDENTITY_PASSPHRASE)
+    await approveIdentityJoin(deviceA, 2)
+    await openVaultAfterIdentityApproval(deviceB)
     await assertVaultReady(deviceB)
+    expect(target.stub.getPrivateFolderCreateCount()).toBe(1)
     await waitForSecretOnDevice(deviceB, secretKey)
     expect(await revealSecretValue(deviceB, secretKey)).toBe(secretValue)
   })
@@ -222,24 +212,19 @@ test.describe('Google Drive provider modes', () => {
     await connectButton.click()
     await waitForVaultOperationsIdle(owner, ENROLLMENT_UNLOCK_TIMEOUT_MS)
     await assertVaultReady(owner)
+    // The identity-namespaced row keeps each vault in its own child folder.
     await expect
-      .poll(() => driveStub.getEventFileCountForParent(sharedFolder.id), {
+      .poll(() => driveStub.getEventFileCount(), {
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })
       .toBeGreaterThan(0)
+    expect(driveStub.getEventFileCountForParent(sharedFolder.id)).toBe(0)
     await openVaultPage(owner)
 
     const secretKey = uniqueSecretKey('shared-drive-onboard')
     const secretValue = 'shared-without-owner-google-credentials'
     await addSecret(owner, secretKey, secretValue)
-    await openStorageSettings(owner)
-    await addVaultPassword(owner, 'Shared Drive onboarding', VAULT_PASSWORD)
     await openOnboardDevicePanel(owner)
-    await owner
-      .getByTestId('onboard-password-entry-list')
-      .getByRole('radio')
-      .first()
-      .click()
     await expect(owner.getByTestId('onboarding-type-label')).toContainText(
       'Shared provider grant',
     )
@@ -252,7 +237,10 @@ test.describe('Google Drive provider modes', () => {
     await owner
       .getByTestId('shared-joiner-identity-input')
       .fill(collaboratorEmail)
-    const linkInput = await submitOnboardEnrollmentCode(owner, VAULT_PASSWORD)
+    const linkInput = await submitOnboardEnrollmentCode(
+      owner,
+      E2E_IDENTITY_PASSPHRASE,
+    )
     const enrollmentLink = (await linkInput.inputValue()).trim()
     expect(enrollmentLink).toContain('#enroll=')
     expect(driveStub.getSharedFolders()).toHaveLength(1)
@@ -273,17 +261,15 @@ test.describe('Google Drive provider modes', () => {
       )
       await collaborator.goto('about:blank')
       await collaborator.goto(localEnrollmentLink)
-      await expect(
-        collaborator.getByTestId('enrollment-scan-panel'),
-      ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+      await expect(collaborator.getByTestId('join-this-device')).toBeVisible({
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
       await expect(
         collaborator.getByTestId('enrollment-icloud-auth-toggle'),
       ).toBeVisible()
-      await collaborator
-        .getByTestId('enrollment-password-input')
-        .fill(VAULT_PASSWORD)
-      await collaborator.getByTestId('submit-enrollment-code-btn').click()
-      await waitForVaultUnlocked(collaborator, ENROLLMENT_UNLOCK_TIMEOUT_MS)
+      await redeemIdentityEnrollmentCode(collaborator, E2E_IDENTITY_PASSPHRASE)
+      await approveIdentityJoin(owner, 2)
+      await openVaultAfterIdentityApproval(collaborator)
       await assertVaultReady(collaborator)
       await waitForSecretOnDevice(collaborator, secretKey)
       expect(await revealSecretValue(collaborator, secretKey)).toBe(secretValue)

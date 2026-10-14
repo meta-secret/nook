@@ -85,24 +85,8 @@ test('import-as-new-vault conflict and unlock honesty surface', async ({
   await page.getByTestId('sync-conflict-cancel-btn').click()
   await expect(page.getByTestId('vault-sync-conflict-dialog')).not.toBeVisible()
   await page.getByTestId('header-lock-vault-btn').click()
-  await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
+  await expect(page.getByTestId('identity-vault-row').first()).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
-  await demoBeat(page)
-
-  await page.evaluate(() => {
-    const vault = window.__nookVault
-    if (!vault) {
-      throw new Error('__nookVault is unavailable')
-    }
-    vault.loginDeviceKeysCapable = false
-  })
-
-  await expect(page.getByTestId('login-device-keys-unavailable')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
-  await expect(page.getByTestId('login-unlock-method-keys')).toBeDisabled()
-  await expect(page.getByTestId('login-unlock-method-password')).toBeVisible()
-  await expect(page.getByTestId('login-password-input')).toBeVisible()
   await demoBeat(page)
 })
