@@ -189,20 +189,40 @@ export async function readExtensionPersistenceSnapshot(
 export async function readExtensionPairingStorage(
   scope: ExtensionExecutionScope,
 ): Promise<Record<string, unknown>> {
+  // Opening a database the extension has not created yet would create an
+  // empty one and keep the extension from adding its stores; companion Rust
+  // decides whether the pairing database and store exist.
+  await companionWasmReady
+  const databaseObservation: ExtensionPersistenceObservation = {
+    area: ExtensionPersistenceArea.Pairing,
+    observedNames: await observedDatabaseNames(scope),
+  }
+  if (
+    classify_extension_persistence_databases(databaseObservation) ===
+    ExtensionPersistenceDatabaseState.Absent
+  ) {
+    return {}
+  }
+  const storeArgs: IndexedDbSnapshotArgs = {
+    scope,
+    area: ExtensionPersistenceArea.Pairing,
+  }
+  const storeObservation: ExtensionPersistenceObservation = {
+    area: ExtensionPersistenceArea.Pairing,
+    observedNames: await observedStoreNames(storeArgs),
+  }
+  if (matching_extension_persistence_stores(storeObservation).length === 0) {
+    return {}
+  }
   return evaluateExtensionScopeWithoutArgument([
     scope,
     async () => {
-      // Opening a database the extension has not created yet would create an
-      // empty one and keep the extension from adding its stores.
-      const existing = await indexedDB.databases()
-      if (!existing.some((entry) => entry.name === 'nook_extension')) return {}
       const database = await new Promise<IDBDatabase>((resolve, reject) => {
         const request = indexedDB.open('nook_extension', 1)
         request.onsuccess = () => resolve(request.result)
         request.onerror = () => reject(request.error)
       })
       try {
-        if (!database.objectStoreNames.contains('pairing')) return {}
         const transaction = database.transaction('pairing', 'readonly')
         const store = transaction.objectStore('pairing')
         const keys = await new Promise<IDBValidKey[]>((resolve, reject) => {
