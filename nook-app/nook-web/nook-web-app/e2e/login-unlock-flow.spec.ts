@@ -1,5 +1,4 @@
 import { expect, test } from './fixtures'
-import { UnlockMethod } from '$lib/components/login/login-unlock-state'
 import {
   addVaultPassword,
   clearBrowserVault,
@@ -9,9 +8,9 @@ import {
   expectVaultPasswordStatus,
   openLoginProviderSetup,
   openStorageSettings,
-  selectLoginUnlockMethod,
   UI_TIMEOUT_MS,
   unlockVaultOnLogin,
+  unlockWithCardPassword,
   waitForPersistedAppLog,
   wipeDeviceIdentity,
 } from './helpers'
@@ -24,7 +23,7 @@ test.describe('login unlock flow (local-first)', () => {
     await connectLocalVault(page)
   })
 
-  test('shows local unlock step when vault has backup passwords', async ({
+  test('offers the backup password on the locked identity card', async ({
     page,
   }) => {
     await openStorageSettings(page)
@@ -35,25 +34,13 @@ test.describe('login unlock flow (local-first)', () => {
     await expect(page.getByTestId('login-gate')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await expect(page.getByTestId('login-local-vault-detected')).toBeVisible()
-    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible()
-    const identityContext = page.getByTestId('login-vault-identity-context')
-    await expect(identityContext).toBeVisible()
-    await expect(
-      identityContext.getByTestId('login-vault-linked-identities'),
-    ).toBeVisible({ timeout: UI_TIMEOUT_MS })
-    await expect(identityContext).toContainText('Current browser')
-    await expect(identityContext).toContainText(
-      'A backup password opens this vault directly',
-    )
-    await expect(page.getByTestId('login-unlock-method-keys')).toBeVisible()
-    await expect(page.getByTestId('login-unlock-method-password')).toBeVisible()
-    await expect(page.getByTestId('login-unlock-method-keys')).toHaveAttribute(
-      'aria-checked',
-      'true',
-    )
-    await expect(page.getByTestId('login-unlock-method-keys')).toBeEnabled()
-    await expect(page.getByTestId('login-password-input')).not.toBeVisible()
+    const card = page.getByTestId('identity-card').first()
+    await expect(card.getByTestId('identity-vault-row')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await expect(card.getByTestId('identity-unlock')).toBeVisible()
+    await expect(card.getByTestId('card-password-unlock-open')).toBeVisible()
+    await expect(card.getByTestId('card-password-input')).toHaveCount(0)
   })
 
   test('unlocks with PRF-enabled device keys from local login step', async ({
@@ -61,13 +48,8 @@ test.describe('login unlock flow (local-first)', () => {
   }) => {
     await disableLoginAutoUnlock(page)
     await page.reload()
-    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
-    await expect(page.getByTestId('login-unlock-method-keys')).toHaveAttribute(
-      'aria-checked',
-      'true',
-    )
+    const vaultRow = page.getByTestId('identity-vault-row').first()
+    await expect(vaultRow).toBeVisible({ timeout: UI_TIMEOUT_MS })
     const prfEnabledAfterReload = await page.evaluate(async () => {
       const credential: unknown = await navigator.credentials.get({
         publicKey: {
@@ -108,13 +90,13 @@ test.describe('login unlock flow (local-first)', () => {
       return typeof enabled === 'boolean' ? enabled : false
     })
     expect(prfEnabledAfterReload).toBe(true)
-    await page.getByTestId('unlock-vault-btn').click()
+    await vaultRow.click()
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
   })
 
-  test('switches to backup password and shows labelled entry picker', async ({
+  test('lets the card choose between labelled backup passwords', async ({
     page,
   }) => {
     await openStorageSettings(page)
@@ -124,22 +106,12 @@ test.describe('login unlock flow (local-first)', () => {
     await addVaultPassword(page, 'Travel', 'travel-pass', { expectedCount: 2 })
 
     await page.reload()
-    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
-
-    await selectLoginUnlockMethod(page, UnlockMethod.Password)
-    await expect(
-      page.getByTestId('login-unlock-method-password'),
-    ).toHaveAttribute('aria-checked', 'true')
-    const entryList = page.getByTestId('login-password-entry-list')
-    await expect(
-      entryList.getByRole('button', { name: 'Personal' }),
-    ).toBeVisible()
-    await expect(
-      entryList.getByRole('button', { name: 'Travel' }),
-    ).toBeVisible()
-    await expect(page.getByTestId('login-password-input')).toBeVisible()
+    const open = page.getByTestId('card-password-unlock-open')
+    await expect(open).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    await open.click()
+    const entries = page.getByTestId('card-password-entry')
+    await expect(entries.locator('option')).toHaveText(['Personal', 'Travel'])
+    await expect(page.getByTestId('card-password-input')).toBeVisible()
   })
 
   test('unlocks with a selected backup password after explicit lock', async ({
@@ -149,24 +121,18 @@ test.describe('login unlock flow (local-first)', () => {
     await addVaultPassword(page, 'Recovery', 'recovery-pass-99')
 
     await page.getByTestId('header-lock-vault-btn').click()
-    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
+    await expect(page.getByTestId('login-gate')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
     await expect(page.getByTestId('passkey-auth-overlay')).toBeHidden()
 
-    await selectLoginUnlockMethod(page, UnlockMethod.Password)
-    await page
-      .getByTestId('login-password-entry-list')
-      .getByRole('button', { name: 'Recovery' })
-      .click()
-    await page.getByTestId('login-password-input').fill('recovery-pass-99')
-    await page.getByTestId('unlock-vault-btn').click()
+    await unlockWithCardPassword(page, { password: 'recovery-pass-99' })
 
     await expect(page.getByTestId('passkey-auth-overlay')).toBeHidden()
     await expect(page.getByTestId('vault-admin-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await expect(page).toHaveURL(/\/vault\/passwords$/)
+    await expect(page).toHaveURL(/\/identity\/passwords$/)
     await waitForPersistedAppLog(page, {
       scope: 'vault-password',
       level: 'info',
@@ -204,75 +170,21 @@ test.describe('login unlock flow (local-first)', () => {
       await joinClose.click()
     }
 
-    const reviewIdentities = page.getByTestId('login-review-identities')
-    await expect(reviewIdentities).toBeVisible({ timeout: UI_TIMEOUT_MS })
-    await reviewIdentities.click()
-    await expect(page.getByTestId('page-bar-back')).toBeFocused()
-    await page.getByTestId('page-bar-back').click()
-    try {
-      await expect(reviewIdentities).toBeFocused()
-    } catch (error) {
-      const activeElement = await page.evaluate(() => {
-        const active = document.activeElement
-        return active
-          ? {
-              tag: active.tagName.toLowerCase(),
-              testId: ((value) => (value ? value : 'absent'))(
-                active.getAttribute('data-testid'),
-              ),
-            }
-          : { tag: 'absent', testId: 'absent' }
-      })
-      await test.info().attach('identity-focus-state.json', {
-        body: Buffer.from(JSON.stringify(activeElement)),
-        contentType: 'application/json',
-      })
-      throw error
-    }
-    await page.keyboard.press('Tab')
-    const focusAfterTab = await page.evaluate(() =>
-      ((v) => (v ? v : ''))(
-        document.activeElement?.getAttribute('data-testid'),
-      ),
-    )
-    expect(focusAfterTab).not.toBe('login-review-identities')
-    await page.evaluate(async () => {
-      for (let frame = 0; frame < 35; frame += 1) {
-        await new Promise<void>((resolve) =>
-          requestAnimationFrame(() => resolve()),
-        )
-      }
-    })
-    expect(
-      await page.evaluate(() =>
-        ((v) => (v ? v : ''))(
-          document.activeElement?.getAttribute('data-testid'),
-        ),
-      ),
-    ).toBe(focusAfterTab)
-
-    await unlockVaultOnLogin(page, {
-      entryLabel: 'Recovery',
-      password: 'recovery-pass-99',
-    })
+    await unlockVaultOnLogin(page, { password: 'recovery-pass-99' })
     await expect(page.getByTestId('vault-admin-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await expect(page).toHaveURL(/\/vault\/passwords$/)
+    await expect(page).toHaveURL(/\/identity\/passwords$/)
   })
 
-  test('hides backup password option when vault has no password entries', async ({
+  test('hides the backup password when the vault has none', async ({
     page,
   }) => {
     await page.reload()
-    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
+    await expect(page.getByTestId('identity-vault-row').first()).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await expect(page.getByTestId('login-unlock-method-fieldset')).toBeVisible()
-    await expect(page.getByTestId('login-unlock-method-keys')).toBeVisible()
-    await expect(
-      page.getByTestId('login-unlock-method-password'),
-    ).not.toBeVisible()
+    await expect(page.getByTestId('card-password-unlock')).toHaveCount(0)
   })
 })
 

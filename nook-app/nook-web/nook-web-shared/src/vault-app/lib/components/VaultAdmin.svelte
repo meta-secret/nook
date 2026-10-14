@@ -591,6 +591,7 @@
       <AuthStorage
         {vault}
         embedded
+        backWithoutSaved
         {syncProviders}
         {manualProviderSync}
         {isVerifying}

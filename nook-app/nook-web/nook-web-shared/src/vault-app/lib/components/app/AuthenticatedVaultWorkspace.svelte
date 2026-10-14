@@ -24,6 +24,7 @@ band, the scrolling page and the status line.
     ProviderSyncFailureHandling,
     ProviderSyncVisibility,
   } from "$app-wasm";
+  import PendingJoinsBanner from "$lib/components/PendingJoinsBanner.svelte";
   import SecretVault from "$lib/components/SecretVault.svelte";
   import VaultAdmin from "$lib/components/VaultAdmin.svelte";
   import IdentityKeysPage from "$lib/components/identity-control/IdentityKeysPage.svelte";
@@ -83,6 +84,7 @@ band, the scrolling page and the status line.
   } from "./authenticated-vault-workspace-state";
 
   type VaultAdminProps = ComponentProps<typeof VaultAdmin>;
+  type PendingJoinsBannerProps = ComponentProps<typeof PendingJoinsBanner>;
   type SecretVaultProps = ComponentProps<typeof SecretVault>;
 
   const SUPPORTS_EXTENSION = configured_vault_application_supports_extension();
@@ -526,6 +528,22 @@ band, the scrolling page and the status line.
         {/if}
 
         {#if section === WorkspaceSection.Vault}
+          {#if !secretsNoteEditorOpen}
+            <PendingJoinsBanner
+              {vault}
+              pendingJoins={identityPendingJoins}
+              isBusy={vault.isSaving || vault.isVerifying}
+              onApproveJoin={(
+                appId: Parameters<PendingJoinsBannerProps["onApproveJoin"]>[0],
+              ) => vault.identityControl.approve(appId)}
+              onRefresh={async () => {
+                const synced = await vault.identityControl.syncWithMounts();
+                if (synced.isErr())
+                  vault.errorMsg = vault.t(synced.error.translationKey);
+              }}
+              onOpenDevicesSettings={() => openSection(WorkspaceSection.Devices)}
+            />
+          {/if}
           <div class="flex min-h-0 flex-1 flex-col p-4 md:p-5">
             {#key secretsEditorResetKey}
               <SecretVault

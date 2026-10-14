@@ -8,7 +8,7 @@ import {
 
 const DEMO_BEAT_MS = 700
 
-test('one workspace sheet carries the rail, the page and the setup band', async ({
+test('the vault page holds items; identity management has its own rail', async ({
   page,
 }) => {
   await page.goto('/app/')
@@ -19,28 +19,34 @@ test('one workspace sheet carries the rail, the page and the setup band', async 
     timeout: UI_TIMEOUT_MS,
   })
 
-  // The rail lists the open vault's pages and the identity's pages at once.
-  const rail = page.getByTestId('manage-nav')
-  await expect(rail).toBeVisible()
-  for (const item of ['items', 'passwords', 'import', 'keys', 'devices']) {
-    await expect(page.getByTestId(`manage-nav-${item}`)).toBeVisible()
-  }
-  await expect(page.getByTestId('manage-nav-items')).toHaveAttribute(
-    'aria-current',
-    'page',
-  )
-  // A fresh identity has no provider, so Sync carries a warning dot.
-  await expect(page.getByTestId('manage-nav-sync-missing')).toBeVisible()
-
-  // Setup sits in one band at the top of the vault page.
-  const setup = page.getByTestId('vault-setup-band')
-  await expect(setup).toBeVisible()
-  await expect(setup.getByTestId('vault-security-guide')).toBeVisible()
-  await expect(page.getByTestId('vault-import-btn')).toHaveCount(0)
-  await expect(page.getByTestId('vault-manage-btn')).toHaveCount(0)
+  // The vault page band carries Import and the browser extension, and no
+  // identity management.
+  await expect(page.getByTestId('vault-import-btn')).toBeVisible()
+  await expect(page.getByTestId('vault-extension-install')).toBeVisible()
+  await expect(page.getByTestId('manage-nav')).toHaveCount(0)
   await page.waitForTimeout(DEMO_BEAT_MS)
 
-  // Identity pages open in the same sheet; the rail stays in place.
+  // Manage on the identity card opens its overview and the rail.
+  await page.getByTestId('header-identities-btn').click()
+  await page.getByTestId('identity-manage').first().click()
+  await expect(page).toHaveURL(/\/identity$/)
+  const rail = page.getByTestId('manage-nav')
+  await expect(rail).toBeVisible()
+  for (const item of [
+    'overview',
+    'vaults',
+    'sync',
+    'devices',
+    'keys',
+    'passwords',
+    'settings',
+  ]) {
+    await expect(page.getByTestId(`manage-nav-${item}`)).toBeVisible()
+  }
+  // A fresh identity has no provider, so Sync carries a warning dot.
+  await expect(page.getByTestId('manage-nav-sync-missing')).toBeVisible()
+  await page.waitForTimeout(DEMO_BEAT_MS)
+
   await page.getByTestId('manage-nav-devices').click()
   await expect(page).toHaveURL(/\/identity\/devices$/)
   await expect(page.getByTestId('vault-devices-panel')).toBeVisible({
@@ -50,12 +56,7 @@ test('one workspace sheet carries the rail, the page and the setup band', async 
     'aria-current',
     'page',
   )
-  await expect(rail).toBeVisible()
   await page.waitForTimeout(DEMO_BEAT_MS)
-
-  await page.getByTestId('manage-nav-items').click()
-  await expect(page).toHaveURL(/\/vault$/)
-  await expect(page.getByTestId('vault-panel')).toBeVisible()
 
   // Phones move the rail to a bottom bar under the same page.
   await page.setViewportSize({ width: 390, height: 844 })

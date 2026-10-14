@@ -98,7 +98,7 @@ test.describe('multi-device identity with a local sync provider', () => {
 
   test('member sees the pending join on Devices and approves it', async () => {
     await approveIdentityJoin(deviceA, 2)
-    await expect(deviceA.getByTestId('vault-security-guide')).toHaveCount(0, {
+    await expect(deviceA.getByTestId('pending-join-row')).toHaveCount(0, {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
   })

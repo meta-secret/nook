@@ -201,6 +201,17 @@ export class IdentityCardProjection {
     return this.source.identities.map((entry) => this.card(entry));
   }
 
+  /** Local vaults no card lists, as when this browser has no current
+   * identity to hold them. They still open from their own row. */
+  get unlistedVaults(): IdentityLocalVault[] {
+    const listed = new Set(
+      this.cards.flatMap((card) => card.vaults.map((row) => row.storeId)),
+    );
+    return this.source.localVaults.filter(
+      (vault) => !listed.has(vault.storeId),
+    );
+  }
+
   get totals(): IdentityTotals {
     const cards = this.cards;
     let keys = 0;

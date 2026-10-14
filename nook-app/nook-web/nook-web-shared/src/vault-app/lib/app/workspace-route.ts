@@ -127,13 +127,3 @@ export class WorkspacePath {
     return { kind: WorkspaceRouteLookupKind.Unknown };
   }
 }
-
-/** Whether the current browser location is the identity Keys page. */
-export function keysRouteOpen(): boolean {
-  if (!("window" in globalThis)) return false;
-  const route = new WorkspacePath(window.location.pathname).route;
-  return (
-    route.kind === WorkspaceRouteLookupKind.Workspace &&
-    route.route === WorkspaceRoute.Keys
-  );
-}

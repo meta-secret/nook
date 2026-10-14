@@ -25,24 +25,21 @@ test.describe('persistent workspace routing', () => {
       })
     })
 
-    await page.getByTestId('manage-nav-passwords').click()
-    await expect(page).toHaveURL(/\/vault\/passwords$/)
-    await expect(page.getByTestId('vault-unlock-section')).toBeVisible()
-
-    // One rail lists the open vault's pages and the identity's pages.
-    await expect(page.getByTestId('manage-nav-items')).toBeVisible()
-    await expect(page.getByTestId('manage-nav-keys')).toBeVisible()
-    await expect(page.getByTestId('manage-nav-sync')).toBeVisible()
-    await page.getByTestId('manage-nav-items').click()
-    await expect(page).toHaveURL(/\/vault$/)
-    await expect(page.getByTestId('vault-panel')).toBeVisible()
+    // Manage on the current identity opens its overview; the rail then
+    // lists the identity's pages.
     await page.getByTestId('header-identities-btn').click()
+    await expect(page).toHaveURL(/\/identities$/)
     await page.getByTestId('identity-manage').first().click()
+    await expect(page).toHaveURL(/\/identity$/)
+    await expect(page.getByTestId('identity-overview')).toBeVisible()
+    await page.getByTestId('manage-nav-passwords').click()
+    await expect(page).toHaveURL(/\/identity\/passwords$/)
+    await expect(page.getByTestId('vault-unlock-section')).toBeVisible()
+    await page.getByTestId('manage-nav-keys').click()
     await expect(page).toHaveURL(/\/identity\/keys$/)
-    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
+    await expect(page.getByTestId('identity-keys')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await expect(page.getByTestId('manage-nav-passwords')).toBeVisible()
     await page.getByTestId('manage-nav-devices').click()
     await expect(page).toHaveURL(/\/identity\/devices$/)
     await expect(page.getByTestId('vault-devices-panel')).toBeVisible()
@@ -133,13 +130,14 @@ test.describe('persistent workspace routing', () => {
     // deep-link target explicitly keeps Playwright from losing the SPA URL
     // while the locked WASM session tears down during reload.
     await page.goto('/identity/keys')
-    await expect(
-      page.getByTestId('login-gate').getByTestId('devices-access-dashboard'),
-    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    // A locked identity shows the hub; the URL is kept and unlocking resumes it.
+    await expect(page.getByTestId('identities-hub')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
     await expect(page).toHaveURL(/\/identity\/keys$/)
     await authorizeDeviceProtection(page)
 
-    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
+    await expect(page.getByTestId('identity-keys')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await expect(page).toHaveURL(/\/identity\/keys$/)
@@ -273,7 +271,7 @@ test.describe('persistent workspace routing', () => {
     await expect(page).toHaveURL(/\/vault$/)
     await expect(page.getByTestId('vault-panel')).toBeVisible()
     await expect(page.getByTestId('header-identities-btn')).toBeVisible()
-    await expect(page.getByTestId('devices-access-dashboard')).toHaveCount(0)
+    await expect(page.getByTestId('identity-keys')).toHaveCount(0)
   })
 
   test('returns from management to the page it was opened from', async ({
@@ -281,7 +279,7 @@ test.describe('persistent workspace routing', () => {
   }) => {
     await connectLocalVault(page)
 
-    await page.getByTestId('manage-nav-import').click()
+    await page.getByTestId('vault-import-btn').click()
     await expect(page).toHaveURL(/\/vault\/import$/)
     await page.getByTestId('page-bar-back').click()
     await expect(page).toHaveURL(/\/vault$/)
@@ -289,8 +287,8 @@ test.describe('persistent workspace routing', () => {
 
     await page.getByTestId('header-identities-btn').click()
     await page.getByTestId('identity-manage').first().click()
-    await expect(page).toHaveURL(/\/identity\/keys$/)
-    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
+    await expect(page).toHaveURL(/\/identity$/)
+    await expect(page.getByTestId('identity-overview')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await page.getByTestId('page-bar-back').click()
@@ -311,7 +309,7 @@ test.describe('persistent workspace routing', () => {
     )
 
     await openKeysPage(page)
-    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
+    await expect(page.getByTestId('identity-keys')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await page.getByTestId('page-bar-back').click()

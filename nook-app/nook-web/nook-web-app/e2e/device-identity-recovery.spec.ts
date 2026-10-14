@@ -38,7 +38,7 @@ async function createProtectedVault(page: Page): Promise<void> {
 
 async function openProtectionOverlay(page: Page): Promise<void> {
   const overlay = page.getByTestId('passkey-auth-overlay')
-  const unlock = page.getByTestId('unlock-vault-btn')
+  const unlock = page.getByTestId('identity-vault-row').first()
   await expect
     .poll(async () => {
       if (await overlay.isVisible()) return 'overlay'
@@ -55,10 +55,9 @@ async function openProtectionOverlay(page: Page): Promise<void> {
 async function expectDeviceKeyRecoveryInitiationAvailable(
   page: Page,
 ): Promise<void> {
-  await expect(page.getByTestId('login-unlock-method-keys')).toBeEnabled({
+  await expect(page.getByTestId('identity-vault-row').first()).toBeEnabled({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-  await expect(page.getByTestId('unlock-vault-btn')).toBeEnabled()
 }
 
 async function readRecoveryStorage(

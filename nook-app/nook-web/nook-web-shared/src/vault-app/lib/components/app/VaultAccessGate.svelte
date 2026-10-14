@@ -21,7 +21,6 @@
   import { FirstRunStage } from '$lib/vault/state/ui.svelte'
   import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
   import { VaultStatusBarVariant } from '$lib/components/vault-status-bar-state'
-  import { keysRouteOpen } from '$lib/app/workspace-route'
   import type { VaultState } from '$lib/vault.svelte'
   import type { ProviderSetupRequest } from '$lib/auth/providers'
   import type { LoginVaultExtensionPairingStatusEntry } from '$lib/components/login/login-vault-extension-pairing-status'
@@ -85,10 +84,6 @@
 
   const appVersion = '0.1.0'
 
-  function devicesAccessRouteOpen(): boolean {
-    return keysRouteOpen()
-  }
-
   function sentinelInvitationOpen(): boolean {
     return sentinelInvitationRequest.trim().length > 0
   }
@@ -104,21 +99,21 @@
   }
 
   function identityTransitionPending(): boolean {
-    return vault.devicesAccessIdentityTransitionPending
+    return vault.identityTransitionPending
   }
 
   onDestroy(() => {
     if (vault.isAuthenticated) {
-      vault.devicesAccessIdentityTransitionPending = false
+      vault.identityTransitionPending = false
     }
   })
 </script>
 
 <div class="space-y-6">
-  {#if showAccessGate || vault.errorMsg || devicesAccessRouteOpen() || sentinelInvitationOpen() || identityTransitionPending()}
+  {#if showAccessGate || vault.errorMsg || sentinelInvitationOpen() || identityTransitionPending()}
     {#if firstRunProtect}
       <FirstRunProtectStep {vault} onBack={leaveFirstRunProtect} />
-    {:else if vault.providersLoaded || existingVaultNeedsDeviceUnlock || devicesAccessRouteOpen() || sentinelInvitationOpen() || identityTransitionPending()}
+    {:else if vault.providersLoaded || existingVaultNeedsDeviceUnlock || sentinelInvitationOpen() || identityTransitionPending()}
       <LoginGate
         {vault}
         appKind={APP_KIND}

@@ -1,7 +1,7 @@
 import { expect, test } from './fixtures'
 import type { Browser, BrowserContext, Page } from '@playwright/test'
 import { Effect } from 'effect'
-import { DevicesAccessScenario } from './devices-access-spec-helpers'
+import { ManualPasskeyScenario } from './identity-spec-helpers'
 import {
   authorizeDeviceProtection,
   connectLocalVault,
@@ -98,7 +98,7 @@ class VaultAppsInventoryScenario {
 
   run = Effect.fnUntraced(function* (this: VaultAppsInventoryScenario) {
     const { page, browser } = this.request
-    yield* Effect.promise(() => new DevicesAccessScenario(page).prepare())
+    yield* Effect.promise(() => new ManualPasskeyScenario(page).prepare())
     yield* Effect.promise(() => connectLocalVault(page))
     const extensionDevice = yield* Effect.acquireUseRelease(
       Effect.promise(() => browser.newContext()),
@@ -131,53 +131,25 @@ class VaultAppsInventoryScenario {
       expect(page).toHaveURL(/\/vault\/?$/, { timeout: UI_TIMEOUT_MS }),
     )
     yield* Effect.promise(() => openKeysPage(page))
-    const identity = page.getByTestId('devices-access-identity-option')
-    const apps = page.getByTestId('devices-access-app')
-    yield* Effect.promise(() => expect(identity).toHaveCount(1))
+    const keys = page.getByTestId('identity-keys')
     yield* Effect.promise(() =>
-      expect(identity).toContainText('2 apps · 1 vault'),
+      expect(keys).toContainText('Nook in this browser'),
     )
-    yield* Effect.promise(() => expect(apps).toHaveCount(2))
-    yield* Effect.promise(() =>
-      expect(apps.filter({ hasText: 'Nook in this browser' })).toContainText(
-        'Protected by',
-      ),
-    )
-    const extension = apps.filter({ hasText: 'Nook Extension' })
-    yield* Effect.promise(() =>
-      expect(extension).toContainText('Linked to Personal'),
-    )
-    yield* Effect.promise(() =>
-      expect(extension).not.toContainText('Protected by'),
-    )
-    yield* Effect.promise(() =>
-      expect(extension.getByTestId('devices-access-app-id')).not.toBeVisible(),
-    )
-    yield* Effect.promise(() =>
-      page.getByTestId('devices-access-layout-graph').click(),
-    )
-    yield* Effect.promise(() =>
-      expect(identity).toContainText('2 apps · 1 vault'),
-    )
+    yield* Effect.promise(() => expect(keys).toContainText('Nook Extension'))
 
+    // After a reload the identity unlocks again and still lists both apps.
     yield* Effect.promise(() => page.reload())
     yield* Effect.promise(() =>
       expect(page.getByTestId('login-gate')).toBeVisible({
         timeout: UI_TIMEOUT_MS,
       }),
     )
+    yield* Effect.promise(() => authorizeDeviceProtection(page))
+    yield* Effect.promise(() => openKeysPage(page))
     yield* Effect.promise(() =>
-      expect(page.getByTestId('devices-access-key-inventory')).toBeVisible({
-        timeout: UI_TIMEOUT_MS,
-      }),
+      expect(keys).toContainText('Nook in this browser'),
     )
-    yield* Effect.promise(() =>
-      expect(identity).toContainText('2 apps · 1 vault'),
-    )
-    yield* Effect.promise(() => expect(apps).toHaveCount(2))
-    yield* Effect.promise(() =>
-      expect(extension).toContainText('Nook Extension'),
-    )
+    yield* Effect.promise(() => expect(keys).toContainText('Nook Extension'))
   })
 }
 

@@ -154,9 +154,7 @@ test('discovers an existing Private Drive v2 vault, distinguishes an empty provi
     await expect(
       emptyPage.getByTestId('existing-vault-recovery-summary'),
     ).toHaveCount(0)
-    await expect(emptyPage.getByTestId('join-enrollment-confirm')).toHaveCount(
-      0,
-    )
+    await expect(emptyPage.getByTestId('join-this-device')).toHaveCount(0)
     await expect(emptyPage.getByTestId('vault-panel')).toHaveCount(0)
     const changeProviderButton = emptyPage.getByTestId('cancel-provider-setup')
     await expect(changeProviderButton).toBeVisible()

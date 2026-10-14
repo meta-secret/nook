@@ -14,7 +14,7 @@ test('keep secure-note editing usable above a short mobile viewport', async ({
   await connectLocalVault(page)
   await demoBeat(page)
 
-  await expect(page.getByTestId('extension-install-setup')).toBeVisible({
+  await expect(page.getByTestId('vault-extension-install')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
   await demoBeat(page)
@@ -24,7 +24,7 @@ test('keep secure-note editing usable above a short mobile viewport', async ({
   await page.getByTestId('item-type-secure-note').click()
   await demoBeat(page)
 
-  await expect(page.getByTestId('extension-install-setup')).toHaveCount(0)
+  await expect(page.getByTestId('vault-extension-install')).toHaveCount(0)
   await expect(page.getByTestId('add-secret-cancel-btn')).toBeInViewport()
   await expect(page.getByTestId('save-secret-btn')).toBeInViewport()
   await demoBeat(page)
@@ -40,7 +40,7 @@ test('keep secure-note editing usable above a short mobile viewport', async ({
   await demoBeat(page)
 
   await page.getByTestId('markdown-editor').scrollIntoViewIfNeeded()
-  await expect(page.getByTestId('extension-install-setup')).toHaveCount(0)
+  await expect(page.getByTestId('vault-extension-install')).toHaveCount(0)
   await expect(page.getByTestId('markdown-editor')).toBeInViewport()
   await expect(page.getByTestId('page-bar-back')).toBeInViewport()
   await demoBeat(page)
@@ -49,7 +49,7 @@ test('keep secure-note editing usable above a short mobile viewport', async ({
   await expect(
     page.getByTestId('secret-row').filter({ hasText: 'Travel recovery notes' }),
   ).toBeVisible({ timeout: UI_TIMEOUT_MS })
-  await expect(page.getByTestId('extension-install-setup')).toBeVisible({
+  await expect(page.getByTestId('vault-extension-install')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
   await demoBeat(page)

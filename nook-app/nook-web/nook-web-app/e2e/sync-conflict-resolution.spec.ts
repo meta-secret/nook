@@ -178,7 +178,7 @@ test.describe('sync conflict resolution', () => {
     await expect(page.getByTestId('vault-panel')).toBeVisible()
 
     await page.getByTestId('header-lock-vault-btn').click()
-    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
+    await expect(page.getByTestId('identity-vault-row').first()).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
 
@@ -186,10 +186,9 @@ test.describe('sync conflict resolution', () => {
     await page.getByTestId('login-import-vault-btn').click()
     await expect(page.getByTestId('provider-picker-list')).toBeVisible()
     await page.getByTestId('login-back-to-get-started').click()
-    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible()
+    await expect(page.getByTestId('identity-vault-row').first()).toBeVisible()
 
     await page.getByTestId('identity-new-vault').click()
-    await expect(page.getByTestId('login-unlock-section')).toBeHidden()
     await page.getByTestId('login-vault-name-input').fill('test-2')
     await page.getByTestId('login-create-additional-vault-btn').click()
     await authorizeDeviceProtection(page)
@@ -314,7 +313,7 @@ test.describe('sync conflict resolution', () => {
       .toEqual(storeA)
 
     await page.getByTestId('header-lock-vault-btn').click()
-    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
+    await expect(page.getByTestId('identity-vault-row').first()).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
 
@@ -355,15 +354,9 @@ test.describe('sync conflict resolution', () => {
     await page.getByTestId('sync-conflict-import-new-vault-btn').click()
     await waitForVaultOperationsIdle(page, ENROLLMENT_UNLOCK_TIMEOUT_MS)
 
-    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
+    await expect(page.getByTestId('identity-vault-row').first()).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await expect(
-      page.locator(
-        `[data-testid="login-vault-card"][data-store-id="${storeA}"]`,
-      ),
-    ).toBeVisible()
-    await page.getByTestId('login-switch-vault-btn').click()
     await expect(page.getByTestId('identity-vault-row')).toHaveCount(2)
     await expect(
       page.locator(

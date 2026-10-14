@@ -6,7 +6,7 @@ join) sit between the hero and the cards.
 -->
 <script lang="ts">
   import { untrack, type Snippet } from 'svelte'
-  import { Plus, RefreshCw } from '@lucide/svelte'
+  import { FolderKey, Plus, RefreshCw } from '@lucide/svelte'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import type { VaultState } from '$lib/vault.svelte'
   import { ActiveVaultKind } from '$lib/vault/state/provider.svelte'
@@ -51,6 +51,7 @@ join) sit between the hero and the cards.
     }),
     unlockPanel,
     passwordFallback,
+    identityPrompt,
     vaultSetup,
     vaultSetupOpen = false,
     vaultPicker,
@@ -79,6 +80,8 @@ join) sit between the hero and the cards.
     /** Backup-password unlock, placed on the card that holds the selected
      * vault. */
     passwordFallback?: Snippet
+    /** The current identity's own unlock prompt (its PIN), on its card. */
+    identityPrompt?: Snippet
     /** First-vault setup. It belongs to the current identity, or to the
      * identity about to be created when this browser has none yet. */
     vaultSetup?: Snippet
@@ -143,6 +146,36 @@ join) sit between the hero and the cards.
     }
     return ''
   })
+  /** The card that offers the selected vault's backup password: the one
+   * that unlocks it, else any card that lists it. A backup password opens
+   * the vault even after this browser lost the identity's key. */
+  const passwordIdentityId = $derived.by(() => {
+    if (unlockingIdentityId) return unlockingIdentityId
+    if (!selectedStoreId || !cardsReady) return ''
+    for (const card of projection.cards) {
+      if (card.vaults.some((row) => row.storeId === selectedStoreId)) {
+        return card.identityId
+      }
+    }
+    return ''
+  })
+  const directoryFailed = $derived(
+    loader.state.kind === IdentityDirectoryLoadKind.Failed,
+  )
+  /** No card can carry the backup password, so it stands on its own. */
+  const passwordStandalone = $derived(
+    Boolean(passwordFallback) &&
+      (directoryFailed || (cardsReady && !passwordIdentityId)),
+  )
+  /** Local vaults no card lists (all of them when the directory cannot be
+   * read): each still opens from its own row. */
+  const strayVaults = $derived(
+    directoryFailed
+      ? localVaults
+      : cardsReady
+        ? projection.unlistedVaults
+        : [],
+  )
   let setupHost = $state<VaultSetupHost>({ kind: VaultSetupHostKind.Pending })
   /** With several identities, the current one opens its first-vault setup
    * from its New vault row; a lone identity opens it straight away. */
@@ -182,7 +215,7 @@ join) sit between the hero and the cards.
   )
   const setupShown = $derived(Boolean(setupIdentityId) && setupOpen)
   const featuredIdentityId = $derived(
-    (setupShown ? setupIdentityId : '') || unlockingIdentityId,
+    (setupShown ? setupIdentityId : '') || passwordIdentityId,
   )
   const cards = $derived(
     featuredIdentityId
@@ -200,7 +233,9 @@ join) sit between the hero and the cards.
    * alone, without the hub's hero or cards. */
   const firstRun = $derived(
     (setupHost.kind === VaultSetupHostKind.Draft ||
-      (cardsReady && projection.cards.length === 0)) &&
+      (cardsReady &&
+        projection.cards.length === 0 &&
+        localVaults.length === 0)) &&
       configured_vault_application() !== VaultApplication.Sentinel,
   )
   /** Unlock and Manage name a vault the identity can open (the selected
@@ -289,6 +324,41 @@ join) sit between the hero and the cards.
     {/if}
   {/if}
 
+  {#if showCards && !vaultPicker && (strayVaults.length > 0 || (passwordStandalone && passwordFallback))}
+    <div class="nk-frame-sheet min-w-0" data-testid="identity-stray-vaults">
+      {#if strayVaults.length > 0}
+        <ul class="p-2">
+          {#each strayVaults as stray (stray.storeId)}
+            <li>
+              <button
+                type="button"
+                class="nk-vault-row"
+                data-testid="identity-vault-row"
+                data-store-id={stray.storeId}
+                data-state="available"
+                {...stray.storeId === selectedStoreId
+                  ? { 'aria-pressed': 'true' }
+                  : {}}
+                disabled={busy}
+                onclick={() => onOpenVault(stray.storeId)}
+              >
+                <span class="nk-vault-icon" aria-hidden="true">
+                  <FolderKey class="size-4" />
+                </span>
+                <span class="truncate text-[0.9375rem] font-medium">
+                  {stray.label || vault.t(I18N_KEYS.WorkspaceVaultFallback)}
+                </span>
+              </button>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+      {#if passwordStandalone && passwordFallback}
+        {@render passwordFallback()}
+      {/if}
+    </div>
+  {/if}
+
   {#if firstRun && vaultSetup}
     {@render vaultSetup()}
   {:else if vaultSetup && setupHost.kind === VaultSetupHostKind.Draft}
@@ -340,9 +410,14 @@ join) sit between the hero and the cards.
             {pairingStatusFor}
             {...vaultSetup && setupShown && card.identityId === setupIdentityId
               ? { unlockPanel: vaultSetup }
-              : passwordFallback && card.identityId === unlockingIdentityId
-                ? { passwordFallback }
+              : identityPrompt && card.current
+                ? { unlockPanel: identityPrompt }
                 : {}}
+            {...passwordFallback &&
+            card.identityId === passwordIdentityId &&
+            !(setupShown && card.identityId === setupIdentityId)
+              ? { passwordFallback }
+              : {}}
           />
         {/each}
         <button

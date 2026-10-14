@@ -57,6 +57,7 @@
     isInitializing,
     addProviderOpen = false,
     embedded = false,
+    backWithoutSaved = false,
     loginSetup,
     githubPat = $bindable(''),
     githubRepo = $bindable(DEFAULT_GITHUB_REPO),
@@ -75,6 +76,9 @@
     isInitializing: boolean
     addProviderOpen?: boolean
     embedded?: boolean
+    /** Offer Back while adding even with no saved provider; a host with
+     * its own Back (the first run) leaves this off. */
+    backWithoutSaved?: boolean
     loginSetup: LoginSetup
     githubPat: string
     githubRepo: string
@@ -151,9 +155,9 @@
       class="flex items-start justify-between gap-3 border-b border-border/60 pb-4"
     >
       <div class="space-y-1">
-        <!-- Back to the saved list. With none saved, each setup wizard offers
-             "Change provider" and the host owns leaving the picker. -->
-        {#if syncProviders.length > 0}
+        <!-- Back to the saved list (or the empty list). A host with its own
+             Back leaves the picker itself when nothing is saved. -->
+        {#if syncProviders.length > 0 || backWithoutSaved}
           <button
             type="button"
             class="mb-2 inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
@@ -162,7 +166,9 @@
               showSetup ? onCancelSetup() : onCancelAddProvider?.()}
           >
             <ChevronLeft class="size-3.5" />
-            {vault.t(I18N_KEYS.OnboardingBackToSaved)}
+            {syncProviders.length > 0
+              ? vault.t(I18N_KEYS.OnboardingBackToSaved)
+              : vault.t(I18N_KEYS.CommonBack)}
           </button>
         {/if}
         <h2 class="text-base font-semibold text-foreground">

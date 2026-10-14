@@ -18,7 +18,8 @@ export enum IdentitySwitchOutcome {
 /**
  * "Use identity" on an identity card: make another identity on this browser
  * the active one, end the current identity's session, and unlock the new
- * one with its own passkey. The identities page then shows it unlocked.
+ * one with its own passkey (a PIN identity unlocks from its card). The
+ * identities page then shows it unlocked.
  */
 export class IdentitySwitch {
   constructor(private readonly vault: VaultState) {}
@@ -41,14 +42,14 @@ export class IdentitySwitch {
     }
     // The workspace unmounts as soon as the session closes; keep the
     // locked screen alive until the new identity's providers are loaded.
-    vault.devicesAccessIdentityTransitionPending = true;
+    vault.identityTransitionPending = true;
     vault.deviceProtectionStatus = DeviceProtectionStatus.Loading;
     new IdentitySessionTransition(vault).clearPriorIdentity();
     vault.deviceId = "";
     vault.devicePublicKey = "";
     const manager = vault.admitManager();
     if (manager.isErr()) {
-      vault.devicesAccessIdentityTransitionPending = false;
+      vault.identityTransitionPending = false;
       vault.errorMsg = vault.t(manager.error.translationKey);
       return IdentitySwitchOutcome.Failed;
     }
@@ -56,23 +57,26 @@ export class IdentitySwitch {
       vault.deviceProtectionStatus =
         await manager.value.device_protection_status();
     } catch (failure) {
-      vault.devicesAccessIdentityTransitionPending = false;
+      vault.identityTransitionPending = false;
       vault.errorMsg = vault.t(
         new NativeVaultStorageFailure(failure).translationKey,
       );
       return IdentitySwitchOutcome.Failed;
     }
-    const identityOnly: Parameters<
-      DeviceProtectionActions["unlockDeviceProtection"]
-    >[0] = { initializeSession: false };
-    await new DeviceProtectionActions(vault).unlockDeviceProtection(
-      identityOnly,
-    );
+    // A PIN-protected identity is unlocked from its card's PIN field.
+    if (vault.deviceProtectionStatus !== DeviceProtectionStatus.Pin) {
+      const identityOnly: Parameters<
+        DeviceProtectionActions["unlockDeviceProtection"]
+      >[0] = { initializeSession: false };
+      await new DeviceProtectionActions(vault).unlockDeviceProtection(
+        identityOnly,
+      );
+    }
     const providerLoad: Parameters<typeof vault.loadProviders>[0] = {
       ensureLocalRow: true,
     };
     const loaded = await vault.loadProviders(providerLoad);
-    vault.devicesAccessIdentityTransitionPending = false;
+    vault.identityTransitionPending = false;
     if (loaded.isErr()) {
       vault.errorMsg = vault.t(loaded.error.translationKey);
       return IdentitySwitchOutcome.Failed;

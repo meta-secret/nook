@@ -326,7 +326,10 @@
           <p class="step-label">
             {translatePlain(I18N_KEYS.ExtensionCompanionStepLabel)}
           </p>
-          <div class="companion-state connected" data-testid="companion-session-status">
+          <div
+            class="companion-state connected"
+            data-testid="companion-session-status"
+          >
             <span aria-hidden="true"></span>
             {translatePlain(I18N_KEYS.ExtensionCompanionUnlocked)}
           </div>
@@ -372,20 +375,32 @@
                     <span class="vault-row-name">{vault.vaultName}</span>
                     <span class="vault-row-meta">
                       {#if vault.fillsPasswords}
-                        <span>{translatePlain(I18N_KEYS.ExtensionCompanionFillsPasswords)}</span>
+                        <span
+                          >{translatePlain(
+                            I18N_KEYS.ExtensionCompanionFillsPasswords,
+                          )}</span
+                        >
                       {/if}
                       {#if vault.managesPasskeys}
-                        <span>{translatePlain(I18N_KEYS.ExtensionCompanionManagesPasskeys)}</span>
+                        <span
+                          >{translatePlain(
+                            I18N_KEYS.ExtensionCompanionManagesPasskeys,
+                          )}</span
+                        >
                       {/if}
                       {#if itemCount(vault.vaultStoreId)}
-                        <span data-testid="companion-vault-count">{itemCount(vault.vaultStoreId)}</span>
+                        <span data-testid="companion-vault-count"
+                          >{itemCount(vault.vaultStoreId)}</span
+                        >
                       {/if}
                     </span>
                   </div>
                   {#if vault.isDefault}
                     <span
                       class="vault-default-tag"
-                      title={translatePlain(I18N_KEYS.ExtensionCompanionDefaultVaultHint)}
+                      title={translatePlain(
+                        I18N_KEYS.ExtensionCompanionDefaultVaultHint,
+                      )}
                       data-testid="companion-default-vault"
                     >
                       <Check size={12} aria-hidden="true" />
@@ -396,7 +411,9 @@
                       type="button"
                       class="menu-secondary-action vault-make-default"
                       disabled={busy}
-                      title={translatePlain(I18N_KEYS.ExtensionCompanionDefaultVaultHint)}
+                      title={translatePlain(
+                        I18N_KEYS.ExtensionCompanionDefaultVaultHint,
+                      )}
                       data-testid="companion-make-default"
                       onclick={() => void makeDefault(vault.vaultStoreId)}
                     >
@@ -424,7 +441,8 @@
         class:secondary-button={vaults.kind === PairedVaultsLoadKind.Ready &&
           vaults.vaults.length > 0 &&
           launcherIntent !== OpenCompanionLauncherIntent.Pair}
-        disabled={busy || pairingCandidate.kind !== PairingCandidateKind.Selected}
+        disabled={busy ||
+          pairingCandidate.kind !== PairingCandidateKind.Selected}
         data-testid="connect-simple-vault-btn"
         onclick={() => {
           if (pairingCandidate.kind === PairingCandidateKind.Selected)
@@ -434,7 +452,8 @@
         <Plus size={14} aria-hidden="true" />
         {busy
           ? translatePlain(I18N_KEYS.DeviceProtectionAuthorizing)
-          : vaults.kind === PairedVaultsLoadKind.Ready && vaults.vaults.length > 0
+          : vaults.kind === PairedVaultsLoadKind.Ready &&
+              vaults.vaults.length > 0
             ? translatePlain(I18N_KEYS.ExtensionCompanionConnectAnother)
             : translatePlain(I18N_KEYS.ExtensionCompanionConnectVault)}
       </button>

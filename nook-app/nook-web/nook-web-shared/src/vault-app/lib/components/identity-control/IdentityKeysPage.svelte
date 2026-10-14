@@ -191,9 +191,23 @@ Technical identifiers stay behind "Details".
     {vault.t(I18N_KEYS.DevicesAccessIdentityDirectoryLoading)}
   </p>
 {:else if load.kind === KeysLoadKind.Failed}
-  <p class="nk-banner px-4 py-3 text-sm text-muted-foreground" role="alert">
-    {vault.t(I18N_KEYS.DevicesAccessIdentityDirectoryFailed)}
-  </p>
+  <div
+    class="nk-banner flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+    role="alert"
+  >
+    <p class="text-sm text-muted-foreground">
+      {vault.t(I18N_KEYS.DevicesAccessIdentityDirectoryFailed)}
+    </p>
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      data-testid="identity-keys-retry"
+      onclick={() => void reload()}
+    >
+      {vault.t(I18N_KEYS.DevicesAccessTryAgain)}
+    </Button>
+  </div>
 {:else}
   <div class="grid min-w-0 gap-6" data-testid="identity-keys">
     <p class="max-w-[64ch] text-sm text-pretty text-muted-foreground">

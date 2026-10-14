@@ -27,7 +27,7 @@ test.describe('idle session auto-lock', () => {
   })
 
   test('locks after inactivity and allows unlock again', async ({ page }) => {
-    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
+    await expect(page.getByTestId('identity-vault-row').first()).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
     await unlockVaultOnLogin(page)
@@ -39,7 +39,7 @@ test.describe('idle session auto-lock', () => {
     await page.waitForTimeout(IDLE_LOCK_MS + 1500)
 
     await expect(page.getByTestId('login-session-expired')).toBeVisible()
-    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible()
+    await expect(page.getByTestId('identity-vault-row').first()).toBeVisible()
 
     await waitForPersistedAppLog(page, {
       scope: 'vault-session',
@@ -61,7 +61,7 @@ test.describe('idle session auto-lock', () => {
   })
 
   test('user activity resets the idle timer', async ({ page }) => {
-    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
+    await expect(page.getByTestId('identity-vault-row').first()).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
     await unlockVaultOnLogin(page)

@@ -206,4 +206,25 @@ describe('IdentityCardProjection vault ownership', () => {
     const all = cards.flatMap((card) => card.vaults.map((row) => row.storeId))
     expect(new Set(all).size).toBe(all.length)
   })
+
+  test('keeps local vaults openable when no identity is current here', () => {
+    const noCurrent: IdentityCardSource = {
+      identities: [work, elsewhere],
+      localVaults: [
+        { storeId: 'store_w', label: 'Acme' },
+        { storeId: 'store_orphan', label: 'Orphan' },
+      ],
+      openStoreId: '',
+      authenticated: false,
+      identityUnlocked: false,
+    }
+
+    const unlisted = new IdentityCardProjection(noCurrent).unlistedVaults
+
+    expect(unlisted.map((vault) => vault.storeId)).toEqual(['store_orphan'])
+  })
+
+  test('lists no stray vaults when the current identity holds them all', () => {
+    expect(new IdentityCardProjection(source(false)).unlistedVaults).toEqual([])
+  })
 })

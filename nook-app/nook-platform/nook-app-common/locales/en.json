@@ -1007,10 +1007,10 @@
     }
   },
   "vault_passwords": {
-    "title": "Onboard another device",
-    "desc": "Generate a QR/link that carries provider access and a vault password so another browser can join this vault.",
-    "warning_banner": "Create a vault password to unlock from another browser or generate an onboarding QR from the Devices page. Use a long, unique value.",
-    "info_desc": "These passwords can unlock the vault and can be selected on the Devices page when you generate a QR/link for another device.",
+    "title": "Backup passwords",
+    "desc": "A backup password opens this vault on its own, without a passkey.",
+    "warning_banner": "This vault has no backup password. If every device with your identity is lost, nothing else opens it. Use a long, unique value.",
+    "info_desc": "Each password opens this vault without a passkey. Keep one somewhere safe for when no device with your identity is left.",
     "create_another": "Create another password",
     "create_password": "Create vault password",
     "label": "Label",
@@ -1942,7 +1942,7 @@
     "section_sync": "Sync",
     "section_sync_description": "Sync providers mounted on this identity. Each replicates the identity and its vaults.",
     "section_passwords": "Backup passwords",
-    "section_passwords_description": "Passwords that open this vault directly and let a new device join.",
+    "section_passwords_description": "Passwords that open this vault directly, without a passkey.",
     "section_import": "Import",
     "section_import_description": "Bring passwords, notes, and authenticator codes into this vault. Files are read in this browser.",
     "vault_eyebrow": "Vault",

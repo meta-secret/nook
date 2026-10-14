@@ -105,7 +105,7 @@ test('offer PIN device protection when passkeys are unavailable', async ({
   await demoBeat(page)
 
   await page.getByTestId('header-lock-vault-btn').click()
-  await page.getByTestId('unlock-vault-btn').click()
+  await page.getByTestId('identity-vault-row').first().click()
   await expect(
     page.getByTestId('device-protection-pin-unlock-btn'),
   ).toBeVisible({

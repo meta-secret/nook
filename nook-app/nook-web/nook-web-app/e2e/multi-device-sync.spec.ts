@@ -260,6 +260,7 @@ test.describe(`multi-device join background sync (${providerLabel})`, () => {
           await deviceA.evaluate(async () => {
             const vault = window.__nookVault
             await vault?.refreshPendingJoinsFromProviders?.()
+            await vault?.identityControl.syncWithMounts()
           })
           return deviceA.getByTestId('pending-joins-banner').isVisible()
         },

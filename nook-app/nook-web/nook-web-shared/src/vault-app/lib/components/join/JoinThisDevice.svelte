@@ -10,6 +10,7 @@ for approval.
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import { Button } from "$lib/components/ui/button";
   import FirstRunBackLink from "$lib/components/login/FirstRunBackLink.svelte";
+  import ICloudEnrollmentAuth from "$lib/components/login/ICloudEnrollmentAuth.svelte";
   import type { EnrollmentCodeUnlock } from "$lib/components/login/login-create-vault-chooser-contract";
   import type { VaultState } from "$lib/vault.svelte";
   import { IdentityJoinKind } from "$lib/vault/identity-control.svelte";
@@ -125,6 +126,7 @@ for approval.
           data-testid="enrollment-password-input"
         />
       </div>
+      <ICloudEnrollmentAuth {vault} />
       <Button
         type="submit"
         class="h-10"

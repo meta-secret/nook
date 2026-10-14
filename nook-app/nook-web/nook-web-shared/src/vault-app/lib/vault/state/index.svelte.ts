@@ -39,7 +39,7 @@ const runtimeKeys = [
 
 const uiKeys = [
   "workspaceSection",
-  "devicesAccessIdentityTransitionPending",
+  "identityTransitionPending",
   "helpOpen",
   "firstRun",
   "firstRunVaultName",
@@ -118,7 +118,6 @@ const sessionKeys = [
   "joinEnrollmentPrompt",
   "awaitingJoinApproval",
   "loginPasswordPrompt",
-  "loginDeviceKeysCapable",
   "remoteVaultRecoveryState",
   "isPasswordBusy",
   "passwordError",
@@ -204,7 +203,7 @@ class VaultStateSlicesImplementation {
   declare isInitializing: VaultRuntimeState["isInitializing"];
 
   declare workspaceSection: VaultUiState["workspaceSection"];
-  declare devicesAccessIdentityTransitionPending: VaultUiState["devicesAccessIdentityTransitionPending"];
+  declare identityTransitionPending: VaultUiState["identityTransitionPending"];
   declare helpOpen: VaultUiState["helpOpen"];
   declare firstRun: VaultUiState["firstRun"];
   declare firstRunVaultName: VaultUiState["firstRunVaultName"];
@@ -279,7 +278,6 @@ class VaultStateSlicesImplementation {
   declare joinEnrollmentPrompt: VaultSessionState["joinEnrollmentPrompt"];
   declare awaitingJoinApproval: VaultSessionState["awaitingJoinApproval"];
   declare loginPasswordPrompt: VaultSessionState["loginPasswordPrompt"];
-  declare loginDeviceKeysCapable: VaultSessionState["loginDeviceKeysCapable"];
   declare remoteVaultRecoveryState: VaultSessionState["remoteVaultRecoveryState"];
   declare isPasswordBusy: VaultSessionState["isPasswordBusy"];
   declare passwordError: VaultSessionState["passwordError"];

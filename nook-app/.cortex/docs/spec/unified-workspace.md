@@ -102,6 +102,8 @@ then "*identity* is ready" with its first vault's name, or Later.
   is installed but this vault is not connected (it serves several vaults),
   and an **Extension** tag once it is. There is no identity button on the
   vault page.
+- When another device asks to join the identity, a banner above the list
+  names it with Approve, a link to Devices, and a refresh.
 - A search field, type chips, the item count, and Add sit above a two-pane
   list: items on the left, the selected item's detail sheet on the right. On
   phones the sheet opens under its row. Selecting another item seals the

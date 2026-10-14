@@ -1,5 +1,4 @@
 import { expect, test } from './fixtures'
-import { UnlockMethod } from '$lib/components/login/login-unlock-state'
 import {
   addSecret,
   addVaultPassword,
@@ -19,7 +18,6 @@ import {
   openStorageSettings,
   revealSecretInRow,
   seedSyncProvidersWhileUnlocked,
-  selectLoginUnlockMethod,
   submitOnboardEnrollmentCode,
   enrollmentCodeFromLink,
   localizeAppLinkForE2e,
@@ -101,15 +99,11 @@ test.describe('vault password envelope (local)', () => {
     await expectVaultPasswordStatus(page, 1, { timeout: UI_TIMEOUT_MS })
 
     await page.reload()
-    await expect(page.getByTestId('login-local-vault-detected')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
-    await selectLoginUnlockMethod(page, UnlockMethod.Keys)
-    await page.getByTestId('unlock-vault-btn').click()
+    await unlockVaultOnLogin(page)
     await expect(page.getByTestId('vault-admin-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await expect(page).toHaveURL(/\/vault\/passwords$/)
+    await expect(page).toHaveURL(/\/identity\/passwords$/)
     await expect(page.getByTestId('login-gate')).not.toBeVisible()
 
     // Simulate lost device keys: wipe identity from nook_db but keep providers.
@@ -118,7 +112,7 @@ test.describe('vault password envelope (local)', () => {
     await expect(page.getByTestId('login-gate')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await expect(page.getByTestId('login-unlock-method-fieldset')).toBeVisible({
+    await expect(page.getByTestId('card-password-unlock')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
     // Dismiss the join prompt — backup password is the recovery path here.
@@ -130,7 +124,7 @@ test.describe('vault password envelope (local)', () => {
     await expect(page.getByTestId('vault-admin-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await expect(page).toHaveURL(/\/vault\/passwords$/)
+    await expect(page).toHaveURL(/\/identity\/passwords$/)
   })
 
   test('rejects short passwords client-side', async ({ page }) => {
@@ -360,16 +354,14 @@ test.describe('enrollment link deep link (local)', () => {
     await expect(pageB.getByTestId('login-gate')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await expect(pageB.getByTestId('enrollment-scan-panel')).toBeVisible({
+    await expect(pageB.getByTestId('join-this-device')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
     await expect(pageB.getByTestId('login-create-vault-chooser')).toHaveCount(0)
     await expect(pageB.getByTestId('passkey-auth-overlay')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await expect(pageB.getByTestId('enrollment-scan-panel')).toContainText(
-      'Finish device onboarding',
-    )
+    await expect(pageB.getByTestId('join-link-received')).toBeVisible()
     await expect(pageB.getByTestId('login-vault-name-input')).toHaveCount(0)
 
     await pageB.getByTestId('device-protection-create-new-choice').click()

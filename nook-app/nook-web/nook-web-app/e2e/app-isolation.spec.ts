@@ -151,16 +151,16 @@ test('keeps extension routing and local session behavior app-specific', async ({
   await extensionContext.close()
   if (!extensionDevice.ok) throw new Error(extensionDevice.error)
   await page.getByTestId('header-lock-vault-btn').click()
-  await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
+  await expect(page.getByTestId('identity-vault-row').first()).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
   await page.goto(
     `/extension-connect?device_id=${extensionDevice.deviceId}&device_public_key=${encodeURIComponent(extensionDevice.devicePublicKey)}&device_signing_public_key=${extensionDevice.deviceSigningPublicKey}&extension_id=test-extension&device_label=Nook%20Extension&nonce=test-nonce&scopes=vault-access,password-filling`,
   )
-  await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
+  await expect(page.getByTestId('identity-vault-row').first()).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
-  await page.getByTestId('unlock-vault-btn').click()
+  await page.getByTestId('identity-vault-row').first().click()
   await expect(page.getByTestId('extension-connect-consent')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
@@ -186,7 +186,7 @@ test('keeps extension routing and local session behavior app-specific', async ({
   await expect(page.getByTestId('extension-connect-approved')).toBeVisible()
 
   await page.getByTestId('header-lock-vault-btn').click()
-  await expect(page.getByTestId('login-local-unlock-step')).toBeVisible()
+  await expect(page.getByTestId('identity-vault-row').first()).toBeVisible()
 })
 
 test('opens the existing-vault workflow without starting creation', async ({

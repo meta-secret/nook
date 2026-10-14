@@ -88,7 +88,9 @@ const refusalFields: RefusalFields = {
   ok: Schema.Literal(false),
   reason: Schema.String,
 }
-const refusalSchema = Schema.Struct(refusalFields) satisfies Schema.Codec<Refusal>
+const refusalSchema = Schema.Struct(
+  refusalFields,
+) satisfies Schema.Codec<Refusal>
 
 type PairedVaultsListed = {
   readonly ok: true

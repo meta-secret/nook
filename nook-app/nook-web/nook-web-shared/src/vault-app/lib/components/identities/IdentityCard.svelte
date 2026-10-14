@@ -313,7 +313,7 @@ card, which then spans the full row.
       </ul>
     </section>
 
-    {#if card.status === IdentityCardStatus.Locked && passwordFallback}
+    {#if passwordFallback && !live}
       {@render passwordFallback()}
     {/if}
 

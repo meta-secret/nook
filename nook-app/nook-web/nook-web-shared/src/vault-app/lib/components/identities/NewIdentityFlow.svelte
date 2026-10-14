@@ -163,7 +163,7 @@ adopting the new identity ends the current identity's session midway.
       return;
     }
     vault.applyActiveProviderCredentials();
-    vault.devicesAccessIdentityTransitionPending = false;
+    vault.identityTransitionPending = false;
     vault.newIdentity = NewIdentityStage.Ready;
   }
 

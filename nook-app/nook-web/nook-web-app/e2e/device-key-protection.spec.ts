@@ -88,7 +88,7 @@ async function createSentinelParticipantResponse(
 
 async function openExistingVaultProtectionOverlay(page: Page) {
   const overlay = page.getByTestId('passkey-auth-overlay')
-  const unlockVaultButton = page.getByTestId('unlock-vault-btn')
+  const unlockVaultButton = page.getByTestId('identity-vault-row').first()
   // Locking from /identity/keys keeps that URL, so LoginGate opens Access
   // directly and may already show the unlock overlay without Unlock.
   await expect
@@ -112,7 +112,7 @@ async function openExistingVaultProtectionOverlay(page: Page) {
 
 async function unlockExistingVaultWithPasskey(page: Page) {
   await expect(page.getByTestId('passkey-auth-overlay')).toBeHidden()
-  const unlockVaultButton = page.getByTestId('unlock-vault-btn')
+  const unlockVaultButton = page.getByTestId('identity-vault-row').first()
   await expect(unlockVaultButton).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
@@ -337,12 +337,8 @@ test.describe('passkey device-key protection', () => {
 
     await openPasskeyOverlayForSimpleCreate(page)
 
-    await expect(page.getByTestId('device-protection-step')).toHaveText(
-      'Device setup · Step 1 of 2',
-    )
-    await expect(page.getByTestId('device-protection-title')).toHaveText(
-      'Prepare this browser',
-    )
+    // The first run's own step bar frames the passkey; the gate has none.
+    await expect(page.getByTestId('device-protection-step')).toHaveCount(0)
     await expect(
       page.getByTestId('device-protection-authenticate-workflow'),
     ).toBeVisible()
@@ -564,7 +560,8 @@ test.describe('passkey device-key protection', () => {
       await pushWorkspacePath(keysPath)
       await expect(page).toHaveURL(/\/identity\/keys$/)
       await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
-      await page.getByTestId('page-bar-back').click()
+      const vaultPath: WorkspacePathPush = { page, path: '/vault' }
+      await pushWorkspacePath(vaultPath)
       await expect(page).toHaveURL(/\/vault$/)
       await expect(page.getByTestId('get-started-path-sentinel')).toBeVisible({
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -574,10 +571,11 @@ test.describe('passkey device-key protection', () => {
       await page.goBack()
       await expect(page).toHaveURL(/\/identity\/keys$/)
       await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
-      await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
+      // A locked identity shows the hub on its Keys URL.
+      await expect(page.getByTestId('identities-hub')).toBeVisible({
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })
-      await page.getByTestId('page-bar-back').click()
+      await pushWorkspacePath(vaultPath)
       await queueSentinelInitiatorKeys(page)
     },
   )
@@ -780,11 +778,11 @@ test.describe('passkey device-key protection', () => {
     // Existing vault stays in the app unlock workflow while device recovery is
     // deferred until the user explicitly asks to unlock it.
     await expect(page.getByTestId('login-gate')).toBeVisible()
-    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible()
+    await expect(page.getByTestId('identity-vault-row').first()).toBeVisible()
     await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
-    await expect(page.getByTestId('unlock-vault-btn')).toBeEnabled()
+    await expect(page.getByTestId('identity-vault-row').first()).toBeEnabled()
 
-    await page.getByTestId('unlock-vault-btn').click()
+    await page.getByTestId('identity-vault-row').first().click()
     await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible()
     await expect(page.getByTestId('passkey-auth-overlay-dismiss')).toBeVisible()
     await page.getByTestId('device-protection-use-existing-choice').click()
@@ -824,15 +822,12 @@ test.describe('passkey device-key protection', () => {
     // metadata; wait for the vault to go quiet first.
     await waitForVaultOperationsIdle(page)
     await openKeysPage(page)
-    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    await expect(
-      page.getByTestId('devices-access-key-inventory'),
-    ).toContainText('PIN or passphrase')
+    await expect(page.getByTestId('identity-key')).toContainText(
+      'PIN or passphrase',
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
 
-    // Leave Access before locking. PIN unlock uses the login Unlock button;
-    // locking while Access stays open leaves neither Unlock nor an overlay.
+    // Unlocking the selected vault's row asks for the PIN in the overlay.
     await openVaultPage(page)
     await expectFirstVaultOpen(page)
     await page.getByTestId('header-lock-vault-btn').click()

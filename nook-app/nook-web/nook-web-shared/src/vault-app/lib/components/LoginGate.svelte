@@ -1,5 +1,9 @@
 <script lang="ts">
-  import { WorkspaceLocation } from "$lib/app/workspace-route";
+  import {
+    WorkspaceLocation,
+    WorkspacePath,
+    WorkspaceRouteLookupKind,
+  } from "$lib/app/workspace-route";
   import type { IdentityVaultTarget } from "$lib/components/identities/identity-card-model";
   import type { SentinelActionResult } from "$lib/vault/sentinel-genesis";
   type EnrollmentCodeUnlock = {
@@ -17,7 +21,10 @@
   import { tick, untrack, type ComponentProps } from "svelte";
   import type { VaultState } from "$lib/vault.svelte";
   import IdentitiesHub from "$lib/components/identities/IdentitiesHub.svelte";
-  import { type StartSentinelGenesisArgs } from "$app-wasm";
+  import {
+    DeviceProtectionStatus,
+    type StartSentinelGenesisArgs,
+  } from "$app-wasm";
   import { Button } from "$lib/components/ui/button";
   import type {
     OAuthFilePreset,
@@ -54,6 +61,12 @@
   import JoinThisDevice from "$lib/components/join/JoinThisDevice.svelte";
   import { NewIdentityStage } from "$lib/vault/state/ui.svelte";
   import CardPasswordUnlock from "$lib/components/identities/CardPasswordUnlock.svelte";
+  import CardPinUnlock from "$lib/components/identities/CardPinUnlock.svelte";
+  import {
+    PinPromptKind,
+    type PinPrompt,
+    type UnlockDestination,
+  } from "$lib/components/identities/card-unlock";
   import { IdentitySwitch } from "$lib/components/identities/identity-switch";
   import { DeviceProtectionActions } from "$lib/vault/device-protection.svelte";
   import SentinelCeremonyPanel from "$lib/components/login/SentinelCeremonyPanel.svelte";
@@ -202,7 +215,7 @@
   let firstScreenRequested = $state(false);
   let newVaultOpen = $state(false);
 
-  /** A vault row on an identity card opens that vault's unlock panel. */
+  /** Select the vault a card row names, closing any open setup panel. */
   async function openVaultFromCard(storeId: string): Promise<void> {
     newVaultOpen = false;
     if (showProviderSetupLink) {
@@ -212,14 +225,6 @@
     if (addProviderOpen) onCancelAddProvider?.();
     if (showSetup) onCancelSetup();
     await vault.chooseLoginVault(storeId);
-    await tick();
-    const scrollRequest: ScrollIntoViewOptions = {
-      block: "nearest",
-      behavior: "smooth",
-    };
-    document
-      .querySelector('[data-testid="login-local-unlock-step"]')
-      ?.scrollIntoView(scrollRequest);
   }
 
   /** "New vault" on the identity card: create one here or import one. */
@@ -245,10 +250,20 @@
     void unlockTo(home);
   }
 
+  let pinPrompt = $state<PinPrompt>({ kind: PinPromptKind.Closed });
+  const pinProtected = $derived(
+    vault.deviceProtectionStatus === DeviceProtectionStatus.Pin,
+  );
+
   /** Unlock on a locked card unlocks the identity: this device's passkey
-   * opens its key, and no vault is opened. A vault opens from its row. */
+   * (or PIN) opens its key, and no vault is opened. A vault opens from its
+   * row. */
   async function unlockIdentity(): Promise<void> {
     if (vault.deviceProtectionReady || isVerifying) return;
+    if (pinProtected) {
+      pinPrompt = { kind: PinPromptKind.Identity };
+      return;
+    }
     const identityOnly: Parameters<
       DeviceProtectionActions["unlockDeviceProtection"]
     >[0] = { initializeSession: false };
@@ -257,24 +272,39 @@
     );
   }
 
+  async function unlockWithPin(pin: string): Promise<void> {
+    const prompt = pinPrompt;
+    const pinRequest: Parameters<
+      DeviceProtectionActions["unlockPinDeviceProtection"]
+    >[0] = { pin, initializeSession: false };
+    await new DeviceProtectionActions(vault).unlockPinDeviceProtection(
+      pinRequest,
+    );
+    if (!vault.deviceProtectionReady) return;
+    pinPrompt = { kind: PinPromptKind.Closed };
+    if (prompt.kind === PinPromptKind.Vault) {
+      await openSelectedVault(prompt.destination);
+    }
+  }
+
   /** Lock on a card whose identity is unlocked without an open vault. */
   function lockIdentity(): void {
     void vault.lockDeviceProtection();
   }
 
-  /** A vault row on a locked card unlocks that vault. */
+  /** A vault row on a locked card unlocks that vault. Locking keeps the
+   * page the URL names, so a management page resumes; otherwise the vault
+   * opens. */
   function unlockVault(storeId: string): void {
-    const vaultPage: UnlockDestination = {
-      storeId,
-      route: WorkspaceRoute.Vault,
-    };
-    void unlockTo(vaultPage);
+    const current = new WorkspacePath(window.location.pathname).route;
+    const resumed =
+      current.kind === WorkspaceRouteLookupKind.Workspace &&
+      current.route !== WorkspaceRoute.Identities
+        ? current.route
+        : WorkspaceRoute.Vault;
+    const destination: UnlockDestination = { storeId, route: resumed };
+    void unlockTo(destination);
   }
-
-  type UnlockDestination = {
-    readonly storeId: string;
-    readonly route: WorkspaceRoute;
-  };
 
   /** Unlock a vault right away, as its Unlock button would, and open the
    * workspace on `route` once it is unlocked. */
@@ -289,10 +319,23 @@
     >[0] = { route: destination.route };
     new VaultWorkspaceActions(vault).applyWorkspaceRoute(routeRequest);
     // Choosing a vault reads it with the device key, so the identity is
-    // unlocked first: passkey, then the vault, then open it.
+    // unlocked first: passkey (or PIN), then the vault, then open it.
     if (destination.storeId !== selectedCardStoreId) {
+      if (pinProtected && !vault.deviceProtectionReady) {
+        pinPrompt = { kind: PinPromptKind.Vault, destination };
+        return;
+      }
       await unlockIdentity();
       if (!vault.deviceProtectionReady) return;
+    }
+    await openSelectedVault(destination);
+  }
+
+  /** With the identity unlocked, select the destination's vault and open it. */
+  async function openSelectedVault(
+    destination: UnlockDestination,
+  ): Promise<void> {
+    if (destination.storeId !== selectedCardStoreId) {
       await openVaultFromCard(destination.storeId);
       await tick();
     }
@@ -560,6 +603,14 @@
 {#snippet sentinelCeremony()}
   <SentinelCeremonyPanel {vault} {isVerifying} {isInitializing} />
 {/snippet}
+{#snippet cardPinUnlock()}
+  <CardPinUnlock
+    {vault}
+    {isVerifying}
+    onUnlock={unlockWithPin}
+    onCancel={() => (pinPrompt = { kind: PinPromptKind.Closed })}
+  />
+{/snippet}
 {#snippet cardPasswordUnlock()}
   <CardPasswordUnlock
     {vault}
@@ -582,7 +633,7 @@
     {isInitializing}
     onChooseVault={(
       storeId: Parameters<LoginVaultPickerProps["onChooseVault"]>[0],
-    ) => vault.chooseLoginVault(storeId)}
+    ) => unlockVault(storeId)}
   />
 {/snippet}
 
@@ -612,6 +663,9 @@
         : {}}
       {...showLocalUnlock && !newVaultOpen && cardPasswordEntries.length > 0
         ? { passwordFallback: cardPasswordUnlock }
+        : {}}
+      {...pinPrompt.kind !== PinPromptKind.Closed && !vault.deviceProtectionReady
+        ? { identityPrompt: cardPinUnlock }
         : {}}
       {...showVaultPicker && !newVaultOpen ? { vaultPicker } : {}}
       {...(showCreateVault || sentinelInvitationRequest.trim()) &&

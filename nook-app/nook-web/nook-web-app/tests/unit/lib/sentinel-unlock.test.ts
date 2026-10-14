@@ -220,7 +220,6 @@ class SentinelFinalizationFixture {
     this.state.sentinelUnlockStatus = SentinelVaultUnlockState.AwaitingShares
     this.state.sentinelCeremonyPrompt = true
     this.state.loginPasswordPrompt = false
-    this.state.loginDeviceKeysCapable = true
     this.state.vaultArchitecture = NookVaultArchitecture.sentinel(
       DeviceMode.Standard,
       ReplicationType.Personal,

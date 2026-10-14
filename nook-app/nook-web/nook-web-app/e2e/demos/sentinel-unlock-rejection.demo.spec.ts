@@ -148,7 +148,7 @@ test(
       await finalize.click()
 
       const start = page.getByTestId('sentinel-unlock-start-btn')
-      const open = page.getByTestId('unlock-vault-btn')
+      const open = page.getByTestId('identity-vault-row').first()
       await expect(open).toBeVisible()
       await expect(open).toBeEnabled()
       await expect(start).toHaveCount(0)

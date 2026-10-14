@@ -261,9 +261,9 @@ test.describe('Google Drive provider modes', () => {
       )
       await collaborator.goto('about:blank')
       await collaborator.goto(localEnrollmentLink)
-      await expect(
-        collaborator.getByTestId('enrollment-scan-panel'),
-      ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+      await expect(collaborator.getByTestId('join-this-device')).toBeVisible({
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
       await expect(
         collaborator.getByTestId('enrollment-icloud-auth-toggle'),
       ).toBeVisible()

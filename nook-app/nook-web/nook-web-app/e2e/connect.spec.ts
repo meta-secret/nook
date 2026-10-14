@@ -62,32 +62,15 @@ test.describe('vault connect flow', () => {
       ),
     ).toBeFalsy()
     await expect(page.getByTestId('login-gate')).not.toBeVisible()
-    await expect(page.getByTestId('extension-install-setup')).toBeVisible()
-    await expect(page.getByTestId('extension-install-setup')).toHaveAttribute(
-      'data-status',
-      'not_installed',
-    )
-    await expect(page.getByTestId('extension-install-setup-cta')).toBeVisible()
-    await expect(page.getByTestId('vault-security-guide')).toBeVisible()
-    await expect(page.getByTestId('vault-security-guide')).toHaveAttribute(
-      'data-folded',
-      'true',
-    )
-    await expect(page.getByTestId('vault-security-guide')).toHaveAttribute(
-      'data-recommendations',
-      '2',
-    )
-    await expect(page.getByTestId('security-guide-details')).not.toBeVisible()
-    await page.getByTestId('security-guide-toggle').click()
-    await expect(page.getByTestId('security-guide-details')).toBeVisible()
-    await expect(page.getByTestId('security-guide-sync-provider')).toBeVisible()
-    await expect(page.getByTestId('security-guide-device')).toBeVisible()
-    await expect(page.getByTestId('vault-security-guide')).toHaveAttribute(
-      'data-folded',
-      'false',
-    )
-    await page.getByTestId('security-guide-add-device').click()
-    await expect(page.getByTestId('onboard-device-panel')).toBeVisible()
+    // The vault page offers the browser extension; the identity's overview
+    // carries the protection ladder and its single next step.
+    await expect(page.getByTestId('vault-extension-install')).toBeVisible()
+    await openManagePage(page, ManagePage.Overview)
+    await expect(page.getByTestId('overview-ladder')).toBeVisible()
+    await expect(page.getByTestId('overview-next-step')).toBeVisible()
+    await expect(page.getByTestId('overview-add-device')).toBeDisabled()
+    await page.getByTestId('overview-next-step-btn').click()
+    await expect(page.getByTestId('storage-providers-section')).toBeVisible()
   })
 
   test('github setup keeps sync step locked until token is entered', async ({
@@ -322,7 +305,7 @@ test.describe('vault connect flow', () => {
     await expect(page.getByTestId('login-gate')).not.toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await expect(page.getByTestId('connected-badge')).toBeVisible()
+    await expect(page.getByTestId('authenticated-shell')).toBeVisible()
     await expect(page.getByTestId('settings-provider-oauth-file')).toHaveCount(
       0,
     )

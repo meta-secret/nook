@@ -463,10 +463,10 @@ test.describe('vault architecture modes', () => {
     await expect(page.getByTestId('identities-hero')).toHaveCount(0)
     await expect(start).toContainText('Name your first vault')
     await expect(page.getByTestId('login-join-identity-btn')).toContainText(
-      'I use Nook on another device',
+      'Already use Nook on another device?',
     )
     await expect(page.getByTestId('login-connect-storage-btn')).toContainText(
-      'Restore from a sync provider',
+      'Recover from a sync provider',
     )
 
     await page.getByTestId('header-language-select').click()
@@ -539,12 +539,12 @@ test.describe('vault architecture modes', () => {
     page,
   }) => {
     await continueToPathChooser(page)
+    // Joining is its own screen; Back returns to naming the first vault.
     await page.getByTestId('login-join-identity-btn').click()
-    await expect(page.getByTestId('login-enrollment-panel')).toContainText(
-      'open Devices to create a code',
-    )
-    await page.getByTestId('open-enrollment-code-btn').click()
+    await expect(page.getByTestId('join-this-device')).toBeVisible()
     await expect(page.getByTestId('enrollment-code-input')).toBeVisible()
+    await page.getByTestId('join-back').click()
+    await expect(page.getByTestId('first-vault-start')).toBeVisible()
 
     // An empty name takes the suggested one, so one click creates the vault.
     await page.getByTestId('login-create-device-vault-btn').click()
@@ -553,10 +553,9 @@ test.describe('vault architecture modes', () => {
     await expect(backup).toContainText('Personal')
     await expect(
       page.getByTestId('first-run-progress').locator('[aria-current="step"]'),
-    ).toContainText('Back up')
+    ).toHaveCount(0)
     await page.getByTestId('first-run-backup-btn').click()
-    await expect(page).toHaveURL(/\/identity\/sync$/)
-    await expect(page.getByTestId('storage-providers-section')).toBeVisible()
+    await expect(page.getByTestId('first-run-provider-picker')).toBeVisible()
   })
 
   test('opens participant response only from an owner invitation URL', async ({
@@ -779,7 +778,7 @@ test.describe('vault architecture modes', () => {
       const localLink = localizeAppLinkForE2e(joiner, link)
       await joiner.goto('about:blank')
       await joiner.goto(localLink)
-      await expect(joiner.getByTestId('enrollment-scan-panel')).toBeVisible({
+      await expect(joiner.getByTestId('join-this-device')).toBeVisible({
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })
       await redeemIdentityEnrollmentCode(joiner, ONBOARD_PASSWORD)

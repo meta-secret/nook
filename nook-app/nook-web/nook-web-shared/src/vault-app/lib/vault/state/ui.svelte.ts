@@ -72,7 +72,7 @@ export enum NewIdentityStage {
 export class VaultUiState {
   workspaceSection = $state<WorkspaceSection>(WorkspaceSection.Vault);
   /** Survives panel cancellation and navigation until the identity authenticates. */
-  devicesAccessIdentityTransitionPending = $state(false);
+  identityTransitionPending = $state(false);
   helpOpen = $state(false);
   firstRun = $state<FirstRunStage>(FirstRunStage.Off);
   /** The name given on the first-vault screen, shown by the later steps. */
