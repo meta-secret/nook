@@ -2,8 +2,9 @@ import type { Browser, BrowserContext, Page } from '@playwright/test'
 import { expect, test } from './fixtures'
 import {
   createIsolatedContext,
-  disableVaultIdleLock,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  keepVaultIdleLockDisabled,
+  waitForVaultOperationsIdle,
   parseJson,
   requireRecord,
   readStringProperty,
@@ -811,12 +812,17 @@ test.describe('passkey device-key protection', () => {
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await disableVaultIdleLock(page)
+    // The PIN unlock finishes after the vault shows and starts a fresh idle
+    // tracker; keep the e2e idle lock off for the rest of the test.
+    await keepVaultIdleLockDisabled(page)
 
     const wrapped = await readPersistedDeviceIdentity(page)
     expect(wrapped).toContain('"protection":"pin"')
     expect(wrapped).not.toContain('AGE-SECRET-KEY-')
 
+    // Opening Keys while the PIN unlock still settles fails to read access
+    // metadata; wait for the vault to go quiet first.
+    await waitForVaultOperationsIdle(page)
     await openKeysPage(page)
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,

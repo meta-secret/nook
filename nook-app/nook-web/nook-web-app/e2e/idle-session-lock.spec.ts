@@ -72,8 +72,9 @@ test.describe('idle session auto-lock', () => {
     const bumpInterval = Math.max(500, Math.floor(IDLE_LOCK_MS / 2))
     for (let i = 0; i < 3; i += 1) {
       await page.waitForTimeout(bumpInterval)
-      await page.getByTestId('authenticated-shell').click({
-        position: { x: 12 + i * 4, y: 12 + i * 4 },
+      // The page title is inert; the shell's corner is the workspace rail.
+      await page.getByTestId('page-bar-title').click({
+        position: { x: 4 + i * 4, y: 4 },
       })
     }
 
