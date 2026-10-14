@@ -74,7 +74,7 @@ identity's parts stay in the bar and security and settings open from More.
   const sheetActive = $derived(sheetSections.includes(active))
 
   let moreOpen = $state(false)
-  let navElement: HTMLElement | undefined = $state()
+  let navElement = $state<HTMLElement>()
 
   function select(section: WorkspaceSection): void {
     moreOpen = false
