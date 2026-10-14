@@ -26,7 +26,9 @@ mod wire;
 pub use wire::ProviderWireMigration;
 mod enrollment;
 mod identity_mounts;
-pub use identity_mounts::{IdentityMountCapability, LayoutRemoteRef, ProviderReplicationTarget};
+pub use identity_mounts::{
+    DeviceJoinReach, IdentityMountCapability, LayoutRemoteRef, ProviderReplicationTarget,
+};
 mod legacy_storage;
 pub use legacy_storage::LegacyAuthProvidersSnapshot;
 mod oauth;

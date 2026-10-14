@@ -58,19 +58,19 @@ const DEFINITIONS: readonly ManageNavDefinition[] = [
     placement: ManageNavPlacement.Everywhere,
   },
   {
-    section: WorkspaceSection.Settings,
-    labelKey: I18N_KEYS.WorkspaceSectionSettings,
-    shortLabelKey: I18N_KEYS.WorkspaceNavShortSettings,
-    descriptionKey: I18N_KEYS.WorkspaceSectionSettingsDescription,
-    testId: "manage-nav-settings",
-    placement: ManageNavPlacement.Everywhere,
-  },
-  {
     section: WorkspaceSection.Passwords,
     labelKey: I18N_KEYS.WorkspaceSectionPasswords,
     shortLabelKey: I18N_KEYS.WorkspaceNavShortPasswords,
     descriptionKey: I18N_KEYS.WorkspaceSectionPasswordsDescription,
     testId: "manage-nav-passwords",
+    placement: ManageNavPlacement.Everywhere,
+  },
+  {
+    section: WorkspaceSection.Settings,
+    labelKey: I18N_KEYS.WorkspaceSectionSettings,
+    shortLabelKey: I18N_KEYS.WorkspaceNavShortSettings,
+    descriptionKey: I18N_KEYS.WorkspaceSectionSettingsDescription,
+    testId: "manage-nav-settings",
     placement: ManageNavPlacement.Everywhere,
   },
   {

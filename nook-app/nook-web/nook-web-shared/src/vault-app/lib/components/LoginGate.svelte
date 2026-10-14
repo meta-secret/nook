@@ -37,7 +37,6 @@
     LocalFolderHandleKind,
     oauth_access_token,
   } from "$lib/auth/providers";
-  import ProductIntro from "$lib/components/ProductIntro.svelte";
   import DevicesAccessDashboard from "$lib/components/DevicesAccessDashboard.svelte";
   import {
     WorkspaceRoute,
@@ -109,7 +108,6 @@
     onCancelAddProvider,
     onBeginSetup,
     onCancelSetup,
-    onOpenHelp,
     onUseEnrollmentCode,
     onUnlockWithPassword,
     onSwitchVault,
@@ -144,7 +142,6 @@
     onCancelAddProvider?: () => void;
     onBeginSetup: (request: ProviderSetupRequest) => void;
     onCancelSetup: () => void;
-    onOpenHelp?: () => void;
     onUseEnrollmentCode?: (args: EnrollmentCodeUnlock) => void | Promise<void>;
     onUnlockWithPassword: (args: VaultPasswordUnlock) => void | Promise<void>;
     onSwitchVault: () => void | Promise<void>;
@@ -801,10 +798,6 @@
             }}
           />
         {:else if !showCreateVault && !sentinelInvitationRequest.trim()}
-          {#if !hasProviders && !showSetup && !showLocalUnlock && onOpenHelp}
-            <ProductIntro {vault} {onOpenHelp} />
-          {/if}
-
           {#if showAccessSheet}
             <section
               class="nk-frame-sheet min-w-0"
@@ -833,6 +826,8 @@
                       })()}
                     {:else if addProviderOpen}
                       {vault.t(I18N_KEYS.OnboardingAddProvider)}
+                    {:else if vault.loginRequiresExistingVault}
+                      {vault.t(I18N_KEYS.FirstRunRestoreTitle)}
                     {:else}
                       {vault.t(I18N_KEYS.OnboardingSetupStorage)}
                     {/if}

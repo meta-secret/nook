@@ -1,8 +1,8 @@
 /**
  * The unified workspace: identities are the hub, a vault is opened from an
  * identity, and management pages are grouped by what they act on — the
- * identity itself (keys, vaults, browser settings) or the open vault (devices,
- * sync providers, backup passwords, imports).
+ * identity (keys, vaults, devices, sync providers, backup passwords, browser
+ * settings) or the open vault (imports).
  */
 export enum WorkspaceSection {
   Vault = "vault",
@@ -33,8 +33,8 @@ export class WorkspaceSectionScope {
       case WorkspaceSection.Devices:
       case WorkspaceSection.Sync:
       case WorkspaceSection.Settings:
-        return ManageSectionScope.Identity;
       case WorkspaceSection.Passwords:
+        return ManageSectionScope.Identity;
       case WorkspaceSection.Import:
         return ManageSectionScope.Vault;
       case WorkspaceSection.Vault:

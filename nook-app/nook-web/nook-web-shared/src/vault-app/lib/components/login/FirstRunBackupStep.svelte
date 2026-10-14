@@ -4,7 +4,7 @@ is offered, never forced: skipping opens the vault, and the Sync rail entry
 keeps its warning until a provider is added.
 -->
 <script lang="ts">
-  import { Cloud } from "@lucide/svelte";
+  import { Copy } from "@lucide/svelte";
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import { Button } from "$lib/components/ui/button";
   import FirstRunProgress from "./FirstRunProgress.svelte";
@@ -37,7 +37,7 @@ keeps its warning until a provider is added.
   <FirstRunProgress {vault} current={FirstRunStage.Backup} />
   <div class="space-y-3">
     <span class="nk-tile nk-tile-lg" aria-hidden="true">
-      <Cloud class="size-5" />
+      <Copy class="size-5" />
     </span>
     <h1 class="text-[1.75rem] leading-tight font-semibold tracking-[-0.02em] text-foreground">
       {vault.t(I18N_KEYS.FirstRunBackupTitle)}

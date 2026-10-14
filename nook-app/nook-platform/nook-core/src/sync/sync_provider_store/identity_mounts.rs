@@ -76,6 +76,31 @@ pub enum IdentityMountCapability {
     Unconfigured,
 }
 
+/// Whether another device can reach a provider row to join the identity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeviceJoinReach {
+    /// A cloud mount every app of the identity can reach.
+    OtherDevices,
+    /// The row lives on this device or cannot carry the identity log.
+    ThisDeviceOnly,
+}
+
+impl StorageProviderData {
+    /// A joining app reads the identity log through a mount it can reach, so
+    /// only cloud mounts carry joins. A local folder is chosen per
+    /// installation and `CloudKit` cannot carry the log yet.
+    #[must_use]
+    pub fn device_join_reach(&self) -> DeviceJoinReach {
+        match self.identity_mount_capability() {
+            IdentityMountCapability::Mountable(IdentityMountTarget::LocalFolder { .. })
+            | IdentityMountCapability::LocalOnly
+            | IdentityMountCapability::ICloudNamespaceUnavailable
+            | IdentityMountCapability::Unconfigured => DeviceJoinReach::ThisDeviceOnly,
+            IdentityMountCapability::Mountable(_) => DeviceJoinReach::OtherDevices,
+        }
+    }
+}
+
 /// One provider row and the namespace one event log uses there.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProviderReplicationTarget {
@@ -347,8 +372,9 @@ mod tests {
     use super::super::OAuthFileConfig;
     use super::*;
     use crate::{
-        ActiveVaultScope, AuthProvidersSnapshotData, ProviderSyncCheckpoint, StoredGithubPat,
-        StoredLocalFolderConfiguration, StoredOAuthFileConfiguration,
+        ActiveVaultScope, AuthProvidersSnapshotData, LocalFolderConfigData, ProviderSyncCheckpoint,
+        StoredGithubPat, StoredLocalFolderConfiguration, StoredLocalFolderDirectory,
+        StoredLocalFolderHandle, StoredOAuthFileConfiguration,
     };
     use std::slice;
 
@@ -404,6 +430,38 @@ mod tests {
             .iter()
             .map(|target| (target.provider.id.as_str(), target.location.clone()))
             .collect()
+    }
+
+    #[test]
+    fn only_cloud_mounts_let_another_device_join() {
+        let mut folder = Row::github("folder", "unused").0;
+        folder.provider_type = StorageProviderType::LocalFolder;
+        folder.github_pat = StoredGithubPat::Missing;
+        folder.local_folder = StoredLocalFolderConfiguration::Configured(LocalFolderConfigData {
+            directory_name: StoredLocalFolderDirectory::DirectoryName("Nook".to_owned()),
+            handle_id: StoredLocalFolderHandle::HandleId("handle".to_owned()),
+        });
+        let mut drive = Row::icloud("drive").0;
+        drive.oauth_file = StoredOAuthFileConfiguration::configured(OAuthFileConfig {
+            preset: OAuthFilePreset::GoogleDrive,
+            drive_mode: GoogleDriveMode::Private,
+            ..OAuthFileConfig::default()
+        });
+
+        assert_eq!(
+            Row::github("github", "owner/repo").0.device_join_reach(),
+            DeviceJoinReach::OtherDevices
+        );
+        assert_eq!(drive.device_join_reach(), DeviceJoinReach::OtherDevices);
+        assert_eq!(folder.device_join_reach(), DeviceJoinReach::ThisDeviceOnly);
+        assert_eq!(
+            Row::icloud("icloud").0.device_join_reach(),
+            DeviceJoinReach::ThisDeviceOnly
+        );
+        assert_eq!(
+            Row::local("local").0.device_join_reach(),
+            DeviceJoinReach::ThisDeviceOnly
+        );
     }
 
     #[test]

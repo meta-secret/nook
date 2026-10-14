@@ -54,7 +54,8 @@
     ApplicationShellLayout,
   } from '$lib/app/shell-layout'
   import {
-    assess_vault_security,
+    assess_identity_health,
+    provider_carries_device_join,
     configured_vault_application_is_simple,
     configured_vault_application_is_sentinel,
     configured_vault_application_supports_extension,
@@ -96,10 +97,15 @@
   function setSecretsAddOpen(open: boolean): void {
     secretsAddOpen = open
   }
-  const vaultSecurityRecommendations = $derived(
-    assess_vault_security(
+  /** Day-2 health of the identity: a copy elsewhere, then a second app. */
+  const identityHealth = $derived(
+    assess_identity_health(
       vault.syncProviders.length,
+      vault.syncProviders.filter((provider) =>
+        provider_carries_device_join(provider),
+      ).length,
       vault.identityControl.memberCount(vault.vaultMembers.length),
+      vault.secretTotal,
     ),
   )
   let colorMode = $state<ColorMode>(browserColorMode.systemColorMode())
@@ -132,8 +138,6 @@
   let extensionSetupStateValue = $state<ExtensionSetupOffer>({
     kind: ExtensionSetupOfferKind.Hidden,
   })
-  let extensionInstallBusy = $state(false)
-  let extensionConnectError = $state(false)
   const EXTENSION_LOCKED_RETRY_MS = 3_000
   $effect(() => {
     const localVaults = vault.localVaults
@@ -752,24 +756,9 @@
     if (offer.isOk()) extensionSetupStateValue = offer.value
   }
 
-  async function handleExtensionInstall() {
-    extensionInstallBusy = true
-    try {
-      await extensionSetupBrowser.openExtensionInstaller()
-    } finally {
-      extensionInstallBusy = false
-    }
-  }
-
+  /** Pair this vault from its page; Devices owns install and its errors. */
   async function handleExtensionConnect() {
-    extensionInstallBusy = true
-    extensionConnectError = false
-    try {
-      extensionConnectError =
-        !(await extensionSetupBrowser.connectInstalledExtension())
-    } finally {
-      extensionInstallBusy = false
-    }
+    await extensionSetupBrowser.connectInstalledExtension()
   }
 
   $effect(() => {
@@ -978,12 +967,7 @@
   authenticatedWorkspaceProps={{
     vault,
     extensionSetupState: extensionSetupStateValue,
-    extensionInstallBusy,
-    extensionConnectError,
-    hasSecurityRecommendations: vaultSecurityRecommendations.hasRecommendations,
-    needsSyncProvider: vaultSecurityRecommendations.needsSyncProvider,
-    needsAnotherDevice: vaultSecurityRecommendations.needsAnotherDevice,
-    onExtensionInstall: () => void handleExtensionInstall(),
+    identityHealth,
     onExtensionConnect: () => void handleExtensionConnect(),
     onSettingsReconnect: handleSettingsReconnect,
     onEditorOpenChange: setSecretsAddOpen,

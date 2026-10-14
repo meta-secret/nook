@@ -2,7 +2,6 @@
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { KeyRound, QrCode, RefreshCw, ShieldCheck } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button";
-  import ICloudEnrollmentAuth from "$lib/components/login/ICloudEnrollmentAuth.svelte";
   import {
     Card,
     CardContent,
@@ -102,7 +101,6 @@
         </p>
       </div>
 
-      <ICloudEnrollmentAuth {vault} />
 
       <div class="flex justify-end">
         <Button

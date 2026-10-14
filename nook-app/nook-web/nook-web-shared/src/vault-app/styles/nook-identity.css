@@ -625,9 +625,9 @@
     }
   }
 
-  /* Authenticated shell: one framed sheet. The navigation rail runs down
-   * the left; the page band, the scrolling page and the status line share
-   * the right column. Phones stack them above a bottom bar. */
+  /* Authenticated shell: one framed sheet with a page band, the scrolling
+   * page and the status line. Identity management adds its rail down the
+   * left (a bottom bar on phones); vault pages have none. */
   .nk-shell {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
@@ -651,7 +651,7 @@
     grid-area: status;
   }
   @media (width >= 48rem) {
-    .nk-shell {
+    .nk-shell-manage {
       grid-template-columns: 15rem minmax(0, 1fr);
       grid-template-rows: auto minmax(0, 1fr) auto;
       grid-template-areas:

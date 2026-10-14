@@ -139,7 +139,6 @@
         onCancelAddProvider={() => vault.cancelAddProvider()}
         onBeginSetup={beginProviderSetup}
         onCancelSetup={() => vault.cancelProviderSetup()}
-        onOpenHelp={() => vault.openHelp()}
         {onUseEnrollmentCode}
         prefillEnrollmentCode={vault.prefillEnrollmentCode}
         enrollmentFromUrlPending={vault.enrollmentFromUrlPending}

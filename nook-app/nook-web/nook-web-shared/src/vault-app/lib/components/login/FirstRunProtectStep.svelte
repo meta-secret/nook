@@ -5,7 +5,7 @@ opens the vault named on the first screen. The card below is a preview of the
 identity card the hub will show once setup finishes.
 -->
 <script lang="ts">
-  import { ArrowLeft } from "@lucide/svelte";
+  import { ArrowLeft, KeyRound } from "@lucide/svelte";
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import { Button } from "$lib/components/ui/button";
   import DeviceProtectionGate from "$lib/components/DeviceProtectionGate.svelte";
@@ -117,7 +117,8 @@ identity card the hub will show once setup finishes.
       </div>
     </figure>
     <div class="grid min-w-0 gap-3">
-      <p class="text-sm font-medium text-foreground">
+      <p class="flex items-center gap-2 text-sm font-medium text-foreground">
+        <KeyRound class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         {vault.t(I18N_KEYS.FirstRunProtectHint)}
       </p>
       <DeviceProtectionGate

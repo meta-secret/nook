@@ -139,6 +139,27 @@ its passkey is made. Returning users get two quiet links instead of a menu.
     </button>
   </div>
 
+  <!-- What Nook is, in one line; the details live in Help. -->
+  <p
+    class="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 font-mono text-[11px] tracking-[0.04em] text-muted-foreground"
+    data-testid="first-vault-facts"
+  >
+    <span>{vault.t(I18N_KEYS.FirstRunFactEncrypted)}</span>
+    <span aria-hidden="true">·</span>
+    <span>{vault.t(I18N_KEYS.FirstRunFactNoServer)}</span>
+    <span aria-hidden="true">·</span>
+    <span>{vault.t(I18N_KEYS.FirstRunFactYourStorage)}</span>
+    <span aria-hidden="true">·</span>
+    <button
+      type="button"
+      class="underline underline-offset-4 hover:text-foreground"
+      data-testid="first-vault-how-it-works"
+      onclick={() => vault.openHelp()}
+    >
+      {vault.t(I18N_KEYS.FirstRunHowItWorks)}
+    </button>
+  </p>
+
   {#if onUseEnrollmentCode && joinOpen}
     <div class="text-left">
       <LoginEnrollmentPanel

@@ -326,21 +326,6 @@
     },
     "choose_vault_hint": "Choose a vault on an identity card to unlock it."
   },
-  "security_guide": {
-    "title": "Vault security guide",
-    "intro": "Complete these recommendations so one lost browser or device cannot leave you without your vault.",
-    "recommendation_count_singular": "{count} security recommendation",
-    "recommendation_count_plural": "{count} security recommendations",
-    "sync_title": "Keep an encrypted copy elsewhere",
-    "sync_body": "Your encrypted vault is stored only in this browser. Clearing site data or losing this device can permanently delete the only copy. Nook does not host or recover vault data, so add a sync provider to keep an encrypted replica elsewhere.",
-    "device_title": "Secure vault access with another device",
-    "device_body": "No other enrolled device can currently open this vault. Add another device while this one is available so access does not depend on a single device key.",
-    "distinct_safeguards": "A sync provider protects the encrypted vault data; another enrolled device protects your ability to open it. You need both safeguards.",
-    "add_sync_provider": "Add sync provider",
-    "add_device": "Add another device",
-    "collapse": "Collapse security guide",
-    "expand": "Show security guide"
-  },
   "extension_setup": {
     "title": "Install the browser extension",
     "body": "Nook fills and saves passwords on websites through the browser extension. Install it, then open the toolbar icon and connect it to this vault.",
@@ -1629,15 +1614,6 @@
     "starting_over": "Starting over instead?",
     "starting_over_desc": "Create a new vault if you reset storage and no longer have an enrolled device to approve this browser."
   },
-  "product_intro": {
-    "why_nook": "Why Nook?",
-    "device_is_key": "Your vault lives on this device",
-    "no_master_pw": "Encrypted locally with your master password. Optional cloud sync after unlock.",
-    "bullet1": "Passwordless access to your secrets.",
-    "bullet2": "Your secrets. Your storage. Your keys.",
-    "bullet3": "A decentralized vault for your secrets.",
-    "how_works": "How Nook works"
-  },
   "provider_picker": {
     "choose_provider": "Choose a storage provider",
     "this_device": "This device",
@@ -2151,11 +2127,8 @@
     "back_to_identities": "Back to identities",
     "nav_label": "Workspace",
     "nav_group_identity": "Identity",
-    "nav_group_vault": "Vault",
-    "nav_items": "Items",
     "nav_all_identities": "All identities",
     "nav_sync_missing": "No sync provider: this identity lives only in this browser.",
-    "setup_label": "Set up this vault",
     "section_keys": "Keys",
     "section_keys_description": "Passkeys and PINs that unlock this identity, one for each Nook app.",
     "section_vaults": "Vaults",
@@ -2239,7 +2212,8 @@
     "mount_unconnected_description": "These providers are mounted on the identity. Sign in to them here to replicate on this app.",
     "vault_open_through_identity": "Open through identity",
     "error_provider_not_mount": "Choose a provider that carries this identity.",
-    "error_passphrase_short": "Use a passphrase of at least 8 characters."
+    "error_passphrase_short": "Use a passphrase of at least 8 characters.",
+    "no_device_join_mounts": "Devices join through a cloud provider. Add GitHub or Google Drive on the Sync page."
   },
   "first_run": {
     "title": "Name your first vault",
@@ -2250,16 +2224,38 @@
     "join_link": "I use Nook on another device",
     "restore_link": "Restore from a sync provider",
     "step_name": "Name",
-    "step_protect": "Protect",
-    "step_backup": "Back up",
+    "step_protect": "Key",
+    "step_backup": "Copy",
     "back": "Back",
     "protect_title": "This is you",
     "protect_body": "Nook keeps your keys in an identity: a private account that lives on your devices, not on a server. It opens {vault} and every vault you add later.",
-    "protect_hint": "Protect your identity with a passkey on this browser.",
+    "protect_hint": "Create the key to your identity: a passkey on this browser.",
     "preview_label": "Your identity",
-    "backup_title": "Back up your identity",
-    "backup_body": "Right now your identity and {vault} live only in this browser. A sync provider keeps an encrypted copy, so a lost browser does not mean lost passwords.",
-    "backup_cta": "Set up backup",
-    "backup_skip": "Skip for now"
+    "backup_title": "Keep a copy outside this browser",
+    "backup_body": "Your passkey opens {vault}, but {vault} itself is stored only in this browser. If this browser’s data is cleared, there is nothing left to open. A sync provider keeps an encrypted copy of your identity and its vaults.",
+    "backup_cta": "Add a sync provider",
+    "backup_skip": "Skip for now",
+    "fact_encrypted": "Encrypted in this browser",
+    "fact_no_server": "No Nook server",
+    "fact_your_storage": "Your storage, your keys",
+    "how_it_works": "How Nook works",
+    "restore_title": "Where is your vault?",
+    "restore_pick": "Pick the provider that holds it",
+    "restore_body": "Nook reads your encrypted vault there, then asks you to unlock it. Nothing is created or overwritten."
+  },
+  "identity_health": {
+    "label": "Identity health",
+    "stage_local_only": "Only in this browser",
+    "stage_copy_kept": "Copy kept",
+    "stage_multi_device": "On several devices",
+    "sync_title": "Keep a copy outside this browser",
+    "sync_body": "If this browser’s data is cleared, your identity and its vaults are gone. A sync provider keeps an encrypted copy.",
+    "sync_cta": "Add a sync provider",
+    "cloud_title": "Add a cloud provider so another device can join",
+    "cloud_body": "Your copy is in a local folder. Other devices reach your identity only through GitHub or Google Drive.",
+    "cloud_cta": "Add a cloud provider",
+    "device_title": "Open this identity on another device",
+    "device_body": "If this device is lost, only another app of this identity can open its vaults. It joins through your cloud provider.",
+    "device_cta": "Add a device"
   }
 }

@@ -1,7 +1,7 @@
 <!--
-Workspace navigation, always present while unlocked. The identity sits on
-top and leads back to the identities hub; the open vault's pages come next,
-then the identity's own pages. One element: a rail inside the shell on wide
+Identity management navigation. The identity sits on top and leads back to
+the identities hub; its pages follow. Vault pages never show it: a vault has
+only its items and imports. One element: a rail inside the shell on wide
 screens and a scrolling bottom bar on phones.
 -->
 <script lang="ts">
@@ -15,7 +15,6 @@ screens and a scrolling bottom bar on phones.
     RefreshCw,
     ShieldCheck,
     SlidersHorizontal,
-    Vault,
   } from '@lucide/svelte'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import type { VaultState } from '$lib/vault.svelte'
@@ -28,26 +27,24 @@ screens and a scrolling bottom bar on phones.
   let {
     vault,
     active,
-    vaultLabel,
     identityLabel,
     pendingJoinCount = 0,
     syncMissing = false,
+    deviceMissing = false,
     onSelect,
   }: {
     vault: VaultState
     active: WorkspaceSection
-    vaultLabel: string
     identityLabel: string
     /** Join requests waiting for this identity's approval. */
     pendingJoinCount?: number
     /** The identity has no sync provider, so it lives only here. */
     syncMissing?: boolean
+    /** The identity's next step is a second app. */
+    deviceMissing?: boolean
     onSelect: (section: WorkspaceSection) => void
   } = $props()
 
-  const vaultItems = $derived(
-    MANAGE_NAV_ITEMS.filter((item) => item.scope === ManageSectionScope.Vault),
-  )
   const identityItems = $derived(
     MANAGE_NAV_ITEMS.filter(
       (item) => item.scope === ManageSectionScope.Identity,
@@ -56,9 +53,7 @@ screens and a scrolling bottom bar on phones.
 </script>
 
 {#snippet itemIcon(section: WorkspaceSection)}
-  {#if section === WorkspaceSection.Vault}
-    <Vault class="size-[1.125rem] shrink-0" aria-hidden="true" />
-  {:else if section === WorkspaceSection.Keys}
+  {#if section === WorkspaceSection.Keys}
     <KeyRound class="size-[1.125rem] shrink-0" aria-hidden="true" />
   {:else if section === WorkspaceSection.Vaults}
     <FolderKey class="size-[1.125rem] shrink-0" aria-hidden="true" />
@@ -80,6 +75,12 @@ screens and a scrolling bottom bar on phones.
     <span class="nk-manage-badge" data-testid="manage-nav-pending-joins">
       {pendingJoinCount}
     </span>
+  {:else if section === WorkspaceSection.Devices && deviceMissing}
+    <span
+      class="nk-manage-dot"
+      title={vault.t(I18N_KEYS.IdentityHealthDeviceTitle)}
+      data-testid="manage-nav-device-missing"
+    ></span>
   {:else if section === WorkspaceSection.Sync && syncMissing}
     <span
       class="nk-manage-dot"
@@ -143,23 +144,6 @@ screens and a scrolling bottom bar on phones.
       aria-hidden="true"
     />
   </button>
-
-  <div class="nk-manage-group">
-    <p class="nk-label hidden truncate px-2.5 pb-1 md:block" title={vaultLabel}>
-      {vault.t(I18N_KEYS.WorkspaceNavGroupVault)} · {vaultLabel}
-    </p>
-    <ul class="contents md:grid md:gap-0.5">
-      {@render entry(
-        WorkspaceSection.Vault,
-        'manage-nav-items',
-        vault.t(I18N_KEYS.WorkspaceNavItems),
-        vault.t(I18N_KEYS.WorkspaceNavItems),
-      )}
-      {#each vaultItems as item (item.section)}
-        {@render listed(item)}
-      {/each}
-    </ul>
-  </div>
 
   <div class="nk-manage-group">
     <p class="nk-label hidden truncate px-2.5 pb-1 md:block">

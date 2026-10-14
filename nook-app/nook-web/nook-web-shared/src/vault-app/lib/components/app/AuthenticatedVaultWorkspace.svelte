@@ -1,8 +1,9 @@
 <!--
-Unified identity and vault workspace. Identities are the hub; every unlocked
-page shares one framed shell: the workspace rail (a bottom bar on phones),
-then a page band, the scrolling page and the status line. Setup and pending
-joins are bands at the top of the page, not separate cards.
+Unified identity and vault workspace. Identities are the hub. A vault page
+holds only the vault: its items and imports, with a chip that opens the
+identity. Identity management (keys, vaults, devices, sync, backup
+passwords, settings) adds its rail. Every page is one framed sheet: a page
+band, the scrolling page and the status line.
 -->
 <script lang="ts">
   type SecretAddModeChange = {
@@ -12,25 +13,22 @@ joins are bands at the top of the page, not separate cards.
 
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import { onDestroy, tick, untrack, type ComponentProps } from "svelte";
-  import { Puzzle } from "@lucide/svelte";
-  import {
-    ExtensionSetupOfferKind,
-    type ExtensionSetupOffer,
-  } from "$lib/app/extension-setup";
+  import { Download, Fingerprint, Puzzle } from "@lucide/svelte";
+  import { type ExtensionSetupOffer } from "$lib/app/extension-setup";
   import {
     configured_vault_application_supports_extension,
     NookIdentityLocalAccessKind,
+    NookIdentityNextStep,
+    NookIdentityNudge,
+    type NookIdentityHealth,
     ProviderSyncFailureHandling,
     ProviderSyncVisibility,
   } from "$app-wasm";
-  import { ExtensionSetupStatus } from "$lib/extension/install";
-  import ExtensionInstallSetupCard from "$lib/components/ExtensionInstallSetupCard.svelte";
-  import PendingJoinsBanner from "$lib/components/PendingJoinsBanner.svelte";
   import SecretVault from "$lib/components/SecretVault.svelte";
   import VaultAdmin from "$lib/components/VaultAdmin.svelte";
   import DevicesAccessDashboard from "$lib/components/DevicesAccessDashboard.svelte";
   import type { KeysPageLeave } from "$lib/components/devices-access-dashboard-state";
-  import VaultSecurityGuideBanner from "$lib/components/VaultSecurityGuideBanner.svelte";
+  import IdentityHealthBand from "$lib/components/identity-control/IdentityHealthBand.svelte";
   import BrowserSettingsPanel from "$lib/components/settings/BrowserSettingsPanel.svelte";
   import IdentityDevicesPanel from "$lib/components/identity-control/IdentityDevicesPanel.svelte";
   import VaultStatusBar from "$lib/components/VaultStatusBar.svelte";
@@ -79,7 +77,6 @@ joins are bands at the top of the page, not separate cards.
   } from "./authenticated-vault-workspace-state";
 
   type VaultAdminProps = ComponentProps<typeof VaultAdmin>;
-  type PendingJoinsBannerProps = ComponentProps<typeof PendingJoinsBanner>;
   type SecretVaultProps = ComponentProps<typeof SecretVault>;
 
   const SUPPORTS_EXTENSION = configured_vault_application_supports_extension();
@@ -87,24 +84,15 @@ joins are bands at the top of the page, not separate cards.
   let {
     vault,
     extensionSetupState,
-    extensionInstallBusy,
-    extensionConnectError,
-    hasSecurityRecommendations,
-    needsSyncProvider,
-    needsAnotherDevice,
-    onExtensionInstall,
+    identityHealth,
     onExtensionConnect,
     onSettingsReconnect,
     onEditorOpenChange,
   }: {
     vault: VaultState;
     extensionSetupState: ExtensionSetupOffer;
-    extensionInstallBusy: boolean;
-    extensionConnectError: boolean;
-    hasSecurityRecommendations: boolean;
-    needsSyncProvider: boolean;
-    needsAnotherDevice: boolean;
-    onExtensionInstall: () => void;
+    /** Day-2 health of the identity, assessed by nook-core. */
+    identityHealth: NookIdentityHealth;
     onExtensionConnect: () => void;
     onSettingsReconnect: () => void;
     onEditorOpenChange: (open: boolean) => void;
@@ -184,11 +172,6 @@ joins are bands at the top of the page, not separate cards.
     };
     return new VaultExtensionPresentation(linkRequest).link;
   });
-  const extensionSetupVisible = $derived(
-    SUPPORTS_EXTENSION &&
-      extensionSetupState.kind === ExtensionSetupOfferKind.Visible &&
-      extensionSetupState.setup.status !== ExtensionSetupStatus.Paired,
-  );
   const canPairCurrentVault = $derived.by(() => {
     const request: CurrentVaultPairingAvailabilityRequest = {
       link: extensionLink,
@@ -420,6 +403,7 @@ joins are bands at the top of the page, not separate cards.
 {:else}
   <div
     class:authenticated-shell-editor={secretsAddOpen}
+    class:nk-shell-manage={scope === ManageSectionScope.Identity}
     class="authenticated-shell nk-shell w-full min-w-0 max-w-full [touch-action:pan-y_pinch-zoom]"
     data-testid="authenticated-shell"
     data-section={section}
@@ -428,7 +412,6 @@ joins are bands at the top of the page, not separate cards.
       <PageBar
         {vault}
         band
-        backOnPhonesOnly={section === WorkspaceSection.Vault}
         eyebrow={barEyebrow}
         title={barTitle}
         testId={section === WorkspaceSection.Vault
@@ -449,6 +432,47 @@ joins are bands at the top of the page, not separate cards.
         {/snippet}
         {#snippet actions()}
           {#if section === WorkspaceSection.Vault}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              title={vault.t(I18N_KEYS.WorkspaceManageIdentity)}
+              data-testid="vault-identity-btn"
+              onclick={() => openFromNav(WorkspaceSection.Keys)}
+            >
+              <Fingerprint class="size-4" />
+              <span class="hidden max-w-[12rem] truncate sm:inline"
+                >{identityName}</span
+              >
+              {#if identityPendingJoins.length > 0}
+                <span
+                  class="min-w-4 bg-foreground px-1 font-mono text-[10px] leading-4 text-background"
+                  data-testid="vault-identity-pending-joins"
+                  >{identityPendingJoins.length}</span
+                >
+              {:else if identityHealth.nudge !== NookIdentityNudge.Quiet}
+                <span
+                  class="size-1.5 rounded-full {identityHealth.nudge ===
+                  NookIdentityNudge.Urge
+                    ? 'bg-warning'
+                    : 'bg-muted-foreground'}"
+                  title={vault.t(I18N_KEYS.IdentityHealthLabel)}
+                  data-testid="vault-identity-health-nudge"
+                ></span>
+              {/if}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              data-testid="vault-import-btn"
+              onclick={() => openSection(WorkspaceSection.Import)}
+            >
+              <Download class="size-4" />
+              <span class="hidden sm:inline"
+                >{vault.t(I18N_KEYS.WorkspaceImportAction)}</span
+              >
+            </Button>
             {#if SUPPORTS_EXTENSION && canPairCurrentVault}
               <Button
                 type="button"
@@ -469,15 +493,20 @@ joins are bands at the top of the page, not separate cards.
       </PageBar>
     </div>
 
-    <ManageNav
-      {vault}
-      active={section}
-      {vaultLabel}
-      identityLabel={identityName}
-      pendingJoinCount={identityPendingJoins.length}
-      syncMissing={needsSyncProvider}
-      onSelect={openFromNav}
-    />
+    {#if scope === ManageSectionScope.Identity}
+      <ManageNav
+        {vault}
+        active={section}
+        identityLabel={identityName}
+        pendingJoinCount={identityPendingJoins.length}
+        syncMissing={identityHealth.nextStep ===
+          NookIdentityNextStep.AddSyncProvider ||
+          identityHealth.nextStep === NookIdentityNextStep.AddCloudProvider}
+        deviceMissing={identityHealth.nextStep ===
+          NookIdentityNextStep.AddDevice}
+        onSelect={openFromNav}
+      />
+    {/if}
 
     <div
       class="nk-shell-main shell-scroll flex min-h-0 min-w-0 flex-col {secretsNoteEditorOpen
@@ -489,6 +518,15 @@ joins are bands at the top of the page, not separate cards.
           ? "grid min-w-0 grid-cols-1 content-start gap-6 p-4 md:p-6"
           : "flex min-h-0 flex-1 flex-col"}
       >
+        {#if scope === ManageSectionScope.Identity}
+          <IdentityHealthBand
+            {vault}
+            health={identityHealth}
+            onAddSyncProvider={() => openSection(WorkspaceSection.Sync)}
+            onAddDevice={() => openSection(WorkspaceSection.Devices)}
+          />
+        {/if}
+
         {#if navEntry.kind === ManageNavEntryKind.Listed && (section === WorkspaceSection.Keys || section === WorkspaceSection.Devices || section === WorkspaceSection.Settings)}
           <p
             class="max-w-[64ch] text-sm text-pretty text-muted-foreground"
@@ -499,46 +537,6 @@ joins are bands at the top of the page, not separate cards.
         {/if}
 
         {#if section === WorkspaceSection.Vault}
-          {#if !secretsAddOpen && (extensionSetupVisible || hasSecurityRecommendations)}
-            <section
-              class="nk-band divide-y divide-border"
-              aria-label={vault.t(I18N_KEYS.WorkspaceSetupLabel)}
-              data-testid="vault-setup-band"
-            >
-              {#if extensionSetupVisible && extensionSetupState.kind === ExtensionSetupOfferKind.Visible}
-                <ExtensionInstallSetupCard
-                  {vault}
-                  state={extensionSetupState.setup}
-                  installBusy={extensionInstallBusy}
-                  onInstall={onExtensionInstall}
-                  onConnect={onExtensionConnect}
-                  connectError={extensionConnectError}
-                />
-              {/if}
-              {#if hasSecurityRecommendations}
-                <VaultSecurityGuideBanner
-                  {vault}
-                  {needsSyncProvider}
-                  {needsAnotherDevice}
-                  onAddSyncProvider={() => openSection(WorkspaceSection.Sync)}
-                  onAddDevice={() => openSection(WorkspaceSection.Devices)}
-                />
-              {/if}
-            </section>
-          {/if}
-          {#if !secretsNoteEditorOpen}
-            <PendingJoinsBanner
-              {vault}
-              pendingJoins={identityPendingJoins}
-              isBusy={vault.identityControl.busy || vault.isSaving}
-              onApproveJoin={(
-                appId: Parameters<PendingJoinsBannerProps["onApproveJoin"]>[0],
-              ) => vault.identityControl.approve(appId)}
-              onRefresh={syncAll}
-              onOpenDevicesSettings={() =>
-                openSection(WorkspaceSection.Devices)}
-            />
-          {/if}
           <div class="flex min-h-0 flex-1 flex-col p-4 md:p-5">
             {#key secretsEditorResetKey}
               <SecretVault
