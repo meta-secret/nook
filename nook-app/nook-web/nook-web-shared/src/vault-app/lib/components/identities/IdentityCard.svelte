@@ -55,6 +55,7 @@ card, which then spans the full row.
     canAddVault = false,
     onOpenVault,
     onNewVault = () => {},
+    onPassphrase,
     onLock = () => {},
     onUnlock = () => {},
     onUseIdentity = () => {},
@@ -81,6 +82,9 @@ card, which then spans the full row.
     canAddVault?: boolean
     onOpenVault: (storeId: string) => void
     onNewVault?: () => void
+    /** The key on a locked vault row: select that vault and open its
+     * passphrase unlock beside the card. */
+    onPassphrase?: (storeId: string) => void
     onLock?: () => void
     /** Unlock the identity with this device's passkey. */
     onUnlock?: (identityId: string) => void
@@ -145,9 +149,22 @@ card, which then spans the full row.
     Boolean(passwordFallback) && !live && passwordOpen,
   )
 
-  function togglePassword(): void {
+  /** The key on a vault row: that vault's passphrase opens beside the
+   * card (the vault is selected first, which reads its passphrases). */
+  function openPassphrase(storeId: string): void {
     menuOpen = false
-    passwordOpen = !passwordOpen
+    passwordOpen = !(passwordShown && storeId === selectedStoreId)
+    if (passwordOpen) onPassphrase?.(storeId)
+  }
+
+  function rowPassphraseLabel(label: string): string {
+    const request: Parameters<typeof vault.t>[0] = {
+      key: I18N_KEYS.WorkspacePassphraseRowAction,
+      replacements: {
+        vault: label || vault.t(I18N_KEYS.WorkspaceVaultFallback),
+      },
+    }
+    return vault.t(request)
   }
 
   function closeMenuOnEscape(event: KeyboardEvent): void {
@@ -332,10 +349,16 @@ card, which then spans the full row.
           {@const selected =
             row.state !== IdentityVaultRowState.Open &&
             row.storeId === selectedStoreId}
-          <li>
+          {@const passphraseHere =
+            Boolean(onPassphrase) &&
+            !live &&
+            !preview &&
+            (row.state === IdentityVaultRowState.Available ||
+              row.state === IdentityVaultRowState.Dormant)}
+          <li class="flex min-w-0 items-center">
             <button
               type="button"
-              class="nk-vault-row"
+              class="nk-vault-row min-w-0 flex-1"
               data-testid="identity-vault-row"
               data-store-id={row.storeId}
               data-state={row.state}
@@ -410,6 +433,21 @@ card, which then spans the full row.
                 />
               {/if}
             </button>
+            {#if passphraseHere}
+              <button
+                type="button"
+                class="nk-vault-passphrase"
+                data-testid="identity-vault-passphrase"
+                data-store-id={row.storeId}
+                aria-expanded={passwordShown && row.storeId === selectedStoreId}
+                aria-label={rowPassphraseLabel(row.label)}
+                title={rowPassphraseLabel(row.label)}
+                disabled={busy}
+                onclick={() => openPassphrase(row.storeId)}
+              >
+                <KeyRound class="size-4" aria-hidden="true" />
+              </button>
+            {/if}
           </li>
         {/each}
         {#if card.vaults.length === 0 && !canAddVault}
@@ -528,18 +566,6 @@ card, which then spans the full row.
               aria-hidden="true"
             />
             {vault.t(I18N_KEYS.WorkspaceUseIdentity)}
-          </button>
-        {/if}
-        {#if passwordFallback && !live}
-          <button
-            type="button"
-            data-testid="card-password-unlock-open"
-            aria-expanded={passwordOpen}
-            disabled={busy}
-            onclick={togglePassword}
-          >
-            <KeyRound class="size-4 text-muted-foreground" aria-hidden="true" />
-            {vault.t(I18N_KEYS.WorkspaceBackupPasswordButton)}
           </button>
         {/if}
       </div>

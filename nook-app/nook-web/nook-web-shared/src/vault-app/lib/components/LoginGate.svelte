@@ -236,6 +236,18 @@
     await vault.chooseLoginVault(storeId);
   }
 
+  /** The vault whose passphrase was asked for from its row; its panel
+   * opens even when it has none, to say so. */
+  let passphraseStoreId = $state("");
+
+  /** The key on a locked vault row selects that vault, which reads its
+   * passphrases, without unlocking it. */
+  async function openPassphrase(storeId: string): Promise<void> {
+    passphraseStoreId = storeId;
+    if (selectedCardStoreId === storeId) return;
+    await openVaultFromCard(storeId);
+  }
+
   /** "New vault" on the identity card: create one here or import one. */
   function openNewVault(): void {
     newVaultOpen = true;
@@ -702,6 +714,7 @@
       canAddVault={!showCreateVault && !showQrOnboarding}
       onOpenVault={unlockVault}
       onNewVault={openNewVault}
+      onPassphrase={(storeId: string) => void openPassphrase(storeId)}
       onAddDevice={addDevice}
       onManageSection={manageSection}
       onUnlock={() => void unlockIdentity()}
@@ -714,7 +727,10 @@
       {...showLocalUnlock && !newVaultOpen && showSentinelCeremony
         ? { unlockPanel: sentinelCeremony }
         : {}}
-      {...showLocalUnlock && !newVaultOpen && cardPasswordEntries.length > 0
+      {...showLocalUnlock &&
+      !newVaultOpen &&
+      (cardPasswordEntries.length > 0 ||
+        (passphraseStoreId && passphraseStoreId === selectedCardStoreId))
         ? { passwordFallback: cardPasswordUnlock }
         : {}}
       {...pinPrompt.kind !== PinPromptKind.Closed && !vault.deviceProtectionReady

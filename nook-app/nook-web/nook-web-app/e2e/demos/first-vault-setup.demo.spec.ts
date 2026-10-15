@@ -27,7 +27,7 @@ test('open an empty local vault without a browser-data reload alert', async ({
   })
   await expect(page.getByTestId('header-lock-vault-btn')).toBeEnabled()
   await expect(page.getByTestId('join-enrollment-dialog')).toHaveCount(0)
-  await expect(page.getByTestId('card-password-unlock-open')).toHaveCount(0)
+  await expect(page.getByTestId('identity-vault-passphrase')).toHaveCount(0)
   await expect
     .poll(() => page.evaluate(() => '__nookVault' in window), {
       timeout: UI_TIMEOUT_MS,

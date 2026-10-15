@@ -64,7 +64,7 @@ test('the identity card leads to adding a device in three steps', async ({
   await expect(page.getByTestId('identity-overview')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-  await expect(page.getByTestId('overview-add-sync')).toBeVisible()
+  await expect(page.getByTestId('overview-open-sync')).toBeVisible()
   await snapshot(page, '3b-details-no-cloud')
   await openVaultPage(page)
   await seedSyncProvidersWhileUnlocked(page)

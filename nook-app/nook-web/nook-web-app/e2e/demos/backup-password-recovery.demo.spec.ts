@@ -28,7 +28,12 @@ test('recover a local vault with its backup password after device-key loss', asy
 
   await wipeDeviceIdentity(page)
   await page.reload()
-  await expect(page.getByTestId('card-password-unlock-open')).toBeVisible({
+  await expect(
+    page
+      .getByTestId('identity-vault-passphrase')
+      .or(page.getByTestId('card-password-input'))
+      .first(),
+  ).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
   await expect
@@ -50,14 +55,15 @@ test('recover a local vault with its backup password after device-key loss', asy
   if (await joinClose.isVisible()) {
     await joinClose.click()
   }
-  // The locked card pairs Unlock with Backup password; the password opens
-  // beside the card.
+  // The key on the locked vault's row opens its passphrase beside the
+  // card.
   const directory = process.env.NOOK_DEMO_SCREENSHOT_DIR
   if (directory) {
     await page.screenshot({ path: `${directory}/locked-card.png` })
   }
-  await page.getByTestId('card-password-unlock-open').click()
-  await expect(page.getByTestId('identity-card-password')).toBeVisible()
+  const key = page.getByTestId('identity-vault-passphrase').first()
+  if (await key.isVisible()) await key.click()
+  await expect(page.getByTestId('card-password-input')).toBeVisible()
   if (directory) {
     await page.emulateMedia({ colorScheme: 'dark' })
     await page.screenshot({ path: `${directory}/locked-backup-password.png` })

@@ -488,7 +488,6 @@ band, the scrolling page and the status line.
       {vault}
       health={identityHealth}
       onOpen={openSection}
-      onAddSyncProvider={addSyncProvider}
     />
   </div>
 {/snippet}

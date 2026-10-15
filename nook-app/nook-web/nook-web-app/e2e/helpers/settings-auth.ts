@@ -786,9 +786,7 @@ async function ensureLoginLocalUnlockReady(page: Page) {
       async () => {
         if (await vaultPanel.isVisible()) return 'ready'
         if (await vaultRow.isVisible()) return 'ready'
-        if (await page.getByTestId('card-password-unlock-open').isVisible()) {
-          return 'ready'
-        }
+        if (await vaultPassphraseKey(page).isVisible()) return 'ready'
         await page.evaluate(async () => {
           const vault = window.__nookVault
           await vault?.refreshLocalVaultCatalog?.()
@@ -801,7 +799,17 @@ async function ensureLoginLocalUnlockReady(page: Page) {
     .toBe('ready')
 }
 
-/** Open the backup-password field on the locked card and unlock with it. */
+/** The passphrase key on a locked vault row: the given vault's, else the
+ * first. */
+export function vaultPassphraseKey(page: Page, storeId = '') {
+  return storeId
+    ? page.locator(
+        `[data-testid="identity-vault-passphrase"][data-store-id="${storeId}"]`,
+      )
+    : page.getByTestId('identity-vault-passphrase').first()
+}
+
+/** Open the passphrase field beside the locked card and unlock with it. */
 export async function unlockWithCardPassword(
   page: Page,
   opts: { password: string; entryLabel?: string; storeId?: string },
@@ -811,10 +819,17 @@ export async function unlockWithCardPassword(
       await window.__nookVault?.chooseLoginVault(storeId)
     }, opts.storeId)
   }
-  const open = page.getByTestId('card-password-unlock-open')
-  await expect(open).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-  // Backup password toggles its panel beside the card.
-  if ((await open.getAttribute('aria-expanded')) !== 'true') {
+  const input = page.getByTestId('card-password-input')
+  const open = vaultPassphraseKey(page, opts.storeId)
+  await expect(open.or(input).first()).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  // The key on the vault row opens its passphrase beside the card; with
+  // no card for the vault, the field stands on its own.
+  if (
+    !(await input.isVisible()) &&
+    (await open.getAttribute('aria-expanded')) !== 'true'
+  ) {
     await open.click()
   }
   if (opts.entryLabel) {

@@ -403,6 +403,29 @@
   .nk-vault-row[aria-expanded="true"] {
     box-shadow: inset 2px 0 0 var(--foreground);
   }
+  /* The passphrase key at the end of a locked vault row. */
+  .nk-vault-passphrase {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 2.75rem;
+    min-height: 2.75rem;
+    align-self: stretch;
+    border: 0;
+    border-left: 1px dashed var(--border);
+    background: none;
+    color: var(--muted-foreground);
+    cursor: pointer;
+  }
+  .nk-vault-passphrase:hover:not(:disabled),
+  .nk-vault-passphrase[aria-expanded="true"] {
+    background: color-mix(in oklch, var(--accent) 70%, transparent);
+    color: var(--foreground);
+  }
+  .nk-vault-passphrase:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
+  }
   .nk-vault-icon {
     display: grid;
     place-items: center;

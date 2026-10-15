@@ -1,9 +1,9 @@
 <!--
 The identity's dashboard, laid out by what matters. Devices take the wide
-tile: each device is a filled slot and empty dashed slots invite the next
-one, so a single device reads as a gap. Cloud copies sit beside it and turn
-into a warning with its fix while there are none. Vaults, sign-in keys,
-backup passwords and this browser follow as small tiles. Every tile opens
+tile, one slot each. Cloud copies sit beside it and turn into a warning
+while there are none. It only reports: adding a device or a sync provider
+lives in Manage on the card. Vaults, sign-in keys,
+passphrases and this browser follow as small tiles. Every tile opens
 its own page; other actions live in Manage on the identity's card.
 -->
 <script lang="ts">
@@ -13,7 +13,6 @@ its own page; other actions live in Manage on the identity's card.
     Cloud,
     CloudOff,
     Laptop,
-    Plus,
     FolderKey,
     KeyRound,
     MonitorSmartphone,
@@ -22,7 +21,6 @@ its own page; other actions live in Manage on the identity's card.
     TriangleAlert,
   } from "@lucide/svelte";
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
-  import { Button } from "$lib/components/ui/button";
   import { localizeProviderLabel } from "$lib/auth/providers";
   import { NookIdentityNextStep, type NookIdentityHealth } from "$app-wasm";
   import { CurrentDeviceName } from "$lib/components/settings/current-device-name";
@@ -34,12 +32,10 @@ its own page; other actions live in Manage on the identity's card.
     vault,
     health,
     onOpen,
-    onAddSyncProvider,
   }: {
     vault: VaultState;
     health: NookIdentityHealth;
     onOpen: (section: WorkspaceSection) => void;
-    onAddSyncProvider: () => void;
   } = $props();
 
   const control = $derived(vault.identityControl);
@@ -122,20 +118,6 @@ its own page; other actions live in Manage on the identity's card.
     health.nextStep === NookIdentityNextStep.AddSyncProvider ||
       health.nextStep === NookIdentityNextStep.AddCloudProvider,
   );
-  /** Device slots: the devices themselves, then empty ones that invite the
-   * next device. A lone device gets two (a phone, a computer); a full set
-   * keeps one. */
-  const emptySlots = $derived.by((): string[] => {
-    const devices = Math.max(members.length, 1);
-    if (devices === 1)
-      return [
-        vault.t(I18N_KEYS.IdentityOverviewSlotPhone),
-        vault.t(I18N_KEYS.IdentityOverviewSlotComputer),
-      ];
-    if (devices === 2) return [vault.t(I18N_KEYS.IdentityOverviewSlotPhone)];
-    return [vault.t(I18N_KEYS.IdentityOverviewSlotDevice)];
-  });
-
   onMount(() => {
     void control.followOpenVault();
   });
@@ -183,7 +165,7 @@ its own page; other actions live in Manage on the identity's card.
 
 <div class="grid min-w-0 gap-3" data-testid="identity-overview">
   <div class="grid gap-3 xl:grid-cols-3">
-    <!-- Devices: filled slots for each device, dashed slots for the next. -->
+    <!-- Devices: one slot each. -->
     <section
       class="grid min-w-0 content-start gap-4 border bg-card p-5 xl:col-span-2 {devicesAtRisk
         ? 'border-warning/60'
@@ -262,19 +244,6 @@ its own page; other actions live in Manage on the identity's card.
             </button>
           </li>
         {/each}
-        {#each emptySlots as slot, index (index)}
-          <li>
-            <button
-              type="button"
-              class="grid h-full min-h-28 w-full place-items-center gap-2 border border-dashed border-foreground/25 p-3 text-center text-muted-foreground transition-colors hover:border-foreground/60 hover:text-foreground"
-              data-testid="overview-add-device-slot"
-              onclick={() => onOpen(WorkspaceSection.AddDevice)}
-            >
-              <Plus class="size-6" aria-hidden="true" />
-              <span class="text-xs">{slot}</span>
-            </button>
-          </li>
-        {/each}
       </ul>
       {#if pendingJoins.length > 0}
         <button
@@ -289,7 +258,7 @@ its own page; other actions live in Manage on the identity's card.
       {/if}
     </section>
 
-    <!-- Cloud copies: a warning with its fix while there are none. -->
+    <!-- Cloud copies: a warning while there are none. -->
     <section
       class="grid min-w-0 content-between gap-4 border p-5 {copiesAtRisk
         ? 'border-warning/60 bg-warning/5'
@@ -323,16 +292,6 @@ its own page; other actions live in Manage on the identity's card.
             {vault.t(I18N_KEYS.IdentityHealthSyncBody)}
           </p>
         </div>
-        <Button
-          type="button"
-          size="sm"
-          class="justify-self-start"
-          data-testid="overview-add-sync"
-          onclick={onAddSyncProvider}
-        >
-          <Plus class="size-4" />
-          {vault.t(I18N_KEYS.AddDeviceCloudAction)}
-        </Button>
       {:else}
         <div class="grid gap-1">
           <span class="font-mono text-3xl leading-none text-foreground tabular-nums">

@@ -40,7 +40,7 @@ test.describe('login unlock flow (local-first)', () => {
       timeout: UI_TIMEOUT_MS,
     })
     await expect(card.getByTestId('identity-unlock')).toBeVisible()
-    await expect(card.getByTestId('card-password-unlock-open')).toBeVisible()
+    await expect(card.getByTestId('identity-vault-passphrase')).toBeVisible()
     await expect(card.getByTestId('card-password-input')).toHaveCount(0)
   })
 
@@ -108,7 +108,7 @@ test.describe('login unlock flow (local-first)', () => {
 
     await disableLoginAutoUnlock(page)
     await page.reload()
-    const open = page.getByTestId('card-password-unlock-open')
+    const open = page.getByTestId('identity-vault-passphrase').first()
     await expect(open).toBeVisible({ timeout: UI_TIMEOUT_MS })
     await open.click()
     const entries = page.getByTestId('card-password-entry')
@@ -179,14 +179,16 @@ test.describe('login unlock flow (local-first)', () => {
     await expect(page).toHaveURL(/\/identity\/passwords$/)
   })
 
-  test('hides the backup password when the vault has none', async ({
-    page,
-  }) => {
+  test('says so when the vault has no passphrase', async ({ page }) => {
+    await disableLoginAutoUnlock(page)
     await page.reload()
-    await expect(page.getByTestId('identity-vault-row').first()).toBeVisible({
+    const open = page.getByTestId('identity-vault-passphrase').first()
+    await expect(open).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    await open.click()
+    await expect(page.getByTestId('card-password-caption')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await expect(page.getByTestId('card-password-unlock-open')).toHaveCount(0)
+    await expect(page.getByTestId('card-password-input')).toHaveCount(0)
   })
 })
 
