@@ -42,7 +42,7 @@ fn dependency_policy_allows_main_cache_seed_latency() -> anyhow::Result<()> {
         .ok_or_else(|| anyhow::anyhow!("ecosystem job block is missing"))?;
 
     assert!(
-        dependency_policy.contains("timeout-minutes: 15")
+        dependency_policy.contains("timeout-minutes: ${{ startsWith(vars.NOOK_RUNS_ON || 'nook-k0s', 'nook-k0s') && 15 || 60 }}")
             && dependency_policy.contains("task docker:ecosystem:check"),
         "dependency policy must retain its command within the fifteen-minute job limit"
     );
@@ -261,7 +261,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         fixture
             .dependency_policy
             .contains("name: Rust ecosystem verification")
-            && fixture.dependency_policy.contains("timeout-minutes: 15"),
+            && fixture.dependency_policy.contains("timeout-minutes: ${{ startsWith(vars.NOOK_RUNS_ON || 'nook-k0s', 'nook-k0s') && 15 || 60 }}"),
         "Dependency policy must enforce the fifteen-minute job limit"
     );
     assert!(

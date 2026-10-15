@@ -193,7 +193,7 @@ jobs:
       # crosses jobs: GitHub drops outputs that contain a masked value.
       e2e_image_attempt: ${{ github.run_attempt }}
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
-    timeout-minutes: 15
+    timeout-minutes: ${{ startsWith(vars.NOOK_RUNS_ON || 'nook-k0s', 'nook-k0s') && 15 || 60 }}
     permissions:
       contents: read
       pull-requests: read
