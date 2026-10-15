@@ -1,29 +1,32 @@
 <!--
-Identity Devices page: the apps in the current identity, pending joins,
-identity upgrade notices, and adding a new app through an identity mount.
+Identity Devices page: adding a device leads, join requests wait for
+approval next, then the devices that open this identity. Upgrade notices
+sit above when the identity needs one.
 -->
 <script lang="ts">
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import { onMount, type ComponentProps } from "svelte";
-  import { RefreshCw } from "@lucide/svelte";
-  import OnboardDevice from "$lib/components/OnboardDevice.svelte";
+  import { Plus, RefreshCw, TriangleAlert } from "@lucide/svelte";
   import ManageSection from "$lib/components/settings/ManageSection.svelte";
+  import PendingJoinList from "$lib/components/settings/PendingJoinList.svelte";
   import VaultDevicesCard from "$lib/components/settings/VaultDevicesCard.svelte";
   import { Button } from "$lib/components/ui/button";
   import { StatusTag, StatusTone } from "$lib/components/ui/status-tag";
   import type { VaultState } from "$lib/vault.svelte";
-  import { IdentityUpgradeKind } from "$lib/vault/identity-control.svelte";
+  import { VaultType } from "$lib/vault/architecture-model";
+  import IdentityStandingNotices from "./IdentityStandingNotices.svelte";
   import { IdentityStandingPresentation } from "./identity-standing";
 
-  type OnboardDeviceProps = ComponentProps<typeof OnboardDevice>;
+  type PendingJoinListProps = ComponentProps<typeof PendingJoinList>;
   type VaultDevicesCardProps = ComponentProps<typeof VaultDevicesCard>;
 
   let {
     vault,
-    onOpenSync,
+    onAddDevice,
   }: {
     vault: VaultState;
-    onOpenSync: () => void;
+    /** Open the add-device flow. */
+    onAddDevice: () => void;
   } = $props();
 
   const control = $derived(vault.identityControl);
@@ -32,6 +35,9 @@ identity upgrade notices, and adding a new app through an identity mount.
   const members = $derived(snapshot === false ? [] : snapshot.members);
   const pendingJoins = $derived(snapshot === false ? [] : snapshot.pendingJoins);
   const isBusy = $derived(control.busy || vault.isSaving || vault.isVerifying);
+  const isSentinelVault = $derived(
+    vault.vaultArchitecture.vault_type === VaultType.Sentinel,
+  );
 
   function reportFailure(translationKey: Parameters<typeof vault.t>[0]) {
     vault.errorMsg = vault.t(translationKey);
@@ -44,70 +50,62 @@ identity upgrade notices, and adding a new app through an identity mount.
   });
 </script>
 
-<div class="grid min-w-0 grid-cols-1 gap-8" data-testid="vault-devices-panel">
-  {#if standing.isRevoked()}
-    <div
-      class="nk-banner nk-banner-warning p-3 text-sm text-foreground"
-      data-testid="identity-revoked-banner"
-    >
-      {vault.t(I18N_KEYS.IdentityControlRevoked)}
-    </div>
-  {/if}
+<div class="grid min-w-0 grid-cols-1 gap-6" data-testid="vault-devices-panel">
+  <IdentityStandingNotices {vault} />
 
-  {#if control.upgrade.kind === IdentityUpgradeKind.AwaitingFounder}
-    <div
-      class="nk-banner nk-banner-warning space-y-2 p-3 text-sm text-foreground"
-      data-testid="identity-awaiting-founder-banner"
+  {#if standing.isMember()}
+    <section
+      class="flex flex-col gap-4 border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5"
+      data-testid="devices-add-device"
     >
-      <p class="font-medium">
-        {vault.t(I18N_KEYS.IdentityControlAwaitingFounderTitle)}
-      </p>
-      <p class="text-xs text-muted-foreground">
-        {vault.t(I18N_KEYS.IdentityControlAwaitingFounderDescription)}
-      </p>
-      <div class="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={isBusy}
-          data-testid="identity-check-providers-btn"
-          onclick={() => void control.adoptFromProviders()}
-        >
-          {vault.t(I18N_KEYS.IdentityControlCheckProviders)}
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          disabled={isBusy}
-          data-testid="identity-upgrade-here-btn"
-          onclick={() => void control.upgradeHere()}
-        >
-          {vault.t(I18N_KEYS.IdentityControlUpgradeHere)}
-        </Button>
+      <div class="min-w-0 space-y-1">
+        <h2 class="text-base font-semibold text-foreground">
+          {vault.t(I18N_KEYS.AddDeviceTitle)}
+        </h2>
+        <p class="text-sm text-pretty text-muted-foreground">
+          {vault.t(I18N_KEYS.AddDeviceDevicesHint)}
+        </p>
+        {#if members.length <= 1}
+          <p
+            class="flex items-start gap-2 pt-1 text-xs text-pretty text-foreground"
+            role="note"
+            data-testid="single-device-warning"
+          >
+            <TriangleAlert
+              class="mt-0.5 size-3.5 shrink-0 text-warning"
+              aria-hidden="true"
+            />
+            {vault.t(
+              isSentinelVault
+                ? I18N_KEYS.DevicesCardSentinelSingleDeviceWarning
+                : I18N_KEYS.AddDeviceSingleDevice,
+            )}
+          </p>
+        {/if}
       </div>
-    </div>
-  {:else if standing.isNotReplicated()}
-    <div
-      class="nk-banner nk-banner-warning space-y-2 p-3 text-sm text-foreground"
-      data-testid="identity-not-replicated-banner"
-    >
-      <p class="font-medium">
-        {vault.t(I18N_KEYS.IdentityControlNotReplicatedTitle)}
-      </p>
-      <p class="text-xs text-muted-foreground">
-        {vault.t(I18N_KEYS.IdentityControlNotReplicatedDescription)}
-      </p>
       <Button
         type="button"
-        size="sm"
-        disabled={isBusy}
-        data-testid="identity-upgrade-btn"
-        onclick={() => void control.upgradeHere()}
+        class="shrink-0"
+        data-testid="devices-add-device-btn"
+        onclick={onAddDevice}
       >
-        {vault.t(I18N_KEYS.IdentityControlUpgrade)}
+        <Plus class="size-4" />
+        {vault.t(I18N_KEYS.AddDeviceTitle)}
       </Button>
-    </div>
+    </section>
+  {/if}
+
+  {#if pendingJoins.length > 0}
+    <PendingJoinList
+      {vault}
+      {pendingJoins}
+      {isBusy}
+      onApproveJoin={(
+        appId: Parameters<PendingJoinListProps["onApproveJoin"]>[0],
+      ) => control.approve(appId)}
+      onDenyJoin={(appId: Parameters<PendingJoinListProps["onDenyJoin"]>[0]) =>
+        control.deny(appId)}
+    />
   {/if}
 
   <ManageSection
@@ -150,13 +148,7 @@ identity upgrade notices, and adding a new app through an identity mount.
     <VaultDevicesCard
       {vault}
       {members}
-      {pendingJoins}
       {isBusy}
-      onApproveJoin={(
-        appId: Parameters<VaultDevicesCardProps["onApproveJoin"]>[0],
-      ) => control.approve(appId)}
-      onDenyJoin={(appId: Parameters<VaultDevicesCardProps["onDenyJoin"]>[0]) =>
-        control.deny(appId)}
       onRenameApp={(
         renameRequest: Parameters<VaultDevicesCardProps["onRenameApp"]>[0],
       ) => control.rename(renameRequest)}
@@ -166,17 +158,4 @@ identity upgrade notices, and adding a new app through an identity mount.
     />
   </ManageSection>
 
-  {#if standing.isMember()}
-    <OnboardDevice
-      {vault}
-      mounts={control.mounts}
-      enrollmentCode={vault.enrollmentCode}
-      {isBusy}
-      onIssueCode={(
-        issueRequest: Parameters<OnboardDeviceProps["onIssueCode"]>[0],
-      ) => vault.issueEnrollmentCode(issueRequest)}
-      onClearCode={() => vault.clearEnrollmentCode()}
-      {onOpenSync}
-    />
-  {/if}
 </div>

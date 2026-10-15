@@ -13,6 +13,7 @@ card, which then spans the full row.
     FolderKey,
     Lock,
     LockOpen,
+    MonitorSmartphone,
     Plus,
     Puzzle,
     Settings2,
@@ -52,6 +53,7 @@ card, which then spans the full row.
     onLock = () => {},
     onUnlock = () => {},
     onUseIdentity = () => {},
+    onAddDevice,
     pairingStatusFor = () => ({
       kind: LoginVaultExtensionPairingStatusKind.NotShown,
     }),
@@ -73,6 +75,8 @@ card, which then spans the full row.
     /** Unlock the identity with this device's passkey. */
     onUnlock?: (identityId: string) => void
     onUseIdentity?: (identityId: string) => void
+    /** Open the add-device flow; offered while the identity is unlocked. */
+    onAddDevice?: () => void
     /** Extension pairing status for a vault row, while pairing is offered. */
     pairingStatusFor?: (storeId: string) => LoginVaultExtensionPairingStatus
     /** Setup panel (a new vault), shown beside the card's rows. */
@@ -315,6 +319,34 @@ card, which then spans the full row.
         {/if}
       </ul>
     </section>
+
+    {#if live && onAddDevice && !preview}
+      <section class="border-t border-border px-2 py-2">
+        <button
+          type="button"
+          class="nk-vault-row"
+          data-testid="identity-add-device"
+          disabled={busy}
+          onclick={onAddDevice}
+        >
+          <span class="nk-vault-icon" aria-hidden="true">
+            <MonitorSmartphone class="size-4" />
+          </span>
+          <span class="flex min-w-0 flex-1 flex-col">
+            <span class="truncate text-[0.9375rem] font-medium"
+              >{vault.t(I18N_KEYS.AddDeviceCardAction)}</span
+            >
+            <span class="truncate text-xs text-muted-foreground"
+              >{vault.t(I18N_KEYS.AddDeviceCardHint)}</span
+            >
+          </span>
+          <Plus
+            class="size-4 flex-none text-muted-foreground"
+            aria-hidden="true"
+          />
+        </button>
+      </section>
+    {/if}
 
     {#if passwordFallback && !live}
       {@render passwordFallback()}

@@ -285,7 +285,7 @@ Technical identifiers stay behind "Details".
             type="button"
             size="sm"
             data-testid="identity-keys-add-device"
-            onclick={() => onOpen(WorkspaceSection.Devices)}
+            onclick={() => onOpen(WorkspaceSection.AddDevice)}
           >
             {vault.t(I18N_KEYS.IdentityOverviewAddDevice)}
           </Button>

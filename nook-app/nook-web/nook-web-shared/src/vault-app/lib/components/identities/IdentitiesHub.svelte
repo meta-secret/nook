@@ -44,6 +44,7 @@ join) sit between the hero and the cards.
     onManage,
     onNewIdentity,
     onUseIdentity,
+    onAddDevice,
     onLock = () => {},
     onUnlock = () => {},
     pairingStatusFor = () => ({
@@ -70,6 +71,8 @@ join) sit between the hero and the cards.
     onManage: (request: IdentityVaultTarget) => void
     onNewIdentity: () => void
     onUseIdentity: (target: IdentityVaultTarget) => void
+    /** Open the add-device flow from the unlocked identity's card. */
+    onAddDevice?: () => void
     onLock?: () => void
     /** Unlock a locked identity with this device's passkey. */
     onUnlock?: (target: IdentityVaultTarget) => void
@@ -406,6 +409,7 @@ join) sit between the hero and the cards.
             onManage={(identityId: string) => onManage(targetFor(identityId))}
             onUnlock={(identityId: string) => onUnlock(targetFor(identityId))}
             {onLock}
+            {...onAddDevice ? { onAddDevice } : {}}
             onUseIdentity={(identityId: string) =>
               onUseIdentity(targetFor(identityId))}
             {pairingStatusFor}

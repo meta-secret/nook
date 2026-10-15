@@ -13,6 +13,8 @@ export enum WorkspaceSection {
   Vaults = "vaults",
   Settings = "settings",
   Devices = "devices",
+  /** Invite another phone or computer into the identity, then approve it. */
+  AddDevice = "add-device",
   Sync = "sync",
   Passwords = "passwords",
   Import = "import",
@@ -42,6 +44,8 @@ export class WorkspaceSectionScope {
         return ManageSectionScope.Vault;
       case WorkspaceSection.Vault:
       case WorkspaceSection.Identities:
+      // A focused flow of its own, outside identity management.
+      case WorkspaceSection.AddDevice:
         return ManageSectionScope.None;
     }
   }

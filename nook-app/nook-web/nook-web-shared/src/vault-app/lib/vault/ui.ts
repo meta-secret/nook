@@ -41,6 +41,8 @@ export class WorkspaceSectionRoute {
         return WorkspaceRoute.Settings;
       case WorkspaceSection.Devices:
         return WorkspaceRoute.Devices;
+      case WorkspaceSection.AddDevice:
+        return WorkspaceRoute.AddDevice;
       case WorkspaceSection.Sync:
         return WorkspaceRoute.Sync;
       case WorkspaceSection.Passwords:
@@ -91,6 +93,7 @@ export class VaultWorkspaceActions {
         // snapshot when the Keys page remounts.
         return;
       case WorkspaceSection.Devices:
+      case WorkspaceSection.AddDevice:
         // Enrolled devices read the same last-known evidence as Keys.
         state.cancelProviderSetup();
         state.cancelAddProvider();
@@ -149,6 +152,9 @@ export class VaultWorkspaceActions {
         return;
       case WorkspaceRoute.Devices:
         this.applySection(WorkspaceSection.Devices);
+        return;
+      case WorkspaceRoute.AddDevice:
+        this.applySection(WorkspaceSection.AddDevice);
         return;
       case WorkspaceRoute.Sync:
         this.applySection(WorkspaceSection.Sync);

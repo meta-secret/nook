@@ -18,13 +18,13 @@ band, the scrolling page and the status line.
   import {
     configured_vault_application_supports_extension,
     NookIdentityLocalAccessKind,
-    NookIdentityHealthStage,
     NookIdentityNextStep,
     type NookIdentityHealth,
     ProviderSyncFailureHandling,
     ProviderSyncVisibility,
   } from "$app-wasm";
   import PendingJoinsBanner from "$lib/components/PendingJoinsBanner.svelte";
+  import AddDeviceFlow from "$lib/components/add-device/AddDeviceFlow.svelte";
   import SecretVault from "$lib/components/SecretVault.svelte";
   import VaultAdmin from "$lib/components/VaultAdmin.svelte";
   import IdentityKeysPage from "$lib/components/identity-control/IdentityKeysPage.svelte";
@@ -115,6 +115,9 @@ band, the scrolling page and the status line.
   /** The page management was entered from; Back returns there. */
   let manageOrigin = $state(WorkspaceSection.Vault);
   let manageOriginRecorded = $state(false);
+  /** Where "Add a device" was opened from; the flow returns there. A link
+   * straight to the flow returns to the Devices page. */
+  let addDeviceOrigin = $state(WorkspaceSection.Devices);
   const secretsNoteEditorOpen = $derived(
     secretsAddOpen &&
       secretsAddFormType.kind === SecretEditorModeKind.Adding &&
@@ -242,6 +245,8 @@ band, the scrolling page and the status line.
   }
 
   function openSection(next: WorkspaceSection): void {
+    if (next === WorkspaceSection.AddDevice && section !== next)
+      addDeviceOrigin = section;
     const nextManaging =
       new WorkspaceSectionScope(next).scope !== ManageSectionScope.None;
     if (nextManaging && !managing) {
@@ -361,11 +366,6 @@ band, the scrolling page and the status line.
       new IdentityCardProjection(source).cards.find((card) => card.current),
     );
   });
-  /** Another app can join once a cloud provider carries the identity. */
-  const canAddDevice = $derived(
-    identityHealth.stage !== NookIdentityHealthStage.LocalOnly &&
-      identityHealth.nextStep !== NookIdentityNextStep.AddCloudProvider,
-  );
 
   function finishFirstRun(next: WorkspaceSection): void {
     vault.firstRun = FirstRunStage.Off;
@@ -417,6 +417,7 @@ band, the scrolling page and the status line.
       onNewIdentity={newIdentity}
       onUseIdentity={(target: IdentityVaultTarget) =>
         manageIdentity(target.identityId)}
+      onAddDevice={() => openSection(WorkspaceSection.AddDevice)}
       onLock={lockIdentity}
     />
     <VaultStatusBar
@@ -436,6 +437,13 @@ band, the scrolling page and the status line.
       onDismissError={() => vault.dismissError()}
     />
   </div>
+{:else if section === WorkspaceSection.AddDevice}
+  <AddDeviceFlow
+    {vault}
+    {identityName}
+    onBack={() => openSection(addDeviceOrigin)}
+    onOpenSync={addSyncProvider}
+  />
 {:else}
   <div
     class:authenticated-shell-editor={secretsAddOpen}
@@ -572,7 +580,6 @@ band, the scrolling page and the status line.
               {vault}
               card={overviewCard}
               health={identityHealth}
-              {canAddDevice}
               onOpen={openSection}
               onOpenVault={(storeId: string) => void openVaultFromCard(storeId)}
               onNewVault={newVaultFromOverview}
@@ -580,7 +587,10 @@ band, the scrolling page and the status line.
             />
           {/if}
         {:else if section === WorkspaceSection.Devices}
-          <IdentityDevicesPanel {vault} onOpenSync={addSyncProvider} />
+          <IdentityDevicesPanel
+            {vault}
+            onAddDevice={() => openSection(WorkspaceSection.AddDevice)}
+          />
         {:else if section === WorkspaceSection.Keys}
           <IdentityKeysPage {vault} onOpen={openSection} />
         {:else if section === WorkspaceSection.Settings}

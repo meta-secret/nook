@@ -1,19 +1,14 @@
 <!--
-Apps in the current identity: pending joins, members, rename, and removal.
-Membership is identity-level; every vault the identity owns follows it.
+The devices in the current identity, with rename and removal. Membership is
+identity-level; every vault the identity owns follows it. Join requests and
+adding a device live on the Devices page around this list.
 -->
 <script lang="ts">
   import type { Result } from "neverthrow";
-  import type { IdentityJoinView, IdentityMemberView } from "$app-wasm";
+  import type { IdentityMemberView } from "$app-wasm";
   import type { VaultStorageFailure } from "$lib/runtime/storage-failure";
   import type { OAuthFailure } from "$lib/auth/oauth-failure";
   import type { IdentityActionOutcome } from "$lib/vault/identity-control.svelte";
-  type IdentityTextTruncation = {
-    readonly value: string;
-    readonly head: number;
-    readonly tail: number;
-  };
-
   type AppRename = { readonly appId: string; readonly label: string };
   type IdentityActionResult = Result<
     IdentityActionOutcome,
@@ -32,6 +27,7 @@ Membership is identity-level; every vault the identity owns follows it.
     TriangleAlert,
     X,
   } from "@lucide/svelte";
+  import { DeviceIdLabel } from "./device-id-label";
   import { Button } from "$lib/components/ui/button";
   import type { VaultState } from "$lib/vault.svelte";
   import { VaultType } from "$lib/vault/architecture-model";
@@ -48,19 +44,13 @@ Membership is identity-level; every vault the identity owns follows it.
   let {
     vault,
     members = [],
-    pendingJoins = [],
     isBusy,
-    onApproveJoin,
-    onDenyJoin,
     onRenameApp,
     onRevokeApp,
   }: {
     vault: VaultState;
     members?: IdentityMemberView[];
-    pendingJoins?: IdentityJoinView[];
     isBusy: boolean;
-    onApproveJoin: (appId: string) => Promise<IdentityActionResult>;
-    onDenyJoin: (appId: string) => Promise<IdentityActionResult>;
     onRenameApp: (args: AppRename) => Promise<IdentityActionResult>;
     onRevokeApp: (appId: string) => Promise<IdentityActionResult>;
   } = $props();
@@ -113,39 +103,16 @@ Membership is identity-level; every vault the identity owns follows it.
     return `${browser} ${vault.t(I18N_KEYS.DevicesCardOn)} ${os}`;
   }
 
-  function truncate({ value, head, tail }: IdentityTextTruncation) {
-    if (value.length <= head + tail + 3) return value;
-    return `${value.slice(0, head)}…${value.slice(-tail)}`;
-  }
-
-  function formatRequestDate(value: string): string {
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime()))
-      return vault.t(I18N_KEYS.DevicesCardRecently);
-    return date.toLocaleDateString();
-  }
-
   function displayName(member: IdentityMemberView): string {
     const label = member.label.trim();
     if (label) return label;
     if (member.isCurrentInstallation) return currentDeviceName();
-    const truncateArgs: Parameters<typeof truncate>[0] = {
+    const idRequest: ConstructorParameters<typeof DeviceIdLabel>[0] = {
       value: member.appId,
       head: 6,
       tail: 4,
     };
-    return `${vault.t(I18N_KEYS.DevicesCardDevicePrefix)}${truncate(truncateArgs)}`;
-  }
-
-  function joinName(join: IdentityJoinView): string {
-    const label = join.label.trim();
-    if (label) return label;
-    const truncateArgs: Parameters<typeof truncate>[0] = {
-      value: join.appId,
-      head: 14,
-      tail: 10,
-    };
-    return `${vault.t(I18N_KEYS.DevicesCardDevicePrefix)}${truncate(truncateArgs)}`;
+    return `${vault.t(I18N_KEYS.DevicesCardDevicePrefix)}${new DeviceIdLabel(idRequest).text}`;
   }
 
   function beginRename(member: IdentityMemberView) {
@@ -170,23 +137,6 @@ Membership is identity-level; every vault the identity owns follows it.
 
 
 <div class="space-y-4" data-testid="vault-devices-card">
-  {#if members.length <= 1}
-    <div
-      class="nk-banner nk-banner-warning flex items-start gap-2 px-3 py-2 text-xs leading-relaxed text-foreground"
-      role="alert"
-      data-testid="single-device-warning"
-    >
-      <TriangleAlert class="mt-0.5 size-3.5 shrink-0" />
-      <span>
-        {vault.t(
-          isSentinelVault
-            ? I18N_KEYS.DevicesCardSentinelSingleDeviceWarning
-            : I18N_KEYS.DevicesCardSingleDeviceWarning,
-        )}
-      </span>
-    </div>
-  {/if}
-
   {#if isSentinelVault}
     <div
       class="nk-banner flex items-start gap-2 px-3 py-2 text-xs leading-relaxed text-muted-foreground"
@@ -198,88 +148,11 @@ Membership is identity-level; every vault the identity owns follows it.
     </div>
   {/if}
 
-  {#if pendingJoins.length > 0}
-    <section class="space-y-2" data-testid="pending-join-list">
-      <div class="flex items-center justify-between gap-3">
-        <h3 class="text-sm font-semibold text-foreground">
-          {vault.t(I18N_KEYS.IdentityControlPendingTitle)}
-        </h3>
-        <span class="text-xs text-muted-foreground">
-          {pendingJoins.length === 1
-            ? vault.t(I18N_KEYS.DevicesCardRequestsCountSingular)
-            : (() => {
-                const countArgs: Parameters<typeof vault.t>[0] = {
-                  key: I18N_KEYS.DevicesCardRequestsCountPlural,
-                  replacements: { count: String(pendingJoins.length) },
-                };
-                return vault.t(countArgs);
-              })()}
-        </span>
-      </div>
-      <ul class="space-y-2">
-        {#each pendingJoins as join (join.appId)}
-          <li
-            class="rounded-lg border border-border/40 bg-background/60 p-3 sm:border-border/60"
-            data-testid="pending-join-row"
-            data-app-id={join.appId}
-          >
-            <div class="flex items-center justify-between gap-3">
-              <div class="flex min-w-0 items-center gap-3">
-                <div
-                  class="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border/40 bg-muted/35 text-muted-foreground"
-                >
-                  <Smartphone class="size-4.5" />
-                </div>
-                <div class="min-w-0">
-                  <p class="truncate text-sm font-medium text-foreground">
-                    {joinName(join)}
-                  </p>
-                  <p class="font-mono text-[11px] text-muted-foreground">
-                    {join.appId}
-                  </p>
-                  <p class="text-xs text-muted-foreground">
-                    {vault.t(
-                      I18N_KEYS.DevicesCardRequestedPrefix,
-                    )}{formatRequestDate(join.requestedAt)}
-                  </p>
-                </div>
-              </div>
-              <div class="flex shrink-0 items-center gap-1.5">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  class="border-border/50 px-2"
-                  disabled={isBusy}
-                  data-testid="deny-join-btn"
-                  aria-label={vault.t(I18N_KEYS.IdentityControlDeny)}
-                  onclick={() => void onDenyJoin(join.appId)}
-                >
-                  <X class="size-3.5" />
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={isBusy}
-                  data-testid="approve-join-btn"
-                  onclick={() => void onApproveJoin(join.appId)}
-                >
-                  <Check class="size-3.5" />
-                  {vault.t(I18N_KEYS.IdentityControlApprove)}
-                </Button>
-              </div>
-            </div>
-          </li>
-        {/each}
-      </ul>
-    </section>
-  {/if}
-
   <section class="space-y-2">
 
     {#if sortedMembers.length === 0}
       <div
-        class="rounded-lg border border-border/40 bg-muted/15 px-3 py-4 text-center text-sm text-muted-foreground"
+        class="border border-border px-3 py-4 text-center text-sm text-muted-foreground"
         data-testid="vault-devices-empty"
       >
         {vault.t(I18N_KEYS.DevicesCardNoDevices)}
@@ -296,19 +169,17 @@ Membership is identity-level; every vault the identity owns follows it.
             revokeAppId.appId === member.appId}
           {@const canRevoke = members.length > 1}
           <li
-            class="rounded-lg border border-border/40 bg-background/60 p-3 sm:border-border/60"
+            class="border border-border bg-card p-3"
             data-testid="vault-member-row"
             data-app-id={member.appId}
           >
             <div class="flex items-start justify-between gap-3">
               <div class="flex min-w-0 items-start gap-3">
-                <div
-                  class="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border/40 bg-muted/35 text-muted-foreground"
-                >
+                <div class="nk-tile shrink-0" aria-hidden="true">
                   {#if isCurrent}
-                    <Laptop class="size-4.5" />
+                    <Laptop class="size-4" />
                   {:else}
-                    <Smartphone class="size-4.5" />
+                    <Smartphone class="size-4" />
                   {/if}
                 </div>
                 <div class="min-w-0 space-y-1">
@@ -340,9 +211,7 @@ Membership is identity-level; every vault the identity owns follows it.
                         {vault.t(I18N_KEYS.IdentityControlCurrentApp)}
                       </span>
                     {:else}
-                      <span
-                        class="rounded-full border border-border/40 bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
-                      >
+                      <span class="nk-tag">
                         {vault.t(I18N_KEYS.DevicesCardEnrolled)}
                       </span>
                     {/if}

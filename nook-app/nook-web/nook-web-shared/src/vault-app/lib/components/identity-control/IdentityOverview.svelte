@@ -38,7 +38,6 @@ the details; keys and backup passwords sit quietly below.
     vault,
     card,
     health,
-    canAddDevice,
     onOpen,
     onOpenVault,
     onNewVault,
@@ -47,8 +46,6 @@ the details; keys and backup passwords sit quietly below.
     vault: VaultState;
     card: IdentityCardView;
     health: NookIdentityHealth;
-    /** A cloud provider is mounted, so another device can join. */
-    canAddDevice: boolean;
     onOpen: (section: WorkspaceSection) => void;
     onOpenVault: (storeId: string) => void;
     onNewVault: () => void;
@@ -125,7 +122,7 @@ the details; keys and backup passwords sit quietly below.
 
   function nextStep(): void {
     if (health.nextStep === NookIdentityNextStep.AddDevice) {
-      onOpen(WorkspaceSection.Devices);
+      onOpen(WorkspaceSection.AddDevice);
       return;
     }
     onAddSyncProvider();
@@ -431,18 +428,12 @@ the details; keys and backup passwords sit quietly below.
           variant="outline"
           size="sm"
           class="justify-self-start"
-          disabled={!canAddDevice}
           data-testid="overview-add-device"
-          onclick={() => onOpen(WorkspaceSection.Devices)}
+          onclick={() => onOpen(WorkspaceSection.AddDevice)}
         >
           <Plus class="size-4" />
           {vault.t(I18N_KEYS.IdentityOverviewAddDevice)}
         </Button>
-        {#if !canAddDevice}
-          <span class="text-[11px] text-muted-foreground">
-            {vault.t(I18N_KEYS.IdentityOverviewNeedsCloud)}
-          </span>
-        {/if}
       </div>
     </section>
   </div>
