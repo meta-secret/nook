@@ -68,7 +68,7 @@ jobs:
         if: ${{ !startsWith(runner.name, 'nook-k0s-') }}
         run: |
           apt-get update
-          apt-get install --yes --no-install-recommends docker.io
+          apt-get install --yes --no-install-recommends docker-cli docker-buildx
           # Use the GitHub-hosted runner socket; do not start another daemon.
       - name: Connect trusted persistent BuildKit
         if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
