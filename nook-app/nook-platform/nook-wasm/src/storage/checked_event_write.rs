@@ -102,7 +102,7 @@ impl<'a> CheckedEventWrite<'a> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use super::*;
     use crate::storage::{
         drive_events::DriveEventStore, github_events::GitHubEventStore, icloud::ICloudEventStore,
@@ -113,14 +113,15 @@ mod tests {
     };
     use wasm_bindgen_test::wasm_bindgen_test;
 
-    struct EventFixture {
-        event_id: EventId,
-        event: VaultEvent,
-        bytes: Vec<u8>,
+    /// One signed vault event, shared by the provider adapter tests.
+    pub(crate) struct EventFixture {
+        pub(crate) event_id: EventId,
+        pub(crate) event: VaultEvent,
+        pub(crate) bytes: Vec<u8>,
     }
 
     impl EventFixture {
-        fn new() -> anyhow::Result<Self> {
+        pub(crate) fn new() -> anyhow::Result<Self> {
             let (identity, _) = SigningIdentity::generate()?;
             let event = VaultEvent::build_genesis_import_event(GenesisImportRequest {
                 store_id: &StoreId::parse("store_testtoken11")?,

@@ -757,3 +757,172 @@ mod namespace_tests {
         Ok(())
     }
 }
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod fetch_tests {
+    use super::*;
+    use crate::storage::checked_event_write::tests::EventFixture;
+    use crate::storage::fetch_stub::{FetchRoute, FetchStub};
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
+    use nook_core::{EventLogLocation, StoreId};
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    const CONTENTS: &str = "contents/nook-log";
+
+    fn location() -> anyhow::Result<EventLogLocation> {
+        Ok(EventLogLocation::Vault(StoreId::parse(
+            "store_testtoken11",
+        )?))
+    }
+
+    fn file(content: &[u8]) -> String {
+        format!(r#"{{"content":"{}"}}"#, STANDARD.encode(content))
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    async fn event_ids_come_from_the_namespace_tree() -> anyhow::Result<()> {
+        let fixture = EventFixture::new()?;
+        let location = location()?;
+        let path = location.event_path(&fixture.event_id);
+        let tree = serde_json::json!({
+            "truncated": false,
+            "tree": [
+                {"path": path, "type": "blob"},
+                {"path": format!("{}/notes.txt", location.root()), "type": "blob"},
+            ],
+        })
+        .to_string();
+        let stub = FetchStub::install(vec![
+            FetchRoute::ok("GET", "git/trees/main?recursive=1", &tree),
+            FetchRoute::ok("GET", "repos/owner/repo", r#"{"default_branch":"main"}"#),
+        ])?;
+        let store = GitHubEventStore {
+            pat: "pat",
+            repo: "owner/repo",
+            location: &location,
+        };
+        assert_eq!(
+            store.list_github_event_ids().await?,
+            [fixture.event_id.to_string()]
+        );
+        assert_eq!(stub.calls().len(), 2);
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    async fn events_are_fetched_and_written_only_when_absent() -> anyhow::Result<()> {
+        let fixture = EventFixture::new()?;
+        let location = location()?;
+        let store = GitHubEventStore {
+            pat: "pat",
+            repo: "owner/repo",
+            location: &location,
+        };
+
+        let stub =
+            FetchStub::install(vec![FetchRoute::ok("GET", CONTENTS, &file(&fixture.bytes))])?;
+        assert_eq!(
+            store.fetch_github_event(&fixture.event_id).await?,
+            fixture.bytes
+        );
+        drop(stub);
+
+        let stub = FetchStub::install(vec![
+            FetchRoute::failing("GET", CONTENTS, 404),
+            FetchRoute::ok("PUT", CONTENTS, r#"{"content":{"sha":"written"}}"#),
+        ])?;
+        store
+            .put_github_event_if_absent(&fixture.event_id, &fixture.bytes)
+            .await?;
+        assert!(stub.calls()[1].starts_with("PUT"));
+        drop(stub);
+
+        let stub =
+            FetchStub::install(vec![FetchRoute::ok("GET", CONTENTS, &file(&fixture.bytes))])?;
+        store
+            .put_github_event_if_absent(&fixture.event_id, &fixture.bytes)
+            .await?;
+        assert_eq!(stub.calls().len(), 1);
+        drop(stub);
+
+        let stub = FetchStub::install(vec![FetchRoute::ok("GET", CONTENTS, &file(b"other"))])?;
+        assert!(
+            store
+                .put_github_event_if_absent(&fixture.event_id, &fixture.bytes)
+                .await
+                .is_err()
+        );
+        drop(stub);
+
+        let _stub = FetchStub::install(vec![FetchRoute::failing("GET", CONTENTS, 404)])?;
+        assert!(store.fetch_github_event(&fixture.event_id).await.is_err());
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    async fn write_conflicts_compare_the_stored_event() -> anyhow::Result<()> {
+        let fixture = EventFixture::new()?;
+        let location = location()?;
+        let store = GitHubEventStore {
+            pat: "pat",
+            repo: "owner/repo",
+            location: &location,
+        };
+        let stub = FetchStub::install(vec![
+            FetchRoute::failing("GET", CONTENTS, 404),
+            FetchRoute::failing("PUT", CONTENTS, 409),
+            FetchRoute::ok("GET", CONTENTS, &file(&fixture.bytes)),
+        ])?;
+        store
+            .put_github_event_if_absent(&fixture.event_id, &fixture.bytes)
+            .await?;
+        assert_eq!(stub.calls().len(), 3);
+        drop(stub);
+
+        let stub = FetchStub::install(vec![
+            FetchRoute::failing("GET", CONTENTS, 404),
+            FetchRoute::failing("PUT", CONTENTS, 422),
+            FetchRoute::ok("GET", CONTENTS, &file(b"other")),
+        ])?;
+        assert!(
+            store
+                .put_github_event_if_absent(&fixture.event_id, &fixture.bytes)
+                .await
+                .is_err()
+        );
+        drop(stub);
+
+        let _stub = FetchStub::install(vec![
+            FetchRoute::failing("GET", CONTENTS, 404),
+            FetchRoute::failing("PUT", CONTENTS, 500),
+        ])?;
+        assert!(
+            store
+                .put_github_event_if_absent(&fixture.event_id, &fixture.bytes)
+                .await
+                .is_err()
+        );
+        Ok(())
+    }
+}

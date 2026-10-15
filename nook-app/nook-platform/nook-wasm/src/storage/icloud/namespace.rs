@@ -164,3 +164,115 @@ impl ICloudEventStore<'_> {
         Ok(records.len())
     }
 }
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod fetch_tests {
+    use super::*;
+    use crate::storage::fetch_stub::{FetchRoute, FetchStub};
+    use nook_core::{EventLogLocation, StoreId};
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    const QUERY: &str = "records/query";
+    const MODIFY: &str = "records/modify";
+
+    fn record(name: &str, location: &str) -> String {
+        format!(r#"{{"recordName":"{name}","fields":{{"location":{{"value":"{location}"}}}}}}"#)
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    async fn namespace_ids_page_through_matching_records() -> anyhow::Result<()> {
+        let first = format!(
+            r#"{{"records":[{},{},{{"recordName":"bare"}}],"continuationMarker":"next"}}"#,
+            record("r1", "vault:store_b"),
+            record("r2", "vault:store_a"),
+        );
+        let second = format!(r#"{{"records":[{}]}}"#, record("r3", "vault:store_a"));
+        let stub = FetchStub::install(vec![
+            FetchRoute::ok("POST", QUERY, &first),
+            FetchRoute::ok("POST", QUERY, &second),
+        ])?;
+        let ids = ICloudEventStore::list_icloud_namespace_ids(
+            "web-token",
+            &ICloudEventTarget::Private,
+            EventLogNamespaceKind::Vault,
+        )
+        .await?;
+        assert_eq!(ids, ["store_a", "store_b"]);
+        assert_eq!(stub.calls().len(), 2);
+        drop(stub);
+
+        let _stub = FetchStub::install(vec![FetchRoute::failing("POST", QUERY, 421)])?;
+        assert!(
+            ICloudEventStore::list_icloud_namespace_ids(
+                "web-token",
+                &ICloudEventTarget::Private,
+                EventLogNamespaceKind::Identity,
+            )
+            .await
+            .is_err()
+        );
+        assert!(
+            ICloudEventStore::list_icloud_namespace_ids(
+                "",
+                &ICloudEventTarget::Private,
+                EventLogNamespaceKind::Identity,
+            )
+            .await
+            .is_err()
+        );
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    async fn namespace_deletion_removes_every_record_or_fails() -> anyhow::Result<()> {
+        let location = EventLogLocation::Vault(StoreId::parse("store_abcdefghijk")?);
+        let tag = location.namespace_tag();
+        let store = ICloudEventStore {
+            web_auth_token: "web-token",
+            target: &ICloudEventTarget::Private,
+            location: &location,
+        };
+        let records = format!(
+            r#"{{"records":[{},{}]}}"#,
+            record("r1", &tag),
+            record("r2", &tag)
+        );
+        let stub = FetchStub::install(vec![
+            FetchRoute::ok("POST", QUERY, &records),
+            FetchRoute::ok("POST", MODIFY, r#"{"records":[]}"#),
+        ])?;
+        assert_eq!(store.delete_icloud_namespace().await?, 2);
+        assert!(stub.calls()[1].contains(MODIFY));
+        drop(stub);
+
+        let stub = FetchStub::install(vec![
+            FetchRoute::ok("POST", QUERY, &records),
+            FetchRoute::ok(
+                "POST",
+                MODIFY,
+                r#"{"records":[{"recordName":"r1","serverErrorCode":"ACCESS_DENIED"}]}"#,
+            ),
+        ])?;
+        assert!(store.delete_icloud_namespace().await.is_err());
+        drop(stub);
+
+        let stub = FetchStub::install(vec![FetchRoute::ok("POST", QUERY, r#"{"records":[]}"#)])?;
+        assert_eq!(store.delete_icloud_namespace().await?, 0);
+        assert_eq!(stub.calls().len(), 1);
+        Ok(())
+    }
+}

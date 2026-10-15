@@ -11,11 +11,8 @@ use reqwest::Client;
 use std::collections;
 use std::str;
 
-use super::checked_event_write::{CheckedEventWrite, CheckedEventWriteRequest};
 use crate::NookError;
 use nook_core::{EventId, EventLogLocation, ICloudEventTarget, ICloudShareRole};
-#[cfg(test)]
-use serde::Deserialize;
 use serde::Serialize;
 
 pub(crate) struct ICloudEventStore<'a> {
@@ -26,16 +23,16 @@ pub(crate) struct ICloudEventStore<'a> {
 }
 
 mod diagnostics;
+mod event_write;
 mod namespace;
 mod wire;
 use wire::{
-    EventIdentity, FieldText, ICloudCreate, ICloudCreateOperation, ICloudCreateRecord,
-    ICloudEventFields, ICloudFilter, ICloudLookup, ICloudQuery, ICloudQueryPage, ICloudRecord,
+    EventIdentity, FieldText, ICloudFilter, ICloudLookup, ICloudQuery, ICloudQueryPage,
     ICloudRecordReference, ICloudRecordsResponse, ICloudRequest, ICloudTextField, ICloudZone,
-    QueryCompletion, QueryContinuation, RecordHierarchy, RecordLookup, ZoneSelection,
+    QueryCompletion, QueryContinuation, RecordLookup, ZoneSelection,
 };
 #[cfg(test)]
-use wire::{ICloudFieldValue, RecordFields};
+use wire::{ICloudFieldValue, ICloudRecord, RecordFields};
 
 const ICLOUD_CONTAINER_ID: &str = match option_env!("NOOK_ICLOUD_CONTAINER_ID") {
     Some(value) => value,
@@ -335,241 +332,6 @@ impl ICloudEventStore<'_> {
         );
         Ok(content.into_bytes())
     }
-
-    fn existing_icloud_event_matches(
-        record: &ICloudRecord,
-        checked: &CheckedEventWrite<'_>,
-    ) -> (bool, usize) {
-        let existing_content = match record.content() {
-            FieldText::Text(content) => content,
-            FieldText::Unset => String::new(),
-        };
-        let existing_bytes = existing_content.as_bytes();
-        (checked.matches(existing_bytes), existing_bytes.len())
-    }
-}
-
-#[derive(Clone, Copy)]
-enum ExistingEventPolicy {
-    ConfirmCreateConflict,
-    RejectMismatch,
-}
-
-impl ICloudEventStore<'_> {
-    async fn resolve_existing_icloud_event(
-        token: &str,
-        target: &ICloudEventTarget,
-        event_id: &EventId,
-        record_name: &str,
-        checked: &CheckedEventWrite<'_>,
-        policy: ExistingEventPolicy,
-    ) -> Result<bool, NookError> {
-        if let RecordLookup::Loaded(existing) = Self::lookup_record(CloudKitRecordQuery {
-            web_auth_token: token,
-            target,
-            record_name,
-        })
-        .await?
-        {
-            let (matches, existing_len) = Self::existing_icloud_event_matches(&existing, checked);
-            if matches {
-                match policy {
-                    ExistingEventPolicy::ConfirmCreateConflict => tracing::info!(
-                        scope = "wasm-icloud",
-                        event_id = event_id.as_str(),
-                        record_name,
-                        existing_len,
-                        "CloudKit create conflict matched existing content"
-                    ),
-                    ExistingEventPolicy::RejectMismatch => tracing::info!(
-                        scope = "wasm-icloud",
-                        event_id = event_id.as_str(),
-                        record_name,
-                        existing_len,
-                        "CloudKit event already exists with matching content"
-                    ),
-                }
-                return Ok(true);
-            }
-            match policy {
-                ExistingEventPolicy::ConfirmCreateConflict => tracing::warn!(
-                    scope = "wasm-icloud",
-                    event_id = event_id.as_str(),
-                    record_name,
-                    "CloudKit create conflict did not match existing content"
-                ),
-                ExistingEventPolicy::RejectMismatch => {
-                    tracing::warn!(
-                        scope = "wasm-icloud",
-                        event_id = event_id.as_str(),
-                        record_name,
-                        existing_len,
-                        expected_len = checked.bytes().len(),
-                        "CloudKit event exists with different content"
-                    );
-                    return Err(NookError::ICloud(
-                        "Event record exists with different content (corruption).".to_owned(),
-                    ));
-                }
-            }
-        }
-        Ok(false)
-    }
-
-    fn icloud_event_create_body(
-        target: &ICloudEventTarget,
-        namespace: &str,
-        event_id: &EventId,
-        record_name: &str,
-        content: &str,
-    ) -> ICloudRequest<ICloudCreate> {
-        let parent = match target {
-            ICloudEventTarget::Private => RecordHierarchy::Root,
-            ICloudEventTarget::Shared(shared) => RecordHierarchy::Child(ICloudRecordReference {
-                record_name: shared.root_record_name.clone(),
-            }),
-        };
-        Self::with_icloud_zone(
-            ICloudCreate {
-                operations: [ICloudCreateOperation {
-                    operation_type: "create",
-                    record: ICloudCreateRecord {
-                        record_type: ICLOUD_EVENT_RECORD_TYPE,
-                        record_name: record_name.to_owned(),
-                        fields: ICloudEventFields {
-                            location: ICloudTextField {
-                                value: namespace.to_owned(),
-                            },
-                            event_id: ICloudTextField {
-                                value: event_id.to_string(),
-                            },
-                            content: ICloudTextField {
-                                value: content.to_owned(),
-                            },
-                        },
-                        parent,
-                    },
-                }],
-            },
-            target,
-        )
-    }
-
-    pub(crate) async fn put_icloud_event_if_absent(
-        &self,
-        event_id: &EventId,
-        bytes: &[u8],
-    ) -> Result<(), NookError> {
-        let web_auth_token = self.web_auth_token;
-        let token = nook_core::OauthAccessToken::parse(web_auth_token)?;
-        let content = str::from_utf8(bytes)
-            .map_err(|e| NookError::Serialization(format!("Event YAML must be UTF-8: {e}")))?;
-        let checked = CheckedEventWrite::parse(CheckedEventWriteRequest {
-            bytes,
-            event_id,
-            location: self.location,
-            provider: "CloudKit",
-        })?;
-        self.put_checked(checked, token.as_ref(), content).await
-    }
-
-    async fn put_checked(
-        &self,
-        checked: CheckedEventWrite<'_>,
-        token: &str,
-        content: &str,
-    ) -> Result<(), NookError> {
-        let target = self.target;
-        let event_id = checked.event_id();
-        let bytes = checked.bytes();
-        let namespace = self.namespace();
-        let record_name = Self::icloud_event_record_name(&namespace, event_id);
-        tracing::info!(
-            scope = "wasm-icloud",
-            event_id = event_id.as_str(),
-            record_name,
-            content_len = bytes.len(),
-            "CloudKit event put-if-absent started"
-        );
-
-        if Self::resolve_existing_icloud_event(
-            token,
-            target,
-            event_id,
-            &record_name,
-            &checked,
-            ExistingEventPolicy::RejectMismatch,
-        )
-        .await?
-        {
-            return Ok(());
-        }
-
-        let body =
-            Self::icloud_event_create_body(target, &namespace, event_id, &record_name, content);
-        let client = Client::new();
-        const OPERATION: &str = "modify";
-        const PATH: &str = "records/modify";
-        Self::log_icloud_request_start(OPERATION, PATH, token);
-        tracing::info!(
-            scope = "wasm-icloud",
-            operation = OPERATION,
-            path = PATH,
-            event_id = event_id.as_str(),
-            record_name,
-            operation_type = "create",
-            "CloudKit event create prepared"
-        );
-        let mut request = client
-            .post(Self::icloud_database_url(target, PATH))
-            .header("Content-Type", "application/json");
-        for (name, value) in Self::icloud_auth_query(token) {
-            request = request.query(&[(name, value)]);
-        }
-        let response = request.json(&body).send().await?;
-        let status = response.status();
-        Self::log_icloud_response(OPERATION, PATH, status);
-        if response.status().is_success() {
-            let _parsed: ICloudRecordsResponse = response.json().await.map_err(|e| {
-                NookError::Serialization(format!("Failed to parse CloudKit event create: {e}"))
-            })?;
-            tracing::info!(
-                scope = "wasm-icloud",
-                event_id = event_id.as_str(),
-                record_name,
-                "CloudKit event created"
-            );
-            return Ok(());
-        }
-
-        let body = response.text().await.unwrap_or_default();
-        Self::log_icloud_error_body(OPERATION, PATH, status, &body, token);
-        if body.contains("serverRecord") || body.contains("ALREADY_EXISTS") {
-            tracing::info!(
-                scope = "wasm-icloud",
-                event_id = event_id.as_str(),
-                record_name,
-                "CloudKit create conflict detected; checking existing record"
-            );
-            if Self::resolve_existing_icloud_event(
-                token,
-                target,
-                event_id,
-                &record_name,
-                &checked,
-                ExistingEventPolicy::ConfirmCreateConflict,
-            )
-            .await?
-            {
-                return Ok(());
-            }
-            return Err(NookError::ICloud(
-                "Event record exists with different content (corruption).".to_owned(),
-            ));
-        }
-
-        Err(Self::icloud_error(status, &body))
-    }
 }
 
 #[cfg(test)]
@@ -577,26 +339,6 @@ mod tests {
     use super::*;
     use nook_core::ICloudSharedTarget;
     use wasm_bindgen_test::wasm_bindgen_test;
-
-    #[derive(Deserialize)]
-    struct CreateBody {
-        #[serde(rename = "zoneID")]
-        #[serde(default)]
-        zone: ZoneSelection,
-        operations: Vec<CreateOperation>,
-    }
-
-    #[derive(Deserialize)]
-    struct CreateOperation {
-        record: CreateRecord,
-    }
-
-    #[derive(Deserialize)]
-    struct CreateRecord {
-        #[serde(default)]
-        parent: RecordHierarchy,
-        fields: collections::HashMap<String, ICloudFieldValue>,
-    }
 
     struct SharedTargetFixture(ICloudEventTarget);
 
@@ -639,89 +381,6 @@ mod tests {
             )
             .contains("/shared/records/query")
         );
-        Ok(())
-    }
-
-    #[wasm_bindgen_test]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            unowned_function,
-            reason = "framework boundary: wasm-bindgen-test callback"
-        )
-    )]
-    fn shared_event_create_is_scoped_to_the_shared_root_hierarchy() -> anyhow::Result<()> {
-        let target = SharedTargetFixture::new(ICloudShareRole::Participant)?.0;
-        let event_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
-        let body = ICloudEventStore::icloud_event_create_body(
-            &target,
-            "vault:store_abcdefghijk",
-            &event_id,
-            "nook-event-test",
-            "encrypted-event",
-        );
-
-        let body: CreateBody = serde_json::from_str(&serde_json::to_string(&body)?)?;
-        let ZoneSelection::Named(zone) = body.zone else {
-            anyhow::bail!("missing shared zone")
-        };
-        assert_eq!(zone.zone_name, "shared-zone");
-        assert_eq!(zone.owner_record_name, "owner-record");
-        let record = &body
-            .operations
-            .first()
-            .ok_or_else(|| anyhow::anyhow!("shared event operation must be present"))?
-            .record;
-        let RecordHierarchy::Child(parent) = &record.parent else {
-            anyhow::bail!("missing parent")
-        };
-        assert_eq!(parent.record_name, "shared-root");
-        assert_eq!(
-            record
-                .fields
-                .get(ICLOUD_CONTENT_FIELD)
-                .ok_or_else(|| anyhow::anyhow!("content field must be present"))?
-                .value,
-            FieldText::Text("encrypted-event".to_owned())
-        );
-        // The record names the log it belongs to, so a vault can be listed and
-        // deleted on its own.
-        assert_eq!(
-            record
-                .fields
-                .get(ICLOUD_LOCATION_FIELD)
-                .ok_or_else(|| anyhow::anyhow!("location field must be present"))?
-                .value,
-            FieldText::Text("vault:store_abcdefghijk".to_owned())
-        );
-        Ok(())
-    }
-
-    #[wasm_bindgen_test]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            unowned_function,
-            reason = "framework boundary: wasm-bindgen-test callback"
-        )
-    )]
-    fn private_event_create_keeps_the_existing_default_zone_shape() -> anyhow::Result<()> {
-        let event_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
-        let body = ICloudEventStore::icloud_event_create_body(
-            &ICloudEventTarget::Private,
-            "identity:idn_abcdefghijk",
-            &event_id,
-            "nook-event-test",
-            "encrypted-event",
-        );
-
-        let body: CreateBody = serde_json::from_str(&serde_json::to_string(&body)?)?;
-        assert!(matches!(body.zone, ZoneSelection::DefaultZone));
-        let operation = body
-            .operations
-            .first()
-            .ok_or_else(|| anyhow::anyhow!("private event operation must be present"))?;
-        assert!(matches!(operation.record.parent, RecordHierarchy::Root));
         Ok(())
     }
 
@@ -851,6 +510,117 @@ mod browser_tests {
                 .await
                 .is_err()
         );
+        Ok(())
+    }
+}
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod fetch_tests {
+    use super::*;
+    use crate::storage::fetch_stub::{FetchRoute, FetchStub};
+    use nook_core::StoreId;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    const QUERY: &str = "records/query";
+    const LOOKUP: &str = "records/lookup";
+
+    fn event_record(event_id: &str, content: &str) -> String {
+        format!(
+            r#"{{"recordName":"r-{event_id}","fields":{{"event_id":{{"value":"{event_id}"}},"content":{{"value":"{content}"}}}}}}"#
+        )
+    }
+
+    fn event_id(fill: char) -> anyhow::Result<EventId> {
+        Ok(EventId::parse(&format!(
+            "sha256u:{}",
+            fill.to_string().repeat(43)
+        ))?)
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    async fn event_ids_page_and_skip_undeclared_records() -> anyhow::Result<()> {
+        let location = EventLogLocation::Vault(StoreId::parse("store_abcdefghijk")?);
+        let (a, b) = (event_id('A')?, event_id('E')?);
+        let first = format!(
+            r#"{{"records":[{},{},{{"recordName":"bare"}}],"continuationMarker":"more"}}"#,
+            event_record(b.as_str(), "b"),
+            event_record("not-an-event", "x"),
+        );
+        let second = format!(
+            r#"{{"records":[{},{}]}}"#,
+            event_record(a.as_str(), "a"),
+            event_record(b.as_str(), "b")
+        );
+        let stub = FetchStub::install(vec![
+            FetchRoute::ok("POST", QUERY, &first),
+            FetchRoute::ok("POST", QUERY, &second),
+        ])?;
+        let store = ICloudEventStore {
+            web_auth_token: "web-token",
+            target: &ICloudEventTarget::Private,
+            location: &location,
+        };
+        assert_eq!(
+            store.list_icloud_event_ids().await?,
+            [a.to_string(), b.to_string()]
+        );
+        assert_eq!(stub.calls().len(), 2);
+        drop(stub);
+
+        let _stub = FetchStub::install(vec![FetchRoute::failing("POST", QUERY, 503)])?;
+        assert!(store.list_icloud_event_ids().await.is_err());
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    async fn fetch_returns_content_only_for_the_named_event() -> anyhow::Result<()> {
+        let location = EventLogLocation::Vault(StoreId::parse("store_abcdefghijk")?);
+        let store = ICloudEventStore {
+            web_auth_token: "web-token",
+            target: &ICloudEventTarget::Private,
+            location: &location,
+        };
+        let wanted = event_id('A')?;
+        let other = event_id('E')?;
+        let found = format!(
+            r#"{{"records":[{}]}}"#,
+            event_record(wanted.as_str(), "body")
+        );
+        let stub = FetchStub::install(vec![FetchRoute::ok("POST", LOOKUP, &found)])?;
+        assert_eq!(store.fetch_icloud_event(&wanted).await?, b"body");
+        drop(stub);
+
+        for response in [
+            r#"{"records":[]}"#.to_owned(),
+            format!(
+                r#"{{"records":[{}]}}"#,
+                event_record(other.as_str(), "body")
+            ),
+            r#"{"records":[{"recordName":"r","fields":{}}]}"#.to_owned(),
+            format!(
+                r#"{{"records":[{{"recordName":"r","fields":{{"event_id":{{"value":"{}"}}}}}}]}}"#,
+                wanted.as_str()
+            ),
+        ] {
+            let _stub = FetchStub::install(vec![FetchRoute::ok("POST", LOOKUP, &response)])?;
+            assert!(store.fetch_icloud_event(&wanted).await.is_err());
+        }
+        let _stub = FetchStub::install(vec![FetchRoute::failing("POST", LOOKUP, 500)])?;
+        assert!(store.fetch_icloud_event(&wanted).await.is_err());
         Ok(())
     }
 }

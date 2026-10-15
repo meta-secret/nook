@@ -269,3 +269,150 @@ mod tests {
         Ok(())
     }
 }
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod fetch_tests {
+    use super::*;
+    use crate::storage::fetch_stub::{FetchRoute, FetchStub};
+    use nook_core::{EventLogLocation, EventLogNamespaceKind, StoreId};
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    const REPO: &str = "repos/owner/repo";
+
+    fn location() -> anyhow::Result<EventLogLocation> {
+        Ok(EventLogLocation::Vault(StoreId::parse(
+            "store_abcdefghijk",
+        )?))
+    }
+
+    fn head_routes(tree: &str) -> Vec<FetchRoute> {
+        vec![
+            FetchRoute::ok(
+                "GET",
+                "git/ref/heads/main",
+                r#"{"object":{"sha":"head-sha"}}"#,
+            ),
+            FetchRoute::ok(
+                "GET",
+                "git/commits/head-sha",
+                r#"{"tree":{"sha":"tree-sha"}}"#,
+            ),
+            FetchRoute::ok("GET", "git/trees/tree-sha?recursive=1", tree),
+            FetchRoute::ok("GET", REPO, r#"{"default_branch":"main"}"#),
+        ]
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    async fn deleting_a_namespace_commits_its_removal_once() -> anyhow::Result<()> {
+        let location = location()?;
+        let tree = r#"{"truncated":false,"tree":[
+            {"path":"nook-log/v1/vaults/store_abcdefghijk/events/a.yaml","type":"blob"},
+            {"path":"nook-log/v1/vaults/store_abcdefghijk/events/b.yaml","type":"blob"},
+            {"path":"nook-log/v1/vaults/store_keep/events/c.yaml","type":"blob"}
+        ]}"#;
+        let mut routes = head_routes(tree);
+        routes.extend([
+            FetchRoute::ok("POST", "git/trees", r#"{"sha":"new-tree"}"#),
+            FetchRoute::ok("POST", "git/commits", r#"{"sha":"new-commit"}"#),
+            FetchRoute::ok(
+                "PATCH",
+                "git/refs/heads/main",
+                r#"{"object":{"sha":"new-commit"}}"#,
+            ),
+        ]);
+        let stub = FetchStub::install(routes)?;
+        let deleted = GitHubEventStore {
+            pat: " pat ",
+            repo: "owner/repo",
+            location: &location,
+        }
+        .delete_github_namespace()
+        .await?;
+        assert_eq!(deleted, 2);
+        let calls = stub.calls();
+        assert_eq!(calls.len(), 7);
+        assert!(calls[6].starts_with("PATCH"));
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    async fn empty_truncated_or_failed_namespaces_write_nothing() -> anyhow::Result<()> {
+        let location = location()?;
+        let store = GitHubEventStore {
+            pat: "pat",
+            repo: "owner/repo",
+            location: &location,
+        };
+        let stub = FetchStub::install(head_routes(r#"{"truncated":false,"tree":[]}"#))?;
+        assert_eq!(store.delete_github_namespace().await?, 0);
+        assert!(stub.calls().iter().all(|call| call.starts_with("GET")));
+        drop(stub);
+
+        let stub = FetchStub::install(head_routes(r#"{"truncated":true,"tree":[]}"#))?;
+        assert!(store.delete_github_namespace().await.is_err());
+        drop(stub);
+
+        let _stub = FetchStub::install(vec![FetchRoute::failing("GET", REPO, 401)])?;
+        assert!(store.delete_github_namespace().await.is_err());
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    async fn namespace_ids_come_from_the_default_branch_tree() -> anyhow::Result<()> {
+        let stub = FetchStub::install(vec![
+            FetchRoute::ok(
+                "GET",
+                "git/trees/main?recursive=1",
+                r#"{"truncated":false,"tree":[
+                    {"path":"nook-log/v1/vaults/store_b/events/x.yaml","type":"blob"},
+                    {"path":"nook-log/v1/vaults/store_a/events/y.yaml","type":"blob"},
+                    {"path":"nook-log/v1/vaults/store_a/events/z.yaml","type":"blob"},
+                    {"path":"nook-log/v1/vaults/store_a/events","type":"tree"}
+                ]}"#,
+            ),
+            FetchRoute::ok("GET", REPO, r#"{"default_branch":"main"}"#),
+        ])?;
+        let ids = GitHubEventStore::list_github_namespace_ids(
+            "pat",
+            "owner/repo",
+            EventLogNamespaceKind::Vault,
+        )
+        .await?;
+        assert_eq!(ids, ["store_a", "store_b"]);
+        assert_eq!(stub.calls().len(), 2);
+        drop(stub);
+
+        let _stub = FetchStub::install(vec![FetchRoute::failing("GET", REPO, 404)])?;
+        assert!(
+            GitHubEventStore::list_github_namespace_ids(
+                "pat",
+                "owner/repo",
+                EventLogNamespaceKind::Identity,
+            )
+            .await?
+            .is_empty()
+        );
+        Ok(())
+    }
+}
