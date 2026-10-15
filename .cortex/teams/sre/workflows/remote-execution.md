@@ -103,7 +103,7 @@ policy or readiness. Single-agent sessions perform these responsibilities locall
 - `loom:verify` uses the general `nook-k0s` scale set.
 - Other mixed batches use the general `nook-k0s` scale set.
 - Fork and Dependabot jobs stay hosted and secret-free.
-- Browser jobs use ordinary Pods on `nook-k0s-container`.
+- Browser jobs use ordinary Pods on `nook-k0s-container` through `vars.NOOK_CONTAINER_RUNS_ON`; `task infra:arc:fallback` routes them and `NOOK_RUNS_ON` jobs to `ubuntu-latest`, and `task infra:arc:activate` returns both to ARC.
 - Do not expose selectors whose Taskfile path reaches `docker run`, `docker create`, `docker start`, `docker exec`, or another runtime lifecycle command.
 - Keep a selector unavailable until it has a direct ordinary-Pod or build-only
   implementation.

@@ -367,7 +367,7 @@ jobs:
     name: Web e2e
     needs: [web]
     if: ${{ !cancelled() && needs.web.outputs.verification_outcome == 'success' }}
-    runs-on: nook-k0s-container
+    runs-on: ${{ vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container' }}
     timeout-minutes: 180
     container:
       image: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ needs.web.outputs.e2e_image_attempt }}
@@ -400,7 +400,7 @@ jobs:
         shard: [1, 2]
     needs: [web]
     if: ${{ !cancelled() && needs.web.outputs.verification_outcome == 'success' }}
-    runs-on: nook-k0s-container
+    runs-on: ${{ vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container' }}
     timeout-minutes: 180
     container:
       image: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ needs.web.outputs.e2e_image_attempt }}
@@ -428,7 +428,7 @@ jobs:
     # This is the final local cache producer. Serialize it behind web so it
     # clones the promoted web generation instead of racing a sibling lineage.
     needs: [web]
-    runs-on: nook-k0s-container
+    runs-on: ${{ vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container' }}
     timeout-minutes: 10
     container:
       image: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ needs.web.outputs.e2e_image_attempt }}

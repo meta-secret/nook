@@ -219,7 +219,7 @@ jobs:
       (inputs.tasks == '' || inputs.task == '') &&
       (inputs.tasks || inputs.task) == 'ci:pr:deploy-and-verify-previews'
     name: Remote / Pages preview
-    runs-on: nook-k0s-container
+    runs-on: ${{ vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container' }}
     timeout-minutes: 45
     container:
       # Keep the preview's native Rust toolchain on the repository-proxied,
@@ -461,7 +461,7 @@ jobs:
       (inputs.tasks || inputs.task) == 'ci:pr')
     needs: web-e2e-image
     name: Remote / web:e2e
-    runs-on: nook-k0s-container
+    runs-on: ${{ vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container' }}
     timeout-minutes: 180
     container:
       image: registry.dev.nokey.sh/nook/remote-buildcache/nook-web-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
@@ -526,7 +526,7 @@ jobs:
       fail-fast: false
       matrix:
         suite: [stable, unstable, isolation, extension]
-    runs-on: nook-k0s-container
+    runs-on: ${{ vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container' }}
     timeout-minutes: 180
     container:
       image: registry.dev.nokey.sh/nook/remote-buildcache/nook-web-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}

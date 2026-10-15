@@ -30,9 +30,11 @@ impl WorkflowRuntimeContract<'_> {
         let ecosystem = root.read(".github/workflows/rust-ecosystem-checks.yml");
         let ecosystem_entry = root.read(".github/workflows/ci.yml");
         assert!(
-            pr.contains("'nook-k0s-container' || 'ubuntu-latest'")
+            pr.contains("(vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container') || 'ubuntu-latest'")
                 && release.contains("runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}")
-                && release.contains("runs-on: nook-k0s-container")
+                && release.contains(
+                    "runs-on: ${{ vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container' }}"
+                )
                 && pr
                     .matches("github.event.pull_request.head.repo.full_name == github.repository")
                     .count()
@@ -64,7 +66,10 @@ impl WorkflowRuntimeContract<'_> {
                     .matches("runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}")
                     .count()
                     >= 5
-                && main.matches("runs-on: nook-k0s-container").count() >= 3
+                && main
+                    .matches("runs-on: ${{ vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container' }}")
+                    .count()
+                    >= 3
                 && main.contains("name: Portable WASM cache publication proof")
                 && main.contains("bash .github/scripts/verify-wasm-gha-cache.sh"),
             "Main build, browser, deployment, and portable cache-proof jobs must all use ARC"

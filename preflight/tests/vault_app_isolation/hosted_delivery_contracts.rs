@@ -447,7 +447,7 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
         "task _ci:main:web:e2e-only",
         "task _extension:test:e2e",
         "task _web:test:ui-demo",
-        "runs-on: nook-k0s-container",
+        "runs-on: ${{ vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container' }}",
         "nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}",
         // Re-run e2e jobs pull the image their producer attempt built; only
         // the attempt number crosses jobs, since GitHub drops masked outputs.
