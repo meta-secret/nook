@@ -118,7 +118,7 @@ jobs:
   deploy:
     name: Verify and deploy production
     needs: prepare
-    runs-on: nook-k0s-container
+    runs-on: ${{ vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container' }}
     container:
       image: registry.dev.nokey.sh/nook/remote-buildcache/nook-release-e2e:run-${{ github.run_id }}-${{ needs.prepare.outputs.e2e-image-attempt }}
       credentials:
