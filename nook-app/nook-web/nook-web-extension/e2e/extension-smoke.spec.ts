@@ -597,7 +597,7 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     await simplePage.getByTestId('header-identities-btn').click()
     await simplePage
       .locator(
-        '[data-testid="identity-card"][data-status="unlocked"] [data-testid="identity-manage"]',
+        '[data-testid="identity-card"][data-status="unlocked"] [data-testid="identity-overview-toggle"]',
       )
       .first()
       .click()

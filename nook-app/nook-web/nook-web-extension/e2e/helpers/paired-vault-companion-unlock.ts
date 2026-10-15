@@ -298,6 +298,35 @@ export async function unlockExtensionThroughCompanion({
   }
 }
 
+/** A locked vault unlocks from its panel beside the identity card. */
+export async function startVaultPanelUnlock(vaultPage: Page): Promise<void> {
+  const row = vaultPage.getByTestId('identity-vault-row').first()
+  const unlock = vaultPage.getByTestId('vault-panel-unlock')
+  if ((await row.getAttribute('aria-expanded')) !== 'true') await row.click()
+  await expect(unlock).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
+  await unlock.click()
+}
+
+/** An unlocked vault waits on the identities page until Open vault. */
+export async function expectVaultOpened(
+  vaultPage: Page,
+  timeout = EXTENSION_UNLOCK_TIMEOUT_MS,
+): Promise<void> {
+  const shell = vaultPage.getByTestId('authenticated-shell')
+  const open = vaultPage.getByTestId('vault-panel-open')
+  await expect
+    .poll(
+      async () => {
+        if (await shell.isVisible()) return true
+        if ((await open.isVisible()) && (await open.isEnabled()))
+          await open.click()
+        return false
+      },
+      { timeout },
+    )
+    .toBe(true)
+}
+
 export async function unlockPairedVaultThroughCompanion(
   request: PairedVaultCompanionUnlock,
 ): Promise<void> {
@@ -321,14 +350,12 @@ export async function unlockPairedVaultThroughCompanion(
     const existingCompanionPages = context
       .pages()
       .filter((page) => isOwnedCompanionPopup(page, extensionId))
-    await unlockButton.click()
+    await startVaultPanelUnlock(vaultPage)
     await expect(vaultPage.getByTestId('passkey-auth-overlay')).toHaveCount(0)
 
     if (companionUnlock === PairedVaultCompanionUnlockKind.Optional) {
       try {
-        await expect(authenticatedShell).toBeVisible({
-          timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
-        })
+        await expectVaultOpened(vaultPage)
       } catch {
         const companionPopup = await waitForOwnedCompanionPopup({
           context,
@@ -337,9 +364,7 @@ export async function unlockPairedVaultThroughCompanion(
         })
         try {
           await completeCompanionPopupUnlock(companionPopup)
-          await expect(authenticatedShell).toBeVisible(
-            adoptionVisibilityOptions,
-          )
+          await expectVaultOpened(vaultPage, adoptionVisibilityOptions.timeout)
         } finally {
           if (companionPopup.closeAfterUse && !companionPopup.page.isClosed()) {
             await companionPopup.page.close()
@@ -354,7 +379,7 @@ export async function unlockPairedVaultThroughCompanion(
       })
       try {
         await completeCompanionPopupUnlock(companionPopup)
-        await expect(authenticatedShell).toBeVisible(adoptionVisibilityOptions)
+        await expectVaultOpened(vaultPage, adoptionVisibilityOptions.timeout)
       } finally {
         if (companionPopup.closeAfterUse && !companionPopup.page.isClosed()) {
           await companionPopup.page.close()
