@@ -2,8 +2,8 @@
 The identity's dashboard, laid out by what matters. Devices take the wide
 tile, one slot each. Cloud copies sit beside it and turn into a warning
 while there are none. It only reports: adding a device or a sync provider
-lives in Manage on the card. Vaults, sign-in keys,
-passphrases and this browser follow as small tiles. Every tile opens
+lives in Manage on the card. Vaults, sign-in keys
+and this browser follow as small tiles. Every tile opens
 its own page; other actions live in Manage on the identity's card.
 -->
 <script lang="ts">
@@ -16,7 +16,6 @@ its own page; other actions live in Manage on the identity's card.
     FolderKey,
     KeyRound,
     MonitorSmartphone,
-    ShieldCheck,
     SlidersHorizontal,
     TriangleAlert,
   } from "@lucide/svelte";
@@ -46,7 +45,6 @@ its own page; other actions live in Manage on the identity's card.
     control.snapshot === false ? [] : control.snapshot.pendingJoins,
   );
   const unnamed = $derived(vault.t(I18N_KEYS.LoginVaultPickerUnnamed));
-  const passwordCount = $derived(vault.passwordEntries.length);
   /** Rows a tile names before "+N more". */
   const TILE_NAMES = 2;
 
@@ -93,15 +91,6 @@ its own page; other actions live in Manage on the identity's card.
     return localizeProviderLabel(labelRequest);
   }
 
-  const passwordsText = $derived.by(() => {
-    if (passwordCount === 0)
-      return vault.t(I18N_KEYS.IdentityOverviewPasswordsNone);
-    const request: Parameters<typeof vault.t>[0] = {
-      key: I18N_KEYS.IdentityOverviewPasswordsCount,
-      replacements: { count: String(passwordCount) },
-    };
-    return vault.t(request);
-  });
   const pendingText = $derived.by(() => {
     const request: Parameters<typeof vault.t>[0] = {
       key: I18N_KEYS.IdentityOverviewPendingJoins,
@@ -160,7 +149,6 @@ its own page; other actions live in Manage on the identity's card.
 
 {#snippet vaultsIcon()}<FolderKey class="size-4" aria-hidden="true" />{/snippet}
 {#snippet keysIcon()}<KeyRound class="size-4" aria-hidden="true" />{/snippet}
-{#snippet passwordsIcon()}<ShieldCheck class="size-4" aria-hidden="true" />{/snippet}
 {#snippet browserIcon()}<SlidersHorizontal class="size-4" aria-hidden="true" />{/snippet}
 
 <div class="grid min-w-0 gap-3" data-testid="identity-overview">
@@ -323,14 +311,6 @@ its own page; other actions live in Manage on the identity's card.
       vault.t(I18N_KEYS.IdentityOverviewSignIn),
       keysIcon,
       WorkspaceSection.Keys,
-    )}
-    {@render smallTile(
-      "overview-passwords",
-      vault.t(I18N_KEYS.IdentityOverviewPasswordsLink),
-      String(passwordCount),
-      passwordsText,
-      passwordsIcon,
-      WorkspaceSection.Passwords,
     )}
     {@render smallTile(
       "overview-browser-settings",

@@ -1,13 +1,13 @@
 <!--
 Actions on the identity this browser uses, adding a device first. Manage on
 the card opens them beside it; Overview there shows what the identity has.
+A vault's own actions (its passphrases) sit in that vault's panel.
 -->
 <script lang="ts">
   import {
     ChevronRight,
     Cloud,
     Plus,
-    ShieldCheck,
   } from "@lucide/svelte";
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import type { VaultState } from "$lib/vault.svelte";
@@ -41,22 +41,14 @@ the card opens them beside it; Overview there shows what the identity has.
       label: vault.t(I18N_KEYS.AddDeviceCloudAction),
       hint: vault.t(I18N_KEYS.IdentityMenuSyncHint),
     },
-    {
-      section: WorkspaceSection.Passwords,
-      testId: "identity-menu-passwords",
-      label: vault.t(I18N_KEYS.IdentityMenuPassword),
-      hint: vault.t(I18N_KEYS.IdentityMenuPasswordHint),
-    },
   ]);
 </script>
 
 {#snippet icon(section: WorkspaceSection)}
   {#if section === WorkspaceSection.AddDevice}
     <Plus class="size-4" />
-  {:else if section === WorkspaceSection.Sync}
-    <Cloud class="size-4" />
   {:else}
-    <ShieldCheck class="size-4" />
+    <Cloud class="size-4" />
   {/if}
 {/snippet}
 

@@ -236,13 +236,13 @@
     await vault.chooseLoginVault(storeId);
   }
 
-  /** The vault whose passphrase was asked for from its row; its panel
-   * opens even when it has none, to say so. */
+  /** The vault opened beside its card; its passphrase unlock shows even
+   * when it has none, to say so. */
   let passphraseStoreId = $state("");
 
-  /** The key on a locked vault row selects that vault, which reads its
+  /** Opening a locked vault's row selects that vault, which reads its
    * passphrases, without unlocking it. */
-  async function openPassphrase(storeId: string): Promise<void> {
+  async function selectVault(storeId: string): Promise<void> {
     passphraseStoreId = storeId;
     if (selectedCardStoreId === storeId) return;
     await openVaultFromCard(storeId);
@@ -714,7 +714,8 @@
       canAddVault={!showCreateVault && !showQrOnboarding}
       onOpenVault={unlockVault}
       onNewVault={openNewVault}
-      onPassphrase={(storeId: string) => void openPassphrase(storeId)}
+      onSelectVault={(storeId: string) => void selectVault(storeId)}
+      onManageVault={manageSection}
       onAddDevice={addDevice}
       onManageSection={manageSection}
       onUnlock={() => void unlockIdentity()}

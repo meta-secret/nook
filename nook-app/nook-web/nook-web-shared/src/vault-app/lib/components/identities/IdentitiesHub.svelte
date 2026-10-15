@@ -43,7 +43,8 @@ join) sit between the hero and the cards.
     busy = false,
     onOpenVault,
     onNewVault = () => {},
-    onPassphrase,
+    onSelectVault,
+    onManageVault,
     onNewIdentity,
     onUseIdentity,
     onCardsShown = () => {},
@@ -77,8 +78,10 @@ join) sit between the hero and the cards.
     busy?: boolean
     onOpenVault: (storeId: string) => void
     onNewVault?: () => void
-    /** Open a locked vault's passphrase unlock on its card. */
-    onPassphrase?: (storeId: string) => void
+    /** A vault opened beside its card; a locked browser selects it. */
+    onSelectVault?: (storeId: string) => void
+    /** One of a vault's own pages, from its panel beside the card. */
+    onManageVault?: (target: IdentitySectionTarget) => void
     onNewIdentity: () => void
     onUseIdentity: (target: IdentityVaultTarget) => void
     /** Whether identity cards are on screen; the login screen then leaves
@@ -472,7 +475,8 @@ join) sit between the hero and the cards.
             onUseIdentity={(identityId: string) =>
               onUseIdentity(targetFor(identityId))}
             {pairingStatusFor}
-            {...onPassphrase ? { onPassphrase } : {}}
+            {...onSelectVault ? { onSelectVault } : {}}
+            {...onManageVault ? { onManageVault } : {}}
             {...vaultSetup && setupShown && card.identityId === setupIdentityId
               ? { unlockPanel: vaultSetup }
               : identityPrompt && card.current

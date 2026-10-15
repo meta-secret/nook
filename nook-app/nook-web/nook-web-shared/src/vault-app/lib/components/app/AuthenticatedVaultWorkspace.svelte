@@ -292,6 +292,13 @@ band, the scrolling page and the status line.
     vault.lockVault();
   }
 
+  /** One of a vault's own pages from its panel beside the card: another
+   * vault of this identity is switched to first. */
+  async function manageVault(target: IdentitySectionTarget): Promise<void> {
+    if (target.storeId !== activeStoreId) await vault.switchToVault(target.storeId);
+    openSection(target.section);
+  }
+
   async function openVaultFromCard(storeId: string): Promise<void> {
     if (storeId === activeStoreId) {
       openSection(WorkspaceSection.Vault);
@@ -543,6 +550,8 @@ band, the scrolling page and the status line.
         NookIdentityNextStep.AddDevice}
       overview={identityOverview}
       overviewOpen={section === WorkspaceSection.Overview}
+      onManageVault={(target: IdentitySectionTarget) =>
+        void manageVault(target)}
       onManageSection={(target: IdentitySectionTarget) => {
         // "Add a sync provider" opens Sync with its form already open.
         if (target.section === WorkspaceSection.Sync) addSyncProvider();
@@ -570,7 +579,11 @@ band, the scrolling page and the status line.
 {:else if scope === ManageSectionScope.Identity}
   <IdentityPageFrame
     {vault}
-    identityName={section === WorkspaceSection.Settings ? "" : identityName}
+    identityName={section === WorkspaceSection.Settings
+      ? ""
+      : section === WorkspaceSection.Passwords
+        ? `${identityName} / ${vaultLabel}`
+        : identityName}
     title={barTitle}
     testId={section}
     onBack={goBack}
