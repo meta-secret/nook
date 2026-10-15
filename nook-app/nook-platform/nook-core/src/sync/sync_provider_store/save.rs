@@ -123,22 +123,12 @@ impl ProviderSaveRequest {
         }
     }
 
-    /// `CloudKit` cannot list a namespace yet, and a browser-local folder
-    /// cannot carry an identity to another app, so both keep their vault at
-    /// the legacy root.
+    /// Only this browser's own store keeps no namespace; every remote row,
+    /// iCloud and local folders included, keeps each vault in its own.
     fn effective_layout(&self, provider_type: StorageProviderType) -> crate::ProviderRowLayout {
-        match (self.layout, provider_type, self.oauth_preset) {
-            (
-                crate::ProviderRowLayout::IdentityNamespaced,
-                StorageProviderType::OauthFile,
-                OAuthFilePreset::ICloud,
-            )
-            | (
-                crate::ProviderRowLayout::IdentityNamespaced,
-                StorageProviderType::Local | StorageProviderType::LocalFolder,
-                _,
-            ) => crate::ProviderRowLayout::LegacyVaultRoot,
-            (layout, _, _) => layout,
+        match provider_type {
+            StorageProviderType::Local => crate::ProviderRowLayout::LegacyVaultRoot,
+            _ => self.layout,
         }
     }
 
@@ -519,7 +509,7 @@ mod tests {
     }
 
     #[test]
-    fn local_folder_rows_keep_their_vault_at_the_legacy_root() -> Result<(), &'static str> {
+    fn local_folder_rows_keep_each_vault_in_its_own_namespace() -> Result<(), &'static str> {
         let mut request = ProviderSaveRequest::fixture(StorageProviderType::LocalFolder);
         request.local_folder = StoredLocalFolderConfiguration::Configured(LocalFolderConfigData {
             directory_name: StoredLocalFolderDirectory::DirectoryName("Nook Backup".to_owned()),
@@ -532,7 +522,22 @@ mod tests {
             .iter()
             .find(|row| row.provider_type == StorageProviderType::LocalFolder)
             .ok_or("expected a saved local folder row")?;
-        assert_eq!(row.layout, crate::ProviderRowLayout::LegacyVaultRoot);
+        assert_eq!(row.layout, crate::ProviderRowLayout::IdentityNamespaced);
+        Ok(())
+    }
+
+    #[test]
+    fn icloud_rows_keep_each_vault_in_its_own_namespace() -> Result<(), &'static str> {
+        let mut request = ProviderSaveRequest::fixture(StorageProviderType::OauthFile);
+        request.oauth_preset = OauthFilePreset::ICloud;
+        request.layout = crate::ProviderRowLayout::IdentityNamespaced;
+        let snapshot = request.apply().saved()?;
+        let row = snapshot
+            .providers
+            .iter()
+            .find(|row| row.provider_type == StorageProviderType::OauthFile)
+            .ok_or("expected a saved iCloud row")?;
+        assert_eq!(row.layout, crate::ProviderRowLayout::IdentityNamespaced);
         Ok(())
     }
 
