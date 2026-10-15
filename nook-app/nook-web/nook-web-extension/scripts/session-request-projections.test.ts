@@ -18,6 +18,11 @@ import {
   type CompanionIdentityDiscoverySessionTransportRequest,
   type CompanionIdentityHandoffSessionTransportRequest,
 } from '../src/offscreen/session-request-adapter'
+import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
+
+// The decoders call the companion WASM module; this file must not rely on
+// another test file having started it.
+await companionWasmReady
 
 describe('extension session request projections', () => {
   test('keeps generated companion values structural across offscreen delivery', async () => {

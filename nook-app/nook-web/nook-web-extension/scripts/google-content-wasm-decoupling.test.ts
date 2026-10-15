@@ -17,6 +17,19 @@ type RuntimeResponse = {
 class GoogleContentWasmDecouplingHarness {
   readonly fetchCalls: string[] = []
   private readonly originalFetch = globalThis.fetch
+  // The test preload installs a browser host; later files rely on it.
+  private readonly chromeDescriptor = Object.getOwnPropertyDescriptor(
+    globalThis,
+    'chrome',
+  )
+  private readonly locationDescriptor = Object.getOwnPropertyDescriptor(
+    globalThis,
+    'location',
+  )
+  private readonly simpleVaultUrlDescriptor = Object.getOwnPropertyDescriptor(
+    globalThis,
+    '__NOOK_SIMPLE_VAULT_URL__',
+  )
 
   install(): void {
     const response: RuntimeResponse = {
@@ -41,6 +54,7 @@ class GoogleContentWasmDecouplingHarness {
     Object.assign(globalThis, {
       chrome: { runtime },
       location: { origin: 'https://accounts.google.com' },
+      __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
       fetch: async (input: RequestInfo | URL): Promise<Response> => {
         this.fetchCalls.push(String(input))
         throw new Error('content companion WASM readiness rejected')
@@ -49,8 +63,19 @@ class GoogleContentWasmDecouplingHarness {
   }
 
   uninstall(): void {
-    Reflect.deleteProperty(globalThis, 'chrome')
-    Reflect.deleteProperty(globalThis, 'location')
+    if (this.chromeDescriptor)
+      Object.defineProperty(globalThis, 'chrome', this.chromeDescriptor)
+    else Reflect.deleteProperty(globalThis, 'chrome')
+    if (this.locationDescriptor)
+      Object.defineProperty(globalThis, 'location', this.locationDescriptor)
+    else Reflect.deleteProperty(globalThis, 'location')
+    if (this.simpleVaultUrlDescriptor)
+      Object.defineProperty(
+        globalThis,
+        '__NOOK_SIMPLE_VAULT_URL__',
+        this.simpleVaultUrlDescriptor,
+      )
+    else Reflect.deleteProperty(globalThis, '__NOOK_SIMPLE_VAULT_URL__')
     globalThis.fetch = this.originalFetch
   }
 }
