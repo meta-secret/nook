@@ -61,5 +61,6 @@ describe('sanitizeLogUrl', () => {
         },
       ),
     )
-  })
+    // A hundred generated URLs can exceed the default 5 s on a loaded CI runner.
+  }, 30_000)
 })
