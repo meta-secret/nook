@@ -778,8 +778,6 @@ pub const EXTENSION_CONSENT_GRANT_REJECTED: &str = "extension.consent.grant_reje
 pub const EXTENSION_CONSENT_HANDOFF_FAILED: &str = "extension.consent.handoff_failed";
 pub const EXTENSION_CONSENT_HANDOFF_FAILED_DETAIL: &str = "extension.consent.handoff_failed_detail";
 pub const EXTENSION_CONSENT_MESSAGING_UNAVAILABLE: &str = "extension.consent.messaging_unavailable";
-pub const EXTENSION_CONSENT_PLAINTEXT_PROVIDER_MIGRATION_REQUIRED: &str =
-    "extension.consent.plaintext_provider_migration_required";
 pub const EXTENSION_CONSENT_REQUESTED_ACCESS: &str = "extension.consent.requested_access";
 pub const EXTENSION_CONSENT_SCOPE_PASSKEY_MANAGEMENT: &str =
     "extension.consent.scope_passkey_management";

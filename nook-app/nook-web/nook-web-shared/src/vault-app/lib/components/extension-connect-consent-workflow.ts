@@ -50,7 +50,6 @@ export enum ExtensionConsentWorkflowFailureKind {
 export enum ExtensionConsentDeliveryOutcomeKind {
   Delivered = "delivered",
   MessagingUnavailable = "messaging-unavailable",
-  PlaintextProviderMigrationRequired = "plaintext-provider-migration-required",
   Rejected = "rejected",
 }
 
@@ -73,9 +72,6 @@ export type ExtensionConsentDeliveryOutcome =
     }
   | {
       readonly kind: ExtensionConsentDeliveryOutcomeKind.MessagingUnavailable;
-    }
-  | {
-      readonly kind: ExtensionConsentDeliveryOutcomeKind.PlaintextProviderMigrationRequired;
     }
   | {
       readonly kind: ExtensionConsentDeliveryOutcomeKind.Rejected;
@@ -247,10 +243,6 @@ function deliveryOutcome(
       };
     case ExtensionPairingDeliveryKind.MessagingUnavailable:
       return { kind: ExtensionConsentDeliveryOutcomeKind.MessagingUnavailable };
-    case ExtensionPairingDeliveryKind.PlaintextProviderMigrationRequired:
-      return {
-        kind: ExtensionConsentDeliveryOutcomeKind.PlaintextProviderMigrationRequired,
-      };
     case ExtensionPairingDeliveryKind.Rejected:
       return "reason" in value
         ? {
@@ -939,12 +931,6 @@ export class ExtensionConsentWorkflowPresentation {
         return {
           kind: ExtensionConsentWorkflowNoticeKind.Message,
           translationKey: I18N_KEYS.ExtensionConsentMessagingUnavailable,
-        };
-      case ExtensionConsentDeliveryOutcomeKind.PlaintextProviderMigrationRequired:
-        return {
-          kind: ExtensionConsentWorkflowNoticeKind.Message,
-          translationKey:
-            I18N_KEYS.ExtensionConsentPlaintextProviderMigrationRequired,
         };
       case ExtensionConsentDeliveryOutcomeKind.Rejected:
         return {

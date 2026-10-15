@@ -742,22 +742,6 @@ mod wasm_tests {
     }
 }
 
-#[wasm_bindgen]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
-pub fn compare_extension_pairing_records(
-    request: &tsify::Ts<nook_companion_core::ExtensionPairingRecordComparisonRequest>,
-) -> Result<tsify::Ts<nook_companion_core::ExtensionPairingRecordComparison>, wasm_bindgen::JsError>
-{
-    let request = request
-        .to_rust()
-        .map_err(|_| JsError::new("Typed WASM value could not be converted."))?;
-    let result = { request.compare() };
-    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
-}
-
 mod browser_material_admission;
 pub use browser_material_admission::*;
 

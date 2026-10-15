@@ -165,8 +165,6 @@ It is never shown as stored on one physical laptop.
     signing keys, and identity-owned DEK envelopes.
   - Validate the staged candidate even when the live directory still equals its
     base snapshot.
-  - Emit the legacy `stagedIdentity` projection for already-open tabs and reject
-    conflicting current and legacy staged state.
   - Make the marker durable before event creation and resume it after reload.
   - On verified connect, publish the staged directory and matching signing seed,
     then remove the marker in one compare-and-write transaction.
@@ -176,19 +174,13 @@ It is never shown as stored on one physical laptop.
   - Bind extension-first staged genesis to the live authorizer app key.
   - If no live authorizer exists, bind it to the handed-off app key.
   - Never derive staged ownership from another tab's persisted selection.
-- **Genesis event state:** Use `awaiting-event`, `legacy-event-pinned`, or
-  `event-pinned`.
-  - Let the current pinned variant own the complete signed `eventYaml`, an
+- **Genesis event state:** Use `awaiting-event` or `event-pinned`.
+  - Let the pinned variant own the complete signed `eventYaml`, an
     app-key-sealed `signingSeedEnvelope`, and staged-member signer envelopes
     before the first event-log write.
   - Let either staged member retry by opening and reusing that exact pair.
-- **Legacy marker compatibility:**
-  - Use the Unix epoch when `createdAt` is absent.
-  - Treat a missing `eventState` as `awaiting-event`.
-  - Migrate a preceding top-level `eventYaml`, or `event-pinned` without seed
-    material, to `legacy-event-pinned`.
-  - Upgrade only after verifying the durable seed against the event signer.
-  - Verify a legacy plaintext seed before sealing it.
+- **Strict marker decoding:** Reject a marker that lacks any current field or
+  carries an unknown event state; there is no upgrade path for older markers.
 - **Failed or imported genesis:**
   - Leave active identity state unchanged after failed extension-first creation.
   - Keep pre-event attempts staged.

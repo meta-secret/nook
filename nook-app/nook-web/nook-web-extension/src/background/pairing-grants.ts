@@ -1,14 +1,12 @@
 import { Effect } from 'effect'
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import {
-  compare_extension_pairing_records,
   create_extension_pairing_state,
   decode_extension_ready_setup_json,
   decode_stored_extension_pairing_grant_json,
   extension_pairing_grant_storage_key,
   extension_setup_after_pairing_grant_removal,
   first_extension_pairing_grant,
-  migrate_legacy_extension_pairing_state_json,
   ordered_extension_pairing_grants,
   refresh_extension_pairing_grant,
   selected_extension_pairing_grant,
@@ -39,20 +37,6 @@ export type ExtensionPairingItems = Record<
   string,
   ExtensionPairingState['entries'][number]['record']
 >
-export type LegacyPairingStorageValue =
-  | string
-  | number
-  | boolean
-  | LegacyPairingStorageObject
-  | LegacyPairingStorageValue[]
-export type LegacyPairingStorageObject = {
-  readonly [key: string]: LegacyPairingStorageValue
-}
-export type LegacyPairingStorageItems = Record<
-  string,
-  LegacyPairingStorageValue
->
-
 export type ExtensionSessionGrantIdentity = Pick<
   StoredExtensionPairingGrant,
   'vaultStoreId' | 'deviceId' | 'devicePublicKey' | 'deviceSigningPublicKey'
@@ -257,22 +241,7 @@ function firstStoredPairingGrant(
   return first_extension_pairing_grant(stateFromItems(stored))
 }
 
-function migratedLegacyPairingStorageItems(
-  legacy: LegacyPairingStorageItems,
-): ExtensionPairingItems {
-  const result = transportJson(legacy)
-  if (result.kind === TransportJsonResultKind.SerializationFailed) return {}
-  try {
-    return itemsFromState(
-      migrate_legacy_extension_pairing_state_json(result.json),
-    )
-  } catch {
-    return {}
-  }
-}
-
 export type ExtensionPairingGrantPolicy = {
-  compare_extension_pairing_records: typeof compare_extension_pairing_records
   pairingGrantStorageKey: typeof pairingGrantStorageKey
   decodeStoredExtensionPairingGrant: typeof decodeStoredExtensionPairingGrant
   decodeExtensionReadySetupState: typeof decodeExtensionReadySetupState
@@ -283,12 +252,10 @@ export type ExtensionPairingGrantPolicy = {
   selectedPairingGrantFirst: typeof selectedPairingGrantFirst
   selectedPairingGrant: typeof selectedPairingGrant
   firstStoredPairingGrant: typeof firstStoredPairingGrant
-  migratedLegacyPairingStorageItems: typeof migratedLegacyPairingStorageItems
 }
 
 export const extensionPairingGrantPolicyReady: Promise<ExtensionPairingGrantPolicy> =
   companionWasmReady.then(() => ({
-    compare_extension_pairing_records,
     pairingGrantStorageKey,
     decodeStoredExtensionPairingGrant,
     decodeExtensionReadySetupState,
@@ -299,5 +266,4 @@ export const extensionPairingGrantPolicyReady: Promise<ExtensionPairingGrantPoli
     selectedPairingGrantFirst,
     selectedPairingGrant,
     firstStoredPairingGrant,
-    migratedLegacyPairingStorageItems,
   }))

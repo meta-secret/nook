@@ -54,7 +54,7 @@ Team owner: development core.
 
 ### Extension Companion Domain: `nook-companion-core`
 
-- **Portable extension policy:** Owns authentication workflow, pairing records and migrations, host classification, and form-field classification.
+- **Portable extension policy:** Owns authentication workflow, pairing records, host classification, and form-field classification.
 - **Shared domain inputs:** Depends on `nook-authenticator-domain` and `nook-event-log` without importing browser APIs.
 - **Strict scope:** Chrome lifecycle, DOM observation, WASM adaptation, and presentation stay outside this crate.
 

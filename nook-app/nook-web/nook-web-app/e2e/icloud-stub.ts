@@ -27,8 +27,10 @@ export function createLocalE2eICloudVaultStub(
   /** The stub answers CloudKit's single location filter (EQUALS or
    * BEGINS_WITH), as the event store queries it. */
   function matchesFilter(location: string, query: Record<string, unknown>) {
-    const filters = Array.isArray(query.filterBy) ? query.filterBy : []
-    const [filter] = filters
+    const filters: unknown[] = Array.isArray(query.filterBy)
+      ? query.filterBy
+      : []
+    const filter: unknown = filters[0]
     if (typeof filter !== 'object' || Object(filter) !== filter) return true
     const condition = requireRecord(filter, 'CloudKit filter')
     const fieldValue =
@@ -163,14 +165,13 @@ export function createLocalE2eICloudVaultStub(
             request.postDataJSON(),
             'CloudKit modify request',
           )
-          const operations = body.operations
+          const operations: unknown = body.operations
           const operation: unknown = Array.isArray(operations)
             ? operations[0]
             : {}
-          const operationType =
+          const operationType: unknown =
             typeof operation === 'object' && Object(operation) === operation
-              ? Object.getOwnPropertyDescriptor(operation, 'operationType')
-                  ?.value
+              ? requireRecord(operation, 'CloudKit operation').operationType
               : ''
           if (operationType === 'forceDelete' && Array.isArray(operations)) {
             for (const deletion of operations) {

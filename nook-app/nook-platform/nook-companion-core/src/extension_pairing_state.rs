@@ -10,7 +10,6 @@ mod approval_timestamp;
 mod authority;
 mod default_vault;
 mod imported_event_log;
-mod legacy;
 mod value_types;
 
 pub use approval_timestamp::*;
@@ -123,30 +122,6 @@ pub enum ExtensionPairingRecord {
     Setup(ExtensionReadySetup),
 }
 
-/// Compare the typed records before deciding whether a legacy write is complete.
-#[derive(Debug, Deserialize, Serialize, Tsify)]
-pub struct ExtensionPairingRecordComparisonRequest {
-    pub current: ExtensionPairingRecord,
-    pub migrated: ExtensionPairingRecord,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Tsify)]
-pub enum ExtensionPairingRecordComparison {
-    Equivalent,
-    Different,
-}
-
-impl ExtensionPairingRecordComparisonRequest {
-    #[must_use]
-    pub fn compare(self) -> ExtensionPairingRecordComparison {
-        if self.current == self.migrated {
-            ExtensionPairingRecordComparison::Equivalent
-        } else {
-            ExtensionPairingRecordComparison::Different
-        }
-    }
-}
-
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct ExtensionPairingEntry {
@@ -188,8 +163,6 @@ pub enum ExtensionPairingStateError {
     ImportedVaultMismatch,
     #[error("imported event log does not grant this extension access")]
     ImportedAccessDenied,
-    #[error("legacy extension pairing state is invalid")]
-    InvalidLegacyState,
     #[error("the extension is not paired with that vault")]
     VaultNotPaired,
 }
@@ -550,39 +523,6 @@ mod tests {
     }
 
     #[test]
-    fn migration_completion_compares_grant_content_and_record_variants() {
-        let current = ExtensionPairingRecord::Grant(Fixture::grant());
-        assert_eq!(
-            ExtensionPairingRecordComparisonRequest {
-                current: current.clone(),
-                migrated: current.clone(),
-            }
-            .compare(),
-            ExtensionPairingRecordComparison::Equivalent
-        );
-        let mut changed = Fixture::grant();
-        changed.device_id = "another-device".to_owned();
-        assert_eq!(
-            ExtensionPairingRecordComparisonRequest {
-                current: current.clone(),
-                migrated: ExtensionPairingRecord::Grant(changed),
-            }
-            .compare(),
-            ExtensionPairingRecordComparison::Different
-        );
-        assert_eq!(
-            ExtensionPairingRecordComparisonRequest {
-                current,
-                migrated: ExtensionPairingRecord::Setup(ExtensionReadySetup::from_grant(
-                    &Fixture::grant()
-                )),
-            }
-            .compare(),
-            ExtensionPairingRecordComparison::Different
-        );
-    }
-
-    #[test]
     fn validates_grant_against_its_domain_key() -> anyhow::Result<()> {
         let mut entries = HashMap::new();
         entries.insert(
@@ -856,30 +796,24 @@ mod tests {
     }
 
     #[test]
-    fn persisted_iso_approval_time_decodes_and_reserializes_as_unix_milliseconds()
-    -> anyhow::Result<()> {
-        let expected_approval_time = Fixture::approved_at("1784937600000")?;
-        let legacy = ExtensionPairingApprovalEpochMilliseconds::from_legacy_date_to_iso_string(
-            "2026-07-25T00:00:00.000Z",
-        )?;
-        assert_eq!(legacy, expected_approval_time);
-
+    fn approval_time_is_stored_only_as_unix_milliseconds() -> anyhow::Result<()> {
         let mut expected = Fixture::grant();
-        expected.approved_at = legacy;
+        expected.approved_at = Fixture::approved_at("1784937600000")?;
         let canonical_json = serde_json::to_string(&expected)?;
-        let legacy_json = canonical_json.replace(
+        assert_eq!(
+            StoredExtensionPairingGrant::decode_json(&canonical_json)?,
+            expected
+        );
+
+        let iso_json = canonical_json.replace(
             r#""approvedAt":1784937600000"#,
             r#""approvedAt":"2026-07-25T00:00:00.000Z""#,
         );
-        assert_ne!(legacy_json, canonical_json);
-
-        let decoded = StoredExtensionPairingGrant::decode_json(&legacy_json)?;
-        assert_eq!(decoded, expected);
+        assert_ne!(iso_json, canonical_json);
         assert_eq!(
-            serde_json::to_string(&decoded.approved_at)?,
-            "1784937600000"
+            StoredExtensionPairingGrant::decode_json(&iso_json),
+            Err(ExtensionPairingStateError::InvalidGrant)
         );
-        assert_eq!(serde_json::to_string(&decoded)?, canonical_json);
         Ok(())
     }
 

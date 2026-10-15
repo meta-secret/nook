@@ -245,13 +245,6 @@ mod tests {
 
     wasm_bindgen_test_configure!(run_in_browser);
 
-    #[derive(serde::Deserialize)]
-    #[serde(rename_all = "camelCase")]
-    struct StagedGenesisCompatibilityWire {
-        flow: PendingSimpleGenesisFlow,
-        staged_identity: StagedSimpleGenesisIdentity,
-    }
-
     #[cfg_attr(
         dylint_lib = "nook_domain_api",
         expect(
@@ -284,14 +277,9 @@ mod tests {
         .await?;
 
         let encoded = pending.encode()?;
-        let wire: StagedGenesisCompatibilityWire = serde_json::from_str(&encoded)
+        let wire: serde_json::Value = serde_json::from_str(&encoded)
             .map_err(|error| NookError::Database(error.to_string()))?;
-        let PendingSimpleGenesisFlow::Staged(current_staged) = wire.flow else {
-            return Err(NookError::Database(
-                "Staged marker serialized as an ordinary flow.".to_owned(),
-            ));
-        };
-        assert_eq!(current_staged, wire.staged_identity);
+        assert!(wire.get("stagedIdentity").is_none());
         assert!(PendingSimpleGenesis::decode(&encoded)?.is_staged());
 
         assert!(

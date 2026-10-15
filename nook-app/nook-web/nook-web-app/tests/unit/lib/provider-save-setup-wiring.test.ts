@@ -106,14 +106,14 @@ describe('provider save setup wiring', () => {
     }
   })
 
-  test('keeps an existing schema-one Drive provider on its legacy reference', () => {
+  test('keeps an existing Drive provider on its resolved private folder', () => {
     const config: OAuthFileConfig = {
       ...defaultOAuthFileConfig({
         preset: 'google-drive',
         fileName: 'vault.yaml',
       }),
       accessToken: storedOAuthCredential('test-access-token'),
-      fileId: storedOAuthRemoteFileId('legacy-file-id'),
+      drivePrivateTarget: { state: 'folderId', value: 'stable-folder-id' },
     }
     const remoteReference = oauth_remote_storage_ref(config)
     const manager = new NookVaultManager()

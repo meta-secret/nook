@@ -226,9 +226,6 @@ Simple vault creation uses the following marker contract:
   - `flow` is explicitly `ordinary` or `staged`.
   - The staged flow carries the base directory and inactive candidate directory
     with identity-owned DEK envelopes.
-  - Writers also emit the legacy `stagedIdentity` projection for already-open
-    tabs.
-  - Reject conflicting current and legacy staged state.
 - Resume the same store and identity binding after a reload.
 - Block local identity creation and activation while a Simple or Sentinel
   genesis transition or local recovery cleanup remains pending.
@@ -236,21 +233,14 @@ Simple vault creation uses the following marker contract:
   connect completes.
   - An older tab cannot delete a newer genesis marker.
 - Let the marker own the genesis timestamp and complete signed event lifecycle.
-- Set `eventState` to `awaiting-event`, `legacy-event-pinned`, or
-  `event-pinned`.
-  - The current pinned variant owns the signed `eventYaml`, an app-key-sealed
+- Set `eventState` to `awaiting-event` or `event-pinned`.
+  - The pinned variant owns the signed `eventYaml`, an app-key-sealed
     `signingSeedEnvelope`, and staged-member signer envelopes before the first
     event-log write.
   - Either authorized staged member can resume the exact signer and event after
     a reload.
-- Decode legacy variants conservatively:
-  - A marker without `createdAt` uses the Unix epoch timestamp.
-  - A marker without `eventState` becomes `awaiting-event`.
-  - A preceding top-level `eventYaml`, or an `event-pinned` state without seed
-    material, becomes `legacy-event-pinned`.
-  - Upgrade that state only after the durable seed matches the pinned event
-    signer.
-  - Apply the same signer check before sealing a legacy plaintext seed.
+- Decode the marker strictly: a missing field or unknown event state is an
+  error, and older marker shapes are not upgraded.
 
 Destructive recovery clears identity ownership atomically while retaining a
 fail-closed ledger of retired app IDs. Tabs quiesce before recovery. Separate

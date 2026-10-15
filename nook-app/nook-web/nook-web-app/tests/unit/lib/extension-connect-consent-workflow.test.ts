@@ -239,20 +239,6 @@ describe('extension consent web workflow', () => {
       },
     },
     {
-      name: 'plaintext provider migration required',
-      delivery: {
-        kind: ExtensionPairingDeliveryKind.PlaintextProviderMigrationRequired,
-      },
-      outcome: {
-        kind: ExtensionConsentDeliveryOutcomeKind.PlaintextProviderMigrationRequired,
-      },
-      notice: {
-        kind: ExtensionConsentWorkflowNoticeKind.Message,
-        translationKey:
-          I18N_KEYS.ExtensionConsentPlaintextProviderMigrationRequired,
-      },
-    },
-    {
       name: 'rejected with its typed reason',
       delivery: {
         kind: ExtensionPairingDeliveryKind.Rejected,

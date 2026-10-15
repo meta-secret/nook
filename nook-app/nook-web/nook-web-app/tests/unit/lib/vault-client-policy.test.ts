@@ -25,6 +25,7 @@ import {
   defaultOAuthFileConfig,
   providerPersistenceDefaults,
   scopedProviderVault,
+  unscopedProviderVault,
   storedGithubPat,
   storedGithubRepository,
   type StorageProvider,
@@ -42,22 +43,20 @@ const providers: StorageProvider[] = [
   },
   {
     ...providerPersistenceDefaults(),
-    id: 'github-a',
+    id: 'github',
     type: 'github',
-    label: 'GitHub A',
-    githubPat: storedGithubPat('pat-a'),
-    githubRepo: storedGithubRepository('owner/a'),
-    storeId: scopedProviderVault('store-a'),
+    label: 'GitHub',
+    githubPat: storedGithubPat('pat'),
+    githubRepo: storedGithubRepository('owner/nook'),
+    storeId: unscopedProviderVault(),
     syncCheckpoint: { state: 'neverSynced' as const },
     createdAt: '2026-07-17T00:00:00.000Z',
   },
   {
     ...providerPersistenceDefaults(),
-    id: 'github-b',
-    type: 'github',
-    label: 'GitHub B',
-    githubPat: storedGithubPat('pat-b'),
-    githubRepo: storedGithubRepository('owner/b'),
+    id: 'local-b',
+    type: 'local',
+    label: 'This device',
     storeId: scopedProviderVault('store-b'),
     syncCheckpoint: { state: 'neverSynced' as const },
     createdAt: '2026-07-17T00:00:00.000Z',
@@ -149,24 +148,24 @@ describe('portable vault client policy', () => {
     }
   })
 
-  test('scopes providers and provider roles to the active vault', () => {
+  test('scopes local rows to the active vault and shares identity mounts', () => {
     const scope = NookManagerStoreScope.scoped('store-a')
     try {
       expect(
         active_vault_providers(snapshot, scope).providers.map(
           (provider) => provider.id,
         ),
-      ).toEqual(['local-a', 'github-a'])
+      ).toEqual(['local-a', 'github'])
       expect(
         sync_providers_for_active_vault(snapshot, scope).providers.map(
           (provider) => provider.id,
         ),
-      ).toEqual(['github-a'])
+      ).toEqual(['github'])
       expect(
         providers_visible_while_device_locked(snapshot).providers.map(
           (provider) => provider.id,
         ),
-      ).toEqual(['local-a'])
+      ).toEqual(['local-a', 'local-b'])
     } finally {
       scope.free()
     }

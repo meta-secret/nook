@@ -765,10 +765,6 @@ class ExtensionPairingIdentity {
     return this.pairingStorage.setPairingStorage(items)
   }
 
-  ensureLegacyPairingMigration(): Promise<void> {
-    return this.pairingStorage.ensureLegacyPairingMigration()
-  }
-
   async getPairingStorage(key?: string): Promise<ExtensionPairingItems> {
     return this.pairingStorage.getPairingStorage(key)
   }

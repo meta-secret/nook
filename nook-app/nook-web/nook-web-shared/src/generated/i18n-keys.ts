@@ -615,7 +615,6 @@ export const I18N_KEYS = {
   ExtensionConsentHandoffFailed: 'extension.consent.handoff_failed',
   ExtensionConsentHandoffFailedDetail: 'extension.consent.handoff_failed_detail',
   ExtensionConsentMessagingUnavailable: 'extension.consent.messaging_unavailable',
-  ExtensionConsentPlaintextProviderMigrationRequired: 'extension.consent.plaintext_provider_migration_required',
   ExtensionConsentRequestedAccess: 'extension.consent.requested_access',
   ExtensionConsentScopePasskeyManagement: 'extension.consent.scope_passkey_management',
   ExtensionConsentScopePasswordFilling: 'extension.consent.scope_password_filling',

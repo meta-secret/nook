@@ -119,7 +119,6 @@ type ReconcilePairingStorageArgs = {
 async function reconcilePairingStorage(
   args: ReconcilePairingStorageArgs,
 ): Promise<void> {
-  await extensionPairingIdentity.ensureLegacyPairingMigration()
   await backgroundVaultRuntime.reconcileExtensionPairingItems(args)
 }
 

@@ -21,7 +21,7 @@ import {
 function driveProvider(
   id: string,
   folderId: string,
-  includeLegacyPrivateTarget = !folderId,
+  includePendingPrivateTarget = !folderId,
 ): StorageProvider {
   const config = {
     ...defaultOAuthFileConfig({
@@ -33,7 +33,7 @@ function driveProvider(
       ? storedGoogleDriveFolder(folderId)
       : rootGoogleDriveFolder(),
     driveMode: folderId ? ('shared' as const) : ('private' as const),
-    ...(includeLegacyPrivateTarget
+    ...(includePendingPrivateTarget
       ? { drivePrivateTarget: { state: 'pending' as const } }
       : {}),
   }

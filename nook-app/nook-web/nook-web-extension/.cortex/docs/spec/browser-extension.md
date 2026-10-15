@@ -779,15 +779,9 @@ the field are admitted with an empty label.
 - **Extension metadata:** Keep non-secret grant and selected-vault status in
   WASM-managed extension-origin Rexie/IndexedDB.
   - Browser-vendor storage is not a vault persistence boundary.
-- **Legacy pairing migration:**
-  1. Read legacy `chrome.storage.local` pairing rows once.
-  2. Validate and copy the selected grant into Rexie.
-  3. Delete matching legacy setup and selected-grant rows.
-  - Quarantine unselected or incomplete rows while Rexie exists.
-  - They have no setup selector and cannot migrate independently.
-  - Retry failed cleanup when Rexie matches the completed migration.
-  - Remove quarantined rows when the user clears extension browser storage.
-  - Use Rexie only for ongoing pairing reads and writes.
+- **Pairing storage:** Read and write pairing records only through Rexie.
+  - Decode each record strictly; approval times are Unix milliseconds.
+  - `chrome.storage.local` never holds pairing rows.
 - **Extension-first creation:** `/extension-connect` may temporarily use the
   unlocked extension identity.
   1. The website creates a one-time age recipient whose private key remains in

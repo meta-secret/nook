@@ -339,7 +339,8 @@ export class IdentityControlModel {
       return err(mounts.error);
     }
     for (const provider of mounts.value) {
-      const removed = await this.deleteAtMount({ storeId, provider });
+      const deletion: MountVaultDeletion = { storeId, provider };
+      const removed = await this.deleteAtMount(deletion);
       if (removed.isErr()) {
         this.report(removed.error);
         return err(removed.error);

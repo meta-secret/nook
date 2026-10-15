@@ -271,19 +271,6 @@ pub fn decode_extension_ready_setup_json(
     Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
 }
 
-#[wasm_bindgen]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(unowned_function, reason = "FFI boundary: wasm-bindgen export")
-)]
-pub fn migrate_legacy_extension_pairing_state_json(
-    value: &str,
-) -> Result<tsify::Ts<nook_companion_core::ExtensionPairingState>, wasm_bindgen::JsError> {
-    let result = ExtensionPairingState::migrate_legacy_json(value)
-        .map_err(|error| JsError::new(&error.to_string()))?;
-    Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM value could not be converted."))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -412,10 +399,6 @@ mod tests {
             refreshed.setup_after_removal(&PairingVaultId::before_genesis_placeholder()),
             ExtensionSetupAfterRemoval::NoPairedVault
         ));
-        #[cfg(target_arch = "wasm32")]
-        assert!(migrate_legacy_extension_pairing_state_json("{").is_err());
-        #[cfg(not(target_arch = "wasm32"))]
-        assert!(ExtensionPairingState::migrate_legacy_json("{").is_err());
         Ok(())
     }
 

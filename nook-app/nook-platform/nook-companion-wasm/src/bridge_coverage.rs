@@ -13,8 +13,7 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     use nook_companion_core::VaultHostPolicy;
     use nook_companion_core::{
-        ExtensionEventCount, ExtensionPairingRecord, ExtensionPairingRecordComparison,
-        ExtensionPairingRecordComparisonRequest, ExtensionReadySetup, ExtensionReadySetupStatus,
+        ExtensionEventCount, ExtensionReadySetup, ExtensionReadySetupStatus,
         ExtensionSyncProviderCount,
     };
 
@@ -136,25 +135,6 @@ mod tests {
         let serialized = serde_json::to_string(&setup).map_err(|error| error.to_string())?;
         assert!(is_extension_ready_setup_json(&serialized));
         assert!(!is_extension_ready_setup_json("{}"));
-
-        assert_eq!(
-            (ExtensionPairingRecordComparisonRequest {
-                current: ExtensionPairingRecord::Setup(setup.clone()),
-                migrated: ExtensionPairingRecord::Setup(setup.clone()),
-            })
-            .compare(),
-            ExtensionPairingRecordComparison::Equivalent
-        );
-        let mut changed = setup.clone();
-        changed.selected_vault_name = "Work".to_owned();
-        assert_eq!(
-            (ExtensionPairingRecordComparisonRequest {
-                current: ExtensionPairingRecord::Setup(changed),
-                migrated: ExtensionPairingRecord::Setup(setup),
-            })
-            .compare(),
-            ExtensionPairingRecordComparison::Different
-        );
         Ok(())
     }
 }

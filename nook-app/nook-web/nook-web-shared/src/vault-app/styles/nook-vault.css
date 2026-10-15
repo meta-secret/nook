@@ -128,8 +128,8 @@
     background: var(--accent);
     color: var(--foreground);
   }
-  .nk-chip[aria-pressed='true'],
-  .nk-chip[aria-checked='true'] {
+  .nk-chip[aria-pressed="true"],
+  .nk-chip[aria-checked="true"] {
     border-color: var(--primary);
     background: var(--primary);
     color: var(--primary-foreground);
@@ -236,7 +236,7 @@
   .nk-vault-item:hover {
     background: color-mix(in oklch, var(--muted) 50%, var(--card));
   }
-  .nk-vault-item[aria-expanded='true'] {
+  .nk-vault-item[aria-expanded="true"] {
     background: var(--accent);
     box-shadow: inset 3px 0 0 var(--foreground);
   }
@@ -364,13 +364,13 @@
     height: 0.25rem;
     background: var(--muted);
   }
-  .nk-meter-segments i[data-on='true'] {
+  .nk-meter-segments i[data-on="true"] {
     background: color-mix(in oklch, var(--foreground) 70%, transparent);
   }
-  .nk-meter[data-level='fair'] .nk-meter-segments i[data-on='true'] {
+  .nk-meter[data-level="fair"] .nk-meter-segments i[data-on="true"] {
     background: var(--warning);
   }
-  .nk-meter[data-level='weak'] .nk-meter-segments i[data-on='true'] {
+  .nk-meter[data-level="weak"] .nk-meter-segments i[data-on="true"] {
     background: var(--destructive);
   }
   .nk-icon-btn {
@@ -484,13 +484,13 @@
     color: var(--muted-foreground);
   }
   .nk-chain-link::before {
-    content: '';
+    content: "";
     width: 1px;
     height: 1rem;
     background: color-mix(in oklch, var(--foreground) 35%, transparent);
   }
   .nk-chain-link::after {
-    content: '↓';
+    content: "↓";
     color: color-mix(in oklch, var(--foreground) 55%, transparent);
   }
   @media (width >= 56rem) {
@@ -506,7 +506,7 @@
       order: 1;
     }
     .nk-chain-link::after {
-      content: '→';
+      content: "→";
       order: 2;
       margin-top: -0.75rem;
       align-self: flex-end;
