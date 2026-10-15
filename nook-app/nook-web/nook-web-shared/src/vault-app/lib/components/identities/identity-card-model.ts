@@ -232,8 +232,13 @@ export class IdentityCardProjection {
     return this.owners.get(request.storeId) === request.identityId;
   }
 
+  /** The identity this browser uses leads; the others keep their order. */
   get cards(): IdentityCardView[] {
-    return this.source.identities.map((entry) => this.card(entry));
+    const cards = this.source.identities.map((entry) => this.card(entry));
+    return [
+      ...cards.filter((card) => card.current),
+      ...cards.filter((card) => !card.current),
+    ];
   }
 
   /** Local vaults no card lists: only when no identity is stored on this

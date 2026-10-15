@@ -164,6 +164,19 @@ describe('identity card projection', () => {
     expect(first?.hue).toBeLessThan(360)
   })
 
+  test('puts the identity this browser uses first, keeping the rest in order', () => {
+    const switched: IdentityCardSource = {
+      ...source(false),
+      identities: [work, elsewhere, personal],
+    }
+    const cards = new IdentityCardProjection(switched).cards
+    expect(cards.map((card) => card.label)).toEqual([
+      'Personal',
+      'Work',
+      'Family',
+    ])
+  })
+
   test('totals identities, keys, vaults, and unlocked identities', () => {
     expect(new IdentityCardProjection(source(true)).totals).toEqual({
       identities: 3,
