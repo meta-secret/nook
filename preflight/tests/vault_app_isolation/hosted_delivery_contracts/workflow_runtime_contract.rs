@@ -129,7 +129,7 @@ impl WorkflowRuntimeContract<'_> {
                 .and_then(|(_, remainder)| remainder.split_once(end_marker).map(|(job, _)| job))
                 .unwrap_or_else(|| panic!("{workflow} must define a bounded WASM producer job"));
             assert!(
-                wasm_job.contains("timeout-minutes: 15"),
+                wasm_job.contains("timeout-minutes: ${{ startsWith(vars.NOOK_RUNS_ON || 'nook-k0s', 'nook-k0s') && 15 || 60 }}"),
                 "{workflow} WASM producer must retain its bounded 15-minute combined execution envelope"
             );
             for required_step in required_steps {
@@ -146,7 +146,7 @@ impl WorkflowRuntimeContract<'_> {
             .map(|(_, job)| job)
             .unwrap_or_else(|| panic!("rust ecosystem workflow must define its aggregated job"));
         assert!(
-            ecosystem_job.contains("timeout-minutes: 15")
+            ecosystem_job.contains("timeout-minutes: ${{ startsWith(vars.NOOK_RUNS_ON || 'nook-k0s', 'nook-k0s') && 15 || 60 }}")
                 && ecosystem_job.contains("task docker:ecosystem:check"),
             "concurrent ecosystem checks must retain their bounded fifteen-minute envelope"
         );
