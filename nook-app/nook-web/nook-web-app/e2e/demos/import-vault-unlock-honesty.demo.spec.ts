@@ -4,6 +4,7 @@ import {
   addVaultPassword,
   clearBrowserVault,
   createLocalVaultOnLogin,
+  openVaultPage,
   UI_TIMEOUT_MS,
 } from '../helpers'
 
@@ -20,6 +21,7 @@ test('import-as-new-vault conflict and unlock honesty surface', async ({
   await page.reload()
   await createLocalVaultOnLogin(page, 'demo-local')
   await addVaultPassword(page, 'Recovery', 'demo-recovery-password')
+  await openVaultPage(page)
   await demoBeat(page)
 
   await page.evaluate(() => {

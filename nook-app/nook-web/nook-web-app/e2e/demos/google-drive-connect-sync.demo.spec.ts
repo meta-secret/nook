@@ -2,6 +2,8 @@ import { I18N_KEYS } from '../../../nook-web-shared/src/generated/i18n-keys'
 import type { Page } from '@playwright/test'
 import { expect, test } from '../fixtures'
 import {
+  ManagePage,
+  openManagePage,
   beginAddSyncProvider,
   clearBrowserVault,
   createLocalE2eGoogleDriveVaultStub,
@@ -71,8 +73,9 @@ test('Google Drive setup shows named New and legacy Existing targets behind the 
   await expect(vaultError).not.toContainText(/PAT/i)
   await demoBeat(page)
 
-  await page.getByTestId('cancel-provider-setup').click()
-  await page.getByTestId('cancel-add-provider-btn').click()
+  // Adding a provider is its own page: Back leaves it unsaved.
+  await page.getByTestId('identity-page-back').click()
+  await openManagePage(page, ManagePage.Sync)
   const existingLegacyTarget = {
     ...E2E_OAUTH_ONBOARD_PROVIDER,
     id: 'e2e-existing-legacy-drive-demo',

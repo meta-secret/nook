@@ -16,6 +16,7 @@ import {
   uniqueSecretKey,
   waitForVaultOperationsIdle,
   openVaultPage,
+  openUnlockedVault,
 } from '../helpers'
 import {
   installLocalFolderPickerMock,
@@ -106,6 +107,8 @@ test('offer PIN device protection when passkeys are unavailable', async ({
 
   await page.getByTestId('header-lock-vault-btn').click()
   await page.getByTestId('identity-vault-row').first().click()
+  // The vault's panel asks for the identity's PIN.
+  await page.getByTestId('vault-panel-unlock').click()
   await expect(
     page.getByTestId('device-protection-pin-unlock-btn'),
   ).toBeVisible({
@@ -115,6 +118,7 @@ test('offer PIN device protection when passkeys are unavailable', async ({
 
   await page.getByTestId('device-protection-pin-unlock-input').fill('123456')
   await page.getByTestId('device-protection-pin-unlock-btn').click()
+  await openUnlockedVault(page)
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })

@@ -35,7 +35,7 @@ test('the vault page holds items; the identity card manages the rest', async ({
   await page.getByTestId('identity-manage').first().click()
   const menu = page.getByTestId('identity-menu')
   await expect(menu).toBeVisible()
-  for (const item of ['add-device', 'sync', 'passwords']) {
+  for (const item of ['add-device', 'sync', 'vaults']) {
     await expect(page.getByTestId(`identity-menu-${item}`)).toBeVisible()
   }
   await page.waitForTimeout(DEMO_BEAT_MS)
