@@ -425,7 +425,8 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
         .map(|(job, _)| job)
         .context("remote workflow must keep the Pages preview compiler job")?;
     assert!(
-        pages_preview.contains("runs-on: nook-k0s-container"),
+        pages_preview
+            .contains("runs-on: ${{ vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container' }}"),
         "trusted Pages preview compiler job must remain on its containerized private ARC runner"
     );
     assert!(

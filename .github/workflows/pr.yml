@@ -25,7 +25,7 @@ permissions:
 jobs:
   validation:
     name: Verify and preview
-    runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && 'nook-k0s-container' || 'ubuntu-latest' }}
+    runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container') || 'ubuntu-latest' }}
     # Source-free Debian Trixie browser base, published only when tooling changes.
     # Configure an immutable digest; the scoped Actions token can read its repository package.
     container:
@@ -62,6 +62,14 @@ jobs:
           ref: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: false
+      # GitHub-hosted job containers (forks, and trusted PRs while ARC is in
+      # fallback) reach the runner's Docker socket through this client.
+      - name: Install Docker client in hosted job container
+        if: ${{ !startsWith(runner.name, 'nook-k0s-') }}
+        run: |
+          apt-get update
+          apt-get install --yes --no-install-recommends docker-cli
+          # Use the GitHub-hosted runner socket; do not start another daemon.
       - name: Connect trusted persistent BuildKit
         if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'
         uses: ./.github/actions/nook-docker-setup
@@ -81,12 +89,6 @@ jobs:
         uses: go-task/setup-task@v2
         with:
           version: 3.52.0
-      - name: Install Docker client in hosted job container
-        if: github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]'
-        run: |
-          apt-get update
-          apt-get install --yes --no-install-recommends docker.io
-          # Use the GitHub-hosted runner socket; do not start another daemon.
       - name: Connect secret-free hosted BuildKit
         if: github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]'
         uses: docker/setup-buildx-action@v4

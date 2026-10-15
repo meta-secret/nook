@@ -448,7 +448,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && web_verification_to_publish.contains("GHA_CACHE_WRITE_ENABLED: \"\"")
             && web_publish_section.contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
             && ui_demo.contains("needs: [web]")
-            && ui_demo.contains("runs-on: nook-k0s-container")
+            && ui_demo.contains("runs-on: ${{ vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container' }}")
             && ui_demo.contains("${{ needs.web.outputs.e2e_image_attempt }}")
             && ui_demo_verification.contains("task _web:test:ui-demo")
             && !ui_demo.contains("nook-docker-setup")
@@ -645,7 +645,7 @@ fn assert_main_split_pipeline(root: &Path) -> anyhow::Result<()> {
             && main.contains("task _ci:main:web:e2e-only")
             && main.contains("task _extension:test:e2e")
             && main.contains("task _web:test:ui-demo")
-            && main.matches("runs-on: nook-k0s-container").count() == 3
+            && main.matches("runs-on: ${{ vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container' }}").count() == 3
             && main.contains("nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
             && !main.contains("\n  wasm-cache-publish:\n")
             && main.contains("\n  wasm-cache-proof:\n")

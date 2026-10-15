@@ -196,7 +196,10 @@ fn k0s_jobs_and_cluster_entrypoints_never_control_nested_runtimes() -> Result<()
     }
 
     let remote_workflow = RepositoryFixture::repository_root().read(".github/workflows/remote.yml");
-    assert!(remote_workflow.contains("runs-on: nook-k0s-container"));
+    assert!(
+        remote_workflow
+            .contains("runs-on: ${{ vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container' }}")
+    );
     assert!(remote_workflow.contains("container:"));
     assert!(remote_workflow.contains("task _web:test:e2e"));
     assert!(remote_workflow.contains("task _extension:test:e2e"));

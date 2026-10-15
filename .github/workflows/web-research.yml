@@ -123,7 +123,7 @@ jobs:
   deploy:
     name: Build and deploy research catalog
     needs: image
-    runs-on: nook-k0s-container
+    runs-on: ${{ vars.NOOK_CONTAINER_RUNS_ON || 'nook-k0s-container' }}
     timeout-minutes: 10
     container:
       image: registry.dev.nokey.sh/nook/remote-buildcache/nook-web-research:run-${{ github.run_id }}-${{ github.run_attempt }}

@@ -218,7 +218,8 @@ export class SkillProviderWorkflowCommandsScenario {
     const runner = node['runs-on'];
     if (typeof runner !== 'string' || /windows/iu.test(runner)) return false;
     if (/^(?:ubuntu-|macos-|nook-k0s)/u.test(runner)) return 'bash';
-    return runner.includes('${{') && runner.includes('vars.NOOK_RUNS_ON')
+    return runner.includes('${{') &&
+      /vars\.NOOK_(?:CONTAINER_)?RUNS_ON/u.test(runner)
       ? 'bash'
       : false;
   }
