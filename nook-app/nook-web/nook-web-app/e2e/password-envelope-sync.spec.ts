@@ -1,5 +1,7 @@
 import { test, expect, type BrowserContext, type Page } from './fixtures'
 import {
+  beginAddSyncProvider,
+  openOnboardDevicePanel,
   addSecret,
   addVaultPassword,
   approveIdentityJoin,
@@ -29,8 +31,6 @@ import {
   readStringProperty,
   requireRecord,
   openVaultPage,
-  openManagePage,
-  ManagePage,
 } from './helpers'
 import {
   createSyncTarget,
@@ -103,7 +103,7 @@ test.describe('vault password envelope with sync provider', () => {
   test('device A issues an identity link without plaintext provider credentials', async () => {
     await openVaultPage(deviceA)
     await expect(deviceA.getByTestId('vault-panel')).toBeVisible()
-    await openManagePage(deviceA, ManagePage.Devices)
+    await openOnboardDevicePanel(deviceA)
     const linkInput = await submitOnboardEnrollmentCode(
       deviceA,
       E2E_IDENTITY_PASSPHRASE,
@@ -254,7 +254,7 @@ test.describe('vault password envelope with sync provider', () => {
 
     await openStorageSettings(deviceA)
     await expandSettingsSection(deviceA, 'storage')
-    await deviceA.getByTestId('add-provider-btn').first().click()
+    await beginAddSyncProvider(deviceA)
     await deviceA.getByTestId('provider-option-github').click()
     await deviceA.getByTestId('github-repo-input').fill('e2e-rejected-repo')
     await deviceA.getByTestId('github-pat-input').fill(fixtureToken)

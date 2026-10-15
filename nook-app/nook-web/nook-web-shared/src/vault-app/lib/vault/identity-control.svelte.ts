@@ -3,6 +3,7 @@ import type { OAuthFailure } from "$lib/auth/oauth-failure";
 import {
   NativeVaultStorageFailure,
   VaultStorageFailure,
+  VaultStorageFailureKind,
 } from "$lib/runtime/storage-failure";
 import {
   generate_password,
@@ -14,10 +15,23 @@ import {
   type PasswordGenerationOptions,
   type StorageProvider,
 } from "$app-wasm";
-import { unselectedVaultScope } from "$lib/auth/providers";
+import {
+  LocalFolderHandleKind,
+  LocalFolderPresentation,
+  LocalFolderProviderConfigurationKind,
+  StorageProviderPresentation,
+  unselectedVaultScope,
+} from "$lib/auth/providers";
+
+/** Named values required by `IdentityControl.deleteAtMount`. */
+type MountVaultDeletion = {
+  readonly storeId: string;
+  readonly provider: StorageProvider;
+};
 import { IdentityStandingPresentation } from "$lib/components/identity-control/identity-standing";
 import { browserLogRuntime } from "$lib/runtime/log";
 import type { VaultState } from "$lib/vault.svelte";
+import { I18N_KEYS } from "../../../generated/i18n-keys";
 
 const log = browserLogRuntime.createLogger("identity-control");
 
@@ -36,18 +50,6 @@ export type IdentityControlView =
   | {
       readonly kind: IdentityControlViewKind.Ready;
       readonly snapshot: IdentityControlSnapshot;
-    };
-
-export enum IdentityUpgradeKind {
-  NotNeeded = "not-needed",
-  AwaitingFounder = "awaiting-founder",
-}
-
-export type IdentityUpgrade =
-  | { readonly kind: IdentityUpgradeKind.NotNeeded }
-  | {
-      readonly kind: IdentityUpgradeKind.AwaitingFounder;
-      readonly storeIds: readonly string[];
     };
 
 export enum IdentityJoinKind {
@@ -85,7 +87,6 @@ const PASSPHRASE_OPTIONS: PasswordGenerationOptions = {
 /** Identity-level devices, onboarding, and sync-provider mounts. */
 export class IdentityControlModel {
   view = $state<IdentityControlView>({ kind: IdentityControlViewKind.Loading });
-  upgrade = $state<IdentityUpgrade>({ kind: IdentityUpgradeKind.NotNeeded });
   join = $state<IdentityJoin>({ kind: IdentityJoinKind.Idle });
   /** Remote provider rows that carry this identity's control log. */
   mounts = $state<StorageProvider[]>([]);
@@ -141,7 +142,7 @@ export class IdentityControlModel {
   /** Create or confirm the identity log, then project its current state. */
   async refresh(): Promise<Result<IdentityActionOutcome, VaultStorageFailure>> {
     const ensured = await this.withManager((manager) =>
-      manager.ensure_identity_control_log(false),
+      manager.ensure_identity_control_log(),
     );
     if (ensured.isErr()) {
       this.view = {
@@ -150,13 +151,6 @@ export class IdentityControlModel {
       };
       return err(ensured.error);
     }
-    this.upgrade =
-      ensured.value.state === "awaitingFounder"
-        ? {
-            kind: IdentityUpgradeKind.AwaitingFounder,
-            storeIds: ensured.value.storeIds,
-          }
-        : { kind: IdentityUpgradeKind.NotNeeded };
     return this.loadSnapshot();
   }
 
@@ -215,6 +209,48 @@ export class IdentityControlModel {
     }
     log.info("identity log synchronized with mounts");
     return this.loadSnapshot();
+  }
+
+  /** Delete a removed vault's files at one identity mount. A local folder
+   * this browser cannot open fails rather than being skipped. */
+  private async deleteAtMount({
+    storeId,
+    provider,
+  }: MountVaultDeletion): Promise<Result<boolean, VaultStorageFailure>> {
+    if (provider.type === "local-folder") {
+      const configuration = new StorageProviderPresentation(
+        provider,
+      ).localFolderProviderConfiguration();
+      if (configuration.kind === LocalFolderProviderConfigurationKind.Missing) {
+        return err(
+          new VaultStorageFailure(
+            VaultStorageFailureKind.LocalFolderUnavailable,
+          ),
+        );
+      }
+      const handle = new LocalFolderPresentation(
+        configuration.config,
+      ).localFolderHandle();
+      if (handle.kind !== LocalFolderHandleKind.Selected) {
+        return err(
+          new VaultStorageFailure(
+            VaultStorageFailureKind.LocalFolderUnavailable,
+          ),
+        );
+      }
+      return this.withManager((manager) =>
+        manager.delete_removed_vault_at_local_folder(storeId, handle.handleId),
+      );
+    }
+    const args = this.vault.providerWasmArgs(provider);
+    return this.withManager((manager) =>
+      manager.delete_removed_vault_at_provider(
+        storeId,
+        args.mode,
+        args.pat,
+        args.repo,
+      ),
+    );
   }
 
   private async syncOneMount(
@@ -281,6 +317,44 @@ export class IdentityControlModel {
     return this.act((manager) => manager.rename_identity_member(appId, label));
   }
 
+  /** Delete a vault from the identity on every device. The removal reaches
+   * the other devices through the identity mounts; this browser's copy goes
+   * at once. */
+  async deleteVaultEverywhere(
+    storeId: string,
+  ): Promise<Result<IdentityActionOutcome, VaultStorageFailure>> {
+    const deleted = await this.act((manager) =>
+      manager.delete_vault_everywhere(storeId),
+    );
+    if (deleted.isErr()) return deleted;
+    // The identity log now records the removal everywhere; the vault's
+    // encrypted files go from every mount too.
+    const mounts = await this.withManager(
+      async (manager) =>
+        (await manager.identity_replication_providers(this.providersSnapshot()))
+          .providers,
+    );
+    if (mounts.isErr()) {
+      this.report(mounts.error);
+      return err(mounts.error);
+    }
+    for (const provider of mounts.value) {
+      const deletion: MountVaultDeletion = { storeId, provider };
+      const removed = await this.deleteAtMount(deletion);
+      if (removed.isErr()) {
+        this.report(removed.error);
+        return err(removed.error);
+      }
+    }
+    const refreshed = await this.vault.refreshLocalVaultCatalog();
+    if (refreshed.isErr()) {
+      this.vault.errorMsg = this.vault.t(refreshed.error.translationKey);
+      return err(refreshed.error);
+    }
+    this.vault.showSuccess(this.vault.t(I18N_KEYS.ToastsVaultDeleted));
+    return deleted;
+  }
+
   /** Drop the identity mount of a provider row the user removed. */
   async unmount(
     provider: StorageProvider,
@@ -291,35 +365,6 @@ export class IdentityControlModel {
     );
     if (removed.isErr()) return err(removed.error);
     return removed.value ? this.syncWithMounts() : this.loadSnapshot();
-  }
-
-  /** Upgrade vaults that another app of this identity created, here. */
-  upgradeHere() {
-    return this.act(async (manager) => {
-      await manager.ensure_identity_control_log(true);
-      this.upgrade = { kind: IdentityUpgradeKind.NotNeeded };
-    });
-  }
-
-  /** Adopt the identity a provider publishes for this app key. */
-  async adoptFromProviders(): Promise<
-    Result<IdentityActionOutcome, VaultStorageFailure>
-  > {
-    for (const provider of this.vault.syncProviders) {
-      const args = this.vault.providerWasmArgs(provider);
-      const adopted = await this.withManager((manager) =>
-        manager.adopt_identity_from_provider(args.mode, args.pat, args.repo),
-      );
-      if (adopted.isErr()) {
-        this.report(adopted.error);
-        return err(adopted.error);
-      }
-      if (adopted.value.state === "adopted") {
-        this.upgrade = { kind: IdentityUpgradeKind.NotNeeded };
-        return this.syncWithMounts();
-      }
-    }
-    return this.refresh();
   }
 
   /** Bring the open vault in line with identity revocations and key epochs. */
@@ -349,33 +394,6 @@ export class IdentityControlModel {
     return this.reconcileOpenVault();
   }
 
-  /**
-   * Save provider rows with the layout the identity's mount records give
-   * their targets. A joined app saved its row before it could read the log.
-   */
-  async alignProviderRows(): Promise<
-    Result<IdentityActionOutcome, VaultStorageFailure>
-  > {
-    const providers = this.providersSnapshot();
-    const aligned = await this.withManager((manager) =>
-      manager.align_identity_provider_rows(providers),
-    );
-    if (aligned.isErr()) return err(aligned.error);
-    if (
-      JSON.stringify(aligned.value.providers) ===
-      JSON.stringify(providers.providers)
-    )
-      return ok(IdentityActionOutcome.Completed);
-    const persistence: Parameters<typeof this.vault.persistProviders>[0] = {
-      replace: true,
-      providers: aligned.value.providers,
-    };
-    const persisted = await this.vault.persistProviders(persistence);
-    if (persisted.isErr()) return err(persisted.error);
-    log.info("provider rows aligned with identity mounts");
-    return ok(IdentityActionOutcome.Completed);
-  }
-
   markJoinPending(identityLabel: string): void {
     this.join = { kind: IdentityJoinKind.Pending, identityLabel };
   }
@@ -398,8 +416,6 @@ export class IdentityControlModel {
   ): Promise<
     Result<IdentityActionOutcome, VaultStorageFailure | OAuthFailure>
   > {
-    const aligned = await this.alignProviderRows();
-    if (aligned.isErr()) return err(aligned.error);
     const providers = this.providersSnapshot();
     const row = await this.withManager(async (manager) =>
       manager.identity_vault_provider(providers, storeId),

@@ -180,17 +180,6 @@ pub enum IdentityMountTarget {
     },
 }
 
-/// How a mount lays out event logs at its target.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(tag = "layout", rename_all = "kebab-case")]
-pub enum ProviderMountLayout {
-    /// Identity log and every owned vault in their own namespaces.
-    Namespaced,
-    /// A migrated per-vault provider: its vault stays at the legacy root and
-    /// only the identity log uses a namespace.
-    LegacySingleVault { store_id: StoreId },
-}
-
 /// One sync-provider mount owned by an identity.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -198,7 +187,6 @@ pub struct IdentityProviderMount {
     pub mount_id: ProviderMountId,
     pub label: String,
     pub target: IdentityMountTarget,
-    pub layout: ProviderMountLayout,
 }
 
 /// Atomic operations recorded in the identity control log.
@@ -234,6 +222,11 @@ pub enum IdentityControlOperation {
         store_id: StoreId,
         key_epoch: EventId,
         recipients: Vec<MemberVaultDek>,
+    },
+    /// The vault is deleted from the identity everywhere. Permanent: later or
+    /// concurrent grants for the same store do not bring it back.
+    VaultRemoved {
+        store_id: StoreId,
     },
     ProviderMounted {
         mount: IdentityProviderMount,
@@ -421,6 +414,7 @@ impl IdentityEvent {
                 | IdentityControlOperation::MemberJoinDenied { .. }
                 | IdentityControlOperation::MemberRevoked { .. }
                 | IdentityControlOperation::MemberRenamed { .. }
+                | IdentityControlOperation::VaultRemoved { .. }
                 | IdentityControlOperation::ProviderMounted { .. }
                 | IdentityControlOperation::ProviderUnmounted { .. } => {}
             }

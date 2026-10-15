@@ -1,10 +1,9 @@
 import { expect, test } from './fixtures'
 import {
+  openIdentitiesPage,
   addSecret,
   createLocalVaultOnLogin,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  ManagePage,
-  openManagePage,
   reloadUnlockWithSyncProvider,
   uniqueSecretKey,
 } from './helpers'
@@ -25,13 +24,12 @@ test.describe('sync fan-out on save', () => {
     await expect(page.getByTestId('vault-sync-out-status')).toContainText(
       '1 sync provider',
     )
-    // With a copy kept, the identity's next step is a second device.
-    await openManagePage(page, ManagePage.Overview)
-    await expect(page.getByTestId('overview-count-sync')).toHaveText('1')
-    await expect(page.getByTestId('overview-next-step')).toHaveAttribute(
-      'data-next-step',
-      'AddDevice',
+    // With a copy kept, the identity's card asks for a second device.
+    await openIdentitiesPage(page)
+    await expect(page.getByTestId('identity-card-health')).toContainText(
+      'Only one device',
     )
+    await expect(page.getByTestId('identity-add-device')).toBeVisible()
   })
 
   test('triggers fan-out sync indicator after saving a secret', async ({

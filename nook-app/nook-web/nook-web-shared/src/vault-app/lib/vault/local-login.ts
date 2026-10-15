@@ -17,6 +17,7 @@ import {
   list_local_vaults,
   prepare_new_local_vault_slot,
   set_active_vault,
+  remove_local_vault,
   set_local_vault_label,
   set_vault_session_locked,
   NookVaultSwitchState,
@@ -700,6 +701,31 @@ export class VaultLoginActions {
       }
       state.isVerifying = false;
     }
+  }
+
+  /** Remove a vault from this browser only; its copies on sync providers
+   * and other devices stay. The engine refuses the active vault. */
+  async removeLocalVault({ storeId }: LoginVaultActionRequest): Promise<void> {
+    const state = this.state;
+    state.errorMsg = "";
+    state.dismissSuccess();
+    state.isVerifying = true;
+    try {
+      await remove_local_vault(storeId);
+    } catch (failure) {
+      state.errorMsg = state.t(
+        new NativeVaultStorageFailure(failure).translationKey,
+      );
+      return;
+    } finally {
+      state.isVerifying = false;
+    }
+    const refreshed = await this.refreshLocalVaultCatalog();
+    if (refreshed.isErr()) {
+      state.errorMsg = state.t(refreshed.error.translationKey);
+      return;
+    }
+    state.showSuccess(state.t(I18N_KEYS.ToastsVaultRemoved));
   }
 
   async syncActiveVaultStoreIdToAuth(): Promise<

@@ -217,6 +217,10 @@
       min-height: 16rem;
       align-content: center;
     }
+    /* Paging belongs to the list: it stays within the list column. */
+    .nk-vault-pagination {
+      max-width: 20rem;
+    }
   }
   .nk-vault-item {
     display: grid;

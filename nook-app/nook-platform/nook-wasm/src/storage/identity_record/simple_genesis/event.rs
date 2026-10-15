@@ -14,8 +14,7 @@ use crate::{IndexedDbUpdate, NookDatabase};
 use crate::{NookError, storage::indexed_db};
 use indexed_db::{StringUpdateGuard, StringUpdateResult};
 use nook_core::StoredSigningSeed;
-use nook_core::VaultEvent;
-use nook_core::{AgeArmoredCiphertext, AppKey, MemberDekEnvelope, SigningIdentity};
+use nook_core::{AgeArmoredCiphertext, AppKey, MemberDekEnvelope};
 use std::{cell::RefCell, rc::Rc};
 pub(crate) struct SimpleGenesisEventInput<'a> {
     pub(crate) app_key: &'a AppKey,
@@ -36,52 +35,7 @@ struct PreparedSimpleGenesisEvent {
     proposed_signing_seed_envelope: AgeArmoredCiphertext,
     proposed_member_signing_seed_envelopes: Vec<MemberDekEnvelope>,
 }
-struct GenesisEventSigner<'a> {
-    event_yaml: &'a str,
-    signing_seed: &'a str,
-}
-impl GenesisEventSigner<'_> {
-    fn validate(self) -> Result<(), NookError> {
-        let Self {
-            event_yaml,
-            signing_seed,
-        } = self;
-
-        let event = VaultEvent::parse_event_storage_bytes(&event_yaml.as_bytes().to_vec().into())?;
-        let signing = SigningIdentity::from_seed_hex_stored(signing_seed)?;
-        if event.body.actor_signing_public_key != signing.public_key() {
-            return Err(NookError::Database(
-                "Pinned Simple genesis event does not match the stored signing seed.".to_owned(),
-            ));
-        }
-        Ok(())
-    }
-}
 impl PendingSimpleGenesis {
-    pub(super) fn seal_legacy_signing_seed(&mut self, app_key: &AppKey) -> Result<(), NookError> {
-        let pending = self;
-        let PendingSimpleGenesisEvent::LegacyUnsealedEventPinned {
-            event_yaml,
-            signing_seed,
-        } = &pending.event_state
-        else {
-            return Ok(());
-        };
-        GenesisEventSigner {
-            event_yaml,
-            signing_seed,
-        }
-        .validate()?;
-        let signing_seed_envelope = app_key
-            .seal_utf8(signing_seed)
-            .map_err(|error| NookError::Database(error.to_string()))?;
-        pending.event_state = PendingSimpleGenesisEvent::EventPinned {
-            event_yaml: event_yaml.clone(),
-            signing_seed_envelope,
-            member_signing_seed_envelopes: Vec::new(),
-        };
-        Ok(())
-    }
     fn staged_signing_seed_envelopes(
         &self,
         signing_seed: &str,
@@ -218,23 +172,6 @@ impl PreparedSimpleGenesisEvent {
                             signing_seed: proposed_signing_seed.clone(),
                         }
                     }
-                    PendingSimpleGenesisEvent::LegacyEventPinned { event_yaml } => {
-                        GenesisEventSigner {
-                            event_yaml: &event_yaml,
-                            signing_seed: &proposed_signing_seed,
-                        }
-                        .validate()?;
-                        current.event_state = PendingSimpleGenesisEvent::EventPinned {
-                            event_yaml: event_yaml.clone(),
-                            signing_seed_envelope: proposed_signing_seed_envelope.clone(),
-                            member_signing_seed_envelopes: proposed_member_signing_seed_envelopes
-                                .clone(),
-                        };
-                        PinnedSimpleGenesisEvent {
-                            event_yaml: event_yaml.clone(),
-                            signing_seed: proposed_signing_seed.clone(),
-                        }
-                    }
                     PendingSimpleGenesisEvent::EventPinned {
                         event_yaml,
                         signing_seed_envelope,
@@ -250,11 +187,6 @@ impl PreparedSimpleGenesisEvent {
                             )
                             .map_err(|error| NookError::Database(error.to_string()))?,
                     },
-                    PendingSimpleGenesisEvent::LegacyUnsealedEventPinned { .. } => {
-                        return Err(NookError::IndexedDb(
-                            "Pending Simple genesis retained an unsealed signing seed.".to_owned(),
-                        ));
-                    }
                 };
                 *captured.borrow_mut() = Ok(pinned);
                 current.encode()
@@ -274,17 +206,13 @@ impl PreparedSimpleGenesisEvent {
 #[cfg(test)]
 mod tests {
     use super::{
-        NookError, PENDING_SIMPLE_GENESIS_KEY, PendingSimpleGenesis, PendingSimpleGenesisEvent,
-        SimpleGenesisEventInput,
+        NookError, PENDING_SIMPLE_GENESIS_KEY, PendingSimpleGenesis, SimpleGenesisEventInput,
     };
     use crate::storage::identity_record;
 
     use crate::{IdbPutStringRequest, NookDatabase, StoredStringRecord};
-    use identity_record::{OrdinarySimpleGenesisRequest, genesis_flow::PendingSimpleGenesisFlow};
-    use nook_core::{
-        AppKey, EventId, IdentityId, IsoTimestamp, SigningIdentity, VaultEvent,
-        VaultEventSchemaVersion,
-    };
+    use identity_record::OrdinarySimpleGenesisRequest;
+    use nook_core::{AppKey, IdentityId, IsoTimestamp};
     use wasm_bindgen_test::wasm_bindgen_test;
     #[cfg_attr(
         dylint_lib = "nook_domain_api",
@@ -330,71 +258,11 @@ mod tests {
         NookDatabase::clear_identity_directory_for_test().await
     }
 
-    #[wasm_bindgen_test]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            unowned_function,
-            reason = "framework boundary: wasm-bindgen-test callback"
-        )
-    )]
-    fn rejects_mismatched_plaintext_legacy_signing_seed() -> anyhow::Result<()> {
-        let app_key = AppKey::generate()?;
-        let (event_signing, _) = SigningIdentity::generate()?;
-        let (_, mismatched_seed) = SigningIdentity::generate()?;
-        let store_id = nook_core::StoreId::generate()?;
-        let event = VaultEvent::sign(
-            nook_core::VaultEventBody {
-                schema_version: VaultEventSchemaVersion::CURRENT,
-                store_id: store_id.clone(),
-                actor_id: event_signing.actor_id()?,
-                actor_signing_public_key: event_signing.public_key(),
-                parents: Vec::new(),
-                created_at: IsoTimestamp::parse("2026-08-14T00:00:00Z")?,
-                key_epoch: EventId::from_sha256_hex(
-                    nook_auth2::Sha256Hex::from_bytes(store_id.as_str().as_bytes()).as_str(),
-                )?,
-                operations: Vec::new(),
-            },
-            event_signing.signing_key(),
-        )?;
-        let event_yaml =
-            String::from_utf8(VaultEvent::serialize_event_storage_yaml(&event)?.into())?;
-        let mut pending = PendingSimpleGenesis {
-            store_id,
-            identity_id: IdentityId::generate()?,
-            created_at: IsoTimestamp::parse("2026-08-14T00:00:00Z")?,
-            event_state: PendingSimpleGenesisEvent::LegacyUnsealedEventPinned {
-                event_yaml,
-                signing_seed: mismatched_seed.as_str().to_owned(),
-            },
-            flow: PendingSimpleGenesisFlow::Ordinary,
-        };
-
-        PinningFixture::expect_signer_mismatch(pending.seal_legacy_signing_seed(&app_key))?;
-        assert!(matches!(
-            pending.event_state,
-            PendingSimpleGenesisEvent::LegacyUnsealedEventPinned { .. }
-        ));
-        Ok(())
-    }
     struct PinningFixture {
         app_key: AppKey,
         pending: PendingSimpleGenesis,
     }
     impl PinningFixture {
-        fn expect_signer_mismatch(result: Result<(), NookError>) -> anyhow::Result<()> {
-            match result {
-                Err(NookError::Database(message))
-                    if message
-                        == "Pinned Simple genesis event does not match the stored signing seed." =>
-                {
-                    Ok(())
-                }
-                Err(error) => anyhow::bail!("Unexpected signer validation error: {error}"),
-                Ok(()) => anyhow::bail!("Mismatched signer was accepted"),
-            }
-        }
         async fn new() -> Result<Self, NookError> {
             let app_key = AppKey::generate()?;
             let pending = OrdinarySimpleGenesisRequest {

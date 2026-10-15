@@ -79,7 +79,10 @@ export async function skipFirstRunBackup(
 /** The first vault opens after its setup steps; skip the backup offer. */
 export async function expectFirstVaultOpen(page: Page): Promise<void> {
   const vaultPanel = page.getByTestId('vault-panel')
-  await skipFirstRunBackup(page, vaultPanel)
+  // Unlocked beside its card, the vault opens from its panel.
+  const open = page.getByTestId('vault-panel-open')
+  await skipFirstRunBackup(page, vaultPanel.or(open).first())
+  if (await open.isVisible()) await open.click()
   await expect(vaultPanel).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })

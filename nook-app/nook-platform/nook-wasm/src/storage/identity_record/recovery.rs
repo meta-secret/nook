@@ -11,9 +11,7 @@ use crate::NookError;
 use crate::storage::identity_record::SimpleGenesisProgress;
 use crate::storage::{device_access, event_db, identity_record, indexed_db};
 use identity_record::simple_genesis;
-use identity_record::{
-    IdentityReconciliationStore, LEGACY_IDENTITY_RECORD_KEY, RETIRED_APP_IDS_KEY,
-};
+use identity_record::{IdentityReconciliationStore, RETIRED_APP_IDS_KEY};
 use rexie::{Store, Transaction, TransactionMode};
 mod cleanup;
 mod target;
@@ -179,14 +177,7 @@ impl RecoveryDeletion {
             clear_compatibility_profile,
         } = self;
         let mut keys = reconciliation_keys;
-        keys.extend([
-            LEGACY_IDENTITY_RECORD_KEY.to_owned(),
-            indexed_db::APP_KEY_WRAPPED_KEY.to_owned(),
-            indexed_db::APP_ID_KEY.to_owned(),
-            indexed_db::WRAPPED_DEVICE_IDENTITY_KEY.to_owned(),
-            indexed_db::DEVICE_ID_KEY.to_owned(),
-            event_db::SIGNING_SEED_KEY.to_owned(),
-        ]);
+        keys.push(event_db::SIGNING_SEED_KEY.to_owned());
         if clear_compatibility_profile {
             keys.push(device_access::DEVICE_ACCESS_PROFILE_KEY.to_owned());
         }
@@ -323,15 +314,7 @@ mod tests {
         .keys();
         assert_eq!(
             keys,
-            vec![
-                identity_record::LEGACY_IDENTITY_RECORD_KEY,
-                indexed_db::APP_KEY_WRAPPED_KEY,
-                indexed_db::APP_ID_KEY,
-                indexed_db::WRAPPED_DEVICE_IDENTITY_KEY,
-                indexed_db::DEVICE_ID_KEY,
-                event_db::SIGNING_SEED_KEY,
-                "selected-access-profile",
-            ]
+            vec![event_db::SIGNING_SEED_KEY, "selected-access-profile",]
         );
     }
 
@@ -365,11 +348,6 @@ mod tests {
             vec![
                 "pending_identity_reconciliation_v1:fixture",
                 "pending_identity_reconciliation_v2:fixture",
-                identity_record::LEGACY_IDENTITY_RECORD_KEY,
-                indexed_db::APP_KEY_WRAPPED_KEY,
-                indexed_db::APP_ID_KEY,
-                indexed_db::WRAPPED_DEVICE_IDENTITY_KEY,
-                indexed_db::DEVICE_ID_KEY,
                 event_db::SIGNING_SEED_KEY,
                 device_access::DEVICE_ACCESS_PROFILE_KEY,
                 simple_genesis::PENDING_SIMPLE_GENESIS_KEY,

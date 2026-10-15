@@ -601,7 +601,7 @@ test('keeps the extension vault independent and switches after valid re-pairing'
       )
       .first()
       .click()
-    await simplePage.getByTestId('manage-nav-settings').click()
+    await simplePage.getByTestId('overview-browser-settings').click()
     await simplePage.getByTestId('delete-local-vault-button').click()
     await simplePage.getByTestId('delete-local-vault-confirm').click()
 

@@ -4,6 +4,12 @@ import type { Connect } from "vite";
 import type { Plugin } from "vitest/config";
 import { shellForAlias } from "./shell-alias.ts";
 import { vaultAppHeaders } from "./src/vault-app/security-headers.ts";
+import {
+  VAULT_WORKSPACE_OUTPUT_ALIASES,
+  VAULT_WORKSPACE_SPA_PATHS,
+} from "./vault-workspace-paths.ts";
+
+export { VAULT_WORKSPACE_OUTPUT_ALIASES, VAULT_WORKSPACE_SPA_PATHS };
 
 export type VaultSpaOptions = {
   name: string;
@@ -11,27 +17,6 @@ export type VaultSpaOptions = {
   denyPath?: (pathname: string) => boolean;
   outputAliases: readonly string[];
 };
-
-export const VAULT_WORKSPACE_OUTPUT_ALIASES = [
-  "admin",
-  "devices-access",
-  "help",
-  "identities",
-  "identity",
-  "identity/devices",
-  "identity/keys",
-  "identity/passwords",
-  "identity/settings",
-  "identity/sync",
-  "identity/vaults",
-  "onboard",
-  "settings",
-  "vault",
-  "vault/devices",
-  "vault/import",
-  "vault/passwords",
-  "vault/sync",
-] as const;
 
 /** Copy the app shell to a route alias, creating nested route folders. */
 export function writeShellAlias(request: ShellAliasWrite): void {
@@ -49,10 +34,6 @@ export type ShellAliasWrite = {
   readonly outDir: string;
   readonly alias: string;
 };
-
-export const VAULT_WORKSPACE_SPA_PATHS = VAULT_WORKSPACE_OUTPUT_ALIASES.map(
-  (alias) => `/${alias}`,
-);
 
 export function vaultSpaPlugin(options: VaultSpaOptions): Plugin {
   const spaPaths = new Set(options.spaPaths);

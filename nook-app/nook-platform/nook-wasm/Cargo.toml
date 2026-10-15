@@ -58,6 +58,7 @@ zeroize = "1.9.0"
 anyhow = "1.0.104"
 futures-util = "0.3"
 wasm-bindgen-test = "0.3.77"
+web-sys = { version = "0.3.104", features = ["Request", "Response", "ResponseInit"] }
 
 [features]
 default = []

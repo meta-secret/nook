@@ -438,11 +438,13 @@ class ICloudOAuthSession {
       const rootRecordName = `nook-root-${suffix}`;
       const zones: CloudKitZoneID[] = [{ zoneName }];
       await database.saveRecordZones(zones);
+      // The share's root is a NookLogEvent outside every log: its location
+      // matches no vault or identity query.
       const record: CloudKitRecord = {
-        recordType: "NookVault",
+        recordType: "NookLogEvent",
         recordName: rootRecordName,
         createShortGUID: true,
-        fields: { content: { value: "" } },
+        fields: { location: { value: "share-root" }, content: { value: "" } },
       };
       const saveOptions: CloudKitRecordSaveOptions = { zoneID: zoneName };
       const saved = await database.saveRecords(record, saveOptions);

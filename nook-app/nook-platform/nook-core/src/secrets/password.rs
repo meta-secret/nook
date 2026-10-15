@@ -121,16 +121,11 @@ impl PasswordGeneration {
         getrandom::fill(&mut random).map_err(|e| PasswordError::RandomBytes(e.to_string()))?;
 
         let mut password = String::with_capacity(password_length);
-        for chunk in random.chunks_exact(4) {
+        for bytes in random.as_chunks::<4>().0 {
             if password.len() >= password_length {
                 break;
             }
-            let Some(bytes) = chunk.get(..4).and_then(|value| value.try_into().ok()) else {
-                return Err(PasswordError::RandomBytes(
-                    "random password word was incomplete".to_owned(),
-                ));
-            };
-            let n = u32::from_le_bytes(bytes) as usize;
+            let n = u32::from_le_bytes(*bytes) as usize;
             let idx = n % charset_bytes.len();
             let Some(character) = charset_bytes.get(idx).copied() else {
                 return Err(PasswordError::RandomBytes(

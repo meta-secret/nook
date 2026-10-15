@@ -54,6 +54,20 @@ export class ProviderConnectionActions {
     await state.loadDb();
   }
 
+  /** Recover this vault when the provider being imported holds several. */
+  chooseRemoteVault(storeId: string): Result<true, StorageOperationFailure> {
+    const state = this.state;
+    const admitted = state.admitManager();
+    if (admitted.isErr()) return storageErr(admitted.error);
+    try {
+      admitted.value.choose_remote_vault(storeId);
+    } catch (nativeFailure) {
+      return storageErr(new NativeVaultStorageFailure(nativeFailure));
+    }
+    state.remoteVaultChoices = [];
+    return storageOk(true);
+  }
+
   async discoverStagedVaultStoreId(): Promise<
     Result<string, StorageOperationFailure>
   > {
@@ -83,11 +97,15 @@ export class ProviderConnectionActions {
             const admitted = state.admitManager();
             if (admitted.isErr()) return storageErr(admitted.error);
             try {
-              admitted.value.reset_vault_session();
-              await admitted.value.sync_local_folder_provider_js(
-                handle.handleId,
+              const discovered =
+                await admitted.value.discover_backup_folder_vault(
+                  handle.handleId,
+                );
+              state.remoteVaultChoices =
+                discovered.state === "several" ? discovered.storeIds : [];
+              return storageOk(
+                discovered.state === "found" ? discovered.storeId : "",
               );
-              return storageOk(admitted.value.vaultStoreId.trim());
             } catch (nativeFailure) {
               return storageErr(new NativeVaultStorageFailure(nativeFailure));
             }
@@ -102,14 +120,15 @@ export class ProviderConnectionActions {
           const admitted = state.admitManager();
           if (admitted.isErr()) return storageErr(admitted.error);
           try {
+            const discovered = await admitted.value.discover_remote_vault(
+              args.mode,
+              args.pat,
+              args.repo,
+            );
+            state.remoteVaultChoices =
+              discovered.state === "several" ? discovered.storeIds : [];
             return storageOk(
-              (
-                await admitted.value.discover_remote_vault_store_id(
-                  args.mode,
-                  args.pat,
-                  args.repo,
-                )
-              ).trim(),
+              discovered.state === "found" ? discovered.storeId : "",
             );
           } catch (nativeFailure) {
             return storageErr(new NativeVaultStorageFailure(nativeFailure));

@@ -63,33 +63,29 @@ impl EnrollmentOAuthConfigurationRequest<'_> {
             ),
         };
         // A private Drive code carries its event folder as a connect
-        // reference. Without one, the issuer reads the legacy appData root,
-        // and the joiner must read the same root rather than a new folder.
-        let (file_id, drive_private_target) = match file_id {
+        // reference; without one the joiner resolves the folder by name.
+        let drive_private_target = match &file_id {
             StoredOAuthRemoteFileId::FileId(reference)
-                if reference == crate::DRIVE_PRIVATE_FOLDER_PENDING_REF =>
+                if reference != crate::DRIVE_PRIVATE_FOLDER_PENDING_REF =>
             {
-                (
-                    StoredOAuthRemoteFileId::Unresolved,
-                    StoredGoogleDrivePrivateTarget::Pending,
-                )
+                reference
+                    .strip_prefix(crate::DRIVE_PRIVATE_FOLDER_REF_PREFIX)
+                    .map_or(StoredGoogleDrivePrivateTarget::Pending, |folder_id| {
+                        StoredGoogleDrivePrivateTarget::FolderId(folder_id.to_owned())
+                    })
             }
-            StoredOAuthRemoteFileId::FileId(reference) => {
-                match reference.strip_prefix(crate::DRIVE_PRIVATE_FOLDER_REF_PREFIX) {
-                    Some(folder_id) => (
-                        StoredOAuthRemoteFileId::Unresolved,
-                        StoredGoogleDrivePrivateTarget::FolderId(folder_id.to_owned()),
-                    ),
-                    None => (
-                        StoredOAuthRemoteFileId::FileId(reference),
-                        StoredGoogleDrivePrivateTarget::LegacyAppDataFolder,
-                    ),
-                }
+            StoredOAuthRemoteFileId::FileId(_) | StoredOAuthRemoteFileId::Unresolved => {
+                StoredGoogleDrivePrivateTarget::Pending
             }
-            StoredOAuthRemoteFileId::Unresolved => (
-                StoredOAuthRemoteFileId::Unresolved,
-                StoredGoogleDrivePrivateTarget::LegacyAppDataFolder,
-            ),
+        };
+        // A folder reference is a target, not a file.
+        let file_id = match file_id {
+            StoredOAuthRemoteFileId::FileId(reference)
+                if reference.starts_with(crate::DRIVE_PRIVATE_FOLDER_REF_PREFIX) =>
+            {
+                StoredOAuthRemoteFileId::Unresolved
+            }
+            file_id => file_id,
         };
         if config.preset == OauthFilePreset::GoogleDrive {
             config.drive_private_target = drive_private_target;
@@ -149,14 +145,15 @@ mod tests {
             pending.drive_private_target,
             StoredGoogleDrivePrivateTarget::Pending
         );
-        let legacy = project("legacy-file-id")?;
+        // A reference that names no folder resolves the folder by name.
+        let unnamed = project("file-id")?;
         assert_eq!(
-            legacy.file_id,
-            StoredOAuthRemoteFileId::FileId("legacy-file-id".into())
+            unnamed.file_id,
+            StoredOAuthRemoteFileId::FileId("file-id".into())
         );
         assert_eq!(
-            legacy.drive_private_target,
-            StoredGoogleDrivePrivateTarget::LegacyAppDataFolder
+            unnamed.drive_private_target,
+            StoredGoogleDrivePrivateTarget::Pending
         );
         Ok(())
     }

@@ -83,6 +83,7 @@ function source(authenticated: boolean): IdentityCardSource {
       { storeId: 'store_a', label: 'Personal vault' },
       { storeId: 'store_b', label: 'Family photos' },
     ],
+    currentLogVaults: [],
     openStoreId: authenticated ? 'store_a' : '',
     authenticated,
     identityUnlocked: authenticated,
@@ -134,6 +135,25 @@ describe('identity card projection', () => {
     ])
   })
 
+  test('lists vaults the current identity log holds but this browser does not', () => {
+    const withLog: IdentityCardSource = {
+      ...source(true),
+      currentLogVaults: ['store_a', 'store_away'],
+    }
+    const [current, workCard] = new IdentityCardProjection(withLog).cards
+    expect(current?.vaults).toContainEqual({
+      storeId: 'store_away',
+      label: 'store_away',
+      state: IdentityVaultRowState.Unavailable,
+    })
+    expect(
+      current?.vaults.filter((row) => row.storeId === 'store_a'),
+    ).toHaveLength(1)
+    expect(workCard?.vaults.some((row) => row.storeId === 'store_away')).toBe(
+      false,
+    )
+  })
+
   test('never offers another identity vault for opening here', () => {
     const cards = new IdentityCardProjection(source(true)).cards
     expect(cards[1]?.vaults).toEqual([
@@ -164,6 +184,19 @@ describe('identity card projection', () => {
     expect(first?.hue).toBeLessThan(360)
   })
 
+  test('puts the identity this browser uses first, keeping the rest in order', () => {
+    const switched: IdentityCardSource = {
+      ...source(false),
+      identities: [work, elsewhere, personal],
+    }
+    const cards = new IdentityCardProjection(switched).cards
+    expect(cards.map((card) => card.label)).toEqual([
+      'Personal',
+      'Work',
+      'Family',
+    ])
+  })
+
   test('totals identities, keys, vaults, and unlocked identities', () => {
     expect(new IdentityCardProjection(source(true)).totals).toEqual({
       identities: 3,
@@ -187,6 +220,7 @@ describe('IdentityCardProjection vault ownership', () => {
         { storeId: 'store_w', label: 'Acme' },
         { storeId: 'store_new', label: 'Fresh' },
       ],
+      currentLogVaults: [],
       openStoreId: '',
       authenticated: false,
       identityUnlocked: false,
@@ -207,21 +241,70 @@ describe('IdentityCardProjection vault ownership', () => {
     expect(new Set(all).size).toBe(all.length)
   })
 
-  test('keeps local vaults openable when no identity is current here', () => {
+  test('puts a local vault no identity claims on the first identity stored here', () => {
     const noCurrent: IdentityCardSource = {
       identities: [work, elsewhere],
       localVaults: [
         { storeId: 'store_w', label: 'Acme' },
         { storeId: 'store_orphan', label: 'Orphan' },
       ],
+      currentLogVaults: [],
+      openStoreId: '',
+      authenticated: false,
+      identityUnlocked: false,
+    }
+    const projection = new IdentityCardProjection(noCurrent)
+
+    expect(projection.unlistedVaults).toEqual([])
+    // With no identity in use here, its vaults stay openable: unlocking one
+    // is how a lost identity key is recovered.
+    expect(projection.cards[0]?.vaults).toEqual([
+      {
+        storeId: 'store_w',
+        label: 'Acme',
+        state: IdentityVaultRowState.Available,
+      },
+      {
+        storeId: 'store_orphan',
+        label: 'Orphan',
+        state: IdentityVaultRowState.Available,
+      },
+    ])
+  })
+
+  test('lists local vaults apart only when no identity is stored here', () => {
+    const onlyElsewhere: IdentityCardSource = {
+      identities: [elsewhere],
+      localVaults: [{ storeId: 'store_orphan', label: 'Orphan' }],
+      currentLogVaults: [],
       openStoreId: '',
       authenticated: false,
       identityUnlocked: false,
     }
 
-    const unlisted = new IdentityCardProjection(noCurrent).unlistedVaults
+    const unlisted = new IdentityCardProjection(onlyElsewhere).unlistedVaults
 
     expect(unlisted.map((vault) => vault.storeId)).toEqual(['store_orphan'])
+  })
+
+  test('marks another identity vault stored here as opening through that identity', () => {
+    const storedHere: IdentityCardSource = {
+      ...source(true),
+      localVaults: [
+        ...source(true).localVaults,
+        { storeId: 'store_w', label: 'Acme' },
+      ],
+    }
+
+    const workCard = new IdentityCardProjection(storedHere).cards[1]
+
+    expect(workCard?.vaults).toEqual([
+      {
+        storeId: 'store_w',
+        label: 'Acme',
+        state: IdentityVaultRowState.Dormant,
+      },
+    ])
   })
 
   test('lists no stray vaults when the current identity holds them all', () => {
@@ -237,6 +320,7 @@ describe('IdentityCardProjection vault ownership', () => {
         },
       ],
       localVaults: [{ storeId: 'store_a', label: 'Personal vault' }],
+      currentLogVaults: [],
       openStoreId: '',
       authenticated: false,
       identityUnlocked: false,

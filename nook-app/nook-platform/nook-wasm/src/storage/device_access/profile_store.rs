@@ -3,19 +3,17 @@
     dylint_lib = "nook_domain_api",
     forbid(invalid_unowned_function_suppression)
 )]
-//! Identity-scoped persistence and legacy migration for device-access profiles.
+//! Identity-scoped persistence for device-access profiles.
 
 #[cfg(test)]
 use crate::IdbPutStringRequest;
 use crate::NookDatabase;
+use crate::StoredStringRecord;
 use crate::storage::identity_record::StoredIdentityProtection;
-use crate::{IndexedDbFallbackUpdate, IndexedDbMigration, NookError};
-use crate::{StoredStringRecord, StringRecordFallback};
+use crate::{IndexedDbUpdate, NookError};
 use nook_core::AppId;
 
-use super::{
-    DEVICE_ACCESS_PROFILE_KEY, DeviceAccessProfile, DeviceAccessProfileDecodeResult, migration,
-};
+use super::{DEVICE_ACCESS_PROFILE_KEY, DeviceAccessProfile, DeviceAccessProfileDecodeResult};
 use crate::storage::indexed_db::{StringUpdateGuard, StringUpdateResult};
 
 const DEVICE_ACCESS_PROFILE_VERSION_ERROR: &str =
@@ -38,20 +36,8 @@ pub(super) enum DeviceAccessProfileUpdateIntent {
 /// ```compile_fail,E0603
 /// use nook_wasm::storage::device_access::DeviceAccessProfileKey;
 /// ```
-enum LegacyProfileOwner {
-    NotAdoptable,
-    SoleProtectedIdentity(Box<nook_core::LocalIdentityKeyringEntry>),
-}
-
 pub(crate) struct DeviceAccessProfileKey {
     value: String,
-    legacy_owner: LegacyProfileOwner,
-}
-
-impl LegacyProfileOwner {
-    fn sole_protected_identity(entry: nook_core::LocalIdentityKeyringEntry) -> Self {
-        Self::SoleProtectedIdentity(Box::new(entry))
-    }
 }
 
 impl DeviceAccessProfileUpdate {
@@ -70,120 +56,59 @@ impl DeviceAccessProfileUpdate {
 }
 
 impl DeviceAccessProfileKey {
+    fn scoped(app_id: &AppId) -> Self {
+        Self {
+            value: format!("{DEVICE_ACCESS_PROFILE_KEY}:{app_id}"),
+        }
+    }
+
     pub(crate) async fn selected() -> Result<Self, NookError> {
-        let keyring = NookDatabase::load_keyring().await?;
-        let entry = NookDatabase::load_selected_entry().await?;
-        let StoredIdentityProtection::Protected(entry) = entry else {
-            return Ok(DeviceAccessProfileKey {
-                value: DEVICE_ACCESS_PROFILE_KEY.to_owned(),
-                legacy_owner: LegacyProfileOwner::NotAdoptable,
-            });
-        };
-        Ok(DeviceAccessProfileKey {
-            value: format!("{DEVICE_ACCESS_PROFILE_KEY}:{}", entry.app_id()),
-            legacy_owner: if keyring.entries().len() == 1 {
-                LegacyProfileOwner::sole_protected_identity(*entry)
-            } else {
-                LegacyProfileOwner::NotAdoptable
-            },
+        Ok(match NookDatabase::load_selected_entry().await? {
+            StoredIdentityProtection::Protected(entry) => Self::scoped(entry.app_id()),
+            StoredIdentityProtection::Unprotected => Self::companion(),
         })
     }
     pub(crate) async fn for_app_id(app_id: &str) -> Result<Self, NookError> {
         let app_id =
             AppId::parse(app_id).map_err(|error| NookError::Database(error.to_string()))?;
         let keyring = NookDatabase::load_keyring().await?;
-        let Some(entry) = keyring
+        if !keyring
             .entries()
             .iter()
-            .find(|entry| entry.app_id() == &app_id)
-        else {
+            .any(|entry| entry.app_id() == &app_id)
+        {
             return Err(NookError::Database(
                 "Device access profile has no protected local app key".to_owned(),
             ));
-        };
-        Ok(DeviceAccessProfileKey {
-            value: format!("{DEVICE_ACCESS_PROFILE_KEY}:{app_id}"),
-            legacy_owner: if keyring.entries().len() == 1 {
-                LegacyProfileOwner::sole_protected_identity(entry.clone())
-            } else {
-                LegacyProfileOwner::NotAdoptable
-            },
-        })
+        }
+        Ok(Self::scoped(&app_id))
     }
     pub(super) async fn for_verified_app_id(app_id: &str) -> Result<Self, NookError> {
         let app_id =
             AppId::parse(app_id).map_err(|error| NookError::Database(error.to_string()))?;
         let keyring = NookDatabase::load_keyring().await?;
-        if let Some(entry) = keyring
+        if keyring
             .entries()
             .iter()
-            .find(|entry| entry.app_id() == &app_id)
+            .any(|entry| entry.app_id() == &app_id)
         {
-            return Ok(DeviceAccessProfileKey {
-                value: format!("{DEVICE_ACCESS_PROFILE_KEY}:{app_id}"),
-                legacy_owner: if keyring.entries().len() == 1 {
-                    LegacyProfileOwner::sole_protected_identity(entry.clone())
-                } else {
-                    LegacyProfileOwner::NotAdoptable
-                },
-            });
+            return Ok(Self::scoped(&app_id));
         }
         // Verified companion and extension sessions can prove vault access without
-        // owning a wrapped local app key. Keep their evidence in the compatibility
+        // owning a wrapped local app key. Keep their evidence in the companion
         // profile used by those sessions.
-        Ok(DeviceAccessProfileKey {
-            value: DEVICE_ACCESS_PROFILE_KEY.to_owned(),
-            legacy_owner: LegacyProfileOwner::NotAdoptable,
-        })
+        Ok(Self::companion())
     }
     pub(crate) async fn load(self) -> Result<DeviceAccessProfile, NookError> {
-        let raw = match NookDatabase::idb_get_string(&self.value).await? {
-            StoredStringRecord::Stored(raw) => raw,
-            StoredStringRecord::MissingKey => {
-                let LegacyProfileOwner::SoleProtectedIdentity(owner) = &self.legacy_owner else {
-                    return Ok(DeviceAccessProfile::default());
-                };
-                match NookDatabase::idb_get_string(DEVICE_ACCESS_PROFILE_KEY).await? {
-                    StoredStringRecord::Stored(raw)
-                        if (LegacyProfileAdmission { owner }).accepts(&raw) =>
-                    {
-                        raw
-                    }
-                    StoredStringRecord::Stored(_) | StoredStringRecord::MissingKey => {
-                        return Ok(DeviceAccessProfile::default());
-                    }
-                }
-            }
+        let StoredStringRecord::Stored(raw) = NookDatabase::idb_get_string(&self.value).await?
+        else {
+            return Ok(DeviceAccessProfile::default());
         };
         Ok(match nook_core::DeviceAccessProfile::decode(&raw) {
             DeviceAccessProfileDecodeResult::Current(profile) => *profile,
             DeviceAccessProfileDecodeResult::RecoverableDefault
             | DeviceAccessProfileDecodeResult::FutureVersion => DeviceAccessProfile::default(),
         })
-    }
-    pub(crate) async fn migrate(self) -> Result<(), NookError> {
-        if self.value == DEVICE_ACCESS_PROFILE_KEY {
-            return Ok(());
-        }
-        let LegacyProfileOwner::SoleProtectedIdentity(entry) = self.legacy_owner else {
-            return Ok(());
-        };
-        NookDatabase::idb_migrate_string_if(IndexedDbMigration {
-            source_key: DEVICE_ACCESS_PROFILE_KEY,
-            target_key: &self.value,
-            can_migrate: move |legacy: &str| match nook_core::DeviceAccessProfile::decode(legacy) {
-                DeviceAccessProfileDecodeResult::Current(profile) => {
-                    migration::LegacyProfileMembership {
-                        profile: &profile,
-                        entry: &entry,
-                    }
-                    .matches()
-                }
-                DeviceAccessProfileDecodeResult::RecoverableDefault
-                | DeviceAccessProfileDecodeResult::FutureVersion => false,
-            },
-        })
-        .await
     }
     pub(super) async fn update<F>(
         self,
@@ -192,32 +117,18 @@ impl DeviceAccessProfileKey {
     where
         F: FnOnce(DeviceAccessProfile) -> Result<DeviceAccessProfile, NookError>,
     {
-        let fallback_key = match &self.legacy_owner {
-            LegacyProfileOwner::SoleProtectedIdentity(_) => {
-                StringRecordFallback::AdoptFrom(DEVICE_ACCESS_PROFILE_KEY)
-            }
-            LegacyProfileOwner::NotAdoptable => StringRecordFallback::Disabled,
-        };
-        let legacy_owner = self.legacy_owner;
-        NookDatabase::idb_update_string_with_fallback(IndexedDbFallbackUpdate {
+        NookDatabase::idb_update_string(IndexedDbUpdate {
             key: &self.value,
-            fallback_key,
             guard: mutation.guard,
-            can_adopt_fallback: move |raw: &str| match &legacy_owner {
-                LegacyProfileOwner::SoleProtectedIdentity(owner) => {
-                    LegacyProfileAdmission { owner }.accepts(raw)
-                }
-                LegacyProfileOwner::NotAdoptable => false,
-            },
             update: move |raw| mutation.apply(raw),
         })
         .await
     }
+    /// The profile of sessions that hold no protected local app key.
     #[must_use]
     pub(crate) fn companion() -> Self {
         Self {
             value: DEVICE_ACCESS_PROFILE_KEY.to_owned(),
-            legacy_owner: LegacyProfileOwner::NotAdoptable,
         }
     }
     #[cfg(test)]
@@ -272,26 +183,6 @@ where
         })
     }
 }
-struct LegacyProfileAdmission<'a> {
-    owner: &'a nook_core::LocalIdentityKeyringEntry,
-}
-impl LegacyProfileAdmission<'_> {
-    fn accepts(&self, raw: &str) -> bool {
-        let owner = self.owner;
-
-        match nook_core::DeviceAccessProfile::decode(raw) {
-            DeviceAccessProfileDecodeResult::Current(profile) => {
-                migration::LegacyProfileMembership {
-                    profile: &profile,
-                    entry: owner,
-                }
-                .matches()
-            }
-            DeviceAccessProfileDecodeResult::RecoverableDefault
-            | DeviceAccessProfileDecodeResult::FutureVersion => false,
-        }
-    }
-}
 impl DeviceAccessProfileUpdate {
     #[must_use]
     pub(super) fn observe(raw: &StoredStringRecord) -> Self {
@@ -315,85 +206,17 @@ impl DeviceAccessProfileUpdate {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::DEVICE_ACCESS_PROFILE_VERSION_ERROR;
-    use crate::{
-        IdbPutStringRequest, IndexedDbFallbackUpdate, NookDatabase, StoredStringRecord,
-        StringRecordFallback,
-    };
-    use nook_core::{AppKey, DeviceId, IdentityId, IsoTimestamp, LocalIdentityKeyringEntry};
+    use crate::{IdbPutStringRequest, NookDatabase, StoredStringRecord};
+    use nook_core::{AppKey, DeviceId, IsoTimestamp};
     use std::cell::Cell;
 
     use super::{
         DeviceAccessProfile, DeviceAccessProfileKey, DeviceAccessProfileMutation,
-        DeviceAccessProfileUpdateIntent, LegacyProfileAdmission, LegacyProfileOwner, NookError,
-        StringUpdateGuard, StringUpdateResult,
+        DeviceAccessProfileUpdateIntent, NookError, StringUpdateGuard, StringUpdateResult,
     };
-    use nook_core::DeviceIdentityProtection;
     use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 
     wasm_bindgen_test_configure!(run_in_browser);
-
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            unowned_function,
-            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
-        )
-    )]
-    #[wasm_bindgen_test]
-    async fn atomic_update_rechecks_legacy_profile_ownership() -> anyhow::Result<()> {
-        const SOURCE_KEY: &str = "test-device-access-legacy-owner";
-        const TARGET_KEY: &str = "test-device-access-scoped-owner";
-        let selected = AppKey::generate()?;
-        let companion = AppKey::generate()?;
-        let wrapped =
-            DeviceIdentityProtection::new(&selected.secret_string()).with_pin("selected-pin")?;
-        let owner = LocalIdentityKeyringEntry::legacy(
-            IdentityId::generate()?,
-            selected.app_id().clone(),
-            wrapped,
-        );
-        let mut companion_profile = DeviceAccessProfile::default();
-        companion_profile = companion_profile.record_verified_vault_access(
-            &DeviceId::parse(companion.app_id().as_str())?,
-            &nook_core::StoreId::generate()?,
-            IsoTimestamp::from_trusted("2026-08-25T01:00:00.000Z".to_owned()),
-        );
-        let companion_raw = serde_json::to_string(&companion_profile)?;
-        NookDatabase::idb_put_string(IdbPutStringRequest {
-            key: SOURCE_KEY,
-            value: &companion_raw,
-        })
-        .await?;
-        NookDatabase::idb_delete_key(TARGET_KEY).await?;
-
-        let result = NookDatabase::idb_update_string_with_fallback(IndexedDbFallbackUpdate {
-            key: TARGET_KEY,
-            fallback_key: StringRecordFallback::AdoptFrom(SOURCE_KEY),
-            guard: StringUpdateGuard::Unconditional,
-            can_adopt_fallback: move |raw: &str| {
-                LegacyProfileAdmission { owner: &owner }.accepts(raw)
-            },
-            update: |current| {
-                assert!(matches!(current, StoredStringRecord::MissingKey));
-                serde_json::to_string(&DeviceAccessProfile::default()).map_err(|error| {
-                    NookError::IndexedDb(format!("Test profile serialize error: {error}"))
-                })
-            },
-        })
-        .await?;
-
-        assert_eq!(result, StringUpdateResult::Applied);
-        assert_eq!(
-            NookDatabase::idb_get_string(SOURCE_KEY).await?,
-            StoredStringRecord::Stored((companion_raw.as_str()).to_owned())
-        );
-        assert!(matches!(
-            NookDatabase::idb_get_string(TARGET_KEY).await?,
-            StoredStringRecord::Stored(_)
-        ));
-        NookDatabase::idb_delete_keys(&[SOURCE_KEY, TARGET_KEY]).await?;
-        Ok(())
-    }
     struct ProfileMutationFixture {
         key: String,
     }
@@ -406,7 +229,6 @@ mod browser_tests {
         fn destination(&self) -> DeviceAccessProfileKey {
             DeviceAccessProfileKey {
                 value: self.key.clone(),
-                legacy_owner: LegacyProfileOwner::NotAdoptable,
             }
         }
         async fn read(&self) -> Result<StoredStringRecord, NookError> {

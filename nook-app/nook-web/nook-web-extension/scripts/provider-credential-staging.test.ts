@@ -45,7 +45,6 @@ class ProviderStagingFixture {
       oauthFile: { state: 'notApplicable' },
       localFolder: { state: 'notApplicable' },
       storeId: { state: 'unscoped' },
-      layout: 'legacyVaultRoot',
       syncCheckpoint: { state: 'neverSynced' },
       createdAt: '2026-06-24T00:00:00.000Z',
     }

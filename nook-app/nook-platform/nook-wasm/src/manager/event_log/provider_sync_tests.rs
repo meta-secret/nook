@@ -138,7 +138,7 @@ fn provider_classification_errors_include_the_provider_and_store_context() {
     assert!(matches!(
         multiple,
         NookError::Database(message)
-            if message == "Backup folder contains multiple vault event logs (store_id: store_first1234, store_second12). Use a dedicated provider path for one vault before syncing."
+            if message == "Backup folder holds several vaults (store_id: store_first1234, store_second12). Choose the vault to open."
     ));
 }
 
@@ -151,14 +151,16 @@ fn event_export_round_trips_content_addressed_records() -> anyhow::Result<()> {
         bytes,
     });
 
-    let records = NookVaultManager::export_event_records_from_store(&store)?;
+    let location =
+        nook_core::EventLogLocation::Vault(nook_core::StoreId::parse("store_abcdefghijk")?);
+    let records = NookVaultManager::export_event_records_from_store(&store, &location)?;
 
     assert_eq!(records.len(), 1);
     let record = records
         .first()
         .ok_or_else(|| anyhow::anyhow!("exported event record must be present"))?;
     assert_eq!(record.event_id, event_id.as_str());
-    assert_eq!(record.path, event_id.storage_path());
+    assert_eq!(record.path, location.event_path(&event_id));
     assert_eq!(record.event.id()?, event.id()?);
     Ok(())
 }
@@ -172,7 +174,9 @@ fn event_export_rejects_corrupt_local_bytes() -> anyhow::Result<()> {
         bytes: b"corrupt event bytes".to_vec().into(),
     });
 
-    assert!(NookVaultManager::export_event_records_from_store(&store).is_err());
+    let location =
+        nook_core::EventLogLocation::Vault(nook_core::StoreId::parse("store_abcdefghijk")?);
+    assert!(NookVaultManager::export_event_records_from_store(&store, &location).is_err());
     Ok(())
 }
 

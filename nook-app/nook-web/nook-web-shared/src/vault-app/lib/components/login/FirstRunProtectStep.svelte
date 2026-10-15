@@ -111,7 +111,6 @@ identity card the hub will show once setup finishes.
           card={preview}
           preview
           onOpenVault={() => {}}
-          onManage={() => {}}
         />
       </div>
     </figure>

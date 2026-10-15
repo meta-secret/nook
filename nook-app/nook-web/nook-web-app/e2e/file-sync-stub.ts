@@ -30,8 +30,9 @@ const VAULT_NAMESPACE_FOLDER_PREFIX = 'nook-vault-'
 const IDENTITY_NAMESPACE_FOLDER_PREFIX = 'nook-identity-'
 const NAMESPACE_LOOKUP_PATTERN =
   /^name = '((?:[^'\\]|\\.)*)' and mimeType = 'application\/vnd\.google-apps\.folder' and '((?:[^'\\]|\\.)*)' in parents and trashed = false$/
-const IDENTITY_LISTING_PATTERN =
-  /^name contains 'nook-identity-' and mimeType = 'application\/vnd\.google-apps\.folder' and '((?:[^'\\]|\\.)*)' in parents and trashed = false$/
+/** Listing every identity log or vault folder below one event parent. */
+const NAMESPACE_LISTING_PATTERN =
+  /^name contains '(nook-identity-|nook-vault-)' and mimeType = 'application\/vnd\.google-apps\.folder' and '((?:[^'\\]|\\.)*)' in parents and trashed = false$/
 const EVENT_PARENT_PATTERN = /'((?:[^'\\]|\\.)*)' in parents/
 const MULTIPART_PARENT_PATTERN = /"parents"\s*:\s*\[\s*"([^"]+)"/
 
@@ -220,6 +221,19 @@ export function createLocalE2eFileSyncVaultStub(
       }
     },
     getEventFileCount: () => vaultEventDigests().length,
+    /** Store ids of the vault folders on the provider, sorted. */
+    getVaultNamespaceIds: () =>
+      [
+        ...new Set(
+          namespaceFolders
+            .filter((folder) =>
+              folder.name.startsWith(VAULT_NAMESPACE_FOLDER_PREFIX),
+            )
+            .map((folder) =>
+              folder.name.slice(VAULT_NAMESPACE_FOLDER_PREFIX.length),
+            ),
+        ),
+      ].sort(),
     getIdentityEventFileCount: () =>
       namespaceFolders
         .filter((folder) =>
@@ -337,11 +351,12 @@ export function createLocalE2eFileSyncVaultStub(
           }
           const [query = ''] = new URL(fullUrl).searchParams.getAll('q')
           const namespaceLookup = query.match(NAMESPACE_LOOKUP_PATTERN)
-          const identityListing = query.match(IDENTITY_LISTING_PATTERN)
-          if (namespaceLookup || identityListing) {
+          const namespaceListing = query.match(NAMESPACE_LISTING_PATTERN)
+          if (namespaceLookup || namespaceListing) {
             const [, rawName = '', rawParent = ''] = namespaceLookup
               ? namespaceLookup
-              : ['', '', ((v) => (v ? v : ''))(identityListing?.[1])]
+              : ['', '', ((v) => (v ? v : ''))(namespaceListing?.[2])]
+            const listedPrefix = ((v) => (v ? v : ''))(namespaceListing?.[1])
             const name = unescapeDriveQueryValue(rawName)
             const parent = unescapeDriveQueryValue(rawParent)
             const files = namespaceFolders
@@ -350,7 +365,7 @@ export function createLocalE2eFileSyncVaultStub(
                   folder.parent === parent &&
                   (namespaceLookup
                     ? folder.name === name
-                    : folder.name.startsWith(IDENTITY_NAMESPACE_FOLDER_PREFIX)),
+                    : folder.name.startsWith(listedPrefix)),
               )
               .map(({ id, name: folderName, mimeType }) => ({
                 id,

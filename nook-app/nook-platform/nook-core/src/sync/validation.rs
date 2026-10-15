@@ -610,16 +610,13 @@ mod tests {
     }
 
     #[test]
-    fn drive_target_ref_keeps_legacy_root_and_namespaces_new_private_targets() -> anyhow::Result<()>
-    {
-        assert_eq!(
-            DriveStorageTargetRef::parse("")?,
-            DriveStorageTargetRef::LegacyAppDataFolder
-        );
-        assert_eq!(
-            DriveStorageTargetRef::parse("historical-file-id")?,
-            DriveStorageTargetRef::LegacyAppDataFolder
-        );
+    fn drive_target_refs_without_a_folder_resolve_the_private_folder() -> anyhow::Result<()> {
+        for unnamed in ["", "file-id"] {
+            assert_eq!(
+                DriveStorageTargetRef::parse(unnamed)?,
+                DriveStorageTargetRef::PendingPrivateFolder
+            );
+        }
         assert_eq!(
             DriveStorageTargetRef::parse(DRIVE_PRIVATE_FOLDER_PENDING_REF)?,
             DriveStorageTargetRef::PendingPrivateFolder
@@ -641,21 +638,7 @@ mod tests {
     }
 
     #[test]
-    fn drive_event_parent_parses_shared_folder_prefix() -> anyhow::Result<()> {
-        assert_eq!(
-            DriveEventParent::from_storage_id(""),
-            DriveEventParent::AppDataFolder
-        );
-        assert_eq!(
-            DriveEventParent::from_storage_id("legacy-file-id"),
-            DriveEventParent::AppDataFolder
-        );
-        assert_eq!(
-            DriveEventParent::from_storage_id("shared:folder-xyz"),
-            DriveEventParent::SharedFolder {
-                folder_id: "folder-xyz".to_owned(),
-            }
-        );
+    fn drive_event_parents_encode_their_target_prefix() -> anyhow::Result<()> {
         assert_eq!(
             DriveEventParent::SharedFolder {
                 folder_id: "folder-xyz".to_owned(),

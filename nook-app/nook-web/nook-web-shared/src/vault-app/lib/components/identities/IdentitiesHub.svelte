@@ -10,6 +10,7 @@ join) sit between the hero and the cards.
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import type { VaultState } from '$lib/vault.svelte'
   import { ActiveVaultKind } from '$lib/vault/state/provider.svelte'
+  import type { WorkspaceSection } from '$lib/vault/state/ui.svelte'
   import { IdentityDirectoryLoadKind } from '$lib/components/devices-access/identity-directory-view'
   import IdentitiesHero from './IdentitiesHero.svelte'
   import IdentityCard from './IdentityCard.svelte'
@@ -23,6 +24,7 @@ join) sit between the hero and the cards.
     VaultSetupHostKind,
     type VaultSetupHost,
     type IdentityCardSource,
+    type IdentitySectionTarget,
     type IdentityVaultTarget,
     type IdentityLocalVault,
   } from './identity-card-model'
@@ -41,9 +43,20 @@ join) sit between the hero and the cards.
     busy = false,
     onOpenVault,
     onNewVault = () => {},
-    onManage,
+    onSelectVault,
+    onUnlockVault,
+    onManageVault,
     onNewIdentity,
     onUseIdentity,
+    onCardsShown = () => {},
+    onClosePanels = () => {},
+    currentHealthNote = '',
+    onHealth = () => {},
+    onAddDevice,
+    addDevicePrompt = false,
+    onManageSection,
+    overview,
+    overviewOpen = false,
     onLock = () => {},
     onUnlock = () => {},
     pairingStatusFor = () => ({
@@ -55,6 +68,7 @@ join) sit between the hero and the cards.
     vaultSetup,
     vaultSetupOpen = false,
     vaultPicker,
+    accessPanel,
     children,
   }: {
     vault: VaultState
@@ -67,9 +81,35 @@ join) sit between the hero and the cards.
     busy?: boolean
     onOpenVault: (storeId: string) => void
     onNewVault?: () => void
-    onManage: (request: IdentityVaultTarget) => void
+    /** A vault opened beside its card; a locked browser selects it. */
+    onSelectVault?: (storeId: string) => void
+    /** Unlock a vault from its panel without going into it. */
+    onUnlockVault?: (storeId: string) => void
+    /** One of a vault's own pages, from its panel beside the card. */
+    onManageVault?: (target: IdentitySectionTarget) => void
     onNewIdentity: () => void
     onUseIdentity: (target: IdentityVaultTarget) => void
+    /** Whether identity cards are on screen; the login screen then leaves
+     * vault access to them instead of its own storage sheet. */
+    onCardsShown?: (shown: boolean) => void
+    /** Close what the page opened beside a card (New vault, an import)
+     * when another panel opens there. */
+    onClosePanels?: () => void
+    /** What the unlocked identity lacks, shown as a chip on its card. */
+    currentHealthNote?: string
+    /** Open the unlocked identity's control page at its next step. */
+    onHealth?: () => void
+    /** Open the add-device flow from the current identity's card; a locked
+     * identity unlocks on the way. */
+    onAddDevice?: (target: IdentityVaultTarget) => void
+    /** The current identity opens on one device only. */
+    addDevicePrompt?: boolean
+    /** Open one of the current identity's pages from Manage on its card. */
+    onManageSection?: (target: IdentitySectionTarget) => void
+    /** The current identity's overview, shown beside its card. */
+    overview?: Snippet
+    /** The current identity's overview is open. */
+    overviewOpen?: boolean
     onLock?: () => void
     /** Unlock a locked identity with this device's passkey. */
     onUnlock?: (target: IdentityVaultTarget) => void
@@ -89,6 +129,9 @@ join) sit between the hero and the cards.
     vaultSetupOpen?: boolean
     /** Plain vault list, shown only when no identity card lists the vaults. */
     vaultPicker?: Snippet
+    /** Storage setup or a restore from a sync provider, beside the current
+     * card. */
+    accessPanel?: Snippet
     children?: Snippet
   } = $props()
 
@@ -113,6 +156,20 @@ join) sit between the hero and the cards.
       return local
     }),
   )
+  /** Vaults the unlocked identity's log lists, stored here or not: read
+   * again whenever this browser's vault catalog changes. */
+  $effect(() => {
+    if (!vault.isAuthenticated) return
+    void vault.localVaults.length
+    void untrack(() => vault.identityControl.loadSnapshot())
+  })
+  const currentLogVaults = $derived.by((): string[] => {
+    const snapshot = vault.identityControl.snapshot
+    return vault.isAuthenticated && snapshot !== false
+      ? snapshot.vaults.map((entry) => entry.storeId)
+      : []
+  })
+
   const projection = $derived.by(() => {
     const source: IdentityCardSource = {
       identities:
@@ -120,6 +177,7 @@ join) sit between the hero and the cards.
           ? loader.state.view.identities
           : [],
       localVaults,
+      currentLogVaults,
       openStoreId:
         vault.activeVault.kind === ActiveVaultKind.Open
           ? vault.activeVault.storeId
@@ -140,7 +198,8 @@ join) sit between the hero and the cards.
       const opensSelected = card.vaults.some(
         (row) =>
           row.storeId === selectedStoreId &&
-          row.state !== IdentityVaultRowState.Unavailable,
+          (row.state === IdentityVaultRowState.Open ||
+            row.state === IdentityVaultRowState.Available),
       )
       if (opensSelected) return card.identityId
     }
@@ -170,11 +229,7 @@ join) sit between the hero and the cards.
   /** Local vaults no card lists (all of them when the directory cannot be
    * read): each still opens from its own row. */
   const strayVaults = $derived(
-    directoryFailed
-      ? localVaults
-      : cardsReady
-        ? projection.unlistedVaults
-        : [],
+    directoryFailed ? localVaults : cardsReady ? projection.unlistedVaults : [],
   )
   let setupHost = $state<VaultSetupHost>({ kind: VaultSetupHostKind.Pending })
   /** With several identities, the current one opens its first-vault setup
@@ -199,6 +254,9 @@ join) sit between the hero and the cards.
     if (loader.state.kind === IdentityDirectoryLoadKind.Loading) return
     const identityId = currentIdentityId()
     if (!identityId) {
+      // Between switching identities no card is current yet; the setup
+      // waits for the new current card rather than standing alone.
+      if (cardsReady && projection.cards.length > 0) return
       setupHost = { kind: VaultSetupHostKind.Draft }
       return
     }
@@ -243,7 +301,9 @@ join) sit between the hero and the cards.
   function targetFor(identityId: string): IdentityVaultTarget {
     const card = projection.cards.find((each) => each.identityId === identityId)
     const openable = (card ? card.vaults : []).filter(
-      (each) => each.state !== IdentityVaultRowState.Unavailable,
+      (each) =>
+        each.state === IdentityVaultRowState.Open ||
+        each.state === IdentityVaultRowState.Available,
     )
     const row = ((...[v = openable[0]]) => v)(
       openable.find((each) => each.storeId === selectedStoreId),
@@ -259,11 +319,19 @@ join) sit between the hero and the cards.
   const currentCardShown = $derived(
     cardsReady && showCards && projection.cards.some((card) => card.current),
   )
+  /** Identity cards are on screen; they, not a flat vault list, carry
+   * this browser's vaults. */
+  const cardsShown = $derived(
+    cardsReady && showCards && projection.cards.length > 0,
+  )
+  $effect(() => onCardsShown(cardsShown))
   const cardsListVaults = $derived(
     cardsReady &&
       projection.cards.some((card) =>
         card.vaults.some(
-          (row) => row.state !== IdentityVaultRowState.Unavailable,
+          (row) =>
+            row.state === IdentityVaultRowState.Open ||
+            row.state === IdentityVaultRowState.Available,
         ),
       ),
   )
@@ -310,14 +378,16 @@ join) sit between the hero and the cards.
   {/if}
 
   {#if vaultPicker}
-    {#if cardsListVaults}
-      <p
-        class="nk-banner px-4 py-3 text-sm text-foreground"
-        data-testid="login-choose-vault-hint"
-        role="status"
-      >
-        {vault.t(I18N_KEYS.LoginChooseVaultHint)}
-      </p>
+    {#if cardsShown}
+      {#if cardsListVaults}
+        <p
+          class="nk-banner px-4 py-3 text-sm text-foreground"
+          data-testid="login-choose-vault-hint"
+          role="status"
+        >
+          {vault.t(I18N_KEYS.LoginChooseVaultHint)}
+        </p>
+      {/if}
     {:else}
       <div class="nk-frame-sheet min-w-0 p-5 sm:p-6">
         {@render vaultPicker()}
@@ -403,19 +473,48 @@ join) sit between the hero and the cards.
             onNewVault={card.identityId === setupIdentityId
               ? () => (setupOpen = true)
               : onNewVault}
-            onManage={(identityId: string) => onManage(targetFor(identityId))}
             onUnlock={(identityId: string) => onUnlock(targetFor(identityId))}
             {onLock}
+            healthNote={card.current ? currentHealthNote : ''}
+            {onHealth}
+            {...onAddDevice
+              ? { onAddDevice: () => onAddDevice(targetFor(card.identityId)) }
+              : {}}
+            addDevicePrompt={card.current && addDevicePrompt}
+            overviewOpen={card.current && overviewOpen}
+            {...overview && overviewOpen && card.current
+              ? { overviewPanel: overview }
+              : {}}
+            {...onManageSection
+              ? {
+                  onManageSection: (section: WorkspaceSection) => {
+                    const target: IdentitySectionTarget = {
+                      ...targetFor(card.identityId),
+                      section,
+                    }
+                    onManageSection(target)
+                  },
+                }
+              : {}}
             onUseIdentity={(identityId: string) =>
               onUseIdentity(targetFor(identityId))}
             {pairingStatusFor}
-            {...vaultSetup && setupShown && card.identityId === setupIdentityId
-              ? { unlockPanel: vaultSetup }
-              : identityPrompt && card.current
-                ? { unlockPanel: identityPrompt }
-                : unlockPanel && card.identityId === unlockingIdentityId
-                  ? { unlockPanel }
-                  : {}}
+            {...onSelectVault ? { onSelectVault } : {}}
+            {...onUnlockVault ? { onUnlockVault } : {}}
+            {...onManageVault ? { onManageVault } : {}}
+            onClosePanels={() => {
+              setupOpen = false
+              onClosePanels()
+            }}
+            {...accessPanel && card.current
+              ? { unlockPanel: accessPanel }
+              : vaultSetup && setupShown && card.identityId === setupIdentityId
+                ? { unlockPanel: vaultSetup }
+                : identityPrompt && card.current
+                  ? { unlockPanel: identityPrompt }
+                  : unlockPanel && card.identityId === unlockingIdentityId
+                    ? { unlockPanel }
+                    : {}}
             {...passwordFallback &&
             card.identityId === passwordIdentityId &&
             !(setupShown && card.identityId === setupIdentityId)

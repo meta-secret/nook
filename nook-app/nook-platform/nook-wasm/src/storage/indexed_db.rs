@@ -28,10 +28,7 @@
 //!   not contain plaintext key material.
 mod atomic_string;
 mod device_identity;
-pub(crate) use atomic_string::{
-    IndexedDbFallbackUpdate, IndexedDbMigration, IndexedDbUpdate, StringRecordFallback,
-    StringUpdateGuard, StringUpdateResult,
-};
+pub(crate) use atomic_string::{IndexedDbUpdate, StringUpdateGuard, StringUpdateResult};
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 pub(crate) use nook_core::ActiveVaultScope;
 mod local_vault;
@@ -55,12 +52,6 @@ use serde::{Deserialize, Serialize};
 const ACTIVE_VAULT_KEY: &str = "active_vault_id";
 const VAULT_REGISTRY_KEY: &str = "vault_registry";
 const PENDING_NEW_LOCAL_VAULT_KEY: &str = "pending_new_local_vault";
-pub(crate) const APP_ID_KEY: &str = "app_id";
-pub(crate) const APP_KEY_WRAPPED_KEY: &str = "app_key_wrapped";
-/// Legacy dual-read key for [`APP_ID_KEY`].
-pub(crate) const DEVICE_ID_KEY: &str = "device_id";
-/// Legacy dual-read key for [`APP_KEY_WRAPPED_KEY`].
-pub(crate) const WRAPPED_DEVICE_IDENTITY_KEY: &str = "device_identity_wrapped";
 pub(crate) use sentinel_storage::{
     SENTINEL_GENESIS_FINALIZATION_PENDING_KEY, SentinelFinalizationJournal,
     StoredSentinelShareDelivery,
@@ -129,14 +120,6 @@ pub(crate) struct ReadStringRecordRequest<'a> {
 pub(crate) struct IdbPutStringRequest<'a> {
     pub(crate) key: &'a str,
     pub(crate) value: &'a str,
-}
-
-/// Named values required by `NookDatabase::read_string_preferring`.
-pub(crate) struct ReadStringPreferringRequest<'a> {
-    pub(crate) store: &'a rexie::Store,
-    pub(crate) preferred_key: &'a str,
-    pub(crate) legacy_key: &'a str,
-    pub(crate) label: &'a str,
 }
 
 impl NookDatabase {
@@ -340,34 +323,6 @@ impl NookDatabase {
     }
 }
 
-impl NookDatabase {
-    pub(crate) async fn read_string_preferring(
-        request: ReadStringPreferringRequest<'_>,
-    ) -> Result<StoredStringRecord, NookError> {
-        let ReadStringPreferringRequest {
-            store,
-            preferred_key,
-            legacy_key,
-            label,
-        } = request;
-        for key_name in [preferred_key, legacy_key] {
-            let key = serde_wasm_bindgen::to_value(key_name)
-                .map_err(|error| NookError::IndexedDb(format!("{label} key error: {error:?}")))?;
-            let value = store
-                .get(key)
-                .await
-                .map_err(|error| NookError::IndexedDb(format!("{label} read error: {error:?}")))?;
-            if let Some(value) = value.filter(|entry| !entry.is_undefined() && !entry.is_null()) {
-                let decoded: String = serde_wasm_bindgen::from_value(value).map_err(|error| {
-                    NookError::IndexedDb(format!("{label} decode error: {error:?}"))
-                })?;
-                return Ok(StoredStringRecord::Stored(decoded));
-            }
-        }
-        Ok(StoredStringRecord::MissingKey)
-    }
-}
-
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 pub(crate) use local_vault::SaveVaultBlobRequest;
 #[cfg(test)]
@@ -376,6 +331,8 @@ pub(crate) use local_vault::{
     ImportVaultBlobRequest, SaveSecretSearchCatalogBucketsRequest, SecretSearchBucketMutation,
     SetLocalVaultLabelRequest,
 };
+#[cfg(test)]
+pub(crate) use local_vault::{LocalVaultRemoval, RemoveRegistryEntryRequest};
 
 #[cfg(test)]
 pub(crate) use device_identity::SaveWrappedDeviceIdentityRequest;
@@ -386,8 +343,8 @@ pub(crate) use sentinel_storage::{
 
 #[cfg(test)]
 mod unit_tests {
-
     use super::*;
+    use nook_core::ActiveVaultScope;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
@@ -460,6 +417,75 @@ mod unit_tests {
         assert!(NookDatabase::store_id_from_yaml("not yaml").is_err());
         assert!(NookDatabase::label_from_yaml("not yaml").is_err());
         assert!(!NookDatabase::default_registry_label("store_registry01").is_empty());
+    }
+
+    fn registry_of(store_ids: &[&str]) -> VaultRegistry {
+        let mut registry = VaultRegistry::default();
+        for store_id in store_ids {
+            NookDatabase::upsert_registry_entry(UpsertRegistryEntryRequest {
+                registry: &mut registry,
+                store_id,
+                label: RegistryLabelUpdate::PreserveOrDefault,
+                touch_unlock: false,
+            });
+        }
+        registry
+    }
+
+    fn store_ids(registry: &VaultRegistry) -> Vec<&str> {
+        registry
+            .vaults
+            .iter()
+            .map(|entry| entry.store_id.as_str())
+            .collect()
+    }
+
+    #[wasm_bindgen_test]
+    fn removing_a_vault_drops_only_that_entry() {
+        let mut registry = registry_of(&["store_keep01", "store_drop01"]);
+        let outcome = NookDatabase::remove_registry_entry(RemoveRegistryEntryRequest {
+            registry: &mut registry,
+            store_id: "store_drop01",
+            active: &ActiveVaultScope::StoreId("store_keep01".to_owned()),
+        });
+        assert_eq!(outcome, LocalVaultRemoval::Removed);
+        assert_eq!(store_ids(&registry), vec!["store_keep01"]);
+    }
+
+    #[wasm_bindgen_test]
+    fn removing_the_active_vault_is_refused_and_keeps_the_registry() {
+        let mut registry = registry_of(&["store_open01", "store_other1"]);
+        let outcome = NookDatabase::remove_registry_entry(RemoveRegistryEntryRequest {
+            registry: &mut registry,
+            store_id: "store_open01",
+            active: &ActiveVaultScope::StoreId("store_open01".to_owned()),
+        });
+        assert_eq!(outcome, LocalVaultRemoval::Active);
+        assert_eq!(store_ids(&registry), vec!["store_open01", "store_other1"]);
+    }
+
+    #[wasm_bindgen_test]
+    fn removing_an_unknown_vault_is_refused() {
+        let mut registry = registry_of(&["store_keep01"]);
+        let outcome = NookDatabase::remove_registry_entry(RemoveRegistryEntryRequest {
+            registry: &mut registry,
+            store_id: "store_missing",
+            active: &ActiveVaultScope::Unselected,
+        });
+        assert_eq!(outcome, LocalVaultRemoval::NotRegistered);
+        assert_eq!(store_ids(&registry), vec!["store_keep01"]);
+    }
+
+    #[wasm_bindgen_test]
+    fn a_vault_can_be_removed_while_none_is_active() {
+        let mut registry = registry_of(&["store_drop01"]);
+        let outcome = NookDatabase::remove_registry_entry(RemoveRegistryEntryRequest {
+            registry: &mut registry,
+            store_id: "store_drop01",
+            active: &ActiveVaultScope::Unselected,
+        });
+        assert_eq!(outcome, LocalVaultRemoval::Removed);
+        assert!(registry.vaults.is_empty());
     }
 }
 
@@ -558,44 +584,6 @@ mod sentinel_genesis_storage_tests {
         .await
         .expect_err("out-of-range search bucket must fail closed");
         assert!(matches!(error, NookError::IndexedDb(message) if message.contains("out of range")));
-        Ok(())
-    }
-
-    #[wasm_bindgen_test]
-    async fn preferred_storage_value_wins_over_legacy_fallback() -> Result<(), wasm_bindgen::JsError>
-    {
-        let _ = Rexie::delete("nook_db").await;
-        NookDatabase::idb_put_string(IdbPutStringRequest {
-            key: "preferred",
-            value: "new-value",
-        })
-        .await?;
-        NookDatabase::idb_put_string(IdbPutStringRequest {
-            key: "legacy",
-            value: "old-value",
-        })
-        .await?;
-        let database = NookDatabase::open_nook_database().await?;
-        let transaction = database
-            .transaction(&["vault"], TransactionMode::ReadOnly)
-            .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
-        let store = transaction
-            .store("vault")
-            .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
-        assert_eq!(
-            NookDatabase::read_string_preferring(ReadStringPreferringRequest {
-                store: &store,
-                preferred_key: "preferred",
-                legacy_key: "legacy",
-                label: "fixture"
-            })
-            .await?,
-            StoredStringRecord::Stored("new-value".to_owned())
-        );
-        transaction
-            .done()
-            .await
-            .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
         Ok(())
     }
 

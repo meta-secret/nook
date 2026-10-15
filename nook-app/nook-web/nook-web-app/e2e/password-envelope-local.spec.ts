@@ -10,6 +10,7 @@ import {
   E2E_SYNC_ONBOARD_PROVIDER,
   approveIdentityJoin,
   issueIdentityEnrollmentCode,
+  keepVaultIdleLockDisabled,
   openVaultAfterIdentityApproval,
   redeemIdentityEnrollmentCode,
   expandSettingsSection,
@@ -66,7 +67,7 @@ test.describe('vault password envelope (local)', () => {
     await addVaultPassword(page, 'Primary password', 'correct-horse-1')
     await expectVaultPasswordStatus(page, 1, { timeout: UI_TIMEOUT_MS })
     await expect(page.getByTestId('app-success')).toContainText(
-      'Vault password set',
+      'Vault passphrase set',
       { timeout: UI_TIMEOUT_MS },
     )
 
@@ -77,7 +78,7 @@ test.describe('vault password envelope (local)', () => {
     await page.getByTestId('submit-vault-password').click()
     await expectVaultPasswordStatus(page, 1)
     await expect(page.getByTestId('app-success')).toContainText(
-      'password updated',
+      'passphrase updated',
       { timeout: UI_TIMEOUT_MS },
     )
 
@@ -86,7 +87,7 @@ test.describe('vault password envelope (local)', () => {
     await page.getByTestId('confirm-remove-vault-password').click()
     await expectNoVaultPasswords(page, { timeout: UI_TIMEOUT_MS })
     await expect(page.getByTestId('app-success')).toContainText(
-      'password removed',
+      'passphrase removed',
       { timeout: UI_TIMEOUT_MS },
     )
   })
@@ -99,6 +100,9 @@ test.describe('vault password envelope (local)', () => {
     await expectVaultPasswordStatus(page, 1, { timeout: UI_TIMEOUT_MS })
 
     await page.reload()
+    // This test is about passphrases, not the idle lock, which a slow
+    // unlock would otherwise race.
+    await keepVaultIdleLockDisabled(page)
     await unlockVaultOnLogin(page)
     await expect(page.getByTestId('vault-admin-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -112,7 +116,12 @@ test.describe('vault password envelope (local)', () => {
     await expect(page.getByTestId('login-gate')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await expect(page.getByTestId('card-password-unlock')).toBeVisible({
+    await expect(
+      page
+        .getByTestId('identity-vault-row')
+        .or(page.getByTestId('card-password-input'))
+        .first(),
+    ).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
     // Dismiss the join prompt — backup password is the recovery path here.
@@ -120,6 +129,7 @@ test.describe('vault password envelope (local)', () => {
     if (await joinClose.isVisible()) {
       await joinClose.click()
     }
+    await keepVaultIdleLockDisabled(page)
     await unlockVaultOnLogin(page, { password: 'reload-pass' })
     await expect(page.getByTestId('vault-admin-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,

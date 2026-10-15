@@ -8,11 +8,9 @@ use nook_core::LocalIdentityProtection;
 
 use crate::NookDatabase;
 use crate::NookError;
-use crate::storage::event_db;
 use nook_core::{IdentitySelection, LocalIdentityKeyring};
 use rexie::TransactionMode;
 
-mod legacy;
 mod protection;
 mod signing;
 
@@ -223,26 +221,12 @@ impl NookDatabase {
             StoredStringRecord::Stored(raw) => NookDatabase::decode_keyring(&raw)?,
             StoredStringRecord::MissingKey => LocalIdentityKeyring::empty(),
         };
-        let migrated = NookDatabase::migrate_legacy_active_key(LegacyIdentityKeyMigration {
-            store,
-            directory,
-            keyring,
-        })
-        .await?;
-        let keyring = migrated.keyring;
         NookDatabase::validate_keyring_directory_binding(
             KeyringDbValidateKeyringDirectoryBinding {
                 keyring: &keyring,
                 directory,
             },
         )?;
-        if matches!(migrated.state, legacy::LegacyKeyMigrationState::Migrated) {
-            NookDatabase::write_keyring(KeyringDbWriteKeyring {
-                store,
-                keyring: &keyring,
-            })
-            .await?;
-        }
         Ok(keyring)
     }
 }
@@ -311,23 +295,6 @@ impl NookDatabase {
             ))
         })?;
         Ok(entry)
-    }
-}
-
-impl NookDatabase {
-    pub(crate) async fn selected_legacy_signer_requires_authorization() -> Result<bool, NookError> {
-        let StoredIdentityProtection::Protected(entry) =
-            NookDatabase::load_selected_entry().await?
-        else {
-            return Ok(false);
-        };
-        if entry.has_signing_seed() {
-            return Ok(false);
-        }
-        Ok(matches!(
-            NookDatabase::idb_get_string(event_db::SIGNING_SEED_KEY).await?,
-            StoredStringRecord::Stored(_)
-        ))
     }
 }
 
@@ -459,8 +426,6 @@ impl NookDatabase {
         NookDatabase::idb_delete_key(LOCAL_IDENTITY_KEYRING_KEY).await
     }
 }
-
-pub(crate) use legacy::LegacyIdentityKeyMigration;
 
 /// Named values required by `NookDatabase::rebind_local_identity`.
 pub(crate) struct KeyringDbRebindLocalIdentity<'a> {

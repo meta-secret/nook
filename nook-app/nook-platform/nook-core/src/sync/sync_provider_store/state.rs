@@ -59,16 +59,15 @@ pub enum StoredGoogleDriveFolder {
     FolderId(String),
 }
 
-/// Private Google Drive event target for a schema-2 provider.
+/// Private Google Drive event folder of a provider.
 ///
-/// Schema-1 rows default to `LegacyAppDataFolder`, preserving their existing
-/// root event log. New private Drive providers use `Pending` until the adapter
-/// resolves or creates a named child folder, then persist its stable Drive ID.
+/// A private Drive provider uses `Pending` until the adapter resolves or
+/// creates its named child folder under appData, then persists the folder's
+/// stable Drive ID.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "value", rename_all = "camelCase")]
 pub enum StoredGoogleDrivePrivateTarget {
     #[default]
-    LegacyAppDataFolder,
     Pending,
     FolderId(String),
 }
@@ -111,19 +110,6 @@ pub enum StoredGithubRepository {
     #[default]
     DefaultRepository,
     Repository(String),
-}
-
-/// Remote layout of one provider row.
-///
-/// Rows saved before identity mounts keep their vault at the legacy event root
-/// named by `store_id`; nothing is moved remotely. Identity mounts namespace the
-/// identity control log and every vault the identity owns.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
-pub enum ProviderRowLayout {
-    #[default]
-    LegacyVaultRoot,
-    IdentityNamespaced,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]

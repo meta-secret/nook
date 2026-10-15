@@ -523,7 +523,9 @@ mod tests {
     fn select_matching_skips_unreadable_duplicate_and_keeps_valid_event() -> anyhow::Result<()> {
         let EventFixture(event_id, _, bytes) = EventFixture::new()?;
         let selected = DriveEventStore::select_matching_drive_event_bytes(DriveEventCandidates {
-            location: &EventLogLocation::LegacyVaultRoot,
+            location: &nook_core::EventLogLocation::Vault(nook_core::StoreId::parse(
+                "store_abcdefghijk",
+            )?),
             event_id: &event_id,
             candidates: [b"not yaml".to_vec(), Vec::new(), bytes.clone()],
         })?;
@@ -542,7 +544,9 @@ mod tests {
     fn select_matching_treats_all_unreadable_candidates_as_absent() -> anyhow::Result<()> {
         let EventFixture(event_id, _, _) = EventFixture::new()?;
         let selected = DriveEventStore::select_matching_drive_event_bytes(DriveEventCandidates {
-            location: &EventLogLocation::LegacyVaultRoot,
+            location: &nook_core::EventLogLocation::Vault(nook_core::StoreId::parse(
+                "store_abcdefghijk",
+            )?),
             event_id: &event_id,
             candidates: [b"not yaml".to_vec(), b"{bad:".to_vec()],
         })?;
@@ -561,7 +565,9 @@ mod tests {
     fn select_matching_accepts_identical_duplicates() -> anyhow::Result<()> {
         let EventFixture(event_id, _, bytes) = EventFixture::new()?;
         let selected = DriveEventStore::select_matching_drive_event_bytes(DriveEventCandidates {
-            location: &EventLogLocation::LegacyVaultRoot,
+            location: &nook_core::EventLogLocation::Vault(nook_core::StoreId::parse(
+                "store_abcdefghijk",
+            )?),
             event_id: &event_id,
             candidates: [bytes.clone(), bytes.clone()],
         })?;
@@ -582,7 +588,9 @@ mod tests {
         event.signature = Ed25519Signature::from_trusted(format!("ed25519:{}", "11".repeat(64)));
         let divergent = VaultEvent::serialize_event_storage_yaml(&event)?.into();
         let err = DriveEventStore::select_matching_drive_event_bytes(DriveEventCandidates {
-            location: &EventLogLocation::LegacyVaultRoot,
+            location: &nook_core::EventLogLocation::Vault(nook_core::StoreId::parse(
+                "store_abcdefghijk",
+            )?),
             event_id: &event_id,
             candidates: [bytes, divergent],
         })
@@ -608,7 +616,9 @@ mod tests {
         let EventFixture(other_id, _, other_bytes) = EventFixture::new()?;
         assert_ne!(event_id, other_id);
         let selected = DriveEventStore::select_matching_drive_event_bytes(DriveEventCandidates {
-            location: &EventLogLocation::LegacyVaultRoot,
+            location: &nook_core::EventLogLocation::Vault(nook_core::StoreId::parse(
+                "store_abcdefghijk",
+            )?),
             event_id: &event_id,
             candidates: [other_bytes],
         })?;
@@ -654,7 +664,9 @@ mod tests {
         let store = DriveEventStore {
             token: "",
             parent: &DriveEventParent::AppDataFolder,
-            location: &EventLogLocation::LegacyVaultRoot,
+            location: &nook_core::EventLogLocation::Vault(nook_core::StoreId::parse(
+                "store_abcdefghijk",
+            )?),
         };
         let Err(error) = store.put_drive_event_if_absent(&requested_id, &bytes).await else {
             anyhow::bail!("mismatched event id must fail before network");

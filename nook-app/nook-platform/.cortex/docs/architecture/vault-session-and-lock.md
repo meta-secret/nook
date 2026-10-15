@@ -257,11 +257,9 @@ When the user explicitly chooses **Unlock**:
 - **Login gate**
   - **Behavior:** Vault picker when >1 vault: open / create new / import from provider
 - **Sync providers**
-  - **Behavior:** Scoped to active vault `store_id`; full list in `nook_auth`
+  - **Behavior:** Mount the identity; each replicates every vault of it in that vault's own namespace
 - **Lock / switch**
   - **Behavior:** Clears session; vault chooser when multiple vaults exist
-- **`store_id` mismatch**
-  - **Behavior:** **Import as new vault** in sync conflict dialog
 
 Vault projection caches use `vault:{store_id}`. Code: `nook-app/nook-platform/nook-wasm/src/storage/indexed_db.rs`, `LoginVaultPicker.svelte`.
 
@@ -277,12 +275,11 @@ Vault projection caches use `vault:{store_id}`. Code: `nook-app/nook-platform/no
   - **Correct action:** Settings → Sync providers → Add GitHub / Drive
 - **Open a vault from elsewhere**
   - **Correct action:** Login → **Connect sync provider** or **Import as new vault**
-- **Local folder contains multiple vault logs**
-  - **Correct action:** Choose a dedicated folder for one vault; Nook shows the detected `store_id`s and refuses to sync until the provider path is unambiguous
+- **Provider or folder holds several vaults**
+  - **Correct action:** Login → connect it; Nook lists the vaults it holds and opens the one chosen
 
-If remote `store_id` differs from the active local `store_id`, sync
-reconciliation offers **import as new vault** or keeping one copy. Nook refuses
-to merge unrelated databases. See
+A second vault of the identity writes beside the first in its own namespace
+(`nook-log/v1/vaults/{store_id}/`); Nook never merges unrelated vaults. See
 [unified-vault.md](unified-vault.md).
 
 ---
@@ -294,7 +291,7 @@ to merge unrelated databases. See
 - **Login gate chooser**
   - **Purpose:** Vault picker, create local vault, or connect sync provider
 - **Settings → Sync providers**
-  - **Purpose:** Manage replica targets for the **active** vault only
+  - **Purpose:** Manage the identity's mounts; one the open vault's mode cannot use is marked unavailable for it
 - **Settings → Delete local vault data**
   - **Purpose:** Remove every Nook vault and credential persisted by this browser; remote replicas remain
 

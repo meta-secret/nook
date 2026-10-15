@@ -1,6 +1,7 @@
 //! Import a provider/local-folder event log as an additional local vault.
 
 use super::NookVaultManager;
+use super::provider_sync::VaultDiscovery;
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use crate::SaveVaultBlobRequest;
 use crate::VaultSnapshotLookup;
@@ -117,7 +118,7 @@ mod browser_tests {
 
 #[wasm_bindgen]
 impl NookVaultManager {
-    /// Copy a single-vault provider event log into local storage as its own vault.
+    /// Copy the vault a provider holds into local storage as its own vault.
     ///
     /// This is the safe recovery path when the active local vault and the provider
     /// have different `store_id`s: preserve the provider's append-only events
@@ -149,7 +150,7 @@ impl NookVaultManager {
         Ok(self.vault.store_id.clone())
     }
 
-    /// Copy a single-vault local-folder event log into local storage as its own vault.
+    /// Copy the vault a local folder holds into local storage as its own vault.
     #[wasm_bindgen]
     pub async fn import_local_folder_event_log_as_local_vault(
         &mut self,
@@ -158,11 +159,15 @@ impl NookVaultManager {
         let (prior_store_id, prior_blob_existed) =
             Self::snapshot_prior_local_vault(&self.vault.store_id).await?;
         self.reset_vault_session();
-        let remote_records = Self::read_external_local_folder_records(
-            handle_id,
-            &nook_core::EventLogLocation::LegacyVaultRoot,
-        )
-        .await?;
+        if self.discover_folder_vault(handle_id).await? != VaultDiscovery::Chosen {
+            return Err(NookError::Database(
+                "No vault event log was found in this backup folder.".to_owned(),
+            )
+            .into());
+        }
+        let remote_records =
+            Self::read_external_local_folder_records(handle_id, &self.current_vault_location()?)
+                .await?;
         let _ = self.sync_external_event_log_records(remote_records).await?;
         if self.vault.store_id.trim().is_empty() {
             return Err(NookError::Database(

@@ -98,8 +98,13 @@ test.describe('identities hub', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
 
-    // Manage on a locked identity unlocks it and opens its overview.
-    await current.getByTestId('identity-manage').click()
+    // Overview and Manage wait for the identity to be unlocked.
+    await expect(current.getByTestId('identity-overview-toggle')).toBeDisabled()
+    await current.getByTestId('identity-unlock').click()
+    await expect(current).toHaveAttribute('data-status', 'unlocked', {
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await current.getByTestId('identity-overview-toggle').click()
     await expect(page.getByTestId('identity-overview')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
@@ -128,6 +133,8 @@ test.describe('identities hub', () => {
     await expect(work).toHaveAttribute('data-status', 'unlocked')
     await expect(work.getByTestId('identity-card-keys')).toContainText('PIN')
     await expect(first).toHaveAttribute('data-status', 'inactive')
+    // An identity not in use offers only to switch to it.
+    await expect(first.getByTestId('identity-manage')).toHaveCount(0)
 
     // The first identity unlocks with its own passkey.
     await first.getByTestId('identity-use').click()
@@ -141,6 +148,10 @@ test.describe('identities hub', () => {
     await expect(work).toHaveAttribute('data-status', 'locked', {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    // Work has no vaults: its card carries New vault, not a storage sheet
+    // or a flat list of this browser's vaults.
+    await expect(page.getByTestId('login-access-sheet')).toHaveCount(0)
+    await expect(page.getByTestId('login-vault-picker')).toHaveCount(0)
     await work.getByTestId('identity-unlock').click()
     await work.getByTestId('card-pin-input').fill(WORK_PIN)
     await work.getByTestId('card-pin-submit').click()

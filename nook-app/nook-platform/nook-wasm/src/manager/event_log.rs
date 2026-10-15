@@ -17,6 +17,7 @@ mod extension_import;
 mod import_as_local;
 mod provider_io;
 mod provider_sync;
+pub(in crate::manager) use provider_sync::VaultDiscovery;
 mod provider_sync_export;
 mod records;
 mod security_epoch;

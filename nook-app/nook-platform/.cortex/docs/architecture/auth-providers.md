@@ -43,107 +43,76 @@ how provider transports relate independently to identities and vaults.
   - **Value:** `nook_auth`
 - **Object store**
   - **Value:** `auth`
-- **Identity key**
-  - **Value:** `providers:{app_id}`
-- **Rollback projection**
-  - **Value:** `providers`
+- **Key**
+  - **Value:** `providers:{app_id}` — one snapshot per local app key
 - **Value**
-  - **Value:** `{ providers: StorageProvider[], activeVaultStoreId?: string }`
-- **Schema markers**
-  - **Value:** `providers-schema:{app_id}` (`2`) and `providers-schema` (`1`)
+  - **Value:** `{ providers: StorageProvider[], activeVaultStoreId }`
 
-The persisted object is a structured-clone JS object (not a JSON string). Rust
-owns both contracts:
-
-- semantic enums are used in memory and exported through Tsify/`$app-wasm`;
-- the identity-scoped record uses schema 2, including the typed private Drive
-  target; and
-- `legacy_storage.rs` projects rollback-compatible rows to the schema-1
-  string-or-absent wire shape.
-
-The current identity-scoped row is schema 2. The singleton `providers` row is
-intentionally kept at schema 1 for the prior deployed build.
-
-- The app-scoped row is authoritative for the current build.
-- The singleton row remains readable by the prior deployed build.
-- Schema-1 private Drive configs migrate to
-  `drivePrivateTarget: legacyAppDataFolder`; migration preserves `fileId` and
-  keeps their event operations at the existing `appDataFolder` root.
-- New private Drive setup uses the Rust-owned `New(OauthFile)` setup kind to
-  project `pending` for its first remote assessment, even if the transient draft
-  was made from a legacy-shaped default. After folder resolution, the returned
-  child ID is saved in the schema-2 typed field. Such rows are omitted from the
-  schema-1 singleton projection because an old build would otherwise route them
-  back to the shared root. A rollback therefore hides these new providers until
-  schema 2 is restored; it does not rewrite their folder or event data.
-- A sole local identity refreshes both rows in one `nook_auth` transaction.
-- Equality with the app-scoped row proves ownership even when a projection has
-  no credential ciphertext to open.
-- Retiring an identity deletes the singleton row only when it still equals that
-  identity's app-scoped row; a competing singleton remains untouched.
-- Initial migration refreshes the rollback row after credentials are opened
-  and resealed successfully.
-- A competing singleton row is preserved and fails migration closed.
+The persisted object is a structured-clone JS object (not a JSON string) in the
+tagged shape the Rust types serialize. Rust owns the contract: semantic enums
+are used in memory and exported through Tsify/`$app-wasm`, and
+`AuthProvidersSnapshotData::from_storage` decodes the stored value. Nothing
+stored yet is an empty snapshot; any other shape is rejected rather than
+guessed at. There is no singleton record, rollback projection, or schema
+marker.
 
 The web layer **re-exports** the semantic types. It does **not** hand-author
 mirror interfaces.
 
-Any future incompatible persisted shape must:
+A future incompatible persisted shape must ship an explicit, documented
+forward migration in the same change. A domain-type refactor alone never
+authorizes a wire format change.
 
-- increment `providers-schema`;
-- ship an explicit forward migration; and
-- retain either a backward projection or a separate rollback-readable key until
-  the prior release is no longer a supported rollback target.
+### Rows and vaults
 
-The schema-2 Drive target migration is route selection only: it never moves,
-renames, or deletes historical appData event files.
-
-A domain-type refactor alone never authorizes a wire format change.
+- **Remote rows** (`github`, `oauth-file`, `local-folder`) are identity mounts:
+  each replicates the identity control log and every vault the identity owns,
+  each in its own namespace. Their `storeId` is `unscoped`.
+- **Browser rows** (`local`) hold one vault in this browser's own store and are
+  scoped to that vault's `storeId`.
 
 ### Wire fields (`StorageProvider`, camelCase)
 
 - **`id`, `type`, `label`, `createdAt`**
   - **Notes:** `type`: `local` \| `github` \| `oauth-file` \| `local-folder`
-- **`githubPat?`, `githubRepo?`**
+- **`githubPat`, `githubRepo`**
   - **Notes:** GitHub only — PAT sealed at rest
-- **`oauthFile?`**
+- **`oauthFile`**
   - **Notes:** Drive/iCloud block — see below
-- **`localFolder?`**
-  - **Notes:** File System Access directory handle metadata (`directoryName?`, `handleId?`)
-- **`storeId?`**
-  - **Notes:** Logical secret store (`store_{token}`) — see [secret-store-identity.md](../../../nook-core/.cortex/docs/architecture/secret-store-identity.md)
-  - **Notes:** For a legacy vault root row, the one vault stored at the root.
-- **`layout?`**
-  - **Notes:** `legacyVaultRoot` (default for earlier rows) or
-    `identityNamespaced`. See [identity-vault-architecture.md](identity-vault-architecture.md#mount-sync-providers-on-the-identity).
-- **`lastSyncedVersion?`, `lastSyncedAt?`, `lastSyncRevision?`, `lastCommonContentHash?`**
+- **`localFolder`**
+  - **Notes:** File System Access directory handle metadata (`directoryName`, `handleId`)
+- **`storeId`**
+  - **Notes:** The vault a browser row holds (`store_{token}`); `unscoped` for
+    identity mounts. See [secret-store-identity.md](../../../nook-core/.cortex/docs/architecture/secret-store-identity.md)
+- **`syncCheckpoint`**
   - **Notes:** Sync bookkeeping
 
 ### Wire fields (`oauthFile`)
 
 - **`preset`**
   - **Notes:** `google-drive` \| `icloud`
-- **`accessToken`, `refreshToken?`**
+- **`accessToken`, `refreshToken`**
   - **Notes:** Sealed at rest
-- **`expiresAt?`, `fileId?`, `fileName?`, `accountEmail?`**
-  - **Notes:** Non-secret metadata
-- **`driveMode?`, `folderId?`**
-  - **Notes:** Google Drive private/shared; absent legacy rows migrate
-- **`drivePrivateTarget?`**
-  - **Notes:** Schema-2 private Drive routing: `legacyAppDataFolder`, `pending`,
-    or `folderId`. Missing schema-1 fields normalize to the legacy root.
-- **`iCloudMode?`, `iCloudShareTarget?`**
+- **`expiresAt`, `fileId`, `fileName`, `accountEmail`**
+  - **Notes:** Non-secret metadata; `fileName` names a private Drive folder
+- **`driveMode`, `folderId`**
+  - **Notes:** Google Drive private/shared
+- **`drivePrivateTarget`**
+  - **Notes:** Private Drive folder: `pending` until resolved, then
+    `folderId`. A private Drive provider always routes through its own child
+    folder under appData.
+- **`iCloudMode`, `iCloudShareTarget`**
   - **Notes:** iCloud private/shared; share target is credential-free routing
 
 ### Ownership
 
-**Persistence + credential crypto live in Rust/WASM** (still current — not a
-legacy note). Snapshot shaping and sealing are unit-tested in core; IndexedDB I/O
-and the load pipeline live in wasm; the web shim is adapters + i18n only.
+**Persistence + credential crypto live in Rust/WASM.** Snapshot shaping and
+sealing are unit-tested in core; IndexedDB I/O and the load pipeline live in
+wasm; the web shim is adapters + i18n only.
 
 **Core domain and policy**
 
-- **Snapshot model + pure transforms (`normalize`, `migrate_provider_fields`, `ensure_local_provider_row`, `find_duplicate_sync_provider`, legacy-seed)**
+- **Snapshot model + pure transforms (`from_storage`, `ensure_local_row`, `find_duplicate_sync_provider`)**
   - **Home:** `nook-app/nook-platform/nook-core/src/sync/sync_provider_store/`
 - **Provider-save policy**
   - **Home:** `nook-app/nook-platform/nook-core/src/sync/sync_provider_store/save.rs`
@@ -152,7 +121,7 @@ and the load pipeline live in wasm; the web shim is adapters + i18n only.
 
 **WASM storage and manager APIs**
 
-- **`nook_auth` IndexedDB I/O (rexie), load pipeline, legacy `localStorage` read/clear**
+- **`nook_auth` IndexedDB I/O (rexie) and load pipeline**
   - **Home:** `nook-app/nook-platform/nook-wasm/src/storage/auth_providers.rs`
 - **Manager APIs (`load_auth_providers_snapshot`, `load_auth_providers_with_local_row`, `save_auth_providers_snapshot`)**
   - **Home:** `NookVaultManager` methods in `nook-app/nook-platform/nook-wasm/src/vault_api.rs`
@@ -213,10 +182,8 @@ TypeScript owns browser integration:
 - **Extension pairing:** `seal_auth_providers_for_device_public_key` can seal a
   snapshot for another device's public key without writing IndexedDB.
   - Use it when staging credentials for the browser extension.
-- **Migration:** On first load, import legacy `localStorage` keys
-  `nook_storage_mode` and `nook_github_pat` into `nook_auth`, then remove them
-  from `localStorage`.
-  - Reject existing **plaintext** provider rows instead of loading them.
+- **Plaintext rows:** Reject stored **plaintext** provider rows instead of
+  loading them.
   - This fail-closed boundary prevents an unsealed credential from remaining
     usable or appearing to be trusted encrypted state.
   - Require users to re-enter the credential so the normal save path persists
@@ -239,30 +206,21 @@ collaborator saves a separate OAuth token for their own Google account. Switchin
 modes clears the scope-bound token and target in Rust before the user signs in
 again; it never reuses an app-data token for a shared folder or vice versa.
 
-#### Private Drive target and rollback compatibility
+#### Private Drive target
 
-- **Historical target:** Schema-1 and pre-scoped private Drive providers keep
-  using the historical `appDataFolder` event root, even when they have an old
-  unresolved `fileId`. The target is not inferred from the name, `store_id`, or
-  ID slot.
-- **New target:** A new schema-2 private provider looks up or creates one folder
-  named `nook-events-v2-{fileName}` directly under `appDataFolder`, then persists
-  that folder's stable Drive ID in `drivePrivateTarget`. All event
+- **Target:** A private provider looks up or creates one folder named
+  `nook-events-v2-{fileName}` directly under `appDataFolder`, then persists
+  that folder's stable Drive ID in `drivePrivateTarget`. The identity log and
+  each vault live in their own namespace folder inside it. All event
   list/fetch/write operations and the local projection-cache key use that ID.
+  A Drive reference that names no folder resolves this folder by name.
 - **Fail-closed resolution:** If the name resolves to multiple matching
   folders, sync fails closed and does not choose a parent. Lookup or creation
   failure leaves the typed target pending; the next connection repeats
-  lookup/create resolution before any event operation.
-- **No event migration:** The Drive API supports listing the appData space and
-  creating folder resources there ([appData guide](https://developers.google.com/workspace/drive/api/guides/appdata),
+  lookup/create resolution before any event operation. The Drive API supports
+  listing the appData space and creating folder resources there
+  ([appData guide](https://developers.google.com/workspace/drive/api/guides/appdata),
   [folder guide](https://developers.google.com/workspace/drive/api/guides/folder)).
-  Google forbids moving or trashing appData entries, so Nook leaves legacy root
-  events in place and performs no automatic event migration.
-- **Rollback:** The schema-1 projection preserves historical private-root and
-  shared providers but omits new schema-2 private-folder providers. This
-  prevents an old build from interpreting the folder ID as a historical file
-  ID and routing the provider to the shared `appDataFolder` root. The folder
-  and its events remain in Drive during rollback.
 
 **Shared-folder grant outcomes:** After Rust validates a shared Google Drive
 grant request, WASM attempts `files.create` (folder) and `permissions.create`
@@ -302,7 +260,7 @@ vault. Earlier vault-named codes fail closed as invalid codes.
   its connect reference in `remote_file.file_id`: `private-folder-v2:{id}`, or
   the pending reference. The joiner projects it into its `drive_private_target`
   so both apps read the identity log under the same folder.
-- A code without that reference means the issuer reads the legacy appData root.
+- A code without that reference lets the joiner resolve the folder by name.
 - The joiner saves its row with `remote_target: adopted`, so saving keeps the
   issuer's target instead of resolving a fresh private folder.
 

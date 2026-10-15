@@ -72,7 +72,14 @@ function githubProvider(id: string, pat: string): StorageProvider {
   }
 }
 
-async function readRawAuthProvidersFromIdb(): Promise<unknown> {
+const PROVIDERS_KEY_PREFIX = 'providers:'
+
+type StoredProviderRecord = {
+  key: string
+  value: unknown
+}
+
+async function readStoredProviderRecord(): Promise<StoredProviderRecord> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open('nook_auth', 1)
     request.onerror = () =>
@@ -85,21 +92,40 @@ async function readRawAuthProvidersFromIdb(): Promise<unknown> {
       const db = request.result
       const tx = db.transaction('auth', 'readonly')
       const store = tx.objectStore('auth')
-      const getReq = store.get('providers')
-      getReq.onerror = () =>
+      const cursorReq = store.openCursor()
+      const records: StoredProviderRecord[] = []
+      cursorReq.onerror = () =>
         reject(
           ((v) => (v ? v : new Error('Failed to read providers.')))(
-            getReq.error,
+            cursorReq.error,
           ),
         )
-      getReq.onsuccess = () => {
-        resolve(getReq.result)
+      cursorReq.onsuccess = () => {
+        const cursor = cursorReq.result
+        if (cursor) {
+          const key = String(cursor.key)
+          if (key.startsWith(PROVIDERS_KEY_PREFIX)) {
+            records.push({ key, value: cursor.value })
+          }
+          cursor.continue()
+          return
+        }
+        const [record, ...others] = records
+        if (!record || others.length > 0) {
+          reject(new Error('expected exactly one app-scoped provider record'))
+          return
+        }
+        resolve(record)
       }
       tx.oncomplete = () => db.close()
       tx.onerror = () =>
         reject(((v) => (v ? v : new Error('IndexedDB tx failed.')))(tx.error))
     }
   })
+}
+
+async function readRawAuthProvidersFromIdb(): Promise<unknown> {
+  return (await readStoredProviderRecord()).value
 }
 
 function persistedProvider(rawSnapshot: unknown): PersistedAuthProvider {
@@ -128,12 +154,20 @@ function persistedProvider(rawSnapshot: unknown): PersistedAuthProvider {
   throw new Error('expected the persisted provider to be an object')
 }
 
-function persistedGithubPat(rawSnapshot: unknown): string {
-  const githubPat = persistedProvider(rawSnapshot).githubPat
-  if (typeof githubPat !== 'string') {
-    throw new Error('expected a persisted sealed GitHub token')
+function storedTokenValue(stored: unknown): string {
+  if (
+    !stored ||
+    typeof stored !== 'object' ||
+    !('value' in stored) ||
+    typeof stored.value !== 'string'
+  ) {
+    throw new Error('expected a persisted credential token')
   }
-  return githubPat
+  return stored.value
+}
+
+function persistedGithubPat(rawSnapshot: unknown): string {
+  return storedTokenValue(persistedProvider(rawSnapshot).githubPat)
 }
 
 function persistedOAuthCredentials(rawSnapshot: unknown): {
@@ -141,20 +175,20 @@ function persistedOAuthCredentials(rawSnapshot: unknown): {
   refreshToken: string
 } {
   const oauthFile = persistedProvider(rawSnapshot).oauthFile
-  if (!oauthFile || typeof oauthFile !== 'object' || Array.isArray(oauthFile)) {
+  if (
+    !oauthFile ||
+    typeof oauthFile !== 'object' ||
+    !('config' in oauthFile) ||
+    !oauthFile.config ||
+    typeof oauthFile.config !== 'object' ||
+    !('accessToken' in oauthFile.config) ||
+    !('refreshToken' in oauthFile.config)
+  ) {
     throw new Error('expected persisted OAuth credentials')
   }
-  if (
-    !('accessToken' in oauthFile) ||
-    typeof oauthFile.accessToken !== 'string' ||
-    !('refreshToken' in oauthFile) ||
-    typeof oauthFile.refreshToken !== 'string'
-  ) {
-    throw new Error('expected persisted OAuth access and refresh tokens')
-  }
   return {
-    accessToken: oauthFile.accessToken,
-    refreshToken: oauthFile.refreshToken,
+    accessToken: storedTokenValue(oauthFile.config.accessToken),
+    refreshToken: storedTokenValue(oauthFile.config.refreshToken),
   }
 }
 
@@ -205,16 +239,30 @@ describe.sequential(
       expect(githubPatValue(provider.githubPat)).toBe(pat)
     })
 
-    test('loadAuthProviders rejects plaintext rows without a legacy fallback', async () => {
-      const pat = 'github_pat_33LEGACYplainROW'
+    test('loadAuthProviders rejects plaintext credentials', async () => {
+      const pat = 'github_pat_33PLAINtextROW'
+      await manager.save_auth_providers_snapshot({
+        providers: [githubProvider('gh-plain', 'github_pat_sealed_first')],
+        activeVaultStoreId: unselectedVaultScope(),
+      })
+      const stored = await readStoredProviderRecord()
+      // IndexedDB hands back a fresh copy, so editing it leaves the store alone.
+      const plaintext: unknown = stored.value
+      if (
+        !plaintext ||
+        typeof plaintext !== 'object' ||
+        !('providers' in plaintext) ||
+        !Array.isArray(plaintext.providers)
+      ) {
+        throw new Error('expected a persisted GitHub provider row')
+      }
+      const row: unknown = plaintext.providers[0]
+      if (!(row instanceof Object)) {
+        throw new Error('expected a persisted GitHub provider row')
+      }
+      Object.assign(row, { githubPat: { state: 'token', value: pat } })
       await new Promise<void>((resolve, reject) => {
         const request = indexedDB.open('nook_auth', 1)
-        request.onupgradeneeded = () => {
-          const db = request.result
-          if (!db.objectStoreNames.contains('auth')) {
-            db.createObjectStore('auth')
-          }
-        }
         request.onerror = () =>
           reject(
             ((v) => (v ? v : new Error('Failed to open nook_auth.')))(
@@ -224,22 +272,7 @@ describe.sequential(
         request.onsuccess = () => {
           const db = request.result
           const tx = db.transaction('auth', 'readwrite')
-          const store = tx.objectStore('auth')
-          store.put(
-            {
-              providers: [
-                {
-                  id: 'gh-legacy',
-                  type: 'github',
-                  label: 'GitHub',
-                  githubPat: pat,
-                  githubRepo: 'nook',
-                  createdAt: '2026-06-24T00:00:00.000Z',
-                },
-              ],
-            },
-            'providers',
-          )
+          tx.objectStore('auth').put(plaintext, stored.key)
           tx.oncomplete = () => {
             db.close()
             resolve()

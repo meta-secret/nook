@@ -306,14 +306,11 @@ pub(crate) use storage::indexed_db::SaveVaultBlobRequest;
 #[cfg(test)]
 pub(crate) use storage::indexed_db::SaveWrappedDeviceIdentityRequest;
 pub(crate) use storage::indexed_db::{
-    IdbPutStringRequest, ImportVaultBlobRequest, ReadStringPreferringRequest,
-    SaveSecretSearchCatalogBucketsRequest, SetLocalVaultLabelRequest,
+    IdbPutStringRequest, ImportVaultBlobRequest, SaveSecretSearchCatalogBucketsRequest,
+    SetLocalVaultLabelRequest,
 };
 
-pub(crate) use storage::indexed_db::{
-    IndexedDbFallbackUpdate, IndexedDbMigration, IndexedDbUpdate, StoredStringRecord,
-    StringRecordFallback,
-};
+pub(crate) use storage::indexed_db::{IndexedDbUpdate, StoredStringRecord};
 
 pub(crate) use conversion::BrowserTimestamp;
 
@@ -333,7 +330,6 @@ pub(crate) use storage::event_db::{
 pub(crate) use storage::identity_record::{
     IdentityDbEnsureLocalIdentityForAppKey, IdentityDbEnsureLocalIdentityInDirectory,
     IdentityDbGenerateVaultDekForIdentity, IdentityDbLocalKeyringEntryForAppIdFromStore,
-    IdentityDbMigrateDirectory, IdentityDbMigrateDirectoryInStore, IdentityDbPersistPendingGenesis,
     IdentityDbSaveNewProtectedLocalIdentity, IdentityDbSaveProtectedLocalIdentity,
     IdentityDbSetIdentityMemberSigningPublicKey, IdentityDbValidateVaultIdentityEnrollment,
     IdentityDbWriteIdentityDirectory,
@@ -351,8 +347,7 @@ pub(crate) use storage::indexed_db::{
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 pub(crate) use storage::auth_providers::ProviderDbWriteSnapshotAt;
 pub(crate) use storage::auth_providers::{
-    AuthProviderDatabase, ProviderDbLegacySnapshotBelongsToIdentity,
-    ProviderDbReadRawSnapshotFromStore,
+    AuthProviderDatabase, ProviderDbReadRawSnapshotFromStore,
 };
 
 pub use passkey_browser::{BrowserCredentialCreationOptions, BrowserCredentialRequestOptions};

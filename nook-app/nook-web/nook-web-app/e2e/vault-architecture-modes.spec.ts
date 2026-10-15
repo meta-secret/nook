@@ -688,9 +688,11 @@ test.describe('vault architecture modes', () => {
 
     await openStorageSettings(page)
     await expandSettingsSection(page, 'storage')
+    // Providers mount the identity; one this vault's mode cannot use is
+    // listed as unavailable for it.
     await expect(
-      page.getByTestId(`sync-provider-${PERSONAL_ONLY_PROVIDER.id}`),
-    ).toHaveCount(0)
+      page.getByTestId(`provider-capability-${PERSONAL_ONLY_PROVIDER.id}`),
+    ).toContainText(/unavailable for this vault/i)
     await expect(
       page.getByTestId(`provider-capability-${SHARED_PROVIDER.id}`),
     ).toContainText(/personal and shared replication/i)

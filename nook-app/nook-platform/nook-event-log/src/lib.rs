@@ -58,16 +58,14 @@ pub use graph::{
 };
 pub use identity_control::{
     DriveMountTarget, ICloudMountTarget, IdentityApprovalRequest, IdentityControlInsertion,
-    IdentityControlLog, IdentityControlMember, IdentityControlMigration,
-    IdentityControlMigrationOutcome, IdentityControlOperation, IdentityControlRejection,
+    IdentityControlLog, IdentityControlMember, IdentityControlOperation, IdentityControlRejection,
     IdentityControlState, IdentityControlVault, IdentityEvent, IdentityEventBody,
     IdentityEventInsertStatus, IdentityEventSchemaVersion, IdentityEventSigning,
     IdentityGenesisRequest, IdentityJoinRequest, IdentityMemberKeys, IdentityMountTarget,
     IdentityProviderMount, IdentityVaultDekGrant, IdentityVaultDekLookup, IdentityVaultEpochDeks,
-    IdentityVaultRegistration, LegacyVaultMembership, MemberVaultDek, OpenedVaultDek,
-    ProviderMountId, ProviderMountLayout,
+    IdentityVaultRegistration, MemberVaultDek, OpenedVaultDek, ProviderMountId,
 };
-pub use location::EventLogLocation;
+pub use location::{EventLogLocation, EventLogNamespaceKind};
 pub use nook_replication::CausalGraphEventCount as EventCount;
 pub use projection::{
     EpochCheckpoint, ProjectedSecret, ProjectedSecretLifecycle, ProjectedSecretOrigin,

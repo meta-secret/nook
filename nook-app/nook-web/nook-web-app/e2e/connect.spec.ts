@@ -1,6 +1,8 @@
 import { expect, test } from './fixtures'
 import { VaultAccessStatus } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm.js'
 import {
+  beginAddSyncProvider,
+  openIdentitiesPage,
   authorizeDeviceProtection,
   createLocalVaultOnLogin,
   dismissSyncConflictIfVisible,
@@ -62,14 +64,13 @@ test.describe('vault connect flow', () => {
       ),
     ).toBeFalsy()
     await expect(page.getByTestId('login-gate')).not.toBeVisible()
-    // The vault page offers the browser extension; the identity's overview
-    // carries the protection ladder and its single next step.
+    // The vault page offers the browser extension; the identity's card
+    // names its single next step, which opens Sync.
     await expect(page.getByTestId('vault-extension-install')).toBeVisible()
-    await openManagePage(page, ManagePage.Overview)
-    await expect(page.getByTestId('overview-ladder')).toBeVisible()
-    await expect(page.getByTestId('overview-next-step')).toBeVisible()
-    await expect(page.getByTestId('overview-add-device')).toBeDisabled()
-    await page.getByTestId('overview-next-step-btn').click()
+    await openIdentitiesPage(page)
+    const health = page.getByTestId('identity-card-health')
+    await expect(health).toContainText('No cloud copy yet')
+    await health.click()
     await expect(page.getByTestId('storage-providers-section')).toBeVisible()
   })
 
@@ -200,14 +201,15 @@ test.describe('vault connect flow', () => {
 
     await openManagePage(page, ManagePage.Sync)
     await expect(page.getByTestId('sync-providers-empty')).toBeVisible()
-    await page.getByTestId('add-provider-btn').click()
+    await beginAddSyncProvider(page)
     await expect(page.getByTestId('provider-picker-list')).toBeVisible()
     await expect(page.getByTestId('provider-option-local')).toHaveCount(0)
     await page.getByTestId('provider-option-github').click()
     await expect(page.getByTestId('github-token-setup')).toBeVisible()
-    await page.getByTestId('cancel-add-provider-btn').click()
-    await expect(page.getByTestId('provider-picker-list')).toBeVisible()
-    await page.getByTestId('cancel-add-provider-btn').click()
+    // Adding a provider is its own page: Back leaves it unsaved.
+    await page.getByTestId('identity-page-back').click()
+    await expect(page.getByTestId('provider-picker-list')).toHaveCount(0)
+    await openManagePage(page, ManagePage.Sync)
     await expect(page.getByTestId('sync-providers-empty')).toBeVisible()
   })
 
@@ -305,7 +307,7 @@ test.describe('vault connect flow', () => {
     await expect(page.getByTestId('login-gate')).not.toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await expect(page.getByTestId('authenticated-shell')).toBeVisible()
+    await expect(page.getByTestId('identity-page')).toBeVisible()
     await expect(page.getByTestId('settings-provider-oauth-file')).toHaveCount(
       0,
     )

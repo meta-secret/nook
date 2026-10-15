@@ -272,26 +272,6 @@ class PairingDeliveredResponseFields {
 const PairingDeliveredResponseSchema = Schema.Struct(
   PairingDeliveredResponseFields.build(),
 );
-class PairingMigrationReasonResponseFields {
-  static build() {
-    return {
-      reason: Schema.Literal("auth-provider-plaintext-migration-required"),
-    };
-  }
-}
-const PairingMigrationReasonResponseSchema = Schema.Struct(
-  PairingMigrationReasonResponseFields.build(),
-);
-class PairingMigrationErrorResponseFields {
-  static build() {
-    return {
-      error: Schema.Literal("auth-provider-plaintext-migration-required"),
-    };
-  }
-}
-const PairingMigrationErrorResponseSchema = Schema.Struct(
-  PairingMigrationErrorResponseFields.build(),
-);
 class PairingRejectedReasonResponseFields {
   static build() {
     return {
@@ -336,20 +316,6 @@ export class PairingApprovalResponseDecoder {
         eventCount,
       })),
     );
-    const migrationByReason = Schema.decodeUnknownEffect(
-      PairingMigrationReasonResponseSchema,
-    )(value, strictDecodeOptions).pipe(
-      Effect.map((): ExtensionPairingDelivery => ({
-        kind: ExtensionPairingDeliveryKind.PlaintextProviderMigrationRequired,
-      })),
-    );
-    const migrationByError = Schema.decodeUnknownEffect(
-      PairingMigrationErrorResponseSchema,
-    )(value, strictDecodeOptions).pipe(
-      Effect.map((): ExtensionPairingDelivery => ({
-        kind: ExtensionPairingDeliveryKind.PlaintextProviderMigrationRequired,
-      })),
-    );
     const rejectedByReason = Schema.decodeUnknownEffect(
       PairingRejectedReasonResponseSchema,
     )(value, strictDecodeOptions).pipe(
@@ -376,8 +342,6 @@ export class PairingApprovalResponseDecoder {
     );
 
     return delivered.pipe(
-      Effect.catch(() => migrationByReason),
-      Effect.catch(() => migrationByError),
       Effect.catch(() => rejectedByReason),
       Effect.catch(() => rejectedByError),
       Effect.catch(() => rejected),

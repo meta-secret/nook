@@ -8,18 +8,20 @@ once done. A `current` past the last step shows every step done.
   let {
     steps,
     current,
+    testId = "first-run-progress",
   }: {
     /** Step labels, in order. */
     steps: readonly string[];
     /** Index of the step on screen. */
     current: number;
+    testId?: string;
   } = $props();
 </script>
 
 <ol
   class="grid gap-2 font-mono text-[11px] tracking-[0.08em] uppercase"
   style:grid-template-columns="repeat({steps.length}, minmax(0, 1fr))"
-  data-testid="first-run-progress"
+  data-testid={testId}
 >
   {#each steps as label, index (label)}
     <li

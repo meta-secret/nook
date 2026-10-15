@@ -373,14 +373,6 @@ impl AppKey {
         SymmetricKey::parse(&plaintext).map_err(MultiDeviceError::Validation)
     }
 
-    /// Back-compat alias.
-    pub fn decrypt_dec_envelope(
-        &self,
-        envelope: &AgeArmoredCiphertext,
-    ) -> MultiDeviceResult<SymmetricKey> {
-        self.decrypt_envelope(envelope)
-    }
-
     /// Seal an arbitrary UTF-8 string to this device's own public key so only
     /// this device (holding the matching identity secret) can open it later.
     /// Used to keep sync-provider credentials encrypted at rest in `IndexedDB`.
@@ -391,5 +383,13 @@ impl AppKey {
     /// Open a string previously sealed with [`AppKey::seal_utf8`].
     pub fn open_utf8(&self, ciphertext: &AgeArmoredCiphertext) -> MultiDeviceResult<String> {
         Self::open_identity_bytes(ciphertext, &self.identity)
+    }
+
+    /// Open bytes sealed to this device's public key; sibling modules decode them.
+    pub(super) fn open_sealed_bytes(
+        &self,
+        ciphertext: &AgeArmoredCiphertext,
+    ) -> MultiDeviceResult<zeroize::Zeroizing<Vec<u8>>> {
+        Self::open_identity_raw_bytes(ciphertext, &self.identity)
     }
 }

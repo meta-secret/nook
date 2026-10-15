@@ -97,13 +97,6 @@ impl EventId {
     pub fn encoded_digest(&self) -> &str {
         self.0.strip_prefix(EVENT_ID_PREFIX).unwrap_or(&self.0)
     }
-
-    /// Immutable provider path: `nook-log/v1/events/{base64url_digest}.yaml`.
-    #[must_use]
-    pub fn storage_path(&self) -> String {
-        let digest = self.encoded_digest();
-        format!("nook-log/v1/events/{digest}.yaml")
-    }
 }
 
 impl fmt::Display for EventId {
@@ -245,16 +238,6 @@ mod tests {
         assert_eq!(a, b);
         assert!(a.as_str().starts_with("sha256u:"));
         assert_eq!(a.encoded_digest().len(), 43);
-    }
-
-    #[test]
-    fn storage_path_is_flat_yaml() -> anyhow::Result<()> {
-        let id = EventId::parse("sha256u:ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0")?;
-        assert_eq!(
-            id.storage_path(),
-            "nook-log/v1/events/ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0.yaml"
-        );
-        Ok(())
     }
 
     #[test]

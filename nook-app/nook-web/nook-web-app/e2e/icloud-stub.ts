@@ -12,11 +12,36 @@ export function createLocalE2eICloudVaultStub(
   let recordChangeTag = 'e2e-stub-change-tag'
   const eventRecords = new Map<
     string,
-    { eventId: string; content: string; recordChangeTag: string }
+    {
+      eventId: string
+      location: string
+      content: string
+      recordChangeTag: string
+    }
   >()
 
   function eventRecordName(eventId: string) {
     return `nook-event-${eventId.replace(/^sha256u:/, '')}`
+  }
+
+  /** The stub answers CloudKit's single location filter (EQUALS or
+   * BEGINS_WITH), as the event store queries it. */
+  function matchesFilter(location: string, query: Record<string, unknown>) {
+    const filters: unknown[] = Array.isArray(query.filterBy)
+      ? query.filterBy
+      : []
+    const filter: unknown = filters[0]
+    if (typeof filter !== 'object' || Object(filter) !== filter) return true
+    const condition = requireRecord(filter, 'CloudKit filter')
+    const fieldValue =
+      typeof condition.fieldValue === 'object' &&
+      Object(condition.fieldValue) === condition.fieldValue
+        ? requireRecord(condition.fieldValue, 'CloudKit filter value')
+        : {}
+    const wanted = typeof fieldValue.value === 'string' ? fieldValue.value : ''
+    return condition.comparator === 'BEGINS_WITH'
+      ? location.startsWith(wanted)
+      : location === wanted
   }
 
   function eventRecord(recordName: string) {
@@ -24,9 +49,10 @@ export function createLocalE2eICloudVaultStub(
     if (!event) return
     return {
       recordName,
-      recordType: 'NookVaultEvent',
+      recordType: 'NookLogEvent',
       recordChangeTag: event.recordChangeTag,
       fields: {
+        location: { value: event.location },
         event_id: { value: event.eventId },
         content: { value: event.content },
       },
@@ -113,12 +139,21 @@ export function createLocalE2eICloudVaultStub(
         }
 
         if (url.endsWith('/records/query') && method === 'POST') {
+          const body = requireRecord(
+            request.postDataJSON(),
+            'CloudKit query request',
+          )
+          const query =
+            typeof body.query === 'object' && Object(body.query) === body.query
+              ? requireRecord(body.query, 'CloudKit query')
+              : {}
           await route.fulfill({
             status: 200,
             contentType: 'application/json',
             body: JSON.stringify({
-              records: Array.from(eventRecords.keys())
-                .map(eventRecord)
+              records: Array.from(eventRecords.entries())
+                .filter(([, event]) => matchesFilter(event.location, query))
+                .map(([name]) => eventRecord(name))
                 .filter(Boolean),
             }),
           })
@@ -130,10 +165,32 @@ export function createLocalE2eICloudVaultStub(
             request.postDataJSON(),
             'CloudKit modify request',
           )
-          const operations = body.operations
+          const operations: unknown = body.operations
           const operation: unknown = Array.isArray(operations)
             ? operations[0]
             : {}
+          const operationType: unknown =
+            typeof operation === 'object' && Object(operation) === operation
+              ? requireRecord(operation, 'CloudKit operation').operationType
+              : ''
+          if (operationType === 'forceDelete' && Array.isArray(operations)) {
+            for (const deletion of operations) {
+              const deleted = requireRecord(deletion, 'CloudKit deletion')
+              const target =
+                typeof deleted.record === 'object' &&
+                Object(deleted.record) === deleted.record
+                  ? requireRecord(deleted.record, 'CloudKit deleted record')
+                  : {}
+              if (typeof target.recordName === 'string')
+                eventRecords.delete(target.recordName)
+            }
+            await route.fulfill({
+              status: 200,
+              contentType: 'application/json',
+              body: JSON.stringify({ records: [] }),
+            })
+            return
+          }
           const operationRecord: unknown =
             typeof operation === 'object' && Object(operation) === operation
               ? Object.getOwnPropertyDescriptor(operation, 'record')?.value
@@ -156,7 +213,14 @@ export function createLocalE2eICloudVaultStub(
               : {}
           const content =
             typeof contentField.value === 'string' ? contentField.value : ''
-          if (recordType === 'NookVaultEvent') {
+          if (recordType === 'NookLogEvent') {
+            const locationField =
+              typeof fields.location === 'object' &&
+              Object(fields.location) === fields.location
+                ? requireRecord(fields.location, 'CloudKit location field')
+                : {}
+            const location =
+              typeof locationField.value === 'string' ? locationField.value : ''
             const eventIdField =
               typeof fields.event_id === 'object' &&
               Object(fields.event_id) === fields.event_id
@@ -170,6 +234,7 @@ export function createLocalE2eICloudVaultStub(
                 : eventRecordName(eventId)
             eventRecords.set(name, {
               eventId,
+              location,
               content,
               recordChangeTag: `e2e-event-change-tag-${Date.now()}`,
             })

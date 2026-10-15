@@ -149,8 +149,6 @@ export const INTERNAL_API_EXPERT_RUST_BOUNDARY_SCOPE_PATHS = [
 
 const INTERNAL_API_EXPERT_AUTHORED_CONSUMER_SCOPE_PATHS = [
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/PendingJoinsBanner.svelte',
-  'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/identity-control/IdentityMountsPanel.svelte',
-  'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/identity-control/identity-mount.ts',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/identity-control/identity-standing.ts',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/vault/identity-control.svelte.ts',
   'nook-app/nook-web/nook-vault-sentinel/src/extension-connect-disabled.ts',
@@ -306,7 +304,9 @@ const INTERNAL_API_EXPERT_AUTHORED_CONSUMER_SCOPE_PATHS = [
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/identities/IdentitiesHub.svelte',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/identities/identity-switch.ts',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/identity-control/IdentityKeysPage.svelte',
-  'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/identity-control/IdentityOverview.svelte',
+  'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/identity-control/IdentityDashboard.svelte',
+  'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/add-device/device-join-mounts.ts',
+  'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/settings/PendingJoinList.svelte',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/login/LoginCreateVaultChooser.svelte',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/login/LoginProviderManagement.svelte',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/login/LoginVaultCard.svelte',

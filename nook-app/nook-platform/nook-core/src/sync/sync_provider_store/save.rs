@@ -72,11 +72,6 @@ pub struct ProviderSaveRequest {
     pub local_folder: StoredLocalFolderConfiguration,
     pub new_provider_id: String,
     pub created_at: String,
-    /// Identity mounts namespace the identity log and every owned vault.
-    /// `CloudKit` cannot list a namespace yet, so iCloud rows stay bound to the
-    /// vault in `provider_store_id`.
-    #[serde(default)]
-    pub layout: crate::ProviderRowLayout,
     #[serde(default)]
     pub remote_target: ProviderSaveRemoteTarget,
 }
@@ -116,29 +111,20 @@ impl ProviderSaveRequest {
             github_repo: StoredGithubRepository::DefaultRepository,
             oauth_file: StoredOAuthFileConfiguration::NotApplicable,
             local_folder: StoredLocalFolderConfiguration::NotApplicable,
-            store_id: request.provider_store_id.clone(),
-            layout: request.effective_layout(provider_type),
+            store_id: request.row_scope(provider_type),
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: request.created_at.clone(),
         }
     }
 
-    /// `CloudKit` cannot list a namespace yet, and a browser-local folder
-    /// cannot carry an identity to another app, so both keep their vault at
-    /// the legacy root.
-    fn effective_layout(&self, provider_type: StorageProviderType) -> crate::ProviderRowLayout {
-        match (self.layout, provider_type, self.oauth_preset) {
-            (
-                crate::ProviderRowLayout::IdentityNamespaced,
-                StorageProviderType::OauthFile,
-                OAuthFilePreset::ICloud,
-            )
-            | (
-                crate::ProviderRowLayout::IdentityNamespaced,
-                StorageProviderType::Local | StorageProviderType::LocalFolder,
-                _,
-            ) => crate::ProviderRowLayout::LegacyVaultRoot,
-            (layout, _, _) => layout,
+    /// Only this browser's own store belongs to one vault. Every remote row
+    /// is an identity mount that keeps each vault in its own namespace.
+    fn row_scope(&self, provider_type: StorageProviderType) -> ProviderVaultScope {
+        match provider_type {
+            StorageProviderType::Local => self.provider_store_id.clone(),
+            StorageProviderType::Github
+            | StorageProviderType::OauthFile
+            | StorageProviderType::LocalFolder => ProviderVaultScope::Unscoped,
         }
     }
 
@@ -157,6 +143,15 @@ impl ProviderSaveRequest {
                     DEFAULT_DRIVE_BACKUP_NAME.to_owned()
                 }
             };
+        }
+        // A private folder the draft already names wins over the setup field,
+        // which still holds the default when the name came from elsewhere.
+        if let StoredOAuthFileConfiguration::Configured(config) = &request.oauth_file
+            && let StoredOAuthRemoteFileName::FileName(name) = &config.file_name
+            && !name.trim().is_empty()
+            && name.trim() != DEFAULT_DRIVE_BACKUP_NAME
+        {
+            return name.trim().to_owned();
         }
         let requested = request.github_repo.trim();
         if requested.is_empty() {
@@ -314,7 +309,6 @@ impl OAuthUpdateTarget<'_> {
             oauth_file: StoredOAuthFileConfiguration::configured(active_oauth.clone()),
             local_folder: StoredLocalFolderConfiguration::NotApplicable,
             store_id: ProviderVaultScope::Unscoped,
-            layout: crate::ProviderRowLayout::LegacyVaultRoot,
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: String::new(),
         };
@@ -503,7 +497,6 @@ mod tests {
                 local_folder: StoredLocalFolderConfiguration::NotApplicable,
                 new_provider_id: "provider-new".to_owned(),
                 created_at: "2026-08-11T00:00:00Z".to_owned(),
-                layout: crate::ProviderRowLayout::LegacyVaultRoot,
                 remote_target: super::ProviderSaveRemoteTarget::Fresh,
             }
         }
@@ -519,20 +512,62 @@ mod tests {
     }
 
     #[test]
-    fn local_folder_rows_keep_their_vault_at_the_legacy_root() -> Result<(), &'static str> {
-        let mut request = ProviderSaveRequest::fixture(StorageProviderType::LocalFolder);
-        request.local_folder = StoredLocalFolderConfiguration::Configured(LocalFolderConfigData {
+    fn remote_rows_belong_to_the_identity_not_the_open_vault() -> Result<(), &'static str> {
+        let mut folder = ProviderSaveRequest::fixture(StorageProviderType::LocalFolder);
+        folder.local_folder = StoredLocalFolderConfiguration::Configured(LocalFolderConfigData {
             directory_name: StoredLocalFolderDirectory::DirectoryName("Nook Backup".to_owned()),
             handle_id: StoredLocalFolderHandle::HandleId("handle-1".to_owned()),
         });
-        request.layout = crate::ProviderRowLayout::IdentityNamespaced;
-        let snapshot = request.apply().saved()?;
-        let row = snapshot
-            .providers
-            .iter()
-            .find(|row| row.provider_type == StorageProviderType::LocalFolder)
-            .ok_or("expected a saved local folder row")?;
-        assert_eq!(row.layout, crate::ProviderRowLayout::LegacyVaultRoot);
+        let mut icloud = ProviderSaveRequest::fixture(StorageProviderType::OauthFile);
+        icloud.oauth_preset = OauthFilePreset::ICloud;
+        for request in [folder, icloud] {
+            let snapshot = request.apply().saved()?;
+            let remote = snapshot
+                .providers
+                .iter()
+                .find(|row| row.provider_type == request.storage_mode)
+                .ok_or("expected the saved remote row")?;
+            assert_eq!(remote.store_id, ProviderVaultScope::Unscoped);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn a_private_drive_row_keeps_the_folder_its_draft_names() -> Result<(), &'static str> {
+        let named = |file_name: &str| {
+            let mut request = ProviderSaveRequest::fixture(StorageProviderType::OauthFile);
+            request.github_repo = super::DEFAULT_DRIVE_BACKUP_NAME.to_owned();
+            request.oauth_file = StoredOAuthFileConfiguration::configured(OAuthFileConfigData {
+                preset: OauthFilePreset::GoogleDrive,
+                file_name: StoredOAuthRemoteFileName::FileName(file_name.to_owned()),
+                drive_mode: GoogleDriveMode::Private,
+                ..OAuthFileConfigData::default()
+            });
+            let snapshot = request.apply().saved()?;
+            snapshot
+                .providers
+                .iter()
+                .find_map(|row| match &row.oauth_file {
+                    StoredOAuthFileConfiguration::Configured(config) => {
+                        Some((row.label.clone(), config.file_name.clone()))
+                    }
+                    StoredOAuthFileConfiguration::NotApplicable => None,
+                })
+                .ok_or("expected a saved Drive row")
+        };
+
+        assert_eq!(
+            named(" team-events ")?,
+            (
+                "Google Drive · team-events".to_owned(),
+                StoredOAuthRemoteFileName::FileName("team-events".to_owned())
+            )
+        );
+        // An unnamed draft still follows the setup field.
+        assert_eq!(
+            named("")?.1,
+            StoredOAuthRemoteFileName::FileName(super::DEFAULT_DRIVE_BACKUP_NAME.to_owned())
+        );
         Ok(())
     }
 
@@ -542,7 +577,7 @@ mod tests {
             preset: OauthFilePreset::GoogleDrive,
             access_token: StoredOAuthAccessCredential::AccessToken("token".to_owned()),
             file_id: StoredOAuthRemoteFileId::Unresolved,
-            drive_private_target: crate::StoredGoogleDrivePrivateTarget::LegacyAppDataFolder,
+            drive_private_target: crate::StoredGoogleDrivePrivateTarget::Pending,
             drive_mode: GoogleDriveMode::Private,
             ..OAuthFileConfigData::default()
         };
@@ -564,7 +599,7 @@ mod tests {
         };
         assert_eq!(
             saved_target(super::ProviderSaveRemoteTarget::Adopted)?,
-            crate::StoredGoogleDrivePrivateTarget::LegacyAppDataFolder
+            crate::StoredGoogleDrivePrivateTarget::Pending
         );
         assert_eq!(
             saved_target(super::ProviderSaveRemoteTarget::Fresh)?,
@@ -592,10 +627,7 @@ mod tests {
             provider.github_repo,
             StoredGithubRepository::Repository(("owner/repo").to_owned())
         );
-        assert_eq!(
-            provider.store_id,
-            ProviderVaultScope::StoreId(("vault-1").to_owned())
-        );
+        assert_eq!(provider.store_id, ProviderVaultScope::Unscoped);
         Ok(())
     }
 
@@ -619,37 +651,16 @@ mod tests {
     }
 
     #[test]
-    fn provider_save_scopes_duplicates_to_the_active_vault() -> Result<(), &'static str> {
+    fn a_mount_saved_for_another_vault_is_the_same_identity_mount() {
         let mut request = ProviderSaveRequest::fixture(StorageProviderType::Github);
-        let mut other_vault_provider = StorageProviderData::github(
-            "other-vault-provider",
+        request.snapshot.providers.push(StorageProviderData::github(
+            "saved-earlier",
             "GitHub · owner/repo",
             "pat",
             "owner/repo",
             "earlier",
-        );
-        other_vault_provider.store_id = ProviderVaultScope::StoreId("vault-2".to_owned());
-        request
-            .snapshot
-            .providers
-            .push(other_vault_provider.clone());
-
-        let snapshot = request.apply().saved()?;
-
-        assert_eq!(snapshot.providers.first(), Some(&other_vault_provider));
-        assert_eq!(snapshot.providers.len(), 2);
-        assert_eq!(
-            snapshot
-                .providers
-                .get(1)
-                .map(|provider| provider.id.as_str()),
-            Some("provider-new")
-        );
-        assert_eq!(
-            snapshot.providers.get(1).map(|provider| &provider.store_id),
-            Some(&ProviderVaultScope::StoreId(("vault-1").to_owned()))
-        );
-        Ok(())
+        ));
+        assert_eq!(request.apply(), ProviderSaveOutcome::Duplicate);
     }
 
     #[test]

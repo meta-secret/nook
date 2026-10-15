@@ -391,7 +391,7 @@
       <div class="space-y-1.5">
         <label for="vault-pw" class="text-sm font-medium text-muted-foreground">
           {panel === VaultPasswordPanel.Add
-            ? vault.t(I18N_KEYS.VaultFieldsPassword)
+            ? vault.t(I18N_KEYS.VaultPasswordsPassphrase)
             : vault.t(I18N_KEYS.VaultPasswordsNewPassword)}
         </label>
         <input

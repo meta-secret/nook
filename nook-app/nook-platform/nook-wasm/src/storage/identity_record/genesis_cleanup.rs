@@ -5,10 +5,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
-use super::directory_migration::PendingGenesisMigrationRejection;
 use super::genesis_flow::PendingSimpleGenesisFlow;
-use crate::IdentityDbMigrateDirectory;
-use crate::storage::identity_record::IdentityMigrationSelection;
 struct StagedGenesisPublication<'a> {
     store: &'a rexie::Store,
     pending: PendingSimpleGenesis,
@@ -28,7 +25,7 @@ impl SimpleGenesisCompletion<'_> {
         &self,
         request: StagedGenesisPublication<'_>,
     ) -> Result<(), NookError> {
-        let StagedGenesisPublication { store, mut pending } = request;
+        let StagedGenesisPublication { store, pending } = request;
         let directory_id =
             serde_wasm_bindgen::to_value(IDENTITY_DIRECTORY_KEY).map_err(|error| {
                 NookError::IndexedDb(format!("Genesis identity key error: {error:?}"))
@@ -46,19 +43,6 @@ impl SimpleGenesisCompletion<'_> {
             })
             .transpose()?
             .unwrap_or_else(IdentityDirectory::empty);
-        let migrate_staged = current.has_legacy_duplicate_app_key_ownership()
-            || matches!(&pending.flow, PendingSimpleGenesisFlow::Staged(staged) if staged.base_directory.has_legacy_duplicate_app_key_ownership());
-        let current = NookDatabase::migrate_directory(IdentityDbMigrateDirectory {
-            directory: current,
-            selection: IdentityMigrationSelection::PreserveGenesis(&pending.identity_id),
-        })?
-        .directory;
-        if migrate_staged {
-            pending = pending
-                .migrate_directories()
-                .map_err(PendingGenesisMigrationRejection::into_cause)?
-                .pending;
-        }
         let PendingSimpleGenesisFlow::Staged(staged) = pending.flow else {
             return Err(NookError::IndexedDb(
                 "Staged genesis identity state disappeared.".to_owned(),

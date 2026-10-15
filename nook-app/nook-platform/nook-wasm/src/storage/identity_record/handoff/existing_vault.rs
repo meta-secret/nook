@@ -186,14 +186,10 @@ mod tests {
     };
     use super::{ExistingVaultHandoff, ExistingVaultImportCommit, HandoffCheckpoint, NookError};
 
-    use crate::storage::identity_record;
     use crate::storage::identity_record::{AuthorizerSigningUpdate, HandoffSignerPublication};
 
-    use crate::{
-        EventDbSaveEventBytes, EventDbSaveEventBytesToStore, IdbPutStringRequest, NookDatabase,
-    };
+    use crate::{EventDbSaveEventBytes, EventDbSaveEventBytesToStore, NookDatabase};
     use futures_util::future;
-    use identity_record::{IDENTITY_DIRECTORY_KEY, PendingSimpleGenesis};
     use nook_core::{
         DeviceIdentity, DeviceSigningPublicKey, EventId, IdentityDirectory, IsoTimestamp,
         LocalEventStore, MemberLabel, SigningIdentity, VaultOperation,
@@ -208,13 +204,6 @@ mod tests {
         store_id: nook_core::StoreId,
         secrets_envelope: nook_core::AgeArmoredCiphertext,
         members_envelope: nook_core::AgeArmoredCiphertext,
-    }
-
-    #[derive(serde::Serialize)]
-    #[serde(rename_all = "camelCase")]
-    struct LegacyGenesisMarker<'a> {
-        store_id: &'a str,
-        identity_id: &'a str,
     }
 
     impl ImportFixture {
@@ -560,89 +549,6 @@ mod tests {
                 .map_err(NookDatabase::map_domain_error)?,
             events.replacement_keys
         );
-        NookDatabase::clear_local_event_store(fixture.store_id.as_str()).await?;
-        NookDatabase::clear_identity_directory_for_test().await
-    }
-
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            unowned_function,
-            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
-        )
-    )]
-    #[wasm_bindgen_test]
-    async fn handoff_transaction_preserves_pending_identity_during_migration()
-    -> Result<(), NookError> {
-        NookDatabase::clear_identity_directory_for_test().await?;
-        let fixture = ImportFixture::new()?;
-        NookDatabase::clear_local_event_store(fixture.store_id.as_str()).await?;
-        let events = SignedAccessEvents::new(&fixture)?;
-        NookDatabase::save_event_bytes(EventDbSaveEventBytes {
-            store_id: fixture.store_id.as_str(),
-            event_id: events.approval_id.as_str(),
-            bytes: &events.approval_bytes,
-        })
-        .await?;
-        let mut directory = IdentityDirectory::empty();
-        let resolved_identity = directory
-            .create_identity(IdentityCreation {
-                label: "Pending",
-                app_key: &fixture.identity,
-                member_label: MemberLabelState::Unnamed,
-            })
-            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
-        directory = resolved_identity.directory;
-        let pending_identity_id = resolved_identity.identity_id;
-        let resolved_identity = directory
-            .create_identity(IdentityCreation {
-                label: "Concurrent duplicate",
-                app_key: &fixture.identity,
-                member_label: MemberLabelState::Unnamed,
-            })
-            .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
-        directory = resolved_identity.directory;
-        NookDatabase::idb_put_string(IdbPutStringRequest {
-            key: IDENTITY_DIRECTORY_KEY,
-            value: &serde_json::to_string(&directory)
-                .map_err(|error| NookError::Serialization(error.to_string()))?,
-        })
-        .await?;
-        NookDatabase::idb_put_string(IdbPutStringRequest {
-            key: identity_record::PENDING_SIMPLE_GENESIS_KEY,
-            value: &serde_json::to_string(&LegacyGenesisMarker {
-                store_id: fixture.store_id.as_str(),
-                identity_id: pending_identity_id.as_str(),
-            })
-            .map_err(|error| NookError::Serialization(error.to_string()))?,
-        })
-        .await?;
-
-        IdentityHandoffCommit {
-            app_key: &fixture.identity,
-            signing_public_key: &events.signing_public_key,
-            authorizer_signing: &AuthorizerSigningUpdate::RetainMembership,
-            signing_seed: HandoffSignerPublication::RetainStored,
-            operation: IdentityHandoffOperation::ExistingVaultImport(ExistingVaultEnrollment {
-                store_id: &fixture.store_id,
-                existing: ExistingVaultImportCommit {
-                    device_id: fixture.identity.device_id().clone(),
-                    label: "Imported".to_owned(),
-                },
-            }),
-        }
-        .commit()
-        .await?;
-
-        let current = NookDatabase::load_identity_directory().await?;
-        let pending = PendingSimpleGenesis::load_for_store(fixture.store_id.as_str())
-            .await?
-            .require_pending()
-            .map_err(|_| NookError::IndexedDb("Pending marker disappeared.".to_owned()))?;
-        assert_eq!(current.identities().len(), 1);
-        assert_eq!(current.selected()?.identity_id, pending_identity_id);
-        assert!(current.selected()?.owns_vault(&fixture.store_id));
-        assert_eq!(pending.identity_id, pending_identity_id);
         NookDatabase::clear_local_event_store(fixture.store_id.as_str()).await?;
         NookDatabase::clear_identity_directory_for_test().await
     }

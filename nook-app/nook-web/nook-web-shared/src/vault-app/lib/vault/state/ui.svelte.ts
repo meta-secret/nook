@@ -4,15 +4,20 @@
  * identity (keys, vaults, devices, sync providers, backup passwords, browser
  * settings) or the open vault (imports).
  */
+
+import { UnlockReturn } from "$lib/app/unlock-return";
+
 export enum WorkspaceSection {
   Vault = "vault",
   Identities = "identities",
-  /** The identity's overview: its parts and how protected it is. */
+  /** The identity's page: what it has (devices, vaults, copies, sign-in). */
   Overview = "overview",
   Keys = "keys",
   Vaults = "vaults",
   Settings = "settings",
   Devices = "devices",
+  /** Invite another phone or computer into the identity, then approve it. */
+  AddDevice = "add-device",
   Sync = "sync",
   Passwords = "passwords",
   Import = "import",
@@ -30,7 +35,6 @@ export class WorkspaceSectionScope {
 
   get scope(): ManageSectionScope {
     switch (this.section) {
-      case WorkspaceSection.Overview:
       case WorkspaceSection.Keys:
       case WorkspaceSection.Vaults:
       case WorkspaceSection.Devices:
@@ -40,8 +44,12 @@ export class WorkspaceSectionScope {
         return ManageSectionScope.Identity;
       case WorkspaceSection.Import:
         return ManageSectionScope.Vault;
+      // The overview opens on the hub beside the identity's card; adding a
+      // device is a focused flow of its own. Neither is a management page.
       case WorkspaceSection.Vault:
       case WorkspaceSection.Identities:
+      case WorkspaceSection.Overview:
+      case WorkspaceSection.AddDevice:
         return ManageSectionScope.None;
     }
   }
@@ -80,4 +88,13 @@ export class VaultUiState {
   newIdentity = $state<NewIdentityStage>(NewIdentityStage.Off);
   /** The name given to the identity being created. */
   newIdentityName = $state("");
+  /** The vault opened beside its identity card. It stays open while the
+   * vault unlocks, so unlocking does not go into the vault by itself. */
+  vaultPanelStoreId = $state("");
+  /** The deep link a panel unlock interrupted, for Open vault to return to. */
+  readonly unlockReturn = new UnlockReturn();
+  /** Importing a vault from a sync provider ("Import from sync provider"
+   * under New vault). The unlocked workspace sets it before locking, so
+   * the locked identities page continues the import on the card. */
+  vaultImportOpen = $state(false);
 }

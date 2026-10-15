@@ -109,13 +109,10 @@ After an Add identity protection action persists and adopts another app key,
 the browser clears the prior decrypted provider grants and provider drafts.
 Cancellation or failure preserves the prior session. A committed local identity
 transition also clears pending extension-handoff secrets.
-An authenticated legacy wrapped key is promoted into the directory and keyring
-with its singleton signing seed before the unlocked session is adopted.
-When a pre-vault legacy identity has no signing seed or signing public key, that
-promotion mints its first signer. Existing signing evidence without its seed
-fails closed instead of silently changing signer identity.
-Locked pre-sealed provider imports preserve eligible legacy grants before they
-publish the first app-scoped provider snapshot.
+Protecting an identity that has no keyring entry yet adopts the signer the
+session already signs with; an identity without vaults or signing evidence
+mints its first signer. Existing signing evidence without its seed fails closed
+instead of silently changing signer identity.
 Extension import binds the grant's protected local identity before importing
 event bytes or provider state. A blocked activation leaves both untouched.
 An extension grant imported for another app ID becomes the persisted local
@@ -131,31 +128,14 @@ The directory contains:
 - an explicit `Empty` or `Selected(identity_id)` state; and
 - app IDs retired by destructive local recovery.
 
-Older versions allowed one app key to appear in several identities.
-Load migrates those records in the existing IndexedDB transaction.
-It merges every identity connected by a shared app key.
-The selected identity survives when it belongs to that group.
-An identity referenced by `pending_simple_genesis_v1` takes precedence over
-the selection so a resumable genesis marker cannot become orphaned.
-When the marker is staged, the same transaction normalizes its base and
-candidate directory snapshots before rewriting the live directory.
-Cleanup repeats that snapshot migration when either the live directory or the
-staged base contains legacy duplicate ownership. Duplicate ownership introduced
-only by the candidate remains invalid and is rejected.
-Every later directory update repeats this marker-aware migration within its
-write transaction. Authenticated handoff and staged genesis cleanup preserve the
-pending identity inside their transactions. A concurrent pre-upgrade writer
-cannot absorb the pending identity between preflight migration and mutation.
-All distinct members and vault DEK grants survive the merge.
-The normalized directory is rewritten before unique app-key ownership is
-enforced.
-A valid directory without duplicate app-key ownership remains usable without
-decoding a malformed or future pending-genesis marker.
+Each app key belongs to exactly one identity; a directory that breaks this is
+rejected when it is read. A valid directory remains usable without decoding a
+malformed or future pending-genesis marker.
 
 Each identity member stores its X25519 encryption public key and Ed25519 event
-signing public key. Older records decode a missing signing key as unavailable.
-They cannot enter a new signed Simple-vault genesis roster until an authenticated
-handoff or the local signer supplies that public key.
+signing public key. A member whose signing key is unavailable cannot enter a
+new signed Simple-vault genesis roster until an authenticated handoff or the
+local signer supplies that public key.
 
 Destructive device recovery retires only the explicitly targeted local app key
 whose protection became inaccessible.
@@ -246,9 +226,6 @@ Simple vault creation uses the following marker contract:
   - `flow` is explicitly `ordinary` or `staged`.
   - The staged flow carries the base directory and inactive candidate directory
     with identity-owned DEK envelopes.
-  - Writers also emit the legacy `stagedIdentity` projection for already-open
-    tabs.
-  - Reject conflicting current and legacy staged state.
 - Resume the same store and identity binding after a reload.
 - Block local identity creation and activation while a Simple or Sentinel
   genesis transition or local recovery cleanup remains pending.
@@ -256,21 +233,14 @@ Simple vault creation uses the following marker contract:
   connect completes.
   - An older tab cannot delete a newer genesis marker.
 - Let the marker own the genesis timestamp and complete signed event lifecycle.
-- Set `eventState` to `awaiting-event`, `legacy-event-pinned`, or
-  `event-pinned`.
-  - The current pinned variant owns the signed `eventYaml`, an app-key-sealed
+- Set `eventState` to `awaiting-event` or `event-pinned`.
+  - The pinned variant owns the signed `eventYaml`, an app-key-sealed
     `signingSeedEnvelope`, and staged-member signer envelopes before the first
     event-log write.
   - Either authorized staged member can resume the exact signer and event after
     a reload.
-- Decode legacy variants conservatively:
-  - A marker without `createdAt` uses the Unix epoch timestamp.
-  - A marker without `eventState` becomes `awaiting-event`.
-  - A preceding top-level `eventYaml`, or an `event-pinned` state without seed
-    material, becomes `legacy-event-pinned`.
-  - Upgrade that state only after the durable seed matches the pinned event
-    signer.
-  - Apply the same signer check before sealing a legacy plaintext seed.
+- Decode the marker strictly: a missing field or unknown event state is an
+  error, and older marker shapes are not upgraded.
 
 Destructive recovery clears identity ownership atomically while retaining a
 fail-closed ledger of retired app IDs. Tabs quiesce before recovery. Separate
@@ -283,14 +253,6 @@ verified reconciliation. Locked remote sync persists the verified projected
 epoch before password self-enrollment can append a membership event. The v2
 reconciliation marker preserves resumable progress across reloads.
 
-The first directory read migrates `identity_record_v1` when present:
-
-1. decode the singleton record;
-2. write a valid directory with that record selected; and
-3. delete the legacy key only after the directory write succeeds.
-
-Pre-directory builds cannot read the new key.
-Downgrading after migration is unsupported.
 The local directory caches the replicated identity control log. Identity sync
 applies the log's members and DEK envelopes to the matching local record.
 
@@ -453,50 +415,25 @@ from the approved control log, which also carries their DEKs.
 ### Mount sync providers on the identity
 
 Provider rows stay in the app-scoped `providers:{app_id}` snapshot, which is
-already one local identity's storage. Each row records its remote layout.
+already one local identity's storage.
 
-- **Identity namespaced rows**
-  - Replicate the identity log and every vault the identity owns.
+- **Remote rows (GitHub, Google Drive, iCloud, local folder)**
+  - Are identity mounts: each replicates the identity log and every vault the
+    identity owns.
   - Use the namespaced paths in
     [identity-control-log.md](../../../nook-event-log/.cortex/docs/architecture/identity-control-log.md#store-the-log-once-per-provider-mount).
-- **Legacy vault root rows**
-  - Rows saved before identity mounts keep their one vault at the legacy root.
-  - They also carry the identity log in its own namespace.
-- **iCloud rows**
-  - Stay bound to the vault they were added from until `CloudKit` can list a
-    namespace.
+- **Browser rows**
+  - Hold one vault in this browser's own store.
 - **Mount records**
   - The identity log records each remote row's credential-free target.
   - A joining installation sees recorded mounts it has not connected and
     connects each with its own credential.
-  - A joining installation saves its row before it can read the log. Once
-    the log arrives, the row takes the layout recorded for its target: a
-    namespaced record wins, and a legacy record binds the row to that vault.
 
 **Prohibited:** add a GitHub provider while vault A is open and leave vault B
 of the same identity without replication.
 
-**Required:** add the provider on **Identity → Sync**. The namespaced row
-replicates the identity log and both vaults.
-
-### Migrate per-vault onboarding
-
-Existing data is migrated without moving remote files.
-
-- **Per-vault join events:** an installation that can open the identity's
-  vaults writes the identity genesis from their signed rosters. The
-  [migration rules](../../../nook-event-log/.cortex/docs/architecture/identity-control-log.md#migrate-per-vault-membership-once)
-  own which devices become members.
-- **Per-vault provider rows:** missing `layout` decodes as the legacy vault
-  root. Each row bound to a vault becomes a `legacy-single-vault` mount record.
-- **Rollback projection:** schema-1 rollback rows omit identity namespaced rows,
-  because an older build would route them to the legacy root.
-
-**Prohibited:** copy a legacy vault's remote events into
-`nook-log/v1/vaults/{store_id}/events` during migration.
-
-**Required:** keep them at the legacy root and record the row's layout. Remote
-history stays where every existing replica already reads it.
+**Required:** add the provider on **Identity → Sync**. The row replicates the
+identity log and both vaults.
 
 ## Browser extension boundary
 

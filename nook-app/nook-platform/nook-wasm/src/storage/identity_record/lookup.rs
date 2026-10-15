@@ -102,24 +102,7 @@ impl NookDatabase {
                     wrapped_identity: entry.wrapped_app_key().clone(),
                 })
             }
-            LocalIdentityProtection::Unprotected => {
-                match NookDatabase::load_legacy_wrapped_device_identity_from_store(&store).await? {
-                    ProtectedIdentityLookup::Configured(identity)
-                        if match &requested_app_id {
-                            ProjectionAppSelection::Persisted => true,
-                            ProjectionAppSelection::Requested(requested) => {
-                                requested == &identity.app_id
-                            }
-                        } =>
-                    {
-                        ProtectedIdentityLookup::Configured(identity)
-                    }
-                    ProtectedIdentityLookup::Configured(_)
-                    | ProtectedIdentityLookup::Unconfigured => {
-                        ProtectedIdentityLookup::Unconfigured
-                    }
-                }
-            }
+            LocalIdentityProtection::Unprotected => ProtectedIdentityLookup::Unconfigured,
         };
         transaction.done().await.map_err(|error| {
             NookError::IndexedDb(format!("Identity projection completion error: {error:?}"))

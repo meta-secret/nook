@@ -56,6 +56,7 @@ mod multi_device;
 mod passkeys;
 mod password;
 mod password_unlock;
+mod remote_vault_choice;
 mod search_catalog;
 mod secrets;
 mod sentinel;
@@ -90,9 +91,9 @@ pub use session::{NookEventLogSyncIssueResult, NookVaultManager, NookVaultNameSt
 mod grant_authority;
 
 pub(in crate::manager) use session::{
-    CeremonyState, EventLogSessionState, EventLogSyncIssueState, SearchCatalogRestore,
-    SearchCatalogState, StorageSession, SyncOutboxState, VaultCryptoState, VaultNameState,
-    VaultSessionState,
+    CeremonyState, ChosenProviderVault, EventLogSessionState, EventLogSyncIssueState,
+    SearchCatalogRestore, SearchCatalogState, StorageSession, SyncOutboxState, VaultCryptoState,
+    VaultNameState, VaultSessionState,
 };
 
 use crate::{NookJoinRequest, NookSecretRecord, NookVaultArchitecture, NookVaultMember};
@@ -567,14 +568,10 @@ impl NookVaultManager {
         // method pattern-matches on `StorageMode` instead of comparing
         // strings.
         let mode = StorageMode::parse(storage_mode)?;
-        // Rust produced this ref from the provider row; the layout prefix
-        // selects the event namespaces and never reaches a provider API.
-        let remote = nook_core::LayoutRemoteRef::parse(github_repo_name);
-        let github_repo_name = remote.inner;
         let previous_mode = self.storage.mode;
         let previous_remote_ref = self.storage.remote_ref.clone();
         self.storage.mode = mode;
-        self.storage.select_layout(remote.layout);
+        self.storage.forget_namespaces();
 
         match mode {
             StorageMode::Local => {
@@ -612,14 +609,10 @@ impl NookVaultManager {
                 DriveStorageClient::new(&self.storage.access_token)
                     .verify_drive_access()
                     .await?;
-                // Schema-1 and unprefixed historical IDs keep the appData root.
-                // New schema-2 private targets resolve a deterministic child folder;
-                // shared Drive still targets the configured My Drive folder.
+                // A private provider resolves its own child folder under appData;
+                // shared Drive targets the configured My Drive folder.
                 self.storage.drive_event_parent =
                     match DriveStorageTargetRef::parse(&known_file_id)? {
-                        DriveStorageTargetRef::LegacyAppDataFolder => {
-                            DriveEventParent::AppDataFolder
-                        }
                         DriveStorageTargetRef::SharedFolder { folder_id } => {
                             DriveEventParent::SharedFolder { folder_id }
                         }
@@ -635,8 +628,8 @@ impl NookVaultManager {
                     };
                 self.storage.remote_ref = match &self.storage.drive_event_parent {
                     DriveEventParent::SharedFolder { folder_id } => folder_id.clone(),
-                    DriveEventParent::AppDataFolder => known_file_id,
-                    DriveEventParent::PrivateAppDataFolder { .. } => {
+                    DriveEventParent::AppDataFolder
+                    | DriveEventParent::PrivateAppDataFolder { .. } => {
                         self.storage.drive_event_parent.encode_storage_id()
                     }
                 };

@@ -24,7 +24,7 @@ async function expectNoSidewaysScroll(page: Page) {
     .toEqual({ clientWidth: PHONE.width, scrollWidth: PHONE.width })
 }
 
-test('a phone gets a full first run, an edge-to-edge shell and a five-slot bottom bar', async ({
+test('a phone gets a full first run, an edge-to-edge shell and the card menu', async ({
   page,
 }) => {
   await page.setViewportSize(PHONE)
@@ -71,45 +71,33 @@ test('a phone gets a full first run, an edge-to-edge shell and a five-slot botto
   await expectNoSidewaysScroll(page)
   await demoBeat(page)
 
-  // Identity management: four parts and More fit the bottom bar.
+  // Manage on the card drops a short list of actions over it.
   await page.getByTestId('header-identities-btn').click()
-  await page.getByTestId('identity-manage').first().click()
-  await expect(page.getByTestId('identity-overview')).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-  const bar = page.getByTestId('manage-nav')
-  await expect(bar).toBeInViewport()
-  for (const item of ['overview', 'vaults', 'sync', 'devices', 'more']) {
-    await expect(page.getByTestId(`manage-nav-${item}`)).toBeInViewport()
-  }
-  await expect(page.getByTestId('manage-nav-keys')).toBeHidden()
+  const manage = page.getByTestId('identity-manage').first()
+  await manage.click()
+  await expect(manage).toHaveAttribute('aria-expanded', 'true')
+  await expect(page.getByTestId('identity-menu')).toBeVisible()
   await expectNoSidewaysScroll(page)
   await demoBeat(page)
 
-  // More opens security and settings above the bar.
-  const more = page.getByTestId('manage-nav-more')
-  await more.click()
-  await expect(more).toHaveAttribute('aria-expanded', 'true')
-  await expect(page.getByTestId('manage-nav-keys')).toBeVisible()
-  await expect(page.getByTestId('manage-nav-passwords')).toBeVisible()
-  await expect(page.getByTestId('manage-nav-settings')).toBeVisible()
-  await demoBeat(page)
-
-  await page.getByTestId('manage-nav-keys').click()
+  // Overview opens beside the card: what the identity has, each tile
+  // opening its page.
+  await page.getByTestId('identity-overview-toggle').first().click()
+  await expect(page.getByTestId('identity-overview')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await expectNoSidewaysScroll(page)
+  const keys = page.getByTestId('overview-keys')
+  await keys.scrollIntoViewIfNeeded()
+  await keys.click()
   await expect(page).toHaveURL(/\/identity\/keys$/)
   await expect(page.getByTestId('identity-keys')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-  await expect(more).toHaveAttribute('aria-expanded', 'false')
-  await expect(more).toHaveAttribute('aria-current', 'page')
   await expectNoSidewaysScroll(page)
   await demoBeat(page)
 
-  // Escape closes the sheet without leaving the page.
-  await more.click()
-  await expect(page.getByTestId('manage-nav-settings')).toBeVisible()
-  await page.keyboard.press('Escape')
-  await expect(page.getByTestId('manage-nav-settings')).toBeHidden()
-  await expect(page).toHaveURL(/\/identity\/keys$/)
+  await page.getByTestId('identity-page-back').click()
+  await expect(page.getByTestId('identity-overview')).toBeVisible()
   await demoBeat(page)
 })

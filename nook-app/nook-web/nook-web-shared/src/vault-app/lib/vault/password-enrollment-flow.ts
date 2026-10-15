@@ -259,7 +259,6 @@ export class PasswordEnrollmentActions {
               label: "GitHub",
               githubPat: storedGithubPat(githubPat),
               githubRepo: storedGithubRepository(githubRepo),
-              layout: "identityNamespaced",
               createdAt: isoTimestamp(),
             };
             enrollmentStorageArgs = state.providerWasmArgs(githubMount);
@@ -521,11 +520,7 @@ export class PasswordEnrollmentActions {
             if (sharedProviderNeedsSave) {
               state.activateLoginSetup("oauth-file");
             }
-            const sharedMount: StorageProvider = {
-              ...provider,
-              layout: "identityNamespaced",
-            };
-            enrollmentStorageArgs = state.providerWasmArgs(sharedMount);
+            enrollmentStorageArgs = state.providerWasmArgs(provider);
           } else if (enrollmentProvider.type === OAUTH_FILE_PROVIDER_TYPE) {
             const presetValue = enrollmentProvider.oauthPreset;
             const decodedPreset = await Effect.runPromise(
@@ -559,7 +554,6 @@ export class PasswordEnrollmentActions {
               type: OAUTH_FILE_PROVIDER_TYPE,
               label: "Enrollment OAuth provider",
               oauthFile: configuredOAuthFile(oauthFile),
-              layout: "identityNamespaced",
               createdAt: isoTimestamp(),
             };
             state.storageMode = "oauth-file";
@@ -615,16 +609,10 @@ export class PasswordEnrollmentActions {
             return;
           }
           // The mount the join went through becomes this app's identity mount.
-          state.providerSaveLayout = "identityNamespaced";
           state.providerSaveTarget = "adopted";
           const savedProvider = await state.ensureProviderSaved();
           if (savedProvider.isErr()) {
             state.errorMsg = state.t(savedProvider.error.translationKey);
-            return;
-          }
-          const aligned = await state.identityControl.alignProviderRows();
-          if (aligned.isErr()) {
-            state.errorMsg = state.t(aligned.error.translationKey);
             return;
           }
           state.identityControl.markJoinPending(identityLabel);

@@ -635,7 +635,6 @@ mod browser_tests {
                 ),
                 local_folder: StoredLocalFolderConfiguration::NotApplicable,
                 store_id: ProviderVaultScope::Unscoped,
-                layout: nook_core::ProviderRowLayout::LegacyVaultRoot,
                 sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-01-01T00:00:00Z".into(),
             }
@@ -769,7 +768,8 @@ mod browser_tests {
 
         let oauth = OAuthFileConfigData::default();
         let remote = super::oauth_remote_storage_ref(&ProviderFixture::wire(&oauth)?)?;
-        assert!(remote.value().is_err());
+        // A private Drive row always has its own folder, pending until created.
+        assert_eq!(remote.value()?, "private-folder-v2:pending");
         assert!(
             super::update_oauth_remote_ref(
                 &ProviderFixture::wire(&oauth)?,

@@ -157,8 +157,7 @@ mod tests {
                         ..OAuthFileConfigData::default()
                     }),
                     local_folder: StoredLocalFolderConfiguration::NotApplicable,
-                    store_id: ProviderVaultScope::StoreId(store_id.to_owned()),
-                    layout: crate::ProviderRowLayout::LegacyVaultRoot,
+                    store_id: ProviderVaultScope::Unscoped,
                     sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                     created_at: "2026-07-12T00:00:00.000Z".to_owned(),
                 }],

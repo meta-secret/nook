@@ -61,9 +61,8 @@ pub struct ICloudOAuthTokenInput<'a> {
 impl OAuthFileConfigData {
     /// Apply provider setup semantics before projecting a draft connection.
     ///
-    /// A newly created private Google Drive provider must resolve an isolated
-    /// child folder even when its draft started from a legacy-shaped default.
-    /// Existing schema-1 rows retain the legacy appData root.
+    /// A newly created private Google Drive provider resolves its own child
+    /// folder, whatever target its draft carried.
     #[must_use]
     pub fn with_provider_save_setup(&self, setup: ProviderSaveSetup) -> Self {
         let mut configured = self.clone();
@@ -131,7 +130,7 @@ impl OAuthFileConfigData {
             },
             drive_mode: GoogleDriveMode::Private,
             folder_id: StoredGoogleDriveFolder::Root,
-            drive_private_target: StoredGoogleDrivePrivateTarget::LegacyAppDataFolder,
+            drive_private_target: StoredGoogleDrivePrivateTarget::Pending,
             icloud_mode,
             icloud_share_target: existing.icloud_share_target,
         }
@@ -166,7 +165,7 @@ impl OAuthFileConfigData {
         switched.account_email = StoredOAuthAccountIdentity::Unknown;
         switched.file_id = StoredOAuthRemoteFileId::Unresolved;
         switched.folder_id = StoredGoogleDriveFolder::Root;
-        switched.drive_private_target = StoredGoogleDrivePrivateTarget::LegacyAppDataFolder;
+        switched.drive_private_target = StoredGoogleDrivePrivateTarget::Pending;
         switched
     }
 
@@ -179,7 +178,7 @@ impl OAuthFileConfigData {
         bound.drive_mode = GoogleDriveMode::Shared;
         bound.folder_id = StoredGoogleDriveFolder::FolderId(folder_id.into_inner());
         bound.file_id = StoredOAuthRemoteFileId::Unresolved;
-        bound.drive_private_target = StoredGoogleDrivePrivateTarget::LegacyAppDataFolder;
+        bound.drive_private_target = StoredGoogleDrivePrivateTarget::Pending;
         Ok(bound)
     }
 
@@ -202,22 +201,17 @@ impl OAuthFileConfigData {
         if self.preset == OauthFilePreset::GoogleDrive
             && self.resolved_google_drive_mode() == GoogleDriveMode::Private
         {
-            match &self.drive_private_target {
-                StoredGoogleDrivePrivateTarget::Pending => {
-                    return OAuthRemoteStorageReference::Resolved(
-                        DRIVE_PRIVATE_FOLDER_PENDING_REF.into(),
-                    );
-                }
+            return OAuthRemoteStorageReference::Resolved(match &self.drive_private_target {
                 StoredGoogleDrivePrivateTarget::FolderId(folder_id)
                     if !folder_id.trim().is_empty() =>
                 {
-                    return OAuthRemoteStorageReference::Resolved(
-                        format!("{DRIVE_PRIVATE_FOLDER_REF_PREFIX}{}", folder_id.trim()).into(),
-                    );
+                    format!("{DRIVE_PRIVATE_FOLDER_REF_PREFIX}{}", folder_id.trim()).into()
                 }
-                StoredGoogleDrivePrivateTarget::LegacyAppDataFolder
-                | StoredGoogleDrivePrivateTarget::FolderId(_) => {}
-            }
+                StoredGoogleDrivePrivateTarget::Pending
+                | StoredGoogleDrivePrivateTarget::FolderId(_) => {
+                    DRIVE_PRIVATE_FOLDER_PENDING_REF.into()
+                }
+            });
         }
         match &self.file_id {
             StoredOAuthRemoteFileId::FileId(id) if !id.trim().is_empty() => {
@@ -234,10 +228,6 @@ impl OAuthFileConfigData {
         let remote_ref = remote_ref.trim();
         if self.preset == OauthFilePreset::GoogleDrive
             && self.resolved_google_drive_mode() == GoogleDriveMode::Private
-            && !matches!(
-                &self.drive_private_target,
-                StoredGoogleDrivePrivateTarget::LegacyAppDataFolder
-            )
             && let Ok(DriveStorageTargetRef::PrivateFolder { folder_id }) =
                 DriveStorageTargetRef::parse(remote_ref)
         {
@@ -290,7 +280,7 @@ mod tests {
             account_email: StoredOAuthAccountIdentity::Email("owner@example.com".to_owned()),
             drive_mode: GoogleDriveMode::Private,
             folder_id: StoredGoogleDriveFolder::Root,
-            drive_private_target: crate::StoredGoogleDrivePrivateTarget::LegacyAppDataFolder,
+            drive_private_target: crate::StoredGoogleDrivePrivateTarget::Pending,
             icloud_mode: ICloudMode::Private,
             icloud_share_target: StoredICloudShareTarget::Personal,
         };
@@ -424,9 +414,10 @@ mod tests {
             file_id: StoredOAuthRemoteFileId::FileId("file-id".to_owned()),
             ..OAuthFileConfigData::default()
         };
+        // A private Drive provider routes through its own folder.
         assert_eq!(
             google.remote_storage_ref(),
-            OAuthRemoteStorageReference::Resolved("file-id".into())
+            OAuthRemoteStorageReference::Resolved(crate::DRIVE_PRIVATE_FOLDER_PENDING_REF.into())
         );
         google.folder_id = StoredGoogleDriveFolder::FolderId(" shared-folder ".to_owned());
         assert_eq!(
@@ -464,11 +455,11 @@ mod tests {
     }
 
     #[test]
-    fn private_drive_remote_reference_persists_stable_folder_id_without_changing_legacy_file_id()
+    fn private_drive_remote_reference_persists_stable_folder_id_and_keeps_the_file_id()
     -> anyhow::Result<()> {
         let mut pending = OAuthFileConfigData {
             preset: OauthFilePreset::GoogleDrive,
-            file_id: StoredOAuthRemoteFileId::FileId("legacy-file-id".to_owned()),
+            file_id: StoredOAuthRemoteFileId::FileId("file-id".to_owned()),
             drive_private_target: crate::StoredGoogleDrivePrivateTarget::Pending,
             ..OAuthFileConfigData::default()
         };
@@ -494,26 +485,12 @@ mod tests {
         );
         assert_eq!(
             pending.file_id,
-            StoredOAuthRemoteFileId::FileId("legacy-file-id".to_owned())
+            StoredOAuthRemoteFileId::FileId("file-id".to_owned())
         );
         assert_eq!(
             pending.remote_storage_ref(),
             OAuthRemoteStorageReference::Resolved("private-folder-v2:stable-folder-id".into())
         );
-
-        let legacy = OAuthFileConfigData {
-            preset: OauthFilePreset::GoogleDrive,
-            file_id: StoredOAuthRemoteFileId::FileId("unchanged-legacy-id".to_owned()),
-            ..OAuthFileConfigData::default()
-        };
-        assert_eq!(
-            legacy.remote_storage_ref(),
-            OAuthRemoteStorageReference::Resolved("unchanged-legacy-id".into())
-        );
-        assert!(matches!(
-            legacy.with_remote_ref("unchanged-legacy-id"),
-            OAuthRemoteConfigurationUpdate::Unchanged
-        ));
         Ok(())
     }
 

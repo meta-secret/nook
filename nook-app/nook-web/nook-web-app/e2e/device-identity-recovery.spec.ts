@@ -1,6 +1,10 @@
 import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures'
-import { ENROLLMENT_UNLOCK_TIMEOUT_MS, expectFirstVaultOpen } from './helpers'
+import {
+  ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  expectFirstVaultOpen,
+  openVaultPanelAndUnlock,
+} from './helpers'
 
 declare global {
   interface Window {
@@ -46,7 +50,7 @@ async function openProtectionOverlay(page: Page): Promise<void> {
       return 'waiting'
     })
     .not.toBe('waiting')
-  if (!(await overlay.isVisible())) await unlock.click()
+  if (!(await overlay.isVisible())) await openVaultPanelAndUnlock(page)
   await expect(overlay).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })

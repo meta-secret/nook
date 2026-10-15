@@ -156,65 +156,46 @@ the DEK can close with `vault-dek-granted`.
 
 ### Store the log once per provider mount
 
-Every remote mount that can list a namespace stores the identity's log beside
-its vaults. Events are immutable and content-addressed, so replicas converge
-by set union.
+Every remote mount stores the identity's log beside its vaults, each in its own
+namespace. Events are immutable and content-addressed, so replicas converge by
+set union.
 
 - **Path-addressed providers (GitHub, local folder)**
   - Identity log: `nook-identity/v1/{identity_id}/events/{digest}.yaml`.
-  - Namespaced vault: `nook-log/v1/vaults/{store_id}/events/{digest}.yaml`.
-  - Legacy vault root: `nook-log/v1/events/{digest}.yaml`.
+  - Vault: `nook-log/v1/vaults/{store_id}/events/{digest}.yaml`.
 - **Google Drive**
   - Each namespace is a child folder of the row's event parent, named by
-    `EventLogLocation::namespace_tag`.
-  - The legacy root keeps listing only direct children, so namespaced files
-    never enter a legacy vault's classification.
+    `EventLogLocation::namespace_tag` (`nook-identity-{id}`, `nook-vault-{id}`).
 - **iCloud**
-  - `CloudKit` cannot list by namespace until a record type for identity
-    events is deployed to the production schema.
-  - iCloud rows keep replicating the one vault they are bound to. They do not
-    carry the identity log, and the Sync page says so.
+  - Every record is a `NookLogEvent` whose queryable `location` field holds
+    the namespace tag, so one log can be listed and deleted on its own.
 - **Browser**
   - `nook_db.events` holds `identity_event:{identity_id}:{event_id}` rows and
     an `identity_event_index:{identity_id}` index in one transaction.
 
-Identity sync lists each mount's identity namespace, fetches missing events,
-validates them, unions them locally, then puts every local event the mount
-lacks. A failed mount is reported on the Sync page and is retried by the next
-sync.
+- **Discovery**
+  - `EventLogNamespaceKind` lists the identities or vaults a target holds.
+  - Recovering from a provider lists its vault namespaces and asks which vault
+    to open when there are several.
+- **Identity sync**
+  - List each mount's identity namespace, fetch missing events, validate them,
+    and union them locally.
+  - Put every local event the mount lacks.
+  - Report a failed mount on the Sync page; the next sync retries it.
 
-**Prohibited:** write identity events into `nook-log/v1/events`, where a legacy
-vault's classification guard reads every file as a vault event.
+**Prohibited:** store identity events in a vault namespace or vault events in
+the identity namespace.
 
-**Required:** write them under `EventLogLocation::Identity`. The legacy vault
-root keeps exactly one `store_id`, and its fail-closed classification stays
-unchanged.
+**Required:** address every log through `EventLogLocation`; there is no shared
+event root.
 
-### Migrate per-vault membership once
+### Start the log with its founder
 
-An identity with vaults but no control log is migrated by an installation that
-can open those vaults.
-
-1. Open each owned Simple vault's DEK at its current key epoch.
-2. Read each vault's authorized roster from its signed event graph.
-   - A device approved by `join-approved` and not revoked is authorized.
-   - A revocation concurrent with an approval wins.
-3. Write the founder-signed `identity-created` genesis.
-4. Write one event with:
-   - `member-approved` for each device authorized in at least one vault.
-   - `vault-registered` per vault, wrapped to the devices that vault authorized.
-   - `provider-mounted` for each existing provider row with a known target.
-5. Report devices whose public keys do not form a valid member tuple.
-
-A device revoked from any owned vault is not carried into the identity. A
-member that one vault never authorized gets no envelope for it. The projection
-lists it as missing that vault's current DEK.
-
-**Prohibited:** make every device from any vault a member of every vault during
-migration.
-
-**Required:** wrap each vault's DEK only to devices that vault authorized. The
-migration must not silently widen access that a vault-level decision limited.
+An identity with no control log gets one when this installation first needs it:
+the founder-signed `identity-created` genesis. Each vault joins the log as it
+opens here (`vault-registered`, wrapped to this member), and every other app
+joins through a join request that a member approves. Vault rosters never become
+identity members on their own.
 
 ## Prohibited actions
 
@@ -245,7 +226,6 @@ Behavior-focused Rust tests cover the log in
   - `projection_is_independent_of_delivery_order_and_resolves_pending_parents`
 - **Identity binding, forged genesis, tampering**
   - `envelopes_bind_to_one_identity_and_one_founder_genesis`
-- **Migration from vault rosters**
-  - `migration_carries_authorized_vault_devices_into_the_identity`
 - **Remote namespaces**
-  - `namespaces_never_overlap_and_keep_the_legacy_vault_root`
+  - `vault_and_identity_namespaces_never_overlap`
+  - `namespace_ids_are_read_back_from_paths_and_tags`

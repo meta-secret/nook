@@ -134,6 +134,13 @@ impl AppKey {
     ) -> MultiDeviceResult<String> {
         AgeCiphertextOpen::new(envelope, identity).open()
     }
+
+    pub(super) fn open_identity_raw_bytes(
+        envelope: &AgeArmoredCiphertext,
+        identity: &Identity,
+    ) -> MultiDeviceResult<zeroize::Zeroizing<Vec<u8>>> {
+        AgeCiphertextOpen::new(envelope, identity).open_bytes()
+    }
 }
 
 impl AuthKeyId {
@@ -350,6 +357,12 @@ impl<'a> AgeCiphertextOpen<'a> {
     }
 
     fn open(self) -> MultiDeviceResult<String> {
+        let decrypted = self.open_bytes()?;
+        String::from_utf8(decrypted.to_vec())
+            .map_err(|error| MultiDeviceError::Age(AgeCryptoError::Read(error.to_string())))
+    }
+
+    fn open_bytes(self) -> MultiDeviceResult<zeroize::Zeroizing<Vec<u8>>> {
         use age::armor::ArmoredReader;
 
         let decryptor =
@@ -360,9 +373,9 @@ impl<'a> AgeCiphertextOpen<'a> {
         let mut reader = decryptor
             .decrypt(iter::once(self.identity as &dyn age::Identity))
             .map_err(|error| MultiDeviceError::Age(AgeCryptoError::Decrypt(error.to_string())))?;
-        let mut decrypted = String::new();
+        let mut decrypted = zeroize::Zeroizing::new(Vec::new());
         reader
-            .read_to_string(&mut decrypted)
+            .read_to_end(&mut decrypted)
             .map_err(|error| MultiDeviceError::Age(AgeCryptoError::Read(error.to_string())))?;
         Ok(decrypted)
     }

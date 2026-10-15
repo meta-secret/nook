@@ -1,76 +1,76 @@
 <script lang="ts">
-  import { type SecretOperationResult } from "$lib/vault/secret-operation-failure";
-  import type { SecretMutationOutcome } from "$lib/vault/secrets";
-  import { err, ok } from "neverthrow";
+  import { type SecretOperationResult } from '$lib/vault/secret-operation-failure'
+  import type { SecretMutationOutcome } from '$lib/vault/secrets'
+  import { err, ok } from 'neverthrow'
   import {
     VaultStorageFailure,
     VaultStorageFailureKind,
-  } from "$lib/runtime/storage-failure";
+  } from '$lib/runtime/storage-failure'
   import {
     VaultOperationStale,
     VaultOperationStaleKind,
-  } from "$lib/runtime/vault-operation-stale";
-  import { Match } from "effect";
-  import type { SecretPageRefreshSnapshot } from "$lib/vault/action-contexts";
+  } from '$lib/runtime/vault-operation-stale'
+  import { Match } from 'effect'
+  import type { SecretPageRefreshSnapshot } from '$lib/vault/action-contexts'
   type SecretFieldCopy = {
-    readonly text: string;
-    readonly id: string;
-    readonly field: string;
-  };
+    readonly text: string
+    readonly id: string
+    readonly field: string
+  }
 
   type SecretCreationSubmission = {
-    readonly id: string;
-    readonly type: SecretType;
-    readonly data: string;
-  };
+    readonly id: string
+    readonly type: SecretType
+    readonly data: string
+  }
 
   type SecretReplacementSubmission = {
-    readonly oldId: string;
-    readonly type: SecretType;
-    readonly data: string;
-  };
+    readonly oldId: string
+    readonly type: SecretType
+    readonly data: string
+  }
 
   type SecretAddModeChange = {
-    readonly open: boolean;
-    readonly selection: SecretTypeSelection;
-  };
+    readonly open: boolean
+    readonly selection: SecretTypeSelection
+  }
 
   type SecretListItemComparison = readonly [
     left: NookSecretListItem,
     right: NookSecretListItem,
-  ];
+  ]
 
   type SecretGroup = {
-    readonly site: string;
-    readonly items: NookSecretListItem[];
-  };
+    readonly site: string
+    readonly items: NookSecretListItem[]
+  }
 
   type VaultListEntry = {
-    readonly item: NookSecretListItem;
-    readonly row: number;
-    readonly first: boolean;
-  };
+    readonly item: NookSecretListItem
+    readonly row: number
+    readonly first: boolean
+  }
 
   type VaultListGroup = {
-    readonly site: string;
-    readonly heading: boolean;
-    readonly headRow: number;
-    readonly entries: readonly VaultListEntry[];
-  };
+    readonly site: string
+    readonly heading: boolean
+    readonly headRow: number
+    readonly entries: readonly VaultListEntry[]
+  }
 
   type VaultListLayout = {
-    readonly groups: readonly VaultListGroup[];
-    readonly rows: number;
-  };
+    readonly groups: readonly VaultListGroup[]
+    readonly rows: number
+  }
 
-  type SecretGroupComparison = readonly [left: SecretGroup, right: SecretGroup];
+  type SecretGroupComparison = readonly [left: SecretGroup, right: SecretGroup]
 
-  import { I18N_KEYS } from "../../../generated/i18n-keys";
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import {
     NookSecretTypeFilter,
     secret_type_name,
     VaultEditDecision,
-  } from "$app-wasm";
+  } from '$app-wasm'
 
   import {
     ArrowLeft,
@@ -82,26 +82,26 @@
     TriangleAlert,
     Vault,
     MousePointerClick,
-  } from "@lucide/svelte";
-  import type { VaultEditRestriction, VaultState } from "$lib/vault.svelte";
-  import { Button } from "$lib/components/ui/button";
-  import AddSecretForm from "./AddSecretForm.svelte";
-  import SecretDetailRow from "./SecretDetailRow.svelte";
+  } from '@lucide/svelte'
+  import type { VaultEditRestriction, VaultState } from '$lib/vault.svelte'
+  import { Button } from '$lib/components/ui/button'
+  import AddSecretForm from './AddSecretForm.svelte'
+  import SecretDetailRow from './SecretDetailRow.svelte'
   import type {
     AuthenticatorCodeView,
     NookSecretListItem,
     PasswordGenerationOptions,
-  } from "$lib/nook";
-  import { SecretType } from "$lib/nook";
+  } from '$lib/nook'
+  import { SecretType } from '$lib/nook'
   import {
     type DecryptedSecrets,
     SecretExposure,
-  } from "$lib/vault/secret-exposure";
-  import { onDestroy, untrack } from "svelte";
+  } from '$lib/vault/secret-exposure'
+  import { onDestroy, untrack } from 'svelte'
   import {
     SecretTypeSelectionKind,
     type SecretTypeSelection,
-  } from "$lib/components/secret-form-state";
+  } from '$lib/components/secret-form-state'
   import {
     AuthenticatorCodePresentationKind,
     ClipboardNoticeKind,
@@ -114,7 +114,7 @@
     type ClipboardNotice,
     type SecretEditor,
     type SecretReveal,
-  } from "./secret-vault-state";
+  } from './secret-vault-state'
 
   let {
     vault,
@@ -127,71 +127,71 @@
     onGeneratePassword,
     onAddModeChange,
   }: {
-    vault: VaultState;
-    isSaving: boolean;
-    editRestriction?: VaultEditRestriction;
-    secrets?: NookSecretListItem[];
+    vault: VaultState
+    isSaving: boolean
+    editRestriction?: VaultEditRestriction
+    secrets?: NookSecretListItem[]
     onAddSecret: (
       args: SecretCreationSubmission,
-    ) => Promise<SecretOperationResult<SecretMutationOutcome.Added>>;
+    ) => Promise<SecretOperationResult<SecretMutationOutcome.Added>>
     onReplaceSecret: (
       args: SecretReplacementSubmission,
-    ) => Promise<SecretOperationResult<SecretMutationOutcome.Replaced>>;
+    ) => Promise<SecretOperationResult<SecretMutationOutcome.Replaced>>
     onDeleteSecret: (
       id: string,
-    ) => Promise<SecretOperationResult<SecretMutationOutcome.Deleted>>;
-    onGeneratePassword: (options: PasswordGenerationOptions) => string;
-    onAddModeChange?: (args: SecretAddModeChange) => void;
-  } = $props();
+    ) => Promise<SecretOperationResult<SecretMutationOutcome.Deleted>>
+    onGeneratePassword: (options: PasswordGenerationOptions) => string
+    onAddModeChange?: (args: SecretAddModeChange) => void
+  } = $props()
 
   const editsBlocked = $derived(
     editRestriction.decision !== VaultEditDecision.Allowed,
-  );
-  let searchPattern = $derived(vault.secretQuery);
-  let pageInteraction = $state(SecretPageInteractionKind.Ready);
-  let searchLoadSequence = 0;
+  )
+  let searchPattern = $derived(vault.secretQuery)
+  let pageInteraction = $state(SecretPageInteractionKind.Ready)
+  let searchLoadSequence = 0
   type SecretSearchCompletion = {
-    readonly sequence: number;
-    readonly result: Awaited<ReturnType<VaultState["loadSecretPage"]>>;
-  };
+    readonly sequence: number
+    readonly result: Awaited<ReturnType<VaultState['loadSecretPage']>>
+  }
   type SecretStalePagePattern = {
     readonly kind: Match.SafeRefinement<
       | VaultOperationStaleKind.RequestSuperseded
       | VaultOperationStaleKind.ContextReplaced
       | VaultOperationStaleKind.OwnerReleased
-    >;
-  };
+    >
+  }
   type SecretCommittedPagePattern = {
-    readonly query: typeof Match.string;
-  };
-  let decryptedSecrets = $state<DecryptedSecrets>({});
-  const initialDecryptedSecrets: DecryptedSecrets = {};
-  let secretExposure = new SecretExposure(initialDecryptedSecrets);
-  let selection = $state<SecretSelection>({ kind: SecretSelectionKind.None });
-  let copiedKey = $state<ClipboardNotice>({ kind: ClipboardNoticeKind.Hidden });
-  let addSecretOpen = $state(false);
+    readonly query: typeof Match.string
+  }
+  let decryptedSecrets = $state<DecryptedSecrets>({})
+  const initialDecryptedSecrets: DecryptedSecrets = {}
+  let secretExposure = new SecretExposure(initialDecryptedSecrets)
+  let selection = $state<SecretSelection>({ kind: SecretSelectionKind.None })
+  let copiedKey = $state<ClipboardNotice>({ kind: ClipboardNoticeKind.Hidden })
+  let addSecretOpen = $state(false)
   let formSelectedType = $state<SecretTypeSelection>({
     kind: SecretTypeSelectionKind.ChoosingType,
-  });
-  let editingItem = $state<SecretEditor>({ kind: SecretEditorKind.Creating });
-  let editLoadSequence = 0;
-  let authenticatorCodes = $state<Record<string, AuthenticatorCodeView>>({});
+  })
+  let editingItem = $state<SecretEditor>({ kind: SecretEditorKind.Creating })
+  let editLoadSequence = 0
+  let authenticatorCodes = $state<Record<string, AuthenticatorCodeView>>({})
 
   class SecretVaultOrdering {
     static byType(...[left, right]: SecretListItemComparison): number {
-      return left.type - right.type;
+      return left.type - right.type
     }
 
     static bySite(...[left, right]: SecretGroupComparison): number {
-      return left.site.localeCompare(right.site);
+      return left.site.localeCompare(right.site)
     }
   }
 
   const typeFilters: Array<{
-    value: SecretType;
-    filter: NookSecretTypeFilter;
-    testId: string;
-    labelKey: string;
+    value: SecretType
+    filter: NookSecretTypeFilter
+    testId: string
+    labelKey: string
   }> = [
     {
       value: SecretType.Login,
@@ -241,67 +241,67 @@
       testId: secret_type_name(SecretType.Passkey),
       labelKey: I18N_KEYS.VaultTypesPasskey,
     },
-  ];
+  ]
 
-  const filteredItems = $derived(secrets);
+  const filteredItems = $derived(secrets)
 
-  const visibleItemCount = $derived(secrets.length);
+  const visibleItemCount = $derived(secrets.length)
   const currentPage = $derived(
     Math.floor(vault.secretPageOffset / vault.secretPageSize) + 1,
-  );
+  )
   const pageCount = $derived(
     Math.max(1, Math.ceil(vault.secretTotal / vault.secretPageSize)),
-  );
+  )
 
   const groups = $derived.by(() => {
-    const dict: Record<string, NookSecretListItem[]> = {};
+    const dict: Record<string, NookSecretListItem[]> = {}
     for (const item of filteredItems) {
-      const key = item.groupKey;
+      const key = item.groupKey
       if (!dict[key]) {
-        dict[key] = [];
+        dict[key] = []
       }
-      dict[key].push(item);
+      dict[key].push(item)
     }
     return Object.entries(dict)
       .map(([site, items]) => ({
         site,
         items: items.sort(SecretVaultOrdering.byType),
       }))
-      .sort(SecretVaultOrdering.bySite);
-  });
+      .sort(SecretVaultOrdering.bySite)
+  })
 
   const listLayout = $derived.by((): VaultListLayout => {
-    let row = 1;
-    const laidOut: VaultListGroup[] = [];
+    let row = 1
+    const laidOut: VaultListGroup[] = []
     for (const group of groups) {
-      const heading = group.items.length > 1;
-      const headRow = row;
-      if (heading) row += 1;
+      const heading = group.items.length > 1
+      const headRow = row
+      if (heading) row += 1
       const entries = group.items.map((item) => {
-        const entry: VaultListEntry = { item, row, first: row === 1 };
-        row += 1;
-        return entry;
-      });
+        const entry: VaultListEntry = { item, row, first: row === 1 }
+        row += 1
+        return entry
+      })
       const laidOutGroup: VaultListGroup = {
         site: group.site,
         heading,
         headRow,
         entries,
-      };
-      laidOut.push(laidOutGroup);
+      }
+      laidOut.push(laidOutGroup)
     }
-    return { groups: laidOut, rows: Math.max(1, row - 1) };
-  });
+    return { groups: laidOut, rows: Math.max(1, row - 1) }
+  })
 
   const filtersNarrowed = $derived(
-    vault.secretQuery.trim() !== "" ||
+    vault.secretQuery.trim() !== '' ||
       vault.secretTypeFilter !== NookSecretTypeFilter.All,
-  );
+  )
 
   function isSelected(id: string): boolean {
     return (
       selection.kind === SecretSelectionKind.Selected && selection.id === id
-    );
+    )
   }
 
   function notifyAddMode() {
@@ -310,92 +310,91 @@
     >[0] = {
       open: addSecretOpen,
       selection: formSelectedType,
-    };
-    onAddModeChange?.(onAddModeChangeArgs);
+    }
+    onAddModeChange?.(onAddModeChangeArgs)
   }
 
   function selectTypeFilter(value: string) {
-    if (value === "all") {
-      vault.secretTypeFilter = NookSecretTypeFilter.All;
+    if (value === 'all') {
+      vault.secretTypeFilter = NookSecretTypeFilter.All
       const pageRequest: Parameters<typeof vault.loadSecretPage>[0] = {
         query: searchPattern.trim(),
         requestedOffset: 0,
-      };
-      loadInteractionPage(pageRequest);
-      return;
+      }
+      loadInteractionPage(pageRequest)
+      return
     }
     const nextFilter = typeFilters.find(
       (filter) => filter.filter === Number(value),
-    );
-    if (!nextFilter) return;
-    vault.secretTypeFilter = nextFilter.filter;
+    )
+    if (!nextFilter) return
+    vault.secretTypeFilter = nextFilter.filter
     const pageRequest: Parameters<typeof vault.loadSecretPage>[0] = {
       query: searchPattern.trim(),
       requestedOffset: 0,
-    };
-    loadInteractionPage(pageRequest);
+    }
+    loadInteractionPage(pageRequest)
   }
 
   function resetTransientSecretViews() {
-    secretExposure.free();
-    const clearedSecrets: DecryptedSecrets = {};
-    secretExposure = new SecretExposure(clearedSecrets);
-    decryptedSecrets = {};
-    authenticatorCodes = {};
+    secretExposure.free()
+    const clearedSecrets: DecryptedSecrets = {}
+    secretExposure = new SecretExposure(clearedSecrets)
+    decryptedSecrets = {}
+    authenticatorCodes = {}
   }
 
   function openAddSecret() {
-    editLoadSequence += 1;
-    releaseEditingItem();
-    formSelectedType = { kind: SecretTypeSelectionKind.ChoosingType };
-    addSecretOpen = true;
-    notifyAddMode();
+    editLoadSequence += 1
+    releaseEditingItem()
+    formSelectedType = { kind: SecretTypeSelectionKind.ChoosingType }
+    addSecretOpen = true
+    notifyAddMode()
   }
 
   function closeAddSecret() {
-    editLoadSequence += 1;
-    releaseEditingItem();
-    addSecretOpen = false;
-    formSelectedType = { kind: SecretTypeSelectionKind.ChoosingType };
-    notifyAddMode();
+    editLoadSequence += 1
+    releaseEditingItem()
+    addSecretOpen = false
+    formSelectedType = { kind: SecretTypeSelectionKind.ChoosingType }
+    notifyAddMode()
   }
 
   function releaseEditingItem() {
-    if (editingItem.kind === SecretEditorKind.Editing)
-      editingItem.record.free();
-    editingItem = { kind: SecretEditorKind.Creating };
+    if (editingItem.kind === SecretEditorKind.Editing) editingItem.record.free()
+    editingItem = { kind: SecretEditorKind.Creating }
   }
 
   async function openEditItem(item: NookSecretListItem) {
-    if (editsBlocked) return;
-    const sequence = ++editLoadSequence;
-    const decrypted = await vault.decryptSecret(item.id);
+    if (editsBlocked) return
+    const sequence = ++editLoadSequence
+    const decrypted = await vault.decryptSecret(item.id)
     if (decrypted.isErr()) {
       if (sequence === editLoadSequence)
-        vault.errorMsg = vault.t(decrypted.error.translationKey);
-      return;
+        vault.errorMsg = vault.t(decrypted.error.translationKey)
+      return
     }
-    const record = decrypted.value;
+    const record = decrypted.value
     if (sequence !== editLoadSequence) {
-      record.free();
-      return;
+      record.free()
+      return
     }
-    releaseEditingItem();
-    editingItem = { kind: SecretEditorKind.Editing, record };
+    releaseEditingItem()
+    editingItem = { kind: SecretEditorKind.Editing, record }
     formSelectedType = {
       kind: SecretTypeSelectionKind.EditingFields,
       itemType: item.type,
-    };
-    addSecretOpen = true;
-    notifyAddMode();
+    }
+    addSecretOpen = true
+    notifyAddMode()
   }
 
   $effect(() => {
     if (addSecretOpen) {
-      void formSelectedType;
-      notifyAddMode();
+      void formSelectedType
+      notifyAddMode()
     }
-  });
+  })
 
   function settleSearchPage({
     sequence,
@@ -403,14 +402,14 @@
   }: SecretSearchCompletion): void {
     switch (sequence) {
       case searchLoadSequence:
-        break;
+        break
       default:
-        return;
+        return
     }
     result.match(settleCommittedSearchPage, (failure) => {
-      pageInteraction = SecretPageInteractionKind.Failed;
-      vault.errorMsg = vault.t(failure.translationKey);
-    });
+      pageInteraction = SecretPageInteractionKind.Failed
+      vault.errorMsg = vault.t(failure.translationKey)
+    })
   }
 
   function settleCommittedSearchPage(
@@ -422,159 +421,159 @@
         VaultOperationStaleKind.ContextReplaced,
         VaultOperationStaleKind.OwnerReleased,
       ),
-    };
+    }
     const committedPattern: SecretCommittedPagePattern = {
       query: Match.string,
-    };
+    }
     Match.value(snapshot).pipe(
       Match.when(stalePattern, () => {
-        return;
+        return
       }),
       Match.when(committedPattern, () => {
-        pageInteraction = SecretPageInteractionKind.Ready;
+        pageInteraction = SecretPageInteractionKind.Ready
       }),
       Match.exhaustive,
-    );
+    )
   }
 
   function loadInteractionPage(
     request: Parameters<typeof vault.loadSecretPage>[0],
   ): void {
-    const sequence = ++searchLoadSequence;
-    pageInteraction = SecretPageInteractionKind.Loading;
+    const sequence = ++searchLoadSequence
+    pageInteraction = SecretPageInteractionKind.Loading
     void vault.loadSecretPage(request).then((result) => {
-      const completion: SecretSearchCompletion = { sequence, result };
-      settleSearchPage(completion);
-    });
+      const completion: SecretSearchCompletion = { sequence, result }
+      settleSearchPage(completion)
+    })
   }
 
   $effect(() => {
-    const query = searchPattern.trim();
+    const query = searchPattern.trim()
     switch (query) {
       case untrack(() => vault.secretQuery):
         switch (untrack(() => pageInteraction)) {
           case SecretPageInteractionKind.Ready:
           case SecretPageInteractionKind.Loading:
-            return;
+            return
           case SecretPageInteractionKind.Debouncing:
           case SecretPageInteractionKind.Failed:
-            break;
+            break
         }
     }
-    const sequence = ++searchLoadSequence;
-    pageInteraction = SecretPageInteractionKind.Debouncing;
+    const sequence = ++searchLoadSequence
+    pageInteraction = SecretPageInteractionKind.Debouncing
     const timer = setTimeout(() => {
       switch (sequence) {
         case searchLoadSequence:
-          break;
+          break
         default:
-          return;
+          return
       }
       const pageRequest: Parameters<typeof vault.loadSecretPage>[0] = {
         query,
         requestedOffset: 0,
-      };
-      loadInteractionPage(pageRequest);
-    }, 200);
-    return () => clearTimeout(timer);
-  });
+      }
+      loadInteractionPage(pageRequest)
+    }, 200)
+    return () => clearTimeout(timer)
+  })
 
   const isSecureNoteEditor = $derived(
     addSecretOpen &&
       formSelectedType.kind === SecretTypeSelectionKind.EditingFields &&
       formSelectedType.itemType === SecretType.SecureNote,
-  );
+  )
 
   async function copyToClipboard({ text, id, field }: SecretFieldCopy) {
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(text)
     } catch {
       return err(
         new VaultStorageFailure(VaultStorageFailureKind.OperationFailed),
-      );
+      )
     }
     const notice: ClipboardNotice = {
       kind: ClipboardNoticeKind.Visible,
       fieldKey: `${id}-${field}`,
-    };
-    return ok(notice);
+    }
+    return ok(notice)
   }
 
   async function copySecretField(request: SecretFieldCopy): Promise<void> {
-    const copied = await copyToClipboard(request);
+    const copied = await copyToClipboard(request)
     if (copied.isErr()) {
-      vault.errorMsg = vault.t(copied.error.translationKey);
-      return;
+      vault.errorMsg = vault.t(copied.error.translationKey)
+      return
     }
-    const notice = copied.value;
-    copiedKey = notice;
+    const notice = copied.value
+    copiedKey = notice
     setTimeout(() => {
       if (
         copiedKey.kind === ClipboardNoticeKind.Visible &&
         copiedKey.fieldKey === notice.fieldKey
       )
-        copiedKey = { kind: ClipboardNoticeKind.Hidden };
-    }, 2000);
+        copiedKey = { kind: ClipboardNoticeKind.Hidden }
+    }, 2000)
   }
 
   function secretReveal(itemId: string): SecretReveal {
-    const record = decryptedSecrets[itemId];
+    const record = decryptedSecrets[itemId]
     return record
       ? { kind: SecretRevealKind.Revealed, record }
-      : { kind: SecretRevealKind.Hidden };
+      : { kind: SecretRevealKind.Hidden }
   }
 
   function authenticatorCodePresentation(
     itemId: string,
   ): AuthenticatorCodePresentation {
-    const code = authenticatorCodes[itemId];
+    const code = authenticatorCodes[itemId]
     return code
       ? { kind: AuthenticatorCodePresentationKind.Visible, code }
-      : { kind: AuthenticatorCodePresentationKind.Hidden };
+      : { kind: AuthenticatorCodePresentationKind.Hidden }
   }
 
   async function toggleReveal(id: string) {
-    const revealing = !(id in decryptedSecrets);
-    const toggleSecretExposureArgs: Parameters<SecretExposure["toggle"]>[0] = {
+    const revealing = !(id in decryptedSecrets)
+    const toggleSecretExposureArgs: Parameters<SecretExposure['toggle']>[0] = {
       id,
       load: (secretId) => vault.decryptSecret(secretId),
-    };
-    const toggled = await secretExposure.toggle(toggleSecretExposureArgs);
-    if (toggled.isErr()) {
-      vault.errorMsg = vault.t(toggled.error.translationKey);
-      return;
     }
-    if (toggled.value instanceof VaultOperationStale) return;
-    decryptedSecrets = toggled.value;
+    const toggled = await secretExposure.toggle(toggleSecretExposureArgs)
+    if (toggled.isErr()) {
+      vault.errorMsg = vault.t(toggled.error.translationKey)
+      return
+    }
+    if (toggled.value instanceof VaultOperationStale) return
+    decryptedSecrets = toggled.value
     if (revealing) {
-      selection = { kind: SecretSelectionKind.Selected, id };
+      selection = { kind: SecretSelectionKind.Selected, id }
       if (
         filteredItems.find((item) => item.id === id)?.type ===
         SecretType.Authenticator
       ) {
-        await refreshAuthenticatorCode(id);
+        await refreshAuthenticatorCode(id)
       }
     } else if (authenticatorCodes[id]) {
-      const nextCodes = { ...authenticatorCodes };
-      delete nextCodes[id];
-      authenticatorCodes = nextCodes;
+      const nextCodes = { ...authenticatorCodes }
+      delete nextCodes[id]
+      authenticatorCodes = nextCodes
     }
   }
 
   async function copySecret(id: string) {
-    const revealed = decryptedSecrets[id];
+    const revealed = decryptedSecrets[id]
     if (revealed) {
       const copyRequest: Parameters<typeof copyToClipboard>[0] = {
         text: revealed.primaryCredential,
         id,
-        field: "secret",
-      };
-      const copied = await copyToClipboard(copyRequest);
-      if (copied.isErr()) vault.errorMsg = vault.t(copied.error.translationKey);
-      return;
+        field: 'secret',
+      }
+      const copied = await copyToClipboard(copyRequest)
+      if (copied.isErr()) vault.errorMsg = vault.t(copied.error.translationKey)
+      return
     }
     const exposureRequest: Parameters<
-      SecretExposure["withTransientRecord"]
+      SecretExposure['withTransientRecord']
     >[0] = {
       id,
       load: (secretId) => vault.decryptSecret(secretId),
@@ -583,76 +582,73 @@
           const copyToClipboardArgs: Parameters<typeof copyToClipboard>[0] = {
             text: record.primaryCredential,
             id,
-            field: "secret",
-          };
-          return copyToClipboard(copyToClipboardArgs);
+            field: 'secret',
+          }
+          return copyToClipboard(copyToClipboardArgs)
         })(),
-    };
-    const copied = await secretExposure.withTransientRecord(exposureRequest);
-    if (copied.isErr()) vault.errorMsg = vault.t(copied.error.translationKey);
+    }
+    const copied = await secretExposure.withTransientRecord(exposureRequest)
+    if (copied.isErr()) vault.errorMsg = vault.t(copied.error.translationKey)
   }
 
   async function refreshAuthenticatorCode(id: string) {
-    const code = await vault.currentAuthenticatorCode(id);
+    const code = await vault.currentAuthenticatorCode(id)
     if (code.isErr()) {
-      vault.errorMsg = vault.t(code.error.translationKey);
-      return;
+      vault.errorMsg = vault.t(code.error.translationKey)
+      return
     }
-    if (!(id in decryptedSecrets)) return;
-    authenticatorCodes = { ...authenticatorCodes, [id]: code.value };
+    if (!(id in decryptedSecrets)) return
+    authenticatorCodes = { ...authenticatorCodes, [id]: code.value }
   }
 
   /** Select an item for the detail sheet; selecting it again closes it. */
   function toggleExpand(id: string) {
-    const previous = selection;
+    const previous = selection
     selection = isSelected(id)
       ? { kind: SecretSelectionKind.None }
-      : { kind: SecretSelectionKind.Selected, id };
+      : { kind: SecretSelectionKind.Selected, id }
     if (
       previous.kind === SecretSelectionKind.Selected &&
       previous.id in decryptedSecrets
     ) {
-      void toggleReveal(previous.id);
+      void toggleReveal(previous.id)
     }
   }
 
   $effect(() => {
     const timer = setInterval(() => {
-      const now = Math.floor(Date.now() / 1000);
-      const nextCodes = { ...authenticatorCodes };
+      const now = Math.floor(Date.now() / 1000)
+      const nextCodes = { ...authenticatorCodes }
       for (const [id, current] of Object.entries(authenticatorCodes)) {
-        const secondsRemaining = Math.max(
-          0,
-          current.expiresAtUnixSeconds - now,
-        );
+        const secondsRemaining = Math.max(0, current.expiresAtUnixSeconds - now)
         if (secondsRemaining === 0) {
-          delete nextCodes[id];
-          void refreshAuthenticatorCode(id);
+          delete nextCodes[id]
+          void refreshAuthenticatorCode(id)
         } else {
           nextCodes[id] = {
             ...current,
             secondsRemaining,
-          };
+          }
         }
       }
-      authenticatorCodes = nextCodes;
-    }, 1000);
-    return () => clearInterval(timer);
-  });
+      authenticatorCodes = nextCodes
+    }, 1000)
+    return () => clearInterval(timer)
+  })
 
   $effect(() => {
     // These reads intentionally make the reset reactive to page changes.
-    void vault.secretQuery;
-    void vault.secretPageOffset;
-    void vault.secretTypeFilter;
-    resetTransientSecretViews();
-  });
+    void vault.secretQuery
+    void vault.secretPageOffset
+    void vault.secretTypeFilter
+    resetTransientSecretViews()
+  })
 
   onDestroy(() => {
-    editLoadSequence += 1;
-    releaseEditingItem();
-    secretExposure.free();
-  });
+    editLoadSequence += 1
+    releaseEditingItem()
+    secretExposure.free()
+  })
 </script>
 
 <div
@@ -722,8 +718,8 @@
                         count: String(visibleItemCount),
                         total: String(vault.secretTotal),
                       },
-                    };
-                    return vault.t(pageCountArgs);
+                    }
+                    return vault.t(pageCountArgs)
                   })()
                 : (() => {
                     const countArgs: Parameters<typeof vault.t>[0] = {
@@ -731,8 +727,8 @@
                       replacements: {
                         count: String(visibleItemCount),
                       },
-                    };
-                    return vault.t(countArgs);
+                    }
+                    return vault.t(countArgs)
                   })()}
             </span>
             <Button
@@ -760,7 +756,7 @@
             class="nk-chip"
             aria-pressed={vault.secretTypeFilter === NookSecretTypeFilter.All}
             data-testid="secret-type-filter-all"
-            onclick={() => selectTypeFilter("all")}
+            onclick={() => selectTypeFilter('all')}
           >
             {vault.t(I18N_KEYS.VaultFilterAllTypes)}
           </button>
@@ -824,7 +820,7 @@
                 <div
                   class="nk-vault-group-head"
                   style:grid-row={String(group.headRow)}
-                  data-edge={group.headRow === 1 ? "first" : "inner"}
+                  data-edge={group.headRow === 1 ? 'first' : 'inner'}
                 >
                   <span class="truncate">{group.site}</span>
                   <span class="nk-tag">{group.entries.length}</span>
@@ -871,7 +867,7 @@
         </div>
         {#if vault.secretTotal > vault.secretPageSize}
           <div
-            class="flex items-center justify-between gap-3"
+            class="nk-vault-pagination flex items-center justify-between gap-2"
             data-testid="secret-pagination"
           >
             <Button
@@ -887,11 +883,11 @@
                       0,
                       vault.secretPageOffset - vault.secretPageSize,
                     ),
-                  };
+                  }
                 void vault.loadSecretPage(pageRequest).then((result) => {
                   if (result.isErr())
-                    vault.errorMsg = vault.t(result.error.translationKey);
-                });
+                    vault.errorMsg = vault.t(result.error.translationKey)
+                })
               }}
             >
               <ChevronLeft class="size-3.5" />
@@ -905,8 +901,8 @@
                     page: String(currentPage),
                     total: String(pageCount),
                   },
-                };
-                return vault.t(pageStatusArgs);
+                }
+                return vault.t(pageStatusArgs)
               })()}
             </span>
             <Button
@@ -921,11 +917,11 @@
                     query: vault.secretQuery,
                     requestedOffset:
                       vault.secretPageOffset + vault.secretPageSize,
-                  };
+                  }
                 void vault.loadSecretPage(pageRequest).then((result) => {
                   if (result.isErr())
-                    vault.errorMsg = vault.t(result.error.translationKey);
-                });
+                    vault.errorMsg = vault.t(result.error.translationKey)
+                })
               }}
             >
               {vault.t(I18N_KEYS.VaultNextPage)}

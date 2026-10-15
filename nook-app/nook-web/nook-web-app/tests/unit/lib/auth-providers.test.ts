@@ -31,7 +31,6 @@ function githubProvider(
 ): StorageProvider {
   return {
     ...providerPersistenceDefaults(),
-    layout: 'legacyVaultRoot',
     id: 'gh-1',
     type: 'github',
     label: 'GitHub',

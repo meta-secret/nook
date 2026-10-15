@@ -125,11 +125,12 @@ mod tests {
         app_key: &nook_core::AppKey,
     ) -> anyhow::Result<nook_core::LocalIdentityKeyringEntry> {
         let wrapped = DeviceIdentityProtection::new(&app_key.secret_string()).with_pin("123456")?;
-        Ok(LocalIdentityKeyringEntry::legacy(
+        Ok(LocalIdentityKeyringEntry::protected(
             identity.identity_id.clone(),
-            app_key.app_id().clone(),
+            app_key,
             wrapped,
-        ))
+            &"11".repeat(32),
+        )?)
     }
 
     fn projection(

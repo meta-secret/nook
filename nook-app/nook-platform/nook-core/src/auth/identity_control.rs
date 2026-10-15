@@ -7,12 +7,11 @@
 )]
 
 use nook_auth2::{
-    AppId, AppKey, AuthKeyId, IdentityId, IdentityMember, MemberLabelState, MultiDeviceResult,
+    AppId, AppKey, AuthKeyId, IdentityMember, MemberLabelState, MultiDeviceResult,
     ReplicatedVaultGrant, StoreId,
 };
 use nook_event_log::{
-    EventGraph, IdentityControlState, IdentityMemberKeys, IdentityVaultDekLookup, SigningIdentity,
-    VaultAuthorizedRoster,
+    IdentityControlState, IdentityMemberKeys, IdentityVaultDekLookup, VaultAuthorizedRoster,
 };
 
 /// Replicated membership expressed in local directory terms.
@@ -21,6 +20,8 @@ pub struct ReplicatedMembershipProjection {
     pub members: Vec<IdentityMember>,
     pub revoked: Vec<AppId>,
     pub own_grants: Vec<ReplicatedVaultGrant>,
+    /// Vaults deleted from the identity everywhere.
+    pub removed_vaults: Vec<StoreId>,
 }
 
 /// Converts one identity projection for one local installation.
@@ -70,36 +71,7 @@ impl ReplicatedMembershipRequest<'_> {
             members,
             revoked: self.state.revoked.clone(),
             own_grants,
-        })
-    }
-}
-
-/// Who created one vault the local identity owns.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VaultFounder {
-    /// This installation signed the vault's genesis; it migrates the vault.
-    ThisInstallation,
-    /// Another installation created it; that installation's identity owns it.
-    AnotherInstallation,
-    /// The local event graph has no applicable genesis yet.
-    Unknown,
-}
-
-impl VaultFounder {
-    /// Compare the vault's genesis actor with this installation's signer.
-    pub fn classify(
-        graph: &EventGraph,
-        signer: &SigningIdentity,
-    ) -> nook_event_log::EventResult<Self> {
-        let actor = signer.actor_id()?;
-        let genesis = graph
-            .applicable_events()
-            .into_iter()
-            .find(|event| event.body.parents.is_empty());
-        Ok(match genesis {
-            Some(event) if event.body.actor_id == actor => Self::ThisInstallation,
-            Some(_) => Self::AnotherInstallation,
-            None => Self::Unknown,
+            removed_vaults: self.state.removed_vaults.clone(),
         })
     }
 }
@@ -124,45 +96,6 @@ impl ReplicatedIdentityStanding {
             Self::PendingJoin
         } else {
             Self::NotListed
-        }
-    }
-}
-
-/// The identity a local identity should adopt: the one replicated identity
-/// listing this app key as an active member. Two such identities are
-/// ambiguous and must not be guessed between.
-pub struct IdentityAdoptionChoice<'a> {
-    pub local_identity_id: &'a IdentityId,
-    pub app_id: &'a AppId,
-    pub candidates: &'a [IdentityControlState],
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum IdentityAdoption {
-    /// The local identity already is the replicated identity.
-    AlreadyReplicated,
-    Adopt(IdentityId),
-    NoneListed,
-    Ambiguous(Vec<IdentityId>),
-}
-
-impl IdentityAdoptionChoice<'_> {
-    #[must_use]
-    pub fn choose(&self) -> IdentityAdoption {
-        let listed = self
-            .candidates
-            .iter()
-            .filter(|state| {
-                ReplicatedIdentityStanding::of(state, self.app_id)
-                    == ReplicatedIdentityStanding::ActiveMember
-            })
-            .map(|state| state.identity_id.clone())
-            .collect::<Vec<_>>();
-        match listed.as_slice() {
-            [] => IdentityAdoption::NoneListed,
-            [only] if only == self.local_identity_id => IdentityAdoption::AlreadyReplicated,
-            [only] => IdentityAdoption::Adopt(only.clone()),
-            _ => IdentityAdoption::Ambiguous(listed),
         }
     }
 }
@@ -224,6 +157,40 @@ impl IdentityVaultEpochStatus<'_> {
     }
 }
 
+/// What deleting a vault everywhere does for one identity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VaultDeletionPlan {
+    /// Record the removal in the identity log; every device drops its copy.
+    RecordRemoval,
+    /// The identity never registered the vault (or already removed it): only
+    /// this browser's copy goes.
+    LocalOnly,
+    /// The vault is open in this session; it must be closed first.
+    RefuseOpen,
+}
+
+/// Decides how one vault is deleted everywhere.
+pub struct VaultDeletionRequest<'a> {
+    pub state: &'a IdentityControlState,
+    pub store_id: &'a StoreId,
+    /// The vault open in this session, if any.
+    pub open_store_id: Option<&'a StoreId>,
+}
+
+impl VaultDeletionRequest<'_> {
+    #[must_use]
+    pub fn plan(&self) -> VaultDeletionPlan {
+        if self.open_store_id == Some(self.store_id) {
+            return VaultDeletionPlan::RefuseOpen;
+        }
+        if self.state.vault(self.store_id).is_some() {
+            VaultDeletionPlan::RecordRemoval
+        } else {
+            VaultDeletionPlan::LocalOnly
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -231,11 +198,11 @@ mod tests {
         IdentityApprovalRequest, IdentityControlLog, IdentityControlOperation,
         IdentityControlSnapshot, IdentityControlSnapshotRequest, IdentityControlStanding,
         IdentityEvent, IdentityEventSigning, IdentityGenesisRequest, IdentityVaultRegistration,
-        OpenedVaultDek, VaultRosterMember,
+        OpenedVaultDek, SigningIdentity, VaultRosterMember,
     };
+    use nook_auth2::IdentityId;
     use nook_auth2::{IsoTimestamp, MemberLabel, VaultKeys};
     use nook_event_log::EventId;
-    use std::slice;
 
     struct Member {
         app: AppKey,
@@ -393,45 +360,6 @@ mod tests {
     }
 
     #[test]
-    fn adoption_chooses_only_an_unambiguous_identity_listing_the_app() -> anyhow::Result<()> {
-        let scenario = Scenario::approved()?;
-        let state = IdentityControlState::project(&scenario.log)?;
-        let local = IdentityId::generate()?;
-        let choose = |candidates: &[IdentityControlState], app_id: &AppId| {
-            IdentityAdoptionChoice {
-                local_identity_id: &local,
-                app_id,
-                candidates,
-            }
-            .choose()
-        };
-        assert_eq!(
-            choose(slice::from_ref(&state), scenario.joiner.app.app_id()),
-            IdentityAdoption::Adopt(state.identity_id.clone())
-        );
-        assert_eq!(
-            choose(slice::from_ref(&state), AppKey::generate()?.app_id()),
-            IdentityAdoption::NoneListed
-        );
-        let mut other = state.clone();
-        other.identity_id = IdentityId::generate()?;
-        assert!(matches!(
-            choose(&[state.clone(), other], scenario.joiner.app.app_id()),
-            IdentityAdoption::Ambiguous(_)
-        ));
-        assert_eq!(
-            IdentityAdoptionChoice {
-                local_identity_id: &state.identity_id,
-                app_id: scenario.founder.app.app_id(),
-                candidates: slice::from_ref(&state),
-            }
-            .choose(),
-            IdentityAdoption::AlreadyReplicated
-        );
-        Ok(())
-    }
-
-    #[test]
     fn identity_revocation_is_due_only_where_the_vault_still_authorizes_the_app()
     -> anyhow::Result<()> {
         let scenario = Scenario::approved()?;
@@ -537,6 +465,50 @@ mod tests {
                 .iter()
                 .all(|member| !member.is_current_installation)
         );
+        Ok(())
+    }
+
+    #[test]
+    fn deleting_a_registered_vault_records_its_removal() -> anyhow::Result<()> {
+        let scenario = Scenario::approved()?;
+        let state = IdentityControlState::project(&scenario.log)?;
+        let other = StoreId::generate()?;
+        let plan = VaultDeletionRequest {
+            state: &state,
+            store_id: &scenario.store_id,
+            open_store_id: Some(&other),
+        }
+        .plan();
+        assert_eq!(plan, VaultDeletionPlan::RecordRemoval);
+        Ok(())
+    }
+
+    #[test]
+    fn deleting_the_open_vault_is_refused() -> anyhow::Result<()> {
+        let scenario = Scenario::approved()?;
+        let state = IdentityControlState::project(&scenario.log)?;
+        let plan = VaultDeletionRequest {
+            state: &state,
+            store_id: &scenario.store_id,
+            open_store_id: Some(&scenario.store_id),
+        }
+        .plan();
+        assert_eq!(plan, VaultDeletionPlan::RefuseOpen);
+        Ok(())
+    }
+
+    #[test]
+    fn deleting_an_unregistered_vault_stays_local() -> anyhow::Result<()> {
+        let scenario = Scenario::approved()?;
+        let state = IdentityControlState::project(&scenario.log)?;
+        let unregistered = StoreId::generate()?;
+        let plan = VaultDeletionRequest {
+            state: &state,
+            store_id: &unregistered,
+            open_store_id: None,
+        }
+        .plan();
+        assert_eq!(plan, VaultDeletionPlan::LocalOnly);
         Ok(())
     }
 }

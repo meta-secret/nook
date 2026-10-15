@@ -1,12 +1,11 @@
 <!--
-Backup-password fallback on a locked identity card: a quiet link that opens
-one password field for the selected vault. A backup password opens that
-vault directly, without this device's passkey.
+Passphrase unlock for one locked vault, under its passkey in the vault's
+panel: the passphrase by the title it was saved with (a choice when there
+are several) and its field. A vault without a passphrase says so.
 -->
 <script lang="ts">
-  import { KeyRound, RefreshCw } from "@lucide/svelte";
+  import { ArrowRight, KeyRound, RefreshCw } from "@lucide/svelte";
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
-  import { Button } from "$lib/components/ui/button";
   import type { VaultState } from "$lib/vault.svelte";
 
   type PasswordEntryChoice = { readonly id: string; readonly label: string };
@@ -24,59 +23,53 @@ vault directly, without this device's passkey.
   }: {
     vault: VaultState;
     vaultLabel: string;
-    /** Backup passwords of the selected vault; one is chosen if several. */
+    /** Passphrases of the selected vault; one is chosen if several. */
     entries: readonly PasswordEntryChoice[];
     isVerifying: boolean;
     onUnlock: (request: CardPasswordUnlockRequest) => void | Promise<void>;
   } = $props();
 
-  let open = $state(false);
   let password = $state("");
   let chosenId = $state("");
-  const entryId = $derived(
-    entries.some((entry) => entry.id === chosenId)
-      ? chosenId
-      : ((v) => (v ? v.id : ""))(entries[0]),
+  const noEntry: PasswordEntryChoice = { id: "", label: "" };
+  const chosen = $derived(
+    entries.find((entry) => entry.id === chosenId) ||
+      entries.find(() => true) ||
+      noEntry,
   );
-  const fieldLabel = $derived.by(() => {
-    const labelRequest: Parameters<typeof vault.t>[0] = {
-      key: I18N_KEYS.WorkspaceBackupPasswordLabel,
-      replacements: { vault: vaultLabel },
-    };
-    return vault.t(labelRequest);
-  });
+  const title = $derived(
+    chosen.label || vault.t(I18N_KEYS.WorkspacePassphraseNode),
+  );
 
   function submit(event: SubmitEvent): void {
     event.preventDefault();
-    if (!entryId || !password.trim()) return;
+    if (!chosen.id || !password.trim()) return;
     const request: CardPasswordUnlockRequest = {
-      entryId,
+      entryId: chosen.id,
       password: password.trim(),
     };
     void onUnlock(request);
   }
 </script>
 
-<div class="border-t border-border px-4 py-3 sm:px-5" data-testid="card-password-unlock">
-  {#if !open}
-    <button
-      type="button"
-      class="inline-flex items-center gap-1.5 text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-      data-testid="card-password-unlock-open"
-      disabled={isVerifying}
-      onclick={() => (open = true)}
+<div class="grid min-w-0 gap-2" data-testid="card-password-unlock">
+  {#if entries.length === 0}
+    <p
+      class="flex items-center gap-2 text-sm text-muted-foreground"
+      data-testid="card-password-caption"
     >
-      <KeyRound class="size-3.5" aria-hidden="true" />
-      {vault.t(I18N_KEYS.WorkspaceUseBackupPassword)}
-    </button>
+      <KeyRound class="size-4 flex-none opacity-60" aria-hidden="true" />
+      {vault.t(I18N_KEYS.WorkspacePassphraseUnlockNone)}
+    </p>
   {:else}
-    <form class="grid gap-2" onsubmit={submit}>
-      <label class="text-xs font-medium text-foreground" for="card-password-input">
-        {fieldLabel}
-      </label>
+    <form class="grid gap-2" aria-label={vaultLabel} onsubmit={submit}>
       {#if entries.length > 1}
+        <label class="sr-only" for="card-password-entry">
+          {vault.t(I18N_KEYS.WorkspacePassphraseUnlockChoose)}
+        </label>
         <select
-          class="h-9 w-full border border-border bg-card px-2 text-sm text-foreground"
+          id="card-password-entry"
+          class="h-9 w-full border border-border bg-background px-2 text-sm text-foreground"
           bind:value={chosenId}
           data-testid="card-password-entry"
         >
@@ -84,28 +77,41 @@ vault directly, without this device's passkey.
             <option value={entry.id}>{entry.label}</option>
           {/each}
         </select>
+      {:else}
+        <span
+          class="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground"
+        >
+          <KeyRound
+            class="size-4 flex-none text-muted-foreground"
+            aria-hidden="true"
+          />
+          <span class="truncate">{title}</span>
+        </span>
       {/if}
-      <div class="flex gap-2">
+      <div
+        class="flex h-11 min-w-0 border border-border bg-background transition-colors focus-within:border-foreground/50"
+      >
         <input
-          id="card-password-input"
           type="password"
-          class="h-9 min-w-0 flex-1 border border-border bg-card px-3 text-sm text-foreground outline-none focus-visible:border-foreground/50 focus-visible:ring-2 focus-visible:ring-ring"
+          class="min-w-0 flex-1 bg-transparent px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground/70"
           autocomplete="current-password"
+          aria-label={title}
+          placeholder={vault.t(I18N_KEYS.WorkspacePassphraseUnlockPlaceholder)}
           bind:value={password}
           data-testid="card-password-input"
         />
-        <Button
+        <button
           type="submit"
-          size="sm"
-          class="h-9"
+          class="inline-flex flex-none items-center gap-2 border-l border-border px-4 text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:cursor-default disabled:text-muted-foreground disabled:hover:bg-transparent"
           disabled={isVerifying || !password.trim()}
           data-testid="card-password-submit"
         >
           {#if isVerifying}
-            <RefreshCw class="size-3.5 animate-spin" />
+            <RefreshCw class="size-3.5 animate-spin" aria-hidden="true" />
           {/if}
           {vault.t(I18N_KEYS.WorkspaceUnlock)}
-        </Button>
+          <ArrowRight class="size-3.5" aria-hidden="true" />
+        </button>
       </div>
     </form>
   {/if}

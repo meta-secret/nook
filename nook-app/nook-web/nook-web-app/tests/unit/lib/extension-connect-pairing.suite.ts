@@ -20,14 +20,12 @@ import {
   extensionStoredPairingGrantStorageItems,
   decodeStoredExtensionPairingGrant,
   decodeExtensionReadySetupState,
-  migratedLegacyPairingStorageItems,
   pairingGrantStorageKey,
   selectedPairingGrant,
   selectedPairingGrantFirst,
   setupAfterPairingGrantRemoval,
   setupStorageKey,
   simplePairingVaultType,
-  type LegacyPairingStorageObject,
 } from './extension-connect-test-support'
 
 describe('extension pairing approved message', () => {
@@ -160,24 +158,6 @@ describe('extension pairing approved message', () => {
       eventCount: 1,
     })
     expect(sendMessage).toHaveBeenCalledOnce()
-  })
-
-  test('classifies plaintext provider migration rejection', async () => {
-    vi.useFakeTimers()
-    const sendMessage = vi.fn(
-      (...args: [string, unknown, (response?: unknown) => void]) => {
-        args[2]({ reason: 'auth-provider-plaintext-migration-required' })
-      },
-    )
-    vi.stubGlobal('chrome', { runtime: { sendMessage } })
-
-    const delivery = extensionConnectionBrowser.deliverExtensionPairingApproval(
-      approvalDeliveryArgs(),
-    )
-    await vi.runAllTimersAsync()
-    await expect(delivery).resolves.toEqual({
-      kind: ExtensionPairingDeliveryKind.PlaintextProviderMigrationRequired,
-    })
   })
 
   test('preserves companion runtime startup rejection', async () => {
@@ -319,7 +299,6 @@ describe('extension pairing approved message', () => {
       oauthFile: { state: 'notApplicable' },
       localFolder: { state: 'notApplicable' },
       storeId: { state: 'unscoped' },
-      layout: 'legacyVaultRoot',
       syncCheckpoint: { state: 'neverSynced' },
       createdAt: '2026-07-07T00:00:00.000Z',
     }
@@ -680,79 +659,5 @@ describe('extension pairing approved message', () => {
       throw new Error('expected the newest paired vault to be selected')
     }
     expect(selected.grant.vaultStoreId).toBe('store_otherid0001')
-  })
-
-  test('migrates the uniquely selected valid legacy grant into Rexie shape', () => {
-    const currentStorageItemsArgs: Parameters<
-      typeof extensionPairingGrantStorageItems
-    >[0] = {
-      grant: {
-        vaultType: simplePairingVaultType,
-        deviceId: 'device-1',
-        devicePublicKey: 'age1device',
-        deviceSigningPublicKey: 'signing-key',
-        deviceLabel: 'Nook Extension',
-        vaultStoreId: 'store_abcdefghijk',
-        vaultName: 'Personal',
-        approvedAt: 1_783_929_600_000,
-        scopes: [ExtensionConnectScope.VaultAccess],
-        syncProviderCount: 0,
-      },
-      imported: {
-        vaultStoreId: 'store_abcdefghijk',
-        eventCount: 3,
-        heads: ['event-3'],
-        accessGranted: true,
-      },
-    }
-    const current = extensionPairingGrantStorageItems(currentStorageItemsArgs)
-    const key = pairingGrantStorageKey('store_abcdefghijk')
-    const decodedCurrentGrant = Effect.runSync(
-      Effect.result(decodeStoredExtensionPairingGrant(current[key])),
-    )
-    if (decodedCurrentGrant._tag === 'Failure') {
-      throw new Error('expected a stored extension pairing grant')
-    }
-    const currentGrant = decodedCurrentGrant.success
-    const { eventCount, eventLogHeads, lastLocalSyncAt, ...legacyGrant } =
-      currentGrant
-    const decodedCurrentSetup = Effect.runSync(
-      Effect.result(decodeExtensionReadySetupState(current[setupStorageKey])),
-    )
-    if (decodedCurrentSetup._tag === 'Failure') {
-      throw new Error('expected a ready extension setup')
-    }
-    const currentSetup = decodedCurrentSetup.success
-    const { selectedVaultStoreId: _selectedVaultStoreId, ...legacySetup } =
-      currentSetup
-    void _selectedVaultStoreId
-    const legacyStoredGrant: LegacyPairingStorageObject = {
-      ...legacyGrant,
-      approvedAt: '2026-07-25T00:00:00.000Z',
-    }
-    const migrated = migratedLegacyPairingStorageItems({
-      [key]: legacyStoredGrant,
-      [setupStorageKey]: legacySetup,
-    })
-
-    expect(eventCount).toBe(3)
-    expect(eventLogHeads).toEqual(['event-3'])
-    expect(lastLocalSyncAt).toEqual(expect.any(String))
-    expect(migrated[key]).toMatchObject({
-      eventCount: 3,
-      eventLogHeads: ['event-3'],
-      lastLocalSyncAt,
-    })
-
-    expect(
-      migratedLegacyPairingStorageItems({
-        [key]: legacyGrant,
-        [pairingGrantStorageKey('store_otherid0001')]: {
-          ...legacyGrant,
-          vaultStoreId: 'store_otherid0001',
-        },
-        [setupStorageKey]: legacySetup,
-      }),
-    ).toEqual({})
   })
 })

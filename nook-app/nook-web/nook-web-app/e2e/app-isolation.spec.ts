@@ -1,6 +1,10 @@
 import { I18N_KEYS } from '../../nook-web-shared/src/generated/i18n-keys'
 import { expect, test } from './fixtures'
-import { createLocalVaultOnLogin, UI_TIMEOUT_MS } from './helpers'
+import {
+  createLocalVaultOnLogin,
+  openVaultPanelAndUnlock,
+  UI_TIMEOUT_MS,
+} from './helpers'
 import { installMockPasskeyRuntime } from './passkey-mock'
 
 const SIMPLE_APP_URL = (
@@ -160,7 +164,8 @@ test('keeps extension routing and local session behavior app-specific', async ({
   await expect(page.getByTestId('identity-vault-row').first()).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
-  await page.getByTestId('identity-vault-row').first().click()
+  // The vault's panel unlocks it; the consent then asks to connect.
+  await openVaultPanelAndUnlock(page)
   await expect(page.getByTestId('extension-connect-consent')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })

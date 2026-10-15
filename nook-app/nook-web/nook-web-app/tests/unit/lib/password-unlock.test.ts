@@ -21,7 +21,7 @@ import {
 function driveProvider(
   id: string,
   folderId: string,
-  includeLegacyPrivateTarget = !folderId,
+  includePendingPrivateTarget = !folderId,
 ): StorageProvider {
   const config = {
     ...defaultOAuthFileConfig({
@@ -33,8 +33,8 @@ function driveProvider(
       ? storedGoogleDriveFolder(folderId)
       : rootGoogleDriveFolder(),
     driveMode: folderId ? ('shared' as const) : ('private' as const),
-    ...(includeLegacyPrivateTarget
-      ? { drivePrivateTarget: { state: 'legacyAppDataFolder' as const } }
+    ...(includePendingPrivateTarget
+      ? { drivePrivateTarget: { state: 'pending' as const } }
       : {}),
   }
   return {
@@ -42,7 +42,6 @@ function driveProvider(
     id,
     type: 'oauth-file',
     label: 'Google Drive',
-    layout: 'legacyVaultRoot',
     oauthFile: configuredOAuthFile(config),
     syncCheckpoint: { state: 'neverSynced' },
     createdAt: '2026-07-15T00:00:00.000Z',

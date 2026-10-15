@@ -112,6 +112,7 @@ mod tests {
         };
         let mut manager = NookVaultManager::new();
         manager.storage.mode = StorageMode::Github;
+        manager.vault.store_id = nook_core::StoreId::generate()?.to_string();
         match fixture.queue().await?.publish(&manager).await {
             Err(NookError::Serialization(message)) => {
                 assert!(message.starts_with("GitHub event parse:"));

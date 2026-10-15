@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { ProviderRowLayoutPresentation } from '$lib/components/identity-control/identity-mount'
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import {
     NookManualProviderSyncState,
@@ -57,7 +56,7 @@
     isInitializing,
     addProviderOpen = false,
     embedded = false,
-    backWithoutSaved = false,
+    hostBack = false,
     loginSetup,
     githubPat = $bindable(''),
     githubRepo = $bindable(DEFAULT_GITHUB_REPO),
@@ -76,9 +75,9 @@
     isInitializing: boolean
     addProviderOpen?: boolean
     embedded?: boolean
-    /** Offer Back while adding even with no saved provider; a host with
-     * its own Back (the first run) leaves this off. */
-    backWithoutSaved?: boolean
+    /** The host page has its own Back and title while adding (the Sync
+     * page): no second Back or heading here. */
+    hostBack?: boolean
     loginSetup: LoginSetup
     githubPat: string
     githubRepo: string
@@ -150,14 +149,21 @@
 </script>
 
 <div class="w-full animate-in fade-in duration-300 space-y-4">
-  {#if addingProvider}
+  {#if addingProvider && hostBack}
+    <p class="text-sm text-muted-foreground text-pretty">
+      {#if showSetup}
+        {vault.t(I18N_KEYS.AuthStorageSyncSetupDesc)}
+      {:else}
+        {vault.t(I18N_KEYS.AuthStorageSyncChooseDesc)}
+      {/if}
+    </p>
+  {:else if addingProvider}
     <div
       class="flex items-start justify-between gap-3 border-b border-border/60 pb-4"
     >
       <div class="space-y-1">
-        <!-- Back to the saved list (or the empty list). A host with its own
-             Back leaves the picker itself when nothing is saved. -->
-        {#if syncProviders.length > 0 || backWithoutSaved}
+        <!-- Back to the saved list. -->
+        {#if syncProviders.length > 0}
           <button
             type="button"
             class="mb-2 inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
@@ -266,22 +272,26 @@
                 >
                   <Cloud class="size-4" />
                 </div>
-                <p class="min-w-0 self-center text-sm font-medium text-foreground">
+                <p
+                  class="min-w-0 self-center text-sm font-medium text-foreground"
+                >
                   {vault.t(I18N_KEYS.AuthStorageNoSyncProviders)}
                 </p>
               </div>
-              <div class="mt-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  data-testid="add-provider-btn"
-                  onclick={() => onBeginAddProvider?.()}
-                >
-                  <Plus class="size-4" />
-                  {vault.t(I18N_KEYS.SettingsAddSyncProvider)}
-                </Button>
-              </div>
+              {#if onBeginAddProvider}
+                <div class="mt-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    data-testid="add-provider-btn"
+                    onclick={() => onBeginAddProvider?.()}
+                  >
+                    <Plus class="size-4" />
+                    {vault.t(I18N_KEYS.SettingsAddSyncProvider)}
+                  </Button>
+                </div>
+              {/if}
             </div>
           {:else}
             <ul
@@ -346,14 +356,6 @@
                           )}
                         {/if}
                       </span>
-                      {#if new ProviderRowLayoutPresentation(provider).isIdentityMount()}
-                        <span
-                          class="block text-[11px] text-muted-foreground"
-                          data-testid="provider-identity-mount-{provider.id}"
-                        >
-                          {vault.t(I18N_KEYS.IdentityControlMountNamespaced)}
-                        </span>
-                      {/if}
                     </span>
                   </div>
                   {#if onSyncProvider}
@@ -409,15 +411,17 @@
               {/each}
             </ul>
 
-            <button
-              type="button"
-              class="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-              data-testid="add-provider-btn"
-              onclick={() => onBeginAddProvider?.()}
-            >
-              <Plus class="size-4" />
-              {vault.t(I18N_KEYS.SettingsAddSyncProvider)}
-            </button>
+            {#if onBeginAddProvider}
+              <button
+                type="button"
+                class="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+                data-testid="add-provider-btn"
+                onclick={() => onBeginAddProvider?.()}
+              >
+                <Plus class="size-4" />
+                {vault.t(I18N_KEYS.SettingsAddSyncProvider)}
+              </button>
+            {/if}
           {/if}
         </fieldset>
       {/if}

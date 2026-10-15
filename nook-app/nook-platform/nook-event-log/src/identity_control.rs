@@ -8,7 +8,6 @@
 
 mod builder;
 mod graph;
-mod migration;
 mod projection;
 mod wire;
 
@@ -20,9 +19,6 @@ pub use graph::{
     IdentityControlInsertion, IdentityControlLog, IdentityControlRejection,
     IdentityEventInsertStatus,
 };
-pub use migration::{
-    IdentityControlMigration, IdentityControlMigrationOutcome, LegacyVaultMembership,
-};
 pub use projection::{
     IdentityControlMember, IdentityControlState, IdentityControlVault, IdentityJoinRequest,
     IdentityVaultDekLookup, IdentityVaultEpochDeks,
@@ -31,7 +27,6 @@ pub use wire::{
     DriveMountTarget, ICloudMountTarget, IdentityControlOperation, IdentityEvent,
     IdentityEventBody, IdentityEventSchemaVersion, IdentityMemberKeys, IdentityMountTarget,
     IdentityProviderMount, IdentityVaultDekGrant, MemberVaultDek, ProviderMountId,
-    ProviderMountLayout,
 };
 
 #[cfg(test)]

@@ -136,6 +136,9 @@ pub enum MultiDeviceError {
     #[error("Invalid sentinel genesis payload.")]
     InvalidSentinelGenesisPayload,
 
+    #[error("Invalid compressed sealed payload.")]
+    InvalidCompressedPayload,
+
     #[error(
         "Standalone Sentinel public-key announcements are rejected; participants must respond to an owner-issued invitation."
     )]

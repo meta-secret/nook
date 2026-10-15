@@ -3,7 +3,6 @@ import { admit_extension_pairing_vault_type } from '../../../../nook-web-shared/
 import {
   extensionPairingGrantPolicyReady,
   setupStorageKey,
-  type LegacyPairingStorageObject,
 } from '../../../../nook-web-extension/src/background/pairing-grants'
 
 export const {
@@ -11,7 +10,6 @@ export const {
   extensionStoredPairingGrantStorageItems,
   decodeStoredExtensionPairingGrant,
   decodeExtensionReadySetupState,
-  migratedLegacyPairingStorageItems,
   pairingGrantStorageKey,
   selectedPairingGrant,
   selectedPairingGrantFirst,
@@ -22,7 +20,6 @@ export const simplePairingVaultType =
   admit_extension_pairing_vault_type('simple')
 
 export { setupStorageKey }
-export type { LegacyPairingStorageObject }
 
 export function locationFromUrl(url: string): Location {
   const parsed = new URL(url)

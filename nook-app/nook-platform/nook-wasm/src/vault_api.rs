@@ -183,8 +183,7 @@ impl NookVaultManager {
         &self,
     ) -> Result<tsify::Ts<nook_core::AuthProvidersSnapshotData>, wasm_bindgen::JsError> {
         let identity = self.device_identity()?;
-        let loaded = AuthProviderDatabase::load_auth_providers(&identity).await?;
-        let result = Ok::<_, wasm_bindgen::JsError>(loaded.snapshot)?;
+        let result = AuthProviderDatabase::load_auth_providers(&identity).await?;
         Tsify::into_ts(&result).map_err(|_| JsError::new("Typed WASM output could not be encoded."))
     }
 
@@ -196,8 +195,7 @@ impl NookVaultManager {
         &self,
     ) -> Result<tsify::Ts<nook_core::AuthProvidersSnapshotData>, wasm_bindgen::JsError> {
         let identity = self.device_identity()?;
-        let loaded = AuthProviderDatabase::load_auth_providers(&identity).await?;
-        let snapshot = loaded.snapshot;
+        let snapshot = AuthProviderDatabase::load_auth_providers(&identity).await?;
         match LocalVaultPresence::from(has_local_vault().await?) {
             LocalVaultPresence::Absent => {
                 return Tsify::into_ts(&snapshot)
@@ -303,9 +301,7 @@ impl NookVaultManager {
             .map_err(|_| JsError::new("Invalid typed WASM input."))?;
 
         let identity = self.device_identity()?;
-        let existing = AuthProviderDatabase::load_auth_providers(&identity)
-            .await?
-            .snapshot;
+        let existing = AuthProviderDatabase::load_auth_providers(&identity).await?;
         let replaced = existing.replace_active_vault_grants(&snapshot);
         ProviderSnapshotPublication {
             identity: &identity,
@@ -589,9 +585,7 @@ impl NookVaultManager {
             AuthProviderPersistenceMode::PreserveUnlistedSyncProviders => {
                 if has_local_vault().await? {
                     let stored = AuthProviderDatabase::load_auth_providers(&identity).await?;
-                    request
-                        .snapshot
-                        .preserve_unlisted_sync_providers(&stored.snapshot)
+                    request.snapshot.preserve_unlisted_sync_providers(&stored)
                 } else {
                     request.snapshot
                 }

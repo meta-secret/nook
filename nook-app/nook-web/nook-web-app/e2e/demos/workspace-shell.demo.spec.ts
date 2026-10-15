@@ -8,7 +8,7 @@ import {
 
 const DEMO_BEAT_MS = 700
 
-test('the vault page holds items; identity management has its own rail', async ({
+test('the vault page holds items; the identity card manages the rest', async ({
   page,
 }) => {
   await page.goto('/app/')
@@ -23,58 +23,38 @@ test('the vault page holds items; identity management has its own rail', async (
   // identity management.
   await expect(page.getByTestId('vault-import-btn')).toBeVisible()
   await expect(page.getByTestId('vault-extension-install')).toBeVisible()
-  await expect(page.getByTestId('manage-nav')).toHaveCount(0)
+  await expect(page.getByTestId('identity-menu')).toHaveCount(0)
   await page.waitForTimeout(DEMO_BEAT_MS)
 
-  // Manage on the identity card opens its overview and the rail.
+  // Manage on the identity card holds actions, adding a device first;
+  // a fresh identity also names what it lacks.
   await page.getByTestId('header-identities-btn').click()
+  await expect(page.getByTestId('identity-card-health')).toContainText(
+    'No cloud copy yet',
+  )
   await page.getByTestId('identity-manage').first().click()
-  await expect(page).toHaveURL(/\/identity$/)
-  const rail = page.getByTestId('manage-nav')
-  await expect(rail).toBeVisible()
-  for (const item of [
-    'overview',
-    'vaults',
-    'sync',
-    'devices',
-    'keys',
-    'passwords',
-    'settings',
-  ]) {
-    await expect(page.getByTestId(`manage-nav-${item}`)).toBeVisible()
+  const menu = page.getByTestId('identity-menu')
+  await expect(menu).toBeVisible()
+  for (const item of ['add-device', 'sync', 'vaults']) {
+    await expect(page.getByTestId(`identity-menu-${item}`)).toBeVisible()
   }
-  // A fresh identity has no provider, so Sync carries a warning dot.
-  await expect(page.getByTestId('manage-nav-sync-missing')).toBeVisible()
   await page.waitForTimeout(DEMO_BEAT_MS)
 
-  await page.getByTestId('manage-nav-devices').click()
+  // Overview opens beside the card: devices, cloud copies, vaults and
+  // sign-in, each tile opening its page.
+  await page.getByTestId('identity-overview-toggle').first().click()
+  await expect(page.getByTestId('identity-overview')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await page.getByTestId('overview-open-devices').first().click()
   await expect(page).toHaveURL(/\/identity\/devices$/)
   await expect(page.getByTestId('vault-devices-panel')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-  await expect(page.getByTestId('manage-nav-devices')).toHaveAttribute(
-    'aria-current',
-    'page',
-  )
   await page.waitForTimeout(DEMO_BEAT_MS)
 
-  // Phones move the rail to a bottom bar under the same page.
-  await page.setViewportSize({ width: 390, height: 844 })
-  await expect(rail).toBeInViewport()
-  await expect
-    .poll(() =>
-      page.evaluate(() => ({
-        clientWidth: document.documentElement.clientWidth,
-        scrollWidth: document.documentElement.scrollWidth,
-      })),
-    )
-    .toEqual({ clientWidth: 390, scrollWidth: 390 })
-  await page.waitForTimeout(DEMO_BEAT_MS)
-
-  // The identity entry leads back to the hub on wide screens.
-  await page.setViewportSize({ width: 1280, height: 900 })
-  await page.getByTestId('manage-nav-identities').click()
-  await expect(page.getByTestId('identities-hub')).toBeVisible({
+  await page.getByTestId('identity-page-back').click()
+  await expect(page.getByTestId('identity-overview')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
 })

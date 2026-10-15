@@ -3,7 +3,6 @@ import { ExtensionPairingApprovedMessageAdmissionFailure } from "../../../extens
 export enum ExtensionPairingDeliveryKind {
   Delivered = "delivered",
   MessagingUnavailable = "messaging-unavailable",
-  PlaintextProviderMigrationRequired = "plaintext-provider-migration-required",
   Rejected = "rejected",
 }
 

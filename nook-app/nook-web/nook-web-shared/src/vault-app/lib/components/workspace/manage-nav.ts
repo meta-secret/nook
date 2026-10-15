@@ -5,35 +5,10 @@ import {
   WorkspaceSectionScope,
 } from "$lib/vault/state/ui.svelte";
 
-export enum ManageNavPlacement {
-  /** Shown in the desktop rail and the phone bottom bar. */
-  Everywhere = "everywhere",
-  /** Desktop rail only; phones reach it from the vault page bar. */
-  RailOnly = "rail-only",
-}
-
-/** How prominently the rail shows a page. */
-export enum ManageNavTier {
-  /** The identity's overview. */
-  Home = "home",
-  /** The parts of an identity: its vaults, where they are copied, and the
-   * devices that open them. */
-  Parts = "parts",
-  /** Who and what can open the identity. */
-  Security = "security",
-  /** Browser preferences. */
-  General = "general",
-}
-
 export type ManageNavItem = {
   readonly section: WorkspaceSection;
   readonly scope: ManageSectionScope;
-  readonly tier: ManageNavTier;
   readonly labelKey: string;
-  readonly shortLabelKey: string;
-  readonly descriptionKey: string;
-  readonly testId: string;
-  readonly placement: ManageNavPlacement;
 };
 
 type ManageNavDefinition = Omit<ManageNavItem, "scope">;
@@ -41,79 +16,39 @@ type ManageNavDefinition = Omit<ManageNavItem, "scope">;
 const DEFINITIONS: readonly ManageNavDefinition[] = [
   {
     section: WorkspaceSection.Overview,
-    tier: ManageNavTier.Home,
     labelKey: I18N_KEYS.WorkspaceSectionOverview,
-    shortLabelKey: I18N_KEYS.WorkspaceSectionOverview,
-    descriptionKey: I18N_KEYS.WorkspaceSectionOverviewDescription,
-    testId: "manage-nav-overview",
-    placement: ManageNavPlacement.Everywhere,
   },
   {
     section: WorkspaceSection.Vaults,
-    tier: ManageNavTier.Parts,
     labelKey: I18N_KEYS.WorkspaceSectionVaults,
-    shortLabelKey: I18N_KEYS.WorkspaceNavShortVaults,
-    descriptionKey: I18N_KEYS.WorkspaceSectionVaultsDescription,
-    testId: "manage-nav-vaults",
-    placement: ManageNavPlacement.Everywhere,
   },
   {
     section: WorkspaceSection.Sync,
-    tier: ManageNavTier.Parts,
     labelKey: I18N_KEYS.WorkspaceSectionSync,
-    shortLabelKey: I18N_KEYS.WorkspaceSectionSync,
-    descriptionKey: I18N_KEYS.WorkspaceSectionSyncDescription,
-    testId: "manage-nav-sync",
-    placement: ManageNavPlacement.Everywhere,
   },
   {
     section: WorkspaceSection.Devices,
-    tier: ManageNavTier.Parts,
     labelKey: I18N_KEYS.WorkspaceSectionDevices,
-    shortLabelKey: I18N_KEYS.WorkspaceSectionDevices,
-    descriptionKey: I18N_KEYS.WorkspaceSectionDevicesDescription,
-    testId: "manage-nav-devices",
-    placement: ManageNavPlacement.Everywhere,
   },
   {
     section: WorkspaceSection.Keys,
-    tier: ManageNavTier.Security,
     labelKey: I18N_KEYS.WorkspaceSectionKeys,
-    shortLabelKey: I18N_KEYS.WorkspaceNavShortKeys,
-    descriptionKey: I18N_KEYS.WorkspaceSectionKeysDescription,
-    testId: "manage-nav-keys",
-    placement: ManageNavPlacement.Everywhere,
   },
   {
     section: WorkspaceSection.Passwords,
-    tier: ManageNavTier.Security,
     labelKey: I18N_KEYS.WorkspaceSectionPasswords,
-    shortLabelKey: I18N_KEYS.WorkspaceNavShortPasswords,
-    descriptionKey: I18N_KEYS.WorkspaceSectionPasswordsDescription,
-    testId: "manage-nav-passwords",
-    placement: ManageNavPlacement.Everywhere,
   },
   {
     section: WorkspaceSection.Settings,
-    tier: ManageNavTier.General,
-    labelKey: I18N_KEYS.WorkspaceSectionSettings,
-    shortLabelKey: I18N_KEYS.WorkspaceNavShortSettings,
-    descriptionKey: I18N_KEYS.WorkspaceSectionSettingsDescription,
-    testId: "manage-nav-settings",
-    placement: ManageNavPlacement.Everywhere,
+    labelKey: I18N_KEYS.IdentityMenuBrowser,
   },
   {
     section: WorkspaceSection.Import,
-    tier: ManageNavTier.General,
     labelKey: I18N_KEYS.WorkspaceSectionImport,
-    shortLabelKey: I18N_KEYS.WorkspaceSectionImport,
-    descriptionKey: I18N_KEYS.WorkspaceSectionImportDescription,
-    testId: "manage-nav-import",
-    placement: ManageNavPlacement.Everywhere,
   },
 ];
 
-/** The management pages, grouped by what they act on. */
+/** The management pages with their titles. */
 export const MANAGE_NAV_ITEMS: readonly ManageNavItem[] = DEFINITIONS.map(
   (definition) => {
     const item: ManageNavItem = {

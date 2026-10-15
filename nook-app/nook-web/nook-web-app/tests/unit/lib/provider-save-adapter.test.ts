@@ -57,7 +57,6 @@ type AdapterState = Omit<
 function providerState(providerType: StorageProviderType): AdapterState {
   return {
     providers: [],
-    providerSaveLayout: 'legacyVaultRoot',
     providerSaveTarget: 'fresh',
     activeVault: { kind: ActiveVaultKind.Open, storeId: 'vault-1' },
     hasActiveVaultStore: true,
@@ -170,7 +169,7 @@ describe('provider save web adapter', () => {
     expect(state.githubRepo).toBe('portable-vault.yaml')
     expect(state.configureOauthFile).toHaveBeenCalledWith({
       ...oauthFile,
-      drivePrivateTarget: { state: 'legacyAppDataFolder' },
+      drivePrivateTarget: { state: 'pending' },
     })
     expect(state.clearLocalFolder).toHaveBeenCalledOnce()
   })

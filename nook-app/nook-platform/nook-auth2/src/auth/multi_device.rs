@@ -5,6 +5,7 @@ use crate::{
 use serde::{Deserialize, Serialize};
 
 mod access;
+mod compressed_json;
 mod join;
 mod key_actions;
 mod roster;

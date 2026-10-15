@@ -6,17 +6,24 @@ card, which then spans the full row.
 -->
 <script lang="ts">
   import type { Snippet } from 'svelte'
+  import IdentityManageMenu from './IdentityManageMenu.svelte'
+  import VaultPanel from './VaultPanel.svelte'
+  import { WorkspaceSection } from '$lib/vault/state/ui.svelte'
   import {
     Asterisk,
     ChevronRight,
     Fingerprint,
     FolderKey,
     Lock,
+    LayoutDashboard,
     LockOpen,
+    MonitorSmartphone,
     Plus,
     Puzzle,
     Settings2,
+    TriangleAlert,
     UserRoundCheck,
+    X,
   } from '@lucide/svelte'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { CipherStrip } from '$lib/components/ui/cipher'
@@ -36,6 +43,7 @@ card, which then spans the full row.
     IdentityKeyKind,
     IdentityVaultRowState,
     type IdentityCardView,
+    type IdentitySectionTarget,
     type IdentityVaultRow,
   } from './identity-card-model'
 
@@ -48,14 +56,24 @@ card, which then spans the full row.
     canAddVault = false,
     onOpenVault,
     onNewVault = () => {},
-    onManage,
+    onSelectVault,
+    onClosePanels = () => {},
+    onUnlockVault,
+    onManageVault,
     onLock = () => {},
     onUnlock = () => {},
     onUseIdentity = () => {},
+    healthNote = '',
+    onHealth = () => {},
+    onAddDevice,
+    addDevicePrompt = false,
+    onManageSection,
     pairingStatusFor = () => ({
       kind: LoginVaultExtensionPairingStatusKind.NotShown,
     }),
     unlockPanel,
+    overviewPanel,
+    overviewOpen = false,
     passwordFallback,
     preview = false,
   }: {
@@ -68,32 +86,120 @@ card, which then spans the full row.
     canAddVault?: boolean
     onOpenVault: (storeId: string) => void
     onNewVault?: () => void
-    onManage: (identityId: string) => void
+    /** A vault row was opened beside the card: a locked browser selects
+     * that vault, which reads its passphrases. */
+    onSelectVault?: (storeId: string) => void
+    /** Close what the page opened beside the card (New vault, an import)
+     * when another panel opens here. */
+    onClosePanels?: () => void
+    /** Unlock a vault from its panel and stay on the card; Open vault in
+     * the panel then goes in. */
+    onUnlockVault?: (storeId: string) => void
+    /** One of a vault's own pages (its passphrases, imports); a locked
+     * vault unlocks first. */
+    onManageVault?: (target: IdentitySectionTarget) => void
     onLock?: () => void
     /** Unlock the identity with this device's passkey. */
     onUnlock?: (identityId: string) => void
     onUseIdentity?: (identityId: string) => void
+    /** What the unlocked identity lacks (no cloud copy, one device); its
+     * chip opens the identity's control page at that step. */
+    healthNote?: string
+    onHealth?: () => void
+    /** Open the add-device flow. Offered on the identity this browser
+     * uses, locked or not: a locked one unlocks first. */
+    onAddDevice?: () => void
+    /** The identity opens on one device only: offer a second on the card
+     * itself, not just in Manage. */
+    addDevicePrompt?: boolean
+    /** Open one of the identity's pages from Manage. Given, Manage on the
+     * identity this browser uses opens a menu of them. */
+    onManageSection?: (section: WorkspaceSection) => void
     /** Extension pairing status for a vault row, while pairing is offered. */
     pairingStatusFor?: (storeId: string) => LoginVaultExtensionPairingStatus
     /** Setup panel (a new vault), shown beside the card's rows. */
     unlockPanel?: Snippet
-    /** Backup-password unlock for the selected vault, while locked. */
+    /** The identity's overview, opened beside the card. */
+    overviewPanel?: Snippet
+    /** The overview is open; Overview on the footer closes it. */
+    overviewOpen?: boolean
+    /** Passphrase unlock for the selected vault, while locked. */
     passwordFallback?: Snippet
     /** A preview of a card that does not exist yet: no actions. */
     preview?: boolean
   } = $props()
 
   const live = $derived(card.status === IdentityCardStatus.Unlocked)
+  const managesHere = $derived(
+    Boolean(onManageSection) && !preview && (live || card.current),
+  )
+  let menuOpen = $state(false)
 
+  function selectFromMenu(section: WorkspaceSection): void {
+    menuOpen = false
+    onManageSection?.(section)
+  }
+
+  /** Overview and Manage share the space beside the card: one at a time. */
+  /** One panel beside the card at a time: opening one closes the rest,
+   * including what the page opened there (New vault, an import). */
+  function closeOthers(): void {
+    menuOpen = false
+    vault.vaultPanelStoreId = ''
+    if (overviewOpen) onManageSection?.(WorkspaceSection.Identities)
+    onClosePanels()
+  }
+
+  function toggleOverview(): void {
+    const opening = !overviewOpen
+    closeOthers()
+    if (opening) onManageSection?.(WorkspaceSection.Overview)
+  }
+
+  function toggleManage(): void {
+    const opening = !menuOpen
+    closeOthers()
+    menuOpen = opening
+  }
+
+  function openNewVault(): void {
+    closeOthers()
+    onNewVault()
+  }
+
+  /** A vault opened beside the card from its row: how to get in, and
+   * what belongs to that vault alone. Kept on the vault state, so the
+   * panel stays open while the vault unlocks. */
+  const vaultOpenId = $derived(vault.vaultPanelStoreId)
+  const vaultOpenRow = $derived(
+    card.vaults.find((row) => row.storeId === vaultOpenId),
+  )
+
+  function toggleVault(storeId: string): void {
+    if (vaultOpenId === storeId) {
+      vault.vaultPanelStoreId = ''
+      return
+    }
+    closeOthers()
+    vault.vaultPanelStoreId = storeId
+    const row = card.vaults.find((candidate) => candidate.storeId === storeId)
+    if (row?.state !== IdentityVaultRowState.Unavailable) onSelectVault?.(storeId)
+  }
+
+  function closeMenuOnEscape(event: KeyboardEvent): void {
+    if (menuOpen && event.key === 'Escape') menuOpen = false
+  }
+
+  const kindKey = $derived(
+    card.keyKind === IdentityKeyKind.Passkey
+      ? I18N_KEYS.WorkspaceKeyKindPasskey
+      : card.keyKind === IdentityKeyKind.Pin
+        ? I18N_KEYS.WorkspaceKeyKindPin
+        : card.keyKind === IdentityKeyKind.Mixed
+          ? I18N_KEYS.WorkspaceKeyKindMixed
+          : I18N_KEYS.WorkspaceKeyKindNone,
+  )
   const keysLine = $derived.by(() => {
-    const kindKey =
-      card.keyKind === IdentityKeyKind.Passkey
-        ? I18N_KEYS.WorkspaceKeyKindPasskey
-        : card.keyKind === IdentityKeyKind.Pin
-          ? I18N_KEYS.WorkspaceKeyKindPin
-          : card.keyKind === IdentityKeyKind.Mixed
-            ? I18N_KEYS.WorkspaceKeyKindMixed
-            : I18N_KEYS.WorkspaceKeyKindNone
     const countRequest: Parameters<typeof vault.t>[0] = {
       key:
         card.keyCount === 1
@@ -117,13 +223,69 @@ card, which then spans the full row.
     }
   })
 
+  /** A vault this browser does not hold opens only on the unlocked
+   * identity, which can delete it everywhere. */
   function rowDisabled(row: IdentityVaultRow): boolean {
-    return busy || row.state === IdentityVaultRowState.Unavailable
+    return busy || (row.state === IdentityVaultRowState.Unavailable && !live)
+  }
+
+  async function deleteAwayVault(storeId: string): Promise<void> {
+    const deleted = await vault.identityControl.deleteVaultEverywhere(storeId)
+    if (deleted.isOk()) vault.vaultPanelStoreId = ''
   }
 </script>
 
+<svelte:window onkeydown={closeMenuOnEscape} />
+
+{#snippet panelRow(
+  testId: string,
+  title: string,
+  hint: string,
+  open: boolean,
+  icon: Snippet,
+  onclick: () => void,
+)}
+  <!-- A locked identity shows them inactive: they open once it is
+       unlocked, rather than asking for the passkey on the way. -->
+  <button
+    type="button"
+    class="nk-vault-row disabled:opacity-45"
+    data-testid={testId}
+    aria-expanded={open}
+    {...open ? { 'aria-current': 'true' } : {}}
+    {...live
+      ? {}
+      : { title: vault.t(I18N_KEYS.WorkspaceVaultPanelManageLocked) }}
+    disabled={busy || !live}
+    {onclick}
+  >
+    <span class="nk-vault-icon" aria-hidden="true">{@render icon()}</span>
+    <span class="flex min-w-0 flex-1 flex-col">
+      <span class="truncate text-[0.9375rem] font-medium">{title}</span>
+      <span class="truncate text-xs text-muted-foreground">{hint}</span>
+    </span>
+    {#if live}
+      <ChevronRight
+        class="size-4 flex-none text-muted-foreground opacity-60"
+        aria-hidden="true"
+      />
+    {:else}
+      <Lock
+        class="size-3.5 flex-none text-muted-foreground"
+        aria-hidden="true"
+      />
+    {/if}
+  </button>
+{/snippet}
+
+{#snippet overviewIcon()}<LayoutDashboard class="size-4" />{/snippet}
+{#snippet manageIcon()}<Settings2 class="size-4" />{/snippet}
+
 <article
-  class="nk-frame-keytag nk-frame-interactive min-w-0 {unlockPanel
+  class="nk-frame-keytag nk-frame-interactive min-w-0 {unlockPanel ||
+  overviewPanel ||
+  (managesHere && menuOpen) ||
+  vaultOpenRow
     ? 'col-span-full grid grid-cols-1 lg:grid-cols-[minmax(0,23rem)_minmax(0,1fr)]'
     : 'flex flex-col'}"
   class:nk-frame-live={live}
@@ -134,7 +296,7 @@ card, which then spans the full row.
   data-unlocking={unlockPanel ? 'true' : 'false'}
 >
   <span class="nk-eyelet" aria-hidden="true"></span>
-  <div class="flex min-w-0 flex-1 flex-col">
+  <div class="relative flex min-w-0 flex-1 flex-col">
     <header class="flex items-start gap-3.5 px-4 pb-4 pt-5 sm:px-5">
       <span class="relative inline-flex flex-none">
         <span class="nk-monogram" style:--nk-hue={card.hue} aria-hidden="true">
@@ -180,6 +342,18 @@ card, which then spans the full row.
               {/snippet}
             </StatusTag>
           {/if}
+          {#if live && healthNote && !preview}
+            <button
+              type="button"
+              class="nk-tag nk-tag-warning"
+              data-testid="identity-card-health"
+              disabled={busy}
+              onclick={onHealth}
+            >
+              <TriangleAlert class="size-3" aria-hidden="true" />
+              {healthNote}
+            </button>
+          {/if}
           {#if card.fingerprint.length > 0}
             <span
               class="nk-fingerprint"
@@ -210,10 +384,10 @@ card, which then spans the full row.
           {@const selected =
             row.state !== IdentityVaultRowState.Open &&
             row.storeId === selectedStoreId}
-          <li>
+          <li class="flex min-w-0 items-center">
             <button
               type="button"
-              class="nk-vault-row"
+              class="nk-vault-row min-w-0 flex-1"
               data-testid="identity-vault-row"
               data-store-id={row.storeId}
               data-state={row.state}
@@ -224,11 +398,13 @@ card, which then spans the full row.
                 ? { 'aria-current': 'true' }
                 : {}}
               {...selected ? { 'aria-pressed': 'true' } : {}}
+              aria-expanded={vaultOpenId === row.storeId}
               {...row.state === IdentityVaultRowState.Available
                 ? { title: vault.t(I18N_KEYS.WorkspaceVaultLockedHint) }
                 : {}}
               disabled={rowDisabled(row)}
-              onclick={() => onOpenVault(row.storeId)}
+              onclick={() =>
+                preview ? onOpenVault(row.storeId) : toggleVault(row.storeId)}
             >
               <span class="nk-vault-icon" aria-hidden="true">
                 <FolderKey class="size-4" />
@@ -272,13 +448,18 @@ card, which then spans the full row.
                     aria-hidden="true"
                   />
                 {/if}
+              {:else if row.state === IdentityVaultRowState.Dormant}
+                <span class="min-w-4 flex-1" aria-hidden="true"></span>
+                <span class="nk-tag"
+                  >{vault.t(I18N_KEYS.WorkspaceVaultDormant)}</span
+                >
               {:else}
                 <span class="min-w-4 flex-1" aria-hidden="true"></span>
                 <span class="nk-tag"
                   >{vault.t(I18N_KEYS.WorkspaceVaultUnavailable)}</span
                 >
               {/if}
-              {#if row.state !== IdentityVaultRowState.Unavailable}
+              {#if row.state === IdentityVaultRowState.Open || row.state === IdentityVaultRowState.Available}
                 <ChevronRight
                   class="size-4 flex-none text-muted-foreground opacity-60"
                   aria-hidden="true"
@@ -302,7 +483,7 @@ card, which then spans the full row.
               class="nk-vault-row nk-vault-row-add text-muted-foreground hover:text-foreground"
               data-testid="identity-new-vault"
               disabled={busy}
-              onclick={onNewVault}
+              onclick={openNewVault}
             >
               <span class="nk-vault-icon" aria-hidden="true">
                 <Plus class="size-4" />
@@ -316,8 +497,55 @@ card, which then spans the full row.
       </ul>
     </section>
 
-    {#if passwordFallback && !live}
-      {@render passwordFallback()}
+    {#if onAddDevice && addDevicePrompt && !preview && (live || card.current)}
+      <section class="border-t border-border px-2 py-2">
+        <button
+          type="button"
+          class="nk-vault-row"
+          data-testid="identity-add-device"
+          disabled={busy}
+          onclick={onAddDevice}
+        >
+          <span class="nk-vault-icon" aria-hidden="true">
+            <MonitorSmartphone class="size-4" />
+          </span>
+          <span class="flex min-w-0 flex-1 flex-col">
+            <span class="truncate text-[0.9375rem] font-medium"
+              >{vault.t(I18N_KEYS.AddDeviceCardAction)}</span
+            >
+            <span class="truncate text-xs text-muted-foreground"
+              >{vault.t(I18N_KEYS.AddDeviceCardHint)}</span
+            >
+          </span>
+          <Plus
+            class="size-4 flex-none text-muted-foreground"
+            aria-hidden="true"
+          />
+        </button>
+      </section>
+    {/if}
+
+    {#if managesHere}
+      <section
+        class="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-0.5 border-t border-border px-2 py-2"
+      >
+        {@render panelRow(
+          'identity-overview-toggle',
+          vault.t(I18N_KEYS.WorkspaceSectionOverview),
+          vault.t(I18N_KEYS.IdentityMenuDetailsHint),
+          overviewOpen,
+          overviewIcon,
+          toggleOverview,
+        )}
+        {@render panelRow(
+          'identity-manage',
+          vault.t(I18N_KEYS.WorkspaceManage),
+          vault.t(I18N_KEYS.IdentityMenuManageHint),
+          menuOpen,
+          manageIcon,
+          toggleManage,
+        )}
+      </section>
     {/if}
 
     {#if !preview}
@@ -358,17 +586,6 @@ card, which then spans the full row.
             {vault.t(I18N_KEYS.WorkspaceUseIdentity)}
           </button>
         {/if}
-        <button
-          type="button"
-          data-testid="identity-manage"
-          disabled={busy}
-          onclick={() => onManage(card.identityId)}
-        >
-          <Settings2 class="size-4 text-muted-foreground" aria-hidden="true" />
-          {live || card.status === IdentityCardStatus.Locked
-            ? vault.t(I18N_KEYS.WorkspaceManage)
-            : vault.t(I18N_KEYS.WorkspaceManageIdentity)}
-        </button>
       </div>
     {/if}
   </div>
@@ -378,6 +595,69 @@ card, which then spans the full row.
       data-testid="identity-card-unlock"
     >
       {@render unlockPanel()}
+    </div>
+  {:else if vaultOpenRow}
+    <div
+      class="min-w-0 border-t border-border p-5 sm:p-6 lg:border-l lg:border-t-0 lg:px-7"
+      data-testid="identity-card-vault"
+    >
+      <VaultPanel
+        {vault}
+        row={vaultOpenRow}
+        identityName={card.label}
+        unlockLabel={card.keyKind === IdentityKeyKind.Pin
+          ? vault.t(I18N_KEYS.WorkspaceVaultPanelUnlockPin)
+          : vault.t(I18N_KEYS.WorkspaceVaultPanelUnlockPasskey)}
+        {busy}
+        passphraseOffered={!live && Boolean(onSelectVault)}
+        {...passwordFallback && vaultOpenRow.storeId === selectedStoreId
+          ? { passphrase: passwordFallback }
+          : {}}
+        onOpen={() => onOpenVault(vaultOpenRow.storeId)}
+        onUnlock={() => onUnlockVault?.(vaultOpenRow.storeId)}
+        onUseIdentity={() => onUseIdentity(card.identityId)}
+        onManage={(section: WorkspaceSection) => {
+          const target: IdentitySectionTarget = {
+            identityId: card.identityId,
+            storeId: vaultOpenRow.storeId,
+            section,
+          }
+          onManageVault?.(target)
+        }}
+        {...live && vaultOpenRow.state === IdentityVaultRowState.Unavailable
+          ? { onDelete: () => deleteAwayVault(vaultOpenRow.storeId) }
+          : {}}
+        onClose={() => (vault.vaultPanelStoreId = '')}
+      />
+    </div>
+  {:else if managesHere && menuOpen}
+    <div
+      class="grid min-w-0 content-start gap-4 border-t border-border p-5 sm:p-6 lg:border-l lg:border-t-0 lg:px-7"
+      data-testid="identity-card-manage"
+    >
+      <header class="flex items-center justify-between gap-3">
+        <h2 class="text-lg font-semibold tracking-tight text-foreground">
+          {vault.t(I18N_KEYS.WorkspaceManage)}
+        </h2>
+        <button
+          type="button"
+          class="grid size-8 place-items-center text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          aria-label={vault.t(I18N_KEYS.IdentityOverviewClosePanel)}
+          title={vault.t(I18N_KEYS.IdentityOverviewClosePanel)}
+          data-testid="identity-manage-close"
+          onclick={() => (menuOpen = false)}
+        >
+          <X class="size-4" aria-hidden="true" />
+        </button>
+      </header>
+      <IdentityManageMenu {vault} onSelect={selectFromMenu} />
+    </div>
+  {:else if overviewPanel}
+    <div
+      class="min-w-0 border-t border-border p-5 sm:p-6 lg:border-l lg:border-t-0 lg:px-7"
+      data-testid="identity-card-overview"
+    >
+      {@render overviewPanel()}
     </div>
   {/if}
 </article>

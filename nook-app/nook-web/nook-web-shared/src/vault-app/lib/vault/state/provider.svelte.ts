@@ -1,6 +1,5 @@
 import type {
   NookStorageConnectArgs,
-  ProviderRowLayout,
   ProviderSaveRemoteTarget,
 } from "$app-wasm";
 import {
@@ -185,10 +184,10 @@ export class VaultProviderState {
     this.loginSetupState = { kind: LoginSetupKind.Inactive };
   }
   loginRequiresExistingVault = $state(false);
-  /** Layout of the next saved provider row: identity mounts are namespaced. */
-  providerSaveLayout = $state<ProviderRowLayout>("legacyVaultRoot");
   /** A row adopted from an enrollment code keeps the issuer's remote target. */
   providerSaveTarget = $state<ProviderSaveRemoteTarget>("fresh");
+  /** Vaults the provider being imported holds when it holds several. */
+  remoteVaultChoices = $state<readonly string[]>([]);
   private recoverySummaryState = $state<RecoveryDiscovery>({
     kind: RecoveryDiscoveryKind.NotFound,
   });
@@ -272,8 +271,8 @@ export class VaultProviderState {
     this.localLoginPreparation = LocalLoginPreparationState.Idle;
     this.clearLoginSetup();
     this.loginRequiresExistingVault = false;
-    this.providerSaveLayout = "legacyVaultRoot";
     this.providerSaveTarget = "fresh";
+    this.remoteVaultChoices = [];
     this.clearExistingVaultRecoverySummary();
     this.addProviderOpen = false;
     this.storageMode = LOCAL_PROVIDER_TYPE;

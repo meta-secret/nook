@@ -492,3 +492,122 @@ impl NookDatabase {
         Ok(store_id)
     }
 }
+
+/// Whether a vault may be removed from this browser's registry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LocalVaultRemoval {
+    /// The entry was dropped; the vault's local data may be deleted.
+    Removed,
+    /// This browser has no such vault.
+    NotRegistered,
+    /// The vault is the active one (open, or chosen to unlock); another vault
+    /// must become active before it can be removed.
+    Active,
+}
+
+/// Named values required by `NookDatabase::remove_registry_entry`.
+pub(crate) struct RemoveRegistryEntryRequest<'a> {
+    pub(crate) registry: &'a mut VaultRegistry,
+    pub(crate) store_id: &'a str,
+    pub(crate) active: &'a ActiveVaultScope,
+}
+
+impl NookDatabase {
+    /// Drop a vault from the registry unless it is unknown or active. The
+    /// registry is left unchanged when the removal is refused.
+    pub(crate) fn remove_registry_entry(
+        request: RemoveRegistryEntryRequest<'_>,
+    ) -> LocalVaultRemoval {
+        let RemoveRegistryEntryRequest {
+            registry,
+            store_id,
+            active,
+        } = request;
+        if !registry
+            .vaults
+            .iter()
+            .any(|entry| entry.store_id == store_id)
+        {
+            return LocalVaultRemoval::NotRegistered;
+        }
+        if matches!(active, ActiveVaultScope::StoreId(active_id) if active_id == store_id) {
+            return LocalVaultRemoval::Active;
+        }
+        registry.vaults.retain(|entry| entry.store_id != store_id);
+        LocalVaultRemoval::Removed
+    }
+}
+
+impl NookDatabase {
+    /// Remove a vault from this browser only: its encrypted snapshot, search
+    /// catalog and event log, then its registry entry. Copies on sync
+    /// providers and other devices stay, so it can be imported again. The
+    /// active vault is refused.
+    pub(crate) async fn remove_local_vault(store_id: &str) -> Result<(), NookError> {
+        let mut registry = NookDatabase::load_vault_registry().await?;
+        let active = NookDatabase::get_active_vault_id().await?;
+        match NookDatabase::remove_registry_entry(RemoveRegistryEntryRequest {
+            registry: &mut registry,
+            store_id,
+            active: &active,
+        }) {
+            LocalVaultRemoval::NotRegistered => {
+                return Err(NookError::Database(format!(
+                    "Vault {store_id} is not registered on this device."
+                )));
+            }
+            LocalVaultRemoval::Active => {
+                return Err(NookError::Database(format!(
+                    "Vault {store_id} is the active vault; switch to another vault before removing it."
+                )));
+            }
+            LocalVaultRemoval::Removed => {}
+        }
+        NookDatabase::delete_local_vault_data(store_id).await?;
+        NookDatabase::save_vault_registry(&registry).await
+    }
+}
+
+impl NookDatabase {
+    /// Drop this browser's copy of a vault the identity deleted everywhere.
+    /// Nothing to do when it is not stored here; an active copy stops being
+    /// active, since the vault no longer exists to open.
+    pub(crate) async fn forget_vault_removed_from_identity(
+        store_id: &str,
+    ) -> Result<(), NookError> {
+        let mut registry = NookDatabase::load_vault_registry().await?;
+        let active = NookDatabase::get_active_vault_id().await?;
+        if matches!(&active, ActiveVaultScope::StoreId(active_id) if active_id == store_id) {
+            NookDatabase::clear_active_vault_id().await?;
+        }
+        match NookDatabase::remove_registry_entry(RemoveRegistryEntryRequest {
+            registry: &mut registry,
+            store_id,
+            active: &ActiveVaultScope::Unselected,
+        }) {
+            LocalVaultRemoval::NotRegistered | LocalVaultRemoval::Active => Ok(()),
+            LocalVaultRemoval::Removed => {
+                NookDatabase::delete_local_vault_data(store_id).await?;
+                NookDatabase::save_vault_registry(&registry).await
+            }
+        }
+    }
+}
+
+impl NookDatabase {
+    /// A vault's encrypted snapshot, search catalog and event log here.
+    async fn delete_local_vault_data(store_id: &str) -> Result<(), NookError> {
+        let mut keys = vec![
+            NookDatabase::vault_blob_key(store_id),
+            NookDatabase::secret_search_key(store_id),
+        ];
+        for bucket in 0..nook_core::SECRET_SEARCH_CATALOG_BUCKET_COUNT {
+            keys.push(NookDatabase::secret_search_bucket_key(
+                SecretSearchBucketKeyRequest { store_id, bucket },
+            ));
+        }
+        let key_refs = keys.iter().map(String::as_str).collect::<Vec<_>>();
+        NookDatabase::idb_delete_keys(&key_refs).await?;
+        NookDatabase::clear_local_event_store(store_id).await
+    }
+}

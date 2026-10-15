@@ -40,8 +40,13 @@ test.describe('login unlock flow (local-first)', () => {
       timeout: UI_TIMEOUT_MS,
     })
     await expect(card.getByTestId('identity-unlock')).toBeVisible()
-    await expect(card.getByTestId('card-password-unlock-open')).toBeVisible()
-    await expect(card.getByTestId('card-password-input')).toHaveCount(0)
+    await expect(page.getByTestId('card-password-input')).toHaveCount(0)
+    // The vault's row opens its panel, which offers the passphrase.
+    await card.getByTestId('identity-vault-row').first().click()
+    await expect(page.getByTestId('vault-panel-passphrase')).toBeVisible()
+    await expect(page.getByTestId('card-password-input')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
   })
 
   test('unlocks with PRF-enabled device keys from local login step', async ({
@@ -91,7 +96,7 @@ test.describe('login unlock flow (local-first)', () => {
       return typeof enabled === 'boolean' ? enabled : false
     })
     expect(prfEnabledAfterReload).toBe(true)
-    await vaultRow.click()
+    await unlockVaultOnLogin(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
@@ -108,7 +113,7 @@ test.describe('login unlock flow (local-first)', () => {
 
     await disableLoginAutoUnlock(page)
     await page.reload()
-    const open = page.getByTestId('card-password-unlock-open')
+    const open = page.getByTestId('identity-vault-row').first()
     await expect(open).toBeVisible({ timeout: UI_TIMEOUT_MS })
     await open.click()
     const entries = page.getByTestId('card-password-entry')
@@ -179,14 +184,16 @@ test.describe('login unlock flow (local-first)', () => {
     await expect(page).toHaveURL(/\/identity\/passwords$/)
   })
 
-  test('hides the backup password when the vault has none', async ({
-    page,
-  }) => {
+  test('says so when the vault has no passphrase', async ({ page }) => {
+    await disableLoginAutoUnlock(page)
     await page.reload()
-    await expect(page.getByTestId('identity-vault-row').first()).toBeVisible({
+    const open = page.getByTestId('identity-vault-row').first()
+    await expect(open).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    await open.click()
+    await expect(page.getByTestId('card-password-caption')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await expect(page.getByTestId('card-password-unlock')).toHaveCount(0)
+    await expect(page.getByTestId('card-password-input')).toHaveCount(0)
   })
 })
 

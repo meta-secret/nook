@@ -45,6 +45,9 @@ const uiKeys = [
   "firstRunVaultName",
   "newIdentity",
   "newIdentityName",
+  "vaultPanelStoreId",
+  "unlockReturn",
+  "vaultImportOpen",
 ] as const satisfies readonly (keyof VaultUiState)[];
 
 const providerKeys = [
@@ -66,8 +69,8 @@ const providerKeys = [
   "activateLoginSetup",
   "clearLoginSetup",
   "loginRequiresExistingVault",
-  "providerSaveLayout",
   "providerSaveTarget",
+  "remoteVaultChoices",
   "recoveryDiscovery",
   "recordExistingVaultRecovery",
   "clearExistingVaultRecoverySummary",
@@ -209,6 +212,9 @@ class VaultStateSlicesImplementation {
   declare firstRunVaultName: VaultUiState["firstRunVaultName"];
   declare newIdentity: VaultUiState["newIdentity"];
   declare newIdentityName: VaultUiState["newIdentityName"];
+  declare vaultPanelStoreId: VaultUiState["vaultPanelStoreId"];
+  declare readonly unlockReturn: VaultUiState["unlockReturn"];
+  declare vaultImportOpen: VaultUiState["vaultImportOpen"];
 
   declare providers: VaultProviderState["providers"];
   declare providersLoaded: VaultProviderState["providersLoaded"];
@@ -228,8 +234,8 @@ class VaultStateSlicesImplementation {
   declare activateLoginSetup: VaultProviderState["activateLoginSetup"];
   declare clearLoginSetup: VaultProviderState["clearLoginSetup"];
   declare loginRequiresExistingVault: VaultProviderState["loginRequiresExistingVault"];
-  declare providerSaveLayout: VaultProviderState["providerSaveLayout"];
   declare providerSaveTarget: VaultProviderState["providerSaveTarget"];
+  declare remoteVaultChoices: VaultProviderState["remoteVaultChoices"];
   declare readonly recoveryDiscovery: VaultProviderState["recoveryDiscovery"];
   declare recordExistingVaultRecovery: VaultProviderState["recordExistingVaultRecovery"];
   declare clearExistingVaultRecoverySummary: VaultProviderState["clearExistingVaultRecoverySummary"];

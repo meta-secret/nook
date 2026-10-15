@@ -275,6 +275,14 @@ export class VaultState extends VaultRuntimeState {
     return this.localLoginActions.renameLocalVaultLabel({ storeId, label });
   }
 
+  /** Remove a vault from this browser only. */
+  async removeLocalVault(storeId: StoreId): Promise<void> {
+    const request: Parameters<
+      typeof this.localLoginActions.removeLocalVault
+    >[0] = { storeId };
+    return this.localLoginActions.removeLocalVault(request);
+  }
+
   async selectVaultForUnlock(
     storeId: StoreId,
   ): Promise<Result<StoreId, VaultStorageFailure | OAuthFailure>> {
@@ -723,6 +731,12 @@ export class VaultState extends VaultRuntimeState {
     return new providersActions.ProviderConnectionActions(
       this,
     ).discoverStagedVaultStoreId();
+  }
+
+  chooseRemoteVault(storeId: string) {
+    return new providersActions.ProviderConnectionActions(
+      this,
+    ).chooseRemoteVault(storeId);
   }
 
   /** Navigate to one page of the unified identity and vault workspace. */

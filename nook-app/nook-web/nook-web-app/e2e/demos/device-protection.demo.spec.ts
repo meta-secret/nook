@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test'
 import { expect, test } from '../fixtures'
 import {
+  beginAddSyncProvider,
   addSecret,
   addVaultPassword,
   assertVaultReady,
@@ -15,6 +16,7 @@ import {
   uniqueSecretKey,
   waitForVaultOperationsIdle,
   openVaultPage,
+  openUnlockedVault,
 } from '../helpers'
 import {
   installLocalFolderPickerMock,
@@ -105,6 +107,8 @@ test('offer PIN device protection when passkeys are unavailable', async ({
 
   await page.getByTestId('header-lock-vault-btn').click()
   await page.getByTestId('identity-vault-row').first().click()
+  // The vault's panel asks for the identity's PIN.
+  await page.getByTestId('vault-panel-unlock').click()
   await expect(
     page.getByTestId('device-protection-pin-unlock-btn'),
   ).toBeVisible({
@@ -114,6 +118,7 @@ test('offer PIN device protection when passkeys are unavailable', async ({
 
   await page.getByTestId('device-protection-pin-unlock-input').fill('123456')
   await page.getByTestId('device-protection-pin-unlock-btn').click()
+  await openUnlockedVault(page)
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
@@ -206,7 +211,7 @@ test('retains the folder import while showing matching passkeys and password rec
   await expandSettingsSection(page, 'unlock')
   await addVaultPassword(page, 'Emergency recovery', 'demo-backup-password')
   await expandSettingsSection(page, 'storage')
-  await page.getByTestId('add-provider-btn').first().click()
+  await beginAddSyncProvider(page)
   await page.getByTestId('provider-option-local-folder').click()
   await page.getByTestId('settings-choose-local-folder-btn').click()
   await page.getByTestId('settings-connect-local-folder-btn').click()
@@ -239,7 +244,7 @@ test('retains the folder import while showing matching passkeys and password rec
   })
   await expect(summary).toContainText('Passkeys for this vault')
   await expect(summary).toContainText('device ')
-  await expect(summary).toContainText('Backup password available')
+  await expect(summary).toContainText('Passphrase available')
   await expect(summary).toContainText('Emergency recovery')
   await demoBeat(page)
 

@@ -934,7 +934,7 @@ mod browser_tests {
             .map_err(|_| JsError::new("Typed test output could not be decoded."))?;
         assert_eq!(
             updated_existing_config.drive_private_target,
-            StoredGoogleDrivePrivateTarget::LegacyAppDataFolder
+            StoredGoogleDrivePrivateTarget::Pending
         );
         assert_eq!(
             updated_existing_config.file_id,
@@ -951,7 +951,7 @@ mod browser_tests {
                 .to_rust()
                 .map_err(|_| JsError::new("Typed test output could not be decoded."))?
                 .repo,
-            "old-file-id\tVault.yaml"
+            "private-folder-v2:pending\tVault.yaml"
         );
         Ok(())
     }

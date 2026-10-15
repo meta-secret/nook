@@ -147,9 +147,6 @@ class VaultEventLogExportStorageFixture {
 
   constructor() {
     const stored: ExtensionPairingItems = {}
-    spyOn(this.storage, 'ensureLegacyPairingMigration').mockImplementation(() =>
-      Effect.runPromise(Effect.void),
-    )
     spyOn(
       backgroundVaultRuntime,
       'loadExtensionPairingItems',

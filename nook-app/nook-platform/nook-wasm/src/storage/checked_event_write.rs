@@ -26,7 +26,7 @@ impl ParsedLogEvent {
             EventLogLocation::Identity(_) => {
                 IdentityEvent::parse_storage_bytes(&storage).map(Self::Identity)
             }
-            EventLogLocation::LegacyVaultRoot | EventLogLocation::Vault(_) => {
+            EventLogLocation::Vault(_) => {
                 VaultEvent::parse_remote_event_storage_bytes(&storage).map(Self::Vault)
             }
         }
@@ -102,7 +102,7 @@ impl<'a> CheckedEventWrite<'a> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use super::*;
     use crate::storage::{
         drive_events::DriveEventStore, github_events::GitHubEventStore, icloud::ICloudEventStore,
@@ -113,14 +113,15 @@ mod tests {
     };
     use wasm_bindgen_test::wasm_bindgen_test;
 
-    struct EventFixture {
-        event_id: EventId,
-        event: VaultEvent,
-        bytes: Vec<u8>,
+    /// One signed vault event, shared by the provider adapter tests.
+    pub(crate) struct EventFixture {
+        pub(crate) event_id: EventId,
+        pub(crate) event: VaultEvent,
+        pub(crate) bytes: Vec<u8>,
     }
 
     impl EventFixture {
-        fn new() -> anyhow::Result<Self> {
+        pub(crate) fn new() -> anyhow::Result<Self> {
             let (identity, _) = SigningIdentity::generate()?;
             let event = VaultEvent::build_genesis_import_event(GenesisImportRequest {
                 store_id: &StoreId::parse("store_testtoken11")?,
@@ -152,10 +153,12 @@ mod tests {
     )]
     fn checked_write_preserves_bytes_and_compares_the_complete_event() -> anyhow::Result<()> {
         let mut fixture = EventFixture::new()?;
+        let location =
+            nook_core::EventLogLocation::Vault(nook_core::StoreId::parse("store_abcdefghijk")?);
         let checked = CheckedEventWrite::parse(CheckedEventWriteRequest {
             bytes: &fixture.bytes,
             event_id: &fixture.event_id,
-            location: &EventLogLocation::LegacyVaultRoot,
+            location: &location,
             provider: "Fixture",
         })?;
         assert_eq!(checked.event_id(), &fixture.event_id);
@@ -201,7 +204,9 @@ mod tests {
             match CheckedEventWrite::parse(CheckedEventWriteRequest {
                 bytes,
                 event_id: requested,
-                location: &EventLogLocation::LegacyVaultRoot,
+                location: &nook_core::EventLogLocation::Vault(nook_core::StoreId::parse(
+                    "store_abcdefghijk",
+                )?),
                 provider: "Fixture",
             }) {
                 Err(NookError::Serialization(message)) => assert!(message.starts_with(&expected)),
@@ -225,16 +230,23 @@ mod tests {
         let github = GitHubEventStore {
             pat: "",
             repo: "",
-            location: &nook_core::EventLogLocation::LegacyVaultRoot,
+            location: &nook_core::EventLogLocation::Vault(nook_core::StoreId::parse(
+                "store_abcdefghijk",
+            )?),
         };
         let drive = DriveEventStore {
             token: "",
             parent: &DriveEventParent::AppDataFolder,
-            location: &nook_core::EventLogLocation::LegacyVaultRoot,
+            location: &nook_core::EventLogLocation::Vault(nook_core::StoreId::parse(
+                "store_abcdefghijk",
+            )?),
         };
         let cloud = ICloudEventStore {
             web_auth_token: "fixture-token",
             target: &ICloudEventTarget::Private,
+            location: &nook_core::EventLogLocation::Vault(nook_core::StoreId::parse(
+                "store_abcdefghijk",
+            )?),
         };
         for (result, prefix) in [
             (
@@ -270,6 +282,9 @@ mod tests {
         let no_token = ICloudEventStore {
             web_auth_token: " ",
             target: &ICloudEventTarget::Private,
+            location: &nook_core::EventLogLocation::Vault(nook_core::StoreId::parse(
+                "store_abcdefghijk",
+            )?),
         };
         match no_token
             .put_icloud_event_if_absent(&event_id, &[0xff])
