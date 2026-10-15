@@ -246,7 +246,8 @@ describe.sequential(
         activeVaultStoreId: unselectedVaultScope(),
       })
       const stored = await readStoredProviderRecord()
-      const plaintext: unknown = JSON.parse(JSON.stringify(stored.value))
+      // IndexedDB hands back a fresh copy, so editing it leaves the store alone.
+      const plaintext: unknown = stored.value
       if (
         !plaintext ||
         typeof plaintext !== 'object' ||

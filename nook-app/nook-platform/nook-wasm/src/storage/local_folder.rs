@@ -9,14 +9,15 @@ use crate::NookError;
 use gloo_file::{File, futures};
 use js_sys::{Array, AsyncIterator, JsString, Object, Reflect};
 use nook_core::EventId;
+use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::wasm_bindgen;
-use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 mod handles;
 pub(crate) use handles::LocalFolderHandles;
+mod event_write;
+pub(crate) use event_write::LocalFolderEventWrite;
 use handles::{
-    ChildLookup, ChildLookupRequest, FolderCallArgument, FolderFailure, FolderMethod, FolderObject,
-    FolderPromise,
+    ChildLookup, ChildLookupRequest, FolderFailure, FolderMethod, FolderObject, FolderPromise,
 };
 
 #[wasm_bindgen]
@@ -70,11 +71,6 @@ pub(crate) struct LocalFolderEventFile {
     pub content: String,
 }
 
-pub(crate) struct LocalFolderEventWrite {
-    pub event_id: String,
-    pub content: String,
-}
-
 /// Successful acquisition under the existing browser permission observations.
 /// Browser permission may change and is still enforced by each underlying operation.
 pub(crate) struct OpenedLocalFolder {
@@ -89,34 +85,6 @@ impl<'a> LocalFolderEventName<'a> {
     }
 }
 
-/// An opened stream exposes writing, but cannot be closed through this state.
-struct WritableLocalFolderEvent {
-    stream: Object,
-}
-/// Only successful writing produces the state that can close the stream.
-struct WrittenLocalFolderEvent {
-    stream: Object,
-}
-impl WritableLocalFolderEvent {
-    async fn write(self, content: &str) -> Result<WrittenLocalFolderEvent, NookError> {
-        let content: Object = JsString::from(content).unchecked_into();
-        FolderObject::new(&self.stream)
-            .call_with(FolderCallArgument {
-                name: "write",
-                argument: &content,
-            })
-            .await?;
-        Ok(WrittenLocalFolderEvent {
-            stream: self.stream,
-        })
-    }
-}
-impl WrittenLocalFolderEvent {
-    async fn close(self) -> Result<(), NookError> {
-        FolderObject::new(&self.stream).call("close").await?;
-        Ok(())
-    }
-}
 enum FolderDirectory {
     Unavailable,
     Opened(Object),
@@ -471,7 +439,12 @@ impl OpenedLocalFolder {
             ));
         };
         let options = Object::new();
-        Reflect::set(&options, &JsString::from("recursive"), &JsValue::TRUE).map_err(|e| {
+        Reflect::set(
+            &options,
+            &JsString::from("recursive"),
+            &js_sys::Boolean::from(true),
+        )
+        .map_err(|e| {
             FolderFailure::new(&e.unchecked_into()).into_error("removeEntry options failed")
         })?;
         let promise = function
@@ -486,65 +459,181 @@ impl OpenedLocalFolder {
         .await?;
         Ok(true)
     }
-
-    pub(crate) async fn write_events(
-        &self,
-        location: &nook_core::EventLogLocation,
-        records: &[LocalFolderEventWrite],
-    ) -> Result<(), NookError> {
-        let root = &self.root;
-        let FolderDirectory::Opened(dir) = FolderObject::new(root)
-            .event_directory(location, ChildLookup::Create)
-            .await?
-        else {
-            return Ok(());
-        };
-        for record in records {
-            record.write_into(&dir).await?;
-        }
-        Ok(())
-    }
-}
-impl LocalFolderEventWrite {
-    async fn write_into(&self, dir: &Object) -> Result<(), NookError> {
-        let record = self;
-        let name = LocalFolderEventName::from_event_id(&record.event_id)?;
-        let existing = FolderObject::new(dir)
-            .child_file(ChildLookupRequest {
-                name: &name,
-                lookup: ChildLookup::Existing,
-            })
-            .await?;
-        if let FolderFile::Opened(existing) = existing {
-            let current = FolderObject::new(&existing).read_text().await?;
-            if current != record.content {
-                return Err(NookError::Database(format!(
-                    "Backup event {} already exists with different content.",
-                    record.event_id
-                )));
-            }
-            return Ok(());
-        }
-        let FolderFile::Opened(file) = FolderObject::new(dir)
-            .child_file(ChildLookupRequest {
-                name: &name,
-                lookup: ChildLookup::Create,
-            })
-            .await?
-        else {
-            return Err(NookError::Database(format!(
-                "Could not create backup event file: {name}"
-            )));
-        };
-        let stream = FolderObject::new(&file).call("createWritable").await?;
-        WritableLocalFolderEvent { stream }
-            .write(&record.content)
-            .await?
-            .close()
-            .await?;
-        Ok(())
-    }
 }
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
-mod tests;
+mod tests {
+    use super::event_write::tests::{EventFixture, StreamOutcome, fixture_location};
+    use super::*;
+    use js_sys::{Boolean, Promise};
+    use std::cell::Cell;
+    use wasm_bindgen::closure::Closure;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    async fn absent_directory_remains_empty_and_missing_methods_remain_errors() -> anyhow::Result<()>
+    {
+        let directory = Object::new();
+        let reject = Closure::<dyn FnMut(Object, Object) -> Promise>::new(|_, _| {
+            Promise::reject(&JsString::from("fixture directory denied"))
+        });
+        Reflect::set(
+            &directory,
+            &JsString::from("getDirectoryHandle"),
+            reject.as_ref(),
+        )
+        .map_err(|error| {
+            FolderFailure::new(&error.unchecked_into()).into_error("fixture directory")
+        })?;
+        let folder = OpenedLocalFolder { root: directory };
+        assert!(folder.read_events(&fixture_location()?).await?.is_empty());
+        match folder.write_events(&fixture_location()?, &[]).await {
+            Err(NookError::Database(message)) => {
+                assert_eq!(
+                    message,
+                    "getDirectoryHandle failed: fixture directory denied"
+                );
+            }
+            Err(error) => return Err(error.into()),
+            Ok(()) => anyhow::bail!("creating a denied directory must reject"),
+        }
+        match (OpenedLocalFolder {
+            root: Object::new(),
+        })
+        .read_events(&fixture_location()?)
+        .await
+        {
+            Err(NookError::Database(message)) => {
+                assert_eq!(message, "Local folder handle cannot open subdirectories.");
+            }
+            Err(error) => return Err(error.into()),
+            Ok(_) => anyhow::bail!("missing directory method must reject"),
+        }
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    fn filenames_preserve_digest_and_reject_non_event_entries() -> anyhow::Result<()> {
+        let id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
+        let filename = LocalFolderEventName::from_event_id(id.as_str())?;
+        assert_eq!(filename, format!("{}.yaml", id.encoded_digest()));
+        assert_eq!(
+            LocalFolderEventName::new(&filename).event_id(),
+            FolderEventName::Event(id)
+        );
+        for name in [
+            "notes.yaml",
+            "event.json",
+            "../event.yaml",
+            "README",
+            ".yaml",
+        ] {
+            assert!(matches!(
+                LocalFolderEventName::new(name).event_id(),
+                FolderEventName::Unrelated
+            ));
+        }
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    async fn entries_and_values_filter_event_files_and_sort_records() -> anyhow::Result<()> {
+        let first = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
+        let second = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?;
+        for method in ["entries", "values"] {
+            let fixture = EventFixture::new(StreamOutcome::Success)?;
+            let items = Array::new();
+            for (name, kind) in [
+                (
+                    LocalFolderEventName::from_event_id(second.as_str())?,
+                    "file",
+                ),
+                ("notes.txt".to_owned(), "file"),
+                (LocalFolderEventName::from_event_id(first.as_str())?, "file"),
+                (
+                    LocalFolderEventName::from_event_id(second.as_str())?,
+                    "directory",
+                ),
+            ] {
+                let file = Object::assign(&Object::new(), &fixture.file);
+                for (key, value) in [("name", name.as_str()), ("kind", kind)] {
+                    Reflect::set(&file, &JsString::from(key), &JsString::from(value)).map_err(
+                        |error| {
+                            FolderFailure::new(&error.unchecked_into()).into_error("fixture file")
+                        },
+                    )?;
+                }
+                if method == "entries" {
+                    items.push(&Array::of2(&JsString::from(name), &file));
+                } else {
+                    items.push(&file);
+                }
+            }
+            let index = Cell::new(0);
+            let next = Closure::<dyn FnMut() -> Promise>::new(move || {
+                let value = Object::new();
+                let done = index.get() >= items.length();
+                if let Err(error) =
+                    Reflect::set(&value, &JsString::from("done"), &Boolean::from(done))
+                {
+                    return Promise::reject(&error);
+                }
+                if !done {
+                    if let Err(error) =
+                        Reflect::set(&value, &JsString::from("value"), &items.get(index.get()))
+                    {
+                        return Promise::reject(&error);
+                    }
+                    index.set(index.get() + 1);
+                }
+                Promise::resolve(&value).unchecked_into::<Promise>()
+            });
+            let iterator = Object::new();
+            Reflect::set(&iterator, &JsString::from("next"), next.as_ref()).map_err(|error| {
+                FolderFailure::new(&error.unchecked_into()).into_error("fixture iterator")
+            })?;
+            let enumerate = Closure::<dyn FnMut() -> Object>::new(move || iterator.clone());
+            Reflect::set(
+                &fixture.directory,
+                &JsString::from(method),
+                enumerate.as_ref(),
+            )
+            .map_err(|error| {
+                FolderFailure::new(&error.unchecked_into()).into_error("fixture enumeration")
+            })?;
+            let records = (OpenedLocalFolder {
+                root: fixture.directory.clone(),
+            })
+            .read_events(&fixture_location()?)
+            .await?;
+            assert_eq!(records.len(), 2);
+            assert_eq!(records[0].event_id, first.as_str());
+            assert_eq!(records[1].event_id, second.as_str());
+            assert_eq!(records[0].path, fixture_location()?.event_path(&first));
+            assert_eq!(records[1].path, fixture_location()?.event_path(&second));
+            assert!(records.iter().all(|record| record.content.is_empty()));
+        }
+        Ok(())
+    }
+}

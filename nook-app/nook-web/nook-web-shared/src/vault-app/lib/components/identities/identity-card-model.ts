@@ -326,6 +326,7 @@ export class IdentityCardProjection {
           identityId: entry.identityId,
         };
         if (!this.owns(ownership)) continue;
+        const localLabel = local.get(storeId);
         const stateRequest: VaultRowStateRequest = {
           storeId,
           local: local.has(storeId),
@@ -334,7 +335,7 @@ export class IdentityCardProjection {
         const row: IdentityVaultRow = {
           storeId,
           // Names live inside the vault: one never stored here shows its id.
-          label: local.get(storeId) ?? storeId,
+          label: localLabel ? localLabel : storeId,
           state: this.vaultState(stateRequest),
         };
         rows.push(row);
