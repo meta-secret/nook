@@ -207,7 +207,7 @@ describe('IdentityCardProjection vault ownership', () => {
     expect(new Set(all).size).toBe(all.length)
   })
 
-  test('keeps local vaults openable when no identity is current here', () => {
+  test('puts a local vault no identity claims on the first identity stored here', () => {
     const noCurrent: IdentityCardSource = {
       identities: [work, elsewhere],
       localVaults: [
@@ -218,10 +218,57 @@ describe('IdentityCardProjection vault ownership', () => {
       authenticated: false,
       identityUnlocked: false,
     }
+    const projection = new IdentityCardProjection(noCurrent)
 
-    const unlisted = new IdentityCardProjection(noCurrent).unlistedVaults
+    expect(projection.unlistedVaults).toEqual([])
+    // With no identity in use here, its vaults stay openable: unlocking one
+    // is how a lost identity key is recovered.
+    expect(projection.cards[0]?.vaults).toEqual([
+      {
+        storeId: 'store_w',
+        label: 'Acme',
+        state: IdentityVaultRowState.Available,
+      },
+      {
+        storeId: 'store_orphan',
+        label: 'Orphan',
+        state: IdentityVaultRowState.Available,
+      },
+    ])
+  })
+
+  test('lists local vaults apart only when no identity is stored here', () => {
+    const onlyElsewhere: IdentityCardSource = {
+      identities: [elsewhere],
+      localVaults: [{ storeId: 'store_orphan', label: 'Orphan' }],
+      openStoreId: '',
+      authenticated: false,
+      identityUnlocked: false,
+    }
+
+    const unlisted = new IdentityCardProjection(onlyElsewhere).unlistedVaults
 
     expect(unlisted.map((vault) => vault.storeId)).toEqual(['store_orphan'])
+  })
+
+  test('marks another identity vault stored here as opening through that identity', () => {
+    const storedHere: IdentityCardSource = {
+      ...source(true),
+      localVaults: [
+        ...source(true).localVaults,
+        { storeId: 'store_w', label: 'Acme' },
+      ],
+    }
+
+    const workCard = new IdentityCardProjection(storedHere).cards[1]
+
+    expect(workCard?.vaults).toEqual([
+      {
+        storeId: 'store_w',
+        label: 'Acme',
+        state: IdentityVaultRowState.Dormant,
+      },
+    ])
   })
 
   test('lists no stray vaults when the current identity holds them all', () => {

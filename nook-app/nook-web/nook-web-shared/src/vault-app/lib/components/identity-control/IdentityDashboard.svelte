@@ -1,15 +1,19 @@
 <!--
-The identity's dashboard: one tile per part of the identity, each with its
-count, a short summary and a warning when that part puts the identity at
-risk. A tile opens the part's own page. A line at the top says what is at
-risk with the one action that fixes it; other actions live in Manage on
-the identity's card.
+The identity's dashboard, laid out by what matters. Devices take the wide
+tile: each device is a filled slot and empty dashed slots invite the next
+one, so a single device reads as a gap. Cloud copies sit beside it and turn
+into a warning with its fix while there are none. Vaults, sign-in keys,
+backup passwords and this browser follow as small tiles. Every tile opens
+its own page; other actions live in Manage on the identity's card.
 -->
 <script lang="ts">
   import { onMount, type Snippet } from "svelte";
   import {
     ChevronRight,
     Cloud,
+    CloudOff,
+    Laptop,
+    Plus,
     FolderKey,
     KeyRound,
     MonitorSmartphone,
@@ -60,11 +64,6 @@ the identity's card.
     return `${shown} ${vault.t(moreRequest)}`;
   }
 
-  const deviceNames = $derived(
-    members.map((member) =>
-      memberName(member.label, member.appId, member.isCurrentInstallation),
-    ),
-  );
   const vaultNames = $derived(
     vault.localVaults.map((entry) => entry.display_label(unnamed)),
   );
@@ -115,201 +114,272 @@ the identity's card.
     return vault.t(request);
   });
 
-  function nextStep(): void {
-    if (health.nextStep === NookIdentityNextStep.AddDevice) {
-      onOpen(WorkspaceSection.AddDevice);
-      return;
-    }
-    onAddSyncProvider();
-  }
+  /** The identity opens on too few devices, or keeps no cloud copy. */
+  const devicesAtRisk = $derived(
+    health.nextStep === NookIdentityNextStep.AddDevice,
+  );
+  const copiesAtRisk = $derived(
+    health.nextStep === NookIdentityNextStep.AddSyncProvider ||
+      health.nextStep === NookIdentityNextStep.AddCloudProvider,
+  );
+  /** Device slots: the devices themselves, then empty ones that invite the
+   * next device. A lone device gets two (a phone, a computer); a full set
+   * keeps one. */
+  const emptySlots = $derived.by((): string[] => {
+    const devices = Math.max(members.length, 1);
+    if (devices === 1)
+      return [
+        vault.t(I18N_KEYS.IdentityOverviewSlotPhone),
+        vault.t(I18N_KEYS.IdentityOverviewSlotComputer),
+      ];
+    if (devices === 2) return [vault.t(I18N_KEYS.IdentityOverviewSlotPhone)];
+    return [vault.t(I18N_KEYS.IdentityOverviewSlotDevice)];
+  });
 
   onMount(() => {
     void control.followOpenVault();
   });
 </script>
 
-{#snippet tile(
+{#snippet smallTile(
   testId: string,
   title: string,
-  count: string,
+  value: string,
   detail: string,
-  warning: string,
   icon: Snippet,
-  onclick: () => void,
+  section: WorkspaceSection,
 )}
   <button
     type="button"
-    class="group grid min-h-36 content-between gap-4 border border-border bg-card p-5 text-left transition-colors hover:border-foreground/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+    class="group grid min-h-28 content-between gap-3 border border-border bg-card p-4 text-left transition-colors hover:border-foreground/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
     data-testid={testId}
-    {onclick}
+    onclick={() => onOpen(section)}
   >
-    <span class="flex items-start justify-between gap-3">
-      <span class="flex min-w-0 items-center gap-3">
-        <span class="nk-tile shrink-0" aria-hidden="true">{@render icon()}</span>
-        <span class="truncate text-sm font-semibold text-foreground">{title}</span>
+    <span class="flex items-center justify-between gap-2 text-muted-foreground">
+      <span class="flex min-w-0 items-center gap-2">
+        {@render icon()}
+        <span class="truncate text-xs font-medium">{title}</span>
       </span>
       <ChevronRight
-        class="mt-1 size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+        class="size-3.5 shrink-0 opacity-60 transition-transform group-hover:translate-x-0.5"
         aria-hidden="true"
       />
     </span>
-    <span class="grid gap-1.5">
-      {#if count}
-        <span class="font-mono text-3xl leading-none text-foreground tabular-nums">
-          {count}
-        </span>
+    <span class="grid gap-1">
+      {#if value}
+        <span class="font-mono text-2xl leading-none text-foreground tabular-nums"
+          >{value}</span
+        >
       {/if}
-      <span class="line-clamp-2 text-xs text-pretty text-muted-foreground">{detail}</span>
-      {#if warning}
-        <span class="nk-tag nk-tag-warning justify-self-start">
-          <TriangleAlert class="size-3" aria-hidden="true" />
-          {warning}
-        </span>
-      {/if}
+      <span class="truncate text-xs text-muted-foreground">{detail}</span>
     </span>
   </button>
 {/snippet}
 
-{#snippet devicesIcon()}<MonitorSmartphone class="size-4" />{/snippet}
-{#snippet vaultsIcon()}<FolderKey class="size-4" />{/snippet}
-{#snippet copiesIcon()}<Cloud class="size-4" />{/snippet}
-{#snippet keysIcon()}<KeyRound class="size-4" />{/snippet}
-{#snippet passwordsIcon()}<ShieldCheck class="size-4" />{/snippet}
-{#snippet browserIcon()}<SlidersHorizontal class="size-4" />{/snippet}
+{#snippet vaultsIcon()}<FolderKey class="size-4" aria-hidden="true" />{/snippet}
+{#snippet keysIcon()}<KeyRound class="size-4" aria-hidden="true" />{/snippet}
+{#snippet passwordsIcon()}<ShieldCheck class="size-4" aria-hidden="true" />{/snippet}
+{#snippet browserIcon()}<SlidersHorizontal class="size-4" aria-hidden="true" />{/snippet}
 
-<div class="grid min-w-0 gap-6" data-testid="identity-overview">
-  {#if health.nextStep === NookIdentityNextStep.Done}
-    <p
-      class="flex items-center gap-2 text-sm text-foreground"
-      data-testid="overview-all-set"
+<div class="grid min-w-0 gap-3" data-testid="identity-overview">
+  <div class="grid gap-3 lg:grid-cols-3">
+    <!-- Devices: filled slots for each device, dashed slots for the next. -->
+    <section
+      class="grid content-start gap-4 border bg-card p-5 lg:col-span-2 {devicesAtRisk
+        ? 'border-warning/60'
+        : 'border-border'}"
+      data-testid="overview-devices"
     >
-      <ShieldCheck class="size-4 shrink-0 text-success" aria-hidden="true" />
-      {vault.t(I18N_KEYS.IdentityOverviewAllSet)}
-    </p>
-  {:else}
-    <div
-      class="nk-banner nk-banner-warning flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-      data-testid="overview-next-step"
-      data-next-step={NookIdentityNextStep[health.nextStep]}
+      <header class="flex items-center justify-between gap-3">
+        <span class="flex min-w-0 items-center gap-2">
+          <MonitorSmartphone class="size-4 text-muted-foreground" aria-hidden="true" />
+          <h2 class="text-sm font-semibold text-foreground">
+            {vault.t(I18N_KEYS.WorkspaceSectionDevices)}
+          </h2>
+          {#if devicesAtRisk}
+            <span class="nk-tag nk-tag-warning">
+              <TriangleAlert class="size-3" aria-hidden="true" />
+              {vault.t(I18N_KEYS.IdentityOverviewRiskOneDevice)}
+            </span>
+          {/if}
+        </span>
+        <button
+          type="button"
+          class="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          data-testid="overview-open-devices"
+          onclick={() => onOpen(WorkspaceSection.Devices)}
+        >
+          {vault.t(I18N_KEYS.IdentityOverviewViewAll)}
+          <ChevronRight class="size-3.5" aria-hidden="true" />
+        </button>
+      </header>
+      <ul class="grid grid-cols-3 gap-2 sm:gap-3">
+        {#if members.length === 0}
+          <li>
+            <button
+              type="button"
+              class="grid h-full min-h-28 w-full place-items-center gap-2 border border-success/50 bg-background p-3 text-center transition-colors hover:border-success"
+              data-testid="overview-device-slot"
+              onclick={() => onOpen(WorkspaceSection.Devices)}
+            >
+              <Laptop class="size-6 text-foreground" aria-hidden="true" />
+              <span class="grid gap-1">
+                <span class="text-xs text-foreground">
+                  {vault.t(I18N_KEYS.IdentityOverviewThisBrowser)}
+                </span>
+                <span class="nk-tag nk-tag-success justify-self-center">
+                  {vault.t(I18N_KEYS.IdentityControlCurrentApp)}
+                </span>
+              </span>
+            </button>
+          </li>
+        {/if}
+        {#each members as member (member.appId)}
+          <li>
+            <button
+              type="button"
+              class="grid h-full min-h-28 w-full place-items-center gap-2 border bg-background p-3 text-center transition-colors {member.isCurrentInstallation
+                ? 'border-success/50 hover:border-success'
+                : 'border-border hover:border-foreground/40'}"
+              data-testid="overview-device-slot"
+              onclick={() => onOpen(WorkspaceSection.Devices)}
+            >
+              {#if member.isCurrentInstallation}
+                <Laptop class="size-6 text-foreground" aria-hidden="true" />
+              {:else}
+                <MonitorSmartphone class="size-6 text-foreground" aria-hidden="true" />
+              {/if}
+              <span class="grid gap-1">
+                <span class="line-clamp-2 text-xs text-foreground">
+                  {memberName(member.label, member.appId, member.isCurrentInstallation)}
+                </span>
+                {#if member.isCurrentInstallation}
+                  <span class="nk-tag nk-tag-success justify-self-center">
+                    {vault.t(I18N_KEYS.IdentityControlCurrentApp)}
+                  </span>
+                {/if}
+              </span>
+            </button>
+          </li>
+        {/each}
+        {#each emptySlots as slot, index (index)}
+          <li>
+            <button
+              type="button"
+              class="grid h-full min-h-28 w-full place-items-center gap-2 border border-dashed border-foreground/25 p-3 text-center text-muted-foreground transition-colors hover:border-foreground/60 hover:text-foreground"
+              data-testid="overview-add-device-slot"
+              onclick={() => onOpen(WorkspaceSection.AddDevice)}
+            >
+              <Plus class="size-6" aria-hidden="true" />
+              <span class="text-xs">{slot}</span>
+            </button>
+          </li>
+        {/each}
+      </ul>
+      {#if pendingJoins.length > 0}
+        <button
+          type="button"
+          class="nk-banner nk-band-success flex items-center justify-between gap-3 px-3 py-2 text-left text-xs text-foreground"
+          data-testid="overview-pending-joins"
+          onclick={() => onOpen(WorkspaceSection.Devices)}
+        >
+          {pendingText}
+          <ChevronRight class="size-3.5 shrink-0" aria-hidden="true" />
+        </button>
+      {/if}
+    </section>
+
+    <!-- Cloud copies: a warning with its fix while there are none. -->
+    <section
+      class="grid content-between gap-4 border p-5 {copiesAtRisk
+        ? 'border-warning/60 bg-warning/5'
+        : 'border-border bg-card'}"
+      data-testid="overview-sync"
     >
-      <div class="flex min-w-0 items-start gap-3">
-        <TriangleAlert
-          class="mt-0.5 size-4 shrink-0 text-warning"
-          aria-hidden="true"
-        />
-        <div class="grid gap-0.5">
-          <p class="text-sm font-semibold text-foreground">
-            {#if health.nextStep === NookIdentityNextStep.AddDevice}
-              {vault.t(I18N_KEYS.IdentityHealthDeviceTitle)}
-            {:else if health.nextStep === NookIdentityNextStep.AddCloudProvider}
-              {vault.t(I18N_KEYS.IdentityHealthCloudTitle)}
-            {:else}
-              {vault.t(I18N_KEYS.IdentityHealthSyncTitle)}
-            {/if}
+      <header class="flex items-center justify-between gap-3">
+        <span class="flex items-center gap-2">
+          <Cloud class="size-4 text-muted-foreground" aria-hidden="true" />
+          <h2 class="text-sm font-semibold text-foreground">
+            {vault.t(I18N_KEYS.IdentityOverviewCopies)}
+          </h2>
+        </span>
+        <button
+          type="button"
+          class="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          data-testid="overview-open-sync"
+          onclick={() => onOpen(WorkspaceSection.Sync)}
+        >
+          {vault.t(I18N_KEYS.IdentityOverviewViewAll)}
+          <ChevronRight class="size-3.5" aria-hidden="true" />
+        </button>
+      </header>
+      {#if providerNames.length === 0}
+        <div class="grid justify-items-start gap-2">
+          <CloudOff class="size-7 text-warning" aria-hidden="true" />
+          <p class="text-sm font-medium text-foreground">
+            {vault.t(I18N_KEYS.IdentityOverviewRiskLocal)}
           </p>
           <p class="text-xs text-pretty text-muted-foreground">
-            {#if health.nextStep === NookIdentityNextStep.AddDevice}
-              {vault.t(I18N_KEYS.IdentityHealthDeviceBody)}
-            {:else if health.nextStep === NookIdentityNextStep.AddCloudProvider}
-              {vault.t(I18N_KEYS.IdentityHealthCloudBody)}
-            {:else}
-              {vault.t(I18N_KEYS.IdentityHealthSyncBody)}
-            {/if}
+            {vault.t(I18N_KEYS.IdentityHealthSyncBody)}
           </p>
         </div>
-      </div>
-      <Button
-        type="button"
-        size="sm"
-        class="shrink-0"
-        data-testid="overview-next-step-btn"
-        onclick={nextStep}
-      >
-        {#if health.nextStep === NookIdentityNextStep.AddDevice}
-          {vault.t(I18N_KEYS.IdentityHealthDeviceCta)}
-        {:else if health.nextStep === NookIdentityNextStep.AddCloudProvider}
-          {vault.t(I18N_KEYS.IdentityHealthCloudCta)}
-        {:else}
-          {vault.t(I18N_KEYS.IdentityHealthSyncCta)}
-        {/if}
-      </Button>
-    </div>
-  {/if}
+        <Button
+          type="button"
+          size="sm"
+          class="justify-self-start"
+          data-testid="overview-add-sync"
+          onclick={onAddSyncProvider}
+        >
+          <Plus class="size-4" />
+          {vault.t(I18N_KEYS.AddDeviceCloudAction)}
+        </Button>
+      {:else}
+        <div class="grid gap-1">
+          <span class="font-mono text-3xl leading-none text-foreground tabular-nums">
+            {providerNames.length}
+          </span>
+          <span class="line-clamp-2 text-xs text-muted-foreground">
+            {summary(providerNames)}
+          </span>
+        </div>
+      {/if}
+    </section>
+  </div>
 
-  <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-    {@render tile(
-      "overview-open-devices",
-      vault.t(I18N_KEYS.WorkspaceSectionDevices),
-      String(Math.max(members.length, 1)),
-      members.length === 0
-        ? vault.t(I18N_KEYS.IdentityOverviewDevicesEmpty)
-        : summary(deviceNames),
-      members.length <= 1 ? vault.t(I18N_KEYS.IdentityOverviewRiskOneDevice) : "",
-      devicesIcon,
-      () => onOpen(WorkspaceSection.Devices),
-    )}
-    {@render tile(
+  <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    {@render smallTile(
       "overview-open-vaults",
       vault.t(I18N_KEYS.WorkspaceSectionVaults),
       String(vaultNames.length),
       vaultNames.length === 0
         ? vault.t(I18N_KEYS.IdentityOverviewVaultsEmpty)
         : summary(vaultNames),
-      "",
       vaultsIcon,
-      () => onOpen(WorkspaceSection.Vaults),
+      WorkspaceSection.Vaults,
     )}
-    {@render tile(
-      "overview-open-sync",
-      vault.t(I18N_KEYS.IdentityOverviewCopies),
-      String(providerNames.length),
-      providerNames.length === 0
-        ? vault.t(I18N_KEYS.IdentityOverviewSyncEmpty)
-        : summary(providerNames),
-      providerNames.length === 0
-        ? vault.t(I18N_KEYS.IdentityOverviewRiskLocal)
-        : "",
-      copiesIcon,
-      () => onOpen(WorkspaceSection.Sync),
-    )}
-    {@render tile(
+    {@render smallTile(
       "overview-keys",
       vault.t(I18N_KEYS.IdentityOverviewKeysLink),
       "",
-      vault.t(I18N_KEYS.WorkspaceSectionKeysDescription),
-      "",
+      vault.t(I18N_KEYS.IdentityOverviewSignIn),
       keysIcon,
-      () => onOpen(WorkspaceSection.Keys),
+      WorkspaceSection.Keys,
     )}
-    {@render tile(
+    {@render smallTile(
       "overview-passwords",
       vault.t(I18N_KEYS.IdentityOverviewPasswordsLink),
       String(passwordCount),
       passwordsText,
-      "",
       passwordsIcon,
-      () => onOpen(WorkspaceSection.Passwords),
+      WorkspaceSection.Passwords,
     )}
-    {@render tile(
+    {@render smallTile(
       "overview-browser-settings",
       vault.t(I18N_KEYS.IdentityMenuBrowser),
-      "",
+      vault.locale.toUpperCase(),
       vault.t(I18N_KEYS.IdentityMenuBrowserHint),
-      "",
       browserIcon,
-      () => onOpen(WorkspaceSection.Settings),
+      WorkspaceSection.Settings,
     )}
   </div>
-
-  {#if pendingJoins.length > 0}
-    <button
-      type="button"
-      class="nk-banner nk-band-success flex items-center justify-between gap-3 px-4 py-3 text-left text-sm text-foreground"
-      data-testid="overview-pending-joins"
-      onclick={() => onOpen(WorkspaceSection.Devices)}
-    >
-      {pendingText}
-      <ChevronRight class="size-4 shrink-0" aria-hidden="true" />
-    </button>
-  {/if}
 </div>

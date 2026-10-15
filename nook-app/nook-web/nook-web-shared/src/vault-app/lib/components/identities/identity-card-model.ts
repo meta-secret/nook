@@ -29,6 +29,9 @@ export enum IdentityVaultRowState {
   Open = "open",
   /** A vault on this browser that can be opened or switched to. */
   Available = "available",
+  /** Stored on this browser for an identity that is not the one in use
+   * here; using that identity opens it. */
+  Dormant = "dormant",
   /** Known for this identity but not stored on this browser. */
   Unavailable = "unavailable",
 }
@@ -89,7 +92,10 @@ export type IdentityTotals = {
 
 type VaultRowStateRequest = {
   readonly storeId: string;
+  /** Stored on this browser. */
   readonly local: boolean;
+  /** Its identity is the one in use here, or none is in use. */
+  readonly active: boolean;
 };
 
 type IdentityVaultRowsRequest = {
@@ -163,8 +169,10 @@ type IdentityVaultOwnership = {
 /**
  * Project the identity directory and local vault catalog into cards. Every
  * vault belongs to exactly one identity: the identity with a verified access
- * record for it (the current identity first when several claim it), or the
- * current identity for local vaults no identity has opened yet.
+ * record for it (the current identity first when several claim it). A local
+ * vault no identity has opened yet belongs to the identity in use here, or,
+ * with none in use, to the first identity stored on this browser, so every
+ * vault on this browser sits on a card.
  */
 export class IdentityCardProjection {
   private readonly owners: ReadonlyMap<string, string>;
@@ -189,7 +197,7 @@ export class IdentityCardProjection {
       }
     }
     for (const entry of ordered) {
-      if (!isCurrent(entry)) continue;
+      if (entry.identityId !== this.adopterId) continue;
       for (const vault of this.source.localVaults) {
         if (!owners.has(vault.storeId)) {
           owners.set(vault.storeId, entry.identityId);
@@ -197,6 +205,20 @@ export class IdentityCardProjection {
       }
     }
     return owners;
+  }
+
+  /** The identity that takes local vaults no identity has a record for:
+   * the one in use here, else the first one stored on this browser. */
+  private get adopterId(): string {
+    const current = this.source.identities.find(
+      (entry) =>
+        entry.localAccess === NookIdentityLocalAccessKind.CurrentBrowser,
+    );
+    if (current) return current.identityId;
+    const stored = this.source.identities.find(
+      (entry) => entry.localAccess === NookIdentityLocalAccessKind.ThisBrowser,
+    );
+    return stored ? stored.identityId : "";
   }
 
   private get hasCurrentIdentity(): boolean {
@@ -214,8 +236,8 @@ export class IdentityCardProjection {
     return this.source.identities.map((entry) => this.card(entry));
   }
 
-  /** Local vaults no card lists, as when this browser has no current
-   * identity to hold them. They still open from their own row. */
+  /** Local vaults no card lists: only when no identity is stored on this
+   * browser to hold them. They still open from their own row. */
   get unlistedVaults(): IdentityLocalVault[] {
     const listed = new Set(
       this.cards.flatMap((card) => card.vaults.map((row) => row.storeId)),
@@ -273,8 +295,8 @@ export class IdentityCardProjection {
       // this browser still opens: unlocking it is how the key is recovered.
       const stateRequest: VaultRowStateRequest = {
         storeId: vault.storeId,
-        local:
-          (current || !this.hasCurrentIdentity) && local.has(vault.storeId),
+        local: local.has(vault.storeId),
+        active: current || !this.hasCurrentIdentity,
       };
       const row: IdentityVaultRow = {
         storeId: vault.storeId,
@@ -283,9 +305,9 @@ export class IdentityCardProjection {
       };
       rows.push(row);
     }
-    // The current identity also owns local vaults that no identity has a
+    // The adopting identity also owns local vaults that no identity has a
     // verified access record for yet (created here, not opened since).
-    if (current) {
+    if (entry.identityId === this.adopterId) {
       for (const vault of this.source.localVaults) {
         if (seen.has(vault.storeId)) continue;
         const ownership: IdentityVaultOwnership = {
@@ -296,6 +318,7 @@ export class IdentityCardProjection {
         const stateRequest: VaultRowStateRequest = {
           storeId: vault.storeId,
           local: true,
+          active: current || !this.hasCurrentIdentity,
         };
         const row: IdentityVaultRow = {
           storeId: vault.storeId,
@@ -311,8 +334,10 @@ export class IdentityCardProjection {
   private vaultState({
     storeId,
     local,
+    active,
   }: VaultRowStateRequest): IdentityVaultRowState {
     if (!local) return IdentityVaultRowState.Unavailable;
+    if (!active) return IdentityVaultRowState.Dormant;
     return this.source.authenticated && storeId === this.source.openStoreId
       ? IdentityVaultRowState.Open
       : IdentityVaultRowState.Available;

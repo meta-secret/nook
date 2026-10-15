@@ -60,6 +60,13 @@ test('the identity card leads to adding a device in three steps', async ({
   await expect(page.getByTestId('identities-hub')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
+  await page.getByTestId('identity-manage').first().click()
+  await page.getByTestId('identity-menu-details').click()
+  await expect(page.getByTestId('identity-overview')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await expect(page.getByTestId('overview-add-sync')).toBeVisible()
+  await snapshot(page, '3b-details-no-cloud')
   await openVaultPage(page)
   await seedSyncProvidersWhileUnlocked(page)
   await forceVaultQuiescentForE2e(page)
@@ -102,7 +109,7 @@ test('the identity card leads to adding a device in three steps', async ({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
   await snapshot(page, '7a-identity-details')
-  await page.getByTestId('overview-open-devices').first().click()
+  await page.getByTestId('overview-open-devices').click()
   await expect(page).toHaveURL(/\/identity\/devices$/)
   await expect(page.getByTestId('devices-add-device-btn')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,

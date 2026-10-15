@@ -1914,6 +1914,7 @@
     "status_elsewhere": "Other installation",
     "status_unlocked_title": "This identity has a vault open in this browser. It locks after a period without activity.",
     "vault_open": "Open",
+    "vault_dormant": "Use identity to open",
     "vault_unavailable": "Not on this browser",
     "vault_locked_hint": "Encrypted — opening it unlocks this identity",
     "vault_selected": "Selected",
@@ -2146,6 +2147,10 @@
     "later": "Later"
   },
   "identity_overview": {
+    "slot_phone": "Add a phone",
+    "slot_computer": "Add a computer",
+    "slot_device": "Add a device",
+    "view_all": "View all",
     "copies": "Cloud copies",
     "sign_in": "Sign-in",
     "risk_local": "No cloud copy yet",

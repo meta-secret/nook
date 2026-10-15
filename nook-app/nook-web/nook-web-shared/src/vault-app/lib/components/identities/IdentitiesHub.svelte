@@ -158,7 +158,8 @@ join) sit between the hero and the cards.
       const opensSelected = card.vaults.some(
         (row) =>
           row.storeId === selectedStoreId &&
-          row.state !== IdentityVaultRowState.Unavailable,
+          (row.state === IdentityVaultRowState.Open ||
+            row.state === IdentityVaultRowState.Available),
       )
       if (opensSelected) return card.identityId
     }
@@ -261,7 +262,8 @@ join) sit between the hero and the cards.
   function targetFor(identityId: string): IdentityVaultTarget {
     const card = projection.cards.find((each) => each.identityId === identityId)
     const openable = (card ? card.vaults : []).filter(
-      (each) => each.state !== IdentityVaultRowState.Unavailable,
+      (each) => (each.state === IdentityVaultRowState.Open ||
+        each.state === IdentityVaultRowState.Available),
     )
     const row = ((...[v = openable[0]]) => v)(
       openable.find((each) => each.storeId === selectedStoreId),
@@ -281,7 +283,8 @@ join) sit between the hero and the cards.
     cardsReady &&
       projection.cards.some((card) =>
         card.vaults.some(
-          (row) => row.state !== IdentityVaultRowState.Unavailable,
+          (row) => (row.state === IdentityVaultRowState.Open ||
+            row.state === IdentityVaultRowState.Available),
         ),
       ),
   )

@@ -162,7 +162,11 @@ card, which then spans the full row.
   })
 
   function rowDisabled(row: IdentityVaultRow): boolean {
-    return busy || row.state === IdentityVaultRowState.Unavailable
+    return (
+      busy ||
+      row.state === IdentityVaultRowState.Unavailable ||
+      row.state === IdentityVaultRowState.Dormant
+    )
   }
 </script>
 
@@ -334,13 +338,16 @@ card, which then spans the full row.
                     aria-hidden="true"
                   />
                 {/if}
+              {:else if row.state === IdentityVaultRowState.Dormant}
+                <span class="min-w-4 flex-1" aria-hidden="true"></span>
+                <span class="nk-tag">{vault.t(I18N_KEYS.WorkspaceVaultDormant)}</span>
               {:else}
                 <span class="min-w-4 flex-1" aria-hidden="true"></span>
                 <span class="nk-tag"
                   >{vault.t(I18N_KEYS.WorkspaceVaultUnavailable)}</span
                 >
               {/if}
-              {#if row.state !== IdentityVaultRowState.Unavailable}
+              {#if row.state === IdentityVaultRowState.Open || row.state === IdentityVaultRowState.Available}
                 <ChevronRight
                   class="size-4 flex-none text-muted-foreground opacity-60"
                   aria-hidden="true"
