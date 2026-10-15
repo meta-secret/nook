@@ -8,6 +8,11 @@ import {
   ExtensionSessionTransportFailureKind,
 } from '../src/background/service-worker/session-document'
 import type { CompanionLauncherOpenRequest } from '../src/background/service-worker/session-lifecycle'
+import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
+
+// Login availability calls the companion WASM module; start it here rather
+// than relying on an earlier test file.
+await companionWasmReady
 
 type ExtensionWindowRequest = {
   url: string
