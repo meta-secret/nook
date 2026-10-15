@@ -171,15 +171,14 @@ pub const DRIVE_PRIVATE_FOLDER_PENDING_REF: &str = "private-folder-v2:pending";
 /// Parsed Drive target reference from the existing storage-ref ID slot.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DriveStorageTargetRef {
-    LegacyAppDataFolder,
     SharedFolder { folder_id: String },
     PendingPrivateFolder,
     PrivateFolder { folder_id: String },
 }
 
 impl DriveStorageTargetRef {
-    /// Parse the existing Drive reference slot without inferring legacy state
-    /// from file-name, store identity, or an unresolved file ID.
+    /// Parse the Drive reference slot. A ref that names no folder resolves the
+    /// provider's own private folder.
     pub fn parse(storage_id: &str) -> ValidationResult<Self> {
         let trimmed = storage_id.trim();
         if let Some(folder_id) = trimmed.strip_prefix(DRIVE_SHARED_FOLDER_REF_PREFIX) {
@@ -200,16 +199,16 @@ impl DriveStorageTargetRef {
                 folder_id: folder_id.into_inner(),
             });
         }
-        Ok(Self::LegacyAppDataFolder)
+        Ok(Self::PendingPrivateFolder)
     }
 }
 
 /// Where Google Drive event files live for the current vault.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DriveEventParent {
-    /// Private provider mode: hidden application data folder (`drive.appdata`).
+    /// The application data root, before a Drive target is prepared.
     AppDataFolder,
-    /// Private schema-2 provider child folder under `appDataFolder`.
+    /// Private provider mode: the provider's child folder under appData.
     PrivateAppDataFolder { folder_id: String },
     /// Shared provider mode: a My Drive folder written with `drive.file` and
     /// read across collaborator accounts with `drive.readonly`.
@@ -217,21 +216,6 @@ pub enum DriveEventParent {
 }
 
 impl DriveEventParent {
-    /// Parse the storage-id slot from [`DriveBackupName::parse_storage_ref`].
-    #[must_use]
-    pub fn from_storage_id(storage_id: &str) -> Self {
-        let trimmed = storage_id.trim();
-        if let Some(folder_id) = trimmed.strip_prefix(DRIVE_SHARED_FOLDER_REF_PREFIX) {
-            let folder_id = folder_id.trim();
-            if !folder_id.is_empty() {
-                return Self::SharedFolder {
-                    folder_id: folder_id.to_owned(),
-                };
-            }
-        }
-        Self::AppDataFolder
-    }
-
     #[must_use]
     pub fn shared_folder_id(folder_id: &str) -> Self {
         Self::SharedFolder {

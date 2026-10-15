@@ -541,7 +541,7 @@ mod tests {
                         expires_at: StoredOAuthTokenExpiry::Unknown,
                         file_id: StoredOAuthRemoteFileId::Unresolved,
                         folder_id: StoredGoogleDriveFolder::Root,
-                        drive_private_target: StoredGoogleDrivePrivateTarget::LegacyAppDataFolder,
+                        drive_private_target: StoredGoogleDrivePrivateTarget::Pending,
                         drive_mode: GoogleDriveMode::Private,
                         icloud_mode: ICloudMode::Private,
                         icloud_share_target: StoredICloudShareTarget::Personal,

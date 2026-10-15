@@ -225,8 +225,8 @@ Nook operates on three primary data flows: multi-device vault unlock, incrementa
   - **Format:** App-key-sealed JSON snapshots
   - **Location:** IndexedDB `nook_auth` → app-scoped providers
 
-Legacy `device_identity_wrapped` and singleton provider records are read only
-during migration into the keyring and app-scoped provider storage.
+Legacy `device_identity_wrapped` records are read only
+during migration into the keyring.
 
 Search catalog detail:
 

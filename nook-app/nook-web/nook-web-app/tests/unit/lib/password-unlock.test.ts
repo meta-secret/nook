@@ -34,7 +34,7 @@ function driveProvider(
       : rootGoogleDriveFolder(),
     driveMode: folderId ? ('shared' as const) : ('private' as const),
     ...(includeLegacyPrivateTarget
-      ? { drivePrivateTarget: { state: 'legacyAppDataFolder' as const } }
+      ? { drivePrivateTarget: { state: 'pending' as const } }
       : {}),
   }
   return {

@@ -96,20 +96,9 @@ It is never shown as stored on one physical laptop.
   - Store descriptive dashboard data in a separately versioned access profile.
   - Key each access profile by its local app ID.
   - Missing descriptive data must not prevent app-key unlock.
-  - Key identity-sealed sync-provider snapshots by local app ID.
-  - Migrate the legacy singleton provider snapshot only when it belongs to the
-    sole local keyring entry.
-  - Keep the schema-1 singleton provider row as a rollback-readable projection.
-  - Refresh that projection atomically with the scoped snapshot while one local
-    identity owns it.
-  - Prove credential-free singleton ownership by equality with the app-scoped
-    projection; credential mutation is not required.
-  - When an identity is retired, delete the singleton rollback projection only
-    when it still equals that identity's app-scoped projection.
-  - A locked pre-sealed migration must refresh both projections atomically.
-  - Preserve both provider snapshots and fail closed when their values differ.
-  - A locked pre-sealed provider import must claim eligible legacy grants before
-    it writes the first app-scoped snapshot.
+  - Key identity-sealed sync-provider snapshots by local app ID. There is no
+    singleton provider record.
+  - When an identity is retired, delete only its app-scoped snapshot.
   - An unlocked manager may write live provider grants only when its in-memory
     app ID matches the grant. Otherwise use the grant's explicit app scope.
   - Extension event import must resolve the protected local key by the grant's

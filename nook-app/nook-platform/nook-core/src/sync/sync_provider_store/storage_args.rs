@@ -46,7 +46,7 @@ impl super::OAuthFileConfig {
     }
 
     fn connection_storage_id(&self) -> ValidationResult<OAuthStorageReference> {
-        let legacy_storage_id = match &self.file_id {
+        let file_storage_id = match &self.file_id {
             StoredOAuthRemoteFileId::Unresolved => OAuthStorageReference::from(String::new()),
             StoredOAuthRemoteFileId::FileId(id) => {
                 OAuthStorageReference::from(id.trim().to_owned())
@@ -88,13 +88,13 @@ impl super::OAuthFileConfig {
             )
             | (OauthFilePreset::GoogleDrive, GoogleDriveMode::Private, ICloudMode::Shared)
             | (OauthFilePreset::ICloud, GoogleDriveMode::Shared, ICloudMode::Private) => {
-                legacy_storage_id
+                file_storage_id
             }
         };
 
         match (self.preset, self.resolved_google_drive_mode()) {
             (OauthFilePreset::GoogleDrive, GoogleDriveMode::Private) => {
-                Ok(self.private_drive_connection_storage_id(storage_id))
+                Ok(self.private_drive_connection_storage_id())
             }
             (OauthFilePreset::GoogleDrive | OauthFilePreset::ICloud, GoogleDriveMode::Shared)
             | (OauthFilePreset::ICloud, GoogleDriveMode::Private) => Ok(storage_id),
@@ -125,14 +125,8 @@ impl super::OAuthFileConfig {
         }
     }
 
-    fn private_drive_connection_storage_id(
-        &self,
-        storage_id: OAuthStorageReference,
-    ) -> OAuthStorageReference {
+    fn private_drive_connection_storage_id(&self) -> OAuthStorageReference {
         match &self.drive_private_target {
-            StoredGoogleDrivePrivateTarget::Pending => {
-                OAuthStorageReference::from(crate::DRIVE_PRIVATE_FOLDER_PENDING_REF)
-            }
             StoredGoogleDrivePrivateTarget::FolderId(folder_id) if !folder_id.trim().is_empty() => {
                 OAuthStorageReference::from(format!(
                     "{}{}",
@@ -140,8 +134,10 @@ impl super::OAuthFileConfig {
                     folder_id.trim()
                 ))
             }
-            StoredGoogleDrivePrivateTarget::LegacyAppDataFolder
-            | StoredGoogleDrivePrivateTarget::FolderId(_) => storage_id,
+            StoredGoogleDrivePrivateTarget::Pending
+            | StoredGoogleDrivePrivateTarget::FolderId(_) => {
+                OAuthStorageReference::from(crate::DRIVE_PRIVATE_FOLDER_PENDING_REF)
+            }
         }
     }
 }
@@ -392,7 +388,7 @@ mod tests {
             StorageConnectArgs {
                 mode: "google-drive".to_owned(),
                 pat: "token".to_owned(),
-                repo: "file-1\tevents".to_owned(),
+                repo: "private-folder-v2:pending\tevents".to_owned(),
             }
         );
         assert_eq!(
@@ -662,7 +658,7 @@ mod tests {
             .project()?
             .ready()?
             .repo,
-            "file-id\tdraft-name"
+            "private-folder-v2:pending\tstored-name"
         );
         oauth.drive_mode = GoogleDriveMode::Shared;
         oauth.folder_id = StoredGoogleDriveFolder::FolderId("shared-folder".to_owned());
@@ -708,7 +704,7 @@ mod tests {
     }
 
     #[test]
-    fn staged_new_private_drive_assessment_uses_pending_target_but_legacy_row_keeps_root()
+    fn staged_private_drive_connections_resolve_their_folder_and_shared_ones_their_share()
     -> anyhow::Result<()> {
         let config = OAuthFileConfigData {
             preset: OauthFilePreset::GoogleDrive,
@@ -717,29 +713,19 @@ mod tests {
             file_name: StoredOAuthRemoteFileName::FileName("named-vault.yaml".to_owned()),
             ..OAuthFileConfigData::default()
         };
-        let persisted_legacy = StoredOAuthFileConfiguration::configured(config);
+        let persisted = StoredOAuthFileConfiguration::configured(config);
         let file_name = StoredOAuthRemoteFileName::Unresolved;
         let existing = StagedRemoteConnection::OAuth(StagedOAuthConnection {
-            configuration: &persisted_legacy,
+            configuration: &persisted,
             file_name: &file_name,
             setup: ProviderSaveSetup::Existing,
         })
         .project()?
         .ready()?;
-        assert_eq!(existing.repo, "historical-file-id\tnamed-vault.yaml");
-        assert_eq!(
-            crate::DriveBackupName::parse_storage_ref(&existing.repo)?.0,
-            "historical-file-id"
-        );
-        assert_eq!(
-            crate::DriveStorageTargetRef::parse(
-                &crate::DriveBackupName::parse_storage_ref(&existing.repo)?.0
-            )?,
-            crate::DriveStorageTargetRef::LegacyAppDataFolder
-        );
+        assert_eq!(existing.repo, "private-folder-v2:pending\tnamed-vault.yaml");
 
         let new_provider = StagedRemoteConnection::OAuth(StagedOAuthConnection {
-            configuration: &persisted_legacy,
+            configuration: &persisted,
             file_name: &file_name,
             setup: ProviderSaveSetup::New(StorageProviderType::OauthFile),
         })
@@ -756,7 +742,7 @@ mod tests {
 
         let new_file_name = StoredOAuthRemoteFileName::FileName("new-vault.yaml".to_owned());
         let new_private_provider = StagedRemoteConnection::OAuth(StagedOAuthConnection {
-            configuration: &persisted_legacy,
+            configuration: &persisted,
             file_name: &new_file_name,
             setup: ProviderSaveSetup::New(StorageProviderType::OauthFile),
         })
@@ -767,8 +753,8 @@ mod tests {
             "private-folder-v2:pending\tnew-vault.yaml"
         );
 
-        let StoredOAuthFileConfiguration::Configured(shared) = persisted_legacy else {
-            anyhow::bail!("the legacy row must contain an OAuth config")
+        let StoredOAuthFileConfiguration::Configured(shared) = persisted else {
+            anyhow::bail!("the row must contain an OAuth config")
         };
         let mut shared = *shared;
         shared.drive_mode = GoogleDriveMode::Shared;

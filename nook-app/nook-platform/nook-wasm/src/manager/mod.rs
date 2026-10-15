@@ -609,14 +609,10 @@ impl NookVaultManager {
                 DriveStorageClient::new(&self.storage.access_token)
                     .verify_drive_access()
                     .await?;
-                // Schema-1 and unprefixed historical IDs keep the appData root.
-                // New schema-2 private targets resolve a deterministic child folder;
-                // shared Drive still targets the configured My Drive folder.
+                // A private provider resolves its own child folder under appData;
+                // shared Drive targets the configured My Drive folder.
                 self.storage.drive_event_parent =
                     match DriveStorageTargetRef::parse(&known_file_id)? {
-                        DriveStorageTargetRef::LegacyAppDataFolder => {
-                            DriveEventParent::AppDataFolder
-                        }
                         DriveStorageTargetRef::SharedFolder { folder_id } => {
                             DriveEventParent::SharedFolder { folder_id }
                         }
@@ -632,8 +628,8 @@ impl NookVaultManager {
                     };
                 self.storage.remote_ref = match &self.storage.drive_event_parent {
                     DriveEventParent::SharedFolder { folder_id } => folder_id.clone(),
-                    DriveEventParent::AppDataFolder => known_file_id,
-                    DriveEventParent::PrivateAppDataFolder { .. } => {
+                    DriveEventParent::AppDataFolder
+                    | DriveEventParent::PrivateAppDataFolder { .. } => {
                         self.storage.drive_event_parent.encode_storage_id()
                     }
                 };

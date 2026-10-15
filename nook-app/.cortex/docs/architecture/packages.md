@@ -63,7 +63,7 @@ Team owner: development core.
 - **`src/auth/`:** Compatibility re-exports for `nook-auth2` plus the core-only adapter that replays vault event operations into auth metadata state.
 - **`src/crypto/`:** Vault encryption and key-epoch re-encryption. Canonical event signing lives in `nook-event-log`.
 - **`src/secrets/`:** Secret payload types/views, mnemonic helpers, password generation, and plaintext session mutation helpers.
-- **`src/sync/`:** Storage-provider validation/configuration, credential sealing, provider snapshot migration, vault reconciliation, and portable sync workflow states.
+- **`src/sync/`:** Storage-provider validation/configuration, credential sealing, provider snapshot decoding, vault reconciliation, and portable sync workflow states.
 - **`src/vault/`:** In-memory database, vault formats, import/connect, event-session application services, session-cache workflows, typed access states, and portable idle/sync runtime policy. Signed history delegates to `nook-event-log`.
 - **Application services:**
   - `vault_connect`: provider-agnostic connect decisions.

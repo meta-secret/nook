@@ -169,7 +169,7 @@ describe('provider save web adapter', () => {
     expect(state.githubRepo).toBe('portable-vault.yaml')
     expect(state.configureOauthFile).toHaveBeenCalledWith({
       ...oauthFile,
-      drivePrivateTarget: { state: 'legacyAppDataFolder' },
+      drivePrivateTarget: { state: 'pending' },
     })
     expect(state.clearLocalFolder).toHaveBeenCalledOnce()
   })

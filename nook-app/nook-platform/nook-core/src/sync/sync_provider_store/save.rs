@@ -529,7 +529,7 @@ mod tests {
             preset: OauthFilePreset::GoogleDrive,
             access_token: StoredOAuthAccessCredential::AccessToken("token".to_owned()),
             file_id: StoredOAuthRemoteFileId::Unresolved,
-            drive_private_target: crate::StoredGoogleDrivePrivateTarget::LegacyAppDataFolder,
+            drive_private_target: crate::StoredGoogleDrivePrivateTarget::Pending,
             drive_mode: GoogleDriveMode::Private,
             ..OAuthFileConfigData::default()
         };
@@ -551,7 +551,7 @@ mod tests {
         };
         assert_eq!(
             saved_target(super::ProviderSaveRemoteTarget::Adopted)?,
-            crate::StoredGoogleDrivePrivateTarget::LegacyAppDataFolder
+            crate::StoredGoogleDrivePrivateTarget::Pending
         );
         assert_eq!(
             saved_target(super::ProviderSaveRemoteTarget::Fresh)?,

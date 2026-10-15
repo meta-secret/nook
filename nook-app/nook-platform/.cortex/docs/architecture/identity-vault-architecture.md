@@ -453,50 +453,25 @@ from the approved control log, which also carries their DEKs.
 ### Mount sync providers on the identity
 
 Provider rows stay in the app-scoped `providers:{app_id}` snapshot, which is
-already one local identity's storage. Each row records its remote layout.
+already one local identity's storage.
 
-- **Identity namespaced rows**
-  - Replicate the identity log and every vault the identity owns.
+- **Remote rows (GitHub, Google Drive, iCloud, local folder)**
+  - Are identity mounts: each replicates the identity log and every vault the
+    identity owns.
   - Use the namespaced paths in
     [identity-control-log.md](../../../nook-event-log/.cortex/docs/architecture/identity-control-log.md#store-the-log-once-per-provider-mount).
-- **Legacy vault root rows**
-  - Rows saved before identity mounts keep their one vault at the legacy root.
-  - They also carry the identity log in its own namespace.
-- **iCloud rows**
-  - Stay bound to the vault they were added from until `CloudKit` can list a
-    namespace.
+- **Browser rows**
+  - Hold one vault in this browser's own store.
 - **Mount records**
   - The identity log records each remote row's credential-free target.
   - A joining installation sees recorded mounts it has not connected and
     connects each with its own credential.
-  - A joining installation saves its row before it can read the log. Once
-    the log arrives, the row takes the layout recorded for its target: a
-    namespaced record wins, and a legacy record binds the row to that vault.
 
 **Prohibited:** add a GitHub provider while vault A is open and leave vault B
 of the same identity without replication.
 
-**Required:** add the provider on **Identity → Sync**. The namespaced row
-replicates the identity log and both vaults.
-
-### Migrate per-vault onboarding
-
-Existing data is migrated without moving remote files.
-
-- **Per-vault join events:** an installation that can open the identity's
-  vaults writes the identity genesis from their signed rosters. The
-  [migration rules](../../../nook-event-log/.cortex/docs/architecture/identity-control-log.md#migrate-per-vault-membership-once)
-  own which devices become members.
-- **Per-vault provider rows:** missing `layout` decodes as the legacy vault
-  root. Each row bound to a vault becomes a `legacy-single-vault` mount record.
-- **Rollback projection:** schema-1 rollback rows omit identity namespaced rows,
-  because an older build would route them to the legacy root.
-
-**Prohibited:** copy a legacy vault's remote events into
-`nook-log/v1/vaults/{store_id}/events` during migration.
-
-**Required:** keep them at the legacy root and record the row's layout. Remote
-history stays where every existing replica already reads it.
+**Required:** add the provider on **Identity → Sync**. The row replicates the
+identity log and both vaults.
 
 ## Browser extension boundary
 
