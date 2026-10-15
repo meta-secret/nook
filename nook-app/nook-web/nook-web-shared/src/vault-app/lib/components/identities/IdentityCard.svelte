@@ -182,7 +182,8 @@ card, which then spans the full row.
     }
     closeOthers()
     vault.vaultPanelStoreId = storeId
-    onSelectVault?.(storeId)
+    const row = card.vaults.find((candidate) => candidate.storeId === storeId)
+    if (row?.state !== IdentityVaultRowState.Unavailable) onSelectVault?.(storeId)
   }
 
   function closeMenuOnEscape(event: KeyboardEvent): void {
@@ -222,8 +223,15 @@ card, which then spans the full row.
     }
   })
 
+  /** A vault this browser does not hold opens only on the unlocked
+   * identity, which can delete it everywhere. */
   function rowDisabled(row: IdentityVaultRow): boolean {
-    return busy || row.state === IdentityVaultRowState.Unavailable
+    return busy || (row.state === IdentityVaultRowState.Unavailable && !live)
+  }
+
+  async function deleteAwayVault(storeId: string): Promise<void> {
+    const deleted = await vault.identityControl.deleteVaultEverywhere(storeId)
+    if (deleted.isOk()) vault.vaultPanelStoreId = ''
   }
 </script>
 
@@ -616,6 +624,9 @@ card, which then spans the full row.
           }
           onManageVault?.(target)
         }}
+        {...live && vaultOpenRow.state === IdentityVaultRowState.Unavailable
+          ? { onDelete: () => deleteAwayVault(vaultOpenRow.storeId) }
+          : {}}
         onClose={() => (vault.vaultPanelStoreId = '')}
       />
     </div>

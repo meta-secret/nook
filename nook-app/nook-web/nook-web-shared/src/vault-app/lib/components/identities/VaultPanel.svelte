@@ -17,6 +17,7 @@ alone (its name, passphrases, imports), usable once it is open.
     PencilLine,
     RefreshCw,
     ShieldCheck,
+    Trash2,
     UserRoundCheck,
     X,
   } from '@lucide/svelte'
@@ -42,6 +43,7 @@ alone (its name, passphrases, imports), usable once it is open.
     onUnlock,
     onUseIdentity,
     onManage,
+    onDelete,
     onClose,
   }: {
     vault: VaultState
@@ -63,6 +65,9 @@ alone (its name, passphrases, imports), usable once it is open.
     onUseIdentity: () => void
     /** One of this open vault's pages. */
     onManage: (section: WorkspaceSection) => void
+    /** Delete a vault this browser does not hold from the identity everywhere;
+     * offered only while the identity is unlocked. */
+    onDelete?: () => Promise<void>
     onClose: () => void
   } = $props()
 
@@ -70,6 +75,26 @@ alone (its name, passphrases, imports), usable once it is open.
   const open = $derived(row.state === IdentityVaultRowState.Open)
   const dormant = $derived(row.state === IdentityVaultRowState.Dormant)
   const reachable = $derived(row.state !== IdentityVaultRowState.Unavailable)
+
+  /** Deleting a vault this browser does not hold, confirmed by its name. */
+  let confirmingDelete = $state(false)
+  let deleteName = $state('')
+  let deleting = $state(false)
+
+  async function deleteEverywhere(): Promise<void> {
+    if (!onDelete) return
+    deleting = true
+    await onDelete()
+    deleting = false
+  }
+
+  const deleteConfirmText = $derived.by(() => {
+    const request: Parameters<typeof vault.t>[0] = {
+      key: I18N_KEYS.VaultAdminDeleteConfirm,
+      replacements: { vault: label },
+    }
+    return vault.t(request)
+  })
 
   /** Renaming an open vault, in place of its name. */
   let renaming = $state(false)
@@ -193,9 +218,11 @@ alone (its name, passphrases, imports), usable once it is open.
             {/if}
           </span>
         {/if}
-        <span class="truncate font-mono text-[11px] text-muted-foreground">
-          {row.storeId}
-        </span>
+        {#if label !== row.storeId}
+          <span class="truncate font-mono text-[11px] text-muted-foreground">
+            {row.storeId}
+          </span>
+        {/if}
       </span>
     </span>
     <span class="flex flex-none items-center gap-2">
@@ -203,7 +230,9 @@ alone (its name, passphrases, imports), usable once it is open.
         tone={open ? StatusTone.Success : StatusTone.Neutral}
         label={open
           ? vault.t(I18N_KEYS.WorkspaceVaultOpen)
-          : vault.t(I18N_KEYS.WorkspaceStatusLocked)}
+          : reachable
+            ? vault.t(I18N_KEYS.WorkspaceStatusLocked)
+            : vault.t(I18N_KEYS.WorkspaceVaultUnavailable)}
       />
       <button
         type="button"
@@ -293,6 +322,70 @@ alone (its name, passphrases, imports), usable once it is open.
             </p>
           {/if}
         </div>
+      {/if}
+    </section>
+  {:else}
+    <section class="grid w-full max-w-md gap-4" data-testid="vault-panel-away">
+      <p class="text-sm text-pretty text-muted-foreground">
+        {vault.t(I18N_KEYS.WorkspaceVaultPanelAway)}
+      </p>
+      {#if onDelete}
+        {#if confirmingDelete}
+          <div
+            class="nk-banner grid gap-3 border-l-destructive bg-destructive/5 p-4"
+            data-testid="vault-panel-delete-confirmation"
+          >
+            <p class="text-sm text-pretty text-foreground">
+              {deleteConfirmText}
+            </p>
+            <input
+              class="h-10 w-full border border-border bg-background px-3 text-sm text-foreground outline-none focus:border-foreground/50"
+              aria-label={vault.t(I18N_KEYS.VaultAdminDeleteName)}
+              placeholder={label}
+              data-testid="vault-panel-delete-name"
+              disabled={deleting}
+              bind:value={deleteName}
+            />
+            <div class="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                data-testid="vault-panel-delete-confirm"
+                disabled={busy || deleting || deleteName.trim() !== label}
+                onclick={() => void deleteEverywhere()}
+              >
+                <Trash2 class="size-3.5" />
+                {vault.t(I18N_KEYS.VaultAdminDeleteConfirmButton)}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                data-testid="vault-panel-delete-cancel"
+                disabled={deleting}
+                onclick={() => {
+                  confirmingDelete = false
+                  deleteName = ''
+                }}
+              >
+                {vault.t(I18N_KEYS.CommonCancel)}
+              </Button>
+            </div>
+          </div>
+        {:else}
+          <Button
+            type="button"
+            variant="outline"
+            class="h-11 w-full text-destructive hover:text-destructive"
+            data-testid="vault-panel-delete"
+            disabled={busy}
+            onclick={() => (confirmingDelete = true)}
+          >
+            <Trash2 class="size-4" />
+            {vault.t(I18N_KEYS.VaultAdminDelete)}
+          </Button>
+        {/if}
       {/if}
     </section>
   {/if}

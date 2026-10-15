@@ -1939,6 +1939,7 @@
     "vault_panel_manage": "This vault",
     "vault_panel_passphrases_hint": "Create or change passphrases for this vault",
     "vault_panel_import_hint": "Bring secrets in from another manager",
+    "vault_panel_away": "This vault isn't stored in this browser. Its encrypted copy stays with this identity's sync providers.",
     "vault_dormant": "Use identity to open",
     "vault_unavailable": "Not on this browser",
     "vault_locked_hint": "Encrypted — opening it unlocks this identity",

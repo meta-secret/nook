@@ -2027,6 +2027,7 @@ export const I18N_KEYS = {
   WorkspaceVaultFallback: 'workspace.vault_fallback',
   WorkspaceVaultLockedHint: 'workspace.vault_locked_hint',
   WorkspaceVaultOpen: 'workspace.vault_open',
+  WorkspaceVaultPanelAway: 'workspace.vault_panel_away',
   WorkspaceVaultPanelImportHint: 'workspace.vault_panel_import_hint',
   WorkspaceVaultPanelKeyDormant: 'workspace.vault_panel_key_dormant',
   WorkspaceVaultPanelManage: 'workspace.vault_panel_manage',

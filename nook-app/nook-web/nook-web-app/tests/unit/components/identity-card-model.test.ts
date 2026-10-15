@@ -83,6 +83,7 @@ function source(authenticated: boolean): IdentityCardSource {
       { storeId: 'store_a', label: 'Personal vault' },
       { storeId: 'store_b', label: 'Family photos' },
     ],
+    currentLogVaults: [],
     openStoreId: authenticated ? 'store_a' : '',
     authenticated,
     identityUnlocked: authenticated,
@@ -132,6 +133,25 @@ describe('identity card projection', () => {
         state: IdentityVaultRowState.Available,
       },
     ])
+  })
+
+  test('lists vaults the current identity log holds but this browser does not', () => {
+    const withLog: IdentityCardSource = {
+      ...source(true),
+      currentLogVaults: ['store_a', 'store_away'],
+    }
+    const [current, workCard] = new IdentityCardProjection(withLog).cards
+    expect(current?.vaults).toContainEqual({
+      storeId: 'store_away',
+      label: 'store_away',
+      state: IdentityVaultRowState.Unavailable,
+    })
+    expect(
+      current?.vaults.filter((row) => row.storeId === 'store_a'),
+    ).toHaveLength(1)
+    expect(workCard?.vaults.some((row) => row.storeId === 'store_away')).toBe(
+      false,
+    )
   })
 
   test('never offers another identity vault for opening here', () => {
@@ -200,6 +220,7 @@ describe('IdentityCardProjection vault ownership', () => {
         { storeId: 'store_w', label: 'Acme' },
         { storeId: 'store_new', label: 'Fresh' },
       ],
+      currentLogVaults: [],
       openStoreId: '',
       authenticated: false,
       identityUnlocked: false,
@@ -227,6 +248,7 @@ describe('IdentityCardProjection vault ownership', () => {
         { storeId: 'store_w', label: 'Acme' },
         { storeId: 'store_orphan', label: 'Orphan' },
       ],
+      currentLogVaults: [],
       openStoreId: '',
       authenticated: false,
       identityUnlocked: false,
@@ -254,6 +276,7 @@ describe('IdentityCardProjection vault ownership', () => {
     const onlyElsewhere: IdentityCardSource = {
       identities: [elsewhere],
       localVaults: [{ storeId: 'store_orphan', label: 'Orphan' }],
+      currentLogVaults: [],
       openStoreId: '',
       authenticated: false,
       identityUnlocked: false,
@@ -297,6 +320,7 @@ describe('IdentityCardProjection vault ownership', () => {
         },
       ],
       localVaults: [{ storeId: 'store_a', label: 'Personal vault' }],
+      currentLogVaults: [],
       openStoreId: '',
       authenticated: false,
       identityUnlocked: false,

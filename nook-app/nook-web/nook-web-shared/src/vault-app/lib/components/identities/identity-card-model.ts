@@ -75,6 +75,9 @@ export type IdentityLocalVault = {
 export type IdentityCardSource = {
   readonly identities: readonly IdentityDirectoryEntry[];
   readonly localVaults: readonly IdentityLocalVault[];
+  /** Store ids the current identity's control log lists, stored here or
+   * not; empty until the log is read. */
+  readonly currentLogVaults: readonly string[];
   /** The open vault's store id, or empty when no vault session is open. */
   readonly openStoreId: string;
   readonly authenticated: boolean;
@@ -190,10 +193,12 @@ export class IdentityCardProjection {
       ...this.source.identities.filter((entry) => !isCurrent(entry)),
     ];
     for (const entry of ordered) {
-      for (const vault of entry.vaults) {
-        if (!owners.has(vault.storeId)) {
-          owners.set(vault.storeId, entry.identityId);
-        }
+      const storeIds = [
+        ...entry.vaults.map((vault) => vault.storeId),
+        ...(isCurrent(entry) ? this.source.currentLogVaults : []),
+      ];
+      for (const storeId of storeIds) {
+        if (!owners.has(storeId)) owners.set(storeId, entry.identityId);
       }
     }
     for (const entry of ordered) {
@@ -309,6 +314,31 @@ export class IdentityCardProjection {
         state: this.vaultState(stateRequest),
       };
       rows.push(row);
+    }
+    // The current identity's log also lists vaults this browser never
+    // recorded access to, or no longer stores.
+    if (entry.localAccess === NookIdentityLocalAccessKind.CurrentBrowser) {
+      for (const storeId of this.source.currentLogVaults) {
+        if (seen.has(storeId)) continue;
+        seen.add(storeId);
+        const ownership: IdentityVaultOwnership = {
+          storeId,
+          identityId: entry.identityId,
+        };
+        if (!this.owns(ownership)) continue;
+        const stateRequest: VaultRowStateRequest = {
+          storeId,
+          local: local.has(storeId),
+          active: current || !this.hasCurrentIdentity,
+        };
+        const row: IdentityVaultRow = {
+          storeId,
+          // Names live inside the vault: one never stored here shows its id.
+          label: local.get(storeId) ?? storeId,
+          state: this.vaultState(stateRequest),
+        };
+        rows.push(row);
+      }
     }
     // The adopting identity also owns local vaults that no identity has a
     // verified access record for yet (created here, not opened since).

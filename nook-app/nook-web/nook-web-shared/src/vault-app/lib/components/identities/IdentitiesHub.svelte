@@ -156,6 +156,20 @@ join) sit between the hero and the cards.
       return local
     }),
   )
+  /** Vaults the unlocked identity's log lists, stored here or not: read
+   * again whenever this browser's vault catalog changes. */
+  $effect(() => {
+    if (!vault.isAuthenticated) return
+    void vault.localVaults.length
+    void untrack(() => vault.identityControl.loadSnapshot())
+  })
+  const currentLogVaults = $derived.by((): string[] => {
+    const snapshot = vault.identityControl.snapshot
+    return vault.isAuthenticated && snapshot !== false
+      ? snapshot.vaults.map((entry) => entry.storeId)
+      : []
+  })
+
   const projection = $derived.by(() => {
     const source: IdentityCardSource = {
       identities:
@@ -163,6 +177,7 @@ join) sit between the hero and the cards.
           ? loader.state.view.identities
           : [],
       localVaults,
+      currentLogVaults,
       openStoreId:
         vault.activeVault.kind === ActiveVaultKind.Open
           ? vault.activeVault.storeId

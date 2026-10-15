@@ -2383,6 +2383,7 @@ pub const WORKSPACE_VAULT_EYEBROW: &str = "workspace.vault_eyebrow";
 pub const WORKSPACE_VAULT_FALLBACK: &str = "workspace.vault_fallback";
 pub const WORKSPACE_VAULT_LOCKED_HINT: &str = "workspace.vault_locked_hint";
 pub const WORKSPACE_VAULT_OPEN: &str = "workspace.vault_open";
+pub const WORKSPACE_VAULT_PANEL_AWAY: &str = "workspace.vault_panel_away";
 pub const WORKSPACE_VAULT_PANEL_IMPORT_HINT: &str = "workspace.vault_panel_import_hint";
 pub const WORKSPACE_VAULT_PANEL_KEY_DORMANT: &str = "workspace.vault_panel_key_dormant";
 pub const WORKSPACE_VAULT_PANEL_MANAGE: &str = "workspace.vault_panel_manage";
