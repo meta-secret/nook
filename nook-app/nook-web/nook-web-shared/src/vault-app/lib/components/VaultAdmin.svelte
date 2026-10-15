@@ -34,7 +34,6 @@
     FolderKey,
     Lock,
     PencilLine,
-    Plus,
     RefreshCw,
     ShieldCheck,
     X,
@@ -42,7 +41,6 @@
   import SettingsAccordionSection from '$lib/components/settings/SettingsAccordionSection.svelte'
   import ManageSection from '$lib/components/settings/ManageSection.svelte'
   import AuthStorage from '$lib/components/AuthStorage.svelte'
-  import LoginNewVaultPanel from '$lib/components/login/LoginNewVaultPanel.svelte'
   import VaultPasswordCard from '$lib/components/VaultPasswordCard.svelte'
   import IdentityMountsPanel from '$lib/components/identity-control/IdentityMountsPanel.svelte'
   import BitwardenImportPanel from '$lib/components/BitwardenImportPanel.svelte'
@@ -77,11 +75,9 @@
     ImportProviderSectionKind,
     VaultLabelEditorKind,
     VaultRenameOperationKind,
-    VaultSwitchOperationKind,
     type ImportProviderSection,
     type VaultLabelEditor,
     type VaultRenameOperation,
-    type VaultSwitchOperation,
   } from './vault-admin-state'
 
   let {
@@ -121,7 +117,6 @@
     onImportDashlane,
     onImportGoogleAuthenticator,
     onImportProtonPass,
-    onCreateVault,
     section,
   }: {
     vault: VaultState
@@ -187,16 +182,9 @@
       exportBytes: Uint8Array,
     ) => Promise<SecretOperationResult<NookImportResult>>
     /** Create a vault for this identity; it opens once created. */
-    onCreateVault: (label: string) => Promise<void>
     section: WorkspaceSection
   } = $props()
 
-  let newVaultOpen = $state(false)
-
-  async function createVault(label: string): Promise<void> {
-    await onCreateVault(label)
-    if (!vault.errorMsg) newVaultOpen = false
-  }
 
   type AuthStorageOptionalProps = Partial<
     Pick<
@@ -223,9 +211,6 @@
   })
   let renamingStoreId = $state<VaultRenameOperation>({
     kind: VaultRenameOperationKind.Idle,
-  })
-  let switchingTo = $state<VaultSwitchOperation>({
-    kind: VaultSwitchOperationKind.Idle,
   })
   let activeImportProvider = $state<ImportProviderSection>({
     kind: ImportProviderSectionKind.Closed,
@@ -274,8 +259,7 @@
     isVerifying ||
       isInitializing ||
       vault.isVerifying ||
-      renamingStoreId.kind === VaultRenameOperationKind.Renaming ||
-      switchingTo.kind === VaultSwitchOperationKind.Switching,
+      renamingStoreId.kind === VaultRenameOperationKind.Renaming,
   )
 
   function buildDrafts() {
@@ -365,18 +349,6 @@
     }
   }
 
-  async function switchTo(entry: NookLocalVaultEntry) {
-    if (entry.storeId === activeStoreId || isBusy) return
-    switchingTo = {
-      kind: VaultSwitchOperationKind.Switching,
-      storeId: entry.storeId,
-    }
-    try {
-      await vault.switchToVault(entry.storeId)
-    } finally {
-      switchingTo = { kind: VaultSwitchOperationKind.Idle }
-    }
-  }
 </script>
 
 <div
@@ -391,35 +363,8 @@
       subtitle={vault.t(I18N_KEYS.WorkspaceSectionVaultsDescription)}
       testId="vault-admin-vaults-section"
     >
-      {#snippet badge()}
-        {#if !newVaultOpen}
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            data-testid="vault-admin-new-vault"
-            disabled={isBusy}
-            onclick={() => (newVaultOpen = true)}
-          >
-            <Plus class="size-4" />
-            {vault.t(I18N_KEYS.WorkspaceNewVault)}
-          </Button>
-        {/if}
-      {/snippet}
 
       <div class="space-y-4" data-testid="vault-admin-vaults-panel">
-        {#if newVaultOpen}
-          <div class="border border-border p-4 sm:p-5">
-            <LoginNewVaultPanel
-              {vault}
-              {isVerifying}
-              {isInitializing}
-              importable={false}
-              onCreateVault={createVault}
-              onClose={() => (newVaultOpen = false)}
-            />
-          </div>
-        {/if}
 
         <ul class="nk-list overflow-hidden">
           {#each vaults as entry (entry.storeId)}
@@ -524,25 +469,9 @@
                     <X class="size-4" />
                     {vault.t(I18N_KEYS.CommonCancel)}
                   </Button>
-                {:else if !isActive}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    class="h-10 w-full"
-                    data-testid="vault-admin-switch-btn"
-                    data-store-id={entry.storeId}
-                    disabled={isBusy}
-                    onclick={() => void switchTo(entry)}
-                  >
-                    {#if switchingTo.kind === VaultSwitchOperationKind.Switching && switchingTo.storeId === entry.storeId}
-                      <RefreshCw class="size-4 animate-spin" />
-                    {/if}
-                    {vault.t(I18N_KEYS.CommonSwitch)}
-                  </Button>
-                {:else}
+                {:else if isActive}
                   <span
-                    class="inline-flex h-10 w-full items-center justify-center gap-1 rounded-md border border-primary/20 bg-primary/10 px-3 text-sm font-medium text-primary"
+                    class="nk-tag nk-tag-success h-10 w-full justify-center"
                     data-testid="vault-admin-active-badge"
                   >
                     <Check class="size-4" />

@@ -35,14 +35,11 @@ Technical identifiers stay behind "Details".
     PasskeyCardSummaryKind,
   } from "$lib/components/devices-access/passkey-card";
   import type { VaultState } from "$lib/vault.svelte";
-  import { WorkspaceSection } from "$lib/vault/state/ui.svelte";
 
   let {
     vault,
-    onOpen,
   }: {
     vault: VaultState;
-    onOpen: (section: WorkspaceSection) => void;
   } = $props();
 
   let load = $state<KeysLoad>({ kind: KeysLoadKind.Loading });
@@ -245,7 +242,7 @@ Technical identifiers stay behind "Details".
 
     <!-- How many keys, and whether that is enough. -->
     <section
-      class="flex flex-col gap-4 border border-border bg-card p-4 sm:flex-row sm:p-5 sm:items-center sm:justify-between"
+      class="flex gap-4 border border-border bg-card p-4 sm:p-5"
       data-testid="identity-keys-summary"
       data-key-count={keys.length}
     >
@@ -279,27 +276,6 @@ Technical identifiers stay behind "Details".
           </p>
         </div>
       </div>
-      {#if keys.length <= 1}
-        <div class="flex shrink-0 flex-wrap gap-2">
-          <Button
-            type="button"
-            size="sm"
-            data-testid="identity-keys-add-device"
-            onclick={() => onOpen(WorkspaceSection.AddDevice)}
-          >
-            {vault.t(I18N_KEYS.IdentityOverviewAddDevice)}
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            data-testid="identity-keys-passwords"
-            onclick={() => onOpen(WorkspaceSection.Passwords)}
-          >
-            {vault.t(I18N_KEYS.IdentityOverviewPasswordsLink)}
-          </Button>
-        </div>
-      {/if}
     </section>
 
     <!-- One row per key. -->

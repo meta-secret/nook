@@ -270,18 +270,20 @@
                   {vault.t(I18N_KEYS.AuthStorageNoSyncProviders)}
                 </p>
               </div>
-              <div class="mt-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  data-testid="add-provider-btn"
-                  onclick={() => onBeginAddProvider?.()}
-                >
-                  <Plus class="size-4" />
-                  {vault.t(I18N_KEYS.SettingsAddSyncProvider)}
-                </Button>
-              </div>
+              {#if onBeginAddProvider}
+                <div class="mt-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    data-testid="add-provider-btn"
+                    onclick={() => onBeginAddProvider?.()}
+                  >
+                    <Plus class="size-4" />
+                    {vault.t(I18N_KEYS.SettingsAddSyncProvider)}
+                  </Button>
+                </div>
+              {/if}
             </div>
           {:else}
             <ul
@@ -409,15 +411,17 @@
               {/each}
             </ul>
 
-            <button
-              type="button"
-              class="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-              data-testid="add-provider-btn"
-              onclick={() => onBeginAddProvider?.()}
-            >
-              <Plus class="size-4" />
-              {vault.t(I18N_KEYS.SettingsAddSyncProvider)}
-            </button>
+            {#if onBeginAddProvider}
+              <button
+                type="button"
+                class="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+                data-testid="add-provider-btn"
+                onclick={() => onBeginAddProvider?.()}
+              >
+                <Plus class="size-4" />
+                {vault.t(I18N_KEYS.SettingsAddSyncProvider)}
+              </button>
+            {/if}
           {/if}
         </fieldset>
       {/if}

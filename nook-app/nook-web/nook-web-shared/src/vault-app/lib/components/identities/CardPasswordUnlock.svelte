@@ -1,13 +1,11 @@
 <!--
-Passphrase unlock beside a locked identity card, for one of its vaults: the
-passphrase (by the title it was saved with) opening that vault, drawn
-rather than explained, then its field. The key button on a vault row
-opens it; a vault without a passphrase says so instead.
+Passphrase unlock for one locked vault, under its passkey in the vault's
+panel: the passphrase by the title it was saved with (a choice when there
+are several) and its field. A vault without a passphrase says so.
 -->
 <script lang="ts">
-  import { FolderKey, KeyRound, RefreshCw } from "@lucide/svelte";
+  import { ArrowRight, KeyRound, RefreshCw } from "@lucide/svelte";
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
-  import { Button } from "$lib/components/ui/button";
   import type { VaultState } from "$lib/vault.svelte";
 
   type PasswordEntryChoice = { readonly id: string; readonly label: string };
@@ -43,14 +41,6 @@ opens it; a vault without a passphrase says so instead.
     chosen.label || vault.t(I18N_KEYS.WorkspacePassphraseNode),
   );
 
-  function vaultText(key: string): string {
-    const request: Parameters<typeof vault.t>[0] = {
-      key,
-      replacements: { vault: vaultLabel },
-    };
-    return vault.t(request);
-  }
-
   function submit(event: SubmitEvent): void {
     event.preventDefault();
     if (!chosen.id || !password.trim()) return;
@@ -62,62 +52,24 @@ opens it; a vault without a passphrase says so instead.
   }
 </script>
 
-{#snippet node(label: string, state: string, strong: boolean, icon: "key" | "vault")}
-  <div class="flex min-w-0 flex-col items-center gap-2">
-    <span class="nk-pair-node" data-state={state}>
-      {#if icon === "key"}
-        <KeyRound class="size-5" aria-hidden="true" />
-      {:else}
-        <FolderKey class="size-5" aria-hidden="true" />
-      {/if}
-    </span>
-    <span
-      class="max-w-28 truncate text-center text-[11px] leading-tight {strong
-        ? 'font-semibold text-foreground'
-        : 'text-muted-foreground'}"
-    >
-      {label}
-    </span>
-  </div>
-{/snippet}
-
-<div class="grid min-w-0 gap-5" data-testid="card-password-unlock">
-  <figure class="grid justify-items-start gap-3">
-    <div class="flex items-start gap-1 sm:gap-2" aria-hidden="true">
-      {@render node(
-        title,
-        entries.length > 0 ? "on" : "missing",
-        entries.length > 0,
-        "key",
-      )}
-      <span
-        class="nk-pair-link"
-        data-state={isVerifying ? "live" : entries.length > 0 ? "on" : "off"}
-      ></span>
-      {@render node(vaultLabel, "on", false, "vault")}
-    </div>
-    <figcaption
-      class="text-sm text-pretty text-muted-foreground"
+<div class="grid min-w-0 gap-2" data-testid="card-password-unlock">
+  {#if entries.length === 0}
+    <p
+      class="flex items-center gap-2 text-sm text-muted-foreground"
       data-testid="card-password-caption"
     >
-      {entries.length > 0
-        ? vaultText(I18N_KEYS.WorkspacePassphraseUnlockCaption)
-        : vaultText(I18N_KEYS.WorkspacePassphraseUnlockNone)}
-    </figcaption>
-  </figure>
-
-  {#if entries.length > 0}
-    <form class="grid gap-3" onsubmit={submit}>
+      <KeyRound class="size-4 flex-none opacity-60" aria-hidden="true" />
+      {vault.t(I18N_KEYS.WorkspacePassphraseUnlockNone)}
+    </p>
+  {:else}
+    <form class="grid gap-2" aria-label={vaultLabel} onsubmit={submit}>
       {#if entries.length > 1}
-        <label
-          class="text-xs font-medium text-foreground"
-          for="card-password-entry"
-        >
+        <label class="sr-only" for="card-password-entry">
           {vault.t(I18N_KEYS.WorkspacePassphraseUnlockChoose)}
         </label>
         <select
           id="card-password-entry"
-          class="h-10 w-full border border-border bg-card px-2 text-sm text-foreground"
+          class="h-9 w-full border border-border bg-background px-2 text-sm text-foreground"
           bind:value={chosenId}
           data-testid="card-password-entry"
         >
@@ -125,30 +77,41 @@ opens it; a vault without a passphrase says so instead.
             <option value={entry.id}>{entry.label}</option>
           {/each}
         </select>
+      {:else}
+        <span
+          class="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground"
+        >
+          <KeyRound
+            class="size-4 flex-none text-muted-foreground"
+            aria-hidden="true"
+          />
+          <span class="truncate">{title}</span>
+        </span>
       {/if}
-      <div class="flex gap-2">
-        <!-- svelte-ignore a11y_autofocus -->
+      <div
+        class="flex h-11 min-w-0 border border-border bg-background transition-colors focus-within:border-foreground/50"
+      >
         <input
           type="password"
-          class="h-10 min-w-0 flex-1 border border-border bg-card px-3 text-sm text-foreground outline-none focus-visible:border-foreground/50 focus-visible:ring-2 focus-visible:ring-ring"
+          class="min-w-0 flex-1 bg-transparent px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground/70"
           autocomplete="current-password"
           aria-label={title}
           placeholder={vault.t(I18N_KEYS.WorkspacePassphraseUnlockPlaceholder)}
-          autofocus
           bind:value={password}
           data-testid="card-password-input"
         />
-        <Button
+        <button
           type="submit"
-          class="h-10"
+          class="inline-flex flex-none items-center gap-2 border-l border-border px-4 text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:cursor-default disabled:text-muted-foreground disabled:hover:bg-transparent"
           disabled={isVerifying || !password.trim()}
           data-testid="card-password-submit"
         >
           {#if isVerifying}
-            <RefreshCw class="size-3.5 animate-spin" />
+            <RefreshCw class="size-3.5 animate-spin" aria-hidden="true" />
           {/if}
           {vault.t(I18N_KEYS.WorkspaceUnlock)}
-        </Button>
+          <ArrowRight class="size-3.5" aria-hidden="true" />
+        </button>
       </div>
     </form>
   {/if}

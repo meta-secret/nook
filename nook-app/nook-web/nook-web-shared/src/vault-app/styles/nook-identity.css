@@ -435,7 +435,8 @@
     border: 1px solid var(--border);
     color: var(--muted-foreground);
   }
-  .nk-vault-row[data-state="open"] .nk-vault-icon {
+  .nk-vault-row[data-state="open"] .nk-vault-icon,
+  .nk-vault-icon.nk-vault-icon-open {
     border-color: var(--success);
     color: var(--success);
   }
@@ -505,7 +506,7 @@
     text-align: left;
     cursor: pointer;
   }
-  .nk-identity-menu-item:hover,
+  .nk-identity-menu-item:hover:not(:disabled),
   .nk-identity-menu-item:focus-visible {
     background: var(--accent);
     outline: none;

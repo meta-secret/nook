@@ -564,7 +564,9 @@ card, which then spans the full row.
         {vault}
         row={vaultOpenRow}
         identityName={card.label}
-        keyLabel={vault.t(kindKey)}
+        unlockLabel={card.keyKind === IdentityKeyKind.Pin
+          ? vault.t(I18N_KEYS.WorkspaceVaultPanelUnlockPin)
+          : vault.t(I18N_KEYS.WorkspaceVaultPanelUnlockPasskey)}
         {busy}
         passphraseOffered={!live && Boolean(onSelectVault)}
         {...passwordFallback && vaultOpenRow.storeId === selectedStoreId

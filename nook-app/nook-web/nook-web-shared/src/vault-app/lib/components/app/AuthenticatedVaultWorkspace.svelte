@@ -378,8 +378,6 @@ band, the scrolling page and the status line.
     {vault}
     {extensionSetupState}
     {section}
-    onCreateVault={(label: string) =>
-      vault.createLocalVaultWithDeviceKeys(label)}
     syncProviders={vault.syncProviders}
     manualProviderSync={vault.manualProviderSync}
     isAuthenticated={vault.isAuthenticated}
@@ -408,7 +406,6 @@ band, the scrolling page and the status line.
       if (outcome.isErr())
         vault.errorMsg = vault.t(outcome.error.translationKey);
     }}
-    onBeginAddProvider={() => vault.beginAddProvider()}
     onCancelAddProvider={() => vault.cancelAddProvider()}
     onBeginSetup={(
       setupRequest: Parameters<VaultAdminProps["onBeginSetup"]>[0],
@@ -502,12 +499,9 @@ band, the scrolling page and the status line.
 <!-- One of the identity's pages, opened from its card or its overview. -->
 {#snippet identityPanel()}
   {#if section === WorkspaceSection.Devices}
-    <IdentityDevicesPanel
-      {vault}
-      onAddDevice={() => openSection(WorkspaceSection.AddDevice)}
-    />
+    <IdentityDevicesPanel {vault} />
   {:else if section === WorkspaceSection.Keys}
-    <IdentityKeysPage {vault} onOpen={openSection} />
+    <IdentityKeysPage {vault} />
   {:else if section === WorkspaceSection.Settings}
     <BrowserSettingsPanel {vault} />
   {:else}

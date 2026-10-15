@@ -1,12 +1,13 @@
 <!--
-Identity Devices page: adding a device leads, join requests wait for
-approval next, then the devices that open this identity. Upgrade notices
-sit above when the identity needs one.
+Identity Devices page: the devices that open this identity, with join
+requests waiting for approval above them. It reports; adding a device is
+in Manage on the card. Upgrade notices sit above when the identity needs
+one.
 -->
 <script lang="ts">
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import { onMount, type ComponentProps } from "svelte";
-  import { Plus, RefreshCw, TriangleAlert } from "@lucide/svelte";
+  import { RefreshCw, TriangleAlert } from "@lucide/svelte";
   import ManageSection from "$lib/components/settings/ManageSection.svelte";
   import PendingJoinList from "$lib/components/settings/PendingJoinList.svelte";
   import VaultDevicesCard from "$lib/components/settings/VaultDevicesCard.svelte";
@@ -22,11 +23,8 @@ sit above when the identity needs one.
 
   let {
     vault,
-    onAddDevice,
   }: {
     vault: VaultState;
-    /** Open the add-device flow. */
-    onAddDevice: () => void;
   } = $props();
 
   const control = $derived(vault.identityControl);
@@ -53,46 +51,22 @@ sit above when the identity needs one.
 <div class="grid min-w-0 grid-cols-1 gap-6" data-testid="vault-devices-panel">
   <IdentityStandingNotices {vault} />
 
-  {#if standing.isMember()}
-    <section
-      class="flex flex-col gap-4 border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5"
-      data-testid="devices-add-device"
+  {#if standing.isMember() && members.length <= 1}
+    <p
+      class="nk-banner nk-banner-warning flex items-start gap-2 px-4 py-3 text-sm text-pretty text-foreground"
+      role="note"
+      data-testid="single-device-warning"
     >
-      <div class="min-w-0 space-y-1">
-        <h2 class="text-base font-semibold text-foreground">
-          {vault.t(I18N_KEYS.AddDeviceTitle)}
-        </h2>
-        <p class="text-sm text-pretty text-muted-foreground">
-          {vault.t(I18N_KEYS.AddDeviceDevicesHint)}
-        </p>
-        {#if members.length <= 1}
-          <p
-            class="flex items-start gap-2 pt-1 text-xs text-pretty text-foreground"
-            role="note"
-            data-testid="single-device-warning"
-          >
-            <TriangleAlert
-              class="mt-0.5 size-3.5 shrink-0 text-warning"
-              aria-hidden="true"
-            />
-            {vault.t(
-              isSentinelVault
-                ? I18N_KEYS.DevicesCardSentinelSingleDeviceWarning
-                : I18N_KEYS.AddDeviceSingleDevice,
-            )}
-          </p>
-        {/if}
-      </div>
-      <Button
-        type="button"
-        class="shrink-0"
-        data-testid="devices-add-device-btn"
-        onclick={onAddDevice}
-      >
-        <Plus class="size-4" />
-        {vault.t(I18N_KEYS.AddDeviceTitle)}
-      </Button>
-    </section>
+      <TriangleAlert
+        class="mt-0.5 size-4 shrink-0 text-warning"
+        aria-hidden="true"
+      />
+      {vault.t(
+        isSentinelVault
+          ? I18N_KEYS.DevicesCardSentinelSingleDeviceWarning
+          : I18N_KEYS.AddDeviceSingleDevice,
+      )}
+    </p>
   {/if}
 
   {#if pendingJoins.length > 0}
