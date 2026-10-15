@@ -3,6 +3,7 @@ import type { OAuthFailure } from "$lib/auth/oauth-failure";
 import {
   NativeVaultStorageFailure,
   VaultStorageFailure,
+  VaultStorageFailureKind,
 } from "$lib/runtime/storage-failure";
 import {
   generate_password,
@@ -14,7 +15,19 @@ import {
   type PasswordGenerationOptions,
   type StorageProvider,
 } from "$app-wasm";
-import { unselectedVaultScope } from "$lib/auth/providers";
+import {
+  LocalFolderHandleKind,
+  LocalFolderPresentation,
+  LocalFolderProviderConfigurationKind,
+  StorageProviderPresentation,
+  unselectedVaultScope,
+} from "$lib/auth/providers";
+
+/** Named values required by `IdentityControl.deleteAtMount`. */
+type MountVaultDeletion = {
+  readonly storeId: string;
+  readonly provider: StorageProvider;
+};
 import { IdentityStandingPresentation } from "$lib/components/identity-control/identity-standing";
 import { browserLogRuntime } from "$lib/runtime/log";
 import type { VaultState } from "$lib/vault.svelte";
@@ -218,6 +231,48 @@ export class IdentityControlModel {
     return this.loadSnapshot();
   }
 
+  /** Delete a removed vault's files at one identity mount. A local folder
+   * this browser cannot open fails rather than being skipped. */
+  private async deleteAtMount({
+    storeId,
+    provider,
+  }: MountVaultDeletion): Promise<Result<boolean, VaultStorageFailure>> {
+    if (provider.type === "local-folder") {
+      const configuration = new StorageProviderPresentation(
+        provider,
+      ).localFolderProviderConfiguration();
+      if (configuration.kind === LocalFolderProviderConfigurationKind.Missing) {
+        return err(
+          new VaultStorageFailure(
+            VaultStorageFailureKind.LocalFolderUnavailable,
+          ),
+        );
+      }
+      const handle = new LocalFolderPresentation(
+        configuration.config,
+      ).localFolderHandle();
+      if (handle.kind !== LocalFolderHandleKind.Selected) {
+        return err(
+          new VaultStorageFailure(
+            VaultStorageFailureKind.LocalFolderUnavailable,
+          ),
+        );
+      }
+      return this.withManager((manager) =>
+        manager.delete_removed_vault_at_local_folder(storeId, handle.handleId),
+      );
+    }
+    const args = this.vault.providerWasmArgs(provider);
+    return this.withManager((manager) =>
+      manager.delete_removed_vault_at_provider(
+        storeId,
+        args.mode,
+        args.pat,
+        args.repo,
+      ),
+    );
+  }
+
   private async syncOneMount(
     args: NookStorageConnectArgs,
   ): Promise<Result<IdentityActionOutcome, VaultStorageFailure>> {
@@ -292,6 +347,24 @@ export class IdentityControlModel {
       manager.delete_vault_everywhere(storeId),
     );
     if (deleted.isErr()) return deleted;
+    // The identity log now records the removal everywhere; the vault's
+    // encrypted files go from every mount too.
+    const mounts = await this.withManager(
+      async (manager) =>
+        (await manager.identity_replication_providers(this.providersSnapshot()))
+          .providers,
+    );
+    if (mounts.isErr()) {
+      this.report(mounts.error);
+      return err(mounts.error);
+    }
+    for (const provider of mounts.value) {
+      const removed = await this.deleteAtMount({ storeId, provider });
+      if (removed.isErr()) {
+        this.report(removed.error);
+        return err(removed.error);
+      }
+    }
     const refreshed = await this.vault.refreshLocalVaultCatalog();
     if (refreshed.isErr()) {
       this.vault.errorMsg = this.vault.t(refreshed.error.translationKey);

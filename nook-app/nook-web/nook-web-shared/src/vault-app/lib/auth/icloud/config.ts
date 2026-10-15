@@ -5,7 +5,10 @@
  * - API token (Settings -> Tokens & Keys), allowed origins https://nokey.sh,
  *   https://simple.nokey.sh, https://sentinel.nokey.sh,
  *   https://simple.dev.nokey.sh, and https://sentinel.dev.nokey.sh
- * - Schema: NookVault record type with content (String), deployed to Production
+ * - Schema: NookLogEvent record type with location, event_id and content
+ *   (String), Queryable indexes on recordName, location and event_id,
+ *   deployed to Production. `location` holds the log's namespace tag
+ *   (`vault:<store>` or `identity:<id>`).
  * - Sign in with Apple via CloudKit JS setUpAuth (Post Message callback)
  */
 import { CloudKitEnvironment } from "$lib/auth/icloud/cloudkit-state";

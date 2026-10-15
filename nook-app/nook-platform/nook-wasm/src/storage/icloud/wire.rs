@@ -1,5 +1,4 @@
 //! `CloudKit` request schemas. Optional fields preserve `CloudKit` wire omission.
-use super::ICloudEventStore;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -29,6 +28,26 @@ pub(super) struct ICloudLookup {
 #[serde(rename_all = "camelCase")]
 pub(super) struct ICloudQuery {
     pub(super) record_type: &'static str,
+    pub(super) filter_by: Vec<ICloudFilter>,
+}
+/// One query condition on a queryable string field.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct ICloudFilter {
+    pub(super) comparator: &'static str,
+    pub(super) field_name: &'static str,
+    pub(super) field_value: ICloudTextField,
+}
+/// Force-delete records by name, one request per page of records.
+#[derive(Serialize)]
+pub(super) struct ICloudDelete {
+    pub(super) operations: Vec<ICloudDeleteOperation>,
+}
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct ICloudDeleteOperation {
+    pub(super) operation_type: &'static str,
+    pub(super) record: ICloudRecordReference,
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -59,6 +78,7 @@ pub(super) struct ICloudCreateRecord {
 }
 #[derive(Serialize)]
 pub(super) struct ICloudEventFields {
+    pub(super) location: ICloudTextField,
     pub(super) event_id: ICloudTextField,
     pub(super) content: ICloudTextField,
 }
@@ -150,7 +170,6 @@ pub(super) enum RecordLookup {
 pub(super) enum EventIdentity {
     Missing,
     Declared(String),
-    NameDerived(String),
 }
 impl ICloudRecord {
     pub(super) fn content(&self) -> FieldText {
@@ -168,12 +187,10 @@ impl ICloudRecord {
     pub(super) fn event_id(&self) -> EventIdentity {
         match self.field(super::ICLOUD_EVENT_ID_FIELD) {
             FieldText::Text(id) => EventIdentity::Declared(id),
-            FieldText::Unset => match self.record_name.strip_prefix("nook-event-") {
-                Some(digest) if ICloudEventStore::is_sha256_base64url_digest(digest) => {
-                    EventIdentity::NameDerived(format!("sha256u:{digest}"))
-                }
-                _ => EventIdentity::Missing,
-            },
+            FieldText::Unset => EventIdentity::Missing,
         }
+    }
+    pub(super) fn location(&self) -> FieldText {
+        self.field(super::ICLOUD_LOCATION_FIELD)
     }
 }

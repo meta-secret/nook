@@ -198,16 +198,6 @@ impl NookVaultManager {
         Ok(parent)
     }
 
-    fn icloud_namespace_guard(location: &EventLogLocation) -> Result<(), NookError> {
-        match location {
-            EventLogLocation::LegacyVaultRoot => Ok(()),
-            EventLogLocation::Vault(_) | EventLogLocation::Identity(_) => Err(NookError::ICloud(
-                "iCloud cannot list identity logs or namespaced vaults until its CloudKit schema is deployed."
-                    .to_owned(),
-            )),
-        }
-    }
-
     pub(in crate::manager) async fn list_provider_event_ids_at(
         &self,
         location: &EventLogLocation,
@@ -233,10 +223,10 @@ impl NookVaultManager {
                 .await?
             }
             StorageMode::ICloud => {
-                Self::icloud_namespace_guard(location)?;
                 (ICloudEventStore {
                     web_auth_token: &self.storage.access_token,
                     target: &self.storage.icloud_event_target,
+                    location,
                 })
                 .list_icloud_event_ids()
                 .await?
@@ -282,10 +272,10 @@ impl NookVaultManager {
                 .await
             }
             StorageMode::ICloud => {
-                Self::icloud_namespace_guard(location)?;
                 match (ICloudEventStore {
                     web_auth_token: &self.storage.access_token,
                     target: &self.storage.icloud_event_target,
+                    location,
                 })
                 .fetch_icloud_event(event_id)
                 .await
@@ -329,15 +319,51 @@ impl NookVaultManager {
                 .map(|_| ())
             }
             StorageMode::ICloud => {
-                Self::icloud_namespace_guard(location)?;
                 (ICloudEventStore {
                     web_auth_token: &self.storage.access_token,
                     target: &self.storage.icloud_event_target,
+                    location,
                 })
                 .put_icloud_event_if_absent(event_id, bytes)
                 .await
             }
             StorageMode::Local => Ok(()),
+        }
+    }
+
+    /// Delete one namespace (a vault deleted everywhere) at the prepared
+    /// provider. Returns whether anything was there.
+    pub(in crate::manager) async fn delete_provider_namespace_at(
+        &self,
+        location: &EventLogLocation,
+    ) -> Result<bool, NookError> {
+        match self.storage.mode {
+            StorageMode::Github => Ok((GitHubEventStore {
+                pat: &self.storage.access_token,
+                repo: &self.storage.remote_ref,
+                location,
+            })
+            .delete_github_namespace()
+            .await?
+                > 0),
+            StorageMode::GoogleDrive => {
+                (DriveNamespace {
+                    token: &self.storage.access_token,
+                    parent: &self.storage.drive_event_parent,
+                    location,
+                })
+                .delete()
+                .await
+            }
+            StorageMode::ICloud => Ok((ICloudEventStore {
+                web_auth_token: &self.storage.access_token,
+                target: &self.storage.icloud_event_target,
+                location,
+            })
+            .delete_icloud_namespace()
+            .await?
+                > 0),
+            StorageMode::Local => Ok(false),
         }
     }
 
@@ -365,7 +391,14 @@ impl NookVaultManager {
                 .list_identity_ids()
                 .await?
             }
-            StorageMode::ICloud | StorageMode::Local => Vec::new(),
+            StorageMode::ICloud => {
+                ICloudEventStore::list_icloud_identity_ids(
+                    &self.storage.access_token,
+                    &self.storage.icloud_event_target,
+                )
+                .await?
+            }
+            StorageMode::Local => Vec::new(),
         };
         Ok(raw
             .iter()

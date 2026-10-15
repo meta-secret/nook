@@ -219,6 +219,36 @@ impl DriveNamespace<'_> {
         Ok(ids)
     }
 
+    /// Delete this namespace's folder and every event in it (a vault deleted
+    /// everywhere). Nothing to do when the folder does not exist; a duplicate
+    /// fails closed. The legacy root is never deleted this way.
+    pub(crate) async fn delete(&self) -> Result<bool, NookError> {
+        let Some(tag) = self.location.namespace_tag() else {
+            return Err(NookError::Drive(
+                "Only an identity or vault namespace can be deleted from Google Drive.".to_owned(),
+            ));
+        };
+        let Some(folder_id) = Self::select(&self.list(&Self::folder_name(&tag)).await?)? else {
+            return Ok(false);
+        };
+        let response = Client::new()
+            .delete(format!(
+                "https://www.googleapis.com/drive/v3/files/{}",
+                urlencoding::encode(&folder_id)
+            ))
+            .header("Authorization", format!("Bearer {}", self.token.trim()))
+            .query(&[("supportsAllDrives", "true")])
+            .send()
+            .await?;
+        if !response.status().is_success() {
+            return Err(NookError::Drive(format!(
+                "Google Drive namespace deletion failed with status {}",
+                response.status()
+            )));
+        }
+        Ok(true)
+    }
+
     /// The legacy root is the parent itself. Other namespaces resolve or
     /// create one child folder; a duplicate fails closed.
     pub(crate) async fn resolve(&self) -> Result<DriveEventParent, NookError> {

@@ -7,10 +7,10 @@
 //! Browser File System Access adapter for local-folder sync providers.
 use crate::NookError;
 use gloo_file::{File, futures};
-use js_sys::{Array, AsyncIterator, JsString, Object};
+use js_sys::{Array, AsyncIterator, JsString, Object, Reflect};
 use nook_core::EventId;
-use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::wasm_bindgen;
+use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 mod handles;
 pub(crate) use handles::LocalFolderHandles;
@@ -381,6 +381,73 @@ impl OpenedLocalFolder {
         records.sort_by(|left, right| left.event_id.cmp(&right.event_id));
         Ok(records)
     }
+    /// Delete one namespace's directory with every event in it (a vault
+    /// deleted everywhere). Its root ends in `<name>/events`; `<name>` goes.
+    /// Nothing to do when it was never written here.
+    pub(crate) async fn delete_namespace(
+        &self,
+        location: &nook_core::EventLogLocation,
+    ) -> Result<bool, NookError> {
+        if location.namespace_tag().is_none() {
+            return Err(NookError::Database(
+                "Only an identity or vault namespace can be deleted from a local folder."
+                    .to_owned(),
+            ));
+        }
+        let root = location.root();
+        let parts = root.split('/').collect::<Vec<_>>();
+        let [parents @ .., name, _events] = parts.as_slice() else {
+            return Err(NookError::Database(format!(
+                "Namespace root {root} has no directory to delete."
+            )));
+        };
+        let mut current = FolderDirectory::Opened(self.root.clone());
+        for part in parents {
+            let FolderDirectory::Opened(parent) = current else {
+                return Ok(false);
+            };
+            current = FolderObject::new(&parent)
+                .child_directory(ChildLookupRequest {
+                    name: part,
+                    lookup: ChildLookup::Existing,
+                })
+                .await?;
+        }
+        let FolderDirectory::Opened(parent) = current else {
+            return Ok(false);
+        };
+        if let FolderDirectory::Unavailable = FolderObject::new(&parent)
+            .child_directory(ChildLookupRequest {
+                name,
+                lookup: ChildLookup::Existing,
+            })
+            .await?
+        {
+            return Ok(false);
+        }
+        let FolderMethod::Callable(function) = FolderObject::new(&parent).method("removeEntry")?
+        else {
+            return Err(NookError::Database(
+                "Local folder handle cannot remove entries.".to_owned(),
+            ));
+        };
+        let options = Object::new();
+        Reflect::set(&options, &JsString::from("recursive"), &JsValue::TRUE).map_err(|e| {
+            FolderFailure::new(&e.unchecked_into()).into_error("removeEntry options failed")
+        })?;
+        let promise = function
+            .call2(&parent, &JsString::from(*name), &options)
+            .map_err(|e| {
+                FolderFailure::new(&e.unchecked_into()).into_error("removeEntry call failed")
+            })?;
+        FolderPromise {
+            value: promise.unchecked_into(),
+        }
+        .resolve("removeEntry failed")
+        .await?;
+        Ok(true)
+    }
+
     pub(crate) async fn write_events(
         &self,
         location: &nook_core::EventLogLocation,

@@ -19,6 +19,8 @@ use std::str;
 use super::checked_event_write::{CheckedEventWrite, CheckedEventWriteRequest};
 use super::github::{GitHubFileWrite, GitHubRootDiscovery, GitHubVaultDiscovery};
 use super::remote_event::RemoteEventRead;
+
+mod namespace;
 use crate::NookError;
 #[derive(Clone, Copy)]
 struct RepositoryResponse<'a> {

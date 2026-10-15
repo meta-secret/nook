@@ -235,6 +235,7 @@ mod tests {
         let cloud = ICloudEventStore {
             web_auth_token: "fixture-token",
             target: &ICloudEventTarget::Private,
+            location: &nook_core::EventLogLocation::LegacyVaultRoot,
         };
         for (result, prefix) in [
             (
@@ -270,6 +271,7 @@ mod tests {
         let no_token = ICloudEventStore {
             web_auth_token: " ",
             target: &ICloudEventTarget::Private,
+            location: &nook_core::EventLogLocation::LegacyVaultRoot,
         };
         match no_token
             .put_icloud_event_if_absent(&event_id, &[0xff])

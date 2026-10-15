@@ -71,7 +71,7 @@ describe('icloud-oauth', () => {
       const saveRecords = vi.fn().mockResolvedValue({
         records: [
           {
-            recordType: 'NookVault',
+            recordType: 'NookLogEvent',
             recordName: 'nook-root-11111111-1111-4111-8111-111111111111',
             shortGUID: 'share-guid',
           },
@@ -100,7 +100,7 @@ describe('icloud-oauth', () => {
       ])
       expect(saveRecords).toHaveBeenCalledWith(
         expect.objectContaining({
-          recordType: 'NookVault',
+          recordType: 'NookLogEvent',
           createShortGUID: true,
         }),
         {
