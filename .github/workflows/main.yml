@@ -188,6 +188,9 @@ jobs:
     outputs:
       cache_publication_outcome: ${{ steps.prepare_web.outputs.cache_publication_outcome }}
       verification_outcome: ${{ steps.upload_web.outcome }}
+      # The e2e image this attempt built. Re-running only failed e2e jobs bumps
+      # run_attempt, so they must pull this tag rather than recompute it.
+      e2e_image: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     timeout-minutes: 15
     permissions:
@@ -366,7 +369,7 @@ jobs:
     runs-on: nook-k0s-container
     timeout-minutes: 180
     container:
-      image: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
+      image: ${{ needs.web.outputs.e2e_image }}
       credentials:
         username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
         password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
@@ -399,7 +402,7 @@ jobs:
     runs-on: nook-k0s-container
     timeout-minutes: 180
     container:
-      image: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
+      image: ${{ needs.web.outputs.e2e_image }}
       credentials:
         username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
         password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
@@ -427,7 +430,7 @@ jobs:
     runs-on: nook-k0s-container
     timeout-minutes: 10
     container:
-      image: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
+      image: ${{ needs.web.outputs.e2e_image }}
       credentials:
         username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
         password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}

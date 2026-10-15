@@ -43,6 +43,9 @@ jobs:
     outputs:
       release-sha: ${{ steps.release.outputs.sha }}
       release-version: ${{ steps.release.outputs.version }}
+      # The image this attempt built. Re-running only the failed consumer bumps
+      # run_attempt, so it must pull this tag rather than recompute it.
+      e2e-image: registry.dev.nokey.sh/nook/remote-buildcache/nook-release-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Checkout release source
         uses: actions/checkout@v7
@@ -116,7 +119,7 @@ jobs:
     needs: prepare
     runs-on: nook-k0s-container
     container:
-      image: registry.dev.nokey.sh/nook/remote-buildcache/nook-release-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
+      image: ${{ needs.prepare.outputs.e2e-image }}
       credentials:
         username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
         password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
