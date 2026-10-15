@@ -205,6 +205,17 @@
     if (!vault.errorMsg) removingStoreId = ''
   }
 
+  /** The vault whose deletion everywhere awaits its typed name. */
+  let deletingStoreId = $state('')
+  let deleteName = $state('')
+
+  async function deleteVault(entry: NookLocalVaultEntry): Promise<void> {
+    const deleted = await vault.identityControl.deleteVaultEverywhere(
+      entry.storeId,
+    )
+    if (deleted.isOk()) deletingStoreId = ''
+  }
+
   type AuthStorageOptionalProps = Partial<
     Pick<
       ComponentProps<typeof AuthStorage>,
@@ -553,13 +564,86 @@
                       ? vault.t(I18N_KEYS.VaultAdminRemoveActiveHint)
                       : vault.t(I18N_KEYS.VaultAdminRemoveConfirmButton)}
                     disabled={isBusy || isActive}
-                    onclick={() => (removingStoreId = entry.storeId)}
+                    onclick={() => {
+                      deletingStoreId = ''
+                      removingStoreId = entry.storeId
+                    }}
                   >
                     <Trash2 class="size-4" />
                     {vault.t(I18N_KEYS.VaultAdminRemove)}
                   </Button>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    class="h-10"
+                    data-testid="vault-admin-delete-btn"
+                    data-store-id={entry.storeId}
+                    title={isActive
+                      ? vault.t(I18N_KEYS.VaultAdminRemoveActiveHint)
+                      : vault.t(I18N_KEYS.VaultAdminDelete)}
+                    disabled={isBusy || isActive}
+                    onclick={() => {
+                      removingStoreId = ''
+                      deleteName = ''
+                      deletingStoreId = entry.storeId
+                    }}
+                  >
+                    {vault.t(I18N_KEYS.VaultAdminDelete)}
+                  </Button>
                 {/if}
               </div>
+              {#if deletingStoreId === entry.storeId && !isActive}
+                <div
+                  class="nk-banner col-span-full grid gap-3 border-l-destructive bg-destructive/5 p-4 md:col-span-3"
+                  data-testid="vault-admin-delete-confirmation"
+                  data-store-id={entry.storeId}
+                >
+                  <p class="text-sm text-pretty text-foreground">
+                    {(() => {
+                      const confirmRequest: Parameters<typeof vault.t>[0] = {
+                        key: I18N_KEYS.VaultAdminDeleteConfirm,
+                        replacements: {
+                          vault: entry.display_label(unnamedVaultLabel),
+                        },
+                      }
+                      return vault.t(confirmRequest)
+                    })()}
+                  </p>
+                  <input
+                    class="h-10 w-full max-w-sm border border-border bg-background px-3 text-sm text-foreground outline-none focus:border-foreground/50"
+                    aria-label={vault.t(I18N_KEYS.VaultAdminDeleteName)}
+                    placeholder={entry.display_label(unnamedVaultLabel)}
+                    data-testid="vault-admin-delete-name"
+                    bind:value={deleteName}
+                  />
+                  <div class="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      data-testid="vault-admin-delete-confirm"
+                      disabled={isBusy ||
+                        deleteName.trim() !==
+                          entry.display_label(unnamedVaultLabel)}
+                      onclick={() => void deleteVault(entry)}
+                    >
+                      <Trash2 class="size-3.5" />
+                      {vault.t(I18N_KEYS.VaultAdminDeleteConfirmButton)}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      data-testid="vault-admin-delete-cancel"
+                      disabled={isBusy}
+                      onclick={() => (deletingStoreId = '')}
+                    >
+                      {vault.t(I18N_KEYS.CommonCancel)}
+                    </Button>
+                  </div>
+                </div>
+              {/if}
               {#if removingStoreId === entry.storeId && !isActive}
                 <div
                   class="nk-banner col-span-full grid gap-3 border-l-destructive bg-destructive/5 p-4 md:col-span-3"

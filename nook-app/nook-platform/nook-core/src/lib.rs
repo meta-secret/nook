@@ -232,7 +232,7 @@ pub use nook_auth2::{
 pub use auth::identity_control::{
     IdentityAdoption, IdentityAdoptionChoice, IdentityVaultEpochAction, IdentityVaultEpochStatus,
     ReplicatedIdentityStanding, ReplicatedMembershipProjection, ReplicatedMembershipRequest,
-    VaultFounder, VaultRevocationDue,
+    VaultDeletionPlan, VaultDeletionRequest, VaultFounder, VaultRevocationDue,
 };
 pub use auth::identity_control_snapshot::{
     IdentityControlSnapshot, IdentityControlSnapshotRequest, IdentityControlStanding,

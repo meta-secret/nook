@@ -27,6 +27,8 @@ pub struct ReplicatedIdentityMembership<'a> {
     pub members: Vec<IdentityMember>,
     pub revoked: Vec<AppId>,
     pub own_grants: Vec<ReplicatedVaultGrant>,
+    /// Vaults deleted from the identity: their cached grants are dropped.
+    pub removed_vaults: Vec<StoreId>,
 }
 
 /// Rename a local identity to the replicated identity that lists its app key.
@@ -105,7 +107,14 @@ impl IdentityRecord {
             changed |= vault.secrets_envelopes.len() != secrets
                 || vault.members_envelopes.len() != members;
         }
+        let vaults_before = self.vault_deks.len();
+        self.vault_deks
+            .retain(|vault| !request.removed_vaults.contains(&vault.store_id));
+        changed |= self.vault_deks.len() != vaults_before;
         for grant in &request.own_grants {
+            if request.removed_vaults.contains(&grant.store_id) {
+                continue;
+            }
             // A grant must open with this installation's key before it is cached.
             request.app_key.decrypt_envelope(&grant.secrets_envelope)?;
             request.app_key.decrypt_envelope(&grant.members_envelope)?;
@@ -287,6 +296,7 @@ mod tests {
             members: vec![member(&laptop, "Laptop"), member(&tablet, "Tablet")],
             revoked: Vec::new(),
             own_grants: vec![grant(&phone, &store_id, &keys)?],
+            removed_vaults: Vec::new(),
         })?;
         assert_eq!(
             directory.open_vault_dek(IdentityVaultKeyOpening {
@@ -304,6 +314,7 @@ mod tests {
             members: vec![member(&laptop, "Work laptop")],
             revoked: vec![tablet.app_id().clone()],
             own_grants: Vec::new(),
+            removed_vaults: Vec::new(),
         })?;
         let record = directory.selected()?;
         assert!(!record.has_app_id(tablet.app_id()));
@@ -325,6 +336,7 @@ mod tests {
                     members: Vec::new(),
                     revoked: Vec::new(),
                     own_grants: vec![foreign],
+                    removed_vaults: Vec::new(),
                 });
         assert!(rejected.is_err());
 
@@ -334,11 +346,60 @@ mod tests {
             members: Vec::new(),
             revoked: vec![phone.app_id().clone()],
             own_grants: Vec::new(),
+            removed_vaults: Vec::new(),
         });
         assert!(matches!(
             revoked.map_err(IdentityDirectoryRejection::into_cause),
             Err(MultiDeviceError::AppKeyRevokedFromIdentity { .. })
         ));
+        Ok(())
+    }
+
+    #[test]
+    fn a_vault_removed_from_the_identity_leaves_the_cached_grants() -> anyhow::Result<()> {
+        let phone = AppKey::generate()?;
+        let created = IdentityDirectory::empty().create_identity(IdentityCreation {
+            label: "Personal",
+            app_key: &phone,
+            member_label: MemberLabelState::Unnamed,
+        })?;
+        let identity_id = created.identity_id;
+        let kept = StoreId::generate()?;
+        let removed = StoreId::generate()?;
+        let keys = VaultKeys::generate()?;
+        let directory =
+            created
+                .directory
+                .apply_replicated_membership(&ReplicatedIdentityMembership {
+                    identity_id: &identity_id,
+                    app_key: &phone,
+                    members: Vec::new(),
+                    revoked: Vec::new(),
+                    own_grants: vec![
+                        grant(&phone, &kept, &keys)?,
+                        grant(&phone, &removed, &keys)?,
+                    ],
+                    removed_vaults: Vec::new(),
+                })?;
+        assert_eq!(directory.selected()?.vault_deks.len(), 2);
+
+        // The removal drops the cached grant, and a stale grant for the same
+        // vault in the same projection does not restore it.
+        let directory = directory.apply_replicated_membership(&ReplicatedIdentityMembership {
+            identity_id: &identity_id,
+            app_key: &phone,
+            members: Vec::new(),
+            revoked: Vec::new(),
+            own_grants: vec![grant(&phone, &removed, &keys)?],
+            removed_vaults: vec![removed.clone()],
+        })?;
+        let stores = directory
+            .selected()?
+            .vault_deks
+            .iter()
+            .map(|vault| vault.store_id.clone())
+            .collect::<Vec<_>>();
+        assert_eq!(stores, vec![kept]);
         Ok(())
     }
 

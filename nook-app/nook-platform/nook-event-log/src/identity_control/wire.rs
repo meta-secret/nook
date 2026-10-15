@@ -235,6 +235,11 @@ pub enum IdentityControlOperation {
         key_epoch: EventId,
         recipients: Vec<MemberVaultDek>,
     },
+    /// The vault is deleted from the identity everywhere. Permanent: later or
+    /// concurrent grants for the same store do not bring it back.
+    VaultRemoved {
+        store_id: StoreId,
+    },
     ProviderMounted {
         mount: IdentityProviderMount,
     },
@@ -421,6 +426,7 @@ impl IdentityEvent {
                 | IdentityControlOperation::MemberJoinDenied { .. }
                 | IdentityControlOperation::MemberRevoked { .. }
                 | IdentityControlOperation::MemberRenamed { .. }
+                | IdentityControlOperation::VaultRemoved { .. }
                 | IdentityControlOperation::ProviderMounted { .. }
                 | IdentityControlOperation::ProviderUnmounted { .. } => {}
             }

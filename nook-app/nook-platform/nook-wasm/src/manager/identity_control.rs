@@ -9,6 +9,7 @@
 mod membership;
 mod migration;
 mod vault_access;
+mod vault_removal;
 
 use nook_core::i18n_keys;
 use nook_core::{
@@ -161,11 +162,17 @@ impl NookVaultManager {
                     members: projection.members,
                     revoked: projection.revoked,
                     own_grants: projection.own_grants,
+                    removed_vaults: projection.removed_vaults,
                 })
                 .map_err(|rejected| NookDatabase::map_domain_error(rejected.into_cause()))?;
             Ok(IdentityDirectoryWrite::from(directory))
         })
-        .await
+        .await?;
+        // A vault deleted from the identity everywhere leaves this browser too.
+        for store_id in &state.removed_vaults {
+            NookDatabase::forget_vault_removed_from_identity(store_id.as_str()).await?;
+        }
+        Ok(())
     }
 
     /// Union one identity log with the prepared provider's identity namespace.

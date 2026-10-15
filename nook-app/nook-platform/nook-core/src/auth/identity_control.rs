@@ -21,6 +21,8 @@ pub struct ReplicatedMembershipProjection {
     pub members: Vec<IdentityMember>,
     pub revoked: Vec<AppId>,
     pub own_grants: Vec<ReplicatedVaultGrant>,
+    /// Vaults deleted from the identity everywhere.
+    pub removed_vaults: Vec<StoreId>,
 }
 
 /// Converts one identity projection for one local installation.
@@ -70,6 +72,7 @@ impl ReplicatedMembershipRequest<'_> {
             members,
             revoked: self.state.revoked.clone(),
             own_grants,
+            removed_vaults: self.state.removed_vaults.clone(),
         })
     }
 }
@@ -220,6 +223,40 @@ impl IdentityVaultEpochStatus<'_> {
             IdentityVaultEpochAction::Rewrap
         } else {
             IdentityVaultEpochAction::Current
+        }
+    }
+}
+
+/// What deleting a vault everywhere does for one identity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VaultDeletionPlan {
+    /// Record the removal in the identity log; every device drops its copy.
+    RecordRemoval,
+    /// The identity never registered the vault (or already removed it): only
+    /// this browser's copy goes.
+    LocalOnly,
+    /// The vault is open in this session; it must be closed first.
+    RefuseOpen,
+}
+
+/// Decides how one vault is deleted everywhere.
+pub struct VaultDeletionRequest<'a> {
+    pub state: &'a IdentityControlState,
+    pub store_id: &'a StoreId,
+    /// The vault open in this session, if any.
+    pub open_store_id: Option<&'a StoreId>,
+}
+
+impl VaultDeletionRequest<'_> {
+    #[must_use]
+    pub fn plan(&self) -> VaultDeletionPlan {
+        if self.open_store_id == Some(self.store_id) {
+            return VaultDeletionPlan::RefuseOpen;
+        }
+        if self.state.vault(self.store_id).is_some() {
+            VaultDeletionPlan::RecordRemoval
+        } else {
+            VaultDeletionPlan::LocalOnly
         }
     }
 }
@@ -537,6 +574,50 @@ mod tests {
                 .iter()
                 .all(|member| !member.is_current_installation)
         );
+        Ok(())
+    }
+
+    #[test]
+    fn deleting_a_registered_vault_records_its_removal() -> anyhow::Result<()> {
+        let scenario = Scenario::approved()?;
+        let state = IdentityControlState::project(&scenario.log)?;
+        let other = StoreId::generate()?;
+        let plan = VaultDeletionRequest {
+            state: &state,
+            store_id: &scenario.store_id,
+            open_store_id: Some(&other),
+        }
+        .plan();
+        assert_eq!(plan, VaultDeletionPlan::RecordRemoval);
+        Ok(())
+    }
+
+    #[test]
+    fn deleting_the_open_vault_is_refused() -> anyhow::Result<()> {
+        let scenario = Scenario::approved()?;
+        let state = IdentityControlState::project(&scenario.log)?;
+        let plan = VaultDeletionRequest {
+            state: &state,
+            store_id: &scenario.store_id,
+            open_store_id: Some(&scenario.store_id),
+        }
+        .plan();
+        assert_eq!(plan, VaultDeletionPlan::RefuseOpen);
+        Ok(())
+    }
+
+    #[test]
+    fn deleting_an_unregistered_vault_stays_local() -> anyhow::Result<()> {
+        let scenario = Scenario::approved()?;
+        let state = IdentityControlState::project(&scenario.log)?;
+        let unregistered = StoreId::generate()?;
+        let plan = VaultDeletionRequest {
+            state: &state,
+            store_id: &unregistered,
+            open_store_id: None,
+        }
+        .plan();
+        assert_eq!(plan, VaultDeletionPlan::LocalOnly);
         Ok(())
     }
 }

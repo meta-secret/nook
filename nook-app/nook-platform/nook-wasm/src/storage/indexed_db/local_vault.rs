@@ -563,6 +563,40 @@ impl NookDatabase {
             }
             LocalVaultRemoval::Removed => {}
         }
+        NookDatabase::delete_local_vault_data(store_id).await?;
+        NookDatabase::save_vault_registry(&registry).await
+    }
+}
+
+impl NookDatabase {
+    /// Drop this browser's copy of a vault the identity deleted everywhere.
+    /// Nothing to do when it is not stored here; an active copy stops being
+    /// active, since the vault no longer exists to open.
+    pub(crate) async fn forget_vault_removed_from_identity(
+        store_id: &str,
+    ) -> Result<(), NookError> {
+        let mut registry = NookDatabase::load_vault_registry().await?;
+        let active = NookDatabase::get_active_vault_id().await?;
+        if matches!(&active, ActiveVaultScope::StoreId(active_id) if active_id == store_id) {
+            NookDatabase::clear_active_vault_id().await?;
+        }
+        match NookDatabase::remove_registry_entry(RemoveRegistryEntryRequest {
+            registry: &mut registry,
+            store_id,
+            active: &ActiveVaultScope::Unselected,
+        }) {
+            LocalVaultRemoval::NotRegistered | LocalVaultRemoval::Active => Ok(()),
+            LocalVaultRemoval::Removed => {
+                NookDatabase::delete_local_vault_data(store_id).await?;
+                NookDatabase::save_vault_registry(&registry).await
+            }
+        }
+    }
+}
+
+impl NookDatabase {
+    /// A vault's encrypted snapshot, search catalog and event log here.
+    async fn delete_local_vault_data(store_id: &str) -> Result<(), NookError> {
         let mut keys = vec![
             NookDatabase::vault_blob_key(store_id),
             NookDatabase::secret_search_key(store_id),
@@ -574,7 +608,6 @@ impl NookDatabase {
         }
         let key_refs = keys.iter().map(String::as_str).collect::<Vec<_>>();
         NookDatabase::idb_delete_keys(&key_refs).await?;
-        NookDatabase::clear_local_event_store(store_id).await?;
-        NookDatabase::save_vault_registry(&registry).await
+        NookDatabase::clear_local_event_store(store_id).await
     }
 }

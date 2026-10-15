@@ -18,6 +18,7 @@ import { unselectedVaultScope } from "$lib/auth/providers";
 import { IdentityStandingPresentation } from "$lib/components/identity-control/identity-standing";
 import { browserLogRuntime } from "$lib/runtime/log";
 import type { VaultState } from "$lib/vault.svelte";
+import { I18N_KEYS } from "../../../generated/i18n-keys";
 
 const log = browserLogRuntime.createLogger("identity-control");
 
@@ -279,6 +280,25 @@ export class IdentityControlModel {
 
   rename({ appId, label }: IdentityMemberRename) {
     return this.act((manager) => manager.rename_identity_member(appId, label));
+  }
+
+  /** Delete a vault from the identity on every device. The removal reaches
+   * the other devices through the identity mounts; this browser's copy goes
+   * at once. */
+  async deleteVaultEverywhere(
+    storeId: string,
+  ): Promise<Result<IdentityActionOutcome, VaultStorageFailure>> {
+    const deleted = await this.act((manager) =>
+      manager.delete_vault_everywhere(storeId),
+    );
+    if (deleted.isErr()) return deleted;
+    const refreshed = await this.vault.refreshLocalVaultCatalog();
+    if (refreshed.isErr()) {
+      this.vault.errorMsg = this.vault.t(refreshed.error.translationKey);
+      return err(refreshed.error);
+    }
+    this.vault.showSuccess(this.vault.t(I18N_KEYS.ToastsVaultDeleted));
+    return deleted;
   }
 
   /** Drop the identity mount of a provider row the user removed. */

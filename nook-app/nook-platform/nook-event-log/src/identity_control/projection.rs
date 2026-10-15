@@ -81,6 +81,8 @@ pub struct IdentityControlState {
     pub revoked: Vec<AppId>,
     pub pending_joins: Vec<IdentityJoinRequest>,
     pub vaults: Vec<IdentityControlVault>,
+    /// Vaults deleted from the identity. Each device drops its local copy.
+    pub removed_vaults: Vec<StoreId>,
     pub mounts: Vec<IdentityProviderMount>,
     pub heads: Vec<EventId>,
 }
@@ -99,6 +101,9 @@ struct ProjectionAccumulator {
     requests: Vec<IdentityJoinRequest>,
     resolutions: Vec<(EventId, AppId)>,
     vaults: BTreeMap<StoreId, VaultAccumulator>,
+    /// Tombstones: removal wins over any grant, in whatever order replicas
+    /// apply the same events.
+    removed_vaults: BTreeSet<StoreId>,
     mounts: BTreeMap<ProviderMountId, IdentityProviderMount>,
 }
 
@@ -190,6 +195,9 @@ impl ProjectionAccumulator {
                 key_epoch,
                 recipients,
             }),
+            IdentityControlOperation::VaultRemoved { store_id } => {
+                self.removed_vaults.insert(store_id.clone());
+            }
             IdentityControlOperation::ProviderMounted { mount } => {
                 self.mounts.insert(mount.mount_id.clone(), mount.clone());
             }
@@ -248,9 +256,11 @@ impl IdentityControlState {
             })
             .cloned()
             .collect::<Vec<_>>();
+        let removed_vaults = accumulator.removed_vaults;
         let vaults = accumulator
             .vaults
             .into_iter()
+            .filter(|(store_id, _)| !removed_vaults.contains(store_id))
             .filter_map(|(store_id, vault)| {
                 let registered_in = vault.registered_in?;
                 let current_key_epoch = vault.current_key_epoch?;
@@ -279,6 +289,7 @@ impl IdentityControlState {
             revoked,
             pending_joins,
             vaults,
+            removed_vaults: removed_vaults.into_iter().collect(),
             mounts: accumulator.mounts.into_values().collect(),
             heads: log.applicable_heads(),
         })
@@ -416,6 +427,91 @@ mod tests {
         let resolved = IdentityControlState::project(&detached)?;
         assert!(resolved.mounts.is_empty());
         assert_eq!(member_label(&resolved, founder.app.app_id()), "Renamed");
+        Ok(())
+    }
+
+    #[test]
+    fn removing_a_vault_drops_it_and_records_the_tombstone() -> anyhow::Result<()> {
+        let mut fixture = Fixture::new()?;
+        let kept = StoreId::generate()?;
+        let removed = StoreId::generate()?;
+        fixture.register_vault(&VaultKeys::generate()?, &kept)?;
+        fixture.register_vault(&VaultKeys::generate()?, &removed)?;
+        let founder = fixture.founder();
+        fixture.append(
+            &founder,
+            vec![IdentityControlOperation::VaultRemoved {
+                store_id: removed.clone(),
+            }],
+        )?;
+        let state = fixture.state()?;
+        assert!(state.vault(&removed).is_none());
+        assert!(state.vault(&kept).is_some());
+        assert_eq!(state.removed_vaults, vec![removed]);
+        Ok(())
+    }
+
+    #[test]
+    fn a_later_grant_does_not_bring_a_removed_vault_back() -> anyhow::Result<()> {
+        let mut fixture = Fixture::new()?;
+        let store_id = StoreId::generate()?;
+        fixture.register_vault(&VaultKeys::generate()?, &store_id)?;
+        let founder = fixture.founder();
+        let rotated = VaultKeys::generate()?;
+        let rotated_epoch = epoch_id("after-removal")?;
+        let regrant = fixture.state()?.vault_rewrap_operation(&OpenedVaultDek {
+            store_id: &store_id,
+            key_epoch: &rotated_epoch,
+            keys: &rotated,
+        })?;
+        fixture.append(
+            &founder,
+            vec![IdentityControlOperation::VaultRemoved {
+                store_id: store_id.clone(),
+            }],
+        )?;
+        fixture.append(&founder, vec![regrant])?;
+        let state = fixture.state()?;
+        assert!(state.vault(&store_id).is_none());
+        assert_eq!(state.removed_vaults, vec![store_id]);
+        Ok(())
+    }
+
+    #[test]
+    fn removal_wins_over_a_concurrent_grant_in_any_delivery_order() -> anyhow::Result<()> {
+        let mut fixture = Fixture::new()?;
+        let store_id = StoreId::generate()?;
+        let keys = VaultKeys::generate()?;
+        let epoch = fixture.register_vault(&keys, &store_id)?;
+        let founder = fixture.founder();
+        // A rewrap built on the same parents as the removal: concurrent.
+        let rewrap = fixture.state()?.vault_rewrap_operation(&OpenedVaultDek {
+            store_id: &store_id,
+            key_epoch: &epoch,
+            keys: &keys,
+        })?;
+        let concurrent = fixture
+            .log
+            .build_append(vec![rewrap], &founder.signing(&fixture.at))?;
+        fixture.append(
+            &founder,
+            vec![IdentityControlOperation::VaultRemoved {
+                store_id: store_id.clone(),
+            }],
+        )?;
+        let merged = fixture.log.clone().insert(concurrent)?.log;
+        let state = IdentityControlState::project(&merged)?;
+        assert!(state.vault(&store_id).is_none());
+
+        let mut stored = merged
+            .storage_bytes()?
+            .into_iter()
+            .map(|(_, bytes)| bytes)
+            .collect::<Vec<EventStorageBytes>>();
+        stored.reverse();
+        let reversed =
+            IdentityControlLog::new(fixture.identity_id.clone()).union_storage_bytes(&stored)?;
+        assert_eq!(IdentityControlState::project(&reversed)?, state);
         Ok(())
     }
 
