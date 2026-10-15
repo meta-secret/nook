@@ -551,8 +551,10 @@ export async function authorizeDeviceProtection(
     // (shell from the new state, gate from the old state) indefinitely under
     // a busy worker.
     const probe = await page.evaluate(() => {
+      // The vault shell, or an identity page or the add-device flow, which
+      // open outside it.
       const shell = document.querySelector(
-        '[data-testid="authenticated-shell"]',
+        '[data-testid="authenticated-shell"], [data-testid="identity-page"], [data-testid="add-device-page"]',
       )
       const gate = document.querySelector('[data-testid="login-gate"]')
       return {
@@ -661,7 +663,10 @@ export async function authorizeDeviceProtection(
       )
       return {
         loginGateVisible: isVisible('login-gate'),
-        authenticatedShellVisible: isVisible('authenticated-shell'),
+        authenticatedShellVisible:
+          isVisible('authenticated-shell') ||
+          isVisible('identity-page') ||
+          isVisible('add-device-page'),
         vaultAuthenticated: window.__nookVault?.isAuthenticated === true,
         overlayVisible: isVisible('passkey-auth-overlay'),
         authorizeReady: isEnabled('device-protection-unlock-btn'),

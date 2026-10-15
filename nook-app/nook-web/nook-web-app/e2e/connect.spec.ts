@@ -305,7 +305,7 @@ test.describe('vault connect flow', () => {
     await expect(page.getByTestId('login-gate')).not.toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await expect(page.getByTestId('authenticated-shell')).toBeVisible()
+    await expect(page.getByTestId('identity-page')).toBeVisible()
     await expect(page.getByTestId('settings-provider-oauth-file')).toHaveCount(
       0,
     )

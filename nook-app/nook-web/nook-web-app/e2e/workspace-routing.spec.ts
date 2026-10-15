@@ -308,7 +308,7 @@ test.describe('persistent workspace routing', () => {
     await expect(page.getByTestId('identity-keys')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await page.getByTestId('page-bar-back').click()
+    await page.getByTestId('identity-page-back').click()
     await openVaultPage(page)
 
     await expect(page.getByTestId('vault-panel')).toBeVisible()
