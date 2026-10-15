@@ -255,6 +255,17 @@
     void unlockTo(home);
   }
 
+  /** "Add a device" on a locked card unlocks the identity, then opens the
+   * add-device flow. */
+  function addDevice(target: IdentityVaultTarget): void {
+    if (!target.storeId) return;
+    const destination: UnlockDestination = {
+      storeId: target.storeId,
+      page: { kind: UnlockPageKind.Route, route: WorkspaceRoute.AddDevice },
+    };
+    void unlockTo(destination);
+  }
+
   let pinPrompt = $state<PinPrompt>({ kind: PinPromptKind.Closed });
   const pinProtected = $derived(
     vault.deviceProtectionStatus === DeviceProtectionStatus.Pin,
@@ -684,6 +695,7 @@
       onOpenVault={unlockVault}
       onNewVault={openNewVault}
       onManage={manageIdentity}
+      onAddDevice={addDevice}
       onUnlock={() => void unlockIdentity()}
       onLock={lockIdentity}
       onNewIdentity={newIdentity}

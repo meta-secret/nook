@@ -77,8 +77,9 @@ join) sit between the hero and the cards.
     currentHealthNote?: string
     /** Open the unlocked identity's control page at its next step. */
     onHealth?: () => void
-    /** Open the add-device flow from the unlocked identity's card. */
-    onAddDevice?: () => void
+    /** Open the add-device flow from the current identity's card; a locked
+     * identity unlocks on the way. */
+    onAddDevice?: (target: IdentityVaultTarget) => void
     onLock?: () => void
     /** Unlock a locked identity with this device's passkey. */
     onUnlock?: (target: IdentityVaultTarget) => void
@@ -417,7 +418,9 @@ join) sit between the hero and the cards.
             {onLock}
             healthNote={card.current ? currentHealthNote : ''}
             {onHealth}
-            {...onAddDevice ? { onAddDevice } : {}}
+            {...onAddDevice
+              ? { onAddDevice: () => onAddDevice(targetFor(card.identityId)) }
+              : {}}
             onUseIdentity={(identityId: string) =>
               onUseIdentity(targetFor(identityId))}
             {pairingStatusFor}

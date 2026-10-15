@@ -82,7 +82,8 @@ card, which then spans the full row.
      * chip opens the identity's control page at that step. */
     healthNote?: string
     onHealth?: () => void
-    /** Open the add-device flow; offered while the identity is unlocked. */
+    /** Open the add-device flow. Offered on the identity this browser
+     * uses, locked or not: a locked one unlocks first. */
     onAddDevice?: () => void
     /** Extension pairing status for a vault row, while pairing is offered. */
     pairingStatusFor?: (storeId: string) => LoginVaultExtensionPairingStatus
@@ -339,7 +340,7 @@ card, which then spans the full row.
       </ul>
     </section>
 
-    {#if live && onAddDevice && !preview}
+    {#if onAddDevice && !preview && (live || card.current)}
       <section class="border-t border-border px-2 py-2">
         <button
           type="button"
