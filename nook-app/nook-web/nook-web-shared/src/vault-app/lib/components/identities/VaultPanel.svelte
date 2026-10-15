@@ -7,6 +7,7 @@ alone (its name, passphrases, imports), usable once it is open.
 <script lang="ts">
   import type { Snippet } from 'svelte'
   import {
+    ArrowRight,
     ChevronRight,
     Download,
     Fingerprint,
@@ -218,16 +219,31 @@ alone (its name, passphrases, imports), usable once it is open.
   </header>
 
   {#if open}
-    <Button
+    <!-- Going in reads as the vault's lead row, in the same language as
+         its pages below, rather than a bare button. -->
+    <button
       type="button"
-      class="h-11 w-full max-w-md"
+      class="nk-identity-menu-item nk-identity-menu-lead group w-full max-w-md border border-border py-3"
       data-testid="vault-panel-open"
       disabled={busy}
       onclick={onOpen}
     >
-      <FolderOpen class="size-4" />
-      {vault.t(I18N_KEYS.WorkspaceVaultPanelOpen)}
-    </Button>
+      <span class="nk-vault-icon size-10" aria-hidden="true">
+        <FolderOpen class="size-4" />
+      </span>
+      <span class="flex min-w-0 flex-1 flex-col">
+        <span class="truncate text-[0.9375rem] font-medium text-foreground"
+          >{vault.t(I18N_KEYS.WorkspaceVaultPanelOpen)}</span
+        >
+        <span class="truncate text-xs text-muted-foreground"
+          >{vault.t(I18N_KEYS.WorkspaceVaultPanelOpenHint)}</span
+        >
+      </span>
+      <ArrowRight
+        class="size-4 flex-none text-muted-foreground transition-transform group-hover:translate-x-0.5"
+        aria-hidden="true"
+      />
+    </button>
   {:else if reachable}
     <section class="grid w-full max-w-md gap-4" data-testid="vault-panel-key">
       {#if dormant}

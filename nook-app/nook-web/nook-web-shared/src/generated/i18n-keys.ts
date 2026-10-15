@@ -2030,6 +2030,7 @@ export const I18N_KEYS = {
   WorkspaceVaultPanelManage: 'workspace.vault_panel_manage',
   WorkspaceVaultPanelManageLocked: 'workspace.vault_panel_manage_locked',
   WorkspaceVaultPanelOpen: 'workspace.vault_panel_open',
+  WorkspaceVaultPanelOpenHint: 'workspace.vault_panel_open_hint',
   WorkspaceVaultPanelOrPassphrase: 'workspace.vault_panel_or_passphrase',
   WorkspaceVaultPanelPassphrasesHint: 'workspace.vault_panel_passphrases_hint',
   WorkspaceVaultPanelReading: 'workspace.vault_panel_reading',

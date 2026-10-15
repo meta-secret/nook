@@ -21,7 +21,7 @@
 
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { ArrowLeft, RefreshCw, ShieldCheck } from '@lucide/svelte'
-  import { tick, untrack, type ComponentProps } from 'svelte'
+  import { onMount, tick, untrack, type ComponentProps } from 'svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import IdentitiesHub from '$lib/components/identities/IdentitiesHub.svelte'
   import {
@@ -214,22 +214,34 @@
     return props
   })
 
-  let showProviderSetupLink = $state(false)
   /** Back from restore returns to the first screen even with saved rows. */
   let firstScreenRequested = $state(false)
   let newVaultOpen = $state(false)
 
-  /** Select the vault a card row names, closing any open setup panel. */
-  async function openVaultFromCard(storeId: string): Promise<void> {
+  /** Close what is open beside the card (New vault, an import, provider
+   * setup) when another panel opens there. */
+  function closeSidePanels(): void {
     newVaultOpen = false
-    if (showProviderSetupLink) {
+    if (vault.vaultImportOpen) {
       vault.cancelExistingVaultOpen()
-      showProviderSetupLink = false
+      vault.vaultImportOpen = false
     }
     if (addProviderOpen) onCancelAddProvider?.()
     if (showSetup) onCancelSetup()
+  }
+
+  /** Select the vault a card row names, closing any open setup panel. */
+  async function openVaultFromCard(storeId: string): Promise<void> {
+    closeSidePanels()
     await vault.chooseLoginVault(storeId)
   }
+
+  // An import started from the unlocked workspace locked the identity to
+  // continue here.
+  onMount(() => {
+    if (vault.vaultImportOpen && !vault.loginRequiresExistingVault)
+      vault.beginExistingVaultOpen()
+  })
 
   /** The vault opened beside its card; its passphrase unlock shows even
    * when it has none, to say so. */
@@ -251,7 +263,7 @@
   function importExistingVault(): void {
     newVaultOpen = false
     vault.beginExistingVaultOpen()
-    showProviderSetupLink = true
+    vault.vaultImportOpen = true
   }
 
   /** "Add a device" on a locked card unlocks the identity, then opens the
@@ -427,7 +439,7 @@
     )
   }
   const showVaultPicker = $derived(
-    vault.showLoginVaultPicker && !showProviderSetupLink,
+    vault.showLoginVaultPicker && !vault.vaultImportOpen,
   )
   const sentinelPresentation = $derived(
     new SentinelLoginPresentationReader(vault),
@@ -447,7 +459,7 @@
       vault.sentinelGenesisPhase !== SentinelGenesisPhase.DeliveringShares &&
       !showSetup &&
       !addProviderOpen &&
-      !showProviderSetupLink &&
+      !vault.vaultImportOpen &&
       !showVaultPicker,
   )
   const activeLoginVault = $derived.by((): LoginVaultEntry => {
@@ -490,11 +502,11 @@
       !showQrOnboarding &&
       !showSetup &&
       !addProviderOpen &&
-      !showProviderSetupLink &&
+      !vault.vaultImportOpen &&
       !showVaultPicker,
   )
   const showProviderSetup = $derived(
-    (showProviderSetupLink ||
+    (vault.vaultImportOpen ||
       addProviderOpen ||
       (hasProviders && !vault.localVaultPresent && !identityCardsShown)) &&
       !showSetup &&
@@ -505,6 +517,11 @@
     (showSentinelCeremony && !showLocalUnlock && !showVaultPicker) ||
       showSetup ||
       showProviderSetup,
+  )
+  /** With identity cards on screen, storage setup and restore open beside
+   * the current card instead of as a sheet of their own. */
+  const accessBesideCard = $derived(
+    identityCardsShown && showAccessSheet && (showSetup || showProviderSetup),
   )
   const isUnlocking = $derived(
     isVerifying && (showLocalUnlock || showSetup) && !showSetup,
@@ -552,7 +569,7 @@
       !showSetup &&
       !addProviderOpen
     ) {
-      showProviderSetupLink = false
+      vault.vaultImportOpen = false
     }
     if (showLocalUnlock && !vault.isInitializing) {
       untrack(() => void vault.prepareLocalLogin())
@@ -655,7 +672,7 @@
     {...createVaultChooserOptionalProps}
     onConnectStorage={() => {
       vault.beginExistingVaultOpen()
-      showProviderSetupLink = true
+      vault.vaultImportOpen = true
       firstScreenRequested = false
     }}
   />
@@ -707,6 +724,185 @@
   />
 {/snippet}
 
+<!-- Storage setup and restore. With identity cards it sits beside the
+     current card (framed by it); otherwise it is its own sheet. -->
+{#snippet accessSheet(framed: boolean)}
+  <section
+    class="min-w-0 {framed ? 'nk-frame-sheet' : ''}"
+    data-testid="login-access-sheet"
+  >
+    <header
+      class="border-b border-border pb-4 {framed ? 'px-5 pt-5 sm:px-6' : ''}"
+    >
+      <div class="space-y-1">
+        <h2 class="text-lg font-semibold tracking-tight text-foreground">
+          {#if showSentinelCeremony && !showSetup && !showProviderSetup}
+            {vault.t(I18N_KEYS.LoginUnlockVault)}
+          {:else if showSetup}
+            {(() => {
+              const tArgs: Parameters<typeof vault.t>[0] = {
+                key: I18N_KEYS.OnboardingConnectTo,
+                replacements: {
+                  provider: setupIs('github')
+                    ? 'GitHub'
+                    : setupIs('local-folder')
+                      ? vault.t(I18N_KEYS.ProviderPickerLocalFolder)
+                      : vault.t(I18N_KEYS.OnboardingLocalStorage),
+                },
+              }
+              return vault.t(tArgs)
+            })()}
+          {:else if addProviderOpen}
+            {vault.t(I18N_KEYS.OnboardingAddProvider)}
+          {:else if vault.loginRequiresExistingVault}
+            {vault.t(I18N_KEYS.FirstRunRestoreTitle)}
+          {:else}
+            {vault.t(I18N_KEYS.OnboardingSetupStorage)}
+          {/if}
+        </h2>
+        {#if isUnlocking}
+          <p class="text-sm text-pretty text-muted-foreground">
+            {vault.t(I18N_KEYS.LoginUnlocking)}
+          </p>
+        {:else if showSetup && setupIs('github')}
+          <p class="text-sm text-pretty text-muted-foreground">
+            {vault.t(I18N_KEYS.OnboardingGithubDescription)}
+          </p>
+        {:else if showSetup}
+          <p class="text-sm text-pretty text-muted-foreground">
+            {vault.t(I18N_KEYS.OnboardingLocalDescription)}
+          </p>
+        {:else if addProviderOpen}
+          <p class="text-sm text-pretty text-muted-foreground">
+            {vault.t(I18N_KEYS.OnboardingAnotherProvider)}
+          </p>
+        {/if}
+      </div>
+    </header>
+
+    <div class="pt-4 {framed ? 'px-5 pb-5 sm:px-6 sm:pb-6' : ''}">
+      {#if showSentinelCeremony && !showSetup && !showProviderSetup}
+        <SentinelCeremonyPanel
+          {vault}
+          {isVerifying}
+          {isInitializing}
+          {...sentinelCeremonyOptionalProps}
+        />
+      {:else if showSetup}
+        {#if setupIs('oauth-file')}
+          <OAuthProviderSetupWizard
+            {vault}
+            bind:githubRepo
+            idPrefix="login"
+            preset={oauthPreset}
+            {isVerifying}
+            {isInitializing}
+            {onCancelSetup}
+            onConnect={onUnlock}
+          />
+        {:else if setupIs('github')}
+          <GitHubProviderSetupWizard
+            {vault}
+            bind:githubPat
+            bind:githubRepo
+            idPrefix="login"
+            {isVerifying}
+            {isInitializing}
+            connectDisabled={vault.clientPolicy.remote_recovery_prompt_visible(
+              vault.remoteVaultRecoveryState,
+            )}
+            {onCancelSetup}
+            onConnect={onUnlock}
+          >
+            {#snippet beforeConnect()}
+              {#if vault.clientPolicy.remote_recovery_prompt_visible(vault.remoteVaultRecoveryState)}
+                <RemoteVaultRecoveryPanel
+                  {vault}
+                  state={vault.remoteVaultRecoveryState}
+                  isBusy={isVerifying}
+                  onRecover={() => vault.confirmRecoverRemoteVault()}
+                  onCreateFresh={() => vault.confirmCreateFreshRemoteVault()}
+                  onDismiss={() => {
+                    const cleared = vault.clearRemoteVaultRecovery()
+                    if (cleared.isErr())
+                      vault.errorMsg = vault.t(cleared.error.translationKey)
+                  }}
+                />
+              {/if}
+            {/snippet}
+          </GitHubProviderSetupWizard>
+        {:else if setupIs('local-folder')}
+          <LocalFolderProviderSetupWizard
+            {vault}
+            idPrefix="login"
+            {isVerifying}
+            {isInitializing}
+            {onCancelSetup}
+            onConnect={onUnlock}
+          />
+        {:else}
+          <form
+            novalidate
+            onsubmit={handleFirstConnectSubmit}
+            class="space-y-4"
+          >
+            <ProviderSetupFields {vault} {onCancelSetup} />
+            <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <Button
+                type="submit"
+                class="sm:min-w-[180px]"
+                data-testid="connect-provider-btn"
+                disabled={!setupCanConnect}
+              >
+                {#if isInitializing}
+                  <RefreshCw class="size-4 animate-spin" />
+                  {vault.t(I18N_KEYS.OnboardingLoadingEngine)}
+                {:else if isVerifying}
+                  <RefreshCw class="size-4 animate-spin" />
+                  {vault.t(I18N_KEYS.CommonConnecting)}
+                {:else}
+                  <ShieldCheck class="size-4" />
+                  {vault.t(I18N_KEYS.CommonConnect)}
+                {/if}
+              </Button>
+            </div>
+          </form>
+        {/if}
+      {:else if showProviderSetup}
+        {#if (vault.vaultImportOpen || !vault.localVaultPresent) && !addProviderOpen}
+          <button
+            type="button"
+            class="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            data-testid="login-back-to-get-started"
+            onclick={() => {
+              vault.cancelExistingVaultOpen()
+              vault.vaultImportOpen = false
+              firstScreenRequested = true
+            }}
+          >
+            <ArrowLeft class="size-4" />
+            {vault.t(I18N_KEYS.FirstRunBack)}
+          </button>
+        {/if}
+        <LoginProviderManagement
+          {vault}
+          variant={LoginProviderManagementVariant.Setup}
+          {providers}
+          {isVerifying}
+          {isInitializing}
+          addingProvider={addProviderOpen}
+          {...providerManagementOptionalProps}
+          {onBeginSetup}
+        />
+      {/if}
+    </div>
+  </section>
+{/snippet}
+
+{#snippet accessSheetBeside()}
+  {@render accessSheet(false)}
+{/snippet}
+
 <div
   class="w-full animate-in fade-in duration-300"
   data-testid="login-gate"
@@ -730,6 +926,8 @@
     onNewIdentity={newIdentity}
     onUseIdentity={(target: IdentityVaultTarget) => void useIdentity(target)}
     onCardsShown={(shown: boolean) => (identityCardsShown = shown)}
+    onClosePanels={closeSidePanels}
+    {...accessBesideCard ? { accessPanel: accessSheetBeside } : {}}
     pairingStatusFor={(storeId: string) =>
       pairingStatusLookup.statusForStore(storeId)}
     {...showLocalUnlock && !newVaultOpen && showSentinelCeremony
@@ -775,180 +973,8 @@
           {onUseEnrollmentCode}
         />
       {:else if !showCreateVault && !sentinelInvitationRequest.trim()}
-        {#if showAccessSheet}
-          <section
-            class="nk-frame-sheet min-w-0"
-            data-testid="login-access-sheet"
-          >
-            <header class="border-b border-border px-5 pb-4 pt-5 sm:px-6">
-              <div class="space-y-1">
-                <h2
-                  class="text-lg font-semibold tracking-tight text-foreground"
-                >
-                  {#if showSentinelCeremony && !showSetup && !showProviderSetup}
-                    {vault.t(I18N_KEYS.LoginUnlockVault)}
-                  {:else if showSetup}
-                    {(() => {
-                      const tArgs: Parameters<typeof vault.t>[0] = {
-                        key: I18N_KEYS.OnboardingConnectTo,
-                        replacements: {
-                          provider: setupIs('github')
-                            ? 'GitHub'
-                            : setupIs('local-folder')
-                              ? vault.t(I18N_KEYS.ProviderPickerLocalFolder)
-                              : vault.t(I18N_KEYS.OnboardingLocalStorage),
-                        },
-                      }
-                      return vault.t(tArgs)
-                    })()}
-                  {:else if addProviderOpen}
-                    {vault.t(I18N_KEYS.OnboardingAddProvider)}
-                  {:else if vault.loginRequiresExistingVault}
-                    {vault.t(I18N_KEYS.FirstRunRestoreTitle)}
-                  {:else}
-                    {vault.t(I18N_KEYS.OnboardingSetupStorage)}
-                  {/if}
-                </h2>
-                {#if isUnlocking}
-                  <p class="text-sm text-pretty text-muted-foreground">
-                    {vault.t(I18N_KEYS.LoginUnlocking)}
-                  </p>
-                {:else if showSetup && setupIs('github')}
-                  <p class="text-sm text-pretty text-muted-foreground">
-                    {vault.t(I18N_KEYS.OnboardingGithubDescription)}
-                  </p>
-                {:else if showSetup}
-                  <p class="text-sm text-pretty text-muted-foreground">
-                    {vault.t(I18N_KEYS.OnboardingLocalDescription)}
-                  </p>
-                {:else if addProviderOpen}
-                  <p class="text-sm text-pretty text-muted-foreground">
-                    {vault.t(I18N_KEYS.OnboardingAnotherProvider)}
-                  </p>
-                {/if}
-              </div>
-            </header>
-
-            <div class="px-5 pb-5 pt-4 sm:px-6 sm:pb-6">
-              {#if showSentinelCeremony && !showSetup && !showProviderSetup}
-                <SentinelCeremonyPanel
-                  {vault}
-                  {isVerifying}
-                  {isInitializing}
-                  {...sentinelCeremonyOptionalProps}
-                />
-              {:else if showSetup}
-                {#if setupIs('oauth-file')}
-                  <OAuthProviderSetupWizard
-                    {vault}
-                    bind:githubRepo
-                    idPrefix="login"
-                    preset={oauthPreset}
-                    {isVerifying}
-                    {isInitializing}
-                    {onCancelSetup}
-                    onConnect={onUnlock}
-                  />
-                {:else if setupIs('github')}
-                  <GitHubProviderSetupWizard
-                    {vault}
-                    bind:githubPat
-                    bind:githubRepo
-                    idPrefix="login"
-                    {isVerifying}
-                    {isInitializing}
-                    connectDisabled={vault.clientPolicy.remote_recovery_prompt_visible(
-                      vault.remoteVaultRecoveryState,
-                    )}
-                    {onCancelSetup}
-                    onConnect={onUnlock}
-                  >
-                    {#snippet beforeConnect()}
-                      {#if vault.clientPolicy.remote_recovery_prompt_visible(vault.remoteVaultRecoveryState)}
-                        <RemoteVaultRecoveryPanel
-                          {vault}
-                          state={vault.remoteVaultRecoveryState}
-                          isBusy={isVerifying}
-                          onRecover={() => vault.confirmRecoverRemoteVault()}
-                          onCreateFresh={() =>
-                            vault.confirmCreateFreshRemoteVault()}
-                          onDismiss={() => {
-                            const cleared = vault.clearRemoteVaultRecovery()
-                            if (cleared.isErr())
-                              vault.errorMsg = vault.t(
-                                cleared.error.translationKey,
-                              )
-                          }}
-                        />
-                      {/if}
-                    {/snippet}
-                  </GitHubProviderSetupWizard>
-                {:else if setupIs('local-folder')}
-                  <LocalFolderProviderSetupWizard
-                    {vault}
-                    idPrefix="login"
-                    {isVerifying}
-                    {isInitializing}
-                    {onCancelSetup}
-                    onConnect={onUnlock}
-                  />
-                {:else}
-                  <form
-                    novalidate
-                    onsubmit={handleFirstConnectSubmit}
-                    class="space-y-4"
-                  >
-                    <ProviderSetupFields {vault} {onCancelSetup} />
-                    <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
-                      <Button
-                        type="submit"
-                        class="sm:min-w-[180px]"
-                        data-testid="connect-provider-btn"
-                        disabled={!setupCanConnect}
-                      >
-                        {#if isInitializing}
-                          <RefreshCw class="size-4 animate-spin" />
-                          {vault.t(I18N_KEYS.OnboardingLoadingEngine)}
-                        {:else if isVerifying}
-                          <RefreshCw class="size-4 animate-spin" />
-                          {vault.t(I18N_KEYS.CommonConnecting)}
-                        {:else}
-                          <ShieldCheck class="size-4" />
-                          {vault.t(I18N_KEYS.CommonConnect)}
-                        {/if}
-                      </Button>
-                    </div>
-                  </form>
-                {/if}
-              {:else if showProviderSetup}
-                {#if (showProviderSetupLink || !vault.localVaultPresent) && !addProviderOpen}
-                  <button
-                    type="button"
-                    class="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-                    data-testid="login-back-to-get-started"
-                    onclick={() => {
-                      vault.cancelExistingVaultOpen()
-                      showProviderSetupLink = false
-                      firstScreenRequested = true
-                    }}
-                  >
-                    <ArrowLeft class="size-4" />
-                    {vault.t(I18N_KEYS.FirstRunBack)}
-                  </button>
-                {/if}
-                <LoginProviderManagement
-                  {vault}
-                  variant={LoginProviderManagementVariant.Setup}
-                  {providers}
-                  {isVerifying}
-                  {isInitializing}
-                  addingProvider={addProviderOpen}
-                  {...providerManagementOptionalProps}
-                  {onBeginSetup}
-                />
-              {/if}
-            </div>
-          </section>
+        {#if showAccessSheet && !accessBesideCard}
+          {@render accessSheet(true)}
         {/if}
       {/if}
     </div>

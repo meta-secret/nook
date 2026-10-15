@@ -88,4 +88,8 @@ export class VaultUiState {
   /** The vault opened beside its identity card. It stays open while the
    * vault unlocks, so unlocking does not go into the vault by itself. */
   vaultPanelStoreId = $state("");
+  /** Importing a vault from a sync provider ("Import from sync provider"
+   * under New vault). The unlocked workspace sets it before locking, so
+   * the locked identities page continues the import on the card. */
+  vaultImportOpen = $state(false);
 }

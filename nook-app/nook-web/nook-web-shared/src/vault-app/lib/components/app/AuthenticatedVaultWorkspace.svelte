@@ -308,6 +308,15 @@ band, the scrolling page and the status line.
     vault.lockVault()
   }
 
+  /** "Import from sync provider" under New vault. Bringing a vault in from
+   * a provider is the locked page's restore, so the identity locks and
+   * that page continues it beside the card. */
+  function importVaultFromProvider(): void {
+    newVaultOpen = false
+    vault.vaultImportOpen = true
+    vault.lockVault()
+  }
+
   /** One of a vault's own pages from its panel beside the card: another
    * vault of this identity is switched to first. */
   async function manageVault(target: IdentitySectionTarget): Promise<void> {
@@ -384,8 +393,8 @@ band, the scrolling page and the status line.
     {vault}
     isVerifying={vault.isVerifying}
     isInitializing={vault.isInitializing}
-    importable={false}
     onCreateVault={createVaultFromCard}
+    onImportVault={importVaultFromProvider}
     onClose={() => (newVaultOpen = false)}
   />
 {/snippet}
@@ -534,6 +543,7 @@ band, the scrolling page and the status line.
       onOpenVault={(storeId: string) => void openVaultFromCard(storeId)}
       onUnlockVault={(storeId: string) => void vault.switchToVault(storeId)}
       onNewVault={() => (newVaultOpen = true)}
+      onClosePanels={() => (newVaultOpen = false)}
       {...newVaultOpen ? { vaultSetup: newVaultPanel } : {}}
       vaultSetupOpen={newVaultOpen}
       onNewIdentity={newIdentity}

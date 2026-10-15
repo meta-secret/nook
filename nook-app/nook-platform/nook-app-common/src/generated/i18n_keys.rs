@@ -2389,6 +2389,7 @@ pub const WORKSPACE_VAULT_PANEL_KEY_DORMANT: &str = "workspace.vault_panel_key_d
 pub const WORKSPACE_VAULT_PANEL_MANAGE: &str = "workspace.vault_panel_manage";
 pub const WORKSPACE_VAULT_PANEL_MANAGE_LOCKED: &str = "workspace.vault_panel_manage_locked";
 pub const WORKSPACE_VAULT_PANEL_OPEN: &str = "workspace.vault_panel_open";
+pub const WORKSPACE_VAULT_PANEL_OPEN_HINT: &str = "workspace.vault_panel_open_hint";
 pub const WORKSPACE_VAULT_PANEL_OR_PASSPHRASE: &str = "workspace.vault_panel_or_passphrase";
 pub const WORKSPACE_VAULT_PANEL_PASSPHRASES_HINT: &str = "workspace.vault_panel_passphrases_hint";
 pub const WORKSPACE_VAULT_PANEL_READING: &str = "workspace.vault_panel_reading";

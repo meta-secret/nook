@@ -46,6 +46,7 @@ const uiKeys = [
   "newIdentity",
   "newIdentityName",
   "vaultPanelStoreId",
+  "vaultImportOpen",
 ] as const satisfies readonly (keyof VaultUiState)[];
 
 const providerKeys = [
@@ -211,6 +212,7 @@ class VaultStateSlicesImplementation {
   declare newIdentity: VaultUiState["newIdentity"];
   declare newIdentityName: VaultUiState["newIdentityName"];
   declare vaultPanelStoreId: VaultUiState["vaultPanelStoreId"];
+  declare vaultImportOpen: VaultUiState["vaultImportOpen"];
 
   declare providers: VaultProviderState["providers"];
   declare providersLoaded: VaultProviderState["providersLoaded"];

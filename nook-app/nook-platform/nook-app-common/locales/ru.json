@@ -1920,6 +1920,7 @@
     "passphrase_unlock_placeholder": "Введите парольную фразу",
     "passphrase_node": "Парольная фраза",
     "vault_panel_open": "Открыть сейф",
+    "vault_panel_open_hint": "Просмотр и изменение секретов",
     "vault_panel_unlock_passkey": "Разблокировать ключом доступа",
     "vault_panel_unlock_pin": "Разблокировать PIN-кодом",
     "vault_panel_or_passphrase": "или парольной фразой",

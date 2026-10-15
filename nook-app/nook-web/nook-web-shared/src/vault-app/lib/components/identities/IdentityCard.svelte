@@ -57,6 +57,7 @@ card, which then spans the full row.
     onOpenVault,
     onNewVault = () => {},
     onSelectVault,
+    onClosePanels = () => {},
     onUnlockVault,
     onManageVault,
     onLock = () => {},
@@ -88,6 +89,9 @@ card, which then spans the full row.
     /** A vault row was opened beside the card: a locked browser selects
      * that vault, which reads its passphrases. */
     onSelectVault?: (storeId: string) => void
+    /** Close what the page opened beside the card (New vault, an import)
+     * when another panel opens here. */
+    onClosePanels?: () => void
     /** Unlock a vault from its panel and stay on the card; Open vault in
      * the panel then goes in. */
     onUnlockVault?: (storeId: string) => void
@@ -137,19 +141,30 @@ card, which then spans the full row.
   }
 
   /** Overview and Manage share the space beside the card: one at a time. */
-  function toggleOverview(): void {
+  /** One panel beside the card at a time: opening one closes the rest,
+   * including what the page opened there (New vault, an import). */
+  function closeOthers(): void {
     menuOpen = false
     vault.vaultPanelStoreId = ''
-    onManageSection?.(
-      overviewOpen ? WorkspaceSection.Identities : WorkspaceSection.Overview,
-    )
+    if (overviewOpen) onManageSection?.(WorkspaceSection.Identities)
+    onClosePanels()
+  }
+
+  function toggleOverview(): void {
+    const opening = !overviewOpen
+    closeOthers()
+    if (opening) onManageSection?.(WorkspaceSection.Overview)
   }
 
   function toggleManage(): void {
-    if (!menuOpen && overviewOpen)
-      onManageSection?.(WorkspaceSection.Identities)
-    vault.vaultPanelStoreId = ''
-    menuOpen = !menuOpen
+    const opening = !menuOpen
+    closeOthers()
+    menuOpen = opening
+  }
+
+  function openNewVault(): void {
+    closeOthers()
+    onNewVault()
   }
 
   /** A vault opened beside the card from its row: how to get in, and
@@ -165,8 +180,7 @@ card, which then spans the full row.
       vault.vaultPanelStoreId = ''
       return
     }
-    menuOpen = false
-    if (overviewOpen) onManageSection?.(WorkspaceSection.Identities)
+    closeOthers()
     vault.vaultPanelStoreId = storeId
     onSelectVault?.(storeId)
   }
@@ -449,7 +463,7 @@ card, which then spans the full row.
               class="nk-vault-row nk-vault-row-add text-muted-foreground hover:text-foreground"
               data-testid="identity-new-vault"
               disabled={busy}
-              onclick={onNewVault}
+              onclick={openNewVault}
             >
               <span class="nk-vault-icon" aria-hidden="true">
                 <Plus class="size-4" />

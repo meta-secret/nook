@@ -49,6 +49,7 @@ join) sit between the hero and the cards.
     onNewIdentity,
     onUseIdentity,
     onCardsShown = () => {},
+    onClosePanels = () => {},
     currentHealthNote = '',
     onHealth = () => {},
     onAddDevice,
@@ -67,6 +68,7 @@ join) sit between the hero and the cards.
     vaultSetup,
     vaultSetupOpen = false,
     vaultPicker,
+    accessPanel,
     children,
   }: {
     vault: VaultState
@@ -90,6 +92,9 @@ join) sit between the hero and the cards.
     /** Whether identity cards are on screen; the login screen then leaves
      * vault access to them instead of its own storage sheet. */
     onCardsShown?: (shown: boolean) => void
+    /** Close what the page opened beside a card (New vault, an import)
+     * when another panel opens there. */
+    onClosePanels?: () => void
     /** What the unlocked identity lacks, shown as a chip on its card. */
     currentHealthNote?: string
     /** Open the unlocked identity's control page at its next step. */
@@ -124,6 +129,9 @@ join) sit between the hero and the cards.
     vaultSetupOpen?: boolean
     /** Plain vault list, shown only when no identity card lists the vaults. */
     vaultPicker?: Snippet
+    /** Storage setup or a restore from a sync provider, beside the current
+     * card. */
+    accessPanel?: Snippet
     children?: Snippet
   } = $props()
 
@@ -479,13 +487,19 @@ join) sit between the hero and the cards.
             {...onSelectVault ? { onSelectVault } : {}}
             {...onUnlockVault ? { onUnlockVault } : {}}
             {...onManageVault ? { onManageVault } : {}}
-            {...vaultSetup && setupShown && card.identityId === setupIdentityId
-              ? { unlockPanel: vaultSetup }
-              : identityPrompt && card.current
-                ? { unlockPanel: identityPrompt }
-                : unlockPanel && card.identityId === unlockingIdentityId
-                  ? { unlockPanel }
-                  : {}}
+            onClosePanels={() => {
+              setupOpen = false
+              onClosePanels()
+            }}
+            {...accessPanel && card.current
+              ? { unlockPanel: accessPanel }
+              : vaultSetup && setupShown && card.identityId === setupIdentityId
+                ? { unlockPanel: vaultSetup }
+                : identityPrompt && card.current
+                  ? { unlockPanel: identityPrompt }
+                  : unlockPanel && card.identityId === unlockingIdentityId
+                    ? { unlockPanel }
+                    : {}}
             {...passwordFallback &&
             card.identityId === passwordIdentityId &&
             !(setupShown && card.identityId === setupIdentityId)

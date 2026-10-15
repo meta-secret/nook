@@ -1920,6 +1920,7 @@
     "passphrase_unlock_placeholder": "Type the passphrase",
     "passphrase_node": "Passphrase",
     "vault_panel_open": "Open vault",
+    "vault_panel_open_hint": "See and edit its secrets",
     "vault_panel_unlock_passkey": "Unlock with passkey",
     "vault_panel_unlock_pin": "Unlock with PIN",
     "vault_panel_or_passphrase": "or use a passphrase",
