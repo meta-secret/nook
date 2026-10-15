@@ -398,12 +398,12 @@ impl NookVaultManager {
         &mut self,
         handle_id: &str,
     ) -> Result<String, JsError> {
-        self.sync_local_folder_provider(handle_id, nook_core::ProviderRowLayout::LegacyVaultRoot)
+        self.sync_local_folder_provider(handle_id)
             .await
             .map_err(Into::into)
     }
 
-    /// Sync one saved local-folder row at the namespace its layout selects.
+    /// Sync one saved local-folder row.
     #[wasm_bindgen]
     pub async fn sync_local_folder_provider_row_js(
         &mut self,
@@ -419,7 +419,7 @@ impl NookVaultManager {
         let nook_core::StoredLocalFolderHandle::HandleId(handle_id) = &config.handle_id else {
             return Err(JsError::new("Local folder provider has no folder."));
         };
-        self.sync_local_folder_provider(handle_id, provider.layout)
+        self.sync_local_folder_provider(handle_id)
             .await
             .map_err(Into::into)
     }

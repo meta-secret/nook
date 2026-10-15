@@ -216,12 +216,9 @@ impl CloudKitErrorBody<'_> {
 }
 
 impl ICloudEventStore<'_> {
-    /// The namespace tag every record of this store carries. iCloud keeps
-    /// only namespaced logs.
-    fn namespace(&self) -> Result<String, NookError> {
-        self.location.namespace_tag().ok_or_else(|| {
-            NookError::ICloud("iCloud keeps only identity and vault logs.".to_owned())
-        })
+    /// The namespace tag every record of this store carries.
+    fn namespace(&self) -> String {
+        self.location.namespace_tag()
     }
 
     /// One record per event and log: the same event id never collides
@@ -312,7 +309,7 @@ impl ICloudEventStore<'_> {
         let web_auth_token = self.web_auth_token;
         let target = self.target;
         let token = nook_core::OauthAccessToken::parse(web_auth_token)?;
-        let namespace = self.namespace()?;
+        let namespace = self.namespace();
         let client = Client::new();
         let mut event_ids = Vec::new();
         let mut continuation_marker = QueryContinuation::FirstPage;
@@ -403,7 +400,7 @@ impl ICloudEventStore<'_> {
         let web_auth_token = self.web_auth_token;
         let target = self.target;
         let token = nook_core::OauthAccessToken::parse(web_auth_token)?;
-        let record_name = Self::icloud_event_record_name(&self.namespace()?, event_id);
+        let record_name = Self::icloud_event_record_name(&self.namespace(), event_id);
         tracing::info!(
             scope = "wasm-icloud",
             event_id = event_id.as_str(),
@@ -602,7 +599,7 @@ impl ICloudEventStore<'_> {
         let target = self.target;
         let event_id = checked.event_id();
         let bytes = checked.bytes();
-        let namespace = self.namespace()?;
+        let namespace = self.namespace();
         let record_name = Self::icloud_event_record_name(&namespace, event_id);
         tracing::info!(
             scope = "wasm-icloud",

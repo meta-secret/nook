@@ -1,11 +1,10 @@
 //! Signed-share admission followed by provider snapshot decryption.
+use super::provider_payload::ProviderRowPayload;
 use super::{AcceptedSentinelOnboarding, OnboardingDelivery, SentinelOnboardingPackage};
-use crate::NormalizedAuthSnapshot;
 use crate::{
-    ActiveVaultScope, CheckedSentinelGenesisDelivery, DeviceIdentity, MultiDeviceError,
-    SentinelGenesisDeliveryRecipient, StoredSecretRecord,
+    ActiveVaultScope, AuthProvidersSnapshotData, CheckedSentinelGenesisDelivery, DeviceIdentity,
+    MultiDeviceError, ProviderVaultScope, SentinelGenesisDeliveryRecipient, StoredSecretRecord,
 };
-use zeroize::Zeroizing;
 
 /// Exact package and recipient observations for a consuming admission attempt.
 /// ```compile_fail
@@ -61,13 +60,15 @@ impl CheckedOnboardingRecipient<'_> {
             recipient: SentinelOnboardingRecipient { package, identity },
             share_record,
         } = self;
-        let provider_json = Zeroizing::new(identity.open_utf8(&package.provider_snapshot)?);
-        let provider_storage: serde_json::Value = serde_json::from_str(&provider_json)
-            .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
-        let mut provider_snapshot = NormalizedAuthSnapshot::from(provider_storage).snapshot;
-        provider_snapshot.validate_onboarding(package.delivery.store_id.as_str())?;
-        provider_snapshot.active_vault_store_id =
-            ActiveVaultScope::StoreId(package.delivery.store_id.to_string());
+        let payload = identity.open_bytes(&package.provider_snapshot)?;
+        let mut provider = ProviderRowPayload::decode(&payload)?;
+        provider.onboarding_cloud_mount()?;
+        // A cloud mount belongs to the identity, not to one vault.
+        provider.store_id = ProviderVaultScope::Unscoped;
+        let provider_snapshot = AuthProvidersSnapshotData {
+            providers: vec![provider],
+            active_vault_store_id: ActiveVaultScope::StoreId(package.delivery.store_id.to_string()),
+        };
         Ok(AcceptedSentinelOnboarding {
             share_record,
             provider_snapshot,

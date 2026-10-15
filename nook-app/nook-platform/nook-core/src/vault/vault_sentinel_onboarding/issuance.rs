@@ -1,11 +1,10 @@
 //! Structural issuance admission followed by recipient encryption.
+use super::provider_payload::ProviderRowPayload;
 use super::{OnboardingDelivery, SentinelOnboardingPackage, SentinelOnboardingVersion};
-use crate::ProviderVaultScope;
 use crate::{
     AuthProvidersSnapshotData, MultiDeviceError, SentinelGenesisRequest,
-    SentinelGenesisShareDelivery, StorageProviderType,
+    SentinelGenesisShareDelivery, StorageProviderData, StorageProviderType,
 };
-use zeroize::Zeroizing;
 
 /// Inputs for one structurally admitted package. This does not verify delivery signatures.
 /// ```compile_fail
@@ -38,8 +37,7 @@ impl<'a> SentinelOnboardingIssuance<'a> {
             delivery: &self.delivery,
         }
         .check()?;
-        self.provider_snapshot
-            .validate_onboarding(self.delivery.store_id.as_str())?;
+        self.provider_snapshot.onboarding_provider()?;
         Ok(PreparedOnboardingIssuance { input: self })
     }
 }
@@ -50,14 +48,8 @@ impl PreparedOnboardingIssuance<'_> {
             delivery,
             provider_snapshot,
         } = self.input;
-        // Keep the encrypted package within the QR budget while retaining semantic
-        // enums in memory. The schema-1 projection is also readable after rollback.
-        let provider_storage = provider_snapshot.legacy_storage_snapshot();
-        let provider_json = Zeroizing::new(
-            serde_json::to_vec(&provider_storage)
-                .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?,
-        );
-        let provider_snapshot = delivery.encryption_public_key.seal_bytes(&provider_json)?;
+        let payload = ProviderRowPayload::encode(provider_snapshot.onboarding_provider()?)?;
+        let provider_snapshot = delivery.encryption_public_key.seal_bytes(&payload)?;
         Ok(SentinelOnboardingPackage {
             version: SentinelOnboardingVersion::CURRENT,
             request,
@@ -67,23 +59,22 @@ impl PreparedOnboardingIssuance<'_> {
     }
 }
 impl AuthProvidersSnapshotData {
-    pub(super) fn validate_onboarding(&self, store_id: &str) -> Result<(), MultiDeviceError> {
-        let snapshot = self;
-
-        if snapshot.providers.len() != 1 {
-            return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
+    /// The one cloud mount an onboarding package hands to the new member.
+    fn onboarding_provider(&self) -> Result<&StorageProviderData, MultiDeviceError> {
+        match self.providers.as_slice() {
+            [provider] => provider.onboarding_cloud_mount(),
+            _ => Err(MultiDeviceError::InvalidSentinelGenesisPayload),
         }
-        let Some(provider) = snapshot.providers.first() else {
-            return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
-        };
-        if matches!(
-            provider.provider_type,
-            StorageProviderType::Local | StorageProviderType::LocalFolder
-        ) || !matches!(&provider.store_id, ProviderVaultScope::StoreId(id) if id == store_id)
-        {
-            return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
+    }
+}
+impl StorageProviderData {
+    pub(super) fn onboarding_cloud_mount(&self) -> Result<&Self, MultiDeviceError> {
+        match self.provider_type {
+            StorageProviderType::Github | StorageProviderType::OauthFile => Ok(self),
+            StorageProviderType::Local | StorageProviderType::LocalFolder => {
+                Err(MultiDeviceError::InvalidSentinelGenesisPayload)
+            }
         }
-        Ok(())
     }
 }
 
@@ -91,9 +82,7 @@ impl AuthProvidersSnapshotData {
 mod tests {
     use super::super::tests::OnboardingFixture;
     use super::SentinelOnboardingIssuance;
-    use crate::{
-        AuthProvidersSnapshotData, MultiDeviceError, ProviderVaultScope, StorageProviderType,
-    };
+    use crate::{AuthProvidersSnapshotData, MultiDeviceError, StorageProviderType};
     use std::ptr;
 
     #[test]
@@ -121,7 +110,7 @@ mod tests {
     }
 
     #[test]
-    fn provider_admission_enforces_count_type_and_exact_store() -> anyhow::Result<()> {
+    fn provider_admission_enforces_one_cloud_mount() -> anyhow::Result<()> {
         let fixture = OnboardingFixture::new()?;
         let mut duplicate = fixture.snapshot.clone();
         let Some(provider) = duplicate.providers.first().cloned() else {
@@ -138,18 +127,11 @@ mod tests {
             anyhow::bail!("onboarding fixture must contain one provider");
         };
         folder_provider.provider_type = StorageProviderType::LocalFolder;
-        let mut wrong_store = fixture.snapshot.clone();
-        let Some(wrong_store_provider) = wrong_store.providers.first_mut() else {
-            anyhow::bail!("onboarding fixture must contain one provider");
-        };
-        wrong_store_provider.store_id =
-            ProviderVaultScope::StoreId(format!(" {} ", fixture.delivery.store_id));
         for snapshot in [
             AuthProvidersSnapshotData::default(),
             duplicate,
             local,
             folder,
-            wrong_store,
         ] {
             assert!(matches!(
                 SentinelOnboardingIssuance {

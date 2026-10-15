@@ -22,15 +22,10 @@ mod draft_connection;
 pub use draft_connection::{
     DraftStorageConnection, GithubStorageDraft, OAuthStorageDraft, VaultStorageConnection,
 };
-mod wire;
-pub use wire::ProviderWireMigration;
 mod enrollment;
 mod identity_mounts;
-pub use identity_mounts::{
-    DeviceJoinReach, IdentityMountCapability, LayoutRemoteRef, ProviderReplicationTarget,
-};
-mod legacy_storage;
-pub use legacy_storage::LegacyAuthProvidersSnapshot;
+mod wire;
+pub use identity_mounts::{DeviceJoinReach, IdentityMountCapability, ProviderReplicationTarget};
 mod oauth;
 mod save;
 mod scope;
@@ -43,7 +38,6 @@ pub use staged_connection::{
     StagedGithubConnection, StagedOAuthConnection, StagedRemoteConnection, StagedStorageConnection,
 };
 mod state;
-mod state_storage;
 mod storage_args;
 mod sync_metadata;
 
@@ -270,8 +264,6 @@ pub struct StorageProvider {
     pub store_id: ProviderVaultScope,
     #[serde(default)]
     pub sync_checkpoint: ProviderSyncCheckpoint,
-    #[serde(default)]
-    pub layout: ProviderRowLayout,
     pub created_at: String,
 }
 
@@ -287,7 +279,6 @@ impl StorageProvider {
             oauth_file: StoredOAuthFileConfiguration::NotApplicable,
             local_folder: StoredLocalFolderConfiguration::NotApplicable,
             store_id: ProviderVaultScope::Unscoped,
-            layout: crate::ProviderRowLayout::LegacyVaultRoot,
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: created_at.to_owned(),
         }
@@ -305,14 +296,6 @@ pub struct AuthProvidersSnapshot {
 }
 
 pub type AuthProvidersSnapshotData = AuthProvidersSnapshot;
-
-/// Owned wire admission with an explicit migration observation.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NormalizedAuthSnapshot {
-    pub snapshot: AuthProvidersSnapshot,
-    pub migration: ProviderWireMigration,
-}
 
 #[cfg(test)]
 #[allow(clippy::unnecessary_wraps)]
@@ -337,7 +320,6 @@ mod tests {
             oauth_file: StoredOAuthFileConfiguration::NotApplicable,
             local_folder: StoredLocalFolderConfiguration::NotApplicable,
             store_id: ProviderVaultScope::Unscoped,
-            layout: crate::ProviderRowLayout::LegacyVaultRoot,
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: "2026-06-24T00:00:00.000Z".to_owned(),
         }

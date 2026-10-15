@@ -513,9 +513,7 @@ export class VaultProviderActions {
     });
     if (loaded.isErr()) return storageErr(loaded.error);
     const snapshot = loaded.value;
-    state.providers = snapshot.providers.map((p) =>
-      p.label === "GitHub sync" ? { ...p, label: "GitHub" } : p,
-    );
+    state.providers = snapshot.providers;
     if (state.selectedLoginVault.kind === LoginVaultSelectionKind.Selected) {
       state.openActiveVault(state.selectedLoginVault.storeId);
     } else if (snapshot.activeVaultStoreId.state === "storeId") {
@@ -656,10 +654,6 @@ export class VaultProviderActions {
       state.resetVaultSessionState();
     }
     state.addProviderOpen = true;
-    // Providers added while signed in are mounted on the identity.
-    state.providerSaveLayout = state.isAuthenticated
-      ? "identityNamespaced"
-      : "legacyVaultRoot";
     state.clearLoginSetup();
     state.errorMsg = "";
   }
@@ -668,7 +662,6 @@ export class VaultProviderActions {
     const state = this.state;
     this.resetICloudSignInState();
     state.addProviderOpen = false;
-    state.providerSaveLayout = "legacyVaultRoot";
     state.providerSaveTarget = "fresh";
     state.clearLoginSetup();
     state.clearExistingVaultRecoverySummary();
@@ -679,6 +672,7 @@ export class VaultProviderActions {
   cancelProviderSetup() {
     const state = this.state;
     this.resetICloudSignInState();
+    state.remoteVaultChoices = [];
     if (
       state.addProviderOpen &&
       state.loginSetup.kind === LoginSetupKind.Active
@@ -844,7 +838,6 @@ export class ProviderPersistenceActions {
       localFolder,
       newProviderId: generate_id(),
       createdAt: isoTimestamp(),
-      layout: state.providerSaveLayout,
       remoteTarget: state.providerSaveTarget,
     };
     const outcome = apply_provider_save_policy(request);
@@ -882,7 +875,6 @@ export class ProviderPersistenceActions {
       }
       state.clearLoginSetup();
       state.loginRequiresExistingVault = false;
-      state.providerSaveLayout = "legacyVaultRoot";
       state.providerSaveTarget = "fresh";
       state.addProviderOpen = false;
       state.applyActiveProviderCredentials();

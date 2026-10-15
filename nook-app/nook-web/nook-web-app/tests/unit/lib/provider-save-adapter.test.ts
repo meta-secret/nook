@@ -57,7 +57,6 @@ type AdapterState = Omit<
 function providerState(providerType: StorageProviderType): AdapterState {
   return {
     providers: [],
-    providerSaveLayout: 'legacyVaultRoot',
     providerSaveTarget: 'fresh',
     activeVault: { kind: ActiveVaultKind.Open, storeId: 'vault-1' },
     hasActiveVaultStore: true,

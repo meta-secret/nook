@@ -8,6 +8,7 @@ use nook_core::VaultEvent;
 impl NookVaultManager {
     pub(super) fn export_event_records_from_store(
         store: &nook_core::LocalEventStore,
+        location: &nook_core::EventLogLocation,
     ) -> Result<Vec<EventLogStorageRecord>, NookError> {
         let mut records = Vec::new();
         for event_id in store.event_ids() {
@@ -23,7 +24,7 @@ impl NookVaultManager {
             let event = VaultEvent::parse_event_storage_bytes(&bytes)?;
             records.push(EventLogStorageRecord {
                 event_id: event_id.as_str().to_owned(),
-                path: event_id.storage_path(),
+                path: location.event_path(&event_id),
                 event,
             });
         }
@@ -37,6 +38,6 @@ impl NookVaultManager {
             return Ok(Vec::new());
         }
         let store = NookDatabase::load_local_event_store(&self.vault.store_id).await?;
-        Self::export_event_records_from_store(&store)
+        Self::export_event_records_from_store(&store, &self.current_vault_location()?)
     }
 }

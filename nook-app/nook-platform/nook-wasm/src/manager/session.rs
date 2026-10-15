@@ -2,10 +2,10 @@ use super::companion_protocol::PendingCompanionWebsiteHandoff;
 use super::device_protection::ExtensionIdentityPublication;
 use crate::ConfiguredVaultApplication;
 use nook_core::{
-    DriveEventParent, EventGraph, EventLogLocation, ICloudEventTarget, ProviderRowLayout,
-    SentinelConfiguration, SentinelGenesisPhase, SentinelPolicy, StorageMode, StoreId,
-    StoredSecretRecord, VaultArchitecture, VaultMetaGraphProjection, VaultMetaState,
-    VaultProjection, VaultSessionProjection, VaultType, VaultUnlock, VaultUserRecordBatch,
+    DriveEventParent, EventGraph, EventLogLocation, ICloudEventTarget, SentinelConfiguration,
+    SentinelGenesisPhase, SentinelPolicy, StorageMode, StoreId, StoredSecretRecord,
+    VaultArchitecture, VaultMetaGraphProjection, VaultMetaState, VaultProjection,
+    VaultSessionProjection, VaultType, VaultUnlock, VaultUserRecordBatch,
 };
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -15,10 +15,18 @@ use zeroize::{Zeroize, Zeroizing};
 
 use crate::{NookError, NookEventLogSyncIssue};
 
+/// The vault a provider import should open when the provider holds several.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(in crate::manager) enum ChosenProviderVault {
+    #[default]
+    Unchosen,
+    Chosen(StoreId),
+}
+
 pub(in crate::manager) struct StorageSession {
     pub(in crate::manager) mode: nook_core::StorageMode,
-    /// Remote layout of the prepared provider row.
-    pub(in crate::manager) layout: ProviderRowLayout,
+    /// The vault to open when the prepared provider holds several.
+    pub(in crate::manager) chosen_vault: ChosenProviderVault,
     /// Resolved Drive child folders for namespaced event logs.
     pub(in crate::manager) drive_namespaces: RefCell<BTreeMap<EventLogLocation, DriveEventParent>>,
     pub(in crate::manager) access_token: String,
@@ -50,10 +58,8 @@ impl StorageSession {
 }
 
 impl StorageSession {
-    /// Address a prepared provider row's layout and forget folder lookups
-    /// resolved for the previous row.
-    pub(in crate::manager) fn select_layout(&mut self, layout: ProviderRowLayout) {
-        self.layout = layout;
+    /// Forget folder lookups resolved for the previously prepared row.
+    pub(in crate::manager) fn forget_namespaces(&mut self) {
         self.drive_namespaces.get_mut().clear();
     }
 }
@@ -62,7 +68,7 @@ impl Default for StorageSession {
     fn default() -> Self {
         Self {
             mode: StorageMode::Local,
-            layout: ProviderRowLayout::LegacyVaultRoot,
+            chosen_vault: ChosenProviderVault::Unchosen,
             drive_namespaces: RefCell::default(),
             access_token: String::new(),
             remote_ref: String::new(),

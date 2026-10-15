@@ -30,7 +30,6 @@ enum PriorLocalAuthorizer {
     Unavailable,
     Authorized(nook_core::AppKey),
 }
-use crate::AuthProviderDatabase;
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use crate::IdbPutStringRequest;
 use crate::IdentityDbSaveNewProtectedLocalIdentity;
@@ -74,7 +73,6 @@ impl NookVaultManager {
                 } else {
                     PriorLocalAuthorizer::Authorized(self.device_identity()?)
                 };
-                AuthProviderDatabase::migrate_legacy_auth_providers_for_selected_identity().await?;
                 DeviceAccessProfileKey::selected().await?.migrate().await?;
                 NookDatabase::save_new_protected_local_identity(
                     IdentityDbSaveNewProtectedLocalIdentity {

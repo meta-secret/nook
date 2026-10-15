@@ -200,29 +200,6 @@ mod tests {
             reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
         )
     )]
-    async fn remote_store_discovery_drops_stale_vault_session_state() -> Result<(), JsError> {
-        let mut manager = NookVaultManager::new();
-        manager.vault.store_id = "store_stale12345".to_owned();
-        manager.vault.vault_name = VaultNameState::Named("Stale vault".to_owned());
-
-        let discovered = manager
-            .discover_remote_vault_store_id("local".to_owned(), String::new(), String::new())
-            .await?;
-
-        assert!(discovered.is_empty());
-        assert!(manager.vault.store_id.is_empty());
-        assert!(matches!(manager.vault.vault_name, VaultNameState::Unnamed));
-        Ok(())
-    }
-
-    #[wasm_bindgen_test]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            unowned_function,
-            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
-        )
-    )]
     async fn verified_connect_finalizes_paired_identity_handoff() -> Result<(), JsError> {
         NookDatabase::clear_identity_directory_for_test().await?;
         let authorizer = AppKey::generate()?;
@@ -658,25 +635,6 @@ impl NookVaultManager {
 
 #[wasm_bindgen]
 impl NookVaultManager {
-    /// Discover the single vault identity exposed by a staged sync provider
-    /// without requiring or decrypting a device identity. Hosts use this only
-    /// to bind an existing-vault import to an already-paired companion.
-    #[wasm_bindgen]
-    pub async fn discover_remote_vault_store_id(
-        &mut self,
-        storage_mode: String,
-        github_pat: String,
-        github_repo: String,
-    ) -> Result<String, JsError> {
-        self.reset_vault_session();
-        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
-            .await?;
-        if self.storage.mode != StorageMode::Local {
-            self.sync_events_from_current_provider().await?;
-        }
-        Ok(self.vault.store_id.clone())
-    }
-
     /// Return the typed, core-owned connect status for the selected provider.
     pub async fn assess_vault_connect(
         &mut self,

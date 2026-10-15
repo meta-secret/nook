@@ -392,4 +392,12 @@ impl AppKey {
     pub fn open_utf8(&self, ciphertext: &AgeArmoredCiphertext) -> MultiDeviceResult<String> {
         Self::open_identity_bytes(ciphertext, &self.identity)
     }
+
+    /// Open bytes sealed to this device's public key.
+    pub fn open_bytes(
+        &self,
+        ciphertext: &AgeArmoredCiphertext,
+    ) -> MultiDeviceResult<zeroize::Zeroizing<Vec<u8>>> {
+        Self::open_identity_raw_bytes(ciphertext, &self.identity)
+    }
 }

@@ -7,21 +7,15 @@
     dylint_lib = "nook_domain_api",
     forbid(invalid_unowned_function_suppression)
 )]
-#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
-use super as auth_providers;
-use super::rollback_projection;
-use super::{LEGACY_STORAGE_SCHEMA_VERSION, SCHEMA_KEY, STATE_KEY, STORAGE_SCHEMA_VERSION, STORE};
+use super::STORE;
 use crate::AuthProviderDatabase;
 use crate::NookError;
-use crate::ProviderDbLegacySnapshotBelongsToIdentity;
 use crate::ProviderDbReadRawSnapshotFromStore;
-use nook_core::NormalizedAuthSnapshot;
 use nook_core::{
     AppId, AuthProvidersSnapshotData, DeviceIdentity, ProviderCredentialStorageAdmission,
 };
 use rexie::{Store, Transaction, TransactionMode};
 use serde::Serialize;
-use serde_json::Value;
 use serde_wasm_bindgen::Serializer;
 
 /// Normal publication derives encrypted credentials before observing storage.
@@ -38,9 +32,6 @@ impl ProviderSnapshotPublication<'_> {
 
         let sealed = snapshot.sealed_credentials_projection(identity)?;
         let state_key = AuthProviderDatabase::state_key_for_app_id(identity.app_id());
-        let schema_key = AuthProviderDatabase::schema_key_for_app_id(identity.app_id());
-        let refresh_legacy =
-            AuthProviderDatabase::should_refresh_legacy_projection(identity.app_id()).await?;
         let rexie = AuthProviderDatabase::open_auth_db().await?;
         let transaction = rexie
             .transaction(&[STORE], TransactionMode::ReadWrite)
@@ -50,55 +41,12 @@ impl ProviderSnapshotPublication<'_> {
         let store = transaction.store(STORE).map_err(|e| {
             NookError::IndexedDb(format!("{}: {:?}", "nook_auth save store error", e))
         })?;
-        let scoped = AuthProviderDatabase::read_raw_snapshot_from_store(
-            ProviderDbReadRawSnapshotFromStore {
-                store: &store,
-                state_key: &state_key,
-            },
-        )
-        .await?;
-        let legacy = AuthProviderDatabase::read_raw_snapshot_from_store(
-            ProviderDbReadRawSnapshotFromStore {
-                store: &store,
-                state_key: STATE_KEY,
-            },
-        )
-        .await?;
-        let scoped = rollback_projection::ProviderSnapshotObservation::from(scoped);
-        let legacy = rollback_projection::ProviderSnapshotObservation::from(legacy);
-        let legacy_belongs_to_identity = AuthProviderDatabase::legacy_snapshot_belongs_to_identity(
-            ProviderDbLegacySnapshotBelongsToIdentity {
-                identity,
-                scoped: &scoped,
-                legacy: &legacy,
-            },
-        );
-        if refresh_legacy
-            && matches!(
-                legacy,
-                rollback_projection::ProviderSnapshotObservation::Present { .. }
-            )
-            && legacy_belongs_to_identity == rollback_projection::LegacyProjectionOwnership::Foreign
-        {
-            return Err(NookError::Database(
-                "Legacy auth providers belong to another identity; both records were preserved"
-                    .to_owned(),
-            ));
-        }
-        let refresh_legacy = refresh_legacy
-            || legacy_belongs_to_identity == rollback_projection::LegacyProjectionOwnership::Owned;
         Ok(PreparedProviderSnapshotWrite {
             database: rexie,
             transaction,
             store,
             state_key,
-            schema_key,
             snapshot: sealed,
-            legacy: if refresh_legacy {
-                LegacyProjectionWrite::Refresh
-            } else {
-                LegacyProjectionWrite::Preserve
-            },
             completion: PublicationCompletion::Normal,
         })
     }
@@ -123,8 +71,6 @@ impl PresealedProviderSnapshotPublication<'_> {
             ));
         }
         let state_key = AuthProviderDatabase::state_key_for_app_id(app_id);
-        let schema_key = AuthProviderDatabase::schema_key_for_app_id(app_id);
-        let migrate_legacy = AuthProviderDatabase::may_migrate_legacy_snapshot(app_id).await?;
         let rexie = AuthProviderDatabase::open_auth_db().await?;
         let transaction = rexie
             .transaction(&[STORE], TransactionMode::ReadWrite)
@@ -137,27 +83,14 @@ impl PresealedProviderSnapshotPublication<'_> {
         let store = transaction.store(STORE).map_err(|e| {
             NookError::IndexedDb(format!("{}: {:?}", "nook_auth presealed store error", e))
         })?;
-        let scoped = AuthProviderDatabase::read_raw_snapshot_from_store(
+        let raw = AuthProviderDatabase::read_raw_snapshot_from_store(
             ProviderDbReadRawSnapshotFromStore {
                 store: &store,
                 state_key: &state_key,
             },
         )
         .await?;
-        let legacy = if scoped.is_null() && migrate_legacy {
-            AuthProviderDatabase::read_raw_snapshot_from_store(ProviderDbReadRawSnapshotFromStore {
-                store: &store,
-                state_key: STATE_KEY,
-            })
-            .await?
-        } else {
-            Value::Null
-        };
-        let (raw, legacy_write) = match legacy {
-            Value::Null => (scoped, LegacyProjectionWrite::Preserve),
-            legacy => (legacy, LegacyProjectionWrite::Refresh),
-        };
-        let existing = NormalizedAuthSnapshot::from(raw).snapshot;
+        let existing = AuthProviderDatabase::decode_stored_snapshot(raw)?;
         if existing.credential_storage_admission()
             != ProviderCredentialStorageAdmission::MarkerCompatible
         {
@@ -171,16 +104,10 @@ impl PresealedProviderSnapshotPublication<'_> {
             transaction,
             store,
             state_key,
-            schema_key,
             snapshot: merged,
-            legacy: legacy_write,
             completion: PublicationCompletion::Presealed,
         })
     }
-}
-enum LegacyProjectionWrite {
-    Preserve,
-    Refresh,
 }
 enum PublicationCompletion {
     Normal,
@@ -205,9 +132,7 @@ struct PreparedProviderSnapshotWrite {
     transaction: Transaction,
     store: Store,
     state_key: String,
-    schema_key: String,
     snapshot: AuthProvidersSnapshotData,
-    legacy: LegacyProjectionWrite,
     completion: PublicationCompletion,
 }
 impl PreparedProviderSnapshotWrite {
@@ -217,27 +142,15 @@ impl PreparedProviderSnapshotWrite {
             transaction,
             store,
             state_key,
-            schema_key,
             snapshot,
-            legacy,
             completion,
         } = self;
         ProviderSnapshotStore {
             store: &store,
             state_key: &state_key,
-            schema_key: &schema_key,
         }
         .write(&snapshot)
         .await?;
-        if let LegacyProjectionWrite::Refresh = legacy {
-            ProviderSnapshotStore {
-                store: &store,
-                state_key: STATE_KEY,
-                schema_key: SCHEMA_KEY,
-            }
-            .write_legacy(&snapshot)
-            .await?;
-        }
         let result = transaction
             .done()
             .await
@@ -247,73 +160,32 @@ impl PreparedProviderSnapshotWrite {
         result
     }
 }
-/// Writes either the current identity-scoped schema-2 snapshot or the
-/// rollback-compatible schema-1 singleton projection.
+/// Writes one app key's provider snapshot.
 pub(super) struct ProviderSnapshotStore<'a> {
     pub(super) store: &'a Store,
     pub(super) state_key: &'a str,
-    pub(super) schema_key: &'a str,
 }
 impl ProviderSnapshotStore<'_> {
     pub(super) async fn write(self, snapshot: &AuthProvidersSnapshotData) -> Result<(), NookError> {
-        self.write_versioned(snapshot, STORAGE_SCHEMA_VERSION, false)
-            .await
-    }
-
-    pub(super) async fn write_legacy(
-        self,
-        snapshot: &AuthProvidersSnapshotData,
-    ) -> Result<(), NookError> {
-        self.write_versioned(snapshot, LEGACY_STORAGE_SCHEMA_VERSION, true)
-            .await
-    }
-
-    async fn write_versioned(
-        self,
-        snapshot: &AuthProvidersSnapshotData,
-        schema_version: u32,
-        legacy_projection: bool,
-    ) -> Result<(), NookError> {
-        let Self {
-            store,
-            state_key,
-            schema_key,
-        } = self;
-
+        let Self { store, state_key } = self;
         let key = serde_wasm_bindgen::to_value(state_key)
             .map_err(|e| NookError::IndexedDb(format!("{}: {:?}", "nook_auth key error", e)))?;
-        let value = if legacy_projection {
-            snapshot
-                .legacy_storage_snapshot()
-                .serialize(&Serializer::json_compatible())
-        } else {
-            snapshot.serialize(&Serializer::json_compatible())
-        }
-        .map_err(|e| NookError::IndexedDb(format!("{}: {:?}", "nook_auth serialize error", e)))?;
+        let value = snapshot
+            .serialize(&Serializer::json_compatible())
+            .map_err(|e| {
+                NookError::IndexedDb(format!("{}: {:?}", "nook_auth serialize error", e))
+            })?;
         store
             .put(&value, Some(&key))
             .await
             .map_err(|e| NookError::IndexedDb(format!("{}: {:?}", "nook_auth put error", e)))?;
-        let schema_key = serde_wasm_bindgen::to_value(schema_key)
-            .map_err(|e| NookError::IndexedDb(format!("{}: {:?}", "schema key error", e)))?;
-        let schema_value = serde_wasm_bindgen::to_value(&schema_version)
-            .map_err(|e| NookError::IndexedDb(format!("{}: {:?}", "schema version error", e)))?;
-        store
-            .put(&schema_value, Some(&schema_key))
-            .await
-            .map_err(|e| {
-                NookError::IndexedDb(format!("{}: {:?}", "schema version put error", e))
-            })?;
         Ok(())
     }
 }
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod tests {
-    use super::{
-        PresealedProviderSnapshotPublication, ProviderSnapshotPublication, STORAGE_SCHEMA_VERSION,
-        auth_providers,
-    };
+    use super::{PresealedProviderSnapshotPublication, ProviderSnapshotPublication};
     use crate::storage::identity_record;
     use crate::{
         AuthProviderDatabase, IdbPutStringRequest, NookDatabase, NookError,
@@ -323,7 +195,7 @@ mod tests {
     use nook_core::StoredGithubPat;
     use nook_core::{
         AGE_ARMOR_MARKER, ActiveVaultScope, AuthProvidersSnapshotData, DeviceIdentity,
-        NormalizedAuthSnapshot, ProviderCredentialStorageAdmission, StorageProviderData,
+        ProviderCredentialStorageAdmission, StorageProviderData, StorageProviderType,
     };
     use serde_json::Value;
     use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
@@ -354,15 +226,6 @@ mod tests {
         snapshot: AuthProvidersSnapshotData,
     }
     impl PublicationFixture {
-        async fn clear_legacy() -> anyhow::Result<()> {
-            AuthProviderDatabase::write_snapshot(&AuthProvidersSnapshotData {
-                providers: Vec::new(),
-                active_vault_store_id: ActiveVaultScope::Unselected,
-            })
-            .await?;
-            Ok(())
-        }
-
         async fn new(credential: &str) -> anyhow::Result<Self> {
             AuthProviderDatabase::clear_auth_providers_db().await?;
             NookDatabase::clear_keyring_for_test().await?;
@@ -401,23 +264,6 @@ mod tests {
         }
         async fn assert_absent(&self) -> anyhow::Result<()> {
             assert!(self.scoped().await?.is_null());
-            assert!(
-                AuthProviderDatabase::read_raw_snapshot_at(
-                    &AuthProviderDatabase::schema_key_for_app_id(self.identity.app_id())
-                )
-                .await?
-                .is_null()
-            );
-            assert!(
-                AuthProviderDatabase::read_raw_snapshot_at(auth_providers::STATE_KEY)
-                    .await?
-                    .is_null()
-            );
-            assert!(
-                AuthProviderDatabase::read_raw_snapshot_at(auth_providers::SCHEMA_KEY)
-                    .await?
-                    .is_null()
-            );
             Ok(())
         }
         fn expect_plaintext_rejection(result: Result<(), NookError>) -> anyhow::Result<()> {
@@ -500,26 +346,10 @@ mod tests {
         let admitted = prepared.snapshot.clone();
         prepared.persist().await?;
         let raw = fixture.scoped().await?;
-        let stored = NormalizedAuthSnapshot::from(raw).snapshot;
+        let stored = AuthProviderDatabase::decode_stored_snapshot(raw)?;
         assert_eq!(stored, admitted);
-        let scoped_schema = AuthProviderDatabase::read_raw_snapshot_at(
-            &AuthProviderDatabase::schema_key_for_app_id(fixture.identity.app_id()),
-        )
-        .await?;
-        let rollback_snapshot =
-            AuthProviderDatabase::read_raw_snapshot_at(auth_providers::STATE_KEY).await?;
-        let rollback_schema =
-            AuthProviderDatabase::read_raw_snapshot_at(auth_providers::SCHEMA_KEY).await?;
-        assert_eq!(
-            scoped_schema.as_u64(),
-            Some(u64::from(STORAGE_SCHEMA_VERSION))
-        );
-        // The generated fixture identity is not in the active keyring, so its
-        // publication must not create an identity-owned rollback projection.
-        assert!(rollback_snapshot.is_null());
-        assert!(rollback_schema.is_null());
         let loaded = AuthProviderDatabase::load_auth_providers(&fixture.identity).await?;
-        assert_eq!(loaded.snapshot, fixture.snapshot);
+        assert_eq!(loaded, fixture.snapshot);
         Ok(())
     }
 
@@ -537,7 +367,7 @@ mod tests {
         fixture.import().save().await?;
         let before = fixture.scoped().await?;
         assert_eq!(
-            NormalizedAuthSnapshot::from(before.clone()).snapshot,
+            AuthProviderDatabase::decode_stored_snapshot(before.clone())?,
             fixture.snapshot
         );
         assert!(
@@ -564,9 +394,7 @@ mod tests {
         PublicationFixture::expect_plaintext_rejection(fixture.import().save().await)?;
         assert_eq!(fixture.scoped().await?, before);
         assert_eq!(
-            AuthProviderDatabase::load_auth_providers(&fixture.identity)
-                .await?
-                .snapshot,
+            AuthProviderDatabase::load_auth_providers(&fixture.identity).await?,
             fixture.snapshot
         );
         Ok(())
@@ -597,9 +425,7 @@ mod tests {
         assert_eq!(fixture.scoped().await?, before);
         NookDatabase::clear_keyring_for_test().await?;
         assert_eq!(
-            AuthProviderDatabase::load_auth_providers(&fixture.identity)
-                .await?
-                .snapshot,
+            AuthProviderDatabase::load_auth_providers(&fixture.identity).await?,
             caller
         );
         Ok(())
@@ -634,13 +460,11 @@ mod tests {
             .map_err(|rejection| rejection.into_cause())?;
         AuthProviderDatabase::write_snapshot_at(ProviderDbWriteSnapshotAt {
             state_key: &AuthProviderDatabase::state_key_for_app_id(first.app_id()),
-            schema_key: &AuthProviderDatabase::schema_key_for_app_id(first.app_id()),
             snapshot: &first_existing,
         })
         .await?;
         AuthProviderDatabase::write_snapshot_at(ProviderDbWriteSnapshotAt {
             state_key: &AuthProviderDatabase::state_key_for_app_id(second.app_id()),
-            schema_key: &AuthProviderDatabase::schema_key_for_app_id(second.app_id()),
             snapshot: &second_existing,
         })
         .await?;
@@ -663,11 +487,11 @@ mod tests {
         let first_loaded = AuthProviderDatabase::load_auth_providers(&first).await?;
         let second_loaded = AuthProviderDatabase::load_auth_providers(&second).await?;
         assert_eq!(
-            first_loaded.snapshot.providers[0].github_pat,
+            first_loaded.providers[0].github_pat,
             StoredGithubPat::Token(("github_pat_first_new").to_owned())
         );
         assert_eq!(
-            second_loaded.snapshot.providers[0].github_pat,
+            second_loaded.providers[0].github_pat,
             StoredGithubPat::Token(("github_pat_second").to_owned())
         );
         Ok(())
@@ -681,32 +505,12 @@ mod tests {
         )
     )]
     #[wasm_bindgen_test]
-    async fn presealed_save_replaces_active_vault_and_preserves_other_vaults() -> anyhow::Result<()>
-    {
-        PublicationFixture::clear_legacy().await?;
+    async fn presealed_save_replaces_the_vaults_local_row_and_keeps_mounts() -> anyhow::Result<()> {
+        AuthProviderDatabase::clear_auth_providers_db().await?;
         let identity = DeviceIdentity::generate()?;
-        let mut existing = GithubSnapshotFixture {
-            id: "gh-removed",
-            pat: "github_pat_existing",
-        }
-        .snapshot();
-        existing.providers[0].store_id = ProviderVaultScope::StoreId("store-incoming".to_owned());
-        let mut retained = GithubSnapshotFixture {
-            id: "gh-retained",
-            pat: "github_pat_retained",
-        }
-        .snapshot()
-        .providers
-        .remove(0);
-        retained.store_id = ProviderVaultScope::StoreId("store-other".to_owned());
-        existing.providers.push(retained);
-        existing.active_vault_store_id = ActiveVaultScope::StoreId("store-incoming".to_owned());
-        existing = existing
-            .seal_credentials(&identity)
-            .map_err(|rejection| rejection.into_cause())?;
+        let existing = VaultRowsFixture::existing().snapshot(&identity)?;
         AuthProviderDatabase::write_snapshot_at(ProviderDbWriteSnapshotAt {
             state_key: &AuthProviderDatabase::state_key_for_app_id(identity.app_id()),
-            schema_key: &AuthProviderDatabase::schema_key_for_app_id(identity.app_id()),
             snapshot: &existing,
         })
         .await?;
@@ -727,18 +531,11 @@ mod tests {
         .save()
         .await?;
 
-        let raw = AuthProviderDatabase::read_raw_snapshot_at(
-            &AuthProviderDatabase::state_key_for_app_id(identity.app_id()),
-        )
-        .await?;
-        let stored = NormalizedAuthSnapshot::from(raw).snapshot;
-        let mut provider_ids = stored
-            .providers
-            .iter()
-            .map(|provider| provider.id.as_str())
-            .collect::<Vec<_>>();
-        provider_ids.sort_unstable();
-        assert_eq!(provider_ids, vec!["gh-incoming", "gh-retained"]);
+        let stored = VaultRowsFixture::stored(&identity).await?;
+        assert_eq!(
+            VaultRowsFixture::ids(&stored),
+            vec!["gh-incoming", "gh-mount", "local-retained"]
+        );
         assert_eq!(
             stored.active_vault_store_id,
             ActiveVaultScope::StoreId(("store-incoming").to_owned())
@@ -759,11 +556,10 @@ mod tests {
     )]
     #[wasm_bindgen_test]
     async fn presealed_save_rejects_existing_plaintext_provider_rows() -> anyhow::Result<()> {
-        PublicationFixture::clear_legacy().await?;
+        AuthProviderDatabase::clear_auth_providers_db().await?;
         let identity = DeviceIdentity::generate()?;
         AuthProviderDatabase::write_snapshot_at(ProviderDbWriteSnapshotAt {
             state_key: &AuthProviderDatabase::state_key_for_app_id(identity.app_id()),
-            schema_key: &AuthProviderDatabase::schema_key_for_app_id(identity.app_id()),
             snapshot: &GithubSnapshotFixture {
                 id: "gh-plaintext",
                 pat: "github_pat_plaintext",
@@ -796,7 +592,7 @@ mod tests {
         )
         .await?;
         assert_eq!(
-            NormalizedAuthSnapshot::from(raw).snapshot.providers[0].github_pat,
+            AuthProviderDatabase::decode_stored_snapshot(raw)?.providers[0].github_pat,
             StoredGithubPat::Token("github_pat_plaintext".to_owned())
         );
         Ok(())
@@ -810,31 +606,13 @@ mod tests {
         )
     )]
     #[wasm_bindgen_test]
-    async fn presealed_empty_save_clears_only_the_incoming_vault() -> anyhow::Result<()> {
-        PublicationFixture::clear_legacy().await?;
+    async fn presealed_empty_save_clears_only_the_incoming_vaults_local_row() -> anyhow::Result<()>
+    {
+        AuthProviderDatabase::clear_auth_providers_db().await?;
         let identity = DeviceIdentity::generate()?;
-        let mut existing = GithubSnapshotFixture {
-            id: "gh-removed",
-            pat: "github_pat_removed",
-        }
-        .snapshot();
-        existing.providers[0].store_id = ProviderVaultScope::StoreId("store-incoming".to_owned());
-        let mut retained = GithubSnapshotFixture {
-            id: "gh-retained",
-            pat: "github_pat_retained",
-        }
-        .snapshot()
-        .providers
-        .remove(0);
-        retained.store_id = ProviderVaultScope::StoreId("store-other".to_owned());
-        existing.providers.push(retained);
-        existing.active_vault_store_id = ActiveVaultScope::StoreId("store-incoming".to_owned());
-        existing = existing
-            .seal_credentials(&identity)
-            .map_err(|rejection| rejection.into_cause())?;
+        let existing = VaultRowsFixture::existing().snapshot(&identity)?;
         AuthProviderDatabase::write_snapshot_at(ProviderDbWriteSnapshotAt {
             state_key: &AuthProviderDatabase::state_key_for_app_id(identity.app_id()),
-            schema_key: &AuthProviderDatabase::schema_key_for_app_id(identity.app_id()),
             snapshot: &existing,
         })
         .await?;
@@ -849,17 +627,72 @@ mod tests {
         .save()
         .await?;
 
-        let raw = AuthProviderDatabase::read_raw_snapshot_at(
-            &AuthProviderDatabase::state_key_for_app_id(identity.app_id()),
-        )
-        .await?;
-        let stored = NormalizedAuthSnapshot::from(raw).snapshot;
-        assert_eq!(stored.providers.len(), 1);
-        assert_eq!(stored.providers[0].id, "gh-retained");
+        let stored = VaultRowsFixture::stored(&identity).await?;
+        assert_eq!(
+            VaultRowsFixture::ids(&stored),
+            vec!["gh-mount", "local-retained"]
+        );
         assert_eq!(
             stored.active_vault_store_id,
             ActiveVaultScope::StoreId(("store-incoming").to_owned())
         );
         Ok(())
+    }
+
+    /// Browser rows of two vaults and one identity mount.
+    struct VaultRowsFixture {
+        providers: Vec<StorageProviderData>,
+    }
+    impl VaultRowsFixture {
+        fn local(id: &str, store_id: &str) -> StorageProviderData {
+            let mut row = StorageProviderData::github(id, "This browser", "", "", "now");
+            row.provider_type = StorageProviderType::Local;
+            row.github_pat = StoredGithubPat::Missing;
+            row.store_id = ProviderVaultScope::StoreId(store_id.to_owned());
+            row
+        }
+
+        fn existing() -> Self {
+            Self {
+                providers: vec![
+                    Self::local("local-removed", "store-incoming"),
+                    Self::local("local-retained", "store-other"),
+                    StorageProviderData::github(
+                        "gh-mount",
+                        "GitHub",
+                        "github_pat_mount",
+                        "nook",
+                        "now",
+                    ),
+                ],
+            }
+        }
+
+        fn snapshot(self, identity: &DeviceIdentity) -> anyhow::Result<AuthProvidersSnapshotData> {
+            AuthProvidersSnapshotData {
+                providers: self.providers,
+                active_vault_store_id: ActiveVaultScope::StoreId("store-incoming".to_owned()),
+            }
+            .seal_credentials(identity)
+            .map_err(|rejection| rejection.into_cause().into())
+        }
+
+        async fn stored(identity: &DeviceIdentity) -> anyhow::Result<AuthProvidersSnapshotData> {
+            let raw = AuthProviderDatabase::read_raw_snapshot_at(
+                &AuthProviderDatabase::state_key_for_app_id(identity.app_id()),
+            )
+            .await?;
+            Ok(AuthProviderDatabase::decode_stored_snapshot(raw)?)
+        }
+
+        fn ids(snapshot: &AuthProvidersSnapshotData) -> Vec<&str> {
+            let mut ids = snapshot
+                .providers
+                .iter()
+                .map(|provider| provider.id.as_str())
+                .collect::<Vec<_>>();
+            ids.sort_unstable();
+            ids
+        }
     }
 }

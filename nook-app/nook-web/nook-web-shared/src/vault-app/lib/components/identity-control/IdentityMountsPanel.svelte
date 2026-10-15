@@ -5,39 +5,25 @@ recorded on the identity but not connected here. Identity sync itself sits
 with Devices, where its results (join requests) show.
 -->
 <script lang="ts">
-  import { I18N_KEYS } from "../../../../generated/i18n-keys";
-  import { onMount } from "svelte";
-  import type { IdentityMountView } from "$app-wasm";
-  import type { VaultState } from "$lib/vault.svelte";
-  import { IdentityMountPresentation } from "./identity-mount";
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
+  import { onMount } from 'svelte'
+  import type { VaultState } from '$lib/vault.svelte'
 
-  let { vault }: { vault: VaultState } = $props();
+  let { vault }: { vault: VaultState } = $props()
 
-  const control = $derived(vault.identityControl);
+  const control = $derived(vault.identityControl)
   const mounts = $derived.by(() => {
-    const snapshot = control.snapshot;
-    return snapshot === false ? [] : snapshot.mounts;
-  });
-  const unconnected = $derived(mounts.filter((mount) => !mount.connectedHere));
-
-  function coverage(mount: IdentityMountView): string {
-    const presentation = new IdentityMountPresentation(mount);
-    if (presentation.isICloud()) return vault.t(I18N_KEYS.IdentityControlMountIcloud);
-    const vaultId = presentation.legacyVaultId();
-    if (vaultId === false) return vault.t(I18N_KEYS.IdentityControlMountNamespaced);
-    const legacyArgs: Parameters<typeof vault.t>[0] = {
-      key: I18N_KEYS.IdentityControlMountLegacy,
-      replacements: { vault: vaultId },
-    };
-    return vault.t(legacyArgs);
-  }
+    const snapshot = control.snapshot
+    return snapshot === false ? [] : snapshot.mounts
+  })
+  const unconnected = $derived(mounts.filter((mount) => !mount.connectedHere))
 
   onMount(() => {
     void control.refresh().then((refreshed) => {
       if (refreshed.isErr())
-        vault.errorMsg = vault.t(refreshed.error.translationKey);
-    });
-  });
+        vault.errorMsg = vault.t(refreshed.error.translationKey)
+    })
+  })
 </script>
 
 {#if unconnected.length > 0}
@@ -55,7 +41,6 @@ with Devices, where its results (join requests) show.
       {#each unconnected as mount (mount.mountId)}
         <li class="truncate" data-testid="identity-mount-row">
           {mount.target}
-          <span class="text-muted-foreground">· {coverage(mount)}</span>
         </li>
       {/each}
     </ul>

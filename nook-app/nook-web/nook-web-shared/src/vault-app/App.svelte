@@ -219,7 +219,9 @@
       },
       syncRoute: routeCoordinator.syncRoute,
     }
-    return vaultBrowserLifecycle.mountBrowserLifecycle(mountBrowserLifecycleArgs)
+    return vaultBrowserLifecycle.mountBrowserLifecycle(
+      mountBrowserLifecycleArgs,
+    )
   })
   $effect(() => {
     const applicationDocumentUpdate: Parameters<
@@ -259,6 +261,9 @@
         return
       }
       activeStoreId = discovered.value
+      // Several vaults wait for the user's choice; the import continues
+      // once one is chosen.
+      if (vault.remoteVaultChoices.length > 0) return
       if (!activeStoreId) {
         vault.errorMsg = vault.t(I18N_KEYS.AuthStorageExistingVaultNotFound)
         return
@@ -356,9 +361,11 @@
         const connectRequest =
           routeCoordinator.extensionIdentityRequestState.request
         const extensionIdentityCanUnlock =
-          (connectRequest.source !== ExtensionIdentityRequestSource.PairedVault ||
+          (connectRequest.source !==
+            ExtensionIdentityRequestSource.PairedVault ||
             connectRequest.vaultStoreId === activeStoreId) &&
-          (connectRequest.source === ExtensionIdentityRequestSource.PairedVault ||
+          (connectRequest.source ===
+            ExtensionIdentityRequestSource.PairedVault ||
             extensionBackedVaultSession ||
             vault.deviceProtectionStatus === DeviceProtectionStatus.Missing)
         if (extensionIdentityCanUnlock) {
@@ -466,8 +473,8 @@
     kind: EnrollmentSubmitQueueKind.Idle,
   })
   const showPasskeyOverlay = $derived(
-    pendingVaultCreationState.kind === VaultCreationQueueKind.WaitingForDevice &&
-      !vault.deviceProtectionReady,
+    pendingVaultCreationState.kind ===
+      VaultCreationQueueKind.WaitingForDevice && !vault.deviceProtectionReady,
   )
   const showExistingVaultPasskeyOverlay = $derived(
     pendingExistingVaultUnlock && existingVaultNeedsDeviceUnlock,
@@ -544,7 +551,8 @@
       return ok(ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable)
     }
     if (
-      discovery.status === ExtensionPairedVaultIdentityStatusMessageStatus.Locked
+      discovery.status ===
+      ExtensionPairedVaultIdentityStatusMessageStatus.Locked
     ) {
       const discoveryRetryRequest: Parameters<
         typeof schedulePairedExtensionDiscoveryRetry

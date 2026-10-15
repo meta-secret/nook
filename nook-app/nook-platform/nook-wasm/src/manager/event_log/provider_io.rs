@@ -17,8 +17,9 @@ use nook_core::StoredSigningSeed;
 use crate::storage::drive_namespace::DriveNamespace;
 use crate::storage::identity_record;
 use nook_core::{
-    DriveEventParent, EventLogLocation, IsoTimestamp, MemberLabel, SigningIdentity, StorageMode,
-    StoreId, SymmetricKey, VaultEvent, VaultEventSchemaVersion, VaultType,
+    DriveEventParent, EventLogLocation, EventLogNamespaceKind, IsoTimestamp, MemberLabel,
+    SigningIdentity, StorageMode, StoreId, SymmetricKey, VaultEvent, VaultEventSchemaVersion,
+    VaultType,
 };
 use std::collections::BTreeSet;
 
@@ -167,17 +168,10 @@ impl NookVaultManager {
 impl NookVaultManager {
     /// Where the open vault's events live at the prepared provider.
     pub(in crate::manager) fn current_vault_location(&self) -> Result<EventLogLocation, NookError> {
-        match self.storage.layout {
-            nook_core::ProviderRowLayout::LegacyVaultRoot => Ok(EventLogLocation::LegacyVaultRoot),
-            nook_core::ProviderRowLayout::IdentityNamespaced => {
-                let store_id = StoreId::parse(self.vault.store_id.trim()).map_err(|_| {
-                    NookError::Database(
-                        "Choose a vault of this identity before syncing its events.".to_owned(),
-                    )
-                })?;
-                Ok(EventLogLocation::Vault(store_id))
-            }
-        }
+        let store_id = StoreId::parse(self.vault.store_id.trim()).map_err(|_| {
+            NookError::Database("Choose a vault before syncing its events.".to_owned())
+        })?;
+        Ok(EventLogLocation::Vault(store_id))
     }
 
     async fn drive_parent_for(
@@ -367,42 +361,50 @@ impl NookVaultManager {
         }
     }
 
-    /// Identities with a namespace at the prepared provider. Providers that
-    /// cannot list namespaces report none.
-    pub(in crate::manager) async fn list_identity_ids_at_current_provider(
+    /// Ids of every namespace of one kind at the prepared provider. This
+    /// browser's own store has none.
+    pub(in crate::manager) async fn list_namespace_ids_at_current_provider(
         &self,
-    ) -> Result<Vec<nook_core::IdentityId>, NookError> {
-        let raw = match self.storage.mode {
+        kind: EventLogNamespaceKind,
+    ) -> Result<Vec<String>, NookError> {
+        match self.storage.mode {
             StorageMode::Github => {
-                (GitHubEventStore {
-                    pat: &self.storage.access_token,
-                    repo: &self.storage.remote_ref,
-                    location: &EventLogLocation::LegacyVaultRoot,
-                })
-                .list_github_identity_ids()
-                .await?
+                GitHubEventStore::list_github_namespace_ids(
+                    &self.storage.access_token,
+                    &self.storage.remote_ref,
+                    kind,
+                )
+                .await
             }
             StorageMode::GoogleDrive => {
-                (DriveNamespace {
-                    token: &self.storage.access_token,
-                    parent: &self.storage.drive_event_parent,
-                    location: &EventLogLocation::LegacyVaultRoot,
-                })
-                .list_identity_ids()
-                .await?
+                DriveNamespace::list_ids(
+                    &self.storage.access_token,
+                    &self.storage.drive_event_parent,
+                    kind,
+                )
+                .await
             }
             StorageMode::ICloud => {
-                ICloudEventStore::list_icloud_identity_ids(
+                ICloudEventStore::list_icloud_namespace_ids(
                     &self.storage.access_token,
                     &self.storage.icloud_event_target,
+                    kind,
                 )
-                .await?
+                .await
             }
-            StorageMode::Local => Vec::new(),
-        };
-        Ok(raw
+            StorageMode::Local => Ok(Vec::new()),
+        }
+    }
+
+    /// Vaults with a namespace at the prepared provider.
+    pub(in crate::manager) async fn list_vault_ids_at_current_provider(
+        &self,
+    ) -> Result<Vec<StoreId>, NookError> {
+        Ok(self
+            .list_namespace_ids_at_current_provider(EventLogNamespaceKind::Vault)
+            .await?
             .iter()
-            .filter_map(|id| nook_core::IdentityId::parse(id).ok())
+            .filter_map(|id| StoreId::parse(id).ok())
             .collect())
     }
 

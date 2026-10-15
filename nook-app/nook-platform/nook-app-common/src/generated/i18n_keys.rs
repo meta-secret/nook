@@ -1069,9 +1069,12 @@ pub const FIRST_RUN_PROTECT_BODY: &str = "first_run.protect_body";
 pub const FIRST_RUN_PROTECT_HINT: &str = "first_run.protect_hint";
 pub const FIRST_RUN_PROTECT_TITLE: &str = "first_run.protect_title";
 pub const FIRST_RUN_RESTORE_BODY: &str = "first_run.restore_body";
+pub const FIRST_RUN_RESTORE_CHOOSE_VAULT: &str = "first_run.restore_choose_vault";
+pub const FIRST_RUN_RESTORE_CHOOSE_VAULT_BODY: &str = "first_run.restore_choose_vault_body";
 pub const FIRST_RUN_RESTORE_LINK: &str = "first_run.restore_link";
 pub const FIRST_RUN_RESTORE_PICK: &str = "first_run.restore_pick";
 pub const FIRST_RUN_RESTORE_TITLE: &str = "first_run.restore_title";
+pub const FIRST_RUN_RESTORE_VAULT_ITEM: &str = "first_run.restore_vault_item";
 pub const FIRST_RUN_STEP_NAME: &str = "first_run.step_name";
 pub const FIRST_RUN_STEP_PROTECT: &str = "first_run.step_protect";
 pub const FIRST_RUN_SUBTITLE: &str = "first_run.subtitle";
@@ -1160,10 +1163,6 @@ pub const HELP_SECTIONS_UNLOCK_TITLE: &str = "help.sections.unlock.title";
 pub const HELP_SUBTITLE: &str = "help.subtitle";
 pub const HELP_TITLE: &str = "help.title";
 pub const IDENTITY_CONTROL_APPROVE: &str = "identity_control.approve";
-pub const IDENTITY_CONTROL_AWAITING_FOUNDER_DESCRIPTION: &str =
-    "identity_control.awaiting_founder_description";
-pub const IDENTITY_CONTROL_AWAITING_FOUNDER_TITLE: &str = "identity_control.awaiting_founder_title";
-pub const IDENTITY_CONTROL_CHECK_PROVIDERS: &str = "identity_control.check_providers";
 pub const IDENTITY_CONTROL_CURRENT_APP: &str = "identity_control.current_app";
 pub const IDENTITY_CONTROL_DENY: &str = "identity_control.deny";
 pub const IDENTITY_CONTROL_ERROR_PASSPHRASE_SHORT: &str = "identity_control.error_passphrase_short";
@@ -1176,17 +1175,11 @@ pub const IDENTITY_CONTROL_JOIN_WAITING_DESCRIPTION: &str =
     "identity_control.join_waiting_description";
 pub const IDENTITY_CONTROL_JOIN_WAITING_TITLE: &str = "identity_control.join_waiting_title";
 pub const IDENTITY_CONTROL_MEMBERS_DESCRIPTION: &str = "identity_control.members_description";
-pub const IDENTITY_CONTROL_MOUNT_ICLOUD: &str = "identity_control.mount_icloud";
-pub const IDENTITY_CONTROL_MOUNT_LEGACY: &str = "identity_control.mount_legacy";
-pub const IDENTITY_CONTROL_MOUNT_NAMESPACED: &str = "identity_control.mount_namespaced";
 pub const IDENTITY_CONTROL_MOUNT_UNCONNECTED_DESCRIPTION: &str =
     "identity_control.mount_unconnected_description";
 pub const IDENTITY_CONTROL_MOUNT_UNCONNECTED_TITLE: &str =
     "identity_control.mount_unconnected_title";
 pub const IDENTITY_CONTROL_NO_DEVICE_JOIN_MOUNTS: &str = "identity_control.no_device_join_mounts";
-pub const IDENTITY_CONTROL_NOT_REPLICATED_DESCRIPTION: &str =
-    "identity_control.not_replicated_description";
-pub const IDENTITY_CONTROL_NOT_REPLICATED_TITLE: &str = "identity_control.not_replicated_title";
 pub const IDENTITY_CONTROL_ONBOARD_CODE_READY: &str = "identity_control.onboard_code_ready";
 pub const IDENTITY_CONTROL_ONBOARD_DESCRIPTION: &str = "identity_control.onboard_description";
 pub const IDENTITY_CONTROL_ONBOARD_GENERATE: &str = "identity_control.onboard_generate";
@@ -1204,8 +1197,6 @@ pub const IDENTITY_CONTROL_REVOKE_CONFIRM: &str = "identity_control.revoke_confi
 pub const IDENTITY_CONTROL_REVOKED: &str = "identity_control.revoked";
 pub const IDENTITY_CONTROL_SYNC_NOW: &str = "identity_control.sync_now";
 pub const IDENTITY_CONTROL_UNNAMED_APP: &str = "identity_control.unnamed_app";
-pub const IDENTITY_CONTROL_UPGRADE: &str = "identity_control.upgrade";
-pub const IDENTITY_CONTROL_UPGRADE_HERE: &str = "identity_control.upgrade_here";
 pub const IDENTITY_CONTROL_VAULT_OPEN_THROUGH_IDENTITY: &str =
     "identity_control.vault_open_through_identity";
 pub const IDENTITY_HEALTH_CLOUD_BODY: &str = "identity_health.cloud_body";

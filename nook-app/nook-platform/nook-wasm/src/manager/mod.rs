@@ -56,6 +56,7 @@ mod multi_device;
 mod passkeys;
 mod password;
 mod password_unlock;
+mod remote_vault_choice;
 mod search_catalog;
 mod secrets;
 mod sentinel;
@@ -90,9 +91,9 @@ pub use session::{NookEventLogSyncIssueResult, NookVaultManager, NookVaultNameSt
 mod grant_authority;
 
 pub(in crate::manager) use session::{
-    CeremonyState, EventLogSessionState, EventLogSyncIssueState, SearchCatalogRestore,
-    SearchCatalogState, StorageSession, SyncOutboxState, VaultCryptoState, VaultNameState,
-    VaultSessionState,
+    CeremonyState, ChosenProviderVault, EventLogSessionState, EventLogSyncIssueState,
+    SearchCatalogRestore, SearchCatalogState, StorageSession, SyncOutboxState, VaultCryptoState,
+    VaultNameState, VaultSessionState,
 };
 
 use crate::{NookJoinRequest, NookSecretRecord, NookVaultArchitecture, NookVaultMember};
@@ -567,14 +568,10 @@ impl NookVaultManager {
         // method pattern-matches on `StorageMode` instead of comparing
         // strings.
         let mode = StorageMode::parse(storage_mode)?;
-        // Rust produced this ref from the provider row; the layout prefix
-        // selects the event namespaces and never reaches a provider API.
-        let remote = nook_core::LayoutRemoteRef::parse(github_repo_name);
-        let github_repo_name = remote.inner;
         let previous_mode = self.storage.mode;
         let previous_remote_ref = self.storage.remote_ref.clone();
         self.storage.mode = mode;
-        self.storage.select_layout(remote.layout);
+        self.storage.forget_namespaces();
 
         match mode {
             StorageMode::Local => {

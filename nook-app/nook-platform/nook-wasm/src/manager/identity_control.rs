@@ -6,8 +6,8 @@
 //! the resulting membership and this installation's DEK grants in the local
 //! identity directory.
 
+mod log_creation;
 mod membership;
-mod migration;
 mod vault_access;
 mod vault_removal;
 
@@ -231,8 +231,7 @@ impl NookVaultManager {
 #[wasm_bindgen]
 impl NookVaultManager {
     /// Union the current identity's control log with one identity mount and
-    /// cache the result locally. `repo` is the Rust-built connect reference
-    /// of the provider row, so its layout prefix is preserved.
+    /// cache the result locally.
     #[wasm_bindgen]
     pub async fn sync_identity_log_with_provider(
         &mut self,
@@ -303,12 +302,12 @@ impl NookVaultManager {
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
-    use super::migration::{NookIdentityAdoptionOutcome, NookIdentityLogEnsureOutcome};
+    use super::log_creation::NookIdentityLogEnsureOutcome;
     use super::*;
     use nook_core::{
-        ActiveVaultScope, ProviderRowLayout, ProviderSyncCheckpoint, ProviderVaultScope,
-        SigningIdentity, StorageProviderData, StorageProviderType, StoredGithubPat,
-        StoredGithubRepository, StoredLocalFolderConfiguration, StoredOAuthFileConfiguration,
+        ActiveVaultScope, ProviderSyncCheckpoint, ProviderVaultScope, SigningIdentity,
+        StorageProviderData, StorageProviderType, StoredGithubPat, StoredGithubRepository,
+        StoredLocalFolderConfiguration, StoredOAuthFileConfiguration,
     };
     use wasm_bindgen_test::*;
 
@@ -391,8 +390,7 @@ mod browser_tests {
                 github_repo: StoredGithubRepository::Repository("owner/personal".to_owned()),
                 oauth_file: StoredOAuthFileConfiguration::NotApplicable,
                 local_folder: StoredLocalFolderConfiguration::NotApplicable,
-                store_id: ProviderVaultScope::StoreId(self.store_id()),
-                layout: ProviderRowLayout::LegacyVaultRoot,
+                store_id: ProviderVaultScope::Unscoped,
                 sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-10-13T00:00:00Z".to_owned(),
             };
@@ -421,20 +419,24 @@ mod browser_tests {
     )]
     async fn founder_replicates_its_identity_and_manages_member_apps() -> anyhow::Result<()> {
         let mut founder = Founder::new("identity founder pin").await?;
-        let created = Founder::js(founder.manager.ensure_identity_control_log(false).await)?
+        let created = Founder::js(founder.manager.ensure_identity_control_log().await)?
             .to_rust()
             .map_err(|error| anyhow::anyhow!("{error:?}"))?;
-        assert!(matches!(
-            created,
-            NookIdentityLogEnsureOutcome::Created { .. }
-        ));
-        let existing = Founder::js(founder.manager.ensure_identity_control_log(true).await)?
+        assert_eq!(created, NookIdentityLogEnsureOutcome::Created);
+        let existing = Founder::js(founder.manager.ensure_identity_control_log().await)?
             .to_rust()
             .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         assert_eq!(existing, NookIdentityLogEnsureOutcome::Existing);
 
-        // Creating the log registered the open vault's DEK epoch, so
-        // reconciling the open vault has nothing left to record.
+        // The new log lists only its founder; the open vault joins it when
+        // reconciled, and a second reconcile has nothing left to record.
+        assert!(founder.snapshot().await?.vaults.is_empty());
+        assert!(Founder::js(
+            founder
+                .manager
+                .reconcile_open_vault_with_identity_log()
+                .await
+        )?);
         assert!(!Founder::js(
             founder
                 .manager
@@ -450,7 +452,7 @@ mod browser_tests {
         assert_eq!(vault.store_id, founder.store_id());
         assert!(vault.granted_to_current_installation);
 
-        // The legacy-root provider becomes a recorded mount once.
+        // The remote provider becomes a recorded mount once.
         let providers = founder.providers()?;
         assert!(Founder::js(
             founder
@@ -478,18 +480,6 @@ mod browser_tests {
         .to_rust()
         .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         assert_eq!(replicating.providers.len(), 1);
-        let aligned = Founder::js(
-            founder
-                .manager
-                .align_identity_provider_rows(&providers)
-                .await,
-        )?
-        .to_rust()
-        .map_err(|error| anyhow::anyhow!("{error:?}"))?;
-        assert_eq!(
-            aligned.providers.first().map(|row| row.layout),
-            Some(ProviderRowLayout::LegacyVaultRoot)
-        );
         let vault_row = Founder::js(
             founder
                 .manager
@@ -505,7 +495,7 @@ mod browser_tests {
                 .identity_vault_provider(&providers, nook_core::StoreId::generate()?.as_str())
                 .is_err()
         );
-        // An empty provider snapshot records no mount and aligns no row.
+        // An empty provider snapshot records no mount.
         let empty = Tsify::into_ts(&AuthProvidersSnapshotData {
             providers: Vec::new(),
             active_vault_store_id: ActiveVaultScope::Unselected,
@@ -517,13 +507,6 @@ mod browser_tests {
                 .record_identity_provider_mounts(&empty)
                 .await
         )?);
-        assert!(
-            Founder::js(founder.manager.align_identity_provider_rows(&empty).await)?
-                .to_rust()
-                .map_err(|error| anyhow::anyhow!("{error:?}"))?
-                .providers
-                .is_empty()
-        );
         // A browser-local row is never an identity mount.
         let local_row = Tsify::into_ts(&StorageProviderData {
             provider_type: StorageProviderType::Local,
@@ -604,15 +587,6 @@ mod browser_tests {
                 .sync_identity_log_with_provider("local".to_owned(), String::new(), String::new())
                 .await,
         )?;
-        let adoption = Founder::js(
-            founder
-                .manager
-                .adopt_identity_from_provider("local".to_owned(), String::new(), String::new())
-                .await,
-        )?
-        .to_rust()
-        .map_err(|error| anyhow::anyhow!("{error:?}"))?;
-        assert_eq!(adoption, NookIdentityAdoptionOutcome::AlreadyReplicated);
 
         // An identity that owns a vault cannot be rebound to an invitation.
         assert!(

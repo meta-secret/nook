@@ -124,11 +124,6 @@ impl GitHubEventStore<'_> {
     /// Delete every file of this namespace in one commit. Returns how many
     /// went; nothing to do when the namespace holds none.
     pub(crate) async fn delete_github_namespace(&self) -> Result<usize, NookError> {
-        if self.location.namespace_tag().is_none() {
-            return Err(NookError::GitHub(
-                "Only an identity or vault namespace can be deleted from GitHub.".to_owned(),
-            ));
-        }
         let client = Client::new();
         let repo: RepoInfo = Self::github_json(self.github_api(GitHubCall {
             client: &client,

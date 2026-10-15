@@ -230,14 +230,14 @@ pub use nook_auth2::{
 };
 
 pub use auth::identity_control::{
-    IdentityAdoption, IdentityAdoptionChoice, IdentityVaultEpochAction, IdentityVaultEpochStatus,
-    ReplicatedIdentityStanding, ReplicatedMembershipProjection, ReplicatedMembershipRequest,
-    VaultDeletionPlan, VaultDeletionRequest, VaultFounder, VaultRevocationDue,
+    IdentityVaultEpochAction, IdentityVaultEpochStatus, ReplicatedIdentityStanding,
+    ReplicatedMembershipProjection, ReplicatedMembershipRequest, VaultDeletionPlan,
+    VaultDeletionRequest, VaultRevocationDue,
 };
 pub use auth::identity_control_snapshot::{
     IdentityControlSnapshot, IdentityControlSnapshotRequest, IdentityControlStanding,
-    IdentityJoinView, IdentityMemberView, IdentityMountLayoutView, IdentityMountProvider,
-    IdentityMountView, IdentityVaultView,
+    IdentityJoinView, IdentityMemberView, IdentityMountProvider, IdentityMountView,
+    IdentityVaultView,
 };
 pub use auth::vault_meta_actions::{
     DeviceAuthorization, EventGraphAuthorizationProjection, EventGraphDeviceAccess,
@@ -285,15 +285,14 @@ pub use nook_event_log::{
     VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation, VaultProjection,
 };
 pub use nook_event_log::{
-    DriveMountTarget, EventLogLocation, ICloudMountTarget, IdentityApprovalRequest,
-    IdentityControlInsertion, IdentityControlLog, IdentityControlMember, IdentityControlMigration,
-    IdentityControlMigrationOutcome, IdentityControlOperation, IdentityControlRejection,
-    IdentityControlState, IdentityControlVault, IdentityEvent, IdentityEventBody,
-    IdentityEventInsertStatus, IdentityEventSchemaVersion, IdentityEventSigning,
-    IdentityGenesisRequest, IdentityJoinRequest, IdentityMemberKeys, IdentityMountTarget,
-    IdentityProviderMount, IdentityVaultDekGrant, IdentityVaultDekLookup, IdentityVaultEpochDeks,
-    IdentityVaultRegistration, LegacyVaultMembership, MemberVaultDek, OpenedVaultDek,
-    ProviderMountId, ProviderMountLayout, VaultAuthorizedRoster, VaultRosterMember,
+    DriveMountTarget, EventLogLocation, EventLogNamespaceKind, ICloudMountTarget,
+    IdentityApprovalRequest, IdentityControlInsertion, IdentityControlLog, IdentityControlMember,
+    IdentityControlOperation, IdentityControlRejection, IdentityControlState, IdentityControlVault,
+    IdentityEvent, IdentityEventBody, IdentityEventInsertStatus, IdentityEventSchemaVersion,
+    IdentityEventSigning, IdentityGenesisRequest, IdentityJoinRequest, IdentityMemberKeys,
+    IdentityMountTarget, IdentityProviderMount, IdentityVaultDekGrant, IdentityVaultDekLookup,
+    IdentityVaultEpochDeks, IdentityVaultRegistration, MemberVaultDek, OpenedVaultDek,
+    ProviderMountId, VaultAuthorizedRoster, VaultRosterMember,
 };
 pub use password::{
     MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordCharacterSet, PasswordGeneration,
@@ -321,17 +320,15 @@ pub use sync_provider_store::{
     ActiveVaultScope, AuthProvidersSnapshotData, DeviceJoinReach, DraftStorageConnection,
     DuplicateCandidatePolicy, DuplicateProviderSelection, DuplicateSyncProvider,
     EnrollmentAudience, GithubStorageDraft, GoogleOAuthTokenInput, ICloudOAuthTokenInput,
-    IdentityMountCapability, LayoutRemoteRef, LegacyAuthProvidersSnapshot, LocalFolderConfigData,
-    LocalProviderRowChange, LocalProviderRowOutcome, LocalProviderRowRequest,
-    LocalProviderSelection, ManagerStoreScopeRef, NormalizedAuthSnapshot, OAuthAccessToken,
-    OAuthAccessTokenRef, OAuthFileConfigData, OAuthRemoteConfigurationUpdate,
+    IdentityMountCapability, LocalFolderConfigData, LocalProviderRowChange,
+    LocalProviderRowOutcome, LocalProviderRowRequest, LocalProviderSelection, ManagerStoreScopeRef,
+    OAuthAccessToken, OAuthAccessTokenRef, OAuthFileConfigData, OAuthRemoteConfigurationUpdate,
     OAuthRemoteStorageReference, OAuthStorageDraft, OAuthStorageReference,
     ProviderEnrollmentRequest, ProviderEventFlushTarget, ProviderId, ProviderLabelLabels,
-    ProviderReplicationTarget, ProviderRowLayout, ProviderRows, ProviderSaveOutcome,
-    ProviderSaveRemoteTarget, ProviderSaveRequest, ProviderSaveSetup, ProviderSelection,
-    ProviderSelectionPolicy, ProviderSelectionRequest, ProviderStorageDetailLabels,
-    ProviderSyncCheckpoint, ProviderSyncRevision, ProviderSyncRevisionRef,
-    ProviderSyncedVaultVersion, ProviderVaultScope, ProviderWireMigration,
+    ProviderReplicationTarget, ProviderRows, ProviderSaveOutcome, ProviderSaveRemoteTarget,
+    ProviderSaveRequest, ProviderSaveSetup, ProviderSelection, ProviderSelectionPolicy,
+    ProviderSelectionRequest, ProviderStorageDetailLabels, ProviderSyncCheckpoint,
+    ProviderSyncRevision, ProviderSyncRevisionRef, ProviderSyncedVaultVersion, ProviderVaultScope,
     RemoteEventFlushProviderRequest, SharedGoogleEnrollmentAudience, SharedGrantProviderSelection,
     StagedGithubConnection, StagedOAuthConnection, StagedRemoteConnection, StagedStorageConnection,
     StorageConnectArgs, StorageProvider, StorageProviderData, StoredGithubPat,

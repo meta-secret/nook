@@ -85,6 +85,7 @@
     SentinelLoginPresentationKind,
   } from '$lib/vault/sentinel-login-presentation.svelte'
   import RemoteVaultRecoveryPanel from '$lib/components/login/RemoteVaultRecoveryPanel.svelte'
+  import RemoteVaultChoice from '$lib/components/login/RemoteVaultChoice.svelte'
   import * as sentinelGenesisActions from '$lib/vault/sentinel-genesis'
   import { SentinelGenesisPhase, type VaultApplication } from '$app-wasm'
   import {
@@ -249,6 +250,15 @@
 
   /** Opening a locked vault's row selects that vault, which reads its
    * passphrases, without unlocking it. */
+  async function chooseRemoteVault(storeId: string): Promise<void> {
+    const chosen = vault.chooseRemoteVault(storeId)
+    if (chosen.isErr()) {
+      vault.errorMsg = vault.t(chosen.error.translationKey)
+      return
+    }
+    await onUnlock()
+  }
+
   async function selectVault(storeId: string): Promise<void> {
     passphraseStoreId = storeId
     if (selectedCardStoreId === storeId) return
@@ -789,7 +799,13 @@
           {...sentinelCeremonyOptionalProps}
         />
       {:else if showSetup}
-        {#if setupIs('oauth-file')}
+        {#if vault.remoteVaultChoices.length > 0}
+          <RemoteVaultChoice
+            {vault}
+            busy={isVerifying}
+            onChoose={chooseRemoteVault}
+          />
+        {:else if setupIs('oauth-file')}
           <OAuthProviderSetupWizard
             {vault}
             bind:githubRepo

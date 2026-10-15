@@ -51,7 +51,7 @@ pub(crate) struct GitHubEventStore<'a> {
 }
 
 #[cfg(test)]
-const EVENT_LOG_ROOT: &str = "nook-log/v1/events";
+const EVENT_LOG_ROOT: &str = "nook-log/v1/vaults/store_abcdefghijk/events";
 const SHA256_BASE64URL_LEN: usize = 43;
 
 impl GitHubEventStore<'_> {
@@ -175,32 +175,42 @@ impl GitHubEventStore<'_> {
         ))
     }
 
-    /// Identity ids with an event namespace among the repository's blobs.
-    fn identity_ids_from_tree(entries: &[GitTreeEntry]) -> Vec<String> {
+    /// Ids of every namespace of one kind among the repository's blobs.
+    fn namespace_ids_from_tree(
+        entries: &[GitTreeEntry],
+        kind: nook_core::EventLogNamespaceKind,
+    ) -> Vec<String> {
         let mut ids = entries
             .iter()
             .filter(|entry| entry.entry_type == "blob")
-            .filter_map(|entry| {
-                let rest = entry.path.strip_prefix("nook-identity/v1/")?;
-                let (identity_id, tail) = rest.split_once('/')?;
-                tail.starts_with("events/").then(|| identity_id.to_owned())
-            })
+            .filter_map(|entry| kind.id_from_path(&entry.path))
             .collect::<Vec<_>>();
         ids.sort();
         ids.dedup();
         ids
     }
 
-    /// Identity ids with a namespace in this repository.
-    pub(crate) async fn list_github_identity_ids(&self) -> Result<Vec<String>, NookError> {
-        Ok(Self::identity_ids_from_tree(
-            &self.tree_entries("nook-identity/v1").await?,
+    /// Ids of every namespace of one kind in a repository.
+    pub(crate) async fn list_github_namespace_ids(
+        pat: &str,
+        repo: &str,
+        kind: nook_core::EventLogNamespaceKind,
+    ) -> Result<Vec<String>, NookError> {
+        Ok(Self::namespace_ids_from_tree(
+            &Self::tree_entries_at(pat, repo, kind.parent_dir()).await?,
+            kind,
         ))
     }
 
     async fn tree_entries(&self, root: &str) -> Result<Vec<GitTreeEntry>, NookError> {
-        let pat = self.pat;
-        let repo = self.repo;
+        Self::tree_entries_at(self.pat, self.repo, root).await
+    }
+
+    async fn tree_entries_at(
+        pat: &str,
+        repo: &str,
+        root: &str,
+    ) -> Result<Vec<GitTreeEntry>, NookError> {
         let pat = pat.trim();
         let client = Client::new();
 
@@ -652,7 +662,9 @@ mod tests {
         let store = GitHubEventStore {
             pat: "",
             repo: "",
-            location: &nook_core::EventLogLocation::LegacyVaultRoot,
+            location: &nook_core::EventLogLocation::Vault(nook_core::StoreId::parse(
+                "store_abcdefghijk",
+            )?),
         };
         let Err(error) = store
             .put_github_event_if_absent(&requested_id, &bytes)
@@ -689,16 +701,11 @@ mod namespace_tests {
         let identity_root = nook_core::EventLogLocation::Identity(identity).root();
         let entries: Vec<GitTreeEntry> = serde_json::from_str(&format!(
             r#"[
-                {{"path":"{EVENT_LOG_ROOT}/{digest}.yaml","type":"blob"}},
                 {{"path":"{vault_root}/{digest}.yaml","type":"blob"}},
                 {{"path":"{identity_root}/{digest}.yaml","type":"blob"}}
             ]"#
         ))?;
         let expected = vec![format!("sha256u:{digest}")];
-        assert_eq!(
-            GitHubEventStore::event_ids_from_tree(&entries, EVENT_LOG_ROOT),
-            expected
-        );
         assert_eq!(
             GitHubEventStore::event_ids_from_tree(&entries, &vault_root),
             expected
@@ -722,7 +729,7 @@ mod namespace_tests {
             reason = "framework boundary: wasm-bindgen-test callback"
         )
     )]
-    fn identity_listing_reads_each_namespace_once() -> anyhow::Result<()> {
+    fn namespace_listing_reads_each_namespace_once() -> anyhow::Result<()> {
         let entries: Vec<GitTreeEntry> = serde_json::from_str(
             r#"[
                 {"path":"nook-identity/v1/idn_bbbbbbbbbbb/events/a.yaml","type":"blob"},
@@ -730,12 +737,22 @@ mod namespace_tests {
                 {"path":"nook-identity/v1/idn_aaaaaaaaaaa/events/b.yaml","type":"blob"},
                 {"path":"nook-identity/v1/idn_ccccccccccc/notes/a.yaml","type":"blob"},
                 {"path":"nook-identity/v1/idn_ddddddddddd/events","type":"tree"},
-                {"path":"nook-log/v1/events/a.yaml","type":"blob"}
+                {"path":"nook-log/v1/vaults/store_aaaaaaaaaaa/events/a.yaml","type":"blob"}
             ]"#,
         )?;
         assert_eq!(
-            GitHubEventStore::identity_ids_from_tree(&entries),
+            GitHubEventStore::namespace_ids_from_tree(
+                &entries,
+                nook_core::EventLogNamespaceKind::Identity
+            ),
             vec!["idn_aaaaaaaaaaa".to_owned(), "idn_bbbbbbbbbbb".to_owned()]
+        );
+        assert_eq!(
+            GitHubEventStore::namespace_ids_from_tree(
+                &entries,
+                nook_core::EventLogNamespaceKind::Vault
+            ),
+            vec!["store_aaaaaaaaaaa".to_owned()]
         );
         Ok(())
     }

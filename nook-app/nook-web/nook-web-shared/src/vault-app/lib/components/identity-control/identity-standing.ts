@@ -16,10 +16,6 @@ export class IdentityStandingPresentation {
     return this.is("revoked");
   }
 
-  isNotReplicated(): boolean {
-    return this.is("notReplicated");
-  }
-
   isPendingJoin(): boolean {
     return this.is("pendingJoin");
   }

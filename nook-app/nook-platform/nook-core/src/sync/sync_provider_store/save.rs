@@ -72,11 +72,6 @@ pub struct ProviderSaveRequest {
     pub local_folder: StoredLocalFolderConfiguration,
     pub new_provider_id: String,
     pub created_at: String,
-    /// Identity mounts namespace the identity log and every owned vault.
-    /// `CloudKit` cannot list a namespace yet, so iCloud rows stay bound to the
-    /// vault in `provider_store_id`.
-    #[serde(default)]
-    pub layout: crate::ProviderRowLayout,
     #[serde(default)]
     pub remote_target: ProviderSaveRemoteTarget,
 }
@@ -116,19 +111,20 @@ impl ProviderSaveRequest {
             github_repo: StoredGithubRepository::DefaultRepository,
             oauth_file: StoredOAuthFileConfiguration::NotApplicable,
             local_folder: StoredLocalFolderConfiguration::NotApplicable,
-            store_id: request.provider_store_id.clone(),
-            layout: request.effective_layout(provider_type),
+            store_id: request.row_scope(provider_type),
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: request.created_at.clone(),
         }
     }
 
-    /// Only this browser's own store keeps no namespace; every remote row,
-    /// iCloud and local folders included, keeps each vault in its own.
-    fn effective_layout(&self, provider_type: StorageProviderType) -> crate::ProviderRowLayout {
+    /// Only this browser's own store belongs to one vault. Every remote row
+    /// is an identity mount that keeps each vault in its own namespace.
+    fn row_scope(&self, provider_type: StorageProviderType) -> ProviderVaultScope {
         match provider_type {
-            StorageProviderType::Local => crate::ProviderRowLayout::LegacyVaultRoot,
-            _ => self.layout,
+            StorageProviderType::Local => self.provider_store_id.clone(),
+            StorageProviderType::Github
+            | StorageProviderType::OauthFile
+            | StorageProviderType::LocalFolder => ProviderVaultScope::Unscoped,
         }
     }
 
@@ -304,7 +300,6 @@ impl OAuthUpdateTarget<'_> {
             oauth_file: StoredOAuthFileConfiguration::configured(active_oauth.clone()),
             local_folder: StoredLocalFolderConfiguration::NotApplicable,
             store_id: ProviderVaultScope::Unscoped,
-            layout: crate::ProviderRowLayout::LegacyVaultRoot,
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: String::new(),
         };
@@ -493,7 +488,6 @@ mod tests {
                 local_folder: StoredLocalFolderConfiguration::NotApplicable,
                 new_provider_id: "provider-new".to_owned(),
                 created_at: "2026-08-11T00:00:00Z".to_owned(),
-                layout: crate::ProviderRowLayout::LegacyVaultRoot,
                 remote_target: super::ProviderSaveRemoteTarget::Fresh,
             }
         }
@@ -509,35 +503,23 @@ mod tests {
     }
 
     #[test]
-    fn local_folder_rows_keep_each_vault_in_its_own_namespace() -> Result<(), &'static str> {
-        let mut request = ProviderSaveRequest::fixture(StorageProviderType::LocalFolder);
-        request.local_folder = StoredLocalFolderConfiguration::Configured(LocalFolderConfigData {
+    fn remote_rows_belong_to_the_identity_not_the_open_vault() -> Result<(), &'static str> {
+        let mut folder = ProviderSaveRequest::fixture(StorageProviderType::LocalFolder);
+        folder.local_folder = StoredLocalFolderConfiguration::Configured(LocalFolderConfigData {
             directory_name: StoredLocalFolderDirectory::DirectoryName("Nook Backup".to_owned()),
             handle_id: StoredLocalFolderHandle::HandleId("handle-1".to_owned()),
         });
-        request.layout = crate::ProviderRowLayout::IdentityNamespaced;
-        let snapshot = request.apply().saved()?;
-        let row = snapshot
-            .providers
-            .iter()
-            .find(|row| row.provider_type == StorageProviderType::LocalFolder)
-            .ok_or("expected a saved local folder row")?;
-        assert_eq!(row.layout, crate::ProviderRowLayout::IdentityNamespaced);
-        Ok(())
-    }
-
-    #[test]
-    fn icloud_rows_keep_each_vault_in_its_own_namespace() -> Result<(), &'static str> {
-        let mut request = ProviderSaveRequest::fixture(StorageProviderType::OauthFile);
-        request.oauth_preset = OauthFilePreset::ICloud;
-        request.layout = crate::ProviderRowLayout::IdentityNamespaced;
-        let snapshot = request.apply().saved()?;
-        let row = snapshot
-            .providers
-            .iter()
-            .find(|row| row.provider_type == StorageProviderType::OauthFile)
-            .ok_or("expected a saved iCloud row")?;
-        assert_eq!(row.layout, crate::ProviderRowLayout::IdentityNamespaced);
+        let mut icloud = ProviderSaveRequest::fixture(StorageProviderType::OauthFile);
+        icloud.oauth_preset = OauthFilePreset::ICloud;
+        for request in [folder, icloud] {
+            let snapshot = request.apply().saved()?;
+            let remote = snapshot
+                .providers
+                .iter()
+                .find(|row| row.provider_type == request.storage_mode)
+                .ok_or("expected the saved remote row")?;
+            assert_eq!(remote.store_id, ProviderVaultScope::Unscoped);
+        }
         Ok(())
     }
 
@@ -597,10 +579,7 @@ mod tests {
             provider.github_repo,
             StoredGithubRepository::Repository(("owner/repo").to_owned())
         );
-        assert_eq!(
-            provider.store_id,
-            ProviderVaultScope::StoreId(("vault-1").to_owned())
-        );
+        assert_eq!(provider.store_id, ProviderVaultScope::Unscoped);
         Ok(())
     }
 
@@ -624,37 +603,16 @@ mod tests {
     }
 
     #[test]
-    fn provider_save_scopes_duplicates_to_the_active_vault() -> Result<(), &'static str> {
+    fn a_mount_saved_for_another_vault_is_the_same_identity_mount() {
         let mut request = ProviderSaveRequest::fixture(StorageProviderType::Github);
-        let mut other_vault_provider = StorageProviderData::github(
-            "other-vault-provider",
+        request.snapshot.providers.push(StorageProviderData::github(
+            "saved-earlier",
             "GitHub · owner/repo",
             "pat",
             "owner/repo",
             "earlier",
-        );
-        other_vault_provider.store_id = ProviderVaultScope::StoreId("vault-2".to_owned());
-        request
-            .snapshot
-            .providers
-            .push(other_vault_provider.clone());
-
-        let snapshot = request.apply().saved()?;
-
-        assert_eq!(snapshot.providers.first(), Some(&other_vault_provider));
-        assert_eq!(snapshot.providers.len(), 2);
-        assert_eq!(
-            snapshot
-                .providers
-                .get(1)
-                .map(|provider| provider.id.as_str()),
-            Some("provider-new")
-        );
-        assert_eq!(
-            snapshot.providers.get(1).map(|provider| &provider.store_id),
-            Some(&ProviderVaultScope::StoreId(("vault-1").to_owned()))
-        );
-        Ok(())
+        ));
+        assert_eq!(request.apply(), ProviderSaveOutcome::Duplicate);
     }
 
     #[test]

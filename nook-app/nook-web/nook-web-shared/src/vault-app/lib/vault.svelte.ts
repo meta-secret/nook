@@ -733,6 +733,12 @@ export class VaultState extends VaultRuntimeState {
     ).discoverStagedVaultStoreId();
   }
 
+  chooseRemoteVault(storeId: string) {
+    return new providersActions.ProviderConnectionActions(
+      this,
+    ).chooseRemoteVault(storeId);
+  }
+
   /** Navigate to one page of the unified identity and vault workspace. */
   openSection(section: WorkspaceSection) {
     return this.uiActions.openSection(section);

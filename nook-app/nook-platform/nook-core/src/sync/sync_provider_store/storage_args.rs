@@ -168,18 +168,13 @@ pub struct ProviderLabelLabels {
 
 impl StorageProviderData {
     pub fn connection_args(&self) -> ValidationResult<StorageConnectArgs> {
-        let mut args = match self.provider_type {
+        let args = match self.provider_type {
             StorageProviderType::Local | StorageProviderType::LocalFolder => {
                 return Ok(StorageConnectArgs::local());
             }
             StorageProviderType::Github => self.github_connection_args(),
             StorageProviderType::OauthFile => self.oauth_file_connection_args()?,
         };
-        args.repo = super::LayoutRemoteRef {
-            layout: self.layout,
-            inner: &args.repo,
-        }
-        .format();
         Ok(args)
     }
 
@@ -325,7 +320,6 @@ mod tests {
                 oauth_file: StoredOAuthFileConfiguration::NotApplicable,
                 local_folder: StoredLocalFolderConfiguration::NotApplicable,
                 store_id: ProviderVaultScope::Unscoped,
-                layout: crate::ProviderRowLayout::LegacyVaultRoot,
                 sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-06-24T00:00:00.000Z".to_owned(),
             }
@@ -345,7 +339,6 @@ mod tests {
                     handle_id: StoredLocalFolderHandle::HandleId(handle_id.to_owned()),
                 }),
                 store_id: ProviderVaultScope::Unscoped,
-                layout: crate::ProviderRowLayout::LegacyVaultRoot,
                 sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-06-24T00:00:00.000Z".to_owned(),
             }
@@ -371,7 +364,6 @@ mod tests {
                 }),
                 local_folder: StoredLocalFolderConfiguration::NotApplicable,
                 store_id: ProviderVaultScope::Unscoped,
-                layout: crate::ProviderRowLayout::LegacyVaultRoot,
                 sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-06-24T00:00:00.000Z".to_owned(),
             }

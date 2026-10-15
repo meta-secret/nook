@@ -167,7 +167,6 @@ impl CredentialTransition<'_> {
             oauth_file,
             local_folder: provider.local_folder.clone(),
             store_id: provider.store_id.clone(),
-            layout: provider.layout,
             sync_checkpoint: provider.sync_checkpoint.clone(),
             created_at: provider.created_at.clone(),
         })
@@ -553,7 +552,6 @@ mod tests {
                     }),
                     local_folder: StoredLocalFolderConfiguration::NotApplicable,
                     store_id: ProviderVaultScope::Unscoped,
-                    layout: crate::ProviderRowLayout::LegacyVaultRoot,
                     sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                     created_at: "2026-06-24T00:00:00.000Z".to_owned(),
                 }],

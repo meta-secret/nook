@@ -1,8 +1,7 @@
 //! Google Drive child folders that separate event-log namespaces.
 //!
-//! A legacy vault root keeps listing only the direct children of its event
-//! parent. Identity logs and namespaced vaults live one folder deeper, so their
-//! files never enter a legacy vault's fail-closed classification.
+//! The identity log and every vault live in their own folder under the
+//! provider's event parent.
 
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 #![cfg_attr(
@@ -10,7 +9,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
-use nook_core::{DriveEventParent, EventLogLocation};
+use nook_core::{DriveEventParent, EventLogLocation, EventLogNamespaceKind};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
@@ -175,28 +174,33 @@ impl DriveNamespace<'_> {
         Ok(created.id.trim().to_owned())
     }
 
-    /// Identity ids that have a namespace folder under this parent.
-    pub(crate) async fn list_identity_ids(&self) -> Result<Vec<String>, NookError> {
+    /// Ids of every namespace of one kind with a folder under `parent`.
+    pub(crate) async fn list_ids(
+        token: &str,
+        parent: &DriveEventParent,
+        kind: EventLogNamespaceKind,
+    ) -> Result<Vec<String>, NookError> {
         let client = Client::new();
-        let escaped_parent = Self::parent_id(self.parent).replace('\'', "\\'");
+        let escaped_parent = Self::parent_id(parent).replace('\'', "\\'");
+        let prefix = Self::folder_name(kind.tag_prefix());
         let query = format!(
-            "name contains 'nook-identity-' and mimeType = '{DRIVE_FOLDER_MIME_TYPE}' and '{escaped_parent}' in parents and trashed = false"
+            "name contains '{prefix}' and mimeType = '{DRIVE_FOLDER_MIME_TYPE}' and '{escaped_parent}' in parents and trashed = false"
         );
         let mut request = client
             .get("https://www.googleapis.com/drive/v3/files")
-            .header("Authorization", format!("Bearer {}", self.token.trim()))
+            .header("Authorization", format!("Bearer {}", token.trim()))
             .query(&[
                 ("q", query.as_str()),
                 ("fields", "files(id,name,mimeType)"),
                 ("pageSize", "1000"),
             ]);
-        if Self::in_app_data(self.parent) {
+        if Self::in_app_data(parent) {
             request = request.query(&[("spaces", "appDataFolder")]);
         }
         let response = request.send().await?;
         if !response.status().is_success() {
             return Err(NookError::Drive(format!(
-                "Google Drive identity lookup failed with status {}",
+                "Google Drive namespace lookup failed with status {}",
                 response.status()
             )));
         }
@@ -210,7 +214,8 @@ impl DriveNamespace<'_> {
             .filter_map(|folder| {
                 folder
                     .name
-                    .strip_prefix("nook-identity-")
+                    .strip_prefix(prefix.as_str())
+                    .filter(|id| !id.is_empty())
                     .map(str::to_owned)
             })
             .collect::<Vec<_>>();
@@ -221,13 +226,9 @@ impl DriveNamespace<'_> {
 
     /// Delete this namespace's folder and every event in it (a vault deleted
     /// everywhere). Nothing to do when the folder does not exist; a duplicate
-    /// fails closed. The legacy root is never deleted this way.
+    /// fails closed.
     pub(crate) async fn delete(&self) -> Result<bool, NookError> {
-        let Some(tag) = self.location.namespace_tag() else {
-            return Err(NookError::Drive(
-                "Only an identity or vault namespace can be deleted from Google Drive.".to_owned(),
-            ));
-        };
+        let tag = self.location.namespace_tag();
         let Some(folder_id) = Self::select(&self.list(&Self::folder_name(&tag)).await?)? else {
             return Ok(false);
         };
@@ -249,12 +250,10 @@ impl DriveNamespace<'_> {
         Ok(true)
     }
 
-    /// The legacy root is the parent itself. Other namespaces resolve or
-    /// create one child folder; a duplicate fails closed.
+    /// Resolve or create the namespace's one child folder; a duplicate fails
+    /// closed.
     pub(crate) async fn resolve(&self) -> Result<DriveEventParent, NookError> {
-        let Some(tag) = self.location.namespace_tag() else {
-            return Ok(self.parent.clone());
-        };
+        let tag = self.location.namespace_tag();
         let name = Self::folder_name(&tag);
         if let Some(folder_id) = Self::select(&self.list(&name).await?)? {
             return Ok(Self::child_parent(self.parent, folder_id));
@@ -282,9 +281,7 @@ mod tests {
     )]
     fn namespace_folders_stay_inside_their_parent_scope() -> anyhow::Result<()> {
         let identity = nook_core::IdentityId::parse("idn_abcdefghijk")?;
-        let tag = EventLogLocation::Identity(identity)
-            .namespace_tag()
-            .ok_or_else(|| anyhow::anyhow!("identity logs are namespaced"))?;
+        let tag = EventLogLocation::Identity(identity).namespace_tag();
         assert_eq!(
             DriveNamespace::folder_name(&tag),
             "nook-identity-idn_abcdefghijk"

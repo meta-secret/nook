@@ -42,27 +42,6 @@ impl NookVaultManager {
 
 #[wasm_bindgen]
 impl NookVaultManager {
-    /// Provider rows with the layout this identity's mount records give their
-    /// targets, so a joined app reads each vault where it already lives.
-    #[wasm_bindgen]
-    pub async fn align_identity_provider_rows(
-        &self,
-        snapshot: &tsify::Ts<AuthProvidersSnapshotData>,
-    ) -> Result<tsify::Ts<AuthProvidersSnapshotData>, JsError> {
-        let snapshot = snapshot
-            .to_rust()
-            .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?;
-        let state = self.current_identity_state().await?;
-        let aligned = AuthProvidersSnapshotData {
-            providers: ProviderRows {
-                providers: &snapshot.providers,
-            }
-            .aligned_with_mounts(&state.mounts),
-            active_vault_store_id: snapshot.active_vault_store_id,
-        };
-        Tsify::into_ts(&aligned).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
-    }
-
     /// The saved row that replicates one identity vault.
     #[wasm_bindgen]
     pub fn identity_vault_provider(

@@ -366,7 +366,6 @@ mod tests {
             target: IdentityMountTarget::Github {
                 repository: "owner/nook-backup".to_owned(),
             },
-            layout: ProviderMountLayout::Namespaced,
         };
         fixture.append(
             &founder,

@@ -351,8 +351,7 @@ pub(crate) use storage::indexed_db::{
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 pub(crate) use storage::auth_providers::ProviderDbWriteSnapshotAt;
 pub(crate) use storage::auth_providers::{
-    AuthProviderDatabase, ProviderDbLegacySnapshotBelongsToIdentity,
-    ProviderDbReadRawSnapshotFromStore,
+    AuthProviderDatabase, ProviderDbReadRawSnapshotFromStore,
 };
 
 pub use passkey_browser::{BrowserCredentialCreationOptions, BrowserCredentialRequestOptions};

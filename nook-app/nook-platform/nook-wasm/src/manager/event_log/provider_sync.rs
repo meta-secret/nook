@@ -13,9 +13,9 @@ use crate::storage::event_db::{RemoteEventUnion, VaultEventPersistence};
 use crate::storage::remote_event::RemoteEventRead;
 use nook_core::LocalEventBytes;
 use nook_core::{
-    CheckedRemoteEvent, EventStorageBytes, MultiDeviceError, ProjectionEpoch, RemoteEventBatch,
-    RemoteEventWrites, RemoteStoreIdentity, StorageMode, VaultCrypto, VaultEvent,
-    VaultMetaGraphProjection, VaultType,
+    CheckedRemoteEvent, EventLogNamespaceKind, EventStorageBytes, MultiDeviceError,
+    ProjectionEpoch, RemoteEventBatch, RemoteEventWrites, RemoteStoreIdentity, StorageMode,
+    StoreId, VaultCrypto, VaultEvent, VaultMetaGraphProjection, VaultType,
 };
 use std::collections::BTreeSet;
 
@@ -24,9 +24,19 @@ use super::{
     LocalFolderEventWrite, LocalFolderHandles, NookDatabase, NookError, NookVaultManager,
     RemoteEventLogClassification, VaultCryptoState,
 };
+use crate::manager::ChosenProviderVault;
 
 mod outbox;
 use outbox::{OutboxIndexScope, PendingOutboxEvent};
+
+/// Whether a provider vault was chosen for a session that had none.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in crate::manager) enum VaultDiscovery {
+    Empty,
+    Chosen,
+    /// The provider holds several vaults and none was chosen.
+    Several(Vec<StoreId>),
+}
 impl NookVaultManager {
     async fn persist_projected_key_epoch(
         &mut self,
@@ -148,7 +158,7 @@ impl NookVaultManager {
 
     fn provider_multiple_stores_error(provider_label: &str, store_ids: &[String]) -> NookError {
         NookError::Database(format!(
-            "{provider_label} contains multiple vault event logs (store_id: {}). Use a dedicated provider path for one vault before syncing.",
+            "{provider_label} holds several vaults (store_id: {}). Choose the vault to open.",
             store_ids.join(", ")
         ))
     }
@@ -323,66 +333,106 @@ impl NookVaultManager {
         Ok(())
     }
 
+    /// Choose the vault a provider holds when none is chosen yet. Nothing
+    /// to choose when the provider holds no vault; several need a choice.
+    pub(in crate::manager) async fn discover_provider_vault(
+        &mut self,
+    ) -> Result<VaultDiscovery, NookError> {
+        let store_ids = self.list_vault_ids_at_current_provider().await?;
+        self.choose_discovered_vault(&store_ids).await
+    }
+
+    /// Choose the vault a local folder holds when none is chosen yet.
+    pub(in crate::manager) async fn discover_folder_vault(
+        &mut self,
+        handle_id: &str,
+    ) -> Result<VaultDiscovery, NookError> {
+        let store_ids = LocalFolderHandles::current()
+            .open_folder(handle_id)
+            .await?
+            .list_namespace_ids(EventLogNamespaceKind::Vault)
+            .await?
+            .iter()
+            .filter_map(|id| StoreId::parse(id).ok())
+            .collect::<Vec<_>>();
+        let discovery = self.choose_discovered_vault(&store_ids).await?;
+        self.require_chosen_vault("Backup folder", discovery)
+    }
+
+    /// The vault the user chose wins when the target holds it; one vault is
+    /// chosen on its own.
+    async fn choose_discovered_vault(
+        &mut self,
+        store_ids: &[StoreId],
+    ) -> Result<VaultDiscovery, NookError> {
+        let candidates = match &self.storage.chosen_vault {
+            ChosenProviderVault::Chosen(chosen) if store_ids.contains(chosen) => {
+                vec![chosen.clone()]
+            }
+            ChosenProviderVault::Chosen(_) | ChosenProviderVault::Unchosen => store_ids.to_vec(),
+        };
+        match candidates.as_slice() {
+            [] => Ok(VaultDiscovery::Empty),
+            [store_id] => {
+                self.vault.store_id = store_id.as_str().to_owned();
+                self.activate_event_log_mode().await?;
+                Ok(VaultDiscovery::Chosen)
+            }
+            _ => Ok(VaultDiscovery::Several(candidates)),
+        }
+    }
+
+    /// Sync continues only with one vault: several need the user's choice.
+    fn require_chosen_vault(
+        &mut self,
+        provider_label: &str,
+        discovery: VaultDiscovery,
+    ) -> Result<VaultDiscovery, NookError> {
+        if let VaultDiscovery::Several(store_ids) = &discovery {
+            let classification = RemoteEventLogClassification::MultipleStores {
+                store_ids: store_ids
+                    .iter()
+                    .map(|store_id| store_id.as_str().to_owned())
+                    .collect(),
+            };
+            self.guard_remote_event_log_classification(provider_label, &classification)?;
+        }
+        Ok(discovery)
+    }
+
     pub(in crate::manager) async fn sync_events_from_current_provider(
         &mut self,
     ) -> Result<(), NookError> {
-        let remote_ids = self.list_current_provider_event_ids().await?;
-
-        let mut remote_events = Vec::new();
         if self.vault.store_id.is_empty() {
-            let mut discovered_store_ids = BTreeSet::new();
-            let mut fetched = Vec::new();
-            for (event_id, bytes) in self.fetch_current_provider_events(remote_ids).await? {
-                let store_id = CheckedRemoteEvent::parse(&event_id, &bytes)
-                    .map(CheckedRemoteEvent::into_store_id)?;
-                let store_id = store_id.as_str().to_owned();
-                discovered_store_ids.insert(store_id.clone());
-                fetched.push((event_id, bytes, store_id));
-            }
-            if discovered_store_ids.is_empty() {
+            let discovery = self.discover_provider_vault().await?;
+            if self.require_chosen_vault("Sync provider", discovery)? != VaultDiscovery::Chosen {
                 return Ok(());
             }
-            if discovered_store_ids.len() > 1 {
-                let store_ids = discovered_store_ids.iter().cloned().collect::<Vec<_>>();
-                let classification = RemoteEventLogClassification::MultipleStores { store_ids };
-                return self
-                    .guard_remote_event_log_classification("Sync provider", &classification);
-            }
-            self.vault.store_id = discovered_store_ids.into_iter().next().ok_or_else(|| {
-                NookError::Database(
-                    "Provider event discovery returned no vault store id.".to_owned(),
-                )
-            })?;
-            self.activate_event_log_mode().await?;
-            remote_events = fetched
+        }
+        let remote_ids = self.list_current_provider_event_ids().await?;
+        let local_ids: BTreeSet<EventId> =
+            NookDatabase::load_local_event_store(&self.vault.store_id)
+                .await?
+                .event_ids()
                 .into_iter()
-                .filter(|(_, _, store_id)| store_id == &self.vault.store_id)
-                .map(|(event_id, bytes, _)| (event_id, bytes))
                 .collect();
-        } else {
-            let local_ids: BTreeSet<EventId> =
-                NookDatabase::load_local_event_store(&self.vault.store_id)
-                    .await?
-                    .event_ids()
-                    .into_iter()
-                    .collect();
-            let missing_ids = remote_ids
-                .difference(&local_ids)
-                .cloned()
-                .collect::<BTreeSet<_>>();
-            let fetched = self.fetch_current_provider_events(missing_ids).await?;
-            let classification = RemoteEventBatch::new(&fetched).classify(
-                RemoteStoreIdentity::Identified(self.vault.store_id.as_str()),
-            )?;
-            self.guard_remote_event_log_classification("Sync provider", &classification)?;
-            for (event_id, bytes) in fetched {
-                if !CheckedRemoteEvent::parse(&event_id, &bytes)
-                    .map(|event| event.belongs_to_store(&self.vault.store_id))?
-                {
-                    continue;
-                }
-                remote_events.push((event_id, bytes));
+        let missing_ids = remote_ids
+            .difference(&local_ids)
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        let fetched = self.fetch_current_provider_events(missing_ids).await?;
+        let classification = RemoteEventBatch::new(&fetched).classify(
+            RemoteStoreIdentity::Identified(self.vault.store_id.as_str()),
+        )?;
+        self.guard_remote_event_log_classification("Sync provider", &classification)?;
+        let mut remote_events = Vec::new();
+        for (event_id, bytes) in fetched {
+            if !CheckedRemoteEvent::parse(&event_id, &bytes)
+                .map(|event| event.belongs_to_store(&self.vault.store_id))?
+            {
+                continue;
             }
+            remote_events.push((event_id, bytes));
         }
 
         let mut local = NookDatabase::load_local_event_store(&self.vault.store_id).await?;
@@ -522,9 +572,15 @@ impl NookVaultManager {
     pub(in crate::manager) async fn sync_local_folder_provider(
         &mut self,
         handle_id: &str,
-        layout: nook_core::ProviderRowLayout,
     ) -> Result<String, NookError> {
-        self.storage.layout = layout;
+        if self.vault.store_id.is_empty()
+            && self.discover_folder_vault(handle_id).await? != VaultDiscovery::Chosen
+        {
+            return Ok(match NookDatabase::load_from_indexed_db().await? {
+                VaultSnapshotLookup::Stored(content) => content,
+                VaultSnapshotLookup::NotStored => String::new(),
+            });
+        }
         let location = self.current_vault_location()?;
         let remote_records = Self::read_external_local_folder_records(handle_id, &location).await?;
         let remote_event_ids = remote_records

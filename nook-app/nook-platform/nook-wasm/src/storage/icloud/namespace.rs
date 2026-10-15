@@ -1,4 +1,4 @@
-//! Whole-namespace `CloudKit` operations: which identities a target holds,
+//! Whole-namespace `CloudKit` operations: which identities and vaults a target holds,
 //! and deleting every record of one log (a vault deleted everywhere).
 
 use reqwest::Client;
@@ -10,9 +10,8 @@ use super::wire::{
 };
 use super::{ICLOUD_EVENT_RECORD_TYPE, ICLOUD_LOCATION_FIELD, ICloudEventStore};
 use crate::NookError;
-use nook_core::ICloudEventTarget;
+use nook_core::{EventLogNamespaceKind, ICloudEventTarget};
 
-const IDENTITY_TAG_PREFIX: &str = "identity:";
 /// `CloudKit` accepts at most 200 operations per modify request.
 const DELETE_BATCH: usize = 200;
 
@@ -83,25 +82,24 @@ impl ICloudEventStore<'_> {
         Ok(records)
     }
 
-    /// Identity ids with a log on this target.
-    pub(crate) async fn list_icloud_identity_ids(
+    /// Ids of every namespace of one kind with a log on this target.
+    pub(crate) async fn list_icloud_namespace_ids(
         web_auth_token: &str,
         target: &ICloudEventTarget,
+        kind: EventLogNamespaceKind,
     ) -> Result<Vec<String>, NookError> {
         let token = nook_core::OauthAccessToken::parse(web_auth_token)?;
         let records = Self::query_records(RecordQuery {
             web_auth_token: token.as_ref(),
             target,
             comparator: "BEGINS_WITH",
-            location: IDENTITY_TAG_PREFIX,
+            location: kind.tag_prefix(),
         })
         .await?;
         let mut ids = records
             .iter()
             .filter_map(|record| match record.location() {
-                FieldText::Text(location) => location
-                    .strip_prefix(IDENTITY_TAG_PREFIX)
-                    .map(str::to_owned),
+                FieldText::Text(location) => kind.id_from_tag(&location),
                 FieldText::Unset => None,
             })
             .collect::<Vec<_>>();
@@ -113,7 +111,7 @@ impl ICloudEventStore<'_> {
     /// Delete every record of this store's log. Returns how many went.
     pub(crate) async fn delete_icloud_namespace(&self) -> Result<usize, NookError> {
         let token = nook_core::OauthAccessToken::parse(self.web_auth_token)?;
-        let namespace = self.namespace()?;
+        let namespace = self.namespace();
         let records = Self::query_records(RecordQuery {
             web_auth_token: token.as_ref(),
             target: self.target,

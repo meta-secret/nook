@@ -9,69 +9,27 @@
 use nook_auth2::{IdentityId, StoreId};
 use nook_event_log::{
     DriveMountTarget, EventLogLocation, ICloudMountTarget, IdentityMountTarget,
-    IdentityProviderMount, ProviderMountId, ProviderMountLayout,
+    IdentityProviderMount, ProviderMountId,
 };
 
 use super::{
-    ProviderRowLayout, ProviderRows, ProviderVaultScope, StorageProviderData,
-    StoredGithubRepository, StoredGoogleDriveFolder, StoredICloudShareTarget,
-    StoredLocalFolderConfiguration, StoredLocalFolderDirectory, StoredOAuthFileConfiguration,
-    StoredOAuthRemoteFileName,
+    ProviderRows, StorageProviderData, StoredGithubRepository, StoredGoogleDriveFolder,
+    StoredICloudShareTarget, StoredLocalFolderConfiguration, StoredLocalFolderDirectory,
+    StoredOAuthFileConfiguration, StoredOAuthRemoteFileName,
 };
 use crate::{
     DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, GoogleDriveMode, ICloudMode,
     OAuthFilePreset, StorageProviderType,
 };
 
-/// Prefix marking an identity namespaced row in the connect `repo` slot.
-pub const IDENTITY_NAMESPACED_REF_PREFIX: &str = "identity-namespaced:";
-
-/// A provider remote reference paired with the row layout it was built from.
-///
-/// The prefix keeps the WASM connect arguments a 3-tuple, as the Drive target
-/// prefixes do. Rust produces and parses it; the web layer only forwards it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct LayoutRemoteRef<'a> {
-    pub layout: ProviderRowLayout,
-    pub inner: &'a str,
-}
-
-impl<'a> LayoutRemoteRef<'a> {
-    #[must_use]
-    pub fn parse(raw: &'a str) -> Self {
-        match raw.strip_prefix(IDENTITY_NAMESPACED_REF_PREFIX) {
-            Some(inner) => Self {
-                layout: ProviderRowLayout::IdentityNamespaced,
-                inner,
-            },
-            None => Self {
-                layout: ProviderRowLayout::LegacyVaultRoot,
-                inner: raw,
-            },
-        }
-    }
-
-    #[must_use]
-    pub fn format(self) -> String {
-        match self.layout {
-            ProviderRowLayout::IdentityNamespaced => {
-                format!("{IDENTITY_NAMESPACED_REF_PREFIX}{}", self.inner)
-            }
-            ProviderRowLayout::LegacyVaultRoot => self.inner.to_owned(),
-        }
-    }
-}
-
 /// Whether a provider row can carry an identity's control log.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IdentityMountCapability {
-    /// The row can replicate the identity log at its namespace.
+    /// The row replicates the identity log and every vault at their
+    /// namespaces.
     Mountable(IdentityMountTarget),
     /// Browser-local cache rows never leave this installation.
     LocalOnly,
-    /// `CloudKit` cannot list a namespace until a record type for identity
-    /// events is deployed to production. The row keeps replicating its vault.
-    ICloudNamespaceUnavailable,
     /// A row without a resolvable remote target.
     Unconfigured,
 }
@@ -81,20 +39,19 @@ pub enum IdentityMountCapability {
 pub enum DeviceJoinReach {
     /// A cloud mount every app of the identity can reach.
     OtherDevices,
-    /// The row lives on this device or cannot carry the identity log.
+    /// The row lives on this device only.
     ThisDeviceOnly,
 }
 
 impl StorageProviderData {
     /// A joining app reads the identity log through a mount it can reach, so
     /// only cloud mounts carry joins. A local folder is chosen per
-    /// installation and `CloudKit` cannot carry the log yet.
+    /// installation.
     #[must_use]
     pub fn device_join_reach(&self) -> DeviceJoinReach {
         match self.identity_mount_capability() {
             IdentityMountCapability::Mountable(IdentityMountTarget::LocalFolder { .. })
             | IdentityMountCapability::LocalOnly
-            | IdentityMountCapability::ICloudNamespaceUnavailable
             | IdentityMountCapability::Unconfigured => DeviceJoinReach::ThisDeviceOnly,
             IdentityMountCapability::Mountable(_) => DeviceJoinReach::OtherDevices,
         }
@@ -165,7 +122,25 @@ impl StorageProviderData {
                             },
                         })
                     }
-                    OAuthFilePreset::ICloud => IdentityMountCapability::ICloudNamespaceUnavailable,
+                    OAuthFilePreset::ICloud => {
+                        IdentityMountCapability::Mountable(IdentityMountTarget::ICloud {
+                            icloud: match (
+                                config.resolved_icloud_mode(),
+                                &config.icloud_share_target,
+                            ) {
+                                (
+                                    ICloudMode::Shared,
+                                    StoredICloudShareTarget::SharedTarget(target),
+                                ) => ICloudMountTarget::Shared {
+                                    share_target: target.clone(),
+                                },
+                                (ICloudMode::Shared, StoredICloudShareTarget::Personal) => {
+                                    return IdentityMountCapability::Unconfigured;
+                                }
+                                (ICloudMode::Private, _) => ICloudMountTarget::Private,
+                            },
+                        })
+                    }
                 },
                 StoredOAuthFileConfiguration::NotApplicable => {
                     IdentityMountCapability::Unconfigured
@@ -174,59 +149,15 @@ impl StorageProviderData {
         }
     }
 
-    /// The iCloud routing a mount record would carry, for display only.
-    #[must_use]
-    pub fn icloud_mount_target(&self) -> Option<ICloudMountTarget> {
-        let StoredOAuthFileConfiguration::Configured(config) = &self.oauth_file else {
-            return None;
-        };
-        match (
-            config.preset,
-            config.resolved_icloud_mode(),
-            &config.icloud_share_target,
-        ) {
-            (
-                OAuthFilePreset::ICloud,
-                ICloudMode::Shared,
-                StoredICloudShareTarget::SharedTarget(target),
-            ) => Some(ICloudMountTarget::Shared {
-                share_target: target.clone(),
-            }),
-            (OAuthFilePreset::ICloud, _, _) => Some(ICloudMountTarget::Private),
-            (OAuthFilePreset::GoogleDrive, _, _) => None,
-        }
-    }
-
-    /// Where this row stores one vault's events, if it replicates that vault.
+    /// Where this row stores one vault's events. Browser-local rows hold the
+    /// vault in this browser's own store instead.
     #[must_use]
     pub fn vault_location(&self, store_id: &StoreId) -> Option<EventLogLocation> {
-        if self.provider_type == StorageProviderType::Local {
-            return None;
-        }
-        match (self.layout, &self.store_id) {
-            (ProviderRowLayout::IdentityNamespaced, _) => {
+        match self.identity_mount_capability() {
+            IdentityMountCapability::Mountable(_) => {
                 Some(EventLogLocation::Vault(store_id.clone()))
             }
-            (ProviderRowLayout::LegacyVaultRoot, ProviderVaultScope::StoreId(bound))
-                if bound.trim() == store_id.as_str() =>
-            {
-                Some(EventLogLocation::LegacyVaultRoot)
-            }
-            (ProviderRowLayout::LegacyVaultRoot, _) => None,
-        }
-    }
-
-    /// The mount layout this row contributes to an identity log, if any.
-    #[must_use]
-    pub fn mount_layout(&self) -> Option<ProviderMountLayout> {
-        match (self.layout, &self.store_id) {
-            (ProviderRowLayout::IdentityNamespaced, _) => Some(ProviderMountLayout::Namespaced),
-            (ProviderRowLayout::LegacyVaultRoot, ProviderVaultScope::StoreId(bound)) => {
-                StoreId::parse(bound)
-                    .ok()
-                    .map(|store_id| ProviderMountLayout::LegacySingleVault { store_id })
-            }
-            (ProviderRowLayout::LegacyVaultRoot, ProviderVaultScope::Unscoped) => None,
+            IdentityMountCapability::LocalOnly | IdentityMountCapability::Unconfigured => None,
         }
     }
 }
@@ -248,8 +179,7 @@ impl ProviderRows<'_> {
             .collect()
     }
 
-    /// Rows that replicate the identity control log. Every remote row that can
-    /// list a namespace carries it, whatever vault its legacy root holds.
+    /// Rows that replicate the identity control log: every remote mount.
     #[must_use]
     pub fn identity_replication(&self, identity_id: &IdentityId) -> Vec<ProviderReplicationTarget> {
         self.providers
@@ -258,7 +188,7 @@ impl ProviderRows<'_> {
                 matches!(
                     provider.identity_mount_capability(),
                     IdentityMountCapability::Mountable(_)
-                ) && provider.mount_layout().is_some()
+                )
             })
             .map(|provider| ProviderReplicationTarget {
                 provider: provider.clone(),
@@ -275,16 +205,14 @@ impl ProviderRows<'_> {
     ) -> nook_event_log::EventResult<Vec<IdentityProviderMount>> {
         let mut mounts: Vec<IdentityProviderMount> = Vec::new();
         for provider in self.providers {
-            let (IdentityMountCapability::Mountable(target), Some(layout)) = (
-                provider.identity_mount_capability(),
-                provider.mount_layout(),
-            ) else {
+            let IdentityMountCapability::Mountable(target) = provider.identity_mount_capability()
+            else {
                 continue;
             };
             let known = recorded
                 .iter()
                 .chain(mounts.iter())
-                .any(|mount| mount.target == target && mount.layout == layout);
+                .any(|mount| mount.target == target);
             if known {
                 continue;
             }
@@ -292,53 +220,9 @@ impl ProviderRows<'_> {
                 mount_id: ProviderMountId::generate()?,
                 label: provider.label.clone(),
                 target,
-                layout,
             });
         }
         Ok(mounts)
-    }
-
-    /// Rows with the layout the identity's mount records give their targets.
-    /// A joining installation saves its row before it can read the log; the
-    /// recorded layout decides where the identity's vaults already live. A
-    /// namespaced record wins over a legacy root record for the same target.
-    #[must_use]
-    pub fn aligned_with_mounts(
-        &self,
-        recorded: &[IdentityProviderMount],
-    ) -> Vec<StorageProviderData> {
-        self.providers
-            .iter()
-            .map(|provider| {
-                let IdentityMountCapability::Mountable(target) =
-                    provider.identity_mount_capability()
-                else {
-                    return provider.clone();
-                };
-                let mut layouts = recorded
-                    .iter()
-                    .filter(|mount| mount.target == target)
-                    .map(|mount| &mount.layout);
-                let chosen = layouts
-                    .clone()
-                    .find(|layout| matches!(layout, ProviderMountLayout::Namespaced))
-                    .or_else(|| layouts.next());
-                match chosen {
-                    Some(ProviderMountLayout::Namespaced) => StorageProviderData {
-                        layout: ProviderRowLayout::IdentityNamespaced,
-                        ..provider.clone()
-                    },
-                    Some(ProviderMountLayout::LegacySingleVault { store_id }) => {
-                        StorageProviderData {
-                            layout: ProviderRowLayout::LegacyVaultRoot,
-                            store_id: ProviderVaultScope::StoreId(store_id.as_str().to_owned()),
-                            ..provider.clone()
-                        }
-                    }
-                    None => provider.clone(),
-                }
-            })
-            .collect()
     }
 
     /// The first row that replicates one vault.
@@ -348,23 +232,6 @@ impl ProviderRows<'_> {
             .iter()
             .find(|provider| provider.vault_location(store_id).is_some())
     }
-
-    /// Recorded mounts this installation has no credentials for yet.
-    #[must_use]
-    pub fn unconnected_mounts<'m>(
-        &self,
-        recorded: &'m [IdentityProviderMount],
-    ) -> Vec<&'m IdentityProviderMount> {
-        recorded
-            .iter()
-            .filter(|mount| {
-                !self.providers.iter().any(|provider| {
-                    provider.identity_mount_capability()
-                        == IdentityMountCapability::Mountable(mount.target.clone())
-                })
-            })
-            .collect()
-    }
 }
 
 #[cfg(test)]
@@ -372,11 +239,9 @@ mod tests {
     use super::super::OAuthFileConfig;
     use super::*;
     use crate::{
-        ActiveVaultScope, AuthProvidersSnapshotData, LocalFolderConfigData, ProviderSyncCheckpoint,
-        StoredGithubPat, StoredLocalFolderConfiguration, StoredLocalFolderDirectory,
-        StoredLocalFolderHandle, StoredOAuthFileConfiguration,
+        ActiveVaultScope, LocalFolderConfigData, ProviderSyncCheckpoint, ProviderVaultScope,
+        StoredGithubPat, StoredLocalFolderHandle,
     };
-    use std::slice;
 
     struct Row(StorageProviderData);
 
@@ -391,37 +256,45 @@ mod tests {
                 oauth_file: StoredOAuthFileConfiguration::NotApplicable,
                 local_folder: StoredLocalFolderConfiguration::NotApplicable,
                 store_id: ProviderVaultScope::Unscoped,
-                layout: ProviderRowLayout::LegacyVaultRoot,
                 sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-10-12T00:00:00Z".to_owned(),
             })
         }
 
-        fn icloud(id: &str) -> Self {
+        fn oauth(id: &str, config: OAuthFileConfig) -> Self {
             let mut row = Self::github(id, "unused").0;
             row.provider_type = StorageProviderType::OauthFile;
             row.github_pat = StoredGithubPat::Missing;
-            row.oauth_file = StoredOAuthFileConfiguration::configured(OAuthFileConfig {
-                preset: OAuthFilePreset::ICloud,
-                ..OAuthFileConfig::default()
-            });
+            row.oauth_file = StoredOAuthFileConfiguration::configured(config);
             Self(row)
         }
 
-        fn local(id: &str) -> Self {
+        fn icloud(id: &str) -> Self {
+            Self::oauth(
+                id,
+                OAuthFileConfig {
+                    preset: OAuthFilePreset::ICloud,
+                    ..OAuthFileConfig::default()
+                },
+            )
+        }
+
+        fn local(id: &str, store_id: &StoreId) -> Self {
             let mut row = Self::github(id, "unused").0;
             row.provider_type = StorageProviderType::Local;
+            row.store_id = ProviderVaultScope::StoreId(store_id.as_str().to_owned());
             Self(row)
         }
 
-        fn bound_to(mut self, store_id: &StoreId) -> Self {
-            self.0.store_id = ProviderVaultScope::StoreId(store_id.as_str().to_owned());
-            self
-        }
-
-        fn namespaced(mut self) -> Self {
-            self.0.layout = ProviderRowLayout::IdentityNamespaced;
-            self
+        fn folder(id: &str) -> Self {
+            let mut row = Self::github(id, "unused").0;
+            row.provider_type = StorageProviderType::LocalFolder;
+            row.github_pat = StoredGithubPat::Missing;
+            row.local_folder = StoredLocalFolderConfiguration::Configured(LocalFolderConfigData {
+                directory_name: StoredLocalFolderDirectory::DirectoryName("Nook".to_owned()),
+                handle_id: StoredLocalFolderHandle::HandleId("handle".to_owned()),
+            });
+            Self(row)
         }
     }
 
@@ -433,89 +306,83 @@ mod tests {
     }
 
     #[test]
-    fn only_cloud_mounts_let_another_device_join() {
-        let mut folder = Row::github("folder", "unused").0;
-        folder.provider_type = StorageProviderType::LocalFolder;
-        folder.github_pat = StoredGithubPat::Missing;
-        folder.local_folder = StoredLocalFolderConfiguration::Configured(LocalFolderConfigData {
-            directory_name: StoredLocalFolderDirectory::DirectoryName("Nook".to_owned()),
-            handle_id: StoredLocalFolderHandle::HandleId("handle".to_owned()),
-        });
-        let mut drive = Row::icloud("drive").0;
-        drive.oauth_file = StoredOAuthFileConfiguration::configured(OAuthFileConfig {
-            preset: OAuthFilePreset::GoogleDrive,
-            drive_mode: GoogleDriveMode::Private,
-            ..OAuthFileConfig::default()
-        });
+    fn only_cloud_mounts_let_another_device_join() -> anyhow::Result<()> {
+        let drive = Row::oauth(
+            "drive",
+            OAuthFileConfig {
+                preset: OAuthFilePreset::GoogleDrive,
+                drive_mode: GoogleDriveMode::Private,
+                ..OAuthFileConfig::default()
+            },
+        )
+        .0;
 
         assert_eq!(
             Row::github("github", "owner/repo").0.device_join_reach(),
             DeviceJoinReach::OtherDevices
         );
         assert_eq!(drive.device_join_reach(), DeviceJoinReach::OtherDevices);
-        assert_eq!(folder.device_join_reach(), DeviceJoinReach::ThisDeviceOnly);
         assert_eq!(
             Row::icloud("icloud").0.device_join_reach(),
+            DeviceJoinReach::OtherDevices
+        );
+        assert_eq!(
+            Row::folder("folder").0.device_join_reach(),
             DeviceJoinReach::ThisDeviceOnly
         );
         assert_eq!(
-            Row::local("local").0.device_join_reach(),
+            Row::local("local", &StoreId::generate()?)
+                .0
+                .device_join_reach(),
             DeviceJoinReach::ThisDeviceOnly
         );
+        Ok(())
     }
 
     #[test]
-    fn identity_mounts_replicate_every_vault_while_legacy_rows_keep_their_one_vault()
+    fn every_remote_mount_replicates_the_identity_and_each_vault_in_its_namespace()
     -> anyhow::Result<()> {
         let personal = StoreId::generate()?;
         let work = StoreId::generate()?;
         let identity = IdentityId::generate()?;
         let providers = vec![
-            Row::local("local").bound_to(&personal).0,
-            Row::github("legacy", "owner/personal")
-                .bound_to(&personal)
-                .0,
-            Row::github("mount", "owner/identity").namespaced().0,
-            Row::github("unbound", "owner/unknown").0,
-            Row::icloud("icloud").bound_to(&work).0,
+            Row::local("local", &personal).0,
+            Row::github("github", "owner/identity").0,
+            Row::icloud("icloud").0,
+            Row::folder("folder").0,
         ];
         let rows = ProviderRows {
             providers: &providers,
         };
 
-        assert_eq!(
-            ids(&rows.vault_replication(&personal)),
-            vec![
-                ("legacy", EventLogLocation::LegacyVaultRoot),
-                ("mount", EventLogLocation::Vault(personal.clone())),
-            ]
-        );
-        assert_eq!(
-            ids(&rows.vault_replication(&work)),
-            vec![
-                ("mount", EventLogLocation::Vault(work.clone())),
-                ("icloud", EventLogLocation::LegacyVaultRoot),
-            ]
-        );
-        // iCloud cannot list a namespace and an unbound legacy row has no
-        // known vault, so neither carries the identity log.
+        for store_id in [&personal, &work] {
+            assert_eq!(
+                ids(&rows.vault_replication(store_id)),
+                vec![
+                    ("github", EventLogLocation::Vault(store_id.clone())),
+                    ("icloud", EventLogLocation::Vault(store_id.clone())),
+                    ("folder", EventLogLocation::Vault(store_id.clone())),
+                ]
+            );
+        }
         assert_eq!(
             ids(&rows.identity_replication(&identity)),
             vec![
-                ("legacy", EventLogLocation::Identity(identity.clone())),
-                ("mount", EventLogLocation::Identity(identity.clone())),
+                ("github", EventLogLocation::Identity(identity.clone())),
+                ("icloud", EventLogLocation::Identity(identity.clone())),
+                ("folder", EventLogLocation::Identity(identity.clone())),
             ]
         );
         assert_eq!(
-            Row::icloud("icloud").0.identity_mount_capability(),
-            IdentityMountCapability::ICloudNamespaceUnavailable
+            rows.vault_row(&work).map(|row| row.id.as_str()),
+            Some("github")
         );
         assert_eq!(
-            Row::local("local").0.identity_mount_capability(),
+            Row::local("local", &personal).0.identity_mount_capability(),
             IdentityMountCapability::LocalOnly
         );
 
-        // The vault-scoped view used by the open vault includes identity mounts.
+        // The open vault sees its own browser row and every identity mount.
         let active = ProviderRows {
             providers: &providers,
         }
@@ -523,178 +390,77 @@ mod tests {
         .active();
         assert_eq!(
             active.iter().map(|row| row.id.as_str()).collect::<Vec<_>>(),
-            vec!["mount", "icloud"]
+            vec!["github", "icloud", "folder"]
         );
         Ok(())
     }
 
     #[test]
-    fn migrated_rows_become_mount_records_once_and_joiners_see_unconnected_mounts()
-    -> anyhow::Result<()> {
-        let personal = StoreId::generate()?;
+    fn icloud_mounts_carry_their_share_and_need_one_when_shared() {
+        assert_eq!(
+            Row::icloud("icloud").0.identity_mount_capability(),
+            IdentityMountCapability::Mountable(IdentityMountTarget::ICloud {
+                icloud: ICloudMountTarget::Private
+            })
+        );
+        let unshared = Row::oauth(
+            "icloud",
+            OAuthFileConfig {
+                preset: OAuthFilePreset::ICloud,
+                icloud_mode: ICloudMode::Shared,
+                ..OAuthFileConfig::default()
+            },
+        );
+        assert_eq!(
+            unshared.0.identity_mount_capability(),
+            IdentityMountCapability::Unconfigured
+        );
+        let shared = Row::oauth(
+            "icloud",
+            OAuthFileConfig {
+                preset: OAuthFilePreset::ICloud,
+                icloud_mode: ICloudMode::Shared,
+                icloud_share_target: StoredICloudShareTarget::SharedTarget("share".to_owned()),
+                ..OAuthFileConfig::default()
+            },
+        );
+        assert_eq!(
+            shared.0.identity_mount_capability(),
+            IdentityMountCapability::Mountable(IdentityMountTarget::ICloud {
+                icloud: ICloudMountTarget::Shared {
+                    share_target: "share".to_owned()
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn remote_rows_become_mount_records_once() -> anyhow::Result<()> {
         let providers = vec![
-            Row::local("local").0,
-            Row::github("legacy", "owner/personal")
-                .bound_to(&personal)
-                .0,
-            Row::github("mount", "owner/identity").namespaced().0,
-            Row::icloud("icloud").bound_to(&personal).0,
+            Row::local("local", &StoreId::generate()?).0,
+            Row::github("first", "owner/identity").0,
+            Row::github("again", "owner/identity").0,
+            Row::icloud("icloud").0,
         ];
         let rows = ProviderRows {
             providers: &providers,
         };
         let recorded = rows.unrecorded_mounts(&[])?;
-        assert_eq!(recorded.len(), 2);
         assert_eq!(
             recorded
                 .iter()
-                .map(|mount| (&mount.target, &mount.layout))
+                .map(|mount| &mount.target)
                 .collect::<Vec<_>>(),
             vec![
-                (
-                    &IdentityMountTarget::Github {
-                        repository: "owner/personal".to_owned()
-                    },
-                    &ProviderMountLayout::LegacySingleVault {
-                        store_id: personal.clone()
-                    }
-                ),
-                (
-                    &IdentityMountTarget::Github {
-                        repository: "owner/identity".to_owned()
-                    },
-                    &ProviderMountLayout::Namespaced
-                ),
+                &IdentityMountTarget::Github {
+                    repository: "owner/identity".to_owned()
+                },
+                &IdentityMountTarget::ICloud {
+                    icloud: ICloudMountTarget::Private
+                },
             ]
         );
         assert!(rows.unrecorded_mounts(&recorded)?.is_empty());
-
-        let joiner_rows = vec![Row::github("joined", "owner/identity").namespaced().0];
-        let unconnected = ProviderRows {
-            providers: &joiner_rows,
-        }
-        .unconnected_mounts(&recorded);
-        assert_eq!(unconnected.len(), 1);
-        assert_eq!(
-            unconnected.first().map(|mount| &mount.target),
-            Some(&IdentityMountTarget::Github {
-                repository: "owner/personal".to_owned()
-            })
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn joined_rows_take_the_layout_the_identity_recorded_for_their_target() -> anyhow::Result<()> {
-        let personal = StoreId::generate()?;
-        let legacy_mount = IdentityProviderMount {
-            mount_id: ProviderMountId::generate()?,
-            label: "GitHub".to_owned(),
-            target: IdentityMountTarget::Github {
-                repository: "owner/personal".to_owned(),
-            },
-            layout: ProviderMountLayout::LegacySingleVault {
-                store_id: personal.clone(),
-            },
-        };
-        let rows = [
-            Row::github("joined", "owner/personal").namespaced().0,
-            Row::github("other", "owner/other").namespaced().0,
-        ];
-        let aligned =
-            ProviderRows { providers: &rows }.aligned_with_mounts(slice::from_ref(&legacy_mount));
-        let [joined, other] = aligned.as_slice() else {
-            anyhow::bail!("alignment keeps every row");
-        };
-        assert_eq!(
-            joined.vault_location(&personal),
-            Some(EventLogLocation::LegacyVaultRoot)
-        );
-        assert_eq!(joined.vault_location(&StoreId::generate()?), None);
-        assert_eq!(other, &rows[1]);
-        let selected = ProviderRows {
-            providers: &aligned,
-        };
-        assert_eq!(
-            selected.vault_row(&personal).map(|row| row.id.as_str()),
-            Some("joined")
-        );
-
-        let namespaced_mount = IdentityProviderMount {
-            mount_id: ProviderMountId::generate()?,
-            layout: ProviderMountLayout::Namespaced,
-            ..legacy_mount.clone()
-        };
-        let aligned = ProviderRows { providers: &rows }
-            .aligned_with_mounts(&[legacy_mount, namespaced_mount]);
-        assert_eq!(
-            aligned.first().map(|row| row.layout),
-            Some(ProviderRowLayout::IdentityNamespaced)
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn namespaced_rows_are_withheld_from_the_rollback_projection() -> anyhow::Result<()> {
-        let personal = StoreId::generate()?;
-        let snapshot = AuthProvidersSnapshotData {
-            providers: vec![
-                Row::github("legacy", "owner/personal")
-                    .bound_to(&personal)
-                    .0,
-                Row::github("mount", "owner/identity").namespaced().0,
-            ],
-            active_vault_store_id: ActiveVaultScope::Unselected,
-        };
-        let projected = serde_json::to_value(snapshot.legacy_storage_snapshot())?;
-        let ids = projected
-            .get("providers")
-            .and_then(serde_json::Value::as_array)
-            .ok_or_else(|| anyhow::anyhow!("rollback projection lists providers"))?
-            .iter()
-            .filter_map(|row| row.get("id").and_then(serde_json::Value::as_str))
-            .collect::<Vec<_>>();
-        assert_eq!(ids, vec!["legacy"]);
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-mod remote_ref_tests {
-    use super::*;
-    use crate::{ProviderSyncCheckpoint, StoredGithubPat, StoredOAuthFileConfiguration};
-
-    #[test]
-    fn namespaced_rows_mark_their_connect_ref_and_legacy_rows_stay_unchanged() -> anyhow::Result<()>
-    {
-        let mut row = StorageProviderData {
-            id: "github".to_owned(),
-            provider_type: StorageProviderType::Github,
-            label: "GitHub".to_owned(),
-            github_pat: StoredGithubPat::Token("pat".to_owned()),
-            github_repo: StoredGithubRepository::Repository("owner/repo".to_owned()),
-            oauth_file: StoredOAuthFileConfiguration::NotApplicable,
-            local_folder: StoredLocalFolderConfiguration::NotApplicable,
-            store_id: ProviderVaultScope::Unscoped,
-            layout: ProviderRowLayout::LegacyVaultRoot,
-            sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
-            created_at: String::new(),
-        };
-        assert_eq!(row.connection_args()?.repo, "owner/repo");
-        row.layout = ProviderRowLayout::IdentityNamespaced;
-        let args = row.connection_args()?;
-        assert_eq!(args.repo, "identity-namespaced:owner/repo");
-        assert_eq!(
-            LayoutRemoteRef::parse(&args.repo),
-            LayoutRemoteRef {
-                layout: ProviderRowLayout::IdentityNamespaced,
-                inner: "owner/repo",
-            }
-        );
-        assert_eq!(
-            LayoutRemoteRef::parse("private-folder-v2:abc").layout,
-            ProviderRowLayout::LegacyVaultRoot
-        );
         Ok(())
     }
 }

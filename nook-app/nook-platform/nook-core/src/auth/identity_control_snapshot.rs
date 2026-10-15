@@ -8,7 +8,7 @@
 use nook_auth2::{AppId, IdentityId};
 use nook_event_log::{
     DriveMountTarget, ICloudMountTarget, IdentityControlState, IdentityMountTarget,
-    IdentityProviderMount, IdentityVaultDekLookup, ProviderMountLayout,
+    IdentityProviderMount, IdentityVaultDekLookup,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -55,16 +55,6 @@ pub struct IdentityVaultView {
     pub members_missing_dek: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(tag = "state", rename_all = "camelCase")]
-pub enum IdentityMountLayoutView {
-    Namespaced,
-    #[serde(rename_all = "camelCase")]
-    LegacySingleVault {
-        store_id: String,
-    },
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub enum IdentityMountProvider {
@@ -83,7 +73,6 @@ pub struct IdentityMountView {
     pub provider: IdentityMountProvider,
     /// Credential-free routing shown to the user (repository, folder, share).
     pub target: String,
-    pub layout: IdentityMountLayoutView,
     /// Whether this installation saved credentials for this mount.
     pub connected_here: bool,
 }
@@ -138,14 +127,6 @@ impl IdentityMountView {
             label: mount.label.clone(),
             provider,
             target,
-            layout: match &mount.layout {
-                ProviderMountLayout::Namespaced => IdentityMountLayoutView::Namespaced,
-                ProviderMountLayout::LegacySingleVault { store_id } => {
-                    IdentityMountLayoutView::LegacySingleVault {
-                        store_id: store_id.as_str().to_owned(),
-                    }
-                }
-            },
             connected_here: providers.iter().any(|provider| {
                 provider.identity_mount_capability()
                     == IdentityMountCapability::Mountable(mount.target.clone())
