@@ -20,6 +20,14 @@ checkout's absolute path, then read that library's `CIRCUIT-BREAKER.md` and
 @.meta-cortex/CIRCUIT-BREAKER.md
 @.meta-cortex/AGENTS.md
 
+## Subagent models
+
+Launch Meta-Cortex roles (Gizmo Prime, Team Gizmo, specialists) through
+Claude Code's own agent tool on Claude models. The `model` values in
+`.meta-cortex/meta-cortex.toml` name Codex models for Codex sessions; do not
+pass them here and do not rewrite that shared file. Every other role,
+assignment-context, and delegation rule still applies.
+
 ---
 meta-cortex: instructions
 ---
