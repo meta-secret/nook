@@ -449,7 +449,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && web_publish_section.contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
             && ui_demo.contains("needs: [web]")
             && ui_demo.contains("runs-on: nook-k0s-container")
-            && ui_demo.contains("image: ${{ needs.web.outputs.e2e_image }}")
+            && ui_demo.contains("${{ needs.web.outputs.e2e_image_attempt }}")
             && ui_demo_verification.contains("task _web:test:ui-demo")
             && !ui_demo.contains("nook-docker-setup")
             && !ui_demo.contains("publish-web-e2e-cache")
