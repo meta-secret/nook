@@ -376,6 +376,8 @@ pub(crate) use local_vault::{
     ImportVaultBlobRequest, SaveSecretSearchCatalogBucketsRequest, SecretSearchBucketMutation,
     SetLocalVaultLabelRequest,
 };
+#[cfg(test)]
+pub(crate) use local_vault::{LocalVaultRemoval, RemoveRegistryEntryRequest};
 
 #[cfg(test)]
 pub(crate) use device_identity::SaveWrappedDeviceIdentityRequest;
@@ -460,6 +462,75 @@ mod unit_tests {
         assert!(NookDatabase::store_id_from_yaml("not yaml").is_err());
         assert!(NookDatabase::label_from_yaml("not yaml").is_err());
         assert!(!NookDatabase::default_registry_label("store_registry01").is_empty());
+    }
+
+    fn registry_of(store_ids: &[&str]) -> VaultRegistry {
+        let mut registry = VaultRegistry::default();
+        for store_id in store_ids {
+            NookDatabase::upsert_registry_entry(UpsertRegistryEntryRequest {
+                registry: &mut registry,
+                store_id,
+                label: RegistryLabelUpdate::PreserveOrDefault,
+                touch_unlock: false,
+            });
+        }
+        registry
+    }
+
+    fn store_ids(registry: &VaultRegistry) -> Vec<&str> {
+        registry
+            .vaults
+            .iter()
+            .map(|entry| entry.store_id.as_str())
+            .collect()
+    }
+
+    #[wasm_bindgen_test]
+    fn removing_a_vault_drops_only_that_entry() {
+        let mut registry = registry_of(&["store_keep01", "store_drop01"]);
+        let outcome = NookDatabase::remove_registry_entry(RemoveRegistryEntryRequest {
+            registry: &mut registry,
+            store_id: "store_drop01",
+            active: &ActiveVaultScope::StoreId("store_keep01".to_owned()),
+        });
+        assert_eq!(outcome, LocalVaultRemoval::Removed);
+        assert_eq!(store_ids(&registry), vec!["store_keep01"]);
+    }
+
+    #[wasm_bindgen_test]
+    fn removing_the_active_vault_is_refused_and_keeps_the_registry() {
+        let mut registry = registry_of(&["store_open01", "store_other1"]);
+        let outcome = NookDatabase::remove_registry_entry(RemoveRegistryEntryRequest {
+            registry: &mut registry,
+            store_id: "store_open01",
+            active: &ActiveVaultScope::StoreId("store_open01".to_owned()),
+        });
+        assert_eq!(outcome, LocalVaultRemoval::Active);
+        assert_eq!(store_ids(&registry), vec!["store_open01", "store_other1"]);
+    }
+
+    #[wasm_bindgen_test]
+    fn removing_an_unknown_vault_is_refused() {
+        let mut registry = registry_of(&["store_keep01"]);
+        let outcome = NookDatabase::remove_registry_entry(RemoveRegistryEntryRequest {
+            registry: &mut registry,
+            store_id: "store_missing",
+            active: &ActiveVaultScope::Unselected,
+        });
+        assert_eq!(outcome, LocalVaultRemoval::NotRegistered);
+        assert_eq!(store_ids(&registry), vec!["store_keep01"]);
+    }
+
+    #[wasm_bindgen_test]
+    fn a_vault_can_be_removed_while_none_is_active() {
+        let mut registry = registry_of(&["store_drop01"]);
+        let outcome = NookDatabase::remove_registry_entry(RemoveRegistryEntryRequest {
+            registry: &mut registry,
+            store_id: "store_drop01",
+            active: &ActiveVaultScope::Unselected,
+        });
+        assert_eq!(outcome, LocalVaultRemoval::Removed);
+        assert!(registry.vaults.is_empty());
     }
 }
 

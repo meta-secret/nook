@@ -37,6 +37,7 @@
     Plus,
     RefreshCw,
     ShieldCheck,
+    Trash2,
     X,
   } from '@lucide/svelte'
   import SettingsAccordionSection from '$lib/components/settings/SettingsAccordionSection.svelte'
@@ -194,6 +195,14 @@
   async function createVault(label: string): Promise<void> {
     await onCreateVault(label)
     if (!vault.errorMsg) newVaultOpen = false
+  }
+
+  /** The vault whose removal from this browser awaits confirmation. */
+  let removingStoreId = $state('')
+
+  async function removeVault(entry: NookLocalVaultEntry): Promise<void> {
+    await vault.removeLocalVault(entry.storeId)
+    if (!vault.errorMsg) removingStoreId = ''
   }
 
   type AuthStorageOptionalProps = Partial<
@@ -487,14 +496,14 @@
               </div>
 
               <div
-                class="col-span-2 grid grid-cols-2 gap-2 md:col-span-1 md:w-[14.5rem] md:grid-cols-[7rem_6.5rem]"
+                class="col-span-2 flex flex-wrap items-center justify-end gap-2 md:col-span-1"
               >
                 {#if isEditing}
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    class="h-10 w-full"
+                    class="h-10"
                     data-testid="vault-admin-cancel-rename-btn"
                     data-store-id={entry.storeId}
                     disabled={renamingStoreId.kind ===
@@ -507,7 +516,7 @@
                   </Button>
                 {:else if isActive}
                   <span
-                    class="nk-tag nk-tag-success h-10 w-full justify-center"
+                    class="nk-tag nk-tag-success h-10 justify-center px-3"
                     data-testid="vault-admin-active-badge"
                   >
                     <Check class="size-4" />
@@ -518,7 +527,7 @@
                   type="button"
                   variant="secondary"
                   size="sm"
-                  class="h-10 w-full"
+                  class="h-10"
                   data-testid="vault-admin-rename-btn"
                   data-store-id={entry.storeId}
                   disabled={isEditing ? !canSave(entry) : isBusy}
@@ -532,7 +541,67 @@
                   {/if}
                   {vault.t(I18N_KEYS.CommonRename)}
                 </Button>
+                {#if !isEditing}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    class="h-10 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    data-testid="vault-admin-remove-btn"
+                    data-store-id={entry.storeId}
+                    title={isActive
+                      ? vault.t(I18N_KEYS.VaultAdminRemoveActiveHint)
+                      : vault.t(I18N_KEYS.VaultAdminRemoveConfirmButton)}
+                    disabled={isBusy || isActive}
+                    onclick={() => (removingStoreId = entry.storeId)}
+                  >
+                    <Trash2 class="size-4" />
+                    {vault.t(I18N_KEYS.VaultAdminRemove)}
+                  </Button>
+                {/if}
               </div>
+              {#if removingStoreId === entry.storeId && !isActive}
+                <div
+                  class="nk-banner col-span-full grid gap-3 border-l-destructive bg-destructive/5 p-4 md:col-span-3"
+                  data-testid="vault-admin-remove-confirmation"
+                  data-store-id={entry.storeId}
+                >
+                  <p class="text-sm text-pretty text-foreground">
+                    {(() => {
+                      const confirmRequest: Parameters<typeof vault.t>[0] = {
+                        key: I18N_KEYS.VaultAdminRemoveConfirm,
+                        replacements: {
+                          vault: entry.display_label(unnamedVaultLabel),
+                        },
+                      }
+                      return vault.t(confirmRequest)
+                    })()}
+                  </p>
+                  <div class="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      data-testid="vault-admin-remove-confirm"
+                      disabled={isBusy}
+                      onclick={() => void removeVault(entry)}
+                    >
+                      <Trash2 class="size-3.5" />
+                      {vault.t(I18N_KEYS.VaultAdminRemoveConfirmButton)}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      data-testid="vault-admin-remove-cancel"
+                      disabled={isBusy}
+                      onclick={() => (removingStoreId = '')}
+                    >
+                      {vault.t(I18N_KEYS.CommonCancel)}
+                    </Button>
+                  </div>
+                </div>
+              {/if}
             </li>
           {/each}
         </ul>

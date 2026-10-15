@@ -293,6 +293,15 @@ impl NookActiveVaultSelection {
     .map_err(Into::into)
 }
 
+/// Remove a vault from this browser only. Its copies on sync providers and
+/// other devices stay. The active vault is refused.
+#[wasm_bindgen]
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn remove_local_vault(store_id: String) -> Result<(), JsError> {
+    NookDatabase::remove_local_vault(&store_id)
+        .await
+        .map_err(Into::into)
+}
+
 #[wasm_bindgen]
 #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub async fn prepare_new_local_vault_slot() -> Result<(), JsError> {
     NookDatabase::prepare_new_local_vault_slot()
