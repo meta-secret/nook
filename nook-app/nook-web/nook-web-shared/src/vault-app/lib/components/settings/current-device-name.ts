@@ -12,7 +12,8 @@ export class CurrentDeviceName {
 
   get text(): string {
     const { t } = this.request;
-    if (!("navigator" in globalThis)) return t(I18N_KEYS.DevicesCardThisBrowserOs);
+    if (!("navigator" in globalThis))
+      return t(I18N_KEYS.DevicesCardThisBrowserOs);
     const ua = navigator.userAgent;
     let os = t(I18N_KEYS.DevicesCardUnknownOs);
     if (ua.includes("Android")) os = "Android";
