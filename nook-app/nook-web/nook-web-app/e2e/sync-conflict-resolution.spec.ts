@@ -247,7 +247,7 @@ test.describe('sync conflict resolution', () => {
     await expect(
       page.getByText(/A passkey unlocks one protected Nook identity/),
     ).toBeVisible()
-    await expect(page.getByText(/A backup password is separate/)).toBeVisible()
+    await expect(page.getByText(/A passphrase is separate/)).toBeVisible()
     await expect(page.getByTestId('vault-error')).toHaveCount(0)
     await expect
       .poll(() =>

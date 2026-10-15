@@ -228,7 +228,7 @@ export async function addVaultPassword(
   await page.getByTestId('vault-password-input').fill(password)
   await page.getByTestId('vault-password-confirm').fill(password)
   await page.getByTestId('submit-vault-password').click()
-  await expect(page.getByTestId('app-success')).toContainText(/password/i, {
+  await expect(page.getByTestId('app-success')).toContainText(/passphrase/i, {
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
   await waitForVaultOperationsIdle(page)
@@ -257,7 +257,7 @@ export async function rotateVaultPassword(page: Page, password: string) {
   if (await error.isVisible()) {
     throw new Error(`Password rotation failed: ${await error.innerText()}`)
   }
-  await expect(success).toContainText(/password/i)
+  await expect(success).toContainText(/passphrase/i)
   await expectVaultPasswordStatus(page, 1, {
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
@@ -324,12 +324,15 @@ export async function expectVaultPasswordStatus(
     .getByTestId('vault-password-status')
   const [timeout = UI_TIMEOUT_MS] = [options?.timeout]
   if (count === 1) {
-    await expect(status).toContainText(/1 (password|item)/, { timeout })
+    await expect(status).toContainText(/1 (passphrase|item)/, { timeout })
     return
   }
-  await expect(status).toContainText(new RegExp(`${count} (passwords|items)`), {
-    timeout,
-  })
+  await expect(status).toContainText(
+    new RegExp(`${count} (passphrases|items)`),
+    {
+      timeout,
+    },
+  )
 }
 
 export async function expectNoVaultPasswords(

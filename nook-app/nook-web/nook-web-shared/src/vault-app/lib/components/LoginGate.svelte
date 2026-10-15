@@ -247,18 +247,6 @@
     showProviderSetupLink = true;
   }
 
-  /** Manage on a locked identity unlocks it (one of its vaults, with this
-   * device's key) and lands on the identity home. */
-  function manageIdentity(target: IdentityVaultTarget): void {
-    // With no vault on this browser there is nothing to unlock it with.
-    if (!target.storeId) return;
-    const home: UnlockDestination = {
-      storeId: target.storeId,
-      page: { kind: UnlockPageKind.Route, route: WorkspaceRoute.Keys },
-    };
-    void unlockTo(home);
-  }
-
   /** "Add a device" on a locked card unlocks the identity, then opens the
    * add-device flow. */
   function addDevice(target: IdentityVaultTarget): void {
@@ -409,6 +397,9 @@
   }
 
   const hasProviders = $derived(providers.length > 0);
+  /** Identity cards carry the vaults; the storage sheet then opens only
+   * when asked for (New vault, Add provider). */
+  let identityCardsShown = $state(false);
   const showSetup = $derived(loginSetup.kind === LoginSetupKind.Active);
   function setupIs(type: StorageProviderType): boolean {
     return (
@@ -486,7 +477,7 @@
   const showProviderSetup = $derived(
     (showProviderSetupLink ||
       addProviderOpen ||
-      (hasProviders && !vault.localVaultPresent)) &&
+      (hasProviders && !vault.localVaultPresent && !identityCardsShown)) &&
       !showSetup &&
       !showLocalUnlock &&
       !showCreateVault,
@@ -711,13 +702,13 @@
       canAddVault={!showCreateVault && !showQrOnboarding}
       onOpenVault={unlockVault}
       onNewVault={openNewVault}
-      onManage={manageIdentity}
       onAddDevice={addDevice}
       onManageSection={manageSection}
       onUnlock={() => void unlockIdentity()}
       onLock={lockIdentity}
       onNewIdentity={newIdentity}
       onUseIdentity={(target: IdentityVaultTarget) => void useIdentity(target)}
+      onCardsShown={(shown: boolean) => (identityCardsShown = shown)}
       pairingStatusFor={(storeId: string) =>
         pairingStatusLookup.statusForStore(storeId)}
       {...showLocalUnlock && !newVaultOpen && showSentinelCeremony
@@ -733,7 +724,8 @@
       {...(showCreateVault || sentinelInvitationRequest.trim()) &&
       !showQrOnboarding
         ? { vaultSetup: vaultSetupPanel }
-        : newVaultOpen && (showLocalUnlock || showVaultPicker)
+        : newVaultOpen &&
+            (showLocalUnlock || showVaultPicker || identityCardsShown)
           ? { vaultSetup: newVaultPanel }
           : {}}
       vaultSetupOpen={newVaultOpen ||

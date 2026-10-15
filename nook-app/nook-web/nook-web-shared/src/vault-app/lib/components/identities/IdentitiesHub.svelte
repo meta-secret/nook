@@ -43,9 +43,9 @@ join) sit between the hero and the cards.
     busy = false,
     onOpenVault,
     onNewVault = () => {},
-    onManage,
     onNewIdentity,
     onUseIdentity,
+    onCardsShown = () => {},
     currentHealthNote = '',
     onHealth = () => {},
     onAddDevice,
@@ -76,9 +76,11 @@ join) sit between the hero and the cards.
     busy?: boolean
     onOpenVault: (storeId: string) => void
     onNewVault?: () => void
-    onManage: (request: IdentityVaultTarget) => void
     onNewIdentity: () => void
     onUseIdentity: (target: IdentityVaultTarget) => void
+    /** Whether identity cards are on screen; the login screen then leaves
+     * vault access to them instead of its own storage sheet. */
+    onCardsShown?: (shown: boolean) => void
     /** What the unlocked identity lacks, shown as a chip on its card. */
     currentHealthNote?: string
     /** Open the unlocked identity's control page at its next step. */
@@ -224,6 +226,9 @@ join) sit between the hero and the cards.
     if (loader.state.kind === IdentityDirectoryLoadKind.Loading) return
     const identityId = currentIdentityId()
     if (!identityId) {
+      // Between switching identities no card is current yet; the setup
+      // waits for the new current card rather than standing alone.
+      if (cardsReady && projection.cards.length > 0) return
       setupHost = { kind: VaultSetupHostKind.Draft }
       return
     }
@@ -285,6 +290,12 @@ join) sit between the hero and the cards.
   const currentCardShown = $derived(
     cardsReady && showCards && projection.cards.some((card) => card.current),
   )
+  /** Identity cards are on screen; they, not a flat vault list, carry
+   * this browser's vaults. */
+  const cardsShown = $derived(
+    cardsReady && showCards && projection.cards.length > 0,
+  )
+  $effect(() => onCardsShown(cardsShown))
   const cardsListVaults = $derived(
     cardsReady &&
       projection.cards.some((card) =>
@@ -337,14 +348,16 @@ join) sit between the hero and the cards.
   {/if}
 
   {#if vaultPicker}
-    {#if cardsListVaults}
-      <p
-        class="nk-banner px-4 py-3 text-sm text-foreground"
-        data-testid="login-choose-vault-hint"
-        role="status"
-      >
-        {vault.t(I18N_KEYS.LoginChooseVaultHint)}
-      </p>
+    {#if cardsShown}
+      {#if cardsListVaults}
+        <p
+          class="nk-banner px-4 py-3 text-sm text-foreground"
+          data-testid="login-choose-vault-hint"
+          role="status"
+        >
+          {vault.t(I18N_KEYS.LoginChooseVaultHint)}
+        </p>
+      {/if}
     {:else}
       <div class="nk-frame-sheet min-w-0 p-5 sm:p-6">
         {@render vaultPicker()}
@@ -430,7 +443,6 @@ join) sit between the hero and the cards.
             onNewVault={card.identityId === setupIdentityId
               ? () => (setupOpen = true)
               : onNewVault}
-            onManage={(identityId: string) => onManage(targetFor(identityId))}
             onUnlock={(identityId: string) => onUnlock(targetFor(identityId))}
             {onLock}
             healthNote={card.current ? currentHealthNote : ''}

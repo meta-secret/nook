@@ -131,7 +131,7 @@ test.describe('local folder backup provider', () => {
     await expect(recoverySummary).toContainText(`device ${passkeyDeviceHint}`)
     await expect(
       page.getByTestId('existing-vault-password-status'),
-    ).toContainText('Backup password available')
+    ).toContainText('Passphrase available')
     await expect(
       page.getByTestId('existing-vault-password-status'),
     ).toContainText('Emergency recovery')

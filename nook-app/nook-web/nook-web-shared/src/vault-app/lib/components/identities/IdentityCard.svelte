@@ -55,7 +55,6 @@ card, which then spans the full row.
     canAddVault = false,
     onOpenVault,
     onNewVault = () => {},
-    onManage,
     onLock = () => {},
     onUnlock = () => {},
     onUseIdentity = () => {},
@@ -82,7 +81,6 @@ card, which then spans the full row.
     canAddVault?: boolean
     onOpenVault: (storeId: string) => void
     onNewVault?: () => void
-    onManage: (identityId: string) => void
     onLock?: () => void
     /** Unlock the identity with this device's passkey. */
     onUnlock?: (identityId: string) => void
@@ -542,19 +540,6 @@ card, which then spans the full row.
           >
             <KeyRound class="size-4 text-muted-foreground" aria-hidden="true" />
             {vault.t(I18N_KEYS.WorkspaceBackupPasswordButton)}
-          </button>
-        {/if}
-        {#if !managesHere}
-          <button
-            type="button"
-            data-testid="identity-manage"
-            disabled={busy}
-            onclick={() => onManage(card.identityId)}
-          >
-            <Settings2 class="size-4 text-muted-foreground" aria-hidden="true" />
-            {live || card.status === IdentityCardStatus.Locked
-              ? vault.t(I18N_KEYS.WorkspaceManage)
-              : vault.t(I18N_KEYS.WorkspaceManageIdentity)}
           </button>
         {/if}
       </div>

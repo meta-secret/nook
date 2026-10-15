@@ -1,8 +1,8 @@
 <!--
-Backup-password unlock beside a locked identity card: which password (when
-the vault has several) and its field. A backup password opens the selected
-vault directly, without this device's passkey. Backup password on the
-card's footer opens it.
+Passphrase unlock beside a locked identity card: what a passphrase is for,
+which one (when the vault has several) and its field. A passphrase opens
+the selected vault directly, without this device's passkey; Passphrase on
+the card's footer opens it.
 -->
 <script lang="ts">
   import { RefreshCw } from "@lucide/svelte";
@@ -46,6 +46,14 @@ card's footer opens it.
     return vault.t(labelRequest);
   });
 
+  const body = $derived.by(() => {
+    const bodyRequest: Parameters<typeof vault.t>[0] = {
+      key: I18N_KEYS.WorkspacePassphraseUnlockBody,
+      replacements: { vault: vaultLabel },
+    };
+    return vault.t(bodyRequest);
+  });
+
   function submit(event: SubmitEvent): void {
     event.preventDefault();
     if (!entryId || !password.trim()) return;
@@ -57,13 +65,22 @@ card's footer opens it.
   }
 </script>
 
-<div class="grid min-w-0 gap-2" data-testid="card-password-unlock">
+<div class="grid min-w-0 gap-5" data-testid="card-password-unlock">
+  <div class="grid max-w-[60ch] gap-2">
+    <p class="text-sm text-pretty text-foreground">{body}</p>
+    <p class="text-xs text-pretty text-muted-foreground">
+      {vault.t(I18N_KEYS.WorkspacePassphraseUnlockNote)}
+    </p>
+  </div>
   <form class="grid gap-3" onsubmit={submit}>
     {#if entries.length > 1}
+      <label class="text-xs font-medium text-foreground" for="card-password-entry">
+        {vault.t(I18N_KEYS.WorkspacePassphraseUnlockChoose)}
+      </label>
       <select
+        id="card-password-entry"
         class="h-10 w-full border border-border bg-card px-2 text-sm text-foreground"
         bind:value={chosenId}
-        aria-label={vault.t(I18N_KEYS.WorkspaceBackupPasswordButton)}
         data-testid="card-password-entry"
       >
         {#each entries as entry (entry.id)}

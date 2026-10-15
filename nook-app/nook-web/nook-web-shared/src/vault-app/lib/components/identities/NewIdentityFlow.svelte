@@ -249,7 +249,6 @@ adopting the new identity ends the current identity's session midway.
           {vault}
           card={preview}
           onOpenVault={() => {}}
-          onManage={() => {}}
         />
       </div>
       <div class="grid min-w-0 gap-3">

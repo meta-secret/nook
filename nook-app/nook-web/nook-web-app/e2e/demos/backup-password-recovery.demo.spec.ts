@@ -59,6 +59,7 @@ test('recover a local vault with its backup password after device-key loss', asy
   await page.getByTestId('card-password-unlock-open').click()
   await expect(page.getByTestId('identity-card-password')).toBeVisible()
   if (directory) {
+    await page.emulateMedia({ colorScheme: 'dark' })
     await page.screenshot({ path: `${directory}/locked-backup-password.png` })
   }
   await unlockWithCardPassword(page, { password: 'recovery-pass-99' })

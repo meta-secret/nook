@@ -239,7 +239,7 @@ test('retains the folder import while showing matching passkeys and password rec
   })
   await expect(summary).toContainText('Passkeys for this vault')
   await expect(summary).toContainText('device ')
-  await expect(summary).toContainText('Backup password available')
+  await expect(summary).toContainText('Passphrase available')
   await expect(summary).toContainText('Emergency recovery')
   await demoBeat(page)
 

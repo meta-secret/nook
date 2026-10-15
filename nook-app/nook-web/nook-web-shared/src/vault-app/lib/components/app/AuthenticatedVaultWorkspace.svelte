@@ -38,7 +38,11 @@ band, the scrolling page and the status line.
   import { VaultStatusBarVariant } from "$lib/components/vault-status-bar-state";
   import IdentitiesHub from "$lib/components/identities/IdentitiesHub.svelte";
   import LoginNewVaultPanel from "$lib/components/login/LoginNewVaultPanel.svelte";
-  import type { IdentitySectionTarget } from "$lib/components/identities/identity-card-model";
+  import type {
+    IdentitySectionTarget,
+    IdentityVaultTarget,
+  } from "$lib/components/identities/identity-card-model";
+  import { IdentitySwitch } from "$lib/components/identities/identity-switch";
   import { IdentityDirectoryLoader } from "$lib/components/identities/identity-directory-loader.svelte";
   import { IdentityDirectoryLoadKind } from "$lib/components/devices-access/identity-directory-view";
   import PageBar from "$lib/components/workspace/PageBar.svelte";
@@ -297,12 +301,10 @@ band, the scrolling page and the status line.
     await vault.switchToVault(storeId);
   }
 
-  /** Manage on a card: the unlocked identity opens its overview; another
-   * identity is managed from Keys, which lists them all. */
-  /** Manage on another identity's card: Keys lists every identity's keys.
-   * The current identity's card opens its own menu instead. */
-  function manageIdentity(): void {
-    openSection(WorkspaceSection.Keys);
+  /** "Use identity" on another identity's card: this browser switches to
+   * it; the session ends and the locked hub shows it as the current card. */
+  function useIdentity(target: IdentityVaultTarget): void {
+    void new IdentitySwitch(vault).to(target.identityId);
   }
 
   function newIdentity(): void {
@@ -528,9 +530,8 @@ band, the scrolling page and the status line.
       onNewVault={() => (newVaultOpen = true)}
       {...newVaultOpen ? { vaultSetup: newVaultPanel } : {}}
       vaultSetupOpen={newVaultOpen}
-      onManage={manageIdentity}
       onNewIdentity={newIdentity}
-      onUseIdentity={manageIdentity}
+      onUseIdentity={useIdentity}
       {currentHealthNote}
       onHealth={() =>
         openSection(
