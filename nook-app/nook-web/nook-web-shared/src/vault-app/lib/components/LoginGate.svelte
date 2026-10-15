@@ -4,7 +4,10 @@
     WorkspacePath,
     WorkspaceRouteLookupKind,
   } from "$lib/app/workspace-route";
-  import type { IdentityVaultTarget } from "$lib/components/identities/identity-card-model";
+  import type {
+    IdentitySectionTarget,
+    IdentityVaultTarget,
+  } from "$lib/components/identities/identity-card-model";
   import type { SentinelActionResult } from "$lib/vault/sentinel-genesis";
   type EnrollmentCodeUnlock = {
     readonly code: string;
@@ -39,6 +42,7 @@
     oauth_access_token,
   } from "$lib/auth/providers";
   import { WorkspaceRoute } from "$lib/app/workspace-route";
+  import { WorkspaceSectionRoute } from "$lib/vault/ui";
   import { VaultWorkspaceActions } from "$lib/vault/ui";
   import ProviderSetupFields from "$lib/components/ProviderSetupFields.svelte";
   import OAuthProviderSetupWizard from "$lib/components/OAuthProviderSetupWizard.svelte";
@@ -250,7 +254,7 @@
     if (!target.storeId) return;
     const home: UnlockDestination = {
       storeId: target.storeId,
-      page: { kind: UnlockPageKind.Route, route: WorkspaceRoute.Overview },
+      page: { kind: UnlockPageKind.Route, route: WorkspaceRoute.Keys },
     };
     void unlockTo(home);
   }
@@ -262,6 +266,19 @@
     const destination: UnlockDestination = {
       storeId: target.storeId,
       page: { kind: UnlockPageKind.Route, route: WorkspaceRoute.AddDevice },
+    };
+    void unlockTo(destination);
+  }
+
+  /** A page chosen from Manage on a locked card: unlock, then open it. */
+  function manageSection(target: IdentitySectionTarget): void {
+    if (!target.storeId) return;
+    const destination: UnlockDestination = {
+      storeId: target.storeId,
+      page: {
+        kind: UnlockPageKind.Route,
+        route: new WorkspaceSectionRoute(target.section).route,
+      },
     };
     void unlockTo(destination);
   }
@@ -696,6 +713,7 @@
       onNewVault={openNewVault}
       onManage={manageIdentity}
       onAddDevice={addDevice}
+      onManageSection={manageSection}
       onUnlock={() => void unlockIdentity()}
       onLock={lockIdentity}
       onNewIdentity={newIdentity}

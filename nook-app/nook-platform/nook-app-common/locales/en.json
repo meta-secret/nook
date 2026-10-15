@@ -2021,6 +2021,12 @@
     "error_passphrase_short": "Use a passphrase of at least 8 characters.",
     "no_device_join_mounts": "Devices join through a cloud provider. Add GitHub or Google Drive under Sync."
   },
+  "identity_menu": {
+    "label": "Manage",
+    "browser": "This browser",
+    "browser_hint": "Language and stored data",
+    "add_device_hint": "Phone or another computer"
+  },
   "add_device": {
     "title": "Add a device",
     "eyebrow": "pairing · end-to-end encrypted",

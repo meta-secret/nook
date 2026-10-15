@@ -461,6 +461,40 @@
     cursor: default;
     opacity: 0.5;
   }
+  /* Manage on a card: the card grows a list of the identity's pages just
+   * above its footer. */
+  .nk-identity-menu {
+    display: grid;
+    gap: 0.125rem;
+    padding: 0.375rem 0.5rem;
+    border-top: 1px solid var(--border);
+  }
+  .nk-identity-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 2.75rem;
+    padding: 0.375rem 0.625rem;
+    border: 0;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+  }
+  .nk-identity-menu-item:hover,
+  .nk-identity-menu-item:focus-visible {
+    background: var(--accent);
+    outline: none;
+  }
+  .nk-identity-menu-lead {
+    box-shadow: inset 2px 0 0 var(--success);
+  }
+  .nk-identity-menu-lead .nk-vault-icon {
+    border-color: var(--success);
+    color: var(--success);
+  }
+  .nk-card-actions > button[aria-expanded="true"] {
+    background: var(--accent);
+  }
   .nk-new-tile {
     display: grid;
     place-content: center;

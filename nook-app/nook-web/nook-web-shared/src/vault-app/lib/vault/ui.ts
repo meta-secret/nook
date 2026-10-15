@@ -31,8 +31,6 @@ export class WorkspaceSectionRoute {
         return WorkspaceRoute.Vault;
       case WorkspaceSection.Identities:
         return WorkspaceRoute.Identities;
-      case WorkspaceSection.Overview:
-        return WorkspaceRoute.Overview;
       case WorkspaceSection.Keys:
         return WorkspaceRoute.Keys;
       case WorkspaceSection.Vaults:
@@ -112,7 +110,6 @@ export class VaultWorkspaceActions {
         state.cancelAddProvider();
         this.reportRefresh();
         return;
-      case WorkspaceSection.Overview:
       case WorkspaceSection.Vaults:
       case WorkspaceSection.Sync:
       case WorkspaceSection.Passwords:
@@ -137,9 +134,6 @@ export class VaultWorkspaceActions {
         return;
       case WorkspaceRoute.Identities:
         this.applySection(WorkspaceSection.Identities);
-        return;
-      case WorkspaceRoute.Overview:
-        this.applySection(WorkspaceSection.Overview);
         return;
       case WorkspaceRoute.Keys:
         this.applySection(WorkspaceSection.Keys);

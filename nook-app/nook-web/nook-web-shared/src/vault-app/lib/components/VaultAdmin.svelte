@@ -122,7 +122,6 @@
     onImportGoogleAuthenticator,
     onImportProtonPass,
     onCreateVault,
-    startNewVault = false,
     section,
   }: {
     vault: VaultState
@@ -189,15 +188,10 @@
     ) => Promise<SecretOperationResult<NookImportResult>>
     /** Create a vault for this identity; it opens once created. */
     onCreateVault: (label: string) => Promise<void>
-    /** Open the new-vault form at once (from the identity overview). */
-    startNewVault?: boolean
     section: WorkspaceSection
   } = $props()
 
   let newVaultOpen = $state(false)
-  $effect(() => {
-    if (startNewVault) newVaultOpen = true
-  })
 
   async function createVault(label: string): Promise<void> {
     await onCreateVault(label)

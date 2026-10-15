@@ -1,3 +1,4 @@
+import type { WorkspaceSection } from "$lib/vault/state/ui.svelte";
 import {
   DeviceAccessProtectionKind,
   NookIdentityLocalAccessKind,
@@ -56,6 +57,11 @@ export type IdentityCardView = {
 export type IdentityVaultTarget = {
   readonly identityId: string;
   readonly storeId: string;
+};
+
+/** One of an identity's pages, opened from Manage on its card. */
+export type IdentitySectionTarget = IdentityVaultTarget & {
+  readonly section: WorkspaceSection;
 };
 
 export type IdentityLocalVault = {

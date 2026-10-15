@@ -9,55 +9,42 @@ export type ManageNavItem = {
   readonly section: WorkspaceSection;
   readonly scope: ManageSectionScope;
   readonly labelKey: string;
-  readonly descriptionKey: string;
 };
 
 type ManageNavDefinition = Omit<ManageNavItem, "scope">;
 
 const DEFINITIONS: readonly ManageNavDefinition[] = [
   {
-    section: WorkspaceSection.Overview,
-    labelKey: I18N_KEYS.WorkspaceSectionOverview,
-    descriptionKey: I18N_KEYS.WorkspaceSectionOverviewDescription,
-  },
-  {
     section: WorkspaceSection.Vaults,
     labelKey: I18N_KEYS.WorkspaceSectionVaults,
-    descriptionKey: I18N_KEYS.WorkspaceSectionVaultsDescription,
   },
   {
     section: WorkspaceSection.Sync,
     labelKey: I18N_KEYS.WorkspaceSectionSync,
-    descriptionKey: I18N_KEYS.WorkspaceSectionSyncDescription,
   },
   {
     section: WorkspaceSection.Devices,
     labelKey: I18N_KEYS.WorkspaceSectionDevices,
-    descriptionKey: I18N_KEYS.WorkspaceSectionDevicesDescription,
   },
   {
     section: WorkspaceSection.Keys,
     labelKey: I18N_KEYS.WorkspaceSectionKeys,
-    descriptionKey: I18N_KEYS.WorkspaceSectionKeysDescription,
   },
   {
     section: WorkspaceSection.Passwords,
     labelKey: I18N_KEYS.WorkspaceSectionPasswords,
-    descriptionKey: I18N_KEYS.WorkspaceSectionPasswordsDescription,
   },
   {
     section: WorkspaceSection.Settings,
-    labelKey: I18N_KEYS.WorkspaceSectionSettings,
-    descriptionKey: I18N_KEYS.WorkspaceSectionSettingsDescription,
+    labelKey: I18N_KEYS.IdentityMenuBrowser,
   },
   {
     section: WorkspaceSection.Import,
     labelKey: I18N_KEYS.WorkspaceSectionImport,
-    descriptionKey: I18N_KEYS.WorkspaceSectionImportDescription,
   },
 ];
 
-/** The management pages with their titles and descriptions. */
+/** The management pages with their titles. */
 export const MANAGE_NAV_ITEMS: readonly ManageNavItem[] = DEFINITIONS.map(
   (definition) => {
     const item: ManageNavItem = {

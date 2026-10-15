@@ -6,8 +6,11 @@ card, which then spans the full row.
 -->
 <script lang="ts">
   import type { Snippet } from 'svelte'
+  import IdentityManageMenu from './IdentityManageMenu.svelte'
+  import { WorkspaceSection } from '$lib/vault/state/ui.svelte'
   import {
     Asterisk,
+    ChevronDown,
     ChevronRight,
     Fingerprint,
     FolderKey,
@@ -57,6 +60,8 @@ card, which then spans the full row.
     healthNote = '',
     onHealth = () => {},
     onAddDevice,
+    addDevicePrompt = false,
+    onManageSection,
     pairingStatusFor = () => ({
       kind: LoginVaultExtensionPairingStatusKind.NotShown,
     }),
@@ -85,6 +90,12 @@ card, which then spans the full row.
     /** Open the add-device flow. Offered on the identity this browser
      * uses, locked or not: a locked one unlocks first. */
     onAddDevice?: () => void
+    /** The identity opens on one device only: offer a second on the card
+     * itself, not just in Manage. */
+    addDevicePrompt?: boolean
+    /** Open one of the identity's pages from Manage. Given, Manage on the
+     * identity this browser uses opens a menu of them. */
+    onManageSection?: (section: WorkspaceSection) => void
     /** Extension pairing status for a vault row, while pairing is offered. */
     pairingStatusFor?: (storeId: string) => LoginVaultExtensionPairingStatus
     /** Setup panel (a new vault), shown beside the card's rows. */
@@ -96,6 +107,27 @@ card, which then spans the full row.
   } = $props()
 
   const live = $derived(card.status === IdentityCardStatus.Unlocked)
+  const managesHere = $derived(
+    Boolean(onManageSection) && !preview && (live || card.current),
+  )
+  let menuOpen = $state(false)
+  let cardElement = $state<HTMLElement>()
+
+  function selectFromMenu(section: WorkspaceSection): void {
+    menuOpen = false
+    onManageSection?.(section)
+  }
+
+  function closeMenuOutside(event: PointerEvent): void {
+    if (!menuOpen || !cardElement) return
+    if (event.target instanceof Node && cardElement.contains(event.target))
+      return
+    menuOpen = false
+  }
+
+  function closeMenuOnEscape(event: KeyboardEvent): void {
+    if (menuOpen && event.key === 'Escape') menuOpen = false
+  }
 
   const keysLine = $derived.by(() => {
     const kindKey =
@@ -134,7 +166,13 @@ card, which then spans the full row.
   }
 </script>
 
+<svelte:window
+  onpointerdown={closeMenuOutside}
+  onkeydown={closeMenuOnEscape}
+/>
+
 <article
+  bind:this={cardElement}
   class="nk-frame-keytag nk-frame-interactive min-w-0 {unlockPanel
     ? 'col-span-full grid grid-cols-1 lg:grid-cols-[minmax(0,23rem)_minmax(0,1fr)]'
     : 'flex flex-col'}"
@@ -340,7 +378,7 @@ card, which then spans the full row.
       </ul>
     </section>
 
-    {#if onAddDevice && !preview && (live || card.current)}
+    {#if onAddDevice && addDevicePrompt && !preview && (live || card.current)}
       <section class="border-t border-border px-2 py-2">
         <button
           type="button"
@@ -370,6 +408,10 @@ card, which then spans the full row.
 
     {#if passwordFallback && !live}
       {@render passwordFallback()}
+    {/if}
+
+    {#if managesHere && menuOpen}
+      <IdentityManageMenu {vault} onSelect={selectFromMenu} />
     {/if}
 
     {#if !preview}
@@ -410,17 +452,37 @@ card, which then spans the full row.
             {vault.t(I18N_KEYS.WorkspaceUseIdentity)}
           </button>
         {/if}
-        <button
-          type="button"
-          data-testid="identity-manage"
-          disabled={busy}
-          onclick={() => onManage(card.identityId)}
-        >
-          <Settings2 class="size-4 text-muted-foreground" aria-hidden="true" />
-          {live || card.status === IdentityCardStatus.Locked
-            ? vault.t(I18N_KEYS.WorkspaceManage)
-            : vault.t(I18N_KEYS.WorkspaceManageIdentity)}
-        </button>
+        {#if managesHere}
+          <button
+            type="button"
+            data-testid="identity-manage"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            disabled={busy}
+            onclick={() => (menuOpen = !menuOpen)}
+          >
+            <Settings2 class="size-4 text-muted-foreground" aria-hidden="true" />
+            {vault.t(I18N_KEYS.WorkspaceManage)}
+            <ChevronDown
+              class="size-3.5 text-muted-foreground transition-transform {menuOpen
+                ? 'rotate-180'
+                : ''}"
+              aria-hidden="true"
+            />
+          </button>
+        {:else}
+          <button
+            type="button"
+            data-testid="identity-manage"
+            disabled={busy}
+            onclick={() => onManage(card.identityId)}
+          >
+            <Settings2 class="size-4 text-muted-foreground" aria-hidden="true" />
+            {live || card.status === IdentityCardStatus.Locked
+              ? vault.t(I18N_KEYS.WorkspaceManage)
+              : vault.t(I18N_KEYS.WorkspaceManageIdentity)}
+          </button>
+        {/if}
       </div>
     {/if}
   </div>

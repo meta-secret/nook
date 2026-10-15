@@ -29,7 +29,7 @@ band, the scrolling page and the status line.
   import VaultAdmin from "$lib/components/VaultAdmin.svelte";
   import IdentityKeysPage from "$lib/components/identity-control/IdentityKeysPage.svelte";
   import VaultExtensionControl from "./VaultExtensionControl.svelte";
-  import IdentityOverview from "$lib/components/identity-control/IdentityOverview.svelte";
+  import IdentityPageFrame from "$lib/components/identity-control/IdentityPageFrame.svelte";
   import BrowserSettingsPanel from "$lib/components/settings/BrowserSettingsPanel.svelte";
   import IdentityDevicesPanel from "$lib/components/identity-control/IdentityDevicesPanel.svelte";
   import VaultStatusBar from "$lib/components/VaultStatusBar.svelte";
@@ -37,13 +37,7 @@ band, the scrolling page and the status line.
   import { VaultStatusBarVariant } from "$lib/components/vault-status-bar-state";
   import IdentitiesHub from "$lib/components/identities/IdentitiesHub.svelte";
   import LoginNewVaultPanel from "$lib/components/login/LoginNewVaultPanel.svelte";
-  import {
-    IdentityCardProjection,
-    type IdentityCardSource,
-    type IdentityCardView,
-    type IdentityLocalVault,
-    type IdentityVaultTarget,
-  } from "$lib/components/identities/identity-card-model";
+  import type { IdentitySectionTarget } from "$lib/components/identities/identity-card-model";
   import { IdentityDirectoryLoader } from "$lib/components/identities/identity-directory-loader.svelte";
   import { IdentityDirectoryLoadKind } from "$lib/components/devices-access/identity-directory-view";
   import PageBar from "$lib/components/workspace/PageBar.svelte";
@@ -228,9 +222,7 @@ band, the scrolling page and the status line.
   const barTitle = $derived(
     section === WorkspaceSection.Vault
       ? vaultLabel
-      : scope === ManageSectionScope.Identity
-        ? identityName
-        : navEntry.kind === ManageNavEntryKind.Listed
+      : navEntry.kind === ManageNavEntryKind.Listed
           ? vault.t(navEntry.item.labelKey)
           : vaultLabel,
   );
@@ -306,10 +298,10 @@ band, the scrolling page and the status line.
 
   /** Manage on a card: the unlocked identity opens its overview; another
    * identity is managed from Keys, which lists them all. */
-  function manageIdentity(identityId: string): void {
-    const unlocked =
-      currentIdentity !== false && currentIdentity.identityId === identityId;
-    openSection(unlocked ? WorkspaceSection.Overview : WorkspaceSection.Keys);
+  /** Manage on another identity's card: Keys lists every identity's keys.
+   * The current identity's card opens its own menu instead. */
+  function manageIdentity(): void {
+    openSection(WorkspaceSection.Keys);
   }
 
   function newIdentity(): void {
@@ -347,38 +339,6 @@ band, the scrolling page and the status line.
     vault.beginAddProvider();
   }
 
-  /** "New vault" on the overview opens the Vaults page with its form. */
-  let startNewVault = $state(false);
-  function newVaultFromOverview(): void {
-    startNewVault = true;
-    openSection(WorkspaceSection.Vaults);
-  }
-  $effect(() => {
-    if (section !== WorkspaceSection.Vaults) startNewVault = false;
-  });
-
-  /** The unlocked identity, drawn the same way as its identity card. */
-  const overviewCard = $derived.by((): IdentityCardView | false => {
-    if (directory.state.kind !== IdentityDirectoryLoadKind.Ready) return false;
-    const localVaults = vault.localVaults.map((entry) => {
-      const local: IdentityLocalVault = {
-        storeId: entry.storeId,
-        label: entry.display_label(unnamedLabel),
-      };
-      return local;
-    });
-    const source: IdentityCardSource = {
-      identities: directory.state.view.identities,
-      localVaults,
-      openStoreId: activeStoreId,
-      authenticated: true,
-      identityUnlocked: true,
-    };
-    return ((v) => (v ? v : false))(
-      new IdentityCardProjection(source).cards.find((card) => card.current),
-    );
-  });
-
   function finishFirstRun(next: WorkspaceSection): void {
     vault.firstRun = FirstRunStage.Off;
     openSection(next);
@@ -408,7 +368,6 @@ band, the scrolling page and the status line.
     {vault}
     {extensionSetupState}
     {section}
-    {startNewVault}
     onCreateVault={(label: string) =>
       vault.createLocalVaultWithDeviceKeys(label)}
     syncProviders={vault.syncProviders}
@@ -514,14 +473,6 @@ band, the scrolling page and the status line.
   {:else if section === WorkspaceSection.Keys}
     <IdentityKeysPage {vault} onOpen={openSection} />
   {:else if section === WorkspaceSection.Settings}
-    {#if navEntry.kind === ManageNavEntryKind.Listed}
-      <p
-        class="max-w-[64ch] text-sm text-pretty text-muted-foreground"
-        data-testid="manage-section-description"
-      >
-        {vault.t(navEntry.item.descriptionKey)}
-      </p>
-    {/if}
     <BrowserSettingsPanel {vault} />
   {:else}
     {@render vaultAdmin()}
@@ -549,14 +500,21 @@ band, the scrolling page and the status line.
       onNewVault={() => (newVaultOpen = true)}
       {...newVaultOpen ? { vaultSetup: newVaultPanel } : {}}
       vaultSetupOpen={newVaultOpen}
-      onManage={(request: IdentityVaultTarget) =>
-        manageIdentity(request.identityId)}
+      onManage={manageIdentity}
       onNewIdentity={newIdentity}
-      onUseIdentity={(target: IdentityVaultTarget) =>
-        manageIdentity(target.identityId)}
+      onUseIdentity={manageIdentity}
       {currentHealthNote}
-      onHealth={() => openSection(WorkspaceSection.Overview)}
+      onHealth={() =>
+        openSection(
+          identityHealth.nextStep === NookIdentityNextStep.AddDevice
+            ? WorkspaceSection.AddDevice
+            : WorkspaceSection.Sync,
+        )}
       onAddDevice={() => openSection(WorkspaceSection.AddDevice)}
+      addDevicePrompt={identityHealth.nextStep ===
+        NookIdentityNextStep.AddDevice}
+      onManageSection={(target: IdentitySectionTarget) =>
+        openSection(target.section)}
       onLock={lockIdentity}
     />
     <VaultStatusBar
@@ -576,6 +534,32 @@ band, the scrolling page and the status line.
       onDismissError={() => vault.dismissError()}
     />
   </div>
+{:else if scope === ManageSectionScope.Identity}
+  <IdentityPageFrame
+    {vault}
+    identityName={section === WorkspaceSection.Settings ? "" : identityName}
+    title={barTitle}
+    testId={section}
+    onBack={goBack}
+  >
+    {@render identityPanel()}
+    {#snippet footer()}
+      <VaultStatusBar
+        {vault}
+        storageMode={vault.storageMode}
+        githubRepo={vault.githubRepo}
+        lastSync={vault.lastSync}
+        isSyncing={vault.isSyncActivityVisible}
+        successMsg={vault.successMsg}
+        errorMsg={vault.errorMsg}
+        syncConflictLabel={vault.syncConflictLabel}
+        {appVersion}
+        onRefresh={syncAll}
+        onDismissSuccess={() => vault.dismissSuccess()}
+        onDismissError={() => vault.dismissError()}
+      />
+    {/snippet}
+  </IdentityPageFrame>
 {:else if section === WorkspaceSection.AddDevice}
   <AddDeviceFlow
     {vault}
@@ -690,24 +674,6 @@ band, the scrolling page and the status line.
               />
             {/key}
           </div>
-        {:else if scope === ManageSectionScope.Identity}
-          {#if overviewCard !== false}
-            <IdentityOverview
-              {vault}
-              card={overviewCard}
-              health={identityHealth}
-              expanded={section}
-              onOpen={openSection}
-              onOpenVault={(storeId: string) => void openVaultFromCard(storeId)}
-              onNewVault={newVaultFromOverview}
-              onAddSyncProvider={addSyncProvider}
-              {...section === WorkspaceSection.Overview
-                ? {}
-                : { panel: identityPanel }}
-            />
-          {:else if section !== WorkspaceSection.Overview}
-            {@render identityPanel()}
-          {/if}
         {:else}
           {@render vaultAdmin()}
         {/if}

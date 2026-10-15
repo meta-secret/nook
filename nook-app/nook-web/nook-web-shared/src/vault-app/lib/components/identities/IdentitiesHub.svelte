@@ -10,6 +10,7 @@ join) sit between the hero and the cards.
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import type { VaultState } from '$lib/vault.svelte'
   import { ActiveVaultKind } from '$lib/vault/state/provider.svelte'
+  import type { WorkspaceSection } from '$lib/vault/state/ui.svelte'
   import { IdentityDirectoryLoadKind } from '$lib/components/devices-access/identity-directory-view'
   import IdentitiesHero from './IdentitiesHero.svelte'
   import IdentityCard from './IdentityCard.svelte'
@@ -23,6 +24,7 @@ join) sit between the hero and the cards.
     VaultSetupHostKind,
     type VaultSetupHost,
     type IdentityCardSource,
+    type IdentitySectionTarget,
     type IdentityVaultTarget,
     type IdentityLocalVault,
   } from './identity-card-model'
@@ -47,6 +49,8 @@ join) sit between the hero and the cards.
     currentHealthNote = '',
     onHealth = () => {},
     onAddDevice,
+    addDevicePrompt = false,
+    onManageSection,
     onLock = () => {},
     onUnlock = () => {},
     pairingStatusFor = () => ({
@@ -80,6 +84,10 @@ join) sit between the hero and the cards.
     /** Open the add-device flow from the current identity's card; a locked
      * identity unlocks on the way. */
     onAddDevice?: (target: IdentityVaultTarget) => void
+    /** The current identity opens on one device only. */
+    addDevicePrompt?: boolean
+    /** Open one of the current identity's pages from Manage on its card. */
+    onManageSection?: (target: IdentitySectionTarget) => void
     onLock?: () => void
     /** Unlock a locked identity with this device's passkey. */
     onUnlock?: (target: IdentityVaultTarget) => void
@@ -420,6 +428,18 @@ join) sit between the hero and the cards.
             {onHealth}
             {...onAddDevice
               ? { onAddDevice: () => onAddDevice(targetFor(card.identityId)) }
+              : {}}
+            addDevicePrompt={card.current && addDevicePrompt}
+            {...onManageSection
+              ? {
+                  onManageSection: (section: WorkspaceSection) => {
+                    const target: IdentitySectionTarget = {
+                      ...targetFor(card.identityId),
+                      section,
+                    }
+                    onManageSection(target)
+                  },
+                }
               : {}}
             onUseIdentity={(identityId: string) =>
               onUseIdentity(targetFor(identityId))}
