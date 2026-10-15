@@ -97,10 +97,6 @@ impl IdentityHandoffCommit<'_> {
         })?;
         let directory_key = serde_wasm_bindgen::to_value(IDENTITY_DIRECTORY_KEY)
             .map_err(|error| NookError::IndexedDb(format!("Handoff key error: {error:?}")))?;
-        let legacy_key =
-            serde_wasm_bindgen::to_value(super::LEGACY_IDENTITY_RECORD_KEY).map_err(|error| {
-                NookError::IndexedDb(format!("Handoff legacy key error: {error:?}"))
-            })?;
         let mut directory = NookDatabase::load_directory_for_write(&store).await?;
         let (identity_id, result) = match input.operation {
             IdentityHandoffOperation::PairedVault(PairedVaultEnrollment {
@@ -179,9 +175,6 @@ impl IdentityHandoffCommit<'_> {
             .put(&encoded_value, Some(&directory_key))
             .await
             .map_err(|error| NookError::IndexedDb(format!("Handoff write error: {error:?}")))?;
-        store.delete(legacy_key).await.map_err(|error| {
-            NookError::IndexedDb(format!("Handoff legacy delete error: {error:?}"))
-        })?;
         Self::persist_signing_seed(&HandoffSigningSeed {
             store: &store,
             seed: input.signing_seed,

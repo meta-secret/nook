@@ -18,7 +18,6 @@ impl PreparedProtectedIdentity<'_> {
             directory: &self.directory,
         })
         .await?;
-        NookDatabase::delete_legacy_active_key(self.store).await?;
         NookDatabase::keyring_delete_key(KeyringDbKeyringDeleteKey {
             store: self.store,
             key: event_db::SIGNING_SEED_KEY,
@@ -43,7 +42,6 @@ impl PreparedProtectedIdentity<'_> {
 mod tests {
     use super::*;
     use crate::IdentityDbSaveNewProtectedLocalIdentity;
-    use crate::storage::identity_record::PriorAppAuthorization;
     use nook_core::{AppKey, DeviceIdentityProtection, SigningIdentity};
     use wasm_bindgen_test::wasm_bindgen_test;
     #[cfg_attr(
@@ -71,7 +69,6 @@ mod tests {
             IdentityDbSaveNewProtectedLocalIdentity {
                 app_key: &first_key,
                 record: &first_wrapped,
-                prior_app_key: PriorAppAuthorization::Unavailable,
                 label: "Personal",
             },
         )
@@ -80,7 +77,6 @@ mod tests {
             IdentityDbSaveNewProtectedLocalIdentity {
                 app_key: &second_key,
                 record: &second_wrapped,
-                prior_app_key: PriorAppAuthorization::Unavailable,
                 label: "Work",
             },
         )

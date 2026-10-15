@@ -135,13 +135,12 @@ pub use lastpass_import::{LastPassCsvInput, LastPassImportError, LastPassImportP
 pub use nook_app_common::i18n_keys;
 pub use nook_app_common::{AppLocale, SupportedAppLocale};
 pub use nook_auth2::{
-    ContextBoundSentinelUnlock, IdentitySigningSeedProtection, KeyringEntryRejection,
-    KeyringRejection, LOCAL_IDENTITY_KEYRING_VERSION, LocalIdentityKeyring,
-    LocalIdentityKeyringEntry, LocalIdentityProtection, ProtectedIdentityKeyring,
-    ProtectedSigningEntry, ProtectedSigningMaterial, RemovedLocalIdentityKey, SentinelUnlockPolicy,
-    SentinelUnlockQuorum, SentinelUnlockReadiness, SentinelUnlockRejection, SentinelUnlockRequest,
+    ContextBoundSentinelUnlock, KeyringEntryRejection, KeyringRejection,
+    LOCAL_IDENTITY_KEYRING_VERSION, LocalIdentityKeyring, LocalIdentityKeyringEntry,
+    LocalIdentityProtection, RemovedLocalIdentityKey, SentinelUnlockPolicy, SentinelUnlockQuorum,
+    SentinelUnlockReadiness, SentinelUnlockRejection, SentinelUnlockRequest,
     SentinelUnlockResponse, SentinelUnlockSession, SentinelUnlockStatus, SentinelUnlockVersion,
-    SigningSeedProtection, WrappedAppKeyReplacement,
+    WrappedAppKeyReplacement,
 };
 #[cfg(feature = "mock-passkey")]
 pub use nook_auth2::{
@@ -247,7 +246,7 @@ pub use auth::vault_meta_actions::{
 };
 pub use multi_device::SimpleIdentityGenesisOperationsInput;
 pub use nook_auth2::{
-    AppId, AppKey, AppKeyIdentityMembership, DirectoryCreationEnrollment, DirectoryLegacyMigration,
+    AppId, AppKey, AppKeyIdentityMembership, DirectoryCreationEnrollment,
     DirectoryLegacyVaultImport, DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening,
     DirectoryVaultEnrollment, IdentityCreation, IdentityDirectory, IdentityDirectoryRejection,
     IdentityDirectoryResolution, IdentityDirectoryVaultKeys, IdentityId, IdentityLegacyVaultImport,
@@ -255,8 +254,7 @@ pub use nook_auth2::{
     IdentityMemberVaultGrant, IdentityRecord, IdentityRecordRejection, IdentitySelection,
     IdentityVaultBinding, IdentityVaultDek, IdentityVaultDekEpoch, IdentityVaultDekEpochUpdate,
     IdentityVaultDekReconciliation, IdentityVaultEventId, IdentityVaultKeyOpening,
-    IdentityVaultKeys, LegacyDirectoryBase, LocalIdentityKeyRetirement, MemberDekEnvelope,
-    MigratedIdentityDirectory, PreparedLegacyDirectoryMigration, RecoveryRetirement,
+    IdentityVaultKeys, LocalIdentityKeyRetirement, MemberDekEnvelope, RecoveryRetirement,
     ReplicatedIdentityAdoption, ReplicatedIdentityMembership, ReplicatedVaultGrant,
     SentinelShareEnvelope, StagedIdentityRebase, VaultMember,
 };

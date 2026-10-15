@@ -1,24 +1,10 @@
 //! Owned keyring transitions preserve the prior usable owner on rejection.
 use super::{LocalIdentityKeyring, LocalIdentityKeyringEntry};
-use crate::{
-    AgeArmoredCiphertext, AppId, AppKey, DeviceSigningPublicKey, IdentityId, MultiDeviceError,
-    WrappedDeviceIdentity,
-};
-
-pub struct SigningSeedProtection<'a> {
-    pub app_key: &'a AppKey,
-    pub signing_seed: &'a str,
-}
+use crate::{AppId, MultiDeviceError, WrappedDeviceIdentity};
 
 pub struct WrappedAppKeyReplacement<'a> {
     pub app_id: &'a AppId,
     pub wrapped_app_key: WrappedDeviceIdentity,
-}
-
-#[derive(Debug)]
-pub struct ProtectedSigningEntry {
-    pub entry: LocalIdentityKeyringEntry,
-    pub signing_public_key: DeviceSigningPublicKey,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -53,20 +39,4 @@ impl KeyringRejection {
 pub struct RemovedLocalIdentityKey {
     pub keyring: LocalIdentityKeyring,
     pub entry: LocalIdentityKeyringEntry,
-}
-
-pub struct IdentitySigningSeedProtection<'a> {
-    pub identity_id: &'a IdentityId,
-    pub material: SigningSeedProtection<'a>,
-}
-
-pub(super) struct SealedSigningMaterial {
-    pub(super) public_key: DeviceSigningPublicKey,
-    pub(super) envelope: AgeArmoredCiphertext,
-}
-
-#[derive(Debug)]
-pub struct ProtectedIdentityKeyring {
-    pub keyring: LocalIdentityKeyring,
-    pub signing_public_key: DeviceSigningPublicKey,
 }

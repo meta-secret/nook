@@ -11,7 +11,6 @@ use crate::storage::identity_record::{AuthorizerSigningUpdate, VaultCreationAuth
 use crate::storage::indexed_db::ImportVaultLabel;
 use crate::{
     DeviceProtectionDeviceModeState, IdbPutStringRequest, ImportVaultBlobRequest, NookDatabase,
-    SaveWrappedDeviceIdentityRequest,
 };
 use nook_core::ActiveVaultScope;
 use nook_core::AppKeyIdentityMembership;
@@ -26,7 +25,7 @@ use nook_core::{
     VaultOperation, VaultStoreIdentity, VaultStoreIdentityRef, VaultType, VaultUnlock,
     VaultVersionWrite,
 };
-use nook_core::{AssessConnectAccessRequest, DeviceIdentityProtection, VaultMetaState};
+use nook_core::{AssessConnectAccessRequest, VaultMetaState};
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
@@ -104,48 +103,6 @@ async fn passkey_protection_bootstraps_the_initial_identity() -> anyhow::Result<
             .label(),
         "Personal"
     );
-    manager
-        .delete_local_browser_data()
-        .await
-        .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
-    Ok(())
-}
-
-#[wasm_bindgen_test]
-async fn authenticated_legacy_key_bootstraps_keyring_and_preserves_signer() -> anyhow::Result<()> {
-    let mut manager = NookVaultManager::new();
-    manager
-        .delete_local_browser_data()
-        .await
-        .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
-    let app_key = AppKey::generate()?;
-    let wrapped =
-        DeviceIdentityProtection::new(&app_key.secret_string()).with_pin("legacy identity pin")?;
-    let (legacy_signing, legacy_seed) = SigningIdentity::generate()?;
-    NookDatabase::save_wrapped_device_identity(SaveWrappedDeviceIdentityRequest {
-        device_id: app_key.app_id().as_str(),
-        record: &wrapped,
-    })
-    .await?;
-    NookDatabase::save_signing_seed(legacy_seed.as_str()).await?;
-
-    manager
-        .unlock_pin_device_identity("legacy identity pin".to_owned())
-        .await
-        .map_err(|error| anyhow::anyhow!("unlock legacy identity: {error:?}"))?;
-
-    let keyring = NookDatabase::load_keyring().await?;
-    assert_eq!(keyring.entries().len(), 1);
-    assert_eq!(keyring.entries()[0].app_id(), app_key.app_id());
-    assert!(keyring.entries()[0].has_signing_seed());
-    assert_eq!(
-        manager.ensure_signing_identity().await?.public_key(),
-        legacy_signing.public_key()
-    );
-    assert!(matches!(
-        NookDatabase::load_signing_seed().await?,
-        StoredSigningSeed::Missing
-    ));
     manager
         .delete_local_browser_data()
         .await
@@ -572,7 +529,7 @@ async fn keyring_backed_simple_genesis_keeps_the_signer_out_of_the_singleton_see
             "protected identity keyring entry is missing"
         )),
     }?;
-    assert!(entry.has_signing_seed());
+    assert!(entry.signing_public_key(&identity).is_ok());
     manager
         .delete_local_browser_data()
         .await

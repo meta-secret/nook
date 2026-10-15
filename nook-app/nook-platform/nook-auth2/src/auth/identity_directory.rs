@@ -26,11 +26,6 @@ use crate::{
     IdentityVaultKeyOpening, StoreId,
 };
 
-mod legacy_migration;
-pub use legacy_migration::{
-    DirectoryLegacyMigration, LegacyDirectoryBase, MigratedIdentityDirectory,
-    PreparedLegacyDirectoryMigration,
-};
 mod staged_rebase;
 pub use staged_rebase::StagedIdentityRebase;
 mod transition;
@@ -87,11 +82,6 @@ impl IdentityDirectory {
         };
         directory.validate()?;
         Ok(directory)
-    }
-
-    pub fn from_legacy_record(record: IdentityRecord) -> MultiDeviceResult<Self> {
-        let selected = record.identity_id.clone();
-        Self::from_records(vec![record], IdentitySelection::Selected(selected))
     }
 
     pub fn validate(&self) -> MultiDeviceResult<()> {

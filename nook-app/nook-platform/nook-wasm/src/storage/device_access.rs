@@ -24,7 +24,6 @@ pub(crate) use nook_core::{
 
 use super::indexed_db::{StringUpdateGuard, StringUpdateResult};
 
-mod migration;
 pub(crate) mod peer_protection;
 mod profile_store;
 mod verified_vault_access;
@@ -246,12 +245,8 @@ mod tests {
     #[cfg(all(target_arch = "wasm32", feature = "browser-wasm-tests"))]
     use crate::IdentityDbSaveNewProtectedLocalIdentity;
     #[cfg(all(target_arch = "wasm32", feature = "browser-wasm-tests"))]
-    use crate::storage::identity_record::PriorAppAuthorization;
-    use crate::{
-        IdbPutStringRequest, NookDatabase, SaveWrappedDeviceIdentityRequest, StoredStringRecord,
-    };
-    #[cfg(all(target_arch = "wasm32", feature = "browser-wasm-tests"))]
-    use futures_util::future;
+    use crate::{IdbPutStringRequest, StoredStringRecord};
+    use crate::{NookDatabase, SaveWrappedDeviceIdentityRequest};
     #[cfg(all(target_arch = "wasm32", feature = "browser-wasm-tests"))]
     use nook_core::AppKey;
     use nook_core::{
@@ -264,12 +259,14 @@ mod tests {
 
     #[cfg(all(target_arch = "wasm32", feature = "browser-wasm-tests"))]
     use super::{AppPasskeyCreation, DeviceIdentityProtection, PasskeyProtectionInput};
+    #[cfg(all(target_arch = "wasm32", feature = "browser-wasm-tests"))]
+    use super::{DEVICE_ACCESS_PROFILE_KEY, VerifiedVaultAccessUpdate};
     use super::{
-        DEVICE_ACCESS_PROFILE_KEY, DeviceAccessProfile, DeviceAccessProfileDecodeResult,
-        DeviceAccessProfileKey, DeviceAccessProfileUpdate, NookError, PasskeyAccessProfile,
-        PasskeyBrowserObservation, PasskeyCreatedAtEvidence, PasskeyCreationCeremony,
-        PasskeyLastUsedAtEvidence, PasskeyProviderLabelUpdate, PasskeyRecordMetadata,
-        SelectedPasskeyCreation, VerifiedVaultAccessUpdate, WrappedDeviceIdentity,
+        DeviceAccessProfile, DeviceAccessProfileDecodeResult, DeviceAccessProfileKey,
+        DeviceAccessProfileUpdate, NookError, PasskeyAccessProfile, PasskeyBrowserObservation,
+        PasskeyCreatedAtEvidence, PasskeyCreationCeremony, PasskeyLastUsedAtEvidence,
+        PasskeyProviderLabelUpdate, PasskeyRecordMetadata, SelectedPasskeyCreation,
+        WrappedDeviceIdentity,
     };
     use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 
@@ -636,7 +633,7 @@ mod tests {
             prf_input: setup.prf_input(),
         })?;
         NookDatabase::save_wrapped_device_identity(SaveWrappedDeviceIdentityRequest {
-            device_id: identity.device_id().as_str(),
+            app_key: &identity,
             record: &wrapped,
         })
         .await?;
@@ -694,7 +691,7 @@ mod tests {
             prf_input: setup.prf_input(),
         })?;
         NookDatabase::save_wrapped_device_identity(SaveWrappedDeviceIdentityRequest {
-            device_id: identity.device_id().as_str(),
+            app_key: &identity,
             record: &current_wrapped,
         })
         .await?;
@@ -759,7 +756,6 @@ mod tests {
         NookDatabase::save_new_protected_local_identity(IdentityDbSaveNewProtectedLocalIdentity {
             app_key: &first_key,
             record: &first_wrapped,
-            prior_app_key: PriorAppAuthorization::Unavailable,
             label: "Personal",
         })
         .await?;
@@ -775,7 +771,6 @@ mod tests {
         }
         .apply()
         .await?;
-        DeviceAccessProfileKey::selected().await?.migrate().await?;
         assert!(
             DeviceAccessProfileKey::companion()
                 .load()
@@ -791,7 +786,6 @@ mod tests {
         NookDatabase::save_new_protected_local_identity(IdentityDbSaveNewProtectedLocalIdentity {
             app_key: &second_key,
             record: &second_wrapped,
-            prior_app_key: PriorAppAuthorization::Unavailable,
             label: "Work",
         })
         .await?;
@@ -831,76 +825,6 @@ mod tests {
     }
 
     #[cfg(all(target_arch = "wasm32", feature = "browser-wasm-tests"))]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            unowned_function,
-            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
-        )
-    )]
-    #[wasm_bindgen_test]
-    async fn concurrent_profile_migration_preserves_scoped_update() -> Result<(), NookError> {
-        let _ = Rexie::delete("nook_db").await;
-        let app_key = AppKey::generate().map_err(|error| NookError::Database(error.to_string()))?;
-        let wrapped =
-            DeviceIdentityProtection::new(&app_key.secret_string()).with_pin("first-secret")?;
-        NookDatabase::save_new_protected_local_identity(IdentityDbSaveNewProtectedLocalIdentity {
-            app_key: &app_key,
-            record: &wrapped,
-            prior_app_key: PriorAppAuthorization::Unavailable,
-            label: "Personal",
-        })
-        .await?;
-        let app_device_id = DeviceId::parse(app_key.app_id().as_str())
-            .map_err(|error| NookError::Database(error.to_string()))?;
-        let first_store = nook_core::StoreId::generate()
-            .map_err(|error| NookError::Database(error.to_string()))?;
-        let second_store = nook_core::StoreId::generate()
-            .map_err(|error| NookError::Database(error.to_string()))?;
-        let mut legacy = DeviceAccessProfile::default();
-        legacy = legacy.record_verified_vault_access(
-            &app_device_id,
-            &first_store,
-            IsoTimestamp::from_trusted("2026-08-24T03:00:00.000Z".to_owned()),
-        );
-        DeviceAccessProfileKey::save_companion(&legacy).await?;
-
-        let (migration_result, update_result) = future::join(
-            DeviceAccessProfileKey::selected().await?.migrate(),
-            VerifiedVaultAccessUpdate {
-                device_id: &app_device_id,
-                store_id: &second_store,
-            }
-            .apply(),
-        )
-        .await;
-        migration_result?;
-        update_result?;
-
-        let scoped = DeviceAccessProfileKey::for_app_id(app_key.app_id().as_str())
-            .await?
-            .load()
-            .await?;
-        assert!(
-            scoped
-                .verified_vaults
-                .iter()
-                .any(|entry| entry.store_id == first_store)
-        );
-        assert!(
-            scoped
-                .verified_vaults
-                .iter()
-                .any(|entry| entry.store_id == second_store)
-        );
-        assert!(matches!(
-            NookDatabase::idb_get_string(DEVICE_ACCESS_PROFILE_KEY).await?,
-            StoredStringRecord::MissingKey
-        ));
-        let _ = Rexie::delete("nook_db").await;
-        Ok(())
-    }
-
     #[cfg_attr(
         dylint_lib = "nook_domain_api",
         expect(

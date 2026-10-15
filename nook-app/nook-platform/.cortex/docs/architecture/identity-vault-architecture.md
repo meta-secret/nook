@@ -109,13 +109,10 @@ After an Add identity protection action persists and adopts another app key,
 the browser clears the prior decrypted provider grants and provider drafts.
 Cancellation or failure preserves the prior session. A committed local identity
 transition also clears pending extension-handoff secrets.
-An authenticated legacy wrapped key is promoted into the directory and keyring
-with its singleton signing seed before the unlocked session is adopted.
-When a pre-vault legacy identity has no signing seed or signing public key, that
-promotion mints its first signer. Existing signing evidence without its seed
-fails closed instead of silently changing signer identity.
-Locked pre-sealed provider imports preserve eligible legacy grants before they
-publish the first app-scoped provider snapshot.
+Protecting an identity that has no keyring entry yet adopts the signer the
+session already signs with; an identity without vaults or signing evidence
+mints its first signer. Existing signing evidence without its seed fails closed
+instead of silently changing signer identity.
 Extension import binds the grant's protected local identity before importing
 event bytes or provider state. A blocked activation leaves both untouched.
 An extension grant imported for another app ID becomes the persisted local
@@ -131,31 +128,14 @@ The directory contains:
 - an explicit `Empty` or `Selected(identity_id)` state; and
 - app IDs retired by destructive local recovery.
 
-Older versions allowed one app key to appear in several identities.
-Load migrates those records in the existing IndexedDB transaction.
-It merges every identity connected by a shared app key.
-The selected identity survives when it belongs to that group.
-An identity referenced by `pending_simple_genesis_v1` takes precedence over
-the selection so a resumable genesis marker cannot become orphaned.
-When the marker is staged, the same transaction normalizes its base and
-candidate directory snapshots before rewriting the live directory.
-Cleanup repeats that snapshot migration when either the live directory or the
-staged base contains legacy duplicate ownership. Duplicate ownership introduced
-only by the candidate remains invalid and is rejected.
-Every later directory update repeats this marker-aware migration within its
-write transaction. Authenticated handoff and staged genesis cleanup preserve the
-pending identity inside their transactions. A concurrent pre-upgrade writer
-cannot absorb the pending identity between preflight migration and mutation.
-All distinct members and vault DEK grants survive the merge.
-The normalized directory is rewritten before unique app-key ownership is
-enforced.
-A valid directory without duplicate app-key ownership remains usable without
-decoding a malformed or future pending-genesis marker.
+Each app key belongs to exactly one identity; a directory that breaks this is
+rejected when it is read. A valid directory remains usable without decoding a
+malformed or future pending-genesis marker.
 
 Each identity member stores its X25519 encryption public key and Ed25519 event
-signing public key. Older records decode a missing signing key as unavailable.
-They cannot enter a new signed Simple-vault genesis roster until an authenticated
-handoff or the local signer supplies that public key.
+signing public key. A member whose signing key is unavailable cannot enter a
+new signed Simple-vault genesis roster until an authenticated handoff or the
+local signer supplies that public key.
 
 Destructive device recovery retires only the explicitly targeted local app key
 whose protection became inaccessible.
@@ -283,14 +263,6 @@ verified reconciliation. Locked remote sync persists the verified projected
 epoch before password self-enrollment can append a membership event. The v2
 reconciliation marker preserves resumable progress across reloads.
 
-The first directory read migrates `identity_record_v1` when present:
-
-1. decode the singleton record;
-2. write a valid directory with that record selected; and
-3. delete the legacy key only after the directory write succeeds.
-
-Pre-directory builds cannot read the new key.
-Downgrading after migration is unsupported.
 The local directory caches the replicated identity control log. Identity sync
 applies the log's members and DEK envelopes to the matching local record.
 

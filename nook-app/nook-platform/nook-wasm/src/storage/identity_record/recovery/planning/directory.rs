@@ -20,7 +20,7 @@ impl RecoveryPlanning<'_> {
             match raw.filter(|value| !value.is_undefined() && !value.is_null()) {
                 Some(value) => match serde_wasm_bindgen::from_value::<String>(value)
                     .ok()
-                    .and_then(|raw| NookDatabase::decode_directory(&raw).ok())
+                    .and_then(|raw| NookDatabase::decode_directory_value(&raw).ok())
                 {
                     Some(directory) => (directory, true),
                     None => (IdentityDirectory::empty(), false),
@@ -46,7 +46,6 @@ impl RecoveryPlanning<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::identity_record::PriorAppAuthorization;
     use crate::storage::identity_record::RecoveryTarget;
     use crate::storage::identity_record::{
         IDENTITY_DIRECTORY_KEY, recovery::LocalIdentityRecoveryRequest,
@@ -74,14 +73,12 @@ mod tests {
         NookDatabase::save_new_protected_local_identity(IdentityDbSaveNewProtectedLocalIdentity {
             app_key: &first_key,
             record: &first_wrapped,
-            prior_app_key: PriorAppAuthorization::Unavailable,
             label: "Personal",
         })
         .await?;
         NookDatabase::save_new_protected_local_identity(IdentityDbSaveNewProtectedLocalIdentity {
             app_key: &second_key,
             record: &second_wrapped,
-            prior_app_key: PriorAppAuthorization::Unavailable,
             label: "Work",
         })
         .await?;
@@ -127,14 +124,12 @@ mod tests {
         NookDatabase::save_new_protected_local_identity(IdentityDbSaveNewProtectedLocalIdentity {
             app_key: &first_key,
             record: &first_wrapped,
-            prior_app_key: PriorAppAuthorization::Unavailable,
             label: "Personal",
         })
         .await?;
         NookDatabase::save_new_protected_local_identity(IdentityDbSaveNewProtectedLocalIdentity {
             app_key: &second_key,
             record: &second_wrapped,
-            prior_app_key: PriorAppAuthorization::Unavailable,
             label: "Work",
         })
         .await?;

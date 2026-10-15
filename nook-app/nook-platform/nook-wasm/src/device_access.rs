@@ -8,8 +8,6 @@ use crate::NookDatabase;
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use crate::SaveVaultBlobRequest;
 use crate::storage::device_access::DeviceAccessProfileKey;
-#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
-use crate::storage::identity_record::PriorAppAuthorization;
 use crate::storage::identity_record::ProtectedIdentityLookup;
 use crate::storage::indexed_db::VaultUnlockHistory;
 use display_text::NookDeviceAccessTextValue;
@@ -815,7 +813,6 @@ mod browser_tests {
         NookDatabase::save_new_protected_local_identity(IdentityDbSaveNewProtectedLocalIdentity {
             app_key: &first_key,
             record: &first_wrapped,
-            prior_app_key: PriorAppAuthorization::Unavailable,
             label: "Personal",
         })
         .await?;
@@ -826,7 +823,6 @@ mod browser_tests {
         NookDatabase::save_new_protected_local_identity(IdentityDbSaveNewProtectedLocalIdentity {
             app_key: &second_key,
             record: &second_wrapped,
-            prior_app_key: PriorAppAuthorization::Unavailable,
             label: "Work",
         })
         .await?;

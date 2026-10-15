@@ -86,13 +86,8 @@ It is never shown as stored on one physical laptop.
   - Commit the new keyring entry and identity-directory entry in one IndexedDB
     transaction.
   - Select a new identity only after both records are durable.
-  - Migrate legacy `app_id` and `app_key_wrapped` into the selected identity's
-    keyring entry.
-  - If an older tab writes a new wrapper for the same app ID, adopt that wrapper
-    without replacing the entry's protected signing seed.
-  - Delete the legacy wrapper only after the reconciled keyring is durable.
-  - Dual-read legacy `device_id` and `device_identity_wrapped` only during that
-    migration.
+  - Every keyring entry carries its protected signing seed; an entry without
+    one is rejected.
   - Store descriptive dashboard data in a separately versioned access profile.
   - Key each access profile by its local app ID.
   - Missing descriptive data must not prevent app-key unlock.

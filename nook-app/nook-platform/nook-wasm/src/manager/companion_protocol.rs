@@ -481,8 +481,6 @@ impl NookPendingCompanionIdentityHandoff {
 #[cfg(all(test, target_arch = "wasm32"))]
 mod typed_boundary_tests {
     use super::*;
-    #[cfg(feature = "browser-wasm-tests")]
-    use crate::storage::identity_record::PriorAppAuthorization;
     use nook_companion_core::{
         CompanionIdentityDiscoveryRequest, CompanionInstallationAppKey, CompanionUnlockedAppKey,
         ExtensionConnectScope, ExtensionPairingVaultType,
@@ -619,7 +617,6 @@ mod typed_boundary_tests {
             crate::IdentityDbSaveNewProtectedLocalIdentity {
                 app_key: &app,
                 record: &record,
-                prior_app_key: PriorAppAuthorization::Unavailable,
                 label: "Extension",
             },
         )
