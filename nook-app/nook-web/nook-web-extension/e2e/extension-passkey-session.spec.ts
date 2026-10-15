@@ -33,7 +33,9 @@ import {
   type WebsitePasskeyAssertionBrowserFlow,
 } from './helpers/extension-smoke-runtime'
 import {
+  expectVaultOpened,
   PairedVaultCompanionUnlockKind,
+  startVaultPanelUnlock,
   unlockExtensionThroughCompanion,
   unlockPairedVaultThroughCompanion,
   type PairedVaultCompanionUnlock,
@@ -865,14 +867,12 @@ test('re-approves an existing local vault after reload without event-log-access-
       timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
     })
     if (await reloadedUnlock.isVisible()) {
-      await simplePage.getByTestId('identity-vault-row').first().click()
+      await startVaultPanelUnlock(simplePage)
       const reloadOverlay = simplePage.getByTestId('passkey-auth-overlay')
       if (await reloadOverlay.isVisible()) {
         await simplePage.getByTestId('device-protection-unlock-btn').click()
       }
-      await expect(reloadedShell).toBeVisible({
-        timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
-      })
+      await expectVaultOpened(simplePage)
     }
 
     const repairPopup = await context.newPage()
@@ -910,11 +910,8 @@ test('re-approves an existing local vault after reload without event-log-access-
       timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
     })
     if (await reconnectUnlock.isVisible()) {
-      await reconnectPage.getByTestId('identity-vault-row').first().click()
-      const reconnectOverlay = reconnectPage.getByTestId('passkey-auth-overlay')
-      if (await reconnectOverlay.isVisible()) {
-        await reconnectPage.getByTestId('device-protection-unlock-btn').click()
-      }
+      // The vault's panel unlocks it; the consent then asks to connect.
+      await authorizeDeviceProtection(reconnectPage)
       await expect(reconnectConsent).toBeVisible({
         timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
       })
