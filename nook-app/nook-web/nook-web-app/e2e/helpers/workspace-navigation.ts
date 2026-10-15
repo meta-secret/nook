@@ -12,17 +12,24 @@ export enum ManagePage {
   Import = 'import',
 }
 
-/** The item in Manage on the identity's card that opens each page. */
-const MANAGE_MENU_ITEMS: Record<
+/** How each page opens from the identity's card: an action in Manage, or
+ * a row on the identity's details page (Manage, then Identity details). */
+const MANAGE_PAGE_OPENERS: Record<
   Exclude<ManagePage, ManagePage.Import>,
-  string
+  { readonly viaDetails: boolean; readonly testId: string }
 > = {
-  [ManagePage.Vaults]: 'identity-menu-vaults',
-  [ManagePage.Sync]: 'identity-menu-sync',
-  [ManagePage.Devices]: 'identity-menu-devices',
-  [ManagePage.Keys]: 'identity-menu-keys',
-  [ManagePage.Passwords]: 'identity-menu-passwords',
-  [ManagePage.Settings]: 'identity-menu-settings',
+  [ManagePage.Sync]: { viaDetails: false, testId: 'identity-menu-sync' },
+  [ManagePage.Passwords]: {
+    viaDetails: false,
+    testId: 'identity-menu-passwords',
+  },
+  [ManagePage.Devices]: { viaDetails: true, testId: 'overview-open-devices' },
+  [ManagePage.Vaults]: { viaDetails: true, testId: 'overview-open-vaults' },
+  [ManagePage.Keys]: { viaDetails: true, testId: 'overview-keys' },
+  [ManagePage.Settings]: {
+    viaDetails: true,
+    testId: 'overview-browser-settings',
+  },
 }
 
 const MANAGE_PAGE_MARKERS: Record<ManagePage, string> = {
@@ -98,7 +105,14 @@ export async function openManagePage(
   if ((await manage.getAttribute('aria-expanded')) !== 'true') {
     await manage.click()
   }
-  const navItem = page.getByTestId(MANAGE_MENU_ITEMS[target])
+  const opener = MANAGE_PAGE_OPENERS[target]
+  if (opener.viaDetails) {
+    await page.getByTestId('identity-menu-details').click()
+    await expect(page.getByTestId('identity-overview')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+  }
+  const navItem = page.getByTestId(opener.testId).first()
   await expect(navItem).toBeVisible({ timeout: UI_TIMEOUT_MS })
   await navItem.click()
   // Identity pages read the identity directory, which retries while the

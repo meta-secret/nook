@@ -25,26 +25,32 @@ test.describe('persistent workspace routing', () => {
       })
     })
 
-    // Manage on the current identity's card lists its pages; each opens
-    // at its own address and Back returns to the hub.
+    // Manage on the current identity's card holds actions and the way to
+    // its details; each detail page has its own address and Back returns
+    // to the details.
     await page.getByTestId('header-identities-btn').click()
     await expect(page).toHaveURL(/\/identities$/)
-    for (const [item, address, marker] of [
-      ['passwords', /\/identity\/passwords$/, 'vault-unlock-section'],
-      ['keys', /\/identity\/keys$/, 'identity-keys'],
-      ['devices', /\/identity\/devices$/, 'vault-devices-panel'],
-      ['sync', /\/identity\/sync$/, 'storage-providers-section'],
-      ['vaults', /\/identity\/vaults$/, 'vault-admin-panel'],
+    await page.getByTestId('identity-manage').first().click()
+    await page.getByTestId('identity-menu-details').click()
+    await expect(page).toHaveURL(/\/identity$/)
+    await expect(page.getByTestId('identity-overview')).toBeVisible()
+    for (const [row, address, marker] of [
+      ['overview-passwords', /\/identity\/passwords$/, 'vault-unlock-section'],
+      ['overview-keys', /\/identity\/keys$/, 'identity-keys'],
+      ['overview-open-devices', /\/identity\/devices$/, 'vault-devices-panel'],
+      ['overview-open-sync', /\/identity\/sync$/, 'storage-providers-section'],
+      ['overview-open-vaults', /\/identity\/vaults$/, 'vault-admin-panel'],
     ] as const) {
-      await page.getByTestId('identity-manage').first().click()
-      await page.getByTestId(`identity-menu-${item}`).click()
+      await page.getByTestId(row).first().click()
       await expect(page).toHaveURL(address)
       await expect(page.getByTestId(marker)).toBeVisible({
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })
       await page.getByTestId('identity-page-back').click()
-      await expect(page.getByTestId('identities-hub')).toBeVisible()
+      await expect(page.getByTestId('identity-overview')).toBeVisible()
     }
+    await page.getByTestId('identity-page-back').click()
+    await expect(page.getByTestId('identities-hub')).toBeVisible()
 
     await page.getByTestId('header-identities-btn').click()
     await expect(page).toHaveURL(/\/identities$/)
@@ -282,9 +288,9 @@ test.describe('persistent workspace routing', () => {
 
     await page.getByTestId('header-identities-btn').click()
     await page.getByTestId('identity-manage').first().click()
-    await page.getByTestId('identity-menu-devices').click()
-    await expect(page).toHaveURL(/\/identity\/devices$/)
-    await expect(page.getByTestId('vault-devices-panel')).toBeVisible({
+    await page.getByTestId('identity-menu-details').click()
+    await expect(page).toHaveURL(/\/identity$/)
+    await expect(page.getByTestId('identity-overview')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await page.getByTestId('identity-page-back').click()

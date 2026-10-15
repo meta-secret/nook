@@ -461,13 +461,27 @@
     cursor: default;
     opacity: 0.5;
   }
-  /* Manage on a card: the card grows a list of the identity's pages just
-   * above its footer. */
+  /* Manage on a card: a short list of actions dropped over the card just
+   * above its footer. The card clips to its silhouette, so the list stays
+   * inside it. */
   .nk-identity-menu {
+    position: absolute;
+    right: 0;
+    bottom: calc(2.75rem + 1px);
+    left: 0;
+    z-index: 20;
     display: grid;
     gap: 0.125rem;
     padding: 0.375rem 0.5rem;
     border-top: 1px solid var(--border);
+    background: var(--card);
+    box-shadow: 0 -16px 32px -24px
+      color-mix(in oklch, var(--foreground) 45%, transparent);
+  }
+  .nk-identity-menu-split {
+    margin-top: 0.25rem;
+    border-top: 1px solid var(--border);
+    padding-top: 0.625rem;
   }
   .nk-identity-menu-item {
     display: flex;

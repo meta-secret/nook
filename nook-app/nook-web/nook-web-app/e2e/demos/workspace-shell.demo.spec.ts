@@ -26,8 +26,8 @@ test('the vault page holds items; the identity card manages the rest', async ({
   await expect(page.getByTestId('identity-menu')).toHaveCount(0)
   await page.waitForTimeout(DEMO_BEAT_MS)
 
-  // Manage on the identity card lists the identity's pages, adding a
-  // device first; a fresh identity also names what it lacks.
+  // Manage on the identity card holds actions, adding a device first;
+  // a fresh identity also names what it lacks.
   await page.getByTestId('header-identities-btn').click()
   await expect(page.getByTestId('identity-card-health')).toContainText(
     'No cloud copy yet',
@@ -35,21 +35,18 @@ test('the vault page holds items; the identity card manages the rest', async ({
   await page.getByTestId('identity-manage').first().click()
   const menu = page.getByTestId('identity-menu')
   await expect(menu).toBeVisible()
-  for (const item of [
-    'add-device',
-    'sync',
-    'devices',
-    'vaults',
-    'keys',
-    'passwords',
-    'settings',
-  ]) {
+  for (const item of ['add-device', 'sync', 'passwords', 'details']) {
     await expect(page.getByTestId(`identity-menu-${item}`)).toBeVisible()
   }
   await page.waitForTimeout(DEMO_BEAT_MS)
 
-  // A page opens on its own, with Back to the hub.
-  await page.getByTestId('identity-menu-devices').click()
+  // Identity details lists devices, vaults, cloud copies and sign-in;
+  // each row opens its page.
+  await page.getByTestId('identity-menu-details').click()
+  await expect(page.getByTestId('identity-overview')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await page.getByTestId('overview-open-devices').first().click()
   await expect(page).toHaveURL(/\/identity\/devices$/)
   await expect(page.getByTestId('vault-devices-panel')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -66,7 +63,7 @@ test('the vault page holds items; the identity card manages the rest', async ({
     timeout: UI_TIMEOUT_MS,
   })
   await page.getByTestId('identity-page-back').click()
-  await expect(page.getByTestId('identities-hub')).toBeVisible({
+  await expect(page.getByTestId('identity-overview')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
 })

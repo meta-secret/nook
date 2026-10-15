@@ -2022,6 +2022,11 @@
     "no_device_join_mounts": "Devices join through a cloud provider. Add GitHub or Google Drive under Sync."
   },
   "identity_menu": {
+    "sync_hint": "Keep an encrypted copy in your cloud",
+    "password": "Set a backup password",
+    "password_hint": "Open a vault without a passkey",
+    "details": "Identity details",
+    "details_hint": "Devices, vaults, cloud copies and sign-in",
     "label": "Manage",
     "browser": "This browser",
     "browser_hint": "Language and stored data",
@@ -2141,6 +2146,8 @@
     "later": "Later"
   },
   "identity_overview": {
+    "copies": "Cloud copies",
+    "sign_in": "Sign-in",
     "risk_local": "No cloud copy yet",
     "risk_one_device": "Only one device",
     "browser_link": "This browser: language and stored data",

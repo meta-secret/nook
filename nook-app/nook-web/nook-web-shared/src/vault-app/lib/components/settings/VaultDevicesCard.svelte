@@ -27,6 +27,7 @@ adding a device live on the Devices page around this list.
     TriangleAlert,
     X,
   } from "@lucide/svelte";
+  import { CurrentDeviceName } from "./current-device-name";
   import { DeviceIdLabel } from "./device-id-label";
   import { Button } from "$lib/components/ui/button";
   import type { VaultState } from "$lib/vault.svelte";
@@ -85,22 +86,10 @@ adding a device live on the Devices page around this list.
   );
 
   function currentDeviceName(): string {
-    if (!("navigator" in globalThis))
-      return vault.t(I18N_KEYS.DevicesCardThisBrowserOs);
-    const ua = navigator.userAgent;
-    let os = vault.t(I18N_KEYS.DevicesCardUnknownOs);
-    if (ua.includes("Android")) os = "Android";
-    else if (ua.includes("like Mac")) os = "iOS";
-    else if (ua.includes("Win")) os = "Windows";
-    else if (ua.includes("Mac")) os = "Mac";
-    else if (ua.includes("Linux")) os = "Linux";
-
-    let browser = "Browser";
-    if (ua.includes("Edg")) browser = "Edge";
-    else if (ua.includes("Firefox")) browser = "Firefox";
-    else if (ua.includes("Chrome")) browser = "Chrome";
-    else if (ua.includes("Safari")) browser = "Safari";
-    return `${browser} ${vault.t(I18N_KEYS.DevicesCardOn)} ${os}`;
+    const nameRequest: ConstructorParameters<typeof CurrentDeviceName>[0] = {
+      t: vault.t,
+    };
+    return new CurrentDeviceName(nameRequest).text;
   }
 
   function displayName(member: IdentityMemberView): string {

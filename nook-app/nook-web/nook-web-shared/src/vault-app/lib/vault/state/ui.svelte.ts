@@ -7,6 +7,8 @@
 export enum WorkspaceSection {
   Vault = "vault",
   Identities = "identities",
+  /** The identity's page: what it has (devices, vaults, copies, sign-in). */
+  Overview = "overview",
   Keys = "keys",
   Vaults = "vaults",
   Settings = "settings",
@@ -30,6 +32,7 @@ export class WorkspaceSectionScope {
 
   get scope(): ManageSectionScope {
     switch (this.section) {
+      case WorkspaceSection.Overview:
       case WorkspaceSection.Keys:
       case WorkspaceSection.Vaults:
       case WorkspaceSection.Devices:

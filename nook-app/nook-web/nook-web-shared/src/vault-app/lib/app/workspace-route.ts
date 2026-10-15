@@ -8,6 +8,7 @@ import {
 export enum WorkspaceRoute {
   Vault = "vault",
   Identities = "identities",
+  Overview = "overview",
   Keys = "keys",
   Vaults = "vaults",
   Settings = "settings",
@@ -31,6 +32,7 @@ export type WorkspaceRouteLookup =
 const WORKSPACE_PATHS: Record<WorkspaceRoute, string> = {
   [WorkspaceRoute.Vault]: "/vault",
   [WorkspaceRoute.Identities]: "/identities",
+  [WorkspaceRoute.Overview]: "/identity",
   [WorkspaceRoute.Keys]: "/identity/keys",
   [WorkspaceRoute.Vaults]: "/identity/vaults",
   [WorkspaceRoute.Settings]: "/identity/settings",
@@ -52,8 +54,6 @@ const LEGACY_WORKSPACE_PATHS: Readonly<Record<string, WorkspaceRoute>> = {
   "/simple": WorkspaceRoute.Vault,
   "/sentinel": WorkspaceRoute.Vault,
   "/devices-access": WorkspaceRoute.Keys,
-  // The identity's dashboard became the hub: its card holds every action.
-  "/identity": WorkspaceRoute.Identities,
   "/admin": WorkspaceRoute.Vaults,
   "/onboard": WorkspaceRoute.AddDevice,
   "/vault/devices": WorkspaceRoute.Devices,

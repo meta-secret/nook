@@ -15,6 +15,10 @@ type ManageNavDefinition = Omit<ManageNavItem, "scope">;
 
 const DEFINITIONS: readonly ManageNavDefinition[] = [
   {
+    section: WorkspaceSection.Overview,
+    labelKey: I18N_KEYS.WorkspaceSectionOverview,
+  },
+  {
     section: WorkspaceSection.Vaults,
     labelKey: I18N_KEYS.WorkspaceSectionVaults,
   },

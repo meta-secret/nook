@@ -91,13 +91,18 @@ test('the identity card leads to adding a device in three steps', async ({
   await snapshot(page, '6-invite')
   await demoBeat(page)
 
-  // Devices is a focused page of its own, led by adding a device.
+  // Identity details lists what the identity has; Devices opens from it.
   await page.getByTestId('add-device-back').click()
   await expect(page.getByTestId('identities-hub')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
   await page.getByTestId('identity-manage').first().click()
-  await page.getByTestId('identity-menu-devices').click()
+  await page.getByTestId('identity-menu-details').click()
+  await expect(page.getByTestId('identity-overview')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await snapshot(page, '7a-identity-details')
+  await page.getByTestId('overview-open-devices').first().click()
   await expect(page).toHaveURL(/\/identity\/devices$/)
   await expect(page.getByTestId('devices-add-device-btn')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -105,9 +110,9 @@ test('the identity card leads to adding a device in three steps', async ({
   await snapshot(page, '7-devices-page')
   await demoBeat(page)
 
+  // Back returns to the details; on a phone its tiles stack.
   await page.setViewportSize({ width: 390, height: 844 })
   await page.getByTestId('identity-page-back').click()
-  await page.getByTestId('identity-manage').first().click()
-  await expect(page.getByTestId('identity-menu')).toBeVisible()
-  await snapshot(page, '8-menu-phone')
+  await expect(page.getByTestId('identity-overview')).toBeVisible()
+  await snapshot(page, '8-details-phone')
 })

@@ -1,18 +1,15 @@
 <!--
-Manage on the identity this browser uses: every action on the identity in
-one list, adding a device first. It opens over the card above its footer
-and each item opens its own focused page.
+Manage on the identity this browser uses: the things to do with it, adding
+a device first, then the way to its details (devices, vaults, cloud copies,
+sign-in). It drops over the card above its footer.
 -->
 <script lang="ts">
   import {
     ChevronRight,
     Cloud,
-    FolderKey,
-    KeyRound,
-    MonitorSmartphone,
+    IdCard,
     Plus,
     ShieldCheck,
-    SlidersHorizontal,
   } from "@lucide/svelte";
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import type { VaultState } from "$lib/vault.svelte";
@@ -43,38 +40,20 @@ and each item opens its own focused page.
     {
       section: WorkspaceSection.Sync,
       testId: "identity-menu-sync",
-      label: vault.t(I18N_KEYS.WorkspaceSectionSync),
-      hint: vault.t(I18N_KEYS.IdentityOverviewSyncCaption),
-    },
-    {
-      section: WorkspaceSection.Devices,
-      testId: "identity-menu-devices",
-      label: vault.t(I18N_KEYS.WorkspaceSectionDevices),
-      hint: vault.t(I18N_KEYS.IdentityOverviewDevicesCaption),
-    },
-    {
-      section: WorkspaceSection.Vaults,
-      testId: "identity-menu-vaults",
-      label: vault.t(I18N_KEYS.WorkspaceSectionVaults),
-      hint: vault.t(I18N_KEYS.IdentityOverviewVaultsCaption),
-    },
-    {
-      section: WorkspaceSection.Keys,
-      testId: "identity-menu-keys",
-      label: vault.t(I18N_KEYS.IdentityOverviewKeysLink),
-      hint: vault.t(I18N_KEYS.WorkspaceSectionKeysDescription),
+      label: vault.t(I18N_KEYS.AddDeviceCloudAction),
+      hint: vault.t(I18N_KEYS.IdentityMenuSyncHint),
     },
     {
       section: WorkspaceSection.Passwords,
       testId: "identity-menu-passwords",
-      label: vault.t(I18N_KEYS.IdentityOverviewPasswordsLink),
-      hint: vault.t(I18N_KEYS.WorkspaceSectionPasswordsDescription),
+      label: vault.t(I18N_KEYS.IdentityMenuPassword),
+      hint: vault.t(I18N_KEYS.IdentityMenuPasswordHint),
     },
     {
-      section: WorkspaceSection.Settings,
-      testId: "identity-menu-settings",
-      label: vault.t(I18N_KEYS.IdentityMenuBrowser),
-      hint: vault.t(I18N_KEYS.IdentityMenuBrowserHint),
+      section: WorkspaceSection.Overview,
+      testId: "identity-menu-details",
+      label: vault.t(I18N_KEYS.IdentityMenuDetails),
+      hint: vault.t(I18N_KEYS.IdentityMenuDetailsHint),
     },
   ]);
 </script>
@@ -84,16 +63,10 @@ and each item opens its own focused page.
     <Plus class="size-4" />
   {:else if section === WorkspaceSection.Sync}
     <Cloud class="size-4" />
-  {:else if section === WorkspaceSection.Devices}
-    <MonitorSmartphone class="size-4" />
-  {:else if section === WorkspaceSection.Vaults}
-    <FolderKey class="size-4" />
-  {:else if section === WorkspaceSection.Keys}
-    <KeyRound class="size-4" />
   {:else if section === WorkspaceSection.Passwords}
     <ShieldCheck class="size-4" />
   {:else}
-    <SlidersHorizontal class="size-4" />
+    <IdCard class="size-4" />
   {/if}
 {/snippet}
 
@@ -109,6 +82,7 @@ and each item opens its own focused page.
       role="menuitem"
       class="nk-identity-menu-item"
       class:nk-identity-menu-lead={index === 0}
+      class:nk-identity-menu-split={item.section === WorkspaceSection.Overview}
       data-testid={item.testId}
       onclick={() => onSelect(item.section)}
     >

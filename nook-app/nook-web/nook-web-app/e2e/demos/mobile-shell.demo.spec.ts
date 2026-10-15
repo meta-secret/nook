@@ -71,7 +71,7 @@ test('a phone gets a full first run, an edge-to-edge shell and the card menu', a
   await expectNoSidewaysScroll(page)
   await demoBeat(page)
 
-  // Manage on the card grows a menu of the identity's pages in place.
+  // Manage on the card drops a short list of actions over it.
   await page.getByTestId('header-identities-btn').click()
   const manage = page.getByTestId('identity-manage').first()
   await manage.click()
@@ -80,8 +80,13 @@ test('a phone gets a full first run, an edge-to-edge shell and the card menu', a
   await expectNoSidewaysScroll(page)
   await demoBeat(page)
 
-  // Each page opens on its own, focused.
-  const keys = page.getByTestId('identity-menu-keys')
+  // Identity details lists what the identity has; each row opens a page.
+  await page.getByTestId('identity-menu-details').click()
+  await expect(page.getByTestId('identity-overview')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await expectNoSidewaysScroll(page)
+  const keys = page.getByTestId('overview-keys')
   await keys.scrollIntoViewIfNeeded()
   await keys.click()
   await expect(page).toHaveURL(/\/identity\/keys$/)
@@ -92,6 +97,6 @@ test('a phone gets a full first run, an edge-to-edge shell and the card menu', a
   await demoBeat(page)
 
   await page.getByTestId('identity-page-back').click()
-  await expect(page.getByTestId('identities-hub')).toBeVisible()
+  await expect(page.getByTestId('identity-overview')).toBeVisible()
   await demoBeat(page)
 })
