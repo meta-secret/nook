@@ -21,6 +21,7 @@ import {
   ManagePage,
   openAddDevice,
   openManagePage,
+  pressIfReady,
 } from './workspace-navigation'
 import { readLocalVaultYamlFromIdb } from './local-sync'
 import {
@@ -950,13 +951,7 @@ export async function openUnlockedVault(page: Page) {
     .poll(
       async () => {
         if (await workspace.isVisible()) return 'open'
-        if ((await unlock.isVisible()) && (await unlock.isEnabled())) {
-          await unlock.click()
-          return 'waiting'
-        }
-        if ((await open.isVisible()) && (await open.isEnabled())) {
-          await open.click()
-        }
+        if (!(await pressIfReady(unlock))) await pressIfReady(open)
         return 'waiting'
       },
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },

@@ -1,5 +1,19 @@
-import { expect, type Page } from '@playwright/test'
+import { expect, type Locator, type Page } from '@playwright/test'
 import { ENROLLMENT_UNLOCK_TIMEOUT_MS, UI_TIMEOUT_MS } from './environment'
+
+/** Press a control that is visible and enabled right now. A panel can
+ * re-render between that check and the press; the caller's next poll then
+ * sees the new state. */
+export async function pressIfReady(control: Locator): Promise<boolean> {
+  const ready = control.and(control.page().locator(':enabled'))
+  if (!(await ready.isVisible())) return false
+  try {
+    await ready.click({ timeout: 1_000 })
+    return true
+  } catch {
+    return false
+  }
+}
 
 /** Management pages of the unified identity and vault workspace. */
 export enum ManagePage {
@@ -209,11 +223,7 @@ export async function switchToVaultFromIdentities(
     .poll(
       async () => {
         if (await vaultPanel.isVisible()) return 'open'
-        if ((await unlock.isVisible()) && (await unlock.isEnabled())) {
-          await unlock.click()
-        } else if ((await open.isVisible()) && (await open.isEnabled())) {
-          await open.click()
-        }
+        if (!(await pressIfReady(unlock))) await pressIfReady(open)
         return 'waiting'
       },
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },

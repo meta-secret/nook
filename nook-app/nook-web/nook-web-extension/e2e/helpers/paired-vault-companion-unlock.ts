@@ -1,4 +1,5 @@
 import { expect, type BrowserContext, type Page } from '@playwright/test'
+import { pressIfReady } from '../../../nook-web-app/e2e/helpers/workspace-navigation'
 import { EXTENSION_UNLOCK_TIMEOUT_MS } from './extension-smoke-runtime'
 
 export enum PairedVaultCompanionUnlockKind {
@@ -318,8 +319,7 @@ export async function expectVaultOpened(
     .poll(
       async () => {
         if (await shell.isVisible()) return true
-        if ((await open.isVisible()) && (await open.isEnabled()))
-          await open.click()
+        await pressIfReady(open)
         return false
       },
       { timeout },
