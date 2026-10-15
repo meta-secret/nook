@@ -449,6 +449,8 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
         "task _web:test:ui-demo",
         "runs-on: nook-k0s-container",
         "nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}",
+        // Re-run e2e jobs pull the image their producer attempt built.
+        "e2e_image: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}",
         "main-wasm-${{ github.run_id }}",
         "task web:e2e:kubernetes-image:artifacts",
         "CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined",
@@ -458,6 +460,11 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
             "main parallel delivery contract missing: {required}"
         );
     }
+    assert_eq!(
+        main.matches("image: ${{ needs.web.outputs.e2e_image }}").count(),
+        3,
+        "every Main browser consumer pulls the e2e image its web attempt built"
+    );
     assert!(
         main_ui_demo_job.contains("name: UI demos\n    if: ${{ false }}")
             && main_ui_demo_job.contains("task _web:test:ui-demo"),
