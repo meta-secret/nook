@@ -17,6 +17,7 @@ card, which then spans the full row.
     Plus,
     Puzzle,
     Settings2,
+    TriangleAlert,
     UserRoundCheck,
   } from '@lucide/svelte'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
@@ -53,6 +54,8 @@ card, which then spans the full row.
     onLock = () => {},
     onUnlock = () => {},
     onUseIdentity = () => {},
+    healthNote = '',
+    onHealth = () => {},
     onAddDevice,
     pairingStatusFor = () => ({
       kind: LoginVaultExtensionPairingStatusKind.NotShown,
@@ -75,6 +78,10 @@ card, which then spans the full row.
     /** Unlock the identity with this device's passkey. */
     onUnlock?: (identityId: string) => void
     onUseIdentity?: (identityId: string) => void
+    /** What the unlocked identity lacks (no cloud copy, one device); its
+     * chip opens the identity's control page at that step. */
+    healthNote?: string
+    onHealth?: () => void
     /** Open the add-device flow; offered while the identity is unlocked. */
     onAddDevice?: () => void
     /** Extension pairing status for a vault row, while pairing is offered. */
@@ -183,6 +190,18 @@ card, which then spans the full row.
                 <Lock class="size-3" aria-hidden="true" />
               {/snippet}
             </StatusTag>
+          {/if}
+          {#if live && healthNote && !preview}
+            <button
+              type="button"
+              class="nk-tag nk-tag-warning"
+              data-testid="identity-card-health"
+              disabled={busy}
+              onclick={onHealth}
+            >
+              <TriangleAlert class="size-3" aria-hidden="true" />
+              {healthNote}
+            </button>
           {/if}
           {#if card.fingerprint.length > 0}
             <span

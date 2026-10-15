@@ -1,8 +1,8 @@
 <!--
-The invite step of adding a device: the identity mount the new device joins
-through, its one-time passphrase, and the invite (QR code and link). The
-add-device flow around it shows the cloud-copy step before and approval
-after; it renders this only once a compatible mount exists.
+The invite stage of adding a device. Before the invite exists: the mount
+the new device joins through and its one-time passphrase, both chosen
+already, and one button. After: the QR code beside three numbered steps,
+the passphrase in large type, and the flow's live status underneath.
 -->
 <script lang="ts">
   import { DeviceJoinMounts } from '$lib/components/add-device/device-join-mounts'
@@ -12,10 +12,10 @@ after; it renders this only once a compatible mount exists.
     readonly passphrase: string
   }
 
-  import { untrack } from 'svelte'
+  import { untrack, type Snippet } from 'svelte'
   import { I18N_KEYS } from '../../../generated/i18n-keys'
-  import { Cloud, QrCode, RefreshCw, KeyRound } from '@lucide/svelte'
-  import EnrollmentOnboardResult from '$lib/components/EnrollmentOnboardResult.svelte'
+  import { Check, Cloud, Copy, QrCode, RefreshCw } from '@lucide/svelte'
+  import EnrollmentQrCode from '$lib/components/EnrollmentQrCode.svelte'
   import SentinelOnboardingGuidance from '$lib/components/onboard-device/SentinelOnboardingGuidance.svelte'
   import { Button } from '$lib/components/ui/button'
   import { enrollmentBrowser } from '$lib/enrollment/code'
@@ -40,6 +40,8 @@ after; it renders this only once a compatible mount exists.
     isBusy,
     onIssueCode,
     onClearCode,
+    manualJoin,
+    status,
   }: {
     vault: VaultState
     /** Remote provider rows that carry this identity's control log. */
@@ -48,12 +50,18 @@ after; it renders this only once a compatible mount exists.
     isBusy: boolean
     onIssueCode: (args: IdentityCodeIssue) => Promise<EnrollmentCodeIssueResult>
     onClearCode: () => void
+    /** How to join without a camera, shown under the invite. */
+    manualJoin: string
+    /** The flow's live status under the invite: waiting, or a request. */
+    status: Snippet
   } = $props()
 
   let chosenProviderId = $state('')
   let passphrase = $state(untrack(() => vault.identityControl.newPassphrase()))
   let localError = $state('')
   let isGenerating = $state(false)
+  let linkCopied = $state(false)
+  let passphraseCopied = $state(false)
 
   const compatibleMounts = $derived.by(() => {
     const mountRequest: ConstructorParameters<typeof DeviceJoinMounts>[0] = {
@@ -119,6 +127,34 @@ after; it renders this only once a compatible mount exists.
     return localizedProviderStorageDetail(detailRequest)
   }
 
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(enrollmentLink)
+      linkCopied = true
+      window.setTimeout(() => (linkCopied = false), 1500)
+    } catch {
+      // Copying is a convenience; the link stays selectable.
+    }
+  }
+
+  async function copyPassphrase() {
+    try {
+      await navigator.clipboard.writeText(passphrase)
+      passphraseCopied = true
+      window.setTimeout(() => (passphraseCopied = false), 1500)
+    } catch {
+      // Copying is a convenience; the passphrase stays on screen.
+    }
+  }
+
+  function issuedLabel(): string {
+    const issuedArgs: Parameters<typeof vault.t>[0] = {
+      key: I18N_KEYS.OnboardDeviceIssuedTime,
+      replacements: { time: issuedAt.slice(0, 19).replace('T', ' ') + ' UTC' },
+    }
+    return vault.t(issuedArgs)
+  }
+
   async function submitOnboard() {
     localError = ''
     onClearCode()
@@ -145,23 +181,30 @@ after; it renders this only once a compatible mount exists.
 </script>
 
 <section
-  class="grid gap-4 animate-in fade-in duration-200"
+  class="grid gap-6 animate-in fade-in duration-200"
   data-testid="onboard-device-panel"
 >
   {#if !enrollmentCode}
+    <header class="grid gap-1.5">
+      <h2 class="text-xl font-semibold tracking-tight text-foreground">
+        {vault.t(I18N_KEYS.AddDeviceInviteTitle)}
+      </h2>
+      <p class="max-w-[56ch] text-sm text-pretty text-muted-foreground">
+        {vault.t(I18N_KEYS.AddDeviceInviteBody)}
+      </p>
+    </header>
+
     <form
-      class="space-y-4"
+      class="grid gap-5"
       onsubmit={(event) => {
         event.preventDefault()
         void submitOnboard()
       }}
     >
-      <div class="space-y-2">
-        <p class="text-xs font-medium text-foreground">
-          {vault.t(I18N_KEYS.IdentityControlOnboardProvider)}
-        </p>
+      <div class="grid gap-2">
+        <p class="nk-label">{vault.t(I18N_KEYS.IdentityControlOnboardProvider)}</p>
         <div
-          class="space-y-1.5"
+          class="grid gap-1.5"
           role="radiogroup"
           aria-label={vault.t(I18N_KEYS.IdentityControlOnboardProvider)}
           data-testid="onboard-provider-list"
@@ -207,64 +250,35 @@ after; it renders this only once a compatible mount exists.
         </div>
       </div>
 
-      <div class="space-y-2">
-        <label
-          for="onboard-passphrase"
-          class="text-xs font-medium text-foreground"
-        >
+      <div class="grid gap-2">
+        <label for="onboard-passphrase" class="nk-label">
           {vault.t(I18N_KEYS.AddDevicePassphraseLabel)}
         </label>
-        <div class="flex gap-2">
+        <div
+          class="flex items-stretch border border-border bg-background focus-within:ring-2 focus-within:ring-ring"
+        >
           <input
             id="onboard-passphrase"
-            class="flex h-10 w-full min-w-0 border border-border bg-background px-3 font-mono text-sm tracking-wide text-foreground focus:outline-hidden focus:ring-2 focus:ring-ring"
+            class="nk-passphrase min-w-0 flex-1 bg-transparent px-4 py-3 outline-none"
             bind:value={passphrase}
             autocomplete="off"
             spellcheck="false"
             disabled={isBusy || isGenerating}
             data-testid="onboard-passphrase-input"
           />
-          <Button
+          <button
             type="button"
-            size="sm"
-            variant="outline"
-            class="h-10 shrink-0"
+            class="grid w-12 shrink-0 place-items-center border-l border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
             disabled={isBusy || isGenerating}
             data-testid="onboard-new-passphrase-btn"
-            aria-label={vault.t(I18N_KEYS.IdentityControlOnboardNewPassphrase)}
-            title={vault.t(I18N_KEYS.IdentityControlOnboardNewPassphrase)}
+            aria-label={vault.t(I18N_KEYS.AddDeviceRegenerate)}
+            title={vault.t(I18N_KEYS.AddDeviceRegenerate)}
             onclick={() => (passphrase = vault.identityControl.newPassphrase())}
           >
-            <KeyRound class="size-4" />
-            <span class="hidden sm:inline"
-              >{vault.t(I18N_KEYS.IdentityControlOnboardNewPassphrase)}</span
-            >
-          </Button>
+            <RefreshCw class="size-4" aria-hidden="true" />
+          </button>
         </div>
       </div>
-
-      <details
-        class="text-xs text-muted-foreground"
-        data-testid="onboarding-type-summary"
-      >
-        <summary class="cursor-pointer select-none hover:text-foreground">
-          {vault.t(I18N_KEYS.AddDeviceHowItWorks)}
-        </summary>
-        <div class="mt-2 border-l-2 border-border pl-3">
-          <p
-            class="font-medium text-foreground"
-            data-testid="onboarding-type-label"
-          >
-            {vault.t(onboardingTypeTitleKey)}
-          </p>
-          <p
-            class="mt-1 text-pretty"
-            data-testid="onboarding-type-description"
-          >
-            {vault.t(onboardingTypeDescriptionKey)}
-          </p>
-        </div>
-      </details>
 
       {#if requiresSharedJoinerIdentity}
         <div class="space-y-2">
@@ -296,9 +310,10 @@ after; it renders this only once a compatible mount exists.
         </p>
       {/if}
 
-      <div class="flex">
+      <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
         <Button
           type="submit"
+          class="nk-go h-11 px-5"
           disabled={isBusy || isGenerating}
           data-testid="onboard-device-submit"
         >
@@ -310,6 +325,22 @@ after; it renders this only once a compatible mount exists.
             {vault.t(I18N_KEYS.IdentityControlOnboardGenerate)}
           {/if}
         </Button>
+        <details
+          class="text-xs text-muted-foreground"
+          data-testid="onboarding-type-summary"
+        >
+          <summary class="cursor-pointer select-none hover:text-foreground">
+            {vault.t(I18N_KEYS.AddDeviceHowItWorks)}
+          </summary>
+          <div class="mt-2 max-w-[48ch] border-l-2 border-border pl-3">
+            <p class="font-medium text-foreground" data-testid="onboarding-type-label">
+              {vault.t(onboardingTypeTitleKey)}
+            </p>
+            <p class="mt-1 text-pretty" data-testid="onboarding-type-description">
+              {vault.t(onboardingTypeDescriptionKey)}
+            </p>
+          </div>
+        </details>
       </div>
     </form>
 
@@ -327,35 +358,95 @@ after; it renders this only once a compatible mount exists.
       </div>
     {/if}
   {:else}
-    <EnrollmentOnboardResult
-      {vault}
-      {enrollmentLink}
-      instruction={vault.t(I18N_KEYS.IdentityControlOnboardCodeReady)}
-      issuedSuffix={issuedAt
-        ? (() => {
-            const issuedArgs: Parameters<typeof vault.t>[0] = {
-              key: I18N_KEYS.OnboardDeviceIssuedTime,
-              replacements: {
-                time: issuedAt.slice(0, 19).replace('T', ' ') + ' UTC',
-              },
-            }
-            return vault.t(issuedArgs)
-          })()
-        : ''}
-      linkTitle={vault.t(I18N_KEYS.OnboardDeviceLinkTitle)}
-      linkDescription={vault.t(I18N_KEYS.OnboardDeviceLinkDesc)}
-    />
-    <div class="space-y-1">
-      <p class="text-xs font-medium text-foreground">
-        {vault.t(I18N_KEYS.AddDevicePassphraseLabel)}
-      </p>
-      <p
-        class="border border-border bg-background px-3 py-2 font-mono text-base tracking-wide text-foreground"
-        data-testid="onboard-passphrase-display"
-      >
-        {passphrase}
-      </p>
+    <header class="grid gap-1.5">
+      <h2 class="text-xl font-semibold tracking-tight text-foreground">
+        {vault.t(I18N_KEYS.AddDeviceOpenTitle)}
+      </h2>
+      {#if issuedAt}
+        <p class="font-mono text-[11px] text-muted-foreground">{issuedLabel()}</p>
+      {/if}
+    </header>
+
+    <div
+      class="grid gap-8 md:grid-cols-[auto_minmax(0,1fr)] md:items-start"
+      data-testid="onboard-enrollment-result"
+    >
+      <div class="justify-self-center p-2">
+        <div class="nk-qr-frame">
+          <EnrollmentQrCode
+            {enrollmentLink}
+            loadingLabel={vault.t(I18N_KEYS.OnboardDeviceGeneratingQr)}
+          />
+        </div>
+      </div>
+
+      <ol class="grid min-w-0 gap-6">
+        <li class="grid min-w-0 gap-2">
+          <span class="nk-step-index">01</span>
+          <p class="text-sm text-pretty text-foreground">
+            {vault.t(I18N_KEYS.AddDeviceOpenScan)}
+          </p>
+          <div class="flex min-w-0 items-stretch border border-border">
+            <input
+              type="text"
+              readonly
+              value={enrollmentLink}
+              aria-label={vault.t(I18N_KEYS.OnboardDeviceLinkTitle)}
+              data-testid="onboarding-link-url"
+              class="min-w-0 flex-1 bg-transparent px-3 py-2 font-mono text-xs text-muted-foreground outline-none"
+              onclick={(event) => event.currentTarget.select()}
+            />
+            <button
+              type="button"
+              class="flex shrink-0 items-center gap-1.5 border-l border-border px-3 text-xs font-medium text-foreground transition-colors hover:bg-accent"
+              data-testid="copy-onboard-link-btn"
+              onclick={() => void copyLink()}
+            >
+              {#if linkCopied}
+                <Check class="size-3.5" aria-hidden="true" />
+                {vault.t(I18N_KEYS.OnboardDeviceCopiedLink)}
+              {:else}
+                <Copy class="size-3.5" aria-hidden="true" />
+                {vault.t(I18N_KEYS.OnboardDeviceCopyLink)}
+              {/if}
+            </button>
+          </div>
+          <span class="sr-only" data-testid="onboard-link">{enrollmentLink}</span>
+        </li>
+        <li class="grid min-w-0 gap-2">
+          <span class="nk-step-index">02</span>
+          <p class="text-sm text-pretty text-foreground">
+            {vault.t(I18N_KEYS.AddDeviceOpenPassphrase)}
+          </p>
+          <div
+            class="flex min-w-0 items-center justify-between gap-3 border border-border bg-background px-4 py-3"
+          >
+            <span class="nk-passphrase min-w-0" data-testid="onboard-passphrase-display">{passphrase}</span>
+            <button
+              type="button"
+              class="flex shrink-0 items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+              data-testid="onboard-copy-passphrase-btn"
+              onclick={() => void copyPassphrase()}
+            >
+              {#if passphraseCopied}
+                <Check class="size-3.5" aria-hidden="true" />
+                {vault.t(I18N_KEYS.AddDeviceCopied)}
+              {:else}
+                <Copy class="size-3.5" aria-hidden="true" />
+                {vault.t(I18N_KEYS.AddDeviceCopy)}
+              {/if}
+            </button>
+          </div>
+        </li>
+        <li class="grid min-w-0 gap-2">
+          <span class="nk-step-index">03</span>
+          <p class="text-sm text-pretty text-foreground">
+            {vault.t(I18N_KEYS.AddDeviceOpenApprove)}
+          </p>
+        </li>
+      </ol>
     </div>
+
     {#if vault.sharedGrantInstructions}
       <div
         class="nk-banner nk-banner-warning p-3 text-sm text-foreground"
@@ -364,11 +455,16 @@ after; it renders this only once a compatible mount exists.
         {vault.sharedGrantInstructions}
       </div>
     {/if}
-    <div class="flex">
-      <Button
+
+    {@render status()}
+
+    <footer
+      class="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-t border-border pt-4 text-xs text-muted-foreground"
+    >
+      <span class="max-w-[60ch] text-pretty">{manualJoin}</span>
+      <button
         type="button"
-        size="sm"
-        variant="outline"
+        class="underline decoration-muted-foreground/40 underline-offset-4 hover:text-foreground"
         data-testid="onboard-clear-code-btn"
         onclick={() => {
           onClearCode()
@@ -376,8 +472,8 @@ after; it renders this only once a compatible mount exists.
         }}
       >
         {vault.t(I18N_KEYS.AddDeviceNewInvite)}
-      </Button>
-    </div>
+      </button>
+    </footer>
   {/if}
 
   {#if isSentinelVault}

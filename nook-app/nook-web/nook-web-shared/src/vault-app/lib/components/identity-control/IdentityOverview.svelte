@@ -1,12 +1,13 @@
 <!--
-The identity at a glance, read as one system: who it is and how protected
-(a three-rung ladder with the single next step), then its parts in the
-order things flow: the vaults it holds are copied to sync providers, and
-devices open them through those copies. Each part opens its own page for
-the details; keys and backup passwords sit quietly below.
+The identity's control page, read as one system: how protected it is (a
+three-rung ladder with the single next step), then its parts in the order
+things flow: the vaults it holds are copied to sync providers, and devices
+open them through those copies. A part opens in place under its row, as
+do keys and backup passwords below and this browser's own settings at the
+foot. Each open part keeps its own address.
 -->
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, tick, type Snippet } from "svelte";
   import {
     ArrowDown,
     ArrowRight,
@@ -18,6 +19,8 @@ the details; keys and backup passwords sit quietly below.
     MonitorSmartphone,
     Plus,
     ShieldCheck,
+    SlidersHorizontal,
+    X,
   } from "@lucide/svelte";
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import { Button } from "$lib/components/ui/button";
@@ -42,6 +45,8 @@ the details; keys and backup passwords sit quietly below.
     onOpenVault,
     onNewVault,
     onAddSyncProvider,
+    expanded,
+    panel,
   }: {
     vault: VaultState;
     card: IdentityCardView;
@@ -50,7 +55,57 @@ the details; keys and backup passwords sit quietly below.
     onOpenVault: (storeId: string) => void;
     onNewVault: () => void;
     onAddSyncProvider: () => void;
+    /** The part open in place; the overview itself when none is. */
+    expanded: WorkspaceSection;
+    /** The open part's content. */
+    panel?: Snippet;
   } = $props();
+
+  const PART_SECTIONS: readonly WorkspaceSection[] = [
+    WorkspaceSection.Vaults,
+    WorkspaceSection.Sync,
+    WorkspaceSection.Devices,
+  ];
+  const SECURITY_SECTIONS: readonly WorkspaceSection[] = [
+    WorkspaceSection.Keys,
+    WorkspaceSection.Passwords,
+  ];
+  let panelElement = $state<HTMLElement>();
+
+  /** Open a part in place, or close it when it is already open. */
+  function toggle(section: WorkspaceSection): void {
+    onOpen(expanded === section ? WorkspaceSection.Overview : section);
+  }
+
+  function panelTitle(section: WorkspaceSection): string {
+    switch (section) {
+      case WorkspaceSection.Vaults:
+        return vault.t(I18N_KEYS.WorkspaceSectionVaults);
+      case WorkspaceSection.Sync:
+        return vault.t(I18N_KEYS.WorkspaceSectionSync);
+      case WorkspaceSection.Devices:
+        return vault.t(I18N_KEYS.WorkspaceSectionDevices);
+      case WorkspaceSection.Keys:
+        return vault.t(I18N_KEYS.WorkspaceSectionKeys);
+      case WorkspaceSection.Passwords:
+        return vault.t(I18N_KEYS.WorkspaceSectionPasswords);
+      default:
+        return vault.t(I18N_KEYS.WorkspaceSectionSettings);
+    }
+  }
+
+  // A part opened from below the fold scrolls into view.
+  $effect(() => {
+    if (expanded === WorkspaceSection.Overview) return;
+    void tick().then(() => {
+      if (!panelElement) return;
+      const scrollRequest: ScrollIntoViewOptions = {
+        block: "start",
+        behavior: "smooth",
+      };
+      panelElement.scrollIntoView(scrollRequest);
+    });
+  });
 
   /** Rows a part tile lists before "+N more". */
   const TILE_ROWS = 3;
@@ -143,7 +198,8 @@ the details; keys and backup passwords sit quietly below.
     type="button"
     class="group flex w-full items-start justify-between gap-3 text-left"
     data-testid="overview-open-{section}"
-    onclick={() => onOpen(section)}
+    aria-expanded={expanded === section}
+    onclick={() => toggle(section)}
   >
     <span class="flex min-w-0 items-center gap-3">
       <span class="nk-tile shrink-0" aria-hidden="true">
@@ -161,7 +217,10 @@ the details; keys and backup passwords sit quietly below.
         >
           {title}
           <ChevronRight
-            class="size-3.5 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+            class="size-3.5 text-muted-foreground transition-transform {expanded ===
+            section
+              ? 'rotate-90'
+              : 'group-hover:translate-x-0.5'}"
             aria-hidden="true"
           />
         </span>
@@ -196,6 +255,34 @@ the details; keys and backup passwords sit quietly below.
     <ArrowRight class="hidden size-4 lg:block" />
     <ArrowDown class="size-4 lg:hidden" />
   </span>
+{/snippet}
+
+{#snippet openPanel()}
+  {#if panel}
+    <section
+      bind:this={panelElement}
+      class="nk-frame-sheet grid min-w-0 scroll-mt-24 gap-4 p-4 animate-in fade-in duration-200 sm:p-6"
+      data-testid="overview-panel"
+      data-section={expanded}
+    >
+      <header class="flex items-center justify-between gap-3">
+        <h2 class="text-lg font-semibold tracking-tight text-foreground">
+          {panelTitle(expanded)}
+        </h2>
+        <button
+          type="button"
+          class="grid size-8 place-items-center text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          aria-label={vault.t(I18N_KEYS.IdentityOverviewClosePanel)}
+          title={vault.t(I18N_KEYS.IdentityOverviewClosePanel)}
+          data-testid="overview-panel-close"
+          onclick={() => onOpen(WorkspaceSection.Overview)}
+        >
+          <X class="size-4" aria-hidden="true" />
+        </button>
+      </header>
+      {@render panel()}
+    </section>
+  {/if}
 {/snippet}
 
 <div class="grid min-w-0 gap-6" data-testid="identity-overview">
@@ -304,7 +391,12 @@ the details; keys and backup passwords sit quietly below.
     class="grid grid-cols-1 items-stretch lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)]"
     data-testid="overview-parts"
   >
-    <section class="grid content-start gap-4 border border-border p-4">
+    <section
+      class="grid content-start gap-4 border p-4 {expanded ===
+      WorkspaceSection.Vaults
+        ? 'border-foreground bg-accent/40'
+        : 'border-border'}"
+    >
       {@render tileHead(
         WorkspaceSection.Vaults,
         vault.t(I18N_KEYS.WorkspaceSectionVaults),
@@ -352,7 +444,12 @@ the details; keys and backup passwords sit quietly below.
 
     {@render link(vault.t(I18N_KEYS.IdentityOverviewCopiedTo))}
 
-    <section class="grid content-start gap-4 border border-border p-4">
+    <section
+      class="grid content-start gap-4 border p-4 {expanded ===
+      WorkspaceSection.Sync
+        ? 'border-foreground bg-accent/40'
+        : 'border-border'}"
+    >
       {@render tileHead(
         WorkspaceSection.Sync,
         vault.t(I18N_KEYS.WorkspaceSectionSync),
@@ -388,7 +485,12 @@ the details; keys and backup passwords sit quietly below.
 
     {@render link(vault.t(I18N_KEYS.IdentityOverviewOpensOn))}
 
-    <section class="grid content-start gap-4 border border-border p-4">
+    <section
+      class="grid content-start gap-4 border p-4 {expanded ===
+      WorkspaceSection.Devices
+        ? 'border-foreground bg-accent/40'
+        : 'border-border'}"
+    >
       {@render tileHead(
         WorkspaceSection.Devices,
         vault.t(I18N_KEYS.WorkspaceSectionDevices),
@@ -438,6 +540,10 @@ the details; keys and backup passwords sit quietly below.
     </section>
   </div>
 
+  {#if PART_SECTIONS.includes(expanded)}
+    {@render openPanel()}
+  {/if}
+
   <!-- Who can unlock it. -->
   <section
     class="flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-border pt-4 text-sm"
@@ -448,7 +554,8 @@ the details; keys and backup passwords sit quietly below.
       type="button"
       class="inline-flex items-center gap-2 text-foreground hover:underline"
       data-testid="overview-keys"
-      onclick={() => onOpen(WorkspaceSection.Keys)}
+      aria-expanded={expanded === WorkspaceSection.Keys}
+      onclick={() => toggle(WorkspaceSection.Keys)}
     >
       <KeyRound class="size-4 text-muted-foreground" aria-hidden="true" />
       {vault.t(I18N_KEYS.IdentityOverviewKeysLink)}
@@ -458,7 +565,8 @@ the details; keys and backup passwords sit quietly below.
       type="button"
       class="inline-flex items-center gap-2 text-foreground hover:underline"
       data-testid="overview-passwords"
-      onclick={() => onOpen(WorkspaceSection.Passwords)}
+      aria-expanded={expanded === WorkspaceSection.Passwords}
+      onclick={() => toggle(WorkspaceSection.Passwords)}
     >
       <ShieldCheck class="size-4 text-muted-foreground" aria-hidden="true" />
       {vault.t(I18N_KEYS.IdentityOverviewPasswordsLink)}
@@ -467,4 +575,24 @@ the details; keys and backup passwords sit quietly below.
       </span>
     </button>
   </section>
+
+  {#if SECURITY_SECTIONS.includes(expanded)}
+    {@render openPanel()}
+  {/if}
+
+  <!-- This browser's own settings: not part of the identity. -->
+  <button
+    type="button"
+    class="inline-flex w-fit items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
+    data-testid="overview-browser-settings"
+    aria-expanded={expanded === WorkspaceSection.Settings}
+    onclick={() => toggle(WorkspaceSection.Settings)}
+  >
+    <SlidersHorizontal class="size-3.5" aria-hidden="true" />
+    {vault.t(I18N_KEYS.IdentityOverviewBrowserLink)}
+  </button>
+
+  {#if expanded === WorkspaceSection.Settings}
+    {@render openPanel()}
+  {/if}
 </div>

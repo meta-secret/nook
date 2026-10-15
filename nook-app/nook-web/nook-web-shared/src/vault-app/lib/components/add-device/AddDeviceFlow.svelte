@@ -1,25 +1,27 @@
 <!--
-Adding a device, as one focused page outside identity management: what
-happens in a sentence and a small diagram, then three steps. The identity
-needs a cloud copy the new device can reach; an invite (QR code, link and
-passphrase) is made through it; the new device redeems the invite and the
-request is approved here. Every place that offers "Add a device" opens this.
+Adding a device: a focused page outside identity management. A hero names
+it and draws this device, the cloud copy and the new device; a progress bar
+counts cloud copy, invite and approval; one card holds the stage at hand.
+Every place that offers "Add a device" opens this.
 -->
 <script lang="ts">
-  import { Check, RefreshCw } from "@lucide/svelte";
-  import { onMount, type ComponentProps, type Snippet } from "svelte";
+  import { Check, Cloud, CloudOff, ShieldCheck } from "@lucide/svelte";
+  import { onMount, type ComponentProps } from "svelte";
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import OnboardDevice from "$lib/components/OnboardDevice.svelte";
   import IdentityStandingNotices from "$lib/components/identity-control/IdentityStandingNotices.svelte";
   import { IdentityStandingPresentation } from "$lib/components/identity-control/identity-standing";
-  import JoinFlowDiagram from "$lib/components/join/JoinFlowDiagram.svelte";
-  import { JoinSide } from "$lib/components/join/join-flow";
   import FirstRunBackLink from "$lib/components/login/FirstRunBackLink.svelte";
+  import StepProgress from "$lib/components/login/StepProgress.svelte";
   import PendingJoinList from "$lib/components/settings/PendingJoinList.svelte";
   import { Button } from "$lib/components/ui/button";
+  import { CipherField, scramble } from "$lib/components/ui/cipher";
+  import { localizeProviderLabel } from "$lib/auth/providers";
   import { enrollmentBrowser } from "$lib/enrollment/code";
   import type { VaultState } from "$lib/vault.svelte";
   import { DeviceJoinMounts } from "./device-join-mounts";
+  import PairingDiagram from "./PairingDiagram.svelte";
+  import { PairingProgress, PairingStage } from "./pairing-stage";
 
   type OnboardDeviceProps = ComponentProps<typeof OnboardDevice>;
   type PendingJoinListProps = ComponentProps<typeof PendingJoinList>;
@@ -53,10 +55,34 @@ request is approved here. Every place that offers "Add a device" opens this.
     };
     return new DeviceJoinMounts(mountRequest).compatible;
   });
-  const cloudReady = $derived(joinMounts.length > 0);
   const inviteReady = $derived(vault.enrollmentCode !== "");
   /** A request approved from this page; the flow is then complete. */
   let approved = $state(false);
+
+  const progress = $derived.by(() => {
+    const facts: ConstructorParameters<typeof PairingProgress>[0] = {
+      cloudReady: joinMounts.length > 0,
+      inviteReady,
+      requestCount: pendingJoins.length,
+      approved,
+    };
+    return new PairingProgress(facts);
+  });
+  const stage = $derived(progress.stage);
+  const steps = $derived([
+    vault.t(I18N_KEYS.AddDeviceProgressCloud),
+    vault.t(I18N_KEYS.AddDeviceProgressInvite),
+    vault.t(I18N_KEYS.AddDeviceProgressApprove),
+  ]);
+  const providerLabel = $derived.by(() => {
+    const [mount] = joinMounts;
+    if (!mount) return "";
+    const labelRequest: Parameters<typeof localizeProviderLabel>[0] = {
+      label: mount.label,
+      t: vault.t,
+    };
+    return localizeProviderLabel(labelRequest);
+  });
 
   const intro = $derived.by(() => {
     const introRequest: Parameters<typeof vault.t>[0] = {
@@ -76,14 +102,6 @@ request is approved here. Every place that offers "Add a device" opens this.
     };
     return vault.t(manualRequest);
   });
-
-  function stepLabel(number: number): string {
-    const stepRequest: Parameters<typeof vault.t>[0] = {
-      key: I18N_KEYS.AddDeviceStep,
-      replacements: { number: String(number) },
-    };
-    return vault.t(stepRequest);
-  }
 
   function reportFailure(translationKey: Parameters<typeof vault.t>[0]) {
     vault.errorMsg = vault.t(translationKey);
@@ -112,7 +130,7 @@ request is approved here. Every place that offers "Add a device" opens this.
   // While an invite waits for its device, look for the request now and then
   // so it shows up without a click.
   $effect(() => {
-    if (!inviteReady || approved || pendingJoins.length > 0) return;
+    if (stage !== PairingStage.Waiting) return;
     const timer = window.setInterval(() => {
       if (document.visibilityState !== "visible") return;
       if (control.busy || vault.isSaving || vault.isVerifying) return;
@@ -122,157 +140,170 @@ request is approved here. Every place that offers "Add a device" opens this.
   });
 </script>
 
-{#snippet step(
-  number: number,
-  title: string,
-  done: boolean,
-  upcoming: boolean,
-  testId: string,
-  content: Snippet,
-)}
-  <li class="group relative grid grid-cols-[2rem_minmax(0,1fr)] gap-x-4 pb-8 last:pb-0" data-testid={testId}>
-    <span
-      class="relative z-10 grid size-8 place-items-center border font-mono text-sm {done
-        ? 'border-success bg-success text-background'
-        : upcoming
-          ? 'border-border bg-card text-muted-foreground'
-          : 'border-foreground bg-foreground text-background'}"
-      aria-hidden="true"
-    >
-      {#if done}
-        <Check class="size-4" />
-      {:else}
-        {number}
-      {/if}
-    </span>
-    <span
-      class="absolute top-8 bottom-0 left-4 w-px bg-border group-last:hidden"
-      aria-hidden="true"
-    ></span>
-    <div class="grid min-w-0 gap-3 pt-1 {upcoming ? 'opacity-60' : ''}">
-      <h2 class="text-base font-semibold text-foreground">
-        <span class="sr-only">{stepLabel(number)}:</span>
-        {title}
-      </h2>
-      {@render content()}
-    </div>
-  </li>
-{/snippet}
-
-{#snippet cloudStep()}
-  {#if cloudReady}
-    <p class="text-sm text-pretty text-muted-foreground" data-testid="add-device-cloud-ready">
-      {vault.t(I18N_KEYS.AddDeviceCloudReady)}
-    </p>
-  {:else}
-    <div class="grid justify-items-start gap-3" data-testid="onboard-no-identity-mount">
+{#snippet requests()}
+  <div class="grid gap-3" data-testid="add-device-request">
+    <div class="grid gap-1">
+      <h3 class="text-base font-semibold text-foreground">
+        {vault.t(I18N_KEYS.AddDeviceRequestTitle)}
+      </h3>
       <p class="text-sm text-pretty text-muted-foreground">
-        {vault.t(I18N_KEYS.AddDeviceCloudMissing)}
+        {vault.t(I18N_KEYS.AddDeviceRequestBody)}
       </p>
-      <Button type="button" data-testid="onboard-open-sync-btn" onclick={onOpenSync}>
-        {vault.t(I18N_KEYS.AddDeviceCloudAction)}
-      </Button>
     </div>
-  {/if}
-{/snippet}
-
-{#snippet inviteStep()}
-  {#if !cloudReady}
-    <p class="text-sm text-muted-foreground">
-      {vault.t(I18N_KEYS.AddDeviceLockedStep)}
-    </p>
-  {:else}
-    {#if !inviteReady}
-      <p class="text-sm text-pretty text-muted-foreground">
-        {vault.t(I18N_KEYS.AddDeviceInviteBody)}
-      </p>
-    {/if}
-    <OnboardDevice
+    <PendingJoinList
       {vault}
-      mounts={control.mounts}
-      enrollmentCode={vault.enrollmentCode}
+      {pendingJoins}
       {isBusy}
-      onIssueCode={(issueRequest: Parameters<OnboardDeviceProps["onIssueCode"]>[0]) =>
-        vault.issueEnrollmentCode(issueRequest)}
-      onClearCode={() => vault.clearEnrollmentCode()}
+      onApproveJoin={approve}
+      onDenyJoin={(appId: Parameters<PendingJoinListProps["onDenyJoin"]>[0]) =>
+        control.deny(appId)}
     />
-  {/if}
+  </div>
 {/snippet}
 
-{#snippet joinStep()}
-  {#if approved}
-    <div class="grid justify-items-start gap-3" data-testid="add-device-approved">
-      <p class="nk-banner nk-band-success px-4 py-3 text-sm text-foreground" role="status">
-        {vault.t(I18N_KEYS.AddDeviceApproved)}
-      </p>
-      <Button type="button" data-testid="add-device-done" onclick={onBack}>
-        {vault.t(I18N_KEYS.AddDeviceDone)}
+{#snippet liveStatus()}
+  {#if stage === PairingStage.Request}
+    {@render requests()}
+  {:else}
+    <div
+      class="flex flex-wrap items-center justify-between gap-3 border border-dashed border-foreground/40 px-4 py-3"
+      data-testid="add-device-waiting"
+      role="status"
+      aria-live="polite"
+    >
+      <span class="flex items-center gap-3 text-sm text-foreground">
+        <span class="relative flex size-2.5" aria-hidden="true">
+          <span
+            class="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-60 motion-reduce:animate-none"
+          ></span>
+          <span class="relative inline-flex size-2.5 rounded-full bg-success"></span>
+        </span>
+        {vault.t(I18N_KEYS.AddDeviceWaiting)}
+      </span>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        disabled={isBusy}
+        data-testid="add-device-check"
+        onclick={checkForRequests}
+      >
+        {vault.t(I18N_KEYS.AddDeviceCheck)}
       </Button>
     </div>
-  {:else}
-    <ol class="grid list-decimal gap-1.5 pl-5 text-sm text-pretty text-muted-foreground marker:text-foreground">
-      <li>{vault.t(I18N_KEYS.AddDeviceJoinScan)}</li>
-      <li>{vault.t(I18N_KEYS.AddDeviceJoinPassphrase)}</li>
-      <li>{vault.t(I18N_KEYS.AddDeviceJoinApprove)}</li>
-    </ol>
-    <p class="text-xs text-pretty text-muted-foreground">{manualJoin}</p>
-    {#if pendingJoins.length > 0}
-      <PendingJoinList
-        {vault}
-        {pendingJoins}
-        {isBusy}
-        onApproveJoin={approve}
-        onDenyJoin={(appId: Parameters<PendingJoinListProps["onDenyJoin"]>[0]) =>
-          control.deny(appId)}
-      />
-    {:else if inviteReady}
-      <div
-        class="flex flex-wrap items-center justify-between gap-3 border border-dashed border-border px-4 py-3"
-        data-testid="add-device-waiting"
-        role="status"
-        aria-live="polite"
-      >
-        <span class="flex items-center gap-2 text-sm text-muted-foreground">
-          <RefreshCw class="size-4 shrink-0 {control.busy ? 'animate-spin' : ''}" aria-hidden="true" />
-          {vault.t(I18N_KEYS.AddDeviceWaiting)}
-        </span>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={isBusy}
-          data-testid="add-device-check"
-          onclick={checkForRequests}
-        >
-          {vault.t(I18N_KEYS.AddDeviceCheck)}
-        </Button>
-      </div>
-    {/if}
   {/if}
 {/snippet}
 
 <section
-  class="mx-auto grid w-full max-w-2xl gap-6 py-6 sm:py-10"
+  class="mx-auto grid w-full max-w-4xl gap-6 py-6 sm:py-10"
   data-testid="add-device-page"
 >
   <FirstRunBackLink {vault} testId="add-device-back" {onBack} />
 
-  <header class="grid gap-2">
-    <h1 class="text-[1.75rem] leading-tight font-semibold tracking-[-0.02em] text-foreground">
-      {vault.t(I18N_KEYS.AddDeviceTitle)}
-    </h1>
-    <p class="max-w-[60ch] text-sm text-pretty text-muted-foreground">{intro}</p>
+  <header class="nk-frame-tab nk-hero relative">
+    <CipherField class="nk-hero-cipher" />
+    <div class="relative grid gap-8">
+      <div class="min-w-0">
+        <p class="nk-eyebrow">
+          <ShieldCheck class="size-3.5 text-success" aria-hidden="true" />
+          {vault.t(I18N_KEYS.AddDeviceEyebrow)}<span
+            class="nk-caret"
+            aria-hidden="true"
+          ></span>
+        </p>
+        {#key vault.locale}
+          <h1
+            class="mt-2.5 text-[clamp(1.875rem,4.5vw,2.75rem)] leading-[1.05] font-semibold tracking-[-0.03em] text-foreground"
+            use:scramble
+          >
+            {vault.t(I18N_KEYS.AddDeviceTitle)}
+          </h1>
+        {/key}
+        <p class="mt-3 max-w-[48ch] text-sm text-pretty text-muted-foreground sm:text-base">
+          {intro}
+        </p>
+      </div>
+      <div class="max-w-xl">
+        <PairingDiagram {vault} {stage} {providerLabel} />
+      </div>
+    </div>
   </header>
 
-  <JoinFlowDiagram {vault} side={JoinSide.Inviting} />
+  <StepProgress {steps} current={progress.step} testId="add-device-progress" />
 
   <IdentityStandingNotices {vault} />
 
   {#if standing.isMember()}
-    <ol class="grid">
-      {@render step(1, vault.t(I18N_KEYS.AddDeviceCloudTitle), cloudReady, false, "add-device-step-cloud", cloudStep)}
-      {@render step(2, vault.t(I18N_KEYS.AddDeviceInviteTitle), inviteReady, !cloudReady, "add-device-step-invite", inviteStep)}
-      {@render step(3, vault.t(I18N_KEYS.AddDeviceJoinTitle), approved, !inviteReady, "add-device-step-join", joinStep)}
-    </ol>
+    <div
+      class="nk-frame-sheet p-5 sm:p-8"
+      data-testid="add-device-stage"
+      data-stage={stage}
+    >
+      {#if stage === PairingStage.Cloud}
+        <div class="grid gap-6" data-testid="onboard-no-identity-mount">
+          <div class="grid gap-5 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start">
+            <span class="nk-pair-node" data-state="missing">
+              <CloudOff class="size-6" aria-hidden="true" />
+            </span>
+            <div class="grid gap-2">
+              <h2 class="text-xl font-semibold tracking-tight text-foreground">
+                {vault.t(I18N_KEYS.AddDeviceCloudTitle)}
+              </h2>
+              <p class="max-w-[56ch] text-sm text-pretty text-muted-foreground">
+                {vault.t(I18N_KEYS.AddDeviceCloudMissing)}
+              </p>
+              <p class="font-mono text-xs tracking-wide text-muted-foreground">
+                {vault.t(I18N_KEYS.AddDeviceCloudExamples)}
+              </p>
+            </div>
+          </div>
+          <Button
+            type="button"
+            class="nk-go h-11 justify-self-start px-5"
+            data-testid="onboard-open-sync-btn"
+            onclick={onOpenSync}
+          >
+            <Cloud class="size-4" />
+            {vault.t(I18N_KEYS.AddDeviceCloudAction)}
+          </Button>
+        </div>
+      {:else if stage === PairingStage.Approved}
+        <div class="grid justify-items-start gap-4" data-testid="add-device-approved">
+          <span class="nk-pair-node" data-state="ready">
+            <Check class="size-6" aria-hidden="true" />
+          </span>
+          <div class="grid gap-1.5" role="status">
+            <h2 class="text-xl font-semibold tracking-tight text-foreground">
+              {vault.t(I18N_KEYS.AddDeviceApprovedTitle)}
+            </h2>
+            <p class="max-w-[56ch] text-sm text-pretty text-muted-foreground">
+              {vault.t(I18N_KEYS.AddDeviceApproved)}
+            </p>
+          </div>
+          <Button
+            type="button"
+            class="nk-go h-11 px-5"
+            data-testid="add-device-done"
+            onclick={onBack}
+          >
+            {vault.t(I18N_KEYS.AddDeviceDone)}
+          </Button>
+        </div>
+      {:else if stage === PairingStage.Request && !inviteReady}
+        {@render requests()}
+      {:else}
+        <OnboardDevice
+          {vault}
+          mounts={control.mounts}
+          enrollmentCode={vault.enrollmentCode}
+          {isBusy}
+          {manualJoin}
+          status={liveStatus}
+          onIssueCode={(issueRequest: Parameters<OnboardDeviceProps["onIssueCode"]>[0]) =>
+            vault.issueEnrollmentCode(issueRequest)}
+          onClearCode={() => vault.clearEnrollmentCode()}
+        />
+      {/if}
+    </div>
   {/if}
 </section>

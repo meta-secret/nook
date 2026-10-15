@@ -44,6 +44,8 @@ join) sit between the hero and the cards.
     onManage,
     onNewIdentity,
     onUseIdentity,
+    currentHealthNote = '',
+    onHealth = () => {},
     onAddDevice,
     onLock = () => {},
     onUnlock = () => {},
@@ -71,6 +73,10 @@ join) sit between the hero and the cards.
     onManage: (request: IdentityVaultTarget) => void
     onNewIdentity: () => void
     onUseIdentity: (target: IdentityVaultTarget) => void
+    /** What the unlocked identity lacks, shown as a chip on its card. */
+    currentHealthNote?: string
+    /** Open the unlocked identity's control page at its next step. */
+    onHealth?: () => void
     /** Open the add-device flow from the unlocked identity's card. */
     onAddDevice?: () => void
     onLock?: () => void
@@ -409,6 +415,8 @@ join) sit between the hero and the cards.
             onManage={(identityId: string) => onManage(targetFor(identityId))}
             onUnlock={(identityId: string) => onUnlock(targetFor(identityId))}
             {onLock}
+            healthNote={card.current ? currentHealthNote : ''}
+            {onHealth}
             {...onAddDevice ? { onAddDevice } : {}}
             onUseIdentity={(identityId: string) =>
               onUseIdentity(targetFor(identityId))}

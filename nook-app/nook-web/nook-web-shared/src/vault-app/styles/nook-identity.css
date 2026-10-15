@@ -509,199 +509,121 @@
     }
   }
 
-  /* Workspace navigation: a rail inside the shell on wide screens, a
-   * bottom bar on phones whose last slot opens the remaining pages. */
-  .nk-manage-nav {
-    grid-area: nav;
-    position: sticky;
-    bottom: 0;
-    z-index: 30;
-    display: flex;
-    align-items: stretch;
-    min-width: 0;
-    border-top: 1px solid var(--border);
-    background: var(--card);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-  }
-  .nk-manage-group {
-    display: contents;
-  }
-  .nk-manage-item {
+  /* Adding a device: this device, the cloud copy and the new device as
+   * three nodes; the links between them light up as pairing advances. */
+  .nk-pair-node {
     position: relative;
-    display: flex;
-    flex: 1 1 0;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 0.25rem;
-    min-width: 0;
-    min-height: 3.5rem;
-    padding: 0.375rem 0.25rem;
-    border: 0;
-    background: none;
-    font-size: 0.625rem;
-    font-weight: 500;
-    white-space: nowrap;
+    display: grid;
+    place-items: center;
+    width: 3.5rem;
+    height: 3.5rem;
+    border: 1px solid var(--border);
+    background: var(--card);
     color: var(--muted-foreground);
-    cursor: pointer;
   }
-  .nk-manage-item:hover {
-    color: var(--foreground);
-  }
-  .nk-manage-item[aria-current="page"] {
-    color: var(--foreground);
-    box-shadow: inset 0 2px 0 var(--foreground);
-  }
-  .nk-manage-item:focus-visible {
-    outline: 2px solid var(--ring);
-    outline-offset: -2px;
-  }
-  .nk-manage-badge {
-    position: absolute;
-    top: 0.375rem;
-    right: calc(50% - 1.125rem);
-    min-width: 1rem;
-    padding: 0 0.25rem;
+  .nk-pair-node[data-state="on"] {
+    border-color: var(--foreground);
     background: var(--foreground);
     color: var(--background);
-    font-family: var(--font-mono);
-    font-size: 0.625rem;
-    line-height: 1rem;
-    text-align: center;
   }
-  .nk-manage-dot {
+  .nk-pair-node[data-state="ready"] {
+    border-color: var(--success);
+    color: var(--success);
+  }
+  .nk-pair-node[data-state="missing"] {
+    border-style: dashed;
+    border-color: color-mix(in oklch, var(--warning) 70%, transparent);
+    color: var(--warning);
+  }
+  .nk-pair-node[data-state="waiting"] {
+    border-style: dashed;
+    border-color: var(--foreground);
+    color: var(--foreground);
+  }
+  .nk-pair-node[data-state="waiting"]::after {
+    content: "";
     position: absolute;
-    top: 0.5rem;
-    right: calc(50% - 0.875rem);
-    width: 0.4375rem;
-    height: 0.4375rem;
-    border-radius: 9999px;
-    background: var(--warning);
+    inset: -5px;
+    border: 1px solid var(--foreground);
+    opacity: 0;
+    animation: nk-pair-ping 1.8s ease-out infinite;
   }
-  .nk-manage-more {
-    display: none;
+  .nk-pair-link {
+    flex: 1;
+    min-width: 1.5rem;
+    height: 2px;
+    margin-top: 1.75rem;
+    background: repeating-linear-gradient(
+      90deg,
+      var(--border) 0 6px,
+      transparent 6px 12px
+    );
   }
-  .nk-manage-more-open {
-    position: absolute;
-    right: 0;
-    bottom: 100%;
-    left: 0;
+  .nk-pair-link[data-state="live"] {
+    background: repeating-linear-gradient(
+      90deg,
+      var(--foreground) 0 6px,
+      transparent 6px 12px
+    );
+    background-size: 12px 2px;
+    animation: nk-pair-flow 0.9s linear infinite;
+  }
+  .nk-pair-link[data-state="on"] {
+    background: var(--foreground);
+  }
+  .nk-pair-link[data-state="done"] {
+    background: var(--success);
+  }
+  /* The invite's QR code: a light tile with corner marks, readable by any
+   * camera in either theme. */
+  .nk-qr-frame {
+    position: relative;
     display: grid;
-    gap: 0.75rem;
-    padding: 0.75rem 0.5rem;
-    border-top: 1px solid var(--border);
-    background: var(--card);
-    box-shadow: 0 -16px 32px -24px
-      color-mix(in oklch, var(--foreground) 45%, transparent);
+    place-items: center;
+    padding: 0.75rem;
+    background: #fff;
   }
-  @media (width < 48rem) {
-    .nk-manage-more .nk-manage-group {
-      display: grid;
-      gap: 0.125rem;
-    }
-    .nk-manage-more .nk-manage-item {
-      flex-direction: row;
-      justify-content: flex-start;
-      gap: 0.75rem;
-      min-height: 2.75rem;
-      padding: 0.5rem 0.625rem;
-      font-size: 0.875rem;
-      text-align: left;
-    }
-    .nk-manage-more .nk-manage-item[aria-current="page"] {
-      background: var(--accent);
-      box-shadow: inset 2px 0 0 var(--foreground);
-    }
+  .nk-qr-frame::before {
+    content: "";
+    position: absolute;
+    inset: -0.5rem;
+    pointer-events: none;
+    background:
+      linear-gradient(var(--foreground), var(--foreground)) top left / 1.25rem 2px,
+      linear-gradient(var(--foreground), var(--foreground)) top left / 2px 1.25rem,
+      linear-gradient(var(--foreground), var(--foreground)) top right / 1.25rem 2px,
+      linear-gradient(var(--foreground), var(--foreground)) top right / 2px 1.25rem,
+      linear-gradient(var(--foreground), var(--foreground)) bottom left / 1.25rem 2px,
+      linear-gradient(var(--foreground), var(--foreground)) bottom left / 2px 1.25rem,
+      linear-gradient(var(--foreground), var(--foreground)) bottom right / 1.25rem 2px,
+      linear-gradient(var(--foreground), var(--foreground)) bottom right / 2px 1.25rem;
+    background-repeat: no-repeat;
   }
-  @media (width >= 48rem) {
-    .nk-manage-nav {
-      position: static;
-      flex-direction: column;
-      gap: 1.25rem;
-      overflow-x: visible;
-      overflow-y: auto;
-      padding: 1rem 0.75rem;
-      border-top: 0;
-      border-right: 1px solid var(--border);
-      background: color-mix(in oklch, var(--muted) 35%, var(--card));
-    }
-    .nk-manage-group {
-      display: grid;
-      gap: 0.125rem;
-    }
-    .nk-manage-more,
-    .nk-manage-more-open {
-      display: contents;
-    }
-    .nk-manage-item {
-      flex: none;
-      flex-direction: row;
-      justify-content: flex-start;
-      gap: 0.625rem;
-      min-width: 0;
-      min-height: 2.25rem;
-      padding: 0.4375rem 0.625rem;
-      font-size: 0.875rem;
-      text-align: left;
-    }
-    .nk-manage-item:hover {
-      background: color-mix(in oklch, var(--accent) 70%, transparent);
-    }
-    .nk-manage-item[aria-current="page"] {
-      background: var(--accent);
-      box-shadow: inset 2px 0 0 var(--foreground);
-    }
-    /* The identity home leads the rail: vaults and sync come first. */
-    .nk-manage-item-home {
-      min-height: 2.75rem;
-      border: 1px solid var(--border);
-      background: var(--card);
-      font-weight: 600;
-      color: var(--foreground);
-    }
-    .nk-manage-badge,
-    .nk-manage-dot {
-      position: static;
-      margin-left: auto;
-    }
+  .nk-passphrase {
+    font-family: var(--font-mono);
+    font-size: clamp(1rem, 2.6vw, 1.25rem);
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    overflow-wrap: anywhere;
+    color: var(--foreground);
   }
-  .nk-manage-identity {
-    display: none;
-  }
-  @media (width >= 48rem) {
-    .nk-manage-identity {
-      display: flex;
-      align-items: center;
-      gap: 0.625rem;
-      width: 100%;
-      min-width: 0;
-      padding: 0.5rem;
-      border: 1px solid var(--border);
-      background: var(--card);
-      text-align: left;
-      cursor: pointer;
-    }
-    .nk-manage-identity:hover {
-      border-color: color-mix(in oklch, var(--foreground) 26%, transparent);
-    }
-    .nk-manage-identity:focus-visible {
-      outline: 2px solid var(--ring);
-      outline-offset: 2px;
-    }
+  .nk-step-index {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    color: var(--muted-foreground);
   }
 
   /* Authenticated shell: one framed sheet with a page band, the scrolling
-   * page and the status line. Identity management adds its rail down the
-   * left (a bottom bar on phones); vault pages have none. */
+   * page and the status line. */
   .nk-shell {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    grid-template-rows: auto minmax(0, 1fr) auto;
     grid-template-areas:
       "bar"
       "main"
-      "status"
-      "nav";
+      "status";
     border: 1px solid var(--border);
     background: var(--card);
   }
@@ -728,16 +650,6 @@
   }
   .nk-shell-status {
     grid-area: status;
-  }
-  @media (width >= 48rem) {
-    .nk-shell-manage {
-      grid-template-columns: 15rem minmax(0, 1fr);
-      grid-template-rows: auto minmax(0, 1fr) auto;
-      grid-template-areas:
-        "nav bar"
-        "nav main"
-        "nav status";
-    }
   }
 
   /* A full-width strip at the top of a shell page: setup, pending joins. */
@@ -768,8 +680,27 @@
   }
 }
 
+@keyframes nk-pair-flow {
+  to {
+    background-position: 12px 0;
+  }
+}
+
+@keyframes nk-pair-ping {
+  0% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.25);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .nk-caret {
+  .nk-caret,
+  .nk-pair-link[data-state="live"],
+  .nk-pair-node[data-state="waiting"]::after {
     animation: none;
   }
 }

@@ -47,7 +47,6 @@ band, the scrolling page and the status line.
   import { IdentityDirectoryLoader } from "$lib/components/identities/identity-directory-loader.svelte";
   import { IdentityDirectoryLoadKind } from "$lib/components/devices-access/identity-directory-view";
   import PageBar from "$lib/components/workspace/PageBar.svelte";
-  import ManageNav from "$lib/components/workspace/ManageNav.svelte";
   import {
     ManageNavEntryKind,
     ManageNavLookup,
@@ -207,6 +206,15 @@ band, the scrolling page and the status line.
     return vault.t(noteText);
   });
 
+  /** What the unlocked identity lacks, for the chip on its hub card. */
+  const currentHealthNote = $derived(
+    identityHealth.nextStep === NookIdentityNextStep.AddSyncProvider ||
+      identityHealth.nextStep === NookIdentityNextStep.AddCloudProvider
+      ? vault.t(I18N_KEYS.IdentityOverviewRiskLocal)
+      : identityHealth.nextStep === NookIdentityNextStep.AddDevice
+        ? vault.t(I18N_KEYS.IdentityOverviewRiskOneDevice)
+        : "",
+  );
   const identityName = $derived(
     identityLabel || vault.t(I18N_KEYS.WorkspaceIdentityFallback),
   );
@@ -215,14 +223,16 @@ band, the scrolling page and the status line.
       ? `${identityName} / ${vault.t(I18N_KEYS.WorkspaceVaultEyebrow)}`
       : scope === ManageSectionScope.Vault
         ? `${identityName} / ${vaultLabel}`
-        : `${identityName} / ${vault.t(I18N_KEYS.WorkspaceManageIdentity)}`,
+        : vault.t(I18N_KEYS.WorkspaceManageIdentity),
   );
   const barTitle = $derived(
     section === WorkspaceSection.Vault
       ? vaultLabel
-      : navEntry.kind === ManageNavEntryKind.Listed
-        ? vault.t(navEntry.item.labelKey)
-        : vaultLabel,
+      : scope === ManageSectionScope.Identity
+        ? identityName
+        : navEntry.kind === ManageNavEntryKind.Listed
+          ? vault.t(navEntry.item.labelKey)
+          : vaultLabel,
   );
 
   function setAddMode({ open, selection }: SecretAddModeChange) {
@@ -249,7 +259,9 @@ band, the scrolling page and the status line.
       addDeviceOrigin = section;
     const nextManaging =
       new WorkspaceSectionScope(next).scope !== ManageSectionScope.None;
-    if (nextManaging && !managing) {
+    // Adding a device is a detour: leaving it keeps the way back the
+    // control page had before.
+    if (nextManaging && !managing && section !== WorkspaceSection.AddDevice) {
       manageOrigin = section;
       manageOriginRecorded = true;
     }
@@ -391,6 +403,131 @@ band, the scrolling page and the status line.
   />
 {/snippet}
 
+{#snippet vaultAdmin()}
+  <VaultAdmin
+    {vault}
+    {extensionSetupState}
+    {section}
+    {startNewVault}
+    onCreateVault={(label: string) =>
+      vault.createLocalVaultWithDeviceKeys(label)}
+    syncProviders={vault.syncProviders}
+    manualProviderSync={vault.manualProviderSync}
+    isAuthenticated={vault.isAuthenticated}
+    isSaving={vault.isSaving}
+    isVerifying={vault.isVerifying}
+    isInitializing={vault.isInitializing}
+    addProviderOpen={vault.addProviderOpen}
+    loginSetup={vault.loginSetup}
+    bind:githubPat={vault.githubPat}
+    bind:githubRepo={vault.githubRepo}
+    passwordEntries={vault.passwordEntries}
+    isPasswordBusy={vault.isPasswordBusy}
+    passwordError={vault.passwordError}
+    canManageExistingPasswords={vault.deviceProtectionReady}
+    onReconnect={onSettingsReconnect}
+    onSyncProvider={async (
+      id: Parameters<NonNullable<VaultAdminProps["onSyncProvider"]>>[0],
+    ) => {
+      const syncRequest: Parameters<typeof vault.syncProviderById>[0] =
+        {
+          providerId: id,
+          visibility: ProviderSyncVisibility.Visible,
+          failureHandling: ProviderSyncFailureHandling.Capture,
+        };
+      const outcome = await vault.syncProviderById(syncRequest);
+      if (outcome.isErr())
+        vault.errorMsg = vault.t(outcome.error.translationKey);
+    }}
+    onBeginAddProvider={() => vault.beginAddProvider()}
+    onCancelAddProvider={() => vault.cancelAddProvider()}
+    onBeginSetup={(
+      setupRequest: Parameters<VaultAdminProps["onBeginSetup"]>[0],
+    ) => vault.beginProviderSetup(setupRequest)}
+    onCancelSetup={() => vault.cancelProviderSetup()}
+    onRemoveProvider={async (
+      id: Parameters<
+        NonNullable<VaultAdminProps["onRemoveProvider"]>
+      >[0],
+    ) => {
+      const removed = await vault.removeProvider(id);
+      if (removed.isErr())
+        vault.errorMsg = vault.t(removed.error.translationKey);
+    }}
+    onAddPassword={(
+      passwordRequest: Parameters<VaultAdminProps["onAddPassword"]>[0],
+    ) => vault.addVaultPassword(passwordRequest)}
+    onUpdatePassword={(
+      passwordRequest: Parameters<
+        VaultAdminProps["onUpdatePassword"]
+      >[0],
+    ) => vault.updateVaultPasswordEntry(passwordRequest)}
+    onRemovePassword={(
+      id: Parameters<VaultAdminProps["onRemovePassword"]>[0],
+    ) => vault.removeVaultPasswordEntry(id)}
+    onImportBitwarden={(
+      importRequest: Parameters<
+        VaultAdminProps["onImportBitwarden"]
+      >[0],
+    ) => vault.handleBitwardenImport(importRequest)}
+    onImportKeePassXc={(
+      csv: Parameters<VaultAdminProps["onImportKeePassXc"]>[0],
+    ) => vault.handleKeePassXcImport(csv)}
+    onImportLastPass={(
+      csv: Parameters<VaultAdminProps["onImportLastPass"]>[0],
+    ) => vault.handleLastPassImport(csv)}
+    onImportKeeper={(
+      csv: Parameters<VaultAdminProps["onImportKeeper"]>[0],
+    ) => vault.handleKeeperImport(csv)}
+    onImportOnePassword={(
+      archive: Parameters<VaultAdminProps["onImportOnePassword"]>[0],
+    ) => vault.handleOnePasswordImport(archive)}
+    onImportApplePasswords={(
+      exportBytes: Parameters<
+        VaultAdminProps["onImportApplePasswords"]
+      >[0],
+    ) => vault.handleApplePasswordsImport(exportBytes)}
+    onImportChromePasswords={(
+      csv: Parameters<VaultAdminProps["onImportChromePasswords"]>[0],
+    ) => vault.handleChromePasswordsImport(csv)}
+    onImportDashlane={(
+      exportBytes: Parameters<VaultAdminProps["onImportDashlane"]>[0],
+    ) => vault.handleDashlaneImport(exportBytes)}
+    onImportGoogleAuthenticator={(
+      migrationUris: Parameters<
+        VaultAdminProps["onImportGoogleAuthenticator"]
+      >[0],
+    ) => vault.handleGoogleAuthenticatorImport(migrationUris)}
+    onImportProtonPass={(
+      exportBytes: Parameters<VaultAdminProps["onImportProtonPass"]>[0],
+    ) => vault.handleProtonPassImport(exportBytes)}
+  />
+{/snippet}
+
+<!-- An identity part opened in place on the control page. -->
+{#snippet identityPanel()}
+  {#if section === WorkspaceSection.Devices}
+    <IdentityDevicesPanel
+      {vault}
+      onAddDevice={() => openSection(WorkspaceSection.AddDevice)}
+    />
+  {:else if section === WorkspaceSection.Keys}
+    <IdentityKeysPage {vault} onOpen={openSection} />
+  {:else if section === WorkspaceSection.Settings}
+    {#if navEntry.kind === ManageNavEntryKind.Listed}
+      <p
+        class="max-w-[64ch] text-sm text-pretty text-muted-foreground"
+        data-testid="manage-section-description"
+      >
+        {vault.t(navEntry.item.descriptionKey)}
+      </p>
+    {/if}
+    <BrowserSettingsPanel {vault} />
+  {:else}
+    {@render vaultAdmin()}
+  {/if}
+{/snippet}
+
 {#if vault.firstRun !== FirstRunStage.Off}
   <FirstRunBackupStep
     {vault}
@@ -417,6 +554,8 @@ band, the scrolling page and the status line.
       onNewIdentity={newIdentity}
       onUseIdentity={(target: IdentityVaultTarget) =>
         manageIdentity(target.identityId)}
+      {currentHealthNote}
+      onHealth={() => openSection(WorkspaceSection.Overview)}
       onAddDevice={() => openSection(WorkspaceSection.AddDevice)}
       onLock={lockIdentity}
     />
@@ -447,7 +586,6 @@ band, the scrolling page and the status line.
 {:else}
   <div
     class:authenticated-shell-editor={secretsAddOpen}
-    class:nk-shell-manage={scope === ManageSectionScope.Identity}
     class="authenticated-shell nk-shell -mx-4 -mt-4 w-auto min-w-0 max-w-none sm:mx-0 sm:mt-0 sm:w-full sm:max-w-full [touch-action:pan-y_pinch-zoom]"
     data-testid="authenticated-shell"
     data-section={section}
@@ -500,20 +638,6 @@ band, the scrolling page and the status line.
       </PageBar>
     </div>
 
-    {#if scope === ManageSectionScope.Identity}
-      <ManageNav
-        {vault}
-        active={section}
-        identityLabel={identityName}
-        pendingJoinCount={identityPendingJoins.length}
-        syncMissing={identityHealth.nextStep ===
-          NookIdentityNextStep.AddSyncProvider ||
-          identityHealth.nextStep === NookIdentityNextStep.AddCloudProvider}
-        deviceMissing={identityHealth.nextStep ===
-          NookIdentityNextStep.AddDevice}
-        onSelect={openSection}
-      />
-    {/if}
 
     <div
       class="nk-shell-main shell-scroll flex min-h-0 min-w-0 flex-col {secretsNoteEditorOpen
@@ -525,14 +649,6 @@ band, the scrolling page and the status line.
           ? "grid min-w-0 grid-cols-1 content-start gap-6 p-4 md:p-6"
           : "flex min-h-0 flex-1 flex-col"}
       >
-        {#if navEntry.kind === ManageNavEntryKind.Listed && section === WorkspaceSection.Settings}
-          <p
-            class="max-w-[64ch] text-sm text-pretty text-muted-foreground"
-            data-testid="manage-section-description"
-          >
-            {vault.t(navEntry.item.descriptionKey)}
-          </p>
-        {/if}
 
         {#if section === WorkspaceSection.Vault}
           {#if !secretsNoteEditorOpen}
@@ -574,126 +690,26 @@ band, the scrolling page and the status line.
               />
             {/key}
           </div>
-        {:else if section === WorkspaceSection.Overview}
+        {:else if scope === ManageSectionScope.Identity}
           {#if overviewCard !== false}
             <IdentityOverview
               {vault}
               card={overviewCard}
               health={identityHealth}
+              expanded={section}
               onOpen={openSection}
               onOpenVault={(storeId: string) => void openVaultFromCard(storeId)}
               onNewVault={newVaultFromOverview}
               onAddSyncProvider={addSyncProvider}
+              {...section === WorkspaceSection.Overview
+                ? {}
+                : { panel: identityPanel }}
             />
+          {:else if section !== WorkspaceSection.Overview}
+            {@render identityPanel()}
           {/if}
-        {:else if section === WorkspaceSection.Devices}
-          <IdentityDevicesPanel
-            {vault}
-            onAddDevice={() => openSection(WorkspaceSection.AddDevice)}
-          />
-        {:else if section === WorkspaceSection.Keys}
-          <IdentityKeysPage {vault} onOpen={openSection} />
-        {:else if section === WorkspaceSection.Settings}
-          <BrowserSettingsPanel {vault} />
         {:else}
-          <VaultAdmin
-            {vault}
-            {extensionSetupState}
-            {section}
-            {startNewVault}
-            onCreateVault={(label: string) =>
-              vault.createLocalVaultWithDeviceKeys(label)}
-            syncProviders={vault.syncProviders}
-            manualProviderSync={vault.manualProviderSync}
-            isAuthenticated={vault.isAuthenticated}
-            isSaving={vault.isSaving}
-            isVerifying={vault.isVerifying}
-            isInitializing={vault.isInitializing}
-            addProviderOpen={vault.addProviderOpen}
-            loginSetup={vault.loginSetup}
-            bind:githubPat={vault.githubPat}
-            bind:githubRepo={vault.githubRepo}
-            passwordEntries={vault.passwordEntries}
-            isPasswordBusy={vault.isPasswordBusy}
-            passwordError={vault.passwordError}
-            canManageExistingPasswords={vault.deviceProtectionReady}
-            onReconnect={onSettingsReconnect}
-            onSyncProvider={async (
-              id: Parameters<NonNullable<VaultAdminProps["onSyncProvider"]>>[0],
-            ) => {
-              const syncRequest: Parameters<typeof vault.syncProviderById>[0] =
-                {
-                  providerId: id,
-                  visibility: ProviderSyncVisibility.Visible,
-                  failureHandling: ProviderSyncFailureHandling.Capture,
-                };
-              const outcome = await vault.syncProviderById(syncRequest);
-              if (outcome.isErr())
-                vault.errorMsg = vault.t(outcome.error.translationKey);
-            }}
-            onBeginAddProvider={() => vault.beginAddProvider()}
-            onCancelAddProvider={() => vault.cancelAddProvider()}
-            onBeginSetup={(
-              setupRequest: Parameters<VaultAdminProps["onBeginSetup"]>[0],
-            ) => vault.beginProviderSetup(setupRequest)}
-            onCancelSetup={() => vault.cancelProviderSetup()}
-            onRemoveProvider={async (
-              id: Parameters<
-                NonNullable<VaultAdminProps["onRemoveProvider"]>
-              >[0],
-            ) => {
-              const removed = await vault.removeProvider(id);
-              if (removed.isErr())
-                vault.errorMsg = vault.t(removed.error.translationKey);
-            }}
-            onAddPassword={(
-              passwordRequest: Parameters<VaultAdminProps["onAddPassword"]>[0],
-            ) => vault.addVaultPassword(passwordRequest)}
-            onUpdatePassword={(
-              passwordRequest: Parameters<
-                VaultAdminProps["onUpdatePassword"]
-              >[0],
-            ) => vault.updateVaultPasswordEntry(passwordRequest)}
-            onRemovePassword={(
-              id: Parameters<VaultAdminProps["onRemovePassword"]>[0],
-            ) => vault.removeVaultPasswordEntry(id)}
-            onImportBitwarden={(
-              importRequest: Parameters<
-                VaultAdminProps["onImportBitwarden"]
-              >[0],
-            ) => vault.handleBitwardenImport(importRequest)}
-            onImportKeePassXc={(
-              csv: Parameters<VaultAdminProps["onImportKeePassXc"]>[0],
-            ) => vault.handleKeePassXcImport(csv)}
-            onImportLastPass={(
-              csv: Parameters<VaultAdminProps["onImportLastPass"]>[0],
-            ) => vault.handleLastPassImport(csv)}
-            onImportKeeper={(
-              csv: Parameters<VaultAdminProps["onImportKeeper"]>[0],
-            ) => vault.handleKeeperImport(csv)}
-            onImportOnePassword={(
-              archive: Parameters<VaultAdminProps["onImportOnePassword"]>[0],
-            ) => vault.handleOnePasswordImport(archive)}
-            onImportApplePasswords={(
-              exportBytes: Parameters<
-                VaultAdminProps["onImportApplePasswords"]
-              >[0],
-            ) => vault.handleApplePasswordsImport(exportBytes)}
-            onImportChromePasswords={(
-              csv: Parameters<VaultAdminProps["onImportChromePasswords"]>[0],
-            ) => vault.handleChromePasswordsImport(csv)}
-            onImportDashlane={(
-              exportBytes: Parameters<VaultAdminProps["onImportDashlane"]>[0],
-            ) => vault.handleDashlaneImport(exportBytes)}
-            onImportGoogleAuthenticator={(
-              migrationUris: Parameters<
-                VaultAdminProps["onImportGoogleAuthenticator"]
-              >[0],
-            ) => vault.handleGoogleAuthenticatorImport(migrationUris)}
-            onImportProtonPass={(
-              exportBytes: Parameters<VaultAdminProps["onImportProtonPass"]>[0],
-            ) => vault.handleProtonPassImport(exportBytes)}
-          />
+          {@render vaultAdmin()}
         {/if}
       </div>
     </div>

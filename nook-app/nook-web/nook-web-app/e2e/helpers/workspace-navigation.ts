@@ -13,6 +13,19 @@ export enum ManagePage {
   Import = 'import',
 }
 
+/** What opens each part on the identity's control page. */
+const MANAGE_PAGE_OPENERS: Record<
+  Exclude<ManagePage, ManagePage.Overview | ManagePage.Import>,
+  string
+> = {
+  [ManagePage.Vaults]: 'overview-open-vaults',
+  [ManagePage.Sync]: 'overview-open-sync',
+  [ManagePage.Devices]: 'overview-open-devices',
+  [ManagePage.Keys]: 'overview-keys',
+  [ManagePage.Passwords]: 'overview-passwords',
+  [ManagePage.Settings]: 'overview-browser-settings',
+}
+
 const MANAGE_PAGE_MARKERS: Record<ManagePage, string> = {
   [ManagePage.Overview]: 'identity-overview',
   [ManagePage.Keys]: 'identity-keys',
@@ -62,31 +75,26 @@ export async function openManagePage(
 ): Promise<void> {
   const marker = page.getByTestId(MANAGE_PAGE_MARKERS[target])
   if (await marker.isVisible()) return
-  // Import belongs to the vault page; every other page is on the identity
-  // rail, which Manage on the current identity's card opens at Overview.
+  // Import belongs to the vault page.
   if (target === ManagePage.Import) {
     await openVaultPage(page)
     await page.getByTestId('vault-import-btn').click()
     await expect(marker).toBeVisible({ timeout: UI_TIMEOUT_MS })
     return
   }
-  const navItem = page.getByTestId(`manage-nav-${target}`)
-  if (!(await navItem.isVisible())) {
+  // Every identity part opens in place on the control page, which Manage
+  // on the current identity's card opens.
+  const overview = page.getByTestId('identity-overview')
+  if (!(await overview.isVisible())) {
     await openIdentitiesPage(page)
     const currentManage = page.locator(
       '[data-testid="identity-card"][data-status="unlocked"] [data-testid="identity-manage"]',
     )
     await currentManage.first().click()
-    await expect(page.getByTestId('identity-overview')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
-    if (target === ManagePage.Overview) return
+    await expect(overview).toBeVisible({ timeout: UI_TIMEOUT_MS })
   }
-  // Phones keep security and settings behind the bottom bar's More slot.
-  const more = page.getByTestId('manage-nav-more')
-  if (!(await navItem.isVisible()) && (await more.isVisible())) {
-    await more.click()
-  }
+  if (target === ManagePage.Overview) return
+  const navItem = page.getByTestId(MANAGE_PAGE_OPENERS[target])
   await expect(navItem).toBeVisible({ timeout: UI_TIMEOUT_MS })
   await navItem.click()
   // Identity pages read the identity directory, which retries while the

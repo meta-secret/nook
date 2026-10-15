@@ -71,10 +71,14 @@ test('the vault page holds items; identity management has its own rail', async (
     .toEqual({ clientWidth: 390, scrollWidth: 390 })
   await page.waitForTimeout(DEMO_BEAT_MS)
 
-  // The identity entry leads back to the hub on wide screens.
+  // Adding a device leads the rail on wide screens and returns to it.
   await page.setViewportSize({ width: 1280, height: 900 })
-  await page.getByTestId('manage-nav-identities').click()
-  await expect(page.getByTestId('identities-hub')).toBeVisible({
+  await page.getByTestId('manage-nav-add-device').click()
+  await expect(page.getByTestId('add-device-page')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+  await page.getByTestId('add-device-back').click()
+  await expect(page.getByTestId('vault-devices-panel')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
 })
