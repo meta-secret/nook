@@ -477,8 +477,17 @@ export async function connectGoogleDriveSyncProviderFromSettings(
   }
 }
 
+/** An open vault session shows the vault shell, the hub, an identity page,
+ * or the add-device flow. */
 export async function assertVaultReady(page: Page) {
-  await expect(page.getByTestId('authenticated-shell')).toBeVisible({
+  await expect(
+    page
+      .getByTestId('authenticated-shell')
+      .or(page.getByTestId('identity-page'))
+      .or(page.getByTestId('add-device-page'))
+      .or(page.getByTestId('identities-workspace'))
+      .first(),
+  ).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
 }

@@ -24,7 +24,7 @@ async function expectNoSidewaysScroll(page: Page) {
     .toEqual({ clientWidth: PHONE.width, scrollWidth: PHONE.width })
 }
 
-test('a phone gets a full first run, an edge-to-edge shell and a stacked control page', async ({
+test('a phone gets a full first run, an edge-to-edge shell and the card menu', async ({
   page,
 }) => {
   await page.setViewportSize(PHONE)
@@ -71,30 +71,27 @@ test('a phone gets a full first run, an edge-to-edge shell and a stacked control
   await expectNoSidewaysScroll(page)
   await demoBeat(page)
 
-  // The identity's control page stacks its parts; each opens in place.
+  // Manage on the card grows a menu of the identity's pages in place.
   await page.getByTestId('header-identities-btn').click()
-  await page.getByTestId('identity-manage').first().click()
-  await expect(page.getByTestId('identity-overview')).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
+  const manage = page.getByTestId('identity-manage').first()
+  await manage.click()
+  await expect(manage).toHaveAttribute('aria-expanded', 'true')
+  await expect(page.getByTestId('identity-menu')).toBeVisible()
   await expectNoSidewaysScroll(page)
   await demoBeat(page)
 
-  const keys = page.getByTestId('overview-keys')
+  // Each page opens on its own, focused.
+  const keys = page.getByTestId('identity-menu-keys')
   await keys.scrollIntoViewIfNeeded()
   await keys.click()
   await expect(page).toHaveURL(/\/identity\/keys$/)
-  await expect(page.getByTestId('overview-panel')).toBeVisible()
   await expect(page.getByTestId('identity-keys')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-  await expect(keys).toHaveAttribute('aria-expanded', 'true')
   await expectNoSidewaysScroll(page)
   await demoBeat(page)
 
-  // Closing the part returns to the control page.
-  await page.getByTestId('overview-panel-close').click()
-  await expect(page).toHaveURL(/\/identity$/)
-  await expect(page.getByTestId('overview-panel')).toHaveCount(0)
+  await page.getByTestId('identity-page-back').click()
+  await expect(page.getByTestId('identities-hub')).toBeVisible()
   await demoBeat(page)
 })

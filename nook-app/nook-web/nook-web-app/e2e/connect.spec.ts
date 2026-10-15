@@ -1,6 +1,7 @@
 import { expect, test } from './fixtures'
 import { VaultAccessStatus } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm.js'
 import {
+  openIdentitiesPage,
   authorizeDeviceProtection,
   createLocalVaultOnLogin,
   dismissSyncConflictIfVisible,
@@ -62,14 +63,13 @@ test.describe('vault connect flow', () => {
       ),
     ).toBeFalsy()
     await expect(page.getByTestId('login-gate')).not.toBeVisible()
-    // The vault page offers the browser extension; the identity's overview
-    // carries the protection ladder and its single next step.
+    // The vault page offers the browser extension; the identity's card
+    // names its single next step, which opens Sync.
     await expect(page.getByTestId('vault-extension-install')).toBeVisible()
-    await openManagePage(page, ManagePage.Overview)
-    await expect(page.getByTestId('overview-ladder')).toBeVisible()
-    await expect(page.getByTestId('overview-next-step')).toBeVisible()
-    await expect(page.getByTestId('overview-add-device')).toBeDisabled()
-    await page.getByTestId('overview-next-step-btn').click()
+    await openIdentitiesPage(page)
+    const health = page.getByTestId('identity-card-health')
+    await expect(health).toContainText('No cloud copy yet')
+    await health.click()
     await expect(page.getByTestId('storage-providers-section')).toBeVisible()
   })
 

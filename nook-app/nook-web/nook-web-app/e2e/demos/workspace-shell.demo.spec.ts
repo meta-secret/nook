@@ -8,7 +8,7 @@ import {
 
 const DEMO_BEAT_MS = 700
 
-test('the vault page holds items; the identity has one control page', async ({
+test('the vault page holds items; the identity card manages the rest', async ({
   page,
 }) => {
   await page.goto('/app/')
@@ -23,61 +23,50 @@ test('the vault page holds items; the identity has one control page', async ({
   // identity management.
   await expect(page.getByTestId('vault-import-btn')).toBeVisible()
   await expect(page.getByTestId('vault-extension-install')).toBeVisible()
-  await expect(page.getByTestId('identity-overview')).toHaveCount(0)
+  await expect(page.getByTestId('identity-menu')).toHaveCount(0)
   await page.waitForTimeout(DEMO_BEAT_MS)
 
-  // Manage on the identity card opens its control page: the ladder with
-  // the next step, then the parts, each opening in place.
+  // Manage on the identity card lists the identity's pages, adding a
+  // device first; a fresh identity also names what it lacks.
   await page.getByTestId('header-identities-btn').click()
-  await page.getByTestId('identity-manage').first().click()
-  await expect(page).toHaveURL(/\/identity$/)
-  await expect(page.getByTestId('identity-overview')).toBeVisible()
-  // A fresh identity has no provider, so its next step is a sync provider.
-  await expect(page.getByTestId('overview-next-step')).toHaveAttribute(
-    'data-next-step',
-    'AddSyncProvider',
+  await expect(page.getByTestId('identity-card-health')).toContainText(
+    'No cloud copy yet',
   )
-  for (const opener of [
-    'overview-open-vaults',
-    'overview-open-sync',
-    'overview-open-devices',
-    'overview-keys',
-    'overview-passwords',
-    'overview-browser-settings',
+  await page.getByTestId('identity-manage').first().click()
+  const menu = page.getByTestId('identity-menu')
+  await expect(menu).toBeVisible()
+  for (const item of [
+    'add-device',
+    'sync',
+    'devices',
+    'vaults',
+    'keys',
+    'passwords',
+    'settings',
   ]) {
-    await expect(page.getByTestId(opener)).toBeVisible()
+    await expect(page.getByTestId(`identity-menu-${item}`)).toBeVisible()
   }
   await page.waitForTimeout(DEMO_BEAT_MS)
 
-  const devices = page.getByTestId('overview-open-devices')
-  await devices.click()
+  // A page opens on its own, with Back to the hub.
+  await page.getByTestId('identity-menu-devices').click()
   await expect(page).toHaveURL(/\/identity\/devices$/)
   await expect(page.getByTestId('vault-devices-panel')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-  await expect(devices).toHaveAttribute('aria-expanded', 'true')
   await page.waitForTimeout(DEMO_BEAT_MS)
 
-  // Phones stack the same page without sideways scrolling.
-  await page.setViewportSize({ width: 390, height: 844 })
-  await expect
-    .poll(() =>
-      page.evaluate(() => ({
-        clientWidth: document.documentElement.clientWidth,
-        scrollWidth: document.documentElement.scrollWidth,
-      })),
-    )
-    .toEqual({ clientWidth: 390, scrollWidth: 390 })
-  await page.waitForTimeout(DEMO_BEAT_MS)
-
-  // Adding a device leads the Devices part and returns to it.
-  await page.setViewportSize({ width: 1280, height: 900 })
+  // Adding a device leads the Devices page and returns to it.
   await page.getByTestId('devices-add-device-btn').click()
   await expect(page.getByTestId('add-device-page')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
   await page.getByTestId('add-device-back').click()
   await expect(page.getByTestId('vault-devices-panel')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+  await page.getByTestId('identity-page-back').click()
+  await expect(page.getByTestId('identities-hub')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
 })

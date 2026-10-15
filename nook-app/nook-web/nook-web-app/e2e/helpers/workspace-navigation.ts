@@ -3,7 +3,6 @@ import { ENROLLMENT_UNLOCK_TIMEOUT_MS, UI_TIMEOUT_MS } from './environment'
 
 /** Management pages of the unified identity and vault workspace. */
 export enum ManagePage {
-  Overview = 'overview',
   Keys = 'keys',
   Vaults = 'vaults',
   Settings = 'settings',
@@ -13,21 +12,20 @@ export enum ManagePage {
   Import = 'import',
 }
 
-/** What opens each part on the identity's control page. */
-const MANAGE_PAGE_OPENERS: Record<
-  Exclude<ManagePage, ManagePage.Overview | ManagePage.Import>,
+/** The item in Manage on the identity's card that opens each page. */
+const MANAGE_MENU_ITEMS: Record<
+  Exclude<ManagePage, ManagePage.Import>,
   string
 > = {
-  [ManagePage.Vaults]: 'overview-open-vaults',
-  [ManagePage.Sync]: 'overview-open-sync',
-  [ManagePage.Devices]: 'overview-open-devices',
-  [ManagePage.Keys]: 'overview-keys',
-  [ManagePage.Passwords]: 'overview-passwords',
-  [ManagePage.Settings]: 'overview-browser-settings',
+  [ManagePage.Vaults]: 'identity-menu-vaults',
+  [ManagePage.Sync]: 'identity-menu-sync',
+  [ManagePage.Devices]: 'identity-menu-devices',
+  [ManagePage.Keys]: 'identity-menu-keys',
+  [ManagePage.Passwords]: 'identity-menu-passwords',
+  [ManagePage.Settings]: 'identity-menu-settings',
 }
 
 const MANAGE_PAGE_MARKERS: Record<ManagePage, string> = {
-  [ManagePage.Overview]: 'identity-overview',
   [ManagePage.Keys]: 'identity-keys',
   [ManagePage.Vaults]: 'vault-admin-vaults-section',
   [ManagePage.Settings]: 'browser-settings-panel',
@@ -86,19 +84,19 @@ export async function openManagePage(
     await expect(marker).toBeVisible({ timeout: UI_TIMEOUT_MS })
     return
   }
-  // Every identity part opens in place on the control page, which Manage
-  // on the current identity's card opens.
-  const overview = page.getByTestId('identity-overview')
-  if (!(await overview.isVisible())) {
+  // Every identity page opens from Manage on the current identity's card.
+  if (!(await page.getByTestId('identities-hub').isVisible())) {
     await openIdentitiesPage(page)
-    const currentManage = page.locator(
-      '[data-testid="identity-card"][data-status="unlocked"] [data-testid="identity-manage"]',
-    )
-    await currentManage.first().click()
-    await expect(overview).toBeVisible({ timeout: UI_TIMEOUT_MS })
   }
-  if (target === ManagePage.Overview) return
-  const navItem = page.getByTestId(MANAGE_PAGE_OPENERS[target])
+  const manage = page
+    .locator(
+      '[data-testid="identity-card"]:not([data-status="inactive"]) [data-testid="identity-manage"]',
+    )
+    .first()
+  if ((await manage.getAttribute('aria-expanded')) !== 'true') {
+    await manage.click()
+  }
+  const navItem = page.getByTestId(MANAGE_MENU_ITEMS[target])
   await expect(navItem).toBeVisible({ timeout: UI_TIMEOUT_MS })
   await navItem.click()
   // Identity pages read the identity directory, which retries while the
@@ -111,20 +109,6 @@ export async function openManagePage(
  * locked, through Manage on the current identity card (which unlocks it).
  */
 export async function openKeysPage(page: Page): Promise<void> {
-  const keys = page.getByTestId('identity-keys')
-  if (await keys.isVisible()) return
-  if (!(await page.getByTestId('header-identities-btn').isVisible())) {
-    const currentCard = page.locator(
-      '[data-testid="identity-card"][data-status="locked"] [data-testid="identity-manage"]',
-    )
-    const manage = (await currentCard.count())
-      ? currentCard.first()
-      : page.getByTestId('identity-manage').first()
-    await expect(manage).toBeVisible({ timeout: UI_TIMEOUT_MS })
-    await manage.click()
-    await expect(page.getByTestId('identity-overview')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
-  }
+  // Manage on a locked card opens the same menu; its items unlock first.
   await openManagePage(page, ManagePage.Keys)
 }

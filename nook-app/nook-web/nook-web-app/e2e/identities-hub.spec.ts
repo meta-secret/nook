@@ -98,12 +98,14 @@ test.describe('identities hub', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
 
-    // Manage on a locked identity unlocks it and opens its overview.
+    // Manage on a locked identity opens its menu; a page chosen there
+    // unlocks the identity first.
     await current.getByTestId('identity-manage').click()
-    await expect(page.getByTestId('identity-overview')).toBeVisible({
+    await current.getByTestId('identity-menu-devices').click()
+    await expect(page.getByTestId('vault-devices-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await expect(page).toHaveURL(/\/identity$/)
+    await expect(page).toHaveURL(/\/identity\/devices$/)
   })
 
   test('creates a PIN identity and switches between both identities', async ({

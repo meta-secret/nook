@@ -19,7 +19,7 @@ test.describe('authenticated shell height', () => {
     })
   })
 
-  test('keeps consistent height when switching between vault and management pages', async ({
+  test('keeps consistent height between the vault page and its import page', async ({
     page,
   }) => {
     const shell = page.getByTestId('authenticated-shell')
@@ -30,29 +30,11 @@ test.describe('authenticated shell height', () => {
     )
     expect(vaultHeight).toBeGreaterThan(0)
 
-    await openManagePage(page, ManagePage.Sync)
-    await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
-    const adminHeight = ((v) => (v ? v : 0))(
+    await openManagePage(page, ManagePage.Import)
+    const importHeight = ((v) => (v ? v : 0))(
       (await shell.boundingBox())?.height,
     )
-    expect(adminHeight).toBeCloseTo(vaultHeight, 0)
-
-    await openManagePage(page, ManagePage.Devices)
-    await expect(page.getByTestId('vault-devices-panel')).toBeVisible()
-    const onboardHeight = ((v) => (v ? v : 0))(
-      (await shell.boundingBox())?.height,
-    )
-    expect(onboardHeight).toBeCloseTo(vaultHeight, 0)
-
-    await openManagePage(page, ManagePage.Keys)
-    const keysHeight = ((v) => (v ? v : 0))((await shell.boundingBox())?.height)
-    expect(keysHeight).toBeCloseTo(vaultHeight, 0)
-
-    await openManagePage(page, ManagePage.Overview)
-    const overviewHeight = ((v) => (v ? v : 0))(
-      (await shell.boundingBox())?.height,
-    )
-    expect(overviewHeight).toBeCloseTo(vaultHeight, 0)
+    expect(importHeight).toBeCloseTo(vaultHeight, 0)
 
     await openVaultPage(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible()
@@ -105,16 +87,16 @@ test.describe('authenticated shell height', () => {
     }
   })
 
-  test('keeps the overview reachable in a short viewport', async ({ page }) => {
+  test('keeps an identity page and its status line reachable in a short viewport', async ({
+    page,
+  }) => {
     const viewport = { width: 1280, height: 600 }
     await page.setViewportSize(viewport)
-    await openManagePage(page, ManagePage.Overview)
+    await openManagePage(page, ManagePage.Devices)
 
-    // The page scrolls inside the shell; the status line stays in view.
-    const security = page.getByTestId('overview-security')
-    await security.scrollIntoViewIfNeeded()
-    await expect(security).toBeInViewport()
-    await expect(page.getByTestId('vault-status-bar')).toBeInViewport()
+    const status = page.getByTestId('vault-status-bar')
+    await status.scrollIntoViewIfNeeded()
+    await expect(status).toBeInViewport()
   })
 
   test('keeps secure-note editing and navigation usable above the mobile keyboard', async ({
@@ -152,7 +134,7 @@ test.describe('authenticated shell height', () => {
       .toEqual({ clientWidth: 390, scrollWidth: 390 })
 
     await openManagePage(page, ManagePage.Sync)
-    await expect(page.getByTestId('overview-panel')).toBeVisible()
+    await expect(page.getByTestId('identity-page')).toBeVisible()
     await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
     await openVaultPage(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible()
