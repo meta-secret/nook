@@ -1023,6 +1023,7 @@ export const I18N_KEYS = {
   IdentityMenuLabel: 'identity_menu.label',
   IdentityMenuManageHint: 'identity_menu.manage_hint',
   IdentityMenuSyncHint: 'identity_menu.sync_hint',
+  IdentityMenuVaultsHint: 'identity_menu.vaults_hint',
   IdentityOverviewAllSet: 'identity_overview.all_set',
   IdentityOverviewBrowserLink: 'identity_overview.browser_link',
   IdentityOverviewClosePanel: 'identity_overview.close_panel',

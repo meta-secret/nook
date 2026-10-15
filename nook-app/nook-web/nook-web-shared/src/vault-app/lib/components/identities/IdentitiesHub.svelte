@@ -44,6 +44,7 @@ join) sit between the hero and the cards.
     onOpenVault,
     onNewVault = () => {},
     onSelectVault,
+    onUnlockVault,
     onManageVault,
     onNewIdentity,
     onUseIdentity,
@@ -80,6 +81,8 @@ join) sit between the hero and the cards.
     onNewVault?: () => void
     /** A vault opened beside its card; a locked browser selects it. */
     onSelectVault?: (storeId: string) => void
+    /** Unlock a vault from its panel without going into it. */
+    onUnlockVault?: (storeId: string) => void
     /** One of a vault's own pages, from its panel beside the card. */
     onManageVault?: (target: IdentitySectionTarget) => void
     onNewIdentity: () => void
@@ -203,11 +206,7 @@ join) sit between the hero and the cards.
   /** Local vaults no card lists (all of them when the directory cannot be
    * read): each still opens from its own row. */
   const strayVaults = $derived(
-    directoryFailed
-      ? localVaults
-      : cardsReady
-        ? projection.unlistedVaults
-        : [],
+    directoryFailed ? localVaults : cardsReady ? projection.unlistedVaults : [],
   )
   let setupHost = $state<VaultSetupHost>({ kind: VaultSetupHostKind.Pending })
   /** With several identities, the current one opens its first-vault setup
@@ -279,8 +278,9 @@ join) sit between the hero and the cards.
   function targetFor(identityId: string): IdentityVaultTarget {
     const card = projection.cards.find((each) => each.identityId === identityId)
     const openable = (card ? card.vaults : []).filter(
-      (each) => (each.state === IdentityVaultRowState.Open ||
-        each.state === IdentityVaultRowState.Available),
+      (each) =>
+        each.state === IdentityVaultRowState.Open ||
+        each.state === IdentityVaultRowState.Available,
     )
     const row = ((...[v = openable[0]]) => v)(
       openable.find((each) => each.storeId === selectedStoreId),
@@ -306,8 +306,9 @@ join) sit between the hero and the cards.
     cardsReady &&
       projection.cards.some((card) =>
         card.vaults.some(
-          (row) => (row.state === IdentityVaultRowState.Open ||
-            row.state === IdentityVaultRowState.Available),
+          (row) =>
+            row.state === IdentityVaultRowState.Open ||
+            row.state === IdentityVaultRowState.Available,
         ),
       ),
   )
@@ -476,6 +477,7 @@ join) sit between the hero and the cards.
               onUseIdentity(targetFor(identityId))}
             {pairingStatusFor}
             {...onSelectVault ? { onSelectVault } : {}}
+            {...onUnlockVault ? { onUnlockVault } : {}}
             {...onManageVault ? { onManageVault } : {}}
             {...vaultSetup && setupShown && card.identityId === setupIdentityId
               ? { unlockPanel: vaultSetup }

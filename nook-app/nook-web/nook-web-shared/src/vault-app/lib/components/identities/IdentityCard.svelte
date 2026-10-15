@@ -57,6 +57,7 @@ card, which then spans the full row.
     onOpenVault,
     onNewVault = () => {},
     onSelectVault,
+    onUnlockVault,
     onManageVault,
     onLock = () => {},
     onUnlock = () => {},
@@ -87,6 +88,9 @@ card, which then spans the full row.
     /** A vault row was opened beside the card: a locked browser selects
      * that vault, which reads its passphrases. */
     onSelectVault?: (storeId: string) => void
+    /** Unlock a vault from its panel and stay on the card; Open vault in
+     * the panel then goes in. */
+    onUnlockVault?: (storeId: string) => void
     /** One of a vault's own pages (its passphrases, imports); a locked
      * vault unlocks first. */
     onManageVault?: (target: IdentitySectionTarget) => void
@@ -135,7 +139,7 @@ card, which then spans the full row.
   /** Overview and Manage share the space beside the card: one at a time. */
   function toggleOverview(): void {
     menuOpen = false
-    vaultOpenId = ''
+    vault.vaultPanelStoreId = ''
     onManageSection?.(
       overviewOpen ? WorkspaceSection.Identities : WorkspaceSection.Overview,
     )
@@ -144,25 +148,26 @@ card, which then spans the full row.
   function toggleManage(): void {
     if (!menuOpen && overviewOpen)
       onManageSection?.(WorkspaceSection.Identities)
-    vaultOpenId = ''
+    vault.vaultPanelStoreId = ''
     menuOpen = !menuOpen
   }
 
   /** A vault opened beside the card from its row: how to get in, and
-   * what belongs to that vault alone. */
-  let vaultOpenId = $state('')
+   * what belongs to that vault alone. Kept on the vault state, so the
+   * panel stays open while the vault unlocks. */
+  const vaultOpenId = $derived(vault.vaultPanelStoreId)
   const vaultOpenRow = $derived(
     card.vaults.find((row) => row.storeId === vaultOpenId),
   )
 
   function toggleVault(storeId: string): void {
     if (vaultOpenId === storeId) {
-      vaultOpenId = ''
+      vault.vaultPanelStoreId = ''
       return
     }
     menuOpen = false
     if (overviewOpen) onManageSection?.(WorkspaceSection.Identities)
-    vaultOpenId = storeId
+    vault.vaultPanelStoreId = storeId
     onSelectVault?.(storeId)
   }
 
@@ -411,7 +416,9 @@ card, which then spans the full row.
                 {/if}
               {:else if row.state === IdentityVaultRowState.Dormant}
                 <span class="min-w-4 flex-1" aria-hidden="true"></span>
-                <span class="nk-tag">{vault.t(I18N_KEYS.WorkspaceVaultDormant)}</span>
+                <span class="nk-tag"
+                  >{vault.t(I18N_KEYS.WorkspaceVaultDormant)}</span
+                >
               {:else}
                 <span class="min-w-4 flex-1" aria-hidden="true"></span>
                 <span class="nk-tag"
@@ -573,6 +580,7 @@ card, which then spans the full row.
           ? { passphrase: passwordFallback }
           : {}}
         onOpen={() => onOpenVault(vaultOpenRow.storeId)}
+        onUnlock={() => onUnlockVault?.(vaultOpenRow.storeId)}
         onUseIdentity={() => onUseIdentity(card.identityId)}
         onManage={(section: WorkspaceSection) => {
           const target: IdentitySectionTarget = {
@@ -582,7 +590,7 @@ card, which then spans the full row.
           }
           onManageVault?.(target)
         }}
-        onClose={() => (vaultOpenId = '')}
+        onClose={() => (vault.vaultPanelStoreId = '')}
       />
     </div>
   {:else if managesHere && menuOpen}

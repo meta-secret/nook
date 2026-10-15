@@ -57,7 +57,7 @@
     isInitializing,
     addProviderOpen = false,
     embedded = false,
-    backWithoutSaved = false,
+    hostBack = false,
     loginSetup,
     githubPat = $bindable(''),
     githubRepo = $bindable(DEFAULT_GITHUB_REPO),
@@ -76,9 +76,9 @@
     isInitializing: boolean
     addProviderOpen?: boolean
     embedded?: boolean
-    /** Offer Back while adding even with no saved provider; a host with
-     * its own Back (the first run) leaves this off. */
-    backWithoutSaved?: boolean
+    /** The host page has its own Back and title while adding (the Sync
+     * page): no second Back or heading here. */
+    hostBack?: boolean
     loginSetup: LoginSetup
     githubPat: string
     githubRepo: string
@@ -150,14 +150,21 @@
 </script>
 
 <div class="w-full animate-in fade-in duration-300 space-y-4">
-  {#if addingProvider}
+  {#if addingProvider && hostBack}
+    <p class="text-sm text-muted-foreground text-pretty">
+      {#if showSetup}
+        {vault.t(I18N_KEYS.AuthStorageSyncSetupDesc)}
+      {:else}
+        {vault.t(I18N_KEYS.AuthStorageSyncChooseDesc)}
+      {/if}
+    </p>
+  {:else if addingProvider}
     <div
       class="flex items-start justify-between gap-3 border-b border-border/60 pb-4"
     >
       <div class="space-y-1">
-        <!-- Back to the saved list (or the empty list). A host with its own
-             Back leaves the picker itself when nothing is saved. -->
-        {#if syncProviders.length > 0 || backWithoutSaved}
+        <!-- Back to the saved list. -->
+        {#if syncProviders.length > 0}
           <button
             type="button"
             class="mb-2 inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
@@ -266,7 +273,9 @@
                 >
                   <Cloud class="size-4" />
                 </div>
-                <p class="min-w-0 self-center text-sm font-medium text-foreground">
+                <p
+                  class="min-w-0 self-center text-sm font-medium text-foreground"
+                >
                   {vault.t(I18N_KEYS.AuthStorageNoSyncProviders)}
                 </p>
               </div>

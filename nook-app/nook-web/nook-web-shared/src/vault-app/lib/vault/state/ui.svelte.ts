@@ -85,4 +85,7 @@ export class VaultUiState {
   newIdentity = $state<NewIdentityStage>(NewIdentityStage.Off);
   /** The name given to the identity being created. */
   newIdentityName = $state("");
+  /** The vault opened beside its identity card. It stays open while the
+   * vault unlocks, so unlocking does not go into the vault by itself. */
+  vaultPanelStoreId = $state("");
 }

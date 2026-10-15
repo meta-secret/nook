@@ -1,54 +1,59 @@
 <!--
-Actions on the identity this browser uses, adding a device first. Manage on
-the card opens them beside it; Overview there shows what the identity has.
-A vault's own actions (its passphrases) sit in that vault's panel.
+Managing the identity this browser uses: add a device, add a sync provider,
+and its vaults (add or rename). Manage on the card opens it beside the
+card; Overview there only reports. A vault's own actions (its passphrases,
+imports) sit in that vault's panel.
 -->
 <script lang="ts">
-  import {
-    ChevronRight,
-    Cloud,
-    Plus,
-  } from "@lucide/svelte";
-  import { I18N_KEYS } from "../../../../generated/i18n-keys";
-  import type { VaultState } from "$lib/vault.svelte";
-  import { WorkspaceSection } from "$lib/vault/state/ui.svelte";
+  import { ChevronRight, Cloud, FolderKey, Plus } from '@lucide/svelte'
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
+  import type { VaultState } from '$lib/vault.svelte'
+  import { WorkspaceSection } from '$lib/vault/state/ui.svelte'
 
   let {
     vault,
     onSelect,
   }: {
-    vault: VaultState;
-    onSelect: (section: WorkspaceSection) => void;
-  } = $props();
+    vault: VaultState
+    onSelect: (section: WorkspaceSection) => void
+  } = $props()
 
   type MenuItem = {
-    readonly section: WorkspaceSection;
-    readonly testId: string;
-    readonly label: string;
-    readonly hint: string;
-  };
+    readonly section: WorkspaceSection
+    readonly testId: string
+    readonly label: string
+    readonly hint: string
+  }
 
   const items = $derived.by((): MenuItem[] => [
     {
       section: WorkspaceSection.AddDevice,
-      testId: "identity-menu-add-device",
+      testId: 'identity-menu-add-device',
       label: vault.t(I18N_KEYS.AddDeviceTitle),
       hint: vault.t(I18N_KEYS.IdentityMenuAddDeviceHint),
     },
     {
       section: WorkspaceSection.Sync,
-      testId: "identity-menu-sync",
+      testId: 'identity-menu-sync',
       label: vault.t(I18N_KEYS.AddDeviceCloudAction),
       hint: vault.t(I18N_KEYS.IdentityMenuSyncHint),
     },
-  ]);
+    {
+      section: WorkspaceSection.Vaults,
+      testId: 'identity-menu-vaults',
+      label: vault.t(I18N_KEYS.WorkspaceSectionVaults),
+      hint: vault.t(I18N_KEYS.IdentityMenuVaultsHint),
+    },
+  ])
 </script>
 
 {#snippet icon(section: WorkspaceSection)}
   {#if section === WorkspaceSection.AddDevice}
     <Plus class="size-4" />
-  {:else}
+  {:else if section === WorkspaceSection.Sync}
     <Cloud class="size-4" />
+  {:else}
+    <FolderKey class="size-4" />
   {/if}
 {/snippet}
 

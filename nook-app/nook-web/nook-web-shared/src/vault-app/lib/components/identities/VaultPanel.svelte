@@ -5,7 +5,7 @@ passphrase. Open, it offers to go in. Below, what belongs to this vault
 alone (its name, passphrases, imports), usable once it is open.
 -->
 <script lang="ts">
-  import type { Snippet } from "svelte";
+  import type { Snippet } from 'svelte'
   import {
     ChevronRight,
     Download,
@@ -18,16 +18,16 @@ alone (its name, passphrases, imports), usable once it is open.
     ShieldCheck,
     UserRoundCheck,
     X,
-  } from "@lucide/svelte";
-  import { I18N_KEYS } from "../../../../generated/i18n-keys";
-  import { Button } from "$lib/components/ui/button";
-  import { StatusTag, StatusTone } from "$lib/components/ui/status-tag";
-  import type { VaultState } from "$lib/vault.svelte";
-  import { WorkspaceSection } from "$lib/vault/state/ui.svelte";
+  } from '@lucide/svelte'
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
+  import { Button } from '$lib/components/ui/button'
+  import { StatusTag, StatusTone } from '$lib/components/ui/status-tag'
+  import type { VaultState } from '$lib/vault.svelte'
+  import { WorkspaceSection } from '$lib/vault/state/ui.svelte'
   import {
     IdentityVaultRowState,
     type IdentityVaultRow,
-  } from "./identity-card-model";
+  } from './identity-card-model'
 
   let {
     vault,
@@ -38,91 +38,93 @@ alone (its name, passphrases, imports), usable once it is open.
     passphrase,
     passphraseOffered = false,
     onOpen,
+    onUnlock,
     onUseIdentity,
     onManage,
     onClose,
   }: {
-    vault: VaultState;
-    row: IdentityVaultRow;
-    identityName: string;
+    vault: VaultState
+    row: IdentityVaultRow
+    identityName: string
     /** "Unlock with passkey" or "Unlock with PIN", as this device signs in. */
-    unlockLabel: string;
-    busy?: boolean;
+    unlockLabel: string
+    busy?: boolean
     /** The vault's passphrase unlock, once its passphrases are read. */
-    passphrase?: Snippet;
+    passphrase?: Snippet
     /** Unlocking with a passphrase applies here (a locked browser). */
-    passphraseOffered?: boolean;
-    /** Unlock with this device's key, or go into an open vault. */
-    onOpen: () => void;
+    passphraseOffered?: boolean
+    /** Go into the open vault. */
+    onOpen: () => void
+    /** Unlock with this device's key and stay here: the panel then offers
+     * Open vault and the vault's own pages. */
+    onUnlock: () => void
     /** The vault belongs to an identity not in use here. */
-    onUseIdentity: () => void;
+    onUseIdentity: () => void
     /** One of this open vault's pages. */
-    onManage: (section: WorkspaceSection) => void;
-    onClose: () => void;
-  } = $props();
+    onManage: (section: WorkspaceSection) => void
+    onClose: () => void
+  } = $props()
 
-  const label = $derived(
-    row.label || vault.t(I18N_KEYS.WorkspaceVaultFallback),
-  );
-  const open = $derived(row.state === IdentityVaultRowState.Open);
-  const dormant = $derived(row.state === IdentityVaultRowState.Dormant);
-  const reachable = $derived(row.state !== IdentityVaultRowState.Unavailable);
+  const label = $derived(row.label || vault.t(I18N_KEYS.WorkspaceVaultFallback))
+  const open = $derived(row.state === IdentityVaultRowState.Open)
+  const dormant = $derived(row.state === IdentityVaultRowState.Dormant)
+  const reachable = $derived(row.state !== IdentityVaultRowState.Unavailable)
 
   /** Renaming an open vault, in place of its name. */
-  let renaming = $state(false);
-  let draft = $state("");
-  let saving = $state(false);
+  let renaming = $state(false)
+  let draft = $state('')
+  let saving = $state(false)
 
   function beginRename(): void {
-    draft = row.label;
-    renaming = true;
+    draft = row.label
+    renaming = true
   }
 
   async function saveRename(event: SubmitEvent): Promise<void> {
-    event.preventDefault();
-    const label = draft.trim();
+    event.preventDefault()
+    const label = draft.trim()
     if (!label || label === row.label) {
-      renaming = false;
-      return;
+      renaming = false
+      return
     }
-    saving = true;
+    saving = true
     const request: Parameters<typeof vault.renameLocalVault>[0] = {
       storeId: row.storeId,
       label,
-    };
-    await vault.renameLocalVault(request);
-    saving = false;
-    if (!vault.errorMsg) renaming = false;
+    }
+    await vault.renameLocalVault(request)
+    saving = false
+    if (!vault.errorMsg) renaming = false
   }
 
   const dormantHint = $derived.by(() => {
     const request: Parameters<typeof vault.t>[0] = {
       key: I18N_KEYS.WorkspaceVaultPanelKeyDormant,
       replacements: { identity: identityName },
-    };
-    return vault.t(request);
-  });
+    }
+    return vault.t(request)
+  })
 
   type ManageItem = {
-    readonly section: WorkspaceSection;
-    readonly testId: string;
-    readonly title: string;
-    readonly hint: string;
-  };
+    readonly section: WorkspaceSection
+    readonly testId: string
+    readonly title: string
+    readonly hint: string
+  }
   const manageItems = $derived.by((): ManageItem[] => [
     {
       section: WorkspaceSection.Passwords,
-      testId: "vault-panel-passphrases",
+      testId: 'vault-panel-passphrases',
       title: vault.t(I18N_KEYS.WorkspaceSectionPasswords),
       hint: vault.t(I18N_KEYS.WorkspaceVaultPanelPassphrasesHint),
     },
     {
       section: WorkspaceSection.Import,
-      testId: "vault-panel-import",
+      testId: 'vault-panel-import',
       title: vault.t(I18N_KEYS.WorkspaceSectionImport),
       hint: vault.t(I18N_KEYS.WorkspaceVaultPanelImportHint),
     },
-  ]);
+  ])
 </script>
 
 <div
@@ -156,7 +158,7 @@ alone (its name, passphrases, imports), usable once it is open.
               disabled={saving}
               bind:value={draft}
               onkeydown={(event) => {
-                if (event.key === "Escape") renaming = false;
+                if (event.key === 'Escape') renaming = false
               }}
             />
             <Button
@@ -247,7 +249,7 @@ alone (its name, passphrases, imports), usable once it is open.
           class="h-11 w-full"
           data-testid="vault-panel-unlock"
           disabled={busy}
-          onclick={onOpen}
+          onclick={onUnlock}
         >
           <Fingerprint class="size-4" />
           {unlockLabel}

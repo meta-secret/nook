@@ -1241,6 +1241,7 @@ pub const IDENTITY_MENU_DETAILS_HINT: &str = "identity_menu.details_hint";
 pub const IDENTITY_MENU_LABEL: &str = "identity_menu.label";
 pub const IDENTITY_MENU_MANAGE_HINT: &str = "identity_menu.manage_hint";
 pub const IDENTITY_MENU_SYNC_HINT: &str = "identity_menu.sync_hint";
+pub const IDENTITY_MENU_VAULTS_HINT: &str = "identity_menu.vaults_hint";
 pub const IDENTITY_OVERVIEW_ALL_SET: &str = "identity_overview.all_set";
 pub const IDENTITY_OVERVIEW_BROWSER_LINK: &str = "identity_overview.browser_link";
 pub const IDENTITY_OVERVIEW_CLOSE_PANEL: &str = "identity_overview.close_panel";

@@ -1951,7 +1951,7 @@
     "section_keys": "Keys",
     "section_keys_description": "Passkeys and PINs that unlock this identity, one for each Nook app.",
     "section_vaults": "Vaults",
-    "section_vaults_description": "Create, rename, and switch the vaults this identity keeps on this browser.",
+    "section_vaults_description": "Create and rename the vaults this identity keeps on this browser.",
     "section_settings": "Settings",
     "section_settings_description": "Language and the encrypted data this browser keeps.",
     "section_devices": "Devices",
@@ -2036,7 +2036,7 @@
     "no_device_join_mounts": "Devices join through a cloud provider. Add GitHub or Google Drive under Sync."
   },
   "identity_menu": {
-    "manage_hint": "Add a device or a sync provider",
+    "manage_hint": "Devices, sync providers and vaults",
     "actions": "Actions",
     "sync_hint": "Keep an encrypted copy in your cloud",
     "details": "Identity details",
@@ -2044,7 +2044,8 @@
     "label": "Manage",
     "browser": "This browser",
     "browser_hint": "Language and stored data",
-    "add_device_hint": "Phone or another computer"
+    "add_device_hint": "Phone or another computer",
+    "vaults_hint": "Add a vault or rename one"
   },
   "add_device": {
     "title": "Add a device",
