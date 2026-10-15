@@ -46,14 +46,18 @@ export async function openVaultPage(page: Page): Promise<void> {
       '[data-testid="identity-vault-row"][data-state="open"]',
     )
     // The hub's cards load after the page; wait for a way back to the vault.
+    const pageBack = page.getByTestId('page-bar-back')
+    const flowBack = page.getByTestId('add-device-back')
     await expect(
-      vaultPanel.or(openRow).or(page.getByTestId('page-bar-back')).first(),
+      vaultPanel.or(openRow).or(pageBack).or(flowBack).first(),
     ).toBeVisible({ timeout: UI_TIMEOUT_MS })
     if (await vaultPanel.isVisible()) return
     if (await openRow.isVisible()) {
       await openRow.click()
+    } else if (await flowBack.isVisible()) {
+      await flowBack.click()
     } else {
-      await page.getByTestId('page-bar-back').click()
+      await pageBack.click()
     }
     await page.waitForTimeout(50)
   }

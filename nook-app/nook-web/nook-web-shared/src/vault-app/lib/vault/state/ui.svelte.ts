@@ -42,9 +42,9 @@ export class WorkspaceSectionScope {
         return ManageSectionScope.Identity;
       case WorkspaceSection.Import:
         return ManageSectionScope.Vault;
+      // Adding a device is a focused flow of its own, outside management.
       case WorkspaceSection.Vault:
       case WorkspaceSection.Identities:
-      // A focused flow of its own, outside identity management.
       case WorkspaceSection.AddDevice:
         return ManageSectionScope.None;
     }

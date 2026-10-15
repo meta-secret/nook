@@ -402,15 +402,24 @@ export function localizeAppLinkForE2e(page: Page, link: string): string {
   return appUrl.toString()
 }
 
-/** Open the onboard-device settings view with sync timers paused for e2e. */
+/** Open the add-device flow with sync timers paused for e2e. */
 export async function openOnboardDevicePanel(page: Page) {
   await assertVaultReady(page)
   await waitForVaultOperationsIdle(page)
   await forceVaultQuiescentForE2e(page)
   await openManagePage(page, ManagePage.Devices)
-  await expect(page.getByTestId('onboard-device-panel')).toBeVisible({
+  await page.getByTestId('devices-add-device-btn').click()
+  await expect(page.getByTestId('add-device-page')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
+  // With a cloud copy the invite form shows; without one, step one asks
+  // for a sync provider.
+  await expect(
+    page
+      .getByTestId('onboard-device-panel')
+      .or(page.getByTestId('onboard-no-identity-mount'))
+      .first(),
+  ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
 }
 
 /** Reconnect after reload — unlock via login gate when auto-unlock is off. */

@@ -89,8 +89,15 @@ foot. Each open part keeps its own address.
         return vault.t(I18N_KEYS.WorkspaceSectionKeys);
       case WorkspaceSection.Passwords:
         return vault.t(I18N_KEYS.WorkspaceSectionPasswords);
-      default:
+      case WorkspaceSection.Settings:
         return vault.t(I18N_KEYS.WorkspaceSectionSettings);
+      // Not parts of the control page; no panel opens for them.
+      case WorkspaceSection.Vault:
+      case WorkspaceSection.Identities:
+      case WorkspaceSection.Overview:
+      case WorkspaceSection.AddDevice:
+      case WorkspaceSection.Import:
+        return "";
     }
   }
 

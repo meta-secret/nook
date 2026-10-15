@@ -589,14 +589,22 @@
     inset: -0.5rem;
     pointer-events: none;
     background:
-      linear-gradient(var(--foreground), var(--foreground)) top left / 1.25rem 2px,
-      linear-gradient(var(--foreground), var(--foreground)) top left / 2px 1.25rem,
-      linear-gradient(var(--foreground), var(--foreground)) top right / 1.25rem 2px,
-      linear-gradient(var(--foreground), var(--foreground)) top right / 2px 1.25rem,
-      linear-gradient(var(--foreground), var(--foreground)) bottom left / 1.25rem 2px,
-      linear-gradient(var(--foreground), var(--foreground)) bottom left / 2px 1.25rem,
-      linear-gradient(var(--foreground), var(--foreground)) bottom right / 1.25rem 2px,
-      linear-gradient(var(--foreground), var(--foreground)) bottom right / 2px 1.25rem;
+      linear-gradient(var(--foreground), var(--foreground)) top left / 1.25rem
+        2px,
+      linear-gradient(var(--foreground), var(--foreground)) top left / 2px
+        1.25rem,
+      linear-gradient(var(--foreground), var(--foreground)) top right / 1.25rem
+        2px,
+      linear-gradient(var(--foreground), var(--foreground)) top right / 2px
+        1.25rem,
+      linear-gradient(var(--foreground), var(--foreground)) bottom left /
+        1.25rem 2px,
+      linear-gradient(var(--foreground), var(--foreground)) bottom left / 2px
+        1.25rem,
+      linear-gradient(var(--foreground), var(--foreground)) bottom right /
+        1.25rem 2px,
+      linear-gradient(var(--foreground), var(--foreground)) bottom right / 2px
+        1.25rem;
     background-repeat: no-repeat;
   }
   .nk-passphrase {

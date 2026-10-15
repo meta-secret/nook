@@ -4,6 +4,7 @@ import { dumpNookLogs } from './app-logs'
 import { ENROLLMENT_UNLOCK_TIMEOUT_MS, UI_TIMEOUT_MS } from './environment'
 import {
   localizeAppLinkForE2e,
+  openOnboardDevicePanel,
   submitOnboardEnrollmentCode,
 } from './settings-auth'
 import { keepVaultIdleLockDisabled } from './device-enrollment'
@@ -28,12 +29,12 @@ export type IssuedIdentityCode = {
   readonly passphrase: string
 }
 
-/** Issue an identity enrollment code from the identity Devices page. */
+/** Issue an identity enrollment code from the add-device flow. */
 export async function issueIdentityEnrollmentCode(
   page: Page,
   passphrase = E2E_IDENTITY_PASSPHRASE,
 ): Promise<IssuedIdentityCode> {
-  await openManagePage(page, ManagePage.Devices)
+  await openOnboardDevicePanel(page)
   await submitOnboardEnrollmentCode(page, passphrase)
   const linkText = await page.getByTestId('onboard-link').textContent()
   if (typeof linkText !== 'string') {

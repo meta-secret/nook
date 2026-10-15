@@ -1,5 +1,6 @@
 import { test, expect, type BrowserContext, type Page } from './fixtures'
 import {
+  openOnboardDevicePanel,
   addSecret,
   addVaultPassword,
   approveIdentityJoin,
@@ -29,8 +30,6 @@ import {
   readStringProperty,
   requireRecord,
   openVaultPage,
-  openManagePage,
-  ManagePage,
 } from './helpers'
 import {
   createSyncTarget,
@@ -103,7 +102,7 @@ test.describe('vault password envelope with sync provider', () => {
   test('device A issues an identity link without plaintext provider credentials', async () => {
     await openVaultPage(deviceA)
     await expect(deviceA.getByTestId('vault-panel')).toBeVisible()
-    await openManagePage(deviceA, ManagePage.Devices)
+    await openOnboardDevicePanel(deviceA)
     const linkInput = await submitOnboardEnrollmentCode(
       deviceA,
       E2E_IDENTITY_PASSPHRASE,

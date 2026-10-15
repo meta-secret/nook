@@ -152,7 +152,7 @@ test.describe('authenticated shell height', () => {
       .toEqual({ clientWidth: 390, scrollWidth: 390 })
 
     await openManagePage(page, ManagePage.Sync)
-    await expect(page.getByTestId('manage-nav')).toBeInViewport()
+    await expect(page.getByTestId('overview-panel')).toBeVisible()
     await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
     await openVaultPage(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible()

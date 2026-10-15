@@ -25,29 +25,29 @@ test.describe('persistent workspace routing', () => {
       })
     })
 
-    // Manage on the current identity opens its overview; the rail then
-    // lists the identity's pages.
+    // Manage on the current identity opens its control page; each part
+    // opens in place there and keeps its own address.
     await page.getByTestId('header-identities-btn').click()
     await expect(page).toHaveURL(/\/identities$/)
     await page.getByTestId('identity-manage').first().click()
     await expect(page).toHaveURL(/\/identity$/)
     await expect(page.getByTestId('identity-overview')).toBeVisible()
-    await page.getByTestId('manage-nav-passwords').click()
+    await page.getByTestId('overview-passwords').click()
     await expect(page).toHaveURL(/\/identity\/passwords$/)
     await expect(page.getByTestId('vault-unlock-section')).toBeVisible()
-    await page.getByTestId('manage-nav-keys').click()
+    await page.getByTestId('overview-keys').click()
     await expect(page).toHaveURL(/\/identity\/keys$/)
     await expect(page.getByTestId('identity-keys')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await page.getByTestId('manage-nav-devices').click()
+    await page.getByTestId('overview-open-devices').click()
     await expect(page).toHaveURL(/\/identity\/devices$/)
     await expect(page.getByTestId('vault-devices-panel')).toBeVisible()
-    await page.getByTestId('manage-nav-sync').click()
+    await page.getByTestId('overview-open-sync').click()
     await expect(page).toHaveURL(/\/identity\/sync$/)
     await expect(page.getByTestId('storage-providers-section')).toBeVisible()
 
-    await page.getByTestId('manage-nav-vaults').click()
+    await page.getByTestId('overview-open-vaults').click()
     await expect(page).toHaveURL(/\/identity\/vaults$/)
     await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
 
@@ -98,7 +98,7 @@ test.describe('persistent workspace routing', () => {
     await connectLocalVault(page)
     for (const [legacy, current, marker] of [
       ['/admin', /\/identity\/vaults$/, 'vault-admin-vaults-section'],
-      ['/onboard', /\/identity\/devices$/, 'vault-devices-panel'],
+      ['/onboard', /\/identity\/devices\/add$/, 'add-device-page'],
       ['/vault/devices', /\/identity\/devices$/, 'vault-devices-panel'],
       ['/vault/sync', /\/identity\/sync$/, 'storage-providers-section'],
       ['/settings', /\/identity\/settings$/, 'browser-settings-panel'],
@@ -331,10 +331,10 @@ test.describe('persistent workspace routing', () => {
     await page.goto('/onboard?sensitive=discarded#private-state')
     await authorizeDeviceProtection(page)
 
-    await expect(page.getByTestId('onboard-device-panel')).toBeVisible({
+    await expect(page.getByTestId('add-device-page')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await expect(page).toHaveURL(/\/identity\/devices$/)
+    await expect(page).toHaveURL(/\/identity\/devices\/add$/)
     expect(new URL(page.url()).search).toBe('')
     expect(new URL(page.url()).hash).toBe('')
 

@@ -11,8 +11,6 @@ import {
   UI_TIMEOUT_MS,
   waitForLoadedSyncProviders,
   readLocalVaultYamlFromIdb,
-  openManagePage,
-  ManagePage,
 } from './helpers'
 
 test.describe('identity onboarding provider picker', () => {
@@ -44,7 +42,7 @@ test.describe('identity onboarding provider picker', () => {
     page,
   }) => {
     await seedOauthFileSyncProvidersWhileUnlocked(page)
-    await openManagePage(page, ManagePage.Devices)
+    await openOnboardDevicePanel(page)
     await expect(page.getByTestId('onboard-provider-list')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
