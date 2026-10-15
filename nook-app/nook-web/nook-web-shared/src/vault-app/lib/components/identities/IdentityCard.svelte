@@ -237,13 +237,18 @@ card, which then spans the full row.
   icon: Snippet,
   onclick: () => void,
 )}
+  <!-- A locked identity shows them inactive: they open once it is
+       unlocked, rather than asking for the passkey on the way. -->
   <button
     type="button"
-    class="nk-vault-row"
+    class="nk-vault-row disabled:opacity-45"
     data-testid={testId}
     aria-expanded={open}
     {...open ? { 'aria-current': 'true' } : {}}
-    disabled={busy}
+    {...live
+      ? {}
+      : { title: vault.t(I18N_KEYS.WorkspaceVaultPanelManageLocked) }}
+    disabled={busy || !live}
     {onclick}
   >
     <span class="nk-vault-icon" aria-hidden="true">{@render icon()}</span>
@@ -251,10 +256,17 @@ card, which then spans the full row.
       <span class="truncate text-[0.9375rem] font-medium">{title}</span>
       <span class="truncate text-xs text-muted-foreground">{hint}</span>
     </span>
-    <ChevronRight
-      class="size-4 flex-none text-muted-foreground opacity-60"
-      aria-hidden="true"
-    />
+    {#if live}
+      <ChevronRight
+        class="size-4 flex-none text-muted-foreground opacity-60"
+        aria-hidden="true"
+      />
+    {:else}
+      <Lock
+        class="size-3.5 flex-none text-muted-foreground"
+        aria-hidden="true"
+      />
+    {/if}
   </button>
 {/snippet}
 
