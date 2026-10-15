@@ -1,9 +1,9 @@
 //! Signed-share admission followed by provider snapshot decryption.
-use super::provider_payload::ProviderRowPayload;
 use super::{AcceptedSentinelOnboarding, OnboardingDelivery, SentinelOnboardingPackage};
 use crate::{
     ActiveVaultScope, AuthProvidersSnapshotData, CheckedSentinelGenesisDelivery, DeviceIdentity,
-    MultiDeviceError, ProviderVaultScope, SentinelGenesisDeliveryRecipient, StoredSecretRecord,
+    MultiDeviceError, ProviderVaultScope, SentinelGenesisDeliveryRecipient, StorageProviderData,
+    StoredSecretRecord,
 };
 
 /// Exact package and recipient observations for a consuming admission attempt.
@@ -60,8 +60,14 @@ impl CheckedOnboardingRecipient<'_> {
             recipient: SentinelOnboardingRecipient { package, identity },
             share_record,
         } = self;
-        let payload = identity.open_bytes(&package.provider_snapshot)?;
-        let mut provider = ProviderRowPayload::decode(&payload)?;
+        let mut provider: StorageProviderData = identity
+            .open_compressed_json(&package.provider_snapshot)
+            .map_err(|error| match error {
+                MultiDeviceError::InvalidCompressedPayload => {
+                    MultiDeviceError::InvalidSentinelGenesisPayload
+                }
+                other => other,
+            })?;
         provider.onboarding_cloud_mount()?;
         // A cloud mount belongs to the identity, not to one vault.
         provider.store_id = ProviderVaultScope::Unscoped;

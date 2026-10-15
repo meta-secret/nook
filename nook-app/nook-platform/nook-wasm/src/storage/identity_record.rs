@@ -41,8 +41,6 @@ pub(crate) use handoff::{
     ExistingVaultEnrollment, ExistingVaultImportCommit, IdentityHandoffCommit,
     IdentityHandoffCommitResult, IdentityHandoffOperation, PairedVaultEnrollment,
 };
-#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
-pub(crate) use keyring::LOCAL_IDENTITY_KEYRING_KEY;
 pub(crate) use keyring::{
     KeyringDbRebindLocalIdentity, LocalIdentitySigner, ProtectedLocalIdentitySave,
 };

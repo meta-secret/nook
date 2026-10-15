@@ -488,11 +488,11 @@ mod browser_tests {
         .to_rust()
         .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         assert_eq!(vault_row.id, "github-personal");
-        // No saved row replicates an unknown vault.
+        // Every identity mount replicates each of its vaults; a malformed id names none.
         assert!(
             founder
                 .manager
-                .identity_vault_provider(&providers, nook_core::StoreId::generate()?.as_str())
+                .identity_vault_provider(&providers, "not a store")
                 .is_err()
         );
         // An empty provider snapshot records no mount.

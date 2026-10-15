@@ -729,6 +729,7 @@ mod tests {
     async fn local_provider_io_dispatches_without_remote_access() -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
         manager.storage.mode = StorageMode::Local;
+        manager.vault.store_id = nook_core::StoreId::generate()?.to_string();
         let event_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
 
         assert!(manager.list_current_provider_event_ids().await?.is_empty());

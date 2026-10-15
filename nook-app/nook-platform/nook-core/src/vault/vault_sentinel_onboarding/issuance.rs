@@ -1,5 +1,4 @@
 //! Structural issuance admission followed by recipient encryption.
-use super::provider_payload::ProviderRowPayload;
 use super::{OnboardingDelivery, SentinelOnboardingPackage, SentinelOnboardingVersion};
 use crate::{
     AuthProvidersSnapshotData, MultiDeviceError, SentinelGenesisRequest,
@@ -48,8 +47,9 @@ impl PreparedOnboardingIssuance<'_> {
             delivery,
             provider_snapshot,
         } = self.input;
-        let payload = ProviderRowPayload::encode(provider_snapshot.onboarding_provider()?)?;
-        let provider_snapshot = delivery.encryption_public_key.seal_bytes(&payload)?;
+        let provider_snapshot = delivery
+            .encryption_public_key
+            .seal_compressed_json(provider_snapshot.onboarding_provider()?)?;
         Ok(SentinelOnboardingPackage {
             version: SentinelOnboardingVersion::CURRENT,
             request,

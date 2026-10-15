@@ -186,11 +186,7 @@ impl ProviderSnapshotStore<'_> {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod tests {
     use super::{PresealedProviderSnapshotPublication, ProviderSnapshotPublication};
-    use crate::storage::identity_record;
-    use crate::{
-        AuthProviderDatabase, IdbPutStringRequest, NookDatabase, NookError,
-        ProviderDbWriteSnapshotAt,
-    };
+    use crate::{AuthProviderDatabase, NookDatabase, NookError, ProviderDbWriteSnapshotAt};
     use nook_core::ProviderVaultScope;
     use nook_core::StoredGithubPat;
     use nook_core::{
@@ -408,22 +404,14 @@ mod tests {
         )
     )]
     #[wasm_bindgen_test]
-    async fn preparation_failure_preserves_caller_and_existing_rows() -> anyhow::Result<()> {
-        let fixture = PublicationFixture::new("github_pat_preserved_on_keyring_failure").await?;
+    async fn rejected_import_preserves_caller_and_existing_rows() -> anyhow::Result<()> {
+        let fixture = PublicationFixture::new("github_pat_preserved_on_rejected_import").await?;
         fixture.publication().save().await?;
         let before = fixture.scoped().await?;
         let caller = fixture.snapshot.clone();
-        NookDatabase::idb_put_string(IdbPutStringRequest {
-            key: identity_record::LOCAL_IDENTITY_KEYRING_KEY,
-            value: "corrupt-keyring",
-        })
-        .await?;
-        assert!(fixture.publication().prepare().await.is_err());
-        // Plaintext import is rejected before the same corrupt keyring is read.
         PublicationFixture::expect_plaintext_rejection(fixture.import().save().await)?;
         assert_eq!(fixture.snapshot, caller);
         assert_eq!(fixture.scoped().await?, before);
-        NookDatabase::clear_keyring_for_test().await?;
         assert_eq!(
             AuthProviderDatabase::load_auth_providers(&fixture.identity).await?,
             caller

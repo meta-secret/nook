@@ -105,7 +105,7 @@ mod tests {
         assert!(manager.vault.store_id.is_empty());
         assert!(matches!(manager.vault.vault_name, VaultNameState::Unnamed));
 
-        assert!(manager.choose_remote_vault("not-a-store").is_err());
+        assert!(manager.choose_remote_vault("not a store").is_err());
         manager.choose_remote_vault("store_abcdefghijk")?;
         assert_eq!(
             manager.storage.chosen_vault,

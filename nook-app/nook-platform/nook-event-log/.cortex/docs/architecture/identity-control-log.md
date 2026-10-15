@@ -173,14 +173,15 @@ set union.
   - `nook_db.events` holds `identity_event:{identity_id}:{event_id}` rows and
     an `identity_event_index:{identity_id}` index in one transaction.
 
-`EventLogNamespaceKind` lists the identities or vaults a target holds.
-Recovering from a provider lists its vault namespaces and asks which vault to
-open when there are several.
-
-Identity sync lists each mount's identity namespace, fetches missing events,
-validates them, unions them locally, then puts every local event the mount
-lacks. A failed mount is reported on the Sync page and is retried by the next
-sync.
+- **Discovery**
+  - `EventLogNamespaceKind` lists the identities or vaults a target holds.
+  - Recovering from a provider lists its vault namespaces and asks which vault
+    to open when there are several.
+- **Identity sync**
+  - List each mount's identity namespace, fetch missing events, validate them,
+    and union them locally.
+  - Put every local event the mount lacks.
+  - Report a failed mount on the Sync page; the next sync retries it.
 
 **Prohibited:** store identity events in a vault namespace or vault events in
 the identity namespace.

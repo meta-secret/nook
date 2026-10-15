@@ -9,7 +9,6 @@
 mod admission;
 mod codec;
 mod issuance;
-mod provider_payload;
 use crate::{
     AgeArmoredCiphertext, AuthProvidersSnapshotData, MultiDeviceError, SentinelGenesisRequest,
     SentinelGenesisShareDelivery, StoredSecretRecord,

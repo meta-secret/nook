@@ -385,15 +385,8 @@ impl AppKey {
         Self::open_identity_bytes(ciphertext, &self.identity)
     }
 
-    /// Open bytes sealed to this device's public key.
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "serialization boundary: decrypts serialized age plaintext bytes"
-        )
-    )]
-    pub fn open_bytes(
+    /// Open bytes sealed to this device's public key; sibling modules decode them.
+    pub(super) fn open_sealed_bytes(
         &self,
         ciphertext: &AgeArmoredCiphertext,
     ) -> MultiDeviceResult<zeroize::Zeroizing<Vec<u8>>> {
