@@ -186,7 +186,7 @@ test.describe('login unlock flow (local-first)', () => {
     await expect(page.getByTestId('identity-vault-row').first()).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await expect(page.getByTestId('card-password-unlock')).toHaveCount(0)
+    await expect(page.getByTestId('card-password-unlock-open')).toHaveCount(0)
   })
 })
 

@@ -12,8 +12,8 @@ export enum ManagePage {
   Import = 'import',
 }
 
-/** How each page opens from the identity's card: an action in Manage, or
- * a row on the identity's details page (Manage, then Identity details). */
+/** How each page opens from the identity's card: an action in Actions, or
+ * a tile in its Overview. */
 const MANAGE_PAGE_OPENERS: Record<
   Exclude<ManagePage, ManagePage.Import>,
   { readonly viaDetails: boolean; readonly testId: string }
@@ -97,20 +97,27 @@ export async function openManagePage(
   if (!(await page.getByTestId('identities-hub').isVisible())) {
     await openIdentitiesPage(page)
   }
-  const manage = page
-    .locator(
-      '[data-testid="identity-card"]:not([data-status="inactive"]) [data-testid="identity-manage"]',
-    )
-    .first()
-  if ((await manage.getAttribute('aria-expanded')) !== 'true') {
-    await manage.click()
-  }
   const opener = MANAGE_PAGE_OPENERS[target]
+  const currentCard =
+    '[data-testid="identity-card"]:not([data-status="inactive"])'
   if (opener.viaDetails) {
-    await page.getByTestId('identity-menu-details').click()
+    // Overview on the card opens the identity's overview beside it.
+    const toggle = page
+      .locator(`${currentCard} [data-testid="identity-overview-toggle"]`)
+      .first()
+    if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+      await toggle.click()
+    }
     await expect(page.getByTestId('identity-overview')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+  } else {
+    const manage = page
+      .locator(`${currentCard} [data-testid="identity-manage"]`)
+      .first()
+    if ((await manage.getAttribute('aria-expanded')) !== 'true') {
+      await manage.click()
+    }
   }
   const navItem = page.getByTestId(opener.testId).first()
   await expect(navItem).toBeVisible({ timeout: UI_TIMEOUT_MS })

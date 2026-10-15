@@ -10,11 +10,12 @@ card, which then spans the full row.
   import { WorkspaceSection } from '$lib/vault/state/ui.svelte'
   import {
     Asterisk,
-    ChevronDown,
     ChevronRight,
     Fingerprint,
     FolderKey,
+    KeyRound,
     Lock,
+    LayoutDashboard,
     LockOpen,
     MonitorSmartphone,
     Plus,
@@ -22,6 +23,7 @@ card, which then spans the full row.
     Settings2,
     TriangleAlert,
     UserRoundCheck,
+    X,
   } from '@lucide/svelte'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { CipherStrip } from '$lib/components/ui/cipher'
@@ -66,6 +68,8 @@ card, which then spans the full row.
       kind: LoginVaultExtensionPairingStatusKind.NotShown,
     }),
     unlockPanel,
+    overviewPanel,
+    overviewOpen = false,
     passwordFallback,
     preview = false,
   }: {
@@ -100,6 +104,10 @@ card, which then spans the full row.
     pairingStatusFor?: (storeId: string) => LoginVaultExtensionPairingStatus
     /** Setup panel (a new vault), shown beside the card's rows. */
     unlockPanel?: Snippet
+    /** The identity's overview, opened beside the card. */
+    overviewPanel?: Snippet
+    /** The overview is open; Overview on the footer closes it. */
+    overviewOpen?: boolean
     /** Backup-password unlock for the selected vault, while locked. */
     passwordFallback?: Snippet
     /** A preview of a card that does not exist yet: no actions. */
@@ -111,18 +119,37 @@ card, which then spans the full row.
     Boolean(onManageSection) && !preview && (live || card.current),
   )
   let menuOpen = $state(false)
-  let cardElement = $state<HTMLElement>()
 
   function selectFromMenu(section: WorkspaceSection): void {
     menuOpen = false
     onManageSection?.(section)
   }
 
-  function closeMenuOutside(event: PointerEvent): void {
-    if (!menuOpen || !cardElement) return
-    if (event.target instanceof Node && cardElement.contains(event.target))
-      return
+  /** Overview and Manage share the space beside the card: one at a time. */
+  function toggleOverview(): void {
     menuOpen = false
+    passwordOpen = false
+    onManageSection?.(
+      overviewOpen ? WorkspaceSection.Identities : WorkspaceSection.Overview,
+    )
+  }
+
+  function toggleManage(): void {
+    if (!menuOpen && overviewOpen)
+      onManageSection?.(WorkspaceSection.Identities)
+    passwordOpen = false
+    menuOpen = !menuOpen
+  }
+
+  /** Backup password on a locked card: its form opens beside the card. */
+  let passwordOpen = $state(false)
+  const passwordShown = $derived(
+    Boolean(passwordFallback) && !live && passwordOpen,
+  )
+
+  function togglePassword(): void {
+    menuOpen = false
+    passwordOpen = !passwordOpen
   }
 
   function closeMenuOnEscape(event: KeyboardEvent): void {
@@ -170,14 +197,45 @@ card, which then spans the full row.
   }
 </script>
 
-<svelte:window
-  onpointerdown={closeMenuOutside}
-  onkeydown={closeMenuOnEscape}
-/>
+<svelte:window onkeydown={closeMenuOnEscape} />
+
+{#snippet panelRow(
+  testId: string,
+  title: string,
+  hint: string,
+  open: boolean,
+  icon: Snippet,
+  onclick: () => void,
+)}
+  <button
+    type="button"
+    class="nk-vault-row"
+    data-testid={testId}
+    aria-expanded={open}
+    {...open ? { 'aria-current': 'true' } : {}}
+    disabled={busy}
+    {onclick}
+  >
+    <span class="nk-vault-icon" aria-hidden="true">{@render icon()}</span>
+    <span class="flex min-w-0 flex-1 flex-col">
+      <span class="truncate text-[0.9375rem] font-medium">{title}</span>
+      <span class="truncate text-xs text-muted-foreground">{hint}</span>
+    </span>
+    <ChevronRight
+      class="size-4 flex-none text-muted-foreground opacity-60"
+      aria-hidden="true"
+    />
+  </button>
+{/snippet}
+
+{#snippet overviewIcon()}<LayoutDashboard class="size-4" />{/snippet}
+{#snippet manageIcon()}<Settings2 class="size-4" />{/snippet}
 
 <article
-  bind:this={cardElement}
-  class="nk-frame-keytag nk-frame-interactive min-w-0 {unlockPanel
+  class="nk-frame-keytag nk-frame-interactive min-w-0 {unlockPanel ||
+  overviewPanel ||
+  (managesHere && menuOpen) ||
+  passwordShown
     ? 'col-span-full grid grid-cols-1 lg:grid-cols-[minmax(0,23rem)_minmax(0,1fr)]'
     : 'flex flex-col'}"
   class:nk-frame-live={live}
@@ -188,7 +246,7 @@ card, which then spans the full row.
   data-unlocking={unlockPanel ? 'true' : 'false'}
 >
   <span class="nk-eyelet" aria-hidden="true"></span>
-  <div class="flex min-w-0 flex-1 flex-col">
+  <div class="relative flex min-w-0 flex-1 flex-col">
     <header class="flex items-start gap-3.5 px-4 pb-4 pt-5 sm:px-5">
       <span class="relative inline-flex flex-none">
         <span class="nk-monogram" style:--nk-hue={card.hue} aria-hidden="true">
@@ -413,12 +471,27 @@ card, which then spans the full row.
       </section>
     {/if}
 
-    {#if passwordFallback && !live}
-      {@render passwordFallback()}
-    {/if}
-
-    {#if managesHere && menuOpen}
-      <IdentityManageMenu {vault} onSelect={selectFromMenu} />
+    {#if managesHere}
+      <section
+        class="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-0.5 border-t border-border px-2 py-2"
+      >
+        {@render panelRow(
+          'identity-overview-toggle',
+          vault.t(I18N_KEYS.WorkspaceSectionOverview),
+          vault.t(I18N_KEYS.IdentityMenuDetailsHint),
+          overviewOpen,
+          overviewIcon,
+          toggleOverview,
+        )}
+        {@render panelRow(
+          'identity-manage',
+          vault.t(I18N_KEYS.WorkspaceManage),
+          vault.t(I18N_KEYS.IdentityMenuManageHint),
+          menuOpen,
+          manageIcon,
+          toggleManage,
+        )}
+      </section>
     {/if}
 
     {#if !preview}
@@ -459,25 +532,19 @@ card, which then spans the full row.
             {vault.t(I18N_KEYS.WorkspaceUseIdentity)}
           </button>
         {/if}
-        {#if managesHere}
+        {#if passwordFallback && !live}
           <button
             type="button"
-            data-testid="identity-manage"
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
+            data-testid="card-password-unlock-open"
+            aria-expanded={passwordOpen}
             disabled={busy}
-            onclick={() => (menuOpen = !menuOpen)}
+            onclick={togglePassword}
           >
-            <Settings2 class="size-4 text-muted-foreground" aria-hidden="true" />
-            {vault.t(I18N_KEYS.WorkspaceManage)}
-            <ChevronDown
-              class="size-3.5 text-muted-foreground transition-transform {menuOpen
-                ? 'rotate-180'
-                : ''}"
-              aria-hidden="true"
-            />
+            <KeyRound class="size-4 text-muted-foreground" aria-hidden="true" />
+            {vault.t(I18N_KEYS.WorkspaceBackupPasswordButton)}
           </button>
-        {:else}
+        {/if}
+        {#if !managesHere}
           <button
             type="button"
             data-testid="identity-manage"
@@ -499,6 +566,56 @@ card, which then spans the full row.
       data-testid="identity-card-unlock"
     >
       {@render unlockPanel()}
+    </div>
+  {:else if passwordShown && passwordFallback}
+    <div
+      class="grid min-w-0 content-start gap-4 border-t border-border p-5 sm:p-6 lg:border-l lg:border-t-0 lg:px-7"
+      data-testid="identity-card-password"
+    >
+      <header class="flex items-center justify-between gap-3">
+        <h2 class="text-lg font-semibold tracking-tight text-foreground">
+          {vault.t(I18N_KEYS.WorkspaceUseBackupPassword)}
+        </h2>
+        <button
+          type="button"
+          class="grid size-8 place-items-center text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          aria-label={vault.t(I18N_KEYS.IdentityOverviewClosePanel)}
+          title={vault.t(I18N_KEYS.IdentityOverviewClosePanel)}
+          onclick={() => (passwordOpen = false)}
+        >
+          <X class="size-4" aria-hidden="true" />
+        </button>
+      </header>
+      {@render passwordFallback()}
+    </div>
+  {:else if managesHere && menuOpen}
+    <div
+      class="grid min-w-0 content-start gap-4 border-t border-border p-5 sm:p-6 lg:border-l lg:border-t-0 lg:px-7"
+      data-testid="identity-card-manage"
+    >
+      <header class="flex items-center justify-between gap-3">
+        <h2 class="text-lg font-semibold tracking-tight text-foreground">
+          {vault.t(I18N_KEYS.WorkspaceManage)}
+        </h2>
+        <button
+          type="button"
+          class="grid size-8 place-items-center text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          aria-label={vault.t(I18N_KEYS.IdentityOverviewClosePanel)}
+          title={vault.t(I18N_KEYS.IdentityOverviewClosePanel)}
+          data-testid="identity-manage-close"
+          onclick={() => (menuOpen = false)}
+        >
+          <X class="size-4" aria-hidden="true" />
+        </button>
+      </header>
+      <IdentityManageMenu {vault} onSelect={selectFromMenu} />
+    </div>
+  {:else if overviewPanel}
+    <div
+      class="min-w-0 border-t border-border p-5 sm:p-6 lg:border-l lg:border-t-0 lg:px-7"
+      data-testid="identity-card-overview"
+    >
+      {@render overviewPanel()}
     </div>
   {/if}
 </article>

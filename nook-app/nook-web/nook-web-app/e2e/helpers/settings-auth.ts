@@ -810,7 +810,10 @@ export async function unlockWithCardPassword(
   }
   const open = page.getByTestId('card-password-unlock-open')
   await expect(open).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-  await open.click()
+  // Backup password toggles its panel beside the card.
+  if ((await open.getAttribute('aria-expanded')) !== 'true') {
+    await open.click()
+  }
   if (opts.entryLabel) {
     await page
       .getByTestId('card-password-entry')

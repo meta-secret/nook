@@ -50,6 +50,17 @@ test('recover a local vault with its backup password after device-key loss', asy
   if (await joinClose.isVisible()) {
     await joinClose.click()
   }
+  // The locked card pairs Unlock with Backup password; the password opens
+  // beside the card.
+  const directory = process.env.NOOK_DEMO_SCREENSHOT_DIR
+  if (directory) {
+    await page.screenshot({ path: `${directory}/locked-card.png` })
+  }
+  await page.getByTestId('card-password-unlock-open').click()
+  await expect(page.getByTestId('identity-card-password')).toBeVisible()
+  if (directory) {
+    await page.screenshot({ path: `${directory}/locked-backup-password.png` })
+  }
   await unlockWithCardPassword(page, { password: 'recovery-pass-99' })
   await expect(page.getByTestId('vault-admin-panel')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,

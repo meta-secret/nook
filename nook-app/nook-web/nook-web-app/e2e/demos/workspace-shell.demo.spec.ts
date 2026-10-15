@@ -35,14 +35,14 @@ test('the vault page holds items; the identity card manages the rest', async ({
   await page.getByTestId('identity-manage').first().click()
   const menu = page.getByTestId('identity-menu')
   await expect(menu).toBeVisible()
-  for (const item of ['add-device', 'sync', 'passwords', 'details']) {
+  for (const item of ['add-device', 'sync', 'passwords']) {
     await expect(page.getByTestId(`identity-menu-${item}`)).toBeVisible()
   }
   await page.waitForTimeout(DEMO_BEAT_MS)
 
-  // Identity details lists devices, vaults, cloud copies and sign-in;
-  // each row opens its page.
-  await page.getByTestId('identity-menu-details').click()
+  // Overview opens beside the card: devices, cloud copies, vaults and
+  // sign-in, each tile opening its page.
+  await page.getByTestId('identity-overview-toggle').first().click()
   await expect(page.getByTestId('identity-overview')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })

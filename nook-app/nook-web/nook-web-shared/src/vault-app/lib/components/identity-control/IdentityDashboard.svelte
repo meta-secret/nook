@@ -151,7 +151,7 @@ its own page; other actions live in Manage on the identity's card.
 )}
   <button
     type="button"
-    class="group grid min-h-28 content-between gap-3 border border-border bg-card p-4 text-left transition-colors hover:border-foreground/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+    class="group grid min-h-28 min-w-0 content-between gap-3 border border-border bg-card p-4 text-left transition-colors hover:border-foreground/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
     data-testid={testId}
     onclick={() => onOpen(section)}
   >
@@ -182,10 +182,10 @@ its own page; other actions live in Manage on the identity's card.
 {#snippet browserIcon()}<SlidersHorizontal class="size-4" aria-hidden="true" />{/snippet}
 
 <div class="grid min-w-0 gap-3" data-testid="identity-overview">
-  <div class="grid gap-3 lg:grid-cols-3">
+  <div class="grid gap-3 xl:grid-cols-3">
     <!-- Devices: filled slots for each device, dashed slots for the next. -->
     <section
-      class="grid content-start gap-4 border bg-card p-5 lg:col-span-2 {devicesAtRisk
+      class="grid min-w-0 content-start gap-4 border bg-card p-5 xl:col-span-2 {devicesAtRisk
         ? 'border-warning/60'
         : 'border-border'}"
       data-testid="overview-devices"
@@ -291,7 +291,7 @@ its own page; other actions live in Manage on the identity's card.
 
     <!-- Cloud copies: a warning with its fix while there are none. -->
     <section
-      class="grid content-between gap-4 border p-5 {copiesAtRisk
+      class="grid min-w-0 content-between gap-4 border p-5 {copiesAtRisk
         ? 'border-warning/60 bg-warning/5'
         : 'border-border bg-card'}"
       data-testid="overview-sync"
@@ -346,7 +346,7 @@ its own page; other actions live in Manage on the identity's card.
     </section>
   </div>
 
-  <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+  <div class="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-3">
     {@render smallTile(
       "overview-open-vaults",
       vault.t(I18N_KEYS.WorkspaceSectionVaults),

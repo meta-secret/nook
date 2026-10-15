@@ -32,7 +32,6 @@ export class WorkspaceSectionScope {
 
   get scope(): ManageSectionScope {
     switch (this.section) {
-      case WorkspaceSection.Overview:
       case WorkspaceSection.Keys:
       case WorkspaceSection.Vaults:
       case WorkspaceSection.Devices:
@@ -42,9 +41,11 @@ export class WorkspaceSectionScope {
         return ManageSectionScope.Identity;
       case WorkspaceSection.Import:
         return ManageSectionScope.Vault;
-      // Adding a device is a focused flow of its own, outside management.
+      // The overview opens on the hub beside the identity's card; adding a
+      // device is a focused flow of its own. Neither is a management page.
       case WorkspaceSection.Vault:
       case WorkspaceSection.Identities:
+      case WorkspaceSection.Overview:
       case WorkspaceSection.AddDevice:
         return ManageSectionScope.None;
     }

@@ -100,8 +100,7 @@ test.describe('identities hub', () => {
 
     // Manage on a locked identity opens its menu; a choice there unlocks
     // the identity first.
-    await current.getByTestId('identity-manage').click()
-    await current.getByTestId('identity-menu-details').click()
+    await current.getByTestId('identity-overview-toggle').click()
     await expect(page.getByTestId('identity-overview')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })

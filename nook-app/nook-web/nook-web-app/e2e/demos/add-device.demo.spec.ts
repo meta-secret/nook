@@ -60,8 +60,7 @@ test('the identity card leads to adding a device in three steps', async ({
   await expect(page.getByTestId('identities-hub')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
-  await page.getByTestId('identity-manage').first().click()
-  await page.getByTestId('identity-menu-details').click()
+  await page.getByTestId('identity-overview-toggle').first().click()
   await expect(page.getByTestId('identity-overview')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
@@ -103,8 +102,7 @@ test('the identity card leads to adding a device in three steps', async ({
   await expect(page.getByTestId('identities-hub')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
-  await page.getByTestId('identity-manage').first().click()
-  await page.getByTestId('identity-menu-details').click()
+  await page.getByTestId('identity-overview-toggle').first().click()
   await expect(page.getByTestId('identity-overview')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })

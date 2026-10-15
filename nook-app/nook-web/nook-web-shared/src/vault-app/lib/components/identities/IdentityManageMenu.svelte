@@ -1,13 +1,11 @@
 <!--
-Manage on the identity this browser uses: the things to do with it, adding
-a device first, then the way to its details (devices, vaults, cloud copies,
-sign-in). It drops over the card above its footer.
+Actions on the identity this browser uses, adding a device first. Manage on
+the card opens them beside it; Overview there shows what the identity has.
 -->
 <script lang="ts">
   import {
     ChevronRight,
     Cloud,
-    IdCard,
     Plus,
     ShieldCheck,
   } from "@lucide/svelte";
@@ -49,12 +47,6 @@ sign-in). It drops over the card above its footer.
       label: vault.t(I18N_KEYS.IdentityMenuPassword),
       hint: vault.t(I18N_KEYS.IdentityMenuPasswordHint),
     },
-    {
-      section: WorkspaceSection.Overview,
-      testId: "identity-menu-details",
-      label: vault.t(I18N_KEYS.IdentityMenuDetails),
-      hint: vault.t(I18N_KEYS.IdentityMenuDetailsHint),
-    },
   ]);
 </script>
 
@@ -63,10 +55,8 @@ sign-in). It drops over the card above its footer.
     <Plus class="size-4" />
   {:else if section === WorkspaceSection.Sync}
     <Cloud class="size-4" />
-  {:else if section === WorkspaceSection.Passwords}
-    <ShieldCheck class="size-4" />
   {:else}
-    <IdCard class="size-4" />
+    <ShieldCheck class="size-4" />
   {/if}
 {/snippet}
 
@@ -80,9 +70,8 @@ sign-in). It drops over the card above its footer.
     <button
       type="button"
       role="menuitem"
-      class="nk-identity-menu-item"
+      class="nk-identity-menu-item border border-border"
       class:nk-identity-menu-lead={index === 0}
-      class:nk-identity-menu-split={item.section === WorkspaceSection.Overview}
       data-testid={item.testId}
       onclick={() => onSelect(item.section)}
     >

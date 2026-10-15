@@ -80,8 +80,9 @@ test('a phone gets a full first run, an edge-to-edge shell and the card menu', a
   await expectNoSidewaysScroll(page)
   await demoBeat(page)
 
-  // Identity details lists what the identity has; each row opens a page.
-  await page.getByTestId('identity-menu-details').click()
+  // Overview opens beside the card: what the identity has, each tile
+  // opening its page.
+  await page.getByTestId('identity-overview-toggle').first().click()
   await expect(page.getByTestId('identity-overview')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })

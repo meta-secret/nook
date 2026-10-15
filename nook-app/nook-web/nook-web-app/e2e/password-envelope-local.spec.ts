@@ -112,7 +112,7 @@ test.describe('vault password envelope (local)', () => {
     await expect(page.getByTestId('login-gate')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await expect(page.getByTestId('card-password-unlock')).toBeVisible({
+    await expect(page.getByTestId('card-password-unlock-open')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
     // Dismiss the join prompt — backup password is the recovery path here.

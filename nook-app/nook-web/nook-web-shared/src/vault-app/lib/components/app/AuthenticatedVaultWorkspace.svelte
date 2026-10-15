@@ -13,7 +13,7 @@ band, the scrolling page and the status line.
 
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import { onDestroy, tick, untrack, type ComponentProps } from "svelte";
-  import { Download } from "@lucide/svelte";
+  import { Download, X } from "@lucide/svelte";
   import { type ExtensionSetupOffer } from "$lib/app/extension-setup";
   import {
     configured_vault_application_supports_extension,
@@ -247,15 +247,9 @@ band, the scrolling page and the status line.
     onEditorOpenChange(false);
   }
 
-  /** A detail page opened from the identity's page returns to it. */
-  let detailFromOverview = $state(false);
-
   function openSection(next: WorkspaceSection): void {
     if (next === WorkspaceSection.AddDevice && section !== next)
       addDeviceOrigin = section;
-    if (section === WorkspaceSection.Overview) detailFromOverview = true;
-    else if (!managing && section !== WorkspaceSection.AddDevice)
-      detailFromOverview = false;
     const nextManaging =
       new WorkspaceSectionScope(next).scope !== ManageSectionScope.None;
     // Adding a device is a detour: leaving it keeps the way back the
@@ -271,11 +265,7 @@ band, the scrolling page and the status line.
   const backDestination = $derived(
     !managing
       ? WorkspaceSection.Identities
-      : scope === ManageSectionScope.Identity &&
-          section !== WorkspaceSection.Overview &&
-          detailFromOverview
-        ? WorkspaceSection.Overview
-        : manageOriginRecorded
+      : manageOriginRecorded
         ? manageOrigin
         : scope === ManageSectionScope.Vault
           ? WorkspaceSection.Vault
@@ -474,16 +464,36 @@ band, the scrolling page and the status line.
   />
 {/snippet}
 
-<!-- An identity part opened in place on the control page. -->
-{#snippet identityPanel()}
-  {#if section === WorkspaceSection.Overview}
+<!-- The current identity's overview, opened beside its card on the hub. -->
+{#snippet identityOverview()}
+  <div class="grid gap-4">
+    <header class="flex items-center justify-between gap-3">
+      <h2 class="text-lg font-semibold tracking-tight text-foreground">
+        {vault.t(I18N_KEYS.WorkspaceSectionOverview)}
+      </h2>
+      <button
+        type="button"
+        class="grid size-8 place-items-center text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        aria-label={vault.t(I18N_KEYS.IdentityOverviewClosePanel)}
+        title={vault.t(I18N_KEYS.IdentityOverviewClosePanel)}
+        data-testid="identity-overview-close"
+        onclick={() => openSection(WorkspaceSection.Identities)}
+      >
+        <X class="size-4" aria-hidden="true" />
+      </button>
+    </header>
     <IdentityDashboard
       {vault}
       health={identityHealth}
       onOpen={openSection}
       onAddSyncProvider={addSyncProvider}
     />
-  {:else if section === WorkspaceSection.Devices}
+  </div>
+{/snippet}
+
+<!-- One of the identity's pages, opened from its card or its overview. -->
+{#snippet identityPanel()}
+  {#if section === WorkspaceSection.Devices}
     <IdentityDevicesPanel
       {vault}
       onAddDevice={() => openSection(WorkspaceSection.AddDevice)}
@@ -503,7 +513,7 @@ band, the scrolling page and the status line.
     onReconnect={onSettingsReconnect}
     onDone={() => finishFirstRun(WorkspaceSection.Vault)}
   />
-{:else if section === WorkspaceSection.Identities}
+{:else if section === WorkspaceSection.Identities || section === WorkspaceSection.Overview}
   <div
     class="grid min-w-0 grid-cols-1 gap-4"
     data-testid="identities-workspace"
@@ -531,6 +541,8 @@ band, the scrolling page and the status line.
       onAddDevice={() => openSection(WorkspaceSection.AddDevice)}
       addDevicePrompt={identityHealth.nextStep ===
         NookIdentityNextStep.AddDevice}
+      overview={identityOverview}
+      overviewOpen={section === WorkspaceSection.Overview}
       onManageSection={(target: IdentitySectionTarget) => {
         // "Add a sync provider" opens Sync with its form already open.
         if (target.section === WorkspaceSection.Sync) addSyncProvider();
@@ -558,12 +570,8 @@ band, the scrolling page and the status line.
 {:else if scope === ManageSectionScope.Identity}
   <IdentityPageFrame
     {vault}
-    identityName={section === WorkspaceSection.Settings
-      ? ""
-      : section === WorkspaceSection.Overview
-        ? vault.t(I18N_KEYS.IdentityOverviewEyebrow)
-        : identityName}
-    title={section === WorkspaceSection.Overview ? identityName : barTitle}
+    identityName={section === WorkspaceSection.Settings ? "" : identityName}
+    title={barTitle}
     testId={section}
     onBack={goBack}
   >

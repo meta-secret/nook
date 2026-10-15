@@ -25,13 +25,11 @@ test.describe('persistent workspace routing', () => {
       })
     })
 
-    // Manage on the current identity's card holds actions and the way to
-    // its details; each detail page has its own address and Back returns
-    // to the details.
+    // Overview on the current identity's card opens beside it; each tile
+    // opens a page with its own address, and Back returns to the overview.
     await page.getByTestId('header-identities-btn').click()
     await expect(page).toHaveURL(/\/identities$/)
-    await page.getByTestId('identity-manage').first().click()
-    await page.getByTestId('identity-menu-details').click()
+    await page.getByTestId('identity-overview-toggle').first().click()
     await expect(page).toHaveURL(/\/identity$/)
     await expect(page.getByTestId('identity-overview')).toBeVisible()
     for (const [row, address, marker] of [
@@ -49,8 +47,9 @@ test.describe('persistent workspace routing', () => {
       await page.getByTestId('identity-page-back').click()
       await expect(page.getByTestId('identity-overview')).toBeVisible()
     }
-    await page.getByTestId('identity-page-back').click()
-    await expect(page.getByTestId('identities-hub')).toBeVisible()
+    await page.getByTestId('identity-overview-close').click()
+    await expect(page).toHaveURL(/\/identities$/)
+    await expect(page.getByTestId('identity-overview')).toHaveCount(0)
 
     await page.getByTestId('header-identities-btn').click()
     await expect(page).toHaveURL(/\/identities$/)
@@ -287,13 +286,12 @@ test.describe('persistent workspace routing', () => {
     await expect(page.getByTestId('vault-panel')).toBeVisible()
 
     await page.getByTestId('header-identities-btn').click()
-    await page.getByTestId('identity-manage').first().click()
-    await page.getByTestId('identity-menu-details').click()
+    await page.getByTestId('identity-overview-toggle').first().click()
     await expect(page).toHaveURL(/\/identity$/)
     await expect(page.getByTestId('identity-overview')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await page.getByTestId('identity-page-back').click()
+    await page.getByTestId('identity-overview-toggle').first().click()
     await expect(page).toHaveURL(/\/identities$/)
     await expect(page.getByTestId('identities-hub')).toBeVisible()
   })

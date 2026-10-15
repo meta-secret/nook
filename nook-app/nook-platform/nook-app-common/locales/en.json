@@ -1914,6 +1914,7 @@
     "status_elsewhere": "Other installation",
     "status_unlocked_title": "This identity has a vault open in this browser. It locks after a period without activity.",
     "vault_open": "Open",
+    "backup_password_button": "Backup password",
     "vault_dormant": "Use identity to open",
     "vault_unavailable": "Not on this browser",
     "vault_locked_hint": "Encrypted — opening it unlocks this identity",
@@ -2023,6 +2024,8 @@
     "no_device_join_mounts": "Devices join through a cloud provider. Add GitHub or Google Drive under Sync."
   },
   "identity_menu": {
+    "manage_hint": "Add a device, a sync provider or a backup password",
+    "actions": "Actions",
     "sync_hint": "Keep an encrypted copy in your cloud",
     "password": "Set a backup password",
     "password_hint": "Open a vault without a passkey",

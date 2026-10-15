@@ -51,6 +51,8 @@ join) sit between the hero and the cards.
     onAddDevice,
     addDevicePrompt = false,
     onManageSection,
+    overview,
+    overviewOpen = false,
     onLock = () => {},
     onUnlock = () => {},
     pairingStatusFor = () => ({
@@ -88,6 +90,10 @@ join) sit between the hero and the cards.
     addDevicePrompt?: boolean
     /** Open one of the current identity's pages from Manage on its card. */
     onManageSection?: (target: IdentitySectionTarget) => void
+    /** The current identity's overview, shown beside its card. */
+    overview?: Snippet
+    /** The current identity's overview is open. */
+    overviewOpen?: boolean
     onLock?: () => void
     /** Unlock a locked identity with this device's passkey. */
     onUnlock?: (target: IdentityVaultTarget) => void
@@ -433,6 +439,10 @@ join) sit between the hero and the cards.
               ? { onAddDevice: () => onAddDevice(targetFor(card.identityId)) }
               : {}}
             addDevicePrompt={card.current && addDevicePrompt}
+            overviewOpen={card.current && overviewOpen}
+            {...overview && overviewOpen && card.current
+              ? { overviewPanel: overview }
+              : {}}
             {...onManageSection
               ? {
                   onManageSection: (section: WorkspaceSection) => {
