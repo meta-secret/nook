@@ -53,15 +53,6 @@ test('the vault page holds items; the identity card manages the rest', async ({
   })
   await page.waitForTimeout(DEMO_BEAT_MS)
 
-  // Adding a device leads the Devices page and returns to it.
-  await page.getByTestId('devices-add-device-btn').click()
-  await expect(page.getByTestId('add-device-page')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
-  await page.getByTestId('add-device-back').click()
-  await expect(page.getByTestId('vault-devices-panel')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
   await page.getByTestId('identity-page-back').click()
   await expect(page.getByTestId('identity-overview')).toBeVisible({
     timeout: UI_TIMEOUT_MS,

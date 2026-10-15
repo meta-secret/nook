@@ -14,6 +14,8 @@ import {
   waitForPersistedAppLog,
   openVaultPage,
   openKeysPage,
+  openVaultPanelAndUnlock,
+  unlockVaultOnLogin,
 } from './helpers'
 
 declare global {
@@ -102,7 +104,7 @@ async function openExistingVaultProtectionOverlay(page: Page) {
   if (await overlay.isVisible()) {
     return
   }
-  await unlockVaultButton.click()
+  await openVaultPanelAndUnlock(page)
   await expect(overlay).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
@@ -114,7 +116,7 @@ async function unlockExistingVaultWithPasskey(page: Page) {
   await expect(unlockVaultButton).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-  await unlockVaultButton.click()
+  await unlockVaultOnLogin(page)
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
@@ -756,7 +758,7 @@ test.describe('passkey device-key protection', () => {
     await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
     await expect(page.getByTestId('identity-vault-row').first()).toBeEnabled()
 
-    await page.getByTestId('identity-vault-row').first().click()
+    await openVaultPanelAndUnlock(page)
     await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible()
     await expect(page.getByTestId('passkey-auth-overlay-dismiss')).toBeVisible()
     await page.getByTestId('device-protection-use-existing-choice').click()

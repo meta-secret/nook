@@ -1,6 +1,5 @@
 import { expect, test } from './fixtures'
 import {
-  appendAuthProviders,
   clearBrowserVault,
   connectLocalVault,
   disableVaultIdleLock,
@@ -10,6 +9,7 @@ import {
   AuthProviderBrowserFixture,
   readRawAuthProvidersFromIdb,
   saveAuthProvidersInBrowser,
+  storePlaintextGithubPat,
   UI_TIMEOUT_MS,
   unselectedAuthProviderSeedScope,
   waitForAuthProvidersE2eHook,
@@ -90,18 +90,26 @@ test.describe('sync provider credential encryption', () => {
     ).toBe(false)
   })
 
-  test('load rejects legacy plaintext IndexedDB rows', async ({ page }) => {
-    const pat = 'github_pat_22E2ElegacyUPGRADE'
+  test('load rejects a plaintext credential at rest', async ({ page }) => {
+    const pat = 'github_pat_22E2EplainTEXT'
     await waitForAuthProvidersE2eHook(page)
-    await appendAuthProviders(page, [
+    await saveAuthProvidersInBrowser(
+      page,
       {
-        id: 'gh-e2e-legacy',
-        type: 'github',
-        label: 'GitHub · legacy',
-        githubRepo: 'nook-legacy',
-        githubPat: pat,
+        providers: [
+          {
+            id: 'gh-e2e-plain',
+            type: 'github',
+            label: 'GitHub',
+            githubPat: 'github_pat_sealed_first',
+            githubRepo: 'nook',
+            createdAt: new Date().toISOString(),
+          },
+        ],
       },
-    ])
+      unselectedAuthProviderSeedScope(),
+    )
+    await storePlaintextGithubPat(page, 'gh-e2e-plain', pat)
 
     const admission = await new AuthProviderBrowserFixture(page).load()
     expect(admission.isErr()).toBe(true)
@@ -109,9 +117,9 @@ test.describe('sync provider credential encryption', () => {
       expect(admission.error).toBe(AUTH_PROVIDER_HOOK_READ_FAILED)
 
     const raw = await readRawAuthProvidersFromIdb(page)
-    expect(raw.providers.find((p) => p.id === 'gh-e2e-legacy')?.githubPat).toBe(
-      pat,
-    )
+    expect(
+      raw.providers.find((p) => p.id === 'gh-e2e-plain')?.githubPat,
+    ).toEqual({ state: 'token', value: pat })
   })
 
   test('OAuth access and refresh tokens are sealed at rest', async ({

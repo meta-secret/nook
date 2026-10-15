@@ -34,11 +34,13 @@ function isPrivateFolderLookup(requestUrl: string, fileName: string): boolean {
 }
 
 const NAMESPACE_FOLDER_PREFIX = 'nook-'
+const VAULT_NAMESPACE_FOLDER_PREFIX = 'nook-vault-'
 const IDENTITY_NAMESPACE_FOLDER_PREFIX = 'nook-identity-'
 const NAMESPACE_LOOKUP_PATTERN =
   /^name = '((?:[^'\\]|\\.)*)' and mimeType = 'application\/vnd\.google-apps\.folder' and '((?:[^'\\]|\\.)*)' in parents and trashed = false$/
-const IDENTITY_LISTING_PATTERN =
-  /^name contains 'nook-identity-' and mimeType = 'application\/vnd\.google-apps\.folder' and '((?:[^'\\]|\\.)*)' in parents and trashed = false$/
+/** Listing every identity log or vault folder below one event parent. */
+const NAMESPACE_LISTING_PATTERN =
+  /^name contains '(nook-identity-|nook-vault-)' and mimeType = 'application\/vnd\.google-apps\.folder' and '((?:[^'\\]|\\.)*)' in parents and trashed = false$/
 
 function unescapeDriveQueryValue(value: string): string {
   return value.replace(/\\(.)/g, '$1')
@@ -199,8 +201,22 @@ export function createLocalE2eGoogleDriveVaultStub(
     getEventFileCount: () => vaultEventFiles().size,
     getIdentityEventFileCount: () =>
       allEventFiles().size - vaultEventFiles().size,
-    getEventFileCountForParent: (parentId: string) =>
+    /** Events stored directly in one event parent, outside its vault folders. */
+    getEventFileCountDirectlyIn: (parentId: string) =>
       eventFilesFor(parentId).size,
+    /** Vault events stored below one event parent: in it, or in the vault
+     * folders it holds. */
+    getEventFileCountForParent: (parentId: string) =>
+      [
+        parentId,
+        ...privateFolders
+          .filter(
+            (folder) =>
+              folder.parents.includes(parentId) &&
+              folder.name.startsWith(VAULT_NAMESPACE_FOLDER_PREFIX),
+          )
+          .map((folder) => folder.id),
+      ].reduce((count, id) => count + eventFilesFor(id).size, 0),
     getEventFileContents: () => [...vaultEventFiles().values()],
     clearEventFiles: () => {
       eventFilesByParent.clear()
@@ -441,11 +457,12 @@ export function createLocalE2eGoogleDriveVaultStub(
           }
           const [query = ''] = new URL(fullUrl).searchParams.getAll('q')
           const namespaceLookup = query.match(NAMESPACE_LOOKUP_PATTERN)
-          const identityListing = query.match(IDENTITY_LISTING_PATTERN)
-          if (namespaceLookup || identityListing) {
+          const namespaceListing = query.match(NAMESPACE_LISTING_PATTERN)
+          if (namespaceLookup || namespaceListing) {
             const [, rawName = '', rawParent = ''] = namespaceLookup
               ? namespaceLookup
-              : ['', '', ((v) => (v ? v : ''))(identityListing?.[1])]
+              : ['', '', ((v) => (v ? v : ''))(namespaceListing?.[2])]
+            const listedPrefix = ((v) => (v ? v : ''))(namespaceListing?.[1])
             const name = unescapeDriveQueryValue(rawName)
             const parent = unescapeDriveQueryValue(rawParent)
             const files = privateFolders
@@ -454,7 +471,7 @@ export function createLocalE2eGoogleDriveVaultStub(
                   folder.parents.includes(parent) &&
                   (namespaceLookup
                     ? folder.name === name
-                    : folder.name.startsWith(IDENTITY_NAMESPACE_FOLDER_PREFIX)),
+                    : folder.name.startsWith(listedPrefix)),
               )
               .map(({ id, name: folderName, mimeType }) => ({
                 id,

@@ -34,4 +34,23 @@ describe('EnrollmentQrPresentation', () => {
     expect(Object.hasOwn(options, 'image')).toBe(false)
     expect(options.imageOptions?.imageSize).toBe(0)
   })
+
+  test('drops the badge and keeps a long link within QR capacity', () => {
+    const link = (length: number) =>
+      'https://nook.example/#enroll=' + 'a'.repeat(length)
+    const level = (enrollmentLink: string) => {
+      const options = new EnrollmentQrPresentation({
+        enrollmentLink,
+        dense: false,
+      }).options
+      return [
+        options.qrOptions?.errorCorrectionLevel,
+        Object.hasOwn(options, 'image'),
+      ]
+    }
+
+    expect(level(link(1600))).toEqual(['Q', true])
+    expect(level(link(1700))).toEqual(['M', false])
+    expect(level(link(2400))).toEqual(['L', false])
+  })
 })

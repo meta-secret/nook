@@ -98,8 +98,12 @@ test.describe('identities hub', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
 
-    // Manage on a locked identity opens its menu; a choice there unlocks
-    // the identity first.
+    // Overview and Manage wait for the identity to be unlocked.
+    await expect(current.getByTestId('identity-overview-toggle')).toBeDisabled()
+    await current.getByTestId('identity-unlock').click()
+    await expect(current).toHaveAttribute('data-status', 'unlocked', {
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
     await current.getByTestId('identity-overview-toggle').click()
     await expect(page.getByTestId('identity-overview')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,

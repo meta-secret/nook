@@ -97,11 +97,15 @@ export class ProviderConnectionActions {
             const admitted = state.admitManager();
             if (admitted.isErr()) return storageErr(admitted.error);
             try {
-              admitted.value.reset_vault_session();
-              await admitted.value.sync_local_folder_provider_js(
-                handle.handleId,
+              const discovered =
+                await admitted.value.discover_backup_folder_vault(
+                  handle.handleId,
+                );
+              state.remoteVaultChoices =
+                discovered.state === "several" ? discovered.storeIds : [];
+              return storageOk(
+                discovered.state === "found" ? discovered.storeId : "",
               );
-              return storageOk(admitted.value.vaultStoreId.trim());
             } catch (nativeFailure) {
               return storageErr(new NativeVaultStorageFailure(nativeFailure));
             }

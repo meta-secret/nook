@@ -144,6 +144,15 @@ impl ProviderSaveRequest {
                 }
             };
         }
+        // A private folder the draft already names wins over the setup field,
+        // which still holds the default when the name came from elsewhere.
+        if let StoredOAuthFileConfiguration::Configured(config) = &request.oauth_file
+            && let StoredOAuthRemoteFileName::FileName(name) = &config.file_name
+            && !name.trim().is_empty()
+            && name.trim() != DEFAULT_DRIVE_BACKUP_NAME
+        {
+            return name.trim().to_owned();
+        }
         let requested = request.github_repo.trim();
         if requested.is_empty() {
             DEFAULT_DRIVE_BACKUP_NAME.to_owned()
@@ -520,6 +529,45 @@ mod tests {
                 .ok_or("expected the saved remote row")?;
             assert_eq!(remote.store_id, ProviderVaultScope::Unscoped);
         }
+        Ok(())
+    }
+
+    #[test]
+    fn a_private_drive_row_keeps_the_folder_its_draft_names() -> Result<(), &'static str> {
+        let named = |file_name: &str| {
+            let mut request = ProviderSaveRequest::fixture(StorageProviderType::OauthFile);
+            request.github_repo = super::DEFAULT_DRIVE_BACKUP_NAME.to_owned();
+            request.oauth_file = StoredOAuthFileConfiguration::configured(OAuthFileConfigData {
+                preset: OauthFilePreset::GoogleDrive,
+                file_name: StoredOAuthRemoteFileName::FileName(file_name.to_owned()),
+                drive_mode: GoogleDriveMode::Private,
+                ..OAuthFileConfigData::default()
+            });
+            let snapshot = request.apply().saved()?;
+            snapshot
+                .providers
+                .iter()
+                .find_map(|row| match &row.oauth_file {
+                    StoredOAuthFileConfiguration::Configured(config) => {
+                        Some((row.label.clone(), config.file_name.clone()))
+                    }
+                    StoredOAuthFileConfiguration::NotApplicable => None,
+                })
+                .ok_or("expected a saved Drive row")
+        };
+
+        assert_eq!(
+            named(" team-events ")?,
+            (
+                "Google Drive · team-events".to_owned(),
+                StoredOAuthRemoteFileName::FileName("team-events".to_owned())
+            )
+        );
+        // An unnamed draft still follows the setup field.
+        assert_eq!(
+            named("")?.1,
+            StoredOAuthRemoteFileName::FileName(super::DEFAULT_DRIVE_BACKUP_NAME.to_owned())
+        );
         Ok(())
     }
 

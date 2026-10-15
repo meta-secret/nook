@@ -254,7 +254,7 @@ test.describe('local vault', () => {
     })
 
     const otherTab = await page.context().newPage()
-    await otherTab.goto('/')
+    await otherTab.goto('/app/')
     await otherTab.waitForFunction(() => Boolean(window.__nookVault))
     await otherTab.evaluate(() => {
       sessionStorage.setItem('nook_cleanup_probe', 'other-tab-session')

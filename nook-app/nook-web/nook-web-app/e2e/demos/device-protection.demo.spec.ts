@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test'
 import { expect, test } from '../fixtures'
 import {
+  beginAddSyncProvider,
   addSecret,
   addVaultPassword,
   assertVaultReady,
@@ -206,7 +207,7 @@ test('retains the folder import while showing matching passkeys and password rec
   await expandSettingsSection(page, 'unlock')
   await addVaultPassword(page, 'Emergency recovery', 'demo-backup-password')
   await expandSettingsSection(page, 'storage')
-  await page.getByTestId('add-provider-btn').first().click()
+  await beginAddSyncProvider(page)
   await page.getByTestId('provider-option-local-folder').click()
   await page.getByTestId('settings-choose-local-folder-btn').click()
   await page.getByTestId('settings-connect-local-folder-btn').click()

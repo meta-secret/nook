@@ -25,8 +25,6 @@ test.describe('identity keys', () => {
     await expect(summary).toHaveAttribute('data-key-count', '1', {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await expect(page.getByTestId('identity-keys-add-device')).toBeVisible()
-    await expect(page.getByTestId('identity-keys-passwords')).toBeVisible()
     const key = page.getByTestId('identity-key')
     await expect(key).toHaveCount(1)
     await expect(key).toContainText('Nook in this browser')

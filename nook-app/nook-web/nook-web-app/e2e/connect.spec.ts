@@ -1,6 +1,7 @@
 import { expect, test } from './fixtures'
 import { VaultAccessStatus } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm.js'
 import {
+  beginAddSyncProvider,
   openIdentitiesPage,
   authorizeDeviceProtection,
   createLocalVaultOnLogin,
@@ -200,14 +201,15 @@ test.describe('vault connect flow', () => {
 
     await openManagePage(page, ManagePage.Sync)
     await expect(page.getByTestId('sync-providers-empty')).toBeVisible()
-    await page.getByTestId('add-provider-btn').click()
+    await beginAddSyncProvider(page)
     await expect(page.getByTestId('provider-picker-list')).toBeVisible()
     await expect(page.getByTestId('provider-option-local')).toHaveCount(0)
     await page.getByTestId('provider-option-github').click()
     await expect(page.getByTestId('github-token-setup')).toBeVisible()
-    await page.getByTestId('cancel-add-provider-btn').click()
-    await expect(page.getByTestId('provider-picker-list')).toBeVisible()
-    await page.getByTestId('cancel-add-provider-btn').click()
+    // Adding a provider is its own page: Back leaves it unsaved.
+    await page.getByTestId('identity-page-back').click()
+    await expect(page.getByTestId('provider-picker-list')).toHaveCount(0)
+    await openManagePage(page, ManagePage.Sync)
     await expect(page.getByTestId('sync-providers-empty')).toBeVisible()
   })
 

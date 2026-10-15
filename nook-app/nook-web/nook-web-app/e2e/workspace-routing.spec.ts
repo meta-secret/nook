@@ -33,11 +33,9 @@ test.describe('persistent workspace routing', () => {
     await expect(page).toHaveURL(/\/identity$/)
     await expect(page.getByTestId('identity-overview')).toBeVisible()
     for (const [row, address, marker] of [
-      ['overview-passwords', /\/identity\/passwords$/, 'vault-unlock-section'],
       ['overview-keys', /\/identity\/keys$/, 'identity-keys'],
       ['overview-open-devices', /\/identity\/devices$/, 'vault-devices-panel'],
       ['overview-open-sync', /\/identity\/sync$/, 'storage-providers-section'],
-      ['overview-open-vaults', /\/identity\/vaults$/, 'vault-admin-panel'],
     ] as const) {
       await page.getByTestId(row).first().click()
       await expect(page).toHaveURL(address)

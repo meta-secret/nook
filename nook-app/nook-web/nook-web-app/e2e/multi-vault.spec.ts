@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures'
 import {
+  beginAddSyncProvider,
   activeAuthProviderSeedScope,
   authorizeDeviceProtection,
   createLocalVaultOnLogin,
@@ -11,6 +12,7 @@ import {
   openVaultPage,
   openManagePage,
   openIdentitiesPage,
+  switchToVaultFromIdentities,
   ManagePage,
 } from './helpers'
 import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
@@ -171,7 +173,7 @@ async function seedScopedSyncProviders(
 }
 
 test.describe('multi-vault on one browser profile', () => {
-  test('creates two vaults, switches between them, and keeps sync providers scoped', async ({
+  test('creates two vaults, switches between them, and shares identity sync providers', async ({
     page,
   }) => {
     await page.goto('/app/')
@@ -248,10 +250,7 @@ test.describe('multi-vault on one browser profile', () => {
     await expect(page.getByTestId('vault-admin-name')).toHaveCount(2)
 
     await openManagePage(page, ManagePage.Sync)
-    await page
-      .getByTestId('storage-providers-section')
-      .getByTestId('add-provider-btn')
-      .click()
+    await beginAddSyncProvider(page)
     await expect(page.getByTestId('provider-picker-list')).toBeVisible()
     await openVaultPage(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible()
@@ -289,34 +288,26 @@ test.describe('multi-vault on one browser profile', () => {
       ),
     ).toHaveAttribute('data-state', 'open')
 
-    await page
-      .locator(
-        '[data-testid="identity-vault-row"][data-store-id="' + storeA + '"]',
-      )
-      .click()
-    await authorizeDeviceProtection(page, { storeId: storeA })
-    await expect(page.getByTestId('vault-panel')).toBeVisible()
+    await switchToVaultFromIdentities(page, storeA)
 
     let activeYaml = await readLocalVaultYamlFromIdb(page)
     expect(parseStoreId(activeYaml)).toEqual(storeA)
 
     await openIdentitiesPage(page)
-    await page
-      .locator(
-        '[data-testid="identity-vault-row"][data-store-id="' + storeB + '"]',
-      )
-      .click()
-    await authorizeDeviceProtection(page, { storeId: storeB })
+    await switchToVaultFromIdentities(page, storeB)
     activeYaml = await readLocalVaultYamlFromIdb(page)
     expect(parseStoreId(activeYaml)).toEqual(storeB)
 
     await seedScopedSyncProviders(page, storeA, storeB)
     await openManagePage(page, ManagePage.Sync)
-    await expect(page.getByTestId('settings-provider-oauth-file')).toBeVisible()
+    // Sync providers mount the identity, so every vault of it uses them.
+    await expect(page.getByTestId('settings-provider-oauth-file')).toHaveCount(
+      2,
+    )
     await expect(page.getByTestId('settings-providers-list')).toContainText(
       'nook-multi-vault-a',
     )
-    await expect(page.getByTestId('settings-providers-list')).not.toContainText(
+    await expect(page.getByTestId('settings-providers-list')).toContainText(
       'nook-multi-vault-b',
     )
   })

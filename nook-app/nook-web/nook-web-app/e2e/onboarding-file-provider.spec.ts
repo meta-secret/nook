@@ -1,5 +1,6 @@
 import { test, expect, type BrowserContext, type Page } from './fixtures'
 import {
+  beginAddSyncProvider,
   addSecret,
   approveIdentityJoin,
   assertVaultReady,
@@ -167,7 +168,7 @@ test.describe('Google Drive provider modes', () => {
     await createLocalVaultOnLogin(owner, 'Shared Drive vault')
     await openStorageSettings(owner)
     await expandSettingsSection(owner, 'storage')
-    await owner.getByTestId('add-provider-btn').first().click()
+    await beginAddSyncProvider(owner)
     await owner.getByTestId('provider-option-oauth-file').click()
     await expect(owner.getByTestId('google-oauth-setup')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
@@ -218,7 +219,7 @@ test.describe('Google Drive provider modes', () => {
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })
       .toBeGreaterThan(0)
-    expect(driveStub.getEventFileCountForParent(sharedFolder.id)).toBe(0)
+    expect(driveStub.getEventFileCountDirectlyIn(sharedFolder.id)).toBe(0)
     await openVaultPage(owner)
 
     const secretKey = uniqueSecretKey('shared-drive-onboard')

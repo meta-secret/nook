@@ -109,7 +109,7 @@ test('the identity card leads to adding a device in three steps', async ({
   await snapshot(page, '7a-identity-details')
   await page.getByTestId('overview-open-devices').click()
   await expect(page).toHaveURL(/\/identity\/devices$/)
-  await expect(page.getByTestId('devices-add-device-btn')).toBeVisible({
+  await expect(page.getByTestId('vault-devices-panel')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
   await snapshot(page, '7-devices-page')

@@ -16,7 +16,12 @@ import {
   UI_TIMEOUT_MS,
   sleep,
 } from './environment'
-import { ManagePage, openManagePage } from './workspace-navigation'
+import {
+  beginAddSyncProvider,
+  ManagePage,
+  openAddDevice,
+  openManagePage,
+} from './workspace-navigation'
 import { readLocalVaultYamlFromIdb } from './local-sync'
 import {
   disableVaultIdleLock,
@@ -59,6 +64,7 @@ export enum DeviceProtectionAuthorizationGateState {
   Picker = 'picker',
   Authorize = 'authorize',
   Unlocked = 'unlocked',
+  Open = 'open',
   Waiting = 'waiting',
   Error = 'error',
 }
@@ -72,6 +78,8 @@ export type DeviceProtectionPostUnlockObservation = {
   readonly unlockReady: boolean
   readonly pickerVisible: boolean
   readonly errorVisible: boolean
+  /** The vault panel offers to open the unlocked vault. */
+  readonly openReady: boolean
 }
 
 export function deviceProtectionAuthenticatedSurface(
@@ -88,6 +96,10 @@ export class DeviceProtectionPostUnlockGate {
   ) {}
 
   state(): DeviceProtectionAuthorizationGateState {
+    // Unlocking beside the card keeps the hub up until the vault is opened.
+    if (this.observation.openReady) {
+      return DeviceProtectionAuthorizationGateState.Open
+    }
     if (this.observation.vaultAuthenticated) {
       return DeviceProtectionAuthorizationGateState.Unlocked
     }
@@ -172,7 +184,7 @@ export async function connectGithubSyncProviderFromSettings(
 ) {
   await openStorageSettings(page)
   await expandSettingsSection(page, 'storage')
-  await page.getByTestId('add-provider-btn').first().click()
+  await beginAddSyncProvider(page)
   await page.getByTestId('provider-option-github').click()
   await expect(page.getByTestId('github-token-setup')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
@@ -410,11 +422,7 @@ export async function openOnboardDevicePanel(page: Page) {
   await assertVaultReady(page)
   await waitForVaultOperationsIdle(page)
   await forceVaultQuiescentForE2e(page)
-  await openManagePage(page, ManagePage.Devices)
-  await page.getByTestId('devices-add-device-btn').click()
-  await expect(page.getByTestId('add-device-page')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
+  await openAddDevice(page)
   // With a cloud copy the invite form shows; without one, step one asks
   // for a sync provider.
   await expect(
@@ -463,7 +471,7 @@ export async function connectGoogleDriveSyncProviderFromSettings(
   await installGoogleOAuthMock(page, accessToken)
   await openStorageSettings(page)
   await expandSettingsSection(page, 'storage')
-  await page.getByTestId('add-provider-btn').first().click()
+  await beginAddSyncProvider(page)
   await page.getByTestId('provider-option-oauth-file').click()
   await expect(page.getByTestId('google-oauth-setup')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
@@ -632,12 +640,7 @@ export async function authorizeDeviceProtection(
   }
 
   if (!(await overlay.isVisible())) {
-    const option = vaultChoiceOption(page, storeId)
-    await expect(option).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    await dismissSyncConflictIfVisible(page)
-    await option.click()
+    await openVaultPanelAndUnlock(page, storeId)
   }
   let lastPostUnlockObservationText = 'unavailable'
   let firstVisibleVaultError = ''
@@ -674,6 +677,7 @@ export async function authorizeDeviceProtection(
         overlayVisible: isVisible('passkey-auth-overlay'),
         authorizeReady: isEnabled('device-protection-unlock-btn'),
         unlockReady: isEnabled('identity-vault-row'),
+        openReady: isEnabled('vault-panel-open'),
         pickerVisible:
           isVisible('login-vault-picker') ||
           isVisible('login-choose-vault-hint'),
@@ -693,30 +697,36 @@ export async function authorizeDeviceProtection(
   }
   const postUnlock = { state: DeviceProtectionAuthorizationGateState.Waiting }
   try {
+    // Answer the prompts as they come: authorize this device's key, then
+    // open the vault the panel offers once it is unlocked.
+    let authorized = false
     await expect
       .poll(
         async () => {
           postUnlock.state = await observePostUnlock()
-          return postUnlock.state
+          if (
+            postUnlock.state === DeviceProtectionAuthorizationGateState.Open
+          ) {
+            await page.getByTestId('vault-panel-open').click()
+            return false
+          }
+          if (
+            postUnlock.state ===
+              DeviceProtectionAuthorizationGateState.Authorize &&
+            !authorized
+          ) {
+            authorized = true
+            await button.click()
+            return false
+          }
+          return [
+            DeviceProtectionAuthorizationGateState.Unlocked,
+            DeviceProtectionAuthorizationGateState.Error,
+          ].includes(postUnlock.state)
         },
-        { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+        { timeout: Math.max(1, postUnlockDeadline - Date.now()) },
       )
-      .not.toBe(DeviceProtectionAuthorizationGateState.Waiting)
-    if (postUnlock.state === DeviceProtectionAuthorizationGateState.Authorize) {
-      await button.click()
-      await expect
-        .poll(
-          async () => {
-            postUnlock.state = await observePostUnlock()
-            return [
-              DeviceProtectionAuthorizationGateState.Unlocked,
-              DeviceProtectionAuthorizationGateState.Error,
-            ].includes(postUnlock.state)
-          },
-          { timeout: Math.max(1, postUnlockDeadline - Date.now()) },
-        )
-        .toBe(true)
-    }
+      .toBe(true)
     if (postUnlock.state === DeviceProtectionAuthorizationGateState.Error) {
       throw new Error(`Vault authorization failed: ${firstVisibleVaultError}`)
     }
@@ -726,6 +736,8 @@ export async function authorizeDeviceProtection(
       { cause: failure },
     )
   }
+  // Unlocked beside the card, the vault opens from its panel.
+  await openUnlockedVault(page)
   await expect(loginGate).toBeHidden({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
@@ -771,13 +783,18 @@ export async function invokeInitializedVaultProviderReload(page: Page) {
 export /** Wait until the login gate offers a vault to unlock or the vault is already open. */
 async function ensureLoginLocalUnlockReady(page: Page) {
   const vaultPanel = page.getByTestId('vault-panel')
-  if (await vaultPanel.isVisible()) {
+  const opened = openedWorkspace(page)
+  if (await opened.isVisible()) {
     return
   }
 
-  await expect(page.getByTestId('login-gate')).toBeVisible({
+  // A reload can unlock on its own and return to the page it left.
+  await expect(page.getByTestId('login-gate').or(opened).first()).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
+  if (await opened.isVisible()) {
+    return
+  }
 
   const vaultRow = vaultChoiceOption(page)
 
@@ -799,14 +816,10 @@ async function ensureLoginLocalUnlockReady(page: Page) {
     .toBe('ready')
 }
 
-/** The passphrase key on a locked vault row: the given vault's, else the
- * first. */
+/** The row that opens a locked vault's panel, where its passphrase is
+ * offered: the given vault's, else the first. */
 export function vaultPassphraseKey(page: Page, storeId = '') {
-  return storeId
-    ? page.locator(
-        `[data-testid="identity-vault-passphrase"][data-store-id="${storeId}"]`,
-      )
-    : page.getByTestId('identity-vault-passphrase').first()
+  return vaultChoiceOption(page, storeId)
 }
 
 /** Open the passphrase field beside the locked card and unlock with it. */
@@ -824,14 +837,15 @@ export async function unlockWithCardPassword(
   await expect(open.or(input).first()).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-  // The key on the vault row opens its passphrase beside the card; with
-  // no card for the vault, the field stands on its own.
+  // The vault row opens its panel beside the card, where the passphrase is
+  // read; with no card for the vault, the field stands on its own.
   if (
     !(await input.isVisible()) &&
     (await open.getAttribute('aria-expanded')) !== 'true'
   ) {
     await open.click()
   }
+  await expect(input).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
   if (opts.entryLabel) {
     await page
       .getByTestId('card-password-entry')
@@ -848,12 +862,12 @@ export async function unlockVaultOnLogin(
   page: Page,
   opts?: { password?: string; entryLabel?: string; storeId?: string },
 ) {
-  const vaultPanel = page.getByTestId('vault-panel')
-  if (await vaultPanel.isVisible()) {
+  const opened = openedWorkspace(page)
+  if (await opened.isVisible()) {
     return
   }
   await ensureLoginLocalUnlockReady(page)
-  if (await vaultPanel.isVisible()) {
+  if (await opened.isVisible()) {
     return
   }
   if (opts?.password) {
@@ -863,12 +877,19 @@ export async function unlockVaultOnLogin(
       ...(opts.storeId ? { storeId: opts.storeId } : {}),
     }
     await unlockWithCardPassword(page, passwordUnlock)
+    await openUnlockedVault(page)
     return
   }
-  const row = vaultChoiceOption(page, opts?.storeId)
-  await expect(row).toBeEnabled({ timeout: UI_TIMEOUT_MS })
-  await dismissSyncConflictIfVisible(page)
-  await row.click()
+  await openVaultPanelAndUnlock(page, opts?.storeId)
+  await openUnlockedVault(page)
+}
+
+/** The open vault, or the workspace page an unlock returned to. */
+function openedWorkspace(page: Page) {
+  return page
+    .getByTestId('vault-panel')
+    .or(page.getByTestId('authenticated-shell'))
+    .first()
 }
 
 /** Mark the browser session as explicitly locked so auto-unlock stays off after reload. */
@@ -881,4 +902,64 @@ export async function disableLoginAutoUnlock(page: Page) {
 /** @deprecated `disableLoginAutoUnlock` no longer adds a dummy provider. */
 export async function removeE2eDummyGithubSyncProvider(page: Page) {
   await page.evaluate(() => {})
+}
+
+/** Open a vault's panel beside its card and unlock it with this device's
+ * key. The plain vault list unlocks on the row itself. */
+export async function openVaultPanelAndUnlock(page: Page, storeId = '') {
+  const unlock = page.getByTestId('vault-panel-unlock')
+  const open = page.getByTestId('vault-panel-open')
+  const shell = page.getByTestId('authenticated-shell')
+  const row = vaultChoiceOption(page, storeId)
+  await expect(row.or(unlock).or(open).first()).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+  // The row toggles its panel: open it unless it already is.
+  if (
+    !(await unlock.isVisible()) &&
+    !(await open.isVisible()) &&
+    (await row.getAttribute('aria-expanded')) !== 'true'
+  ) {
+    await expect(row).toBeEnabled({ timeout: UI_TIMEOUT_MS })
+    await dismissSyncConflictIfVisible(page)
+    await row.click()
+  }
+  // A row whose key needs recovery prompts at once instead.
+  const overlay = page.getByTestId('passkey-auth-overlay')
+  await expect(unlock.or(open).or(shell).or(overlay).first()).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  if (await unlock.isVisible()) await unlock.click()
+}
+
+/** After an unlock beside the card, go into the vault the panel offers,
+ * pressing Unlock again while it is still offered. */
+export async function openUnlockedVault(page: Page) {
+  // The vault, or the page the unlock returns to: a workspace page, an
+  // identity page, adding a device, or approving an extension.
+  const workspace = page
+    .getByTestId('vault-panel')
+    .or(page.getByTestId('authenticated-shell'))
+    .or(page.getByTestId('identity-page'))
+    .or(page.getByTestId('add-device-page'))
+    .or(page.getByTestId('approve-extension-device-btn'))
+    .first()
+  const open = page.getByTestId('vault-panel-open')
+  const unlock = page.getByTestId('vault-panel-unlock')
+  await expect
+    .poll(
+      async () => {
+        if (await workspace.isVisible()) return 'open'
+        if ((await unlock.isVisible()) && (await unlock.isEnabled())) {
+          await unlock.click()
+          return 'waiting'
+        }
+        if ((await open.isVisible()) && (await open.isEnabled())) {
+          await open.click()
+        }
+        return 'waiting'
+      },
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
+    .not.toBe('waiting')
 }

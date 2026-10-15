@@ -2,6 +2,7 @@ import { I18N_KEYS } from '../../../nook-web-shared/src/generated/i18n-keys'
 import type { Page } from '@playwright/test'
 import { expect, test } from '../fixtures'
 import {
+  beginAddSyncProvider,
   clearBrowserVault,
   createLocalE2eGoogleDriveVaultStub,
   createLocalVaultOnLogin,
@@ -36,7 +37,7 @@ test('Google Drive setup shows named New and legacy Existing targets behind the 
 
   await openStorageSettings(page)
   await expandSettingsSection(page, 'storage')
-  await page.getByTestId('add-provider-btn').first().click()
+  await beginAddSyncProvider(page)
   await page.getByTestId('provider-option-oauth-file').click()
   await expect(page.getByTestId('google-oauth-setup')).toBeVisible({
     timeout: UI_TIMEOUT_MS,

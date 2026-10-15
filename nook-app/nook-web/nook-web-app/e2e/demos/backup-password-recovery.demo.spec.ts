@@ -30,7 +30,7 @@ test('recover a local vault with its backup password after device-key loss', asy
   await page.reload()
   await expect(
     page
-      .getByTestId('identity-vault-passphrase')
+      .getByTestId('identity-vault-row')
       .or(page.getByTestId('card-password-input'))
       .first(),
   ).toBeVisible({
@@ -55,13 +55,13 @@ test('recover a local vault with its backup password after device-key loss', asy
   if (await joinClose.isVisible()) {
     await joinClose.click()
   }
-  // The key on the locked vault's row opens its passphrase beside the
+  // The locked vault's row opens its panel, with the passphrase, beside the
   // card.
   const directory = process.env.NOOK_DEMO_SCREENSHOT_DIR
   if (directory) {
     await page.screenshot({ path: `${directory}/locked-card.png` })
   }
-  const key = page.getByTestId('identity-vault-passphrase').first()
+  const key = page.getByTestId('identity-vault-row').first()
   if (await key.isVisible()) await key.click()
   await expect(page.getByTestId('card-password-input')).toBeVisible()
   if (directory) {

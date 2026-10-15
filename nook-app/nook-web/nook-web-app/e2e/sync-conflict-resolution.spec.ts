@@ -1,20 +1,15 @@
 import { expect, test, type Page } from './fixtures'
 import {
-  addVaultPassword,
   authorizeDeviceProtection,
   createLocalVaultOnLogin,
   disableVaultIdleLock,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  installGoogleOAuthMock,
-  openStorageSettings,
   readLocalVaultYamlFromIdb,
   seedOauthFileSyncProvidersWhileUnlocked,
   triggerVaultSyncRefresh,
   UI_TIMEOUT_MS,
-  waitForVaultOperationsIdle,
   waitForLoadedSyncProviders,
-  waitForSyncRemoteVaultState,
-  openVaultPage,
+  openIdentitiesPage,
 } from './helpers'
 import { createLocalE2eFileSyncVaultStub } from './file-sync-stub'
 
@@ -24,6 +19,13 @@ function parseStoreId(yaml: string): string {
     throw new Error('store_id missing from vault yaml')
   }
   return storeId
+}
+
+async function runFanOutSync(page: Page) {
+  await page.evaluate(async () => {
+    const vault = window.__nookVault
+    await vault?.runFanOutSyncAfterLocalSave?.()
+  })
 }
 
 async function setSecurityConflict(page: Page, present: boolean) {
@@ -126,7 +128,7 @@ test.describe('sync conflict resolution', () => {
     })
   })
 
-  test('opens the vault-choice dialog when onboarding connects a provider for another vault', async ({
+  test('a second vault of the identity syncs beside the first through its provider', async ({
     page,
   }) => {
     const fileName = 'nook-e2e-shared-vault-file.yaml'
@@ -139,9 +141,7 @@ test.describe('sync conflict resolution', () => {
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-
-    const vaultAYaml = await readLocalVaultYamlFromIdb(page)
-    const storeA = parseStoreId(vaultAYaml)
+    const storeA = parseStoreId(await readLocalVaultYamlFromIdb(page))
 
     await seedOauthFileSyncProvidersWhileUnlocked(
       page,
@@ -158,24 +158,13 @@ test.describe('sync conflict resolution', () => {
     )
     await triggerVaultSyncRefresh(page)
     await waitForLoadedSyncProviders(page)
-    await page.evaluate(async () => {
-      const vault = window.__nookVault
-      await vault?.runFanOutSyncAfterLocalSave?.()
-    })
-    await waitForSyncRemoteVaultState(
-      stub,
-      (snapshot) =>
-        snapshot.authPkIds.length >= 1 && snapshot.memberPkIds.length >= 1,
-    )
+    await runFanOutSync(page)
     await expect
-      .poll(() => parseStoreId(stub.getVaultYaml()), {
+      .poll(() => stub.getVaultNamespaceIds(), {
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })
-      .toEqual(storeA)
-    const remoteEventsBeforeConflict = stub.getEventFileContents()
-
-    await openVaultPage(page)
-    await expect(page.getByTestId('vault-panel')).toBeVisible()
+      .toEqual([storeA])
+    const vaultAEvents = stub.getEventFileContents()
 
     await page.getByTestId('header-lock-vault-btn').click()
     await expect(page.getByTestId('identity-vault-row').first()).toBeVisible({
@@ -203,184 +192,29 @@ test.describe('sync conflict resolution', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await disableVaultIdleLock(page)
-
-    const vaultBYaml = await readLocalVaultYamlFromIdb(page)
-    const storeB = parseStoreId(vaultBYaml)
+    const storeB = parseStoreId(await readLocalVaultYamlFromIdb(page))
     expect(storeB).not.toEqual(storeA)
 
-    stub.setVaultYaml(vaultAYaml)
-    await addVaultPassword(page, 'onboard', 'onboard-pass-1')
-    // Sync providers are added on the identity Sync page.
-    await openStorageSettings(page)
-
-    await installGoogleOAuthMock(page, 'ya29.e2e_file_sync_token')
-    await page.getByTestId('add-provider-btn').first().click()
-    await page.getByTestId('provider-option-oauth-file').click()
-    await page.getByTestId('drive-file-input').fill(fileName)
-    await page.getByTestId('google-sign-in-btn').click()
-    await expect(
-      page
-        .getByTestId('google-account-status')
-        .or(page.getByTestId('connect-provider-btn')),
-    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-    await page.getByTestId('connect-provider-btn').click()
-    await waitForVaultOperationsIdle(page, ENROLLMENT_UNLOCK_TIMEOUT_MS)
-
-    await expect(page.getByTestId('vault-sync-conflict-dialog')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    await expect(page.getByTestId('vault-sync-conflict-dialog')).toContainText(
-      'Choose how to open this provider vault',
-    )
-    await expect(
-      page.getByTestId('sync-conflict-import-new-vault-btn'),
-    ).toBeVisible()
-    await expect(page.getByTestId('sync-conflict-cancel-btn')).toBeVisible()
-    await expect(
-      page.getByTestId('provider-vault-preserve-both'),
-    ).toContainText('Nook does not merge them automatically')
-    await expect(page.getByText(storeA, { exact: true })).not.toBeVisible()
-    await expect(page.getByText(storeB, { exact: true })).not.toBeVisible()
-    await page.getByText('Technical details', { exact: true }).click()
-    await expect(page.getByText(storeA, { exact: true })).toBeVisible()
-    await expect(page.getByText(storeB, { exact: true })).toBeVisible()
-    await expect(
-      page.getByText(/A passkey unlocks one protected Nook identity/),
-    ).toBeVisible()
-    await expect(page.getByText(/A passphrase is separate/)).toBeVisible()
-    await expect(page.getByTestId('vault-error')).toHaveCount(0)
-    await expect
-      .poll(() =>
-        page.evaluate(() => {
-          const vault = window.__nookVault
-          if (!vault) throw new Error('__nookVault is unavailable.')
-          const manager = vault.admitManager()
-          return manager.isOk()
-            ? manager.value.storage_mode
-            : manager.error.translationKey
-        }),
-      )
-      .toBe('local')
-    expect(parseStoreId(stub.getVaultYaml())).toEqual(storeA)
-    expect(stub.getEventFileContents()).toEqual(remoteEventsBeforeConflict)
-    expect(parseStoreId(await readLocalVaultYamlFromIdb(page))).toEqual(storeB)
-
-    await page.getByTestId('sync-conflict-cancel-btn').click()
-    await expect(
-      page.getByTestId('vault-sync-conflict-dialog'),
-    ).not.toBeVisible()
-    expect(stub.getEventFileContents()).toEqual(remoteEventsBeforeConflict)
-  })
-
-  test('sole linked identity opens the imported vault and keeps the prior vault', async ({
-    page,
-  }) => {
-    const fileName = 'nook-e2e-import-new-vault.yaml'
-    const stub = createLocalE2eFileSyncVaultStub('', fileName)
-    await stub.install(page, { fileName })
-
-    await page.goto('/app/')
-    await createLocalVaultOnLogin(page, 'test')
-    await disableVaultIdleLock(page)
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-
-    const vaultAYaml = await readLocalVaultYamlFromIdb(page)
-    const storeA = parseStoreId(vaultAYaml)
-
-    await seedOauthFileSyncProvidersWhileUnlocked(
-      page,
-      [
-        {
-          id: 'e2e-import-sync-a',
-          label: 'Shared File Import A',
-          fileName,
-          accessToken: 'ya29.e2e_file_sync_token',
-          accountEmail: 'shared-import-a@example.test',
-        },
-      ],
-      stub,
-    )
-    await triggerVaultSyncRefresh(page)
+    // The provider mounts the identity: the new vault gets its own folder
+    // there, and the first vault's events stay as they were.
     await waitForLoadedSyncProviders(page)
-    await page.evaluate(async () => {
-      const vault = window.__nookVault
-      await vault?.runFanOutSyncAfterLocalSave?.()
-    })
-    await waitForSyncRemoteVaultState(
-      stub,
-      (snapshot) =>
-        snapshot.authPkIds.length >= 1 && snapshot.memberPkIds.length >= 1,
-    )
+    await runFanOutSync(page)
     await expect
-      .poll(() => parseStoreId(stub.getVaultYaml()), {
+      .poll(() => stub.getVaultNamespaceIds(), {
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })
-      .toEqual(storeA)
+      .toEqual([storeA, storeB].sort())
+    for (const event of vaultAEvents)
+      expect(stub.getEventFileContents()).toContain(event)
+    await expect(page.getByTestId('vault-sync-conflict-dialog')).toHaveCount(0)
 
-    await page.getByTestId('header-lock-vault-btn').click()
-    await expect(page.getByTestId('identity-vault-row').first()).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
-
-    await page.getByTestId('identity-new-vault').click()
-    await page.getByTestId('login-vault-name-input').fill('test-2')
-    await page.getByTestId('login-create-additional-vault-btn').click()
-    // Creating a vault on a locked identity asks for its passkey first.
-    await expect(
-      page
-        .getByTestId('passkey-auth-overlay')
-        .or(page.getByTestId('vault-panel'))
-        .first(),
-    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-    await authorizeDeviceProtection(page)
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    await disableVaultIdleLock(page)
-
-    const vaultBYaml = await readLocalVaultYamlFromIdb(page)
-    const storeB = parseStoreId(vaultBYaml)
-    expect(storeB).not.toEqual(storeA)
-
-    stub.setVaultYaml(vaultAYaml)
-    await addVaultPassword(page, 'onboard', 'onboard-pass-1')
-    // Sync providers are added on the identity Sync page.
-    await openStorageSettings(page)
-
-    await installGoogleOAuthMock(page, 'ya29.e2e_file_sync_token')
-    await page.getByTestId('add-provider-btn').first().click()
-    await page.getByTestId('provider-option-oauth-file').click()
-    await page.getByTestId('drive-file-input').fill(fileName)
-    await page.getByTestId('google-sign-in-btn').click()
-    await expect(
-      page
-        .getByTestId('google-account-status')
-        .or(page.getByTestId('connect-provider-btn')),
-    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-    await page.getByTestId('connect-provider-btn').click()
-    await waitForVaultOperationsIdle(page, ENROLLMENT_UNLOCK_TIMEOUT_MS)
-
-    await expect(page.getByTestId('vault-sync-conflict-dialog')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    await page.getByTestId('sync-conflict-import-new-vault-btn').click()
-    await waitForVaultOperationsIdle(page, ENROLLMENT_UNLOCK_TIMEOUT_MS)
-
-    await expect(page.getByTestId('identity-vault-row').first()).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
+    await openIdentitiesPage(page)
     await expect(page.getByTestId('identity-vault-row')).toHaveCount(2)
-    await expect(
-      page.locator(
-        `[data-testid="identity-vault-row"][data-store-id="${storeA}"]`,
-      ),
-    ).toBeVisible()
-    await expect(
-      page.locator(
-        `[data-testid="identity-vault-row"][data-store-id="${storeB}"]`,
-      ),
-    ).toBeVisible()
+    for (const storeId of [storeA, storeB])
+      await expect(
+        page.locator(
+          `[data-testid="identity-vault-row"][data-store-id="${storeId}"]`,
+        ),
+      ).toBeVisible()
   })
 })

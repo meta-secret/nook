@@ -371,10 +371,7 @@
         ? { kind: UnlockPageKind.Stay }
         : {
             kind: UnlockPageKind.Route,
-            route:
-              current.route === WorkspaceRoute.Identities
-                ? WorkspaceRoute.Vault
-                : current.route,
+            route: vault.unlockReturn.routeFrom(current.route),
           }
     const destination: UnlockDestination = { storeId, page }
     void unlockTo(destination)
@@ -384,6 +381,9 @@
    * panel then offers Open vault and the vault's own pages. */
   function unlockVaultInPlace(storeId: string): void {
     const current = new WorkspacePath(window.location.pathname).route
+    if (current.kind === WorkspaceRouteLookupKind.Unknown)
+      vault.unlockReturn.forget()
+    else vault.unlockReturn.remember(current.route)
     const page: UnlockPage =
       current.kind === WorkspaceRouteLookupKind.Unknown
         ? { kind: UnlockPageKind.Stay }

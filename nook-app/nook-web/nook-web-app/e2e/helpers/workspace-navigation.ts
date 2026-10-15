@@ -12,19 +12,15 @@ export enum ManagePage {
   Import = 'import',
 }
 
-/** How each page opens from the identity's card: an action in Actions, or
- * a tile in its Overview. */
+/** How each identity page opens from its card: an item in Manage, or a
+ * tile in its Overview. The vault's own pages open from its panel. */
 const MANAGE_PAGE_OPENERS: Record<
-  Exclude<ManagePage, ManagePage.Import>,
+  Exclude<ManagePage, ManagePage.Import | ManagePage.Passwords>,
   { readonly viaDetails: boolean; readonly testId: string }
 > = {
-  [ManagePage.Sync]: { viaDetails: false, testId: 'identity-menu-sync' },
-  [ManagePage.Passwords]: {
-    viaDetails: false,
-    testId: 'identity-menu-passwords',
-  },
+  [ManagePage.Sync]: { viaDetails: true, testId: 'overview-open-sync' },
   [ManagePage.Devices]: { viaDetails: true, testId: 'overview-open-devices' },
-  [ManagePage.Vaults]: { viaDetails: true, testId: 'overview-open-vaults' },
+  [ManagePage.Vaults]: { viaDetails: false, testId: 'identity-menu-vaults' },
   [ManagePage.Keys]: { viaDetails: true, testId: 'overview-keys' },
   [ManagePage.Settings]: {
     viaDetails: true,
@@ -60,7 +56,13 @@ export async function openVaultPage(page: Page): Promise<void> {
     ).toBeVisible({ timeout: UI_TIMEOUT_MS })
     if (await vaultPanel.isVisible()) return
     if (await openRow.isVisible()) {
-      await openRow.click()
+      // The open vault's row opens its panel, which leads into the vault.
+      if ((await openRow.getAttribute('aria-expanded')) !== 'true') {
+        await openRow.click()
+      }
+      const enter = page.getByTestId('vault-panel-open')
+      await expect(enter).toBeVisible({ timeout: UI_TIMEOUT_MS })
+      await enter.click()
     } else if (await flowBack.isVisible()) {
       await flowBack.click()
     } else {
@@ -96,6 +98,19 @@ export async function openManagePage(
   // Every identity page opens from Manage on the current identity's card.
   if (!(await page.getByTestId('identities-hub').isVisible())) {
     await openIdentitiesPage(page)
+  }
+  // Passphrases belong to the open vault: its row opens its panel.
+  if (target === ManagePage.Passwords) {
+    const openRow = page
+      .locator('[data-testid="identity-vault-row"][data-state="open"]')
+      .first()
+    await expect(openRow).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    if ((await openRow.getAttribute('aria-expanded')) !== 'true') {
+      await openRow.click()
+    }
+    await page.getByTestId('vault-panel-passphrases').click()
+    await expect(marker).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    return
   }
   const opener = MANAGE_PAGE_OPENERS[target]
   const currentCard =
@@ -134,4 +149,74 @@ export async function openManagePage(
 export async function openKeysPage(page: Page): Promise<void> {
   // Manage on a locked card opens the same menu; its items unlock first.
   await openManagePage(page, ManagePage.Keys)
+}
+
+/** Open one item of Manage on the current identity's card. */
+async function openManageItem(page: Page, testId: string): Promise<void> {
+  if (!(await page.getByTestId('identities-hub').isVisible())) {
+    await openIdentitiesPage(page)
+  }
+  const manage = page
+    .locator(
+      '[data-testid="identity-card"]:not([data-status="inactive"]) [data-testid="identity-manage"]',
+    )
+    .first()
+  if ((await manage.getAttribute('aria-expanded')) !== 'true') {
+    await manage.click()
+  }
+  const item = page.getByTestId(testId).first()
+  await expect(item).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  await item.click()
+}
+
+/** Open the sync provider picker: the login gate's Add button, or "Add a
+ * sync provider" in Manage once a vault is open. */
+export async function beginAddSyncProvider(page: Page): Promise<void> {
+  const picker = page.getByTestId('provider-picker-list')
+  if (await picker.isVisible()) return
+  const add = page.getByTestId('add-provider-btn').first()
+  if (await add.isVisible()) {
+    await add.click()
+  } else {
+    await openManageItem(page, 'identity-menu-sync')
+  }
+  await expect(picker).toBeVisible({ timeout: UI_TIMEOUT_MS })
+}
+
+/** Open the add-device flow from Manage on the current identity's card. */
+export async function openAddDevice(page: Page): Promise<void> {
+  await openManageItem(page, 'identity-menu-add-device')
+  await expect(page.getByTestId('add-device-page')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+}
+
+/** Switch to another vault from its row on the identities page: its panel
+ * unlocks it with the identity's key, then opens it. */
+export async function switchToVaultFromIdentities(
+  page: Page,
+  storeId: string,
+): Promise<void> {
+  const row = page.locator(
+    `[data-testid="identity-vault-row"][data-store-id="${storeId}"]`,
+  )
+  await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  if ((await row.getAttribute('aria-expanded')) !== 'true') await row.click()
+  const vaultPanel = page.getByTestId('vault-panel')
+  const unlock = page.getByTestId('vault-panel-unlock')
+  const open = page.getByTestId('vault-panel-open')
+  await expect
+    .poll(
+      async () => {
+        if (await vaultPanel.isVisible()) return 'open'
+        if ((await unlock.isVisible()) && (await unlock.isEnabled())) {
+          await unlock.click()
+        } else if ((await open.isVisible()) && (await open.isEnabled())) {
+          await open.click()
+        }
+        return 'waiting'
+      },
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
+    .toBe('open')
 }

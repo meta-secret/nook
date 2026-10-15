@@ -1,5 +1,6 @@
 import { test, expect, type BrowserContext, type Page } from './fixtures'
 import {
+  beginAddSyncProvider,
   openOnboardDevicePanel,
   addSecret,
   addVaultPassword,
@@ -253,7 +254,7 @@ test.describe('vault password envelope with sync provider', () => {
 
     await openStorageSettings(deviceA)
     await expandSettingsSection(deviceA, 'storage')
-    await deviceA.getByTestId('add-provider-btn').first().click()
+    await beginAddSyncProvider(deviceA)
     await deviceA.getByTestId('provider-option-github').click()
     await deviceA.getByTestId('github-repo-input').fill('e2e-rejected-repo')
     await deviceA.getByTestId('github-pat-input').fill(fixtureToken)

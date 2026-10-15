@@ -347,6 +347,16 @@ impl NookVaultManager {
         &mut self,
         handle_id: &str,
     ) -> Result<VaultDiscovery, NookError> {
+        let discovery = self.discover_folder_vaults(handle_id).await?;
+        self.require_chosen_vault("Backup folder", discovery)
+    }
+
+    /// The vaults a local folder holds; one is chosen on its own, several
+    /// are left for the user to choose.
+    pub(in crate::manager) async fn discover_folder_vaults(
+        &mut self,
+        handle_id: &str,
+    ) -> Result<VaultDiscovery, NookError> {
         let store_ids = LocalFolderHandles::current()
             .open_folder(handle_id)
             .await?
@@ -355,8 +365,7 @@ impl NookVaultManager {
             .iter()
             .filter_map(|id| StoreId::parse(id).ok())
             .collect::<Vec<_>>();
-        let discovery = self.choose_discovered_vault(&store_ids).await?;
-        self.require_chosen_vault("Backup folder", discovery)
+        self.choose_discovered_vault(&store_ids).await
     }
 
     /// The vault the user chose wins when the target holds it; one vault is

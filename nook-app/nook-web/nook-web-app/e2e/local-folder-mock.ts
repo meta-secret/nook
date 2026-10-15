@@ -6,7 +6,9 @@ export function eventLogRecords(
   records: LocalFolderRecord[],
 ): LocalFolderRecord[] {
   return records.filter((record) =>
-    /^nook-log\/v1\/events\/[A-Za-z0-9_-]{43}\.yaml$/.test(record.path),
+    /^nook-log\/v1\/vaults\/[^/]+\/events\/[A-Za-z0-9_-]{43}\.yaml$/.test(
+      record.path,
+    ),
   )
 }
 
@@ -108,12 +110,6 @@ export async function installLocalFolderPickerMock(page: Page) {
         child.seed(tail.join('/'), content)
       }
 
-      replace(records: Array<{ path: string; content: string }>) {
-        this.directories.clear()
-        this.files.clear()
-        for (const record of records) this.seed(record.path, record.content)
-      }
-
       async queryPermission() {
         return 'granted'
       }
@@ -181,12 +177,6 @@ export async function installLocalFolderPickerMock(page: Page) {
       },
       __nookE2eLocalFolderPickerInvocationCount: () => pickerInvocationCount,
       __nookE2eLocalFolderSnapshot: () => root.snapshot(),
-      __nookE2eSetLocalFolderSnapshot: (
-        records: Array<{ path: string; content: string }>,
-      ) => {
-        root.replace(records)
-        writeSnapshot(root.snapshot())
-      },
     })
   })
 }
@@ -217,17 +207,4 @@ export async function localFolderSnapshot(
       ).__nookE2eLocalFolderSnapshot?.(),
     ),
   )
-}
-
-export async function setLocalFolderSnapshot(
-  page: Page,
-  records: LocalFolderRecord[],
-) {
-  await page.evaluate((nextRecords) => {
-    ;(
-      window as Window & {
-        __nookE2eSetLocalFolderSnapshot?: (records: LocalFolderRecord[]) => void
-      }
-    ).__nookE2eSetLocalFolderSnapshot?.(nextRecords)
-  }, records)
 }

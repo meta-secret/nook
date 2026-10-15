@@ -77,13 +77,13 @@ test('shows backup-password unlock after locked local-vault startup', async ({
   expect(retryPreparation).toBe(LocalLoginPreparationState.Ready)
   await expect(vaultError).not.toBeVisible()
 
-  await page.getByTestId('identity-vault-passphrase').first().click()
+  await page.getByTestId('identity-vault-row').first().click()
   await expect(page.getByTestId('card-password-input')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
   await expect(page.getByTestId('passkey-auth-overlay')).toBeHidden()
   await expect(vaultError).not.toBeVisible()
-  // The passphrase opens beside the locked card, from its vault's row.
-  await expect(page.getByTestId('identity-card-password')).toBeVisible()
+  // The passphrase opens in the vault's panel beside the locked card.
+  await expect(page.getByTestId('vault-panel-passphrase')).toBeVisible()
   await page.waitForTimeout(DEMO_BEAT_MS)
 })

@@ -199,9 +199,11 @@ impl FolderObject<'_> {
 }
 
 impl FolderObject<'_> {
-    async fn event_entries(&self) -> Result<Vec<(String, Object)>, NookError> {
+    /// Every child of this directory with its name: `entries()` where the
+    /// handle offers it, else `values()` with each handle's own name.
+    async fn named_children(&self) -> Result<Vec<(String, Object)>, NookError> {
         let dir = self.object;
-        let mut entries = Vec::new();
+        let mut children = Vec::new();
         if matches!(
             FolderObject::new(dir).method("entries")?,
             FolderMethod::Callable(_)
@@ -209,32 +211,32 @@ impl FolderObject<'_> {
             for value in FolderObject::new(dir).iterator_values("entries").await? {
                 let array = Array::from(&value);
                 let name = array.get(0).as_string().unwrap_or_default();
-                let handle: Object = array.get(1).unchecked_into();
-                if FolderObject::new(&handle)
-                    .property("kind")?
-                    .as_string()
-                    .as_deref()
-                    == Some("file")
-                    && matches!(
-                        LocalFolderEventName::new(&name).event_id(),
-                        FolderEventName::Event(_)
-                    )
-                {
-                    entries.push((name, handle));
-                }
+                children.push((name, array.get(1).unchecked_into()));
             }
-            return Ok(entries);
+            return Ok(children);
         }
         for handle in FolderObject::new(dir).iterator_values("values").await? {
             let name = FolderObject::new(&handle)
                 .property("name")?
                 .as_string()
                 .unwrap_or_default();
-            if FolderObject::new(&handle)
-                .property("kind")?
-                .as_string()
-                .as_deref()
-                == Some("file")
+            children.push((name, handle));
+        }
+        Ok(children)
+    }
+
+    fn is_kind(handle: &Object, kind: &str) -> Result<bool, NookError> {
+        Ok(FolderObject::new(handle)
+            .property("kind")?
+            .as_string()
+            .as_deref()
+            == Some(kind))
+    }
+
+    async fn event_entries(&self) -> Result<Vec<(String, Object)>, NookError> {
+        let mut entries = Vec::new();
+        for (name, handle) in self.named_children().await? {
+            if Self::is_kind(&handle, "file")?
                 && matches!(
                     LocalFolderEventName::new(&name).event_id(),
                     FolderEventName::Event(_)
@@ -245,21 +247,12 @@ impl FolderObject<'_> {
         }
         Ok(entries)
     }
-}
 
-impl FolderObject<'_> {
     /// Names of the subdirectories directly inside this directory.
     async fn directory_names(&self) -> Result<Vec<String>, NookError> {
-        let dir = self.object;
         let mut names = Vec::new();
-        for handle in FolderObject::new(dir).iterator_values("values").await? {
-            if FolderObject::new(&handle)
-                .property("kind")?
-                .as_string()
-                .as_deref()
-                == Some("directory")
-                && let Some(name) = FolderObject::new(&handle).property("name")?.as_string()
-            {
+        for (name, handle) in self.named_children().await? {
+            if Self::is_kind(&handle, "directory")? && !name.is_empty() {
                 names.push(name);
             }
         }
@@ -634,6 +627,62 @@ mod tests {
             assert_eq!(records[1].path, fixture_location()?.event_path(&second));
             assert!(records.iter().all(|record| record.content.is_empty()));
         }
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    async fn directory_names_list_only_named_subdirectories() -> anyhow::Result<()> {
+        let items = Array::new();
+        for (name, kind) in [
+            ("store_b", "directory"),
+            ("notes.txt", "file"),
+            ("store_a", "directory"),
+            ("", "directory"),
+        ] {
+            let handle = Object::new();
+            Reflect::set(&handle, &JsString::from("kind"), &JsString::from(kind)).map_err(
+                |error| FolderFailure::new(&error.unchecked_into()).into_error("fixture handle"),
+            )?;
+            items.push(&Array::of2(&JsString::from(name), &handle));
+        }
+        let index = Cell::new(0);
+        let next = Closure::<dyn FnMut() -> Promise>::new(move || {
+            let value = Object::new();
+            let done = index.get() >= items.length();
+            if let Err(error) = Reflect::set(&value, &JsString::from("done"), &Boolean::from(done))
+            {
+                return Promise::reject(&error);
+            }
+            if !done {
+                if let Err(error) =
+                    Reflect::set(&value, &JsString::from("value"), &items.get(index.get()))
+                {
+                    return Promise::reject(&error);
+                }
+                index.set(index.get() + 1);
+            }
+            Promise::resolve(&value).unchecked_into::<Promise>()
+        });
+        let iterator = Object::new();
+        Reflect::set(&iterator, &JsString::from("next"), next.as_ref()).map_err(|error| {
+            FolderFailure::new(&error.unchecked_into()).into_error("fixture iterator")
+        })?;
+        let enumerate = Closure::<dyn FnMut() -> Object>::new(move || iterator.clone());
+        let directory = Object::new();
+        Reflect::set(&directory, &JsString::from("entries"), enumerate.as_ref()).map_err(
+            |error| FolderFailure::new(&error.unchecked_into()).into_error("fixture entries"),
+        )?;
+        assert_eq!(
+            FolderObject::new(&directory).directory_names().await?,
+            ["store_b", "store_a"]
+        );
         Ok(())
     }
 }

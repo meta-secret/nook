@@ -157,12 +157,16 @@ function storedProvider(
   return common
 }
 
-export async function appendAuthProviders(
+/** Put a plaintext GitHub token into one stored provider row, in place of
+ * its sealed credential, to observe that loading rejects it. */
+export async function storePlaintextGithubPat(
   page: Page,
-  providers: SeededAuthProvider[],
+  providerId: string,
+  pat: string,
 ): Promise<void> {
+  const stateKey = await activeAuthProviderStateKey(page)
   await page.evaluate(
-    ({ providers: additions }) =>
+    ({ stateKey: key, providerId: id, pat: token }) =>
       new Promise<void>((resolve, reject) => {
         const request = indexedDB.open('nook_auth', 1)
         request.onerror = () =>
@@ -171,44 +175,28 @@ export async function appendAuthProviders(
           const db = request.result
           const tx = db.transaction('auth', 'readwrite')
           const store = tx.objectStore('auth')
-          const getRequest = store.get('providers')
-          getRequest.onerror = () =>
-            reject(
-              ((v) => (v ? v : new Error('idb read failed')))(getRequest.error),
-            )
+          const getRequest = store.get(key)
           getRequest.onsuccess = () => {
-            const rawSnapshot: unknown = getRequest.result
-            const snapshot: { providers: unknown[] } = { providers: [] }
-            if (
-              typeof rawSnapshot === 'object' &&
-              Object(rawSnapshot) === rawSnapshot
-            ) {
-              const storedProviders: unknown = Object.getOwnPropertyDescriptor(
-                rawSnapshot,
-                'providers',
-              )?.value
-              if (Array.isArray(storedProviders)) {
-                for (const storedProvider of storedProviders) {
-                  const provider: unknown = storedProvider
-                  snapshot.providers.push(provider)
-                }
-              }
+            const snapshot: unknown = getRequest.result
+            const providers: unknown =
+              typeof snapshot === 'object' && Object(snapshot) === snapshot
+                ? Object.getOwnPropertyDescriptor(snapshot, 'providers')?.value
+                : []
+            const row: unknown = Array.isArray(providers)
+              ? providers.find(
+                  (candidate: unknown) =>
+                    typeof candidate === 'object' &&
+                    Object(candidate) === candidate &&
+                    Object.getOwnPropertyDescriptor(candidate, 'id')?.value ===
+                      id,
+                )
+              : {}
+            if (!(row instanceof Object)) {
+              reject(new Error(`provider ${id} is not stored`))
+              return
             }
-            snapshot.providers.push(
-              ...additions.map((provider) => {
-                return {
-                  ...provider,
-                  createdAt: new Date().toISOString(),
-                }
-              }),
-            )
-            const putRequest = store.put(snapshot, 'providers')
-            putRequest.onerror = () =>
-              reject(
-                ((v) => (v ? v : new Error('idb write failed')))(
-                  putRequest.error,
-                ),
-              )
+            Object.assign(row, { githubPat: { state: 'token', value: token } })
+            store.put(snapshot, key)
           }
           tx.oncomplete = () => {
             db.close()
@@ -218,7 +206,7 @@ export async function appendAuthProviders(
             reject(((v) => (v ? v : new Error('idb tx failed')))(tx.error))
         }
       }),
-    { providers },
+    { stateKey, providerId, pat },
   )
 }
 
@@ -695,25 +683,7 @@ export async function readRawAuthProvidersFromIdb(
             resolveSnapshot(rawSnapshot)
             return
           }
-          if (scopedStateKey === 'providers') {
-            resolveEmptySnapshot()
-            return
-          }
-          const legacyReq = store.get('providers')
-          legacyReq.onerror = () =>
-            reject(
-              ((v) => (v ? v : new Error('legacy idb read failed')))(
-                legacyReq.error,
-              ),
-            )
-          legacyReq.onsuccess = () => {
-            if (legacyReq.result) {
-              const rawSnapshot: unknown = legacyReq.result
-              resolveSnapshot(rawSnapshot)
-              return
-            }
-            resolveEmptySnapshot()
-          }
+          resolveEmptySnapshot()
         }
         tx.oncomplete = () => db.close()
         tx.onerror = () =>

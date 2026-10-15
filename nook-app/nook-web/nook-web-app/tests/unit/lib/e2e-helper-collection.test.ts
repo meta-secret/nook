@@ -143,6 +143,7 @@ describe('Playwright collection imports', () => {
       unlockReady: false,
       pickerVisible: false,
       errorVisible: false,
+      openReady: false,
     })
 
     expect(gate.state()).toBe(DeviceProtectionAuthorizationGateState.Waiting)
@@ -158,6 +159,7 @@ describe('Playwright collection imports', () => {
       unlockReady: false,
       pickerVisible: false,
       errorVisible: true,
+      openReady: false,
     })
 
     expect(gate.state()).toBe(DeviceProtectionAuthorizationGateState.Error)
@@ -174,6 +176,7 @@ describe('Playwright collection imports', () => {
         unlockReady: false,
         pickerVisible: false,
         errorVisible: false,
+        openReady: false,
       }).state(),
     ).toBe(DeviceProtectionAuthorizationGateState.Unlocked)
     expect(
@@ -186,6 +189,7 @@ describe('Playwright collection imports', () => {
         unlockReady: false,
         pickerVisible: false,
         errorVisible: false,
+        openReady: false,
       }).state(),
     ).toBe(DeviceProtectionAuthorizationGateState.Authorize)
     expect(
@@ -198,6 +202,7 @@ describe('Playwright collection imports', () => {
         unlockReady: true,
         pickerVisible: false,
         errorVisible: false,
+        openReady: false,
       }).state(),
     ).toBe(DeviceProtectionAuthorizationGateState.Waiting)
     expect(
@@ -210,6 +215,7 @@ describe('Playwright collection imports', () => {
         unlockReady: false,
         pickerVisible: true,
         errorVisible: false,
+        openReady: false,
       }).state(),
     ).toBe(DeviceProtectionAuthorizationGateState.Waiting)
     expect(
@@ -222,6 +228,7 @@ describe('Playwright collection imports', () => {
         unlockReady: true,
         pickerVisible: false,
         errorVisible: true,
+        openReady: false,
       }).state(),
     ).toBe(DeviceProtectionAuthorizationGateState.Error)
     expect(
@@ -234,8 +241,24 @@ describe('Playwright collection imports', () => {
         unlockReady: false,
         pickerVisible: false,
         errorVisible: false,
+        openReady: false,
       }).state(),
     ).toBe(DeviceProtectionAuthorizationGateState.Waiting)
+  })
+
+  test('opens a vault unlocked beside its card before treating it as done', () => {
+    const gate = new DeviceProtectionPostUnlockGate({
+      loginGateVisible: true,
+      authenticatedShellVisible: false,
+      vaultAuthenticated: true,
+      overlayVisible: false,
+      authorizeReady: false,
+      unlockReady: false,
+      pickerVisible: false,
+      errorVisible: false,
+      openReady: true,
+    })
+    expect(gate.state()).toBe(DeviceProtectionAuthorizationGateState.Open)
   })
 
   test('recognizes the current authenticated session despite a visible load error', () => {
@@ -248,6 +271,7 @@ describe('Playwright collection imports', () => {
       unlockReady: false,
       pickerVisible: false,
       errorVisible: true,
+      openReady: false,
     })
 
     expect(gate.state()).toBe(DeviceProtectionAuthorizationGateState.Unlocked)
@@ -263,6 +287,7 @@ describe('Playwright collection imports', () => {
       unlockReady: false,
       pickerVisible: false,
       errorVisible: false,
+      openReady: false,
     })
 
     expect(gate.state()).toBe(DeviceProtectionAuthorizationGateState.Unlocked)
@@ -278,6 +303,7 @@ describe('Playwright collection imports', () => {
       unlockReady: false,
       pickerVisible: false,
       errorVisible: false,
+      openReady: false,
     })
 
     expect(gate.state()).toBe(DeviceProtectionAuthorizationGateState.Authorize)

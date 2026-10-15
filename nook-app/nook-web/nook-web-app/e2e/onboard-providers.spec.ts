@@ -9,6 +9,7 @@ import {
   seedOauthFileSyncProvidersWhileUnlocked,
   installOauthFileRemoteForLocalE2e,
   UI_TIMEOUT_MS,
+  unlockVaultOnLogin,
   waitForLoadedSyncProviders,
   readLocalVaultYamlFromIdb,
 } from './helpers'
@@ -93,7 +94,7 @@ test.describe('identity onboarding provider picker', () => {
     await expect(page.getByTestId('identity-vault-row').first()).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await page.getByTestId('identity-vault-row').first().click()
+    await unlockVaultOnLogin(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })

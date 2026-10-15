@@ -4,6 +4,9 @@
  * identity (keys, vaults, devices, sync providers, backup passwords, browser
  * settings) or the open vault (imports).
  */
+
+import { UnlockReturn } from "$lib/app/unlock-return";
+
 export enum WorkspaceSection {
   Vault = "vault",
   Identities = "identities",
@@ -88,6 +91,8 @@ export class VaultUiState {
   /** The vault opened beside its identity card. It stays open while the
    * vault unlocks, so unlocking does not go into the vault by itself. */
   vaultPanelStoreId = $state("");
+  /** The deep link a panel unlock interrupted, for Open vault to return to. */
+  readonly unlockReturn = new UnlockReturn();
   /** Importing a vault from a sync provider ("Import from sync provider"
    * under New vault). The unlocked workspace sets it before locking, so
    * the locked identities page continues the import on the card. */

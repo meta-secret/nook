@@ -6,6 +6,8 @@ passwords, settings) adds its rail. Every page is one framed sheet: a page
 band, the scrolling page and the status line.
 -->
 <script lang="ts">
+  import { WorkspaceLocation, WorkspaceRoute } from '$lib/app/workspace-route'
+  import { VaultWorkspaceActions } from '$lib/vault/ui'
   type SecretAddModeChange = {
     readonly open: boolean
     readonly selection: SecretTypeSelection
@@ -326,12 +328,28 @@ band, the scrolling page and the status line.
   }
 
   async function openVaultFromCard(storeId: string): Promise<void> {
+    // A deep link the lock interrupted resumes once its vault opens.
+    const route = vault.unlockReturn.routeFrom(WorkspaceRoute.Identities)
     if (storeId === activeStoreId) {
-      openSection(WorkspaceSection.Vault)
+      if (route === WorkspaceRoute.Vault) openSection(WorkspaceSection.Vault)
+      else openRoute(route)
       return
     }
     vault.openSection(WorkspaceSection.Vault)
     await vault.switchToVault(storeId)
+  }
+
+  function openRoute(route: WorkspaceRoute): void {
+    leaveSecretsEditor()
+    const navigation = new WorkspaceLocation(route).navigate()
+    if (navigation.isErr()) {
+      vault.errorMsg = vault.t(navigation.error.translationKey)
+      return
+    }
+    const routeRequest: Parameters<
+      VaultWorkspaceActions['applyWorkspaceRoute']
+    >[0] = { route }
+    new VaultWorkspaceActions(vault).applyWorkspaceRoute(routeRequest)
   }
 
   /** "Use identity" on another identity's card: this browser switches to
