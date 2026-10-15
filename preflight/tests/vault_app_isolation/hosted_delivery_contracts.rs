@@ -461,7 +461,8 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
         );
     }
     assert_eq!(
-        main.matches("image: ${{ needs.web.outputs.e2e_image }}").count(),
+        main.matches("image: ${{ needs.web.outputs.e2e_image }}")
+            .count(),
         3,
         "every Main browser consumer pulls the e2e image its web attempt built"
     );
