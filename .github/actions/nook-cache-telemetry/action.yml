@@ -31,7 +31,7 @@ runs:
         output="$RUNNER_TEMP/nook-cache-telemetry/$GITHUB_JOB$suffix.json"
         mkdir -p "$(dirname "$output")"
         if [ ! -f "$baseline" ]; then
-          if timeout 15s "$node_bin" "${{ github.action_path }}/../../workflows/lib/cache-telemetry.mjs" start --output "$baseline"; then
+          if timeout 15s "$node_bin" "$GITHUB_ACTION_PATH/../../workflows/lib/cache-telemetry.mjs" start --output "$baseline"; then
             :
           else
             status=$?
@@ -40,13 +40,13 @@ runs:
               warning="baseline_collection_timeout:15s"
             fi
             echo "Cache telemetry baseline unavailable ($warning); preserving an incomplete record."
-            "$node_bin" "${{ github.action_path }}/../../workflows/lib/cache-telemetry.mjs" unavailable \
+            "$node_bin" "$GITHUB_ACTION_PATH/../../workflows/lib/cache-telemetry.mjs" unavailable \
               --warning "$warning" \
               --output "$output"
             exit 0
           fi
         fi
-        if timeout 30s "$node_bin" "${{ github.action_path }}/../../workflows/lib/cache-telemetry.mjs" collect \
+        if timeout 30s "$node_bin" "$GITHUB_ACTION_PATH/../../workflows/lib/cache-telemetry.mjs" collect \
           --baseline "$baseline" \
           --output "$output"; then
           :
@@ -57,7 +57,7 @@ runs:
             warning="collection_timeout:30s"
           fi
           echo "Cache telemetry collection unavailable ($warning); preserving an incomplete record."
-          "$node_bin" "${{ github.action_path }}/../../workflows/lib/cache-telemetry.mjs" unavailable \
+          "$node_bin" "$GITHUB_ACTION_PATH/../../workflows/lib/cache-telemetry.mjs" unavailable \
             --warning "$warning" \
             --output "$output"
         fi
