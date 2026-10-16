@@ -61,6 +61,12 @@
     configured_vault_application_supports_extension,
   } from '$app-wasm'
   import * as deviceProtectionActions from '$lib/vault/device-protection.svelte'
+  import {
+    DeviceKeyUnlockPresentation,
+    deviceKeySheetShown,
+    type DeviceKeySheetRequest,
+    type VaultUnlockRequest,
+  } from '$lib/vault/device-key-unlock'
   import * as sentinelGenesisActions from '$lib/vault/sentinel-genesis'
   import { ExistingVaultImportLifecycle } from '$lib/vault/existing-vault-import.svelte'
   import {
@@ -235,7 +241,28 @@
     }
     vaultBrowserLifecycle.updateApplicationDocument(applicationDocumentUpdate)
   })
-  async function handleUnlock(skipExtensionDiscovery = false) {
+  async function handleUnlock(skipExtensionDiscovery = false): Promise<void> {
+    const request: VaultUnlockRequest = {
+      skipExtensionDiscovery,
+      presentation: DeviceKeyUnlockPresentation.Sheet,
+    }
+    await unlockVault(request)
+  }
+
+  /** A vault unlocked from its identity card: the same companion and
+   * extension paths, but this browser's key is unlocked on the card. */
+  async function handleCardUnlock(): Promise<void> {
+    const request: VaultUnlockRequest = {
+      skipExtensionDiscovery: false,
+      presentation: DeviceKeyUnlockPresentation.Card,
+    }
+    await unlockVault(request)
+  }
+
+  async function unlockVault({
+    skipExtensionDiscovery,
+    presentation,
+  }: VaultUnlockRequest): Promise<void> {
     const existingVaultImport =
       vault.loginRequiresExistingVault &&
       vault.loginSetup.kind === LoginSetupKind.Active
@@ -398,7 +425,14 @@
           return
         }
       }
+      // A card shows its key unlock, a failure, and recovery itself: no
+      // sheet. The sheet stays for setting up a key this browser lacks.
+      const sheetRequest: DeviceKeySheetRequest = {
+        presentation,
+        status: vault.deviceProtectionStatus,
+      }
       pendingExistingVaultUnlock = true
+      existingVaultUnlockSheet = deviceKeySheetShown(sheetRequest)
       if (vault.deviceProtectionStatus === DeviceProtectionStatus.Passkey) {
         const deviceProtectionUnlockRequest: Parameters<
           deviceProtectionActions.DeviceProtectionActions['unlockDeviceProtection']
@@ -407,6 +441,10 @@
           vault,
         ).unlockDeviceProtection(deviceProtectionUnlockRequest)
       }
+      // A card unlock that did not finish leaves nothing waiting: the card
+      // shows why, and its Unlock tries again.
+      if (!existingVaultUnlockSheet && !vault.deviceProtectionReady)
+        pendingExistingVaultUnlock = false
       return
     }
     if (existingVaultImport) {
@@ -468,6 +506,9 @@
     !requiresPasskeyFirst && vault.providersLoaded,
   )
   let pendingExistingVaultUnlock = $state(false)
+  /** The pending existing-vault unlock asks in the page-level sheet; a card
+   * unlock asks on the card and only waits here to open the vault. */
+  let existingVaultUnlockSheet = $state(false)
   let pendingEnrollmentDeviceUnlock = $state(false)
   let pendingEnrollmentSubmitState = $state<EnrollmentSubmitQueue>({
     kind: EnrollmentSubmitQueueKind.Idle,
@@ -477,7 +518,9 @@
       VaultCreationQueueKind.WaitingForDevice && !vault.deviceProtectionReady,
   )
   const showExistingVaultPasskeyOverlay = $derived(
-    pendingExistingVaultUnlock && existingVaultNeedsDeviceUnlock,
+    pendingExistingVaultUnlock &&
+      existingVaultUnlockSheet &&
+      existingVaultNeedsDeviceUnlock,
   )
   const showEnrollmentPasskeyOverlay = $derived(
     pendingEnrollmentDeviceUnlock &&
@@ -945,6 +988,7 @@
     sentinelOnboardingPackage: routeCoordinator.sentinelOnboardingPackage,
     extensionConnectPairingStatusEntries,
     onUnlock: handleUnlock,
+    onUnlockOnCard: handleCardUnlock,
     onUseEnrollmentCode: handleUseEnrollmentCode,
     onAcceptSentinelOnboardingPackage: handleAcceptSentinelOnboarding,
     onUnlockWithPassword: unlockExistingVaultWithPassword,

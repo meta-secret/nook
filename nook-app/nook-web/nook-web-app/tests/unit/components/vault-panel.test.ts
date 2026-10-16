@@ -1,7 +1,11 @@
 import { fireEvent, render } from '@testing-library/svelte'
 import { flushSync, type ComponentProps } from 'svelte'
 import { describe, expect, test, vi } from 'vitest'
-import type { NookPasswordEntrySummary } from '$app-wasm'
+import {
+  DeviceProtectionStatus,
+  type NookPasswordEntrySummary,
+} from '$app-wasm'
+import { DeviceRecoveryKind } from '$lib/components/device-recovery'
 import type { VaultState } from '$lib/vault.svelte'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import VaultPanel from '../../../../nook-web-shared/src/vault-app/lib/components/identities/VaultPanel.svelte'
@@ -151,6 +155,55 @@ describe('vault panel', () => {
     flushSync()
     expect(hint()).toBe('Paper copy, Office safe identity_overview.more:2')
     expect(count()).toBe('4')
+  })
+
+  test('shows a failed passkey unlock and its recovery beside the unlock button', () => {
+    const panelOptions: PanelOptions = {
+      state: IdentityVaultRowState.Available,
+    }
+    const { vault, view } = VaultPanelScenario.render(panelOptions)
+    vault.deviceProtectionStatus = DeviceProtectionStatus.Passkey
+    flushSync()
+
+    expect(view.queryAllByTestId('vault-panel-unlock-error')).toHaveLength(0)
+    expect(view.queryAllByTestId('device-recovery')).toHaveLength(0)
+
+    vault.errorMsg = 'Passkey cancelled'
+    flushSync()
+
+    expect(view.getByTestId('vault-panel-unlock-error').textContent).toContain(
+      'Passkey cancelled',
+    )
+    expect(view.getByTestId('device-recovery').dataset.kind).toBe(
+      DeviceRecoveryKind.Passkey,
+    )
+    expect(view.getByTestId('device-protection-recovery-btn')).toBeTruthy()
+  })
+
+  test('offers a reset at once when this browser cannot read its key', () => {
+    const panelOptions: PanelOptions = {
+      state: IdentityVaultRowState.Available,
+    }
+    const { vault, view } = VaultPanelScenario.render(panelOptions)
+    vault.deviceProtectionStatus = DeviceProtectionStatus.Error
+    flushSync()
+
+    expect(view.getByTestId('device-recovery').dataset.kind).toBe(
+      DeviceRecoveryKind.Unavailable,
+    )
+  })
+
+  test('offers no recovery for an open vault', () => {
+    const panelOptions: PanelOptions = {
+      state: IdentityVaultRowState.Open,
+    }
+    const { vault, view } = VaultPanelScenario.render(panelOptions)
+    vault.deviceProtectionStatus = DeviceProtectionStatus.Error
+    vault.errorMsg = 'Sync failed'
+    flushSync()
+
+    expect(view.queryAllByTestId('device-recovery')).toHaveLength(0)
+    expect(view.queryAllByTestId('vault-panel-unlock-error')).toHaveLength(0)
   })
 
   test('keeps a locked vault passphrases out of its manage list', () => {

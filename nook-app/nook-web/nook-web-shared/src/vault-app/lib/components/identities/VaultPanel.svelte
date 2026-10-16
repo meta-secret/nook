@@ -27,6 +27,12 @@ once it is open.
   import { StatusTag, StatusTone } from '$lib/components/ui/status-tag'
   import type { VaultState } from '$lib/vault.svelte'
   import { WorkspaceSection } from '$lib/vault/state/ui.svelte'
+  import DeviceRecoveryAction from '$lib/components/DeviceRecoveryAction.svelte'
+  import {
+    DeviceRecoveryKind,
+    DeviceRecoveryOffer,
+    type DeviceRecoveryRequest,
+  } from '$lib/components/device-recovery'
   import {
     IdentityVaultRowState,
     type IdentityVaultRow,
@@ -79,6 +85,21 @@ once it is open.
   const open = $derived(row.state === IdentityVaultRowState.Open)
   const dormant = $derived(row.state === IdentityVaultRowState.Dormant)
   const reachable = $derived(row.state !== IdentityVaultRowState.Unavailable)
+  /** Why the last unlock did not finish (a cancelled passkey, a wrong PIN),
+   * beside the button that retries it. */
+  const unlockError = $derived(
+    !open && reachable && !dormant ? vault.errorMsg : '',
+  )
+  /** When this browser's key cannot be unlocked, resetting it is offered
+   * here, where the unlock failed. */
+  const recovery = $derived.by(() => {
+    if (open || !reachable || dormant) return DeviceRecoveryKind.None
+    const request: DeviceRecoveryRequest = {
+      status: vault.deviceProtectionStatus,
+      unlockFailed: Boolean(unlockError),
+    }
+    return new DeviceRecoveryOffer(request).kind
+  })
 
   /** Deleting a vault this browser does not hold, confirmed by its name. */
   let confirmingDelete = $state(false)
@@ -326,6 +347,22 @@ once it is open.
           <Fingerprint class="size-4" />
           {unlockLabel}
         </Button>
+        {#if unlockError}
+          <p
+            class="text-sm text-pretty text-destructive"
+            role="alert"
+            data-testid="vault-panel-unlock-error"
+          >
+            {unlockError}
+          </p>
+        {/if}
+        {#if recovery !== DeviceRecoveryKind.None}
+          <DeviceRecoveryAction
+            {vault}
+            kind={recovery}
+            recoveryAppId={vault.deviceId}
+          />
+        {/if}
       {/if}
       {#if passphraseOffered}
         <div
