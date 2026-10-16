@@ -54,7 +54,6 @@ export type EnrollmentFlowHost = EnrollmentFlowViewHost & {
   readonly authenticatorSetupSnapshot: AuthenticationAuthenticatorSetupSnapshot
   step: HTMLParagraphElement
   continueButton: HTMLButtonElement
-  openVaultButton: HTMLButtonElement
   setBusy: (busy: boolean) => void
   isBusy: () => boolean
   sendDecodedRuntimeMessage: <Response>(

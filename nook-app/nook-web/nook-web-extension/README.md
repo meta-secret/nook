@@ -1,8 +1,9 @@
 # Nook Browser Extension
 
-`nook-web-extension` is Nook's browser-integration package. Before pairing, the
-toolbar action opens the extension-owned authentication component in a normal
-browser tab. A locked Pilot action opens or focuses the matching Pilot auth tab
+`nook-web-extension` is Nook's browser-integration package. The toolbar icon
+opens a compact panel beside itself: Open vault, the connected identities, PIN
+unlock and lock. Passkey unlock, setup and pairing open the extension-owned
+authentication component in a normal browser tab. A locked Pilot action opens or focuses the matching Pilot auth tab
 in the initiating normal window. If another auth intent is already open, it is
 left untouched and the requested intent opens in a separate tab in that window.
 The tab creates or unlocks the extension's separately revocable identity, then
@@ -46,8 +47,8 @@ The extension first-run model is specified in
 The extension becomes its own passkey-protected Nook device and pairs only
 through vault consent at the configured Simple Vault
 `/extension-connect` route; it does not borrow or scrape the Simple web app
-device key. There is no website-first enable screen, floating companion window,
-or toolbar default popup. The auth tab also displays localized return guidance
+device key. There is no website-first enable screen or floating companion
+window; the toolbar panel never runs a passkey ceremony. The auth tab also displays localized return guidance
 after a Pilot unlock; the page HUD waits for a fresh Continue click and rechecks
 the current origin/workflow before it acts.
 It intentionally has no miniature vault interface. Sentinel Vault

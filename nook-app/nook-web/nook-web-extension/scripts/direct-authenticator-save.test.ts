@@ -92,7 +92,6 @@ async function enrollmentHost(confirmKind: number) {
     description: document.createElement('p'),
     step: document.createElement('p'),
     continueButton: document.createElement('button'),
-    openVaultButton: document.createElement('button'),
     setBusy: mock(() => {}),
     isBusy: () => false,
     translatedMessage: (key: BrowserMessageKey) => key,

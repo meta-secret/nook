@@ -306,7 +306,6 @@ class FocusedInteractionFixture {
           title: document.createElement('h2'),
           description: document.createElement('p'),
           continueButton: document.createElement('button'),
-          openVaultButton: document.createElement('button'),
           collapseButton: document.createElement('button'),
           collapsedLaunch: document.createElement('button'),
         }

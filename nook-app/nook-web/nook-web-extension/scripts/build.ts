@@ -216,6 +216,7 @@ async function copyStaticFile(source: string, destination: string) {
 
 enum SveltePage {
   Popup = 'popup',
+  Action = 'action',
   LoginPicker = 'login-picker',
 }
 
@@ -266,6 +267,7 @@ await Promise.all([
 
 await Promise.all([
   buildSveltePage(SveltePage.Popup),
+  buildSveltePage(SveltePage.Action),
   buildSveltePage(SveltePage.LoginPicker),
   buildChromeLocales({ appCommonLocalesRoot, distDir }),
 ])

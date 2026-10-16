@@ -43,6 +43,7 @@ once it is open.
     row,
     identityName,
     unlockLabel,
+    identityOpen = false,
     busy = false,
     passphrase,
     passphraseOffered = false,
@@ -57,8 +58,11 @@ once it is open.
     vault: VaultState
     row: IdentityVaultRow
     identityName: string
-    /** "Unlock with passkey" or "Unlock with PIN", as this device signs in. */
+    /** "Unlock with passkey" or "Unlock with PIN", as this device signs in;
+     * "Open vault" once the identity is unlocked. */
     unlockLabel: string
+    /** The identity is unlocked: opening the vault asks for no key. */
+    identityOpen?: boolean
     busy?: boolean
     /** The vault's passphrase unlock, once its passphrases are read. */
     passphrase?: Snippet
@@ -344,7 +348,11 @@ once it is open.
           disabled={busy}
           onclick={onUnlock}
         >
-          <Fingerprint class="size-4" />
+          {#if identityOpen}
+            <FolderOpen class="size-4" />
+          {:else}
+            <Fingerprint class="size-4" />
+          {/if}
           {unlockLabel}
         </Button>
         {#if unlockError}

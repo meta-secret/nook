@@ -891,6 +891,7 @@
       {vault}
       request={extensionConnectRequest.request}
       {card}
+      selectedStoreId={selectedCardStoreId}
       busy={isVerifying || isInitializing}
       onConnect={unlockVault}
     />

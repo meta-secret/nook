@@ -48,14 +48,19 @@ application capability checks enforce the vault-type boundary.
 
 - **`simple.nokey.sh`**
   - **Responsibility:** Complete vault UI, unlock, consent, device management, recovery, and settings
-- **Extension toolbar action and Pilot lock entry**
+- **Extension toolbar panel**
+  - **Responsibility:** The compact panel beside the toolbar icon: Open vault
+    first, the connected identities, PIN unlock and lock. It hands passkey
+    unlock, setup and identity connection to the authentication tab, because a
+    passkey prompt closes a toolbar panel.
+- **Authentication tab and Pilot lock entry**
   - **Responsibility:** Open or focus the shared extension-owned authentication
     tab; create or unlock the extension device there and show localized return
     guidance for Pilot
 - **Extension background/WASM runtime**
   - **Responsibility:** Local device key, selected identity, encrypted state, sync, domain matching, and fill authorization
 - **In-page auth gate**
-  - **Responsibility:** Universal Continue with Nook gate plus optional open/unlock/select/fill/save actions
+  - **Responsibility:** Universal Sign in with Nook gate plus optional unlock/select/fill/save actions
 - **Content script**
   - **Responsibility:** DOM detection and the minimum selected fill payload; never vault search, crypto, or provider credentials
 
@@ -151,7 +156,12 @@ private identity.
 
 ## Toolbar Behavior
 
-- The toolbar action and Pilot lock entry use the same extension-owned
+- The toolbar icon opens a compact panel beside itself
+  (`action/index.html`). It leads with Open vault, lists the connected
+  identities and their vaults, unlocks a PIN-protected key in place, and locks.
+  Passkey unlock, first setup, connecting an identity and All connections open
+  the authentication tab, since a passkey prompt would close the panel.
+- The Pilot lock entry and the panel's hand-offs use the same extension-owned
   authentication component per initiating normal window. The service worker
   focuses an existing tab only when its intent matches the requested action; it
   leaves a different-intent auth tab untouched and opens the requested intent
@@ -671,13 +681,14 @@ The gate must:
 
 - be visibly Nook-owned and keyboard accessible;
 - be draggable so the user can move it away from site chrome;
-- support collapsing to a compact Nook mark and expanding again;
+- support collapsing to a compact chip (the Nook mark beside the step count,
+  nothing overlapping it) and expanding again;
 - preserve current/total progress in the compact state and accessible label;
 - support dismissal without blocking the host page;
 - show the requesting hostname, Rust-classified workflow, current step, and
   manual takeover without exposing a username, password, TOTP code, setup key,
   recovery code, or provider credential;
-- offer a primary Continue with Nook action that lists matching logins for the
+- offer one primary Sign in with Nook action that lists matching logins for the
   page origin. Reveal one credential after explicit choice and fill a detected
   form. Require explicit submission approval except for the
   [selected Google username advance](#google-two-step-login).
@@ -685,7 +696,8 @@ The gate must:
   page in status/Continue mode.
   After unlock, show localized return guidance and require a fresh Continue click
   with existing origin/workflow revalidation before any page interaction;
-- keep Open vault as an optional secondary action;
+- keep the panel to that one action: Open vault lives in the toolbar panel,
+  and the close button is how the person takes over the page;
 - never request a vault password, recovery secret, or provider credential;
 - never silently fill or submit;
 - when more than one login matches the page origin, open an extension-owned

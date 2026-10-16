@@ -76,8 +76,8 @@ test('detect and fill the Airbnb homepage login modal', async ({ page }) => {
   await expect(page.locator('[role="dialog"]')).toBeVisible()
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
 
-  await widget.getByRole('button', { name: 'Continue with Nook' }).click()
-  await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+  await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
+  await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
 
   await expect(identity).toHaveValue('pilot@example.test')
   await expect(page.getByRole('status')).toHaveText(

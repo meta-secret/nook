@@ -1,0 +1,320 @@
+/* The toolbar panel: a fixed-width card anchored under the Nook icon, in
+ * the same language as the Nook tab and Pilot (keytag cut, monospace
+ * labels, square icon boxes). Tokens come from popup.css. */
+html:has(.action-body),
+.action-body,
+.action-body #app {
+  width: 340px;
+  min-height: 0;
+}
+
+.action-body {
+  overflow: hidden;
+}
+
+.action-body #app {
+  display: block;
+  padding: 0;
+}
+
+.action-panel {
+  --cut: 16px;
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  background: var(--card);
+}
+
+.action-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.action-logo {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+.action-title {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.action-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 2px;
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.action-state > span {
+  width: 6px;
+  height: 6px;
+  background: var(--muted-foreground);
+}
+
+.action-state[data-state='unlocked'] {
+  color: var(--success);
+}
+
+.action-state[data-state='unlocked'] > span {
+  background: var(--success);
+}
+
+.action-icon-button {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-left: auto;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+
+.action-icon-button:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+/* Open vault: the one large action, a keytag-cut light card. */
+.action-primary {
+  appearance: none;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 11px 12px;
+  border: 0;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  clip-path: polygon(
+    0 0,
+    calc(100% - var(--cut)) 0,
+    100% var(--cut),
+    100% 100%,
+    0 100%
+  );
+}
+
+.action-primary:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--primary) 90%, black);
+}
+
+.action-primary-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid
+    color-mix(in oklab, var(--primary-foreground) 22%, transparent);
+}
+
+.action-primary-copy {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.action-primary-copy small {
+  color: color-mix(in oklab, var(--primary-foreground) 70%, transparent);
+  font-size: 12px;
+  font-weight: 450;
+}
+
+.action-section {
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.action-label {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.action-note {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.action-identities {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.action-identity {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  background: var(--background);
+}
+
+.action-identity-name {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.action-identity.is-other .action-identity-name,
+.action-identity.is-other .action-vault {
+  color: var(--muted-foreground);
+}
+
+.action-tag {
+  align-self: center;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+
+.action-vaults {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  gap: 4px 10px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.action-vault.is-default {
+  color: var(--foreground);
+}
+
+.action-vault.is-default::before {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin: 0 5px 1px 0;
+  background: var(--success);
+}
+
+.action-secondary {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.action-secondary:hover:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--input);
+}
+
+.action-pin-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+}
+
+.action-pin-row input {
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--input);
+  border-radius: var(--radius);
+  background: var(--background);
+  color: var(--foreground);
+  font: inherit;
+  font-size: 13px;
+}
+
+.action-error {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--destructive-border);
+  background: var(--destructive-bg);
+  color: var(--destructive-fg);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.action-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.action-link {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+
+.action-link:hover:not(:disabled) {
+  color: var(--foreground);
+}
+
+.action-panel button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.action-panel button:focus-visible,
+.action-panel input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}

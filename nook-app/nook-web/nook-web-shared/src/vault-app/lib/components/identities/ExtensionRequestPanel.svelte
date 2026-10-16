@@ -1,16 +1,18 @@
 <!--
 A browser extension asking to connect, shown beside the identity card while
 this browser is locked. It names the extension device and the access it
-asks for, and lists this identity's vaults here: choosing one unlocks it,
-then the approval step follows.
+asks for. The extension joins the identity, not one vault, so the one action
+unlocks the identity; its selected vault (or first one here) opens behind it
+for the approval step that follows.
 -->
 <script lang="ts">
-  import { ArrowRight, FolderKey, Puzzle } from '@lucide/svelte'
+  import { ArrowRight, Fingerprint, KeyRound, Puzzle } from '@lucide/svelte'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import type { ExtensionConnectRequest } from '$lib/extension/connect'
   import type { VaultState } from '$lib/vault.svelte'
   import { ExtensionConsentScopeTranslation } from '../extension-connect-consent-state'
   import {
+    IdentityKeyKind,
     IdentityVaultRowState,
     type IdentityCardView,
   } from './identity-card-model'
@@ -19,14 +21,17 @@ then the approval step follows.
     vault,
     request,
     card,
+    selectedStoreId,
     busy = false,
     onConnect,
   }: {
     vault: VaultState
     request: ExtensionConnectRequest
     card: IdentityCardView
+    /** The card's selected vault on this browser ("" when none). */
+    selectedStoreId: string
     busy?: boolean
-    /** Unlock this vault; the approval step follows. */
+    /** Unlock the identity and open this vault; the approval step follows. */
     onConnect: (storeId: string) => void
   } = $props()
 
@@ -38,7 +43,7 @@ then the approval step follows.
     return vault.t(titleRequest)
   })
 
-  /** Only vaults this browser holds can be unlocked here. */
+  /** Only vaults this browser holds can be opened here. */
   const vaults = $derived(
     card.vaults.filter(
       (row) =>
@@ -46,6 +51,17 @@ then the approval step follows.
         row.state === IdentityVaultRowState.Available,
     ),
   )
+  /** The vault the approval is made from: the selected one, else the first. */
+  const approvalVault = $derived(
+    vaults.find((row) => row.storeId === selectedStoreId) || vaults[0],
+  )
+  const unlockLabel = $derived.by(() => {
+    const labelRequest: Parameters<typeof vault.t>[0] = {
+      key: I18N_KEYS.ExtensionRequestUnlockIdentity,
+      replacements: { identity: card.label },
+    }
+    return vault.t(labelRequest)
+  })
 
   /** The device id in groups of four, as fingerprints read elsewhere. */
   const deviceGroups = $derived(
@@ -114,38 +130,35 @@ then the approval step follows.
     >
       {vault.t(I18N_KEYS.ExtensionRequestVaults)}
     </h3>
-    {#if vaults.length > 0}
-      <ul class="grid gap-2">
-        {#each vaults as row (row.storeId)}
-          <li>
-            <button
-              type="button"
-              class="nk-identity-menu-item group w-full border border-border disabled:cursor-default disabled:opacity-45"
-              data-testid="extension-request-vault"
-              data-store-id={row.storeId}
-              disabled={busy}
-              onclick={() => onConnect(row.storeId)}
-            >
-              <span class="nk-vault-icon" aria-hidden="true">
-                <FolderKey class="size-4" />
-              </span>
-              <span class="flex min-w-0 flex-1 flex-col">
-                <span class="truncate text-sm font-medium text-foreground"
-                  >{row.label ||
-                    vault.t(I18N_KEYS.WorkspaceVaultFallback)}</span
-                >
-                <span class="truncate text-xs text-muted-foreground"
-                  >{vault.t(I18N_KEYS.ExtensionRequestVaultAction)}</span
-                >
-              </span>
-              <ArrowRight
-                class="size-4 flex-none text-muted-foreground transition-transform group-hover:translate-x-0.5"
-                aria-hidden="true"
-              />
-            </button>
-          </li>
-        {/each}
-      </ul>
+    {#if approvalVault}
+      <button
+        type="button"
+        class="nk-identity-menu-item group w-full border border-border disabled:cursor-default disabled:opacity-45"
+        data-testid="extension-request-unlock"
+        data-store-id={approvalVault.storeId}
+        disabled={busy}
+        onclick={() => onConnect(approvalVault.storeId)}
+      >
+        <span class="nk-vault-icon" aria-hidden="true">
+          {#if card.keyKind === IdentityKeyKind.Pin}
+            <KeyRound class="size-4" />
+          {:else}
+            <Fingerprint class="size-4" />
+          {/if}
+        </span>
+        <span class="flex min-w-0 flex-1 flex-col">
+          <span class="truncate text-sm font-medium text-foreground"
+            >{unlockLabel}</span
+          >
+          <span class="truncate text-xs text-muted-foreground"
+            >{vault.t(I18N_KEYS.ExtensionRequestVaultAction)}</span
+          >
+        </span>
+        <ArrowRight
+          class="size-4 flex-none text-muted-foreground transition-transform group-hover:translate-x-0.5"
+          aria-hidden="true"
+        />
+      </button>
     {:else}
       <p class="text-sm text-muted-foreground">
         {vault.t(I18N_KEYS.ExtensionRequestNoVaults)}

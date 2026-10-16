@@ -268,11 +268,12 @@ test('sets up the extension device first and sends its public keys to Simple Vau
       'vault-not-connected',
     )
     await expect(
-      widget.getByRole('button', { name: 'Continue with Nook' }),
+      widget.getByRole('button', { name: 'Sign in with Nook' }),
     ).toBeVisible()
+    // One action on the page: the vault opens from the toolbar panel.
     await expect(
       widget.getByRole('button', { name: 'Open vault' }),
-    ).toBeVisible()
+    ).toHaveCount(0)
 
     const hiddenHeaderLoginPage = await context.newPage()
     await hiddenHeaderLoginPage.goto(
@@ -282,7 +283,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
       hiddenHeaderLoginPage.locator('#nook-auth-widget')
     await expect(hiddenHeaderWidget.getByText('Ready to sign in')).toBeVisible()
     await expect(
-      hiddenHeaderWidget.getByRole('button', { name: 'Continue with Nook' }),
+      hiddenHeaderWidget.getByRole('button', { name: 'Sign in with Nook' }),
     ).toBeVisible()
     await expect(hiddenHeaderWidget.getByText('Manual checkpoint')).toHaveCount(
       0,
@@ -297,7 +298,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
 
     await widget.getByRole('button', { name: 'Collapse Nook' }).click()
     await expect(
-      widget.getByRole('button', { name: 'Continue with Nook' }),
+      widget.getByRole('button', { name: 'Sign in with Nook' }),
     ).toBeHidden()
     await expect(
       widget
@@ -309,11 +310,15 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     ).toBeVisible()
     await widget.getByTestId('nook-auth-gate-expand').click()
     await expect(
-      widget.getByRole('button', { name: 'Continue with Nook' }),
+      widget.getByRole('button', { name: 'Sign in with Nook' }),
     ).toBeVisible()
 
+    const toolbarPanel = await context.newPage()
+    await toolbarPanel.goto(
+      `chrome-extension://${extensionId}/action/index.html`,
+    )
     const openedVault = context.waitForEvent('page')
-    await widget.getByRole('button', { name: 'Open vault' }).click()
+    await toolbarPanel.getByTestId('action-panel-open-vault').click()
     await expect(await openedVault).toHaveURL(
       simple_vault_url(simpleVaultBaseUrl, 'vault'),
     )
@@ -323,15 +328,16 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     const signupWidget = signupPage.locator('#nook-auth-widget')
     await expect(signupWidget.getByText('Nook Pilot · 2/5')).toBeVisible()
     await expect(signupWidget.getByText('Signup detected')).toBeVisible()
+    // The close button is how the person takes over; no second control.
     await expect(
       signupWidget.getByRole('button', { name: 'Take over' }),
-    ).toBeVisible()
+    ).toHaveCount(0)
     await signupWidget.evaluate((host) => {
       host.shadowRoot
-        ?.querySelector<HTMLButtonElement>('button.text-button')
+        ?.querySelector<HTMLButtonElement>('button.primary-button')
         ?.click()
     })
-    await expect(signupWidget).toBeVisible()
+    await expect(signupWidget.getByText('Signup detected')).toBeVisible()
 
     const otpPage = await context.newPage()
     await otpPage.goto(`${loginServer.origin}/otp`)
@@ -353,25 +359,25 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     const combinedWidget = combinedPage.locator('#nook-auth-widget')
     await expect(combinedWidget.getByText('Ready to sign in')).toBeVisible()
     await expect(
-      combinedWidget.getByRole('button', { name: 'Continue with Nook' }),
+      combinedWidget.getByRole('button', { name: 'Sign in with Nook' }),
     ).toBeVisible()
 
     const spaPage = await context.newPage()
     await spaPage.goto(`${loginServer.origin}/spa`)
     const spaWidget = spaPage.locator('#nook-auth-widget')
     await expect(
-      spaWidget.getByRole('button', { name: 'Continue with Nook' }),
+      spaWidget.getByRole('button', { name: 'Sign in with Nook' }),
     ).toBeVisible()
     await spaPage.getByRole('button', { name: 'Next' }).click()
     await expect(
-      spaWidget.getByRole('button', { name: 'Continue with Nook' }),
+      spaWidget.getByRole('button', { name: 'Sign in with Nook' }),
     ).toBeVisible()
 
     const microsoftPage = await context.newPage()
     await microsoftPage.goto(`${loginServer.origin}/microsoft`)
     const microsoftWidget = microsoftPage.locator('#nook-auth-widget')
     await expect(
-      microsoftWidget.getByRole('button', { name: 'Continue with Nook' }),
+      microsoftWidget.getByRole('button', { name: 'Sign in with Nook' }),
     ).toBeVisible()
     await expect(microsoftPage.locator('#usernameEntry')).toBeVisible()
 
@@ -379,7 +385,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await slackPage.goto(`${loginServer.origin}/slack`)
     const slackWidget = slackPage.locator('#nook-auth-widget')
     await expect(
-      slackWidget.getByRole('button', { name: 'Continue with Nook' }),
+      slackWidget.getByRole('button', { name: 'Sign in with Nook' }),
     ).toBeVisible()
     await expect(slackPage.locator('[data-qa="login_email"]')).toBeVisible()
 
@@ -401,7 +407,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
       await page.goto(`${loginServer.origin}${site.path}`)
       const widget = page.locator('#nook-auth-widget')
       await expect(
-        widget.getByRole('button', { name: 'Continue with Nook' }),
+        widget.getByRole('button', { name: 'Sign in with Nook' }),
       ).toBeVisible()
       await expect(page.locator(site.field)).toBeVisible()
       await page.close()

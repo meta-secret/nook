@@ -99,7 +99,7 @@ class MicrosoftLiveIdentifierProof {
     })
     const widget = page.locator('#nook-auth-widget')
     await expect(
-      widget.getByRole('button', { name: 'Continue with Nook' }),
+      widget.getByRole('button', { name: 'Sign in with Nook' }),
     ).toBeVisible({ timeout: 30_000 })
     await expect(widget.getByTestId('nook-auth-gate')).toBeInViewport()
     await expect(widget.getByTestId('nook-auth-gate')).toHaveCSS('opacity', '1')
@@ -127,7 +127,7 @@ class MicrosoftLiveIdentifierProof {
     expect(retainedFrames).toBe(60)
     await page.screenshot({ path: screenshotPath, caret: 'initial' })
     const popupPromise = this.context.waitForEvent('page')
-    await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+    await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
     const popup = await popupPromise
     await expect(popup).toHaveURL(
       /chrome-extension:\/\/[^/]+\/popup\/index.html/u,

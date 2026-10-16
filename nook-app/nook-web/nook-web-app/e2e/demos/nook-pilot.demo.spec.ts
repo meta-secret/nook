@@ -409,10 +409,10 @@ test('open trusted pairing from disconnected Nook Pilot', async ({ page }) => {
   await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(
     'Vault not connected',
   )
-  await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+  await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
   await expect(
     widget.getByText(
-      'Connect this browser to your vault, then click Continue with Nook again.',
+      'Connect this browser to your vault, then click Sign in with Nook again.',
     ),
   ).toBeVisible()
   await expect
@@ -521,7 +521,7 @@ test('guide a login through the Nook Pilot control plane', async ({ page }) => {
   await expect(vaultStatus).toHaveAttribute('data-state', 'vault-locked')
   await expect(vaultStatus).toHaveText('locked')
   await expect(widget.locator('p.description')).toHaveText(
-    'Unlock Nook in the Nook tab, return to the site, then select Continue with Nook again.',
+    'Unlock Nook in the Nook tab, return to the site, then select Sign in with Nook again.',
   )
   await expect
     .poll(() =>
@@ -551,9 +551,9 @@ test('guide a login through the Nook Pilot control plane', async ({ page }) => {
     .poll(() => page.evaluate(() => window.__nookSetupOverlap.pending))
     .toBe(true)
   try {
-    await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+    await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
     await expect(widget.locator('p.description')).toHaveText(
-      'Unlock Nook in the Nook tab, return to the site, then select Continue with Nook again.',
+      'Unlock Nook in the Nook tab, return to the site, then select Sign in with Nook again.',
     )
     expect(
       await page.evaluate(
@@ -568,7 +568,7 @@ test('guide a login through the Nook Pilot control plane', async ({ page }) => {
   }
   await demoBeat(page)
 
-  await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+  await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
   await expect(widget.getByTestId('nook-inline-login-picker')).toBeVisible()
   await expect(widget.locator('p.description')).toBeHidden()
   const pickerOpenedMessage = Schema.decodeUnknownSync(
@@ -850,18 +850,18 @@ test('revalidate contextual email-first facts through Nook Pilot', async ({
   await expect(widget.getByText('Nook Pilot · 1/3')).toBeVisible()
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
   await expect(
-    widget.getByRole('button', { name: 'Continue with Nook' }),
+    widget.getByRole('button', { name: 'Sign in with Nook' }),
   ).toBeVisible()
   await expect(page.locator('[name="email"]')).toBeVisible()
   await demoBeat(page)
 
-  await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+  await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
   await expect(
     widget.getByText(
-      'Unlock Nook in the Nook tab, return to the site, then select Continue with Nook again.',
+      'Unlock Nook in the Nook tab, return to the site, then select Sign in with Nook again.',
     ),
   ).toBeVisible()
-  await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+  await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
   await expect(page.locator('[name="email"]')).toHaveValue('pilot@example.test')
   await expect(page.getByTestId('advance-status')).toHaveText(
     'Email-first login advanced',
@@ -969,7 +969,7 @@ test('detect a Facebook-like login under an aria-hidden consent layer', async ({
   await expect(widget.getByText('Nook Pilot · 1/3')).toBeVisible()
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
   await expect(
-    widget.getByRole('button', { name: 'Continue with Nook' }),
+    widget.getByRole('button', { name: 'Sign in with Nook' }),
   ).toBeVisible()
   await expect(page.locator('[name="email"]')).toBeVisible()
   await expect(page.locator('[name="pass"]')).toBeVisible()

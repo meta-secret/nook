@@ -128,10 +128,8 @@ class AuthenticationWidgetRenderer {
       totalSteps: snapshot.totalSteps,
     }
     const shell = authenticationWidgetShell.createWidgetShell(nookTypedArgs0_0)
-    const { body, step, title, description, continueButton, openVaultButton } =
-      shell
+    const { body, step, title, description, continueButton } = shell
     continueButton.hidden = true
-    openVaultButton.hidden = true
     const workflowRoot: Parameters<
       typeof authenticationWidgetShell.mountWidgetShell
     >[0]['workflowRoot'] = {
@@ -155,7 +153,6 @@ class AuthenticationWidgetRenderer {
       title,
       description,
       continueButton,
-      openVaultButton,
     }
     const nookTypedArgs1_0: Parameters<
       typeof authenticatorEnrollmentInteraction.renderEnrollmentActions
@@ -259,8 +256,7 @@ class AuthenticationWidgetRenderer {
       totalSteps: snapshot.totalSteps,
     }
     const shell = authenticationWidgetShell.createWidgetShell(nookTypedArgs0_3)
-    const { body, step, title, description, continueButton, openVaultButton } =
-      shell
+    const { body, step, title, description, continueButton } = shell
     const canContinueWithNook =
       snapshot.action === AuthenticationWorkflowAction.ContinueWithNook ||
       snapshot.action === AuthenticationWorkflowAction.FillTotp ||
@@ -328,7 +324,6 @@ class AuthenticationWidgetRenderer {
           title,
           description,
           continueButton,
-          openVaultButton,
         }
         const host =
           authenticationWidgetShell.buildEnrollmentFlowHost(hostRequest)
@@ -410,22 +405,6 @@ class AuthenticationWidgetRenderer {
     }
     continueButton.addEventListener('click', activateContinueButton)
 
-    const takeOverButton = document.createElement('button')
-    takeOverButton.type = 'button'
-    takeOverButton.className = 'text-button'
-    takeOverButton.textContent = workflowUi.translatedMessage(
-      BROWSER_MESSAGE_KEYS.WidgetTakeOver,
-    )
-    takeOverButton.hidden = !canContinueWithNook
-    takeOverButton.addEventListener('click', (event) => {
-      if (!new AuthenticationGesture(event).trusted) return
-      authenticatorInteraction.cancelPendingAuthenticatorPickerRequest()
-      loginPasskeyInteraction.cancelPendingLoginPickerRequest()
-      this.ui.widgetState.dismissed = true
-      workflowUi.removeWidget()
-    })
-
-    body.append(takeOverButton)
     if (savedLoginActionAvailable) {
       const savedLoginButton = document.createElement('button')
       savedLoginButton.type = 'button'
@@ -522,7 +501,6 @@ class AuthenticationWidgetRenderer {
         title,
         description,
         continueButton,
-        openVaultButton,
       }
       const nookTypedArgs1_1: Parameters<
         typeof authenticatorEnrollmentInteraction.renderEnrollmentActions

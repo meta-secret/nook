@@ -46,6 +46,8 @@ export type ExtensionManifest = {
   action: {
     default_title: string
     default_icon: ManifestIconSet
+    /** The compact panel the toolbar icon opens beside itself. */
+    default_popup: string
   }
   background: {
     service_worker: string
@@ -135,6 +137,7 @@ export function createManifest(
     action: {
       default_title: 'Nook',
       default_icon: iconSet,
+      default_popup: 'action/index.html',
     },
     background: {
       service_worker: 'background/service-worker.js',

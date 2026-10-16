@@ -101,10 +101,10 @@ test('selected Google login advances the identifier and fills its password once 
     const selectionCheckpoint: GoogleDemoCheckpoint = {
       name: 'google-select-saved-login',
       caption:
-        'Select the synthetic saved Google login with Continue with Nook.',
+        'Select the synthetic saved Google login with Sign in with Nook.',
     }
     await demo.recordCheckpoint(selectionCheckpoint)
-    await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+    await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
 
     await expect(browserPage).toHaveURL(
       'https://accounts.google.com/v3/signin/challenge/pwd',

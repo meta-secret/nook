@@ -36,8 +36,8 @@ export type PopupSenderCheck = {
   readonly popupUrl: string
 }
 
-/** Only the extension's popup lists or changes its vaults, whether it
- * opens from the toolbar or in a tab; content scripts never do. */
+/** Only the extension's own pages list or change its vaults: the toolbar
+ * panel and the Nook tab; content scripts never do. */
 export function isPopupSender({
   sender,
   runtimeId,
@@ -50,12 +50,14 @@ export function isPopupSender({
 }
 
 function fromExtensionPage(sender: chrome.runtime.MessageSender): boolean {
-  const check: PopupSenderCheck = {
-    sender,
-    runtimeId: chrome.runtime.id,
-    popupUrl: chrome.runtime.getURL('popup/index.html'),
-  }
-  return isPopupSender(check)
+  return ['popup/index.html', 'action/index.html'].some((page) => {
+    const check: PopupSenderCheck = {
+      sender,
+      runtimeId: chrome.runtime.id,
+      popupUrl: chrome.runtime.getURL(page),
+    }
+    return isPopupSender(check)
+  })
 }
 
 async function pairedVaults(): Promise<PairedVaultSummary[]> {

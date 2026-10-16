@@ -706,6 +706,26 @@ pub const ERRORS_VAULT_UNLOCK_METADATA_UNAVAILABLE: &str =
     "errors.vault_unlock_metadata_unavailable";
 pub const ERRORS_WHOLE_VAULT_CONFLICT_RESOLUTION_RETIRED: &str =
     "errors.whole_vault_conflict_resolution_retired";
+pub const EXTENSION_ACTION_CONNECT_ANOTHER: &str = "extension.action.connect_another";
+pub const EXTENSION_ACTION_CONNECT_IDENTITY: &str = "extension.action.connect_identity";
+pub const EXTENSION_ACTION_IDENTITIES: &str = "extension.action.identities";
+pub const EXTENSION_ACTION_LOCK: &str = "extension.action.lock";
+pub const EXTENSION_ACTION_LOCK_FAILED: &str = "extension.action.lock_failed";
+pub const EXTENSION_ACTION_MANAGE: &str = "extension.action.manage";
+pub const EXTENSION_ACTION_NO_IDENTITY: &str = "extension.action.no_identity";
+pub const EXTENSION_ACTION_OPEN_FAILED: &str = "extension.action.open_failed";
+pub const EXTENSION_ACTION_OPEN_VAULT: &str = "extension.action.open_vault";
+pub const EXTENSION_ACTION_OPEN_VAULT_HINT: &str = "extension.action.open_vault_hint";
+pub const EXTENSION_ACTION_OTHER_IDENTITY: &str = "extension.action.other_identity";
+pub const EXTENSION_ACTION_PIN_LABEL: &str = "extension.action.pin_label";
+pub const EXTENSION_ACTION_SET_UP: &str = "extension.action.set_up";
+pub const EXTENSION_ACTION_SET_UP_HINT: &str = "extension.action.set_up_hint";
+pub const EXTENSION_ACTION_STATE_LOCKED: &str = "extension.action.state_locked";
+pub const EXTENSION_ACTION_STATE_SETUP: &str = "extension.action.state_setup";
+pub const EXTENSION_ACTION_STATE_UNLOCKED: &str = "extension.action.state_unlocked";
+pub const EXTENSION_ACTION_UNLOCK: &str = "extension.action.unlock";
+pub const EXTENSION_ACTION_UNLOCK_FAILED: &str = "extension.action.unlock_failed";
+pub const EXTENSION_ACTION_UNLOCK_PASSKEY_HINT: &str = "extension.action.unlock_passkey_hint";
 pub const EXTENSION_AUTHENTICATOR_PICKER_DESCRIPTION: &str =
     "extension.authenticator_picker.description";
 pub const EXTENSION_AUTHENTICATOR_PICKER_DESTINATION: &str =
@@ -869,6 +889,7 @@ pub const EXTENSION_REQUEST_BODY: &str = "extension.request.body";
 pub const EXTENSION_REQUEST_EYEBROW: &str = "extension.request.eyebrow";
 pub const EXTENSION_REQUEST_NO_VAULTS: &str = "extension.request.no_vaults";
 pub const EXTENSION_REQUEST_TITLE: &str = "extension.request.title";
+pub const EXTENSION_REQUEST_UNLOCK_IDENTITY: &str = "extension.request.unlock_identity";
 pub const EXTENSION_REQUEST_VAULT_ACTION: &str = "extension.request.vault_action";
 pub const EXTENSION_REQUEST_VAULTS: &str = "extension.request.vaults";
 pub const EXTENSION_SETUP_BROWSER_ACCESS_DESCRIPTION: &str =
