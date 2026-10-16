@@ -26,3 +26,36 @@ export class DeviceJoinMounts {
     );
   }
 }
+
+/** Whether another device can join this identity yet. */
+export enum DeviceJoinAvailability {
+  /** The sync providers are not loaded yet. */
+  Unknown = "unknown",
+  /** No provider can carry a join: a cloud sync provider comes first. */
+  NeedsCloud = "needs-cloud",
+  Ready = "ready",
+}
+
+type DeviceJoinReadinessRequest = {
+  /** The identity's configured sync providers. Adding a device records
+   * them as mounts, so they decide before any mount is recorded. */
+  readonly providers: readonly StorageProvider[];
+  readonly providersLoaded: boolean;
+  readonly replication: ReplicationType;
+};
+
+export class DeviceJoinReadiness {
+  constructor(private readonly request: DeviceJoinReadinessRequest) {}
+
+  get availability(): DeviceJoinAvailability {
+    const { providers, providersLoaded, replication } = this.request;
+    if (!providersLoaded) return DeviceJoinAvailability.Unknown;
+    const mountRequest: DeviceJoinMountRequest = {
+      mounts: providers,
+      replication,
+    };
+    return new DeviceJoinMounts(mountRequest).compatible.length > 0
+      ? DeviceJoinAvailability.Ready
+      : DeviceJoinAvailability.NeedsCloud;
+  }
+}

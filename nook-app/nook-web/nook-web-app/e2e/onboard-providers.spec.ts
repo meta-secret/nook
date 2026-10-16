@@ -4,6 +4,7 @@ import {
   connectLocalVault,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   forceVaultQuiescentForE2e,
+  openManageMenu,
   openOnboardDevicePanel,
   seedExtraOauthFileProviders,
   seedOauthFileSyncProvidersWhileUnlocked,
@@ -25,6 +26,19 @@ test.describe('identity onboarding provider picker', () => {
   test('asks for a sync provider before an identity code can be created', async ({
     page,
   }) => {
+    // Manage leads with a sync provider and holds adding a device until one
+    // exists.
+    await openManageMenu(page)
+    const menuItems = page.getByTestId('identity-menu').getByRole('menuitem')
+    await expect(menuItems.first()).toHaveAttribute(
+      'data-testid',
+      'identity-menu-sync',
+    )
+    const addDevice = page.getByTestId('identity-menu-add-device')
+    await expect(addDevice).toBeDisabled()
+    await expect(addDevice).toContainText('Add a cloud sync provider first')
+
+    // The flow itself, reached by its route, starts at the same step.
     await openOnboardDevicePanel(page)
 
     await expect(page.getByTestId('onboard-no-identity-mount')).toBeVisible({

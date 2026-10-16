@@ -1013,6 +1013,7 @@ export const I18N_KEYS = {
   IdentityKeysUnlocks: 'identity_keys.unlocks',
   IdentityMenuActions: 'identity_menu.actions',
   IdentityMenuAddDeviceHint: 'identity_menu.add_device_hint',
+  IdentityMenuAddDeviceNeedsCloud: 'identity_menu.add_device_needs_cloud',
   IdentityMenuBrowser: 'identity_menu.browser',
   IdentityMenuBrowserHint: 'identity_menu.browser_hint',
   IdentityMenuDetails: 'identity_menu.details',

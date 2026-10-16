@@ -1228,6 +1228,7 @@ pub const IDENTITY_KEYS_SINGLE_WARNING: &str = "identity_keys.single_warning";
 pub const IDENTITY_KEYS_UNLOCKS: &str = "identity_keys.unlocks";
 pub const IDENTITY_MENU_ACTIONS: &str = "identity_menu.actions";
 pub const IDENTITY_MENU_ADD_DEVICE_HINT: &str = "identity_menu.add_device_hint";
+pub const IDENTITY_MENU_ADD_DEVICE_NEEDS_CLOUD: &str = "identity_menu.add_device_needs_cloud";
 pub const IDENTITY_MENU_BROWSER: &str = "identity_menu.browser";
 pub const IDENTITY_MENU_BROWSER_HINT: &str = "identity_menu.browser_hint";
 pub const IDENTITY_MENU_DETAILS: &str = "identity_menu.details";

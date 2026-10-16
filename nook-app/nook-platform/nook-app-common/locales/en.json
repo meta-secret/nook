@@ -2053,6 +2053,7 @@
     "browser": "This browser",
     "browser_hint": "Language and stored data",
     "add_device_hint": "Phone or another computer",
+    "add_device_needs_cloud": "Add a cloud sync provider first",
     "vaults_hint": "Add a vault or rename one"
   },
   "add_device": {
