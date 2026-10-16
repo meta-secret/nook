@@ -285,6 +285,7 @@ const INTERNAL_API_EXPERT_AUTHORED_CONSUMER_SCOPE_PATHS = [
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/SecretVault.svelte',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/SeedPhraseGrid.svelte',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/VaultAdmin.svelte',
+  'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/VaultAdminVaults.svelte',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/VaultPasswordCard.svelte',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/VaultStatusBar.svelte',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/VaultSyncConflictDialog.svelte',
