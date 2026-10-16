@@ -21,7 +21,7 @@ Follow Meta-Cortex's [project context](../.meta-cortex/AGENTS.md#project-context
 and [assignment context](../.meta-cortex/teams/AGENTS.md#assignment-context)
 rules for generic context selection and coordination. Meta-Cortex owns
 per-assignment model and reasoning-effort selection. Its
-`../.meta-cortex/meta-cortex.toml` owns required host capacity; Nook `.cortex`
+`../.meta-cortex/meta-cortex.toml` owns the host concurrency ceiling; Nook `.cortex`
 adds no static role settings.
 
 For each multi-agent Nook assignment, include:
@@ -56,8 +56,8 @@ ownership boundary.
 - Use [Meta-Cortex Gizmo Prime](../.meta-cortex/teams/gizmo-team/agents/gizmo-prime/AGENTS.md) directly.
 - Use [Meta-Cortex Team Gizmo](../.meta-cortex/teams/gizmo-team/agents/gizmo/AGENTS.md) directly.
 - [Nook scope routing](docs/spec/upstream-role-routing.md) maps project requirements to upstream roles.
-- The active ignored `.meta-cortex/meta-cortex.toml` configures required host
-  capacity. Follow Meta-Cortex's
+- The active ignored `.meta-cortex/meta-cortex.toml` configures the host
+  concurrency ceiling. Follow Meta-Cortex's
   [agent configuration rules](../.meta-cortex/teams/gizmo-team/docs/agent-configuration.md).
   Nook documents do not copy or override its settings.
 
