@@ -14,6 +14,9 @@
       "$lib/components/ExtensionConnectConsent.svelte": [
         "./src/ExtensionConnectDisabled.svelte"
       ],
+      "$lib/components/identities/ExtensionRequestPanel.svelte": [
+        "./src/ExtensionRequestPanelDisabled.svelte"
+      ],
       "$lib": ["../nook-web-shared/src/vault-app/lib"],
       "$lib/*": ["../nook-web-shared/src/vault-app/lib/*"],
       "$vault-shared": ["../nook-web-shared/src/vault-app"],
@@ -38,6 +41,7 @@
     "../nook-web-shared/src/vault-app/lib/nook-wasm*",
     "../nook-web-shared/src/vault-app/lib/extension/connect.ts",
     "../nook-web-shared/src/vault-app/lib/components/ExtensionConnectConsent.svelte",
+    "../nook-web-shared/src/vault-app/lib/components/identities/ExtensionRequestPanel.svelte",
     "**/node_modules/**",
     "**/dist/**",
     "**/dist-prod/**",
