@@ -47,7 +47,7 @@ type ExtensionIdentityInvitationRequest = {
  * Invites the browser extension into the identity the way a new phone or
  * computer is invited: a one-time invite that carries every vault's key, so
  * the extension signs itself in as a member and opens all of the identity's
- * vaults, including later ones. The passphrase is sealed to the extension,
+ * vaults. The passphrase is sealed to the extension,
  * so the invite opens nowhere else.
  */
 export class ExtensionIdentityInvite {

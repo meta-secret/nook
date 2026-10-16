@@ -12,6 +12,7 @@ import {
   waitForNewPage,
 } from './helpers/extension-smoke-runtime'
 import { belongs_to_simple_vault } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { attachNookLogsForTest } from '../../nook-web-app/e2e/helpers/app-logs'
 import {
   authorizeDeviceProtection,
   connectGithubSyncProviderFromSettings,
@@ -97,6 +98,9 @@ test('connecting the extension to an identity pairs every vault in it', async ({
 
     // Connect the extension once, from the open vault.
     const worker = await getServiceWorker(context)
+    worker.on('console', (message) => {
+      console.log(`[identity-membership sw] ${message.text()}`)
+    })
     const extensionId = new URL(worker.url()).host
     await popupPage.close()
     const pairPopup = await context.newPage()
@@ -125,6 +129,8 @@ test('connecting the extension to an identity pairs every vault in it', async ({
     // The identity has a cloud provider, so the consent covers all of it.
     await expect(consent).toContainText('every vault in')
 
+    const identityEventsBefore = github.getIdentityEventFileCount()
+    console.log(`[identity-membership] consent: ${await consent.innerText()}`)
     await connectPage.getByTestId('approve-extension-device-btn').click()
     // Joining the identity and opening its other vault take longer than a
     // single-vault approval; wait for the outcome before reading it.
@@ -133,6 +139,11 @@ test('connecting the extension to an identity pairs every vault in it', async ({
         .getByTestId('extension-connect-approved')
         .or(connectPage.locator('[data-extension-pairing-rejection-reason]')),
     ).toBeVisible({ timeout: 90_000 })
+    // The extension signs its own join into the identity log it shares.
+    console.log(
+      `[identity-membership] identity events ${identityEventsBefore} -> ${github.getIdentityEventFileCount()}; vault paths ${github.getEventFilePaths().join(', ')}`,
+    )
+    await attachNookLogsForTest(connectPage, testInfo)
     // The connection page opens one of the identity's vaults; whichever it
     // approved from stays the extension's default.
     await expect

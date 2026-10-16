@@ -260,7 +260,7 @@ export class ExtensionVaultApproval {
     if (providerStoreId.isErr()) return err(providerStoreId.error);
 
     // The extension joins the vault's identity as a member, the way a new
-    // device does, so it opens every vault of the identity and later ones.
+    // device does, so it opens every vault of the identity.
     // It reaches the identity through a sync provider, so it needs their
     // credentials.
     const sharesProviders = this.request.scopes.includes(
