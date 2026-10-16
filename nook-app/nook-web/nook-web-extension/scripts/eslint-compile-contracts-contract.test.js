@@ -5,7 +5,10 @@ import { describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { Linter } from 'eslint'
 import compileContractsEslintConfig from '../../eslint.compile-contracts.config.js'
 
-setDefaultTimeout(15_000)
+// Each case builds a TypeScript program; release verification runs every
+// static, lint, and unit gate in parallel in one container, where that can
+// take well over fifteen seconds.
+setDefaultTimeout(60_000)
 
 const extensionSourceDirectory = fileURLToPath(
   new URL('../src/', import.meta.url),
