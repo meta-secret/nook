@@ -20,6 +20,8 @@ const ERRORS_VALIDATION_STORE_ID_RESERVED: &str = "errors.validation.store_id_re
 const ERRORS_VALIDATION_AUTH_KEY_ID_INVALID: &str = "errors.validation.auth_key_id_invalid";
 const ERRORS_VALIDATION_DEVICE_ID_INVALID: &str = "errors.validation.device_id_invalid";
 const ERRORS_VALIDATION_SYMMETRIC_KEY_INVALID: &str = "errors.validation.symmetric_key_invalid";
+const ERRORS_VALIDATION_IDENTITY_INVITE_ID_INVALID: &str =
+    "errors.validation.identity_invite_id_invalid";
 const ERRORS_VALIDATION_SECRET_FINGERPRINT_KEY_INVALID: &str =
     "errors.validation.secret_fingerprint_key_invalid";
 const ERRORS_VALIDATION_AGE_ARMORED_INVALID: &str = "errors.validation.age_armored_invalid";
@@ -207,6 +209,9 @@ pub enum ValidationError {
 
     #[error("{}", ERRORS_VALIDATION_SYMMETRIC_KEY_INVALID)]
     SymmetricKeyInvalid,
+
+    #[error("{}", ERRORS_VALIDATION_IDENTITY_INVITE_ID_INVALID)]
+    IdentityInviteIdInvalid,
 
     #[error("{}", ERRORS_VALIDATION_SECRET_FINGERPRINT_KEY_INVALID)]
     SecretFingerprintKeyInvalid,

@@ -278,10 +278,13 @@ impl NookEnrollmentIssueInput {
         }
     }
 
+    /// The issue input with the invite a member just recorded.
     pub(crate) fn to_core(
         &self,
+        invite: nook_core::EnrollmentInvite,
     ) -> Result<nook_core::EnrollmentIssueInput, nook_core::EnrollmentError> {
         Ok(nook_core::EnrollmentIssueInput {
+            invite,
             provider: self.provider.to_core(),
             identity: nook_core::EnrollmentIdentityTarget {
                 identity_id: nook_core::IdentityId::parse(&self.identity_id).map_err(|_| {
@@ -594,6 +597,13 @@ mod tests {
 
     #[wasm_bindgen_test]
     fn enrollment_inputs_and_sync_targets_keep_typed_values() -> anyhow::Result<()> {
+        let invite = || -> anyhow::Result<nook_core::EnrollmentInvite> {
+            Ok(nook_core::EnrollmentInvite {
+                invite_id: nook_core::IdentityInviteId::generate()?,
+                signing_seed: nook_core::InviteSigningSeed::generate()?,
+                vaults: Vec::new(),
+            })
+        };
         let provider = NookEnrollmentProvider::github("repo".into(), "pat".into());
         let malformed = NookEnrollmentIssueInput::for_identity(
             provider.clone(),
@@ -604,7 +614,7 @@ mod tests {
         );
         assert_eq!(malformed.entry_id(), "entry-1");
         assert_eq!(malformed.issued_at(), "2026-01-01");
-        assert!(malformed.to_core().is_err());
+        assert!(malformed.to_core(invite()?).is_err());
         let identity_id = nook_core::IdentityId::generate()?;
         let named = NookEnrollmentIssueInput::for_identity(
             provider,
@@ -613,8 +623,8 @@ mod tests {
             "entry-2".into(),
             "2026-01-02".into(),
         );
-        assert_eq!(named.to_core()?.identity.identity_id, identity_id);
-        assert_eq!(named.to_core()?.identity.label, "Personal");
+        assert_eq!(named.to_core(invite()?)?.identity.identity_id, identity_id);
+        assert_eq!(named.to_core(invite()?)?.identity.label, "Personal");
 
         let payload =
             NookDecryptedEnrollmentPayload::from_core(nook_core::DecryptedEnrollmentPayload {
@@ -625,6 +635,7 @@ mod tests {
                 },
                 entry_id: "entry-3".into(),
                 issued_at: "2026-01-03".into(),
+                invite: invite()?,
             });
         assert_eq!(payload.identity_label(), "Family");
         assert_eq!(payload.identity_id(), identity_id.to_string());

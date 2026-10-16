@@ -2,8 +2,8 @@
 The one place a new browser joins an existing identity: what happens in a
 sentence and a small diagram, where to get the invite, and the form. An
 invite link opened on this device arrives with its code filled in; only
-the passphrase is left. Once submitted, the identities hub shows the wait
-for approval.
+the passphrase is left. Once submitted, the device signs itself in and the
+identities hub lists the vaults it can open.
 -->
 <script lang="ts">
   import { CheckCircle2, RefreshCw } from "@lucide/svelte";
@@ -40,7 +40,7 @@ for approval.
 
   const linkReceived = $derived(Boolean(code));
   const joinCode = $derived(linkReceived ? code : linkInput.trim());
-  const requested = $derived(
+  const joined = $derived(
     vault.identityControl.join.kind !== IdentityJoinKind.Idle,
   );
 
@@ -81,7 +81,7 @@ for approval.
 
   <JoinFlowDiagram {vault} side={JoinSide.Joining} />
 
-  {#if !requested}
+  {#if !joined}
     <form class="grid gap-4" data-testid="join-form" onsubmit={submit}>
       {#if linkReceived}
         <p

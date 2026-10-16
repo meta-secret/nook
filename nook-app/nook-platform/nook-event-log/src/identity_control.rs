@@ -12,8 +12,8 @@ mod projection;
 mod wire;
 
 pub use builder::{
-    IdentityApprovalRequest, IdentityEventSigning, IdentityGenesisRequest,
-    IdentityVaultRegistration, OpenedVaultDek,
+    IdentityApprovalRequest, IdentityEventSigning, IdentityGenesisRequest, IdentityInviteIssue,
+    IdentityInviteJoin, IdentityVaultRegistration, OpenedVaultDek,
 };
 pub use graph::{
     IdentityControlInsertion, IdentityControlLog, IdentityControlRejection,
@@ -25,8 +25,9 @@ pub use projection::{
 };
 pub use wire::{
     DriveMountTarget, ICloudMountTarget, IdentityControlOperation, IdentityEvent,
-    IdentityEventBody, IdentityEventSchemaVersion, IdentityMemberKeys, IdentityMountTarget,
-    IdentityProviderMount, IdentityVaultDekGrant, MemberVaultDek, ProviderMountId,
+    IdentityEventBody, IdentityEventSchemaVersion, IdentityInvite, IdentityInviteProof,
+    IdentityMemberKeys, IdentityMountTarget, IdentityProviderMount, IdentityVaultDekGrant,
+    MemberVaultDek, ProviderMountId,
 };
 
 #[cfg(test)]
@@ -35,7 +36,7 @@ pub(crate) mod test_fixtures {
 
     pub(crate) use ed25519_dalek::SigningKey;
     pub(crate) use nook_auth2::{
-        AppKey, IdentityId, IsoTimestamp, MemberLabel, StoreId, VaultKeys,
+        AppKey, IdentityId, IdentityInviteId, IsoTimestamp, MemberLabel, StoreId, VaultKeys,
     };
 
     pub(crate) use super::*;
@@ -70,6 +71,13 @@ pub(crate) mod test_fixtures {
                 created_at: at,
             }
         }
+    }
+
+    /// The invite a joiner holds: its id, key, and the vault DEKs it carries.
+    pub(crate) struct InviteJoinFixture<'a> {
+        pub(crate) invite_id: &'a IdentityInviteId,
+        pub(crate) invite_key: &'a SigningKey,
+        pub(crate) vaults: &'a [OpenedVaultDek<'a>],
     }
 
     pub(crate) struct Fixture {
@@ -152,6 +160,42 @@ pub(crate) mod test_fixtures {
             };
             self.append(&founder, vec![operation])?;
             Ok(key_epoch)
+        }
+
+        /// The founder issues a one-time invite; returns its id and key.
+        pub(crate) fn issue_invite(&mut self) -> anyhow::Result<(IdentityInviteId, SigningKey)> {
+            let invite_id = IdentityInviteId::generate()?;
+            let invite_key = signing_key();
+            let expires_at = IsoTimestamp::from_trusted("2026-10-13T00:00:00Z".to_owned());
+            let operation = IdentityInviteIssue {
+                invite_id: &invite_id,
+                invite_key: &invite_key,
+                expires_at: &expires_at,
+            }
+            .operation();
+            let founder = self.founder();
+            let (_, status) = self.append(&founder, vec![operation])?;
+            assert_eq!(status, IdentityEventInsertStatus::Applied);
+            Ok((invite_id, invite_key))
+        }
+
+        /// The joiner's self-signed invite join, built on the current heads.
+        pub(crate) fn invite_join_event(
+            &self,
+            joiner: &Installation,
+            join: &InviteJoinFixture<'_>,
+        ) -> anyhow::Result<IdentityEvent> {
+            let operation = IdentityInviteJoin {
+                identity_id: &self.identity_id,
+                invite_id: join.invite_id,
+                invite_key: join.invite_key,
+                member: &joiner.keys("Phone"),
+                vaults: join.vaults,
+            }
+            .operation()?;
+            Ok(self
+                .log
+                .build_append(vec![operation], &joiner.signing(&self.at))?)
         }
 
         pub(crate) fn founder(&self) -> Installation {

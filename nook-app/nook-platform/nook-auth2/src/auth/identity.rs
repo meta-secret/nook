@@ -69,6 +69,57 @@ impl fmt::Display for IdentityId {
     }
 }
 
+const IDENTITY_INVITE_ID_PREFIX: &str = "inv_";
+
+/// One-time identity invitation identifier (`inv_{compact_token}`). An
+/// enrollment code carries it with the invite's signing seed; the identity
+/// log records it when a member issues the invite.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct IdentityInviteId(String);
+
+impl IdentityInviteId {
+    pub fn generate() -> MultiDeviceResult<Self> {
+        let token = CompactToken::generate()?;
+        Ok(Self(format!(
+            "{IDENTITY_INVITE_ID_PREFIX}{}",
+            token.as_str()
+        )))
+    }
+
+    pub fn parse(raw: &str) -> ValidationResult<Self> {
+        let trimmed = raw.trim();
+        match trimmed.strip_prefix(IDENTITY_INVITE_ID_PREFIX) {
+            Some(token) if CompactToken::is_valid(token) => Ok(Self(trimmed.to_owned())),
+            _ => Err(ValidationError::IdentityInviteIdInvalid),
+        }
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl TryFrom<String> for IdentityInviteId {
+    type Error = ValidationError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::parse(&value)
+    }
+}
+
+impl From<IdentityInviteId> for String {
+    fn from(value: IdentityInviteId) -> Self {
+        value.0
+    }
+}
+
+impl fmt::Display for IdentityInviteId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
 /// One app-key member of an identity.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct IdentityMember {

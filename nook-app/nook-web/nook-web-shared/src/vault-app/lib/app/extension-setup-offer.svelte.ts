@@ -1,0 +1,55 @@
+import type { VaultState } from "$lib/vault.svelte";
+import {
+  ExtensionSetupOfferKind,
+  type ExtensionSetupOffer,
+  extensionSetupBrowser,
+} from "$lib/app/extension-setup";
+
+/** Named values required by `ExtensionSetupOfferModel`. */
+export type ExtensionSetupOfferSource = {
+  readonly vault: VaultState;
+  /** This application ships the browser extension. */
+  readonly supported: boolean;
+};
+
+/**
+ * The open vault's offer to set up the browser extension. It stays hidden
+ * where the application does not support the extension or no vault is open,
+ * and follows the extension appearing or leaving while the page is open.
+ */
+export class ExtensionSetupOfferModel {
+  offer = $state<ExtensionSetupOffer>({ kind: ExtensionSetupOfferKind.Hidden });
+
+  private readonly vault: VaultState;
+  private readonly supported: boolean;
+
+  constructor({ vault, supported }: ExtensionSetupOfferSource) {
+    this.vault = vault;
+    this.supported = supported;
+  }
+
+  async refresh(): Promise<void> {
+    if (!this.supported || !this.vault.isAuthenticated) {
+      this.offer = { kind: ExtensionSetupOfferKind.Hidden };
+      return;
+    }
+    const offer = await extensionSetupBrowser.loadExtensionSetupOffer(
+      this.vault,
+    );
+    if (offer.isOk()) this.offer = offer.value;
+  }
+
+  /** Refresh now and whenever the extension's presence changes; returns the
+   * cleanup. */
+  follow(): () => void {
+    void this.refresh();
+    return extensionSetupBrowser.observeExtensionSetupChanges(() =>
+      this.refresh(),
+    );
+  }
+
+  /** Pair this vault from its page; Devices owns install and its errors. */
+  async connect(): Promise<void> {
+    await extensionSetupBrowser.connectInstalledExtension();
+  }
+}

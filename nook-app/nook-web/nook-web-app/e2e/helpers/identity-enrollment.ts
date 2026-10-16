@@ -45,7 +45,7 @@ export async function issueIdentityEnrollmentCode(
   return { link, passphrase }
 }
 
-/** The joining app redeems the code and waits for a member's approval. */
+/** The joining app redeems the code and signs itself into the identity. */
 export async function redeemIdentityEnrollmentCode(
   page: Page,
   passphrase: string,
@@ -59,15 +59,15 @@ export async function redeemIdentityEnrollmentCode(
   })
   await page.getByTestId('enrollment-password-input').fill(passphrase)
   await page.getByTestId('submit-enrollment-code-btn').click()
-  const pending = page.getByTestId('identity-join-pending')
+  const joined = page.getByTestId('identity-join-ready')
   const failure = page.getByTestId('vault-error')
   try {
-    await expect(pending.or(failure).first()).toBeVisible({
+    await expect(joined.or(failure).first()).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     if (await failure.isVisible()) {
       throw new Error(
-        `identity join request failed: ${(await failure.innerText()).trim()}`,
+        `identity join failed: ${(await failure.innerText()).trim()}`,
       )
     }
   } catch (error) {
@@ -79,58 +79,34 @@ export async function redeemIdentityEnrollmentCode(
   }
 }
 
-/** A member syncs its identity log until the join shows, then approves it. */
-export async function approveIdentityJoin(
+/** A member syncs its identity log until the invited app shows among its
+ * devices. No member approves the join. */
+export async function expectIdentityMembers(
   page: Page,
   expectedMembers: number,
 ): Promise<void> {
   await openManagePage(page, ManagePage.Devices)
-  const pendingRow = page.getByTestId('pending-join-row').first()
+  const rows = page.getByTestId('vault-member-row')
   await expect
     .poll(
       async () => {
-        if (await pendingRow.isVisible()) return true
+        if ((await rows.count()) === expectedMembers) return true
         await page.getByTestId('identity-sync-now-btn').click()
         await waitForVaultOperationsIdle(page)
-        return pendingRow.isVisible()
+        return (await rows.count()) === expectedMembers
       },
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
     .toBe(true)
-  await pendingRow.getByTestId('approve-join-btn').click()
-  await expect(page.getByTestId('vault-member-row')).toHaveCount(
-    expectedMembers,
-    { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
-  )
 }
 
-/** The joined app checks for approval, then opens the identity's vault. */
-export async function openVaultAfterIdentityApproval(
-  page: Page,
-): Promise<void> {
+/** The joined app opens the vault its invite granted. */
+export async function openVaultAfterIdentityJoin(page: Page): Promise<void> {
   const openVault = page.getByTestId('identity-open-vault-btn').first()
   try {
-    await expect
-      .poll(
-        async () => {
-          if (await openVault.isVisible()) return true
-          const check = page.getByTestId('identity-join-check-btn')
-          // Approval replaces the waiting panel, so its button can detach
-          // between the visibility probe and the click; the next poll retries.
-          const checkOptions: Parameters<typeof check.click>[0] = {
-            timeout: 1_000,
-          }
-          if (await check.isVisible()) {
-            await check.click(checkOptions).then(
-              () => true,
-              () => false,
-            )
-          }
-          return openVault.isVisible()
-        },
-        { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
-      )
-      .toBe(true)
+    await expect(openVault).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
   } catch (error) {
     const state = await page.evaluate(() => {
       const vault = (window as VaultDebugWindow).__nookVault
@@ -140,8 +116,8 @@ export async function openVaultAfterIdentityApproval(
         join: vault?.identityControl?.join,
       })
     })
-    console.log(`[openVaultAfterIdentityApproval] joiner state: ${state}`)
-    await dumpNookLogs(page, 'openVaultAfterIdentityApproval')
+    console.log(`[openVaultAfterIdentityJoin] joiner state: ${state}`)
+    await dumpNookLogs(page, 'openVaultAfterIdentityJoin')
     throw error
   }
   // Every unlock starts a new idle tracker; keep the e2e idle lock off.
@@ -160,7 +136,7 @@ export type IdentityJoinThroughCode = {
 
 /**
  * Join a fresh app to the member's identity: issue a code, redeem it on the
- * joiner, approve the join, and open the vault on the joiner. The member
+ * joiner, which signs itself in, and open the vault on the joiner. The member
  * returns to its vault page.
  */
 export async function joinIdentityThroughCode({
@@ -176,7 +152,7 @@ export async function joinIdentityThroughCode({
     timeout: UI_TIMEOUT_MS,
   })
   await redeemIdentityEnrollmentCode(joiner, issued.passphrase)
-  await approveIdentityJoin(member, expectedMembers)
-  await openVaultAfterIdentityApproval(joiner)
+  await openVaultAfterIdentityJoin(joiner)
+  await expectIdentityMembers(member, expectedMembers)
   await openVaultPage(member)
 }

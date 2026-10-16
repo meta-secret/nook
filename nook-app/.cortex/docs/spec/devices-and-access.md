@@ -44,7 +44,9 @@ See
    keys.
    A vault cannot hold a DEK by itself.
 5. Adding or removing an app key is an identity control log event.
-   Approval wraps every owned vault's DEK to the new app key.
+   A one-time invite code carries every owned vault's DEK under its
+   passphrase; the new app key signs itself in and wraps them to itself.
+   No member approves the join.
    The joined app key then self-enrolls into each Simple vault log.
 6. A vault backup password opens only its owning vault.
    It does not replace identity or app-key unlock.
@@ -350,9 +352,9 @@ Current dashboard requirements:
   - It reads as protection method → app → identity → vault.
   - Raw app-key identifiers and cryptographic terminology remain internal.
 - App enrollment begins from **Identity → Devices**.
-  - A member issues an identity enrollment code there.
-  - The joining installation connects the code's mount and requests to join.
-  - A member approves, denies, renames, or revokes apps there.
+  - A member issues a one-time identity invite code there.
+  - The joining installation connects the code's mount and joins at once.
+  - A member renames or revokes apps there; no join waits for approval.
   - The selected-identity inventory lists connected apps; it does not create
     a local app key itself.
 - The primary surface omits access-evidence inspection and browser-reported

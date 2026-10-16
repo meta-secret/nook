@@ -300,10 +300,96 @@ impl EnrollmentIdentityTarget {
     }
 }
 
+/// Ed25519 seed of a one-time invite key. The issuing member records the
+/// matching public key in the identity log; the code's holder proves the
+/// invite by signing its own keys with this seed. Redacted in `Debug`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct InviteSigningSeed(crate::SymmetricKey);
+
+impl InviteSigningSeed {
+    pub fn generate() -> crate::ValidationResult<Self> {
+        crate::SymmetricKey::generate().map(Self)
+    }
+
+    /// The invite's signing key; the seed was validated as 32 hex bytes.
+    pub fn signing_key(&self) -> crate::ValidationResult<ed25519_dalek::SigningKey> {
+        let mut seed = zeroize::Zeroizing::new([0u8; 32]);
+        hex::decode_to_slice(self.0.as_str(), seed.as_mut_slice())
+            .map_err(|_| crate::ValidationError::SymmetricKeyInvalid)?;
+        Ok(ed25519_dalek::SigningKey::from_bytes(&seed))
+    }
+}
+
+/// One vault an invite opens: its DEK pair at its current key epoch.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EnrollmentInviteVault {
+    pub store_id: crate::StoreId,
+    pub key_epoch: crate::IdentityVaultEventId,
+    pub secrets_key: crate::SymmetricKey,
+    pub members_key: crate::SymmetricKey,
+}
+
+impl EnrollmentInviteVault {
+    #[must_use]
+    pub fn keys(&self) -> crate::VaultKeys {
+        crate::VaultKeys {
+            secrets_key: self.secrets_key.clone(),
+            members_key: self.members_key.clone(),
+        }
+    }
+}
+
+/// One-time invitation into an identity, carried inside the passphrase-
+/// encrypted enrollment code. The joiner signs itself into the identity with
+/// the seed and takes every owned vault's DEK from here, with no approval.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EnrollmentInvite {
+    pub invite_id: crate::IdentityInviteId,
+    pub signing_seed: InviteSigningSeed,
+    pub vaults: Vec<EnrollmentInviteVault>,
+}
+
+impl EnrollmentInvite {
+    /// An invite opening one vault, for round-trip tests.
+    #[cfg(test)]
+    pub(crate) fn fixture() -> crate::ValidationResult<Self> {
+        Ok(Self {
+            invite_id: crate::IdentityInviteId::parse("inv_abcdefghijk")?,
+            signing_seed: InviteSigningSeed::generate()?,
+            vaults: vec![EnrollmentInviteVault {
+                store_id: crate::StoreId::parse("store_abcdefghijk")?,
+                key_epoch: crate::IdentityVaultEventId::parse(
+                    "sha256u:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                )?,
+                secrets_key: crate::SymmetricKey::generate()?,
+                members_key: crate::SymmetricKey::generate()?,
+            }],
+        })
+    }
+
+    fn check(&self) -> EnrollmentResult<()> {
+        let mut stores = self
+            .vaults
+            .iter()
+            .map(|vault| &vault.store_id)
+            .collect::<Vec<_>>();
+        stores.sort();
+        stores.dedup();
+        if stores.len() != self.vaults.len() {
+            return Err(EnrollmentError::MissingField {
+                field: "invite_vaults",
+            });
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EnrollmentIssueInput {
     pub provider: EnrollmentProvider,
     pub identity: EnrollmentIdentityTarget,
+    pub invite: EnrollmentInvite,
     pub entry_id: String,
     pub issued_at: String,
 }
@@ -312,6 +398,7 @@ pub struct EnrollmentIssueInput {
 pub struct DecryptedEnrollmentPayload {
     pub provider: EnrollmentProvider,
     pub identity: EnrollmentIdentityTarget,
+    pub invite: EnrollmentInvite,
     pub entry_id: String,
     pub issued_at: String,
 }
@@ -340,6 +427,7 @@ pub struct EnrollmentCodeEnvelope {
 struct EnrollmentProviderPayload {
     provider: EnrollmentProvider,
     identity: EnrollmentIdentityTarget,
+    invite: EnrollmentInvite,
 }
 
 impl EnrollmentProvider {
@@ -551,6 +639,7 @@ mod tests {
         let payload = EnrollmentProviderPayload {
             provider,
             identity: super::EnrollmentIdentityTarget::fixture("Shared identity"),
+            invite: super::EnrollmentInvite::fixture()?,
         };
         let encoded = serde_json::to_vec(&payload)?;
         let decoded: EnrollmentProviderPayload = serde_json::from_slice(&encoded)?;

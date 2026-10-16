@@ -7,10 +7,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use nook_auth2::{AppId, AuthKeyId, IdentityId};
+use nook_auth2::{AppId, AuthKeyId, IdentityId, IdentityInviteId};
 use nook_replication::{CausalEventInsertion, CausalGraph, CausalInsertStatus, CausalQuarantine};
 
-use super::wire::{IdentityControlOperation, IdentityEvent};
+use super::wire::{IdentityControlOperation, IdentityEvent, IdentityInvite, IdentityInviteProof};
 use crate::{EventError, EventId, EventResult, EventStorageBytes};
 
 /// Outcome of inserting one identity control event.
@@ -257,7 +257,8 @@ impl IdentityControlLog {
                             founder.signing_actor()?,
                         ));
                     }
-                    IdentityControlOperation::MemberApproved { member, .. } => {
+                    IdentityControlOperation::MemberApproved { member, .. }
+                    | IdentityControlOperation::MemberJoinedByInvite { member, .. } => {
                         approvals.push((
                             id.clone(),
                             member.app_id.clone(),
@@ -307,12 +308,79 @@ impl IdentityControlLog {
             .collect())
     }
 
+    /// The invite a member issued in `parents`' causal history.
+    fn issued_invite(
+        &self,
+        parents: &[EventId],
+        invite_id: &IdentityInviteId,
+    ) -> Option<&IdentityInvite> {
+        self.ancestry(parents)
+            .iter()
+            .filter_map(|ancestor| self.events.get(ancestor))
+            .flat_map(|event| event.body.operations.iter())
+            .find_map(|operation| match operation {
+                IdentityControlOperation::MemberInvited { invite }
+                    if &invite.invite_id == invite_id =>
+                {
+                    Some(invite)
+                }
+                _ => None,
+            })
+    }
+
+    /// The invite a member issued in this log's applicable history.
+    #[must_use]
+    pub fn issued_invite_now(&self, invite_id: &IdentityInviteId) -> Option<&IdentityInvite> {
+        self.issued_invite(&self.applicable_heads(), invite_id)
+    }
+
+    /// An invite join stands when its invite was issued before it and the
+    /// invite key proves the joiner's keys.
+    fn invite_join_holds(&self, event: &IdentityEvent) -> bool {
+        let Some((invite_id, member, signature)) = event.invite_join() else {
+            return false;
+        };
+        self.issued_invite(&event.body.parents, invite_id)
+            .is_some_and(|invite| {
+                IdentityInviteProof {
+                    identity_id: &self.identity_id,
+                    invite_id,
+                    member,
+                }
+                .verify(invite, signature)
+                .is_ok()
+            })
+    }
+
+    /// Why an invite join is refused: no issued invite, a failed proof, or
+    /// an invite another join already used. Of several joins on one invite,
+    /// the lowest event id wins, so every replica keeps the same one.
+    fn invite_join_rejection(&self, id: &EventId, event: &IdentityEvent) -> Option<String> {
+        let (invite_id, _, _) = event.invite_join()?;
+        if !self.invite_join_holds(event) {
+            return Some(format!(
+                "Invite {invite_id} was not issued in causal history or its proof does not verify"
+            ));
+        }
+        let used_first = self.events.iter().any(|(other_id, other)| {
+            other_id < id
+                && other
+                    .invite_join()
+                    .is_some_and(|(other_invite, _, _)| other_invite == invite_id)
+                && self.invite_join_holds(other)
+        });
+        used_first.then(|| format!("Invite {invite_id} was already used"))
+    }
+
     fn unauthorized_reason(&self, id: &EventId) -> EventResult<Option<String>> {
         let Some(event) = self.events.get(id) else {
             return Ok(None);
         };
         if event.body.is_genesis() || event.is_self_signed_join_request() {
             return Ok(None);
+        }
+        if event.invite_join().is_some() {
+            return Ok(self.invite_join_rejection(id, event));
         }
         if self
             .authorized_actors_before(event)?
@@ -452,6 +520,176 @@ mod tests {
         let second_state = IdentityControlState::project(&other_order)?;
         assert_eq!(first, second_state);
         assert!(first.member(second.app.app_id()).is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn an_invite_holder_joins_with_its_vault_keys_and_no_approval() -> anyhow::Result<()> {
+        let mut fixture = Fixture::new()?;
+        let store_id = StoreId::generate()?;
+        let keys = VaultKeys::generate()?;
+        let epoch = fixture.register_vault(&keys, &store_id)?;
+        let (invite_id, invite_key) = fixture.issue_invite()?;
+        assert!(fixture.log.issued_invite_now(&invite_id).is_some());
+
+        let joiner = Installation::new()?;
+        let vaults = [OpenedVaultDek {
+            store_id: &store_id,
+            key_epoch: &epoch,
+            keys: &keys,
+        }];
+        let join = fixture.invite_join_event(
+            &joiner,
+            &InviteJoinFixture {
+                invite_id: &invite_id,
+                invite_key: &invite_key,
+                vaults: &vaults,
+            },
+        )?;
+        let inserted = fixture.log.clone().insert(join)?;
+        assert_eq!(inserted.status, IdentityEventInsertStatus::Applied);
+        fixture.log = inserted.log;
+
+        let state = fixture.state()?;
+        assert!(state.member(joiner.app.app_id()).is_some());
+        assert!(state.pending_joins.is_empty());
+        let Some(vault) = state.vault(&store_id) else {
+            anyhow::bail!("the vault stays registered");
+        };
+        let IdentityVaultDekLookup::Granted(dek) = vault.current_dek_for(joiner.app.app_id())
+        else {
+            anyhow::bail!("the joiner holds the vault's current DEK");
+        };
+        assert_eq!(
+            joiner
+                .app
+                .decrypt_envelope(&dek.secrets_key_ciphertext)?
+                .as_str(),
+            keys.secrets_key.as_str()
+        );
+        // Now a member, the joiner may act on the identity.
+        let (_, status) = fixture.append(&joiner, vec![rename(joiner.app.app_id(), "Phone 2")])?;
+        assert_eq!(status, IdentityEventInsertStatus::Applied);
+        Ok(())
+    }
+
+    #[test]
+    fn a_join_needs_an_invite_a_member_issued_and_its_key() -> anyhow::Result<()> {
+        let mut fixture = Fixture::new()?;
+        let joiner = Installation::new()?;
+
+        // No invite was issued for this id.
+        let unissued = IdentityInviteId::generate()?;
+        let stray_key = signing_key();
+        let join = fixture.invite_join_event(
+            &joiner,
+            &InviteJoinFixture {
+                invite_id: &unissued,
+                invite_key: &stray_key,
+                vaults: &[],
+            },
+        )?;
+        let inserted = fixture.log.clone().insert(join)?;
+        assert!(matches!(
+            inserted.status,
+            IdentityEventInsertStatus::Quarantined { .. }
+        ));
+
+        // The invite exists, but the proof is made with another key.
+        let (invite_id, _) = fixture.issue_invite()?;
+        let forged = fixture.invite_join_event(
+            &joiner,
+            &InviteJoinFixture {
+                invite_id: &invite_id,
+                invite_key: &stray_key,
+                vaults: &[],
+            },
+        )?;
+        let inserted = fixture.log.clone().insert(forged)?;
+        assert!(matches!(
+            inserted.status,
+            IdentityEventInsertStatus::Quarantined { .. }
+        ));
+        assert!(
+            IdentityControlState::project(&inserted.log)?
+                .member(joiner.app.app_id())
+                .is_none()
+        );
+
+        // An outsider cannot issue an invite and then use it.
+        let outsider = Installation::new()?;
+        let outsider_invite = IdentityInviteId::generate()?;
+        let outsider_key = signing_key();
+        let expires_at = IsoTimestamp::from_trusted("2026-10-13T00:00:00Z".to_owned());
+        let (_, status) = fixture.append(
+            &outsider,
+            vec![
+                IdentityInviteIssue {
+                    invite_id: &outsider_invite,
+                    invite_key: &outsider_key,
+                    expires_at: &expires_at,
+                }
+                .operation(),
+            ],
+        )?;
+        assert!(matches!(
+            status,
+            IdentityEventInsertStatus::Quarantined { .. }
+        ));
+        assert!(fixture.log.issued_invite_now(&outsider_invite).is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn an_invite_join_is_signed_by_the_member_it_adds() -> anyhow::Result<()> {
+        let mut fixture = Fixture::new()?;
+        let (invite_id, invite_key) = fixture.issue_invite()?;
+        let joiner = Installation::new()?;
+        let impostor = Installation::new()?;
+        let operation = IdentityInviteJoin {
+            identity_id: &fixture.identity_id,
+            invite_id: &invite_id,
+            invite_key: &invite_key,
+            member: &joiner.keys("Phone"),
+            vaults: &[],
+        }
+        .operation()?;
+        let event = fixture
+            .log
+            .build_append(vec![operation], &impostor.signing(&fixture.at))?;
+        assert!(fixture.log.clone().insert(event).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn an_invite_admits_one_device_in_any_delivery_order() -> anyhow::Result<()> {
+        let mut fixture = Fixture::new()?;
+        let (invite_id, invite_key) = fixture.issue_invite()?;
+        let first = Installation::new()?;
+        let second = Installation::new()?;
+        let join = InviteJoinFixture {
+            invite_id: &invite_id,
+            invite_key: &invite_key,
+            vaults: &[],
+        };
+        // Both joins build on the same heads: concurrent uses of one invite.
+        let one = fixture.invite_join_event(&first, &join)?;
+        let other = fixture.invite_join_event(&second, &join)?;
+        let base = fixture.log.clone();
+        let forward = base
+            .clone()
+            .insert(one.clone())?
+            .log
+            .insert(other.clone())?
+            .log;
+        let backward = base.insert(other)?.log.insert(one)?.log;
+        let forward_state = IdentityControlState::project(&forward)?;
+        assert_eq!(forward_state, IdentityControlState::project(&backward)?);
+        let admitted = [&first, &second]
+            .iter()
+            .filter(|joiner| forward_state.member(joiner.app.app_id()).is_some())
+            .count();
+        assert_eq!(admitted, 1);
         Ok(())
     }
 }

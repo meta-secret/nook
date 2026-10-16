@@ -1,9 +1,6 @@
 use super::wasm_bindgen;
-use crate::{NookDecryptedEnrollmentPayload, NookEnrollmentIssueInput};
-use nook_core::{
-    CheckedEnrollmentEnvelope, CheckedEnrollmentIssuance, EnrollmentEntryLabel, EnrollmentIssuance,
-    EnrollmentLinkInput,
-};
+use crate::NookDecryptedEnrollmentPayload;
+use nook_core::{CheckedEnrollmentEnvelope, EnrollmentEntryLabel, EnrollmentLinkInput};
 use wasm_bindgen::JsError;
 
 #[wasm_bindgen]
@@ -61,35 +58,6 @@ impl NookEnrollmentEntryLabel {
     let code = EnrollmentLinkInput { input: code }.normalize();
     Ok(CheckedEnrollmentEnvelope::parse(&code)
         .map(|checked| checked.envelope().issued_at.clone())?)
-}
-
-#[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn encrypt_unlabeled_enrollment_payload(
-    input: &NookEnrollmentIssueInput,
-    password: &str,
-) -> Result<String, wasm_bindgen::JsError> {
-    Ok(EnrollmentIssuance {
-        input: &input.to_core()?,
-        password,
-        entry_label: "",
-    }
-    .check()
-    .and_then(CheckedEnrollmentIssuance::issue)?)
-}
-
-#[wasm_bindgen]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn encrypt_labeled_enrollment_payload(
-    input: &NookEnrollmentIssueInput,
-    password: &str,
-    entry_label: &str,
-) -> Result<String, wasm_bindgen::JsError> {
-    Ok(EnrollmentIssuance {
-        input: &input.to_core()?,
-        password,
-        entry_label,
-    }
-    .check()
-    .and_then(CheckedEnrollmentIssuance::issue)?)
 }
 
 #[wasm_bindgen]
@@ -160,7 +128,6 @@ impl NookEnrollmentEntryLabel {
 #[allow(unused_imports)]
 mod tests {
     use super::*;
-    use crate::NookEnrollmentProvider;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[cfg(target_arch = "wasm32")]
@@ -188,28 +155,5 @@ mod tests {
         );
         assert!(normalize_sentinel_genesis_participant_payload("{}\n").is_err());
         assert!(sentinel_genesis_participant_fingerprint("{}").is_err());
-    }
-
-    #[wasm_bindgen_test]
-    fn enrollment_payload_round_trip_preserves_label_and_metadata() -> Result<(), JsError> {
-        let identity_id = nook_core::IdentityId::generate()?;
-        let input = NookEnrollmentIssueInput::for_identity(
-            NookEnrollmentProvider::local(),
-            identity_id.to_string(),
-            "Work".into(),
-            "entry-1".into(),
-            "2026-01-01".into(),
-        );
-        let unlabeled = encrypt_unlabeled_enrollment_payload(&input, "password")?;
-        let decoded = decrypt_enrollment_payload(&unlabeled, "password")?;
-        assert_eq!(decoded.identity_label(), "Work");
-        assert_eq!(decoded.identity_id(), identity_id.to_string());
-        assert_eq!(decoded.entry_id(), "entry-1");
-        assert_eq!(decoded.issued_at(), "2026-01-01");
-
-        let labeled = encrypt_labeled_enrollment_payload(&input, "password", "Phone")?;
-        let normalized = normalize_enrollment_code(&labeled);
-        assert_eq!(peek_enrollment_entry_label(&normalized)?.value()?, "Phone");
-        Ok(())
     }
 }

@@ -441,7 +441,7 @@ the passphrase in large type, and the flow's live status underneath.
         <li class="grid min-w-0 gap-2">
           <span class="nk-step-index">03</span>
           <p class="text-sm text-pretty text-foreground">
-            {vault.t(I18N_KEYS.AddDeviceOpenApprove)}
+            {vault.t(I18N_KEYS.AddDeviceOpenJoin)}
           </p>
         </li>
       </ol>

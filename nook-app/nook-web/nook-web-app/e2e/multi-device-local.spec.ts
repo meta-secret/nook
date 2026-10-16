@@ -1,7 +1,7 @@
 import { test, expect, type BrowserContext, type Page } from './fixtures'
 import {
   addSecret,
-  approveIdentityJoin,
+  expectIdentityMembers,
   assertVaultReady,
   connectLocalVault,
   createIsolatedContext,
@@ -10,7 +10,7 @@ import {
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   issueIdentityEnrollmentCode,
   localizeAppLinkForE2e,
-  openVaultAfterIdentityApproval,
+  openVaultAfterIdentityJoin,
   readLocalVaultYamlFromIdb,
   redeemIdentityEnrollmentCode,
   reloadUnlockLocalVaultWithSync,
@@ -96,15 +96,12 @@ test.describe('multi-device identity with a local sync provider', () => {
       .toBeGreaterThan(identityEventsBefore)
   })
 
-  test('member sees the pending join on Devices and approves it', async () => {
-    await approveIdentityJoin(deviceA, 2)
-    await expect(deviceA.getByTestId('pending-join-row')).toHaveCount(0, {
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
+  test('member sees the invited app on Devices without approving it', async () => {
+    await expectIdentityMembers(deviceA, 2)
   })
 
-  test('approved app opens the vault with its identity grant', async () => {
-    await openVaultAfterIdentityApproval(deviceB)
+  test('joined app opens the vault with its identity grant', async () => {
+    await openVaultAfterIdentityJoin(deviceB)
     await expect(
       deviceB.getByTestId('secret-row').filter({ hasText: secretKey }),
     ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })

@@ -61,17 +61,18 @@ pub use auth::device_key_protection::{
 pub use auth::enrollment::{
     CheckedEnrollmentEnvelope, CheckedEnrollmentIssuance, DecryptedEnrollmentPayload,
     EnrollmentCodeEnvelope, EnrollmentEmail, EnrollmentEntryLabel, EnrollmentIdentityTarget,
-    EnrollmentIssuance, EnrollmentIssueInput, EnrollmentLinkInput, EnrollmentProvider,
-    EnrollmentProviderDataRef, EnrollmentState, OAuthAccountIdentity, OAuthRefreshCredential,
-    OAuthRemoteFile, OAuthTokenExpiry, PersonalCredentialTransfer, PersonalEnrollmentProvider,
+    EnrollmentInvite, EnrollmentInviteVault, EnrollmentIssuance, EnrollmentIssueInput,
+    EnrollmentLinkInput, EnrollmentProvider, EnrollmentProviderDataRef, EnrollmentState,
+    InviteSigningSeed, OAuthAccountIdentity, OAuthRefreshCredential, OAuthRemoteFile,
+    OAuthTokenExpiry, PersonalCredentialTransfer, PersonalEnrollmentProvider,
     PersonalEnrollmentProviderData, SharedEnrollmentProvider, SharedEnrollmentProviderData,
     SharedProviderGrant, TypedEnrollmentProvider,
 };
 pub use auth::identity::{
-    IdentityId, IdentityLegacyVaultImport, IdentityLegacyVaultReconciliation, IdentityMember,
-    IdentityMemberKeyBinding, IdentityMemberSigningUpdate, IdentityMemberVaultGrant,
-    IdentityRecord, IdentityRecordRejection, IdentityVaultAppEnvelopes, IdentityVaultBinding,
-    IdentityVaultDek, IdentityVaultDekEpoch, IdentityVaultDekEpochUpdate,
+    IdentityId, IdentityInviteId, IdentityLegacyVaultImport, IdentityLegacyVaultReconciliation,
+    IdentityMember, IdentityMemberKeyBinding, IdentityMemberSigningUpdate,
+    IdentityMemberVaultGrant, IdentityRecord, IdentityRecordRejection, IdentityVaultAppEnvelopes,
+    IdentityVaultBinding, IdentityVaultDek, IdentityVaultDekEpoch, IdentityVaultDekEpochUpdate,
     IdentityVaultDekReconciliation, IdentityVaultKeyOpening, IdentityVaultKeys, MemberDekEnvelope,
 };
 pub use auth::identity_directory::{

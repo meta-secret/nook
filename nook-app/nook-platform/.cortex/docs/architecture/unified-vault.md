@@ -233,7 +233,7 @@ After any local vault save (secret CRUD, join approve/deny, device roster change
    [vault-event-log.md](../../../nook-event-log/.cortex/docs/architecture/vault-event-log.md).
 3. Background fan-out is **quiet** (no per-provider toast spam); status bar shows `Syncing to {provider}…`.
 
-Background **pull** (sync timer, `PendingJoinsBanner` refresh) reconciles every sync provider into the local vault, then `hydrateMultiDeviceState()` reads pending `joins:` from the unlocked session.
+Background **pull** (sync timer) reconciles every sync provider into the local vault, then `hydrateMultiDeviceState()` reads pending `joins:` from the unlocked session.
 
 Manual **Sync all** in the status bar runs the same sync loop with user-visible toasts.
 

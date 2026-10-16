@@ -9,6 +9,7 @@ import {
   generate_password,
   type AuthProvidersSnapshot,
   type IdentityControlSnapshot,
+  type NookEnrollmentIssueInput,
   type NookSecretPage,
   type NookStorageConnectArgs,
   type NookVaultManager,
@@ -54,14 +55,13 @@ export type IdentityControlView =
 
 export enum IdentityJoinKind {
   Idle = "idle",
-  Pending = "pending",
-  Approved = "approved",
+  Joined = "joined",
 }
 
 export type IdentityJoin =
   | { readonly kind: IdentityJoinKind.Idle }
   | {
-      readonly kind: IdentityJoinKind.Pending | IdentityJoinKind.Approved;
+      readonly kind: IdentityJoinKind.Joined;
       readonly identityLabel: string;
     };
 
@@ -70,6 +70,12 @@ export enum IdentityActionOutcome {
 }
 
 type IdentityManagerOperation<T> = (manager: NookVaultManager) => Promise<T>;
+
+/** Named values required by `IdentityControlModel.issueInvite`. */
+export type IdentityInviteIssue = {
+  readonly input: NookEnrollmentIssueInput;
+  readonly passphrase: string;
+};
 
 export type IdentityMemberRename = {
   readonly appId: string;
@@ -176,15 +182,6 @@ export class IdentityControlModel {
       snapshot: loaded.value.snapshot,
     };
     this.mounts = loaded.value.mounts;
-    if (
-      this.join.kind === IdentityJoinKind.Pending &&
-      new IdentityStandingPresentation(loaded.value.snapshot).isMember()
-    ) {
-      this.join = {
-        kind: IdentityJoinKind.Approved,
-        identityLabel: this.join.identityLabel,
-      };
-    }
     return ok(IdentityActionOutcome.Completed);
   }
 
@@ -283,22 +280,24 @@ export class IdentityControlModel {
   }
 
   /**
-   * Approve a join. The open vault is registered with the identity first, so
-   * the approval wraps its DEK for the new app.
+   * Issue a one-time invite code. The open vault is registered with the
+   * identity first, so the code carries its DEK; the invite then reaches
+   * every mount before the joiner looks for it there.
    */
-  async approve(
-    appId: string,
-  ): Promise<Result<IdentityActionOutcome, VaultStorageFailure>> {
+  async issueInvite({
+    input,
+    passphrase,
+  }: IdentityInviteIssue): Promise<Result<string, VaultStorageFailure>> {
     const reconciled = await this.reconcileOpenVault();
-    if (reconciled.isErr()) {
-      this.report(reconciled.error);
-      return reconciled;
-    }
-    return this.act((manager) => manager.approve_identity_join(appId));
-  }
-
-  deny(appId: string) {
-    return this.act((manager) => manager.deny_identity_join(appId));
+    if (reconciled.isErr()) return err(reconciled.error);
+    const issued = await this.withManager((manager) =>
+      manager.issue_identity_invite_code(input, passphrase),
+    );
+    if (issued.isErr()) return err(issued.error);
+    const synced = await this.syncWithMounts();
+    if (synced.isErr()) return err(synced.error);
+    log.info("identity invite issued");
+    return ok(issued.value);
   }
 
   async revoke(
@@ -394,14 +393,12 @@ export class IdentityControlModel {
     return this.reconcileOpenVault();
   }
 
-  markJoinPending(identityLabel: string): void {
-    this.join = { kind: IdentityJoinKind.Pending, identityLabel };
-  }
-
-  /** The joining app checks whether a member approved it yet. */
-  async checkJoinApproval(): Promise<
-    Result<IdentityActionOutcome, VaultStorageFailure>
-  > {
+  /** This app signed itself into an identity with an invite: load its
+   * mounts and the vaults the invite granted. */
+  async followInviteJoin(
+    identityLabel: string,
+  ): Promise<Result<IdentityActionOutcome, VaultStorageFailure>> {
+    this.join = { kind: IdentityJoinKind.Joined, identityLabel };
     const providerLoad: Parameters<typeof this.vault.loadProviders>[0] = {
       ensureLocalRow: false,
     };

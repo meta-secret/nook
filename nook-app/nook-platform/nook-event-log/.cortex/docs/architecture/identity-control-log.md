@@ -57,14 +57,23 @@ The operation set is closed. Every operation is kebab-case tagged on the wire.
 
 - **`identity-created`**
   - Holds the founder's member keys.
-- **`member-join-requested`**
-  - Holds the joiner's member keys. It must be the event's only operation.
-  - The actor must be the joiner's own signing key.
-- **`member-approved`**
-  - Holds the approved member's keys.
-  - Holds one DEK grant per owned vault, wrapped to the member's encryption key.
-- **`member-join-denied`**
-  - Resolves a pending request without membership.
+- **`member-invited`**
+  - Holds a one-time invite: `invite_id`, the invite's Ed25519 public key, and
+    `expires_at`.
+  - A member issues it with the enrollment code that carries the invite's
+    signing seed.
+- **`member-joined-by-invite`**
+  - Holds the `invite_id`, the joiner's member keys, the invite key's
+    signature over the identity id, the invite id, and those member keys, and
+    one DEK grant per vault the invite carried.
+  - It must be the event's only operation, and its actor must be the joiner's
+    own signing key.
+  - Each grant names a different vault.
+- **`member-join-requested`**, **`member-approved`**, and
+  **`member-join-denied`**
+  - Earlier builds joined by request and approval. Logs keep these operations
+    and still project them, so members admitted that way stay members.
+    Current builds never write them.
 - **`member-revoked`**
   - Ends an app key's membership and drops its DEK envelopes from the projection.
 - **`member-renamed`**
@@ -115,11 +124,18 @@ An event's actor must be an identity member in that event's causal past.
 - The genesis actor is a member from genesis onward.
 - `member-approved` makes the approved member's signer a member in every
   causal descendant.
+- `member-joined-by-invite` does the same for its joiner when a member issued
+  that invite in the event's causal past, the invite key signed the joiner's
+  keys, and no other join used the invite.
+  - Of several joins on one invite, the lowest event id wins on every replica.
+  - The joining client refuses an expired invite; the log does not read
+    clocks.
 - `member-revoked` removes membership unless a later approval causally follows
   the revocation.
 - A revocation concurrent with an approval of the same app wins.
-- A self-signed `member-join-requested` is the only operation an outsider may
-  publish.
+- A self-signed `member-joined-by-invite` that holds is the only operation an
+  outsider may publish. A self-signed `member-join-requested` from an earlier
+  build is still accepted as history.
 - An unauthorized event is quarantined with every causal descendant.
 
 The projection applies the same rule over the whole applicable log, so the
@@ -194,7 +210,7 @@ event root.
 An identity with no control log gets one when this installation first needs it:
 the founder-signed `identity-created` genesis. Each vault joins the log as it
 opens here (`vault-registered`, wrapped to this member), and every other app
-joins through a join request that a member approves. Vault rosters never become
+joins with a one-time invite a member issued. Vault rosters never become
 identity members on their own.
 
 ## Prohibited actions
@@ -202,7 +218,7 @@ identity members on their own.
 - Do not let a provider credential, an enrollment code, or a vault backup
   password grant identity membership.
 - Do not accept an identity event whose actor is not an identity member in its
-  causal past, except a self-signed join request.
+  causal past, except a self-signed join that holds an issued invite.
 - Do not store identity events in a vault namespace or vault events in the
   identity namespace.
 - Do not persist private app keys, signing seeds, or plaintext DEKs in the
@@ -218,6 +234,12 @@ Behavior-focused Rust tests cover the log in
   - `approval_wraps_every_owned_vault_dek_to_the_joiner`
 - **Outsider writes, impersonated requests, self-approval**
   - `outsiders_can_only_request_to_join`
+- **Invite joins: DEKs without approval, issued invite and key, self-signed,
+  one device per invite**
+  - `an_invite_holder_joins_with_its_vault_keys_and_no_approval`
+  - `a_join_needs_an_invite_a_member_issued_and_its_key`
+  - `an_invite_join_is_signed_by_the_member_it_adds`
+  - `an_invite_admits_one_device_in_any_delivery_order`
 - **Revocation, envelope removal, rewrap after rotation**
   - `revocation_drops_envelopes_and_blocks_later_actions`
 - **Concurrent revoke versus reapproval**

@@ -6,6 +6,7 @@
 //! the resulting membership and this installation's DEK grants in the local
 //! identity directory.
 
+mod invite;
 mod log_creation;
 mod membership;
 mod vault_access;
@@ -302,16 +303,21 @@ impl NookVaultManager {
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
+    use super::invite::InviteJoinOperation;
     use super::log_creation::NookIdentityLogEnsureOutcome;
     use super::*;
+    use crate::{NookEnrollmentIssueInput, NookEnrollmentProvider};
     use nook_core::{
-        ActiveVaultScope, ProviderSyncCheckpoint, ProviderVaultScope, SigningIdentity,
-        StorageProviderData, StorageProviderType, StoredGithubPat, StoredGithubRepository,
-        StoredLocalFolderConfiguration, StoredOAuthFileConfiguration,
+        ActiveVaultScope, CheckedEnrollmentEnvelope, EnrollmentInvite, ProviderSyncCheckpoint,
+        ProviderVaultScope, SigningIdentity, StorageProviderData, StorageProviderType,
+        StoredGithubPat, StoredGithubRepository, StoredLocalFolderConfiguration,
+        StoredOAuthFileConfiguration,
     };
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
+
+    const INVITE_PASSPHRASE: &str = "invite passphrase";
 
     /// An installation that is not yet part of the founder's identity.
     struct Joiner {
@@ -327,20 +333,29 @@ mod browser_tests {
             })
         }
 
-        /// Write a self-signed join request into the founder's local log, as
-        /// a union with a mount would.
-        async fn request_join(&self, identity_id: &IdentityId) -> anyhow::Result<()> {
+        /// Sign this installation into the founder's local log with an
+        /// invite, as a union with a mount would deliver it.
+        async fn join_with_invite(
+            &self,
+            identity_id: &IdentityId,
+            invite: &EnrollmentInvite,
+        ) -> anyhow::Result<()> {
             let log = NookDatabase::load_identity_log(identity_id).await?;
             let at = IsoTimestamp::from_trusted("2026-10-13T00:00:00Z".to_owned());
+            let operation = InviteJoinOperation {
+                identity_id,
+                invite,
+                member: &IdentityMemberKeys {
+                    app_id: self.app.app_id().clone(),
+                    encryption_public_key: self.app.public_key(),
+                    signing_public_key: self.signer.public_key(),
+                    label: MemberLabel::from_trusted(String::new()),
+                },
+            }
+            .operation()
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
             let event = log.build_append(
-                vec![IdentityControlOperation::MemberJoinRequested {
-                    member: IdentityMemberKeys {
-                        app_id: self.app.app_id().clone(),
-                        encryption_public_key: self.app.public_key(),
-                        signing_public_key: self.signer.public_key(),
-                        label: MemberLabel::from_trusted(String::new()),
-                    },
-                }],
+                vec![operation],
                 &IdentityEventSigning {
                     signing_key: self.signer.signing_key(),
                     created_at: &at,
@@ -399,6 +414,32 @@ mod browser_tests {
                 active_vault_store_id: ActiveVaultScope::Unselected,
             })
             .map_err(|error| anyhow::anyhow!("{error:?}"))
+        }
+
+        async fn issue_code(&mut self, identity_id: &IdentityId) -> anyhow::Result<String> {
+            let input = NookEnrollmentIssueInput::for_identity(
+                NookEnrollmentProvider::local(),
+                identity_id.as_str().to_owned(),
+                "Work".to_owned(),
+                "entry-1".to_owned(),
+                "2026-10-13T00:00:00Z".to_owned(),
+            );
+            Founder::js(
+                self.manager
+                    .issue_identity_invite_code(&input, INVITE_PASSPHRASE.to_owned())
+                    .await,
+            )
+        }
+
+        /// Issue an invite code and open it as its holder would.
+        async fn issue_invite(
+            &mut self,
+            identity_id: &IdentityId,
+        ) -> anyhow::Result<EnrollmentInvite> {
+            let code = self.issue_code(identity_id).await?;
+            Ok(CheckedEnrollmentEnvelope::parse(&code)?
+                .decrypt(INVITE_PASSPHRASE)?
+                .invite)
         }
 
         async fn snapshot(&mut self) -> anyhow::Result<IdentityControlSnapshot> {
@@ -528,24 +569,18 @@ mod browser_tests {
                 .is_err()
         );
 
-        // A join request is approved with the vault DEK, renamed, then revoked.
+        // An invite holder joins with the vault DEK and no approval, is
+        // renamed, then revoked.
         let identity_id = IdentityId::parse(&snapshot.identity_id)?;
+        let invite = founder.issue_invite(&identity_id).await?;
+        assert_eq!(invite.vaults.len(), 1);
         let phone = Joiner::new()?;
-        phone.request_join(&identity_id).await?;
-        let pending = founder.snapshot().await?;
-        assert_eq!(pending.pending_joins.len(), 1);
+        phone.join_with_invite(&identity_id, &invite).await?;
         let phone_id = phone.app.app_id().as_str().to_owned();
-        Founder::js(
-            founder
-                .manager
-                .approve_identity_join(phone_id.clone())
-                .await,
-        )?;
-        let approved = founder.snapshot().await?;
-        assert_eq!(approved.members.len(), 2);
-        assert!(approved.pending_joins.is_empty());
+        let joined = founder.snapshot().await?;
+        assert_eq!(joined.members.len(), 2);
         assert!(
-            approved
+            joined
                 .vaults
                 .iter()
                 .all(|vault| vault.members_missing_dek.is_empty())
@@ -567,18 +602,12 @@ mod browser_tests {
         Founder::js(founder.manager.revoke_identity_member(phone_id).await)?;
         assert_eq!(founder.snapshot().await?.members.len(), 1);
 
-        // A second request is denied without changing membership.
+        // A fresh invite admits another installation.
         let tablet = Joiner::new()?;
-        tablet.request_join(&identity_id).await?;
-        Founder::js(
-            founder
-                .manager
-                .deny_identity_join(tablet.app.app_id().as_str().to_owned())
-                .await,
-        )?;
-        let denied = founder.snapshot().await?;
-        assert!(denied.pending_joins.is_empty());
-        assert_eq!(denied.members.len(), 1);
+        let second = founder.issue_invite(&identity_id).await?;
+        assert_ne!(second.invite_id, invite.invite_id);
+        tablet.join_with_invite(&identity_id, &second).await?;
+        assert_eq!(founder.snapshot().await?.members.len(), 2);
 
         // The browser-local cache has no remote namespace to union with.
         Founder::js(
@@ -611,11 +640,18 @@ mod browser_tests {
         )?);
         assert!(founder.snapshot().await?.mounts.is_empty());
 
-        // A member's join request is already satisfied.
+        // A member joining with an invite is already satisfied.
+        let code = founder.issue_code(&identity_id).await?;
         Founder::js(
             founder
                 .manager
-                .request_identity_join("local".to_owned(), String::new(), String::new())
+                .join_identity_with_invite(
+                    code,
+                    INVITE_PASSPHRASE.to_owned(),
+                    "local".to_owned(),
+                    String::new(),
+                    String::new(),
+                )
                 .await,
         )?;
         Founder::js(founder.manager.delete_local_browser_data().await)?;
@@ -665,13 +701,6 @@ mod browser_tests {
             .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         assert_eq!(snapshot.identity_id, invited.as_str());
         assert!(snapshot.members.is_empty());
-        // Without the invited identity's log there is nothing to join.
-        assert!(
-            manager
-                .request_identity_join("local".to_owned(), String::new(), String::new())
-                .await
-                .is_err()
-        );
         Founder::js(manager.delete_local_browser_data().await)?;
         Ok(())
     }

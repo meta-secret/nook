@@ -102,12 +102,13 @@ pub use device_key_protection::{
 };
 pub use enrollment::{
     CheckedEnrollmentEnvelope, CheckedEnrollmentIssuance, DecryptedEnrollmentPayload,
-    EnrollmentCodeEnvelope, EnrollmentEntryLabel, EnrollmentIdentityTarget, EnrollmentIssuance,
-    EnrollmentIssueInput, EnrollmentLinkInput, EnrollmentProvider, EnrollmentProviderDataRef,
-    EnrollmentState, OAuthAccountIdentity, OAuthRefreshCredential, OAuthRemoteFile,
-    OAuthTokenExpiry, PersonalCredentialTransfer, PersonalEnrollmentProvider,
-    PersonalEnrollmentProviderData, SharedEnrollmentProvider, SharedEnrollmentProviderData,
-    SharedProviderGrant, TypedEnrollmentProvider,
+    EnrollmentCodeEnvelope, EnrollmentEntryLabel, EnrollmentIdentityTarget, EnrollmentInvite,
+    EnrollmentInviteVault, EnrollmentIssuance, EnrollmentIssueInput, EnrollmentLinkInput,
+    EnrollmentProvider, EnrollmentProviderDataRef, EnrollmentState, InviteSigningSeed,
+    OAuthAccountIdentity, OAuthRefreshCredential, OAuthRemoteFile, OAuthTokenExpiry,
+    PersonalCredentialTransfer, PersonalEnrollmentProvider, PersonalEnrollmentProviderData,
+    SharedEnrollmentProvider, SharedEnrollmentProviderData, SharedProviderGrant,
+    TypedEnrollmentProvider,
 };
 pub use errors::{
     DatabaseError, DeviceKeyProtectionError, EnrollmentError, EventError, EventResult,
@@ -235,8 +236,7 @@ pub use auth::identity_control::{
 };
 pub use auth::identity_control_snapshot::{
     IdentityControlSnapshot, IdentityControlSnapshotRequest, IdentityControlStanding,
-    IdentityJoinView, IdentityMemberView, IdentityMountProvider, IdentityMountView,
-    IdentityVaultView,
+    IdentityMemberView, IdentityMountProvider, IdentityMountView, IdentityVaultView,
 };
 pub use auth::vault_meta_actions::{
     DeviceAuthorization, EventGraphAuthorizationProjection, EventGraphDeviceAccess,
@@ -249,14 +249,14 @@ pub use nook_auth2::{
     AppId, AppKey, AppKeyIdentityMembership, DirectoryCreationEnrollment,
     DirectoryLegacyVaultImport, DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening,
     DirectoryVaultEnrollment, IdentityCreation, IdentityDirectory, IdentityDirectoryRejection,
-    IdentityDirectoryResolution, IdentityDirectoryVaultKeys, IdentityId, IdentityLegacyVaultImport,
-    IdentityLegacyVaultReconciliation, IdentityMember, IdentityMemberSigningUpdate,
-    IdentityMemberVaultGrant, IdentityRecord, IdentityRecordRejection, IdentitySelection,
-    IdentityVaultBinding, IdentityVaultDek, IdentityVaultDekEpoch, IdentityVaultDekEpochUpdate,
-    IdentityVaultDekReconciliation, IdentityVaultEventId, IdentityVaultKeyOpening,
-    IdentityVaultKeys, LocalIdentityKeyRetirement, MemberDekEnvelope, RecoveryRetirement,
-    ReplicatedIdentityAdoption, ReplicatedIdentityMembership, ReplicatedVaultGrant,
-    SentinelShareEnvelope, StagedIdentityRebase, VaultMember,
+    IdentityDirectoryResolution, IdentityDirectoryVaultKeys, IdentityId, IdentityInviteId,
+    IdentityLegacyVaultImport, IdentityLegacyVaultReconciliation, IdentityMember,
+    IdentityMemberSigningUpdate, IdentityMemberVaultGrant, IdentityRecord, IdentityRecordRejection,
+    IdentitySelection, IdentityVaultBinding, IdentityVaultDek, IdentityVaultDekEpoch,
+    IdentityVaultDekEpochUpdate, IdentityVaultDekReconciliation, IdentityVaultEventId,
+    IdentityVaultKeyOpening, IdentityVaultKeys, LocalIdentityKeyRetirement, MemberDekEnvelope,
+    RecoveryRetirement, ReplicatedIdentityAdoption, ReplicatedIdentityMembership,
+    ReplicatedVaultGrant, SentinelShareEnvelope, StagedIdentityRebase, VaultMember,
 };
 
 pub use multi_device::{
@@ -287,10 +287,11 @@ pub use nook_event_log::{
     IdentityApprovalRequest, IdentityControlInsertion, IdentityControlLog, IdentityControlMember,
     IdentityControlOperation, IdentityControlRejection, IdentityControlState, IdentityControlVault,
     IdentityEvent, IdentityEventBody, IdentityEventInsertStatus, IdentityEventSchemaVersion,
-    IdentityEventSigning, IdentityGenesisRequest, IdentityJoinRequest, IdentityMemberKeys,
-    IdentityMountTarget, IdentityProviderMount, IdentityVaultDekGrant, IdentityVaultDekLookup,
-    IdentityVaultEpochDeks, IdentityVaultRegistration, MemberVaultDek, OpenedVaultDek,
-    ProviderMountId, VaultAuthorizedRoster, VaultRosterMember,
+    IdentityEventSigning, IdentityGenesisRequest, IdentityInvite, IdentityInviteIssue,
+    IdentityInviteJoin, IdentityJoinRequest, IdentityMemberKeys, IdentityMountTarget,
+    IdentityProviderMount, IdentityVaultDekGrant, IdentityVaultDekLookup, IdentityVaultEpochDeks,
+    IdentityVaultRegistration, MemberVaultDek, OpenedVaultDek, ProviderMountId,
+    VaultAuthorizedRoster, VaultRosterMember,
 };
 pub use password::{
     MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordCharacterSet, PasswordGeneration,

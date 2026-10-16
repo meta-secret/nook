@@ -1,7 +1,7 @@
 <!--
 Adding a device: a focused page outside identity management. A hero names
 it and draws this device, the cloud copy and the new device; a progress bar
-counts cloud copy, invite and approval; one card holds the stage at hand.
+counts cloud copy, invite and join; one card holds the stage at hand.
 Every place that offers "Add a device" opens this.
 -->
 <script lang="ts">
@@ -13,7 +13,6 @@ Every place that offers "Add a device" opens this.
   import { IdentityStandingPresentation } from "$lib/components/identity-control/identity-standing";
   import FirstRunBackLink from "$lib/components/login/FirstRunBackLink.svelte";
   import StepProgress from "$lib/components/login/StepProgress.svelte";
-  import PendingJoinList from "$lib/components/settings/PendingJoinList.svelte";
   import { Button } from "$lib/components/ui/button";
   import { CipherField, scramble } from "$lib/components/ui/cipher";
   import { localizeProviderLabel } from "$lib/auth/providers";
@@ -24,9 +23,8 @@ Every place that offers "Add a device" opens this.
   import { PairingProgress, PairingStage } from "./pairing-stage";
 
   type OnboardDeviceProps = ComponentProps<typeof OnboardDevice>;
-  type PendingJoinListProps = ComponentProps<typeof PendingJoinList>;
 
-  /** How often an open invite checks the identity log for its request. */
+  /** How often an open invite checks the identity log for its device. */
   const JOIN_CHECK_INTERVAL_MS = 8_000;
 
   let {
@@ -46,7 +44,9 @@ Every place that offers "Add a device" opens this.
   const control = $derived(vault.identityControl);
   const snapshot = $derived(control.snapshot);
   const standing = $derived(new IdentityStandingPresentation(snapshot));
-  const pendingJoins = $derived(snapshot === false ? [] : snapshot.pendingJoins);
+  const memberIds = $derived(
+    snapshot === false ? [] : snapshot.members.map((member) => member.appId),
+  );
   const isBusy = $derived(control.busy || vault.isSaving || vault.isVerifying);
   const joinMounts = $derived.by(() => {
     const mountRequest: ConstructorParameters<typeof DeviceJoinMounts>[0] = {
@@ -56,15 +56,15 @@ Every place that offers "Add a device" opens this.
     return new DeviceJoinMounts(mountRequest).compatible;
   });
   const inviteReady = $derived(vault.enrollmentCode !== "");
-  /** A request approved from this page; the flow is then complete. */
-  let approved = $state(false);
+  /** The members when the open invite went out; a new one is its device. */
+  let membersAtInvite = $state<readonly string[] | false>(false);
 
   const progress = $derived.by(() => {
     const facts: ConstructorParameters<typeof PairingProgress>[0] = {
       cloudReady: joinMounts.length > 0,
       inviteReady,
-      requestCount: pendingJoins.length,
-      approved,
+      membersAtInvite,
+      members: memberIds,
     };
     return new PairingProgress(facts);
   });
@@ -72,7 +72,7 @@ Every place that offers "Add a device" opens this.
   const steps = $derived([
     vault.t(I18N_KEYS.AddDeviceProgressCloud),
     vault.t(I18N_KEYS.AddDeviceProgressInvite),
-    vault.t(I18N_KEYS.AddDeviceProgressApprove),
+    vault.t(I18N_KEYS.AddDeviceProgressJoin),
   ]);
   const providerLabel = $derived.by(() => {
     const [mount] = joinMounts;
@@ -107,19 +107,22 @@ Every place that offers "Add a device" opens this.
     vault.errorMsg = vault.t(translationKey);
   }
 
-  function checkForRequests(): void {
+  function checkForDevice(): void {
     void control.syncWithMounts().then((synced) => {
       if (synced.isErr()) reportFailure(synced.error.translationKey);
     });
   }
 
-  async function approve(
-    appId: Parameters<PendingJoinListProps["onApproveJoin"]>[0],
-  ): ReturnType<PendingJoinListProps["onApproveJoin"]> {
-    const approval = await control.approve(appId);
-    if (approval.isOk()) approved = true;
-    return approval;
-  }
+  // Remember who belonged when the invite went out; forget it with the
+  // invite.
+  $effect(() => {
+    if (!inviteReady) {
+      membersAtInvite = false;
+      return;
+    }
+    if (membersAtInvite !== false || snapshot === false) return;
+    membersAtInvite = memberIds;
+  });
 
   onMount(() => {
     void control.followOpenVault().then((refreshed) => {
@@ -127,71 +130,46 @@ Every place that offers "Add a device" opens this.
     });
   });
 
-  // While an invite waits for its device, look for the request now and then
-  // so it shows up without a click.
+  // While an invite waits for its device, look for it now and then so the
+  // join shows up without a click.
   $effect(() => {
     if (stage !== PairingStage.Waiting) return;
     const timer = window.setInterval(() => {
       if (document.visibilityState !== "visible") return;
       if (control.busy || vault.isSaving || vault.isVerifying) return;
-      checkForRequests();
+      checkForDevice();
     }, JOIN_CHECK_INTERVAL_MS);
     return () => window.clearInterval(timer);
   });
 </script>
 
-{#snippet requests()}
-  <div class="grid gap-3" data-testid="add-device-request">
-    <div class="grid gap-1">
-      <h3 class="text-base font-semibold text-foreground">
-        {vault.t(I18N_KEYS.AddDeviceRequestTitle)}
-      </h3>
-      <p class="text-sm text-pretty text-muted-foreground">
-        {vault.t(I18N_KEYS.AddDeviceRequestBody)}
-      </p>
-    </div>
-    <PendingJoinList
-      {vault}
-      {pendingJoins}
-      {isBusy}
-      onApproveJoin={approve}
-      onDenyJoin={(appId: Parameters<PendingJoinListProps["onDenyJoin"]>[0]) =>
-        control.deny(appId)}
-    />
-  </div>
-{/snippet}
-
 {#snippet liveStatus()}
-  {#if stage === PairingStage.Request}
-    {@render requests()}
-  {:else}
-    <div
-      class="flex flex-wrap items-center justify-between gap-3 border border-dashed border-foreground/40 px-4 py-3"
-      data-testid="add-device-waiting"
-      role="status"
-      aria-live="polite"
-    >
-      <span class="flex items-center gap-3 text-sm text-foreground">
-        <span class="relative flex size-2.5" aria-hidden="true">
-          <span
-            class="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-60 motion-reduce:animate-none"
-          ></span>
-          <span class="relative inline-flex size-2.5 rounded-full bg-success"></span>
-        </span>
-        {vault.t(I18N_KEYS.AddDeviceWaiting)}
+  <div
+    class="flex flex-wrap items-center justify-between gap-3 border border-dashed border-foreground/40 px-4 py-3"
+    data-testid="add-device-waiting"
+    role="status"
+    aria-live="polite"
+  >
+    <span class="flex items-center gap-3 text-sm text-foreground">
+      <span class="relative flex size-2.5" aria-hidden="true">
+        <span
+          class="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-60 motion-reduce:animate-none"
+        ></span>
+        <span class="relative inline-flex size-2.5 rounded-full bg-success"></span>
       </span>
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        disabled={isBusy}
-        data-testid="add-device-check"
-        onclick={checkForRequests}
-      >
-        {vault.t(I18N_KEYS.AddDeviceCheck)}
-      </Button>
-    </div>
-  {/if}
+      {vault.t(I18N_KEYS.AddDeviceWaiting)}
+    </span>
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      disabled={isBusy}
+      data-testid="add-device-check"
+      onclick={checkForDevice}
+    >
+      {vault.t(I18N_KEYS.AddDeviceCheck)}
+    </Button>
+  </div>
 {/snippet}
 
 <section
@@ -267,17 +245,17 @@ Every place that offers "Add a device" opens this.
             {vault.t(I18N_KEYS.AddDeviceCloudAction)}
           </Button>
         </div>
-      {:else if stage === PairingStage.Approved}
-        <div class="grid justify-items-start gap-4" data-testid="add-device-approved">
+      {:else if stage === PairingStage.Joined}
+        <div class="grid justify-items-start gap-4" data-testid="add-device-joined">
           <span class="nk-pair-node" data-state="ready">
             <Check class="size-6" aria-hidden="true" />
           </span>
           <div class="grid gap-1.5" role="status">
             <h2 class="text-xl font-semibold tracking-tight text-foreground">
-              {vault.t(I18N_KEYS.AddDeviceApprovedTitle)}
+              {vault.t(I18N_KEYS.AddDeviceJoinedTitle)}
             </h2>
             <p class="max-w-[56ch] text-sm text-pretty text-muted-foreground">
-              {vault.t(I18N_KEYS.AddDeviceApproved)}
+              {vault.t(I18N_KEYS.AddDeviceJoined)}
             </p>
           </div>
           <Button
@@ -289,8 +267,6 @@ Every place that offers "Add a device" opens this.
             {vault.t(I18N_KEYS.AddDeviceDone)}
           </Button>
         </div>
-      {:else if stage === PairingStage.Request && !inviteReady}
-        {@render requests()}
       {:else}
         <OnboardDevice
           {vault}

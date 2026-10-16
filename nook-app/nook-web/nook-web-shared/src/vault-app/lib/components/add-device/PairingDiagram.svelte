@@ -1,7 +1,7 @@
 <!--
 This device, the cloud copy and the new device, drawn as the pairing
 advances: the cloud is dashed while missing, the link to the new device
-runs while the invite waits, and everything turns green once approved.
+runs while the invite waits, and everything turns green once the device joins.
 -->
 <script lang="ts">
   import { Check, Cloud, CloudOff, Laptop, MonitorSmartphone } from "@lucide/svelte";
@@ -21,20 +21,18 @@ runs while the invite waits, and everything turns green once approved.
   } = $props();
 
   const cloudMissing = $derived(stage === PairingStage.Cloud);
-  const approved = $derived(stage === PairingStage.Approved);
-  const inviteOut = $derived(
-    stage === PairingStage.Waiting || stage === PairingStage.Request,
-  );
+  const joined = $derived(stage === PairingStage.Joined);
+  const inviteOut = $derived(stage === PairingStage.Waiting);
   const cloudState = $derived(
-    cloudMissing ? "missing" : approved ? "ready" : "on",
+    cloudMissing ? "missing" : joined ? "ready" : "on",
   );
   const joinerState = $derived(
-    approved ? "ready" : inviteOut ? "waiting" : "off",
+    joined ? "ready" : inviteOut ? "waiting" : "off",
   );
   const firstLink = $derived(
-    cloudMissing ? "off" : approved ? "done" : "on",
+    cloudMissing ? "off" : joined ? "done" : "on",
   );
-  const secondLink = $derived(approved ? "done" : inviteOut ? "live" : "off");
+  const secondLink = $derived(joined ? "done" : inviteOut ? "live" : "off");
 </script>
 
 {#snippet label(text: string, strong: boolean)}
@@ -49,7 +47,7 @@ runs while the invite waits, and everything turns green once approved.
 
 <div class="flex items-start gap-1 sm:gap-2" data-testid="pairing-diagram" data-stage={stage}>
   <div class="flex flex-col items-center gap-2">
-    <span class="nk-pair-node" data-state={approved ? "ready" : "on"}>
+    <span class="nk-pair-node" data-state={joined ? "ready" : "on"}>
       <Laptop class="size-5" aria-hidden="true" />
     </span>
     {@render label(vault.t(I18N_KEYS.JoinThisDevice), true)}
@@ -68,12 +66,12 @@ runs while the invite waits, and everything turns green once approved.
   <span class="nk-pair-link" data-state={secondLink} aria-hidden="true"></span>
   <div class="flex flex-col items-center gap-2">
     <span class="nk-pair-node" data-state={joinerState}>
-      {#if approved}
+      {#if joined}
         <Check class="size-5" aria-hidden="true" />
       {:else}
         <MonitorSmartphone class="size-5" aria-hidden="true" />
       {/if}
     </span>
-    {@render label(vault.t(I18N_KEYS.JoinNodeJoiner), approved)}
+    {@render label(vault.t(I18N_KEYS.JoinNodeJoiner), joined)}
   </div>
 </div>

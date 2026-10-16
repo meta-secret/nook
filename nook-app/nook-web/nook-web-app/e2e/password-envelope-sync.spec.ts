@@ -4,10 +4,10 @@ import {
   openOnboardDevicePanel,
   addSecret,
   addVaultPassword,
-  approveIdentityJoin,
+  expectIdentityMembers,
   assertVaultReady,
   E2E_IDENTITY_PASSPHRASE,
-  openVaultAfterIdentityApproval,
+  openVaultAfterIdentityJoin,
   createIsolatedContext,
   dismissSyncConflictIfVisible,
   expandSettingsSection,
@@ -151,13 +151,13 @@ test.describe('vault password envelope with sync provider', () => {
       .getByTestId('enrollment-password-input')
       .fill(E2E_IDENTITY_PASSPHRASE)
     await deviceB.getByTestId('submit-enrollment-code-btn').click()
-    await expect(deviceB.getByTestId('identity-join-pending')).toBeVisible({
+    await expect(deviceB.getByTestId('identity-join-ready')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
 
-    await approveIdentityJoin(deviceA, 2)
+    await expectIdentityMembers(deviceA, 2)
     await openVaultPage(deviceA)
-    await openVaultAfterIdentityApproval(deviceB)
+    await openVaultAfterIdentityJoin(deviceB)
     await assertVaultReady(deviceB)
 
     const row = deviceB

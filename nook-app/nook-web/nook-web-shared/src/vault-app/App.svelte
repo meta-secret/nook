@@ -43,11 +43,11 @@
     LoginVaultExtensionPairingStatusKind,
     type LoginVaultExtensionPairingStatusEntry,
   } from '$lib/components/login/login-vault-extension-pairing-status'
+  import { extensionSetupBrowser } from '$lib/app/extension-setup'
   import {
-    ExtensionSetupOfferKind,
-    type ExtensionSetupOffer,
-    extensionSetupBrowser,
-  } from '$lib/app/extension-setup'
+    ExtensionSetupOfferModel,
+    type ExtensionSetupOfferSource,
+  } from '$lib/app/extension-setup-offer.svelte'
   import {
     APP_SHELL_WIDTH,
     APP_VERSION,
@@ -63,10 +63,10 @@
   import * as deviceProtectionActions from '$lib/vault/device-protection.svelte'
   import {
     DeviceKeyUnlockPresentation,
-    deviceKeySheetShown,
     type DeviceKeySheetRequest,
     type VaultUnlockRequest,
   } from '$lib/vault/device-key-unlock'
+  import { ExistingVaultUnlockWait } from '$lib/vault/existing-vault-unlock.svelte'
   import * as sentinelGenesisActions from '$lib/vault/sentinel-genesis'
   import { ExistingVaultImportLifecycle } from '$lib/vault/existing-vault-import.svelte'
   import {
@@ -141,9 +141,13 @@
   >([])
   let extensionBackedVaultSession = $state(false)
   let extensionDiscoveryStoreId = $state('')
-  let extensionSetupStateValue = $state<ExtensionSetupOffer>({
-    kind: ExtensionSetupOfferKind.Hidden,
-  })
+  const extensionSetupOfferSource: ExtensionSetupOfferSource = {
+    vault: untrack(() => vault),
+    supported: SUPPORTS_EXTENSION,
+  }
+  const extensionSetupOffer = new ExtensionSetupOfferModel(
+    extensionSetupOfferSource,
+  )
   const EXTENSION_LOCKED_RETRY_MS = 3_000
   $effect(() => {
     const localVaults = vault.localVaults
@@ -431,8 +435,7 @@
         presentation,
         status: vault.deviceProtectionStatus,
       }
-      pendingExistingVaultUnlock = true
-      existingVaultUnlockSheet = deviceKeySheetShown(sheetRequest)
+      existingVaultUnlock.begin(sheetRequest)
       if (vault.deviceProtectionStatus === DeviceProtectionStatus.Passkey) {
         const deviceProtectionUnlockRequest: Parameters<
           deviceProtectionActions.DeviceProtectionActions['unlockDeviceProtection']
@@ -441,10 +444,7 @@
           vault,
         ).unlockDeviceProtection(deviceProtectionUnlockRequest)
       }
-      // A card unlock that did not finish leaves nothing waiting: the card
-      // shows why, and its Unlock tries again.
-      if (!existingVaultUnlockSheet && !vault.deviceProtectionReady)
-        pendingExistingVaultUnlock = false
+      existingVaultUnlock.settle(vault.deviceProtectionReady)
       return
     }
     if (existingVaultImport) {
@@ -505,10 +505,7 @@
   const showLoginWithoutPasskey = $derived(
     !requiresPasskeyFirst && vault.providersLoaded,
   )
-  let pendingExistingVaultUnlock = $state(false)
-  /** The pending existing-vault unlock asks in the page-level sheet; a card
-   * unlock asks on the card and only waits here to open the vault. */
-  let existingVaultUnlockSheet = $state(false)
+  const existingVaultUnlock = new ExistingVaultUnlockWait()
   let pendingEnrollmentDeviceUnlock = $state(false)
   let pendingEnrollmentSubmitState = $state<EnrollmentSubmitQueue>({
     kind: EnrollmentSubmitQueueKind.Idle,
@@ -518,9 +515,7 @@
       VaultCreationQueueKind.WaitingForDevice && !vault.deviceProtectionReady,
   )
   const showExistingVaultPasskeyOverlay = $derived(
-    pendingExistingVaultUnlock &&
-      existingVaultUnlockSheet &&
-      existingVaultNeedsDeviceUnlock,
+    existingVaultUnlock.sheetShown(existingVaultNeedsDeviceUnlock),
   )
   const showEnrollmentPasskeyOverlay = $derived(
     pendingEnrollmentDeviceUnlock &&
@@ -593,19 +588,7 @@
         await vault.loadDb()
       return ok(ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable)
     }
-    if (
-      discovery.status ===
-      ExtensionPairedVaultIdentityStatusMessageStatus.Locked
-    ) {
-      const discoveryRetryRequest: Parameters<
-        typeof schedulePairedExtensionDiscoveryRetry
-      >[0] = {
-        storeId,
-        discoveringStagedImport,
-      }
-      schedulePairedExtensionDiscoveryRetry(discoveryRetryRequest)
-      return ok(ExtensionPairedVaultIdentityStatusMessageStatus.Locked)
-    }
+    // A locked or unavailable extension is asked again shortly.
     if (
       discovery.status !==
       ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked
@@ -617,7 +600,12 @@
         discoveringStagedImport,
       }
       schedulePairedExtensionDiscoveryRetry(discoveryRetryRequest)
-      return ok(ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable)
+      return ok(
+        discovery.status ===
+          ExtensionPairedVaultIdentityStatusMessageStatus.Locked
+          ? ExtensionPairedVaultIdentityStatusMessageStatus.Locked
+          : ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable,
+      )
     }
     routeCoordinator.extensionIdentityRequestState = {
       kind: ExtensionConnectIntentKind.Requested,
@@ -798,28 +786,10 @@
     routeCoordinator.sentinelOnboardingPackage = ''
   }
 
-  async function refreshExtensionSetupStatus() {
-    if (!SUPPORTS_EXTENSION || !vault.isAuthenticated) {
-      extensionSetupStateValue = { kind: ExtensionSetupOfferKind.Hidden }
-      return
-    }
-    const offer = await extensionSetupBrowser.loadExtensionSetupOffer(vault)
-    if (offer.isOk()) extensionSetupStateValue = offer.value
-  }
-
-  /** Pair this vault from its page; Devices owns install and its errors. */
-  async function handleExtensionConnect() {
-    await extensionSetupBrowser.connectInstalledExtension()
-  }
-
   $effect(() => {
     void vault.isAuthenticated
     void vault.activeVault
-    void refreshExtensionSetupStatus()
-
-    return extensionSetupBrowser.observeExtensionSetupChanges(
-      refreshExtensionSetupStatus,
-    )
+    return extensionSetupOffer.follow()
   })
 
   $effect(() => {
@@ -904,13 +874,13 @@
 
   $effect(() => {
     if (
-      !pendingExistingVaultUnlock ||
+      !existingVaultUnlock.pending ||
       !vault.deviceProtectionReady ||
       vault.isVerifying
     ) {
       return
     }
-    pendingExistingVaultUnlock = false
+    existingVaultUnlock.pending = false
     void (existingVaultImportLifecycle.waitingForDevice
       ? existingVaultImportLifecycle.resume()
       : vault.loadDb())
@@ -1004,7 +974,7 @@
       handleCreateSentinelParticipantResponse,
     onDismissPasskey: () => {
       if (showExistingVaultPasskeyOverlay) {
-        pendingExistingVaultUnlock = false
+        existingVaultUnlock.pending = false
         existingVaultImportLifecycle.cancel()
         return
       }
@@ -1017,9 +987,9 @@
   }}
   authenticatedWorkspaceProps={{
     vault,
-    extensionSetupState: extensionSetupStateValue,
+    extensionSetupState: extensionSetupOffer.offer,
     identityHealth,
-    onExtensionConnect: () => void handleExtensionConnect(),
+    onExtensionConnect: () => void extensionSetupOffer.connect(),
     onSettingsReconnect: handleSettingsReconnect,
     onEditorOpenChange: setSecretsAddOpen,
   }}

@@ -37,9 +37,6 @@ Manage, and the vaults are on the card.
   const members = $derived(
     control.snapshot === false ? [] : control.snapshot.members,
   );
-  const pendingJoins = $derived(
-    control.snapshot === false ? [] : control.snapshot.pendingJoins,
-  );
   /** Each device that opens the identity holds its own key; this browser
    * holds one even before the device list loads. */
   const keyCount = $derived(Math.max(members.length, 1));
@@ -95,14 +92,6 @@ Manage, and the vaults are on the card.
     };
     return localizeProviderLabel(labelRequest);
   }
-
-  const pendingText = $derived.by(() => {
-    const request: Parameters<typeof vault.t>[0] = {
-      key: I18N_KEYS.IdentityOverviewPendingJoins,
-      replacements: { count: String(pendingJoins.length) },
-    };
-    return vault.t(request);
-  });
 
   /** The identity opens on too few devices, or keeps no cloud copy. */
   const devicesAtRisk = $derived(
@@ -231,17 +220,6 @@ Manage, and the vaults are on the card.
 {/snippet}
 
 <div class="grid min-w-0 gap-3" data-testid="identity-overview">
-  {#if pendingJoins.length > 0}
-    <button
-      type="button"
-      class="nk-banner nk-band-success flex items-center justify-between gap-3 px-4 py-3 text-left text-sm text-foreground"
-      data-testid="overview-pending-joins"
-      onclick={() => onOpen(WorkspaceSection.Devices)}
-    >
-      {pendingText}
-      <ChevronRight class="size-4 shrink-0" aria-hidden="true" />
-    </button>
-  {/if}
   <div class="grid gap-3 sm:grid-cols-2">
     {#each tiles as item (item.testId)}
       {@render tile(item)}

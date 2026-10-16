@@ -47,9 +47,9 @@ test('the identity card leads to adding a device in three steps', async ({
 
   // Without a cloud copy, Manage leads with a sync provider and holds adding
   // a device until one exists.
-  const addDevice = page.getByTestId('identity-menu-add-device')
-  await expect(addDevice).toBeDisabled()
-  await expect(addDevice).toContainText('Add a cloud sync provider first')
+  const addDeviceItem = page.getByTestId('identity-menu-add-device')
+  await expect(addDeviceItem).toBeDisabled()
+  await expect(addDeviceItem).toContainText('Add a cloud sync provider first')
   await expect(
     page.getByTestId('identity-menu').getByRole('menuitem').first(),
   ).toHaveAttribute('data-testid', 'identity-menu-sync')
@@ -91,6 +91,15 @@ test('the identity card leads to adding a device in three steps', async ({
   })
   await expect(page.getByTestId('onboard-passphrase-display')).toBeVisible()
   await expect(page.getByTestId('add-device-waiting')).toBeVisible()
+  // The invite carries the vault keys: the new device joins by itself, with
+  // no approval step on this one.
+  await expect(page.getByTestId('add-device-progress')).toContainText('Join')
+  await expect(page.getByTestId('add-device-stage')).toContainText(
+    'It joins by itself.',
+  )
+  await expect(page.getByTestId('add-device-stage')).not.toContainText(
+    'Approve',
+  )
   await snapshot(page, '6-invite')
   await demoBeat(page)
 

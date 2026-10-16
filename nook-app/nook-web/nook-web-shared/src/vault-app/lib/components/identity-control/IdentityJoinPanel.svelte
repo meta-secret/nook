@@ -1,12 +1,11 @@
 <!--
-Joining app on the identities hub: waits for a member to approve the join,
-then lists the vaults the identity granted this app that are not on this
-browser yet. Opening one pulls it from an identity mount and self-enrolls.
+Joining app on the identities hub: once an invite signed it in, lists the
+vaults the identity granted this app that are not on this browser yet. Opening one pulls it from an identity mount and self-enrolls.
 -->
 <script lang="ts">
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import { untrack } from "svelte";
-  import { Clock, LockOpen, RefreshCw } from "@lucide/svelte";
+  import { LockOpen } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button";
   import type { VaultState } from "$lib/vault.svelte";
   import { IdentityJoinKind } from "$lib/vault/identity-control.svelte";
@@ -26,19 +25,6 @@ browser yet. Opening one pulls it from an identity mount and self-enrolls.
       (entry) => entry.grantedToCurrentInstallation && !local.has(entry.storeId),
     );
   });
-  const waitingDescription = $derived.by(() => {
-    if (join.kind === IdentityJoinKind.Idle) return "";
-    const waitingArgs: Parameters<typeof vault.t>[0] = {
-      key: I18N_KEYS.IdentityControlJoinWaitingDescription,
-      replacements: { identity: join.identityLabel },
-    };
-    return vault.t(waitingArgs);
-  });
-
-  async function checkAgain() {
-    const checked = await control.checkJoinApproval();
-    if (checked.isErr()) vault.errorMsg = vault.t(checked.error.translationKey);
-  }
 
   async function openVault(storeId: string) {
     const opened = await control.openVault(storeId);
@@ -63,38 +49,12 @@ browser yet. Opening one pulls it from an identity mount and self-enrolls.
   });
 </script>
 
-{#if join.kind === IdentityJoinKind.Pending}
-  <section
-    class="nk-banner space-y-2 p-4 text-sm text-foreground"
-    data-testid="identity-join-pending"
-    role="status"
-    aria-live="polite"
-  >
-    <p class="inline-flex items-center gap-2 font-medium">
-      <Clock class="size-4 shrink-0 text-primary" />
-      {vault.t(I18N_KEYS.IdentityControlJoinWaitingTitle)}
-    </p>
-    <p class="text-xs text-muted-foreground">{waitingDescription}</p>
-    <Button
-      type="button"
-      size="sm"
-      variant="outline"
-      disabled={control.busy}
-      data-testid="identity-join-check-btn"
-      onclick={() => void checkAgain()}
-    >
-      <RefreshCw class="size-3.5" />
-      {vault.t(I18N_KEYS.IdentityControlJoinCheck)}
-    </Button>
-  </section>
-{/if}
-
-{#if !vault.isAuthenticated && (join.kind === IdentityJoinKind.Approved || joinableVaults.length > 0)}
+{#if !vault.isAuthenticated && (join.kind === IdentityJoinKind.Joined || joinableVaults.length > 0)}
   <section
     class="nk-banner nk-banner-success space-y-3 p-4 text-sm text-foreground"
-    data-testid="identity-join-approved"
+    data-testid="identity-join-ready"
   >
-    <p class="font-medium">{vault.t(I18N_KEYS.IdentityControlJoinApproved)}</p>
+    <p class="font-medium">{vault.t(I18N_KEYS.IdentityControlJoinReady)}</p>
     <ul class="space-y-2" data-testid="identity-joinable-vaults">
       {#each joinableVaults as entry (entry.storeId)}
         <li

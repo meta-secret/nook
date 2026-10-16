@@ -2,10 +2,10 @@ import { test, expect, type BrowserContext, type Page } from './fixtures'
 import {
   beginAddSyncProvider,
   addSecret,
-  approveIdentityJoin,
+  expectIdentityMembers,
   assertVaultReady,
   E2E_IDENTITY_PASSPHRASE,
-  openVaultAfterIdentityApproval,
+  openVaultAfterIdentityJoin,
   redeemIdentityEnrollmentCode,
   clearBrowserVault,
   connectGoogleDriveGenesisDevice,
@@ -133,8 +133,8 @@ test.describe('file sync provider onboarding', () => {
     await deviceB.goto('about:blank')
     await deviceB.goto(localEnrollmentLink)
     await redeemIdentityEnrollmentCode(deviceB, E2E_IDENTITY_PASSPHRASE)
-    await approveIdentityJoin(deviceA, 2)
-    await openVaultAfterIdentityApproval(deviceB)
+    await expectIdentityMembers(deviceA, 2)
+    await openVaultAfterIdentityJoin(deviceB)
     await assertVaultReady(deviceB)
     expect(target.stub.getPrivateFolderCreateCount()).toBe(1)
     await waitForSecretOnDevice(deviceB, secretKey)
@@ -269,8 +269,8 @@ test.describe('Google Drive provider modes', () => {
         collaborator.getByTestId('enrollment-icloud-auth-toggle'),
       ).toBeVisible()
       await redeemIdentityEnrollmentCode(collaborator, E2E_IDENTITY_PASSPHRASE)
-      await approveIdentityJoin(owner, 2)
-      await openVaultAfterIdentityApproval(collaborator)
+      await expectIdentityMembers(owner, 2)
+      await openVaultAfterIdentityJoin(collaborator)
       await assertVaultReady(collaborator)
       await waitForSecretOnDevice(collaborator, secretKey)
       expect(await revealSecretValue(collaborator, secretKey)).toBe(secretValue)
