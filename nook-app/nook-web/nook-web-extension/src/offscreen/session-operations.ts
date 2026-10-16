@@ -47,6 +47,12 @@ import {
   connectExtensionIdentityVault,
   joinExtensionIdentity,
 } from './session-identity-operations'
+import {
+  activateExtensionIdentity,
+  beginExtensionIdentityConnection,
+  cancelExtensionIdentityConnection,
+  refreshExtensionIdentityVaults,
+} from './session-identity-membership'
 import { extensionVaultGrant } from './session-vault-grant'
 import {
   type WebsitePasskeyOperationArgs,
@@ -455,6 +461,31 @@ export async function handleSessionMessage({
           typeof connectExtensionIdentityVault
         >[0] = { manager: await getManager(), message }
         return connectExtensionIdentityVault(connectRequest)
+      }
+      case ExtensionSessionMessageType.RefreshIdentityVaults: {
+        const refreshRequest: Parameters<
+          typeof refreshExtensionIdentityVaults
+        >[0] = { manager: await getManager(), message }
+        return refreshExtensionIdentityVaults(refreshRequest)
+      }
+      case ExtensionSessionMessageType.BeginIdentityConnection: {
+        const beginRequest: Parameters<
+          typeof beginExtensionIdentityConnection
+        >[0] = { manager: await getManager(), message }
+        return beginExtensionIdentityConnection(beginRequest)
+      }
+      case ExtensionSessionMessageType.CancelIdentityConnection:
+        return cancelExtensionIdentityConnection(await getManager())
+      case ExtensionSessionMessageType.ActivateIdentity: {
+        const activateRequest: Parameters<typeof activateExtensionIdentity>[0] =
+          { manager: await getManager(), message }
+        const activated = await activateExtensionIdentity(activateRequest)
+        // The other identity starts locked: queued work of this one ends.
+        if (activated.isOk())
+          context.resetOperations(
+            new SessionOperationFailure(SessionOperationFailureKind.Locked),
+          )
+        return activated
       }
       case ExtensionSessionMessageType.UpdateVault: {
         const payload = message.payload

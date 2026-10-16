@@ -151,6 +151,10 @@ class InstalledVaultEventLogListenerFixture {
       case ExtensionSessionMessageType.ImportVault:
       case ExtensionSessionMessageType.JoinIdentity:
       case ExtensionSessionMessageType.ConnectIdentityVault:
+      case ExtensionSessionMessageType.RefreshIdentityVaults:
+      case ExtensionSessionMessageType.BeginIdentityConnection:
+      case ExtensionSessionMessageType.CancelIdentityConnection:
+      case ExtensionSessionMessageType.ActivateIdentity:
       case ExtensionSessionMessageType.UpdateVault:
       case ExtensionSessionMessageType.VaultSummary:
       case ExtensionSessionMessageType.ListPasskeys:
@@ -214,6 +218,10 @@ class InstalledVaultEventLogListenerFixture {
       case ExtensionSessionMessageType.ImportVault:
       case ExtensionSessionMessageType.JoinIdentity:
       case ExtensionSessionMessageType.ConnectIdentityVault:
+      case ExtensionSessionMessageType.RefreshIdentityVaults:
+      case ExtensionSessionMessageType.BeginIdentityConnection:
+      case ExtensionSessionMessageType.CancelIdentityConnection:
+      case ExtensionSessionMessageType.ActivateIdentity:
       case ExtensionSessionMessageType.UpdateVault:
       case ExtensionSessionMessageType.VaultSummary:
       case ExtensionSessionMessageType.ListPasskeys:

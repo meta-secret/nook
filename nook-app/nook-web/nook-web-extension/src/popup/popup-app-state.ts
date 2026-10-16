@@ -13,6 +13,26 @@ export type PairingCandidate =
       device: ExtensionSessionDeviceWire
     }
 
+/** The unlocked identity, checked for vaults it gained since. */
+export enum IdentitySyncKind {
+  Idle = 'idle',
+  Checking = 'checking',
+  Checked = 'checked',
+}
+
+export type IdentitySync =
+  | { kind: IdentitySyncKind.Idle }
+  | { kind: IdentitySyncKind.Checking }
+  | { kind: IdentitySyncKind.Checked; awaitingGrant: number }
+
+/** What follows a successful passkey or PIN step in the popup. */
+export enum DeviceActionFollowUp {
+  /** Show the vaults. */
+  Menu = 'menu',
+  /** The extension just unlocked: pair the vaults its identity gained. */
+  RefreshIdentity = 'refresh-identity',
+}
+
 export enum CompanionSecretCountKind {
   Unavailable = 'unavailable',
   Loading = 'loading',

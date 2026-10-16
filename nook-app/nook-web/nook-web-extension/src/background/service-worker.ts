@@ -100,6 +100,7 @@ import {
 import { handlePairingStateQuery } from './service-worker/pairing-state-query'
 import {
   handleDefaultVaultSelect,
+  handleIdentityVaultsRefresh,
   handlePairedVaultsQuery,
 } from './service-worker/paired-vaults'
 import { pairedVaultsMessages } from '../lib/paired-vaults'
@@ -179,8 +180,11 @@ const extensionLifecycleRoutingDependencies: Parameters<
   handlePairingStateQuery,
   handlePairedVaultsQuery,
   handleDefaultVaultSelect,
+  handleIdentityVaultsRefresh,
   decodePairedVaultsQueryMessage: pairedVaultsMessages.decodeQuery,
   decodeDefaultVaultSelectMessage: pairedVaultsMessages.decodeSelectDefault,
+  decodeIdentityVaultsRefreshMessage:
+    pairedVaultsMessages.decodeRefreshIdentity,
   decodePairingApprovedMessage: ExtensionPairingApprovedMessageSchema.decode,
   importLocalEventLogUpdate,
   importPairingAfterCompanionReady,

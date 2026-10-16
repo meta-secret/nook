@@ -177,6 +177,10 @@ function installFilledProjectionHold(install: FilledProjectionInstall): void {
         case install.session.ImportVault:
         case install.session.JoinIdentity:
         case install.session.ConnectIdentityVault:
+        case install.session.RefreshIdentityVaults:
+        case install.session.BeginIdentityConnection:
+        case install.session.CancelIdentityConnection:
+        case install.session.ActivateIdentity:
         case install.session.UpdateVault:
         case install.session.ListPasskeys:
         case install.session.ListLogins:

@@ -261,18 +261,19 @@ impl NookVaultManager {
         github_repo: String,
     ) -> Result<(), JsError> {
         let app_key = self.unlocked_app_key()?;
-        NookDatabase::ensure_local_identity_for_app_key(IdentityDbEnsureLocalIdentityForAppKey {
-            app_key: &app_key,
-            label: &member_label,
-        })
-        .await?;
-        self.bind_local_identity_to_invitation(identity_id).await?;
+        // An invite sealed to another app key leaves the local identity as it was.
         let sealed = AgeArmoredCiphertext::from_trusted(sealed_passphrase);
         let passphrase = InvitePassphraseOpen {
             identity: &app_key,
             sealed: &sealed,
         }
         .open()?;
+        NookDatabase::ensure_local_identity_for_app_key(IdentityDbEnsureLocalIdentityForAppKey {
+            app_key: &app_key,
+            label: &member_label,
+        })
+        .await?;
+        self.bind_local_identity_to_invitation(identity_id).await?;
         self.join_identity_with_invite(
             code,
             passphrase.as_str().to_owned(),

@@ -178,9 +178,12 @@ private identity.
 - One paired vault is the default: new logins are saved there and it leads
   every list. Make default on another row rewrites only the setup record
   (`select_default_vault` in the companion core); grants are untouched.
-- Connect another vault starts pairing (it is the primary action while no
+- Connect another identity starts pairing (it is the primary action while no
   vault is paired, or when the tab was opened to pair); Open Nook opens the
-  web app.
+  web app. When the unlocked key already belongs to a replicated identity, the
+  next identity first gets its own key (see Identity membership).
+- A group whose key is not the unlocked one offers Use this identity: the
+  extension selects that identity and asks for its own unlock.
 - The tab starts the Simple Vault approval route only after an explicit
   Connect / pair action (or Open Simple Vault).
 - The Simple Vault header vault menu lists every local vault in the viewport.
@@ -741,6 +744,38 @@ authority. The field is additive and decoded with a serde default, so grants
 stored before it existed read back with an empty label and need no migration;
 re-pairing the vault records the label. Approvals from a web app that predates
 the field are admitted with an empty label.
+
+### Identity membership
+
+The extension is a member device of each identity it connects, the way a new
+phone or computer is.
+
+- **Join:** An approval carries an identity invite whose passphrase is sealed
+  to the extension's app key. The offscreen session opens it, binds the key's
+  local identity to the invited identity, signs the join, and pairs the
+  identity's other vaults through the same import as the approved vault. An
+  identity with no cloud sync provider pairs only the approved vault.
+- **Later vaults:** After each unlock in the popup, the extension unions the
+  unlocked identity's log with every sync provider that replicates it and
+  pairs each vault the identity grants it and it holds no grant for. Rust
+  plans the vaults (`IdentityVaultPairingPlan`); vaults the identity has not
+  granted it yet are reported, not skipped. A failed refresh or vault shows an
+  error and pairs nothing further.
+  - The refresh reply names provider ids only. The identity's provider stays
+    saved in the session, so no credential travels to the service worker.
+- **One key per identity:** The identity directory binds one app key to one
+  local identity, as on the web app. Rust decides which key connects the next
+  identity (`IdentityDirectory::connection_key`):
+  - a key whose identity has no replicated log keeps connecting vaults itself,
+    including vaults paired one by one;
+  - a key of a replicated identity stages a new local identity, whose passkey
+    or PIN setup creates the key the next approval is sealed to.
+- **Binding:** `IdentityDirectory::invitation_binding` refuses an invite for a
+  key that already belongs to another identity, and an identity another local
+  key already holds, instead of merging identities.
+- **Switching:** One identity is unlocked at a time. Grants keep their key's app
+  id, so the popup groups vaults by key and offers Use this identity for the
+  others, which selects that identity and locks the current one.
 
 - **Installation key:** Create an extension-specific Nook device key instead of
   reusing or scraping the `simple.nokey.sh` browser private key.

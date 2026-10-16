@@ -52,6 +52,11 @@ pub enum MultiDeviceError {
     #[error("Identity {identity_id} already exists on this installation.")]
     ReplicatedIdentityAlreadyLocal { identity_id: String },
 
+    #[error(
+        "This key already belongs to identity {identity_id}; join another identity with its own key."
+    )]
+    AppKeyBelongsToAnotherIdentity { identity_id: String },
+
     #[error("Vault DEK epoch is stale: expected {expected}, found {actual}.")]
     StaleVaultDekEpoch { expected: String, actual: String },
 

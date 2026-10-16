@@ -724,10 +724,18 @@ pub const EXTENSION_AUTHENTICATOR_PICKER_STEP_LABEL: &str =
     "extension.authenticator_picker.step_label";
 pub const EXTENSION_AUTHENTICATOR_PICKER_TITLE: &str = "extension.authenticator_picker.title";
 pub const EXTENSION_COMPANION_CONNECT_ANOTHER: &str = "extension.companion.connect_another";
+pub const EXTENSION_COMPANION_CONNECT_IDENTITY_FAILED: &str =
+    "extension.companion.connect_identity_failed";
 pub const EXTENSION_COMPANION_CONNECT_VAULT: &str = "extension.companion.connect_vault";
 pub const EXTENSION_COMPANION_DEFAULT_VAULT: &str = "extension.companion.default_vault";
 pub const EXTENSION_COMPANION_DEFAULT_VAULT_HINT: &str = "extension.companion.default_vault_hint";
 pub const EXTENSION_COMPANION_FILLS_PASSWORDS: &str = "extension.companion.fills_passwords";
+pub const EXTENSION_COMPANION_IDENTITY_SYNC_AWAITING: &str =
+    "extension.companion.identity_sync_awaiting";
+pub const EXTENSION_COMPANION_IDENTITY_SYNC_CHECKING: &str =
+    "extension.companion.identity_sync_checking";
+pub const EXTENSION_COMPANION_IDENTITY_SYNC_FAILED: &str =
+    "extension.companion.identity_sync_failed";
 pub const EXTENSION_COMPANION_ITEM_COUNT: &str = "extension.companion.item_count";
 pub const EXTENSION_COMPANION_MAKE_DEFAULT: &str = "extension.companion.make_default";
 pub const EXTENSION_COMPANION_MAKE_DEFAULT_FAILED: &str = "extension.companion.make_default_failed";
@@ -740,6 +748,8 @@ pub const EXTENSION_COMPANION_PILOT_RETURN_GUIDANCE: &str =
     "extension.companion.pilot_return_guidance";
 pub const EXTENSION_COMPANION_STEP_LABEL: &str = "extension.companion.step_label";
 pub const EXTENSION_COMPANION_UNLOCKED: &str = "extension.companion.unlocked";
+pub const EXTENSION_COMPANION_USE_IDENTITY: &str = "extension.companion.use_identity";
+pub const EXTENSION_COMPANION_USE_IDENTITY_FAILED: &str = "extension.companion.use_identity_failed";
 pub const EXTENSION_COMPANION_VAULTS_HINT: &str = "extension.companion.vaults_hint";
 pub const EXTENSION_COMPANION_VAULTS_TITLE: &str = "extension.companion.vaults_title";
 pub const EXTENSION_CONNECT_CONTINUE: &str = "extension.connect.continue";
@@ -788,6 +798,12 @@ pub const EXTENSION_DEVICE_SETUP_CREATE_DESCRIPTION: &str =
 pub const EXTENSION_DEVICE_SETUP_CREATE_ONE: &str = "extension.device_setup.create_one";
 pub const EXTENSION_DEVICE_SETUP_CREATE_TITLE: &str = "extension.device_setup.create_title";
 pub const EXTENSION_DEVICE_SETUP_HAVE_PASSKEY: &str = "extension.device_setup.have_passkey";
+pub const EXTENSION_DEVICE_SETUP_IDENTITY_KEY_CANCEL: &str =
+    "extension.device_setup.identity_key_cancel";
+pub const EXTENSION_DEVICE_SETUP_IDENTITY_KEY_DESCRIPTION: &str =
+    "extension.device_setup.identity_key_description";
+pub const EXTENSION_DEVICE_SETUP_IDENTITY_KEY_TITLE: &str =
+    "extension.device_setup.identity_key_title";
 pub const EXTENSION_DEVICE_SETUP_NO_PASSKEY: &str = "extension.device_setup.no_passkey";
 pub const EXTENSION_DEVICE_SETUP_NODE_EXTENSION: &str = "extension.device_setup.node_extension";
 pub const EXTENSION_DEVICE_SETUP_NODE_IDENTITY: &str = "extension.device_setup.node_identity";

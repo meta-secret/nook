@@ -121,6 +121,9 @@ function sessionMessagePriority(
     case ExtensionSessionMessageType.UnlockOptions:
     case ExtensionSessionMessageType.UnlockPasskey:
     case ExtensionSessionMessageType.UnlockPin:
+    case ExtensionSessionMessageType.BeginIdentityConnection:
+    case ExtensionSessionMessageType.CancelIdentityConnection:
+    case ExtensionSessionMessageType.ActivateIdentity:
       return SessionOperationPriority.Interactive
     case ExtensionSessionMessageType.ClassifyGrantAuthority:
     case ExtensionSessionMessageType.Status:
@@ -130,6 +133,7 @@ function sessionMessagePriority(
     case ExtensionSessionMessageType.ImportVault:
     case ExtensionSessionMessageType.JoinIdentity:
     case ExtensionSessionMessageType.ConnectIdentityVault:
+    case ExtensionSessionMessageType.RefreshIdentityVaults:
     case ExtensionSessionMessageType.UpdateVault:
     case ExtensionSessionMessageType.VaultSummary:
     case ExtensionSessionMessageType.ListPasskeys:
@@ -691,6 +695,7 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
             type === ExtensionSessionMessageType.SealIdentityHandoff ||
             type === ExtensionSessionMessageType.JoinIdentity ||
             type === ExtensionSessionMessageType.ConnectIdentityVault ||
+            type === ExtensionSessionMessageType.RefreshIdentityVaults ||
             type === ExtensionSessionMessageType.CancelPasskey ||
             type === ExtensionSessionMessageType.ExportVaultEventLog
           if (

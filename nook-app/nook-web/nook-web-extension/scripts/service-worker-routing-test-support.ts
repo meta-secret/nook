@@ -195,8 +195,11 @@ const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
   handlePairingStateQuery: mock(() => false),
   handlePairedVaultsQuery: mock(() => false),
   handleDefaultVaultSelect: mock(() => false),
+  handleIdentityVaultsRefresh: mock(() => false),
   decodePairedVaultsQueryMessage: pairedVaultsMessages.decodeQuery,
   decodeDefaultVaultSelectMessage: pairedVaultsMessages.decodeSelectDefault,
+  decodeIdentityVaultsRefreshMessage:
+    pairedVaultsMessages.decodeRefreshIdentity,
   decodePairingApprovedMessage: ExtensionPairingApprovedMessage.decode,
   importLocalEventLogUpdate: unusedAsyncDependency,
   importPairingAfterCompanionReady: unusedAsyncDependency,

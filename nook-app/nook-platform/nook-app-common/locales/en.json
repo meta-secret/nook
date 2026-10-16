@@ -1657,7 +1657,10 @@
       "unlock_action": "Unlock",
       "pin_setup_title": "Protect it with a PIN",
       "pin_setup_description": "A PIN or passphrase becomes the key to this extension.",
-      "pin_unlock_description": "Enter its PIN or passphrase."
+      "pin_unlock_description": "Enter its PIN or passphrase.",
+      "identity_key_title": "Add a key for the next identity",
+      "identity_key_description": "Each identity connects through its own key, as on the Nook web app. Create one for the identity you are connecting; your other identities stay as they are.",
+      "identity_key_cancel": "Cancel"
     },
     "connect": {
       "title": "Use Nook on websites",
@@ -1691,7 +1694,13 @@
       "connect_vault": "Connect an identity",
       "open_nook": "Open Nook",
       "make_default_failed": "Nook could not change the default vault. Try again.",
-      "other_vaults": "Other vaults"
+      "other_vaults": "Other vaults",
+      "identity_sync_checking": "Checking your identity for new vaults…",
+      "identity_sync_failed": "Nook could not check your identity for new vaults. Lock and unlock the extension to try again.",
+      "identity_sync_awaiting": "Vaults of this identity not shared with this extension yet: {count}",
+      "use_identity": "Use this identity",
+      "use_identity_failed": "Nook could not switch to that identity. Try again.",
+      "connect_identity_failed": "Nook could not start connecting another identity. Try again."
     },
     "authenticator_picker": {
       "step_label": "2FA with Nook",

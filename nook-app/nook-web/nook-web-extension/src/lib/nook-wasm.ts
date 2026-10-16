@@ -17,6 +17,7 @@ import {
   type ExtensionSessionDeviceWire,
   generate_password,
   get_translation_catalog,
+  type NookIdentityConnectionStart,
   NookAppLocaleParse,
   parse_app_locale,
   resolve_app_locale_from_tags,
@@ -55,6 +56,7 @@ export {
   DeviceMode,
   ExtensionSessionDeviceProtectionStatusWire as DeviceProtectionStatus,
 }
+export type { NookIdentityConnectionStart }
 
 export enum StoredAppLocaleInputKind {
   Missing = 'missing',
@@ -145,7 +147,25 @@ type ExtensionUnlockPinRequest = {
   payload: { pin: string; queue: ExtensionSessionQueue }
 }
 
+type ExtensionBeginIdentityConnectionRequest = {
+  type: typeof ExtensionSessionMessageType.BeginIdentityConnection
+  payload: { label: string; queue: ExtensionSessionQueue }
+}
+
+type ExtensionCancelIdentityConnectionRequest = {
+  type: typeof ExtensionSessionMessageType.CancelIdentityConnection
+  payload: ExtensionControlPayload
+}
+
+type ExtensionActivateIdentityRequest = {
+  type: typeof ExtensionSessionMessageType.ActivateIdentity
+  payload: { appId: string; queue: ExtensionSessionQueue }
+}
+
 type ExtensionSessionRequest =
+  | ExtensionBeginIdentityConnectionRequest
+  | ExtensionCancelIdentityConnectionRequest
+  | ExtensionActivateIdentityRequest
   | ExtensionStatusRequest
   | ExtensionBeginPasskeySetupRequest
   | ExtensionFinishPasskeySetupRequest
@@ -648,6 +668,72 @@ class ExtensionWasmRuntime {
     }
     const response = await this.sessionResponse(unlockPinResponseRequest)
     return response.device
+  }
+
+  /** Start connecting one more identity: the unlocked key joins it, or a
+   * new identity named `label` waits for its own passkey or PIN. */
+  async beginIdentityConnection(
+    label: string,
+  ): Promise<NookIdentityConnectionStart> {
+    const request: ExtensionBeginIdentityConnectionRequest = {
+      type: ExtensionSessionMessageType.BeginIdentityConnection,
+      payload: { label, queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
+    }
+    const responseRequest: ExtensionSessionResponseRequest<NookIdentityConnectionStart> =
+      {
+        message: request,
+        decode: (response) => {
+          if (
+            response &&
+            typeof response === 'object' &&
+            'ok' in response &&
+            response.ok === true &&
+            'start' in response &&
+            (response.start === 'current-key' ||
+              response.start === 'new-key-staged')
+          )
+            return response.start
+          throw new Error('Extension identity connection did not start.')
+        },
+      }
+    return this.sessionResponse(responseRequest)
+  }
+
+  /** Drop the identity staged for a key the person did not set up. */
+  async cancelIdentityConnection(): Promise<void> {
+    const request: ExtensionCancelIdentityConnectionRequest = {
+      type: ExtensionSessionMessageType.CancelIdentityConnection,
+      payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
+    }
+    const responseRequest: ExtensionSessionResponseRequest<void> = {
+      message: request,
+      decode: (response) => this.acknowledged(response),
+    }
+    await this.sessionResponse(responseRequest)
+  }
+
+  /** Use another identity of this extension; it opens with its own unlock. */
+  async activateIdentity(appId: string): Promise<void> {
+    const request: ExtensionActivateIdentityRequest = {
+      type: ExtensionSessionMessageType.ActivateIdentity,
+      payload: { appId, queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
+    }
+    const responseRequest: ExtensionSessionResponseRequest<void> = {
+      message: request,
+      decode: (response) => this.acknowledged(response),
+    }
+    await this.sessionResponse(responseRequest)
+  }
+
+  private acknowledged(response: unknown): void {
+    if (
+      response &&
+      typeof response === 'object' &&
+      'ok' in response &&
+      response.ok === true
+    )
+      return
+    throw new Error('Extension session refused the identity request.')
   }
 
   async generateSuggestedPassword(): Promise<string> {

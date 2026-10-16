@@ -29,6 +29,9 @@
   - Use explicit unknown or legacy states when evidence is unavailable.
 - **Browser extension:** Treat it as another app installation.
   - Extension setup enrolls its internal app key into a selected identity.
+  - Each further identity it joins gets its own app key, as on the web app;
+    see the extension's
+    [identity membership](../../../nook-web/nook-web-extension/.cortex/docs/spec/browser-extension.md#identity-membership).
 
 See
 [identity-vault-architecture.md](../../../nook-platform/.cortex/docs/architecture/identity-vault-architecture.md).

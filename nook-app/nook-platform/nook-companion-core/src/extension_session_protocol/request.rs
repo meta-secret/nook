@@ -2,6 +2,10 @@
 
 #![allow(dead_code)] // Serde reads the private wire fields during concrete decoding.
 
+use super::identity_membership::{
+    ActivateIdentityPayload, BeginIdentityConnectionPayload, ConnectIdentityVaultPayload,
+    JoinIdentityPayload, RefreshIdentityVaultsPayload,
+};
 use super::login_save::{
     DirectLoginSaveActionPayload, GrantedLoginSaveActionPayload, LoginSavePlanPayload,
     OriginPayload,
@@ -219,30 +223,6 @@ pub struct ImportVaultPayload {
     queue: QueueDisposition,
 }
 
-/// Join the identity of an approved vault, as a new device does: the
-/// invite from the approval, through a sync provider the session already
-/// holds (by id, so no credential travels in this request).
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Tsify)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct JoinIdentityPayload {
-    identity_id: String,
-    member_label: String,
-    code: String,
-    sealed_passphrase: String,
-    mount_provider_id: String,
-    queue: QueueDisposition,
-}
-
-/// Open one vault of a joined identity with the key the identity grants
-/// this installation, through the identity's sync provider.
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Tsify)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct ConnectIdentityVaultPayload {
-    vault_store_id: String,
-    mount_provider_id: String,
-    queue: QueueDisposition,
-}
-
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct UpdateVaultPayload {
@@ -437,6 +417,14 @@ pub enum ExtensionSessionRequest {
     JoinIdentity(JoinIdentityPayload),
     #[serde(rename = "nook:extension-session-connect-identity-vault")]
     ConnectIdentityVault(ConnectIdentityVaultPayload),
+    #[serde(rename = "nook:extension-session-refresh-identity-vaults")]
+    RefreshIdentityVaults(RefreshIdentityVaultsPayload),
+    #[serde(rename = "nook:extension-session-begin-identity-connection")]
+    BeginIdentityConnection(BeginIdentityConnectionPayload),
+    #[serde(rename = "nook:extension-session-cancel-identity-connection")]
+    CancelIdentityConnection(EmptyPayload),
+    #[serde(rename = "nook:extension-session-activate-identity")]
+    ActivateIdentity(ActivateIdentityPayload),
     #[serde(rename = "nook:extension-session-update-vault")]
     UpdateVault(UpdateVaultPayload),
     ExportVaultEventLog(ExportVaultEventLogPayload),
@@ -552,6 +540,10 @@ impl Drop for ExtensionSessionRequestWire {
             | ExtensionSessionRequest::UnlockOptions(_)
             | ExtensionSessionRequest::ImportVault(_)
             | ExtensionSessionRequest::ConnectIdentityVault(_)
+            | ExtensionSessionRequest::RefreshIdentityVaults(_)
+            | ExtensionSessionRequest::BeginIdentityConnection(_)
+            | ExtensionSessionRequest::CancelIdentityConnection(_)
+            | ExtensionSessionRequest::ActivateIdentity(_)
             | ExtensionSessionRequest::UpdateVault(_)
             | ExtensionSessionRequest::ExportVaultEventLog(_)
             | ExtensionSessionRequest::VaultSummary(_)
@@ -945,47 +937,5 @@ mod tests {
                 ExtensionSessionRequestValidation::Rejected
             );
         }
-    }
-
-    const JOIN_IDENTITY: &str = r#"{"type":"nook:extension-session-join-identity","payload":{"identityId":"identity-1","memberLabel":"Nook Extension","code":"nook-enroll-code","sealedPassphrase":"age-sealed","mountProviderId":"provider-1","queue":{"kind":"message-default"}}}"#;
-
-    #[test]
-    fn joining_an_identity_names_the_mount_and_carries_no_credential() {
-        assert_eq!(
-            ExtensionSessionRequestValidation::validate_extension_session_request_json(
-                JOIN_IDENTITY
-            ),
-            ExtensionSessionRequestValidation::Accepted
-        );
-        let with_token = JOIN_IDENTITY.replace(
-            r#""mountProviderId":"provider-1","#,
-            r#""mountProviderId":"provider-1","githubPat":"ghp_secret","#,
-        );
-        assert_eq!(
-            ExtensionSessionRequestValidation::validate_extension_session_request_json(&with_token),
-            ExtensionSessionRequestValidation::Rejected
-        );
-    }
-
-    #[test]
-    fn join_identity_payload_zeroizes_the_invite() -> anyhow::Result<()> {
-        let mut request: ExtensionSessionRequest = serde_json::from_str(JOIN_IDENTITY)?;
-        let ExtensionSessionRequest::JoinIdentity(payload) = &mut request else {
-            anyhow::bail!("decoded request must preserve the join identity variant");
-        };
-        payload.code.zeroize();
-        payload.sealed_passphrase.zeroize();
-        assert!(payload.code.is_empty());
-        assert!(payload.sealed_passphrase.is_empty());
-        Ok(())
-    }
-
-    #[test]
-    fn connecting_an_identity_vault_names_the_vault_and_mount() {
-        let request = r#"{"type":"nook:extension-session-connect-identity-vault","payload":{"vaultStoreId":"store_abcdefghijk","mountProviderId":"provider-1","queue":{"kind":"message-default"}}}"#;
-        assert_eq!(
-            ExtensionSessionRequestValidation::validate_extension_session_request_json(request),
-            ExtensionSessionRequestValidation::Accepted
-        );
     }
 }

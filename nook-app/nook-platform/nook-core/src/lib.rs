@@ -241,6 +241,7 @@ pub use auth::identity_control_snapshot::{
     IdentityControlSnapshot, IdentityControlSnapshotRequest, IdentityControlStanding,
     IdentityMemberView, IdentityMountProvider, IdentityMountView, IdentityVaultView,
 };
+pub use auth::identity_vault_pairing::{IdentityVaultPairingPlan, IdentityVaultPairingRequest};
 pub use auth::vault_meta_actions::{
     DeviceAuthorization, EventGraphAuthorizationProjection, EventGraphDeviceAccess,
     EventGraphDeviceAccessRequest, SentinelMemberRecordProjection,
@@ -251,13 +252,15 @@ pub use multi_device::SimpleIdentityGenesisOperationsInput;
 pub use nook_auth2::{
     AppId, AppKey, AppKeyIdentityMembership, DirectoryCreationEnrollment,
     DirectoryLegacyVaultImport, DirectoryMemberSigningUpdate, DirectoryOwnedVaultOpening,
-    DirectoryVaultEnrollment, IdentityCreation, IdentityDirectory, IdentityDirectoryRejection,
-    IdentityDirectoryResolution, IdentityDirectoryVaultKeys, IdentityId, IdentityInviteId,
-    IdentityLegacyVaultImport, IdentityLegacyVaultReconciliation, IdentityMember,
-    IdentityMemberSigningUpdate, IdentityMemberVaultGrant, IdentityRecord, IdentityRecordRejection,
-    IdentitySelection, IdentityVaultBinding, IdentityVaultDek, IdentityVaultDekEpoch,
-    IdentityVaultDekEpochUpdate, IdentityVaultDekReconciliation, IdentityVaultEventId,
-    IdentityVaultKeyOpening, IdentityVaultKeys, LocalIdentityKeyRetirement, MemberDekEnvelope,
+    DirectoryVaultEnrollment, IdentityConnectionKey, IdentityConnectionKeyRequest,
+    IdentityCreation, IdentityDirectory, IdentityDirectoryRejection, IdentityDirectoryResolution,
+    IdentityDirectoryVaultKeys, IdentityId, IdentityInvitationBinding,
+    IdentityInvitationBindingRequest, IdentityInviteId, IdentityLegacyVaultImport,
+    IdentityLegacyVaultReconciliation, IdentityMember, IdentityMemberSigningUpdate,
+    IdentityMemberVaultGrant, IdentityRecord, IdentityRecordRejection, IdentitySelection,
+    IdentityVaultBinding, IdentityVaultDek, IdentityVaultDekEpoch, IdentityVaultDekEpochUpdate,
+    IdentityVaultDekReconciliation, IdentityVaultEventId, IdentityVaultKeyOpening,
+    IdentityVaultKeys, LocalIdentityKeyRetirement, LocalIdentityLog, MemberDekEnvelope,
     RecoveryRetirement, ReplicatedIdentityAdoption, ReplicatedIdentityMembership,
     ReplicatedVaultGrant, SentinelShareEnvelope, StagedIdentityRebase, VaultMember,
 };
