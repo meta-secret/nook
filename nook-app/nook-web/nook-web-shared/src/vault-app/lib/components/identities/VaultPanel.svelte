@@ -135,24 +135,47 @@ once it is open.
     return vault.t(request)
   })
 
+  /** Passphrases named before "+N more". */
+  const PASSPHRASE_NAMES = 2
+
+  /** The open vault is the session's vault, so its passphrases are the
+   * ones the session holds; they change as the Passphrases page edits them. */
+  const passphrasesHint = $derived.by(() => {
+    if (!open) return vault.t(I18N_KEYS.WorkspaceVaultPanelPassphrasesHint)
+    const names = vault.passwordEntries.map((entry) => entry.label)
+    if (names.length === 0)
+      return vault.t(I18N_KEYS.WorkspaceVaultPanelPassphrasesNone)
+    const shown = names.slice(0, PASSPHRASE_NAMES).join(', ')
+    if (names.length <= PASSPHRASE_NAMES) return shown
+    const moreRequest: Parameters<typeof vault.t>[0] = {
+      key: I18N_KEYS.IdentityOverviewMore,
+      replacements: { count: String(names.length - PASSPHRASE_NAMES) },
+    }
+    return `${shown} ${vault.t(moreRequest)}`
+  })
+
   type ManageItem = {
     readonly section: WorkspaceSection
     readonly testId: string
     readonly title: string
     readonly hint: string
+    /** How many the item holds, beside its title; empty shows none. */
+    readonly count: string
   }
   const manageItems = $derived.by((): ManageItem[] => [
     {
       section: WorkspaceSection.Passwords,
       testId: 'vault-panel-passphrases',
       title: vault.t(I18N_KEYS.WorkspaceSectionPasswords),
-      hint: vault.t(I18N_KEYS.WorkspaceVaultPanelPassphrasesHint),
+      hint: passphrasesHint,
+      count: open ? String(vault.passwordEntries.length) : '',
     },
     {
       section: WorkspaceSection.Import,
       testId: 'vault-panel-import',
       title: vault.t(I18N_KEYS.WorkspaceSectionImport),
       hint: vault.t(I18N_KEYS.WorkspaceVaultPanelImportHint),
+      count: '',
     },
   ])
 </script>
@@ -425,11 +448,20 @@ once it is open.
               {/if}
             </span>
             <span class="flex min-w-0 flex-1 flex-col">
-              <span class="truncate text-sm font-medium text-foreground"
-                >{item.title}</span
-              >
-              <span class="truncate text-xs text-muted-foreground"
-                >{item.hint}</span
+              <span class="flex min-w-0 items-baseline gap-2">
+                <span class="truncate text-sm font-medium text-foreground"
+                  >{item.title}</span
+                >
+                {#if item.count}
+                  <span
+                    class="font-mono text-[11px] text-muted-foreground"
+                    data-testid="{item.testId}-count">{item.count}</span
+                  >
+                {/if}
+              </span>
+              <span
+                class="truncate text-xs text-muted-foreground"
+                data-testid="{item.testId}-hint">{item.hint}</span
               >
             </span>
             {#if open}

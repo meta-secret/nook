@@ -2393,6 +2393,7 @@ pub const WORKSPACE_VAULT_PANEL_OPEN: &str = "workspace.vault_panel_open";
 pub const WORKSPACE_VAULT_PANEL_OPEN_HINT: &str = "workspace.vault_panel_open_hint";
 pub const WORKSPACE_VAULT_PANEL_OR_PASSPHRASE: &str = "workspace.vault_panel_or_passphrase";
 pub const WORKSPACE_VAULT_PANEL_PASSPHRASES_HINT: &str = "workspace.vault_panel_passphrases_hint";
+pub const WORKSPACE_VAULT_PANEL_PASSPHRASES_NONE: &str = "workspace.vault_panel_passphrases_none";
 pub const WORKSPACE_VAULT_PANEL_READING: &str = "workspace.vault_panel_reading";
 pub const WORKSPACE_VAULT_PANEL_UNLOCK_PASSKEY: &str = "workspace.vault_panel_unlock_passkey";
 pub const WORKSPACE_VAULT_PANEL_UNLOCK_PIN: &str = "workspace.vault_panel_unlock_pin";

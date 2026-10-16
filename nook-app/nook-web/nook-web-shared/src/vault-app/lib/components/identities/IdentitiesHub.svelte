@@ -151,6 +151,9 @@ join) sit between the hero and the cards.
     void vault.deviceProtectionStatus
     void vault.localVaults.length
     void vault.activeVault.kind
+    // Each projection of the identity log (a vault deleted everywhere, a
+    // device approved or revoked) changes the cards: read them again.
+    void vault.identityControl.view
     void loader.reload()
   })
 

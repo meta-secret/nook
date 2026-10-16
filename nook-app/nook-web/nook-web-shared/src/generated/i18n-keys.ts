@@ -2038,6 +2038,7 @@ export const I18N_KEYS = {
   WorkspaceVaultPanelOpenHint: 'workspace.vault_panel_open_hint',
   WorkspaceVaultPanelOrPassphrase: 'workspace.vault_panel_or_passphrase',
   WorkspaceVaultPanelPassphrasesHint: 'workspace.vault_panel_passphrases_hint',
+  WorkspaceVaultPanelPassphrasesNone: 'workspace.vault_panel_passphrases_none',
   WorkspaceVaultPanelReading: 'workspace.vault_panel_reading',
   WorkspaceVaultPanelUnlockPasskey: 'workspace.vault_panel_unlock_passkey',
   WorkspaceVaultPanelUnlockPin: 'workspace.vault_panel_unlock_pin',

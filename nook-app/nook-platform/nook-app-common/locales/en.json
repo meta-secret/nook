@@ -1943,6 +1943,7 @@
     "vault_panel_reading": "Reading this vault's passphrases…",
     "vault_panel_manage": "This vault",
     "vault_panel_passphrases_hint": "Create or change passphrases for this vault",
+    "vault_panel_passphrases_none": "No passphrase yet. Add one in case every device is lost",
     "vault_panel_import_hint": "Bring secrets in from another manager",
     "vault_panel_away": "This vault isn't stored in this browser. Its encrypted copy stays with this identity's sync providers.",
     "vault_dormant": "Use identity to open",
