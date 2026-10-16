@@ -208,6 +208,11 @@ export function installMockPasskeyRuntime() {
         }
       }
     }) {
+      // "hold" keeps the prompt open, as a person reading Touch ID does,
+      // until the test clears the mode.
+      while (localStorage.getItem('nook_e2e_passkey_mode') === 'hold') {
+        await new Promise((resolve) => window.setTimeout(resolve, 50))
+      }
       const mode = localStorage.getItem('nook_e2e_passkey_mode')
       if (mode === 'unavailable') {
         throw new Error(
