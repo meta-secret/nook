@@ -20,7 +20,6 @@ band, the scrolling page and the status line.
   import {
     configured_vault_application_supports_extension,
     NookIdentityLocalAccessKind,
-    NookIdentityNextStep,
     type NookIdentityHealth,
     ProviderSyncFailureHandling,
     ProviderSyncVisibility,
@@ -380,21 +379,6 @@ band, the scrolling page and the status line.
     vault.beginAddProvider()
   }
 
-  /** The page that finishes a protection task from the card's checklist. */
-  function protect(action: NookIdentityNextStep): void {
-    switch (action) {
-      case NookIdentityNextStep.AddSyncProvider:
-      case NookIdentityNextStep.AddCloudProvider:
-        addSyncProvider()
-        return
-      case NookIdentityNextStep.AddDevice:
-        openSection(WorkspaceSection.AddDevice)
-        return
-      case NookIdentityNextStep.Done:
-        return
-    }
-  }
-
   function finishFirstRun(next: WorkspaceSection): void {
     vault.firstRun = FirstRunStage.Off
     openSection(next)
@@ -579,7 +563,6 @@ band, the scrolling page and the status line.
       onNewIdentity={newIdentity}
       onUseIdentity={useIdentity}
       currentHealth={identityHealth}
-      onProtect={protect}
       overview={identityOverview}
       overviewOpen={section === WorkspaceSection.Overview}
       onManageVault={(target: IdentitySectionTarget) =>

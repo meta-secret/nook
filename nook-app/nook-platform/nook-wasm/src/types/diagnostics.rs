@@ -426,12 +426,59 @@ mod browser_tests {
 
     wasm_bindgen_test_configure!(run_in_browser);
 
+    /// Health assessed by nook-core from provider, app and item counts.
+    fn assessed(counts: [usize; 4]) -> NookIdentityHealth {
+        let [copies, joinable, apps, items] = counts;
+        NookIdentityHealth::from_core(nook_core::IdentityHealth::assess(
+            nook_core::IdentityHealthAssessment {
+                copy_provider_count: copies.into(),
+                device_join_provider_count: joinable.into(),
+                app_count: apps.into(),
+                stored_item_count: items.into(),
+            },
+        ))
+    }
+
+    #[wasm_bindgen_test]
+    fn identity_health_exposes_its_protection_checklist() {
+        let local_copy = assessed([1, 0, 1, 10]);
+        assert!(!local_copy.is_protected());
+        let local_steps = local_copy.checklist();
+        let [copy, device] = local_steps.as_slice() else {
+            panic!("the checklist lists both protections");
+        };
+        assert_eq!(copy.task(), NookIdentityProtectionTask::CopyOutsideBrowser);
+        assert_eq!(copy.state(), NookIdentityProtectionTaskState::Done);
+        assert_eq!(copy.action(), NookIdentityNextStep::Done);
+        assert_eq!(device.task(), NookIdentityProtectionTask::SecondDevice);
+        assert_eq!(device.state(), NookIdentityProtectionTaskState::Open);
+        assert_eq!(device.action(), NookIdentityNextStep::AddCloudProvider);
+
+        let new_identity = assessed([0, 0, 1, 0]);
+        let new_steps = new_identity.checklist();
+        let [_, blocked] = new_steps.as_slice() else {
+            panic!("the checklist lists both protections");
+        };
+        assert_eq!(blocked.state(), NookIdentityProtectionTaskState::Blocked);
+        assert_eq!(blocked.action(), NookIdentityNextStep::AddSyncProvider);
+
+        let protected = assessed([1, 1, 2, 3]);
+        assert!(protected.is_protected());
+        assert!(
+            protected
+                .checklist()
+                .iter()
+                .all(|step| step.state() == NookIdentityProtectionTaskState::Done)
+        );
+    }
+
     #[wasm_bindgen_test]
     fn diagnostic_projection_getters_cover_known_and_unknown_epochs() {
         let health = NookIdentityHealth::from_core(nook_core::IdentityHealth {
             stage: nook_core::IdentityHealthStage::CopyKept,
             next_step: nook_core::IdentityNextStep::AddCloudProvider,
             nudge: nook_core::IdentityNudge::Urge,
+            checklist: assessed([1, 0, 1, 10]).0.checklist,
         });
         assert_eq!(health.stage(), NookIdentityHealthStage::CopyKept);
         assert_eq!(health.next_step(), NookIdentityNextStep::AddCloudProvider);

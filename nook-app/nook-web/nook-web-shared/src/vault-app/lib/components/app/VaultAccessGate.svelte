@@ -92,7 +92,7 @@
     onDismissPasskey: () => void
     /** How the identity is protected; its unlocked card offers the
      * checklist here too, before any vault is open. */
-    identityHealth: NookIdentityHealth
+    identityHealth?: NookIdentityHealth
     /** A browser extension asking to connect while this browser is locked. */
     extensionConnectRequest?: ExtensionConnectIntent
   } = $props()
@@ -143,7 +143,7 @@
         {usesExtensionDeviceIdentity}
         {onUnlock}
         {onUnlockOnCard}
-        {identityHealth}
+        {...identityHealth ? { identityHealth } : {}}
         onBeginAddProvider={() => vault.beginAddProvider()}
         onCancelAddProvider={() => vault.cancelAddProvider()}
         onBeginSetup={beginProviderSetup}

@@ -1,14 +1,18 @@
 import { fireEvent, render } from '@testing-library/svelte'
 import type { ComponentProps } from 'svelte'
 import { describe, expect, test, vi } from 'vitest'
-import { assess_identity_health, NookIdentityNextStep } from '$app-wasm'
+import {
+  assess_identity_health,
+  NookIdentityNextStep,
+  type NookIdentityHealth,
+} from '$app-wasm'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import IdentityProtectionPanel from '../../../../nook-web-shared/src/vault-app/lib/components/identities/IdentityProtectionPanel.svelte'
 
 type PanelProps = ComponentProps<typeof IdentityProtectionPanel>
 
-function renderPanel(health: PanelProps['health']) {
+function renderPanel(health: NookIdentityHealth) {
   const vault = VaultStateTestFixture.create()
   const onAction = vi.fn()
   const props = {

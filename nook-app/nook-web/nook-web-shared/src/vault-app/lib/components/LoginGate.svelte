@@ -32,7 +32,6 @@
   } from '$lib/app/route-state'
   import {
     DeviceProtectionStatus,
-    NookIdentityNextStep,
     type NookIdentityHealth,
     type StartSentinelGenesisArgs,
   } from '$app-wasm'
@@ -71,7 +70,7 @@
   import LoginProviderManagement from '$lib/components/login/LoginProviderManagement.svelte'
   import { LoginProviderManagementVariant } from '$lib/components/login/login-provider-management-state'
   import JoinThisDevice from '$lib/components/join/JoinThisDevice.svelte'
-  import { NewIdentityStage, WorkspaceSection } from '$lib/vault/state/ui.svelte'
+  import { NewIdentityStage } from '$lib/vault/state/ui.svelte'
   import CardPasswordUnlock from '$lib/components/identities/CardPasswordUnlock.svelte'
   import CardPinUnlock from '$lib/components/identities/CardPinUnlock.svelte'
   import {
@@ -310,22 +309,6 @@
     newVaultOpen = false
     vault.beginExistingVaultOpen()
     vault.vaultImportOpen = true
-  }
-
-  /** A step from the unlocked card's protection checklist: open the
-   * selected vault, then the page that finishes the step. */
-  function protect(action: NookIdentityNextStep): void {
-    if (action === NookIdentityNextStep.Done) return
-    const section =
-      action === NookIdentityNextStep.AddDevice
-        ? WorkspaceSection.AddDevice
-        : WorkspaceSection.Sync
-    const target: IdentitySectionTarget = {
-      identityId: '',
-      storeId: selectedCardStoreId,
-      section,
-    }
-    manageSection(target)
   }
 
   /** A page chosen from Manage on a locked card: unlock, then open it. */
@@ -935,9 +918,7 @@
     onUnlockVault={unlockVaultInPlace}
     onManageVault={manageSection}
     onManageSection={manageSection}
-    {...identityHealth && selectedCardStoreId
-      ? { currentHealth: identityHealth, onProtect: protect }
-      : {}}
+    {...identityHealth ? { currentHealth: identityHealth } : {}}
     onUnlock={() => void unlockIdentity()}
     onLock={lockIdentity}
     onNewIdentity={newIdentity}
