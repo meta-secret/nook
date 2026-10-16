@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import {
   AuthenticationWorkflowClassification,
   LiveApprovedAuthenticationWorkflow,
@@ -16,6 +16,10 @@ import {
   passwordFormInteraction,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 import { authentication_advance_control_is_safe } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+
+// Each case parses or ranks a large fixture; release and PR verification run
+// every gate in parallel in one container, where that can pass five seconds.
+vi.setConfig({ testTimeout: 60_000 })
 
 const wholeDocumentPasswordFormSubmission: Parameters<
   typeof passwordFormInteraction.submitLoginForm

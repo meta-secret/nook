@@ -15,6 +15,10 @@ import {
   type PasswordFormObservation,
   passwordFormInteraction as forms,
 } from '../../../../nook-web-shared/src/extension/password-forms'
+
+// Each case parses or ranks a large fixture; release and PR verification run
+// every gate in parallel in one container, where that can pass five seconds.
+vi.setConfig({ testTimeout: 60_000 })
 const wholeDocumentPasswordFormSubmission: Parameters<
   typeof forms.submitLoginForm
 >[0] = { kind: PasswordFormQueryKind.Root, root: document }
