@@ -62,8 +62,8 @@ describe('identity protection checklist', () => {
   test('a local-folder copy asks for a cloud provider before a device can join', () => {
     const view = renderPanel(assess_identity_health(1, 0, 1, 3))
 
-    expect(view.getByTestId('identity-protection-action').textContent).toContain(
-      view.vault.t(I18N_KEYS.IdentityProtectionActionAddCloud),
-    )
+    expect(
+      view.getByTestId('identity-protection-action').textContent,
+    ).toContain(view.vault.t(I18N_KEYS.IdentityProtectionActionAddCloud))
   })
 })
