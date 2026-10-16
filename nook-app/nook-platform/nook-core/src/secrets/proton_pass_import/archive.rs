@@ -28,7 +28,8 @@ impl<'a> ProtonPassArchive<'a> {
                 .archive
                 .by_index(index)
                 .map_err(ProtonPassImportError::invalid)?;
-            if file.name().ends_with("/data.pgp") || file.name() == "data.pgp" {
+            let name = file.name().map_err(ProtonPassImportError::invalid)?;
+            if name.ends_with("/data.pgp") || name == "data.pgp" {
                 encrypted_data_found = true;
             }
         }
