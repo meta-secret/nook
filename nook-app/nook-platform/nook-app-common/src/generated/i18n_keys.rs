@@ -2144,6 +2144,7 @@ pub const VAULT_ADMIN_REMOVE_ACTIVE_HINT: &str = "vault.admin_remove_active_hint
 pub const VAULT_ADMIN_REMOVE_CONFIRM: &str = "vault.admin_remove_confirm";
 pub const VAULT_ADMIN_REMOVE_CONFIRM_BUTTON: &str = "vault.admin_remove_confirm_button";
 pub const VAULT_ADMIN_TITLE: &str = "vault.admin_title";
+pub const VAULT_ADMIN_VAULTS_EMPTY: &str = "vault.admin_vaults_empty";
 pub const VAULT_ADMIN_VAULTS_TITLE: &str = "vault.admin_vaults_title";
 pub const VAULT_COLLAPSE_SECRET: &str = "vault.collapse_secret";
 pub const VAULT_COPIED: &str = "vault.copied";

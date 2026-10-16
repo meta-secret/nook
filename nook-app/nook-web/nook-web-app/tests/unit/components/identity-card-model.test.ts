@@ -338,3 +338,51 @@ describe('IdentityCardProjection vault ownership', () => {
     )
   })
 })
+
+describe('IdentityCardProjection current identity vaults', () => {
+  test('owns only the vaults on the current card, not another identity stored here', () => {
+    // The Manage → Vaults list: "Travel test" in use must not list
+    // "Personal vault", which belongs to the "Personal" identity.
+    const travel: IdentityDirectoryEntry = {
+      identityId: 'id_travel',
+      label: 'Travel test',
+      localAccess: NookIdentityLocalAccessKind.CurrentBrowser,
+      members: [member('browser', DeviceAccessProtectionKind.PinOrPassphrase)],
+      vaults: [vaultAccess('store_t', 'Trip')],
+    }
+    const storedPersonal: IdentityDirectoryEntry = {
+      ...personal,
+      localAccess: NookIdentityLocalAccessKind.ThisBrowser,
+    }
+    const twoIdentities: IdentityCardSource = {
+      identities: [storedPersonal, travel],
+      localVaults: [
+        { storeId: 'store_a', label: 'Personal vault' },
+        { storeId: 'store_t', label: 'Trip' },
+        { storeId: 'store_new', label: 'Fresh' },
+      ],
+      currentLogVaults: ['store_t', 'store_away'],
+      openStoreId: 'store_t',
+      authenticated: true,
+      identityUnlocked: true,
+    }
+
+    const owned = new IdentityCardProjection(twoIdentities).currentStoreIds
+
+    expect([...owned].sort()).toEqual(['store_away', 'store_new', 'store_t'])
+    expect(owned.has('store_a')).toBe(false)
+  })
+
+  test('owns nothing while no identity is in use here', () => {
+    const noCurrent: IdentityCardSource = {
+      identities: [work],
+      localVaults: [{ storeId: 'store_w', label: 'Acme' }],
+      currentLogVaults: [],
+      openStoreId: '',
+      authenticated: false,
+      identityUnlocked: false,
+    }
+
+    expect(new IdentityCardProjection(noCurrent).currentStoreIds.size).toBe(0)
+  })
+})
