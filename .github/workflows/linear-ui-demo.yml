@@ -1,13 +1,10 @@
 # Linear publication remains isolated from pull_request workflows. Artifact publication is
-# temporarily disabled with the retained implementation available for later re-enable. The close
+# temporarily disabled without CI-completion runs, with the implementation retained for re-enable. The close
 # job still transitions any Linear demo issues that were created before publication was disabled.
 
 name: Linear UI demos
 
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
   pull_request_target:
     types: [closed]
 
