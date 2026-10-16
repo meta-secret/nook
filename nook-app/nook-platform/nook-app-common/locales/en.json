@@ -376,6 +376,7 @@
     "manager_name_label": "Vault name",
     "admin_title": "Admin",
     "admin_vaults_title": "Vaults",
+    "admin_vaults_empty": "This identity keeps no vaults on this browser yet.",
     "admin_remove": "Remove",
     "admin_remove_confirm": "Remove {vault} from this browser? Its copies on sync providers and your other devices stay, so you can import it again.",
     "admin_remove_confirm_button": "Remove from this browser",
