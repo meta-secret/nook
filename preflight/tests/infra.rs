@@ -84,7 +84,7 @@ fn parallel_web_verification_invokes_the_static_container_entrypoint() {
 
     assert!(
         parallel_verification.contains(
-            "task --parallel web:static:container _lint:parallel _test:parallel || failed=1"
+            "task --taskfile \"{{.ROOT_DIR}}/Taskfile.yml\" --parallel web:static:container _lint:parallel _test:parallel || failed=1"
         ),
         "parallel verification must run the static container entrypoint concurrently within its bounded gate"
     );
