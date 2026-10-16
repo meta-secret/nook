@@ -33,7 +33,6 @@ import {
 import { backgroundVaultRuntime } from '../vault-runtime'
 import { extensionPairingIdentity } from './pairing-identity'
 import { PairingIdentityConnection } from './pairing-identity-connection'
-import { selectDefaultPairedVault } from './paired-vaults'
 import { extensionSessionLifecycle } from './session-lifecycle'
 
 export enum PairingIngressFailure {
@@ -147,10 +146,18 @@ async function restorePairingStorage(
   await reconcilePairingStorage(reconcileArgs)
 }
 
+enum PairingImportSelection {
+  /** The imported vault becomes the one the extension fills from. */
+  Select = 'select',
+  /** The vault joins the paired list; the selected vault stays as it is. */
+  Keep = 'keep',
+}
+
 type ImportDecodedApprovedPairingArgs = {
   message: ExtensionPairingApprovedMessage
   sessionEventLogRecords: ExtensionPairingApprovedMessage['eventLogRecords']
   providers: StorageProvider[]
+  selection: PairingImportSelection
 }
 
 export type PairingImportResult =
@@ -192,8 +199,17 @@ async function importDecodedApprovedPairing(
     const pairingItemsArgs: Parameters<
       typeof pairingPolicy.extensionPairingGrantStorageItems
     >[0] = { grant: grantApproval, imported }
-    const pairingItems =
+    const createdItems =
       pairingPolicy.extensionPairingGrantStorageItems(pairingItemsArgs)
+    // A vault that only joins the list keeps the selected vault's setup.
+    const pairingItems: ExtensionPairingItems =
+      args.selection === PairingImportSelection.Select
+        ? createdItems
+        : Object.fromEntries(
+            Object.entries(createdItems).filter(
+              ([key]) => key !== setupStorageKey,
+            ),
+          )
     const previousPairingState =
       await extensionPairingIdentity.getPairingStorage()
     await extensionPairingIdentity.setPairingStorage(pairingItems)
@@ -359,6 +375,7 @@ export class PairingCredentialImportLifecycle {
           message: this.message,
           sessionEventLogRecords: this.sessionEventLogRecords,
           providers: stagedProviders,
+          selection: PairingImportSelection.Select,
         }
         const approved = await importDecodedApprovedPairing(args)
         if (!approved.ok) return approved
@@ -372,21 +389,17 @@ export class PairingCredentialImportLifecycle {
               message,
               sessionEventLogRecords: message.eventLogRecords,
               providers,
+              // The vault the person approved from stays the default.
+              selection: PairingImportSelection.Keep,
             }
             return importDecodedApprovedPairing(vaultArgs)
           },
           sendSessionMessage: (...request) =>
             extensionPairingIdentity.sendSessionMessage(...request),
         }
-        const connected = await new PairingIdentityConnection(
-          connectionRequest,
-        ).connect(approved.eventCount)
-        // Each identity vault imports as the newest pairing; the vault the
-        // person approved from stays the one the extension fills from.
-        if (connected.ok) {
-          await selectDefaultPairedVault(this.message.payload.vaultStoreId)
-        }
-        return connected
+        return await new PairingIdentityConnection(connectionRequest).connect(
+          approved.eventCount,
+        )
       } finally {
         new ProviderCredentialBuffer(stagedProviders).clear()
         new ProviderCredentialBuffer(identityProviders).clear()
