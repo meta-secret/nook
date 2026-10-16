@@ -306,17 +306,6 @@
     vault.vaultImportOpen = true
   }
 
-  /** "Add a device" on a locked card unlocks the identity, then opens the
-   * add-device flow. */
-  function addDevice(target: IdentityVaultTarget): void {
-    if (!target.storeId) return
-    const destination: UnlockDestination = {
-      storeId: target.storeId,
-      page: { kind: UnlockPageKind.Route, route: WorkspaceRoute.AddDevice },
-    }
-    void unlockTo(destination)
-  }
-
   /** A page chosen from Manage on a locked card: unlock, then open it. */
   function manageSection(target: IdentitySectionTarget): void {
     if (!target.storeId) return
@@ -923,7 +912,6 @@
     onSelectVault={(storeId: string) => void selectVault(storeId)}
     onUnlockVault={unlockVaultInPlace}
     onManageVault={manageSection}
-    onAddDevice={addDevice}
     onManageSection={manageSection}
     onUnlock={() => void unlockIdentity()}
     onLock={lockIdentity}

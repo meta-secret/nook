@@ -577,9 +577,6 @@ band, the scrolling page and the status line.
         identityHealth.nextStep === NookIdentityNextStep.AddDevice
           ? openSection(WorkspaceSection.AddDevice)
           : addSyncProvider()}
-      onAddDevice={() => openSection(WorkspaceSection.AddDevice)}
-      addDevicePrompt={identityHealth.nextStep ===
-        NookIdentityNextStep.AddDevice}
       overview={identityOverview}
       overviewOpen={section === WorkspaceSection.Overview}
       onManageVault={(target: IdentitySectionTarget) =>

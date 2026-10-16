@@ -29,7 +29,6 @@ test.describe('sync fan-out on save', () => {
     await expect(page.getByTestId('identity-card-health')).toContainText(
       'Only one device',
     )
-    await expect(page.getByTestId('identity-add-device')).toBeVisible()
   })
 
   test('triggers fan-out sync indicator after saving a secret', async ({
