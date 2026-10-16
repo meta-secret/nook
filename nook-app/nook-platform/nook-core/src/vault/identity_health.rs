@@ -3,7 +3,8 @@
 //! An identity is safe once it survives two losses, built in this order: a
 //! copy outside this browser (any sync provider), then a second app that can
 //! open it (which joins through a cloud provider). The assessment names the
-//! stage reached, the single next step, and how firmly to ask for it.
+//! stage reached, the single next step, how firmly to ask for it, and the
+//! checklist of both protections with what each still needs.
 
 /// How far an identity is protected against loss.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -40,6 +41,37 @@ pub enum IdentityNudge {
     Urge,
 }
 
+/// One loss an identity is protected against, in the order they are built.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IdentityProtectionTask {
+    /// A sync provider keeps a copy: clearing this browser loses nothing.
+    CopyOutsideBrowser,
+    /// Another app opens the identity: losing this device loses nothing.
+    SecondDevice,
+}
+
+/// Where one protection task stands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IdentityProtectionTaskState {
+    Done,
+    /// Can be done now, through the task's action.
+    Open,
+    /// Waits for an earlier task: a device joins through the copy.
+    Blocked,
+}
+
+/// One row of the protection checklist: the task, where it stands, and the
+/// step that completes it (`Done` once it is done).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IdentityProtectionStep {
+    pub task: IdentityProtectionTask,
+    pub state: IdentityProtectionTaskState,
+    pub action: IdentityNextStep,
+}
+
+/// Every protection task, in order, finished ones included.
+pub type IdentityProtectionChecklist = [IdentityProtectionStep; 2];
+
 /// Stored items at which a browser-only identity is urged to keep a copy.
 const URGE_AT_STORED_ITEMS: usize = 10;
 
@@ -62,6 +94,7 @@ pub struct IdentityHealth {
     pub stage: IdentityHealthStage,
     pub next_step: IdentityNextStep,
     pub nudge: IdentityNudge,
+    pub checklist: IdentityProtectionChecklist,
 }
 
 impl IdentityHealth {
@@ -98,11 +131,58 @@ impl IdentityHealth {
             }
             _ => IdentityNudge::Suggest,
         };
+        let copy = if copy_provider_count.is_zero() {
+            IdentityProtectionStep {
+                task: IdentityProtectionTask::CopyOutsideBrowser,
+                state: IdentityProtectionTaskState::Open,
+                action: IdentityNextStep::AddSyncProvider,
+            }
+        } else {
+            IdentityProtectionStep {
+                task: IdentityProtectionTask::CopyOutsideBrowser,
+                state: IdentityProtectionTaskState::Done,
+                action: IdentityNextStep::Done,
+            }
+        };
+        let second_device = if !app_count.is_at_most_one() {
+            IdentityProtectionStep {
+                task: IdentityProtectionTask::SecondDevice,
+                state: IdentityProtectionTaskState::Done,
+                action: IdentityNextStep::Done,
+            }
+        } else if copy_provider_count.is_zero() {
+            IdentityProtectionStep {
+                task: IdentityProtectionTask::SecondDevice,
+                state: IdentityProtectionTaskState::Blocked,
+                action: IdentityNextStep::AddSyncProvider,
+            }
+        } else if device_join_provider_count.is_zero() {
+            IdentityProtectionStep {
+                task: IdentityProtectionTask::SecondDevice,
+                state: IdentityProtectionTaskState::Open,
+                action: IdentityNextStep::AddCloudProvider,
+            }
+        } else {
+            IdentityProtectionStep {
+                task: IdentityProtectionTask::SecondDevice,
+                state: IdentityProtectionTaskState::Open,
+                action: IdentityNextStep::AddDevice,
+            }
+        };
         Self {
             stage,
             next_step,
             nudge,
+            checklist: [copy, second_device],
         }
+    }
+
+    /// Every task is done: the identity survives both losses.
+    #[must_use]
+    pub fn is_protected(&self) -> bool {
+        self.checklist
+            .iter()
+            .all(|step| step.state == IdentityProtectionTaskState::Done)
     }
 }
 
@@ -175,5 +255,92 @@ mod tests {
         assert_eq!(health.stage, IdentityHealthStage::LocalOnly);
         assert_eq!(health.next_step, IdentityNextStep::AddSyncProvider);
         assert_eq!(health.nudge, IdentityNudge::Urge);
+    }
+
+    fn step(
+        task: IdentityProtectionTask,
+        state: IdentityProtectionTaskState,
+        action: IdentityNextStep,
+    ) -> IdentityProtectionStep {
+        IdentityProtectionStep {
+            task,
+            state,
+            action,
+        }
+    }
+
+    #[test]
+    fn a_new_identity_lists_both_protections_with_the_device_waiting_on_the_copy() {
+        let health = assess(0, 0, 1, 0);
+
+        assert_eq!(
+            health.checklist,
+            [
+                step(
+                    IdentityProtectionTask::CopyOutsideBrowser,
+                    IdentityProtectionTaskState::Open,
+                    IdentityNextStep::AddSyncProvider,
+                ),
+                step(
+                    IdentityProtectionTask::SecondDevice,
+                    IdentityProtectionTaskState::Blocked,
+                    IdentityNextStep::AddSyncProvider,
+                ),
+            ]
+        );
+        assert!(!health.is_protected());
+    }
+
+    #[test]
+    fn a_local_copy_checks_off_the_copy_and_asks_for_a_cloud_provider_to_add_a_device() {
+        let health = assess(1, 0, 1, 5);
+
+        assert_eq!(
+            health.checklist,
+            [
+                step(
+                    IdentityProtectionTask::CopyOutsideBrowser,
+                    IdentityProtectionTaskState::Done,
+                    IdentityNextStep::Done,
+                ),
+                step(
+                    IdentityProtectionTask::SecondDevice,
+                    IdentityProtectionTaskState::Open,
+                    IdentityNextStep::AddCloudProvider,
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_cloud_copy_leaves_only_the_second_device_open() {
+        let health = assess(1, 1, 1, 5);
+
+        assert_eq!(
+            health.checklist[1],
+            step(
+                IdentityProtectionTask::SecondDevice,
+                IdentityProtectionTaskState::Open,
+                IdentityNextStep::AddDevice,
+            )
+        );
+        assert!(!health.is_protected());
+    }
+
+    #[test]
+    fn a_copy_and_a_second_device_complete_the_checklist() {
+        let health = assess(1, 1, 2, 5);
+
+        assert!(health.is_protected());
+        assert_eq!(health.next_step, IdentityNextStep::Done);
+    }
+
+    #[test]
+    fn removing_the_last_provider_reopens_only_the_copy() {
+        let health = assess(0, 0, 2, 5);
+
+        assert_eq!(health.checklist[0].state, IdentityProtectionTaskState::Open);
+        assert_eq!(health.checklist[1].state, IdentityProtectionTaskState::Done);
+        assert!(!health.is_protected());
     }
 }

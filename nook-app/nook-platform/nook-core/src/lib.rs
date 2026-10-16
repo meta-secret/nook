@@ -128,6 +128,8 @@ pub use google_authenticator_import::{
 };
 pub use identity_health::{
     IdentityHealth, IdentityHealthAssessment, IdentityHealthStage, IdentityNextStep, IdentityNudge,
+    IdentityProtectionChecklist, IdentityProtectionStep, IdentityProtectionTask,
+    IdentityProtectionTaskState,
 };
 pub use import_support::{SecretImportSourceRecordCount, SecretImportUnsupportedRecordCount};
 pub use keepassxc_import::{KeePassXcCsvInput, KeePassXcImportError, KeePassXcImportPlan};

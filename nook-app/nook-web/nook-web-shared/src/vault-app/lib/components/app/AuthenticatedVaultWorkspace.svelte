@@ -202,15 +202,6 @@ band, the scrolling page and the status line.
     return vault.t(noteText)
   })
 
-  /** What the unlocked identity lacks, for the chip on its hub card. */
-  const currentHealthNote = $derived(
-    identityHealth.nextStep === NookIdentityNextStep.AddSyncProvider ||
-      identityHealth.nextStep === NookIdentityNextStep.AddCloudProvider
-      ? vault.t(I18N_KEYS.IdentityOverviewRiskLocal)
-      : identityHealth.nextStep === NookIdentityNextStep.AddDevice
-        ? vault.t(I18N_KEYS.IdentityOverviewRiskOneDevice)
-        : '',
-  )
   const identityName = $derived(
     identityLabel || vault.t(I18N_KEYS.WorkspaceIdentityFallback),
   )
@@ -387,6 +378,21 @@ band, the scrolling page and the status line.
   function addSyncProvider(): void {
     openSection(WorkspaceSection.Sync)
     vault.beginAddProvider()
+  }
+
+  /** The page that finishes a protection task from the card's checklist. */
+  function protect(action: NookIdentityNextStep): void {
+    switch (action) {
+      case NookIdentityNextStep.AddSyncProvider:
+      case NookIdentityNextStep.AddCloudProvider:
+        addSyncProvider()
+        return
+      case NookIdentityNextStep.AddDevice:
+        openSection(WorkspaceSection.AddDevice)
+        return
+      case NookIdentityNextStep.Done:
+        return
+    }
   }
 
   function finishFirstRun(next: WorkspaceSection): void {
@@ -572,11 +578,8 @@ band, the scrolling page and the status line.
       vaultSetupOpen={newVaultOpen}
       onNewIdentity={newIdentity}
       onUseIdentity={useIdentity}
-      {currentHealthNote}
-      onHealth={() =>
-        identityHealth.nextStep === NookIdentityNextStep.AddDevice
-          ? openSection(WorkspaceSection.AddDevice)
-          : addSyncProvider()}
+      currentHealth={identityHealth}
+      onProtect={protect}
       overview={identityOverview}
       overviewOpen={section === WorkspaceSection.Overview}
       onManageVault={(target: IdentitySectionTarget) =>

@@ -76,6 +76,7 @@ pub use types::{
     NookClientRunModeUtil, NookDecryptedEnrollmentPayload, NookDiagnosticEpochState,
     NookEnrollmentIssueInput, NookEnrollmentProvider, NookEventLogSyncIssue, NookGoogleDriveFolder,
     NookIdentityHealth, NookIdentityHealthStage, NookIdentityNextStep, NookIdentityNudge,
+    NookIdentityProtectionStep, NookIdentityProtectionTask, NookIdentityProtectionTaskState,
     NookImportResult, NookJoinRequest, NookLocalFolderHealth, NookLocalFolderHealthState,
     NookLoginAccount, NookLoginFillCredential, NookManualProviderSync, NookManualProviderSyncState,
     NookOtpauthPreview, NookPasskeyAccount, NookPasskeyAssertion, NookPasskeyRegistration,
