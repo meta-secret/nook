@@ -26,6 +26,7 @@
     "../nook-vault-{simple,sentinel}/src/main.ts",
     "../nook-vault-{simple,sentinel}/vite.config.ts",
     "../nook-vault-sentinel/src/ExtensionConnectDisabled.svelte",
+    "../nook-vault-sentinel/src/ExtensionRequestPanelDisabled.svelte",
     "../nook-vault-sentinel/src/extension-connect-disabled.ts",
     "../nook-web-extension/scripts/{build,deployment-package}.ts",
     "../nook-web-extension/scripts/**/*.test.ts",

@@ -47,6 +47,10 @@ const sentinelViteConfig: UserConfig = {
         "./src/ExtensionConnectDisabled.svelte",
         import.meta.url,
       ).pathname,
+      "$lib/components/identities/ExtensionRequestPanel.svelte": new URL(
+        "./src/ExtensionRequestPanelDisabled.svelte",
+        import.meta.url,
+      ).pathname,
       ...vaultAppAliases(
         new URL(
           "../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm",
