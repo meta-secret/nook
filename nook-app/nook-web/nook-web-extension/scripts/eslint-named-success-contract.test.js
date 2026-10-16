@@ -10,7 +10,10 @@ import { namedSuccessContractBaseline } from '../../named-success-contract-basel
 
 // Every case initializes type-aware ESLint services. Parallel PR phases can
 // briefly push one otherwise-fast fixture beyond Bun's 5-second default.
-setDefaultTimeout(15_000)
+// Each case builds a TypeScript program; release verification runs every
+// static, lint, and unit gate in parallel in one container, where that can
+// take well over fifteen seconds.
+setDefaultTimeout(60_000)
 
 const webRoot = fileURLToPath(new URL('../../', import.meta.url))
 const svelteFixturePath = fileURLToPath(
