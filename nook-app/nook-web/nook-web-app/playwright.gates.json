@@ -7,6 +7,7 @@
     "identity-keys.spec.ts",
     "identity-extension-app.spec.ts",
     "identities-hub.spec.ts",
+    "vault-panel-unlock-sheet.spec.ts",
     "local-vault-apple-safari-imports.spec.ts",
     "local-vault-dashlane-import.spec.ts",
     "local-vault-imports.spec.ts",

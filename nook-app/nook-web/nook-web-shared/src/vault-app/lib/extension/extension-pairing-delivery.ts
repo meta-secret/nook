@@ -18,6 +18,8 @@ export enum ExtensionPairingRejectionReason {
   ExtensionRuntimeUnavailable = "extension-runtime-unavailable",
   ExtensionVaultImportFailed = "extension-vault-import-failed",
   ForbiddenSender = "forbidden-sender",
+  IdentityJoinFailed = "identity-join-failed",
+  IdentityVaultConnectFailed = "identity-vault-connect-failed",
   InvalidPairingGrant = "invalid-pairing-grant",
   InvalidPairingGrantApprovedAt = ExtensionPairingApprovedMessageAdmissionFailure.ApprovedAt,
   InvalidPairingGrantDeviceId = ExtensionPairingApprovedMessageAdmissionFailure.DeviceId,

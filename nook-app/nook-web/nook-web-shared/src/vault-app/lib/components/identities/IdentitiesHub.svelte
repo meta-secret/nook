@@ -22,7 +22,13 @@ join) sit between the hero and the cards.
     type DeviceRecoveryRequest,
   } from '$lib/components/device-recovery'
   import { IdentityCards } from './identity-cards.svelte'
-  import { configured_vault_application, VaultApplication } from '$app-wasm'
+  import { ProtectionStepPageKind, protectionStepPage } from './protection-step'
+  import {
+    configured_vault_application,
+    VaultApplication,
+    type NookIdentityHealth,
+    type NookIdentityNextStep,
+  } from '$app-wasm'
   import {
     IdentityVaultRowState,
     VaultSetupHostKind,
@@ -53,10 +59,7 @@ join) sit between the hero and the cards.
     onUseIdentity,
     onCardsShown = () => {},
     onClosePanels = () => {},
-    currentHealthNote = '',
-    onHealth = () => {},
-    onAddDevice,
-    addDevicePrompt = false,
+    currentHealth,
     onManageSection,
     overview,
     overviewOpen = false,
@@ -100,15 +103,10 @@ join) sit between the hero and the cards.
     /** Close what the page opened beside a card (New vault, an import)
      * when another panel opens there. */
     onClosePanels?: () => void
-    /** What the unlocked identity lacks, shown as a chip on its card. */
-    currentHealthNote?: string
-    /** Open the unlocked identity's control page at its next step. */
-    onHealth?: () => void
-    /** Open the add-device flow from the current identity's card; a locked
-     * identity unlocks on the way. */
-    onAddDevice?: (target: IdentityVaultTarget) => void
-    /** The current identity opens on one device only. */
-    addDevicePrompt?: boolean
+    /** How the unlocked identity is protected; its card offers the
+     * checklist until both protections are done, and a step opens its page
+     * through `onManageSection`. */
+    currentHealth?: NookIdentityHealth
     /** Open one of the current identity's pages from Manage on its card. */
     onManageSection?: (target: IdentitySectionTarget) => void
     /** The current identity's overview, shown beside its card. */
@@ -465,12 +463,20 @@ join) sit between the hero and the cards.
               : onNewVault}
             onUnlock={(identityId: string) => onUnlock(targetFor(identityId))}
             {onLock}
-            healthNote={card.current ? currentHealthNote : ''}
-            {onHealth}
-            {...onAddDevice
-              ? { onAddDevice: () => onAddDevice(targetFor(card.identityId)) }
+            {...card.current && currentHealth && onManageSection
+              ? {
+                  health: currentHealth,
+                  onProtect: (action: NookIdentityNextStep) => {
+                    const page = protectionStepPage(action)
+                    if (page.kind === ProtectionStepPageKind.Done) return
+                    const target: IdentitySectionTarget = {
+                      ...targetFor(card.identityId),
+                      section: page.section,
+                    }
+                    onManageSection(target)
+                  },
+                }
               : {}}
-            addDevicePrompt={card.current && addDevicePrompt}
             overviewOpen={card.current && overviewOpen}
             {...overview && overviewOpen && card.current
               ? { overviewPanel: overview }

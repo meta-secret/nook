@@ -26,6 +26,7 @@
   import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
   import { VaultStatusBarVariant } from '$lib/components/vault-status-bar-state'
   import type { VaultState } from '$lib/vault.svelte'
+  import type { NookIdentityHealth } from '$app-wasm'
   import type { ProviderSetupRequest } from '$lib/auth/providers'
   import type { LoginVaultExtensionPairingStatusEntry } from '$lib/components/login/login-vault-extension-pairing-status'
 
@@ -62,6 +63,7 @@
     onCreateSentinelParticipantKey,
     onCreateSentinelParticipantResponse,
     onDismissPasskey,
+    identityHealth,
     extensionConnectRequest = { kind: ExtensionConnectIntentKind.Absent },
   }: {
     vault: VaultState
@@ -88,6 +90,9 @@
       requestPayload: string,
     ) => Promise<SentinelActionResult<string>>
     onDismissPasskey: () => void
+    /** How the identity is protected; its unlocked card offers the
+     * checklist here too, before any vault is open. */
+    identityHealth?: NookIdentityHealth
     /** A browser extension asking to connect while this browser is locked. */
     extensionConnectRequest?: ExtensionConnectIntent
   } = $props()
@@ -138,6 +143,7 @@
         {usesExtensionDeviceIdentity}
         {onUnlock}
         {onUnlockOnCard}
+        {...identityHealth ? { identityHealth } : {}}
         onBeginAddProvider={() => vault.beginAddProvider()}
         onCancelAddProvider={() => vault.cancelAddProvider()}
         onBeginSetup={beginProviderSetup}

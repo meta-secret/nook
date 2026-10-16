@@ -20,7 +20,6 @@ band, the scrolling page and the status line.
   import {
     configured_vault_application_supports_extension,
     NookIdentityLocalAccessKind,
-    NookIdentityNextStep,
     type NookIdentityHealth,
     ProviderSyncFailureHandling,
     ProviderSyncVisibility,
@@ -202,15 +201,6 @@ band, the scrolling page and the status line.
     return vault.t(noteText)
   })
 
-  /** What the unlocked identity lacks, for the chip on its hub card. */
-  const currentHealthNote = $derived(
-    identityHealth.nextStep === NookIdentityNextStep.AddSyncProvider ||
-      identityHealth.nextStep === NookIdentityNextStep.AddCloudProvider
-      ? vault.t(I18N_KEYS.IdentityOverviewRiskLocal)
-      : identityHealth.nextStep === NookIdentityNextStep.AddDevice
-        ? vault.t(I18N_KEYS.IdentityOverviewRiskOneDevice)
-        : '',
-  )
   const identityName = $derived(
     identityLabel || vault.t(I18N_KEYS.WorkspaceIdentityFallback),
   )
@@ -572,14 +562,7 @@ band, the scrolling page and the status line.
       vaultSetupOpen={newVaultOpen}
       onNewIdentity={newIdentity}
       onUseIdentity={useIdentity}
-      {currentHealthNote}
-      onHealth={() =>
-        identityHealth.nextStep === NookIdentityNextStep.AddDevice
-          ? openSection(WorkspaceSection.AddDevice)
-          : addSyncProvider()}
-      onAddDevice={() => openSection(WorkspaceSection.AddDevice)}
-      addDevicePrompt={identityHealth.nextStep ===
-        NookIdentityNextStep.AddDevice}
+      currentHealth={identityHealth}
       overview={identityOverview}
       overviewOpen={section === WorkspaceSection.Overview}
       onManageVault={(target: IdentitySectionTarget) =>

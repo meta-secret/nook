@@ -1,13 +1,21 @@
 <!--
 Key-tag card for one identity: who it is (label, keys, session), what it
-opens (its vaults), and what you can do (lock, manage). Opening a vault is
-the unlock: while locked, the selected vault's unlock panel sits inside the
-card, which then spans the full row.
+opens (its vaults), what still protects it from loss (a checklist row while
+the unlocked identity is at risk), and what you can do (lock, manage).
+Opening a vault is the unlock: while locked, the selected vault's unlock
+panel sits inside the card, which then spans the full row.
 -->
 <script lang="ts">
   import type { Snippet } from 'svelte'
   import IdentityManageMenu from './IdentityManageMenu.svelte'
+  import IdentityProtectionPanel from './IdentityProtectionPanel.svelte'
   import VaultPanel from './VaultPanel.svelte'
+  import {
+    NookIdentityNudge,
+    NookIdentityProtectionTaskState,
+    type NookIdentityHealth,
+    type NookIdentityNextStep,
+  } from '$app-wasm'
   import { WorkspaceSection } from '$lib/vault/state/ui.svelte'
   import {
     Asterisk,
@@ -17,11 +25,10 @@ card, which then spans the full row.
     Lock,
     LayoutDashboard,
     LockOpen,
-    MonitorSmartphone,
     Plus,
     Puzzle,
     Settings2,
-    TriangleAlert,
+    ShieldAlert,
     UserRoundCheck,
     X,
   } from '@lucide/svelte'
@@ -63,10 +70,8 @@ card, which then spans the full row.
     onLock = () => {},
     onUnlock = () => {},
     onUseIdentity = () => {},
-    healthNote = '',
-    onHealth = () => {},
-    onAddDevice,
-    addDevicePrompt = false,
+    health,
+    onProtect,
     onManageSection,
     pairingStatusFor = () => ({
       kind: LoginVaultExtensionPairingStatusKind.NotShown,
@@ -104,16 +109,11 @@ card, which then spans the full row.
     /** Unlock the identity with this device's passkey. */
     onUnlock?: (identityId: string) => void
     onUseIdentity?: (identityId: string) => void
-    /** What the unlocked identity lacks (no cloud copy, one device); its
-     * chip opens the identity's control page at that step. */
-    healthNote?: string
-    onHealth?: () => void
-    /** Open the add-device flow. Offered on the identity this browser
-     * uses, locked or not: a locked one unlocks first. */
-    onAddDevice?: () => void
-    /** The identity opens on one device only: offer a second on the card
-     * itself, not just in Manage. */
-    addDevicePrompt?: boolean
+    /** How the unlocked identity is protected against loss; until both
+     * protections are done, the card offers its checklist. */
+    health?: NookIdentityHealth
+    /** Take the step that finishes an open protection task. */
+    onProtect?: (action: NookIdentityNextStep) => void
     /** Open one of the identity's pages from Manage. Given, Manage on the
      * identity this browser uses opens a menu of them. */
     onManageSection?: (section: WorkspaceSection) => void
@@ -141,17 +141,43 @@ card, which then spans the full row.
     Boolean(onManageSection) && !preview && (live || card.current),
   )
   let menuOpen = $state(false)
+  let protectionOpen = $state(false)
+  /** The checklist row shows while the unlocked identity is at risk, and
+   * leaves once both protections are done. */
+  const protection = $derived(
+    live && !preview && health && onProtect && !health.isProtected
+      ? health
+      : false,
+  )
+  const protectionDone = $derived(
+    protection === false
+      ? 0
+      : protection.checklist.filter(
+          (step) => step.state === NookIdentityProtectionTaskState.Done,
+        ).length,
+  )
+  const protectionProgress = $derived.by(() => {
+    if (protection === false) return ''
+    const progressRequest: Parameters<typeof vault.t>[0] = {
+      key: I18N_KEYS.IdentityProtectionRowProgress,
+      replacements: {
+        done: String(protectionDone),
+        total: String(protection.checklist.length),
+      },
+    }
+    return vault.t(progressRequest)
+  })
 
   function selectFromMenu(section: WorkspaceSection): void {
     menuOpen = false
     onManageSection?.(section)
   }
 
-  /** Overview and Manage share the space beside the card: one at a time. */
   /** One panel beside the card at a time: opening one closes the rest,
    * including what the page opened there (New vault, an import). */
   function closeOthers(): void {
     menuOpen = false
+    protectionOpen = false
     vault.vaultPanelStoreId = ''
     if (overviewOpen) onManageSection?.(WorkspaceSection.Identities)
     onClosePanels()
@@ -167,6 +193,17 @@ card, which then spans the full row.
     const opening = !menuOpen
     closeOthers()
     menuOpen = opening
+  }
+
+  function toggleProtection(): void {
+    const opening = !protectionOpen
+    closeOthers()
+    protectionOpen = opening
+  }
+
+  function protect(action: NookIdentityNextStep): void {
+    protectionOpen = false
+    onProtect?.(action)
   }
 
   function openNewVault(): void {
@@ -294,6 +331,7 @@ card, which then spans the full row.
   overviewPanel ||
   requestPanel ||
   (managesHere && menuOpen) ||
+  (protection && protectionOpen) ||
   vaultOpenRow
     ? 'col-span-full grid grid-cols-1 lg:grid-cols-[minmax(0,23rem)_minmax(0,1fr)]'
     : 'flex flex-col'}"
@@ -350,18 +388,6 @@ card, which then spans the full row.
                 <Lock class="size-3" aria-hidden="true" />
               {/snippet}
             </StatusTag>
-          {/if}
-          {#if live && healthNote && !preview}
-            <button
-              type="button"
-              class="nk-tag nk-tag-warning"
-              data-testid="identity-card-health"
-              disabled={busy}
-              onclick={onHealth}
-            >
-              <TriangleAlert class="size-3" aria-hidden="true" />
-              {healthNote}
-            </button>
           {/if}
           {#if card.fingerprint.length > 0}
             <span
@@ -506,28 +532,46 @@ card, which then spans the full row.
       </ul>
     </section>
 
-    {#if onAddDevice && addDevicePrompt && !preview && (live || card.current)}
+    {#if protection}
       <section class="border-t border-border px-2 py-2">
         <button
           type="button"
-          class="nk-vault-row"
-          data-testid="identity-add-device"
+          class="nk-vault-row {protection.nudge === NookIdentityNudge.Urge
+            ? 'bg-destructive/5'
+            : 'bg-warning/5'}"
+          data-testid="identity-protection-toggle"
+          data-nudge={protection.nudge === NookIdentityNudge.Urge
+            ? 'urge'
+            : protection.nudge === NookIdentityNudge.Suggest
+              ? 'suggest'
+              : 'quiet'}
+          aria-expanded={protectionOpen}
+          {...protectionOpen ? { 'aria-current': 'true' } : {}}
           disabled={busy}
-          onclick={onAddDevice}
+          onclick={toggleProtection}
         >
-          <span class="nk-vault-icon" aria-hidden="true">
-            <MonitorSmartphone class="size-4" />
+          <!-- Amber while a protection is missing; red once many items
+               live only in this browser. -->
+          <span
+            class="nk-vault-icon {protection.nudge === NookIdentityNudge.Urge
+              ? 'border-destructive/40 text-destructive'
+              : 'border-warning/50 text-warning'}"
+            aria-hidden="true"
+          >
+            <ShieldAlert class="size-4" />
           </span>
           <span class="flex min-w-0 flex-1 flex-col">
             <span class="truncate text-[0.9375rem] font-medium"
-              >{vault.t(I18N_KEYS.AddDeviceCardAction)}</span
+              >{vault.t(I18N_KEYS.IdentityProtectionRowTitle)}</span
             >
-            <span class="truncate text-xs text-muted-foreground"
-              >{vault.t(I18N_KEYS.AddDeviceCardHint)}</span
+            <span
+              class="truncate text-xs {protection.nudge === NookIdentityNudge.Urge
+                ? 'text-destructive'
+                : 'text-warning'}">{protectionProgress}</span
             >
           </span>
-          <Plus
-            class="size-4 flex-none text-muted-foreground"
+          <ChevronRight
+            class="size-4 flex-none text-muted-foreground opacity-60"
             aria-hidden="true"
           />
         </button>
@@ -661,6 +705,20 @@ card, which then spans the full row.
         </button>
       </header>
       <IdentityManageMenu {vault} onSelect={selectFromMenu} />
+    </div>
+  {:else if protection && protectionOpen}
+    <div
+      class="min-w-0 border-t border-border p-5 sm:p-6 lg:border-l lg:border-t-0 lg:px-7"
+      data-testid="identity-card-protection"
+    >
+      <IdentityProtectionPanel
+        {vault}
+        health={protection}
+        identityName={card.label || vault.t(I18N_KEYS.WorkspaceIdentityFallback)}
+        {busy}
+        onAction={protect}
+        onClose={() => (protectionOpen = false)}
+      />
     </div>
   {:else if overviewPanel}
     <div

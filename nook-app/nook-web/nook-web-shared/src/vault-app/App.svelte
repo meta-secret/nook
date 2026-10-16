@@ -959,6 +959,7 @@
     extensionConnectPairingStatusEntries,
     onUnlock: handleUnlock,
     onUnlockOnCard: handleCardUnlock,
+    identityHealth,
     onUseEnrollmentCode: handleUseEnrollmentCode,
     onAcceptSentinelOnboardingPackage: handleAcceptSentinelOnboarding,
     onUnlockWithPassword: unlockExistingVaultWithPassword,

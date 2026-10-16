@@ -30,6 +30,72 @@ pub enum NookIdentityNudge {
     Urge,
 }
 
+/// One loss an identity is protected against, in the order they are built.
+#[wasm_bindgen]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NookIdentityProtectionTask {
+    CopyOutsideBrowser,
+    SecondDevice,
+}
+
+/// Where one protection task stands.
+#[wasm_bindgen]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NookIdentityProtectionTaskState {
+    Done,
+    Open,
+    /// Waits for an earlier task.
+    Blocked,
+}
+
+/// One row of the protection checklist, assessed by `nook-core`.
+#[wasm_bindgen]
+#[derive(Clone, Copy)]
+pub struct NookIdentityProtectionStep(nook_core::IdentityProtectionStep);
+
+#[wasm_bindgen]
+impl NookIdentityProtectionStep {
+    #[wasm_bindgen(getter)]
+    pub fn task(&self) -> NookIdentityProtectionTask {
+        match self.0.task {
+            nook_core::IdentityProtectionTask::CopyOutsideBrowser => {
+                NookIdentityProtectionTask::CopyOutsideBrowser
+            }
+            nook_core::IdentityProtectionTask::SecondDevice => {
+                NookIdentityProtectionTask::SecondDevice
+            }
+        }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn state(&self) -> NookIdentityProtectionTaskState {
+        match self.0.state {
+            nook_core::IdentityProtectionTaskState::Done => NookIdentityProtectionTaskState::Done,
+            nook_core::IdentityProtectionTaskState::Open => NookIdentityProtectionTaskState::Open,
+            nook_core::IdentityProtectionTaskState::Blocked => {
+                NookIdentityProtectionTaskState::Blocked
+            }
+        }
+    }
+
+    /// The step that completes this task; `Done` once it is done.
+    #[wasm_bindgen(getter)]
+    pub fn action(&self) -> NookIdentityNextStep {
+        NookIdentityNextStep::from_core(self.0.action)
+    }
+}
+
+impl NookIdentityNextStep {
+    const fn from_core(step: nook_core::IdentityNextStep) -> Self {
+        match step {
+            nook_core::IdentityNextStep::AddSyncProvider => Self::AddSyncProvider,
+            nook_core::IdentityNextStep::AddCloudProvider => Self::AddCloudProvider,
+            nook_core::IdentityNextStep::AddDevice => Self::AddDevice,
+            nook_core::IdentityNextStep::Done => Self::Done,
+        }
+    }
+}
+
 /// Day-2 health of an identity, assessed by `nook-core`.
 #[wasm_bindgen]
 #[derive(Clone, Copy)]
@@ -48,12 +114,24 @@ impl NookIdentityHealth {
 
     #[wasm_bindgen(getter, js_name = nextStep)]
     pub fn next_step(&self) -> NookIdentityNextStep {
-        match self.0.next_step {
-            nook_core::IdentityNextStep::AddSyncProvider => NookIdentityNextStep::AddSyncProvider,
-            nook_core::IdentityNextStep::AddCloudProvider => NookIdentityNextStep::AddCloudProvider,
-            nook_core::IdentityNextStep::AddDevice => NookIdentityNextStep::AddDevice,
-            nook_core::IdentityNextStep::Done => NookIdentityNextStep::Done,
-        }
+        NookIdentityNextStep::from_core(self.0.next_step)
+    }
+
+    /// Both protection tasks in order, finished ones included.
+    #[wasm_bindgen(getter)]
+    pub fn checklist(&self) -> Vec<NookIdentityProtectionStep> {
+        self.0
+            .checklist
+            .iter()
+            .copied()
+            .map(NookIdentityProtectionStep)
+            .collect()
+    }
+
+    /// Every protection task is done.
+    #[wasm_bindgen(getter, js_name = isProtected)]
+    pub fn is_protected(&self) -> bool {
+        self.0.is_protected()
     }
 
     #[wasm_bindgen(getter)]
@@ -348,12 +426,59 @@ mod browser_tests {
 
     wasm_bindgen_test_configure!(run_in_browser);
 
+    /// Health assessed by nook-core from provider, app and item counts.
+    fn assessed(counts: [usize; 4]) -> NookIdentityHealth {
+        let [copies, joinable, apps, items] = counts;
+        NookIdentityHealth::from_core(nook_core::IdentityHealth::assess(
+            nook_core::IdentityHealthAssessment {
+                copy_provider_count: copies.into(),
+                device_join_provider_count: joinable.into(),
+                app_count: apps.into(),
+                stored_item_count: items.into(),
+            },
+        ))
+    }
+
+    #[wasm_bindgen_test]
+    fn identity_health_exposes_its_protection_checklist() {
+        let local_copy = assessed([1, 0, 1, 10]);
+        assert!(!local_copy.is_protected());
+        let local_steps = local_copy.checklist();
+        let [copy, device] = local_steps.as_slice() else {
+            panic!("the checklist lists both protections");
+        };
+        assert_eq!(copy.task(), NookIdentityProtectionTask::CopyOutsideBrowser);
+        assert_eq!(copy.state(), NookIdentityProtectionTaskState::Done);
+        assert_eq!(copy.action(), NookIdentityNextStep::Done);
+        assert_eq!(device.task(), NookIdentityProtectionTask::SecondDevice);
+        assert_eq!(device.state(), NookIdentityProtectionTaskState::Open);
+        assert_eq!(device.action(), NookIdentityNextStep::AddCloudProvider);
+
+        let new_identity = assessed([0, 0, 1, 0]);
+        let new_steps = new_identity.checklist();
+        let [_, blocked] = new_steps.as_slice() else {
+            panic!("the checklist lists both protections");
+        };
+        assert_eq!(blocked.state(), NookIdentityProtectionTaskState::Blocked);
+        assert_eq!(blocked.action(), NookIdentityNextStep::AddSyncProvider);
+
+        let protected = assessed([1, 1, 2, 3]);
+        assert!(protected.is_protected());
+        assert!(
+            protected
+                .checklist()
+                .iter()
+                .all(|step| step.state() == NookIdentityProtectionTaskState::Done)
+        );
+    }
+
     #[wasm_bindgen_test]
     fn diagnostic_projection_getters_cover_known_and_unknown_epochs() {
         let health = NookIdentityHealth::from_core(nook_core::IdentityHealth {
             stage: nook_core::IdentityHealthStage::CopyKept,
             next_step: nook_core::IdentityNextStep::AddCloudProvider,
             nudge: nook_core::IdentityNudge::Urge,
+            checklist: assessed([1, 0, 1, 10]).0.checklist,
         });
         assert_eq!(health.stage(), NookIdentityHealthStage::CopyKept);
         assert_eq!(health.next_step(), NookIdentityNextStep::AddCloudProvider);

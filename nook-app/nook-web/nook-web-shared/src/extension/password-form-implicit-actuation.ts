@@ -1,6 +1,4 @@
-import type {
-  AuthenticationPageObservationFacts,
-} from "./nook-companion-wasm/nook_companion_wasm.js";
+import type { AuthenticationPageObservationFacts } from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
   FormSubmissionResult,
   type FormSubmissionApproval,

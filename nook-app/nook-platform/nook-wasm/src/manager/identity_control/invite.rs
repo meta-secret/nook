@@ -4,18 +4,20 @@
 
 use js_sys::Date;
 use nook_core::{
-    CheckedEnrollmentEnvelope, CheckedEnrollmentIssuance, EnrollmentInvite, EnrollmentInviteVault,
-    EnrollmentIssuance, EnrollmentLinkInput, EventId, IdentityControlOperation,
-    IdentityControlState, IdentityEventInsertStatus, IdentityEventSigning, IdentityId,
-    IdentityInviteId, IdentityInviteIssue, IdentityInviteJoin, IdentityMemberKeys,
-    IdentityVaultEventId, InviteSigningSeed, IsoTimestamp, OpenedVaultDek,
-    ReplicatedIdentityStanding, StorageMode, VaultKeys,
+    AgeArmoredCiphertext, CheckedEnrollmentEnvelope, CheckedEnrollmentIssuance, EnrollmentInvite,
+    EnrollmentInviteVault, EnrollmentIssuance, EnrollmentLinkInput, EventId,
+    IdentityControlOperation, IdentityControlState, IdentityEventInsertStatus,
+    IdentityEventSigning, IdentityId, IdentityInviteId, IdentityInviteIssue, IdentityInviteJoin,
+    IdentityMemberKeys, IdentityVaultEventId, InvitePassphraseOpen, InviteSigningSeed,
+    IsoTimestamp, OpenedVaultDek, ReplicatedIdentityStanding, StorageMode, VaultKeys,
 };
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 use crate::manager::NookVaultManager;
 use crate::storage::identity_log::IdentityLogWrite;
-use crate::{NookDatabase, NookEnrollmentIssueInput, NookError};
+use crate::{
+    IdentityDbEnsureLocalIdentityForAppKey, NookDatabase, NookEnrollmentIssueInput, NookError,
+};
 
 /// How long an issued invite may be used. The joining client enforces it;
 /// the identity log enforces that an invite is used once.
@@ -236,5 +238,48 @@ impl NookVaultManager {
                 .await?;
         }
         result.map_err(Into::into)
+    }
+
+    /// Join with an invite whose passphrase was sealed to this installation
+    /// (an identity connecting the browser extension), as a new device
+    /// joins: this installation's local identity binds to the invited one,
+    /// then it signs itself in. The passphrase opens with this
+    /// installation's own app key, here, and never reaches JavaScript.
+    #[wasm_bindgen]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "FFI boundary: wasm-bindgen exports take the invite, the member label and the provider arguments as separate JavaScript scalars"
+    )]
+    pub async fn join_identity_with_sealed_invite(
+        &mut self,
+        identity_id: String,
+        member_label: String,
+        code: String,
+        sealed_passphrase: String,
+        storage_mode: String,
+        github_pat: String,
+        github_repo: String,
+    ) -> Result<(), JsError> {
+        let app_key = self.unlocked_app_key()?;
+        NookDatabase::ensure_local_identity_for_app_key(IdentityDbEnsureLocalIdentityForAppKey {
+            app_key: &app_key,
+            label: &member_label,
+        })
+        .await?;
+        self.bind_local_identity_to_invitation(identity_id).await?;
+        let sealed = AgeArmoredCiphertext::from_trusted(sealed_passphrase);
+        let passphrase = InvitePassphraseOpen {
+            identity: &app_key,
+            sealed: &sealed,
+        }
+        .open()?;
+        self.join_identity_with_invite(
+            code,
+            passphrase.as_str().to_owned(),
+            storage_mode,
+            github_pat,
+            github_repo,
+        )
+        .await
     }
 }

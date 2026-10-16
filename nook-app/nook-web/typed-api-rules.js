@@ -40,6 +40,7 @@ export const untrustedInputAdapterFiles = [
   "nook-web-extension/src/background/service-worker/login-session-response-adapter.ts",
   "nook-web-extension/src/background/service-worker/pairing-identity.ts",
   "nook-web-extension/src/background/service-worker/pairing-import.ts",
+  "nook-web-extension/src/background/service-worker/pairing-identity-connection.ts",
   "nook-web-extension/src/background/service-worker/passkey-session-adapter.ts",
   "nook-web-extension/src/background/service-worker/session-lifecycle.ts",
   "nook-web-extension/src/content/autofill/runtime-message-adapter.ts",

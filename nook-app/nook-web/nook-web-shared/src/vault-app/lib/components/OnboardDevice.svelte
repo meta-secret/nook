@@ -2,7 +2,8 @@
 The invite stage of adding a device. Before the invite exists: the mount
 the new device joins through and its one-time passphrase, both chosen
 already, and one button. After: the QR code beside three numbered steps,
-the passphrase in large type, and the flow's live status underneath.
+the passphrase in large type, and Done underneath: the new device joins by
+itself, so nothing here waits for it.
 -->
 <script lang="ts">
   import { DeviceJoinMounts } from '$lib/components/add-device/device-join-mounts'
@@ -41,7 +42,7 @@ the passphrase in large type, and the flow's live status underneath.
     onIssueCode,
     onClearCode,
     manualJoin,
-    status,
+    done,
   }: {
     vault: VaultState
     /** Remote provider rows that carry this identity's control log. */
@@ -52,8 +53,8 @@ the passphrase in large type, and the flow's live status underneath.
     onClearCode: () => void
     /** How to join without a camera, shown under the invite. */
     manualJoin: string
-    /** The flow's live status under the invite: waiting, or a request. */
-    status: Snippet
+    /** Leaves the flow once the invite is out. */
+    done: Snippet
   } = $props()
 
   let chosenProviderId = $state('')
@@ -456,7 +457,7 @@ the passphrase in large type, and the flow's live status underneath.
       </div>
     {/if}
 
-    {@render status()}
+    {@render done()}
 
     <footer
       class="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-t border-border pt-4 text-xs text-muted-foreground"

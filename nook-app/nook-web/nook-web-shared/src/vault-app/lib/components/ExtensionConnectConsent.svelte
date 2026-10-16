@@ -7,6 +7,8 @@
   import type { ExtensionConnectRequest } from '../extension/connect'
   import type { VaultState } from '$lib/vault.svelte'
   import { ExtensionConsentScopeTranslation } from './extension-connect-consent-state'
+  import { DeviceJoinMounts } from '$lib/components/add-device/device-join-mounts'
+  import { ExtensionConnectScope } from '$web-shared/extension/extension-connect-scope'
   import {
     ExtensionConsentIdentityText,
     type ExtensionConsentIdentityTextLayout,
@@ -78,6 +80,34 @@
   })
   let session = $derived(createWorkflowSession(sessionRequest))
   const presentation = new ExtensionConsentWorkflowPresentation()
+
+  /** The extension joins the whole identity when it can reach it: a cloud
+   * sync provider and that provider's credentials. Otherwise only this
+   * vault connects, and the consent says so. */
+  const joinsIdentity = $derived.by(() => {
+    if (!request.scopes.includes(ExtensionConnectScope.SyncProviderCredentials))
+      return false
+    const mountRequest: ConstructorParameters<typeof DeviceJoinMounts>[0] = {
+      mounts: vault.identityControl.mounts,
+      replication: vault.vaultArchitecture.replication_type,
+    }
+    return new DeviceJoinMounts(mountRequest).compatible.length > 0
+  })
+  const identityName = $derived(
+    vault.identityControl.snapshot === false
+      ? vault.t(I18N_KEYS.WorkspaceIdentityFallback)
+      : vault.identityControl.snapshot.identityLabel ||
+          vault.t(I18N_KEYS.WorkspaceIdentityFallback),
+  )
+  const consentDescription = $derived.by(() => {
+    const descriptionRequest: Parameters<typeof vault.t>[0] = {
+      key: joinsIdentity
+        ? I18N_KEYS.ExtensionConsentJoinsIdentity
+        : I18N_KEYS.ExtensionConsentVaultOnly,
+      replacements: { identity: identityName },
+    }
+    return vault.t(descriptionRequest)
+  })
   const workflowState = $derived(session.state)
   const availability = $derived(
     session.workflow.approvalAvailability(workflowState),
@@ -152,7 +182,7 @@
         {vault.t(I18N_KEYS.ExtensionConsentTitle)}
       </h2>
       <p class="text-sm leading-relaxed text-muted-foreground">
-        {vault.t(I18N_KEYS.ExtensionConsentDescription)}
+        {consentDescription}
       </p>
     </div>
   </div>

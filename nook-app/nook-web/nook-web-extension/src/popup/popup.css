@@ -452,14 +452,71 @@ body {
   text-transform: uppercase;
 }
 
-.shield-icon {
+/* What connects to what: key → this extension → vaults. The lit link is
+ * the step at hand; the dashed one waits for step 2. */
+.connect-chain {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 6px;
+  margin: 2px 0 6px;
+}
+
+.chain-node {
   display: grid;
-  width: 48px;
-  height: 48px;
-  margin: 0 auto;
+  justify-items: center;
+  gap: 8px;
+  width: 88px;
+  color: var(--muted-foreground);
+}
+
+.chain-icon {
+  display: grid;
+  width: 46px;
+  height: 46px;
   place-items: center;
+  border: 1px dashed var(--input);
+}
+
+.chain-node.is-on .chain-icon {
   border: 1px solid var(--success);
   color: var(--success);
+}
+
+.chain-label {
+  font-size: 12px;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.chain-node.is-on .chain-label {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.chain-tag {
+  margin-top: -4px;
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.chain-link {
+  flex: 1;
+  max-width: 64px;
+  height: 2px;
+  margin-top: 22px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--input) 0 6px,
+    transparent 6px 12px
+  );
+}
+
+.chain-link.is-on {
+  background: var(--success);
 }
 
 h1 {
@@ -557,37 +614,51 @@ button:disabled {
   background: var(--secondary);
 }
 
-.alternative-button {
-  display: inline-flex;
-  min-height: 36px;
-  align-items: center;
-  justify-self: center;
-  gap: 8px;
-  border-color: transparent;
-  background: transparent;
-  color: var(--secondary-foreground);
-  padding: 6px 10px;
-}
-
-.alternative-button:hover:not(:disabled) {
-  background: var(--secondary);
-}
-
-.divider {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  gap: 10px;
-  align-items: center;
+/* "No passkey yet? Create one": the other way in, as one quiet line. */
+.alternative-line {
+  margin: 0;
   color: var(--muted-foreground);
+  font-size: 13px;
+  text-align: center;
 }
 
-.divider span {
-  height: 1px;
-  background: var(--border);
+.link-button {
+  min-height: 0;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 13px;
+  text-decoration: underline;
+  text-decoration-color: var(--input);
+  text-underline-offset: 3px;
 }
 
-.divider small {
-  font-size: 11px;
+.link-button:hover:not(:disabled) {
+  background: transparent;
+  text-decoration-color: var(--foreground);
+}
+
+.setup-options {
+  display: grid;
+  gap: 12px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+.setup-options summary {
+  cursor: pointer;
+  justify-self: center;
+}
+
+.setup-options[open] {
+  padding: 12px;
+  border: 1px solid var(--border);
+}
+
+.setup-options[open] summary {
+  justify-self: start;
+  margin-bottom: 4px;
 }
 
 .error-message {

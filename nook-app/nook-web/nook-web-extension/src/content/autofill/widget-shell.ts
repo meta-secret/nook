@@ -40,6 +40,9 @@ import {
 
 import { WIDGET_HOST_ID, workflowUi } from './workflow-ui'
 
+/* The Pilot speaks the vault app's visual language: a keytag frame with a
+ * cut top-right corner, monospace labels, square marks, and green for what
+ * is done. Tokens mirror the companion popup. */
 const WIDGET_PANEL_STYLES = `
     :host {
       all: initial;
@@ -48,6 +51,20 @@ const WIDGET_PANEL_STYLES = `
       top: 18px;
       right: 18px;
       color-scheme: dark;
+      --nk-bg: oklch(0.141 0.005 285.823);
+      --nk-card: oklch(0.21 0.006 285.885);
+      --nk-raised: oklch(0.274 0.006 286.033);
+      --nk-fg: oklch(0.985 0 0);
+      --nk-muted: oklch(0.705 0.015 286.067);
+      --nk-primary: oklch(0.92 0.004 286.32);
+      --nk-primary-fg: oklch(0.21 0.006 285.885);
+      --nk-border: rgb(255 255 255 / 10%);
+      --nk-input: rgb(255 255 255 / 16%);
+      --nk-success: oklch(0.765 0.177 163.223);
+      --nk-warning: oklch(0.8 0.13 75);
+      --nk-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --nk-cut: 18px;
+      filter: drop-shadow(0 18px 36px rgb(0 0 0 / 45%));
     }
     :host(.dragging) {
       cursor: grabbing;
@@ -59,34 +76,43 @@ const WIDGET_PANEL_STYLES = `
     .panel {
       box-sizing: border-box;
       position: relative;
+      isolation: isolate;
       width: min(320px, calc(100vw - 36px));
       max-height: calc(100dvh - 36px);
       overflow-y: auto;
       display: grid;
-      gap: 12px;
-      padding: 14px 14px 16px;
-      border: 1px solid rgb(255 255 255 / 10%);
-      border-radius: 12px;
-      background: oklch(0.141 0.005 285.823);
-      color: oklch(0.985 0 0);
-      box-shadow: 0 16px 40px rgb(0 0 0 / 35%);
+      gap: 14px;
+      padding: 12px 14px 16px;
+      background: var(--nk-border);
+      color: var(--nk-fg);
       font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      clip-path: polygon(0 0, calc(100% - var(--nk-cut)) 0, 100% var(--nk-cut), 100% 100%, 0 100%);
+    }
+    .panel::before {
+      content: '';
+      position: absolute;
+      inset: 1px;
+      z-index: -1;
+      background: var(--nk-card);
+      clip-path: polygon(0 0, calc(100% - var(--nk-cut) + 0.41px) 0, 100% calc(var(--nk-cut) - 0.41px), 100% 100%, 0 100%);
     }
     .panel.is-collapsed {
       width: auto;
       gap: 0;
       padding: 0 4px 4px 0;
       overflow: visible;
-      border-radius: 16px;
       background: transparent;
-      border: 0;
-      box-shadow: none;
+      clip-path: none;
     }
+    .panel.is-collapsed::before { display: none; }
     .toolbar {
       display: grid;
-      grid-template-columns: 1fr auto auto;
+      grid-template-columns: auto 1fr auto auto;
       align-items: center;
-      gap: 4px;
+      gap: 8px;
+      margin: 0 -2px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--nk-border);
       cursor: grab;
       touch-action: none;
       user-select: none;
@@ -94,170 +120,194 @@ const WIDGET_PANEL_STYLES = `
     :host(.dragging) .toolbar {
       cursor: grabbing;
     }
+    .mark {
+      display: block;
+      width: 22px;
+      height: 22px;
+      object-fit: contain;
+    }
     .icon-button {
       appearance: none;
+      display: grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      padding: 0;
       border: 0;
-      border-radius: 6px;
+      border-radius: 3px;
       background: transparent;
-      color: oklch(0.705 0.015 286.067);
+      color: var(--nk-muted);
       cursor: pointer;
-      font: inherit;
-      font-size: 16px;
-      line-height: 1;
-      padding: 4px 8px;
     }
-    .icon-button:hover { background: oklch(0.274 0.006 286.033); }
-    .collapse-button { font-size: 14px; }
+    .icon-button:hover { background: var(--nk-raised); color: var(--nk-fg); }
+    .icon-button svg { width: 15px; height: 15px; }
     .step-label {
       margin: 0;
-      color: oklch(0.705 0.015 286.067);
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.08em;
+      color: var(--nk-muted);
+      font-family: var(--nk-mono);
+      font-size: 10.5px;
+      font-weight: 500;
+      letter-spacing: 0.14em;
       text-align: left;
       text-transform: uppercase;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .body {
       display: grid;
       gap: 12px;
     }
-    .pilot-checklist { list-style:none; margin:0; padding:12px; display:grid; gap:12px; min-width:0; border-radius:9px; background:oklch(0.21 0.006 285.885); }
-    .pilot-checklist-step { display:flex; gap:10px; align-items:flex-start; min-width:0; color:oklch(0.705 0.015 286.067); font-size:13px; line-height:1.4; }
-    .pilot-checklist-mark { display:grid; place-items:center; flex:0 0 21px; width:21px; height:21px; margin-top:1px; border-radius:50%; background:oklch(0.141 0.005 285.823); color:inherit; font-size:11px; font-weight:600; }
-    .pilot-checklist-copy { min-width:0; overflow-wrap:anywhere; }
+    /* Where Nook is acting, and what the vault holds for it, on one strip. */
+    .site-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px 10px;
+      padding: 8px 10px;
+      border: 1px solid var(--nk-border);
+      background: var(--nk-bg);
+    }
+    .site-context {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      min-width: 0;
+      max-width: 100%;
+      margin: 0;
+      overflow: hidden;
+      color: var(--nk-fg);
+      font-family: var(--nk-mono);
+      font-size: 11.5px;
+      font-weight: 500;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .site-context::before {
+      content: '';
+      flex: none;
+      width: 6px;
+      height: 6px;
+      background: var(--nk-muted);
+    }
+    .vault-status {
+      margin: 0;
+      padding: 2px 7px;
+      border: 1px solid var(--nk-border);
+      color: var(--nk-muted);
+      font-family: var(--nk-mono);
+      font-size: 10.5px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
+    .vault-status[data-state='vault-connected'],
+    .vault-status[data-state='credential-available'] {
+      border-color: color-mix(in oklab, var(--nk-success) 45%, transparent);
+      color: var(--nk-success);
+    }
+    .vault-status[data-state='vault-not-connected'],
+    .vault-status[data-state='vault-locked'],
+    .vault-status[data-state='no-matching-credential'],
+    .vault-status[data-state='unavailable'] {
+      border-color: color-mix(in oklab, var(--nk-warning) 45%, transparent);
+      color: var(--nk-warning);
+    }
+    .vault-status[data-state='vault-locked'],
+    .vault-status[data-state='no-matching-credential'],
+    .vault-status[data-state='unavailable'] {
+      white-space: normal;
+    }
+    h1 {
+      margin: 2px 0 0;
+      font-size: 17px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      line-height: 1.25;
+      text-align: left;
+    }
+    .description {
+      margin: -6px 0 0;
+      color: var(--nk-muted);
+      font-size: 13px;
+      line-height: 1.45;
+      text-align: left;
+    }
+    /* The three steps as a stepper: square marks joined by a rail; the
+     * current one lit, finished ones green. */
+    .pilot-checklist { list-style:none; margin:0; padding:2px 0; display:grid; gap:0; min-width:0; }
+    .pilot-checklist-step { position:relative; display:flex; gap:11px; align-items:flex-start; min-width:0; padding-bottom:12px; color:var(--nk-muted); font-size:13px; line-height:1.35; }
+    .pilot-checklist-step:last-child { padding-bottom:0; }
+    .pilot-checklist-step:not(:last-child)::after { content:''; position:absolute; left:10px; top:24px; bottom:2px; width:1px; background:var(--nk-border); }
+    .pilot-checklist-mark { display:grid; place-items:center; flex:0 0 21px; width:21px; height:21px; border:1px solid var(--nk-input); background:var(--nk-bg); color:inherit; font-family:var(--nk-mono); font-size:10.5px; font-weight:600; }
+    .pilot-checklist-copy { min-width:0; overflow-wrap:anywhere; padding-top:1px; }
     .pilot-checklist-label { display:block; }
-    .pilot-checklist-detail { display:block; margin-top:2px; font-size:12px; line-height:1.5; font-weight:400; color:oklch(0.705 0.015 286.067); }
-    .pilot-checklist-step[data-state='Current'] { color:oklch(0.985 0 0); font-weight:600; }
-    .pilot-checklist-step[data-state='Current'] .pilot-checklist-mark { background:oklch(0.92 0.004 286.32); color:oklch(0.21 0.006 285.885); }
-    .pilot-checklist-step[data-state='Done'] .pilot-checklist-mark { color:oklch(0.82 0.04 155); }
-    .pilot-checklist-step[data-state='Attention'] .pilot-checklist-mark { color:oklch(0.78 0.05 70); }
+    .pilot-checklist-detail { display:block; margin-top:2px; font-size:12px; line-height:1.45; font-weight:400; color:var(--nk-muted); }
+    .pilot-checklist-step[data-state='Current'] { color:var(--nk-fg); font-weight:600; }
+    .pilot-checklist-step[data-state='Current'] .pilot-checklist-mark { border-color:var(--nk-primary); background:var(--nk-primary); color:var(--nk-primary-fg); }
+    .pilot-checklist-step[data-state='Done'] .pilot-checklist-mark { border-color:color-mix(in oklab, var(--nk-success) 60%, transparent); color:var(--nk-success); }
+    .pilot-checklist-step[data-state='Done']:not(:last-child)::after { background:color-mix(in oklab, var(--nk-success) 45%, transparent); }
+    .pilot-checklist-step[data-state='Attention'] .pilot-checklist-mark { border-color:color-mix(in oklab, var(--nk-warning) 60%, transparent); color:var(--nk-warning); }
     .inline-login-picker {
       width: 100%;
       height: max(80px, min(420px, calc(100dvh - 360px)));
       min-width: 0;
-      border: 0;
-      border-radius: 6px;
+      border: 1px solid var(--nk-border);
       color-scheme: dark;
     }
     .inline-login-picker-cancel {
       min-height: 44px;
       margin: 0 auto;
     }
-    .site-context {
-      width: fit-content;
-      max-width: 100%;
-      margin: -4px auto 0;
-      overflow: hidden;
-      color: oklch(0.82 0.01 286);
-      font-size: 11px;
-      font-weight: 650;
-      letter-spacing: 0.02em;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .vault-status {
-      width: fit-content;
-      max-width: 100%;
-      margin: -8px auto 0;
-      overflow: hidden;
-      color: oklch(0.705 0.015 286.067);
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.01em;
-      text-align: center;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .vault-status[data-state='vault-connected'],
-    .vault-status[data-state='credential-available'] {
-      color: oklch(0.82 0.04 155);
-    }
-    .vault-status[data-state='vault-not-connected'],
-    .vault-status[data-state='vault-locked'],
-    .vault-status[data-state='no-matching-credential'],
-    .vault-status[data-state='unavailable'] {
-      color: oklch(0.78 0.05 70);
-    }
-    .vault-status[data-state='vault-locked'],
-    .vault-status[data-state='no-matching-credential'],
-    .vault-status[data-state='unavailable'] {
-      overflow: visible;
-      text-overflow: clip;
-      white-space: normal;
-    }
-    .mark {
-      display: block;
-      width: 52px;
-      height: 52px;
-      margin: 0 auto;
-      border-radius: 12px;
-      object-fit: contain;
-    }
     .collapsed-launch {
       appearance: none;
       position: relative;
       display: grid;
       place-items: center;
-      width: 56px;
-      height: 56px;
+      width: 52px;
+      height: 52px;
       padding: 0;
-      border: 1px solid rgb(255 255 255 / 10%);
-      border-radius: 16px;
-      background: oklch(0.141 0.005 285.823);
-      box-shadow: 0 12px 28px rgb(0 0 0 / 35%);
+      border: 1px solid var(--nk-border);
+      background: var(--nk-card);
       cursor: grab;
       touch-action: none;
     }
     .collapsed-launch:hover {
-      background: oklch(0.21 0.006 285.885);
+      background: var(--nk-raised);
     }
     .collapsed-mark {
       display: block;
-      width: 40px;
-      height: 40px;
-      border-radius: 10px;
+      width: 34px;
+      height: 34px;
       object-fit: contain;
       pointer-events: none;
     }
     .collapsed-progress {
       position: absolute;
-      right: -4px;
-      bottom: -4px;
-      min-width: 24px;
+      right: -5px;
+      bottom: -5px;
+      min-width: 22px;
       padding: 3px 5px;
-      border: 1px solid rgb(255 255 255 / 18%);
-      border-radius: 999px;
-      background: oklch(0.274 0.006 286.033);
-      color: oklch(0.985 0 0);
-      font: 700 10px/1 Inter, ui-sans-serif, system-ui, sans-serif;
+      border: 1px solid var(--nk-border);
+      background: var(--nk-primary);
+      color: var(--nk-primary-fg);
+      font: 600 10px/1 var(--nk-mono);
       pointer-events: none;
-    }
-    h1 {
-      margin: 0;
-      font-size: 18px;
-      line-height: 1.25;
-      text-align: center;
-    }
-    .description {
-      margin: 0;
-      color: oklch(0.705 0.015 286.067);
-      font-size: 13px;
-      line-height: 1.4;
-      text-align: center;
     }
     .account-list {
       display: grid;
-      gap: 8px;
+      gap: 6px;
     }
     button.primary-button,
     button.secondary-button {
       appearance: none;
       min-height: 40px;
-      border-radius: 9px;
+      border-radius: 3px;
       cursor: pointer;
       font: inherit;
       font-size: 13px;
-      font-weight: 700;
+      font-weight: 600;
       padding: 9px 12px;
     }
     button:disabled {
@@ -266,19 +316,19 @@ const WIDGET_PANEL_STYLES = `
     }
     .primary-button {
       border: 1px solid transparent;
-      background: oklch(0.92 0.004 286.32);
-      color: oklch(0.21 0.006 285.885);
+      background: var(--nk-primary);
+      color: var(--nk-primary-fg);
     }
     .primary-button:hover:not(:disabled) {
-      background: color-mix(in oklab, oklch(0.92 0.004 286.32) 90%, black);
+      background: color-mix(in oklab, var(--nk-primary) 90%, black);
     }
     .secondary-button {
-      border: 1px solid rgb(255 255 255 / 10%);
+      border: 1px solid var(--nk-border);
       background: transparent;
-      color: oklch(0.985 0 0);
+      color: var(--nk-fg);
     }
     .secondary-button:hover:not(:disabled) {
-      background: oklch(0.274 0.006 286.033);
+      background: var(--nk-raised);
     }
     .text-button {
       appearance: none;
@@ -287,11 +337,14 @@ const WIDGET_PANEL_STYLES = `
       padding: 4px 8px;
       border: 0;
       background: transparent;
-      color: oklch(0.705 0.015 286.067);
+      color: var(--nk-muted);
       cursor: pointer;
-      font: 650 12px/1.2 Inter, ui-sans-serif, system-ui, sans-serif;
+      font: 500 12px/1.2 Inter, ui-sans-serif, system-ui, sans-serif;
+      text-decoration: underline;
+      text-decoration-color: var(--nk-input);
+      text-underline-offset: 3px;
     }
-    .text-button:hover { color: oklch(0.985 0 0); }
+    .text-button:hover { color: var(--nk-fg); text-decoration-color: var(--nk-fg); }
     button:focus-visible {
       outline: 2px solid rgb(180 186 198 / 45%);
       outline-offset: 2px;
@@ -320,6 +373,11 @@ interface WidgetShell {
   openVaultButton: HTMLButtonElement
   collapseButton: HTMLButtonElement
   collapsedLaunch: HTMLButtonElement
+}
+
+enum WidgetIcon {
+  Collapse = 'collapse',
+  Dismiss = 'dismiss',
 }
 
 type CreateWidgetMarkArgs = {
@@ -444,6 +502,26 @@ class AuthenticationWidgetShell {
     }
   }
 
+  /** A 24-unit stroke icon (Lucide's chevron-down and x) for the toolbar. */
+  private createIcon(icon: WidgetIcon): SVGSVGElement {
+    const namespace = 'http://www.w3.org/2000/svg'
+    const svg = document.createElementNS(namespace, 'svg')
+    svg.setAttribute('viewBox', '0 0 24 24')
+    svg.setAttribute('fill', 'none')
+    svg.setAttribute('stroke', 'currentColor')
+    svg.setAttribute('stroke-width', '2')
+    svg.setAttribute('stroke-linecap', 'round')
+    svg.setAttribute('stroke-linejoin', 'round')
+    svg.setAttribute('aria-hidden', 'true')
+    const path = document.createElementNS(namespace, 'path')
+    path.setAttribute(
+      'd',
+      icon === WidgetIcon.Collapse ? 'm6 9 6 6 6-6' : 'M18 6 6 18M6 6l12 12',
+    )
+    svg.append(path)
+    return svg
+  }
+
   createWidgetMark({
     className,
     size,
@@ -491,7 +569,7 @@ class AuthenticationWidgetShell {
     const collapseButton = document.createElement('button')
     collapseButton.type = 'button'
     collapseButton.className = 'icon-button collapse-button'
-    collapseButton.textContent = '▾'
+    collapseButton.append(this.createIcon(WidgetIcon.Collapse))
     collapseButton.setAttribute(
       'aria-label',
       workflowUi.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetCollapse),
@@ -500,7 +578,7 @@ class AuthenticationWidgetShell {
     const dismissButton = document.createElement('button')
     dismissButton.type = 'button'
     dismissButton.className = 'icon-button dismiss-button'
-    dismissButton.textContent = '×'
+    dismissButton.append(this.createIcon(WidgetIcon.Dismiss))
     dismissButton.setAttribute(
       'aria-label',
       workflowUi.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetDismiss),
@@ -511,16 +589,15 @@ class AuthenticationWidgetShell {
       this.ui.widgetState.dismissed = true
       workflowUi.removeWidget()
     })
-    toolbar.append(step, collapseButton, dismissButton)
+    const nookTypedArgs0_1: Parameters<typeof this.createWidgetMark>[0] = {
+      className: 'mark',
+      size: 22,
+    }
+    const mark = this.createWidgetMark(nookTypedArgs0_1)
+    toolbar.append(mark, step, collapseButton, dismissButton)
 
     const body = document.createElement('div')
     body.className = 'body'
-
-    const nookTypedArgs0_1: Parameters<typeof this.createWidgetMark>[0] = {
-      className: 'mark',
-      size: 52,
-    }
-    const mark = this.createWidgetMark(nookTypedArgs0_1)
 
     const title = document.createElement('h1')
     title.textContent = workflowUi.translatedMessage(copy.titleKey)
@@ -573,15 +650,11 @@ class AuthenticationWidgetShell {
       void chrome.runtime.sendMessage(message)
     })
 
-    body.append(
-      mark,
-      site,
-      vaultStatus,
-      title,
-      description,
-      continueButton,
-      openVaultButton,
-    )
+    const siteRow = document.createElement('div')
+    siteRow.className = 'site-row'
+    siteRow.append(site, vaultStatus)
+
+    body.append(siteRow, title, description, continueButton, openVaultButton)
 
     const collapsedLaunch = document.createElement('button')
     collapsedLaunch.type = 'button'

@@ -32,6 +32,7 @@
   } from '$lib/app/route-state'
   import {
     DeviceProtectionStatus,
+    type NookIdentityHealth,
     type StartSentinelGenesisArgs,
   } from '$app-wasm'
   import { Button } from '$lib/components/ui/button'
@@ -118,6 +119,7 @@
     addProviderOpen = false,
     onUnlock,
     onUnlockOnCard,
+    identityHealth,
     onBeginAddProvider,
     onCancelAddProvider,
     onBeginSetup,
@@ -155,6 +157,9 @@
     /** Unlock the selected vault from its identity card: this browser's key
      * unlocks on the card, never in the page-level sheet. */
     onUnlockOnCard: () => void | Promise<void>
+    /** How the identity is protected; its unlocked card offers the
+     * checklist before any vault is open. */
+    identityHealth?: NookIdentityHealth
     onBeginAddProvider?: () => void
     onCancelAddProvider?: () => void
     onBeginSetup: (request: ProviderSetupRequest) => void
@@ -304,17 +309,6 @@
     newVaultOpen = false
     vault.beginExistingVaultOpen()
     vault.vaultImportOpen = true
-  }
-
-  /** "Add a device" on a locked card unlocks the identity, then opens the
-   * add-device flow. */
-  function addDevice(target: IdentityVaultTarget): void {
-    if (!target.storeId) return
-    const destination: UnlockDestination = {
-      storeId: target.storeId,
-      page: { kind: UnlockPageKind.Route, route: WorkspaceRoute.AddDevice },
-    }
-    void unlockTo(destination)
   }
 
   /** A page chosen from Manage on a locked card: unlock, then open it. */
@@ -923,8 +917,8 @@
     onSelectVault={(storeId: string) => void selectVault(storeId)}
     onUnlockVault={unlockVaultInPlace}
     onManageVault={manageSection}
-    onAddDevice={addDevice}
     onManageSection={manageSection}
+    {...identityHealth ? { currentHealth: identityHealth } : {}}
     onUnlock={() => void unlockIdentity()}
     onLock={lockIdentity}
     onNewIdentity={newIdentity}

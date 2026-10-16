@@ -29,6 +29,7 @@ import {
   simple_vault_url,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
+import { ExtensionIdentityInviteWireKind } from '../../nook-web-shared/src/extension/identity-invite-wire'
 import {
   ensurePinProtectedPopup,
   installForcePinDeviceProtection,
@@ -86,13 +87,23 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     const popupPage = await context.newPage()
     await popupPage.goto(`chrome-extension://${extensionId}/popup/index.html`)
     await expect(popupPage.getByTestId('extension-device-setup')).toBeVisible()
+    // Setup shows what connects to what: the passkey opens this extension,
+    // and the vaults follow in step 2.
+    await expect(popupPage.getByTestId('device-setup-chain')).toHaveAttribute(
+      'data-key',
+      'passkey',
+    )
+    await expect(popupPage.getByTestId('device-setup-chain')).toHaveAttribute(
+      'aria-label',
+      'Your passkey connects to this extension. Your identity comes next.',
+    )
     await expect(
       popupPage.getByTestId('device-protection-use-existing-choice'),
-    ).toHaveText('Authenticate')
+    ).toHaveText('Use my passkey')
     await expect(popupPage.getByTestId('device-mode-select')).toBeHidden()
     await expect(
       popupPage.getByTestId('device-protection-create-new-choice'),
-    ).toHaveText('Create passkey')
+    ).toHaveText('Create one')
     await expect(
       popupPage.getByTestId('device-protection-setup-btn'),
     ).toBeHidden()
@@ -103,7 +114,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     ).toHaveText('Standard')
     await expect(
       popupPage.getByTestId('device-protection-setup-btn'),
-    ).toHaveText('Create new passkey')
+    ).toHaveText('Create passkey')
     await expect(
       popupPage.getByTestId('device-protection-use-existing-choice'),
     ).toBeVisible()
@@ -469,6 +480,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
           ExtensionConnectScope.PasswordFilling,
         ],
         providers: [],
+        identityInvite: { kind: ExtensionIdentityInviteWireKind.NotOffered },
       },
       eventLogRecords: syntheticEventLogRecords,
     }
@@ -555,7 +567,7 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     )
     await expect(
       pairingPopupPage.getByTestId('connect-simple-vault-btn'),
-    ).toHaveText('Connect another vault')
+    ).toHaveText('Connect another identity')
     const pairingPagePromise = context.waitForEvent('page', { timeout: 30_000 })
     await pairingPopupPage.getByTestId('connect-simple-vault-btn').click()
     const pairingPage = await pairingPagePromise

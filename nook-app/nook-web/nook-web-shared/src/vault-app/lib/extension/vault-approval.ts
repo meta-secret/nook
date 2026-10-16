@@ -31,6 +31,14 @@ import {
   ExtensionPairingApprovedMessageType,
   type ExtensionPairingApprovedMessage,
 } from "$web-shared/extension/runtime-messages";
+import {
+  ExtensionIdentityInviteWireKind,
+  type ExtensionIdentityInviteWire,
+} from "$web-shared/extension/identity-invite-wire";
+import {
+  ExtensionIdentityInvitationKind,
+  ExtensionIdentityInvite,
+} from "./identity-invitation";
 
 export type ExtensionVaultCompletion = {
   readonly manager: NookVaultManager;
@@ -251,12 +259,45 @@ export class ExtensionVaultApproval {
     });
     if (providerStoreId.isErr()) return err(providerStoreId.error);
 
+    // The extension joins the vault's identity as a member, the way a new
+    // device does, so it opens every vault of the identity.
+    // It reaches the identity through a sync provider, so it needs their
+    // credentials.
+    const sharesProviders = this.request.scopes.includes(
+      ExtensionConnectScope.SyncProviderCredentials,
+    );
+    let identityInvite: ExtensionIdentityInviteWire = {
+      kind: ExtensionIdentityInviteWireKind.NotOffered,
+    };
+    let joinMountId = "";
+    if (sharesProviders) {
+      const inviteRequest: ConstructorParameters<
+        typeof ExtensionIdentityInvite
+      >[0] = {
+        vault: this.vault,
+        devicePublicKey: this.request.devicePublicKey,
+      };
+      const invitation = await new ExtensionIdentityInvite(
+        inviteRequest,
+      ).issue();
+      if (invitation.isErr()) return err(invitation.error);
+      if (invitation.value.kind === ExtensionIdentityInvitationKind.Invited) {
+        joinMountId = invitation.value.mount.id;
+        identityInvite = {
+          kind: ExtensionIdentityInviteWireKind.Invited,
+          identityId: invitation.value.identityId,
+          identityLabel: invitation.value.identityLabel,
+          code: invitation.value.code,
+          sealedPassphrase: invitation.value.sealedPassphrase,
+          mountProviderId: joinMountId,
+        };
+      } else {
+        identityInvite = { kind: ExtensionIdentityInviteWireKind.NeedsCloud };
+      }
+    }
+
     let providers: StorageProvider[] = [];
-    if (
-      this.request.scopes.includes(
-        ExtensionConnectScope.SyncProviderCredentials,
-      )
-    ) {
+    if (sharesProviders) {
       const snapshot = await this.vault.enqueueStorage(async () => {
         const capability = this.admitAuthorization();
         if (capability.isErr()) return err(capability.error);
@@ -270,12 +311,16 @@ export class ExtensionVaultApproval {
       });
       if (snapshot.isErr()) return err(snapshot.error);
       try {
+        // The vault's providers, and the identity mount the extension joins
+        // through when it is not one of them.
         const matching = snapshot.value.providers.filter((provider) => {
           const membership: VaultProviderMembership = {
             provider,
             storeId: providerStoreId.value,
           };
-          return providerBelongsToVault(membership);
+          return (
+            providerBelongsToVault(membership) || provider.id === joinMountId
+          );
         });
         const providerSnapshot: Parameters<
           typeof seal_auth_providers_for_device_public_key
@@ -339,6 +384,7 @@ export class ExtensionVaultApproval {
           approvedAt: authorization.approvedAt,
           scopes: this.request.scopes,
           providers,
+          identityInvite,
         },
         eventLogRecords,
       };

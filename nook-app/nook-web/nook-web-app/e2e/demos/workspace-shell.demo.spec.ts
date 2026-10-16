@@ -33,10 +33,10 @@ test('the vault page holds items; the identity card manages the rest', async ({
   await page.waitForTimeout(DEMO_BEAT_MS)
 
   // Manage on the identity card holds actions, adding a device first;
-  // a fresh identity also names what it lacks.
+  // a fresh identity also offers its protection checklist.
   await page.getByTestId('header-identities-btn').click()
-  await expect(page.getByTestId('identity-card-health')).toContainText(
-    'No cloud copy yet',
+  await expect(page.getByTestId('identity-protection-toggle')).toContainText(
+    'Protect this identity',
   )
   await page.getByTestId('identity-manage').first().click()
   const menu = page.getByTestId('identity-menu')

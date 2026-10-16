@@ -128,6 +128,8 @@ function sessionMessagePriority(
     case ExtensionSessionMessageType.RecoverPasskey:
     case ExtensionSessionMessageType.CreatePin:
     case ExtensionSessionMessageType.ImportVault:
+    case ExtensionSessionMessageType.JoinIdentity:
+    case ExtensionSessionMessageType.ConnectIdentityVault:
     case ExtensionSessionMessageType.UpdateVault:
     case ExtensionSessionMessageType.VaultSummary:
     case ExtensionSessionMessageType.ListPasskeys:
@@ -687,6 +689,8 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
           const type = request.type
           const serviceWorkerOnly =
             type === ExtensionSessionMessageType.SealIdentityHandoff ||
+            type === ExtensionSessionMessageType.JoinIdentity ||
+            type === ExtensionSessionMessageType.ConnectIdentityVault ||
             type === ExtensionSessionMessageType.CancelPasskey ||
             type === ExtensionSessionMessageType.ExportVaultEventLog
           if (
