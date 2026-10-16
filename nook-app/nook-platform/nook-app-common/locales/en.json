@@ -2068,8 +2068,6 @@
     "done": "Done",
     "new_invite": "Make a new invite",
     "how_it_works": "How the new device gets access",
-    "card_action": "Add a device",
-    "card_hint": "Phone or another computer",
     "single_device": "Only this device can open your identity. Add another so losing it doesn't lock you out."
   },
   "first_run": {

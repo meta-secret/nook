@@ -56,7 +56,8 @@ test('the identity card leads to adding a device in three steps', async ({
   await snapshot(page, '3-needs-cloud')
   await demoBeat(page)
 
-  // With a cloud copy and one device, the card offers a second device.
+  // With a cloud copy and one device, the card's health chip offers a
+  // second device.
   await page.getByTestId('identity-overview-toggle').first().click()
   await expect(page.getByTestId('identity-overview')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -67,14 +68,12 @@ test('the identity card leads to adding a device in three steps', async ({
   await seedSyncProvidersWhileUnlocked(page)
   await forceVaultQuiescentForE2e(page)
   await openIdentitiesPage(page)
-  await expect(page.getByTestId('identity-card-health')).toContainText(
-    'Only one device',
-    { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
-  )
-  const addDevice = page.getByTestId('identity-add-device')
-  await expect(addDevice).toBeVisible()
+  const health = page.getByTestId('identity-card-health')
+  await expect(health).toContainText('Only one device', {
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
   await snapshot(page, '4-hub-one-device')
-  await addDevice.click()
+  await health.click()
   await expect(page.getByTestId('add-device-stage')).toHaveAttribute(
     'data-stage',
     'invite',

@@ -17,7 +17,6 @@ card, which then spans the full row.
     Lock,
     LayoutDashboard,
     LockOpen,
-    MonitorSmartphone,
     Plus,
     Puzzle,
     Settings2,
@@ -65,8 +64,6 @@ card, which then spans the full row.
     onUseIdentity = () => {},
     healthNote = '',
     onHealth = () => {},
-    onAddDevice,
-    addDevicePrompt = false,
     onManageSection,
     pairingStatusFor = () => ({
       kind: LoginVaultExtensionPairingStatusKind.NotShown,
@@ -108,12 +105,6 @@ card, which then spans the full row.
      * chip opens the identity's control page at that step. */
     healthNote?: string
     onHealth?: () => void
-    /** Open the add-device flow. Offered on the identity this browser
-     * uses, locked or not: a locked one unlocks first. */
-    onAddDevice?: () => void
-    /** The identity opens on one device only: offer a second on the card
-     * itself, not just in Manage. */
-    addDevicePrompt?: boolean
     /** Open one of the identity's pages from Manage. Given, Manage on the
      * identity this browser uses opens a menu of them. */
     onManageSection?: (section: WorkspaceSection) => void
@@ -505,34 +496,6 @@ card, which then spans the full row.
         {/if}
       </ul>
     </section>
-
-    {#if onAddDevice && addDevicePrompt && !preview && (live || card.current)}
-      <section class="border-t border-border px-2 py-2">
-        <button
-          type="button"
-          class="nk-vault-row"
-          data-testid="identity-add-device"
-          disabled={busy}
-          onclick={onAddDevice}
-        >
-          <span class="nk-vault-icon" aria-hidden="true">
-            <MonitorSmartphone class="size-4" />
-          </span>
-          <span class="flex min-w-0 flex-1 flex-col">
-            <span class="truncate text-[0.9375rem] font-medium"
-              >{vault.t(I18N_KEYS.AddDeviceCardAction)}</span
-            >
-            <span class="truncate text-xs text-muted-foreground"
-              >{vault.t(I18N_KEYS.AddDeviceCardHint)}</span
-            >
-          </span>
-          <Plus
-            class="size-4 flex-none text-muted-foreground"
-            aria-hidden="true"
-          />
-        </button>
-      </section>
-    {/if}
 
     {#if managesHere}
       <section

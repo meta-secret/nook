@@ -55,8 +55,6 @@ join) sit between the hero and the cards.
     onClosePanels = () => {},
     currentHealthNote = '',
     onHealth = () => {},
-    onAddDevice,
-    addDevicePrompt = false,
     onManageSection,
     overview,
     overviewOpen = false,
@@ -104,11 +102,6 @@ join) sit between the hero and the cards.
     currentHealthNote?: string
     /** Open the unlocked identity's control page at its next step. */
     onHealth?: () => void
-    /** Open the add-device flow from the current identity's card; a locked
-     * identity unlocks on the way. */
-    onAddDevice?: (target: IdentityVaultTarget) => void
-    /** The current identity opens on one device only. */
-    addDevicePrompt?: boolean
     /** Open one of the current identity's pages from Manage on its card. */
     onManageSection?: (target: IdentitySectionTarget) => void
     /** The current identity's overview, shown beside its card. */
@@ -467,10 +460,6 @@ join) sit between the hero and the cards.
             {onLock}
             healthNote={card.current ? currentHealthNote : ''}
             {onHealth}
-            {...onAddDevice
-              ? { onAddDevice: () => onAddDevice(targetFor(card.identityId)) }
-              : {}}
-            addDevicePrompt={card.current && addDevicePrompt}
             overviewOpen={card.current && overviewOpen}
             {...overview && overviewOpen && card.current
               ? { overviewPanel: overview }
