@@ -790,10 +790,10 @@ pub const EXTENSION_DEVICE_SETUP_CREATE_TITLE: &str = "extension.device_setup.cr
 pub const EXTENSION_DEVICE_SETUP_HAVE_PASSKEY: &str = "extension.device_setup.have_passkey";
 pub const EXTENSION_DEVICE_SETUP_NO_PASSKEY: &str = "extension.device_setup.no_passkey";
 pub const EXTENSION_DEVICE_SETUP_NODE_EXTENSION: &str = "extension.device_setup.node_extension";
+pub const EXTENSION_DEVICE_SETUP_NODE_IDENTITY: &str = "extension.device_setup.node_identity";
 pub const EXTENSION_DEVICE_SETUP_NODE_NEXT: &str = "extension.device_setup.node_next";
 pub const EXTENSION_DEVICE_SETUP_NODE_PASSKEY: &str = "extension.device_setup.node_passkey";
 pub const EXTENSION_DEVICE_SETUP_NODE_PIN: &str = "extension.device_setup.node_pin";
-pub const EXTENSION_DEVICE_SETUP_NODE_VAULTS: &str = "extension.device_setup.node_vaults";
 pub const EXTENSION_DEVICE_SETUP_OPTIONS: &str = "extension.device_setup.options";
 pub const EXTENSION_DEVICE_SETUP_PIN_SETUP_DESCRIPTION: &str =
     "extension.device_setup.pin_setup_description";

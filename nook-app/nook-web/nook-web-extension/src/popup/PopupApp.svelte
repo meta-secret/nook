@@ -556,7 +556,7 @@
       <div class="chain-node" aria-hidden="true">
         <span class="chain-icon"><FolderKey size={18} /></span>
         <span class="chain-label">
-          {translatePlain(I18N_KEYS.ExtensionDeviceSetupNodeVaults)}
+          {translatePlain(I18N_KEYS.ExtensionDeviceSetupNodeIdentity)}
         </span>
         {#if inSetup}
           <span class="chain-tag">

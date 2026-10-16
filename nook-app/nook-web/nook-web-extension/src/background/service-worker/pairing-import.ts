@@ -33,6 +33,7 @@ import {
 import { backgroundVaultRuntime } from '../vault-runtime'
 import { extensionPairingIdentity } from './pairing-identity'
 import { PairingIdentityConnection } from './pairing-identity-connection'
+import { selectDefaultPairedVault } from './paired-vaults'
 import { extensionSessionLifecycle } from './session-lifecycle'
 
 export enum PairingIngressFailure {
@@ -377,9 +378,15 @@ export class PairingCredentialImportLifecycle {
           sendSessionMessage: (...request) =>
             extensionPairingIdentity.sendSessionMessage(...request),
         }
-        return await new PairingIdentityConnection(connectionRequest).connect(
-          approved.eventCount,
-        )
+        const connected = await new PairingIdentityConnection(
+          connectionRequest,
+        ).connect(approved.eventCount)
+        // Each identity vault imports as the newest pairing; the vault the
+        // person approved from stays the one the extension fills from.
+        if (connected.ok) {
+          await selectDefaultPairedVault(this.message.payload.vaultStoreId)
+        }
+        return connected
       } finally {
         new ProviderCredentialBuffer(stagedProviders).clear()
         new ProviderCredentialBuffer(identityProviders).clear()

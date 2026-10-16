@@ -1634,12 +1634,12 @@
     },
     "device_setup": {
       "step_label": "Step 1 of 2",
-      "chain_passkey": "Your passkey connects to this extension. Your vaults come next.",
-      "chain_pin": "Your PIN connects to this extension. Your vaults come next.",
+      "chain_passkey": "Your passkey connects to this extension. Your identity comes next.",
+      "chain_pin": "Your PIN connects to this extension. Your identity comes next.",
       "node_passkey": "Your passkey",
       "node_pin": "Your PIN",
       "node_extension": "This extension",
-      "node_vaults": "Your vaults",
+      "node_identity": "Your identity",
       "node_next": "Next",
       "setup_title": "Connect your passkey",
       "setup_description": "It becomes the key to this extension.",
@@ -1881,7 +1881,7 @@
       "approved_return": "Browser access approved. You can close this window or return to your vault.",
       "approving": "Approving…",
       "approve": "Approve extension",
-      "joins_identity": "The extension joins {identity} as another device: it opens every vault in {identity}, including vaults you create later. It stays a filling companion with these permissions only.",
+      "joins_identity": "The extension joins {identity} as another device: it opens every vault in {identity}. It stays a filling companion with these permissions only.",
       "vault_only": "{identity} has no cloud sync provider yet, so the extension connects this vault only. Add one to connect every vault in {identity}."
     },
     "popup": {

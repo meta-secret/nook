@@ -95,7 +95,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     )
     await expect(popupPage.getByTestId('device-setup-chain')).toHaveAttribute(
       'aria-label',
-      'Your passkey connects to this extension. Your vaults come next.',
+      'Your passkey connects to this extension. Your identity comes next.',
     )
     await expect(
       popupPage.getByTestId('device-protection-use-existing-choice'),

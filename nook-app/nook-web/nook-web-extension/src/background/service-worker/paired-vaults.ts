@@ -98,7 +98,10 @@ export function handlePairedVaultsQuery({
   return true
 }
 
-async function selectDefault(vaultStoreId: string): Promise<void> {
+/** Make one paired vault the one the extension fills from first. */
+export async function selectDefaultPairedVault(
+  vaultStoreId: string,
+): Promise<void> {
   const policy = await extensionPairingGrantPolicyReady
   const stored = await extensionPairingIdentity.getPairingStorage()
   const selectionArgs: Parameters<typeof policy.defaultVaultSelectionItems>[0] =
@@ -121,7 +124,7 @@ export function handleDefaultVaultSelect({
     sendResponse(forbidden)
     return false
   }
-  void selectDefault(vaultStoreId)
+  void selectDefaultPairedVault(vaultStoreId)
     .then(() => {
       const response: DefaultVaultSelectResponse = { ok: true }
       sendResponse(response)
