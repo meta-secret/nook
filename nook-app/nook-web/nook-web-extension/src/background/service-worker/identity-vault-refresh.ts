@@ -45,9 +45,8 @@ type RefreshReply =
       readonly kind: RefreshReplyKind.Decoded
       readonly toPair: string[]
       readonly awaitingGrant: string[]
-      /** The identity's first sync provider, which opens the vaults. */
-      readonly mountProviderId: string
-      readonly syncProviderCount: number
+      /** The identity's sync providers; the first one opens the vaults. */
+      readonly mountProviderIds: string[]
     }
   | { readonly kind: RefreshReplyKind.Rejected }
 
@@ -82,25 +81,13 @@ function decodeRefreshReply(response: unknown): RefreshReply {
     mountProviderIds === RefreshReplyKind.Rejected
   )
     return rejectedRefresh
-  const [mountProviderId] = mountProviderIds
-  if (mountProviderId === undefined) {
-    // Nothing to open, or vaults to pair and no provider to open them with.
-    if (toPair.length > 0) return rejectedRefresh
-    const nothingToPair: RefreshReply = {
-      kind: RefreshReplyKind.Decoded,
-      toPair,
-      awaitingGrant,
-      mountProviderId: '',
-      syncProviderCount: 0,
-    }
-    return nothingToPair
-  }
+  // Vaults to pair need a provider to open them with.
+  if (toPair.length > 0 && mountProviderIds.length === 0) return rejectedRefresh
   const decoded: RefreshReply = {
     kind: RefreshReplyKind.Decoded,
     toPair,
     awaitingGrant,
-    mountProviderId,
-    syncProviderCount: mountProviderIds.length,
+    mountProviderIds,
   }
   return decoded
 }
@@ -155,19 +142,21 @@ export class IdentityVaultRefresh {
       sendSessionMessage,
     }
     const pairing = new IdentityVaultPairing(pairingRequest)
-    for (const vaultStoreId of reply.toPair) {
-      // The identity's sync provider stays saved in the session; the vault
-      // replicates through it without its credentials travelling here.
-      const vault: IdentityVaultPair = {
-        vaultStoreId,
-        mountProviderId: reply.mountProviderId,
-        template,
-        identityLabel,
-        providers: [],
-        syncProviderCount: reply.syncProviderCount,
+    // The identity's first sync provider opens the vaults; it stays saved
+    // in the session, so no credential travels here.
+    for (const mountProviderId of reply.mountProviderIds.slice(0, 1)) {
+      for (const vaultStoreId of reply.toPair) {
+        const vault: IdentityVaultPair = {
+          vaultStoreId,
+          mountProviderId,
+          template,
+          identityLabel,
+          providers: [],
+          syncProviderCount: reply.mountProviderIds.length,
+        }
+        const imported = await pairing.pair(vault)
+        if (!imported.ok) return imported
       }
-      const imported = await pairing.pair(vault)
-      if (!imported.ok) return imported
     }
     return {
       ok: true,

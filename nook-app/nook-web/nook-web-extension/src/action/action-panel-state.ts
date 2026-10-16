@@ -45,8 +45,9 @@ type ServiceWorkerMessage =
       readonly payload?: { readonly intent: OpenCompanionLauncherIntent.Pair }
     }
 
-/** The service worker's acknowledgement of a panel request. */
-type ServiceWorkerAcknowledgement = { readonly ok?: boolean } | undefined
+/** The service worker's acknowledgement of a panel request; Chrome passes
+ * nothing when no listener answered. */
+type ServiceWorkerAcknowledgement = { readonly ok?: boolean }
 
 /** The panel's requests to the service worker; each settles to whether it
  * was done, so the panel can close or say what failed. */
@@ -58,7 +59,11 @@ export class ActionPanelMessages {
       chrome.runtime.sendMessage(
         message,
         (response: ServiceWorkerAcknowledgement) => {
-          resolve(!chrome.runtime.lastError && response?.ok === true)
+          resolve(
+            !chrome.runtime.lastError &&
+              Boolean(response) &&
+              response.ok === true,
+          )
         },
       )
     })

@@ -84,7 +84,11 @@ function grant(
   }
 }
 
-type RefreshAnswer = 'plan' | 'nothing-to-pair' | 'refused'
+enum RefreshAnswer {
+  Plan = 'plan',
+  NothingToPair = 'nothing-to-pair',
+  Refused = 'refused',
+}
 
 /** The offscreen session and the import, as the refresh drives them. */
 class RefreshFixture {
@@ -99,7 +103,7 @@ class RefreshFixture {
     const [message] = request
     this.sent.push(message)
     if (message.type === ExtensionSessionMessageType.RefreshIdentityVaults) {
-      if (this.answer === 'refused') {
+      if (this.answer === RefreshAnswer.Refused) {
         const failure = new ExtensionSessionTransportFailure(
           ExtensionSessionTransportFailureKind.DeliveryFailed,
         )
@@ -110,11 +114,12 @@ class RefreshFixture {
         standing: 'member',
         identityLabel: 'Extension',
         toPair:
-          this.answer === 'plan'
+          this.answer === RefreshAnswer.Plan
             ? ['store_lllllllllll', 'store_nnnnnnnnnnn']
             : [],
         awaitingGrant: ['store_uuuuuuuuuuu'],
-        mountProviderIds: this.answer === 'plan' ? ['github-family'] : [],
+        mountProviderIds:
+          this.answer === RefreshAnswer.Plan ? ['github-family'] : [],
       }
       return Promise.resolve(ok(planned))
     }
@@ -149,7 +154,7 @@ class RefreshFixture {
 
 describe('pairing the vaults an identity gained, on unlock', () => {
   test('pairs each vault the identity grants and the extension lacks', async () => {
-    const fixture = new RefreshFixture('plan', true)
+    const fixture = new RefreshFixture(RefreshAnswer.Plan, true)
 
     const result = await fixture.refresh([
       grant('store_aaaaaaaaaaa', EXTENSION_DEVICE),
@@ -193,7 +198,7 @@ describe('pairing the vaults an identity gained, on unlock', () => {
   })
 
   test('a key with no vault yet asks the session nothing', async () => {
-    const fixture = new RefreshFixture('plan', true)
+    const fixture = new RefreshFixture(RefreshAnswer.Plan, true)
 
     const result = await fixture.refresh([
       grant('store_wwwwwwwwwww', 'device-work'),
@@ -204,7 +209,7 @@ describe('pairing the vaults an identity gained, on unlock', () => {
   })
 
   test('reports vaults not shared with the extension yet', async () => {
-    const fixture = new RefreshFixture('nothing-to-pair', true)
+    const fixture = new RefreshFixture(RefreshAnswer.NothingToPair, true)
 
     const result = await fixture.refresh([
       grant('store_aaaaaaaaaaa', EXTENSION_DEVICE),
@@ -215,7 +220,7 @@ describe('pairing the vaults an identity gained, on unlock', () => {
   })
 
   test('a refresh the session cannot finish is reported', async () => {
-    const fixture = new RefreshFixture('refused', true)
+    const fixture = new RefreshFixture(RefreshAnswer.Refused, true)
 
     const result = await fixture.refresh([
       grant('store_aaaaaaaaaaa', EXTENSION_DEVICE),
@@ -229,7 +234,7 @@ describe('pairing the vaults an identity gained, on unlock', () => {
   })
 
   test('a vault that does not open stops the refresh with that failure', async () => {
-    const fixture = new RefreshFixture('plan', false)
+    const fixture = new RefreshFixture(RefreshAnswer.Plan, false)
 
     const result = await fixture.refresh([
       grant('store_aaaaaaaaaaa', EXTENSION_DEVICE),

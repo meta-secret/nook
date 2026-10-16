@@ -20,7 +20,7 @@ use nook_core::{
     IsoTimestamp, LocalIdentityLog, MemberLabel, MemberLabelState, MultiDeviceError,
     OpenedVaultDek, PersonalEnrollmentProvider, ReplicatedIdentityAdoption,
     ReplicatedIdentityMembership, ReplicatedIdentityStanding, ReplicatedMembershipRequest,
-    SigningIdentity, StoreId, VaultKeys,
+    SigningIdentity, StoreId, VaultError, VaultKeys,
 };
 
 const PASSPHRASE: &str = "orbit-lantern-kitten-meadow";
@@ -441,7 +441,11 @@ fn only_the_extension_the_invite_was_sealed_to_can_join() -> anyhow::Result<()> 
     let invite = family.invite(&key.app)?;
     let joined = other_browser.join(&stranger, &invite, &mut family, LocalIdentityLog::Empty);
 
-    assert!(joined.is_err());
+    // The passphrase does not open with the stranger's key.
+    assert!(matches!(
+        joined.map_err(anyhow::Error::downcast::<VaultError>),
+        Err(Ok(_))
+    ));
     assert_eq!(
         ReplicatedIdentityStanding::of(&family.state()?, stranger.app.app_id()),
         ReplicatedIdentityStanding::NotListed
