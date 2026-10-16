@@ -1,18 +1,16 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { afterAll, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { Linter } from 'eslint'
 import compileContractsEslintConfig from '../../eslint.compile-contracts.config.js'
+import { CompileContractFixture } from './compile-contract-fixture.js'
 
 // Each case builds a TypeScript program; release verification runs every
 // static, lint, and unit gate in parallel in one container, where that can
 // take well over fifteen seconds.
 setDefaultTimeout(60_000)
+afterAll(() => CompileContractFixture.remove())
 
-const extensionSourceDirectory = fileURLToPath(
-  new URL('../src/', import.meta.url),
-)
 const webRoot = fileURLToPath(new URL('../../', import.meta.url))
 const adapterFilePath = fileURLToPath(
   new URL('../src/lib/nook-wasm.ts', import.meta.url),
@@ -35,22 +33,15 @@ class CompileContractsConfigTestHarness {
 
   /** @param {string} source @param {'.ts' | '.svelte'} extension */
   static lintTemporarySource(source, extension) {
-    const fixtureDirectory = mkdtempSync(
-      join(extensionSourceDirectory, '__compile-contracts-'),
+    const filePath = CompileContractFixture.path(extension)
+    writeFileSync(filePath, source)
+    return new Linter({ cwd: webRoot }).verify(
+      source,
+      /** @type {import('eslint').Linter.Config[]} */ (
+        compileContractsEslintConfig
+      ),
+      filePath,
     )
-    const filePath = join(fixtureDirectory, `contract${extension}`)
-    try {
-      writeFileSync(filePath, source)
-      return new Linter({ cwd: webRoot }).verify(
-        source,
-        /** @type {import('eslint').Linter.Config[]} */ (
-          compileContractsEslintConfig
-        ),
-        filePath,
-      )
-    } finally {
-      rmSync(fixtureDirectory, { recursive: true, force: true })
-    }
   }
 
   /** @param {string} source */
@@ -82,7 +73,7 @@ describe('focused compile-contract ESLint config', () => {
       'utf8',
     )
     expect(namedSuccessContractTestSource).toContain(
-      "join(sourceDirectory, '__compile-contracts-named-success-')",
+      "CompileContractFixture.path('.ts')",
     )
     expect(namedSuccessContractTestSource).toContain(
       'const typeAwareSvelteMessages = SvelteNamedSuccessContractTestHarness.lint(`',

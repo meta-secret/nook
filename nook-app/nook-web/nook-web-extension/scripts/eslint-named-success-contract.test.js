@@ -1,12 +1,13 @@
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { afterAll, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { Linter } from 'eslint'
 import namedSuccessEslintConfig from '../../eslint.named-success.config.js'
 import { namedSuccessContractBaseline } from '../../named-success-contract-baseline.js'
+import { CompileContractFixture } from './compile-contract-fixture.js'
 
 // Every case initializes type-aware ESLint services. Parallel PR phases can
 // briefly push one otherwise-fast fixture beyond Bun's 5-second default.
@@ -14,6 +15,7 @@ import { namedSuccessContractBaseline } from '../../named-success-contract-basel
 // static, lint, and unit gate in parallel in one container, where that can
 // take well over fifteen seconds.
 setDefaultTimeout(60_000)
+afterAll(() => CompileContractFixture.remove())
 
 const webRoot = fileURLToPath(new URL('../../', import.meta.url))
 const svelteFixturePath = fileURLToPath(
@@ -25,27 +27,19 @@ const svelteFixturePath = fileURLToPath(
 class NamedSuccessContractTestHarness {
   /** @param {string} source */
   static lint(source) {
-    const sourceDirectory = fileURLToPath(new URL('../src/', import.meta.url))
-    const root = mkdtempSync(
-      join(sourceDirectory, '__compile-contracts-named-success-'),
+    const filePath = CompileContractFixture.path('.ts')
+    writeFileSync(filePath, source)
+    const messages = new Linter({ cwd: webRoot }).verify(
+      source,
+      /** @type {import('eslint').Linter.Config[]} */ (
+        namedSuccessEslintConfig
+      ),
+      filePath,
     )
-    try {
-      const filePath = join(root, 'contract.ts')
-      writeFileSync(filePath, source)
-      const messages = new Linter({ cwd: webRoot }).verify(
-        source,
-        /** @type {import('eslint').Linter.Config[]} */ (
-          namedSuccessEslintConfig
-        ),
-        filePath,
-      )
-      return messages.filter(
-        (message) =>
-          message.ruleId === 'nook-typed-api/no-empty-success-contract',
-      )
-    } finally {
-      rmSync(root, { recursive: true, force: true })
-    }
+    return messages.filter(
+      (message) =>
+        message.ruleId === 'nook-typed-api/no-empty-success-contract',
+    )
   }
 }
 
