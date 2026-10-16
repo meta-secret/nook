@@ -58,7 +58,7 @@ enum DecodedReplyKind {
 
 type JoinReply =
   | { readonly kind: DecodedReplyKind.Decoded; readonly storeIds: string[] }
-  | { readonly kind: DecodedReplyKind.Rejected }
+  | { readonly kind: DecodedReplyKind.Rejected; readonly reason: string }
 
 type ConnectReply =
   | {
@@ -68,12 +68,24 @@ type ConnectReply =
     }
   | { readonly kind: DecodedReplyKind.Rejected }
 
-const rejectedJoin: JoinReply = { kind: DecodedReplyKind.Rejected }
+const rejectedJoin: JoinReply = { kind: DecodedReplyKind.Rejected, reason: '' }
 const rejectedConnect: ConnectReply = { kind: DecodedReplyKind.Rejected }
 
 /** The offscreen session's reply to joining an identity. */
 function decodeJoinReply(response: unknown): JoinReply {
   if (!response || typeof response !== 'object') return rejectedJoin
+  if (
+    'ok' in response &&
+    response.ok === false &&
+    'reason' in response &&
+    typeof response.reason === 'string'
+  ) {
+    const refused: JoinReply = {
+      kind: DecodedReplyKind.Rejected,
+      reason: response.reason,
+    }
+    return refused
+  }
   if (!('ok' in response) || response.ok !== true) return rejectedJoin
   if (!('vaults' in response) || !Array.isArray(response.vaults))
     return rejectedJoin
@@ -156,7 +168,7 @@ export class PairingIdentityConnection {
     const joined = await sendSessionMessage(joinMessage)
     const join = joined.isOk() ? decodeJoinReply(joined.value) : rejectedJoin
     if (join.kind === DecodedReplyKind.Rejected) {
-      console.warn('Extension could not join the identity')
+      console.warn('Extension could not join the identity', join.reason)
       const failure: PairingIdentityImportResult = {
         ok: false,
         reason: PairingIdentityConnectionFailure.JoinFailed,

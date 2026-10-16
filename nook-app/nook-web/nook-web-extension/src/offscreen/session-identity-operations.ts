@@ -45,6 +45,13 @@ export type JoinIdentityResponse = {
   readonly vaults: ExtensionIdentityVault[]
 }
 
+/** The identity join failed; the reason is the domain message, with no key
+ * material, so the extension can say why. */
+export type JoinIdentityRefusal = {
+  readonly ok: false
+  readonly reason: string
+}
+
 export type ConnectIdentityVaultResponse = {
   readonly ok: true
   readonly vaultName: string
@@ -99,7 +106,7 @@ export async function joinExtensionIdentity({
   manager,
   message,
 }: JoinExtensionIdentityRequest): Promise<
-  Result<JoinIdentityResponse, SessionOperationFailure>
+  Result<JoinIdentityResponse | JoinIdentityRefusal, SessionOperationFailure>
 > {
   const { identityId, memberLabel, code, sealedPassphrase, mountProviderId } =
     message.payload
@@ -129,11 +136,11 @@ export async function joinExtensionIdentity({
     }
     return ok(response)
   } catch (failure) {
-    console.error(
-      'Extension could not join the identity',
-      failure instanceof Error ? failure.message : '',
-    )
-    return err(failed())
+    const refusal: JoinIdentityRefusal = {
+      ok: false,
+      reason: failure instanceof Error ? failure.message : '',
+    }
+    return ok(refusal)
   }
 }
 
