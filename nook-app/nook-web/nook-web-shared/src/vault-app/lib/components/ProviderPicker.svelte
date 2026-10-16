@@ -25,6 +25,7 @@
     type StorageProvider,
   } from '$lib/auth/providers'
   import { provider_replication_capability } from '$lib/vault/architecture-model'
+  import { cloudKitRuntime } from '$lib/auth/icloud/cloudkit-runtime'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {
@@ -40,6 +41,14 @@
   } = $props()
 
   const localFolderUnavailable = $derived(!vault.localFolderBackupSupported)
+  /** Brave ships folder access switched off; say where to turn it on. */
+  const localFolderUnavailableText = $derived(
+    vault.t(
+      cloudKitRuntime.isBraveBrowser()
+        ? I18N_KEYS.ProviderPickerLocalFolderUnavailableBrave
+        : I18N_KEYS.ProviderPickerLocalFolderUnavailableDesc,
+    ),
+  )
   const localProviderRequest: Parameters<typeof blocked>[0] = {
     type: LOCAL_PROVIDER_TYPE,
   }
@@ -168,9 +177,15 @@
             <span class="block text-sm font-semibold text-foreground"
               >{vault.t(I18N_KEYS.ProviderPickerLocalFolder)}</span
             >
-            <span class="block truncate text-xs text-muted-foreground">
+            <span
+              class="block truncate text-xs text-muted-foreground"
+              data-testid="provider-option-local-folder-desc"
+              {...localFolderUnavailable
+                ? { title: localFolderUnavailableText }
+                : {}}
+            >
               {localFolderUnavailable
-                ? vault.t(I18N_KEYS.ProviderPickerLocalFolderUnavailableDesc)
+                ? localFolderUnavailableText
                 : (() => {
                     const descriptionRequest: Parameters<
                       typeof description

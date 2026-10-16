@@ -61,7 +61,8 @@ pub use identity_control::{
     IdentityControlLog, IdentityControlMember, IdentityControlOperation, IdentityControlRejection,
     IdentityControlState, IdentityControlVault, IdentityEvent, IdentityEventBody,
     IdentityEventInsertStatus, IdentityEventSchemaVersion, IdentityEventSigning,
-    IdentityGenesisRequest, IdentityJoinRequest, IdentityMemberKeys, IdentityMountTarget,
+    IdentityGenesisRequest, IdentityInvite, IdentityInviteIssue, IdentityInviteJoin,
+    IdentityInviteProof, IdentityJoinRequest, IdentityMemberKeys, IdentityMountTarget,
     IdentityProviderMount, IdentityVaultDekGrant, IdentityVaultDekLookup, IdentityVaultEpochDeks,
     IdentityVaultRegistration, MemberVaultDek, OpenedVaultDek, ProviderMountId,
 };

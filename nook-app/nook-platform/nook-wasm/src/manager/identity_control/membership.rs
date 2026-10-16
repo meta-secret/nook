@@ -1,23 +1,21 @@
-//! Identity-level join, approval, denial, revocation, renaming, and mounts.
+//! Identity-level membership: revocation, renaming, and mounts.
 
 use nook_core::{
-    AppId, AuthProvidersSnapshotData, IdentityApprovalRequest, IdentityControlOperation,
-    IdentityControlState, IdentityEventInsertStatus, IdentityEventSigning, IdentityMountCapability,
-    IdentityVaultDekLookup, MemberLabel, OpenedVaultDek, ProviderRows, ReplicatedIdentityStanding,
-    StorageMode, StorageProviderData, VaultKeys,
+    AppId, AuthProvidersSnapshotData, IdentityControlOperation, IdentityControlState,
+    IdentityMountCapability, IdentityVaultDekLookup, MemberLabel, ProviderRows,
+    StorageProviderData, VaultKeys,
 };
 use tsify::Tsify;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 use super::{INVALID_TYPED_INPUT, UNENCODABLE_TYPED_OUTPUT};
 use crate::manager::NookVaultManager;
-use crate::storage::identity_log::IdentityLogWrite;
 use crate::{NookDatabase, NookError};
 
 impl NookVaultManager {
     /// Open every owned vault's current DEK through this member's own
     /// identity envelope.
-    fn opened_identity_vault_keys(
+    pub(super) fn opened_identity_vault_keys(
         &self,
         state: &IdentityControlState,
     ) -> Result<Vec<(nook_core::StoreId, nook_core::EventId, VaultKeys)>, NookError> {
@@ -53,122 +51,10 @@ impl NookVaultManager {
         }
         IdentityControlState::project(&log).map_err(Into::into)
     }
-
-    async fn request_join_at_current_provider(&mut self) -> Result<(), NookError> {
-        let app_key = self.unlocked_app_key()?;
-        let identity_id = Self::current_identity_id(&app_key).await?;
-        let (log, _) = self
-            .union_identity_log_with_current_provider(&identity_id)
-            .await?;
-        if log.is_empty() {
-            return Err(NookError::Database(
-                "No identity was found at this provider. Ask for a new code.".to_owned(),
-            ));
-        }
-        let state = IdentityControlState::project(&log)?;
-        match ReplicatedIdentityStanding::of(&state, app_key.app_id()) {
-            ReplicatedIdentityStanding::ActiveMember | ReplicatedIdentityStanding::PendingJoin => {
-                return Ok(());
-            }
-            ReplicatedIdentityStanding::Revoked => {
-                return Err(NookError::Database(
-                    "This installation was removed from the identity.".to_owned(),
-                ));
-            }
-            ReplicatedIdentityStanding::NotListed => {}
-        }
-        let member = self.own_identity_member_keys(&app_key).await?;
-        let signing = self.ensure_signing_identity().await?;
-        let created_at = Self::identity_event_time()?;
-        let event = log.build_append(
-            vec![IdentityControlOperation::MemberJoinRequested { member }],
-            &IdentityEventSigning {
-                signing_key: signing.signing_key(),
-                created_at: &created_at,
-            },
-        )?;
-        let event_id = event.id()?;
-        let bytes = event.serialize_storage_yaml()?;
-        let inserted = log.insert(event).map_err(|rejection| rejection.cause)?;
-        if inserted.status != IdentityEventInsertStatus::Applied {
-            return Err(NookError::Database(format!(
-                "Join request did not apply: {:?}",
-                inserted.status
-            )));
-        }
-        NookDatabase::save_identity_events(IdentityLogWrite {
-            identity_id: &identity_id,
-            events: &[(event_id, bytes)],
-        })
-        .await?;
-        self.union_identity_log_with_current_provider(&identity_id)
-            .await?;
-        Ok(())
-    }
 }
 
 #[wasm_bindgen]
 impl NookVaultManager {
-    /// The joining installation asks the invited identity to approve its app
-    /// key through the mount named by the enrollment code.
-    #[wasm_bindgen]
-    pub async fn request_identity_join(
-        &mut self,
-        storage_mode: String,
-        github_pat: String,
-        github_repo: String,
-    ) -> Result<(), JsError> {
-        let restore_local = self.storage.mode == StorageMode::Local;
-        let result = async {
-            self.prepare_storage_preserving_vault_metadata(
-                &storage_mode,
-                &github_pat,
-                &github_repo,
-            )
-            .await?;
-            self.request_join_at_current_provider().await
-        }
-        .await;
-        if restore_local {
-            self.prepare_storage_preserving_vault_metadata("local", "", "")
-                .await?;
-        }
-        result.map_err(Into::into)
-    }
-
-    /// Approve a pending join and wrap every owned vault's DEK to it.
-    #[wasm_bindgen]
-    pub async fn approve_identity_join(&mut self, app_id: String) -> Result<(), JsError> {
-        let app_id = AppId::parse(&app_id)?;
-        let state = self.current_identity_state().await?;
-        let opened = self.opened_identity_vault_keys(&state)?;
-        let vaults = opened
-            .iter()
-            .map(|(store_id, key_epoch, keys)| OpenedVaultDek {
-                store_id,
-                key_epoch,
-                keys,
-            })
-            .collect::<Vec<_>>();
-        let approval = state.approval_operation(&IdentityApprovalRequest {
-            app_id: &app_id,
-            vaults: &vaults,
-        })?;
-        self.append_identity_operations(vec![approval]).await?;
-        Ok(())
-    }
-
-    #[wasm_bindgen]
-    pub async fn deny_identity_join(&mut self, app_id: String) -> Result<(), JsError> {
-        let app_id = AppId::parse(&app_id)?;
-        let denial = self
-            .current_identity_state()
-            .await?
-            .denial_operation(&app_id)?;
-        self.append_identity_operations(vec![denial]).await?;
-        Ok(())
-    }
-
     /// Revoke an app key from the identity. The open vault rotates now; every
     /// other owned vault rotates before its next write.
     #[wasm_bindgen]

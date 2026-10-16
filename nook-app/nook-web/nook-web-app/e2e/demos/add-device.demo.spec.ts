@@ -45,21 +45,18 @@ test('the identity card leads to adding a device in three steps', async ({
   await snapshot(page, '2-manage-menu')
   await demoBeat(page)
 
-  // Without a cloud copy, adding a device asks for a sync provider first.
-  await page.getByTestId('identity-menu-add-device').click()
-  await expect(page).toHaveURL(/\/identity\/devices\/add$/)
-  await expect(page.getByTestId('onboard-no-identity-mount')).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-  await expect(page.getByTestId('onboard-device-panel')).toHaveCount(0)
+  // Without a cloud copy, Manage leads with a sync provider and holds adding
+  // a device until one exists.
+  const addDeviceItem = page.getByTestId('identity-menu-add-device')
+  await expect(addDeviceItem).toBeDisabled()
+  await expect(addDeviceItem).toContainText('Add a cloud sync provider first')
+  await expect(
+    page.getByTestId('identity-menu').getByRole('menuitem').first(),
+  ).toHaveAttribute('data-testid', 'identity-menu-sync')
   await snapshot(page, '3-needs-cloud')
   await demoBeat(page)
 
   // With a cloud copy and one device, the card offers a second device.
-  await page.getByTestId('add-device-back').click()
-  await expect(page.getByTestId('identities-hub')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
   await page.getByTestId('identity-overview-toggle').first().click()
   await expect(page.getByTestId('identity-overview')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -94,10 +91,26 @@ test('the identity card leads to adding a device in three steps', async ({
   })
   await expect(page.getByTestId('onboard-passphrase-display')).toBeVisible()
   await expect(page.getByTestId('add-device-waiting')).toBeVisible()
+  // The invite carries the vault keys: the new device joins by itself, with
+  // no approval step on this one.
+  await expect(page.getByTestId('add-device-progress')).toContainText('Join')
+  await expect(page.getByTestId('add-device-stage')).toContainText(
+    'It joins by itself.',
+  )
+  await expect(page.getByTestId('add-device-stage')).not.toContainText(
+    'Approve',
+  )
   await snapshot(page, '6-invite')
   await demoBeat(page)
 
   // Identity details lists what the identity has; Devices opens from it.
+  // Back sits on the hero's title row and returns to the identities hub.
+  await expect(
+    page
+      .getByTestId('add-device-page')
+      .locator('header')
+      .getByTestId('add-device-back'),
+  ).toBeVisible()
   await page.getByTestId('add-device-back').click()
   await expect(page.getByTestId('identities-hub')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
@@ -112,6 +125,13 @@ test('the identity card leads to adding a device in three steps', async ({
   await expect(page.getByTestId('vault-devices-panel')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
+  // The page's Back shares the row with its title.
+  await expect(
+    page
+      .getByTestId('identity-page')
+      .locator('header')
+      .getByTestId('identity-page-back'),
+  ).toBeVisible()
   await snapshot(page, '7-devices-page')
   await demoBeat(page)
 

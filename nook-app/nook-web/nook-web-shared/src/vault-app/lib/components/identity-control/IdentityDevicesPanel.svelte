@@ -1,15 +1,13 @@
 <!--
-Identity Devices page: the devices that open this identity, with join
-requests waiting for approval above them. It reports; adding a device is
-in Manage on the card. Upgrade notices sit above when the identity needs
-one.
+Identity Devices page: the devices that open this identity. It reports;
+adding a device is in Manage on the card. Upgrade notices sit above when the
+identity needs one.
 -->
 <script lang="ts">
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import { onMount, type ComponentProps } from "svelte";
   import { RefreshCw, TriangleAlert } from "@lucide/svelte";
   import ManageSection from "$lib/components/settings/ManageSection.svelte";
-  import PendingJoinList from "$lib/components/settings/PendingJoinList.svelte";
   import VaultDevicesCard from "$lib/components/settings/VaultDevicesCard.svelte";
   import { Button } from "$lib/components/ui/button";
   import { StatusTag, StatusTone } from "$lib/components/ui/status-tag";
@@ -18,7 +16,6 @@ one.
   import IdentityStandingNotices from "./IdentityStandingNotices.svelte";
   import { IdentityStandingPresentation } from "./identity-standing";
 
-  type PendingJoinListProps = ComponentProps<typeof PendingJoinList>;
   type VaultDevicesCardProps = ComponentProps<typeof VaultDevicesCard>;
 
   let {
@@ -31,7 +28,6 @@ one.
   const snapshot = $derived(control.snapshot);
   const standing = $derived(new IdentityStandingPresentation(snapshot));
   const members = $derived(snapshot === false ? [] : snapshot.members);
-  const pendingJoins = $derived(snapshot === false ? [] : snapshot.pendingJoins);
   const isBusy = $derived(control.busy || vault.isSaving || vault.isVerifying);
   const isSentinelVault = $derived(
     vault.vaultArchitecture.vault_type === VaultType.Sentinel,
@@ -67,19 +63,6 @@ one.
           : I18N_KEYS.AddDeviceSingleDevice,
       )}
     </p>
-  {/if}
-
-  {#if pendingJoins.length > 0}
-    <PendingJoinList
-      {vault}
-      {pendingJoins}
-      {isBusy}
-      onApproveJoin={(
-        appId: Parameters<PendingJoinListProps["onApproveJoin"]>[0],
-      ) => control.approve(appId)}
-      onDenyJoin={(appId: Parameters<PendingJoinListProps["onDenyJoin"]>[0]) =>
-        control.deny(appId)}
-    />
   {/if}
 
   <ManageSection

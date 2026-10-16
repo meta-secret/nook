@@ -3,10 +3,10 @@ import { expect, test, type Page } from './fixtures'
 import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
 import {
   addSecret,
-  approveIdentityJoin,
+  expectIdentityMembers,
   attachNookLogsForTest,
   assertVaultReady,
-  openVaultAfterIdentityApproval,
+  openVaultAfterIdentityJoin,
   redeemIdentityEnrollmentCode,
   clearBrowserVault,
   createIsolatedContext,
@@ -790,8 +790,8 @@ test.describe('vault architecture modes', () => {
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })
       await redeemIdentityEnrollmentCode(joiner, ONBOARD_PASSWORD)
-      await approveIdentityJoin(page, 2)
-      await openVaultAfterIdentityApproval(joiner)
+      await expectIdentityMembers(page, 2)
+      await openVaultAfterIdentityJoin(joiner)
       await assertVaultReady(joiner)
       const revealed = await revealSecretValue(joiner, sharedSecretKey)
       expect(revealed).toBe(SHARED_SECRET_VALUE)

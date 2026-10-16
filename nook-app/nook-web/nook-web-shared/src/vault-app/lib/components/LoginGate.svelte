@@ -84,6 +84,7 @@
     IdentitySwitchOutcome,
   } from '$lib/components/identities/identity-switch'
   import { DeviceProtectionActions } from '$lib/vault/device-protection.svelte'
+  import { deviceKeySetupNeeded } from '$lib/vault/device-key-unlock'
   import SentinelCeremonyPanel from '$lib/components/login/SentinelCeremonyPanel.svelte'
   import { SentinelCeremonyVisibility } from '$lib/vault/sentinel-unlock'
   import {
@@ -96,6 +97,7 @@
   import {
     ActiveVaultKind,
     LocalFolderDraftKind,
+    LocalLoginPreparationState,
     LoginSetupKind,
     LoginVaultSelectionKind,
     OAuthFileDraftKind,
@@ -115,6 +117,7 @@
     isInitializing,
     addProviderOpen = false,
     onUnlock,
+    onUnlockOnCard,
     onBeginAddProvider,
     onCancelAddProvider,
     onBeginSetup,
@@ -149,6 +152,9 @@
     isInitializing: boolean
     addProviderOpen?: boolean
     onUnlock: () => void | Promise<void>
+    /** Unlock the selected vault from its identity card: this browser's key
+     * unlocks on the card, never in the page-level sheet. */
+    onUnlockOnCard: () => void | Promise<void>
     onBeginAddProvider?: () => void
     onCancelAddProvider?: () => void
     onBeginSetup: (request: ProviderSetupRequest) => void
@@ -266,9 +272,12 @@
       vault.beginExistingVaultOpen()
   })
 
-  /** The vault opened beside its card; its passphrase unlock shows even
-   * when it has none, to say so. */
-  let passphraseStoreId = $state('')
+  /** The selected vault's passphrases have been read: its passphrase unlock
+   * shows even when it has none, to say so. Reading them is part of
+   * preparing the local login, after a row is opened, a lock, or a reload. */
+  const passphrasesRead = $derived(
+    vault.localLoginPreparation === LocalLoginPreparationState.Ready,
+  )
 
   /** Opening a locked vault's row selects that vault, which reads its
    * passphrases, without unlocking it. */
@@ -282,7 +291,6 @@
   }
 
   async function selectVault(storeId: string): Promise<void> {
-    passphraseStoreId = storeId
     if (selectedCardStoreId === storeId) return
     await openVaultFromCard(storeId)
   }
@@ -325,6 +333,10 @@
   let pinPrompt = $state<PinPrompt>({ kind: PinPromptKind.Closed })
   const pinProtected = $derived(
     vault.deviceProtectionStatus === DeviceProtectionStatus.Pin,
+  )
+  /** This browser has no protected key to unlock yet: it is set up first. */
+  const setupNeeded = $derived(
+    deviceKeySetupNeeded(vault.deviceProtectionStatus),
   )
 
   /** Unlock on a locked card unlocks the identity: this device's passkey
@@ -417,6 +429,8 @@
   /** Unlock a vault right away, as its Unlock button would, and open the
    * workspace on `route` once it is unlocked. */
   async function unlockTo(destination: UnlockDestination): Promise<void> {
+    // A new attempt replaces the last failure shown on the card.
+    vault.errorMsg = ''
     if (destination.page.kind === UnlockPageKind.Route) {
       const navigation = new WorkspaceLocation(
         destination.page.route,
@@ -430,15 +444,21 @@
       >[0] = { route: destination.page.route }
       new VaultWorkspaceActions(vault).applyWorkspaceRoute(routeRequest)
     }
-    // Choosing a vault reads it with the device key, so the identity is
-    // unlocked first: passkey (or PIN), then the vault, then open it.
-    if (destination.storeId !== selectedCardStoreId) {
-      if (pinProtected && !vault.deviceProtectionReady) {
+    // Opening a vault reads it with the device key. A PIN is asked for on
+    // the card. Choosing another vault reads it, so the key is unlocked
+    // first. The selected vault unlocks through the card unlock, which tries
+    // a paired extension before this browser's passkey; either way a failure
+    // and its recovery stay on the card. A browser without a key yet (after
+    // a reset) sets one up in the sheet.
+    if (!vault.deviceProtectionReady && !setupNeeded) {
+      if (pinProtected) {
         pinPrompt = { kind: PinPromptKind.Vault, destination }
         return
       }
-      await unlockIdentity()
-      if (!vault.deviceProtectionReady) return
+      if (destination.storeId !== selectedCardStoreId) {
+        await unlockIdentity()
+        if (!vault.deviceProtectionReady) return
+      }
     }
     await openSelectedVault(destination)
   }
@@ -452,7 +472,7 @@
       await tick()
     }
     if (vault.errorMsg || isVerifying) return
-    await onUnlock()
+    await onUnlockOnCard()
   }
 
   function newIdentity(): void {
@@ -923,8 +943,7 @@
       : {}}
     {...showLocalUnlock &&
     !newVaultOpen &&
-    (cardPasswordEntries.length > 0 ||
-      (passphraseStoreId && passphraseStoreId === selectedCardStoreId))
+    (cardPasswordEntries.length > 0 || passphrasesRead)
       ? { passwordFallback: cardPasswordUnlock }
       : {}}
     {...pinPrompt.kind !== PinPromptKind.Closed && !vault.deviceProtectionReady

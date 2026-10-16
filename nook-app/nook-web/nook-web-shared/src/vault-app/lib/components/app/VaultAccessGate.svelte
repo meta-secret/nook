@@ -51,6 +51,7 @@
     sentinelParticipantResponse,
     sentinelOnboardingPackage,
     onUnlock,
+    onUnlockOnCard,
     onUseEnrollmentCode,
     onAcceptSentinelOnboardingPackage,
     onUnlockWithPassword,
@@ -73,6 +74,8 @@
     sentinelParticipantResponse: string
     sentinelOnboardingPackage: string
     onUnlock: (skipExtensionDiscovery?: boolean) => Promise<void>
+    /** Unlock a vault from its identity card; its device key unlocks there. */
+    onUnlockOnCard: () => Promise<void>
     onUseEnrollmentCode: (args: EnrollmentCodeUnlock) => Promise<void>
     onAcceptSentinelOnboardingPackage: (packageJson: string) => Promise<void>
     onUnlockWithPassword: (args: VaultPasswordUnlock) => Promise<void>
@@ -134,6 +137,7 @@
         deviceAuthorizationPending={existingVaultNeedsDeviceUnlock}
         {usesExtensionDeviceIdentity}
         {onUnlock}
+        {onUnlockOnCard}
         onBeginAddProvider={() => vault.beginAddProvider()}
         onCancelAddProvider={() => vault.cancelAddProvider()}
         onBeginSetup={beginProviderSetup}

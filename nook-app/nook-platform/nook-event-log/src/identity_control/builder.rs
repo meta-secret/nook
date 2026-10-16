@@ -6,13 +6,15 @@
 )]
 
 use ed25519_dalek::SigningKey;
-use nook_auth2::{AppId, DeviceSigningPublicKey, IdentityId, IsoTimestamp, StoreId, VaultKeys};
+use nook_auth2::{
+    AppId, DeviceSigningPublicKey, IdentityId, IdentityInviteId, IsoTimestamp, StoreId, VaultKeys,
+};
 
 use super::graph::IdentityControlLog;
 use super::projection::IdentityControlState;
 use super::wire::{
     IdentityControlOperation, IdentityEvent, IdentityEventBody, IdentityEventSchemaVersion,
-    IdentityMemberKeys, IdentityVaultDekGrant, MemberVaultDek,
+    IdentityInvite, IdentityInviteProof, IdentityMemberKeys, IdentityVaultDekGrant, MemberVaultDek,
 };
 use crate::signing::SigningIdentity;
 use crate::{EventError, EventId, EventResult};
@@ -119,6 +121,75 @@ impl IdentityMemberKeys {
             members_key_ciphertext: seal(keys.members_key.as_str())?,
         })
     }
+
+    /// Each opened vault's DEK pair wrapped to this member.
+    fn vault_dek_grants(
+        &self,
+        vaults: &[OpenedVaultDek<'_>],
+    ) -> EventResult<Vec<IdentityVaultDekGrant>> {
+        vaults
+            .iter()
+            .map(|opened| {
+                let wrapped = self.wrap_vault_keys(opened.keys)?;
+                Ok(IdentityVaultDekGrant {
+                    store_id: opened.store_id.clone(),
+                    key_epoch: opened.key_epoch.clone(),
+                    secrets_key_ciphertext: wrapped.secrets_key_ciphertext,
+                    members_key_ciphertext: wrapped.members_key_ciphertext,
+                })
+            })
+            .collect()
+    }
+}
+
+/// Named values a member needs to issue a one-time invite.
+pub struct IdentityInviteIssue<'a> {
+    pub invite_id: &'a IdentityInviteId,
+    pub invite_key: &'a SigningKey,
+    pub expires_at: &'a IsoTimestamp,
+}
+
+impl IdentityInviteIssue<'_> {
+    #[must_use]
+    pub fn operation(&self) -> IdentityControlOperation {
+        IdentityControlOperation::MemberInvited {
+            invite: IdentityInvite {
+                invite_id: self.invite_id.clone(),
+                signing_public_key: DeviceSigningPublicKey::from_trusted(hex::encode(
+                    self.invite_key.verifying_key().as_bytes(),
+                )),
+                expires_at: self.expires_at.clone(),
+            },
+        }
+    }
+}
+
+/// Named values a joiner needs to sign itself into an identity with an
+/// invite: the invite key from the code, its own keys, and the vault DEKs
+/// the code carried.
+pub struct IdentityInviteJoin<'a> {
+    pub identity_id: &'a IdentityId,
+    pub invite_id: &'a IdentityInviteId,
+    pub invite_key: &'a SigningKey,
+    pub member: &'a IdentityMemberKeys,
+    pub vaults: &'a [OpenedVaultDek<'a>],
+}
+
+impl IdentityInviteJoin<'_> {
+    pub fn operation(&self) -> EventResult<IdentityControlOperation> {
+        let invite_signature = IdentityInviteProof {
+            identity_id: self.identity_id,
+            invite_id: self.invite_id,
+            member: self.member,
+        }
+        .sign(self.invite_key)?;
+        Ok(IdentityControlOperation::MemberJoinedByInvite {
+            invite_id: self.invite_id.clone(),
+            member: self.member.clone(),
+            invite_signature,
+            vault_deks: self.member.vault_dek_grants(self.vaults)?,
+        })
+    }
 }
 
 impl IdentityControlState {
@@ -142,22 +213,9 @@ impl IdentityControlState {
                 });
             }
         }
-        let vault_deks = request
-            .vaults
-            .iter()
-            .map(|opened| {
-                let wrapped = join.member.wrap_vault_keys(opened.keys)?;
-                Ok(IdentityVaultDekGrant {
-                    store_id: opened.store_id.clone(),
-                    key_epoch: opened.key_epoch.clone(),
-                    secrets_key_ciphertext: wrapped.secrets_key_ciphertext,
-                    members_key_ciphertext: wrapped.members_key_ciphertext,
-                })
-            })
-            .collect::<EventResult<Vec<_>>>()?;
         Ok(IdentityControlOperation::MemberApproved {
             member: join.member.clone(),
-            vault_deks,
+            vault_deks: join.member.vault_dek_grants(request.vaults)?,
         })
     }
 

@@ -177,8 +177,8 @@ export async function openKeysPage(page: Page): Promise<void> {
   await openManagePage(page, ManagePage.Keys)
 }
 
-/** Open one item of Manage on the current identity's card. */
-async function openManageItem(page: Page, testId: string): Promise<void> {
+/** Open Manage on the current identity's card. */
+export async function openManageMenu(page: Page): Promise<void> {
   if (!(await page.getByTestId('identities-hub').isVisible())) {
     await openIdentitiesPage(page)
   }
@@ -190,6 +190,11 @@ async function openManageItem(page: Page, testId: string): Promise<void> {
   if ((await manage.getAttribute('aria-expanded')) !== 'true') {
     await manage.click()
   }
+}
+
+/** Open one item of Manage on the current identity's card. */
+async function openManageItem(page: Page, testId: string): Promise<void> {
+  await openManageMenu(page)
   const item = page.getByTestId(testId).first()
   await expect(item).toBeVisible({ timeout: UI_TIMEOUT_MS })
   await item.click()
@@ -209,9 +214,21 @@ export async function beginAddSyncProvider(page: Page): Promise<void> {
   await expect(picker).toBeVisible({ timeout: UI_TIMEOUT_MS })
 }
 
-/** Open the add-device flow from Manage on the current identity's card. */
+/** Open the add-device flow from Manage on the current identity's card.
+ * Without a cloud sync provider Manage locks the item, so the flow, whose
+ * first step then asks for a provider, opens directly as its route would. */
 export async function openAddDevice(page: Page): Promise<void> {
-  await openManageItem(page, 'identity-menu-add-device')
+  await openManageMenu(page)
+  const item = page.getByTestId('identity-menu-add-device').first()
+  await expect(item).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  if (await item.isEnabled()) {
+    await item.click()
+  } else {
+    await page.evaluate(() => {
+      history.pushState({}, '', '/identity/devices/add')
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    })
+  }
   await expect(page.getByTestId('add-device-page')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })

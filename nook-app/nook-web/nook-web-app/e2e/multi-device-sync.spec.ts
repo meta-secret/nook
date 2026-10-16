@@ -7,7 +7,7 @@ import {
 } from './fixtures'
 import {
   addSecret,
-  approveIdentityJoin,
+  expectIdentityMembers,
   assertVaultReady,
   createIsolatedContext,
   disableVaultIdleLock,
@@ -15,10 +15,9 @@ import {
   openStorageSettings,
   issueIdentityEnrollmentCode,
   localizeAppLinkForE2e,
-  openVaultAfterIdentityApproval,
+  openVaultAfterIdentityJoin,
   redeemIdentityEnrollmentCode,
   revealSecretValue,
-  triggerVaultSyncRefresh,
   uniqueSecretKey,
   UI_TIMEOUT_MS,
   NOTIFICATION_TIMEOUT_MS,
@@ -120,12 +119,12 @@ test.describe(`multi-device ${providerLabel} vault`, () => {
   })
 
   test('device A approves the identity join from Devices', async () => {
-    await approveIdentityJoin(deviceA, 2)
+    await expectIdentityMembers(deviceA, 2)
     await openVaultPage(deviceA)
   })
 
   test('device B opens the vault and reads the genesis secret', async () => {
-    await openVaultAfterIdentityApproval(deviceB)
+    await openVaultAfterIdentityJoin(deviceB)
     await assertVaultReady(deviceB)
 
     await waitForSecretOnDevice(deviceB, genesisSecretKey, target)
@@ -196,29 +195,14 @@ test.describe(`multi-device approve from the vault page (${providerLabel})`, () 
     await contextB?.close()
   })
 
-  test('approves an identity join from the pending joins banner', async () => {
+  test('an invited app joins and opens the vault without approval', async () => {
     const issued = await issueIdentityEnrollmentCode(deviceA)
     await deviceB.goto(localizeAppLinkForE2e(deviceA, issued.link))
     await redeemIdentityEnrollmentCode(deviceB, issued.passphrase)
 
-    await openVaultPage(deviceA)
-    const row = deviceA.getByTestId('device-join-row').first()
-    await expect
-      .poll(
-        async () => {
-          if (await row.isVisible()) return true
-          await triggerVaultSyncRefresh(deviceA)
-          await waitForVaultOperationsIdle(deviceA)
-          return row.isVisible()
-        },
-        { timeout: NOTIFICATION_TIMEOUT_MS },
-      )
-      .toBe(true)
-    await row.getByTestId('approve-join-btn').click()
-    await expect(row).not.toBeVisible({ timeout: UI_TIMEOUT_MS })
-
-    await openVaultAfterIdentityApproval(deviceB)
+    await openVaultAfterIdentityJoin(deviceB)
     await assertVaultReady(deviceB)
+    await expectIdentityMembers(deviceA, 2)
   })
 })
 
@@ -245,7 +229,7 @@ test.describe(`multi-device join background sync (${providerLabel})`, () => {
     await contextB?.close()
   })
 
-  test('device A picks up a pending identity join while it refreshes', async () => {
+  test('device A picks up an invite join while it refreshes', async () => {
     const issued = await issueIdentityEnrollmentCode(deviceA)
     await openVaultPage(deviceA)
     await deviceB.goto(localizeAppLinkForE2e(deviceA, issued.link))
@@ -253,20 +237,15 @@ test.describe(`multi-device join background sync (${providerLabel})`, () => {
 
     await expect
       .poll(
-        async () => {
-          if (await deviceA.getByTestId('pending-joins-banner').isVisible()) {
-            return true
-          }
-          await deviceA.evaluate(async () => {
-            const vault = window.__nookVault
-            await vault?.refreshPendingJoinsFromProviders?.()
-            await vault?.identityControl.syncWithMounts()
-          })
-          return deviceA.getByTestId('pending-joins-banner').isVisible()
-        },
+        async () =>
+          deviceA.evaluate(async () => {
+            const control = window.__nookVault?.identityControl
+            await control?.syncWithMounts()
+            const snapshot = control?.snapshot
+            return snapshot ? snapshot.members.length : 0
+          }),
         { timeout: NOTIFICATION_TIMEOUT_MS },
       )
-      .toBe(true)
-    await expect(deviceA.getByTestId('device-join-row')).toHaveCount(1)
+      .toBe(2)
   })
 })

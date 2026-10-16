@@ -25,7 +25,6 @@ band, the scrolling page and the status line.
     ProviderSyncFailureHandling,
     ProviderSyncVisibility,
   } from '$app-wasm'
-  import PendingJoinsBanner from '$lib/components/PendingJoinsBanner.svelte'
   import AddDeviceFlow from '$lib/components/add-device/AddDeviceFlow.svelte'
   import SecretVault from '$lib/components/SecretVault.svelte'
   import VaultAdmin from '$lib/components/VaultAdmin.svelte'
@@ -86,7 +85,6 @@ band, the scrolling page and the status line.
   } from './authenticated-vault-workspace-state'
 
   type VaultAdminProps = ComponentProps<typeof VaultAdmin>
-  type PendingJoinsBannerProps = ComponentProps<typeof PendingJoinsBanner>
   type SecretVaultProps = ComponentProps<typeof SecretVault>
 
   const SUPPORTS_EXTENSION = configured_vault_application_supports_extension()
@@ -119,7 +117,6 @@ band, the scrolling page and the status line.
   let manageOriginRecorded = $state(false)
   /** Where "Add a device" was opened from; the flow returns there. A link
    * straight to the flow returns to the Devices page. */
-  let addDeviceOrigin = $state(WorkspaceSection.Devices)
   const secretsNoteEditorOpen = $derived(
     secretsAddOpen &&
       secretsAddFormType.kind === SecretEditorModeKind.Adding &&
@@ -127,10 +124,6 @@ band, the scrolling page and the status line.
   )
 
   const section = $derived(vault.workspaceSection)
-  const identityPendingJoins = $derived.by(() => {
-    const snapshot = vault.identityControl.snapshot
-    return snapshot === false ? [] : snapshot.pendingJoins
-  })
   const scope = $derived(new WorkspaceSectionScope(section).scope)
   const managing = $derived(scope !== ManageSectionScope.None)
   const navEntry = $derived(new ManageNavLookup(section).entry)
@@ -265,8 +258,6 @@ band, the scrolling page and the status line.
   }
 
   function openSection(next: WorkspaceSection): void {
-    if (next === WorkspaceSection.AddDevice && section !== next)
-      addDeviceOrigin = section
     const nextManaging =
       new WorkspaceSectionScope(next).scope !== ManageSectionScope.None
     // Adding a device is a detour: leaving it keeps the way back the
@@ -287,6 +278,12 @@ band, the scrolling page and the status line.
         : scope === ManageSectionScope.Vault
           ? WorkspaceSection.Vault
           : WorkspaceSection.Identities,
+  )
+
+  const backLabel = $derived(
+    backDestination === WorkspaceSection.Vault
+      ? vault.t(I18N_KEYS.WorkspaceBackToVault)
+      : vault.t(I18N_KEYS.WorkspaceBackToIdentities),
   )
 
   /** Back leaves management for the page it was entered from. */
@@ -450,6 +447,7 @@ band, the scrolling page and the status line.
       if (outcome.isErr())
         vault.errorMsg = vault.t(outcome.error.translationKey)
     }}
+    onBeginAddProvider={() => vault.beginAddProvider()}
     onCancelAddProvider={() => vault.cancelAddProvider()}
     onBeginSetup={(
       setupRequest: Parameters<VaultAdminProps['onBeginSetup']>[0],
@@ -576,11 +574,9 @@ band, the scrolling page and the status line.
       onUseIdentity={useIdentity}
       {currentHealthNote}
       onHealth={() =>
-        openSection(
-          identityHealth.nextStep === NookIdentityNextStep.AddDevice
-            ? WorkspaceSection.AddDevice
-            : WorkspaceSection.Sync,
-        )}
+        identityHealth.nextStep === NookIdentityNextStep.AddDevice
+          ? openSection(WorkspaceSection.AddDevice)
+          : addSyncProvider()}
       onAddDevice={() => openSection(WorkspaceSection.AddDevice)}
       addDevicePrompt={identityHealth.nextStep ===
         NookIdentityNextStep.AddDevice}
@@ -614,7 +610,6 @@ band, the scrolling page and the status line.
   </div>
 {:else if scope === ManageSectionScope.Identity}
   <IdentityPageFrame
-    {vault}
     identityName={section === WorkspaceSection.Settings
       ? ''
       : section === WorkspaceSection.Passwords
@@ -622,6 +617,7 @@ band, the scrolling page and the status line.
         : identityName}
     title={barTitle}
     testId={section}
+    backLabel={backLabel}
     onBack={goBack}
   >
     {@render identityPanel()}
@@ -646,7 +642,7 @@ band, the scrolling page and the status line.
   <AddDeviceFlow
     {vault}
     {identityName}
-    onBack={() => openSection(addDeviceOrigin)}
+    onBack={() => openSection(WorkspaceSection.Identities)}
     onOpenSync={addSyncProvider}
   />
 {:else}
@@ -665,9 +661,7 @@ band, the scrolling page and the status line.
         testId={section === WorkspaceSection.Vault
           ? 'vault-page-bar'
           : 'manage-page-bar'}
-        backLabel={backDestination === WorkspaceSection.Vault
-          ? vault.t(I18N_KEYS.WorkspaceBackToVault)
-          : vault.t(I18N_KEYS.WorkspaceBackToIdentities)}
+        {backLabel}
         onBack={goBack}
       >
         {#snippet tags()}
@@ -692,23 +686,6 @@ band, the scrolling page and the status line.
           : 'flex min-h-0 flex-1 flex-col'}
       >
         {#if section === WorkspaceSection.Vault}
-          {#if !secretsNoteEditorOpen}
-            <PendingJoinsBanner
-              {vault}
-              pendingJoins={identityPendingJoins}
-              isBusy={vault.isSaving || vault.isVerifying}
-              onApproveJoin={(
-                appId: Parameters<PendingJoinsBannerProps['onApproveJoin']>[0],
-              ) => vault.identityControl.approve(appId)}
-              onRefresh={async () => {
-                const synced = await vault.identityControl.syncWithMounts()
-                if (synced.isErr())
-                  vault.errorMsg = vault.t(synced.error.translationKey)
-              }}
-              onOpenDevicesSettings={() =>
-                openSection(WorkspaceSection.Devices)}
-            />
-          {/if}
           <div class="flex min-h-0 flex-1 flex-col p-4 md:p-5">
             {#key secretsEditorResetKey}
               <SecretVault

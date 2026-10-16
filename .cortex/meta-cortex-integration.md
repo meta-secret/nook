@@ -4,7 +4,7 @@
 
 ### Required bootstrap
 
-Nook pins Meta-Cortex `0.18.0` in [`.meta-cortex-version`](../.meta-cortex-version).
+Nook pins Meta-Cortex `0.19.0` in [`.meta-cortex-version`](../.meta-cortex-version).
 Use the checked-in [POSIX wrapper](../meta-cortexw) or
 [PowerShell wrapper](../meta-cortexw.ps1) from the consuming worktree.
 Identify the consuming project root and installed library root separately.
@@ -32,11 +32,11 @@ On Windows x86-64, use the native PowerShell wrapper:
 .\meta-cortexw.ps1 list
 ```
 
-The upstream [wrapper contract](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/blob/e759fe5caccca63dd3c753205a753acb5d03e1f3/README.md#run-the-pinned-command)
+The upstream [wrapper contract](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/blob/525acba4047a59a5fe1e7c5308a4806dff7c1e8c/README.md#run-the-pinned-command)
 owns installation, cache paths, prerequisites, and failure behavior. The wrapper
 bootstraps the exact pin into a separate cache directory per version.
 A global command is optional and does not select Nook's executable.
-On Linux, install the pinned release's [native runtime prerequisites](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/blob/e759fe5caccca63dd3c753205a753acb5d03e1f3/CONTRIBUTING.md#native-dashboard-prerequisites)
+On Linux, install the pinned release's [native runtime prerequisites](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/blob/525acba4047a59a5fe1e7c5308a4806dff7c1e8c/CONTRIBUTING.md#native-dashboard-prerequisites)
 before either command. GTK 3 and WebKitGTK 4.1 are required even for headless use.
 
 - **Prohibited:** invoke `./meta-cortexw list` on Linux before installing its native
@@ -91,9 +91,10 @@ operation:
 
 Do not initialize over an existing installation. If either required framework
 file is missing, initialization fails, or the versions do not match, follow
-the upstream [replacement procedure](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/blob/e759fe5caccca63dd3c753205a753acb5d03e1f3/README.md#replace-an-installed-framework).
+the upstream [replacement procedure](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/blob/525acba4047a59a5fe1e7c5308a4806dff7c1e8c/README.md#replace-an-installed-framework).
 Back up or move the old installation before Initialize.
-Retain supported host capacity settings in the newly generated configuration.
+Set `host.max_total_agents` in the newly generated configuration to Nook's
+chosen ceiling of `20`; the former `required_total_agents` key is rejected.
 Remove the obsolete role model and reasoning-effort sections.
 Preserve the repository identity as described below. Do not overwrite the new
 configuration with the old file.
@@ -130,11 +131,11 @@ operation:
 
 `Framework / Info` must verify all of these conditions before work continues:
 
-- `schema_version` is `6`.
+- `schema_version` is `7`.
 - `cli_version` and `framework_version` both match the consuming worktree's pin
-  (`0.18.0` here).
+  (`0.19.0` here).
 - The Codex integration reports `Connected` for the project owning the installation.
-- `configuration.host.required_total_agents` is `20`.
+- `configuration.host.max_total_agents` is `20`.
 - `model_selection` is `PerAssignment`.
 
 Verify Info against that project when a task uses its shared library.
@@ -156,7 +157,7 @@ PATH in each new shell. Stop if that check fails.
 #### Different versions in simultaneous worktrees
 
 Each worktree uses its checked-out wrapper and exact version pin. Follow the
-upstream [pin upgrade procedure](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/blob/e759fe5caccca63dd3c753205a753acb5d03e1f3/README.md#upgrade-the-project-pin)
+upstream [pin upgrade procedure](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/blob/525acba4047a59a5fe1e7c5308a4806dff7c1e8c/README.md#upgrade-the-project-pin)
 when choosing a different published release. A pin change selects the CLI.
 It leaves installed frameworks unchanged.
 
@@ -166,7 +167,7 @@ It leaves installed frameworks unchanged.
 3. Initialize an absent `.meta-cortex/` in the consuming worktree with its
    wrapper and `instructions: skip`. For an existing installation, use the
    supported replacement procedure above.
-4. Retain supported host capacity settings. Verify Info for the project
+4. Set `host.max_total_agents` to `20`. Verify Info for the project
    owning the selected library.
 5. Pass that verified library root separately to every assignment. Run library
    scripts from it. Invoke the consuming worktree's wrapper for CLI requests.
@@ -177,11 +178,11 @@ root request file. PowerShell uses
 `..\meta-cortexw.ps1 run --request ..\request.yaml`. Use actual paths from deeper
 directories. Every YAML `project` remains the explicit absolute consuming path.
 
-**Prohibited:** replace a shared `0.16.0` library while another assignment uses
-it, or pass it to an assignment whose wrapper pin is `0.18.0`.
+**Prohibited:** replace a shared `0.18.0` library while another assignment uses
+it, or pass it to an assignment whose wrapper pin is `0.19.0`.
 
 **Required:** keep the older library for its existing assignments. Initialize
-and verify `0.18.0` in the consuming worktree, then pass that library to its
+and verify `0.19.0` in the consuming worktree, then pass that library to its
 assignments. Check [shared ledger compatibility](#repository-identity-and-ledger-migration)
 before either version writes. Separate CLI caches do not isolate ledger storage.
 
@@ -190,12 +191,14 @@ before either version writes. Separate CLI caches do not isolate ledger storage.
 Keep `meta-cortex.toml` in the resolved ignored library installation.
 Meta-Cortex owns per-assignment model selection through its
 [agent configuration rules](../.meta-cortex/teams/gizmo-team/docs/agent-configuration.md).
-Its configuration contains only `[host]` with `required_total_agents`.
-Preserve the newly generated configuration shape. Set the host requirement to
-Nook's configured total of `20` and follow upstream
+Its configuration contains only `[host]` with `max_total_agents`.
+Preserve the newly generated configuration shape. Set the ceiling to Nook's
+chosen `20` and follow upstream
 [host capacity preflight](../.meta-cortex/teams/gizmo-team/docs/agent-configuration.md#check-host-capacity).
-This configured requirement is checked against current host evidence; it is not
-a fixed host concurrency limit.
+The ceiling bounds concurrent agents, including the host and coordinators. It
+neither allocates host slots nor requires the host to offer that many;
+coordinators queue assignments when slots are occupied. Single-agent work needs
+no subagent capacity.
 Model and reasoning effort belong to each assignment under upstream selection
 policy. Single-agent mode keeps the current host settings.
 Execution speed is selected by host-native settings. Keep Nook's session
@@ -208,6 +211,8 @@ configuration or launch fields. Apply Nook's assignment and delivery
 constraints to either coordination path.
 
 When upgrading an older configuration, retain the new `[host]` section.
+Replace a former `required_total_agents` minimum with `max_total_agents`; the
+current schema rejects the old key.
 Remove `[gizmo-prime]`, `[team.gizmo]`, and `[team.agent]` sections.
 The current schema rejects those static role settings. Do not restore obsolete
 `model`, `reasoning_effort`, `mode`, or `service_tier` fields.
@@ -219,10 +224,11 @@ $metaCortexHome = if ($env:META_CORTEX_HOME) { $env:META_CORTEX_HOME } else { Jo
 $env:PATH = "$metaCortexHome\mise\bin;$metaCortexHome\bun\bin;$metaCortexHome\vale\bin;$env:PATH"
 ```
 
-**Prohibited:** restore the v0.16.0 role sections into the new configuration.
+**Prohibited:** restore the v0.16.0 role sections or the `required_total_agents`
+key into the new configuration.
 
-**Required:** retain `[host]` with Nook's capacity requirement of `20`.
-Verify schema `6` and `model_selection: PerAssignment` through Info.
+**Required:** retain `[host]` with Nook's `max_total_agents` ceiling of `20`.
+Verify schema `7` and `model_selection: PerAssignment` through Info.
 
 #### Ownership boundaries
 
@@ -267,16 +273,16 @@ tooling and graph topology; they do not redefine generic authoring rules.
 
 ### Release pin
 
-The [v0.18.0 release](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/tag/v0.18.0)
+The [v0.19.0 release](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/releases/tag/v0.19.0)
 identifies upstream commit
-[`e759fe5caccca63dd3c753205a753acb5d03e1f3`](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/commit/e759fe5caccca63dd3c753205a753acb5d03e1f3).
+[`525acba4047a59a5fe1e7c5308a4806dff7c1e8c`](https://github.com/ai-ai-ai-ai-ai-ai-ai/meta-cortex/commit/525acba4047a59a5fe1e7c5308a4806dff7c1e8c).
 The checked-in launchers are the official source files from that revision.
 Keep their upstream behavior. Do not maintain a Nook launcher implementation.
 
-The Nook CLI release pin is `0.18.0` in `.meta-cortex-version`.
+The Nook CLI release pin is `0.19.0` in `.meta-cortex-version`.
 `preflight/Dockerfile` uses the project wrapper with that pin.
 `.github/workflows/repository-policy.yml` and `.task/ci-workflows.yml` pin the
-upstream library commit `e759fe5caccca63dd3c753205a753acb5d03e1f3`.
+upstream library commit `525acba4047a59a5fe1e7c5308a4806dff7c1e8c`.
 `preflight/tests/loom_contracts.rs` owns the corresponding policy assertions.
 Future upgrades update this contract, the exact version pin, every library
 source pin, and their owning assertions together. Update launcher source from
@@ -294,8 +300,8 @@ and [storage migration and supported readers](../.meta-cortex/teams/gizmo-team/d
 for the current database and record contracts. Nook does not maintain a second
 copy of those formats.
 
-The framework Info schema `6` describes installation verification. It is
-separate from ledger database schema `6`. Release `0.18.0` writes event-envelope
+The framework Info schema `7` describes installation verification. It is
+separate from ledger database schema `6`. Release `0.19.0` writes event-envelope
 version `2`; an unchanged database version does not establish mixed-version
 compatibility. The upstream ledger protocol owns released request and task
 formats, migration behavior, and supported readers.

@@ -26,6 +26,9 @@ export class IdentityCards {
       void vault.deviceProtectionStatus;
       void vault.localVaults.length;
       void vault.activeVault.kind;
+      // Each projection of the identity log (a vault deleted everywhere, a
+      // device approved or revoked) changes the cards: read them again.
+      void vault.identityControl.view;
       void this.loader.reload();
     });
     // Vaults the unlocked identity's log lists, stored here or not: read

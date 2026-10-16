@@ -10,7 +10,7 @@ use std::{fmt, str};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use nook_auth2::{
     AgeArmoredCiphertext, AppId, AuthKeyId, CompactToken, DevicePublicKey, DeviceSigningPublicKey,
-    IdentityId, IsoTimestamp, MemberLabel, StoreId,
+    IdentityId, IdentityInviteId, IsoTimestamp, MemberLabel, StoreId,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -189,6 +189,52 @@ pub struct IdentityProviderMount {
     pub target: IdentityMountTarget,
 }
 
+/// A one-time invitation a member issues with an enrollment code. The code's
+/// holder may join once by proving the invite key over its own app keys.
+/// `expires_at` is enforced by the joining client; the log enforces that an
+/// invite is used once.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub struct IdentityInvite {
+    pub invite_id: IdentityInviteId,
+    pub signing_public_key: DeviceSigningPublicKey,
+    pub expires_at: IsoTimestamp,
+}
+
+/// Named values that bind an invite to the member who uses it.
+pub struct IdentityInviteProof<'a> {
+    pub identity_id: &'a IdentityId,
+    pub invite_id: &'a IdentityInviteId,
+    pub member: &'a IdentityMemberKeys,
+}
+
+const INVITE_PROOF_PURPOSE: &str = "nook-identity-invite-join-v1";
+
+impl IdentityInviteProof<'_> {
+    fn message(&self) -> EventResult<CanonicalEventBodyBytes> {
+        CanonicalEventBodyBytes::from_json(&serde_json::json!({
+            "purpose": INVITE_PROOF_PURPOSE,
+            "identity_id": self.identity_id.as_str(),
+            "invite_id": self.invite_id.as_str(),
+            "app_id": self.member.app_id.as_str(),
+            "encryption_public_key": self.member.encryption_public_key.as_str(),
+            "signing_public_key": self.member.signing_public_key.as_str(),
+        }))
+    }
+
+    /// The invite key's signature over this member's keys.
+    pub fn sign(&self, invite_key: &SigningKey) -> EventResult<Ed25519Signature> {
+        Ok(Ed25519Signature::sign(&self.message()?, invite_key))
+    }
+
+    /// Whether `signature` is the invite key's proof over this member.
+    pub fn verify(&self, invite: &IdentityInvite, signature: &Ed25519Signature) -> EventResult<()> {
+        let invite_key =
+            SigningIdentity::verifying_key_from_public_key_hex(invite.signing_public_key.as_str())?;
+        signature.verify(&self.message()?, &invite_key)
+    }
+}
+
 /// Atomic operations recorded in the identity control log.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "type", rename_all = "kebab-case")]
@@ -205,6 +251,19 @@ pub enum IdentityControlOperation {
     },
     MemberJoinDenied {
         app_id: AppId,
+    },
+    /// A member issued a one-time invite with an enrollment code.
+    MemberInvited {
+        invite: IdentityInvite,
+    },
+    /// The holder of an invite joins: it signs the event with its own app
+    /// key, proves the invite key over that key, and records the vault DEKs
+    /// the code carried, wrapped to itself. No member approves it.
+    MemberJoinedByInvite {
+        invite_id: IdentityInviteId,
+        member: IdentityMemberKeys,
+        invite_signature: Ed25519Signature,
+        vault_deks: Vec<IdentityVaultDekGrant>,
     },
     MemberRevoked {
         app_id: AppId,
@@ -384,17 +443,23 @@ impl IdentityEvent {
                 }
                 IdentityControlOperation::MemberApproved { member, vault_deks } => {
                     member.signing_actor()?;
-                    let mut stores = vault_deks
-                        .iter()
-                        .map(|grant| &grant.store_id)
-                        .collect::<Vec<_>>();
-                    stores.sort();
-                    stores.dedup();
-                    if stores.len() != vault_deks.len() {
+                    Self::check_one_grant_per_vault(vault_deks)?;
+                }
+                IdentityControlOperation::MemberInvited { invite } => {
+                    SigningIdentity::verifying_key_from_public_key_hex(
+                        invite.signing_public_key.as_str(),
+                    )?;
+                }
+                IdentityControlOperation::MemberJoinedByInvite {
+                    member, vault_deks, ..
+                } => {
+                    if body.operations.len() != 1 || member.signing_actor()? != body.actor_id {
                         return Err(EventError::IdentityControlInvalid(
-                            "an approval grants each vault at most once".to_owned(),
+                            "an invite join must be the sole operation, signed by the joiner"
+                                .to_owned(),
                         ));
                     }
+                    Self::check_one_grant_per_vault(vault_deks)?;
                 }
                 IdentityControlOperation::VaultRegistered { recipients, .. }
                 | IdentityControlOperation::VaultDekGranted { recipients, .. } => {
@@ -420,6 +485,39 @@ impl IdentityEvent {
             }
         }
         Ok(())
+    }
+
+    fn check_one_grant_per_vault(vault_deks: &[IdentityVaultDekGrant]) -> EventResult<()> {
+        let mut stores = vault_deks
+            .iter()
+            .map(|grant| &grant.store_id)
+            .collect::<Vec<_>>();
+        stores.sort();
+        stores.dedup();
+        if stores.len() != vault_deks.len() {
+            return Err(EventError::IdentityControlInvalid(
+                "a member is granted each vault at most once".to_owned(),
+            ));
+        }
+        Ok(())
+    }
+
+    /// The invite join this event carries, when it is one.
+    #[must_use]
+    pub fn invite_join(
+        &self,
+    ) -> Option<(&IdentityInviteId, &IdentityMemberKeys, &Ed25519Signature)> {
+        match self.body.operations.as_slice() {
+            [
+                IdentityControlOperation::MemberJoinedByInvite {
+                    invite_id,
+                    member,
+                    invite_signature,
+                    ..
+                },
+            ] => Some((invite_id, member, invite_signature)),
+            _ => None,
+        }
     }
 
     /// Self-signed join requests are the only operations an unauthorized

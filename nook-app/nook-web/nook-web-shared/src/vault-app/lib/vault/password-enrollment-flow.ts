@@ -78,8 +78,8 @@ type SavedEnrollmentProviderApplication = {
   readonly selection: SavedEnrollmentProvider;
 };
 
-enum IdentityJoinRequestOutcome {
-  Requested = "requested",
+enum IdentityInviteJoinOutcome {
+  Joined = "joined",
 }
 
 export enum OAuthFilePresetDecodeFailureKind {
@@ -594,12 +594,14 @@ export class PasswordEnrollmentActions {
               await admittedManager.value.bind_local_identity_to_invitation(
                 identityId,
               );
-              await admittedManager.value.request_identity_join(
+              await admittedManager.value.join_identity_with_invite(
+                code,
+                password,
                 enrollmentStorageArgs.mode,
                 enrollmentStorageArgs.pat,
                 enrollmentStorageArgs.repo,
               );
-              return storageOk(IdentityJoinRequestOutcome.Requested);
+              return storageOk(IdentityInviteJoinOutcome.Joined);
             } catch (nativeFailure) {
               return storageErr(new NativeVaultStorageFailure(nativeFailure));
             }
@@ -615,14 +617,14 @@ export class PasswordEnrollmentActions {
             state.errorMsg = state.t(savedProvider.error.translationKey);
             return;
           }
-          state.identityControl.markJoinPending(identityLabel);
           state.joinEnrollmentPrompt = JoinEnrollmentState.None;
           state.loginEnrollmentCode = "";
           state.prefillEnrollmentCode = "";
           state.enrollmentFromUrlPending = false;
-          const checked = await state.identityControl.checkJoinApproval();
-          if (checked.isErr()) {
-            state.errorMsg = state.t(checked.error.translationKey);
+          const followed =
+            await state.identityControl.followInviteJoin(identityLabel);
+          if (followed.isErr()) {
+            state.errorMsg = state.t(followed.error.translationKey);
           }
         } finally {
           enrollmentProvider.free();

@@ -26,7 +26,6 @@ import {
   enrollment_icloud_shared_provider_for_architecture,
   enrollment_provider_for_architecture,
   enrollment_shared_provider_for_architecture,
-  encrypt_unlabeled_enrollment_payload,
   generate_id,
 } from "$app-wasm";
 import {
@@ -448,14 +447,17 @@ export class IdentityEnrollmentIssue {
       } catch (failure) {
         return storageErr(new NativeVaultStorageFailure(failure));
       }
-      let code: string;
-      try {
-        code = encrypt_unlabeled_enrollment_payload(payload, passphrase.trim());
-      } catch (failure) {
-        return storageErr(new NativeVaultStorageFailure(failure));
-      } finally {
-        payload.free();
-      }
+      // The code carries a one-time invite and the identity's vault DEKs,
+      // so its holder joins without a member approving it.
+      const invite: Parameters<typeof state.identityControl.issueInvite>[0] = {
+        input: payload,
+        passphrase: passphrase.trim(),
+      };
+      const issued = await state.identityControl
+        .issueInvite(invite)
+        .finally(() => payload.free());
+      if (issued.isErr()) return storageErr(issued.error);
+      const code = issued.value;
       state.enrollmentCode = code;
       log.info("enrollment code issued");
       return storageOk(code);

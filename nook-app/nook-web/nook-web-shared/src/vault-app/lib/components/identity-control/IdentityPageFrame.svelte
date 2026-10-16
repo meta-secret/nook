@@ -1,26 +1,27 @@
 <!--
-One of the identity's pages, opened from Manage on its card: Back, the
-identity it belongs to, the page's name, and its content in one sheet.
+One of the identity's pages, opened from Manage on its card: one row with
+Back, the identity it belongs to and the page's name, then its content in
+one sheet.
 No navigation of its own: the card's menu is the way between pages.
 -->
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import FirstRunBackLink from "$lib/components/login/FirstRunBackLink.svelte";
-  import type { VaultState } from "$lib/vault.svelte";
+  import BackButton from "$lib/components/workspace/BackButton.svelte";
 
   let {
-    vault,
     identityName,
     title,
     testId,
+    backLabel,
     onBack,
     children,
     footer,
   }: {
-    vault: VaultState;
     identityName: string;
     title: string;
     testId: string;
+    /** Where Back goes. */
+    backLabel: string;
     onBack: () => void;
     children: Snippet;
     /** The status line under the sheet. */
@@ -29,21 +30,22 @@ No navigation of its own: the card's menu is the way between pages.
 </script>
 
 <section
-  class="mx-auto grid w-full max-w-3xl gap-6 py-6 sm:py-10"
+  class="mx-auto grid w-full max-w-3xl gap-5 py-4 sm:py-8"
   data-testid="identity-page"
   data-page={testId}
 >
-  <FirstRunBackLink {vault} testId="identity-page-back" {onBack} />
-
-  <header class="grid gap-2">
-    {#if identityName}
-      <p class="nk-eyebrow">{identityName}</p>
-    {/if}
-    <h1
-      class="text-[clamp(1.75rem,4vw,2.25rem)] leading-tight font-semibold tracking-[-0.02em] text-foreground"
-    >
-      {title}
-    </h1>
+  <header class="flex min-w-0 items-center gap-4">
+    <BackButton label={backLabel} testId="identity-page-back" {onBack} />
+    <div class="grid min-w-0 gap-0.5">
+      {#if identityName}
+        <p class="nk-eyebrow truncate">{identityName}</p>
+      {/if}
+      <h1
+        class="truncate text-[clamp(1.5rem,3.5vw,2rem)] leading-tight font-semibold tracking-[-0.02em] text-foreground"
+      >
+        {title}
+      </h1>
+    </div>
   </header>
 
   <div class="nk-frame-sheet min-w-0 p-4 sm:p-7">

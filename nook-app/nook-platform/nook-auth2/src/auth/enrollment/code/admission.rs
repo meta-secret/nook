@@ -114,20 +114,29 @@ impl CheckedEnrollmentEnvelope {
         }
         .derive();
         let cipher = Aes256Gcm::new(&Array(key));
-        let plaintext = cipher
-            .decrypt(&Array(iv), ciphertext.as_slice())
-            .map_err(|_| EnrollmentError::WrongPassword)?;
+        // The payload holds vault DEKs and the invite seed: wipe it once parsed.
+        let plaintext = zeroize::Zeroizing::new(
+            cipher
+                .decrypt(&Array(iv), ciphertext.as_slice())
+                .map_err(|_| EnrollmentError::WrongPassword)?,
+        );
         let provider_payload: EnrollmentProviderPayload =
             serde_json::from_slice(&plaintext).map_err(|_| EnrollmentError::WrongPassword)?;
-        let EnrollmentProviderPayload { provider, identity } = provider_payload;
+        let EnrollmentProviderPayload {
+            provider,
+            identity,
+            invite,
+        } = provider_payload;
         provider.validate()?;
         if identity.check().is_err() {
             return Err(EnrollmentError::WrongPassword);
         }
+        invite.check()?;
 
         Ok(DecryptedEnrollmentPayload {
             provider,
             identity,
+            invite,
             entry_id: envelope.entry_id,
             issued_at: envelope.issued_at,
         })

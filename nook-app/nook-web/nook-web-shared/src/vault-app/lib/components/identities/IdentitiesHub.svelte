@@ -15,6 +15,12 @@ join) sit between the hero and the cards.
   import IdentityCard from './IdentityCard.svelte'
   import IdentityDraftCard from './IdentityDraftCard.svelte'
   import IdentityJoinPanel from '$lib/components/identity-control/IdentityJoinPanel.svelte'
+  import DeviceRecoveryAction from '$lib/components/DeviceRecoveryAction.svelte'
+  import {
+    DeviceRecoveryKind,
+    DeviceRecoveryOffer,
+    type DeviceRecoveryRequest,
+  } from '$lib/components/device-recovery'
   import { IdentityCards } from './identity-cards.svelte'
   import { configured_vault_application, VaultApplication } from '$app-wasm'
   import {
@@ -187,6 +193,17 @@ join) sit between the hero and the cards.
   const strayVaults = $derived(
     directoryFailed ? localVaults : cardsReady ? projection.unlistedVaults : [],
   )
+  /** Stray rows have no panel beside a card, so their unlock failure and
+   * this browser's key recovery show under them. */
+  const strayRecovery = $derived.by(() => {
+    if (vault.isAuthenticated || vault.deviceProtectionReady)
+      return DeviceRecoveryKind.None
+    const request: DeviceRecoveryRequest = {
+      status: vault.deviceProtectionStatus,
+      unlockFailed: Boolean(vault.errorMsg),
+    }
+    return new DeviceRecoveryOffer(request).kind
+  })
   let setupHost = $state<VaultSetupHost>({ kind: VaultSetupHostKind.Pending })
   /** With several identities, the current one opens its first-vault setup
    * from its New vault row; a lone identity opens it straight away. */
@@ -379,6 +396,23 @@ join) sit between the hero and the cards.
             </li>
           {/each}
         </ul>
+        {#if strayRecovery !== DeviceRecoveryKind.None}
+          <div
+            class="grid gap-3 px-4 pb-4"
+            data-testid="identity-stray-recovery"
+          >
+            {#if vault.errorMsg}
+              <p class="text-sm text-pretty text-destructive" role="alert">
+                {vault.errorMsg}
+              </p>
+            {/if}
+            <DeviceRecoveryAction
+              {vault}
+              kind={strayRecovery}
+              recoveryAppId={vault.deviceId}
+            />
+          </div>
+        {/if}
       {/if}
       {#if passwordStandalone && passwordFallback}
         {@render passwordFallback()}

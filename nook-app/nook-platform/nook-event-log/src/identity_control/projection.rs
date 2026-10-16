@@ -143,7 +143,10 @@ impl ProjectionAccumulator {
                     requested_at: created_at.clone(),
                 });
             }
-            IdentityControlOperation::MemberApproved { member, vault_deks } => {
+            IdentityControlOperation::MemberApproved { member, vault_deks }
+            | IdentityControlOperation::MemberJoinedByInvite {
+                member, vault_deks, ..
+            } => {
                 self.member_keys
                     .insert(member.app_id.clone(), (member.clone(), id.clone()));
                 self.resolutions.push((id.clone(), member.app_id.clone()));
@@ -167,6 +170,8 @@ impl ProjectionAccumulator {
             | IdentityControlOperation::MemberRevoked { app_id } => {
                 self.resolutions.push((id.clone(), app_id.clone()));
             }
+            // An invite grants nothing until its holder joins with it.
+            IdentityControlOperation::MemberInvited { .. } => {}
             IdentityControlOperation::MemberRenamed { app_id, label } => {
                 if let Some((keys, _)) = self.member_keys.get_mut(app_id) {
                     keys.label = label.clone();

@@ -39,14 +39,6 @@ pub struct IdentityMemberView {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-pub struct IdentityJoinView {
-    pub app_id: String,
-    pub label: String,
-    pub requested_at: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
 pub struct IdentityVaultView {
     pub store_id: String,
     /// Whether this installation holds the vault's current DEK envelope.
@@ -85,7 +77,6 @@ pub struct IdentityControlSnapshot {
     pub identity_label: String,
     pub standing: IdentityControlStanding,
     pub members: Vec<IdentityMemberView>,
-    pub pending_joins: Vec<IdentityJoinView>,
     pub vaults: Vec<IdentityVaultView>,
     pub mounts: Vec<IdentityMountView>,
 }
@@ -144,7 +135,6 @@ impl IdentityControlSnapshot {
             identity_label: identity_label.to_owned(),
             standing: IdentityControlStanding::NotReplicated,
             members: Vec::new(),
-            pending_joins: Vec::new(),
             vaults: Vec::new(),
             mounts: Vec::new(),
         }
@@ -175,15 +165,6 @@ impl IdentityControlSnapshot {
                     app_id: member.keys.app_id.as_str().to_owned(),
                     label: member.keys.label.as_str().to_owned(),
                     is_current_installation: &member.keys.app_id == *current_app_id,
-                })
-                .collect(),
-            pending_joins: state
-                .pending_joins
-                .iter()
-                .map(|join| IdentityJoinView {
-                    app_id: join.member.app_id.as_str().to_owned(),
-                    label: join.member.label.as_str().to_owned(),
-                    requested_at: join.requested_at.as_str().to_owned(),
                 })
                 .collect(),
             vaults: state

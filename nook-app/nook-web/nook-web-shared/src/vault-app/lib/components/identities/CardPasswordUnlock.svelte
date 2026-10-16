@@ -4,7 +4,7 @@ panel: the passphrase by the title it was saved with (a choice when there
 are several) and its field. A vault without a passphrase says so.
 -->
 <script lang="ts">
-  import { ArrowRight, KeyRound, RefreshCw } from "@lucide/svelte";
+  import { ArrowRight, Check, KeyRound, RefreshCw } from "@lucide/svelte";
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import type { VaultState } from "$lib/vault.svelte";
 
@@ -64,19 +64,36 @@ are several) and its field. A vault without a passphrase says so.
   {:else}
     <form class="grid gap-2" aria-label={vaultLabel} onsubmit={submit}>
       {#if entries.length > 1}
-        <label class="sr-only" for="card-password-entry">
-          {vault.t(I18N_KEYS.WorkspacePassphraseUnlockChoose)}
-        </label>
-        <select
-          id="card-password-entry"
-          class="h-9 w-full border border-border bg-background px-2 text-sm text-foreground"
-          bind:value={chosenId}
-          data-testid="card-password-entry"
-        >
+        <!-- One row per passphrase, the first chosen: radios keep arrow keys
+             and screen readers, styled like the panel's other rows. -->
+        <fieldset class="grid gap-1" data-testid="card-password-entry">
+          <legend class="sr-only">
+            {vault.t(I18N_KEYS.WorkspacePassphraseUnlockChoose)}
+          </legend>
           {#each entries as entry (entry.id)}
-            <option value={entry.id}>{entry.label}</option>
+            {@const selected = entry.id === chosen.id}
+            <label
+              class="flex h-9 min-w-0 cursor-pointer items-center gap-2 border px-3 text-sm transition-colors has-[input:focus-visible]:border-foreground/60 {selected
+                ? 'border-foreground/40 bg-accent text-foreground'
+                : 'border-border text-muted-foreground hover:bg-accent/50 hover:text-foreground'}"
+            >
+              <input
+                type="radio"
+                class="sr-only"
+                name="card-password-entry"
+                value={entry.id}
+                checked={selected}
+                disabled={isVerifying}
+                onchange={() => (chosenId = entry.id)}
+              />
+              <KeyRound class="size-4 flex-none opacity-70" aria-hidden="true" />
+              <span class="min-w-0 flex-1 truncate">{entry.label}</span>
+              {#if selected}
+                <Check class="size-3.5 flex-none" aria-hidden="true" />
+              {/if}
+            </label>
           {/each}
-        </select>
+        </fieldset>
       {:else}
         <span
           class="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground"

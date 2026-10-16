@@ -89,7 +89,7 @@ owns:
 
 - a stable identity id;
 - app-key members (`app_id`, X25519 encryption public key, Ed25519 signing
-  public key, label), pending joins, and revocations;
+  public key, label), one-time invites, and revocations;
 - per-vault DEK records: vault `store_id` plus envelopes of that vault DEK to
   each active app public key, per vault key epoch;
 - zero or more credential-free sync-provider mounts.
@@ -330,35 +330,49 @@ is registered in that identity's log from its genesis.
 
 ### Join an installation to an identity
 
-1. An identity member issues an identity enrollment code.
-   - The code names the identity and the mount the joiner can reach.
-2. The joining installation decrypts the code and connects that mount.
+1. An identity member issues a one-time invite.
+   - It appends `member-invited` with a fresh invite key and a 24-hour expiry,
+     and pushes it to every identity mount.
+   - The enrollment code names the identity and the mount the joiner can
+     reach. It also carries the invite's signing seed and every owned Simple
+     vault's DEK at its current key epoch, all under the code's passphrase.
+   - Issuing fails when the member cannot open an owned vault.
+2. The joining installation decrypts the code inside WASM and connects that
+   mount.
    - Personal credential transfer carries the provider credential.
    - A shared grant carries only the target; the joiner signs in itself.
-3. The joiner syncs the identity log from the mount.
-4. The joiner appends a self-signed `member-join-requested` and pushes it.
-5. A member sees the pending join on **Identity → Devices** and approves it.
-   - The approver opens every owned Simple vault's DEK at its current key
-     epoch.
-   - `member-approved` wraps each DEK to the joiner's encryption key.
-   - Approval fails when the approver cannot open an owned vault.
-6. The joiner syncs again and adopts the identity.
-   - Its local directory record gains the members and DEK envelopes.
-   - Its identity card lists every vault the identity owns.
-7. On the first open of each Simple vault, the joiner appends a self-signed
+   - The invite key and the DEKs never reach JavaScript.
+3. The joiner syncs the identity log from the mount and finds the invite.
+   - It refuses an invite the log does not hold yet, or one past its expiry.
+4. The joiner appends a self-signed `member-joined-by-invite` and pushes it.
+   - The invite key signs the joiner's member keys.
+   - Each DEK from the code is wrapped to the joiner's encryption key.
+   - The joiner is a member at once. No member approves it.
+   - A second join with the same invite loses on every replica.
+5. Its identity card lists every vault the identity owns.
+6. On the first open of each Simple vault, the joiner appends a self-signed
    `join-approved` to that vault's log with the DEK it holds.
    - This uses the existing Simple self-enrolment policy in
      [vault-event-log.md](../../../nook-event-log/.cortex/docs/architecture/vault-event-log.md).
-   - No approver writes into any vault log.
+   - No member writes into any vault log.
 
-A member may deny the request with `member-join-denied`.
+Two cases sit outside these steps:
 
-**Prohibited:** approve a joiner by writing `join-approved` into the open vault
-only, so the joiner sees one vault and must be approved again for each other
-vault.
+- A vault registered after the invite went out reaches the joiner through
+  `vault-dek-granted`, like any member that joined concurrently with a
+  registration.
+- Logs from earlier builds may hold `member-join-requested`,
+  `member-approved`, and `member-join-denied`. They still project, so members
+  admitted by approval stay members. Nothing writes them now. A pending
+  request from an earlier build is not offered for approval; that
+  installation joins with a new invite.
 
-**Required:** approve once in the identity log. The approval wraps every owned
-vault's DEK, and the joiner reaches each vault through the identity.
+**Prohibited:** make the member who issued the invite approve the joiner as
+well. The passphrase-protected code already proves the joiner holds the
+invite, so a second confirmation adds a round trip and no security.
+
+**Required:** let the invite holder sign itself in, once, with the DEKs the
+code carries. The joiner reaches each vault through the identity.
 
 ### Revoke an installation
 
@@ -384,12 +398,12 @@ holds no envelope for the new epoch, so it cannot read later secrets.
 ### Keep Sentinel vaults on their ceremony
 
 Sentinel vault keys are threshold shares, not a DEK the identity can wrap.
-Identity approval grants a joiner the identity's Simple vaults only. A Sentinel
+An identity invite grants a joiner the identity's Simple vaults only. A Sentinel
 vault keeps its participant ceremony in
 [sentinel-genesis.md](sentinel-genesis.md).
 
 **Prohibited:** wrap a reconstructed Sentinel key bundle to a joiner during
-identity approval.
+an identity invite join.
 
 **Required:** list the Sentinel vault on the joiner's identity card as needing
 its ceremony. Identity membership never bypasses the threshold.
@@ -398,19 +412,23 @@ its ceremony. Identity membership never bypasses the threshold.
 
 The enrollment code invites an installation into an identity, not a vault.
 
-- The encrypted payload holds the provider transport and
-  `identity: { identity_id, label }`.
+- The encrypted payload holds the provider transport,
+  `identity: { identity_id, label }`, and
+  `invite: { invite_id, signing_seed, vaults: [{ store_id, key_epoch,
+  secrets_key, members_key }] }`.
 - The provider transport keeps the personal and shared typestates described in
   [auth-providers.md](auth-providers.md#shared-provider-onboarding).
 - The outer envelope and its PBKDF2 and AES-GCM parameters are unchanged.
-- Codes issued by earlier builds named a vault. They are short-lived invitations
-  and fail closed as invalid codes; the member issues a new code.
+- Only WASM issues and opens codes. JavaScript passes the code and passphrase
+  through and receives the label and provider, never the invite.
+- Codes issued by earlier builds carry no invite. They are short-lived
+  invitations and fail closed as invalid codes; the member issues a new code.
 
 **Prohibited:** keep `vault_name` in the payload so the joiner's identity card
-can show the vault before approval.
+can show the vault before it joins.
 
 **Required:** name only the identity. The joiner learns the identity's vaults
-from the approved control log, which also carries their DEKs.
+from the control log; the code carries only their DEKs.
 
 ### Mount sync providers on the identity
 

@@ -1,61 +1,19 @@
 import { describe, expect, test } from 'vitest'
 import { enrollmentBrowser } from '$lib/enrollment/code'
 import {
-  NookEnrollmentIssueInput,
-  NookEnrollmentEntryLabelState,
-  NookEnrollmentProvider,
   default as initNookWasm,
   decrypt_enrollment_payload,
-  encrypt_labeled_enrollment_payload,
-  encrypt_unlabeled_enrollment_payload,
   normalize_enrollment_code,
   peek_enrollment_entry_id,
-  peek_enrollment_entry_label,
-  peek_enrollment_issued_at,
   VaultApplication,
 } from '$app-wasm'
 
 await initNookWasm()
 
-const IDENTITY_ID = 'idn_abcdefghijk'
-
-function samplePayload(): NookEnrollmentIssueInput {
-  return NookEnrollmentIssueInput.for_identity(
-    NookEnrollmentProvider.local(),
-    IDENTITY_ID,
-    'Local vault',
-    'entry-local',
-    '2026-06-23T12:00:00Z',
-  )
-}
-
-function githubPayload(): NookEnrollmentIssueInput {
-  return NookEnrollmentIssueInput.for_identity(
-    NookEnrollmentProvider.github('team-vault', 'github_pat_11AAAAbbbbCCCC'),
-    IDENTITY_ID,
-    'Team vault',
-    'entry-1',
-    '2026-06-23T12:00:00Z',
-  )
-}
-
-function enrollmentEntryLabel(code: string): string {
-  const label = peek_enrollment_entry_label(code)
-  try {
-    expect(label.state).toBe(NookEnrollmentEntryLabelState.Labeled)
-    return label.value
-  } finally {
-    label.free()
-  }
-}
-
-function decodeOuterPayload(code: string): string {
-  const normalized = code.replace(/-/g, '+').replace(/_/g, '/')
-  const padded = normalized + '='.repeat((4 - (normalized.length % 4 || 4)) % 4)
-  const binary = atob(padded)
-  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
-  return new TextDecoder().decode(bytes)
-}
+// Codes are sealed inside WASM when an identity issues an invite; the
+// round trip is covered by the nook-auth2 enrollment tests. A raw base64url
+// value is enough to exercise the link helpers.
+const RAW_CODE = 'eyJlbnRyeV9pZCI6ImVudHJ5LTEifQ'
 
 describe('enrollment-code links', () => {
   test('isolated applications generate links at their own root', () => {
@@ -82,94 +40,30 @@ describe('enrollment-code links', () => {
     ).toBe('https://nokey.sh/app/')
   })
 
-  test('buildEnrollmentLink wraps the raw code in a hash URL', async () => {
-    const code = encrypt_unlabeled_enrollment_payload(
-      samplePayload(),
-      'hunter2',
-    )
+  test('buildEnrollmentLink wraps the raw code in a hash URL', () => {
     expect(
       enrollmentBrowser.buildEnrollmentLink({
-        code: code,
+        code: RAW_CODE,
         baseUrl: 'https://nook.example',
       }),
-    ).toBe(`https://nook.example/#enroll=${encodeURIComponent(code)}`)
+    ).toBe(`https://nook.example/#enroll=${encodeURIComponent(RAW_CODE)}`)
   })
 
-  test('normalize_enrollment_code accepts raw base64url codes', async () => {
-    const code = encrypt_unlabeled_enrollment_payload(
-      samplePayload(),
-      'hunter2',
-    )
-    expect(normalize_enrollment_code(code)).toBe(code)
+  test('normalize_enrollment_code accepts raw base64url codes', () => {
+    expect(normalize_enrollment_code(RAW_CODE)).toBe(RAW_CODE)
   })
 
-  test('normalize_enrollment_code extracts codes from hash links', async () => {
-    const code = encrypt_unlabeled_enrollment_payload(
-      samplePayload(),
-      'hunter2',
-    )
+  test('normalize_enrollment_code extracts codes from hash links', () => {
     const link = enrollmentBrowser.buildEnrollmentLink({
-      code: code,
+      code: RAW_CODE,
       baseUrl: 'https://nook.example',
     })
-    expect(normalize_enrollment_code(link)).toBe(code)
-  })
-
-  test('wasm peek helpers accept full enrollment links', async () => {
-    const code = encrypt_labeled_enrollment_payload(
-      samplePayload(),
-      'hunter2',
-      'Desk',
-    )
-    const link = enrollmentBrowser.buildEnrollmentLink({
-      code: code,
-      baseUrl: 'https://nook.example',
-    })
-    expect(peek_enrollment_entry_id(link)).toBe('entry-local')
-    expect(enrollmentEntryLabel(link)).toBe('Desk')
-    expect(peek_enrollment_issued_at(link)).toBe('2026-06-23T12:00:00Z')
+    expect(normalize_enrollment_code(link)).toBe(RAW_CODE)
   })
 })
 
 describe('enrollment payloads', () => {
-  test('encrypts provider creds and exposes entry_id without the password', async () => {
-    const code = encrypt_labeled_enrollment_payload(
-      githubPayload(),
-      'vault-pass-99',
-      'Work laptop',
-    )
-    expect(peek_enrollment_entry_id(code)).toBe('entry-1')
-    expect(enrollmentEntryLabel(code)).toBe('Work laptop')
-    expect(peek_enrollment_issued_at(code)).toBe('2026-06-23T12:00:00Z')
-
-    const serialized = decodeOuterPayload(code)
-    expect(serialized).not.toContain('vault-pass-99')
-    expect(serialized).not.toContain('github_pat_11AAAAbbbbCCCC')
-    expect(serialized).not.toContain('Team vault')
-    expect(serialized).toContain('"entry_id":"entry-1"')
-    expect(serialized).toContain('"ct":')
-
-    const decrypted = decrypt_enrollment_payload(code, 'vault-pass-99')
-    expect(decrypted.entryId).toBe('entry-1')
-    expect(decrypted.identityLabel).toBe('Team vault')
-    expect(decrypted.identityId).toBe(IDENTITY_ID)
-    expect(decrypted.issuedAt).toBe('2026-06-23T12:00:00Z')
-    expect(decrypted.provider.type).toBe('github')
-    expect(decrypted.provider.githubPat).toBe('github_pat_11AAAAbbbbCCCC')
-    expect(decrypted.provider.githubRepo).toBe('team-vault')
-  })
-
-  test('rejects wrong vault passwords', async () => {
-    const code = encrypt_unlabeled_enrollment_payload(
-      samplePayload(),
-      'hunter2',
-    )
-    expect(() => decrypt_enrollment_payload(code, 'wrong-pass')).toThrow(
-      'Vault password does not decrypt this enrollment code.',
-    )
-  })
-
-  test('rejects malformed codes', async () => {
+  test('rejects malformed codes', () => {
     const malformed = btoa(JSON.stringify({ provider: { type: 'local' } }))
       .replace(/\+/g, '-')
       .replace(/\//g, '_')

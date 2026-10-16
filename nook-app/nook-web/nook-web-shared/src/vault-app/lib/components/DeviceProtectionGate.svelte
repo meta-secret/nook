@@ -1,6 +1,6 @@
 <script lang="ts">
   import { I18N_KEYS } from '../../../generated/i18n-keys'
-  import { CircleHelp, KeyRound, ShieldCheck } from '@lucide/svelte'
+  import { KeyRound, ShieldCheck } from '@lucide/svelte'
   import { untrack } from 'svelte'
   import { DeviceProtectionStatus } from '$app-wasm'
   import * as deviceProtectionActions from '$lib/vault/device-protection.svelte'
@@ -8,6 +8,8 @@
   import { Button } from '$lib/components/ui/button'
   import DeviceModeSelect from '$lib/components/DeviceModeSelect.svelte'
   import ExistingVaultRecoverySummary from '$lib/components/ExistingVaultRecoverySummary.svelte'
+  import DeviceRecoveryAction from '$lib/components/DeviceRecoveryAction.svelte'
+  import { DeviceRecoveryKind } from './device-recovery'
   import {
     DeviceProtectionGateFrame,
     DeviceProtectionSetupWorkflow,
@@ -56,18 +58,6 @@
       vault.deviceProtectionStatus === DeviceProtectionStatus.Plaintext ||
       vault.deviceProtectionStatus === DeviceProtectionStatus.PinSetup,
   )
-
-  function recover() {
-    if (!confirm(vault.t(I18N_KEYS.DeviceProtectionRecoveryConfirm))) {
-      return
-    }
-    const recoveryRequest: Parameters<
-      deviceProtectionActions.DeviceProtectionRecoveryActions['resetDeviceProtectionForRecovery']
-    >[0] = { expectedAppId: recoveryAppId }
-    void new deviceProtectionActions.DeviceProtectionRecoveryActions(
-      vault,
-    ).resetDeviceProtectionForRecovery(recoveryRequest)
-  }
 
   async function completeProtectionAction(
     action: () => Promise<deviceProtectionActions.DeviceProtectionActionOutcome>,
@@ -364,21 +354,11 @@
           : vault.t(I18N_KEYS.DeviceProtectionPinUnlockAction)}
       </Button>
 
-      <div class="rounded-md border border-border/60 bg-muted/20 p-3">
-        <div class="flex gap-2 text-xs text-muted-foreground">
-          <CircleHelp class="mt-0.5 size-4 shrink-0" />
-          <p>{vault.t(I18N_KEYS.DeviceProtectionPinRecoveryWarning)}</p>
-        </div>
-        <Button
-          class="mt-2 h-auto px-0 text-xs"
-          variant="link"
-          disabled={vault.isVerifying}
-          data-testid="device-protection-recovery-btn"
-          onclick={recover}
-        >
-          {vault.t(I18N_KEYS.DeviceProtectionPinRecoveryAction)}
-        </Button>
-      </div>
+      <DeviceRecoveryAction
+        {vault}
+        kind={DeviceRecoveryKind.Pin}
+        {recoveryAppId}
+      />
     {:else if vault.deviceProtectionStatus === DeviceProtectionStatus.Passkey}
       <Button
         class="w-full"
@@ -399,39 +379,17 @@
           : vault.t(I18N_KEYS.DeviceProtectionUnlockAction)}
       </Button>
 
-      <div class="rounded-md border border-border/60 bg-muted/20 p-3">
-        <div class="flex gap-2 text-xs text-muted-foreground">
-          <CircleHelp class="mt-0.5 size-4 shrink-0" />
-          <p>{vault.t(I18N_KEYS.DeviceProtectionRecoveryWarning)}</p>
-        </div>
-        <Button
-          class="mt-2 h-auto px-0 text-xs"
-          variant="link"
-          disabled={vault.isVerifying}
-          data-testid="device-protection-recovery-btn"
-          onclick={recover}
-        >
-          {vault.t(I18N_KEYS.DeviceProtectionRecoveryAction)}
-        </Button>
-      </div>
+      <DeviceRecoveryAction
+        {vault}
+        kind={DeviceRecoveryKind.Passkey}
+        {recoveryAppId}
+      />
     {:else if vault.deviceProtectionStatus === DeviceProtectionStatus.Error && !creationOnly}
-      <div class="rounded-md border border-border/60 bg-muted/20 p-3">
-        <div class="flex gap-2 text-xs text-muted-foreground">
-          <CircleHelp class="mt-0.5 size-4 shrink-0" />
-          <p>
-            {vault.t(I18N_KEYS.DeviceProtectionUnavailableRecoveryWarning)}
-          </p>
-        </div>
-        <Button
-          class="mt-2 h-auto px-0 text-xs"
-          variant="link"
-          disabled={vault.isVerifying}
-          data-testid="device-protection-recovery-btn"
-          onclick={recover}
-        >
-          {vault.t(I18N_KEYS.DeviceProtectionUnavailableRecoveryAction)}
-        </Button>
-      </div>
+      <DeviceRecoveryAction
+        {vault}
+        kind={DeviceRecoveryKind.Unavailable}
+        {recoveryAppId}
+      />
     {/if}
 
     {#if vault.errorMsg}

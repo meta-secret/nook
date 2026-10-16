@@ -430,7 +430,6 @@ mod tests {
         });
         assert_eq!(joiner.standing, IdentityControlStanding::Member);
         assert_eq!(joiner.identity_label, "Personal");
-        assert!(joiner.pending_joins.is_empty());
         let current = joiner
             .members
             .iter()

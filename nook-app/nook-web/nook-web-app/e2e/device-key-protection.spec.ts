@@ -86,28 +86,15 @@ async function createSentinelParticipantResponse(
   return { context, responseLink }
 }
 
-async function openExistingVaultProtectionOverlay(page: Page) {
-  const overlay = page.getByTestId('passkey-auth-overlay')
-  const unlockVaultButton = page.getByTestId('identity-vault-row').first()
-  // Locking from /identity/keys keeps that URL, so LoginGate opens Access
-  // directly and may already show the unlock overlay without Unlock.
-  await expect
-    .poll(
-      async () => {
-        if (await overlay.isVisible()) return 'overlay'
-        if (await unlockVaultButton.isVisible()) return 'unlock'
-        return 'waiting'
-      },
-      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
-    )
-    .not.toBe('waiting')
-  if (await overlay.isVisible()) {
-    return
-  }
-  await openVaultPanelAndUnlock(page)
-  await expect(overlay).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
+/** A PIN-protected browser asks for its PIN on the card when the selected
+ * vault is unlocked from its panel. */
+async function openCardPinPrompt(page: Page) {
+  const pin = page.getByTestId('card-pin-input')
+  await expect(
+    pin.or(page.getByTestId('identity-vault-row')).first(),
+  ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  if (!(await pin.isVisible())) await openVaultPanelAndUnlock(page)
+  await expect(pin).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
 }
 
 async function unlockExistingVaultWithPasskey(page: Page) {
@@ -803,30 +790,30 @@ test.describe('passkey device-key protection', () => {
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
 
-    // Unlocking the selected vault's row asks for the PIN in the overlay.
+    // Unlocking the selected vault from its panel asks for the PIN on its
+    // card; a wrong PIN stays there with this browser's PIN recovery.
     await openVaultPage(page)
     await expectFirstVaultOpen(page)
     await page.getByTestId('header-lock-vault-btn').click()
-    await openExistingVaultProtectionOverlay(page)
-    await expect(
-      page.getByTestId('device-protection-pin-unlock-btn'),
-    ).toBeVisible()
-    await page.getByTestId('device-protection-pin-unlock-input').fill('000000')
-    await page.getByTestId('device-protection-pin-unlock-btn').click()
-    await expect(page.getByTestId('device-protection-error')).toContainText(
+    await openCardPinPrompt(page)
+    await page.getByTestId('card-pin-input').fill('000000')
+    await page.getByTestId('card-pin-submit').click()
+    await expect(page.getByTestId('card-pin-error')).toContainText(
       'The PIN or passphrase did not unlock this browser. Check it and try again.',
     )
-    await page.getByTestId('device-protection-pin-unlock-input').fill('123456')
-    await page.getByTestId('device-protection-pin-unlock-btn').click()
+    await expect(page.getByTestId('device-recovery')).toHaveAttribute(
+      'data-kind',
+      'pin',
+    )
+    await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
+    await page.getByTestId('card-pin-input').fill('123456')
+    await page.getByTestId('card-pin-submit').click()
     await expectFirstVaultOpen(page)
 
     await page.reload()
-    await openExistingVaultProtectionOverlay(page)
-    await expect(
-      page.getByTestId('device-protection-pin-unlock-btn'),
-    ).toBeVisible()
-    await page.getByTestId('device-protection-pin-unlock-input').fill('123456')
-    await page.getByTestId('device-protection-pin-unlock-btn').click()
+    await openCardPinPrompt(page)
+    await page.getByTestId('card-pin-input').fill('123456')
+    await page.getByTestId('card-pin-submit').click()
     await expectFirstVaultOpen(page)
   })
 

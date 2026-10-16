@@ -8,10 +8,10 @@ import {
   createIsolatedContext,
   E2E_IDENTITY_PASSPHRASE,
   E2E_SYNC_ONBOARD_PROVIDER,
-  approveIdentityJoin,
+  expectIdentityMembers,
   issueIdentityEnrollmentCode,
   keepVaultIdleLockDisabled,
-  openVaultAfterIdentityApproval,
+  openVaultAfterIdentityJoin,
   redeemIdentityEnrollmentCode,
   expandSettingsSection,
   expectNoVaultPasswords,
@@ -315,8 +315,8 @@ test.describe('enrollment link deep link (local)', () => {
     })
     await redeemIdentityEnrollmentCode(pageB, issued.passphrase)
 
-    await approveIdentityJoin(pageA, 2)
-    await openVaultAfterIdentityApproval(pageB)
+    await expectIdentityMembers(pageA, 2)
+    await openVaultAfterIdentityJoin(pageB)
     const row = pageB.getByTestId('secret-row').filter({ hasText: secretKey })
     await expect(row).toBeVisible()
 
@@ -380,8 +380,8 @@ test.describe('enrollment link deep link (local)', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await redeemIdentityEnrollmentCode(pageB, issued.passphrase)
-    await approveIdentityJoin(pageA, 2)
-    await openVaultAfterIdentityApproval(pageB)
+    await expectIdentityMembers(pageA, 2)
+    await openVaultAfterIdentityJoin(pageB)
     const row = pageB.getByTestId('secret-row').filter({ hasText: secretKey })
     await expect(row).toBeVisible()
 

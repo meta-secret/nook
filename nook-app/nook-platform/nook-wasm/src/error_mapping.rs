@@ -79,6 +79,7 @@ impl From<nook_core::ValidationError> for NookError {
             | ValidationError::SecretIdInvalid
             | ValidationError::SecretIdReserved
             | ValidationError::StoreIdInvalid
+            | ValidationError::IdentityInviteIdInvalid
             | ValidationError::StoreIdReserved
             | ValidationError::AuthKeyIdInvalid
             | ValidationError::DeviceIdInvalid

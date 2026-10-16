@@ -97,6 +97,7 @@ impl<'a> EnrollmentIssuance<'a> {
 
         self.input.provider.validate()?;
         self.input.identity.check()?;
+        self.input.invite.check()?;
         let identity_label = self.input.identity.label.trim();
 
         Ok(CheckedEnrollmentIssuance {
@@ -116,6 +117,7 @@ impl CheckedEnrollmentIssuance<'_> {
                 identity_id: self.input.identity.identity_id.clone(),
                 label: self.identity_label.to_owned(),
             },
+            invite: self.input.invite.clone(),
         };
         let mut salt = [0u8; SALT_LEN];
         let mut iv = [0u8; IV_LEN];
@@ -129,7 +131,10 @@ impl CheckedEnrollmentIssuance<'_> {
         }
         .derive();
         let cipher = Aes256Gcm::new(&Array(key));
-        let plaintext = serde_json::to_vec(&inner).map_err(EnrollmentError::Serialize)?;
+        // The payload holds vault DEKs and the invite seed: wipe it once sealed.
+        let plaintext = zeroize::Zeroizing::new(
+            serde_json::to_vec(&inner).map_err(EnrollmentError::Serialize)?,
+        );
         let ciphertext = cipher
             .encrypt(&Array(iv), plaintext.as_slice())
             .map_err(|_| EnrollmentError::WrongPassword)?;
@@ -160,23 +165,24 @@ mod tests {
     use crate::EnrollmentError;
     use crate::auth::enrollment::{
         CheckedEnrollmentEnvelope, EnrollmentEntryLabel, EnrollmentIdentityTarget,
-        EnrollmentIssueInput, EnrollmentProvider, EnrollmentProviderDataRef, OAuthAccountIdentity,
-        OAuthRefreshCredential, OAuthRemoteFile, OAuthTokenExpiry, PersonalEnrollmentProvider,
-        SharedEnrollmentProvider, SharedEnrollmentProviderData,
+        EnrollmentInvite, EnrollmentIssueInput, EnrollmentProvider, EnrollmentProviderDataRef,
+        OAuthAccountIdentity, OAuthRefreshCredential, OAuthRemoteFile, OAuthTokenExpiry,
+        PersonalEnrollmentProvider, SharedEnrollmentProvider, SharedEnrollmentProviderData,
     };
     use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
     use serde_json::json;
     impl EnrollmentIssueInput {
-        fn github_fixture() -> Self {
-            Self {
+        fn github_fixture() -> anyhow::Result<Self> {
+            Ok(Self {
                 provider: EnrollmentProvider::personal(PersonalEnrollmentProvider::github(
                     "github_pat_11AAAAbbbbCCCC".to_owned(),
                     "team-vault".to_owned(),
                 )),
                 identity: EnrollmentIdentityTarget::fixture("Team vault"),
+                invite: EnrollmentInvite::fixture()?,
                 entry_id: "entry-1".to_owned(),
                 issued_at: "2026-06-23T12:00:00Z".to_owned(),
-            }
+            })
         }
     }
 
@@ -194,7 +200,7 @@ mod tests {
 
     #[test]
     fn issuance_validation_keeps_password_entry_provider_vault_order() -> anyhow::Result<()> {
-        let mut input = EnrollmentIssueInput::github_fixture();
+        let mut input = EnrollmentIssueInput::github_fixture()?;
         input.entry_id = " ".to_owned();
         input.identity.label = "\n".to_owned();
         input.provider = EnrollmentProvider::personal(PersonalEnrollmentProvider::github(
@@ -241,6 +247,7 @@ mod tests {
                 " repo ".to_owned(),
             )),
             identity: EnrollmentIdentityTarget::fixture("  Vault \n"),
+            invite: EnrollmentInvite::fixture()?,
             entry_id: "  entry  ".to_owned(),
             issued_at: "  timestamp  ".to_owned(),
         };
@@ -278,7 +285,7 @@ mod tests {
 
     #[test]
     fn outer_report_metadata_remains_unbound_to_ciphertext() -> anyhow::Result<()> {
-        let input = EnrollmentIssueInput::github_fixture();
+        let input = EnrollmentIssueInput::github_fixture()?;
         let code = EnrollmentIssuance {
             input: &input,
             password: "password",
@@ -303,6 +310,7 @@ mod tests {
         let input = EnrollmentIssueInput {
             provider: EnrollmentProvider::personal(PersonalEnrollmentProvider::local()),
             identity: EnrollmentIdentityTarget::fixture("Local vault"),
+            invite: EnrollmentInvite::fixture()?,
             entry_id: "entry-local".to_owned(),
             issued_at: "2026-06-23T12:00:00Z".to_owned(),
         };
@@ -329,6 +337,7 @@ mod tests {
                 "shared-folder-abc".to_owned(),
             )),
             identity: EnrollmentIdentityTarget::fixture("Shared vault"),
+            invite: EnrollmentInvite::fixture()?,
             entry_id: "entry-shared".to_owned(),
             issued_at: "2026-06-23T12:00:00Z".to_owned(),
         };
@@ -372,6 +381,7 @@ mod tests {
                 storage_target_id.clone(),
             )),
             identity: EnrollmentIdentityTarget::fixture("Shared iCloud vault"),
+            invite: EnrollmentInvite::fixture()?,
             entry_id: "entry-icloud-shared".to_owned(),
             issued_at: "2026-06-23T12:00:00Z".to_owned(),
         };
@@ -404,6 +414,7 @@ mod tests {
                 OAuthAccountIdentity::Email("owner@example.com".to_owned()),
             )),
             identity: EnrollmentIdentityTarget::fixture("OAuth vault"),
+            invite: EnrollmentInvite::fixture()?,
             entry_id: "entry-oauth".to_owned(),
             issued_at: "2026-07-09T00:00:00Z".to_owned(),
         };
@@ -423,7 +434,7 @@ mod tests {
     }
 
     #[test]
-    fn malformed_oauth_file_provider_has_provider_specific_error() {
+    fn malformed_oauth_file_provider_has_provider_specific_error() -> anyhow::Result<()> {
         let input = EnrollmentIssueInput {
             provider: EnrollmentProvider::personal(PersonalEnrollmentProvider::oauth_file(
                 "unsupported".to_owned(),
@@ -434,6 +445,7 @@ mod tests {
                 OAuthAccountIdentity::Unknown,
             )),
             identity: EnrollmentIdentityTarget::fixture("OAuth vault"),
+            invite: EnrollmentInvite::fixture()?,
             entry_id: "entry-oauth".to_owned(),
             issued_at: "2026-07-09T00:00:00Z".to_owned(),
         };
@@ -447,11 +459,12 @@ mod tests {
             .and_then(CheckedEnrollmentIssuance::issue),
             Err(EnrollmentError::MalformedOauthFileProvider)
         ));
+        Ok(())
     }
     #[test]
     fn encrypts_provider_credentials_and_peeks_outer_fields() -> anyhow::Result<()> {
         let code = EnrollmentIssuance {
-            input: &EnrollmentIssueInput::github_fixture(),
+            input: &EnrollmentIssueInput::github_fixture()?,
             password: "vault-pass-99",
             entry_label: "Work laptop",
         }
@@ -485,7 +498,7 @@ mod tests {
 
     #[test]
     fn decrypts_roundtrip_payload() -> anyhow::Result<()> {
-        let input = EnrollmentIssueInput::github_fixture();
+        let input = EnrollmentIssueInput::github_fixture()?;
         let code = EnrollmentIssuance {
             input: &input,
             password: "vault-pass-99",
@@ -506,7 +519,7 @@ mod tests {
     #[test]
     fn rejects_wrong_password() -> anyhow::Result<()> {
         let code = EnrollmentIssuance {
-            input: &EnrollmentIssueInput::github_fixture(),
+            input: &EnrollmentIssueInput::github_fixture()?,
             password: "hunter2",
             entry_label: "",
         }
@@ -539,6 +552,60 @@ mod tests {
                 .map(|checked| checked.envelope().entry_id.clone())
                 .is_err()
         );
+        Ok(())
+    }
+
+    #[test]
+    fn the_invite_travels_sealed_in_the_code_and_opens_with_its_passphrase() -> anyhow::Result<()> {
+        let input = EnrollmentIssueInput::github_fixture()?;
+        let code = EnrollmentIssuance {
+            input: &input,
+            password: "invite-pass-42",
+            entry_label: "",
+        }
+        .check()
+        .and_then(CheckedEnrollmentIssuance::issue)?;
+        let [vault] = input.invite.vaults.as_slice() else {
+            anyhow::bail!("the fixture invite opens one vault");
+        };
+        // Neither vault key appears in the code itself.
+        assert!(!code.contains(vault.secrets_key.as_str()));
+        assert!(!code.contains(vault.members_key.as_str()));
+
+        let decrypted = CheckedEnrollmentEnvelope::parse(&code)?.decrypt("invite-pass-42")?;
+        assert_eq!(decrypted.invite, input.invite);
+        assert_eq!(
+            decrypted.invite.signing_seed.signing_key()?.verifying_key(),
+            input.invite.signing_seed.signing_key()?.verifying_key()
+        );
+        assert!(matches!(
+            CheckedEnrollmentEnvelope::parse(&code)?.decrypt("wrong-pass"),
+            Err(EnrollmentError::WrongPassword)
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn an_invite_names_each_vault_once_and_never_prints_its_keys() -> anyhow::Result<()> {
+        let mut input = EnrollmentIssueInput::github_fixture()?;
+        let printed = format!("{:?}", input.invite);
+        for vault in &input.invite.vaults {
+            assert!(!printed.contains(vault.secrets_key.as_str()));
+            assert!(!printed.contains(vault.members_key.as_str()));
+        }
+        let duplicate = input.invite.vaults.clone();
+        input.invite.vaults.extend(duplicate);
+        assert!(matches!(
+            EnrollmentIssuance {
+                input: &input,
+                password: "invite-pass-42",
+                entry_label: "",
+            }
+            .check(),
+            Err(EnrollmentError::MissingField {
+                field: "invite_vaults"
+            })
+        ));
         Ok(())
     }
 }

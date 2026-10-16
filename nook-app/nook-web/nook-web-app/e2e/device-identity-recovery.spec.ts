@@ -1,10 +1,6 @@
 import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures'
-import {
-  ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  expectFirstVaultOpen,
-  openVaultPanelAndUnlock,
-} from './helpers'
+import { ENROLLMENT_UNLOCK_TIMEOUT_MS, expectFirstVaultOpen } from './helpers'
 
 declare global {
   interface Window {
@@ -40,20 +36,53 @@ async function createProtectedVault(page: Page): Promise<void> {
   await expectFirstVaultOpen(page)
 }
 
-async function openProtectionOverlay(page: Page): Promise<void> {
-  const overlay = page.getByTestId('passkey-auth-overlay')
-  const unlock = page.getByTestId('identity-vault-row').first()
+/**
+ * Recovery sits under the vault's unlock: at once when this browser's key
+ * cannot be read, otherwise after its passkey unlock fails there.
+ */
+async function openDeviceRecovery(page: Page): Promise<void> {
+  const recovery = page.getByTestId('device-protection-recovery-btn')
+  const row = page.getByTestId('identity-vault-row').first()
+  const unlock = page.getByTestId('vault-panel-unlock')
   await expect
-    .poll(async () => {
-      if (await overlay.isVisible()) return 'overlay'
-      if (await unlock.isVisible()) return 'unlock'
-      return 'waiting'
-    })
+    .poll(
+      async () => {
+        if (await recovery.isVisible()) return 'recovery'
+        if (await row.isVisible()) return 'row'
+        return 'waiting'
+      },
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
     .not.toBe('waiting')
-  if (!(await overlay.isVisible())) await openVaultPanelAndUnlock(page)
-  await expect(overlay).toBeVisible({
+  if (await recovery.isVisible()) return
+  await page.evaluate(() => {
+    localStorage.setItem('nook_e2e_passkey_mode', 'cancel')
+  })
+  // A card's row opens its vault panel; a row no card lists unlocks at once.
+  if (
+    !(await unlock.isVisible()) &&
+    (await row.getAttribute('aria-expanded')) !== 'true'
+  ) {
+    await row.click()
+  }
+  await expect(unlock.or(recovery).first()).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
+  if (!(await recovery.isVisible())) await unlock.click()
+  await expect(recovery).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+}
+
+/** After a reset this browser has no key: opening the vault sets one up. */
+async function openDeviceSetup(page: Page): Promise<void> {
+  const choice = page.getByTestId('device-protection-use-existing-choice')
+  const row = page.getByTestId('identity-vault-row').first()
+  await expect(choice.or(row).first()).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  if (!(await choice.isVisible())) await row.click()
+  await expect(choice).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
 }
 
 async function expectDeviceKeyRecoveryInitiationAvailable(
@@ -144,7 +173,7 @@ test('waits for peer storage work before destructive identity recovery', async (
     localStorage.setItem('nook_e2e_passkey_mode', 'cancel')
   })
   await page.reload()
-  await openProtectionOverlay(page)
+  await openDeviceRecovery(page)
   page.once('dialog', (dialog) => dialog.accept())
   await page.getByTestId('device-protection-recovery-btn').click()
 
@@ -161,6 +190,7 @@ test('waits for peer storage work before destructive identity recovery', async (
     delete window.__releaseRecoveryStorageWork
   })
 
+  await openDeviceSetup(page)
   await expect(
     page.getByTestId('device-protection-use-existing-choice'),
   ).toHaveText('Authenticate')
@@ -221,12 +251,13 @@ test('keeps recovery reachable when the identity directory is corrupt', async ({
 
   await page.reload()
   await expectDeviceKeyRecoveryInitiationAvailable(page)
-  await openProtectionOverlay(page)
+  await openDeviceRecovery(page)
   const recovery = page.getByTestId('device-protection-recovery-btn')
   await expect(recovery).toHaveText('Reset this browser')
   page.once('dialog', (dialog) => dialog.accept())
   await recovery.click()
 
+  await openDeviceSetup(page)
   await expect(
     page.getByTestId('device-protection-use-existing-choice'),
   ).toHaveText('Authenticate')
@@ -262,10 +293,11 @@ test('uses a safe full reset when the identity directory is missing', async ({
 
   await page.reload()
   await expectDeviceKeyRecoveryInitiationAvailable(page)
-  await openProtectionOverlay(page)
+  await openDeviceRecovery(page)
   page.once('dialog', (dialog) => dialog.accept())
   await page.getByTestId('device-protection-recovery-btn').click()
 
+  await openDeviceSetup(page)
   await expect(
     page.getByTestId('device-protection-use-existing-choice'),
   ).toHaveText('Authenticate')
