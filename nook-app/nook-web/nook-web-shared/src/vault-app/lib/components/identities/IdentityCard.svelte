@@ -75,6 +75,7 @@ card, which then spans the full row.
     overviewPanel,
     overviewOpen = false,
     passwordFallback,
+    vaultExtension,
     preview = false,
   }: {
     vault: VaultState
@@ -125,6 +126,8 @@ card, which then spans the full row.
     overviewOpen?: boolean
     /** Passphrase unlock for the selected vault, while locked. */
     passwordFallback?: Snippet
+    /** The browser extension for the open vault, in its panel. */
+    vaultExtension?: Snippet
     /** A preview of a card that does not exist yet: no actions. */
     preview?: boolean
   } = $props()
@@ -613,6 +616,7 @@ card, which then spans the full row.
         {...passwordFallback && vaultOpenRow.storeId === selectedStoreId
           ? { passphrase: passwordFallback }
           : {}}
+        {...vaultExtension ? { extension: vaultExtension } : {}}
         onOpen={() => onOpenVault(vaultOpenRow.storeId)}
         onUnlock={() => onUnlockVault?.(vaultOpenRow.storeId)}
         onUseIdentity={() => onUseIdentity(card.identityId)}

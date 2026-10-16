@@ -1974,7 +1974,6 @@
     "section_import_description": "Перенесите пароли, заметки и коды аутентификатора в этот сейф. Файлы читаются в этом браузере.",
     "vault_eyebrow": "Сейф",
     "manage_vault": "Управление сейфом",
-    "import_action": "Импорт",
     "identity_fallback": "Этот идентификатор",
     "vault_fallback": "Сейф",
     "open_vault_sheet": "Открыть сейф",

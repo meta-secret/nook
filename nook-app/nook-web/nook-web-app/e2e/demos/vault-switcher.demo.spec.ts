@@ -6,7 +6,7 @@ import {
   readLocalVaultYamlFromIdb,
   parseJson,
   openIdentitiesPage,
-  openVaultPage,
+  openOpenVaultPanel,
 } from '../helpers'
 import {
   ExtensionPairedVaultIdentityDiscoveryMessageType,
@@ -235,7 +235,8 @@ test('list every vault on its identity card and pair the open vault with the com
   await expect(
     page.getByTestId('identity-vault-extension-badge'),
   ).toContainText('Browser extension')
-  await openVaultPage(page)
+  // The open vault's panel connects it to the extension.
+  await openOpenVaultPanel(page)
   await expect(page.getByTestId('vault-pair-extension-btn')).toBeVisible()
   await page.getByTestId('vault-pair-extension-btn').click()
   await expect(page.locator('html')).toHaveAttribute(

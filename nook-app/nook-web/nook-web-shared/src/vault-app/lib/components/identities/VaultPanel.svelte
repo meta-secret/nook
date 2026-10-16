@@ -2,7 +2,8 @@
 One vault, opened beside its identity's card from the vault's row. Locked,
 it unlocks with this device's passkey or PIN, or with the vault's own
 passphrase. Open, it offers to go in. Below, what belongs to this vault
-alone (its name, passphrases, imports), usable once it is open.
+alone (its name, passphrases, imports, the browser extension), usable
+once it is open.
 -->
 <script lang="ts">
   import type { Snippet } from 'svelte'
@@ -39,6 +40,7 @@ alone (its name, passphrases, imports), usable once it is open.
     busy = false,
     passphrase,
     passphraseOffered = false,
+    extension,
     onOpen,
     onUnlock,
     onUseIdentity,
@@ -56,6 +58,8 @@ alone (its name, passphrases, imports), usable once it is open.
     passphrase?: Snippet
     /** Unlocking with a passphrase applies here (a locked browser). */
     passphraseOffered?: boolean
+    /** The browser extension for this vault, offered while it is open. */
+    extension?: Snippet
     /** Go into the open vault. */
     onOpen: () => void
     /** Unlock with this device's key and stay here: the panel then offers
@@ -441,6 +445,9 @@ alone (its name, passphrases, imports), usable once it is open.
             {/if}
           </button>
         {/each}
+        {#if open && extension}
+          {@render extension()}
+        {/if}
       </div>
     </section>
   {/if}

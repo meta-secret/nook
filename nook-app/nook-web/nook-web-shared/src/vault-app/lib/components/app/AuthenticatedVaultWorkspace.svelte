@@ -15,7 +15,7 @@ band, the scrolling page and the status line.
 
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { onDestroy, tick, untrack, type ComponentProps } from 'svelte'
-  import { Download, X } from '@lucide/svelte'
+  import { X } from '@lucide/svelte'
   import { type ExtensionSetupOffer } from '$lib/app/extension-setup'
   import {
     configured_vault_application_supports_extension,
@@ -52,7 +52,6 @@ band, the scrolling page and the status line.
     ManageNavEntryKind,
     ManageNavLookup,
   } from '$lib/components/workspace/manage-nav'
-  import { Button } from '$lib/components/ui/button'
   import { StatusTag, StatusTone } from '$lib/components/ui/status-tag'
   import {
     ConnectedVaultMenuNoteKind,
@@ -541,6 +540,14 @@ band, the scrolling page and the status line.
   {/if}
 {/snippet}
 
+{#snippet vaultExtension()}
+  <VaultExtensionControl
+    {vault}
+    offer={extensionSetupState}
+    onConnect={onExtensionConnect}
+  />
+{/snippet}
+
 {#if vault.firstRun !== FirstRunStage.Off}
   <FirstRunBackupStep
     {vault}
@@ -560,6 +567,7 @@ band, the scrolling page and the status line.
       busy={vault.isVerifying || vault.isInitializing}
       onOpenVault={(storeId: string) => void openVaultFromCard(storeId)}
       onUnlockVault={(storeId: string) => void vault.switchToVault(storeId)}
+      {...SUPPORTS_EXTENSION ? { vaultExtension } : {}}
       onNewVault={() => (newVaultOpen = true)}
       onClosePanels={() => (newVaultOpen = false)}
       {...newVaultOpen ? { vaultSetup: newVaultPanel } : {}}
@@ -669,29 +677,6 @@ band, the scrolling page and the status line.
             title={vault.t(I18N_KEYS.WorkspaceStatusUnlockedTitle)}
             testId="session-status-tag"
           />
-        {/snippet}
-        {#snippet actions()}
-          {#if section === WorkspaceSection.Vault}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              data-testid="vault-import-btn"
-              onclick={() => openSection(WorkspaceSection.Import)}
-            >
-              <Download class="size-4" />
-              <span class="hidden sm:inline"
-                >{vault.t(I18N_KEYS.WorkspaceImportAction)}</span
-              >
-            </Button>
-            {#if SUPPORTS_EXTENSION && !secretsNoteEditorOpen}
-              <VaultExtensionControl
-                {vault}
-                offer={extensionSetupState}
-                onConnect={onExtensionConnect}
-              />
-            {/if}
-          {/if}
         {/snippet}
       </PageBar>
     </div>

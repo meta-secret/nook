@@ -1974,7 +1974,6 @@
     "section_import_description": "Bring passwords, notes, and authenticator codes into this vault. Files are read in this browser.",
     "vault_eyebrow": "Vault",
     "manage_vault": "Manage vault",
-    "import_action": "Import",
     "identity_fallback": "This identity",
     "vault_fallback": "Vault",
     "open_vault_sheet": "Open a vault",

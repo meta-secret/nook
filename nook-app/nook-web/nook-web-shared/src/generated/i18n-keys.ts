@@ -1963,7 +1963,6 @@ export const I18N_KEYS = {
   WorkspaceIdentitiesTitle: 'workspace.identities_title',
   WorkspaceIdentityFallback: 'workspace.identity_fallback',
   WorkspaceIdentityVaultSetup: 'workspace.identity_vault_setup',
-  WorkspaceImportAction: 'workspace.import_action',
   WorkspaceKeyKindMixed: 'workspace.key_kind_mixed',
   WorkspaceKeyKindNone: 'workspace.key_kind_none',
   WorkspaceKeyKindPasskey: 'workspace.key_kind_passkey',
