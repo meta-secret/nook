@@ -1,11 +1,9 @@
 import { expect, test, type Route } from '../fixtures'
-import { Effect } from 'effect'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { demoBeat } from './pilot-demo-helpers'
 import { DeviceProtectionStatus } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import {
-  AuthenticatorPickerQueryMessage,
   AuthenticatorPickerQueryMessageType,
   AuthenticatorPickerSelectMessageType,
 } from '../../../nook-web-extension/src/lib/authenticator-picker-messages'
@@ -22,7 +20,18 @@ type PopupDemoSession = {
   followingStatus: DeviceProtectionStatus
   hasVaultConnection?: boolean
 }
-function installPopupDemoRuntime(session: PopupDemoSession): void {
+// The runtime below runs inside the page, where module imports do not
+// exist: every message type it answers travels in with its argument.
+const popupDemoMessageTypes = {
+  authenticatorSelect:
+    AuthenticatorPickerSelectMessageType.NookAuthenticatorPickerSelect,
+  pairedVaultsQuery: PairedVaultsMessageType.Query,
+  pairedVaultsSelectDefault: PairedVaultsMessageType.SelectDefault,
+}
+type PopupDemoRuntimeArgument = PopupDemoSession & {
+  messageTypes: typeof popupDemoMessageTypes
+}
+function installPopupDemoRuntime(session: PopupDemoRuntimeArgument): void {
   let statusReads = 0
   const device = {
     deviceId: 'popup-demo-device',
@@ -53,15 +62,15 @@ function installPopupDemoRuntime(session: PopupDemoSession): void {
           return
         case session.authenticatorQueryMessageType:
           {
-            const decodedQuery = Effect.runSync(
-              Effect.result(AuthenticatorPickerQueryMessage.decode(message)),
-            )
+            const payload: unknown = Reflect.get(message, 'payload')
+            const query: unknown =
+              payload instanceof Object ? Reflect.get(payload, 'query') : ''
             callback({
               ok: true,
               origin: 'https://accounts.example.test',
               accounts:
-                decodedQuery._tag === 'Success'
-                  ? decodedQuery.success.payload.query.trim().length === 0
+                typeof query === 'string'
+                  ? query.trim().length === 0
                     ? [
                         {
                           vaultStoreId: 'popup-demo-store',
@@ -76,7 +85,7 @@ function installPopupDemoRuntime(session: PopupDemoSession): void {
             })
           }
           return
-        case AuthenticatorPickerSelectMessageType.NookAuthenticatorPickerSelect:
+        case session.messageTypes.authenticatorSelect:
           callback({ ok: true })
           return
         case 'nook:extension-pairing-state-query':
@@ -99,7 +108,7 @@ function installPopupDemoRuntime(session: PopupDemoSession): void {
         case 'nook:extension-session-unlock-pin':
           callback({ ok: true, device })
           return
-        case PairedVaultsMessageType.Query:
+        case session.messageTypes.pairedVaultsQuery:
           callback(
             session.hasVaultConnection === false
               ? { ok: true, vaults: [] }
@@ -126,7 +135,7 @@ function installPopupDemoRuntime(session: PopupDemoSession): void {
                 },
           )
           return
-        case PairedVaultsMessageType.SelectDefault:
+        case session.messageTypes.pairedVaultsSelectDefault:
           callback({ ok: true })
           return
         case 'nook:extension-session-vault-summary':
@@ -162,10 +171,14 @@ test('keeps mixed session status safe and actionable', async ({ page }) => {
     firstStatus: DeviceProtectionStatus.Unlocked,
     followingStatus: DeviceProtectionStatus.Passkey,
   }
-  await page.addInitScript(installPopupDemoRuntime, session)
+  await page.addInitScript(installPopupDemoRuntime, {
+    ...session,
+    messageTypes: popupDemoMessageTypes,
+  })
   await page.goto(`${extensionRoutePrefix}popup/index.html?state=mixed`)
   await expect(page.getByTestId('open-simple-vault-btn')).toBeVisible()
-  await expect(page.getByTestId('connect-simple-vault-btn')).toBeHidden()
+  // A session that cannot pair yet keeps Connect visible but unusable.
+  await expect(page.getByTestId('connect-simple-vault-btn')).toBeDisabled()
   await demoBeat(page)
 })
 
@@ -179,7 +192,10 @@ test('restores the paired companion home after a restart unlock and popup reopen
     firstStatus: DeviceProtectionStatus.Pin,
     followingStatus: DeviceProtectionStatus.Pin,
   }
-  await page.addInitScript(installPopupDemoRuntime, session)
+  await page.addInitScript(installPopupDemoRuntime, {
+    ...session,
+    messageTypes: popupDemoMessageTypes,
+  })
   await page.goto(`${extensionRoutePrefix}popup/index.html`)
   await expect(page.getByTestId('extension-device-setup')).toBeVisible()
   await page.getByTestId('device-protection-pin-unlock-input').fill('123456')
@@ -196,7 +212,9 @@ test('restores the paired companion home after a restart unlock and popup reopen
   ).toContainText('Personal vault')
   await expect(page.getByTestId('companion-make-default')).toHaveCount(1)
   await expect(page.getByTestId('open-simple-vault-btn')).toBeVisible()
-  await expect(page.getByTestId('connect-simple-vault-btn')).toBeHidden()
+  await expect(page.getByTestId('connect-simple-vault-btn')).toHaveText(
+    'Connect another vault',
+  )
   await page.reload()
   await expect(page.getByTestId('extension-runtime-error')).toHaveCount(0)
   await expect(page.getByTestId('extension-device-setup')).toBeVisible()
@@ -216,7 +234,10 @@ test('explains the next step when no vault is paired', async ({ page }) => {
     followingStatus: DeviceProtectionStatus.Unlocked,
     hasVaultConnection: false,
   }
-  await page.addInitScript(installPopupDemoRuntime, session)
+  await page.addInitScript(installPopupDemoRuntime, {
+    ...session,
+    messageTypes: popupDemoMessageTypes,
+  })
   await page.goto(`${extensionRoutePrefix}popup/index.html`)
 
   await expect(page.getByTestId('companion-no-vaults')).toBeVisible()
@@ -237,7 +258,10 @@ test('shows compact inline error when cleanup has invalidated the picker', async
     firstStatus: DeviceProtectionStatus.Unlocked,
     followingStatus: DeviceProtectionStatus.Passkey,
   }
-  await page.addInitScript(installPopupDemoRuntime, session)
+  await page.addInitScript(installPopupDemoRuntime, {
+    ...session,
+    messageTypes: popupDemoMessageTypes,
+  })
   await page.setViewportSize({ width: 360, height: 740 })
   await page.goto('/')
   await page.setContent(`<iframe
@@ -289,7 +313,10 @@ test('searches the authenticator picker without losing account context', async (
     firstStatus: DeviceProtectionStatus.Unlocked,
     followingStatus: DeviceProtectionStatus.Passkey,
   }
-  await page.addInitScript(installPopupDemoRuntime, session)
+  await page.addInitScript(installPopupDemoRuntime, {
+    ...session,
+    messageTypes: popupDemoMessageTypes,
+  })
   await page.goto(
     `${extensionRoutePrefix}popup/index.html?intent=authenticator-picker&request=popup-demo-authenticator`,
   )
