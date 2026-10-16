@@ -69,8 +69,8 @@ fn preflight_pins_downloaded_toolchain_artifacts() {
         RepositoryFixture::repository_root()
             .read(".meta-cortex-version")
             .trim(),
-        "0.16.0",
-        "Meta-Cortex project wrapper must pin the official 0.16.0 release"
+        "0.18.0",
+        "Meta-Cortex project wrapper must pin the official 0.18.0 release"
     );
 }
 
@@ -79,7 +79,7 @@ fn repository_policy_pins_meta_cortex_library_to_the_selected_commit() {
     let root = RepositoryFixture::repository_root();
     let workflow = root.read(".github/workflows/repository-policy.yml");
     let taskfile = root.read(".task/ci-workflows.yml");
-    let expected_commit = "f385941d7482a4d82d5b327236540f724f37fd6c";
+    let expected_commit = "e759fe5caccca63dd3c753205a753acb5d03e1f3";
     let workflow_checkout = format!(
         "          repository: ai-ai-ai-ai-ai-ai-ai/meta-cortex\n          ref: {expected_commit}\n          path: .meta-cortex-source"
     );
