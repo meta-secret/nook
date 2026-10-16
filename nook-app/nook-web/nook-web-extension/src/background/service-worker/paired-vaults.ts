@@ -50,7 +50,7 @@ export function isPopupSender({
 }
 
 function fromExtensionPage(sender: chrome.runtime.MessageSender): boolean {
-  return ['popup/index.html', 'action/index.html'].some((page) => {
+  return ['popup/index.html', 'popup/panel.html'].some((page) => {
     const check: PopupSenderCheck = {
       sender,
       runtimeId: chrome.runtime.id,

@@ -9,9 +9,9 @@ import {
 } from '../lib/nook-wasm'
 import { retryClosedExtensionSessionOnce } from '../lib/extension-runtime-retry'
 import ActionPanel from './ActionPanel.svelte'
-import PopupInitializationFailure from '../popup/PopupInitializationFailure.svelte'
-import { PopupInitializationPhase } from '../popup/popup-app-state'
-import '../popup/popup.css'
+import PopupInitializationFailure from './PopupInitializationFailure.svelte'
+import { PopupInitializationPhase } from './popup-app-state'
+import './popup.css'
 import './action.css'
 
 /** The toolbar panel: reads the extension's state, then shows its actions. */

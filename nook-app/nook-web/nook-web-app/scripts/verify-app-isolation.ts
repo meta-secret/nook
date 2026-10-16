@@ -472,7 +472,7 @@ const previewManifestArgs: CreateExtensionManifestArgs = {
 const previewManifest = createManifest(previewManifestArgs)
 if (
   // The toolbar icon opens the extension's own compact panel.
-  previewManifest.action.default_popup !== 'action/index.html' ||
+  previewManifest.action.default_popup !== 'popup/panel.html' ||
   previewManifest.background.service_worker !==
     'background/service-worker.js' ||
   previewManifest.externally_connectable.matches[0] !==

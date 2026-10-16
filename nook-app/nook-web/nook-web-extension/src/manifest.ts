@@ -137,7 +137,7 @@ export function createManifest(
     action: {
       default_title: 'Nook',
       default_icon: iconSet,
-      default_popup: 'action/index.html',
+      default_popup: 'popup/panel.html',
     },
     background: {
       service_worker: 'background/service-worker.js',

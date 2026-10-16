@@ -54,7 +54,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     path.join(extensionDir, 'manifest.json'),
     'utf8',
   )
-  expect(manifestText).toMatch(/"default_popup"\s*:\s*"action\/index\.html"/u)
+  expect(manifestText).toMatch(/"default_popup"\s*:\s*"popup\/panel\.html"/u)
 
   const loginServer = await startLoginServer()
   const userDataDir = testInfo.outputPath('chromium-profile')
@@ -315,7 +315,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
 
     const toolbarPanel = await context.newPage()
     await toolbarPanel.goto(
-      `chrome-extension://${extensionId}/action/index.html`,
+      `chrome-extension://${extensionId}/popup/panel.html`,
     )
     const openedVault = context.waitForEvent('page')
     await toolbarPanel.getByTestId('action-panel-open-vault').click()

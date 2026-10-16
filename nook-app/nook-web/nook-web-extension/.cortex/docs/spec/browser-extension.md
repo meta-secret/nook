@@ -157,7 +157,7 @@ private identity.
 ## Toolbar Behavior
 
 - The toolbar icon opens a compact panel beside itself
-  (`action/index.html`). It leads with Open vault, lists the connected
+  (`popup/panel.html`). It leads with Open vault, lists the connected
   identities and their vaults, unlocks a PIN-protected key in place, and locks.
   Passkey unlock, first setup, connecting an identity and All connections open
   the authentication tab, since a passkey prompt would close the panel.

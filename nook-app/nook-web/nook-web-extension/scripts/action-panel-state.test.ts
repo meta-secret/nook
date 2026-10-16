@@ -3,7 +3,7 @@ import { DeviceProtectionStatus } from '../src/lib/nook-wasm'
 import {
   ActionPanelState,
   actionPanelState,
-} from '../src/action/action-panel-state'
+} from '../src/popup/action-panel-state'
 
 describe('the toolbar panel', () => {
   test('unlocks a PIN inside the panel and a passkey in the Nook tab', () => {

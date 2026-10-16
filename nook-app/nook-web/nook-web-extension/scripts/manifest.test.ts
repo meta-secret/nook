@@ -44,7 +44,7 @@ const environments = [
 
 describe('extension origin isolation', () => {
   test('opens the compact toolbar panel beside the icon', () => {
-    expect(defaultManifest().action.default_popup).toBe('action/index.html')
+    expect(defaultManifest().action.default_popup).toBe('popup/panel.html')
   })
 
   for (const environment of environments) {
