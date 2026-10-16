@@ -779,6 +779,36 @@ pub const EXTENSION_CONSENT_SCOPE_VAULT_ACCESS: &str = "extension.consent.scope_
 pub const EXTENSION_CONSENT_SIGNING_KEY: &str = "extension.consent.signing_key";
 pub const EXTENSION_CONSENT_TITLE: &str = "extension.consent.title";
 pub const EXTENSION_CONSENT_UNLOCK_FIRST: &str = "extension.consent.unlock_first";
+pub const EXTENSION_DEVICE_SETUP_CHAIN_PASSKEY: &str = "extension.device_setup.chain_passkey";
+pub const EXTENSION_DEVICE_SETUP_CHAIN_PIN: &str = "extension.device_setup.chain_pin";
+pub const EXTENSION_DEVICE_SETUP_CREATE_ACTION: &str = "extension.device_setup.create_action";
+pub const EXTENSION_DEVICE_SETUP_CREATE_DESCRIPTION: &str =
+    "extension.device_setup.create_description";
+pub const EXTENSION_DEVICE_SETUP_CREATE_ONE: &str = "extension.device_setup.create_one";
+pub const EXTENSION_DEVICE_SETUP_CREATE_TITLE: &str = "extension.device_setup.create_title";
+pub const EXTENSION_DEVICE_SETUP_HAVE_PASSKEY: &str = "extension.device_setup.have_passkey";
+pub const EXTENSION_DEVICE_SETUP_NO_PASSKEY: &str = "extension.device_setup.no_passkey";
+pub const EXTENSION_DEVICE_SETUP_NODE_EXTENSION: &str = "extension.device_setup.node_extension";
+pub const EXTENSION_DEVICE_SETUP_NODE_NEXT: &str = "extension.device_setup.node_next";
+pub const EXTENSION_DEVICE_SETUP_NODE_PASSKEY: &str = "extension.device_setup.node_passkey";
+pub const EXTENSION_DEVICE_SETUP_NODE_PIN: &str = "extension.device_setup.node_pin";
+pub const EXTENSION_DEVICE_SETUP_NODE_VAULTS: &str = "extension.device_setup.node_vaults";
+pub const EXTENSION_DEVICE_SETUP_OPTIONS: &str = "extension.device_setup.options";
+pub const EXTENSION_DEVICE_SETUP_PIN_SETUP_DESCRIPTION: &str =
+    "extension.device_setup.pin_setup_description";
+pub const EXTENSION_DEVICE_SETUP_PIN_SETUP_TITLE: &str = "extension.device_setup.pin_setup_title";
+pub const EXTENSION_DEVICE_SETUP_PIN_UNLOCK_DESCRIPTION: &str =
+    "extension.device_setup.pin_unlock_description";
+pub const EXTENSION_DEVICE_SETUP_SETUP_DESCRIPTION: &str =
+    "extension.device_setup.setup_description";
+pub const EXTENSION_DEVICE_SETUP_SETUP_TITLE: &str = "extension.device_setup.setup_title";
+pub const EXTENSION_DEVICE_SETUP_STEP_LABEL: &str = "extension.device_setup.step_label";
+pub const EXTENSION_DEVICE_SETUP_UNLOCK_ACTION: &str = "extension.device_setup.unlock_action";
+pub const EXTENSION_DEVICE_SETUP_UNLOCK_DESCRIPTION: &str =
+    "extension.device_setup.unlock_description";
+pub const EXTENSION_DEVICE_SETUP_UNLOCK_TITLE: &str = "extension.device_setup.unlock_title";
+pub const EXTENSION_DEVICE_SETUP_USE_EXISTING: &str = "extension.device_setup.use_existing";
+pub const EXTENSION_DEVICE_SETUP_USE_PASSKEY: &str = "extension.device_setup.use_passkey";
 pub const EXTENSION_LOGIN_PICKER_DESCRIPTION: &str = "extension.login_picker.description";
 pub const EXTENSION_LOGIN_PICKER_DESTINATION: &str = "extension.login_picker.destination";
 pub const EXTENSION_LOGIN_PICKER_FAILED: &str = "extension.login_picker.failed";

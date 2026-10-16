@@ -15,11 +15,13 @@
   } from '../../../nook-web-shared/src/generated/i18n-keys'
   import {
     ArrowUpRight,
+    Asterisk,
     Check,
+    Fingerprint,
     FolderKey,
     KeyRound,
     Plus,
-    ShieldCheck,
+    Puzzle,
   } from '@lucide/svelte'
   import NookIcon from '../../../nook-web-shared/src/components/NookIcon.svelte'
   import {
@@ -95,6 +97,33 @@
       status === DeviceProtectionStatus.Plaintext,
   )
   const showToolbarMenu = $derived(status === DeviceProtectionStatus.Unlocked)
+  /** The extension's key is a PIN rather than a passkey. */
+  const usesPin = $derived(
+    status === DeviceProtectionStatus.Pin ||
+      status === DeviceProtectionStatus.PinSetup,
+  )
+  /** First use: the key is being set up; vaults connect in step 2. */
+  const inSetup = $derived(
+    needsSetup || status === DeviceProtectionStatus.PinSetup,
+  )
+  const setupTitleKey = $derived.by((): I18nKey => {
+    if (status === DeviceProtectionStatus.PinSetup)
+      return I18N_KEYS.ExtensionDeviceSetupPinSetupTitle
+    if (!needsSetup) return I18N_KEYS.ExtensionDeviceSetupUnlockTitle
+    return setupWorkflow === DeviceProtectionSetupWorkflow.Authenticate
+      ? I18N_KEYS.ExtensionDeviceSetupSetupTitle
+      : I18N_KEYS.ExtensionDeviceSetupCreateTitle
+  })
+  const setupDescriptionKey = $derived.by((): I18nKey => {
+    if (status === DeviceProtectionStatus.PinSetup)
+      return I18N_KEYS.ExtensionDeviceSetupPinSetupDescription
+    if (status === DeviceProtectionStatus.Pin)
+      return I18N_KEYS.ExtensionDeviceSetupPinUnlockDescription
+    if (!needsSetup) return I18N_KEYS.ExtensionDeviceSetupUnlockDescription
+    return setupWorkflow === DeviceProtectionSetupWorkflow.Authenticate
+      ? I18N_KEYS.ExtensionDeviceSetupSetupDescription
+      : I18N_KEYS.ExtensionDeviceSetupCreateDescription
+  })
 
   const groups = $derived(
     vaults.kind === PairedVaultsLoadKind.Ready
@@ -479,29 +508,62 @@
   </main>
 {:else}
   <main class="device-setup" data-testid="extension-device-setup">
-    <p class="step-label">
-      {translatePlain(I18N_KEYS.DeviceProtectionStepLabel)}
-    </p>
-    <div class="shield-icon" aria-hidden="true">
-      {#if needsSetup || status === DeviceProtectionStatus.PinSetup}
-        <ShieldCheck size={26} />
-      {:else}
-        <KeyRound size={25} />
-      {/if}
-    </div>
-    <h1>{translatePlain(I18N_KEYS.DeviceProtectionTitle)}</h1>
-    <p class="description">
-      {translatePlain(
-        status === DeviceProtectionStatus.Passkey ||
-          status === DeviceProtectionStatus.Unlocked
-          ? I18N_KEYS.DeviceProtectionUnlockDescription
-          : status === DeviceProtectionStatus.Pin
-            ? I18N_KEYS.DeviceProtectionPinUnlockDescription
-            : status === DeviceProtectionStatus.PinSetup
-              ? I18N_KEYS.DeviceProtectionPinSetupDescription
-              : I18N_KEYS.DeviceProtectionSetupDescription,
+    {#if inSetup}
+      <p class="step-label">
+        {translatePlain(I18N_KEYS.ExtensionDeviceSetupStepLabel)}
+      </p>
+    {/if}
+    <!-- What connects to what: the key (passkey or PIN) opens this
+         extension now; the vaults connect to it in step 2. -->
+    <div
+      class="connect-chain"
+      role="img"
+      aria-label={translatePlain(
+        usesPin
+          ? I18N_KEYS.ExtensionDeviceSetupChainPin
+          : I18N_KEYS.ExtensionDeviceSetupChainPasskey,
       )}
-    </p>
+      data-testid="device-setup-chain"
+      data-key={usesPin ? 'pin' : 'passkey'}
+    >
+      <div class="chain-node is-on" aria-hidden="true">
+        <span class="chain-icon">
+          {#if usesPin}
+            <Asterisk size={18} />
+          {:else}
+            <Fingerprint size={18} />
+          {/if}
+        </span>
+        <span class="chain-label">
+          {translatePlain(
+            usesPin
+              ? I18N_KEYS.ExtensionDeviceSetupNodePin
+              : I18N_KEYS.ExtensionDeviceSetupNodePasskey,
+          )}
+        </span>
+      </div>
+      <span class="chain-link is-on" aria-hidden="true"></span>
+      <div class="chain-node is-on" aria-hidden="true">
+        <span class="chain-icon"><Puzzle size={18} /></span>
+        <span class="chain-label">
+          {translatePlain(I18N_KEYS.ExtensionDeviceSetupNodeExtension)}
+        </span>
+      </div>
+      <span class="chain-link" aria-hidden="true"></span>
+      <div class="chain-node" aria-hidden="true">
+        <span class="chain-icon"><FolderKey size={18} /></span>
+        <span class="chain-label">
+          {translatePlain(I18N_KEYS.ExtensionDeviceSetupNodeVaults)}
+        </span>
+        {#if inSetup}
+          <span class="chain-tag">
+            {translatePlain(I18N_KEYS.ExtensionDeviceSetupNodeNext)}
+          </span>
+        {/if}
+      </div>
+    </div>
+    <h1>{translatePlain(setupTitleKey)}</h1>
+    <p class="description">{translatePlain(setupDescriptionKey)}</p>
 
     {#if status === DeviceProtectionStatus.PinSetup}
       <div class="field-group">
@@ -546,115 +608,100 @@
           : translatePlain(I18N_KEYS.DeviceProtectionPinSetupAction)}
       </button>
     {:else if needsSetup && setupWorkflow === DeviceProtectionSetupWorkflow.Authenticate}
-      <p class="field-hint">
-        {translatePlain(I18N_KEYS.DeviceProtectionExistingPasskeyHint)}
-      </p>
       <button
         type="button"
         disabled={busy}
         data-testid="device-protection-use-existing-choice"
         onclick={useExistingPasskey}
       >
+        <Fingerprint size={16} aria-hidden="true" />
         {busy
           ? translatePlain(I18N_KEYS.DeviceProtectionAuthorizing)
-          : translatePlain(I18N_KEYS.DeviceProtectionExistingPasskeyAction)}
+          : translatePlain(I18N_KEYS.ExtensionDeviceSetupUsePasskey)}
       </button>
-
-      <div class="divider">
-        <span></span>
-        <small
-          >{translatePlain(
-            I18N_KEYS.DeviceProtectionNewPasskeyAlternative,
-          )}</small
+      <p class="alternative-line">
+        {translatePlain(I18N_KEYS.ExtensionDeviceSetupNoPasskey)}
+        <button
+          type="button"
+          class="link-button"
+          disabled={busy}
+          data-testid="device-protection-create-new-choice"
+          onclick={() => {
+            setupWorkflow = DeviceProtectionSetupWorkflow.Create
+            error = ''
+          }}
         >
-        <span></span>
-      </div>
-      <button
-        type="button"
-        class="alternative-button"
-        disabled={busy}
-        data-testid="device-protection-create-new-choice"
-        onclick={() => {
-          setupWorkflow = DeviceProtectionSetupWorkflow.Create
-          error = ''
-        }}
-      >
-        <KeyRound size={17} />
-        {translatePlain(I18N_KEYS.DeviceProtectionNewPasskeyAlternativeAction)}
-      </button>
+          {translatePlain(I18N_KEYS.ExtensionDeviceSetupCreateOne)}
+        </button>
+      </p>
     {:else if needsSetup}
-      <div class="field-group">
-        <label for="device-protection-mode">
-          {translatePlain(I18N_KEYS.DeviceProtectionModeGroupLabel)}
-        </label>
-        <select
-          id="device-protection-mode"
-          bind:value={deviceMode}
-          disabled={busy}
-          data-testid="device-mode-select"
-        >
-          <option value={DeviceMode.Standard}>
-            {translatePlain(I18N_KEYS.DeviceProtectionModeStandardTitle)}
-          </option>
-          <option value={DeviceMode.AntiHacker}>
-            {translatePlain(I18N_KEYS.DeviceProtectionModeAntiHackerTitle)}
-          </option>
-        </select>
-        <p class="field-hint">
-          {translatePlain(
-            deviceMode === DeviceMode.Standard
-              ? I18N_KEYS.DeviceProtectionModeStandardDescription
-              : I18N_KEYS.DeviceProtectionModeAntiHackerDescription,
-          )}
-        </p>
-      </div>
-
-      <div class="field-group">
-        <label for="device-protection-label">
-          {translatePlain(I18N_KEYS.DeviceProtectionPasskeyLabel)}
-        </label>
-        <input
-          id="device-protection-label"
-          type="text"
-          autocomplete="off"
-          placeholder={translatePlain(
-            I18N_KEYS.DeviceProtectionPasskeyLabelPlaceholder,
-          )}
-          bind:value={passkeyLabel}
-          disabled={busy}
-          data-testid="device-protection-label-input"
-        />
-      </div>
       <button
         type="button"
         disabled={busy}
         data-testid="device-protection-setup-btn"
         onclick={createPasskey}
       >
+        <KeyRound size={16} aria-hidden="true" />
         {busy
           ? translatePlain(I18N_KEYS.DeviceProtectionAuthorizing)
-          : translatePlain(I18N_KEYS.DeviceProtectionSetupAction)}
+          : translatePlain(I18N_KEYS.ExtensionDeviceSetupCreateAction)}
       </button>
-
-      <div class="divider">
-        <span></span>
-        <small
-          >{translatePlain(
-            I18N_KEYS.DeviceProtectionExistingPasskeyAlternative,
-          )}</small
+      <details class="setup-options">
+        <summary>{translatePlain(I18N_KEYS.ExtensionDeviceSetupOptions)}</summary>
+        <div class="field-group">
+          <label for="device-protection-mode">
+            {translatePlain(I18N_KEYS.DeviceProtectionModeGroupLabel)}
+          </label>
+          <select
+            id="device-protection-mode"
+            bind:value={deviceMode}
+            disabled={busy}
+            data-testid="device-mode-select"
+          >
+            <option value={DeviceMode.Standard}>
+              {translatePlain(I18N_KEYS.DeviceProtectionModeStandardTitle)}
+            </option>
+            <option value={DeviceMode.AntiHacker}>
+              {translatePlain(I18N_KEYS.DeviceProtectionModeAntiHackerTitle)}
+            </option>
+          </select>
+          <p class="field-hint">
+            {translatePlain(
+              deviceMode === DeviceMode.Standard
+                ? I18N_KEYS.DeviceProtectionModeStandardDescription
+                : I18N_KEYS.DeviceProtectionModeAntiHackerDescription,
+            )}
+          </p>
+        </div>
+        <div class="field-group">
+          <label for="device-protection-label">
+            {translatePlain(I18N_KEYS.DeviceProtectionPasskeyLabel)}
+          </label>
+          <input
+            id="device-protection-label"
+            type="text"
+            autocomplete="off"
+            placeholder={translatePlain(
+              I18N_KEYS.DeviceProtectionPasskeyLabelPlaceholder,
+            )}
+            bind:value={passkeyLabel}
+            disabled={busy}
+            data-testid="device-protection-label-input"
+          />
+        </div>
+      </details>
+      <p class="alternative-line">
+        {translatePlain(I18N_KEYS.ExtensionDeviceSetupHavePasskey)}
+        <button
+          type="button"
+          class="link-button"
+          disabled={busy}
+          data-testid="device-protection-use-existing-choice"
+          onclick={useExistingPasskey}
         >
-        <span></span>
-      </div>
-      <button
-        type="button"
-        class="alternative-button"
-        disabled={busy}
-        data-testid="device-protection-use-existing-choice"
-        onclick={useExistingPasskey}
-      >
-        <KeyRound size={17} />
-        {translatePlain(I18N_KEYS.DeviceProtectionExistingPasskeyAction)}
-      </button>
+          {translatePlain(I18N_KEYS.ExtensionDeviceSetupUseExisting)}
+        </button>
+      </p>
     {:else if status === DeviceProtectionStatus.Pin}
       <div class="field-group">
         <label for="device-protection-pin">
@@ -687,9 +734,10 @@
         data-testid="device-protection-unlock-btn"
         onclick={unlockPasskey}
       >
+        <Fingerprint size={16} aria-hidden="true" />
         {busy
           ? translatePlain(I18N_KEYS.DeviceProtectionAuthorizing)
-          : translatePlain(I18N_KEYS.DeviceProtectionUnlockAction)}
+          : translatePlain(I18N_KEYS.ExtensionDeviceSetupUnlockAction)}
       </button>
     {/if}
 
