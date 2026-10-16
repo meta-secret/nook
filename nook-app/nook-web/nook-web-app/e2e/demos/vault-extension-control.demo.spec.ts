@@ -1,4 +1,4 @@
-import { expect, test } from '../fixtures'
+import { expect, test, type Browser } from '../fixtures'
 import { Effect } from 'effect'
 import {
   connectLocalVault,
@@ -62,6 +62,32 @@ const DEMO_BEAT_MS = 700
 
 async function demoBeat(page: Parameters<typeof connectLocalVault>[0]) {
   await page.waitForTimeout(DEMO_BEAT_MS)
+}
+
+/** A second local vault whose device keys stand in for an extension's. */
+async function createExtensionDevice(browser: Browser) {
+  const extensionContext = await browser.newContext()
+  await extensionContext.addInitScript(installMockPasskeyRuntime)
+  const extensionPage = await extensionContext.newPage()
+  await connectLocalVault(extensionPage)
+  const extensionDevice = await extensionPage.evaluate(async () => {
+    const vault = window.__nookVault
+    if (!vault)
+      return { ok: false as const, error: 'Vault debug hooks are unavailable' }
+    const admission = vault.admitManager()
+    if (admission.isErr())
+      return { ok: false as const, error: admission.error.translationKey }
+    const manager = admission.value
+    return {
+      ok: true as const,
+      deviceId: manager.device_id,
+      devicePublicKey: manager.device_public_key,
+      deviceSigningPublicKey: await manager.device_signing_public_key_js(),
+    }
+  })
+  await extensionContext.close()
+  if (!extensionDevice.ok) throw new Error(extensionDevice.error)
+  return extensionDevice
 }
 
 test("offer the browser extension from the open vault's panel", async ({
@@ -207,27 +233,7 @@ test('automatically return after accessible extension approval confirmation', as
 }) => {
   await connectLocalVault(page)
 
-  const extensionContext = await browser.newContext()
-  await extensionContext.addInitScript(installMockPasskeyRuntime)
-  const extensionPage = await extensionContext.newPage()
-  await connectLocalVault(extensionPage)
-  const extensionDevice = await extensionPage.evaluate(async () => {
-    const vault = window.__nookVault
-    if (!vault)
-      return { ok: false as const, error: 'Vault debug hooks are unavailable' }
-    const admission = vault.admitManager()
-    if (admission.isErr())
-      return { ok: false as const, error: admission.error.translationKey }
-    const manager = admission.value
-    return {
-      ok: true as const,
-      deviceId: manager.device_id,
-      devicePublicKey: manager.device_public_key,
-      deviceSigningPublicKey: await manager.device_signing_public_key_js(),
-    }
-  })
-  await extensionContext.close()
-  if (!extensionDevice.ok) throw new Error(extensionDevice.error)
+  const extensionDevice = await createExtensionDevice(browser)
 
   await page.goto(
     `/extension-connect?device_id=${extensionDevice.deviceId}&device_public_key=${encodeURIComponent(extensionDevice.devicePublicKey)}&device_signing_public_key=${extensionDevice.deviceSigningPublicKey}&extension_id=demo-extension-id&device_label=Nook%20Extension%20-%20UI%20demo&nonce=demo-nonce&scopes=vault-access,password-filling`,
@@ -288,6 +294,38 @@ test('automatically return after accessible extension approval confirmation', as
   await expect(approvalToast).toHaveAttribute('role', 'status')
   await expect(approvalToast).toHaveText(approvedMessage)
   await expect(html).toHaveAttribute('data-demo-pairing-delivery-count', '1')
+  await demoBeat(page)
+})
+
+test("show an extension's connection request beside the locked identity", async ({
+  browser,
+  page,
+}) => {
+  await connectLocalVault(page)
+
+  const extensionDevice = await createExtensionDevice(browser)
+
+  await page.getByTestId('header-lock-vault-btn').click()
+  await expect(page.getByTestId('identity-vault-row').first()).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+  await page.goto(
+    `/extension-connect?device_id=${extensionDevice.deviceId}&device_public_key=${encodeURIComponent(extensionDevice.devicePublicKey)}&device_signing_public_key=${extensionDevice.deviceSigningPublicKey}&extension_id=demo-extension-id&device_label=Nook%20Extension%20-%20UI%20demo&nonce=demo-nonce&scopes=vault-access,password-filling`,
+  )
+  // The locked browser shows the request beside the identity card. The
+  // Sentinel build swaps this panel for its hidden
+  // ExtensionRequestPanelDisabled no-op, so no extension scope ships there.
+  const request = page.getByTestId('extension-request-panel')
+  await expect(request).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  await expect(page.getByTestId('extension-request-title')).toContainText(
+    'Nook Extension - UI demo',
+  )
+  await demoBeat(page)
+
+  await request.getByTestId('extension-request-vault').first().click()
+  await expect(page.getByTestId('extension-connect-consent')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
   await demoBeat(page)
 })
 
