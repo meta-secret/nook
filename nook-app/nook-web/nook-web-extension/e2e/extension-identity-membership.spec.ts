@@ -21,6 +21,7 @@ import {
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   openIdentitiesPage,
   readLocalVaultYamlFromIdb,
+  waitForLoadedSyncProviders,
 } from '../../nook-web-app/e2e/helpers'
 
 const GITHUB_REPO = 'nook-extension-identity'
@@ -80,6 +81,12 @@ test('connecting the extension to an identity pairs every vault in it', async ({
       })
       .not.toBe(personalStoreId)
     const workStoreId = storeIdOf(await readLocalVaultYamlFromIdb(vaultPage))
+    // The provider mounts the identity: a sync gives the new vault its own
+    // folder in the repo.
+    await waitForLoadedSyncProviders(vaultPage)
+    await vaultPage.evaluate(async () => {
+      await window.__nookVault?.runFanOutSyncAfterLocalSave?.()
+    })
     await expect
       .poll(
         () =>
