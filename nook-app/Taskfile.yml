@@ -230,7 +230,9 @@ tasks:
     cmds:
       - |
         failed=0
-        task --parallel web:static:container _lint:parallel _test:parallel || failed=1
+        # web:static:container lives in the repository-root Taskfile; a nested
+        # task started from nook-app/ would otherwise resolve only this file.
+        task --taskfile "{{.ROOT_DIR}}/Taskfile.yml" --parallel web:static:container _lint:parallel _test:parallel || failed=1
         exit "$failed"
 
   _lint:parallel:
