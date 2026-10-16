@@ -770,10 +770,15 @@ test.describe('local vault', () => {
     await expect(page.getByTestId('secret-row')).toHaveCount(50)
 
     await page.getByTestId('search-secrets').fill('bulk-user-1299')
+    // Imported ids are random, so page 2 can already show this row; wait for
+    // the search page itself rather than the row.
+    await expect(page.getByTestId('secret-pagination')).toHaveCount(0, {
+      timeout: 30_000,
+    })
+    await expect(page.getByTestId('secret-row')).toHaveCount(1)
     await expect(
       page.getByTestId('secret-row').filter({ hasText: 'bulk-user-1299' }),
-    ).toBeVisible({ timeout: 30_000 })
-    await expect(page.getByTestId('secret-pagination')).toHaveCount(0)
+    ).toBeVisible()
   })
 
   test('decrypts paginated credentials only for reveal or secret copy', async ({
