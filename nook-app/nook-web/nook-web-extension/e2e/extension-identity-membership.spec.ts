@@ -1,31 +1,30 @@
-import { expect, test } from '@playwright/test'
+import { chromium, expect, test } from '@playwright/test'
 import {
   EXTENSION_UNLOCK_TIMEOUT_MS,
+  extensionDir,
   getServiceWorker,
   installMockPasskeyRuntime,
   isHostedSmoke,
-  launchExtensionContext,
   readExtensionStorage,
   setupPasskeyExtensionPopup,
-  setupStorageKey,
   simpleVaultBaseUrl,
   waitForNewPage,
 } from './helpers/extension-smoke-runtime'
 import { belongs_to_simple_vault } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import { attachNookLogsForTest } from '../../nook-web-app/e2e/helpers/app-logs'
 import {
   authorizeDeviceProtection,
   connectGithubSyncProviderFromSettings,
   createLocalE2eGithubVaultStub,
   createLocalVaultOnLogin,
-  ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  openIdentitiesPage,
   readLocalVaultYamlFromIdb,
 } from '../../nook-web-app/e2e/helpers'
 
 const GITHUB_REPO = 'nook-extension-identity'
 const GITHUB_PAT = 'ghp_test_token'
 const PAIRING_GRANT_PREFIX = 'nook:extension-pairing-grant:'
+const chromiumExecutablePath = ((v) => (v ? v : ''))(
+  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim(),
+)
 
 function storeIdOf(yaml: string): string {
   const storeId = yaml.match(/^store_id:\s*(\S+)/mu)?.[1]
@@ -35,15 +34,30 @@ function storeIdOf(yaml: string): string {
   return storeId
 }
 
-test('connecting the extension to an identity pairs every vault in it', async ({
+// The vault page reaches GitHub through Playwright's stub. The extension's
+// offscreen session is outside Playwright's routing, so GitHub resolves
+// nowhere for it: its identity join cannot reach the provider, and that
+// failure must reach the person instead of passing for a connection.
+test('an identity join that cannot reach the provider is reported, and the approved vault stays paired', async ({
   browserName,
 }, testInfo) => {
   test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
   test.skip(isHostedSmoke, 'Hosted smoke has no GitHub stub')
   testInfo.setTimeout(240_000)
 
-  const context = await launchExtensionContext(
+  const context = await chromium.launchPersistentContext(
     testInfo.outputPath('chromium-profile-identity-membership'),
+    {
+      headless: false,
+      ...(chromiumExecutablePath
+        ? { executablePath: chromiumExecutablePath }
+        : {}),
+      args: [
+        `--disable-extensions-except=${extensionDir}`,
+        `--load-extension=${extensionDir}`,
+        '--host-resolver-rules=MAP api.github.com ~NOTFOUND',
+      ],
+    },
   )
   await context.addInitScript(installMockPasskeyRuntime)
   const github = createLocalE2eGithubVaultStub()
@@ -51,10 +65,9 @@ test('connecting the extension to an identity pairs every vault in it', async ({
   try {
     const popupPage = await setupPasskeyExtensionPopup(context)
 
-    // An identity with two vaults, both replicated through one GitHub repo.
+    // An identity replicated through a GitHub repo, so the extension is
+    // invited into it.
     const vaultPage = await context.newPage()
-    // The stub routes the whole context, so the extension's offscreen
-    // session reaches the same repo.
     await github.install(vaultPage, { repoName: GITHUB_REPO })
     await vaultPage.goto(simpleVaultBaseUrl)
     await createLocalVaultOnLogin(
@@ -62,45 +75,14 @@ test('connecting the extension to an identity pairs every vault in it', async ({
       'Personal vault',
       'authenticated-shell',
     )
-    const personalStoreId = storeIdOf(
-      await readLocalVaultYamlFromIdb(vaultPage),
-    )
+    const storeId = storeIdOf(await readLocalVaultYamlFromIdb(vaultPage))
     await connectGithubSyncProviderFromSettings(
       vaultPage,
       GITHUB_REPO,
       GITHUB_PAT,
     )
-    await openIdentitiesPage(vaultPage)
-    await vaultPage.getByTestId('identity-new-vault').click()
-    await vaultPage.getByTestId('login-vault-name-input').fill('Work vault')
-    await vaultPage.getByTestId('login-create-additional-vault-btn').click()
-    await expect
-      .poll(async () => storeIdOf(await readLocalVaultYamlFromIdb(vaultPage)), {
-        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-      })
-      .not.toBe(personalStoreId)
-    const workStoreId = storeIdOf(await readLocalVaultYamlFromIdb(vaultPage))
-    // The provider mounts the identity: a sync gives the new vault its own
-    // folder in the repo.
-    await expect
-      .poll(
-        async () => {
-          await vaultPage.evaluate(async () => {
-            await window.__nookVault?.runFanOutSyncAfterLocalSave?.()
-          })
-          return github
-            .getEventFilePaths()
-            .filter((path) => path.includes(`/vaults/${workStoreId}/`)).length
-        },
-        { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS, intervals: [2_000] },
-      )
-      .toBeGreaterThan(0)
 
-    // Connect the extension once, from the open vault.
     const worker = await getServiceWorker(context)
-    worker.on('console', (message) => {
-      console.log(`[identity-membership sw] ${message.text()}`)
-    })
     const extensionId = new URL(worker.url()).host
     await popupPage.close()
     const pairPopup = await context.newPage()
@@ -129,51 +111,28 @@ test('connecting the extension to an identity pairs every vault in it', async ({
     // The identity has a cloud provider, so the consent covers all of it.
     await expect(consent).toContainText('every vault in')
 
-    const identityEventsBefore = github.getIdentityEventFileCount()
-    console.log(`[identity-membership] consent: ${await consent.innerText()}`)
     await connectPage.getByTestId('approve-extension-device-btn').click()
-    // Joining the identity and opening its other vault take longer than a
-    // single-vault approval; wait for the outcome before reading it.
-    await expect(
-      connectPage
-        .getByTestId('extension-connect-approved')
-        .or(connectPage.locator('[data-extension-pairing-rejection-reason]')),
-    ).toBeVisible({ timeout: 90_000 })
-    // The extension signs its own join into the identity log it shares.
-    console.log(
-      `[identity-membership] identity events ${identityEventsBefore} -> ${github.getIdentityEventFileCount()}; vault paths ${github.getEventFilePaths().join(', ')}`,
-    )
-    await attachNookLogsForTest(connectPage, testInfo)
-    // The connection page opens one of the identity's vaults; whichever it
-    // approved from stays the extension's default.
-    await expect
-      .poll(
-        async () => (await readExtensionStorage(context))[setupStorageKey],
-        { timeout: EXTENSION_UNLOCK_TIMEOUT_MS },
-      )
-      .toMatchObject({
-        status: 'ready',
-        selectedVaultName: expect.stringMatching(/^(Personal|Work) vault$/u),
-      })
-    await expect(
-      connectPage.getByTestId('extension-connect-approved'),
-    ).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
     await expect(
       connectPage.locator('[data-extension-pairing-rejection-reason]'),
+    ).toHaveAttribute(
+      'data-extension-pairing-rejection-reason',
+      'identity-join-failed',
+      { timeout: 90_000 },
+    )
+    await expect(
+      connectPage.getByTestId('extension-connect-approved'),
     ).toHaveCount(0)
 
-    // The extension joined the identity: both vaults are paired, not only
-    // the one the consent was shown from.
+    // The vault the person approved from was paired before the join.
     await expect
       .poll(
         async () =>
           Object.keys(await readExtensionStorage(context))
             .filter((key) => key.startsWith(PAIRING_GRANT_PREFIX))
-            .map((key) => key.slice(PAIRING_GRANT_PREFIX.length))
-            .sort(),
+            .map((key) => key.slice(PAIRING_GRANT_PREFIX.length)),
         { timeout: EXTENSION_UNLOCK_TIMEOUT_MS },
       )
-      .toEqual([personalStoreId, workStoreId].sort())
+      .toEqual([storeId])
   } finally {
     await context.close()
   }

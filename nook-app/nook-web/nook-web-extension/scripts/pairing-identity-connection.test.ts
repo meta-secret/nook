@@ -206,3 +206,30 @@ test('a failed join is reported, not read as connected', async () => {
   })
   expect(fixture.imported).toHaveLength(0)
 })
+
+test('a join the session refuses is reported with no other vault paired', async () => {
+  const fixture = new SessionFixture(true)
+  const refusing: IdentitySessionSend = (...request) => {
+    const [message] = request
+    fixture.sent.push(message)
+    const refused: ExtensionSessionResponse = {
+      ok: false,
+      reason: 'GitHub authentication failed.',
+    }
+    return Promise.resolve(ok(refused))
+  }
+  const connectionRequest: PairingIdentityConnectionRequest = {
+    ...fixture.request(approval(invited)),
+    sendSessionMessage: refusing,
+  }
+  const result = await new PairingIdentityConnection(connectionRequest).connect(
+    3,
+  )
+
+  expect(result).toEqual({
+    ok: false,
+    reason: PairingIdentityConnectionFailure.JoinFailed,
+  })
+  expect(fixture.sent).toHaveLength(1)
+  expect(fixture.imported).toHaveLength(0)
+})
