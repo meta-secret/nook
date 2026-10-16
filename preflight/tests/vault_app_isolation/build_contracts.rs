@@ -967,3 +967,24 @@ fn coverage_dependencies_are_warmed_in_one_instrumented_build() -> anyhow::Resul
     }
     Ok(())
 }
+
+#[test]
+fn wasm_source_stamps_follow_successful_builds() {
+    let root = RepositoryFixture::repository_root();
+    let wasm_task = root.read("nook-app/nook-platform/nook-wasm/Taskfile.yml");
+    // A failed wasm-pack must stop the build before the source stamps say
+    // the packages are current, or the next build skips and serves stale WASM.
+    let Some((_, build_script)) = wasm_task.split_once("_wasm:build:run:") else {
+        panic!("the mounted WASM build must keep its run task");
+    };
+    let Some((before_stamps, _)) = build_script.split_once("echo \"$desired\" > \"$vault_stamp\"")
+    else {
+        panic!("the mounted WASM build must record its vault source stamp");
+    };
+    assert!(
+        build_script.contains("sh -c 'set -eu;")
+            && before_stamps.contains("wasm-pack build nook-wasm")
+            && before_stamps.contains("wasm-pack build nook-companion-wasm"),
+        "WASM source stamps must be written only after both packages build"
+    );
+}

@@ -47,7 +47,7 @@ tasks:
     internal: true
     cmds:
       - >-
-        sh -c '
+        sh -c 'set -eu;
         current="$(cd "{{.PLATFORM_ROOT}}" && find "Cargo.toml" "Cargo.lock" \
           "nook-wasm/Cargo.toml" "nook-wasm/src" \
           "nook-companion-wasm/Cargo.toml" "nook-companion-wasm/src" \
