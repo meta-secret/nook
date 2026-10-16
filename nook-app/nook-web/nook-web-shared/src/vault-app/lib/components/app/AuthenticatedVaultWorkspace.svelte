@@ -450,6 +450,7 @@ band, the scrolling page and the status line.
       if (outcome.isErr())
         vault.errorMsg = vault.t(outcome.error.translationKey)
     }}
+    onBeginAddProvider={() => vault.beginAddProvider()}
     onCancelAddProvider={() => vault.cancelAddProvider()}
     onBeginSetup={(
       setupRequest: Parameters<VaultAdminProps['onBeginSetup']>[0],
@@ -576,11 +577,9 @@ band, the scrolling page and the status line.
       onUseIdentity={useIdentity}
       {currentHealthNote}
       onHealth={() =>
-        openSection(
-          identityHealth.nextStep === NookIdentityNextStep.AddDevice
-            ? WorkspaceSection.AddDevice
-            : WorkspaceSection.Sync,
-        )}
+        identityHealth.nextStep === NookIdentityNextStep.AddDevice
+          ? openSection(WorkspaceSection.AddDevice)
+          : addSyncProvider()}
       onAddDevice={() => openSection(WorkspaceSection.AddDevice)}
       addDevicePrompt={identityHealth.nextStep ===
         NookIdentityNextStep.AddDevice}
