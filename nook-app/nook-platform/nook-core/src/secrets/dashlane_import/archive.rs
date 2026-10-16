@@ -30,7 +30,8 @@ impl<'a> DashlaneArchive<'a> {
                 .by_index(index)
                 .map_err(DashlaneImportError::archive)?
                 .name()
-                .to_owned();
+                .map_err(DashlaneImportError::archive)?
+                .into_owned();
             if !(DashlaneEntryName { name: &name }).is_csv() {
                 continue;
             }
