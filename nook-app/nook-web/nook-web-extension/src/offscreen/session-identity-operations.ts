@@ -128,7 +128,11 @@ export async function joinExtensionIdentity({
       })),
     }
     return ok(response)
-  } catch {
+  } catch (failure) {
+    console.error(
+      'Extension could not join the identity',
+      failure instanceof Error ? failure.message : '',
+    )
     return err(failed())
   }
 }
@@ -175,7 +179,11 @@ export async function connectExtensionIdentityVault({
       eventLogRecords,
     }
     return ok(response)
-  } catch {
+  } catch (failure) {
+    console.error(
+      'Extension could not open an identity vault',
+      failure instanceof Error ? failure.message : '',
+    )
     return err(failed())
   }
 }

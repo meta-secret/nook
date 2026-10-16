@@ -138,7 +138,10 @@ export class PairingIdentityConnection {
       ok: true,
       eventCount: approvedEventCount,
     }
-    if (invite.kind !== ExtensionIdentityInviteWireKind.Invited) return approved
+    if (invite.kind !== ExtensionIdentityInviteWireKind.Invited) {
+      console.info('Extension connects only the approved vault', invite.kind)
+      return approved
+    }
     const joinMessage: Parameters<IdentitySessionSend>[0] = {
       type: ExtensionSessionMessageType.JoinIdentity,
       payload: {
@@ -153,6 +156,7 @@ export class PairingIdentityConnection {
     const joined = await sendSessionMessage(joinMessage)
     const join = joined.isOk() ? decodeJoinReply(joined.value) : rejectedJoin
     if (join.kind === DecodedReplyKind.Rejected) {
+      console.warn('Extension could not join the identity')
       const failure: PairingIdentityImportResult = {
         ok: false,
         reason: PairingIdentityConnectionFailure.JoinFailed,
@@ -163,6 +167,10 @@ export class PairingIdentityConnection {
       ok: false,
       reason: PairingIdentityConnectionFailure.VaultConnectFailed,
     }
+    console.info(
+      'Extension joined the identity',
+      `${join.storeIds.length} vaults`,
+    )
     let eventCount = approvedEventCount
     for (const vaultStoreId of join.storeIds) {
       if (vaultStoreId === message.payload.vaultStoreId) continue
