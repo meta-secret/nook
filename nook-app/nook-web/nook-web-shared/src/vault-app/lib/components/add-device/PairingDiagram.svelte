@@ -1,10 +1,10 @@
 <!--
 This device, the cloud copy and the new device, drawn as the pairing
-advances: the cloud is dashed while missing, the link to the new device
-runs while the invite waits, and everything turns green once the device joins.
+advances: the cloud is dashed while missing, and the new device lights up
+once the invite is out, since it then joins by itself.
 -->
 <script lang="ts">
-  import { Check, Cloud, CloudOff, Laptop, MonitorSmartphone } from "@lucide/svelte";
+  import { Cloud, CloudOff, Laptop, MonitorSmartphone } from "@lucide/svelte";
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import type { VaultState } from "$lib/vault.svelte";
   import { PairingStage } from "./pairing-stage";
@@ -21,18 +21,9 @@ runs while the invite waits, and everything turns green once the device joins.
   } = $props();
 
   const cloudMissing = $derived(stage === PairingStage.Cloud);
-  const joined = $derived(stage === PairingStage.Joined);
-  const inviteOut = $derived(stage === PairingStage.Waiting);
-  const cloudState = $derived(
-    cloudMissing ? "missing" : joined ? "ready" : "on",
-  );
-  const joinerState = $derived(
-    joined ? "ready" : inviteOut ? "waiting" : "off",
-  );
-  const firstLink = $derived(
-    cloudMissing ? "off" : joined ? "done" : "on",
-  );
-  const secondLink = $derived(joined ? "done" : inviteOut ? "live" : "off");
+  const issued = $derived(stage === PairingStage.Issued);
+  const firstLink = $derived(cloudMissing ? "off" : "on");
+  const secondLink = $derived(issued ? "on" : "off");
 </script>
 
 {#snippet label(text: string, strong: boolean)}
@@ -47,14 +38,14 @@ runs while the invite waits, and everything turns green once the device joins.
 
 <div class="flex items-start gap-1 sm:gap-2" data-testid="pairing-diagram" data-stage={stage}>
   <div class="flex flex-col items-center gap-2">
-    <span class="nk-pair-node" data-state={joined ? "ready" : "on"}>
+    <span class="nk-pair-node" data-state="on">
       <Laptop class="size-5" aria-hidden="true" />
     </span>
     {@render label(vault.t(I18N_KEYS.JoinThisDevice), true)}
   </div>
   <span class="nk-pair-link" data-state={firstLink} aria-hidden="true"></span>
   <div class="flex flex-col items-center gap-2">
-    <span class="nk-pair-node" data-state={cloudState}>
+    <span class="nk-pair-node" data-state={cloudMissing ? "missing" : "on"}>
       {#if cloudMissing}
         <CloudOff class="size-5" aria-hidden="true" />
       {:else}
@@ -65,13 +56,9 @@ runs while the invite waits, and everything turns green once the device joins.
   </div>
   <span class="nk-pair-link" data-state={secondLink} aria-hidden="true"></span>
   <div class="flex flex-col items-center gap-2">
-    <span class="nk-pair-node" data-state={joinerState}>
-      {#if joined}
-        <Check class="size-5" aria-hidden="true" />
-      {:else}
-        <MonitorSmartphone class="size-5" aria-hidden="true" />
-      {/if}
+    <span class="nk-pair-node" data-state={issued ? "on" : "off"}>
+      <MonitorSmartphone class="size-5" aria-hidden="true" />
     </span>
-    {@render label(vault.t(I18N_KEYS.JoinNodeJoiner), joined)}
+    {@render label(vault.t(I18N_KEYS.JoinNodeJoiner), issued)}
   </div>
 </div>

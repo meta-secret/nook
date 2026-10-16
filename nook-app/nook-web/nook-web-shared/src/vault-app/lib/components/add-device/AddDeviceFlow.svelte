@@ -1,12 +1,13 @@
 <!--
 Adding a device: a focused page outside identity management. A hero names
 it, leads back to the identities hub, and draws this device, the cloud copy
-and the new device; a progress bar counts cloud copy, invite and join; one
-card holds the stage at hand.
+and the new device; a progress bar counts cloud copy and invite; one card
+holds the stage at hand. The invite carries the vault keys, so once it is
+out the new device joins by itself: nothing here waits for it.
 Every place that offers "Add a device" opens this.
 -->
 <script lang="ts">
-  import { Check, Cloud, CloudOff, ShieldCheck } from "@lucide/svelte";
+  import { Cloud, CloudOff, ShieldCheck } from "@lucide/svelte";
   import { onMount, type ComponentProps } from "svelte";
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import OnboardDevice from "$lib/components/OnboardDevice.svelte";
@@ -25,9 +26,6 @@ Every place that offers "Add a device" opens this.
 
   type OnboardDeviceProps = ComponentProps<typeof OnboardDevice>;
 
-  /** How often an open invite checks the identity log for its device. */
-  const JOIN_CHECK_INTERVAL_MS = 8_000;
-
   let {
     vault,
     identityName,
@@ -45,9 +43,6 @@ Every place that offers "Add a device" opens this.
   const control = $derived(vault.identityControl);
   const snapshot = $derived(control.snapshot);
   const standing = $derived(new IdentityStandingPresentation(snapshot));
-  const memberIds = $derived(
-    snapshot === false ? [] : snapshot.members.map((member) => member.appId),
-  );
   const isBusy = $derived(control.busy || vault.isSaving || vault.isVerifying);
   const joinMounts = $derived.by(() => {
     const mountRequest: ConstructorParameters<typeof DeviceJoinMounts>[0] = {
@@ -56,16 +51,10 @@ Every place that offers "Add a device" opens this.
     };
     return new DeviceJoinMounts(mountRequest).compatible;
   });
-  const inviteReady = $derived(vault.enrollmentCode !== "");
-  /** The members when the open invite went out; a new one is its device. */
-  let membersAtInvite = $state<readonly string[] | false>(false);
-
   const progress = $derived.by(() => {
     const facts: ConstructorParameters<typeof PairingProgress>[0] = {
       cloudReady: joinMounts.length > 0,
-      inviteReady,
-      membersAtInvite,
-      members: memberIds,
+      inviteReady: vault.enrollmentCode !== "",
     };
     return new PairingProgress(facts);
   });
@@ -73,7 +62,6 @@ Every place that offers "Add a device" opens this.
   const steps = $derived([
     vault.t(I18N_KEYS.AddDeviceProgressCloud),
     vault.t(I18N_KEYS.AddDeviceProgressInvite),
-    vault.t(I18N_KEYS.AddDeviceProgressJoin),
   ]);
   const providerLabel = $derived.by(() => {
     const [mount] = joinMounts;
@@ -108,69 +96,22 @@ Every place that offers "Add a device" opens this.
     vault.errorMsg = vault.t(translationKey);
   }
 
-  function checkForDevice(): void {
-    void control.syncWithMounts().then((synced) => {
-      if (synced.isErr()) reportFailure(synced.error.translationKey);
-    });
-  }
-
-  // Remember who belonged when the invite went out; forget it with the
-  // invite.
-  $effect(() => {
-    if (!inviteReady) {
-      membersAtInvite = false;
-      return;
-    }
-    if (membersAtInvite !== false || snapshot === false) return;
-    membersAtInvite = memberIds;
-  });
-
   onMount(() => {
     void control.followOpenVault().then((refreshed) => {
       if (refreshed.isErr()) reportFailure(refreshed.error.translationKey);
     });
   });
-
-  // While an invite waits for its device, look for it now and then so the
-  // join shows up without a click.
-  $effect(() => {
-    if (stage !== PairingStage.Waiting) return;
-    const timer = window.setInterval(() => {
-      if (document.visibilityState !== "visible") return;
-      if (control.busy || vault.isSaving || vault.isVerifying) return;
-      checkForDevice();
-    }, JOIN_CHECK_INTERVAL_MS);
-    return () => window.clearInterval(timer);
-  });
 </script>
 
-{#snippet liveStatus()}
-  <div
-    class="flex flex-wrap items-center justify-between gap-3 border border-dashed border-foreground/40 px-4 py-3"
-    data-testid="add-device-waiting"
-    role="status"
-    aria-live="polite"
+{#snippet done()}
+  <Button
+    type="button"
+    class="nk-go h-11 justify-self-start px-5"
+    data-testid="add-device-done"
+    onclick={onBack}
   >
-    <span class="flex items-center gap-3 text-sm text-foreground">
-      <span class="relative flex size-2.5" aria-hidden="true">
-        <span
-          class="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-60 motion-reduce:animate-none"
-        ></span>
-        <span class="relative inline-flex size-2.5 rounded-full bg-success"></span>
-      </span>
-      {vault.t(I18N_KEYS.AddDeviceWaiting)}
-    </span>
-    <Button
-      type="button"
-      size="sm"
-      variant="outline"
-      disabled={isBusy}
-      data-testid="add-device-check"
-      onclick={checkForDevice}
-    >
-      {vault.t(I18N_KEYS.AddDeviceCheck)}
-    </Button>
-  </div>
+    {vault.t(I18N_KEYS.AddDeviceDone)}
+  </Button>
 {/snippet}
 
 <section
@@ -251,28 +192,6 @@ Every place that offers "Add a device" opens this.
             {vault.t(I18N_KEYS.AddDeviceCloudAction)}
           </Button>
         </div>
-      {:else if stage === PairingStage.Joined}
-        <div class="grid justify-items-start gap-4" data-testid="add-device-joined">
-          <span class="nk-pair-node" data-state="ready">
-            <Check class="size-6" aria-hidden="true" />
-          </span>
-          <div class="grid gap-1.5" role="status">
-            <h2 class="text-xl font-semibold tracking-tight text-foreground">
-              {vault.t(I18N_KEYS.AddDeviceJoinedTitle)}
-            </h2>
-            <p class="max-w-[56ch] text-sm text-pretty text-muted-foreground">
-              {vault.t(I18N_KEYS.AddDeviceJoined)}
-            </p>
-          </div>
-          <Button
-            type="button"
-            class="nk-go h-11 px-5"
-            data-testid="add-device-done"
-            onclick={onBack}
-          >
-            {vault.t(I18N_KEYS.AddDeviceDone)}
-          </Button>
-        </div>
       {:else}
         <OnboardDevice
           {vault}
@@ -280,7 +199,7 @@ Every place that offers "Add a device" opens this.
           enrollmentCode={vault.enrollmentCode}
           {isBusy}
           {manualJoin}
-          status={liveStatus}
+          {done}
           onIssueCode={(issueRequest: Parameters<OnboardDeviceProps["onIssueCode"]>[0]) =>
             vault.issueEnrollmentCode(issueRequest)}
           onClearCode={() => vault.clearEnrollmentCode()}

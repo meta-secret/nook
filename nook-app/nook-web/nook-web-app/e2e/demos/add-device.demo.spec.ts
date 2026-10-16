@@ -89,16 +89,17 @@ test('the identity card leads to adding a device in three steps', async ({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
   await expect(page.getByTestId('onboard-passphrase-display')).toBeVisible()
-  await expect(page.getByTestId('add-device-waiting')).toBeVisible()
-  // The invite carries the vault keys: the new device joins by itself, with
-  // no approval step on this one.
-  await expect(page.getByTestId('add-device-progress')).toContainText('Join')
-  await expect(page.getByTestId('add-device-stage')).toContainText(
-    'It joins by itself.',
+  // The invite carries the vault keys: the new device joins by itself, so
+  // this one neither approves it nor waits for it.
+  const stage = page.getByTestId('add-device-stage')
+  await expect(stage).toHaveAttribute('data-stage', 'issued')
+  await expect(stage).toContainText('It joins by itself.')
+  await expect(stage).not.toContainText('Approve')
+  await expect(stage).not.toContainText('Waiting')
+  await expect(page.getByTestId('add-device-progress')).not.toContainText(
+    'Join',
   )
-  await expect(page.getByTestId('add-device-stage')).not.toContainText(
-    'Approve',
-  )
+  await expect(page.getByTestId('add-device-done')).toBeVisible()
   await snapshot(page, '6-invite')
   await demoBeat(page)
 

@@ -583,27 +583,10 @@
     background: var(--foreground);
     color: var(--background);
   }
-  .nk-pair-node[data-state="ready"] {
-    border-color: var(--success);
-    color: var(--success);
-  }
   .nk-pair-node[data-state="missing"] {
     border-style: dashed;
     border-color: color-mix(in oklch, var(--warning) 70%, transparent);
     color: var(--warning);
-  }
-  .nk-pair-node[data-state="waiting"] {
-    border-style: dashed;
-    border-color: var(--foreground);
-    color: var(--foreground);
-  }
-  .nk-pair-node[data-state="waiting"]::after {
-    content: "";
-    position: absolute;
-    inset: -5px;
-    border: 1px solid var(--foreground);
-    opacity: 0;
-    animation: nk-pair-ping 1.8s ease-out infinite;
   }
   .nk-pair-link {
     flex: 1;
@@ -616,20 +599,8 @@
       transparent 6px 12px
     );
   }
-  .nk-pair-link[data-state="live"] {
-    background: repeating-linear-gradient(
-      90deg,
-      var(--foreground) 0 6px,
-      transparent 6px 12px
-    );
-    background-size: 12px 2px;
-    animation: nk-pair-flow 0.9s linear infinite;
-  }
   .nk-pair-link[data-state="on"] {
     background: var(--foreground);
-  }
-  .nk-pair-link[data-state="done"] {
-    background: var(--success);
   }
   /* The invite's QR code: a light tile with corner marks, readable by any
    * camera in either theme. */
@@ -745,27 +716,8 @@
   }
 }
 
-@keyframes nk-pair-flow {
-  to {
-    background-position: 12px 0;
-  }
-}
-
-@keyframes nk-pair-ping {
-  0% {
-    opacity: 0.7;
-    transform: scale(1);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(1.25);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .nk-caret,
-  .nk-pair-link[data-state="live"],
-  .nk-pair-node[data-state="waiting"]::after {
+  .nk-caret {
     animation: none;
   }
 }
