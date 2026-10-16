@@ -30,7 +30,8 @@ impl<'a> SafariArchive<'a> {
                 .by_index(index)
                 .map_err(ApplePasswordsImportError::archive)?
                 .name()
-                .to_owned();
+                .map_err(ApplePasswordsImportError::archive)?
+                .into_owned();
             let entry = SafariEntryName { name: &name };
             if entry.is_csv() {
                 candidates.push(SafariCsvCandidate {
