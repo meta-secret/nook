@@ -262,8 +262,8 @@ void test('keeps the Linear credential out of the untrusted pull request workflo
 
   assert.doesNotMatch(pullRequestWorkflow, /LINEAR_API_KEY/)
   assert.doesNotMatch(pullRequestWorkflow, /types: \[labeled, closed\]/)
-  assert.doesNotMatch(trustedWorkflow, /^  workflow_run:/m)
-  assert.match(trustedWorkflow, /pull_request_target:\n    types: \[closed\]/)
+  assert.doesNotMatch(trustedWorkflow, /^ {2}workflow_run:/m)
+  assert.match(trustedWorkflow, /pull_request_target:\n {4}types: \[closed\]/)
   assert.match(
     trustedWorkflow,
     /group: linear-ui-demo-\$\{\{ github\.run_id \}\}/,
