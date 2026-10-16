@@ -61,7 +61,8 @@ class VaultPanelScenario {
         ? request
         : `${request.key}${request.replacements?.count ? `:${request.replacements.count}` : ''}`,
     )
-    this.setPassphrases({ vault, labels: options.passphrases ?? [] })
+    const [labels = []] = [options.passphrases]
+    this.setPassphrases({ vault, labels })
     const row: IdentityVaultRow = {
       storeId: 'store_awayvault01',
       label: 'Travel',
