@@ -9,7 +9,6 @@ import {
   setupPasskeyExtensionPopup,
   setupStorageKey,
   simpleVaultBaseUrl,
-  waitForExtensionPairingReady,
   waitForNewPage,
 } from './helpers/extension-smoke-runtime'
 import { belongs_to_simple_vault } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
@@ -134,14 +133,17 @@ test('connecting the extension to an identity pairs every vault in it', async ({
         .getByTestId('extension-connect-approved')
         .or(connectPage.locator('[data-extension-pairing-rejection-reason]')),
     ).toBeVisible({ timeout: 90_000 })
-    await waitForExtensionPairingReady(
-      connectPage,
-      async () => {
-        const storage = await readExtensionStorage(context)
-        return storage[setupStorageKey]
-      },
-      'Work vault',
-    )
+    // The connection page opens one of the identity's vaults; whichever it
+    // approved from stays the extension's default.
+    await expect
+      .poll(
+        async () => (await readExtensionStorage(context))[setupStorageKey],
+        { timeout: EXTENSION_UNLOCK_TIMEOUT_MS },
+      )
+      .toMatchObject({
+        status: 'ready',
+        selectedVaultName: expect.stringMatching(/^(Personal|Work) vault$/u),
+      })
     await expect(
       connectPage.getByTestId('extension-connect-approved'),
     ).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
