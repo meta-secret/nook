@@ -536,7 +536,9 @@ panel sits inside the card, which then spans the full row.
       <section class="border-t border-border px-2 py-2">
         <button
           type="button"
-          class="nk-vault-row"
+          class="nk-vault-row {protection.nudge === NookIdentityNudge.Urge
+            ? 'bg-destructive/5'
+            : 'bg-warning/5'}"
           data-testid="identity-protection-toggle"
           data-nudge={protection.nudge === NookIdentityNudge.Urge
             ? 'urge'
@@ -548,12 +550,12 @@ panel sits inside the card, which then spans the full row.
           disabled={busy}
           onclick={toggleProtection}
         >
+          <!-- Amber while a protection is missing; red once many items
+               live only in this browser. -->
           <span
             class="nk-vault-icon {protection.nudge === NookIdentityNudge.Urge
               ? 'border-destructive/40 text-destructive'
-              : protection.nudge === NookIdentityNudge.Suggest
-                ? 'border-warning/50 text-warning'
-                : ''}"
+              : 'border-warning/50 text-warning'}"
             aria-hidden="true"
           >
             <ShieldAlert class="size-4" />
@@ -562,8 +564,10 @@ panel sits inside the card, which then spans the full row.
             <span class="truncate text-[0.9375rem] font-medium"
               >{vault.t(I18N_KEYS.IdentityProtectionRowTitle)}</span
             >
-            <span class="truncate text-xs text-muted-foreground"
-              >{protectionProgress}</span
+            <span
+              class="truncate text-xs {protection.nudge === NookIdentityNudge.Urge
+                ? 'text-destructive'
+                : 'text-warning'}">{protectionProgress}</span
             >
           </span>
           <ChevronRight

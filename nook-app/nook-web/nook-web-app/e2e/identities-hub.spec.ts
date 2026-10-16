@@ -87,12 +87,26 @@ test.describe('identities hub', () => {
     })
     await expect(current.getByTestId('identity-vault-row')).toBeVisible()
 
-    // Unlock opens the identity's key without opening a vault.
+    // Locked, the card cannot tell what protects the identity: no checklist.
+    await expect(current.getByTestId('identity-protection-toggle')).toHaveCount(
+      0,
+    )
+
+    // Unlock opens the identity's key without opening a vault; the card
+    // offers its protection checklist here too, before any vault opens.
     await current.getByTestId('identity-unlock').click()
     await expect(current).toHaveAttribute('data-status', 'unlocked', {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await expect(page.getByTestId('login-gate')).toBeVisible()
+    await expect(
+      current.getByTestId('identity-protection-toggle'),
+    ).toContainText('0 of 2 done')
+    await current.getByTestId('identity-protection-toggle').click()
+    await expect(page.getByTestId('identity-protection-risk')).toContainText(
+      'Only this browser has your vaults',
+    )
+    await current.getByTestId('identity-protection-close').click()
     await current.getByTestId('identity-lock').click()
     await expect(current).toHaveAttribute('data-status', 'locked', {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,

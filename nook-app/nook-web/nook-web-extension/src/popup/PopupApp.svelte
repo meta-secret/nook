@@ -647,7 +647,9 @@
           : translatePlain(I18N_KEYS.ExtensionDeviceSetupCreateAction)}
       </button>
       <details class="setup-options">
-        <summary>{translatePlain(I18N_KEYS.ExtensionDeviceSetupOptions)}</summary>
+        <summary
+          >{translatePlain(I18N_KEYS.ExtensionDeviceSetupOptions)}</summary
+        >
         <div class="field-group">
           <label for="device-protection-mode">
             {translatePlain(I18N_KEYS.DeviceProtectionModeGroupLabel)}
