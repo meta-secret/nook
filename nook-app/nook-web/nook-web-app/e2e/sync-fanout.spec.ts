@@ -24,10 +24,17 @@ test.describe('sync fan-out on save', () => {
     await expect(page.getByTestId('vault-sync-out-status')).toContainText(
       '1 sync provider',
     )
-    // With a copy kept, the identity's card asks for a second device.
+    // With a copy kept, the checklist ticks the copy off and asks for a
+    // second device.
     await openIdentitiesPage(page)
-    await expect(page.getByTestId('identity-card-health')).toContainText(
-      'Only one device',
+    const protection = page.getByTestId('identity-protection-toggle')
+    await expect(protection).toContainText('1 of 2 done')
+    await protection.click()
+    const steps = page.getByTestId('identity-protection-step')
+    await expect(steps.nth(0)).toHaveAttribute('data-state', 'done')
+    await expect(steps.nth(1)).toHaveAttribute('data-state', 'open')
+    await expect(page.getByTestId('identity-protection-action')).toContainText(
+      'Add a device',
     )
   })
 

@@ -2145,6 +2145,22 @@
     "create_vault": "Create vault",
     "later": "Later"
   },
+  "identity_protection": {
+    "row_title": "Protect this identity",
+    "row_progress": "{done} of {total} done",
+    "panel_title": "Protect {identity}",
+    "risk_local": "Only this browser has your vaults. Clearing site data or losing this device deletes them.",
+    "risk_one_device": "A copy is kept, but only this device can open it. Lose the device and you lose your vaults.",
+    "copy_title": "Keep a copy outside this browser",
+    "copy_why": "Clearing this browser loses nothing.",
+    "device_title": "Add a second device",
+    "device_why": "Losing this device loses nothing.",
+    "device_blocked": "After the copy: the new device joins through it.",
+    "action_add_sync": "Add a sync provider",
+    "action_add_cloud": "Add a cloud sync provider",
+    "action_add_device": "Add a device",
+    "done": "Done"
+  },
   "identity_overview": {
     "view_all": "View all",
     "copies": "Cloud copies",

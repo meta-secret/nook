@@ -32,11 +32,11 @@ test('the identity card leads to adding a device in three steps', async ({
   await page.reload()
   await connectLocalVault(page)
 
-  // The hub card names what the identity lacks; Manage lists its pages,
+  // The hub card offers its protection checklist; Manage lists its pages,
   // adding a device first.
   await openIdentitiesPage(page)
-  await expect(page.getByTestId('identity-card-health')).toContainText(
-    'No cloud copy yet',
+  await expect(page.getByTestId('identity-protection-toggle')).toContainText(
+    '0 of 2 done',
     { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
   )
   await snapshot(page, '1-hub-health')
@@ -56,8 +56,8 @@ test('the identity card leads to adding a device in three steps', async ({
   await snapshot(page, '3-needs-cloud')
   await demoBeat(page)
 
-  // With a cloud copy and one device, the card's health chip offers a
-  // second device.
+  // With a cloud copy and one device, the card's protection checklist
+  // offers a second device.
   await page.getByTestId('identity-overview-toggle').first().click()
   await expect(page.getByTestId('identity-overview')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -68,12 +68,16 @@ test('the identity card leads to adding a device in three steps', async ({
   await seedSyncProvidersWhileUnlocked(page)
   await forceVaultQuiescentForE2e(page)
   await openIdentitiesPage(page)
-  const health = page.getByTestId('identity-card-health')
-  await expect(health).toContainText('Only one device', {
+  const protection = page.getByTestId('identity-protection-toggle')
+  await expect(protection).toContainText('1 of 2 done', {
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
+  await protection.click()
+  await expect(page.getByTestId('identity-protection-risk')).toContainText(
+    'only this device can open it',
+  )
   await snapshot(page, '4-hub-one-device')
-  await health.click()
+  await page.getByTestId('identity-protection-action').click()
   await expect(page.getByTestId('add-device-stage')).toHaveAttribute(
     'data-stage',
     'invite',

@@ -303,6 +303,8 @@ const INTERNAL_API_EXPERT_AUTHORED_CONSUMER_SCOPE_PATHS = [
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/devices-access/passkey-card.ts',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/identities/identity-card-model.ts',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/identities/IdentitiesHub.svelte',
+  'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/identities/IdentityCard.svelte',
+  'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/identities/IdentityProtectionPanel.svelte',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/identities/identity-switch.ts',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/identity-control/IdentityKeysPage.svelte',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/identity-control/IdentityDashboard.svelte',

@@ -65,12 +65,16 @@ test.describe('vault connect flow', () => {
     ).toBeFalsy()
     await expect(page.getByTestId('login-gate')).not.toBeVisible()
     // The open vault's panel offers the browser extension; the identity's
-    // card names its single next step, which opens Sync.
+    // card offers its protection checklist, whose open step opens Sync.
     await openOpenVaultPanel(page)
     await expect(page.getByTestId('vault-extension-install')).toBeVisible()
-    const health = page.getByTestId('identity-card-health')
-    await expect(health).toContainText('No cloud copy yet')
-    await health.click()
+    const protection = page.getByTestId('identity-protection-toggle')
+    await expect(protection).toContainText('0 of 2 done')
+    await protection.click()
+    await expect(page.getByTestId('identity-protection-risk')).toContainText(
+      'Only this browser has your vaults',
+    )
+    await page.getByTestId('identity-protection-action').click()
     await expect(page.getByTestId('storage-providers-section')).toBeVisible()
   })
 

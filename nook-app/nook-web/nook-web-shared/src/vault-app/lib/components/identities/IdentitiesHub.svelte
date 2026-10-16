@@ -22,7 +22,12 @@ join) sit between the hero and the cards.
     type DeviceRecoveryRequest,
   } from '$lib/components/device-recovery'
   import { IdentityCards } from './identity-cards.svelte'
-  import { configured_vault_application, VaultApplication } from '$app-wasm'
+  import {
+    configured_vault_application,
+    VaultApplication,
+    type NookIdentityHealth,
+    type NookIdentityNextStep,
+  } from '$app-wasm'
   import {
     IdentityVaultRowState,
     VaultSetupHostKind,
@@ -53,8 +58,8 @@ join) sit between the hero and the cards.
     onUseIdentity,
     onCardsShown = () => {},
     onClosePanels = () => {},
-    currentHealthNote = '',
-    onHealth = () => {},
+    currentHealth,
+    onProtect,
     onManageSection,
     overview,
     overviewOpen = false,
@@ -98,10 +103,11 @@ join) sit between the hero and the cards.
     /** Close what the page opened beside a card (New vault, an import)
      * when another panel opens there. */
     onClosePanels?: () => void
-    /** What the unlocked identity lacks, shown as a chip on its card. */
-    currentHealthNote?: string
-    /** Open the unlocked identity's control page at its next step. */
-    onHealth?: () => void
+    /** How the unlocked identity is protected; its card offers the
+     * checklist until both protections are done. */
+    currentHealth?: NookIdentityHealth
+    /** Take the step that finishes an open protection task. */
+    onProtect?: (action: NookIdentityNextStep) => void
     /** Open one of the current identity's pages from Manage on its card. */
     onManageSection?: (target: IdentitySectionTarget) => void
     /** The current identity's overview, shown beside its card. */
@@ -458,8 +464,9 @@ join) sit between the hero and the cards.
               : onNewVault}
             onUnlock={(identityId: string) => onUnlock(targetFor(identityId))}
             {onLock}
-            healthNote={card.current ? currentHealthNote : ''}
-            {onHealth}
+            {...card.current && currentHealth && onProtect
+              ? { health: currentHealth, onProtect }
+              : {}}
             overviewOpen={card.current && overviewOpen}
             {...overview && overviewOpen && card.current
               ? { overviewPanel: overview }
