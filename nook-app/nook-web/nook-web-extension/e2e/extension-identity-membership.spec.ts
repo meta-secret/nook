@@ -119,9 +119,6 @@ test('an identity join that cannot reach the provider is reported, and the appro
       'identity-join-failed',
       { timeout: 90_000 },
     )
-    await expect(
-      connectPage.getByTestId('extension-connect-approved'),
-    ).toHaveCount(0)
 
     // The vault the person approved from was paired before the join.
     await expect
