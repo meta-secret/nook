@@ -165,7 +165,6 @@ test('keeps mixed session status safe and actionable', async ({ page }) => {
   await page.addInitScript(installPopupDemoRuntime, session)
   await page.goto(`${extensionRoutePrefix}popup/index.html?state=mixed`)
   await expect(page.getByTestId('open-simple-vault-btn')).toBeVisible()
-  await expect(page.getByTestId('companion-done-btn')).toHaveText('Done')
   await expect(page.getByTestId('connect-simple-vault-btn')).toBeHidden()
   await demoBeat(page)
 })
@@ -196,7 +195,6 @@ test('restores the paired companion home after a restart unlock and popup reopen
     page.locator('[data-testid="companion-vault"][data-default="true"]'),
   ).toContainText('Personal vault')
   await expect(page.getByTestId('companion-make-default')).toHaveCount(1)
-  await expect(page.getByTestId('companion-done-btn')).toBeVisible()
   await expect(page.getByTestId('open-simple-vault-btn')).toBeVisible()
   await expect(page.getByTestId('connect-simple-vault-btn')).toBeHidden()
   await page.reload()

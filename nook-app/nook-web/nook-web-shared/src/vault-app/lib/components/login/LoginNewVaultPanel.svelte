@@ -62,47 +62,46 @@ existing one in from a sync provider. It opens inside the identity card.
     </button>
   </header>
 
-  <div class="grid gap-4 {importable ? 'xl:grid-cols-2' : ''}">
-    <section
-      class="nk-frame-nick grid content-start gap-3 p-4"
-      data-testid="login-vault-create-workflow"
+  {#if importable}
+    <!-- Two ways in, side by side: no frame inside the card's own frame. -->
+    <div
+      class="grid gap-5 xl:grid-cols-2 xl:gap-0 xl:divide-x xl:divide-border"
     >
-      <span class="nk-tile" aria-hidden="true"
-        ><FolderPlus class="size-4" /></span
+      <section
+        class="grid content-start gap-3 xl:pr-6"
+        data-testid="login-vault-create-workflow"
       >
-      <div class="grid gap-1">
-        <h3 class="text-[0.9375rem] font-semibold text-foreground">
+        <h3
+          class="flex items-center gap-2 text-[0.9375rem] font-semibold text-foreground"
+        >
+          <FolderPlus class="size-4 text-muted-foreground" aria-hidden="true" />
           {vault.t(I18N_KEYS.LoginVaultPickerCreateNew)}
         </h3>
-        <p class="text-sm text-pretty text-muted-foreground">
-          {vault.t(I18N_KEYS.LoginVaultWorkflowCreateDescription)}
-        </p>
-      </div>
-      <LoginVaultNameForm
-        {vault}
-        {isVerifying}
-        {isInitializing}
-        testId="login-create-additional-vault-btn"
-        submitLabel={vault.t(I18N_KEYS.LoginVaultPickerCreateNew)}
-        onCreate={onCreateVault}
-      />
-    </section>
-    {#if importable}
+        <LoginVaultNameForm
+          {vault}
+          {isVerifying}
+          {isInitializing}
+          testId="login-create-additional-vault-btn"
+          submitLabel={vault.t(I18N_KEYS.LoginVaultPickerCreateNew)}
+          onCreate={onCreateVault}
+        />
+      </section>
       <section
-        class="nk-frame-nick grid content-start gap-3 p-4"
+        class="grid content-start gap-3 border-t border-border pt-5 xl:border-t-0 xl:pl-6 xl:pt-0"
         data-testid="login-vault-import-workflow"
       >
-        <span class="nk-tile" aria-hidden="true"
-          ><CloudDownload class="size-4" /></span
+        <h3
+          class="flex items-center gap-2 text-[0.9375rem] font-semibold text-foreground"
         >
-        <div class="grid gap-1">
-          <h3 class="text-[0.9375rem] font-semibold text-foreground">
-            {vault.t(I18N_KEYS.LoginVaultPickerImport)}
-          </h3>
-          <p class="text-sm text-pretty text-muted-foreground">
-            {vault.t(I18N_KEYS.LoginVaultWorkflowImportDescription)}
-          </p>
-        </div>
+          <CloudDownload
+            class="size-4 text-muted-foreground"
+            aria-hidden="true"
+          />
+          {vault.t(I18N_KEYS.LoginVaultPickerImport)}
+        </h3>
+        <p class="text-sm text-pretty text-muted-foreground">
+          {vault.t(I18N_KEYS.LoginVaultWorkflowImportDescription)}
+        </p>
         <Button
           type="button"
           variant="outline"
@@ -115,6 +114,17 @@ existing one in from a sync provider. It opens inside the identity card.
           {vault.t(I18N_KEYS.LoginVaultPickerImport)}
         </Button>
       </section>
-    {/if}
-  </div>
+    </div>
+  {:else}
+    <div data-testid="login-vault-create-workflow">
+      <LoginVaultNameForm
+        {vault}
+        {isVerifying}
+        {isInitializing}
+        testId="login-create-additional-vault-btn"
+        submitLabel={vault.t(I18N_KEYS.LoginVaultPickerCreateNew)}
+        onCreate={onCreateVault}
+      />
+    </div>
+  {/if}
 </section>

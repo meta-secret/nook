@@ -736,7 +736,6 @@ pub const EXTENSION_COMPANION_CONNECT_ANOTHER: &str = "extension.companion.conne
 pub const EXTENSION_COMPANION_CONNECT_VAULT: &str = "extension.companion.connect_vault";
 pub const EXTENSION_COMPANION_DEFAULT_VAULT: &str = "extension.companion.default_vault";
 pub const EXTENSION_COMPANION_DEFAULT_VAULT_HINT: &str = "extension.companion.default_vault_hint";
-pub const EXTENSION_COMPANION_DONE: &str = "extension.companion.done";
 pub const EXTENSION_COMPANION_FILLS_PASSWORDS: &str = "extension.companion.fills_passwords";
 pub const EXTENSION_COMPANION_ITEM_COUNT: &str = "extension.companion.item_count";
 pub const EXTENSION_COMPANION_MAKE_DEFAULT: &str = "extension.companion.make_default";
@@ -828,6 +827,12 @@ pub const EXTENSION_POPUP_INITIALIZATION_PAIRING_STATE_FAILED: &str =
     "extension.popup_initialization.pairing_state_failed";
 pub const EXTENSION_POPUP_INITIALIZATION_SESSION_DEVICE_FAILED: &str =
     "extension.popup_initialization.session_device_failed";
+pub const EXTENSION_REQUEST_BODY: &str = "extension.request.body";
+pub const EXTENSION_REQUEST_EYEBROW: &str = "extension.request.eyebrow";
+pub const EXTENSION_REQUEST_NO_VAULTS: &str = "extension.request.no_vaults";
+pub const EXTENSION_REQUEST_TITLE: &str = "extension.request.title";
+pub const EXTENSION_REQUEST_VAULT_ACTION: &str = "extension.request.vault_action";
+pub const EXTENSION_REQUEST_VAULTS: &str = "extension.request.vaults";
 pub const EXTENSION_SETUP_BROWSER_ACCESS_DESCRIPTION: &str =
     "extension.setup.browser_access_description";
 pub const EXTENSION_SETUP_BROWSER_ACCESS_TITLE: &str = "extension.setup.browser_access_title";
@@ -1660,8 +1665,6 @@ pub const LOGIN_VAULT_PICKER_EXTENSION_PAIRING_CHECKING: &str =
     "login.vault_picker_extension_pairing_checking";
 pub const LOGIN_VAULT_PICKER_EXTENSION_PAIRING_PURPOSE: &str =
     "login.vault_picker_extension_pairing_purpose";
-pub const LOGIN_VAULT_PICKER_EXTENSION_PAIRING_UNAVAILABLE: &str =
-    "login.vault_picker_extension_pairing_unavailable";
 pub const LOGIN_VAULT_PICKER_HINT: &str = "login.vault_picker_hint";
 pub const LOGIN_VAULT_PICKER_IMPORT: &str = "login.vault_picker_import";
 pub const LOGIN_VAULT_PICKER_ON_DEVICE: &str = "login.vault_picker_on_device";
@@ -1669,7 +1672,6 @@ pub const LOGIN_VAULT_PICKER_START_FRESH: &str = "login.vault_picker_start_fresh
 pub const LOGIN_VAULT_PICKER_SUBTITLE: &str = "login.vault_picker_subtitle";
 pub const LOGIN_VAULT_PICKER_TITLE: &str = "login.vault_picker_title";
 pub const LOGIN_VAULT_PICKER_UNNAMED: &str = "login.vault_picker_unnamed";
-pub const LOGIN_VAULT_WORKFLOW_CREATE_DESCRIPTION: &str = "login.vault_workflow_create_description";
 pub const LOGIN_VAULT_WORKFLOW_IMPORT_DESCRIPTION: &str = "login.vault_workflow_import_description";
 pub const LOGIN_WAITING_APPROVAL: &str = "login.waiting_approval";
 pub const LOGIN_WIZARD_ADD_PROVIDER: &str = "login_wizard.add_provider";

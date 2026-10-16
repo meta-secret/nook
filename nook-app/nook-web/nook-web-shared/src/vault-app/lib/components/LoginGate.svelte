@@ -24,6 +24,12 @@
   import { onMount, tick, untrack, type ComponentProps } from 'svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import IdentitiesHub from '$lib/components/identities/IdentitiesHub.svelte'
+  import ExtensionRequestPanel from '$lib/components/identities/ExtensionRequestPanel.svelte'
+  import type { IdentityCardView } from '$lib/components/identities/identity-card-model'
+  import {
+    ExtensionConnectIntentKind,
+    type ExtensionConnectIntent,
+  } from '$lib/app/route-state'
   import {
     DeviceProtectionStatus,
     type StartSentinelGenesisArgs,
@@ -53,7 +59,7 @@
     type LoginVaultEntry,
   } from '$lib/components/login/login-unlock-state'
   import LoginCreateVaultChooser from '$lib/components/login/LoginCreateVaultChooser.svelte'
-  import type { SentinelGenesisParticipation } from '$lib/components/login/login-create-vault-chooser-contract'
+  import { SentinelGenesisChooserBinding } from '$lib/components/login/sentinel-genesis-chooser-handlers'
   import {
     LoginVaultExtensionPairingStatusLookup,
     type LoginVaultExtensionPairingStatusEntry,
@@ -86,7 +92,6 @@
   } from '$lib/vault/sentinel-login-presentation.svelte'
   import RemoteVaultRecoveryPanel from '$lib/components/login/RemoteVaultRecoveryPanel.svelte'
   import RemoteVaultChoice from '$lib/components/login/RemoteVaultChoice.svelte'
-  import * as sentinelGenesisActions from '$lib/vault/sentinel-genesis'
   import { SentinelGenesisPhase, type VaultApplication } from '$app-wasm'
   import {
     ActiveVaultKind,
@@ -131,6 +136,7 @@
     sentinelParticipantResponse = '',
     sentinelOnboardingPackage = '',
     extensionConnectPairingStatusEntries,
+    extensionConnectRequest = { kind: ExtensionConnectIntentKind.Absent },
     onAcceptSentinelOnboardingPackage,
   }: {
     vault: VaultState
@@ -168,6 +174,9 @@
     sentinelParticipantResponse?: string
     sentinelOnboardingPackage?: string
     extensionConnectPairingStatusEntries: LoginVaultExtensionPairingStatusEntry[]
+    /** A browser extension asking to connect: its request sits beside the
+     * current identity, with the vaults that can answer it. */
+    extensionConnectRequest?: ExtensionConnectIntent
     onAcceptSentinelOnboardingPackage?: (
       packageJson: string,
     ) => void | Promise<void>
@@ -181,7 +190,20 @@
       | 'onUseEnrollmentCode'
     >
   >
-  type CreateVaultChooserProps = ComponentProps<typeof LoginCreateVaultChooser>
+  const sentinelGenesisHandlers = $derived.by(() => {
+    const bindingRequest: ConstructorParameters<
+      typeof SentinelGenesisChooserBinding
+    >[0] = {
+      vault,
+      ...(onCreateSentinelGenesisParticipantResponse
+        ? { onCreateSentinelGenesisParticipantResponse }
+        : {}),
+      ...(onCreateSentinelGenesisPublicKeyAnnouncement
+        ? { onCreateSentinelGenesisPublicKeyAnnouncement }
+        : {}),
+    }
+    return new SentinelGenesisChooserBinding(bindingRequest).handlers()
+  })
   type LoginVaultPickerProps = ComponentProps<typeof LoginVaultPicker>
   type SentinelCeremonyOptionalProps = Partial<
     Pick<ComponentProps<typeof SentinelCeremonyPanel>, 'onUnlocked'>
@@ -604,73 +626,7 @@
     {usesExtensionDeviceIdentity}
     {onCreateDeviceVault}
     {onStartSentinelGenesis}
-    onAddSentinelGenesisParticipantResponse={({
-      payload,
-      participantLabel,
-    }: SentinelGenesisParticipation) => {
-      const participantRequest: Parameters<
-        sentinelGenesisActions.SentinelGenesisActions['addParticipantResponse']
-      >[0] = {
-        payload,
-        participantLabel: participantLabel ? participantLabel : '',
-      }
-      return new sentinelGenesisActions.SentinelGenesisActions(
-        vault,
-      ).addParticipantResponse(participantRequest)
-    }}
-    onFinalizeSentinelGenesis={() =>
-      new sentinelGenesisActions.SentinelGenesisActions(vault).finalize()}
-    onCreateSentinelGenesisParticipantResponse={((
-      ...[
-        v = (payload) =>
-          (() => {
-            const createParticipantResponseArgs: Parameters<
-              sentinelGenesisActions.SentinelGenesisActions['createParticipantResponse']
-            >[0] = { requestPayload: payload }
-            return new sentinelGenesisActions.SentinelGenesisActions(
-              vault,
-            ).createParticipantResponse(createParticipantResponseArgs)
-          })(),
-      ]
-    ) => v)(onCreateSentinelGenesisParticipantResponse)}
-    onCreateSentinelGenesisPublicKeyAnnouncement={((
-      ...[
-        v = () =>
-          new sentinelGenesisActions.SentinelGenesisActions(
-            vault,
-          ).createPublicKeyAnnouncement(),
-      ]
-    ) => v)(onCreateSentinelGenesisPublicKeyAnnouncement)}
-    onRememberSentinelGenesisRequest={(
-      payload: Parameters<
-        NonNullable<CreateVaultChooserProps['onRememberSentinelGenesisRequest']>
-      >[0],
-    ) =>
-      (() => {
-        const rememberRequestArgs: Parameters<
-          sentinelGenesisActions.SentinelGenesisActions['rememberRequest']
-        >[0] = { requestPayload: payload }
-        return new sentinelGenesisActions.SentinelGenesisActions(
-          vault,
-        ).rememberRequest(rememberRequestArgs)
-      })()}
-    onReceiveSentinelGenesisShare={(
-      payload: Parameters<
-        NonNullable<CreateVaultChooserProps['onReceiveSentinelGenesisShare']>
-      >[0],
-    ) =>
-      (() => {
-        const acceptShareDeliveryArgs: Parameters<
-          sentinelGenesisActions.SentinelGenesisActions['acceptShareDelivery']
-        >[0] = { payload }
-        return new sentinelGenesisActions.SentinelGenesisActions(
-          vault,
-        ).acceptShareDelivery(acceptShareDeliveryArgs)
-      })()}
-    onCompleteSentinelGenesisDelivery={() =>
-      new sentinelGenesisActions.SentinelGenesisActions(
-        vault,
-      ).completeDelivery()}
+    {...sentinelGenesisHandlers}
     sentinelGenesisPhase={vault.sentinelGenesisPhase}
     sentinelGenesisRequest={vault.sentinelGenesisRequest}
     sentinelGenesisParticipants={vault.sentinelGenesisParticipants}
@@ -915,6 +871,18 @@
   </section>
 {/snippet}
 
+{#snippet extensionRequest(card: IdentityCardView)}
+  {#if extensionConnectRequest.kind === ExtensionConnectIntentKind.Requested}
+    <ExtensionRequestPanel
+      {vault}
+      request={extensionConnectRequest.request}
+      {card}
+      busy={isVerifying || isInitializing}
+      onConnect={unlockVault}
+    />
+  {/if}
+{/snippet}
+
 {#snippet accessSheetBeside()}
   {@render accessSheet(false)}
 {/snippet}
@@ -944,6 +912,10 @@
     onCardsShown={(shown: boolean) => (identityCardsShown = shown)}
     onClosePanels={closeSidePanels}
     {...accessBesideCard ? { accessPanel: accessSheetBeside } : {}}
+    {...extensionConnectRequest.kind === ExtensionConnectIntentKind.Requested &&
+    !newVaultOpen
+      ? { requestPanel: extensionRequest }
+      : {}}
     pairingStatusFor={(storeId: string) =>
       pairingStatusLookup.statusForStore(storeId)}
     {...showLocalUnlock && !newVaultOpen && showSentinelCeremony

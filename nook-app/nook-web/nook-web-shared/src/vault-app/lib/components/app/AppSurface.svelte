@@ -62,7 +62,6 @@
     onToggleColorMode: () => void
     onFinishExtensionConnect: (outcome: ExtensionConsentCloseOutcome) => void
   } = $props()
-
 </script>
 
 {#if appLogsPage}
@@ -103,7 +102,10 @@
       {:else if vault.newIdentity !== NewIdentityStage.Off}
         <NewIdentityFlow {vault} />
       {:else if !vault.isAuthenticated || preserveAccessGate}
-        <VaultAccessGate {...accessGateProps} />
+        <VaultAccessGate
+          {...accessGateProps}
+          extensionConnectRequest={extensionConnectRequestState}
+        />
       {:else if extensionConnectRequestState.kind === ExtensionConnectIntentKind.Requested}
         <ExtensionConnectConsentWorkspace
           {vault}

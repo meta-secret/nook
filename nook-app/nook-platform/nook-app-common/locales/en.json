@@ -281,13 +281,11 @@
     "sentinel_genesis_receive_share_success": "This device's encrypted Sentinel share is protected locally.",
     "vault_picker_title": "Choose a vault",
     "vault_picker_subtitle": "Open an existing vault on this device, create another, or import one from a sync provider.",
-    "vault_workflow_create_description": "Create a separate vault with its own secrets and sync providers.",
     "vault_workflow_import_description": "Connect a sync provider to open a vault that already exists elsewhere.",
     "vault_picker_hint": "Each vault has its own secrets and sync providers.",
     "vault_picker_extension_pairing_checking": "Checking extension pairing…",
     "vault_picker_extension_paired": "Paired with this extension",
     "vault_picker_extension_not_paired": "Not paired with this extension",
-    "vault_picker_extension_pairing_unavailable": "Extension pairing status unavailable",
     "vault_picker_extension_pairing_purpose": "Choose this vault to connect it to the browser extension.",
     "vault_picker_unnamed": "Unnamed vault",
     "vault_name_label": "Vault name",
@@ -1659,7 +1657,6 @@
     "companion": {
       "step_label": "Browser companion",
       "pilot_return_guidance": "Return to the site and select Continue with Nook again to retry.",
-      "done": "Done",
       "unlocked": "Unlocked",
       "vaults_title": "Vaults on this browser",
       "vaults_hint": "The extension fills passwords and passkeys from these vaults on websites.",
@@ -1671,7 +1668,7 @@
       "item_count": "{count} items",
       "connect_another": "Connect another vault",
       "no_vaults_title": "No vault connected yet",
-      "no_vaults_body": "Open a vault in Nook and choose Use with extension, or connect one from here.",
+      "no_vaults_body": "Connect a vault: Nook opens, you unlock one of your vaults there and approve this browser.",
       "connect_vault": "Connect a vault",
       "open_nook": "Open Nook",
       "make_default_failed": "Nook could not change the default vault. Try again.",
@@ -1887,6 +1884,14 @@
       "device_status_failed": "The extension device protection status could not be loaded.",
       "session_device_failed": "The active extension device could not be loaded.",
       "app_mount_failed": "The extension interface could not be started."
+    },
+    "request": {
+      "eyebrow": "Connection request",
+      "title": "{label} wants to connect",
+      "body": "It fills passwords on websites from the vault you connect. Choose the vault and unlock it here; you approve the connection on the next step.",
+      "vaults": "Connect a vault",
+      "vault_action": "Unlock and review",
+      "no_vaults": "This identity has no vault yet. Create one, then connect it."
     }
   },
   "app": {
