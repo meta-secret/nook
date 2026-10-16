@@ -2,6 +2,7 @@ import { expect, test } from '../fixtures'
 import { Effect } from 'effect'
 import {
   connectLocalVault,
+  openOpenVaultPanel,
   parseJson,
   requireStringArray,
   UI_TIMEOUT_MS,
@@ -63,8 +64,11 @@ async function demoBeat(page: Parameters<typeof connectLocalVault>[0]) {
   await page.waitForTimeout(DEMO_BEAT_MS)
 }
 
-test('offer the browser extension from the vault page', async ({ page }) => {
+test("offer the browser extension from the open vault's panel", async ({
+  page,
+}) => {
   await connectLocalVault(page)
+  await openOpenVaultPanel(page)
   await demoBeat(page)
 
   const install = page.getByTestId('vault-extension-install')
@@ -296,13 +300,14 @@ test.describe('mobile browser', () => {
     viewport: { width: 390, height: 844 },
   })
 
-  test('hide browser extension installation on the vault page', async ({
+  test("hide browser extension installation in the open vault's panel", async ({
     page,
   }) => {
     await connectLocalVault(page)
+    await openOpenVaultPanel(page)
     await demoBeat(page)
 
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
+    await expect(page.getByTestId('vault-panel-import')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
     await expect(page.getByTestId('vault-extension-install')).toHaveCount(0)

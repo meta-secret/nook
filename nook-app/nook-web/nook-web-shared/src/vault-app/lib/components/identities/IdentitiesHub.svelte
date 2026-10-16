@@ -64,6 +64,7 @@ join) sit between the hero and the cards.
     }),
     unlockPanel,
     passwordFallback,
+    vaultExtension,
     identityPrompt,
     vaultSetup,
     vaultSetupOpen = false,
@@ -120,6 +121,8 @@ join) sit between the hero and the cards.
     /** Backup-password unlock, placed on the card that holds the selected
      * vault. */
     passwordFallback?: Snippet
+    /** The browser extension for the open vault, in its panel. */
+    vaultExtension?: Snippet
     /** The current identity's own unlock prompt (its PIN), on its card. */
     identityPrompt?: Snippet
     /** First-vault setup. It belongs to the current identity, or to the
@@ -520,6 +523,7 @@ join) sit between the hero and the cards.
             !(setupShown && card.identityId === setupIdentityId)
               ? { passwordFallback }
               : {}}
+            {...vaultExtension ? { vaultExtension } : {}}
           />
         {/each}
         <button

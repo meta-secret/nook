@@ -6,6 +6,7 @@ import {
   signedSentinelInvitation,
   openVaultPage,
   openKeysPage,
+  openOpenVaultPanel,
 } from './helpers'
 
 test.describe('persistent workspace routing', () => {
@@ -277,11 +278,13 @@ test.describe('persistent workspace routing', () => {
   }) => {
     await connectLocalVault(page)
 
-    await page.getByTestId('vault-import-btn').click()
+    // The vault's own pages open from its panel beside the card.
+    await openOpenVaultPanel(page)
+    await page.getByTestId('vault-panel-import').click()
     await expect(page).toHaveURL(/\/vault\/import$/)
     await page.getByTestId('page-bar-back').click()
-    await expect(page).toHaveURL(/\/vault$/)
-    await expect(page.getByTestId('vault-panel')).toBeVisible()
+    await expect(page).toHaveURL(/\/identities$/)
+    await expect(page.getByTestId('identities-hub')).toBeVisible()
 
     await page.getByTestId('header-identities-btn').click()
     await page.getByTestId('identity-overview-toggle').first().click()

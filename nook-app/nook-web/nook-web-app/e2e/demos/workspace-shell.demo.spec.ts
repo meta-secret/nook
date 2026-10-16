@@ -2,6 +2,7 @@ import { expect, test } from '../fixtures'
 import {
   clearBrowserVault,
   connectLocalVault,
+  openOpenVaultPanel,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   UI_TIMEOUT_MS,
 } from '../helpers'
@@ -19,11 +20,16 @@ test('the vault page holds items; the identity card manages the rest', async ({
     timeout: UI_TIMEOUT_MS,
   })
 
-  // The vault page band carries Import and the browser extension, and no
-  // identity management.
-  await expect(page.getByTestId('vault-import-btn')).toBeVisible()
-  await expect(page.getByTestId('vault-extension-install')).toBeVisible()
+  // The vault page holds only its items: imports and the browser extension
+  // belong to the vault's panel beside the card, management to the card.
+  await expect(page.getByTestId('vault-import-btn')).toHaveCount(0)
+  await expect(page.getByTestId('vault-extension-install')).toHaveCount(0)
   await expect(page.getByTestId('identity-menu')).toHaveCount(0)
+  await page.waitForTimeout(DEMO_BEAT_MS)
+
+  await openOpenVaultPanel(page)
+  await expect(page.getByTestId('vault-panel-import')).toBeVisible()
+  await expect(page.getByTestId('vault-extension-install')).toBeVisible()
   await page.waitForTimeout(DEMO_BEAT_MS)
 
   // Manage on the identity card holds actions, adding a device first;

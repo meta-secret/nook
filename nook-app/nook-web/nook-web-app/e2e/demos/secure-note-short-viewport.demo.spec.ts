@@ -14,7 +14,7 @@ test('keep secure-note editing usable above a short mobile viewport', async ({
   await connectLocalVault(page)
   await demoBeat(page)
 
-  await expect(page.getByTestId('vault-extension-install')).toBeVisible({
+  await expect(page.getByTestId('add-secret-btn')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
   await demoBeat(page)
@@ -49,8 +49,5 @@ test('keep secure-note editing usable above a short mobile viewport', async ({
   await expect(
     page.getByTestId('secret-row').filter({ hasText: 'Travel recovery notes' }),
   ).toBeVisible({ timeout: UI_TIMEOUT_MS })
-  await expect(page.getByTestId('vault-extension-install')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
   await demoBeat(page)
 })

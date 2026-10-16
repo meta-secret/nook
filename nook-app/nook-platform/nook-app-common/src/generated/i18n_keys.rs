@@ -2319,7 +2319,6 @@ pub const WORKSPACE_IDENTITIES_EYEBROW: &str = "workspace.identities_eyebrow";
 pub const WORKSPACE_IDENTITIES_TITLE: &str = "workspace.identities_title";
 pub const WORKSPACE_IDENTITY_FALLBACK: &str = "workspace.identity_fallback";
 pub const WORKSPACE_IDENTITY_VAULT_SETUP: &str = "workspace.identity_vault_setup";
-pub const WORKSPACE_IMPORT_ACTION: &str = "workspace.import_action";
 pub const WORKSPACE_KEY_KIND_MIXED: &str = "workspace.key_kind_mixed";
 pub const WORKSPACE_KEY_KIND_NONE: &str = "workspace.key_kind_none";
 pub const WORKSPACE_KEY_KIND_PASSKEY: &str = "workspace.key_kind_passkey";

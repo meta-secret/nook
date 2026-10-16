@@ -95,6 +95,24 @@ export async function openIdentitiesPage(page: Page): Promise<void> {
   })
 }
 
+/** Open the open vault's panel beside its card on the identities page: its
+ * passphrases, imports and browser extension live there. */
+export async function openOpenVaultPanel(page: Page): Promise<void> {
+  if (!(await page.getByTestId('identities-hub').isVisible())) {
+    await openIdentitiesPage(page)
+  }
+  const openRow = page
+    .locator('[data-testid="identity-vault-row"][data-state="open"]')
+    .first()
+  await expect(openRow).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  if ((await openRow.getAttribute('aria-expanded')) !== 'true') {
+    await openRow.click()
+  }
+  await expect(page.getByTestId('vault-panel-manage')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+}
+
 /** Open one management page from wherever the workspace currently is. */
 export async function openManagePage(
   page: Page,
@@ -102,29 +120,23 @@ export async function openManagePage(
 ): Promise<void> {
   const marker = page.getByTestId(MANAGE_PAGE_MARKERS[target])
   if (await marker.isVisible()) return
-  // Import belongs to the vault page.
-  if (target === ManagePage.Import) {
-    await openVaultPage(page)
-    await page.getByTestId('vault-import-btn').click()
-    await expect(marker).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  // Passphrases and imports belong to the open vault: its row opens its
+  // panel.
+  if (target === ManagePage.Passwords || target === ManagePage.Import) {
+    await openOpenVaultPanel(page)
+    await page
+      .getByTestId(
+        target === ManagePage.Import
+          ? 'vault-panel-import'
+          : 'vault-panel-passphrases',
+      )
+      .click()
+    await expect(marker).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
     return
   }
   // Every identity page opens from Manage on the current identity's card.
   if (!(await page.getByTestId('identities-hub').isVisible())) {
     await openIdentitiesPage(page)
-  }
-  // Passphrases belong to the open vault: its row opens its panel.
-  if (target === ManagePage.Passwords) {
-    const openRow = page
-      .locator('[data-testid="identity-vault-row"][data-state="open"]')
-      .first()
-    await expect(openRow).toBeVisible({ timeout: UI_TIMEOUT_MS })
-    if ((await openRow.getAttribute('aria-expanded')) !== 'true') {
-      await openRow.click()
-    }
-    await page.getByTestId('vault-panel-passphrases').click()
-    await expect(marker).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-    return
   }
   const opener = MANAGE_PAGE_OPENERS[target]
   const currentCard =

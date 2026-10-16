@@ -1,13 +1,12 @@
 <!--
 The browser extension, seen from a vault: it fills passwords from vaults,
-so its one control lives on the vault page. Not installed: install it.
-Installed without this vault: connect this vault too (the extension serves
-several vaults). Connected: a quiet tag says so.
+so it is one of the open vault's own items beside its card. Not installed:
+install it. Installed without this vault: connect this vault too (the
+extension serves several vaults). Connected: a quiet item says so.
 -->
 <script lang="ts">
-  import { Puzzle } from "@lucide/svelte";
+  import { ArrowUpRight, ChevronRight, Puzzle } from "@lucide/svelte";
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
-  import { Button } from "$lib/components/ui/button";
   import {
     ExtensionSetupOfferKind,
     type ExtensionSetupOffer,
@@ -50,44 +49,60 @@ several vaults). Connected: a quiet tag says so.
 </script>
 
 {#if offer.kind === ExtensionSetupOfferKind.Visible}
-  {#if status === ExtensionSetupStatus.NotInstalled}
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      title={vault.t(I18N_KEYS.ExtensionSetupVaultInstallTitle)}
-      data-testid="vault-extension-install"
-      disabled={installing}
-      onclick={() => void install()}
-    >
-      <Puzzle class="size-4" />
-      <span class="hidden sm:inline"
-        >{vault.t(I18N_KEYS.ExtensionSetupInstallCta)}</span
-      >
-    </Button>
-  {:else if status === ExtensionSetupStatus.Paired}
-    <span
-      class="nk-tag nk-tag-success inline-flex items-center gap-1"
-      title={vault.t(I18N_KEYS.ExtensionSetupVaultConnectedTitle)}
+  {#if status === ExtensionSetupStatus.Paired}
+    <div
+      class="nk-identity-menu-item border border-border"
       data-testid="vault-extension-connected"
     >
-      <Puzzle class="size-3" aria-hidden="true" />
-      {vault.t(I18N_KEYS.ExtensionSetupVaultConnected)}
-    </span>
+      <span class="nk-vault-icon nk-vault-icon-open" aria-hidden="true">
+        <Puzzle class="size-4" />
+      </span>
+      <span class="flex min-w-0 flex-1 flex-col">
+        <span class="truncate text-sm font-medium text-foreground"
+          >{vault.t(I18N_KEYS.ExtensionSetupVaultConnected)}</span
+        >
+        <span class="truncate text-xs text-muted-foreground"
+          >{vault.t(I18N_KEYS.ExtensionSetupVaultConnectedTitle)}</span
+        >
+      </span>
+    </div>
   {:else}
-    <Button
+    {@const notInstalled = status === ExtensionSetupStatus.NotInstalled}
+    <button
       type="button"
-      variant="outline"
-      size="sm"
-      title={vault.t(I18N_KEYS.ExtensionSetupVaultConnectTitle)}
-      data-testid="vault-pair-extension-btn"
-      disabled={vault.isVerifying}
-      onclick={onConnect}
+      class="nk-identity-menu-item border border-border disabled:cursor-default disabled:opacity-45"
+      data-testid={notInstalled
+        ? "vault-extension-install"
+        : "vault-pair-extension-btn"}
+      disabled={notInstalled ? installing : vault.isVerifying}
+      onclick={() => (notInstalled ? void install() : onConnect())}
     >
-      <Puzzle class="size-4" />
-      <span class="hidden sm:inline"
-        >{vault.t(I18N_KEYS.ExtensionSetupVaultConnect)}</span
-      >
-    </Button>
+      <span class="nk-vault-icon" aria-hidden="true">
+        <Puzzle class="size-4" />
+      </span>
+      <span class="flex min-w-0 flex-1 flex-col">
+        <span class="truncate text-sm font-medium text-foreground"
+          >{notInstalled
+            ? vault.t(I18N_KEYS.ExtensionSetupInstallCta)
+            : vault.t(I18N_KEYS.ExtensionSetupVaultConnect)}</span
+        >
+        <span class="truncate text-xs text-muted-foreground"
+          >{notInstalled
+            ? vault.t(I18N_KEYS.ExtensionSetupVaultInstallTitle)
+            : vault.t(I18N_KEYS.ExtensionSetupVaultConnectTitle)}</span
+        >
+      </span>
+      {#if notInstalled}
+        <ArrowUpRight
+          class="size-4 flex-none text-muted-foreground opacity-60"
+          aria-hidden="true"
+        />
+      {:else}
+        <ChevronRight
+          class="size-4 flex-none text-muted-foreground opacity-60"
+          aria-hidden="true"
+        />
+      {/if}
+    </button>
   {/if}
 {/if}
