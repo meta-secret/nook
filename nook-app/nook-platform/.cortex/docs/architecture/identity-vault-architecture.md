@@ -356,9 +356,16 @@ is registered in that identity's log from its genesis.
      [vault-event-log.md](../../../nook-event-log/.cortex/docs/architecture/vault-event-log.md).
    - No member writes into any vault log.
 
-A vault registered after the invite went out reaches the joiner through
-`vault-dek-granted`, like any member that joined concurrently with a
-registration.
+Two cases sit outside these steps:
+
+- A vault registered after the invite went out reaches the joiner through
+  `vault-dek-granted`, like any member that joined concurrently with a
+  registration.
+- Logs from earlier builds may hold `member-join-requested`,
+  `member-approved`, and `member-join-denied`. They still project, so members
+  admitted by approval stay members. Nothing writes them now. A pending
+  request from an earlier build is not offered for approval; that
+  installation joins with a new invite.
 
 **Prohibited:** make the member who issued the invite approve the joiner as
 well. The passphrase-protected code already proves the joiner holds the
@@ -366,11 +373,6 @@ invite, so a second confirmation adds a round trip and no security.
 
 **Required:** let the invite holder sign itself in, once, with the DEKs the
 code carries. The joiner reaches each vault through the identity.
-
-Logs from earlier builds may hold `member-join-requested`, `member-approved`,
-and `member-join-denied`. They still project, so members admitted by approval
-stay members. Nothing writes them now, and a pending request from an earlier
-build is not offered for approval; that installation joins with a new invite.
 
 ### Revoke an installation
 

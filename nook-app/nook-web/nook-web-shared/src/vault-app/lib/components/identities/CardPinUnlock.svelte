@@ -1,12 +1,19 @@
 <!--
 PIN unlock on a locked identity card. An identity whose key on this browser
 is a PIN (passkeys were unavailable when it was made) unlocks here instead of
-with a passkey ceremony.
+with a passkey ceremony. The prompt takes the vault panel's place, so a wrong
+PIN and this browser's PIN recovery show here too.
 -->
 <script lang="ts">
   import { RefreshCw } from "@lucide/svelte";
   import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import { Button } from "$lib/components/ui/button";
+  import DeviceRecoveryAction from "$lib/components/DeviceRecoveryAction.svelte";
+  import {
+    DeviceRecoveryKind,
+    DeviceRecoveryOffer,
+    type DeviceRecoveryRequest,
+  } from "$lib/components/device-recovery";
   import type { VaultState } from "$lib/vault.svelte";
 
   let {
@@ -22,6 +29,16 @@ with a passkey ceremony.
   } = $props();
 
   let pin = $state("");
+
+  /** Why the last PIN did not unlock this browser's key. */
+  const unlockError = $derived(isVerifying ? "" : vault.errorMsg);
+  const recovery = $derived.by(() => {
+    const request: DeviceRecoveryRequest = {
+      status: vault.deviceProtectionStatus,
+      unlockFailed: Boolean(unlockError),
+    };
+    return new DeviceRecoveryOffer(request).kind;
+  });
 
   function submit(event: SubmitEvent): void {
     event.preventDefault();
@@ -65,4 +82,20 @@ with a passkey ceremony.
   >
     {vault.t(I18N_KEYS.CommonCancel)}
   </button>
+  {#if unlockError}
+    <p
+      class="text-sm text-pretty text-destructive"
+      role="alert"
+      data-testid="card-pin-error"
+    >
+      {unlockError}
+    </p>
+  {/if}
+  {#if recovery !== DeviceRecoveryKind.None}
+    <DeviceRecoveryAction
+      {vault}
+      kind={recovery}
+      recoveryAppId={vault.deviceId}
+    />
+  {/if}
 </form>

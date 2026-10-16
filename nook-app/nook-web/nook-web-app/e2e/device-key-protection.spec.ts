@@ -798,7 +798,7 @@ test.describe('passkey device-key protection', () => {
     await openCardPinPrompt(page)
     await page.getByTestId('card-pin-input').fill('000000')
     await page.getByTestId('card-pin-submit').click()
-    await expect(page.getByTestId('vault-panel-unlock-error')).toContainText(
+    await expect(page.getByTestId('card-pin-error')).toContainText(
       'The PIN or passphrase did not unlock this browser. Check it and try again.',
     )
     await expect(page.getByTestId('device-recovery')).toHaveAttribute(
