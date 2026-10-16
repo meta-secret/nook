@@ -117,7 +117,6 @@ band, the scrolling page and the status line.
   let manageOriginRecorded = $state(false)
   /** Where "Add a device" was opened from; the flow returns there. A link
    * straight to the flow returns to the Devices page. */
-  let addDeviceOrigin = $state(WorkspaceSection.Devices)
   const secretsNoteEditorOpen = $derived(
     secretsAddOpen &&
       secretsAddFormType.kind === SecretEditorModeKind.Adding &&
@@ -259,8 +258,6 @@ band, the scrolling page and the status line.
   }
 
   function openSection(next: WorkspaceSection): void {
-    if (next === WorkspaceSection.AddDevice && section !== next)
-      addDeviceOrigin = section
     const nextManaging =
       new WorkspaceSectionScope(next).scope !== ManageSectionScope.None
     // Adding a device is a detour: leaving it keeps the way back the
@@ -281,6 +278,12 @@ band, the scrolling page and the status line.
         : scope === ManageSectionScope.Vault
           ? WorkspaceSection.Vault
           : WorkspaceSection.Identities,
+  )
+
+  const backLabel = $derived(
+    backDestination === WorkspaceSection.Vault
+      ? vault.t(I18N_KEYS.WorkspaceBackToVault)
+      : vault.t(I18N_KEYS.WorkspaceBackToIdentities),
   )
 
   /** Back leaves management for the page it was entered from. */
@@ -607,7 +610,6 @@ band, the scrolling page and the status line.
   </div>
 {:else if scope === ManageSectionScope.Identity}
   <IdentityPageFrame
-    {vault}
     identityName={section === WorkspaceSection.Settings
       ? ''
       : section === WorkspaceSection.Passwords
@@ -615,6 +617,7 @@ band, the scrolling page and the status line.
         : identityName}
     title={barTitle}
     testId={section}
+    backLabel={backLabel}
     onBack={goBack}
   >
     {@render identityPanel()}
@@ -639,7 +642,7 @@ band, the scrolling page and the status line.
   <AddDeviceFlow
     {vault}
     {identityName}
-    onBack={() => openSection(addDeviceOrigin)}
+    onBack={() => openSection(WorkspaceSection.Identities)}
     onOpenSync={addSyncProvider}
   />
 {:else}
@@ -658,9 +661,7 @@ band, the scrolling page and the status line.
         testId={section === WorkspaceSection.Vault
           ? 'vault-page-bar'
           : 'manage-page-bar'}
-        backLabel={backDestination === WorkspaceSection.Vault
-          ? vault.t(I18N_KEYS.WorkspaceBackToVault)
-          : vault.t(I18N_KEYS.WorkspaceBackToIdentities)}
+        {backLabel}
         onBack={goBack}
       >
         {#snippet tags()}

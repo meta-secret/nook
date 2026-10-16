@@ -1,7 +1,8 @@
 <!--
 Adding a device: a focused page outside identity management. A hero names
-it and draws this device, the cloud copy and the new device; a progress bar
-counts cloud copy, invite and join; one card holds the stage at hand.
+it, leads back to the identities hub, and draws this device, the cloud copy
+and the new device; a progress bar counts cloud copy, invite and join; one
+card holds the stage at hand.
 Every place that offers "Add a device" opens this.
 -->
 <script lang="ts">
@@ -11,7 +12,7 @@ Every place that offers "Add a device" opens this.
   import OnboardDevice from "$lib/components/OnboardDevice.svelte";
   import IdentityStandingNotices from "$lib/components/identity-control/IdentityStandingNotices.svelte";
   import { IdentityStandingPresentation } from "$lib/components/identity-control/identity-standing";
-  import FirstRunBackLink from "$lib/components/login/FirstRunBackLink.svelte";
+  import BackButton from "$lib/components/workspace/BackButton.svelte";
   import StepProgress from "$lib/components/login/StepProgress.svelte";
   import { Button } from "$lib/components/ui/button";
   import { CipherField, scramble } from "$lib/components/ui/cipher";
@@ -173,33 +174,38 @@ Every place that offers "Add a device" opens this.
 {/snippet}
 
 <section
-  class="mx-auto grid w-full max-w-4xl gap-6 py-6 sm:py-10"
+  class="mx-auto grid w-full max-w-4xl gap-6 py-4 sm:py-8"
   data-testid="add-device-page"
 >
-  <FirstRunBackLink {vault} testId="add-device-back" {onBack} />
-
   <header class="nk-frame-tab nk-hero relative">
     <CipherField class="nk-hero-cipher" />
     <div class="relative grid gap-8">
-      <div class="min-w-0">
-        <p class="nk-eyebrow">
-          <ShieldCheck class="size-3.5 text-success" aria-hidden="true" />
-          {vault.t(I18N_KEYS.AddDeviceEyebrow)}<span
-            class="nk-caret"
-            aria-hidden="true"
-          ></span>
-        </p>
-        {#key vault.locale}
-          <h1
-            class="mt-2.5 text-[clamp(1.875rem,4.5vw,2.75rem)] leading-[1.05] font-semibold tracking-[-0.03em] text-foreground"
-            use:scramble
-          >
-            {vault.t(I18N_KEYS.AddDeviceTitle)}
-          </h1>
-        {/key}
-        <p class="mt-3 max-w-[48ch] text-sm text-pretty text-muted-foreground sm:text-base">
-          {intro}
-        </p>
+      <div class="flex min-w-0 items-start gap-4">
+        <BackButton
+          label={vault.t(I18N_KEYS.WorkspaceBackToIdentities)}
+          testId="add-device-back"
+          {onBack}
+        />
+        <div class="min-w-0">
+          <p class="nk-eyebrow">
+            <ShieldCheck class="size-3.5 text-success" aria-hidden="true" />
+            {vault.t(I18N_KEYS.AddDeviceEyebrow)}<span
+              class="nk-caret"
+              aria-hidden="true"
+            ></span>
+          </p>
+          {#key vault.locale}
+            <h1
+              class="mt-2.5 text-[clamp(1.875rem,4.5vw,2.75rem)] leading-[1.05] font-semibold tracking-[-0.03em] text-foreground"
+              use:scramble
+            >
+              {vault.t(I18N_KEYS.AddDeviceTitle)}
+            </h1>
+          {/key}
+          <p class="mt-3 max-w-[48ch] text-sm text-pretty text-muted-foreground sm:text-base">
+            {intro}
+          </p>
+        </div>
       </div>
       <div class="max-w-xl">
         <PairingDiagram {vault} {stage} {providerLabel} />

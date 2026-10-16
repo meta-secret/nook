@@ -104,6 +104,13 @@ test('the identity card leads to adding a device in three steps', async ({
   await demoBeat(page)
 
   // Identity details lists what the identity has; Devices opens from it.
+  // Back sits on the hero's title row and returns to the identities hub.
+  await expect(
+    page
+      .getByTestId('add-device-page')
+      .locator('header')
+      .getByTestId('add-device-back'),
+  ).toBeVisible()
   await page.getByTestId('add-device-back').click()
   await expect(page.getByTestId('identities-hub')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
@@ -118,6 +125,13 @@ test('the identity card leads to adding a device in three steps', async ({
   await expect(page.getByTestId('vault-devices-panel')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
+  // The page's Back shares the row with its title.
+  await expect(
+    page
+      .getByTestId('identity-page')
+      .locator('header')
+      .getByTestId('identity-page-back'),
+  ).toBeVisible()
   await snapshot(page, '7-devices-page')
   await demoBeat(page)
 

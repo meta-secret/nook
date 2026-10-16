@@ -4,9 +4,8 @@ state, and the page's own actions. Only the identities hub gets a hero.
 -->
 <script lang="ts">
   import type { Snippet } from 'svelte'
-  import { ArrowLeft } from '@lucide/svelte'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
-  import { Button } from '$lib/components/ui/button'
+  import BackButton from './BackButton.svelte'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {
@@ -46,18 +45,13 @@ state, and the page's own actions. Only the identities hub gets a hero.
 >
   <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
     {#if onBack}
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        class="-ml-2 size-9 shrink-0 {backOnPhonesOnly ? 'md:hidden' : ''}"
-        aria-label={backLabel || vault.t(I18N_KEYS.WorkspaceBackToIdentities)}
-        title={backLabel || vault.t(I18N_KEYS.WorkspaceBackToIdentities)}
-        data-testid="page-bar-back"
-        onclick={onBack}
-      >
-        <ArrowLeft class="size-4" />
-      </Button>
+      <span class="contents {backOnPhonesOnly ? 'md:hidden' : ''}">
+        <BackButton
+          label={backLabel || vault.t(I18N_KEYS.WorkspaceBackToIdentities)}
+          testId="page-bar-back"
+          {onBack}
+        />
+      </span>
     {/if}
     <div class="min-w-0 flex-1">
       {#if eyebrow}
