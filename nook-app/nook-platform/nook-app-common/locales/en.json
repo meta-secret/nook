@@ -1677,18 +1677,18 @@
       "step_label": "Browser companion",
       "pilot_return_guidance": "Return to the site and select Continue with Nook again to retry.",
       "unlocked": "Unlocked",
-      "vaults_title": "Vaults on this browser",
-      "vaults_hint": "The extension fills passwords and passkeys from these vaults on websites.",
+      "vaults_title": "Connected identities",
+      "vaults_hint": "The extension fills passwords and passkeys from every vault of these identities.",
       "default_vault": "Default",
       "default_vault_hint": "New logins are saved here",
       "make_default": "Make default",
       "fills_passwords": "Passwords",
       "manages_passkeys": "Passkeys",
       "item_count": "{count} items",
-      "connect_another": "Connect another vault",
-      "no_vaults_title": "No vault connected yet",
-      "no_vaults_body": "Connect a vault: Nook opens, you unlock one of your vaults there and approve this browser.",
-      "connect_vault": "Connect a vault",
+      "connect_another": "Connect another identity",
+      "no_vaults_title": "No identity connected yet",
+      "no_vaults_body": "Connect Nook: it opens, you unlock one of your vaults there, and this browser joins that identity with all of its vaults.",
+      "connect_vault": "Connect an identity",
       "open_nook": "Open Nook",
       "make_default_failed": "Nook could not change the default vault. Try again.",
       "other_vaults": "Other vaults"
@@ -1862,7 +1862,6 @@
     },
     "consent": {
       "title": "Approve Nook extension",
-      "description": "This adds a separate passkey-protected extension device to the unlocked Simple vault. The extension remains a permissioned filling companion; Sentinel Vault never participates.",
       "device": "Extension device",
       "encryption_key": "Encryption public key",
       "signing_key": "Signing public key",
@@ -1881,7 +1880,9 @@
       "approval_failed": "Failed to approve extension device.",
       "approved_return": "Browser access approved. You can close this window or return to your vault.",
       "approving": "Approving…",
-      "approve": "Approve extension"
+      "approve": "Approve extension",
+      "joins_identity": "The extension joins {identity} as another device: it opens every vault in {identity}, including vaults you create later. It stays a filling companion with these permissions only.",
+      "vault_only": "{identity} has no cloud sync provider yet, so the extension connects this vault only. Add one to connect every vault in {identity}."
     },
     "popup": {
       "checking_this_page": "Checking this page",
@@ -1906,9 +1907,9 @@
     },
     "request": {
       "eyebrow": "Connection request",
-      "title": "{label} wants to connect",
-      "body": "It fills passwords on websites from the vault you connect. Choose the vault and unlock it here; you approve the connection on the next step.",
-      "vaults": "Connect a vault",
+      "title": "{label} wants to join an identity",
+      "body": "It joins the identity you choose and fills passwords from all of its vaults, including new ones. Unlock one of that identity's vaults here; you approve on the next step.",
+      "vaults": "Unlock to connect",
       "vault_action": "Unlock and review",
       "no_vaults": "This identity has no vault yet. Create one, then connect it."
     }

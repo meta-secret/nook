@@ -14,6 +14,10 @@ import { ExtensionConnectScope } from "./extension-connect-scope";
 import { extensionPairingVaultType } from "./extension-pairing-vault-type";
 import { ExtensionPairingApprovedMessageAdmissionFailure } from "./extension-pairing-admission-failure";
 import {
+  ExtensionIdentityInviteWireKind,
+  type ExtensionIdentityInviteWire,
+} from "./identity-invite-wire";
+import {
   RuntimeMessageDecodeFailure,
   RuntimeMessageDecodeCauseKind,
   RuntimeMessageDecodeFailureKind,
@@ -133,6 +137,8 @@ export type ExtensionPairingApprovedGrant = Omit<
   "syncProviderCount"
 > & {
   providers: ExtensionPairingStorageProviderPayload[];
+  /** How the extension joins the vault's identity, beyond this vault. */
+  identityInvite: ExtensionIdentityInviteWire;
 };
 export type ExtensionPairingStorageProviderPayload =
   RustExtensionPairingStorageProviderPayload;
@@ -163,6 +169,64 @@ export class ExtensionPairingStorageProviderPayloadDecoder {
 
 export class ExtensionPairingApprovedGrantAdmission {
   private constructor() {}
+
+  /** The identity invite beside an approval; an approval without one comes
+   * from a web app that predates identity connection. */
+  private static identityInvite(
+    payload: unknown,
+  ): Result<
+    ExtensionIdentityInviteWire,
+    ExtensionPairingApprovedMessageAdmissionFailure
+  > {
+    const notOffered: ExtensionIdentityInviteWire = {
+      kind: ExtensionIdentityInviteWireKind.NotOffered,
+    };
+    if (!payload || typeof payload !== "object") return ok(notOffered);
+    if (!("identityInvite" in payload)) return ok(notOffered);
+    const invite = payload.identityInvite;
+    if (!invite || typeof invite !== "object" || !("kind" in invite))
+      return err(
+        ExtensionPairingApprovedMessageAdmissionFailure.IdentityInvite,
+      );
+    if (invite.kind === ExtensionIdentityInviteWireKind.NotOffered)
+      return ok(notOffered);
+    if (invite.kind === ExtensionIdentityInviteWireKind.NeedsCloud) {
+      const needsCloud: ExtensionIdentityInviteWire = {
+        kind: ExtensionIdentityInviteWireKind.NeedsCloud,
+      };
+      return ok(needsCloud);
+    }
+    if (
+      invite.kind !== ExtensionIdentityInviteWireKind.Invited ||
+      !("identityId" in invite) ||
+      typeof invite.identityId !== "string" ||
+      !invite.identityId.trim() ||
+      !("identityLabel" in invite) ||
+      typeof invite.identityLabel !== "string" ||
+      !("code" in invite) ||
+      typeof invite.code !== "string" ||
+      !invite.code.trim() ||
+      !("sealedPassphrase" in invite) ||
+      typeof invite.sealedPassphrase !== "string" ||
+      !invite.sealedPassphrase.trim() ||
+      !("mountProviderId" in invite) ||
+      typeof invite.mountProviderId !== "string" ||
+      !invite.mountProviderId.trim()
+    )
+      return err(
+        ExtensionPairingApprovedMessageAdmissionFailure.IdentityInvite,
+      );
+    const invited: ExtensionIdentityInviteWire = {
+      kind: ExtensionIdentityInviteWireKind.Invited,
+      identityId: invite.identityId,
+      identityLabel: invite.identityLabel,
+      code: invite.code,
+      sealedPassphrase: invite.sealedPassphrase,
+      mountProviderId: invite.mountProviderId,
+    };
+    return ok(invited);
+  }
+
   static parse(
     value: unknown,
   ): Result<
@@ -230,6 +294,12 @@ export class ExtensionPairingApprovedGrantAdmission {
         return err(ExtensionPairingApprovedMessageAdmissionFailure.Providers);
       providers.push(decoded.success);
     }
+    const identityInvite =
+      ExtensionPairingApprovedGrantAdmission.identityInvite(payload);
+    if (identityInvite.isErr())
+      return err(
+        ExtensionPairingApprovedMessageAdmissionFailure.IdentityInvite,
+      );
     const grant: ExtensionPairingApprovedGrant = {
       vaultType: vaultType.value,
       deviceId: payload.deviceId,
@@ -246,6 +316,7 @@ export class ExtensionPairingApprovedGrantAdmission {
       approvedAt: payload.approvedAt,
       scopes,
       providers,
+      identityInvite: identityInvite.value,
     };
     return ok(grant);
   }

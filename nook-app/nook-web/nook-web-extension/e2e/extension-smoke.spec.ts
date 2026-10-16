@@ -29,6 +29,7 @@ import {
   simple_vault_url,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
+import { ExtensionIdentityInviteWireKind } from '../../nook-web-shared/src/extension/identity-invite-wire'
 import {
   ensurePinProtectedPopup,
   installForcePinDeviceProtection,
@@ -479,6 +480,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
           ExtensionConnectScope.PasswordFilling,
         ],
         providers: [],
+        identityInvite: { kind: ExtensionIdentityInviteWireKind.NotOffered },
       },
       eventLogRecords: syntheticEventLogRecords,
     }
@@ -565,7 +567,7 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     )
     await expect(
       pairingPopupPage.getByTestId('connect-simple-vault-btn'),
-    ).toHaveText('Connect another vault')
+    ).toHaveText('Connect another identity')
     const pairingPagePromise = context.waitForEvent('page', { timeout: 30_000 })
     await pairingPopupPage.getByTestId('connect-simple-vault-btn').click()
     const pairingPage = await pairingPagePromise

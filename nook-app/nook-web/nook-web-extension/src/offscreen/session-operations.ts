@@ -43,6 +43,10 @@ import {
   ActivatedExtensionIdentityLifecycle,
 } from './session-vault-operations'
 import { PasskeyBrowserBytes } from './session-key-material'
+import {
+  connectExtensionIdentityVault,
+  joinExtensionIdentity,
+} from './session-identity-operations'
 import { extensionVaultGrant } from './session-vault-grant'
 import {
   type WebsitePasskeyOperationArgs,
@@ -438,6 +442,19 @@ export async function handleSessionMessage({
           message,
         }
         return importExtensionVault(importArgs)
+      }
+      case ExtensionSessionMessageType.JoinIdentity: {
+        const joinRequest: Parameters<typeof joinExtensionIdentity>[0] = {
+          manager: await getManager(),
+          message,
+        }
+        return joinExtensionIdentity(joinRequest)
+      }
+      case ExtensionSessionMessageType.ConnectIdentityVault: {
+        const connectRequest: Parameters<
+          typeof connectExtensionIdentityVault
+        >[0] = { manager: await getManager(), message }
+        return connectExtensionIdentityVault(connectRequest)
       }
       case ExtensionSessionMessageType.UpdateVault: {
         const payload = message.payload

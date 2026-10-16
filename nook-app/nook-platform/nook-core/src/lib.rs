@@ -23,7 +23,7 @@ mod vault;
 
 pub(crate) use auth::{
     device_key_protection, enrollment, extension_identity_handoff, multi_device, password_envelope,
-    website_login_save,
+    sealed_invite, website_login_save,
 };
 pub(crate) use crypto::{vault_crypto, vault_epoch_crypto};
 pub use device_access::{
@@ -186,6 +186,7 @@ pub use passkey_authenticator::{
     PasskeyRegistrationRequest, PasskeyRegistrationResult, PasskeyRelyingParty, PasskeyUser,
 };
 pub use proton_pass_import::{ProtonPassImportError, ProtonPassImportInput, ProtonPassImportPlan};
+pub use sealed_invite::{InvitePassphraseOpen, InvitePassphraseSeal};
 pub use secret_types::{
     ApiKeySecret, FILE_ATTACHMENT_MAX_BYTES, FileAttachmentByteCount, FileAttachmentSecret,
     LoginSecret, PASSKEY_SECRET_VERSION, PasskeyCredentialKey, PasskeyPrivateKeyPkcs8,

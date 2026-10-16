@@ -15,6 +15,7 @@ import {
   ExtensionPairingApprovedMessage as ExtensionPairingApprovedMessageSchema,
   type ExtensionPairingApprovedMessage,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
+import { ExtensionIdentityInviteWireKind } from '../../../../nook-web-shared/src/extension/identity-invite-wire'
 import {
   extensionPairingGrantStorageItems,
   extensionStoredPairingGrantStorageItems,
@@ -74,6 +75,7 @@ describe('extension pairing approved message', () => {
           approvedAt: 1_783_373_640_000,
           scopes: [ExtensionConnectScope.VaultAccess],
           providers: [],
+          identityInvite: { kind: ExtensionIdentityInviteWireKind.NotOffered },
         },
         eventLogRecords,
       },
@@ -268,6 +270,67 @@ describe('extension pairing approved message', () => {
         ),
       )._tag,
     ).toBe('Success')
+  })
+
+  test('carries the identity invite that lets the extension join the identity', () => {
+    const message = approvalDeliveryArgs().message
+    const invite = {
+      kind: ExtensionIdentityInviteWireKind.Invited,
+      identityId: 'identity-1',
+      identityLabel: 'Personal',
+      code: 'nook-enroll-code',
+      sealedPassphrase: '-----BEGIN AGE ENCRYPTED FILE-----\\nsealed',
+      mountProviderId: 'github-1',
+    }
+    const admission = Effect.runSync(
+      Effect.result(
+        ExtensionPairingApprovedMessageSchema.decode({
+          ...message,
+          payload: { ...message.payload, identityInvite: invite },
+        }),
+      ),
+    )
+    expect(admission._tag).toBe('Success')
+    if (admission._tag === 'Failure') return
+    expect(admission.success.payload.identityInvite).toEqual(invite)
+  })
+
+  test('reads an approval without an identity invite as not offered', () => {
+    const message = approvalDeliveryArgs().message
+    const payload: Partial<typeof message.payload> = { ...message.payload }
+    delete payload.identityInvite
+    const admission = Effect.runSync(
+      Effect.result(
+        ExtensionPairingApprovedMessageSchema.decode({ ...message, payload }),
+      ),
+    )
+    expect(admission._tag).toBe('Success')
+    if (admission._tag === 'Failure') return
+    expect(admission.success.payload.identityInvite).toEqual({
+      kind: ExtensionIdentityInviteWireKind.NotOffered,
+    })
+  })
+
+  test('rejects an identity invite without its sealed passphrase', () => {
+    const message = approvalDeliveryArgs().message
+    const admission = Effect.runSync(
+      Effect.result(
+        ExtensionPairingApprovedMessageSchema.decode({
+          ...message,
+          payload: {
+            ...message.payload,
+            identityInvite: {
+              kind: ExtensionIdentityInviteWireKind.Invited,
+              identityId: 'identity-1',
+              identityLabel: 'Personal',
+              code: 'nook-enroll-code',
+              mountProviderId: 'github-1',
+            },
+          },
+        }),
+      ),
+    )
+    expect(admission._tag).toBe('Failure')
   })
 
   test('rejects ISO approval timestamps at the new-grant browser boundary', () => {

@@ -213,7 +213,7 @@ test('restores the paired companion home after a restart unlock and popup reopen
   await expect(page.getByTestId('companion-make-default')).toHaveCount(1)
   await expect(page.getByTestId('open-simple-vault-btn')).toBeVisible()
   await expect(page.getByTestId('connect-simple-vault-btn')).toHaveText(
-    'Connect another vault',
+    'Connect another identity',
   )
   await page.reload()
   await expect(page.getByTestId('extension-runtime-error')).toHaveCount(0)

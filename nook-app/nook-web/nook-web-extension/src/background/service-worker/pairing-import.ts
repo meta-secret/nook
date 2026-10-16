@@ -32,6 +32,7 @@ import {
 } from '../pairing-grants'
 import { backgroundVaultRuntime } from '../vault-runtime'
 import { extensionPairingIdentity } from './pairing-identity'
+import { PairingIdentityConnection } from './pairing-identity-connection'
 import { extensionSessionLifecycle } from './session-lifecycle'
 
 export enum PairingIngressFailure {
@@ -350,15 +351,38 @@ export class PairingCredentialImportLifecycle {
         return { ok: false, reason: 'invalid-provider-payload' }
       }
       const stagedProviders = staging.value
+      // Kept for the identity's other vaults: the first import clears its own.
+      const identityProviders = structuredClone(stagedProviders)
       try {
         const args: ImportDecodedApprovedPairingArgs = {
           message: this.message,
           sessionEventLogRecords: this.sessionEventLogRecords,
           providers: stagedProviders,
         }
-        return await importDecodedApprovedPairing(args)
+        const approved = await importDecodedApprovedPairing(args)
+        if (!approved.ok) return approved
+        const connectionRequest: ConstructorParameters<
+          typeof PairingIdentityConnection
+        >[0] = {
+          message: this.message,
+          providers: identityProviders,
+          importVault: ({ message, providers }) => {
+            const vaultArgs: ImportDecodedApprovedPairingArgs = {
+              message,
+              sessionEventLogRecords: message.eventLogRecords,
+              providers,
+            }
+            return importDecodedApprovedPairing(vaultArgs)
+          },
+          sendSessionMessage: (...request) =>
+            extensionPairingIdentity.sendSessionMessage(...request),
+        }
+        return await new PairingIdentityConnection(connectionRequest).connect(
+          approved.eventCount,
+        )
       } finally {
         new ProviderCredentialBuffer(stagedProviders).clear()
+        new ProviderCredentialBuffer(identityProviders).clear()
       }
     } catch {
       return { ok: false, reason: 'event-log-import-failed' }

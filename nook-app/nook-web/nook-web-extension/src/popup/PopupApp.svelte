@@ -407,7 +407,10 @@
                     <FolderKey size={14} />
                   </span>
                   <div class="vault-row-main">
-                    <span class="vault-row-name">{vault.vaultName}</span>
+                    <span class="vault-row-name"
+                      >{vault.vaultName ||
+                        translatePlain(I18N_KEYS.LoginVaultPickerUnnamed)}</span
+                    >
                     <span class="vault-row-meta">
                       {#if vault.fillsPasswords}
                         <span

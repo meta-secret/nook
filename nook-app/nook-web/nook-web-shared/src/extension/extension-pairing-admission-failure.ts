@@ -10,6 +10,7 @@ export enum ExtensionPairingApprovedMessageAdmissionFailure {
   EventLogRecordSchemaVersion = "invalid-pairing-grant-event-log-record-schema-version",
   EventLogRecordsEmpty = "invalid-pairing-grant-event-log-records-empty",
   EventLogRecordsNotArray = "invalid-pairing-grant-event-log-records-not-array",
+  IdentityInvite = "invalid-pairing-grant-identity-invite",
   MessageEnvelope = "invalid-pairing-grant-message-envelope",
   Payload = "invalid-pairing-grant-payload",
   Providers = "invalid-pairing-grant-providers",

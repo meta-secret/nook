@@ -149,6 +149,8 @@ class InstalledVaultEventLogListenerFixture {
       case ExtensionSessionMessageType.UnlockPin:
       case ExtensionSessionMessageType.SealIdentityHandoff:
       case ExtensionSessionMessageType.ImportVault:
+      case ExtensionSessionMessageType.JoinIdentity:
+      case ExtensionSessionMessageType.ConnectIdentityVault:
       case ExtensionSessionMessageType.UpdateVault:
       case ExtensionSessionMessageType.VaultSummary:
       case ExtensionSessionMessageType.ListPasskeys:
@@ -210,6 +212,8 @@ class InstalledVaultEventLogListenerFixture {
       case ExtensionSessionMessageType.UnlockPin:
       case ExtensionSessionMessageType.SealIdentityHandoff:
       case ExtensionSessionMessageType.ImportVault:
+      case ExtensionSessionMessageType.JoinIdentity:
+      case ExtensionSessionMessageType.ConnectIdentityVault:
       case ExtensionSessionMessageType.UpdateVault:
       case ExtensionSessionMessageType.VaultSummary:
       case ExtensionSessionMessageType.ListPasskeys:
