@@ -7,12 +7,14 @@
     vault,
     request,
     card,
+    selectedStoreId,
     busy = false,
     onConnect,
   }: {
     vault: VaultState
     request: ExtensionConnectRequest
     card: IdentityCardView
+    selectedStoreId: string
     busy?: boolean
     onConnect: (storeId: string) => void
   } = $props()
@@ -20,4 +22,10 @@
   const disabled = $derived(Boolean(vault && request && card && onConnect))
 </script>
 
-<div aria-hidden="true" data-disabled={disabled} data-busy={busy} hidden></div>
+<div
+  aria-hidden="true"
+  data-disabled={disabled}
+  data-busy={busy}
+  data-store-id={selectedStoreId}
+  hidden
+></div>
