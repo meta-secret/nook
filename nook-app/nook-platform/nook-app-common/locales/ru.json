@@ -1354,6 +1354,7 @@
     "local_folder": "Локальная резервная копия",
     "local_folder_desc": "Выберите папку — резервная копия зашифрованных событий на этом компьютере",
     "local_folder_unavailable_desc": "Требуется браузер с доступом на запись в папку",
+    "local_folder_unavailable_brave": "В Brave включите File System Access API в brave://flags",
     "unsupported_replication_desc": "Этот провайдер не поддерживает выбранный режим репликации.",
     "unsupported_current_vault": "Недоступно для режима репликации этого сейфа",
     "capability_personal_only": "Только личная репликация",

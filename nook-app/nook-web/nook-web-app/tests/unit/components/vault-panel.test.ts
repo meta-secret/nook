@@ -7,6 +7,7 @@ import {
 } from '$app-wasm'
 import { DeviceRecoveryKind } from '$lib/components/device-recovery'
 import type { VaultState } from '$lib/vault.svelte'
+import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { VaultStateTestFixture } from '../vault-state-test-fixture'
 import VaultPanel from '../../../../nook-web-shared/src/vault-app/lib/components/identities/VaultPanel.svelte'
 import {
@@ -138,7 +139,7 @@ describe('vault panel', () => {
     const count = () =>
       view.getByTestId('vault-panel-passphrases-count').textContent
 
-    expect(hint()).toBe('workspace.vault_panel_passphrases_none')
+    expect(hint()).toBe(I18N_KEYS.WorkspaceVaultPanelPassphrasesNone)
     expect(count()).toBe('0')
 
     // Adding one on the Passphrases page updates the session's list; the
@@ -153,7 +154,9 @@ describe('vault panel', () => {
       labels: ['Paper copy', 'Office safe', 'Spouse', 'Lawyer'],
     })
     flushSync()
-    expect(hint()).toBe('Paper copy, Office safe identity_overview.more:2')
+    expect(hint()).toBe(
+      `Paper copy, Office safe ${I18N_KEYS.IdentityOverviewMore}:2`,
+    )
     expect(count()).toBe('4')
   })
 
@@ -214,7 +217,7 @@ describe('vault panel', () => {
     const { view } = VaultPanelScenario.render(panelOptions)
 
     expect(view.getByTestId('vault-panel-passphrases-hint').textContent).toBe(
-      'workspace.vault_panel_passphrases_hint',
+      I18N_KEYS.WorkspaceVaultPanelPassphrasesHint,
     )
     expect(view.queryAllByTestId('vault-panel-passphrases-count')).toHaveLength(
       0,

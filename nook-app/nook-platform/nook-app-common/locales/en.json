@@ -1436,6 +1436,7 @@
     "local_folder": "Local backup",
     "local_folder_desc": "Choose a folder — backup encrypted event files on this computer",
     "local_folder_unavailable_desc": "Requires a browser with writable folder access",
+    "local_folder_unavailable_brave": "In Brave, turn on File System Access API in brave://flags",
     "unsupported_replication_desc": "This provider does not support the selected replication mode.",
     "unsupported_current_vault": "Unavailable for this vault's replication mode",
     "capability_personal_only": "Personal replication only",

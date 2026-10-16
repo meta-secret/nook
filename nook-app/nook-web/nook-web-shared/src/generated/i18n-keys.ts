@@ -1561,6 +1561,7 @@ export const I18N_KEYS = {
   ProviderPickerIcloudDesc: 'provider_picker.icloud_desc',
   ProviderPickerLocalFolder: 'provider_picker.local_folder',
   ProviderPickerLocalFolderDesc: 'provider_picker.local_folder_desc',
+  ProviderPickerLocalFolderUnavailableBrave: 'provider_picker.local_folder_unavailable_brave',
   ProviderPickerLocalFolderUnavailableDesc: 'provider_picker.local_folder_unavailable_desc',
   ProviderPickerThisDevice: 'provider_picker.this_device',
   ProviderPickerThisDeviceDesc: 'provider_picker.this_device_desc',

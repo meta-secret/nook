@@ -1869,6 +1869,8 @@ pub const PROVIDER_PICKER_ICLOUD: &str = "provider_picker.icloud";
 pub const PROVIDER_PICKER_ICLOUD_DESC: &str = "provider_picker.icloud_desc";
 pub const PROVIDER_PICKER_LOCAL_FOLDER: &str = "provider_picker.local_folder";
 pub const PROVIDER_PICKER_LOCAL_FOLDER_DESC: &str = "provider_picker.local_folder_desc";
+pub const PROVIDER_PICKER_LOCAL_FOLDER_UNAVAILABLE_BRAVE: &str =
+    "provider_picker.local_folder_unavailable_brave";
 pub const PROVIDER_PICKER_LOCAL_FOLDER_UNAVAILABLE_DESC: &str =
     "provider_picker.local_folder_unavailable_desc";
 pub const PROVIDER_PICKER_THIS_DEVICE: &str = "provider_picker.this_device";
