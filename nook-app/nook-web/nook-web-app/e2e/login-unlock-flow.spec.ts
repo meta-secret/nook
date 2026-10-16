@@ -117,7 +117,8 @@ test.describe('login unlock flow (local-first)', () => {
     await expect(open).toBeVisible({ timeout: UI_TIMEOUT_MS })
     await open.click()
     const entries = page.getByTestId('card-password-entry')
-    await expect(entries.locator('option')).toHaveText(['Personal', 'Travel'])
+    await expect(entries.locator('label')).toHaveText(['Personal', 'Travel'])
+    await expect(entries.getByRole('radio', { name: 'Personal' })).toBeChecked()
     await expect(page.getByTestId('card-password-input')).toBeVisible()
   })
 

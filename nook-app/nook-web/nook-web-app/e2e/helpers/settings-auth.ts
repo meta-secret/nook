@@ -850,7 +850,8 @@ export async function unlockWithCardPassword(
   if (opts.entryLabel) {
     await page
       .getByTestId('card-password-entry')
-      .selectOption({ label: opts.entryLabel })
+      .locator('label', { hasText: opts.entryLabel })
+      .click()
   }
   await page.getByTestId('card-password-input').fill(opts.password)
   await dismissSyncConflictIfVisible(page)
