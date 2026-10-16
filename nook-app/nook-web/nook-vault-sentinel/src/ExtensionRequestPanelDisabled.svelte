@@ -7,6 +7,7 @@
     vault,
     request,
     card,
+    busy = false,
     onConnect,
   }: {
     vault: VaultState
@@ -19,4 +20,4 @@
   const disabled = $derived(Boolean(vault && request && card && onConnect))
 </script>
 
-<div aria-hidden="true" data-disabled={disabled} hidden></div>
+<div aria-hidden="true" data-disabled={disabled} data-busy={busy} hidden></div>
