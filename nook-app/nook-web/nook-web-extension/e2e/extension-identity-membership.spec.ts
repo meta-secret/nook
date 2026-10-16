@@ -28,7 +28,10 @@ const GITHUB_PAT = 'ghp_test_token'
 const PAIRING_GRANT_PREFIX = 'nook:extension-pairing-grant:'
 
 function storeIdOf(yaml: string): string {
-  const [, storeId = ''] = /^store_id:\s*(\S+)/mu.exec(yaml) ?? []
+  const storeId = yaml.match(/^store_id:\s*(\S+)/mu)?.[1]
+  if (!storeId) {
+    throw new Error('store_id missing from vault yaml')
+  }
   return storeId
 }
 
