@@ -76,6 +76,7 @@ card, which then spans the full row.
     overviewOpen = false,
     passwordFallback,
     vaultExtension,
+    requestPanel,
     preview = false,
   }: {
     vault: VaultState
@@ -128,6 +129,9 @@ card, which then spans the full row.
     passwordFallback?: Snippet
     /** The browser extension for the open vault, in its panel. */
     vaultExtension?: Snippet
+    /** A request waiting on this identity (a browser extension asking to
+     * connect), beside the card when nothing else is open there. */
+    requestPanel?: Snippet<[IdentityCardView]>
     /** A preview of a card that does not exist yet: no actions. */
     preview?: boolean
   } = $props()
@@ -186,7 +190,8 @@ card, which then spans the full row.
     closeOthers()
     vault.vaultPanelStoreId = storeId
     const row = card.vaults.find((candidate) => candidate.storeId === storeId)
-    if (row?.state !== IdentityVaultRowState.Unavailable) onSelectVault?.(storeId)
+    if (row?.state !== IdentityVaultRowState.Unavailable)
+      onSelectVault?.(storeId)
   }
 
   function closeMenuOnEscape(event: KeyboardEvent): void {
@@ -287,6 +292,7 @@ card, which then spans the full row.
 <article
   class="nk-frame-keytag nk-frame-interactive min-w-0 {unlockPanel ||
   overviewPanel ||
+  requestPanel ||
   (managesHere && menuOpen) ||
   vaultOpenRow
     ? 'col-span-full grid grid-cols-1 lg:grid-cols-[minmax(0,23rem)_minmax(0,1fr)]'
@@ -662,6 +668,13 @@ card, which then spans the full row.
       data-testid="identity-card-overview"
     >
       {@render overviewPanel()}
+    </div>
+  {:else if requestPanel}
+    <div
+      class="min-w-0 border-t border-border p-5 sm:p-6 lg:border-l lg:border-t-0 lg:px-7"
+      data-testid="identity-card-request"
+    >
+      {@render requestPanel(card)}
     </div>
   {/if}
 </article>

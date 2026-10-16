@@ -16,6 +16,10 @@
   } from '$app-wasm'
   import { onDestroy } from 'svelte'
   import LoginGate from '$lib/components/LoginGate.svelte'
+  import {
+    ExtensionConnectIntentKind,
+    type ExtensionConnectIntent,
+  } from '$lib/app/route-state'
   import PasskeyAuthOverlay from '$lib/components/PasskeyAuthOverlay.svelte'
   import FirstRunProtectStep from '$lib/components/login/FirstRunProtectStep.svelte'
   import { FirstRunStage } from '$lib/vault/state/ui.svelte'
@@ -57,6 +61,7 @@
     onCreateSentinelParticipantKey,
     onCreateSentinelParticipantResponse,
     onDismissPasskey,
+    extensionConnectRequest = { kind: ExtensionConnectIntentKind.Absent },
   }: {
     vault: VaultState
     showAccessGate: boolean
@@ -80,6 +85,8 @@
       requestPayload: string,
     ) => Promise<SentinelActionResult<string>>
     onDismissPasskey: () => void
+    /** A browser extension asking to connect while this browser is locked. */
+    extensionConnectRequest?: ExtensionConnectIntent
   } = $props()
 
   const appVersion = '0.1.0'
@@ -143,6 +150,7 @@
         {onSentinelUnlocked}
         {onCreateDeviceVault}
         {extensionConnectPairingStatusEntries}
+        {extensionConnectRequest}
         {onStartSentinelGenesis}
         onCreateSentinelGenesisPublicKeyAnnouncement={onCreateSentinelParticipantKey}
         onCreateSentinelGenesisParticipantResponse={onCreateSentinelParticipantResponse}

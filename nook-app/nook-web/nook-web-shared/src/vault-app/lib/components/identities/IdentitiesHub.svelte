@@ -27,6 +27,7 @@ join) sit between the hero and the cards.
     type IdentitySectionTarget,
     type IdentityVaultTarget,
     type IdentityLocalVault,
+    type IdentityCardView,
   } from './identity-card-model'
   import {
     LoginVaultExtensionPairingStatusKind,
@@ -65,6 +66,7 @@ join) sit between the hero and the cards.
     unlockPanel,
     passwordFallback,
     vaultExtension,
+    requestPanel,
     identityPrompt,
     vaultSetup,
     vaultSetupOpen = false,
@@ -123,6 +125,9 @@ join) sit between the hero and the cards.
     passwordFallback?: Snippet
     /** The browser extension for the open vault, in its panel. */
     vaultExtension?: Snippet
+    /** A request waiting on the current identity (a browser extension
+     * asking to connect), beside its card. */
+    requestPanel?: Snippet<[IdentityCardView]>
     /** The current identity's own unlock prompt (its PIN), on its card. */
     identityPrompt?: Snippet
     /** First-vault setup. It belongs to the current identity, or to the
@@ -524,6 +529,7 @@ join) sit between the hero and the cards.
               ? { passwordFallback }
               : {}}
             {...vaultExtension ? { vaultExtension } : {}}
+            {...requestPanel && card.current ? { requestPanel } : {}}
           />
         {/each}
         <button

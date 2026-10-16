@@ -28,8 +28,8 @@ vault it holds instead. Shown on vault rows and in the unlock panel.
         return vault.t(I18N_KEYS.LoginVaultPickerExtensionPaired)
       case LoginVaultExtensionPairingStatusKind.NotPaired:
         return vault.t(I18N_KEYS.LoginVaultPickerExtensionNotPaired)
+      // An extension that cannot answer says nothing about this vault.
       case LoginVaultExtensionPairingStatusKind.Unavailable:
-        return vault.t(I18N_KEYS.LoginVaultPickerExtensionPairingUnavailable)
       case LoginVaultExtensionPairingStatusKind.NotShown:
         return ''
     }

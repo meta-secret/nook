@@ -13,7 +13,14 @@
     I18N_KEYS,
     type I18nKey,
   } from '../../../nook-web-shared/src/generated/i18n-keys'
-  import { Check, KeyRound, Plus, ShieldCheck } from '@lucide/svelte'
+  import {
+    ArrowUpRight,
+    Check,
+    FolderKey,
+    KeyRound,
+    Plus,
+    ShieldCheck,
+  } from '@lucide/svelte'
   import NookIcon from '../../../nook-web-shared/src/components/NookIcon.svelte'
   import {
     ExtensionTranslationRequestKind,
@@ -190,10 +197,6 @@
       window.close()
     })
   }
-  function closeCompanion(): void {
-    window.close()
-  }
-
   function beginPairing(device: ExtensionSessionDeviceWire): void {
     busy = true
     error = ''
@@ -371,6 +374,9 @@
                   data-vault-store-id={vault.vaultStoreId}
                   data-default={vault.isDefault}
                 >
+                  <span class="vault-icon" aria-hidden="true">
+                    <FolderKey size={14} />
+                  </span>
                   <div class="vault-row-main">
                     <span class="vault-row-name">{vault.vaultName}</span>
                     <span class="vault-row-meta">
@@ -464,17 +470,8 @@
         onclick={openSimpleVault}
       >
         {translatePlain(I18N_KEYS.ExtensionCompanionOpenNook)}
+        <ArrowUpRight size={14} aria-hidden="true" />
       </button>
-      <div class="companion-footer-actions">
-        <button
-          type="button"
-          class="menu-secondary-action"
-          data-testid="companion-done-btn"
-          onclick={closeCompanion}
-        >
-          {translatePlain(I18N_KEYS.ExtensionCompanionDone)}
-        </button>
-      </div>
     </div>
     {#if error}
       <p class="error-message" role="alert">{error}</p>
