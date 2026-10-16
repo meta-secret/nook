@@ -16,6 +16,17 @@ assert_equal() {
   [ "$1" = "$2" ] || { echo "expected '$2', got '$1'" >&2; exit 1; }
 }
 
+# The fake browser runs in the background; a loaded runner can take seconds
+# to start it, and the redirect creates the log before writing to it.
+wait_for_log() {
+  for _ in $(seq 1 200); do
+    [ -s "$1" ] && return 0
+    sleep 0.05
+  done
+  echo "fake browser log was not written: $1" >&2
+  exit 1
+}
+
 expect_failure() {
   if "$@" >/dev/null 2>&1; then
     echo "expected command to fail: $*" >&2
@@ -202,14 +213,14 @@ EOF
 chmod +x "$fake_browser"
 uname() { printf 'Linux\n'; }
 FAKE_BROWSER_LOG="$fake_browser_log" launch_browser_binary chrome "$fake_browser" "$installed" "$NOOK_EXTENSION_PROFILE_ROOT/chrome-extension-pr-410" '' '' 'Chromium' >/dev/null
-for _ in $(seq 1 20); do [ -f "$fake_browser_log" ] && break; sleep 0.05; done
+wait_for_log "$fake_browser_log"
 grep -Fq -- "--load-extension=$installed" "$fake_browser_log"
 
 rm -f "$fake_browser_log"
 FAKE_BROWSER_LOG="$fake_browser_log" \
   NOOK_EXTENSION_REMOTE_DEBUGGING_PORT=9333 \
   launch_browser_binary chrome "$fake_browser" "$installed" "$NOOK_EXTENSION_PROFILE_ROOT/chrome-extension-pr-410" '--remote-debugging-address=127.0.0.1' '--remote-debugging-port=9333' 'Chromium' >"$TEST_ROOT/launch-cdp.out"
-for _ in $(seq 1 20); do [ -f "$fake_browser_log" ] && break; sleep 0.05; done
+wait_for_log "$fake_browser_log"
 grep -Fq -- '--remote-debugging-port=9333' "$fake_browser_log"
 grep -Fq -- '--remote-debugging-address=127.0.0.1' "$fake_browser_log"
 grep -Fq 'cdp_url=http://127.0.0.1:9333' "$TEST_ROOT/launch-cdp.out"
@@ -240,7 +251,7 @@ exit 0
 EOF
 chmod +x "$fake_stable_chrome"
 FAKE_STABLE_LOG="$fake_stable_log" launch_browser_binary chrome "$fake_stable_chrome" "$installed" "$NOOK_EXTENSION_PROFILE_ROOT/chrome-extension-pr-410" '' '' 'Google Chrome' >/dev/null
-for _ in $(seq 1 20); do [ -f "$fake_stable_log" ] && break; sleep 0.05; done
+wait_for_log "$fake_stable_log"
 grep -Fq 'chrome://extensions' "$fake_stable_log"
 if grep -Fq -- '--load-extension' "$fake_stable_log"; then
   echo 'branded Google Chrome must not receive the ignored --load-extension switch' >&2
