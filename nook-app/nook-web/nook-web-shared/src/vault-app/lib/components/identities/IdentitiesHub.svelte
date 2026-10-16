@@ -9,24 +9,20 @@ join) sit between the hero and the cards.
   import { FolderKey, Plus, RefreshCw } from '@lucide/svelte'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import type { VaultState } from '$lib/vault.svelte'
-  import { ActiveVaultKind } from '$lib/vault/state/provider.svelte'
   import type { WorkspaceSection } from '$lib/vault/state/ui.svelte'
   import { IdentityDirectoryLoadKind } from '$lib/components/devices-access/identity-directory-view'
   import IdentitiesHero from './IdentitiesHero.svelte'
   import IdentityCard from './IdentityCard.svelte'
   import IdentityDraftCard from './IdentityDraftCard.svelte'
   import IdentityJoinPanel from '$lib/components/identity-control/IdentityJoinPanel.svelte'
-  import { IdentityDirectoryLoader } from './identity-directory-loader.svelte'
+  import { IdentityCards } from './identity-cards.svelte'
   import { configured_vault_application, VaultApplication } from '$app-wasm'
   import {
-    IdentityCardProjection,
     IdentityVaultRowState,
     VaultSetupHostKind,
     type VaultSetupHost,
-    type IdentityCardSource,
     type IdentitySectionTarget,
     type IdentityVaultTarget,
-    type IdentityLocalVault,
     type IdentityCardView,
   } from './identity-card-model'
   import {
@@ -143,58 +139,10 @@ join) sit between the hero and the cards.
     children?: Snippet
   } = $props()
 
-  const loader = new IdentityDirectoryLoader(untrack(() => vault))
-
-  $effect(() => {
-    void vault.hasManager
-    void vault.isAuthenticated
-    void vault.deviceProtectionStatus
-    void vault.localVaults.length
-    void vault.activeVault.kind
-    void loader.reload()
-  })
-
-  const unnamedLabel = $derived(vault.t(I18N_KEYS.LoginVaultPickerUnnamed))
-  const localVaults = $derived.by((): IdentityLocalVault[] =>
-    vault.localVaults.map((entry) => {
-      const local: IdentityLocalVault = {
-        storeId: entry.storeId,
-        label: entry.display_label(unnamedLabel),
-      }
-      return local
-    }),
-  )
-  /** Vaults the unlocked identity's log lists, stored here or not: read
-   * again whenever this browser's vault catalog changes. */
-  $effect(() => {
-    if (!vault.isAuthenticated) return
-    void vault.localVaults.length
-    void untrack(() => vault.identityControl.loadSnapshot())
-  })
-  const currentLogVaults = $derived.by((): string[] => {
-    const snapshot = vault.identityControl.snapshot
-    return vault.isAuthenticated && snapshot !== false
-      ? snapshot.vaults.map((entry) => entry.storeId)
-      : []
-  })
-
-  const projection = $derived.by(() => {
-    const source: IdentityCardSource = {
-      identities:
-        loader.state.kind === IdentityDirectoryLoadKind.Ready
-          ? loader.state.view.identities
-          : [],
-      localVaults,
-      currentLogVaults,
-      openStoreId:
-        vault.activeVault.kind === ActiveVaultKind.Open
-          ? vault.activeVault.storeId
-          : '',
-      authenticated: vault.isAuthenticated,
-      identityUnlocked: vault.isAuthenticated || vault.deviceProtectionReady,
-    }
-    return new IdentityCardProjection(source)
-  })
+  const identityCards = new IdentityCards(untrack(() => vault))
+  const loader = identityCards.loader
+  const localVaults = $derived(identityCards.localVaults)
+  const projection = $derived(identityCards.projection)
   const cardsReady = $derived(
     loader.state.kind === IdentityDirectoryLoadKind.Ready,
   )

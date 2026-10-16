@@ -1787,6 +1787,7 @@ export const I18N_KEYS = {
   VaultAdminRemoveConfirm: 'vault.admin_remove_confirm',
   VaultAdminRemoveConfirmButton: 'vault.admin_remove_confirm_button',
   VaultAdminTitle: 'vault.admin_title',
+  VaultAdminVaultsEmpty: 'vault.admin_vaults_empty',
   VaultAdminVaultsTitle: 'vault.admin_vaults_title',
   VaultCollapseSecret: 'vault.collapse_secret',
   VaultCopied: 'vault.copied',

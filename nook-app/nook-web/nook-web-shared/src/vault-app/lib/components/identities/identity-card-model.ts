@@ -246,6 +246,13 @@ export class IdentityCardProjection {
     ];
   }
 
+  /** Store ids the identity in use here owns, as its card lists them;
+   * empty while no identity is in use. */
+  get currentStoreIds(): ReadonlySet<string> {
+    const current = this.cards.find((card) => card.current);
+    return new Set(current ? current.vaults.map((row) => row.storeId) : []);
+  }
+
   /** Local vaults no card lists: only when no identity is stored on this
    * browser to hold them. They still open from their own row. */
   get unlistedVaults(): IdentityLocalVault[] {
