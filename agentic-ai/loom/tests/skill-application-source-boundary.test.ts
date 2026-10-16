@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { join, posix } from 'node:path';
 
-import { expect, test } from 'bun:test';
+import { expect, setDefaultTimeout, test } from 'bun:test';
 
 import ts from 'typescript';
 
@@ -16,6 +16,10 @@ import {
   ExecutableSkillCheckout,
   ExecutableTrackedPackages,
 } from '../src/executable-skills/repository.ts';
+
+// Each case parses or ranks a large fixture; release and PR verification run
+// every gate in parallel in one container, where that can pass five seconds.
+setDefaultTimeout(60_000);
 
 export class SkillApplicationSourceBoundaryScenario {
   private constructor(

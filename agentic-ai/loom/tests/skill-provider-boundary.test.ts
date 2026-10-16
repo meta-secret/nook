@@ -4,7 +4,11 @@ import { SkillProviderTypeContextScenario } from './skill-provider-type-context.
 export { SkillProviderBoundaryScenario } from './skill-provider-boundary.fixture.ts';
 import { join } from 'node:path';
 
-import { expect, test } from 'bun:test';
+import { expect, setDefaultTimeout, test } from 'bun:test';
+
+// Each case parses or ranks a large fixture; release and PR verification run
+// every gate in parallel in one container, where that can pass five seconds.
+setDefaultTimeout(60_000);
 
 type LoomSourceScanOptions = {
   readonly cwd: string;
