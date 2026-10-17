@@ -61,7 +61,7 @@ test.describe('PIN Pilot save login', () => {
       const nextWidget = nextLogin.locator('#nook-auth-widget')
       await expect(nextWidget.getByText('Ready to sign in')).toBeVisible()
       await nextWidget
-        .getByRole('button', { name: 'Sign in with Nook' })
+        .getByRole('button', { name: 'Sign in' })
         .click()
       await expect(nextLogin.getByTestId('mock-auth-success')).toHaveText(
         'Authentication complete',
@@ -113,7 +113,7 @@ test.describe('PIN Pilot save login', () => {
       const loginWidget = loginPage.locator('#nook-auth-widget')
       await expect(loginWidget.getByText('Ready to sign in')).toBeVisible()
       await loginWidget
-        .getByRole('button', { name: 'Sign in with Nook' })
+        .getByRole('button', { name: 'Sign in' })
         .click()
       await expect(loginPage.getByTestId('mock-auth-success')).toHaveText(
         'Authentication complete',

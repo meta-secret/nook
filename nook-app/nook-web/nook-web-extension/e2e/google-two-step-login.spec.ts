@@ -113,7 +113,7 @@ class GoogleTwoStepBrowserScenarios {
       )
       const widget = page.locator('#nook-auth-widget')
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
-      await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
+      await widget.getByRole('button', { name: 'Sign in' }).click()
       const scenario: GoogleBrowserScenario = { mode: request.mode, page }
       await this.assertPassword(scenario)
       const screenshot: Parameters<Page['screenshot']>[0] = {
