@@ -8,6 +8,9 @@ import {
   ExtensionDiagnosticBuildAvailability,
   ExtensionDiagnosticBuildPolicy,
   ExtensionEntrypointBuildFormat,
+  ExtensionPageBuild,
+  ExtensionPageBuildPlan,
+  ExtensionPageOutput,
   extensionEntrypointBuildPolicy,
 } from './build-contract'
 
@@ -97,4 +100,23 @@ test('rejects top-level await when compiling the classic autofill format', async
   } finally {
     await rm(fixtureRoot, { recursive: true, force: true })
   }
+})
+
+test('builds the side panel with the Nook tab and no toolbar popup page', () => {
+  const plan = new ExtensionPageBuildPlan()
+  const pages = plan.layout(ExtensionPageBuild.Pages)
+  // One build for both pages keeps one copy of each WASM binary.
+  expect(pages).toEqual({
+    root: 'src',
+    outDir: '',
+    output: ExtensionPageOutput.Shared,
+    inputs: ['popup/index.html', 'side-panel/index.html'],
+  })
+  expect(pages.inputs).not.toContain('popup/panel.html')
+  expect(plan.layout(ExtensionPageBuild.LoginPicker)).toEqual({
+    root: 'src/login-picker',
+    outDir: 'login-picker',
+    output: ExtensionPageOutput.Owned,
+    inputs: ['index.html'],
+  })
 })

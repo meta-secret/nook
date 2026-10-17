@@ -18,12 +18,15 @@ export enum IdentitySyncKind {
   Idle = 'idle',
   Checking = 'checking',
   Checked = 'checked',
+  /** The refresh failed; nothing further was paired. */
+  Failed = 'failed',
 }
 
 export type IdentitySync =
   | { kind: IdentitySyncKind.Idle }
   | { kind: IdentitySyncKind.Checking }
   | { kind: IdentitySyncKind.Checked; awaitingGrant: number }
+  | { kind: IdentitySyncKind.Failed }
 
 /** What follows a successful passkey or PIN step in the popup. */
 export enum DeviceActionFollowUp {

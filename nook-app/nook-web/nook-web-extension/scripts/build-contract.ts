@@ -45,3 +45,58 @@ export class ExtensionEntrypointBuildPolicy {
 
 export const extensionEntrypointBuildPolicy =
   new ExtensionEntrypointBuildPolicy()
+
+/** The extension's Vite page builds. */
+export enum ExtensionPageBuild {
+  /** The Nook tab and the side panel: one build, so the package holds one
+   * copy of each WASM binary they load. */
+  Pages = 'pages',
+  /** The in-page login picker, web-accessible on its own path. */
+  LoginPicker = 'login-picker',
+}
+
+/** Whether a page build owns its output directory or shares it. */
+export enum ExtensionPageOutput {
+  /** Emptied before the build: nothing else writes there. */
+  Owned = 'owned',
+  /** The package root: other builds write beside it in parallel. */
+  Shared = 'shared',
+}
+
+export type ExtensionPageBuildLayout = {
+  /** Vite root, relative to the extension package. */
+  readonly root: string
+  /** Output directory, relative to dist. */
+  readonly outDir: string
+  readonly output: ExtensionPageOutput
+  /** HTML entries relative to the root; each is emitted at that same path. */
+  readonly inputs: readonly string[]
+}
+
+/** Where each extension page is built from and emitted to. */
+export class ExtensionPageBuildPlan {
+  static readonly NOOK_TAB_PAGE_PATH = 'popup/index.html'
+  static readonly SIDE_PANEL_PAGE_PATH = 'side-panel/index.html'
+
+  layout(build: ExtensionPageBuild): ExtensionPageBuildLayout {
+    switch (build) {
+      case ExtensionPageBuild.Pages:
+        return {
+          root: 'src',
+          outDir: '',
+          output: ExtensionPageOutput.Shared,
+          inputs: [
+            ExtensionPageBuildPlan.NOOK_TAB_PAGE_PATH,
+            ExtensionPageBuildPlan.SIDE_PANEL_PAGE_PATH,
+          ],
+        }
+      case ExtensionPageBuild.LoginPicker:
+        return {
+          root: 'src/login-picker',
+          outDir: 'login-picker',
+          output: ExtensionPageOutput.Owned,
+          inputs: ['index.html'],
+        }
+    }
+  }
+}

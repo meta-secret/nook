@@ -32,6 +32,8 @@ export enum ExtensionPermission {
   ActiveTab = 'activeTab',
   Offscreen = 'offscreen',
   Storage = 'storage',
+  /** The toolbar button opens the Nook side panel. */
+  SidePanel = 'sidePanel',
 }
 
 export type ExtensionManifest = {
@@ -46,8 +48,10 @@ export type ExtensionManifest = {
   action: {
     default_title: string
     default_icon: ManifestIconSet
-    /** The compact panel the toolbar icon opens beside itself. */
-    default_popup: string
+  }
+  /** The panel the toolbar button opens; it has no popup. */
+  side_panel: {
+    default_path: string
   }
   background: {
     service_worker: string
@@ -137,7 +141,9 @@ export function createManifest(
     action: {
       default_title: 'Nook',
       default_icon: iconSet,
-      default_popup: 'popup/panel.html',
+    },
+    side_panel: {
+      default_path: 'side-panel/index.html',
     },
     background: {
       service_worker: 'background/service-worker.js',
@@ -195,6 +201,7 @@ export function createManifest(
       ExtensionPermission.ActiveTab,
       ExtensionPermission.Offscreen,
       ExtensionPermission.Storage,
+      ExtensionPermission.SidePanel,
     ],
     host_permissions: ['<all_urls>'],
     web_accessible_resources: [

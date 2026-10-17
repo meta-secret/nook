@@ -670,6 +670,27 @@ button:disabled {
   margin-bottom: 4px;
 }
 
+/* The device-protection ceremony (ExtensionDeviceProtection.svelte) in the
+ * Nook tab and the side panel: its PIN forms keep the surface rhythm, and
+ * a running step keeps focus on a control that only looks unavailable. */
+.device-protection-form {
+  display: grid;
+  gap: 14px;
+}
+
+.device-protection-notice {
+  display: contents;
+}
+
+.device-setup [aria-disabled='true'] {
+  cursor: default;
+  opacity: 0.68;
+}
+
+.device-setup [aria-busy='true'] {
+  cursor: wait;
+}
+
 .error-message {
   grid-column: 1 / -1;
   margin: 0;

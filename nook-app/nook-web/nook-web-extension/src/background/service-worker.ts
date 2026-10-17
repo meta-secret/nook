@@ -141,6 +141,10 @@ import {
   type BackgroundRuntimeMessageRoutes,
 } from './service-worker/schema-runtime-message-route'
 import { backgroundVaultRuntime } from './vault-runtime'
+import {
+  ToolbarSidePanelBehavior,
+  type ToolbarSidePanelRequest,
+} from './service-worker/side-panel-behavior'
 import { Effect, Result } from 'effect'
 import {
   isCompanionWasmSessionMessageType,
@@ -213,6 +217,15 @@ const extensionLifecycleRoutingDependencies: Parameters<
       extensionSessionLifecycle,
     ),
 }
+
+// The toolbar button opens the Nook side panel; the manifest has no popup.
+const toolbarSidePanelRequest: ToolbarSidePanelRequest = {
+  sidePanel: chrome.sidePanel,
+  reporter: console,
+}
+void Effect.runPromise(
+  new ToolbarSidePanelBehavior(toolbarSidePanelRequest).apply(),
+)
 
 void Effect.runPromise(
   Effect.result(
