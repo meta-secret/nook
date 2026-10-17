@@ -122,16 +122,21 @@ describe('side-panel sender (T-1)', () => {
       'panel page with a tab only',
       { ...RouteData.panelSender, tab: RouteData.tab(5, RouteData.panelUrl) },
     ],
-    [
-      'panel page with a document id',
-      { ...RouteData.panelSender, documentId: 'DOC' },
-    ],
     ['panel page with a frame id', { ...RouteData.panelSender, frameId: 0 }],
   ]
 
   test('admits only the side-panel document', () => {
     new SidePanelRouteFixture().install()
     expect(new SidePanelSender(RouteData.panelSender).admission()).toBe(
+      SidePanelSenderAdmission.Admitted,
+    )
+    // Chrome gives every document-backed sender a document id, the panel too.
+    const realPanel: chrome.runtime.MessageSender = {
+      ...RouteData.panelSender,
+      documentId: 'DOC',
+      documentLifecycle: 'active',
+    }
+    expect(new SidePanelSender(realPanel).admission()).toBe(
       SidePanelSenderAdmission.Admitted,
     )
     for (const [, sender] of forbidden) {

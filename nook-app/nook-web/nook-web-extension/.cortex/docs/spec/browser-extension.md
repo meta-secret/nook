@@ -329,7 +329,8 @@ the panel.
 
 - The service worker admits a This site or Fill request only from the
   side-panel document. That sender carries this extension's id and the exact
-  side-panel page URL, with no `tab`, `frameId`, or `documentId`.
+  side-panel page URL and, like any document, a `documentId`, but no `tab`
+  or `frameId`.
 - Every other sender receives `forbidden`:
   - content scripts and the login-picker frame;
   - the authentication tab and the offscreen document;
