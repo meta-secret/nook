@@ -1,5 +1,5 @@
 import { SimpleVaultTarget } from './lib/simple-vault-target'
-import { SIDE_PANEL_PAGE_PATH } from './lib/side-panel-site'
+import { SIDE_PANEL_PAGE_PATH } from './lib/side-panel-page-path'
 import {
   nook_vault_app_exclude_match_patterns,
   sentinel_vault_match_patterns,

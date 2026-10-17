@@ -10,7 +10,7 @@ import {
   ExtensionManifestBuildKind,
   type ExtensionManifestDeployment,
 } from '../../nook-web-extension/src/manifest'
-import { SIDE_PANEL_PAGE_PATH } from '../../nook-web-extension/src/lib/side-panel-site'
+import { SIDE_PANEL_PAGE_PATH } from '../../nook-web-extension/src/lib/side-panel-page-path'
 import { VAULT_WORKSPACE_OUTPUT_ALIASES } from '../../nook-web-shared/vite-config'
 
 const webRoot = resolve(import.meta.dir, '../..')
