@@ -129,7 +129,7 @@ export class LoginFillProgress {
     }
     switch (selection.checklist.kind) {
       case LoginChecklistControlKind.Unowned:
-        return untracked
+        return LoginFillProgress.unownedTracking(untracked)
       case LoginChecklistControlKind.Owned:
         break
     }
@@ -150,6 +150,25 @@ export class LoginFillProgress {
         return { tracking: { kind: LoginFillTrackingKind.Attempt }, start }
       case SignInAttemptStartKind.Unavailable:
         return { tracking: { kind: LoginFillTrackingKind.Untracked }, start }
+    }
+  }
+
+  /**
+   * Only the approved Google username advance runs untracked at top level.
+   * A top-level fill whose control no login Pilot owns has no attempt host,
+   * so it does not fill; an iframe keeps its existing untracked path.
+   */
+  private static unownedTracking(
+    untracked: LoginFillTrackingStart,
+  ): LoginFillTrackingStart {
+    switch (signInAttemptSession.scope()) {
+      case SignInAttemptScope.Frame:
+        return untracked
+      case SignInAttemptScope.TopDocument:
+        return {
+          tracking: { kind: LoginFillTrackingKind.Untracked },
+          start: SignInAttemptStartKind.Unavailable,
+        }
     }
   }
 

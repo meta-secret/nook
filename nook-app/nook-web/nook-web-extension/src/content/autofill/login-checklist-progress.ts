@@ -244,9 +244,14 @@ export class LoginChecklistProgress implements SignInAttemptHost {
   }
 
   release(): void {
+    void this.releaseToFresh()
+  }
+
+  /** Leaves the attempt and restores the fresh Ready Pilot. */
+  private releaseToFresh(): Promise<void> {
     switch (this.attempt) {
       case ChecklistAttemptBinding.Unbound:
-        return
+        return Promise.resolve()
       case ChecklistAttemptBinding.Bound:
         break
     }
@@ -262,7 +267,7 @@ export class LoginChecklistProgress implements SignInAttemptHost {
     }
     workflowUi.setStepProgress(progress)
     this.state = { kind: 'Activity', activity: 'Ready' }
-    void this.initializeFresh()
+    return this.initializeFresh()
   }
 
   unavailable(): void {
@@ -270,7 +275,9 @@ export class LoginChecklistProgress implements SignInAttemptHost {
     this.rendering.unavailable()
   }
 
+  /** Follow-ups run from the fresh Pilot through its live form controls. */
   run(action: SignInAttemptHostAction): void {
+    this.release()
     this.mount.attemptActions.run(action)
   }
 

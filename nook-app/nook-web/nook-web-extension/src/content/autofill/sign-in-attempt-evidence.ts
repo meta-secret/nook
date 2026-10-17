@@ -14,6 +14,7 @@ import {
   type PasswordFormObservation,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 import { authenticationSurfaceObservation } from './authentication-surface-observation'
+import { AUTHENTICATION_SUCCESS_MARKER_SELECTOR } from './authentication-outcome-observation'
 import {
   AuthenticationControlLabels,
   type AuthenticationControlLabelRequest,
@@ -99,6 +100,18 @@ enum ParsedColorKind {
   Transparent = 'transparent',
   Unreadable = 'unreadable',
 }
+enum PainterKind {
+  Unprepared = 'unprepared',
+  Ready = 'ready',
+  Unavailable = 'unavailable',
+}
+type Painter =
+  | { readonly kind: PainterKind.Unprepared }
+  | {
+      readonly kind: PainterKind.Ready
+      readonly context: CanvasRenderingContext2D
+    }
+  | { readonly kind: PainterKind.Unavailable }
 type ParsedColor =
   | { readonly kind: ParsedColorKind.Opaque; readonly color: SignInPageColor }
   | { readonly kind: ParsedColorKind.Transparent }
@@ -116,6 +129,10 @@ export type SignInAttemptLinkTarget =
       readonly element: HTMLAnchorElement
     }
   | { readonly kind: SignInAttemptLinkTargetKind.Unavailable }
+type AvailableLinkTarget = Extract<
+  SignInAttemptLinkTarget,
+  { readonly kind: SignInAttemptLinkTargetKind.Available }
+>
 
 /**
  * Sensor only: collects raw, bounded, non-secret structural facts of the
@@ -127,6 +144,8 @@ export class SignInAttemptEvidenceSensor {
   static readonly MAX_MESSAGES = 6
   static readonly MAX_LINKS = 8
   static readonly MAX_MESSAGE_TEXT = 300
+  /** Raw text (markup whitespace included) a message subtree may hold before it is skipped. */
+  static readonly MAX_READ_TEXT = 1200
   static readonly MIN_CONTAINER_TEXT = 8
   static readonly MAX_LINK_TEXT = 80
   static readonly MAX_LINK_HREF = 300
@@ -145,8 +164,13 @@ export class SignInAttemptEvidenceSensor {
   static readonly AUTH_FIELD_SELECTOR =
     'input[type="password"], input[autocomplete~="username"], input[autocomplete="one-time-code"], input[type="email"]'
   static readonly SUCCESS_MARKER_SELECTOR =
-    '[data-nook-auth-outcome="success"], [data-testid="mock-auth-success"]'
+    AUTHENTICATION_SUCCESS_MARKER_SELECTOR
   static readonly ERROR_MARKER_SELECTOR = '[data-nook-auth-outcome="error"]'
+  static readonly PAINT_SETTINGS: CanvasRenderingContext2DSettings = {
+    willReadFrequently: true,
+  }
+  static readonly UNPAINTED = 'rgba(0, 0, 0, 0)'
+  private painter: Painter = { kind: PainterKind.Unprepared }
   /** CSS initial canvas colors, observed when no ancestor paints a color. */
   static readonly CANVAS: SignInPageColor = { red: 255, green: 255, blue: 255 }
 
@@ -252,6 +276,24 @@ export class SignInAttemptEvidenceSensor {
         break
     }
     return { kind: SignInAttemptLinkTargetKind.Unavailable }
+  }
+
+  /**
+   * The very element chosen earlier, still connected, visible, at the same
+   * handle, and with the same text and href Rust revalidated.
+   */
+  confirm(target: AvailableLinkTarget): boolean {
+    const fresh = this.link(target.link.index)
+    switch (fresh.kind) {
+      case SignInAttemptLinkTargetKind.Unavailable:
+        return false
+      case SignInAttemptLinkTargetKind.Available:
+        return (
+          fresh.element === target.element &&
+          fresh.link.text === target.link.text &&
+          fresh.link.href === target.link.href
+        )
+    }
   }
 
   private collect(): CollectedEvidence {
@@ -513,18 +555,22 @@ export class SignInAttemptEvidenceSensor {
       })
   }
 
-  /** A visible leaf block with bounded text and no form controls. */
+  /** A visible leaf block with bounded text and no form controls (cheap checks first). */
   private plainTextBlock(element: Element): boolean {
-    const length = this.visibleText(element).length
     return (
-      element.id !== WIDGET_HOST_ID &&
-      !element.matches(SignInAttemptEvidenceSensor.SKIPPED_SELECTOR) &&
-      !element.querySelector(SignInAttemptEvidenceSensor.CONTROL_SELECTOR) &&
+      this.controlFree(element) &&
       this.display(element) === ElementDisplay.Block &&
       !Array.from(element.children).some((child) => this.textBlock(child)) &&
-      length >= SignInAttemptEvidenceSensor.MIN_CONTAINER_TEXT &&
-      length <= SignInAttemptEvidenceSensor.MAX_MESSAGE_TEXT &&
+      this.containerTextLength(element) &&
       this.presence(element) === ElementPresence.Rendered
+    )
+  }
+
+  private containerTextLength(element: Element): boolean {
+    const length = this.visibleText(element).length
+    return (
+      length >= SignInAttemptEvidenceSensor.MIN_CONTAINER_TEXT &&
+      length <= SignInAttemptEvidenceSensor.MAX_MESSAGE_TEXT
     )
   }
 
@@ -546,14 +592,36 @@ export class SignInAttemptEvidenceSensor {
     return ElementDisplay.Block
   }
 
+  /** Alert, live-region and field-reference candidates: no controls, visible, bounded text. */
   private textBearing(element: Element): boolean {
     return (
+      this.controlFree(element) &&
       this.presence(element) === ElementPresence.Rendered &&
       this.visibleText(element).length > 0
     )
   }
 
+  /** Contract §5: a message never is or contains an input, button or label. */
+  private controlFree(element: Element): boolean {
+    return (
+      element.id !== WIDGET_HOST_ID &&
+      !element.matches(SignInAttemptEvidenceSensor.SKIPPED_SELECTOR) &&
+      !element.matches(SignInAttemptEvidenceSensor.CONTROL_SELECTOR) &&
+      !element.querySelector(SignInAttemptEvidenceSensor.CONTROL_SELECTOR)
+    )
+  }
+
+  /**
+   * Visible text of a bounded subtree. A subtree whose raw text exceeds the
+   * read bound is not a message and is never rendered to text.
+   */
   private visibleText(element: Element): string {
+    switch (this.withinReadBound(element)) {
+      case false:
+        return ''
+      case true:
+        break
+    }
     switch (true) {
       case element instanceof this.browser.HTMLElement:
         return this.normalize(element.innerText)
@@ -561,6 +629,24 @@ export class SignInAttemptEvidenceSensor {
         break
     }
     return this.normalize(String(element.textContent))
+  }
+
+  /** Walks text nodes only until the bound is passed; never reads the whole subtree. */
+  private withinReadBound(element: Element): boolean {
+    const walker = this.browser.document.createTreeWalker(
+      element,
+      this.browser.NodeFilter.SHOW_TEXT,
+    )
+    let length = 0
+    for (
+      let node = walker.nextNode();
+      node instanceof this.browser.Node &&
+      length <= SignInAttemptEvidenceSensor.MAX_READ_TEXT;
+      node = walker.nextNode()
+    ) {
+      length += String(node.nodeValue).length
+    }
+    return length <= SignInAttemptEvidenceSensor.MAX_READ_TEXT
   }
 
   private normalize(text: string): string {
@@ -718,7 +804,66 @@ export class SignInAttemptEvidenceSensor {
       case true:
         break
     }
-    return { kind: ParsedColorKind.Unreadable }
+    return this.paintedColor(value)
+  }
+
+  /**
+   * Modern color syntaxes (oklch, lab, color(), color-mix) are normalized to
+   * sRGB by the browser itself: paint one pixel and read it back.
+   */
+  private paintedColor(value: string): ParsedColor {
+    const context = this.paintContext()
+    switch (context) {
+      case false:
+        return { kind: ParsedColorKind.Unreadable }
+      default:
+        break
+    }
+    context.clearRect(0, 0, 1, 1)
+    context.fillStyle = SignInAttemptEvidenceSensor.UNPAINTED
+    context.fillStyle = value
+    context.fillRect(0, 0, 1, 1)
+    const pixel = context.getImageData(0, 0, 1, 1).data
+    switch (pixel[3] === 0) {
+      case true:
+        return { kind: ParsedColorKind.Transparent }
+      case false:
+        return {
+          kind: ParsedColorKind.Opaque,
+          color: {
+            red: Number(pixel[0]),
+            green: Number(pixel[1]),
+            blue: Number(pixel[2]),
+          },
+        }
+    }
+  }
+
+  private paintContext(): CanvasRenderingContext2D | false {
+    switch (this.painter.kind) {
+      case PainterKind.Ready:
+        return this.painter.context
+      case PainterKind.Unavailable:
+        return false
+      case PainterKind.Unprepared:
+        break
+    }
+    const canvas = this.browser.document.createElement('canvas')
+    canvas.width = 1
+    canvas.height = 1
+    const context = canvas.getContext(
+      '2d',
+      SignInAttemptEvidenceSensor.PAINT_SETTINGS,
+    )
+    switch (true) {
+      case context instanceof Object:
+        this.painter = { kind: PainterKind.Ready, context }
+        return context
+      case true:
+        break
+    }
+    this.painter = { kind: PainterKind.Unavailable }
+    return false
   }
 
   private functionalColor(channels: RegExpMatchArray): ParsedColor {

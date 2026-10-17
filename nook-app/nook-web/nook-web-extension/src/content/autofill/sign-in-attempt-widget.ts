@@ -32,6 +32,8 @@ export enum SignInAttemptWidgetDisplay {
 enum SignInAttemptWidgetMount {
   Detached = 'detached',
   Attached = 'attached',
+  /** A follow-up could not run: the refusal stays until the user closes it. */
+  Refused = 'refused',
 }
 
 /**
@@ -86,11 +88,14 @@ class SignInAttemptPageWidget implements SignInAttemptHost {
     return signInAttemptSession.phase
   }
 
-  /** Whether this Pilot still holds the page for a presented attempt. */
+  /** Whether this Pilot still holds the page for a presented attempt or its refusal. */
   displayed(): SignInAttemptWidgetDisplay {
+    const holding =
+      (this.rendering.kind === SignInAttemptWidgetMount.Attached &&
+        signInAttemptSession.phase.kind === SignInAttemptPhaseKind.Presented) ||
+      this.rendering.kind === SignInAttemptWidgetMount.Refused
     switch (
-      this.rendering.kind === SignInAttemptWidgetMount.Attached &&
-      signInAttemptSession.phase.kind === SignInAttemptPhaseKind.Presented &&
+      holding &&
       widgetState.enrollmentRenderDisposition(
         SignInAttemptPageWidget.WORKFLOW_KEY,
       ) === WidgetRenderDisposition.Reuse
@@ -105,6 +110,7 @@ class SignInAttemptPageWidget implements SignInAttemptHost {
   present(presentation: SignInAttemptPresentation): void {
     switch (this.rendering.kind) {
       case SignInAttemptWidgetMount.Detached:
+      case SignInAttemptWidgetMount.Refused:
         return
       case SignInAttemptWidgetMount.Attached:
         this.rendering.attempt.render(presentation)
@@ -120,19 +126,38 @@ class SignInAttemptPageWidget implements SignInAttemptHost {
     this.remove()
   }
 
-  /** Follow-ups need a form Pilot: the rescan mounts it where the page has one. */
+  /**
+   * This Pilot has no login form controls, so it cannot run a follow-up; it
+   * stays visible with a refusal instead of disappearing.
+   */
   run(action: SignInAttemptHostAction): void {
     switch (action.kind) {
       case SignInAttemptHostActionKind.RestartWithSameLogin:
       case SignInAttemptHostActionKind.OpenLoginPicker:
       case SignInAttemptHostActionKind.OpenAuthenticatorPicker:
-        scanState.schedule()
+        this.refuse()
+    }
+  }
+
+  refuse(): void {
+    switch (this.rendering.kind) {
+      case SignInAttemptWidgetMount.Detached:
+        return
+      case SignInAttemptWidgetMount.Attached:
+      case SignInAttemptWidgetMount.Refused:
+        break
+    }
+    this.rendering.attempt.refuse()
+    this.rendering = {
+      kind: SignInAttemptWidgetMount.Refused,
+      attempt: this.rendering.attempt,
     }
   }
 
   disable(offer: SignInAttemptActionOffer): void {
     switch (this.rendering.kind) {
       case SignInAttemptWidgetMount.Detached:
+      case SignInAttemptWidgetMount.Refused:
         return
       case SignInAttemptWidgetMount.Attached:
         this.rendering.attempt.disable(offer)
@@ -186,6 +211,7 @@ class SignInAttemptPageWidget implements SignInAttemptHost {
       case SignInAttemptWidgetMount.Detached:
         return
       case SignInAttemptWidgetMount.Attached:
+      case SignInAttemptWidgetMount.Refused:
         break
     }
     workflowUi.removeWidget()
@@ -203,7 +229,8 @@ type SignInAttemptPageMount = {
 type SignInAttemptRenderingSlot =
   | { readonly kind: SignInAttemptWidgetMount.Detached }
   | {
-      readonly kind: SignInAttemptWidgetMount.Attached
+      readonly kind:
+        SignInAttemptWidgetMount.Attached | SignInAttemptWidgetMount.Refused
       readonly attempt: SignInAttemptRendering
     }
 

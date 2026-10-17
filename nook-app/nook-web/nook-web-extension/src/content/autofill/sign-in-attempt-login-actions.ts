@@ -5,6 +5,7 @@ import {
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import { WebsiteLoginOptionsMessageType } from '../../lib/login-fill-messages'
+import { authenticationActivityProgress } from './authentication-activity-progress'
 import { authenticationWorkflowUi } from './authentication-workflow-ui-state'
 import { loginCredentialFillAction } from './login-credential-fill-action'
 import type { LoginChecklistAttemptActions } from './login-checklist-progress'
@@ -49,6 +50,15 @@ export class SignInAttemptLoginActions implements LoginChecklistAttemptActions {
   constructor(private readonly controls: SignInAttemptLoginControls) {}
 
   run(action: SignInAttemptHostAction): void {
+    // The fill and picker paths project their step counter from this
+    // document's Rust policy batch; without it they cannot run, visibly.
+    switch (authenticationActivityProgress.prepare()) {
+      case true:
+        break
+      case false:
+        this.status(BROWSER_MESSAGE_KEYS.WidgetSignInActionUnavailable)
+        return
+    }
     switch (action.kind) {
       case SignInAttemptHostActionKind.RestartWithSameLogin:
         void this.restart(action.login)

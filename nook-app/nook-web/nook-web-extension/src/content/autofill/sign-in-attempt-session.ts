@@ -11,6 +11,7 @@ import {
   SignInAttemptLinkTargetKind,
   signInAttemptEvidenceSensor,
   type SignInAttemptEvidenceSensor,
+  type SignInAttemptLinkTarget,
 } from './sign-in-attempt-evidence'
 import {
   SignInAttemptDeliveryKind,
@@ -63,6 +64,7 @@ export interface SignInAttemptHost {
   release(): void
   /** The attempt owner is unreachable: show the existing manual state. */
   unavailable(): void
+  /** Performs a follow-up; the host leaves the attempt presentation itself. */
   run(action: SignInAttemptHostAction): void
   disable(offer: SignInAttemptActionOffer): void
 }
@@ -102,6 +104,20 @@ enum EvidenceReport {
   Idle = 'idle',
   Sending = 'sending',
 }
+enum PendingResetKind {
+  None = 'none',
+  Chosen = 'chosen',
+}
+/** The exact element and link facts sent to Rust for revalidation. */
+type PendingReset =
+  | { readonly kind: PendingResetKind.None }
+  | {
+      readonly kind: PendingResetKind.Chosen
+      readonly target: Extract<
+        SignInAttemptLinkTarget,
+        { readonly kind: SignInAttemptLinkTargetKind.Available }
+      >
+    }
 type SignInAttemptChoice = {
   readonly offer: SignInAttemptActionOffer
   readonly action: SignInAttemptUserAction
@@ -131,6 +147,9 @@ export class SignInAttemptSession {
   static readonly OPEN_AUTHENTICATOR_PICKER: SignInAttemptHostAction = {
     kind: SignInAttemptHostActionKind.OpenAuthenticatorPicker,
   }
+  static readonly UNAVAILABLE: SignInAttemptDelivery = {
+    kind: SignInAttemptDeliveryKind.Unavailable,
+  }
   private phaseState: SignInAttemptPhase = {
     kind: SignInAttemptPhaseKind.Fresh,
   }
@@ -142,6 +161,8 @@ export class SignInAttemptSession {
     SignInAttemptObservation.NEW_DOCUMENT
   private watch: EvidenceWatch = { kind: EvidenceWatchKind.Stopped }
   private report = EvidenceReport.Idle
+  private pendingReset: PendingReset = { kind: PendingResetKind.None }
+  private resumption: Promise<void> = Promise.resolve()
 
   constructor(
     private readonly dependencies: SignInAttemptSessionDependencies,
@@ -161,16 +182,31 @@ export class SignInAttemptSession {
    * before anything renders, so the page shows Rust's verdict on this page
    * and never the resumed record's earlier presentation.
    */
-  async resume(): Promise<void> {
+  resume(): Promise<void> {
     switch (this.scope()) {
       case SignInAttemptScope.Frame:
-        return
+        return this.resumption
       case SignInAttemptScope.TopDocument:
         break
     }
-    const event: SignInAttemptEvent = { kind: 'Resumed' }
-    const resumed = await this.dependencies.transport.advance(event)
-    this.accept(await this.observedOnResume(resumed))
+    this.resumption = this.resumeTopDocument()
+    return this.resumption
+  }
+
+  /** Settles once this document's resume has; scans wait for it, start does not. */
+  resumed(): Promise<void> {
+    return this.resumption
+  }
+
+  /** Never rejects: a resume that cannot complete shows the unavailable state. */
+  private async resumeTopDocument(): Promise<void> {
+    try {
+      const event: SignInAttemptEvent = { kind: 'Resumed' }
+      const resumed = await this.dependencies.transport.advance(event)
+      this.accept(await this.observedOnResume(resumed))
+    } catch {
+      this.accept(SignInAttemptSession.UNAVAILABLE)
+    }
   }
 
   private async observedOnResume(
@@ -226,6 +262,7 @@ export class SignInAttemptSession {
     request: SignInAttemptBeginRequest,
   ): Promise<SignInAttemptStartKind> {
     this.observation = SignInAttemptObservation.NEW_DOCUMENT
+    this.pendingReset = { kind: PendingResetKind.None }
     this.binding = {
       kind: SignInAttemptHostBindingKind.Attached,
       host: request.host,
@@ -387,12 +424,15 @@ export class SignInAttemptSession {
     return { kind: SignInAttemptChoiceKind.Unavailable }
   }
 
+  /** Keeps the exact element and facts Rust is asked to revalidate. */
   private resetLinkAction(index: number): SignInAttemptChoiceResult {
     const target = this.dependencies.sensor.link(index)
     switch (target.kind) {
       case SignInAttemptLinkTargetKind.Unavailable:
+        this.pendingReset = { kind: PendingResetKind.None }
         return { kind: SignInAttemptChoiceKind.Unavailable }
       case SignInAttemptLinkTargetKind.Available:
+        this.pendingReset = { kind: PendingResetKind.Chosen, target }
         return {
           kind: SignInAttemptChoiceKind.Chosen,
           action: { kind: 'ResetPassword', link: target.link },
@@ -450,8 +490,8 @@ export class SignInAttemptSession {
         this.release(SignInAttemptSession.OPEN_AUTHENTICATOR_PICKER)
         return
       case 'ActivateResetLink':
+        this.stopWatching()
         this.phaseState = { kind: SignInAttemptPhaseKind.Fresh }
-        this.hostRelease()
         this.activateResetLink(followUp.link)
         return
     }
@@ -511,24 +551,40 @@ export class SignInAttemptSession {
   }
 
   private release(action: SignInAttemptHostAction): void {
+    this.stopWatching()
     this.phaseState = { kind: SignInAttemptPhaseKind.Fresh }
     switch (this.binding.kind) {
       case SignInAttemptHostBindingKind.Detached:
         return
       case SignInAttemptHostBindingKind.Attached:
-        this.binding.host.release()
         this.binding.host.run(action)
     }
   }
 
-  /** DOM revalidation again right before activating the page's own link. */
+  /**
+   * Clicks the very element whose facts Rust revalidated, and only while it
+   * is connected, visible, at the same handle and with unchanged facts.
+   */
   private activateResetLink(index: number): void {
-    const target = this.dependencies.sensor.link(index)
-    switch (target.kind) {
-      case SignInAttemptLinkTargetKind.Unavailable:
+    const pending = this.pendingReset
+    this.pendingReset = { kind: PendingResetKind.None }
+    switch (pending.kind) {
+      case PendingResetKind.None:
         return
-      case SignInAttemptLinkTargetKind.Available:
-        target.element.click()
+      case PendingResetKind.Chosen:
+        break
+    }
+    // On any mismatch nothing is clicked or reported: the Pilot stays as it is.
+    switch (
+      pending.target.link.index === index &&
+      this.dependencies.sensor.confirm(pending.target)
+    ) {
+      case true:
+        this.hostRelease()
+        pending.target.element.click()
+        return
+      case false:
+        return
     }
   }
 
@@ -585,9 +641,11 @@ export class SignInAttemptSession {
         break
     }
     this.report = EvidenceReport.Sending
-    void this.observe().finally(() => {
+    // A report that fails is retried on the next mutation or tick.
+    const idle = () => {
       this.report = EvidenceReport.Idle
-    })
+    }
+    void this.observe().then(idle, idle)
   }
 
   /** A page that cannot be observed now is observed again on the next tick. */

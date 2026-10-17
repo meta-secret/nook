@@ -22,6 +22,8 @@ type StoredValues = Record<string, BrowserRuntimeMessageValue>
 /** In-memory `chrome.storage.session` with the same get/set/remove semantics. */
 export class SessionStorageSimulation implements SignInAttemptStorageArea {
   readonly values: StoredValues = {}
+  writes = 0
+  removalFails = false
 
   get(key: string): Promise<StoredValues> {
     const result: StoredValues = Object.fromEntries(
@@ -31,11 +33,18 @@ export class SessionStorageSimulation implements SignInAttemptStorageArea {
   }
 
   set(values: StoredValues): Promise<void> {
+    this.writes += 1
     Object.assign(this.values, values)
     return Promise.resolve()
   }
 
   remove(key: string): Promise<void> {
+    switch (this.removalFails) {
+      case true:
+        return Promise.reject(new Error('storage unavailable'))
+      case false:
+        break
+    }
     delete this.values[key]
     return Promise.resolve()
   }

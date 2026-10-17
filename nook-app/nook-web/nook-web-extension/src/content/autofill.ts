@@ -145,6 +145,8 @@ export class AuthenticationScanRenderLifecycle {
   }
 
   private async performScanAndRender(): Promise<AuthenticationScanOutcome> {
+    // A resumed attempt decides what this document shows; never flash Ready first.
+    await signInAttemptSession.resumed()
     switch (widgetState.credentialActuation) {
       case WidgetCredentialActuation.WorkflowFill:
       case WidgetCredentialActuation.FocusedSelection:
@@ -784,7 +786,8 @@ void runAfterCompanionWasmReady({
       loginSaveInteraction.discardSubmissionCapture()
       return
     }
-    await signInAttemptSession.resume()
+    // Start does not wait for the attempt owner; scans wait for the resume (it never rejects).
+    void signInAttemptSession.resume()
     void authenticationScanRenderLifecycle.scanAndRender()
     loginSaveInteraction.rememberSubmissionPasswordFields()
     loginSaveInteraction.enableSubmissionCapture()

@@ -82,7 +82,18 @@ export class SignInAttemptTabRecords {
     )
   }
 
+  /** Writes only a changed record; an identical record leaves storage untouched. */
   retain(retention: SignInAttemptRecordRetention) {
+    const previous = retention.previous
+    switch (
+      previous.kind === StoredSignInAttemptKind.Stored &&
+      previous.record === retention.record
+    ) {
+      case true:
+        return Effect.void
+      case false:
+        break
+    }
     const values: SignInAttemptStoredValues = {
       [this.key(retention.tab)]: retention.record,
     }
@@ -137,4 +148,6 @@ export type SignInAttemptTabId = typeof SignInAttemptTabRecords.TAB_ID.Type
 export type SignInAttemptRecordRetention = {
   readonly tab: SignInAttemptTabId
   readonly record: SignInAttemptStoredRecord
+  /** What this transition read; Begin replaces whatever is stored. */
+  readonly previous: StoredSignInAttempt
 }

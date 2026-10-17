@@ -599,11 +599,15 @@ where a login form exists, otherwise no sign-in Pilot at all.
 
 - The service worker keeps one opaque Rust-owned record string per tab in
   `chrome.storage.session` under `nook.extension.sign-in-attempt.<tabId>` and
-  returns it to Rust verbatim. The record holds the non-secret lifecycle
-  state: the site binding, the opaque login item identity, the
-  submit-time baseline facts, timestamps, the concluded state, and at most
-  one bounded site message selected by Rust. It never holds a credential,
-  field value, username, or other page text.
+  returns it to Rust verbatim. The record holds the lifecycle state: the
+  site binding, the opaque login item identity, the submit-time baseline
+  facts, timestamps, the concluded state, and at most one bounded site
+  message selected by Rust. It never holds a credential or a field value.
+  The site message is the site's own visible text and can include what the
+  site displays, such as an email address. It is therefore protected rather
+  than assumed harmless: it lives only in trusted extension contexts, is
+  never logged, is cleared when the attempt is resolved or the tab closes,
+  and is shown only on the exact origin that recorded it.
 - Lifetime: Rust closes the record on **Signed in** (after the presentation is
   delivered), **Dismiss**, **Try again**, **Choose another login**, **Reset
   password** and **Fill 2FA code**; the service worker removes it on that

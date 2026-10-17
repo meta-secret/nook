@@ -1905,6 +1905,7 @@
       "sign_in_timed_out": "Sign-in not confirmed",
       "sign_in_timed_out_description": "Nook did not see the site's response in time. Check the page.",
       "sign_in_try_again": "Try again",
+      "sign_in_action_unavailable": "Nook could not do that on this page. Continue on the page.",
       "sign_in_choose_another_login": "Choose another login",
       "sign_in_reset_password": "Reset password",
       "sign_in_dismiss": "Dismiss"

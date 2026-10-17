@@ -1,18 +1,14 @@
 import { Schema } from 'effect'
 import type {
-  SignInAttemptActivity,
-  SignInAttemptAuthFields,
   SignInAttemptEvent,
   SignInAttemptLoginReference,
-  SignInAttemptPageEvidence,
   SignInAttemptPresentation,
-  SignInAttemptSubmitBaseline,
-  SignInAttemptUserAction,
-  SignInPageColor,
-  SignInPageLink,
-  SignInPageMessage,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import type { BrowserRuntimeMessage } from './browser-runtime-message'
+import {
+  BROWSER_RUNTIME_MESSAGE_VALUE,
+  type BrowserRuntimeMessage,
+  type BrowserRuntimeMessageValue,
+} from './browser-runtime-message'
 
 export enum SignInAttemptMessageType {
   Session = 'nook:website-sign-in-attempt',
@@ -59,167 +55,41 @@ export type SignInAttemptRuntimeResponse =
   | { readonly ok: true; readonly attempt: SignInAttemptView }
   | { readonly ok: false; readonly reason: SignInAttemptFailureReason }
 
-/**
- * Field schemas typed by the generated Rust value they decode, so the
- * compiler keeps the browser decoder aligned with the contract.
- */
-type CodecFields<Value> = {
-  readonly [Key in keyof Value]-?: Schema.Codec<Value[Key]>
+type SignInAttemptBeginFields = {
+  readonly operation: Schema.Literal<SignInAttemptOperation.Begin>
+  readonly login: typeof Schema.String
 }
-type ActivityKind = SignInAttemptActivity['kind']
-type UserActionKind = SignInAttemptUserAction['kind']
-type SignInAttemptBeginWire = Extract<
-  SignInAttemptRequest,
-  { readonly operation: SignInAttemptOperation.Begin }
->
-type SignInAttemptAdvanceWire = Extract<
-  SignInAttemptRequest,
-  { readonly operation: SignInAttemptOperation.Advance }
->
+type SignInAttemptAdvanceFields = {
+  readonly operation: Schema.Literal<SignInAttemptOperation.Advance>
+  readonly event: typeof BROWSER_RUNTIME_MESSAGE_VALUE
+}
+type SignInAttemptEnvelopeFields = {
+  readonly type: Schema.Literal<SignInAttemptMessageType.Session>
+  readonly payload: Schema.Union<
+    readonly [
+      Schema.Struct<SignInAttemptBeginFields>,
+      Schema.Struct<SignInAttemptAdvanceFields>,
+    ]
+  >
+}
 
 /**
- * Browser-envelope decoding only. Bounds, site binding and every lifecycle
- * decision stay in Rust, which strictly decodes the same values again.
+ * Browser-envelope decoding only: the message type, the operation and the
+ * login reference string. The event is carried unchanged; Rust's
+ * `advance_sign_in_attempt` strictly decodes it (and the login) and throws on
+ * anything else, which the route answers with its failed response. Bounds,
+ * site binding and every lifecycle decision stay in Rust.
  */
 export class SignInAttemptMessageCodec {
-  private static readonly colorFields: CodecFields<SignInPageColor> = {
-    red: Schema.Number,
-    green: Schema.Number,
-    blue: Schema.Number,
-  }
-  private static readonly color = Schema.Struct(
-    SignInAttemptMessageCodec.colorFields,
-  )
-  private static readonly linkFields: CodecFields<SignInPageLink> = {
-    index: Schema.Number,
-    text: Schema.String,
-    href: Schema.String,
-  }
-  private static readonly link = Schema.Struct(
-    SignInAttemptMessageCodec.linkFields,
-  )
-  private static readonly messageFields: CodecFields<SignInPageMessage> = {
-    text: Schema.String,
-    source: Schema.Literals([
-      'Alert',
-      'LiveRegion',
-      'FieldReference',
-      'Container',
-    ]),
-    placement: Schema.Literals(['InsideAuthForm', 'NearAuthForm']),
-    tokens: Schema.mutable(Schema.Array(Schema.String)),
-    ancestor_tokens: Schema.mutable(Schema.Array(Schema.String)),
-    foreground: SignInAttemptMessageCodec.color,
-    background: SignInAttemptMessageCodec.color,
-    changed_since_submit: Schema.Boolean,
-  }
-  private static readonly controls = Schema.mutable(Schema.Array(Schema.String))
-  private static readonly messages = Schema.mutable(
-    Schema.Array(Schema.Struct(SignInAttemptMessageCodec.messageFields)),
-  )
-  private static readonly authFieldsFields: CodecFields<SignInAttemptAuthFields> =
-    {
-      username_present: Schema.Boolean,
-      current_password_present: Schema.Boolean,
-      one_time_code_present: Schema.Boolean,
-    }
-  private static readonly authFields = Schema.Struct(
-    SignInAttemptMessageCodec.authFieldsFields,
-  )
-  private static readonly baselineFields: CodecFields<SignInAttemptSubmitBaseline> =
-    {
-      messages: SignInAttemptMessageCodec.messages,
-      auth_fields: SignInAttemptMessageCodec.authFields,
-      controls: SignInAttemptMessageCodec.controls,
-    }
-  private static readonly pageFields: CodecFields<SignInAttemptPageEvidence> = {
-    document: Schema.Literals([
-      'SameDocumentSameRoute',
-      'SameDocumentNewRoute',
-      'NewDocument',
-    ]),
-    auth_fields: SignInAttemptMessageCodec.authFields,
-    manual_checkpoint_present: Schema.Boolean,
-    success_marker_present: Schema.Boolean,
-    error_marker_present: Schema.Boolean,
-    controls: SignInAttemptMessageCodec.controls,
-    messages: SignInAttemptMessageCodec.messages,
-    links: Schema.mutable(Schema.Array(SignInAttemptMessageCodec.link)),
-  }
-  private static readonly plainActivityFields: {
-    readonly kind: Schema.Codec<Exclude<ActivityKind, 'Submitted'>>
-  } = {
-    kind: Schema.Literals([
-      'Filled',
-      'FillFailed',
-      'SubmissionRejected',
-      'SubmissionUnobserved',
-    ]),
-  }
-  private static readonly submittedFields: CodecFields<
-    Extract<SignInAttemptActivity, { readonly kind: 'Submitted' }>
-  > = {
-    kind: Schema.Literal('Submitted'),
-    baseline: Schema.Struct(SignInAttemptMessageCodec.baselineFields),
-  }
-  private static readonly plainActionFields: {
-    readonly kind: Schema.Codec<Exclude<UserActionKind, 'ResetPassword'>>
-  } = {
-    kind: Schema.Literals([
-      'TryAgain',
-      'ChooseAnotherLogin',
-      'FillAuthenticator',
-      'Dismiss',
-    ]),
-  }
-  private static readonly resetFields: CodecFields<
-    Extract<SignInAttemptUserAction, { readonly kind: 'ResetPassword' }>
-  > = {
-    kind: Schema.Literal('ResetPassword'),
-    link: SignInAttemptMessageCodec.link,
-  }
-  private static readonly resumedFields: CodecFields<
-    Extract<SignInAttemptEvent, { readonly kind: 'Resumed' }>
-  > = { kind: Schema.Literal('Resumed') }
-  private static readonly activityFields: CodecFields<
-    Extract<SignInAttemptEvent, { readonly kind: 'Activity' }>
-  > = {
-    kind: Schema.Literal('Activity'),
-    activity: Schema.Union([
-      Schema.Struct(SignInAttemptMessageCodec.plainActivityFields),
-      Schema.Struct(SignInAttemptMessageCodec.submittedFields),
-    ]),
-  }
-  private static readonly observedFields: CodecFields<
-    Extract<SignInAttemptEvent, { readonly kind: 'PageObserved' }>
-  > = {
-    kind: Schema.Literal('PageObserved'),
-    page: Schema.Struct(SignInAttemptMessageCodec.pageFields),
-  }
-  private static readonly actionFields: CodecFields<
-    Extract<SignInAttemptEvent, { readonly kind: 'UserAction' }>
-  > = {
-    kind: Schema.Literal('UserAction'),
-    action: Schema.Union([
-      Schema.Struct(SignInAttemptMessageCodec.plainActionFields),
-      Schema.Struct(SignInAttemptMessageCodec.resetFields),
-    ]),
-  }
-  private static readonly beginFields: CodecFields<SignInAttemptBeginWire> = {
+  private static readonly beginFields: SignInAttemptBeginFields = {
     operation: Schema.Literal(SignInAttemptOperation.Begin),
     login: Schema.String,
   }
-  private static readonly advanceFields: CodecFields<SignInAttemptAdvanceWire> =
-    {
-      operation: Schema.Literal(SignInAttemptOperation.Advance),
-      event: Schema.Union([
-        Schema.Struct(SignInAttemptMessageCodec.resumedFields),
-        Schema.Struct(SignInAttemptMessageCodec.activityFields),
-        Schema.Struct(SignInAttemptMessageCodec.observedFields),
-        Schema.Struct(SignInAttemptMessageCodec.actionFields),
-      ]),
-    }
-  private static readonly envelopeFields: CodecFields<SignInAttemptMessage> = {
+  private static readonly advanceFields: SignInAttemptAdvanceFields = {
+    operation: Schema.Literal(SignInAttemptOperation.Advance),
+    event: BROWSER_RUNTIME_MESSAGE_VALUE,
+  }
+  private static readonly envelopeFields: SignInAttemptEnvelopeFields = {
     type: Schema.Literal(SignInAttemptMessageType.Session),
     payload: Schema.Union([
       Schema.Struct(SignInAttemptMessageCodec.beginFields),
@@ -234,5 +104,14 @@ export class SignInAttemptMessageCodec {
     return Schema.decodeUnknownEffect(SignInAttemptMessageCodec.envelope)(
       message,
     )
+  }
+
+  /**
+   * The one boundary narrowing for this route: the value is handed to Rust's
+   * strict decoder unchanged and is never read in TypeScript.
+   */
+  static event(value: BrowserRuntimeMessageValue): SignInAttemptEvent {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Rust strictly decodes the event at advance_sign_in_attempt.
+    return value as SignInAttemptEvent
   }
 }

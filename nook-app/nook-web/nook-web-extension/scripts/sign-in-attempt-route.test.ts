@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, spyOn, test } from 'bun:test'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import {
   SignInAttemptFailureReason,
@@ -9,9 +9,16 @@ import {
 } from '../src/lib/sign-in-attempt-messages'
 import type { BrowserRuntimeMessageValue } from '../src/lib/browser-runtime-message'
 import {
+  SessionStorageSimulation,
   SignInAttemptRouteFixture,
   type SignInAttemptSenderFixture,
 } from './sign-in-attempt-test-support'
+import {
+  SignInAttemptTabRecords,
+  StoredSignInAttemptKind,
+  type SignInAttemptRecordRetention,
+} from '../src/background/service-worker/sign-in-attempt-store'
+import { Effect, Schema } from 'effect'
 
 await companionWasmReady
 
@@ -171,6 +178,75 @@ describe('service-worker sign-in attempt store', () => {
     await fixture.respond({ message: beginMessage, sender: topFrame })
     await fixture.route.forgetTab(7)
     expect(fixture.storage.key(7) in fixture.storage.values).toBe(false)
+  })
+
+  test('an event TypeScript does not decode is strictly rejected by Rust and leaves the record', async () => {
+    const fixture = await SignInAttemptRouteFixture.create()
+    await fixture.respond({ message: beginMessage, sender: topFrame })
+    const stored = fixture.storage.values[fixture.storage.key(7)]
+    const events: BrowserRuntimeMessageValue[] = [
+      'Resumed',
+      { kind: 'PageObserved', page: { document: 'NewDocument' } },
+      { kind: 'UserAction', action: { kind: 'Delete' } },
+    ]
+    for (const event of events) {
+      const message: BrowserRuntimeMessageValue = {
+        type: SignInAttemptMessageType.Session,
+        payload: { operation: SignInAttemptOperation.Advance, event },
+      }
+      expect(await fixture.respond({ message, sender: topFrame })).toEqual({
+        ok: false,
+        reason: SignInAttemptFailureReason.Unavailable,
+      })
+    }
+    expect(fixture.storage.values[fixture.storage.key(7)]).toBe(stored)
+  })
+
+  test('an identical record is not written to session storage again', async () => {
+    const storage = new SessionStorageSimulation()
+    const records = new SignInAttemptTabRecords(storage)
+    const tab = Schema.decodeUnknownSync(SignInAttemptTabRecords.TAB_ID)(7)
+    const first: SignInAttemptRecordRetention = {
+      tab,
+      record: 'opaque-record',
+      previous: { kind: StoredSignInAttemptKind.Absent },
+    }
+    await Effect.runPromise(records.retain(first))
+    const same: SignInAttemptRecordRetention = {
+      tab,
+      record: 'opaque-record',
+      previous: {
+        kind: StoredSignInAttemptKind.Stored,
+        record: 'opaque-record',
+      },
+    }
+    await Effect.runPromise(records.retain(same))
+    expect(storage.writes).toBe(1)
+    const changed: SignInAttemptRecordRetention = {
+      ...same,
+      record: 'next-record',
+    }
+    await Effect.runPromise(records.retain(changed))
+    expect(storage.writes).toBe(2)
+  })
+
+  test('a failed removal on tab close is reported without record content', async () => {
+    const fixture = await SignInAttemptRouteFixture.create()
+    await fixture.respond({ message: beginMessage, sender: topFrame })
+    const stored = String(fixture.storage.values[fixture.storage.key(7)])
+    fixture.storage.removalFails = true
+    const warn = spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      await fixture.route.forgetTab(7)
+      expect(warn).toHaveBeenCalledTimes(1)
+      expect(warn.mock.calls.at(0)).toEqual([
+        'Nook sign-in attempt record could not be removed',
+        'remove',
+      ])
+      expect(JSON.stringify(warn.mock.calls)).not.toContain(stored)
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   test('malformed requests are rejected without touching storage', async () => {

@@ -40,6 +40,7 @@ interface SignInAttemptBrowserRun {
 class NamecheapLoginFixture {
   static readonly ORIGIN = 'https://www.namecheap.com'
   static readonly LOGIN_URL = `${NamecheapLoginFixture.ORIGIN}/myaccount/login/`
+  static readonly RESET_PATH = '/myaccount/login/password-reset/'
   static readonly USERNAME = 'pilot-user'
   static readonly PASSWORD = 'pilot-password-1'
   static readonly LOCK_MESSAGE =
@@ -102,6 +103,8 @@ class NamecheapLoginFixture {
     switch (new URL(request.url()).pathname) {
       case '/dashboard/':
         return route.fulfill(this.document(this.dashboard()))
+      case NamecheapLoginFixture.RESET_PATH:
+        return route.fulfill(this.document(this.passwordReset()))
     }
     return route.fulfill(this.document(this.login()))
   }
@@ -153,6 +156,10 @@ class NamecheapLoginFixture {
         <button type="submit">Sign in</button>
       </form>
     </section></main>`
+  }
+
+  private passwordReset(): string {
+    return `<main class="page"><h1>Reset your password</h1><p>Enter your username to receive a reset link.</p></main>`
   }
 
   private dashboard(): string {
@@ -225,9 +232,16 @@ class SignInAttemptLifecycleScenario {
       animations: 'disabled',
       caret: 'initial',
     }
-    await this.widget(request.page)
-      .locator('[data-testid="nook-auth-gate"]')
-      .screenshot(options)
+    const panel = this.widget(request.page).locator(
+      '[data-testid="nook-auth-gate"]',
+    )
+    // Title, reason, site message, rows and every action fit without scrolling.
+    expect(
+      await panel.evaluate(
+        (element) => element.scrollHeight <= element.clientHeight,
+      ),
+    ).toBe(true)
+    await panel.screenshot(options)
   }
 
   private async signIn(page: Page): Promise<void> {
@@ -266,6 +280,21 @@ class SignInAttemptLifecycleScenario {
       name: 'failed-wrong-password.png',
     }
     await this.screenshot(failed)
+
+    // Try again begins a new attempt with the same login through the fill path.
+    await this.fixture.hold(page)
+    const tryAgain: PilotButtonRequest = { page, name: 'Try again' }
+    await this.button(tryAgain).click()
+    await this.fixture.submitted(page)
+    await expect(widget.getByText('Signing in…')).toBeVisible({
+      timeout: 20_000,
+    })
+    await this.fixture.release(page)
+    await expect(widget.getByText('Sign-in failed')).toBeVisible({
+      timeout: 20_000,
+    })
+    expect(this.fixture.submissions).toBe(2)
+
     const dismiss: PilotButtonRequest = { page, name: 'Dismiss' }
     await this.button(dismiss).click()
     await expect(widget.getByText('Sign-in failed')).toHaveCount(0)
@@ -308,9 +337,14 @@ class SignInAttemptLifecycleScenario {
     const another: PilotButtonRequest = { page, name: 'Choose another login' }
     await expect(this.button(another)).toBeVisible()
 
-    const dismiss: PilotButtonRequest = { page, name: 'Dismiss' }
-    await this.button(dismiss).click()
-    await expect(widget.getByText('Sign-in failed')).toHaveCount(0)
+    // Reset password activates the page's own revalidated reset link.
+    await this.button(reset).click()
+    await page.waitForURL(
+      `${NamecheapLoginFixture.ORIGIN}${NamecheapLoginFixture.RESET_PATH}`,
+    )
+    await expect(
+      page.getByRole('heading', { name: 'Reset your password' }),
+    ).toBeVisible()
     await page.goto(NamecheapLoginFixture.LOGIN_URL)
     await expect(widget.getByText('Ready to sign in')).toBeVisible({
       timeout: 20_000,
@@ -327,7 +361,7 @@ class SignInAttemptLifecycleScenario {
     await expect(widget.getByText('Signed in')).toBeVisible({ timeout: 20_000 })
     const signedIn: PilotScreenshotRequest = { page, name: 'signed-in.png' }
     await this.screenshot(signedIn)
-    expect(this.fixture.submissions).toBe(3)
+    expect(this.fixture.submissions).toBe(4)
   }
 }
 

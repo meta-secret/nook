@@ -38,6 +38,7 @@ export const BROWSER_MESSAGE_KEYS = {
   WidgetSignInReasonChallengeRequired: 'widgetSignInReasonChallengeRequired',
   WidgetSignInReasonUnknown: 'widgetSignInReasonUnknown',
   WidgetSignInSiteMessageLabel: 'widgetSignInSiteMessageLabel',
+  WidgetSignInActionUnavailable: 'widgetSignInActionUnavailable',
   WidgetSignInChallenge: 'widgetSignInChallenge',
   WidgetSignInChallengeOneTimeCodeDescription:
     'widgetSignInChallengeOneTimeCodeDescription',

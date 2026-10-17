@@ -874,6 +874,7 @@ export const I18N_KEYS = {
   ExtensionWidgetSaveLoginTitle: 'extension.widget.save_login_title',
   ExtensionWidgetSavedAuthenticator: 'extension.widget.saved_authenticator',
   ExtensionWidgetSavedLogin: 'extension.widget.saved_login',
+  ExtensionWidgetSignInActionUnavailable: 'extension.widget.sign_in_action_unavailable',
   ExtensionWidgetSignInChallenge: 'extension.widget.sign_in_challenge',
   ExtensionWidgetSignInChallengeOneTimeCodeDescription: 'extension.widget.sign_in_challenge_one_time_code_description',
   ExtensionWidgetSignInChallengeVerificationDescription: 'extension.widget.sign_in_challenge_verification_description',

@@ -1912,6 +1912,7 @@
       "sign_in_timed_out": "Вход не подтверждён",
       "sign_in_timed_out_description": "Nook не дождался ответа сайта. Проверьте страницу.",
       "sign_in_try_again": "Повторить",
+      "sign_in_action_unavailable": "Nook не может выполнить это действие на этой странице. Продолжите на странице.",
       "sign_in_choose_another_login": "Выбрать другой вход",
       "sign_in_reset_password": "Сбросить пароль",
       "sign_in_dismiss": "Закрыть"

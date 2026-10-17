@@ -25,6 +25,7 @@ import type { extensionPairingIdentity } from './pairing-identity'
 import {
   SignInAttemptTabRecords,
   StoredSignInAttemptKind,
+  type StoredSignInAttempt,
   type SignInAttemptRecordRetention,
   type SignInAttemptTabId,
 } from './sign-in-attempt-store'
@@ -51,10 +52,12 @@ type SignInAttemptAdvanceStep = {
 type SignInAttemptTransitionApplication = {
   readonly tab: SignInAttemptTabId
   readonly transition: SignInAttemptTransition
+  readonly previous: StoredSignInAttempt
 }
 type SignInAttemptAdvanceOutcome = {
   readonly tab: SignInAttemptTabId
   readonly advance: SignInAttemptAdvance
+  readonly previous: StoredSignInAttempt
 }
 type SignInAttemptSenderFacts = {
   readonly sender: chrome.runtime.MessageSender
@@ -140,9 +143,17 @@ export class SignInAttemptRoute {
     }
     const records = this.dependencies.records
     return Effect.runPromise(
-      records
-        .serialized(records.remove(tab.value))
-        .pipe(Effect.catch(() => Effect.void)),
+      records.serialized(records.remove(tab.value)).pipe(
+        // Only the failed storage operation is reported, never record content.
+        Effect.catch((failure) =>
+          Effect.sync(() =>
+            console.warn(
+              'Nook sign-in attempt record could not be removed',
+              failure.operation,
+            ),
+          ),
+        ),
+      ),
     )
   }
 }
@@ -151,6 +162,10 @@ export class SignInAttemptRoute {
 class SignInAttemptExchange {
   static readonly SENDER_TAB_FIELDS: SignInAttemptSenderTabFields = {
     id: SignInAttemptTabRecords.TAB_ID,
+  }
+  /** Begin always writes: it replaces any record the tab held. */
+  static readonly REPLACED: StoredSignInAttempt = {
+    kind: StoredSignInAttemptKind.Absent,
   }
   static readonly SENDER_FIELDS: SignInAttemptSenderFields = {
     frameId: Schema.Literal(0),
@@ -181,7 +196,10 @@ class SignInAttemptExchange {
         return this.delivered(view)
       }
       case SignInAttemptOperation.Advance: {
-        const step: SignInAttemptAdvanceStep = { binding, event: payload.event }
+        const step: SignInAttemptAdvanceStep = {
+          binding,
+          event: SignInAttemptMessageCodec.event(payload.event),
+        }
         const view = yield* dependencies.records.serialized(this.advance(step))
         return this.delivered(view)
       }
@@ -265,6 +283,7 @@ class SignInAttemptExchange {
         const application: SignInAttemptTransitionApplication = {
           tab: begin.binding.tab,
           transition,
+          previous: SignInAttemptExchange.REPLACED,
         }
         return this.apply(application)
       }),
@@ -292,6 +311,7 @@ class SignInAttemptExchange {
                 const outcome: SignInAttemptAdvanceOutcome = {
                   tab: step.binding.tab,
                   advance,
+                  previous: stored,
                 }
                 return this.applyAdvance(outcome)
               }),
@@ -309,6 +329,7 @@ class SignInAttemptExchange {
         const application: SignInAttemptTransitionApplication = {
           tab: outcome.tab,
           transition: outcome.advance.transition,
+          previous: outcome.previous,
         }
         return this.apply(application)
       }
@@ -332,6 +353,7 @@ class SignInAttemptExchange {
         const retention: SignInAttemptRecordRetention = {
           tab: application.tab,
           record: disposition.record,
+          previous: application.previous,
         }
         return records.retain(retention).pipe(Effect.as(presented))
       }

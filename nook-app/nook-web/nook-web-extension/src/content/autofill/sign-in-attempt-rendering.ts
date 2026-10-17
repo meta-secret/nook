@@ -47,7 +47,11 @@ export class SignInAttemptRendering {
     .sign-in-site-message { margin: 0; padding: 9px 11px; border: 1px solid var(--nk-border); border-left: 3px solid var(--nk-warning); background: var(--nk-bg); display: grid; gap: 4px; }
     .sign-in-site-message-label { margin: 0; color: var(--nk-muted); font-family: var(--nk-mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; }
     .sign-in-site-message-text { margin: 0; color: var(--nk-fg); font-size: 12.5px; line-height: 1.45; overflow-wrap: anywhere; }
-    .sign-in-attempt-actions { display: grid; gap: 8px; }
+    .sign-in-attempt-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .sign-in-attempt-actions .primary-button,
+    .sign-in-attempt-actions .is-wide,
+    .sign-in-attempt-actions .text-button { grid-column: 1 / -1; }
+    .sign-in-attempt-actions button.secondary-button { min-height: 36px; padding: 7px 8px; font-size: 12.5px; line-height: 1.25; }
     .sign-in-attempt-actions .text-button { margin: 0 auto; }
   `
   private readonly detail: HTMLDivElement
@@ -55,6 +59,8 @@ export class SignInAttemptRendering {
   private readonly siteMessage: HTMLDivElement
   private readonly siteMessageText: HTMLParagraphElement
   private readonly actions: HTMLDivElement
+  /** Offer kinds and label keys of the rendered buttons; never page text. */
+  private renderedActions = ''
 
   constructor(private readonly request: SignInAttemptRenderingRequest) {
     const { surface } = request
@@ -63,6 +69,9 @@ export class SignInAttemptRendering {
     this.detail = document.createElement('div')
     this.detail.className = 'sign-in-attempt-detail'
     this.detail.setAttribute('data-testid', 'nook-sign-in-attempt')
+    // The reason and the site's message are announced like the description.
+    this.detail.setAttribute('role', 'status')
+    this.detail.setAttribute('aria-live', 'polite')
     this.reason = document.createElement('p')
     this.reason.className = 'sign-in-attempt-reason'
     this.reason.setAttribute('data-testid', 'nook-sign-in-reason')
@@ -98,10 +107,16 @@ export class SignInAttemptRendering {
       totalSteps: presentation.progress.totalSteps,
     }
     workflowUi.setStepProgress(progress)
-    surface.title.textContent = chrome.i18n.getMessage(presentation.title_key)
-    surface.description.textContent = chrome.i18n.getMessage(
-      presentation.description_key,
-    )
+    const title: SignInAttemptDetailCopy = {
+      element: surface.title,
+      copy: chrome.i18n.getMessage(presentation.title_key),
+    }
+    this.write(title)
+    const description: SignInAttemptDetailCopy = {
+      element: surface.description,
+      copy: chrome.i18n.getMessage(presentation.description_key),
+    }
+    this.write(description)
     this.detail.dataset.status = String(presentation.status)
     this.renderReason(presentation)
     this.renderSiteMessage(presentation)
@@ -118,9 +133,24 @@ export class SignInAttemptRendering {
     this.detail.hidden = true
     this.actions.hidden = true
     this.actions.replaceChildren()
+    this.renderedActions = ''
     this.siteMessageText.textContent = ''
     delete this.detail.dataset.status
     this.request.surface.continueButton.hidden = false
+  }
+
+  /** A chosen follow-up could not run here: say so and offer nothing further. */
+  refuse(): void {
+    this.actions.replaceChildren()
+    this.actions.hidden = true
+    this.renderedActions = ''
+    const refusal: SignInAttemptDetailCopy = {
+      element: this.request.surface.description,
+      copy: chrome.i18n.getMessage(
+        BROWSER_MESSAGE_KEYS.WidgetSignInActionUnavailable,
+      ),
+    }
+    this.write(refusal)
   }
 
   /** A choice that could not be revalidated stays visible but inert. */
@@ -156,10 +186,15 @@ export class SignInAttemptRendering {
   private renderSiteMessage(presentation: SignInAttemptPresentation): void {
     const message = presentation.site_message
     switch (true) {
-      case typeof message === 'string':
-        this.siteMessageText.textContent = message
+      case typeof message === 'string': {
+        const copy: SignInAttemptDetailCopy = {
+          element: this.siteMessageText,
+          copy: message,
+        }
+        this.write(copy)
         this.siteMessage.hidden = false
         return
+      }
       case true:
         this.siteMessageText.textContent = ''
         this.siteMessage.hidden = true
@@ -167,8 +202,18 @@ export class SignInAttemptRendering {
   }
 
   private show(update: SignInAttemptDetailCopy): void {
-    update.element.textContent = update.copy
+    this.write(update)
     update.element.hidden = false
+  }
+
+  /** Writes only changed copy, so identical presentations cause no DOM churn. */
+  private write(update: SignInAttemptDetailCopy): void {
+    switch (update.element.textContent === update.copy) {
+      case true:
+        return
+      case false:
+        update.element.textContent = update.copy
+    }
   }
 
   private hide(element: HTMLElement): void {
@@ -176,12 +221,24 @@ export class SignInAttemptRendering {
     element.hidden = true
   }
 
+  /** Rebuilds buttons only when the offers change, so focus and clicks survive. */
   private renderActions(offers: readonly SignInAttemptActionOffer[]): void {
+    const signature = offers
+      .map((offer) => `${String(offer.action)}:${String(offer.label_key)}`)
+      .join('|')
+    switch (signature === this.renderedActions) {
+      case true:
+        return
+      case false:
+        break
+    }
+    this.renderedActions = signature
     this.actions.replaceChildren(
       ...offers.map((offer) => {
         const position: SignInAttemptActionPosition = {
           offer,
           index: offers.indexOf(offer),
+          offers,
         }
         return this.actionButton(position)
       }),
@@ -210,13 +267,33 @@ export class SignInAttemptRendering {
     return button
   }
 
-  /** The first offer is the primary next step; the rest stay secondary. */
+  /**
+   * The first offer is the primary next step; Dismiss is a quiet text
+   * button; the other offers share a compact two-column row, and an odd one
+   * out spans the row.
+   */
   private actionClass(position: SignInAttemptActionPosition): string {
-    switch (position.index) {
-      case 0:
+    switch (true) {
+      case position.index === 0:
         return 'primary-button'
+      case position.offer.action === 'Dismiss':
+        return 'text-button'
+      case true:
+        break
     }
-    return 'secondary-button'
+    const secondary = position.offers.filter(
+      (offer) =>
+        offer.action !== 'Dismiss' && position.offers.indexOf(offer) !== 0,
+    )
+    switch (
+      secondary.length % 2 === 1 &&
+      secondary.indexOf(position.offer) === secondary.length - 1
+    ) {
+      case true:
+        return 'secondary-button is-wide'
+      case false:
+        return 'secondary-button'
+    }
   }
 
   private detailKind(element: HTMLElement): SignInAttemptDetailKind {
@@ -233,4 +310,5 @@ export class SignInAttemptRendering {
 type SignInAttemptActionPosition = {
   readonly offer: SignInAttemptActionOffer
   readonly index: number
+  readonly offers: readonly SignInAttemptActionOffer[]
 }

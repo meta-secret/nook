@@ -1088,6 +1088,8 @@ pub const EXTENSION_WIDGET_SAVE_LOGIN_SAVED_TITLE: &str = "extension.widget.save
 pub const EXTENSION_WIDGET_SAVE_LOGIN_TITLE: &str = "extension.widget.save_login_title";
 pub const EXTENSION_WIDGET_SAVED_AUTHENTICATOR: &str = "extension.widget.saved_authenticator";
 pub const EXTENSION_WIDGET_SAVED_LOGIN: &str = "extension.widget.saved_login";
+pub const EXTENSION_WIDGET_SIGN_IN_ACTION_UNAVAILABLE: &str =
+    "extension.widget.sign_in_action_unavailable";
 pub const EXTENSION_WIDGET_SIGN_IN_CHALLENGE: &str = "extension.widget.sign_in_challenge";
 pub const EXTENSION_WIDGET_SIGN_IN_CHALLENGE_ONE_TIME_CODE_DESCRIPTION: &str =
     "extension.widget.sign_in_challenge_one_time_code_description";
