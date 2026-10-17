@@ -30,6 +30,7 @@ import { GoogleLoginStartDisposition } from './google-login-continuation'
 import {
   LoginFillProgress,
   LoginFillStartKind,
+  type LoginFillControls,
   type LoginFillProgressRequest,
 } from './login-fill-progress'
 import { SignInAttemptLogin } from './sign-in-attempt-login'
@@ -44,18 +45,15 @@ export class LoginCredentialFillAction {
     description,
     continueButton,
   }: FillAndSubmitAccountArgs): Promise<boolean> {
-    const progressRequest: LoginFillProgressRequest = {
-      controls: { step, title, description, continueButton },
-      login: SignInAttemptLogin.reference(account),
+    const controls: LoginFillControls = {
+      step,
+      title,
+      description,
+      continueButton,
     }
-    const start = await LoginFillProgress.start(progressRequest)
-    const progress = start.progress
-    switch (start.kind) {
-      case LoginFillStartKind.Unavailable:
-        return progress.fillFailed()
-      case LoginFillStartKind.Started:
-        break
-    }
+    // Google's selected username advance runs its own continuation; only the
+    // fill-and-submit path below is a tracked sign-in attempt.
+    const preflight = LoginFillProgress.untracked(controls)
     const approvalIsActive = () =>
       widgetState.controlDisposition(continueButton) ===
       WidgetControlDisposition.Active
@@ -83,7 +81,7 @@ export class LoginCredentialFillAction {
     if (
       releaseOutcome.kind !== RevalidatedAuthenticationActionOutcomeKind.Acted
     ) {
-      return progress.fillFailed()
+      return preflight.fillFailed()
     }
     const googleRequest: Parameters<
       typeof widgetState.googleLoginContinuation.start
@@ -105,8 +103,20 @@ export class LoginCredentialFillAction {
         scanState.schedule()
         return true
       case GoogleLoginStartDisposition.Rejected:
-        return progress.fillFailed()
+        return preflight.fillFailed()
       case GoogleLoginStartDisposition.OtherPage:
+        break
+    }
+    const progressRequest: LoginFillProgressRequest = {
+      controls,
+      login: SignInAttemptLogin.reference(account),
+    }
+    const start = await LoginFillProgress.start(progressRequest)
+    const progress = start.progress
+    switch (start.kind) {
+      case LoginFillStartKind.Unavailable:
+        return progress.fillFailed()
+      case LoginFillStartKind.Started:
         break
     }
     const loginFillMessage1: Parameters<

@@ -87,6 +87,15 @@ export class LoginFillProgress {
 
   private constructor(private readonly request: LoginFillTrackingRequest) {}
 
+  /** Progress before the fill path is chosen: the existing Pilot copy only. */
+  static untracked(controls: LoginFillControls): LoginFillProgress {
+    const request: LoginFillTrackingRequest = {
+      controls,
+      tracking: { kind: LoginFillTrackingKind.Untracked },
+    }
+    return new LoginFillProgress(request)
+  }
+
   /** Sign in (or a picker choice) begins one attempt for a top-level Pilot mount. */
   static async start(
     request: LoginFillProgressRequest,
