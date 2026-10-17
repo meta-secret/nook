@@ -209,11 +209,13 @@ pub(crate) enum VaultAppHostname {
 
 /// Named outcome of the Simple and Sentinel hostname predicates.
 impl VaultHostObservation<'_> {
+    /// A trailing DNS root dot names the same host, as in Chrome match patterns.
     #[must_use]
     pub(crate) fn vault_app_hostname(&self) -> VaultAppHostname {
+        let hostname = VaultHostObservation::new(self.as_str().trim_end_matches('.'));
         match (
-            self.is_simple_vault_hostname(),
-            self.is_sentinel_vault_hostname(),
+            hostname.is_simple_vault_hostname(),
+            hostname.is_sentinel_vault_hostname(),
         ) {
             (true, _) => VaultAppHostname::Simple,
             (false, true) => VaultAppHostname::Sentinel,
@@ -360,6 +362,22 @@ mod tests {
             VaultAppHostnameCase {
                 hostname: "pr-7.nokey-sentinel.pages.dev",
                 expected: VaultAppHostname::Sentinel,
+            },
+            VaultAppHostnameCase {
+                hostname: "simple.nokey.sh.",
+                expected: VaultAppHostname::Simple,
+            },
+            VaultAppHostnameCase {
+                hostname: "pr-7.nokey-simple.pages.dev..",
+                expected: VaultAppHostname::Simple,
+            },
+            VaultAppHostnameCase {
+                hostname: "sentinel.dev.nokey.sh.",
+                expected: VaultAppHostname::Sentinel,
+            },
+            VaultAppHostnameCase {
+                hostname: "example.com.",
+                expected: VaultAppHostname::Unrelated,
             },
             VaultAppHostnameCase {
                 hostname: "example.com",

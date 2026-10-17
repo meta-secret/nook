@@ -75,7 +75,7 @@ mod wasm_tests {
         );
         for case in [
             TabKindCase {
-                observation: BrowserTabUrlObservation::Unavailable,
+                observation: BrowserTabUrlObservation::Unavailable {},
                 kind: "NonWeb",
             },
             TabKindCase {
@@ -104,6 +104,7 @@ mod wasm_tests {
             serde_json::json!("https://example.com"),
             serde_json::json!({ "kind": "Observed" }),
             serde_json::json!({ "kind": "Observed", "url": "https://example.com", "tab_id": 4 }),
+            serde_json::json!({ "kind": "Unavailable", "url": "https://example.com" }),
         ] {
             let observation = Ts::new_unchecked(serde_wasm_bindgen::to_value(&value)?);
             assert!(classify_browser_tab_target(&observation).is_err());

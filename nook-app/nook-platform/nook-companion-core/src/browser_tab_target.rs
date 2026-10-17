@@ -8,13 +8,17 @@
 //! fragment.
 //!
 //! - The origin is the WHATWG ASCII serialization (`scheme://host[:port]`, the
-//!   default port omitted). It equals the browser's `URL.origin` for that page,
-//!   which the website login routes compare with the content script's sender.
+//!   default port omitted), including any trailing DNS root dot. It equals the
+//!   browser's `URL.origin` for that page, which the website login routes
+//!   compare with the content script's sender.
 //! - The display host is the canonical lowercase host without a port, because
-//!   website login matching ignores ports. It keeps `www` and every other label.
+//!   website login matching ignores ports, and without a trailing root dot,
+//!   which names the same host. It keeps `www` and every other label.
 //!   Internationalized domains stay in their ASCII (punycode) form so a
 //!   homograph host cannot render as another site's name. IPv6 hosts keep their
-//!   brackets.
+//!   brackets. A host made only of dots has no name and is not a website.
+//! - Vault-app recognition ignores the trailing root dot, as Chrome's content
+//!   script match patterns do.
 
 use crate::vault_host_policy::{VaultAppHostname, VaultHostObservation};
 use serde::{Deserialize, Serialize};
@@ -26,7 +30,8 @@ use url::Url;
 #[serde(tag = "kind", deny_unknown_fields)]
 pub enum BrowserTabUrlObservation {
     /// The browser reported no URL for the tab, as for its own `chrome:` pages.
-    Unavailable,
+    /// A struct variant, so `deny_unknown_fields` also rejects stray fields here.
+    Unavailable {},
     /// The browser reported this URL for the tab's top-level document.
     Observed { url: BrowserTabUrl },
 }
@@ -73,7 +78,7 @@ impl BrowserTabUrlObservation {
     #[must_use]
     pub fn classify(self) -> BrowserTabTarget {
         match self {
-            Self::Unavailable => BrowserTabTarget::NonWeb,
+            Self::Unavailable {} => BrowserTabTarget::NonWeb,
             Self::Observed { url } => url.classify(),
         }
     }
@@ -98,11 +103,15 @@ impl WebTabTarget {
         let Some(host) = url.host_str() else {
             return BrowserTabTarget::NonWeb;
         };
+        let display_host = match host.trim_end_matches('.') {
+            "" => return BrowserTabTarget::NonWeb,
+            hostname => WebTabDisplayHost(hostname.to_owned()),
+        };
         match VaultHostObservation::new(host).vault_app_hostname() {
             VaultAppHostname::Simple | VaultAppHostname::Sentinel => BrowserTabTarget::NookVaultApp,
             VaultAppHostname::Unrelated => BrowserTabTarget::Web(Self {
                 origin: WebTabOrigin(url.origin().ascii_serialization()),
-                display_host: WebTabDisplayHost(host.to_owned()),
+                display_host,
             }),
         }
     }
@@ -282,6 +291,29 @@ mod tests {
     }
 
     #[test]
+    fn trailing_root_dot_stays_in_the_origin_and_leaves_the_display_host() {
+        for case in [
+            WebTabCase {
+                url: "https://example.com./login",
+                origin: "https://example.com.",
+                display_host: "example.com",
+            },
+            WebTabCase {
+                url: "https://WWW.Example.COM.:8443/",
+                origin: "https://www.example.com.:8443",
+                display_host: "www.example.com",
+            },
+            WebTabCase {
+                url: "http://localhost./",
+                origin: "http://localhost.",
+                display_host: "localhost",
+            },
+        ] {
+            case.assert_classified();
+        }
+    }
+
+    #[test]
     fn browser_extension_local_inline_and_script_pages_are_non_web() {
         for url in [
             "chrome://settings/passwords",
@@ -314,6 +346,8 @@ mod tests {
             "not a url",
             "https://",
             "http:///",
+            "https://./",
+            "https://../login",
         ] {
             TabKindCase {
                 url,
@@ -322,7 +356,7 @@ mod tests {
             .assert_classified();
         }
         assert_eq!(
-            BrowserTabUrlObservation::Unavailable.classify(),
+            BrowserTabUrlObservation::Unavailable {}.classify(),
             BrowserTabTarget::NonWeb
         );
     }
@@ -339,6 +373,10 @@ mod tests {
             "https://SIMPLE.NOKEY.SH/",
             "http://simple.nokey.sh/",
             "https://user:secret@sentinel.nokey.sh/",
+            "https://simple.nokey.sh./",
+            "https://sentinel.dev.nokey.sh./unlock",
+            "https://pr-1.nokey-simple.pages.dev./",
+            "https://pr-1.nokey-sentinel.pages.dev../",
         ] {
             TabKindCase {
                 url,
@@ -412,10 +450,15 @@ mod tests {
         let unavailable: BrowserTabUrlObservation =
             serde_json::from_value(serde_json::json!({ "kind": "Unavailable" }))?;
         assert_eq!(unavailable.classify(), BrowserTabTarget::NonWeb);
+        assert_eq!(
+            serde_json::to_value(BrowserTabUrlObservation::Unavailable {})?,
+            serde_json::json!({ "kind": "Unavailable" })
+        );
         for rejected in [
             serde_json::json!({ "kind": "Observed" }),
             serde_json::json!({ "kind": "Observed", "url": 7 }),
             serde_json::json!({ "kind": "Observed", "url": "https://example.com", "tab_id": 3 }),
+            serde_json::json!({ "kind": "Unavailable", "url": "https://example.com" }),
             serde_json::json!({ "kind": "Web", "origin": "https://example.com" }),
             serde_json::json!({ "url": "https://example.com" }),
             serde_json::json!("https://example.com"),
