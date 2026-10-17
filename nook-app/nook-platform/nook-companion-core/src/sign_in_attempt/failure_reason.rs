@@ -27,6 +27,8 @@ pub(crate) struct SignInFailureReasonReading {
 }
 
 impl SignInFailureReason {
+    /// Matched only at word starts, so "blocked", "unlocked", and
+    /// "разблокировка" (unblocking) do not read as a lock.
     const ACCOUNT_LOCKED: SignInAttemptTerms = SignInAttemptTerms(&[
         "locked",
         "lockout",
@@ -45,15 +47,9 @@ impl SignInFailureReason {
         "too many",
         "rate limit",
         "rate-limit",
-        "try again later",
-        "try again in",
         "slow down",
         "слишком много",
         "слишком част",
-        "попробуйте позже",
-        "повторите попытку позже",
-        "попробуйте через",
-        "повторите через",
     ]);
     const CHALLENGE_REQUIRED: SignInAttemptTerms = SignInAttemptTerms(&[
         "captcha",
@@ -118,7 +114,7 @@ impl SignInFailureReason {
 impl From<&SignInAttemptNormalizedText> for SignInFailureReasonReading {
     fn from(text: &SignInAttemptNormalizedText) -> Self {
         use SignInAttemptTermMatch::{Matched, Unmatched};
-        let locked = SignInFailureReason::ACCOUNT_LOCKED.find_in(text);
+        let locked = SignInFailureReason::ACCOUNT_LOCKED.find_word_start_in(text);
         let limited = SignInFailureReason::RATE_LIMITED.find_in(text);
         let challenge = SignInFailureReason::CHALLENGE_REQUIRED.find_in(text);
         let wrong = SignInFailureReason::WRONG_CREDENTIALS.find_in(text);
@@ -226,6 +222,43 @@ mod tests {
             ReasonCase {
                 text: "Введите код подтверждения",
                 reason: ChallengeRequired,
+            },
+        ] {
+            case.assert_reason();
+        }
+    }
+
+    #[test]
+    fn timing_advice_alone_is_not_rate_limiting_and_lock_stems_are_word_bounded() {
+        use SignInFailureReason::{AccountLocked, Unknown};
+        for case in [
+            ReasonCase {
+                text: "Something went wrong. Please try again later.",
+                reason: Unknown,
+            },
+            ReasonCase {
+                text: "Account locked. Try again in 30 minutes.",
+                reason: AccountLocked,
+            },
+            ReasonCase {
+                text: "Произошла ошибка. Попробуйте позже.",
+                reason: Unknown,
+            },
+            ReasonCase {
+                text: "Your account was unlocked",
+                reason: Unknown,
+            },
+            ReasonCase {
+                text: "Pop-up blocked by your browser",
+                reason: Unknown,
+            },
+            ReasonCase {
+                text: "Разблокировка аккаунта выполнена",
+                reason: Unknown,
+            },
+            ReasonCase {
+                text: "Ваш аккаунт заблокирован",
+                reason: AccountLocked,
             },
         ] {
             case.assert_reason();

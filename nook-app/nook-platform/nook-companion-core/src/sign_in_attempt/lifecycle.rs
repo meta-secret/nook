@@ -296,7 +296,7 @@ impl SignInAttemptRecord {
 }
 
 impl SignInAttemptPreSubmitStep {
-    fn unchanged(self) -> SignInAttemptStep {
+    pub(crate) fn unchanged(self) -> SignInAttemptStep {
         let signing_in = match self {
             Self::Filling => SignInAttemptSigningIn::Filling,
             Self::Filled => SignInAttemptSigningIn::Filled,
@@ -316,14 +316,14 @@ impl SignInAttemptPreSubmitStep {
     fn advance(self, context: SignInAttemptEventContext<'_>) -> SignInAttemptStep {
         let SignInAttemptEventContext { now, event, .. } = context;
         match event {
-            SignInAttemptEvent::Resumed => SignInAttemptConcluded {
-                conclusion: SignInAttemptConclusion::TimedOut,
+            SignInAttemptEvent::Resumed {} => SignInAttemptConcluded {
+                conclusion: SignInAttemptConclusion::TimedOut {},
                 form: SignInAttemptLoginForm::Unobserved,
             }
             .unobserved(),
             SignInAttemptEvent::PageObserved { page } => match page.document {
                 SignInAttemptDocumentRelation::NewDocument => SignInAttemptConcluded {
-                    conclusion: SignInAttemptConclusion::TimedOut,
+                    conclusion: SignInAttemptConclusion::TimedOut {},
                     form: SignInAttemptLoginForm::from(&page),
                 }
                 .presented(SignInAttemptResetOffer::NotOffered),
@@ -334,14 +334,14 @@ impl SignInAttemptPreSubmitStep {
                 self.after_activity(SignInAttemptPreSubmitActivity { activity, now })
             }
             SignInAttemptEvent::UserAction {
-                action: SignInAttemptUserAction::Dismiss,
+                action: SignInAttemptUserAction::Dismiss {},
             } => SignInAttemptStep::closing(SignInAttemptClosing::TAKEN_OVER),
             SignInAttemptEvent::UserAction {
                 action:
-                    SignInAttemptUserAction::TryAgain
-                    | SignInAttemptUserAction::ChooseAnotherLogin
+                    SignInAttemptUserAction::TryAgain {}
+                    | SignInAttemptUserAction::ChooseAnotherLogin {}
                     | SignInAttemptUserAction::ResetPassword { .. }
-                    | SignInAttemptUserAction::FillAuthenticator,
+                    | SignInAttemptUserAction::FillAuthenticator {},
             } => self.unchanged(),
         }
     }
@@ -362,16 +362,16 @@ impl SignInAttemptPreSubmitStep {
                 scene: SignInAttemptScene::SigningIn(SignInAttemptSigningIn::AwaitingOutcome),
                 follow_up: SignInAttemptFollowUp::None,
             },
-            (Self::Filling | Self::Filled, SignInAttemptActivity::Filled) => {
+            (Self::Filling | Self::Filled, SignInAttemptActivity::Filled {}) => {
                 Self::Filled.unchanged()
             }
-            (Self::Filling | Self::Filled, SignInAttemptActivity::SubmissionUnobserved) => {
+            (Self::Filling | Self::Filled, SignInAttemptActivity::SubmissionUnobserved {}) => {
                 Self::ManualSubmit.unchanged()
             }
-            (Self::Filling | Self::Filled, SignInAttemptActivity::FillFailed) => {
+            (Self::Filling | Self::Filled, SignInAttemptActivity::FillFailed {}) => {
                 SignInAttemptConcluded {
                     conclusion: SignInAttemptConclusion::Failed {
-                        failure: SignInAttemptFailure::FillFailed,
+                        failure: SignInAttemptFailure::FillFailed {},
                     },
                     form: SignInAttemptLoginForm::Shown,
                 }
@@ -379,19 +379,19 @@ impl SignInAttemptPreSubmitStep {
             }
             (
                 Self::Filling | Self::Filled | Self::ManualSubmit,
-                SignInAttemptActivity::SubmissionRejected,
+                SignInAttemptActivity::SubmissionRejected {},
             ) => SignInAttemptConcluded {
                 conclusion: SignInAttemptConclusion::Failed {
-                    failure: SignInAttemptFailure::SubmissionRejected,
+                    failure: SignInAttemptFailure::SubmissionRejected {},
                 },
                 form: SignInAttemptLoginForm::Shown,
             }
             .unobserved(),
             (
                 Self::ManualSubmit,
-                SignInAttemptActivity::Filled
-                | SignInAttemptActivity::FillFailed
-                | SignInAttemptActivity::SubmissionUnobserved,
+                SignInAttemptActivity::Filled {}
+                | SignInAttemptActivity::FillFailed {}
+                | SignInAttemptActivity::SubmissionUnobserved {},
             ) => self.unchanged(),
         }
     }
@@ -472,7 +472,7 @@ mod tests {
     #[test]
     fn nook_fill_failures_conclude_without_a_site_reason() -> anyhow::Result<()> {
         let fill_failed = SignInScenario::begin(1_000)?
-            .activity(SignInAttemptActivity::FillFailed)?
+            .activity(SignInAttemptActivity::FillFailed {})?
             .retained()?;
         assert_eq!(fill_failed.presentation.status, SignInAttemptStatus::Failed);
         assert_eq!(
@@ -488,7 +488,7 @@ mod tests {
             ]
         );
         let rejected = SignInScenario::begin(1_000)?
-            .activity(SignInAttemptActivity::SubmissionRejected)?
+            .activity(SignInAttemptActivity::SubmissionRejected {})?
             .retained()?;
         assert_eq!(
             rejected.presentation.description_key,
@@ -501,7 +501,7 @@ mod tests {
     fn manual_submission_waits_for_the_users_submit_and_reload_before_submit_times_out()
     -> anyhow::Result<()> {
         let manual = SignInScenario::begin(1_000)?
-            .activity(SignInAttemptActivity::SubmissionUnobserved)?
+            .activity(SignInAttemptActivity::SubmissionUnobserved {})?
             .retained()?;
         assert_eq!(
             manual.presentation.description_key,
@@ -513,7 +513,7 @@ mod tests {
             SignInAttemptMessageKey::WidgetSignInSigningInDescription
         );
         let lost = SignInScenario::begin(1_000)?
-            .activity(SignInAttemptActivity::Filled)?
+            .activity(SignInAttemptActivity::Filled {})?
             .retained()?
             .resumed(1_500)?
             .retained()?;
@@ -532,7 +532,7 @@ mod tests {
             let outcome = awaiting.clone().advance(SignInScenarioEvent {
                 at: 2_000,
                 origin,
-                event: SignInAttemptEvent::Resumed,
+                event: SignInAttemptEvent::Resumed {},
             })?;
             assert!(
                 matches!(outcome, SignInScenarioOutcome::OtherSite),
@@ -542,7 +542,7 @@ mod tests {
         let subdomain = awaiting.advance(SignInScenarioEvent {
             at: 2_000,
             origin: "https://ap.www.namecheap.com",
-            event: SignInAttemptEvent::Resumed,
+            event: SignInAttemptEvent::Resumed {},
         })?;
         assert!(matches!(subdomain, SignInScenarioOutcome::Retained(_)));
         Ok(())
@@ -585,7 +585,7 @@ mod tests {
             record: SignInScenario::begin(1_000)?.record,
             sender_origin: SignInAttemptSenderOrigin::try_from(SignInScenario::ORIGIN.to_owned())?,
             now: serde_json::from_str("0")?,
-            event: SignInAttemptEvent::Resumed,
+            event: SignInAttemptEvent::Resumed {},
         }
         .advance();
         assert_eq!(result, Err(SignInAttemptRequestError::TimeInvalid));
@@ -624,7 +624,7 @@ mod tests {
             .advance(SignInScenarioEvent {
                 at: 2_500,
                 origin: SiblingObservation::SIBLING,
-                event: SignInAttemptEvent::Resumed,
+                event: SignInAttemptEvent::Resumed {},
             })?
             .retained()?;
         let settling = SiblingObservation {
@@ -667,7 +667,7 @@ mod tests {
             .advance(SignInScenarioEvent {
                 at: 4_000,
                 origin: SiblingObservation::SIBLING,
-                event: SignInAttemptEvent::Resumed,
+                event: SignInAttemptEvent::Resumed {},
             })?
             .retained()?;
         assert_eq!(on_capture_origin.presentation.site_message, expected);

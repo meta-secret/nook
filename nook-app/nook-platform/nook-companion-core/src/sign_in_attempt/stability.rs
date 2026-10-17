@@ -50,7 +50,7 @@ impl SignInAttemptSettlingEvidence {
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", deny_unknown_fields)]
 pub(crate) enum SignInAttemptStability {
-    Unsettled,
+    Unsettled {},
     Settling {
         evidence: SignInAttemptSettlingEvidence,
         since: SignInAttemptInstant,

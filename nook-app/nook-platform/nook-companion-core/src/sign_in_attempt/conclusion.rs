@@ -42,10 +42,10 @@ enum SignInAttemptActionRequirement {
 impl SignInAttemptUserAction {
     const fn requirement(&self) -> SignInAttemptActionRequirement {
         match self {
-            Self::TryAgain | Self::ChooseAnotherLogin | Self::FillAuthenticator => {
+            Self::TryAgain {} | Self::ChooseAnotherLogin {} | Self::FillAuthenticator {} => {
                 SignInAttemptActionRequirement::LoginForm
             }
-            Self::ResetPassword { .. } | Self::Dismiss => {
+            Self::ResetPassword { .. } | Self::Dismiss {} => {
                 SignInAttemptActionRequirement::Independent
             }
         }
@@ -68,7 +68,7 @@ impl SignInAttemptConcluded {
             SignInAttemptEvent::PageObserved { page } => {
                 self.observed(SignInAttemptConcludedObservation { page, binding })
             }
-            SignInAttemptEvent::Resumed => self.reloaded().unobserved(),
+            SignInAttemptEvent::Resumed {} => self.reloaded().unobserved(),
             SignInAttemptEvent::Activity { .. } => self.unobserved(),
         }
     }
@@ -152,17 +152,17 @@ impl SignInAttemptConcluded {
             SignInAttemptConclusion::ChallengeRequired { challenge } => {
                 challenge.resolve(SignInAttemptFormResolution { resolution, form })
             }
-            SignInAttemptConclusion::TimedOut => match resolution.action {
-                SignInAttemptUserAction::TryAgain => {
+            SignInAttemptConclusion::TimedOut {} => match resolution.action {
+                SignInAttemptUserAction::TryAgain {} => {
                     SignInAttemptStep::restarting(resolution.binding.login)
                 }
-                SignInAttemptUserAction::Dismiss => {
+                SignInAttemptUserAction::Dismiss {} => {
                     SignInAttemptStep::closing(SignInAttemptClosing::CONCLUDED_DISMISSAL)
                 }
-                SignInAttemptUserAction::ChooseAnotherLogin
+                SignInAttemptUserAction::ChooseAnotherLogin {}
                 | SignInAttemptUserAction::ResetPassword { .. }
-                | SignInAttemptUserAction::FillAuthenticator => Self {
-                    conclusion: SignInAttemptConclusion::TimedOut,
+                | SignInAttemptUserAction::FillAuthenticator {} => Self {
+                    conclusion: SignInAttemptConclusion::TimedOut {},
                     form,
                 }
                 .unobserved(),
@@ -202,7 +202,7 @@ impl SignInAttemptConcluded {
                     form,
                 }
             }
-            SignInAttemptConclusion::TimedOut => SignInAttemptScene::TimedOut {
+            SignInAttemptConclusion::TimedOut {} => SignInAttemptScene::TimedOut {
                 evidence: representation.evidence,
                 form,
             },
@@ -222,8 +222,8 @@ impl SignInAttemptFailure {
         let SignInAttemptFormResolution { resolution, form } = request;
         let SignInAttemptResolution { action, binding } = resolution;
         match action {
-            SignInAttemptUserAction::TryAgain => SignInAttemptStep::restarting(binding.login),
-            SignInAttemptUserAction::ChooseAnotherLogin => {
+            SignInAttemptUserAction::TryAgain {} => SignInAttemptStep::restarting(binding.login),
+            SignInAttemptUserAction::ChooseAnotherLogin {} => {
                 SignInAttemptStep::closing(SignInAttemptClosing {
                     scene: SignInAttemptScene::Dismissed(SignInAttemptDismissal::Concluded),
                     follow_up: SignInAttemptFollowUp::OpenLoginPicker,
@@ -235,16 +235,16 @@ impl SignInAttemptFailure {
                     form,
                 }
                 .reset_password(SignInAttemptResetRequest { link, binding }),
-                Self::FillFailed | Self::SubmissionRejected => SignInAttemptConcluded {
+                Self::FillFailed {} | Self::SubmissionRejected {} => SignInAttemptConcluded {
                     conclusion: SignInAttemptConclusion::Failed { failure: self },
                     form,
                 }
                 .unobserved(),
             },
-            SignInAttemptUserAction::Dismiss => {
+            SignInAttemptUserAction::Dismiss {} => {
                 SignInAttemptStep::closing(SignInAttemptClosing::CONCLUDED_DISMISSAL)
             }
-            SignInAttemptUserAction::FillAuthenticator => SignInAttemptConcluded {
+            SignInAttemptUserAction::FillAuthenticator {} => SignInAttemptConcluded {
                 conclusion: SignInAttemptConclusion::Failed { failure: self },
                 form,
             }
@@ -261,7 +261,7 @@ impl SignInAttemptChallenge {
         let SignInAttemptFormResolution { resolution, form } = request;
         let SignInAttemptResolution { action, binding } = resolution;
         match (self, action) {
-            (Self::OneTimeCode, SignInAttemptUserAction::FillAuthenticator) => {
+            (Self::OneTimeCode, SignInAttemptUserAction::FillAuthenticator {}) => {
                 SignInAttemptStep::closing(SignInAttemptClosing {
                     scene: SignInAttemptScene::ChallengeRequired {
                         challenge: Self::OneTimeCode,
@@ -271,17 +271,17 @@ impl SignInAttemptChallenge {
                     follow_up: SignInAttemptFollowUp::OpenAuthenticatorPicker,
                 })
             }
-            (Self::Verification, SignInAttemptUserAction::TryAgain) => {
+            (Self::Verification, SignInAttemptUserAction::TryAgain {}) => {
                 SignInAttemptStep::restarting(binding.login)
             }
-            (Self::OneTimeCode | Self::Verification, SignInAttemptUserAction::Dismiss) => {
+            (Self::OneTimeCode | Self::Verification, SignInAttemptUserAction::Dismiss {}) => {
                 SignInAttemptStep::closing(SignInAttemptClosing::TAKEN_OVER)
             }
-            (Self::OneTimeCode, SignInAttemptUserAction::TryAgain)
-            | (Self::Verification, SignInAttemptUserAction::FillAuthenticator)
+            (Self::OneTimeCode, SignInAttemptUserAction::TryAgain {})
+            | (Self::Verification, SignInAttemptUserAction::FillAuthenticator {})
             | (
                 Self::OneTimeCode | Self::Verification,
-                SignInAttemptUserAction::ChooseAnotherLogin
+                SignInAttemptUserAction::ChooseAnotherLogin {}
                 | SignInAttemptUserAction::ResetPassword { .. },
             ) => SignInAttemptConcluded {
                 conclusion: SignInAttemptConclusion::ChallengeRequired { challenge: self },
@@ -411,14 +411,14 @@ mod tests {
         );
         let unoffered = challenged
             .clone()
-            .act(SignInAttemptUserAction::TryAgain)?
+            .act(SignInAttemptUserAction::TryAgain {})?
             .retained()?;
         assert_eq!(
             unoffered.presentation.status,
             SignInAttemptStatus::ChallengeRequired
         );
         let handed_off = challenged
-            .act(SignInAttemptUserAction::FillAuthenticator)?
+            .act(SignInAttemptUserAction::FillAuthenticator {})?
             .closed()?;
         assert_eq!(
             handed_off.follow_up,
@@ -455,7 +455,7 @@ mod tests {
         );
         let taken_over = challenged
             .clone()
-            .act(SignInAttemptUserAction::Dismiss)?
+            .act(SignInAttemptUserAction::Dismiss {})?
             .closed()?;
         assert_eq!(taken_over.status, SignInAttemptStatus::Dismissed);
         assert_eq!(
@@ -463,7 +463,7 @@ mod tests {
             AuthenticationLoginChecklistStatus::Inactive
         );
         let restarted = challenged
-            .act(SignInAttemptUserAction::TryAgain)?
+            .act(SignInAttemptUserAction::TryAgain {})?
             .closed()?;
         assert_eq!(
             restarted.follow_up,
@@ -478,7 +478,7 @@ mod tests {
     fn dismiss_takes_over_in_flight_and_returns_to_fresh_after_a_conclusion() -> anyhow::Result<()>
     {
         let taken_over = SignInScenario::begin(1_000)?
-            .act(SignInAttemptUserAction::Dismiss)?
+            .act(SignInAttemptUserAction::Dismiss {})?
             .closed()?;
         assert_eq!(taken_over.status, SignInAttemptStatus::Dismissed);
         assert_eq!(
@@ -491,7 +491,7 @@ mod tests {
         );
         let awaiting_taken_over = SignInSubmittedAttempt::login_form()
             .awaiting()?
-            .act(SignInAttemptUserAction::Dismiss)?
+            .act(SignInAttemptUserAction::Dismiss {})?
             .closed()?;
         assert_eq!(
             awaiting_taken_over.checklist.status,
@@ -501,7 +501,7 @@ mod tests {
             .awaiting()?
             .resumed(30_000)?
             .retained()?
-            .act(SignInAttemptUserAction::Dismiss)?
+            .act(SignInAttemptUserAction::Dismiss {})?
             .closed()?;
         assert_eq!(concluded.status, SignInAttemptStatus::Dismissed);
         assert_eq!(
@@ -532,7 +532,7 @@ mod tests {
             .retained()?;
         let restarted = failed
             .clone()
-            .act(SignInAttemptUserAction::TryAgain)?
+            .act(SignInAttemptUserAction::TryAgain {})?
             .closed()?;
         assert_eq!(restarted.status, SignInAttemptStatus::SigningIn);
         assert_eq!(
@@ -543,7 +543,7 @@ mod tests {
         );
         assert!(restarted.actions.is_empty());
         let picker = failed
-            .act(SignInAttemptUserAction::ChooseAnotherLogin)?
+            .act(SignInAttemptUserAction::ChooseAnotherLogin {})?
             .closed()?;
         assert_eq!(picker.follow_up, SignInAttemptFollowUp::OpenLoginPicker);
         Ok(())
@@ -745,8 +745,8 @@ mod tests {
     #[test]
     fn nook_fill_and_submit_failures_never_close_as_workflow_left() -> anyhow::Result<()> {
         for activity in [
-            SignInAttemptActivity::FillFailed,
-            SignInAttemptActivity::SubmissionRejected,
+            SignInAttemptActivity::FillFailed {},
+            SignInAttemptActivity::SubmissionRejected {},
         ] {
             let failed = SignInScenario::begin(1_000)?
                 .activity(activity)?
@@ -823,7 +823,7 @@ mod tests {
         assert_eq!(timed_out.offered(), vec![SignInAttemptActionKind::Dismiss]);
         let refused = timed_out
             .clone()
-            .act(SignInAttemptUserAction::TryAgain)?
+            .act(SignInAttemptUserAction::TryAgain {})?
             .retained()?;
         assert_eq!(refused.presentation.status, SignInAttemptStatus::TimedOut);
         let form_back = timed_out
@@ -948,7 +948,7 @@ mod tests {
             .advance(SignInScenarioEvent {
                 at: 2_000,
                 origin: "https://ap.www.namecheap.com",
-                event: SignInAttemptEvent::Resumed,
+                event: SignInAttemptEvent::Resumed {},
             })?
             .retained()?;
         assert_eq!(sibling.presentation.status, SignInAttemptStatus::Failed);

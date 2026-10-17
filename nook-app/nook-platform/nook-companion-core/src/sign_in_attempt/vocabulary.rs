@@ -55,6 +55,39 @@ impl SignInAttemptTerms {
     }
 }
 
+impl SignInAttemptTerms {
+    /// Like `find_in`, but a term counts only where it starts a word, so a
+    /// stem does not match inside a longer word ("blocked" for "locked").
+    pub(crate) fn find_word_start_in(
+        self,
+        text: &SignInAttemptNormalizedText,
+    ) -> SignInAttemptTermMatch {
+        let Self(terms) = self;
+        let SignInAttemptNormalizedText(text) = text;
+        let starts_word = terms.iter().any(|term| {
+            text.match_indices(term).any(|(index, _)| {
+                text.get(..index)
+                    .and_then(|before| before.chars().next_back())
+                    .is_none_or(|previous| !previous.is_alphanumeric())
+            })
+        });
+        SignInAttemptTermMatch::from(starts_word)
+    }
+}
+
+impl From<bool> for SignInAttemptTermMatch {
+    #[expect(
+        clippy::match_bool,
+        reason = "the word-start search result is converted immediately into a named match outcome"
+    )]
+    fn from(matched: bool) -> Self {
+        match matched {
+            true => Self::Matched,
+            false => Self::Unmatched,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{SignInAttemptNormalizedText, SignInAttemptTermMatch, SignInAttemptTerms};
@@ -66,6 +99,50 @@ mod tests {
             text,
             SignInAttemptNormalizedText("we couldn't find учетную".to_owned())
         );
+    }
+
+    struct WordCase {
+        text: &'static str,
+        expected: SignInAttemptTermMatch,
+    }
+
+    #[test]
+    fn word_start_matching_ignores_terms_inside_longer_words() {
+        use SignInAttemptTermMatch::{Matched, Unmatched};
+        let terms = SignInAttemptTerms(&["locked", "блокировк"]);
+        for case in [
+            WordCase {
+                text: "Your account has been locked.",
+                expected: Matched,
+            },
+            WordCase {
+                text: "locked out",
+                expected: Matched,
+            },
+            WordCase {
+                text: "Pop-up blocked",
+                expected: Unmatched,
+            },
+            WordCase {
+                text: "Account unlocked",
+                expected: Unmatched,
+            },
+            WordCase {
+                text: "Блокировка входа",
+                expected: Matched,
+            },
+            WordCase {
+                text: "Разблокировка выполнена",
+                expected: Unmatched,
+            },
+        ] {
+            assert_eq!(
+                terms.find_word_start_in(&SignInAttemptNormalizedText::from(case.text)),
+                case.expected,
+                "{}",
+                case.text
+            );
+        }
     }
 
     #[test]

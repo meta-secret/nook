@@ -56,7 +56,7 @@ pub(crate) enum SignInAttemptSiteMessageEvidence {
         text: SignInAttemptSiteMessage,
         origin: SignInAttemptOrigin,
     },
-    Absent,
+    Absent {},
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -68,9 +68,9 @@ pub(crate) enum SignInAttemptFailure {
         message: SignInAttemptSiteMessageEvidence,
     },
     /// Nook could not fill the selected login.
-    FillFailed,
+    FillFailed {},
     /// Nook's submit revalidation refused to submit the filled form.
-    SubmissionRejected,
+    SubmissionRejected {},
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -117,7 +117,7 @@ impl From<&SignInAttemptPageEvidence> for SignInAttemptLoginForm {
 pub(crate) enum SignInAttemptConclusion {
     Failed { failure: SignInAttemptFailure },
     ChallengeRequired { challenge: SignInAttemptChallenge },
-    TimedOut,
+    TimedOut {},
 }
 
 impl SignInAttemptConclusion {
@@ -127,13 +127,14 @@ impl SignInAttemptConclusion {
     pub(crate) const fn origin(&self) -> SignInAttemptConclusionOrigin {
         match self {
             Self::Failed {
-                failure: SignInAttemptFailure::FillFailed | SignInAttemptFailure::SubmissionRejected,
+                failure:
+                    SignInAttemptFailure::FillFailed {} | SignInAttemptFailure::SubmissionRejected {},
             } => SignInAttemptConclusionOrigin::Nook,
             Self::Failed {
                 failure: SignInAttemptFailure::SiteRejected { .. },
             }
             | Self::ChallengeRequired { .. }
-            | Self::TimedOut => SignInAttemptConclusionOrigin::Site,
+            | Self::TimedOut {} => SignInAttemptConclusionOrigin::Site,
         }
     }
 }

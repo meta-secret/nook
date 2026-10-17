@@ -219,6 +219,13 @@ mod tests {
     #[test]
     fn strict_decoder_accepts_the_current_shape() {
         assert_eq!(RawStoredRecord(RawStoredRecord::VALID).decode(), Ok(()));
+        assert_eq!(
+            RawStoredRecord(
+                r#"{"schema":1,"origin":"https://www.namecheap.com","login":"store_a/secret_b","started_at":1000,"phase":{"kind":"Concluded","conclusion":{"kind":"TimedOut"},"form":"Shown"}}"#
+            )
+            .decode(),
+            Ok(())
+        );
     }
 
     #[test]
@@ -237,6 +244,9 @@ mod tests {
             r#"{"schema":1,"origin":"https://www.namecheap.com","login":"store_a/secret_b","started_at":-5,"phase":{"kind":"BeforeSubmit","step":"Filling"}}"#,
             // Unknown field inside the phase.
             r#"{"schema":1,"origin":"https://www.namecheap.com","login":"store_a/secret_b","started_at":1000,"phase":{"kind":"BeforeSubmit","step":"Filling","extra":true}}"#,
+            // Unknown field on a tagged variant without payload.
+            r#"{"schema":1,"origin":"https://www.namecheap.com","login":"store_a/secret_b","started_at":1000,"phase":{"kind":"Concluded","conclusion":{"kind":"TimedOut","extra":true},"form":"Shown"}}"#,
+            r#"{"schema":1,"origin":"https://www.namecheap.com","login":"store_a/secret_b","started_at":1000,"phase":{"kind":"Concluded","conclusion":{"kind":"Failed","failure":{"kind":"FillFailed","extra":true}},"form":"Shown"}}"#,
             // Unknown phase.
             r#"{"schema":1,"origin":"https://www.namecheap.com","login":"store_a/secret_b","started_at":1000,"phase":{"kind":"Signing"}}"#,
             // Missing required field.

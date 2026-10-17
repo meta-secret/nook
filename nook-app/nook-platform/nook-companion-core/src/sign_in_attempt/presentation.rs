@@ -377,7 +377,8 @@ impl SignInAttemptScene {
             | Self::ChallengeRequired { evidence, .. }
             | Self::TimedOut { evidence, .. } => *evidence,
             Self::Failed(SignInAttemptFailedScene {
-                failure: SignInAttemptFailure::FillFailed | SignInAttemptFailure::SubmissionRejected,
+                failure:
+                    SignInAttemptFailure::FillFailed {} | SignInAttemptFailure::SubmissionRejected {},
                 ..
             })
             | Self::SigningIn(
@@ -438,7 +439,8 @@ impl SignInAttemptScene {
                 | SignInAttemptSigningIn::Restarting,
             )
             | Self::Failed(SignInAttemptFailedScene {
-                failure: SignInAttemptFailure::FillFailed | SignInAttemptFailure::SubmissionRejected,
+                failure:
+                    SignInAttemptFailure::FillFailed {} | SignInAttemptFailure::SubmissionRejected {},
                 ..
             }) => AuthenticationWorkflowActivity::FillingLogin,
             Self::SigningIn(SignInAttemptSigningIn::AwaitingOutcome)
@@ -471,11 +473,11 @@ impl SignInAttemptScene {
                 AuthenticationLoginChecklistActivity::Submitted
             }
             Self::Failed(SignInAttemptFailedScene {
-                failure: SignInAttemptFailure::FillFailed,
+                failure: SignInAttemptFailure::FillFailed {},
                 ..
             }) => AuthenticationLoginChecklistActivity::FillFailed,
             Self::Failed(SignInAttemptFailedScene {
-                failure: SignInAttemptFailure::SubmissionRejected,
+                failure: SignInAttemptFailure::SubmissionRejected {},
                 ..
             }) => AuthenticationLoginChecklistActivity::SubmissionRejected,
             Self::Dismissed(SignInAttemptDismissal::TakenOver) => {
@@ -552,7 +554,7 @@ impl SignInAttemptFailedScene {
                     | SignInFailureReason::Unknown,
                 ..
             } => [try_again, choose, reset, dismiss].concat(),
-            SignInAttemptFailure::FillFailed | SignInAttemptFailure::SubmissionRejected => {
+            SignInAttemptFailure::FillFailed {} | SignInAttemptFailure::SubmissionRejected {} => {
                 [try_again, choose, dismiss].concat()
             }
         }
@@ -563,8 +565,8 @@ impl SignInAttemptFailure {
     fn description_key(&self) -> SignInAttemptMessageKey {
         match self {
             Self::SiteRejected { reason, .. } => reason.message_key(),
-            Self::FillFailed => SignInAttemptMessageKey::WidgetChecklistFillFailed,
-            Self::SubmissionRejected => SignInAttemptMessageKey::WidgetChecklistSubmitRejected,
+            Self::FillFailed {} => SignInAttemptMessageKey::WidgetChecklistFillFailed,
+            Self::SubmissionRejected {} => SignInAttemptMessageKey::WidgetChecklistSubmitRejected,
         }
     }
 }
@@ -718,7 +720,7 @@ mod tests {
         let site_failure = SignInAttemptFailedScene {
             failure: SignInAttemptFailure::SiteRejected {
                 reason: SignInFailureReason::WrongCredentials,
-                message: SignInAttemptSiteMessageEvidence::Absent,
+                message: SignInAttemptSiteMessageEvidence::Absent {},
             },
             reset: SignInAttemptResetOffer::NotOffered,
             evidence: SignInAttemptEvidenceDemand::NotWanted,
@@ -727,12 +729,12 @@ mod tests {
         let unknown_failure = SignInAttemptFailedScene {
             failure: SignInAttemptFailure::SiteRejected {
                 reason: SignInFailureReason::Unknown,
-                message: SignInAttemptSiteMessageEvidence::Absent,
+                message: SignInAttemptSiteMessageEvidence::Absent {},
             },
             ..site_failure.clone()
         };
         let fill_failure = SignInAttemptFailedScene {
-            failure: SignInAttemptFailure::FillFailed,
+            failure: SignInAttemptFailure::FillFailed {},
             ..site_failure.clone()
         };
         for expectation in [

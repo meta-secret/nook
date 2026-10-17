@@ -133,7 +133,7 @@ pub struct SignInAttemptAdvanceRequest {
 #[serde(tag = "kind", deny_unknown_fields)]
 pub enum SignInAttemptEvent {
     /// Content script (re)mounted on a page while the tab holds a record.
-    Resumed,
+    Resumed {},
     /// Activity reported by the actuator that performs fill/submit.
     Activity { activity: SignInAttemptActivity },
     /// Bounded page evidence (in-place polling or after resume).
@@ -145,14 +145,14 @@ pub enum SignInAttemptEvent {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(tag = "kind", deny_unknown_fields)]
 pub enum SignInAttemptActivity {
-    Filled,
-    FillFailed,
+    Filled {},
+    FillFailed {},
     /// Nook submitted (or observed the trusted submit of) the filled form.
     Submitted {
         baseline: SignInAttemptSubmitBaseline,
     },
-    SubmissionRejected,
-    SubmissionUnobserved,
+    SubmissionRejected {},
+    SubmissionUnobserved {},
 }
 
 /// Submit-time facts collected synchronously right before submit, with the
@@ -180,21 +180,22 @@ pub struct SignInAttemptAuthFields {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(tag = "kind", deny_unknown_fields)]
 pub enum SignInAttemptUserAction {
-    TryAgain,
-    ChooseAnotherLogin,
+    TryAgain {},
+    ChooseAnotherLogin {},
     /// Fresh, revalidated link facts at click time.
     ResetPassword {
         link: SignInPageLink,
     },
-    FillAuthenticator,
-    Dismiss,
+    FillAuthenticator {},
+    Dismiss {},
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        SignInAttemptAdvanceRequest, SignInAttemptLoginReference, SignInAttemptRequestError,
-        SignInAttemptSenderOrigin,
+        SignInAttemptActivity, SignInAttemptAdvanceRequest, SignInAttemptEvent,
+        SignInAttemptLoginReference, SignInAttemptRequestError, SignInAttemptSenderOrigin,
+        SignInAttemptUserAction,
     };
 
     #[test]
@@ -260,5 +261,34 @@ mod tests {
         assert!(serde_json::from_str::<SignInAttemptAdvanceRequest>(unknown_event).is_err());
         let renamed = r#"{"record":"{}","senderOrigin":"https://a.example","now":1,"event":{"kind":"Resumed"}}"#;
         assert!(serde_json::from_str::<SignInAttemptAdvanceRequest>(renamed).is_err());
+    }
+
+    #[test]
+    fn tagged_variants_without_payload_reject_unknown_fields() -> anyhow::Result<()> {
+        assert_eq!(
+            serde_json::from_str::<SignInAttemptEvent>(r#"{"kind":"Resumed"}"#)?,
+            SignInAttemptEvent::Resumed {}
+        );
+        assert!(
+            serde_json::from_str::<SignInAttemptEvent>(r#"{"kind":"Resumed","extra":true}"#)
+                .is_err()
+        );
+        assert!(
+            serde_json::from_str::<SignInAttemptActivity>(
+                r#"{"kind":"SubmissionUnobserved","extra":true}"#
+            )
+            .is_err()
+        );
+        assert!(
+            serde_json::from_str::<SignInAttemptUserAction>(r#"{"kind":"Dismiss","extra":true}"#)
+                .is_err()
+        );
+        assert!(
+            serde_json::from_str::<SignInAttemptEvent>(
+                r#"{"kind":"UserAction","action":{"kind":"TryAgain","extra":true}}"#
+            )
+            .is_err()
+        );
+        Ok(())
     }
 }

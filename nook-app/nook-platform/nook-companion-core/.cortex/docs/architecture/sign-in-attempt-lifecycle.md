@@ -113,6 +113,11 @@ Lifetime is the tab's session. `chrome.storage.session` is ephemeral and
 cleared on tab removal. No durable vault schema or storage migration is
 needed, because the record is non-secret and never written to vault storage.
 
+Every request and record object is decoded strictly. Unknown fields are
+rejected everywhere, including on tagged variants without a payload such as
+`{ kind: 'Resumed' }`; Rust models those as empty struct variants so the rule
+applies, and the TypeScript shape is unchanged.
+
 ## Transitions, end versus close
 
 | From | Event | Result |
@@ -123,7 +128,9 @@ needed, because the record is non-secret and never written to vault storage.
 | BeforeSubmit | `FillFailed`, `SubmissionRejected` | `Failed` without a site reason |
 | BeforeSubmit | `Resumed`, or `PageObserved(NewDocument)` | `TimedOut` (the acting document was lost before a recorded submit) |
 | AwaitingOutcome | `PageObserved` | see classification below |
-| AwaitingOutcome | `Resumed` or another activity | keep waiting, or `TimedOut` after the budget |
+| AwaitingOutcome | `SubmissionUnobserved` | `BeforeSubmit(ManualSubmit)`: the actuator reports its submit outcome after `Submitted`, so the user submits |
+| AwaitingOutcome | `SubmissionRejected` | `Failed` without a site reason, as before submit |
+| AwaitingOutcome | `Resumed`, `Filled`, `FillFailed`, or an offered user action | keep waiting, or `TimedOut` after the budget |
 | AwaitingOutcome | a new `Submitted` | restart the wait |
 | any in-flight phase | `Dismiss` | close; take-over state |
 | Concluded | `Resumed`, activity | re-present unchanged; site outcomes ask for page evidence; never expires |
@@ -280,6 +287,11 @@ Categories are `WrongCredentials`, `AccountLocked`, `RateLimited`, and
   with failed attempts.
 - Two consequences together, or no category, give `Unknown`. A category is
   never guessed.
+- `RateLimited` needs explicit throttling wording ("too many", "rate limit",
+  "slow down", "слишком много/част"). Timing advice such as "try again later"
+  is only generic error wording, so it never decides a category.
+- Lock wording matches only at word starts, so "blocked", "unlocked", and
+  "разблокировка" do not read as `AccountLocked`.
 
 ### Reset links
 
@@ -317,7 +329,7 @@ Requests exceeding a bound fail decoding (`JsError`):
 | Value | Bound |
 |---|---|
 | sender origin | 512 bytes |
-| login reference | 256 bytes |
+| login reference | 1,024 bytes |
 | messages | ≤ 6, text ≤ 300 characters |
 | message tokens, ancestor tokens | ≤ 12 each, each token ≤ 48 characters |
 | control labels | ≤ 64, existing login-save label bound |

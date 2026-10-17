@@ -250,7 +250,7 @@ impl SignInAttemptBaseline {
                 SameStep | OverlappingStep | OtherStep | NoAuthFields,
             ) => SignInAttemptLeadingEvidence::Failure {
                 reason: SignInFailureReason::Unknown,
-                message: SignInAttemptSiteMessageEvidence::Absent,
+                message: SignInAttemptSiteMessageEvidence::Absent {},
             },
             (Success, SignInAttemptFreshError::Fresh { .. }, OtherStep | NoAuthFields)
             | (
@@ -552,7 +552,7 @@ mod tests {
             case.read()?,
             SignInAttemptPageReading::Failure {
                 reason: SignInFailureReason::Unknown,
-                message: SignInAttemptSiteMessageEvidence::Absent,
+                message: SignInAttemptSiteMessageEvidence::Absent {},
             }
         );
         Ok(())
