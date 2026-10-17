@@ -6,12 +6,12 @@
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
+use super::auth_step::SignInAttemptLoginWorkflow;
 use super::failure_reason::SignInFailureReason;
 use super::lifecycle::{
     SignInAttemptBinding, SignInAttemptEventContext, SignInAttemptNext, SignInAttemptStep,
 };
 use super::page_evidence::{SignInPageLink, SignInPageMessageText};
-use super::page_reading::SignInAttemptLoginWorkflow;
 use super::presentation::{
     SignInAttemptDismissal, SignInAttemptFailedScene, SignInAttemptResetOffer, SignInAttemptScene,
 };

@@ -12,6 +12,7 @@
 //! field value, or page text is stored except the one Rust-selected, bounded
 //! site message of a failed attempt, and nothing here is logged.
 
+mod auth_step;
 mod conclusion;
 mod failure_reason;
 mod lifecycle;
