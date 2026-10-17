@@ -72,6 +72,8 @@ pub enum SignInAttemptStatus {
     ChallengeRequired,
     TimedOut,
     Dismissed,
+    /// An email-first step was accepted and the site shows the next step.
+    StepAdvanced,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Tsify)]
@@ -84,7 +86,6 @@ pub enum SignInAttemptActionKind {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Tsify)]
-#[serde(rename_all = "camelCase")]
 pub struct SignInAttemptActionOffer {
     pub action: SignInAttemptActionKind,
     pub label_key: SignInAttemptMessageKey,
@@ -119,7 +120,6 @@ pub enum SignInAttemptFollowUp {
 /// `resetLink` as optional fields; Rust fills them only from the named scene
 /// states below, at this DTO edge.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
-#[serde(rename_all = "camelCase")]
 pub struct SignInAttemptPresentation {
     pub status: SignInAttemptStatus,
     pub title_key: SignInAttemptMessageKey,
@@ -142,6 +142,8 @@ pub(crate) enum SignInAttemptScene {
     ChallengeRequired(SignInAttemptChallenge),
     TimedOut,
     Dismissed(SignInAttemptDismissal),
+    /// The submitted email-first step was accepted; the next step starts fresh.
+    StepAdvanced,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -242,6 +244,7 @@ impl SignInAttemptScene {
             Self::ChallengeRequired(_) => SignInAttemptStatus::ChallengeRequired,
             Self::TimedOut => SignInAttemptStatus::TimedOut,
             Self::Dismissed(_) => SignInAttemptStatus::Dismissed,
+            Self::StepAdvanced => SignInAttemptStatus::StepAdvanced,
         }
     }
 
@@ -255,7 +258,7 @@ impl SignInAttemptScene {
             Self::Dismissed(SignInAttemptDismissal::TakenOver) => {
                 SignInAttemptMessageKey::WidgetChecklistInactive
             }
-            Self::Dismissed(SignInAttemptDismissal::Concluded) => {
+            Self::Dismissed(SignInAttemptDismissal::Concluded) | Self::StepAdvanced => {
                 SignInAttemptMessageKey::WidgetLoginTitle
             }
         }
@@ -287,7 +290,7 @@ impl SignInAttemptScene {
             Self::Dismissed(SignInAttemptDismissal::TakenOver) => {
                 SignInAttemptMessageKey::WidgetManualDescription
             }
-            Self::Dismissed(SignInAttemptDismissal::Concluded) => {
+            Self::Dismissed(SignInAttemptDismissal::Concluded) | Self::StepAdvanced => {
                 SignInAttemptMessageKey::WidgetLoginDescription
             }
         }
@@ -307,7 +310,8 @@ impl SignInAttemptScene {
             | Self::SignedIn
             | Self::ChallengeRequired(_)
             | Self::TimedOut
-            | Self::Dismissed(_) => None,
+            | Self::Dismissed(_)
+            | Self::StepAdvanced => None,
         }
     }
 
@@ -326,7 +330,8 @@ impl SignInAttemptScene {
             | Self::SignedIn
             | Self::ChallengeRequired(_)
             | Self::TimedOut
-            | Self::Dismissed(_) => None,
+            | Self::Dismissed(_)
+            | Self::StepAdvanced => None,
         }
     }
 
@@ -342,7 +347,8 @@ impl SignInAttemptScene {
             | Self::SignedIn
             | Self::ChallengeRequired(_)
             | Self::TimedOut
-            | Self::Dismissed(_) => None,
+            | Self::Dismissed(_)
+            | Self::StepAdvanced => None,
         }
     }
 
@@ -366,7 +372,8 @@ impl SignInAttemptScene {
             | Self::SignedIn
             | Self::ChallengeRequired(_)
             | Self::TimedOut
-            | Self::Dismissed(_) => SignInAttemptEvidenceDemand::NotWanted,
+            | Self::Dismissed(_)
+            | Self::StepAdvanced => SignInAttemptEvidenceDemand::NotWanted,
         }
     }
 
@@ -386,7 +393,7 @@ impl SignInAttemptScene {
                 SignInAttemptActionOffer::TRY_AGAIN,
                 SignInAttemptActionOffer::DISMISS,
             ],
-            Self::SignedIn | Self::Dismissed(_) => Vec::new(),
+            Self::SignedIn | Self::Dismissed(_) | Self::StepAdvanced => Vec::new(),
         }
     }
 
@@ -416,7 +423,7 @@ impl SignInAttemptScene {
             Self::Dismissed(SignInAttemptDismissal::TakenOver) => {
                 AuthenticationLoginChecklistActivity::TakenOver
             }
-            Self::Dismissed(SignInAttemptDismissal::Concluded) => {
+            Self::Dismissed(SignInAttemptDismissal::Concluded) | Self::StepAdvanced => {
                 AuthenticationLoginChecklistActivity::Ready
             }
             Self::SignedIn => {

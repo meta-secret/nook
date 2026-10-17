@@ -11,7 +11,7 @@ use tsify::Tsify;
 use super::request::{SignInAttemptAuthFields, SignInAttemptRequestError};
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(deny_unknown_fields)]
 pub struct SignInAttemptPageEvidence {
     pub document: SignInAttemptDocumentRelation,
     pub auth_fields: SignInAttemptAuthFields,
@@ -35,7 +35,7 @@ pub enum SignInAttemptDocumentRelation {
 
 /// Raw, bounded, non-secret structural facts of one visible text block.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(deny_unknown_fields)]
 pub struct SignInPageMessage {
     pub text: SignInPageMessageText,
     pub source: SignInPageMessageSource,
@@ -212,7 +212,7 @@ impl TryFrom<Vec<SignInPageMessage>> for SignInPageMessages {
 
 /// A visible link inside or near the auth form, or inside a captured message.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(deny_unknown_fields)]
 pub struct SignInPageLink {
     pub index: SignInPageLinkIndex,
     pub text: SignInPageLinkText,
@@ -461,7 +461,7 @@ mod tests {
 
         fn json(&self) -> String {
             format!(
-                r#"{{"document":"NewDocument","authFields":{{"usernamePresent":true,"currentPasswordPresent":true,"oneTimeCodePresent":false}},"manualCheckpointPresent":false,"successMarkerPresent":false,"errorMarkerPresent":false,"messages":[{}],"links":[{}]}}"#,
+                r#"{{"document":"NewDocument","auth_fields":{{"username_present":true,"current_password_present":true,"one_time_code_present":false}},"manual_checkpoint_present":false,"success_marker_present":false,"error_marker_present":false,"messages":[{}],"links":[{}]}}"#,
                 vec![Self::MESSAGE; self.messages].join(","),
                 vec![Self::LINK; self.links].join(",")
             )

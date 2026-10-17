@@ -270,6 +270,11 @@ impl SignInAttemptClosing {
         scene: SignInAttemptScene::Dismissed(SignInAttemptDismissal::Concluded),
         follow_up: SignInAttemptFollowUp::None,
     };
+    /// An email-first step advanced: the Pilot renders the next step fresh.
+    pub(crate) const STEP_ADVANCED: Self = Self {
+        scene: SignInAttemptScene::StepAdvanced,
+        follow_up: SignInAttemptFollowUp::None,
+    };
     /// The user takes over: the Pilot shows its inactive "You are in control" state.
     pub(crate) const TAKEN_OVER: Self = Self {
         scene: SignInAttemptScene::Dismissed(SignInAttemptDismissal::TakenOver),

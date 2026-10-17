@@ -9,7 +9,7 @@
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
-use super::page_evidence::{SignInAttemptPageEvidence, SignInPageLink};
+use super::page_evidence::{SignInAttemptPageEvidence, SignInPageLink, SignInPageMessages};
 use super::record::SignInAttemptStoredRecord;
 use crate::CompanionEpochMilliseconds;
 
@@ -99,7 +99,7 @@ impl From<SignInAttemptLoginReference> for String {
 
 /// Starts one attempt after the user chose `Sign in` (and a login, when several match).
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(deny_unknown_fields)]
 pub struct SignInAttemptBeginRequest {
     pub sender_origin: SignInAttemptSenderOrigin,
     pub login: SignInAttemptLoginReference,
@@ -108,7 +108,7 @@ pub struct SignInAttemptBeginRequest {
 
 /// Advances the tab's stored attempt with one event.
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(deny_unknown_fields)]
 pub struct SignInAttemptAdvanceRequest {
     pub record: SignInAttemptStoredRecord,
     pub sender_origin: SignInAttemptSenderOrigin,
@@ -142,18 +142,19 @@ pub enum SignInAttemptActivity {
     SubmissionUnobserved,
 }
 
-/// Minimal submit-time presence facts. No page text.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+/// Submit-time facts collected synchronously right before submit, with the
+/// same collector and bounds as `PageObserved`. Rust keeps only whether an
+/// error-looking message was present and the auth-field presence.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields)]
 pub struct SignInAttemptSubmitBaseline {
-    /// Any message candidate was present at submit (frozen contract boolean).
-    pub error_message_present: bool,
+    pub messages: SignInPageMessages,
     pub auth_fields: SignInAttemptAuthFields,
 }
 
 /// Visible authentication field presence (frozen contract booleans).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(deny_unknown_fields)]
 pub struct SignInAttemptAuthFields {
     pub username_present: bool,
     pub current_password_present: bool,
@@ -209,12 +210,14 @@ mod tests {
     }
 
     #[test]
-    fn advance_request_rejects_unknown_fields_and_events() {
-        let unknown_field = r#"{"record":"{}","senderOrigin":"https://a.example","now":1,"event":{"kind":"Resumed"},"extra":1}"#;
+    fn advance_request_keeps_rust_field_names_and_rejects_unknown_input() {
+        let rust_names = r#"{"record":"{}","sender_origin":"https://a.example","now":1,"event":{"kind":"Resumed"}}"#;
+        assert!(serde_json::from_str::<SignInAttemptAdvanceRequest>(rust_names).is_ok());
+        let unknown_field = r#"{"record":"{}","sender_origin":"https://a.example","now":1,"event":{"kind":"Resumed"},"extra":1}"#;
         assert!(serde_json::from_str::<SignInAttemptAdvanceRequest>(unknown_field).is_err());
-        let unknown_event = r#"{"record":"{}","senderOrigin":"https://a.example","now":1,"event":{"kind":"Retry"}}"#;
+        let unknown_event = r#"{"record":"{}","sender_origin":"https://a.example","now":1,"event":{"kind":"Retry"}}"#;
         assert!(serde_json::from_str::<SignInAttemptAdvanceRequest>(unknown_event).is_err());
-        let snake_case = r#"{"record":"{}","sender_origin":"https://a.example","now":1,"event":{"kind":"Resumed"}}"#;
-        assert!(serde_json::from_str::<SignInAttemptAdvanceRequest>(snake_case).is_err());
+        let renamed = r#"{"record":"{}","senderOrigin":"https://a.example","now":1,"event":{"kind":"Resumed"}}"#;
+        assert!(serde_json::from_str::<SignInAttemptAdvanceRequest>(renamed).is_err());
     }
 }
