@@ -103,10 +103,11 @@ mod tests {
         }
 
         fn assert_classification(&self) -> anyhow::Result<()> {
-            let site = SignInAttemptSenderOrigin::try_from("https://www.namecheap.com".to_owned())?
-                .site()?;
+            let origin =
+                SignInAttemptSenderOrigin::try_from("https://www.namecheap.com".to_owned())?
+                    .origin()?;
             assert_eq!(
-                self.link()?.reset_link(&site),
+                self.link()?.reset_link(origin.site()),
                 self.reset,
                 "{} {}",
                 self.text,
@@ -169,8 +170,9 @@ mod tests {
 
     #[test]
     fn page_offer_is_the_first_reset_link() -> anyhow::Result<()> {
-        let site =
-            SignInAttemptSenderOrigin::try_from("https://www.namecheap.com".to_owned())?.site()?;
+        let origin = SignInAttemptSenderOrigin::try_from("https://www.namecheap.com".to_owned())?
+            .origin()?;
+        let site = origin.site();
         let links = SignInPageLinks::try_from(vec![
             SignInPageLink {
                 index: SignInPageLinkIndex::from(1),
@@ -189,7 +191,7 @@ mod tests {
             },
         ])?;
         assert_eq!(
-            links.reset_link(&site),
+            links.reset_link(site),
             SignInAttemptResetLink::Reset(SignInPageLinkIndex::from(2))
         );
         Ok(())

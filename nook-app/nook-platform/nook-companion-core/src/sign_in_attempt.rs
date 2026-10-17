@@ -8,12 +8,16 @@
 //! budget, the offered actions, message-key selection, and the disposition.
 //! Content scripts are sensors and actuators only.
 //!
-//! The record and every request are non-secret: no credential, username,
-//! field value, or page text is stored except the one Rust-selected, bounded
-//! site message of a failed attempt, and nothing here is logged.
+//! Requests carry no credential or field value, and nothing here is logged.
+//! The record's only page text is the one Rust-selected, bounded site message
+//! of a failed attempt. It is the site's own text and may include what the
+//! site displays (an email address, for example), so it lives only in
+//! trusted-context session storage, is cleared on resolution or tab close,
+//! and is presented only to the exact origin that recorded it.
 
 mod auth_step;
 mod conclusion;
+mod end_state;
 mod failure_reason;
 mod lifecycle;
 mod message_evidence;
@@ -25,12 +29,13 @@ mod record;
 mod request;
 mod reset_link;
 mod site;
+mod stability;
 mod submit_baseline;
 #[cfg(test)]
 mod test_fixture;
 mod vocabulary;
 
-pub use conclusion::SignInAttemptSiteMessage;
+pub use end_state::SignInAttemptSiteMessage;
 pub use lifecycle::{SignInAttemptAdvance, SignInAttemptDisposition, SignInAttemptTransition};
 pub use page_evidence::{
     SignInAttemptDocumentRelation, SignInAttemptPageEvidence, SignInPageColor,

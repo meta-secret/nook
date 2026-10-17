@@ -68,15 +68,23 @@ The record is JSON that TypeScript stores and returns verbatim:
 
 - `schema`: the supported revision (`1`). There is one writer and no
   compatibility reader.
-- `site`: the canonical schemeful site, for example `https://namecheap.com`.
-- `login`: the opaque login reference. It is printable ASCII, at most 256
-  bytes, and never a credential or username.
+- `origin`: the exact canonical origin that began the attempt, for example
+  `https://www.namecheap.com`. Its schemeful site binds the record, and only
+  this exact origin is shown the stored site message.
+- `login`: the opaque login reference `${vaultStoreId}/${secretId}`, at most
+  1 KiB. It is split at the first `/`, both components must be non-blank, and
+  control characters are rejected. Legacy secret labels with spaces,
+  non-ASCII text, or `/` are accepted. It identifies a vault item and is not a
+  credential value.
 - `started_at`: a validated Unix-millisecond instant.
 - `phase`, one of:
   - `BeforeSubmit` with step `Filling`, `Filled`, or `ManualSubmit`.
   - `AwaitingOutcome`, holding the submit instant, the baseline, and the
     stability state.
-  - `Concluded`, which is `Failed`, `ChallengeRequired`, or `TimedOut`.
+  - `Concluded`, which is `Failed`, `ChallengeRequired`, or `TimedOut`,
+    together with the latest login-form evidence (`Shown`, `Gone`, or
+    `Unobserved`). Try again, Choose another login, and Fill 2FA code are
+    offered only while the form is `Shown`.
 
 The submit baseline keeps only three facts:
 
@@ -90,10 +98,11 @@ The submit baseline keeps only three facts:
 Submit-time message text, tokens, colours, and control labels are classified
 once and dropped. The only page text a record ever holds is the one Rust-selected
 site message of a failure: whitespace-normalized visible text, at most 300
-characters.
+characters. It is the site's own text and may contain what the site displays,
+such as an email address.
 
 Decoding is strict. The stored text is at most 8 KiB. Unknown fields,
-unsupported schema revisions, non-canonical sites, invalid login references,
+unsupported schema revisions, non-canonical origins, invalid login references,
 invalid instants, and reversed chronology are all rejected. A record that
 fails decoding yields `RecordRejected`: the service worker removes it and the
 Pilot starts fresh. There is no repair, replay, or migration of old shapes.
@@ -117,7 +126,8 @@ needed, because the record is non-secret and never written to vault storage.
 | any in-flight phase | `Dismiss` | close; take-over state |
 | Concluded | `Resumed`, activity | re-present unchanged; site outcomes ask for page evidence; never expires |
 | Concluded | `PageObserved` with an auth field visible | re-present unchanged, with the reset offer from that page |
-| Concluded by the site | `PageObserved` with no auth field visible | close as `WorkflowLeft`: no outcome claim, no actions |
+| Concluded by the site | `PageObserved` from a `NewDocument` with no auth field visible | close as `WorkflowLeft`: no outcome claim, no actions |
+| Concluded by the site | `PageObserved` on the same document with no auth field visible | re-present with the form recorded as gone (form-acting actions withdrawn) |
 | Concluded by Nook (`FillFailed`, `SubmissionRejected`) | `PageObserved` | re-present unchanged; never closes as `WorkflowLeft`, never asks for page evidence |
 | Concluded | offered user action | close with its follow-up |
 
@@ -148,6 +158,25 @@ The concluded actions are:
   - for a verification checkpoint, Try again;
   - Dismiss as take-over in both cases.
 - **TimedOut** offers Try again and Dismiss.
+
+Try again, Choose another login, and Fill 2FA code act on the login form. They
+are offered, and accepted, only while the latest page evidence shows an
+authentication field; a same-document TimedOut whose form is gone offers
+Dismiss only. Nook's own fill and submit failures count as showing the form.
+Reset password depends only on a classified link.
+
+For a site Failed, the first action is the primary button, and the order
+follows the reason:
+
+| Reason | Order |
+|---|---|
+| `AccountLocked` | Reset password (if offered), Choose another login, Try again, Dismiss |
+| `RateLimited` | Dismiss, Choose another login, Reset password (if offered), Try again |
+| `WrongCredentials`, `ChallengeRequired`, `Unknown` | Try again, Choose another login, Reset password (if offered), Dismiss |
+
+A site Failed shows its reason as `description_key`; there is no separate
+reason field. Nook-originated failures keep the checklist step description
+(`widgetChecklistFillFailed` / `widgetChecklistSubmitRejected`).
 
 A user action that is not offered re-presents the current state. Nothing is
 retried automatically.
@@ -298,9 +327,15 @@ Submit baselines use the same message bounds. Stored records are limited to
 
 ## Security invariants
 
-- The record and requests carry no credential, password, username, or field
-  value.
+- Requests and the record carry no credential, password, or field value that
+  Nook collected.
 - The only page text in a record is the bounded site message of a failure.
+  Because it is the site's own text, it may include what the site displays,
+  such as an email address. It is protected by:
+  - trusted-context-only `chrome.storage.session` storage;
+  - never being logged;
+  - removal when the attempt is resolved or the tab closes;
+  - exact-origin display (other same-site origins see the failure without it).
 - Nothing in the lifecycle logs; error messages are fixed text.
 - Every request is bound to its tab and the top-level frame. The sender
   origin comes from browser sender metadata, never from the message body.

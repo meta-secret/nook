@@ -11,8 +11,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::conclusion::{
-    SignInAttemptClosing, SignInAttemptConclusion, SignInAttemptFailure,
+use super::conclusion::{SignInAttemptClosing, SignInAttemptConcluded};
+use super::end_state::{
+    SignInAttemptConclusion, SignInAttemptFailure, SignInAttemptLoginForm,
     SignInAttemptSiteMessageEvidence,
 };
 use super::failure_reason::SignInFailureReason;
@@ -25,58 +26,13 @@ use super::request::{
     SignInAttemptActivity, SignInAttemptEvent, SignInAttemptSubmitBaseline, SignInAttemptUserAction,
 };
 use super::site::SignInAttemptSite;
+use super::stability::{
+    SignInAttemptSettledness, SignInAttemptSettlingEvidence, SignInAttemptStability,
+};
 use super::submit_baseline::SignInAttemptBaseline;
 use crate::{
-    AuthenticationOutcomeElapsedMilliseconds, AuthenticationOutcomeTimeoutMilliseconds,
-    LoginSaveOutcomeObservation, SignInAttemptFollowUp,
+    AuthenticationOutcomeTimeoutMilliseconds, LoginSaveOutcomeObservation, SignInAttemptFollowUp,
 };
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) enum SignInAttemptSettlingEvidence {
-    /// No auth fields, no error-looking message, no challenge.
-    SignedInLooking,
-    /// The submitted step re-presented on a new document without a message.
-    StepRepresented,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SignInAttemptSettledness {
-    Settled,
-    Settling,
-}
-
-impl SignInAttemptSettlingEvidence {
-    fn window(self) -> AuthenticationOutcomeTimeoutMilliseconds {
-        match self {
-            Self::SignedInLooking => SignInAttemptOutcomeWait::CONFIRMATION_STABILITY,
-            Self::StepRepresented => SignInAttemptOutcomeWait::REPRESENTATION_STABILITY,
-        }
-    }
-
-    #[expect(
-        clippy::match_bool,
-        reason = "the elapsed-time comparison is converted immediately into named settledness"
-    )]
-    fn settledness(
-        self,
-        elapsed: AuthenticationOutcomeElapsedMilliseconds,
-    ) -> SignInAttemptSettledness {
-        match elapsed.has_reached(self.window()) {
-            true => SignInAttemptSettledness::Settled,
-            false => SignInAttemptSettledness::Settling,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "kind", deny_unknown_fields)]
-pub(crate) enum SignInAttemptStability {
-    Unsettled,
-    Settling {
-        evidence: SignInAttemptSettlingEvidence,
-        since: SignInAttemptInstant,
-    },
-}
 
 /// The record's post-submit wait.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -175,7 +131,10 @@ impl SignInAttemptOutcomeWait {
                 baseline: &baseline,
                 now,
             })
-            .wait_or_expire(now),
+            .wait_or_expire(SignInAttemptExpiry {
+                now,
+                form: SignInAttemptLoginForm::Unobserved,
+            }),
             SignInAttemptEvent::UserAction {
                 action: SignInAttemptUserAction::Dismiss,
             } => SignInAttemptStep::closing(SignInAttemptClosing::TAKEN_OVER),
@@ -193,7 +152,10 @@ impl SignInAttemptOutcomeWait {
                     | SignInAttemptUserAction::ChooseAnotherLogin
                     | SignInAttemptUserAction::ResetPassword { .. }
                     | SignInAttemptUserAction::FillAuthenticator,
-            } => self.wait_or_expire(now),
+            } => self.wait_or_expire(SignInAttemptExpiry {
+                now,
+                form: SignInAttemptLoginForm::Unobserved,
+            }),
         }
     }
 
@@ -206,10 +168,11 @@ impl SignInAttemptOutcomeWait {
                     observation,
                 })
             }
-            SignInAttemptPageReading::Challenge(challenge) => {
-                SignInAttemptConclusion::ChallengeRequired { challenge }
-                    .presented(SignInAttemptResetOffer::NotOffered)
+            SignInAttemptPageReading::Challenge(challenge) => SignInAttemptConcluded {
+                conclusion: SignInAttemptConclusion::ChallengeRequired { challenge },
+                form: SignInAttemptLoginForm::from(&observation.page),
             }
+            .presented(SignInAttemptResetOffer::NotOffered),
             SignInAttemptPageReading::StepAdvanced => {
                 SignInAttemptStep::closing(SignInAttemptClosing::STEP_ADVANCED)
             }
@@ -222,7 +185,7 @@ impl SignInAttemptOutcomeWait {
                 stability: SignInAttemptStability::Unsettled,
                 ..self
             }
-            .wait_or_expire(observation.now),
+            .wait_or_expire(SignInAttemptExpiry::from(&observation)),
         }
     }
 
@@ -281,7 +244,7 @@ impl SignInAttemptOutcomeWait {
                 stability: SignInAttemptStability::Settling { evidence, since },
                 ..self
             }
-            .wait_or_expire(observation.now),
+            .wait_or_expire(SignInAttemptExpiry::from(&observation)),
         }
     }
 
@@ -292,7 +255,11 @@ impl SignInAttemptOutcomeWait {
         } = rejection;
         let reset =
             SignInAttemptResetOffer::from(observation.page.links.reset_link(observation.site));
-        SignInAttemptConclusion::Failed { failure }.presented(reset)
+        SignInAttemptConcluded {
+            conclusion: SignInAttemptConclusion::Failed { failure },
+            form: SignInAttemptLoginForm::from(&observation.page),
+        }
+        .presented(reset)
     }
 
     #[expect(
@@ -309,14 +276,46 @@ impl SignInAttemptOutcomeWait {
         }
     }
 
-    fn wait_or_expire(self, now: SignInAttemptInstant) -> SignInAttemptStep {
-        match self.budget(now) {
-            SignInAttemptBudget::Exhausted => SignInAttemptConclusion::TimedOut.unobserved(),
-            SignInAttemptBudget::Remaining => SignInAttemptStep {
+    fn wait_or_expire(self, expiry: SignInAttemptExpiry) -> SignInAttemptStep {
+        let SignInAttemptExpiry { now, form } = expiry;
+        let timed_out = SignInAttemptConcluded {
+            conclusion: SignInAttemptConclusion::TimedOut,
+            form,
+        };
+        match (self.budget(now), form) {
+            (SignInAttemptBudget::Exhausted, SignInAttemptLoginForm::Unobserved) => {
+                timed_out.unobserved()
+            }
+            (
+                SignInAttemptBudget::Exhausted,
+                SignInAttemptLoginForm::Shown | SignInAttemptLoginForm::Gone,
+            ) => timed_out.presented(SignInAttemptResetOffer::NotOffered),
+            (
+                SignInAttemptBudget::Remaining,
+                SignInAttemptLoginForm::Shown
+                | SignInAttemptLoginForm::Gone
+                | SignInAttemptLoginForm::Unobserved,
+            ) => SignInAttemptStep {
                 next: SignInAttemptNext::AwaitingOutcome(self),
                 scene: SignInAttemptScene::SigningIn(SignInAttemptSigningIn::AwaitingOutcome),
                 follow_up: SignInAttemptFollowUp::None,
             },
+        }
+    }
+}
+
+/// The clock reading and the latest login-form evidence for a budget check.
+#[derive(Debug, Clone, Copy)]
+struct SignInAttemptExpiry {
+    now: SignInAttemptInstant,
+    form: SignInAttemptLoginForm,
+}
+
+impl From<&SignInAttemptObservation<'_>> for SignInAttemptExpiry {
+    fn from(observation: &SignInAttemptObservation<'_>) -> Self {
+        Self {
+            now: observation.now,
+            form: SignInAttemptLoginForm::from(&observation.page),
         }
     }
 }
@@ -385,11 +384,7 @@ mod tests {
         );
         assert_eq!(
             presentation.description_key,
-            SignInAttemptMessageKey::WidgetSignInFailedDescription
-        );
-        assert_eq!(
-            presentation.reason_key,
-            Some(SignInAttemptMessageKey::WidgetSignInReasonWrongCredentials)
+            SignInAttemptMessageKey::WidgetSignInReasonWrongCredentials
         );
         assert_eq!(
             presentation.site_message,
@@ -415,8 +410,8 @@ mod tests {
             SignInAttemptStatus::Failed
         );
         assert_eq!(
-            reloaded_much_later.presentation.reason_key,
-            presentation.reason_key
+            reloaded_much_later.presentation.description_key,
+            presentation.description_key
         );
         assert_eq!(
             reloaded_much_later.presentation.site_message,
@@ -447,8 +442,8 @@ mod tests {
             })?
             .retained()?;
         assert_eq!(
-            failed.presentation.reason_key,
-            Some(SignInAttemptMessageKey::WidgetSignInReasonAccountLocked)
+            failed.presentation.description_key,
+            SignInAttemptMessageKey::WidgetSignInReasonAccountLocked
         );
         assert_eq!(
             failed.presentation.site_message,
@@ -560,8 +555,7 @@ mod tests {
                 })?
                 .retained()?;
             assert_eq!(
-                failed.presentation.reason_key,
-                Some(expected.key),
+                failed.presentation.description_key, expected.key,
                 "{}",
                 expected.text
             );
@@ -720,8 +714,8 @@ mod tests {
             .retained()?;
         assert_eq!(failed.presentation.status, SignInAttemptStatus::Failed);
         assert_eq!(
-            failed.presentation.reason_key,
-            Some(SignInAttemptMessageKey::WidgetSignInReasonUnknown)
+            failed.presentation.description_key,
+            SignInAttemptMessageKey::WidgetSignInReasonUnknown
         );
         assert_eq!(failed.presentation.site_message, None);
         Ok(())
@@ -925,8 +919,8 @@ mod tests {
         })?
         .retained()?;
         assert_eq!(
-            failed.presentation.reason_key,
-            Some(SignInAttemptMessageKey::WidgetSignInReasonRateLimited)
+            failed.presentation.description_key,
+            SignInAttemptMessageKey::WidgetSignInReasonRateLimited
         );
         let timed_out = SignInSubmittedAttempt {
             baseline: banner.clone(),

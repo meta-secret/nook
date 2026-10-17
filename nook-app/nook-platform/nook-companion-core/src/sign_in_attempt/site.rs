@@ -18,10 +18,8 @@ use super::request::SignInAttemptSenderOrigin;
 pub(crate) enum SignInAttemptSiteError {
     #[error("sign-in site URL is not an absolute http(s) URL")]
     UnsupportedUrl,
-    #[error("sign-in sender origin is not a canonical origin")]
+    #[error("sign-in origin is not a canonical origin")]
     OriginNotCanonical,
-    #[error("stored sign-in site is not canonical")]
-    SiteNotCanonical,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,8 +28,7 @@ enum SignInAttemptScheme {
     Https,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(try_from = "String", into = "String")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SignInAttemptSite {
     scheme: SignInAttemptScheme,
     host: SignInAttemptSiteHost,
@@ -90,30 +87,70 @@ impl SignInAttemptSite {
             false => SignInAttemptSiteRelation::OtherSite,
         }
     }
+}
 
-    fn canonical(&self) -> String {
-        let SignInAttemptSiteHost(host) = &self.host;
-        let scheme = match self.scheme {
-            SignInAttemptScheme::Http => "http",
-            SignInAttemptScheme::Https => "https",
-        };
-        format!("{scheme}://{host}")
+/// A canonical http(s) origin (`scheme://host[:port]`) and its site.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub(crate) struct SignInAttemptOrigin {
+    canonical: String,
+    site: SignInAttemptSite,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SignInAttemptOriginRelation {
+    SameOrigin,
+    OtherOrigin,
+}
+
+impl TryFrom<String> for SignInAttemptOrigin {
+    type Error = SignInAttemptSiteError;
+
+    /// Admits only the browser's canonical serialization of an http(s) origin.
+    #[expect(
+        clippy::match_bool,
+        reason = "canonical-origin equality is converted immediately into admission"
+    )]
+    fn try_from(origin: String) -> Result<Self, Self::Error> {
+        let url = Url::parse(&origin).map_err(|_| SignInAttemptSiteError::UnsupportedUrl)?;
+        let site = SignInAttemptSite::try_from(&url)?;
+        match url.origin().ascii_serialization() == origin {
+            true => Ok(Self {
+                canonical: origin,
+                site,
+            }),
+            false => Err(SignInAttemptSiteError::OriginNotCanonical),
+        }
+    }
+}
+
+impl From<SignInAttemptOrigin> for String {
+    fn from(origin: SignInAttemptOrigin) -> Self {
+        origin.canonical
+    }
+}
+
+impl SignInAttemptOrigin {
+    pub(crate) const fn site(&self) -> &SignInAttemptSite {
+        &self.site
+    }
+
+    #[expect(
+        clippy::match_bool,
+        reason = "exact-origin equality is converted immediately into the named relation"
+    )]
+    pub(crate) fn relation(&self, other: &Self) -> SignInAttemptOriginRelation {
+        match self.canonical == other.canonical {
+            true => SignInAttemptOriginRelation::SameOrigin,
+            false => SignInAttemptOriginRelation::OtherOrigin,
+        }
     }
 }
 
 impl SignInAttemptSenderOrigin {
     /// Admits only a canonical `scheme://host[:port]` http(s) origin.
-    #[expect(
-        clippy::match_bool,
-        reason = "canonical-origin equality is converted immediately into admission"
-    )]
-    pub(crate) fn site(&self) -> Result<SignInAttemptSite, SignInAttemptSiteError> {
-        let url = Url::parse(self.text()).map_err(|_| SignInAttemptSiteError::UnsupportedUrl)?;
-        let site = SignInAttemptSite::try_from(&url)?;
-        match url.origin().ascii_serialization() == self.text() {
-            true => Ok(site),
-            false => Err(SignInAttemptSiteError::OriginNotCanonical),
-        }
+    pub(crate) fn origin(&self) -> Result<SignInAttemptOrigin, SignInAttemptSiteError> {
+        SignInAttemptOrigin::try_from(self.text().to_owned())
     }
 }
 
@@ -123,32 +160,12 @@ impl SignInPageLinkHref {
     }
 }
 
-impl TryFrom<String> for SignInAttemptSite {
-    type Error = SignInAttemptSiteError;
-
-    #[expect(
-        clippy::match_bool,
-        reason = "canonical stored-site equality is converted immediately into strict decoding"
-    )]
-    fn try_from(stored: String) -> Result<Self, Self::Error> {
-        let url = Url::parse(&stored).map_err(|_| SignInAttemptSiteError::SiteNotCanonical)?;
-        let site = Self::try_from(&url)?;
-        match site.canonical() == stored {
-            true => Ok(site),
-            false => Err(SignInAttemptSiteError::SiteNotCanonical),
-        }
-    }
-}
-
-impl From<SignInAttemptSite> for String {
-    fn from(site: SignInAttemptSite) -> Self {
-        site.canonical()
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{SignInAttemptSite, SignInAttemptSiteError, SignInAttemptSiteRelation};
+    use super::{
+        SignInAttemptOrigin, SignInAttemptOriginRelation, SignInAttemptSiteError,
+        SignInAttemptSiteRelation,
+    };
     use crate::SignInAttemptSenderOrigin;
 
     struct SiteCase {
@@ -159,10 +176,11 @@ mod tests {
 
     impl SiteCase {
         fn assert_relation(&self) -> anyhow::Result<()> {
-            let recorded = SignInAttemptSenderOrigin::try_from(self.recorded.to_owned())?.site()?;
-            let sender = SignInAttemptSenderOrigin::try_from(self.sender.to_owned())?.site()?;
+            let recorded =
+                SignInAttemptSenderOrigin::try_from(self.recorded.to_owned())?.origin()?;
+            let sender = SignInAttemptSenderOrigin::try_from(self.sender.to_owned())?.origin()?;
             assert_eq!(
-                recorded.relation(&sender),
+                recorded.site().relation(sender.site()),
                 self.relation,
                 "{} vs {}",
                 self.recorded,
@@ -234,32 +252,36 @@ mod tests {
             "",
         ] {
             let origin = SignInAttemptSenderOrigin::try_from(rejected.to_owned())?;
-            assert!(origin.site().is_err(), "{rejected}");
+            assert!(origin.origin().is_err(), "{rejected}");
         }
         Ok(())
     }
 
     #[test]
-    fn stored_site_round_trips_canonically_and_rejects_other_forms() -> anyhow::Result<()> {
-        let site =
-            SignInAttemptSenderOrigin::try_from("https://www.namecheap.com".to_owned())?.site()?;
-        let stored = serde_json::to_string(&site)?;
-        assert_eq!(stored, r#""https://namecheap.com""#);
-        assert_eq!(serde_json::from_str::<SignInAttemptSite>(&stored)?, site);
-        for rejected in [
-            "https://www.namecheap.com",
-            "https://namecheap.com/",
-            "ftp://namecheap.com",
-        ] {
-            assert_ne!(
-                SignInAttemptSite::try_from(rejected.to_owned()),
-                Ok(site.clone()),
-                "{rejected}"
-            );
-        }
+    fn stored_origin_round_trips_exactly_and_compares_by_exact_origin() -> anyhow::Result<()> {
+        let origin = SignInAttemptOrigin::try_from("https://www.namecheap.com".to_owned())?;
+        let stored = serde_json::to_string(&origin)?;
+        assert_eq!(stored, r#""https://www.namecheap.com""#);
         assert_eq!(
-            SignInAttemptSite::try_from("ftp://namecheap.com".to_owned()),
+            serde_json::from_str::<SignInAttemptOrigin>(&stored)?,
+            origin
+        );
+        let subdomain = SignInAttemptOrigin::try_from("https://ap.www.namecheap.com".to_owned())?;
+        assert_eq!(
+            origin.relation(&origin.clone()),
+            SignInAttemptOriginRelation::SameOrigin
+        );
+        assert_eq!(
+            origin.relation(&subdomain),
+            SignInAttemptOriginRelation::OtherOrigin
+        );
+        assert_eq!(
+            SignInAttemptOrigin::try_from("ftp://namecheap.com".to_owned()),
             Err(SignInAttemptSiteError::UnsupportedUrl)
+        );
+        assert_eq!(
+            SignInAttemptOrigin::try_from("https://www.namecheap.com/".to_owned()),
+            Err(SignInAttemptSiteError::OriginNotCanonical)
         );
         Ok(())
     }

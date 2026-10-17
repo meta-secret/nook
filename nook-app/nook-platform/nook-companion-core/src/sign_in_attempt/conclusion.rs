@@ -3,147 +3,116 @@
 //! A concluded attempt never expires and never reverts on its own; it stays
 //! visible across reloads until the user resolves it or the tab closes.
 
-use serde::{Deserialize, Serialize};
-use tsify::Tsify;
-
-use super::auth_step::SignInAttemptLoginWorkflow;
-use super::failure_reason::SignInFailureReason;
+use super::end_state::{
+    SignInAttemptChallenge, SignInAttemptConclusion, SignInAttemptConclusionOrigin,
+    SignInAttemptFailure, SignInAttemptLoginForm,
+};
 use super::lifecycle::{
     SignInAttemptBinding, SignInAttemptEventContext, SignInAttemptNext, SignInAttemptStep,
 };
-use super::page_evidence::{SignInPageLink, SignInPageMessageText};
+use super::page_evidence::{
+    SignInAttemptDocumentRelation, SignInAttemptPageEvidence, SignInPageLink,
+};
 use super::presentation::{
     SignInAttemptDismissal, SignInAttemptFailedScene, SignInAttemptResetOffer, SignInAttemptScene,
 };
-use super::request::{SignInAttemptEvent, SignInAttemptRequestError, SignInAttemptUserAction};
+use super::request::{SignInAttemptEvent, SignInAttemptUserAction};
 use super::reset_link::SignInAttemptResetLink;
 use crate::{SignInAttemptEvidenceDemand, SignInAttemptFollowUp};
 
-/// The one Rust-selected, bounded site message shown with a failure.
-/// Rendered by the content script with `textContent` only; never logged.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(try_from = "String", into = "String")]
-#[tsify(type = "string")]
-pub struct SignInAttemptSiteMessage(String);
-
-impl SignInAttemptSiteMessage {
-    pub(crate) const MAX_CHARS: usize = SignInPageMessageText::MAX_CHARS;
+/// A retained end state with the login-form evidence its actions depend on.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SignInAttemptConcluded {
+    pub(crate) conclusion: SignInAttemptConclusion,
+    pub(crate) form: SignInAttemptLoginForm,
 }
 
-impl TryFrom<String> for SignInAttemptSiteMessage {
-    type Error = SignInAttemptRequestError;
+struct SignInAttemptConcludedObservation<'a> {
+    page: SignInAttemptPageEvidence,
+    binding: SignInAttemptBinding<'a>,
+}
 
-    fn try_from(message: String) -> Result<Self, Self::Error> {
-        match message.chars().count() {
-            0..=Self::MAX_CHARS => Ok(Self(message)),
-            _ => Err(SignInAttemptRequestError::PageTextTooLong),
+/// Whether a user action acts on the login form.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SignInAttemptActionRequirement {
+    LoginForm,
+    Independent,
+}
+
+impl SignInAttemptUserAction {
+    const fn requirement(&self) -> SignInAttemptActionRequirement {
+        match self {
+            Self::TryAgain | Self::ChooseAnotherLogin | Self::FillAuthenticator => {
+                SignInAttemptActionRequirement::LoginForm
+            }
+            Self::ResetPassword { .. } | Self::Dismiss => {
+                SignInAttemptActionRequirement::Independent
+            }
         }
     }
 }
 
-impl From<SignInAttemptSiteMessage> for String {
-    fn from(message: SignInAttemptSiteMessage) -> Self {
-        let SignInAttemptSiteMessage(message) = message;
-        message
-    }
-}
-
-impl From<&SignInPageMessageText> for SignInAttemptSiteMessage {
-    fn from(text: &SignInPageMessageText) -> Self {
-        Self(text.text().to_owned())
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", deny_unknown_fields)]
-pub(crate) enum SignInAttemptSiteMessageEvidence {
-    Captured { text: SignInAttemptSiteMessage },
-    Absent,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", deny_unknown_fields)]
-pub(crate) enum SignInAttemptFailure {
-    /// The site re-presented the login with an error, or its error marker.
-    SiteRejected {
-        reason: SignInFailureReason,
-        message: SignInAttemptSiteMessageEvidence,
-    },
-    /// Nook could not fill the selected login.
-    FillFailed,
-    /// Nook's submit revalidation refused to submit the filled form.
-    SubmissionRejected,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) enum SignInAttemptChallenge {
-    /// A one-time-code field appeared after submit.
-    OneTimeCode,
-    /// A CAPTCHA or manual verification checkpoint appeared after submit.
-    Verification,
-}
-
-/// Who produced a concluded end state.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SignInAttemptConclusionOrigin {
-    /// Nook's own fill or submit failed before the site responded.
-    Nook,
-    /// The site's response (or its absence within the budget) concluded it.
-    Site,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", deny_unknown_fields)]
-pub(crate) enum SignInAttemptConclusion {
-    Failed { failure: SignInAttemptFailure },
-    ChallengeRequired { challenge: SignInAttemptChallenge },
-    TimedOut,
-}
-
-impl SignInAttemptConclusion {
+impl SignInAttemptConcluded {
     /// Applies one event to a retained end state. Only an offered user action
-    /// changes it. Page evidence re-presents it only while the page still
-    /// shows the login workflow; otherwise the record closes as
-    /// `WorkflowLeft` without claiming an outcome. Events without page
-    /// evidence re-present it and ask for page evidence.
+    /// changes it. For a site outcome, page evidence from a new document
+    /// without any authentication field closes the record as `WorkflowLeft`
+    /// without claiming an outcome; on the same document it only records that
+    /// the form is gone. Events without page evidence re-present it and ask
+    /// for page evidence.
     pub(crate) fn advance(self, context: SignInAttemptEventContext<'_>) -> SignInAttemptStep {
         let SignInAttemptEventContext { binding, event, .. } = context;
         match event {
             SignInAttemptEvent::UserAction { action } => {
                 self.resolve(SignInAttemptResolution { action, binding })
             }
-            SignInAttemptEvent::PageObserved { page } => match self.origin() {
-                SignInAttemptConclusionOrigin::Nook => {
-                    self.presented(SignInAttemptResetOffer::NotOffered)
-                }
-                SignInAttemptConclusionOrigin::Site => {
-                    match SignInAttemptLoginWorkflow::from(&page.auth_fields) {
-                        SignInAttemptLoginWorkflow::Shown => self.presented(
-                            SignInAttemptResetOffer::from(page.links.reset_link(binding.site)),
-                        ),
-                        SignInAttemptLoginWorkflow::Left => {
-                            SignInAttemptStep::closing(SignInAttemptClosing::WORKFLOW_LEFT)
-                        }
-                    }
-                }
-            },
-            SignInAttemptEvent::Resumed | SignInAttemptEvent::Activity { .. } => self.unobserved(),
+            SignInAttemptEvent::PageObserved { page } => {
+                self.observed(SignInAttemptConcludedObservation { page, binding })
+            }
+            SignInAttemptEvent::Resumed => self.reloaded().unobserved(),
+            SignInAttemptEvent::Activity { .. } => self.unobserved(),
         }
     }
 
-    /// Whether the site produced this end state. Nook's own fill and submit
-    /// failures happen before the site responds, often because the fields
-    /// are not visible, so they never close as `WorkflowLeft`.
-    const fn origin(&self) -> SignInAttemptConclusionOrigin {
-        match self {
-            Self::Failed {
-                failure: SignInAttemptFailure::FillFailed | SignInAttemptFailure::SubmissionRejected,
-            } => SignInAttemptConclusionOrigin::Nook,
-            Self::Failed {
-                failure: SignInAttemptFailure::SiteRejected { .. },
+    /// A reload invalidates the form evidence of a site outcome.
+    #[must_use]
+    fn reloaded(self) -> Self {
+        match self.conclusion.origin() {
+            SignInAttemptConclusionOrigin::Nook => self,
+            SignInAttemptConclusionOrigin::Site => Self {
+                form: SignInAttemptLoginForm::Unobserved,
+                ..self
+            },
+        }
+    }
+
+    fn observed(self, observation: SignInAttemptConcludedObservation<'_>) -> SignInAttemptStep {
+        use SignInAttemptDocumentRelation::{
+            NewDocument, SameDocumentNewRoute, SameDocumentSameRoute,
+        };
+        let SignInAttemptConcludedObservation { page, binding } = observation;
+        let reset = SignInAttemptResetOffer::from(page.links.reset_link(binding.site));
+        let form = SignInAttemptLoginForm::from(&page);
+        match (self.conclusion.origin(), form, page.document) {
+            (
+                SignInAttemptConclusionOrigin::Nook,
+                SignInAttemptLoginForm::Shown
+                | SignInAttemptLoginForm::Gone
+                | SignInAttemptLoginForm::Unobserved,
+                NewDocument | SameDocumentSameRoute | SameDocumentNewRoute,
+            ) => self.presented(SignInAttemptResetOffer::NotOffered),
+            (SignInAttemptConclusionOrigin::Site, SignInAttemptLoginForm::Gone, NewDocument) => {
+                SignInAttemptStep::closing(SignInAttemptClosing::WORKFLOW_LEFT)
             }
-            | Self::ChallengeRequired { .. }
-            | Self::TimedOut => SignInAttemptConclusionOrigin::Site,
+            (
+                SignInAttemptConclusionOrigin::Site,
+                SignInAttemptLoginForm::Shown | SignInAttemptLoginForm::Unobserved,
+                NewDocument | SameDocumentSameRoute | SameDocumentNewRoute,
+            )
+            | (
+                SignInAttemptConclusionOrigin::Site,
+                SignInAttemptLoginForm::Gone,
+                SameDocumentSameRoute | SameDocumentNewRoute,
+            ) => Self { form, ..self }.presented(reset),
         }
     }
 
@@ -162,10 +131,28 @@ impl SignInAttemptConclusion {
     }
 
     fn resolve(self, resolution: SignInAttemptResolution<'_>) -> SignInAttemptStep {
-        match self {
-            Self::Failed { failure } => failure.resolve(resolution),
-            Self::ChallengeRequired { challenge } => challenge.resolve(resolution),
-            Self::TimedOut => match resolution.action {
+        match (resolution.action.requirement(), self.form) {
+            (
+                SignInAttemptActionRequirement::LoginForm,
+                SignInAttemptLoginForm::Gone | SignInAttemptLoginForm::Unobserved,
+            ) => return self.unobserved(),
+            (SignInAttemptActionRequirement::LoginForm, SignInAttemptLoginForm::Shown)
+            | (
+                SignInAttemptActionRequirement::Independent,
+                SignInAttemptLoginForm::Shown
+                | SignInAttemptLoginForm::Gone
+                | SignInAttemptLoginForm::Unobserved,
+            ) => {}
+        }
+        let Self { conclusion, form } = self;
+        match conclusion {
+            SignInAttemptConclusion::Failed { failure } => {
+                failure.resolve(SignInAttemptFormResolution { resolution, form })
+            }
+            SignInAttemptConclusion::ChallengeRequired { challenge } => {
+                challenge.resolve(SignInAttemptFormResolution { resolution, form })
+            }
+            SignInAttemptConclusion::TimedOut => match resolution.action {
                 SignInAttemptUserAction::TryAgain => {
                     SignInAttemptStep::restarting(resolution.binding.login)
                 }
@@ -174,7 +161,11 @@ impl SignInAttemptConclusion {
                 }
                 SignInAttemptUserAction::ChooseAnotherLogin
                 | SignInAttemptUserAction::ResetPassword { .. }
-                | SignInAttemptUserAction::FillAuthenticator => Self::TimedOut.unobserved(),
+                | SignInAttemptUserAction::FillAuthenticator => Self {
+                    conclusion: SignInAttemptConclusion::TimedOut,
+                    form,
+                }
+                .unobserved(),
             },
         }
     }
@@ -194,18 +185,26 @@ impl SignInAttemptConclusion {
     }
 
     fn represented(self, representation: SignInAttemptRepresentation) -> SignInAttemptStep {
-        let scene = match &self {
-            Self::Failed { failure } => SignInAttemptScene::Failed(SignInAttemptFailedScene {
-                failure: failure.clone(),
-                reset: representation.reset,
+        let form = self.form;
+        let scene = match &self.conclusion {
+            SignInAttemptConclusion::Failed { failure } => {
+                SignInAttemptScene::Failed(SignInAttemptFailedScene {
+                    failure: failure.clone(),
+                    reset: representation.reset,
+                    evidence: representation.evidence,
+                    form,
+                })
+            }
+            SignInAttemptConclusion::ChallengeRequired { challenge } => {
+                SignInAttemptScene::ChallengeRequired {
+                    challenge: *challenge,
+                    evidence: representation.evidence,
+                    form,
+                }
+            }
+            SignInAttemptConclusion::TimedOut => SignInAttemptScene::TimedOut {
                 evidence: representation.evidence,
-            }),
-            Self::ChallengeRequired { challenge } => SignInAttemptScene::ChallengeRequired {
-                challenge: *challenge,
-                evidence: representation.evidence,
-            },
-            Self::TimedOut => SignInAttemptScene::TimedOut {
-                evidence: representation.evidence,
+                form,
             },
         };
         SignInAttemptStep {
@@ -219,7 +218,8 @@ impl SignInAttemptConclusion {
 impl SignInAttemptFailure {
     /// Failed offers Try again, Choose another login, Reset password (site
     /// rejections with a revalidated same-site reset link) and Dismiss.
-    fn resolve(self, resolution: SignInAttemptResolution<'_>) -> SignInAttemptStep {
+    fn resolve(self, request: SignInAttemptFormResolution<'_>) -> SignInAttemptStep {
+        let SignInAttemptFormResolution { resolution, form } = request;
         let SignInAttemptResolution { action, binding } = resolution;
         match action {
             SignInAttemptUserAction::TryAgain => SignInAttemptStep::restarting(binding.login),
@@ -230,18 +230,25 @@ impl SignInAttemptFailure {
                 })
             }
             SignInAttemptUserAction::ResetPassword { link } => match self {
-                Self::SiteRejected { .. } => SignInAttemptConclusion::Failed { failure: self }
-                    .reset_password(SignInAttemptResetRequest { link, binding }),
-                Self::FillFailed | Self::SubmissionRejected => {
-                    SignInAttemptConclusion::Failed { failure: self }.unobserved()
+                Self::SiteRejected { .. } => SignInAttemptConcluded {
+                    conclusion: SignInAttemptConclusion::Failed { failure: self },
+                    form,
                 }
+                .reset_password(SignInAttemptResetRequest { link, binding }),
+                Self::FillFailed | Self::SubmissionRejected => SignInAttemptConcluded {
+                    conclusion: SignInAttemptConclusion::Failed { failure: self },
+                    form,
+                }
+                .unobserved(),
             },
             SignInAttemptUserAction::Dismiss => {
                 SignInAttemptStep::closing(SignInAttemptClosing::CONCLUDED_DISMISSAL)
             }
-            SignInAttemptUserAction::FillAuthenticator => {
-                SignInAttemptConclusion::Failed { failure: self }.unobserved()
+            SignInAttemptUserAction::FillAuthenticator => SignInAttemptConcluded {
+                conclusion: SignInAttemptConclusion::Failed { failure: self },
+                form,
             }
+            .unobserved(),
         }
     }
 }
@@ -250,7 +257,8 @@ impl SignInAttemptChallenge {
     /// A one-time-code challenge hands off to the existing authenticator
     /// picker; a verification checkpoint offers Try again after the user
     /// completes it. Dismiss is a take-over in both.
-    fn resolve(self, resolution: SignInAttemptResolution<'_>) -> SignInAttemptStep {
+    fn resolve(self, request: SignInAttemptFormResolution<'_>) -> SignInAttemptStep {
+        let SignInAttemptFormResolution { resolution, form } = request;
         let SignInAttemptResolution { action, binding } = resolution;
         match (self, action) {
             (Self::OneTimeCode, SignInAttemptUserAction::FillAuthenticator) => {
@@ -258,6 +266,7 @@ impl SignInAttemptChallenge {
                     scene: SignInAttemptScene::ChallengeRequired {
                         challenge: Self::OneTimeCode,
                         evidence: SignInAttemptEvidenceDemand::NotWanted,
+                        form,
                     },
                     follow_up: SignInAttemptFollowUp::OpenAuthenticatorPicker,
                 })
@@ -274,7 +283,11 @@ impl SignInAttemptChallenge {
                 Self::OneTimeCode | Self::Verification,
                 SignInAttemptUserAction::ChooseAnotherLogin
                 | SignInAttemptUserAction::ResetPassword { .. },
-            ) => SignInAttemptConclusion::ChallengeRequired { challenge: self }.unobserved(),
+            ) => SignInAttemptConcluded {
+                conclusion: SignInAttemptConclusion::ChallengeRequired { challenge: self },
+                form,
+            }
+            .unobserved(),
         }
     }
 }
@@ -298,6 +311,11 @@ impl SignInAttemptRepresentation {
 struct SignInAttemptResolution<'a> {
     action: SignInAttemptUserAction,
     binding: SignInAttemptBinding<'a>,
+}
+
+struct SignInAttemptFormResolution<'a> {
+    resolution: SignInAttemptResolution<'a>,
+    form: SignInAttemptLoginForm,
 }
 
 struct SignInAttemptResetRequest<'a> {
@@ -350,12 +368,14 @@ mod tests {
     };
     use crate::sign_in_attempt::test_fixture::{
         SignInFieldsFixture, SignInLinkFixture, SignInMarkerFixture, SignInMessageFixture,
-        SignInObservationFixture, SignInPageFixture, SignInScenario, SignInSubmittedAttempt,
+        SignInObservationFixture, SignInPageFixture, SignInScenario, SignInScenarioEvent,
+        SignInSubmittedAttempt,
     };
     use crate::{
         AuthenticationLoginChecklistStatus, SignInAttemptActionKind, SignInAttemptActivity,
-        SignInAttemptEvidenceDemand, SignInAttemptFollowUp, SignInAttemptLoginReference,
-        SignInAttemptMessageKey, SignInAttemptStatus, SignInAttemptUserAction,
+        SignInAttemptEvent, SignInAttemptEvidenceDemand, SignInAttemptFollowUp,
+        SignInAttemptLoginReference, SignInAttemptMessageKey, SignInAttemptStatus,
+        SignInAttemptUserAction,
     };
 
     #[test]
@@ -575,8 +595,8 @@ mod tests {
             .retained()?;
         assert_eq!(with_link.presentation.status, SignInAttemptStatus::Failed);
         assert_eq!(
-            with_link.presentation.reason_key,
-            Some(SignInAttemptMessageKey::WidgetSignInReasonAccountLocked)
+            with_link.presentation.description_key,
+            SignInAttemptMessageKey::WidgetSignInReasonAccountLocked
         );
         assert_eq!(
             with_link.presentation.reset_link,
@@ -759,6 +779,182 @@ mod tests {
                 SignInAttemptEvidenceDemand::NotWanted
             );
         }
+        Ok(())
+    }
+
+    /// A site failure concluded from one page of the same document.
+    struct FailedOnPage {
+        messages: Vec<SignInMessageFixture>,
+        links: Vec<SignInLinkFixture>,
+    }
+
+    impl FailedOnPage {
+        fn scenario(self) -> anyhow::Result<SignInScenario> {
+            SignInSubmittedAttempt::login_form()
+                .awaiting()?
+                .observe(SignInObservationFixture {
+                    at: 1_500,
+                    page: SignInPageFixture {
+                        messages: self.messages,
+                        links: self.links,
+                        ..SignInPageFixture::login_form(
+                            SignInAttemptDocumentRelation::SameDocumentSameRoute,
+                        )
+                    },
+                })?
+                .retained()
+        }
+    }
+
+    #[test]
+    fn form_acting_actions_need_a_visible_login_form() -> anyhow::Result<()> {
+        let gone = SignInPageFixture {
+            fields: SignInFieldsFixture::None,
+            ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocumentSameRoute)
+        };
+        let timed_out = SignInSubmittedAttempt::login_form()
+            .awaiting()?
+            .observe(SignInObservationFixture {
+                at: 21_100,
+                page: gone.clone(),
+            })?
+            .retained()?;
+        assert_eq!(timed_out.presentation.status, SignInAttemptStatus::TimedOut);
+        assert_eq!(timed_out.offered(), vec![SignInAttemptActionKind::Dismiss]);
+        let refused = timed_out
+            .clone()
+            .act(SignInAttemptUserAction::TryAgain)?
+            .retained()?;
+        assert_eq!(refused.presentation.status, SignInAttemptStatus::TimedOut);
+        let form_back = timed_out
+            .observe(SignInObservationFixture {
+                at: 21_500,
+                page: SignInPageFixture::login_form(
+                    SignInAttemptDocumentRelation::SameDocumentSameRoute,
+                ),
+            })?
+            .retained()?;
+        assert_eq!(
+            form_back.offered(),
+            vec![
+                SignInAttemptActionKind::TryAgain,
+                SignInAttemptActionKind::Dismiss
+            ]
+        );
+        let failed = FailedOnPage {
+            messages: vec![SignInMessageFixture::alert("Incorrect password")],
+            links: Vec::new(),
+        }
+        .scenario()?;
+        let failed_without_form = failed
+            .observe(SignInObservationFixture {
+                at: 1_800,
+                page: gone,
+            })?
+            .retained()?;
+        assert_eq!(
+            failed_without_form.presentation.status,
+            SignInAttemptStatus::Failed
+        );
+        assert_eq!(
+            failed_without_form.offered(),
+            vec![SignInAttemptActionKind::Dismiss]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn failed_actions_are_ordered_by_reason() -> anyhow::Result<()> {
+        let locked = FailedOnPage {
+            messages: vec![SignInMessageFixture::red_banner(
+                SignInMessageFixture::NAMECHEAP_LOCK,
+            )],
+            links: vec![SignInLinkFixture::NAMECHEAP_RESET],
+        }
+        .scenario()?;
+        assert_eq!(
+            locked.offered(),
+            vec![
+                SignInAttemptActionKind::ResetPassword,
+                SignInAttemptActionKind::ChooseAnotherLogin,
+                SignInAttemptActionKind::TryAgain,
+                SignInAttemptActionKind::Dismiss,
+            ]
+        );
+        let limited = FailedOnPage {
+            messages: vec![SignInMessageFixture::alert(
+                "Too many attempts. Try again later.",
+            )],
+            links: Vec::new(),
+        }
+        .scenario()?;
+        assert_eq!(
+            limited.offered(),
+            vec![
+                SignInAttemptActionKind::Dismiss,
+                SignInAttemptActionKind::ChooseAnotherLogin,
+                SignInAttemptActionKind::TryAgain,
+            ]
+        );
+        let unknown = FailedOnPage {
+            messages: vec![SignInMessageFixture::alert("Something went wrong")],
+            links: vec![SignInLinkFixture::NAMECHEAP_RESET],
+        }
+        .scenario()?;
+        assert_eq!(
+            unknown.offered(),
+            vec![
+                SignInAttemptActionKind::TryAgain,
+                SignInAttemptActionKind::ChooseAnotherLogin,
+                SignInAttemptActionKind::ResetPassword,
+                SignInAttemptActionKind::Dismiss,
+            ]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn a_site_failure_uses_its_reason_as_the_description() -> anyhow::Result<()> {
+        let locked = FailedOnPage {
+            messages: vec![SignInMessageFixture::red_banner(
+                SignInMessageFixture::NAMECHEAP_LOCK,
+            )],
+            links: Vec::new(),
+        }
+        .scenario()?;
+        assert_eq!(
+            locked.presentation.title_key,
+            SignInAttemptMessageKey::WidgetSignInFailed
+        );
+        assert_eq!(
+            locked.presentation.description_key,
+            SignInAttemptMessageKey::WidgetSignInReasonAccountLocked
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn the_site_message_is_shown_only_to_the_exact_recording_origin() -> anyhow::Result<()> {
+        let failed = FailedOnPage {
+            messages: vec![SignInMessageFixture::alert(
+                "Incorrect password for a@example.com",
+            )],
+            links: Vec::new(),
+        }
+        .scenario()?;
+        assert!(failed.presentation.site_message.is_some());
+        let sibling = failed
+            .clone()
+            .advance(SignInScenarioEvent {
+                at: 2_000,
+                origin: "https://ap.www.namecheap.com",
+                event: SignInAttemptEvent::Resumed,
+            })?
+            .retained()?;
+        assert_eq!(sibling.presentation.status, SignInAttemptStatus::Failed);
+        assert_eq!(sibling.presentation.site_message, None);
+        let same_origin = failed.resumed(2_000)?.retained()?;
+        assert!(same_origin.presentation.site_message.is_some());
         Ok(())
     }
 }

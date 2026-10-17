@@ -69,23 +69,34 @@ impl From<SignInAttemptSenderOrigin> for String {
     }
 }
 
-/// Opaque vault item identity of the selected login. Printable ASCII only,
-/// bounded; never a username, password, or other credential value.
+/// Opaque vault item identity of the selected login, `${vaultStoreId}/${secretId}`.
+/// Store ids are `store_` plus an 11-character token; secret ids are either
+/// `secret_` plus a token or legacy human labels that may contain spaces,
+/// non-ASCII text, or `/`. The reference is therefore split at its first `/`,
+/// both components must be non-blank, and only control characters are
+/// rejected. It identifies a vault item and is not a credential value.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(try_from = "String", into = "String")]
 #[tsify(type = "string")]
 pub struct SignInAttemptLoginReference(String);
 
 impl SignInAttemptLoginReference {
-    pub(crate) const MAX_BYTES: usize = 256;
+    /// A 17-byte store id, the separator, and a legacy secret label of up to
+    /// about 1 KiB (legacy labels are unbounded human names, often URLs).
+    pub(crate) const MAX_BYTES: usize = 1_024;
 }
 
 impl TryFrom<String> for SignInAttemptLoginReference {
     type Error = SignInAttemptRequestError;
 
     fn try_from(login: String) -> Result<Self, Self::Error> {
-        let printable = login.bytes().all(|byte| byte.is_ascii_graphic());
-        match (login.len(), printable) {
+        let Some((store, secret)) = login.split_once('/') else {
+            return Err(SignInAttemptRequestError::LoginReferenceInvalid);
+        };
+        let shaped = !store.trim().is_empty()
+            && !secret.trim().is_empty()
+            && !login.chars().any(char::is_control);
+        match (login.len(), shaped) {
             (1..=Self::MAX_BYTES, true) => Ok(Self(login)),
             (_, _) => Err(SignInAttemptRequestError::LoginReferenceInvalid),
         }
@@ -187,14 +198,29 @@ mod tests {
     };
 
     #[test]
-    fn login_reference_is_bounded_printable_ascii() {
-        assert!(SignInAttemptLoginReference::try_from("store_a:secret_b".to_owned()).is_ok());
+    fn login_reference_accepts_every_vault_id_and_rejects_only_malformed_shapes() {
+        for valid in [
+            "store_abcdefghijk/secret_SMypl8K0w9a",
+            "store_abcdefghijk/github.com work",
+            "store_abcdefghijk/почта для работы",
+            "store_abcdefghijk/https://example.com/login",
+        ] {
+            assert!(
+                SignInAttemptLoginReference::try_from(valid.to_owned()).is_ok(),
+                "{valid}"
+            );
+        }
         for invalid in [
             String::new(),
-            "has space".to_owned(),
-            "tab\tinside".to_owned(),
-            "пароль".to_owned(),
-            "x".repeat(SignInAttemptLoginReference::MAX_BYTES + 1),
+            "store_abcdefghijk".to_owned(),
+            "/secret_SMypl8K0w9a".to_owned(),
+            "store_abcdefghijk/ ".to_owned(),
+            "store_abcdefghijk/tab\tinside".to_owned(),
+            "store_abcdefghijk/new\nline".to_owned(),
+            format!(
+                "store_abcdefghijk/{}",
+                "x".repeat(SignInAttemptLoginReference::MAX_BYTES)
+            ),
         ] {
             assert_eq!(
                 SignInAttemptLoginReference::try_from(invalid),

@@ -33,13 +33,13 @@
 use super::auth_step::{
     SignInAttemptAuthStep, SignInAttemptFieldPresence, SignInAttemptStepRelation,
 };
-use super::conclusion::{
+use super::end_state::{
     SignInAttemptChallenge, SignInAttemptSiteMessage, SignInAttemptSiteMessageEvidence,
 };
 use super::failure_reason::SignInFailureReason;
 use super::message_evidence::SignInAttemptErrorMessageSelection;
-use super::outcome::SignInAttemptSettlingEvidence;
 use super::page_evidence::{SignInAttemptDocumentRelation, SignInAttemptPageEvidence};
+use super::stability::SignInAttemptSettlingEvidence;
 use super::submit_baseline::{SignInAttemptAffordanceChange, SignInAttemptBaseline};
 
 /// What one page observation says about the submitted login.
@@ -319,12 +319,12 @@ impl SignInAttemptPageFacts<'_> {
 #[cfg(test)]
 mod tests {
     use super::{SignInAttemptBaseline, SignInAttemptPageReading};
-    use crate::sign_in_attempt::conclusion::{
+    use crate::sign_in_attempt::end_state::{
         SignInAttemptChallenge, SignInAttemptSiteMessage, SignInAttemptSiteMessageEvidence,
     };
     use crate::sign_in_attempt::failure_reason::SignInFailureReason;
-    use crate::sign_in_attempt::outcome::SignInAttemptSettlingEvidence;
     use crate::sign_in_attempt::page_evidence::SignInAttemptDocumentRelation;
+    use crate::sign_in_attempt::stability::SignInAttemptSettlingEvidence;
     use crate::sign_in_attempt::test_fixture::{
         SignInControlsFixture, SignInFieldsFixture, SignInMarkerFixture,
         SignInMessageChangeFixture, SignInMessageFixture, SignInPageFixture,
