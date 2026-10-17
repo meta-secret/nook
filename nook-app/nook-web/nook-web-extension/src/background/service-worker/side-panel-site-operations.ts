@@ -93,6 +93,8 @@ export class SidePanelSiteListingOperation {
           return this.failure(SidePanelSiteListingKind.NonWeb)
         case SidePanelTabTargetKind.PageUnavailable:
           return this.failure(SidePanelSiteListingKind.PageUnavailable)
+        case SidePanelTabTargetKind.Failed:
+          return this.failure(SidePanelSiteListingKind.ListFailed)
         case SidePanelTabTargetKind.Web:
           break
       }
@@ -229,6 +231,8 @@ export class SidePanelLoginFillOperation {
           return this.outcome(SidePanelLoginFillKind.NonWeb)
         case SidePanelTabTargetKind.PageUnavailable:
           return this.outcome(SidePanelLoginFillKind.PageUnavailable)
+        case SidePanelTabTargetKind.Failed:
+          return this.outcome(SidePanelLoginFillKind.FillFailed)
         case SidePanelTabTargetKind.Web:
           break
       }

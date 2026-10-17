@@ -11,6 +11,8 @@ export enum SidePanelTabTargetKind {
   Web = 'web',
   NonWeb = 'non-web',
   PageUnavailable = 'page-unavailable',
+  /** Reading the active tab or classifying it failed; not a page state. */
+  Failed = 'failed',
 }
 
 /** The active tab of the panel's window, as the worker resolved and Rust classified it. */
@@ -23,6 +25,7 @@ export type SidePanelTabTarget =
     }
   | { readonly kind: SidePanelTabTargetKind.NonWeb }
   | { readonly kind: SidePanelTabTargetKind.PageUnavailable }
+  | { readonly kind: SidePanelTabTargetKind.Failed }
 
 /** Rust owns which kind of page a tab shows. */
 export interface SidePanelTabClassifier {
@@ -67,11 +70,17 @@ type SidePanelTabTargetResolverConfiguration = {
  * Resolves the panel's window selector into the tab Fill and the listing act
  * on. The panel's window id only selects a window: the worker checks that it
  * is a normal window of this extension's profile, reads that window's single
- * active tab and its URL itself, and lets Rust classify the URL.
+ * active tab and its URL itself, and lets Rust classify the URL. A selector
+ * naming no usable window or no single active tab is page-unavailable; a
+ * failure to query tabs or to classify is reported as Failed, never as a
+ * page state.
  */
 export class SidePanelTabTargetResolver {
   private readonly unavailable: SidePanelTabTarget = {
     kind: SidePanelTabTargetKind.PageUnavailable,
+  }
+  private readonly failed: SidePanelTabTarget = {
+    kind: SidePanelTabTargetKind.Failed,
   }
   private readonly generatorContext: SidePanelTabTargetResolverGeneratorContext =
     { self: this }
@@ -83,7 +92,7 @@ export class SidePanelTabTargetResolver {
   resolve(selection: SidePanelWindowSelection): Promise<SidePanelTabTarget> {
     return Effect.runPromise(
       this.target(selection).pipe(
-        Effect.catch(() => Effect.succeed(this.unavailable)),
+        Effect.catch(() => Effect.succeed(this.failed)),
       ),
     )
   }
@@ -91,10 +100,17 @@ export class SidePanelTabTargetResolver {
   private target = Effect.fn(
     this.generatorContext,
     function* (selection: SidePanelWindowSelection) {
-      const window = yield* Effect.tryPromise(() =>
-        chrome.windows.get(selection.windowId),
+      // A window id that names no window is an unusable selector, not a failure.
+      const window = yield* Effect.result(
+        Effect.tryPromise(() => chrome.windows.get(selection.windowId)),
       )
-      switch (this.windowEligibility(window)) {
+      switch (window._tag) {
+        case 'Failure':
+          return this.unavailable
+        case 'Success':
+          break
+      }
+      switch (this.windowEligibility(window.success)) {
         case SidePanelWindowEligibility.Ineligible:
           return this.unavailable
         case SidePanelWindowEligibility.Eligible:
