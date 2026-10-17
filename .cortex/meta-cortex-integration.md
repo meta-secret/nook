@@ -136,12 +136,11 @@ operation:
   (`0.20.0` here).
 - The Codex and Claude integrations each report `Connected` for the project
   owning the installation.
+  - The tracked `AGENTS.md` and `CLAUDE.md` each end their managed
+    `meta-cortex: instructions` block with its closing `---` rule. Info reports
+    `Conflict` for an unterminated block.
 - `configuration.host.max_total_agents` is `20`.
 - `model_selection` is `PerAssignment`.
-
-The tracked `AGENTS.md` and `CLAUDE.md` each end their managed
-`meta-cortex: instructions` block with its closing `---` rule. Info reports
-`Conflict` for an unterminated block.
 
 Verify Info against that project when a task uses its shared library.
 Then read the installed [Meta-Cortex circuit breaker](../.meta-cortex/CIRCUIT-BREAKER.md), followed by

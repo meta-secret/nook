@@ -230,7 +230,8 @@ discovered again.
 - **Session lifetime:** The extension has a separate, revocable device identity.
   - After passkey or PIN authorization, keep it in WASM memory in an offscreen
     document for 15 minutes.
-  - Reopening the toolbar popup does not repeat the ceremony.
+  - Reopening the side panel or the authentication tab does not repeat the
+    ceremony.
 - **Persistence boundary:** Never persist decrypted identity, PIN, or passkey
   PRF output to `chrome.storage`.
   - Expiry or browser shutdown zeroizes the manager and requires authorization

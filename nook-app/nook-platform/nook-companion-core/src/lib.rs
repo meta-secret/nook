@@ -30,6 +30,7 @@ mod authenticator_options_response;
 mod authenticator_picker_open_response;
 mod authenticator_preview_response;
 mod backup_code_candidates;
+mod browser_tab_target;
 mod companion_pairing;
 mod companion_protocol;
 pub mod credential_fill;
@@ -127,7 +128,10 @@ pub use authenticator_preview_response::{
     AuthenticatorPreviewResponseDecodeError, AuthenticatorPreviewResponseKind,
     AuthenticatorPreviewResponseWire,
 };
-
+pub use browser_tab_target::{
+    BrowserTabTarget, BrowserTabUrl, BrowserTabUrlObservation, WebTabDisplayHost, WebTabOrigin,
+    WebTabTarget,
+};
 pub use companion_pairing::{
     AdmittedCompanionPairingApproval, AuthorizedCompanionPairingApproval,
     AuthorizedCompanionWebsitePairing, CompanionExtensionPairingEndpoint, CompanionPairingApproval,

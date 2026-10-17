@@ -12,6 +12,7 @@ import {
   IdentityVaultRefresh,
   type IdentityVaultRefreshRequest,
 } from './identity-vault-refresh'
+import { SidePanelSender, SidePanelSenderAdmission } from './side-panel-sender'
 
 type RuntimeMessageListener = Parameters<
   typeof chrome.runtime.onMessage.addListener
@@ -36,8 +37,7 @@ export type PopupSenderCheck = {
   readonly popupUrl: string
 }
 
-/** Only the extension's own pages list or change its vaults: the toolbar
- * panel and the Nook tab; content scripts never do. */
+/** The Nook tab, in any intent; content scripts never match. */
 export function isPopupSender({
   sender,
   runtimeId,
@@ -49,15 +49,19 @@ export function isPopupSender({
   return page.origin === popup.origin && page.pathname === popup.pathname
 }
 
+/** Only the extension's own pages list or change its vaults: the side
+ * panel and the Nook tab; content scripts never do. */
 function fromExtensionPage(sender: chrome.runtime.MessageSender): boolean {
-  return ['popup/index.html', 'popup/panel.html'].some((page) => {
-    const check: PopupSenderCheck = {
-      sender,
-      runtimeId: chrome.runtime.id,
-      popupUrl: chrome.runtime.getURL(page),
-    }
-    return isPopupSender(check)
-  })
+  const authTab: PopupSenderCheck = {
+    sender,
+    runtimeId: chrome.runtime.id,
+    popupUrl: chrome.runtime.getURL('popup/index.html'),
+  }
+  return (
+    isPopupSender(authTab) ||
+    new SidePanelSender(sender).admission() ===
+      SidePanelSenderAdmission.Admitted
+  )
 }
 
 async function pairedVaults(): Promise<PairedVaultSummary[]> {
