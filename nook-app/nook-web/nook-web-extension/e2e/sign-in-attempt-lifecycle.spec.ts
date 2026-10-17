@@ -94,6 +94,25 @@ class NamecheapLoginFixture {
     })
   }
 
+  /** Every namecheap.com host, with or without a subdomain. */
+  static readonly NAMECHEAP_HOST = /(^|\.)namecheap\.com$/
+
+  static routed(url: URL): boolean {
+    return NamecheapLoginFixture.NAMECHEAP_HOST.test(url.hostname)
+  }
+
+  /** The fixture origin is answered by the fixture; any other Namecheap request is aborted. */
+  async isolate(route: Route): Promise<void> {
+    switch (
+      new URL(route.request().url()).origin === NamecheapLoginFixture.ORIGIN
+    ) {
+      case true:
+        return this.fulfill(route)
+      case false:
+        return route.abort('blockedbyclient')
+    }
+  }
+
   async fulfill(route: Route): Promise<void> {
     const request = route.request()
     switch (request.method()) {
@@ -203,11 +222,14 @@ class SignInAttemptLifecycleScenario {
         NamecheapLoginFixture.USERNAME,
         NamecheapLoginFixture.PASSWORD,
       )
-      const page = await paired.context.newPage()
-      await page.route(
-        `${NamecheapLoginFixture.ORIGIN}/**`,
-        this.fixture.fulfill.bind(this.fixture),
+      // Context-wide, before any page opens: every tab, frame, redirect and
+      // subresource for any namecheap.com host is answered by the fixture or
+      // aborted, so nothing in this context can reach the live site.
+      await paired.context.route(
+        NamecheapLoginFixture.routed.bind(NamecheapLoginFixture),
+        this.fixture.isolate.bind(this.fixture),
       )
+      const page = await paired.context.newPage()
       await page.goto(NamecheapLoginFixture.LOGIN_URL)
       await this.wrongPassword(page)
       await this.accountLocked(page)
