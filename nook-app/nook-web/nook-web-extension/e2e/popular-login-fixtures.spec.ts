@@ -846,8 +846,9 @@ test.describe('popular login fixture coverage', () => {
       await expect(
         passwordThenOtpPage.getByTestId('mock-auth-success'),
       ).toHaveCount(0)
+      // Pilot signed in on this tab, so the attempt presents the 2FA step.
       await expect(
-        passwordThenOtpWidget.getByText('Fill your 2FA code'),
+        passwordThenOtpWidget.getByText('Verification needed'),
       ).toBeVisible()
 
       const pickerPromise = paired.context.waitForEvent('page')
