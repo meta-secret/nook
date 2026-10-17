@@ -61,7 +61,6 @@ type SidePanelPageFillTypeFields = {
 type SidePanelPageFillReplyFields = {
   readonly kind: Schema.Codec<SidePanelPageFillReplyKind>
 }
-type SidePanelPageFillReplyKinds = readonly SidePanelPageFillReplyKind[]
 
 /** Strict codecs for the worker-to-page Fill trigger and its answer. */
 export class SidePanelPageFillMessages {
@@ -91,15 +90,8 @@ export class SidePanelPageFillMessages {
   private static readonly typeFields: SidePanelPageFillTypeFields = {
     type: Schema.Literal(SidePanelPageFillMessageType.Fill),
   }
-  private static readonly replyKinds: SidePanelPageFillReplyKinds = [
-    SidePanelPageFillReplyKind.Filled,
-    SidePanelPageFillReplyKind.TabChanged,
-    SidePanelPageFillReplyKind.NoLoginForm,
-    SidePanelPageFillReplyKind.FillFailed,
-    SidePanelPageFillReplyKind.Locked,
-  ]
   private static readonly replyFields: SidePanelPageFillReplyFields = {
-    kind: Schema.Literals(SidePanelPageFillMessages.replyKinds),
+    kind: Schema.Enum(SidePanelPageFillReplyKind),
   }
 
   /** Matches the trigger by type only, so a malformed trigger still gets an answer. */

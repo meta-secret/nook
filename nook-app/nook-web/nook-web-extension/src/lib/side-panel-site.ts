@@ -147,9 +147,9 @@ type SidePanelSiteListingFailureFields = {
 type SidePanelLoginFillOutcomeFields = {
   readonly kind: Schema.Codec<SidePanelLoginFillKind>
 }
-type SidePanelSiteListingFailureKinds =
-  readonly SidePanelSiteListingFailureKind[]
-type SidePanelLoginFillKinds = readonly SidePanelLoginFillKind[]
+type SidePanelSiteListingFailureKinds = Readonly<
+  Record<SidePanelSiteListingFailureKind, SidePanelSiteListingFailureKind>
+>
 
 /** Strict wire codecs for the panel's requests and the worker's answers. */
 export class SidePanelSiteMessages {
@@ -208,31 +208,26 @@ export class SidePanelSiteMessages {
       display_host: SidePanelSiteMessages.host,
       items: Schema.Array(Schema.Struct(SidePanelSiteMessages.loginFields)),
     }
+  // Keyed by every failure kind, so a new kind cannot be left undecodable.
   private static readonly listingFailureKinds: SidePanelSiteListingFailureKinds =
-    [
-      SidePanelSiteListingKind.Forbidden,
-      SidePanelSiteListingKind.NonWeb,
-      SidePanelSiteListingKind.PageUnavailable,
-      SidePanelSiteListingKind.Unpaired,
-      SidePanelSiteListingKind.Locked,
-      SidePanelSiteListingKind.ListFailed,
-    ]
+    {
+      [SidePanelSiteListingKind.Forbidden]: SidePanelSiteListingKind.Forbidden,
+      [SidePanelSiteListingKind.NonWeb]: SidePanelSiteListingKind.NonWeb,
+      [SidePanelSiteListingKind.PageUnavailable]:
+        SidePanelSiteListingKind.PageUnavailable,
+      [SidePanelSiteListingKind.Unpaired]: SidePanelSiteListingKind.Unpaired,
+      [SidePanelSiteListingKind.Locked]: SidePanelSiteListingKind.Locked,
+      [SidePanelSiteListingKind.ListFailed]:
+        SidePanelSiteListingKind.ListFailed,
+    }
   private static readonly listingFailureFields: SidePanelSiteListingFailureFields =
-    { kind: Schema.Literals(SidePanelSiteMessages.listingFailureKinds) }
-  private static readonly fillKinds: SidePanelLoginFillKinds = [
-    SidePanelLoginFillKind.Filled,
-    SidePanelLoginFillKind.Forbidden,
-    SidePanelLoginFillKind.NonWeb,
-    SidePanelLoginFillKind.PageUnavailable,
-    SidePanelLoginFillKind.Locked,
-    SidePanelLoginFillKind.Unpaired,
-    SidePanelLoginFillKind.ItemNotFound,
-    SidePanelLoginFillKind.TabChanged,
-    SidePanelLoginFillKind.NoLoginForm,
-    SidePanelLoginFillKind.FillFailed,
-  ]
+    {
+      kind: Schema.Literals(
+        Object.values(SidePanelSiteMessages.listingFailureKinds),
+      ),
+    }
   private static readonly fillOutcomeFields: SidePanelLoginFillOutcomeFields = {
-    kind: Schema.Literals(SidePanelSiteMessages.fillKinds),
+    kind: Schema.Enum(SidePanelLoginFillKind),
   }
   private static readonly listing: Schema.Codec<SidePanelSiteListing> =
     Schema.Union([

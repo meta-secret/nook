@@ -13,6 +13,11 @@ import {
 } from '../lib/session-operation-queue'
 import { ExtensionSessionMessageType } from '../lib/extension-session-message-type'
 import {
+  ExtensionSessionSenderAdmission,
+  ExtensionSessionSenderKind,
+  ExtensionSessionSenderPolicy,
+} from './session-sender-policy'
+import {
   BrowserRuntimeMessage,
   BrowserRuntimeMessageAdmissionKind,
   type BrowserRuntimeMessageValue,
@@ -271,39 +276,6 @@ export class ListeningExtensionSession<Response> {
 }
 
 export class ExtensionSessionMessageDispatcher<SessionResponse> {
-  /**
-   * Requests only the service worker sends. They seal identity material,
-   * reveal, list or write vault items, or stage credentials, so the worker's
-   * sender-bound origin checks must stay in front of them; extension pages,
-   * the side panel and content scripts are refused.
-   */
-  private static readonly serviceWorkerOnlyTypes: ReadonlySet<ExtensionSessionMessageType> =
-    new Set<ExtensionSessionMessageType>([
-      ExtensionSessionMessageType.SealIdentityHandoff,
-      ExtensionSessionMessageType.JoinIdentity,
-      ExtensionSessionMessageType.ConnectIdentityVault,
-      ExtensionSessionMessageType.RefreshIdentityVaults,
-      ExtensionSessionMessageType.CancelPasskey,
-      ExtensionSessionMessageType.ExportVaultEventLog,
-      ExtensionSessionMessageType.ImportVault,
-      ExtensionSessionMessageType.UpdateVault,
-      ExtensionSessionMessageType.ListPasskeys,
-      ExtensionSessionMessageType.RevealLogin,
-      ExtensionSessionMessageType.RevealFocusedLogin,
-      ExtensionSessionMessageType.ListAuthenticators,
-      ExtensionSessionMessageType.AuthenticatorCode,
-      ExtensionSessionMessageType.AuthenticatorEnrollPreview,
-      ExtensionSessionMessageType.AuthenticatorEnrollCode,
-      ExtensionSessionMessageType.AuthenticatorEnrollConfirm,
-      ExtensionSessionMessageType.AuthenticatorBackupAttach,
-      ExtensionSessionMessageType.PlanLoginSave,
-      ExtensionSessionMessageType.PendingLoginSave,
-      ExtensionSessionMessageType.CommitLoginSave,
-      ExtensionSessionMessageType.DismissLoginSave,
-      ExtensionSessionMessageType.RegisterPasskey,
-      ExtensionSessionMessageType.AssertPasskey,
-    ])
-
   private operations = new SessionOperationQueue()
   private operationGeneration = 0
 
@@ -613,10 +585,9 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
       ) {
         return false
       }
+      const senderPolicy = new ExtensionSessionSenderPolicy(sender)
       const serviceWorkerSender =
-        !sender.tab &&
-        (!sender.url ||
-          sender.url === chrome.runtime.getURL('background/service-worker.js'))
+        senderPolicy.kind() === ExtensionSessionSenderKind.ServiceWorker
       if (isCompanionWasmSessionMessageType(message.type)) {
         // Content-script requests are admitted and forwarded by the service
         // worker. The offscreen document receives the same runtime broadcast,
@@ -724,10 +695,9 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
           }
           const request = parsed.request
           const type = request.type
-          const serviceWorkerOnly =
-            ExtensionSessionMessageDispatcher.serviceWorkerOnlyTypes.has(type)
           if (
-            (serviceWorkerOnly && !serviceWorkerSender) ||
+            senderPolicy.admission(type) ===
+              ExtensionSessionSenderAdmission.Forbidden ||
             (!type.startsWith('nook:extension-session-') &&
               type !== ExtensionSessionMessageType.ExportVaultEventLog)
           ) {

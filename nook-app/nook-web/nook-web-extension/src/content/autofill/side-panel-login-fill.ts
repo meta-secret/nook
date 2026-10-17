@@ -146,7 +146,12 @@ export class SidePanelLoginFillAction {
     private readonly collaborators: SidePanelLoginFillCollaborators,
   ) {}
 
-  /** Withdraws the in-flight Fill's approval, as when the session changes. */
+  /**
+   * Withdraws the in-flight Fill's approval, as when the session changes. The
+   * surface refresh behind it does not say why (lock, pairing import or a
+   * local vault update), so a withdrawn Fill answers fill-failed; a lock the
+   * reveal itself observes answers locked.
+   */
   withdraw(): void {
     this.approval += 1
   }
@@ -277,6 +282,16 @@ export class SidePanelLoginFillAction {
         case true:
           break
       }
+      // A Pilot fill may have started while the reveal was in flight; never
+      // interleave writes into its fields.
+      switch (widgetState.selectionAdmission()) {
+        case WidgetSelectionAdmission.Interacting:
+        case WidgetSelectionAdmission.Actuating:
+          write.release()
+          return this.reply(SidePanelPageFillReplyKind.FillFailed)
+        case WidgetSelectionAdmission.Available:
+          break
+      }
       const revalidation: RevalidationRequest = {
         workflow: request.workflow,
         expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
@@ -370,7 +385,10 @@ export class SidePanelLoginFillReceiver {
       case WidgetSelectionAdmission.Available:
         break
     }
-    void this.action.fill(payload.account).then(delivery.sendResponse)
+    void this.action
+      .fill(payload.account)
+      .then(delivery.sendResponse)
+      .catch(() => answer.send(SidePanelPageFillReplyKind.FillFailed))
     return SidePanelLoginFillReception.Responding
   }
 

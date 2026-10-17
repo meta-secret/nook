@@ -1,11 +1,9 @@
 import { beforeAll, describe, expect, mock, test } from 'bun:test'
 import { err, ok } from 'neverthrow'
 import { DeviceProtectionStatus } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
-import type { StoredExtensionPairingGrant } from '../src/background/pairing-grants'
 import {
   ExtensionSessionTransportFailure,
   ExtensionSessionTransportFailureKind,
-  type ExtensionSessionTransportResult,
 } from '../src/background/service-worker/session-document'
 import {
   SidePanelSender,
@@ -19,283 +17,24 @@ import {
   SidePanelLoginFillOperation,
   SidePanelSiteListingOperation,
 } from '../src/background/service-worker/side-panel-site-operations'
-import {
-  CompanionSidePanelTabClassifier,
-  SidePanelTabTargetResolver,
-} from '../src/background/service-worker/side-panel-tab-target'
-import {
-  BrowserRuntimeMessage,
-  BrowserRuntimeMessageAdmissionKind,
-  type BrowserRuntimeMessageValue,
-} from '../src/lib/browser-runtime-message'
+import type { BrowserRuntimeMessageValue } from '../src/lib/browser-runtime-message'
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
-import type { WebsiteLoginAccountOption } from '../src/lib/login-fill-messages'
 import {
   SidePanelPageFillMessageType,
   SidePanelPageFillReplyKind,
 } from '../src/lib/side-panel-page-fill'
 import {
-  SIDE_PANEL_PAGE_PATH,
   SidePanelLoginFillKind,
   SidePanelSiteListingKind,
   SidePanelSiteMessageType,
   type SidePanelSiteListingFailureKind,
 } from '../src/lib/side-panel-site'
-import type { ExtensionSessionResponse } from '../src/offscreen/session'
-import type { ExtensionSessionTransportRequest } from '../src/offscreen/session-request-adapter'
-
-Object.assign(globalThis, {
-  __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
-})
-
-/** Builders for the Chrome, grant and listing values the route scenarios use. */
-class RouteData {
-  static readonly extensionId = 'nook-extension'
-  static readonly panelUrl = RouteData.url(SIDE_PANEL_PAGE_PATH)
-  static readonly panelSender: chrome.runtime.MessageSender = {
-    id: RouteData.extensionId,
-    url: RouteData.panelUrl,
-    origin: `chrome-extension://${RouteData.extensionId}`,
-  }
-
-  static url(path: string): string {
-    return `chrome-extension://${RouteData.extensionId}/${path}`
-  }
-
-  /** Admits the value the way the service worker's runtime listener does. */
-  static message(value: BrowserRuntimeMessageValue): BrowserRuntimeMessage {
-    const admission = BrowserRuntimeMessage.from(value)
-    if (admission.kind !== BrowserRuntimeMessageAdmissionKind.Accepted)
-      throw new Error('fixture must be a runtime message')
-    return admission.message
-  }
-
-  static grant(
-    vaultStoreId: string,
-    vaultName: string,
-  ): StoredExtensionPairingGrant {
-    return {
-      vaultType: 'simple',
-      vaultStoreId,
-      vaultName,
-      deviceId: `${vaultStoreId}-device`,
-      devicePublicKey: `${vaultStoreId}-public`,
-      deviceSigningPublicKey: `${vaultStoreId}-signing`,
-      deviceLabel: 'Laptop',
-      approvedAt: 1_786_320_000_000,
-      scopes: ['password-filling'],
-      syncProviderCount: 0,
-      eventCount: 1,
-      eventLogHeads: [],
-      lastLocalSyncAt: '',
-    }
-  }
-
-  static account(
-    vaultStoreId: string,
-    secretId: string,
-    username: string,
-  ): WebsiteLoginAccountOption {
-    return {
-      vaultStoreId,
-      vaultName: vaultStoreId,
-      secretId,
-      username,
-      websiteUrl: 'https://www.example.com/login?session=token',
-      websiteHost: 'www.example.com',
-    }
-  }
-
-  static tab(id: number, url: string | false): chrome.tabs.Tab {
-    const base: chrome.tabs.Tab = {
-      id,
-      index: 0,
-      pinned: false,
-      highlighted: true,
-      windowId: 7,
-      active: true,
-      incognito: false,
-      selected: true,
-      discarded: false,
-      autoDiscardable: true,
-      frozen: false,
-      lastAccessed: 0,
-      groupId: -1,
-    }
-    return url === false ? base : { ...base, url }
-  }
-
-  static window(): chrome.windows.Window {
-    return {
-      id: 7,
-      type: 'normal',
-      incognito: false,
-      focused: true,
-      alwaysOnTop: false,
-      state: 'normal',
-    }
-  }
-}
-
-type SessionDelivery = ExtensionSessionTransportResult<ExtensionSessionResponse>
-type PageReply = BrowserRuntimeMessageValue | 'no-receiver'
-
-/**
- * A service-worker host with stubbed Chrome windows, tabs and storage, a
- * recording offscreen session, and the real sender predicate, tab resolver,
- * Rust classifier and fail-closed login listing.
- */
-class SidePanelRouteFixture {
-  readonly sessionMessages: ExtensionSessionTransportRequest[] = []
-  readonly pageDeliveries: SidePanelPageDelivery[] = []
-  readonly tabsQuery = mock(() => Promise.resolve(this.activeTabs))
-  readonly launcher = mock(() => Promise.resolve())
-  readonly storageWrite = mock(() => Promise.resolve())
-  activeTabs: chrome.tabs.Tab[] = [
-    RouteData.tab(
-      41,
-      'https://user:pass@www.example.com:8443/login?token=secret#f',
-    ),
-  ]
-  window: chrome.windows.Window | 'missing' = RouteData.window()
-  grants: StoredExtensionPairingGrant[] = [
-    RouteData.grant('store_personal', 'Personal'),
-    RouteData.grant('store_work', 'Work'),
-  ]
-  status: DeviceProtectionStatus = DeviceProtectionStatus.Unlocked
-  listings = new Map<string, SessionDelivery>([
-    [
-      'store_personal',
-      ok({
-        ok: true,
-        accounts: [
-          RouteData.account(
-            'store_personal',
-            'secret_one',
-            'person@example.com',
-          ),
-        ],
-      }),
-    ],
-    [
-      'store_work',
-      ok({
-        ok: true,
-        accounts: [
-          RouteData.account('store_work', 'secret_two', 'work@example.com'),
-        ],
-      }),
-    ],
-  ])
-  current = true
-  revokeAfterListing = false
-  pageReply: PageReply = { kind: SidePanelPageFillReplyKind.Filled }
-
-  install(): void {
-    Object.assign(globalThis, {
-      chrome: {
-        runtime: { id: RouteData.extensionId, getURL: RouteData.url },
-        extension: { inIncognitoContext: false },
-        windows: {
-          get: () =>
-            this.window === 'missing'
-              ? Promise.reject(new Error('No window with id'))
-              : Promise.resolve(this.window),
-          create: this.launcher,
-        },
-        tabs: { query: this.tabsQuery, create: this.launcher },
-        storage: {
-          local: { set: this.storageWrite },
-          session: { set: this.storageWrite },
-        },
-      },
-    })
-  }
-
-  async dependencies(): Promise<SidePanelSiteDependencies> {
-    this.install()
-    const { accountPickerSessions } =
-      await import('../src/background/service-worker/account-pickers')
-    const resolver = new SidePanelTabTargetResolver({
-      classifier: new CompanionSidePanelTabClassifier(),
-    })
-    return {
-      senderAdmission: (sender) => new SidePanelSender(sender).admission(),
-      tabTarget: resolver.resolve.bind(resolver),
-      authorizationGeneration: async () => 'generation-1',
-      authorizationIsCurrent: () => this.current,
-      authorizationCleanupPending: async () => false,
-      passwordPairingGrants: async () => this.grants,
-      sendSessionMessage: async (message) => this.session(message),
-      loginAccountAvailabilityForOrigin:
-        accountPickerSessions.loginAccountAvailabilityForOrigin.bind(
-          accountPickerSessions,
-        ),
-      sendPageMessage: async (delivery) => {
-        this.pageDeliveries.push(delivery)
-        if (this.pageReply === 'no-receiver')
-          throw new Error('Could not establish connection')
-        return this.pageReply
-      },
-      now: () => 1_000,
-    }
-  }
-
-  private session(message: ExtensionSessionTransportRequest): SessionDelivery {
-    this.sessionMessages.push(message)
-    if (message.type === ExtensionSessionMessageType.Status)
-      return ok({ ok: true, status: this.status })
-    if (message.type !== ExtensionSessionMessageType.ListLogins)
-      throw new Error(`unexpected session request ${message.type}`)
-    if (this.revokeAfterListing) this.current = false
-    const listing = this.listings.get(message.payload.vaultStoreId)
-    if (!listing) throw new Error('unexpected vault')
-    return listing
-  }
-
-  listedOrigins(): string[] {
-    return this.sessionMessages.flatMap((message) =>
-      message.type === ExtensionSessionMessageType.ListLogins
-        ? [message.payload.origin]
-        : [],
-    )
-  }
-
-  sessionTypes(): string[] {
-    return this.sessionMessages.map((message) => message.type)
-  }
-
-  async list(
-    sender: chrome.runtime.MessageSender = RouteData.panelSender,
-    payload: BrowserRuntimeMessageValue = { windowId: 7 },
-  ) {
-    const operation = new SidePanelSiteListingOperation(
-      await this.dependencies(),
-    )
-    const message = RouteData.message({
-      type: SidePanelSiteMessageType.ListLogins,
-      payload,
-    })
-    return operation.run({ message, sender })
-  }
-
-  async fill(
-    itemId = { vaultStoreId: 'store_work', secretId: 'secret_two' },
-    payload: BrowserRuntimeMessageValue = { windowId: 7, itemId },
-  ) {
-    const operation = new SidePanelLoginFillOperation(await this.dependencies())
-    const message = RouteData.message({
-      type: SidePanelSiteMessageType.FillLogin,
-      payload,
-    })
-    return operation.run({ message, sender: RouteData.panelSender })
-  }
-
-  expectNoSideEffects(): void {
-    expect(this.launcher).not.toHaveBeenCalled()
-    expect(this.storageWrite).not.toHaveBeenCalled()
-  }
-}
+import {
+  RouteData,
+  SidePanelRouteFixture,
+  ThrowingTabClassifier,
+  type PageReply,
+} from './side-panel-route-test-support'
 
 beforeAll(async () => {
   const { companionWasmReady } =
@@ -572,6 +311,29 @@ describe('side-panel This-site listing (T-2)', () => {
       })
       expect(fixture.sessionMessages).toEqual([])
     }
+  })
+
+  test('a failing tab query or Rust classification is a failure, not a page state', async () => {
+    const query = new SidePanelRouteFixture()
+    query.tabQueryFails = true
+    expect(await query.list()).toEqual({
+      kind: SidePanelSiteListingKind.ListFailed,
+    })
+    expect(await query.fill()).toEqual({
+      kind: SidePanelLoginFillKind.FillFailed,
+    })
+    expect(query.sessionMessages).toEqual([])
+
+    const classification = new SidePanelRouteFixture()
+    classification.classifier = new ThrowingTabClassifier()
+    expect(await classification.list()).toEqual({
+      kind: SidePanelSiteListingKind.ListFailed,
+    })
+    expect(await classification.fill()).toEqual({
+      kind: SidePanelLoginFillKind.FillFailed,
+    })
+    expect(classification.sessionMessages).toEqual([])
+    expect(classification.pageDeliveries).toEqual([])
   })
 
   test('unpaired and locked answer their state without opening the launcher', async () => {
@@ -853,7 +615,9 @@ describe('website routes stay website-only (T-5)', () => {
         storage: {
           session: {
             get: async (key: string) =>
-              storage.has(key) ? { [key]: storage.get(key) } : {},
+              Object.fromEntries(
+                [...storage].filter(([stored]) => stored === key),
+              ),
             set: async (items: Record<string, string>) => {
               for (const [key, value] of Object.entries(items))
                 storage.set(key, value)

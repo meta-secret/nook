@@ -55,6 +55,10 @@ type RevalidationRequest = Parameters<
   SidePanelLoginFillCollaborators['revalidate']
 >[0]
 type RevalidationOutcomeKind = RevalidatedAuthenticationActionOutcomeKind
+type ScopedCredential = {
+  readonly input: HTMLInputElement
+  readonly request: LoginCredentialsFillRequest
+}
 
 await companionWasmReady
 
@@ -238,24 +242,39 @@ class SidePanelPageFixture {
       },
       fillCredentials: (request) => {
         this.fills.push(request)
-        const owner =
-          request.kind === PasswordFormQueryKind.Scoped &&
-          request.formScope.kind === PasswordFormScopeKind.Owned
-            ? request.formScope.owner
-            : this.form()
-        for (const input of owner.querySelectorAll('input')) {
-          input.value =
-            input.type === 'password'
-              ? request.credentials.password
-              : request.credentials.username
-        }
+        for (const input of this.scopedInputs(request))
+          input.value = this.credentialFor({ input, request })
         return true
       },
       clearCredentials: (request) => {
         this.clears.push(request)
+        this.clearing()
         for (const input of this.form().querySelectorAll('input'))
           input.value = ''
       },
+    }
+  }
+
+  clearing: () => void = () => {}
+
+  /** The fields inside the scope the action asked to fill. */
+  private scopedInputs(request: LoginCredentialsFillRequest) {
+    switch (true) {
+      case request.kind === PasswordFormQueryKind.Scoped &&
+        request.formScope.kind === PasswordFormScopeKind.Owned:
+        return request.formScope.owner.querySelectorAll('input')
+      case true:
+      default:
+        return this.form().querySelectorAll('input')
+    }
+  }
+
+  private credentialFor({ input, request }: ScopedCredential): string {
+    switch (input.type) {
+      case 'password':
+        return request.credentials.password
+      default:
+        return request.credentials.username
     }
   }
 
@@ -513,6 +532,44 @@ describe('side-panel Fill into the page (T-4)', () => {
       revealed.kind === LoginFillDeliveryKind.Delivered && revealed.response,
     ).toEqual({
       ok: true,
+      username: '',
+      password: '',
+    })
+  })
+
+  test('a Pilot fill that starts during the reveal is never overwritten', async () => {
+    const fixture = new SidePanelPageFixture(PageMarkup.Login)
+    fixture.beforeReveal = () => {
+      widgetState.busy = true
+    }
+
+    const answer = await fixture.receive(PageData.trigger())
+
+    expect(answer.reply).toEqual({
+      kind: SidePanelPageFillReplyKind.FillFailed,
+    })
+    expect(fixture.fills).toEqual([])
+    expect(fixture.revalidations).toHaveLength(1)
+    expect(fixture.value('#user')).toBe('')
+  })
+
+  test('an unexpected defect still answers fill-failed and restores Pilot', async () => {
+    const fixture = new SidePanelPageFixture(PageMarkup.Login)
+    fixture.verdicts = [
+      RevalidatedAuthenticationActionOutcomeKind.Acted,
+      RevalidatedAuthenticationActionOutcomeKind.Rejected,
+    ]
+    fixture.clearing = () => {
+      throw new Error('field clearing defect')
+    }
+
+    const answer = await fixture.receive(PageData.trigger())
+
+    expect(answer.reply).toEqual({
+      kind: SidePanelPageFillReplyKind.FillFailed,
+    })
+    expect(widgetState.credentialActuation).toBe(WidgetCredentialActuation.Idle)
+    expect(fixture.fills[0]?.credentials).toEqual({
       username: '',
       password: '',
     })
