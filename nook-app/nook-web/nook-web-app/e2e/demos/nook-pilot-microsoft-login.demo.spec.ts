@@ -94,16 +94,14 @@ test('retain Microsoft identifier login during adornment writes, then fill both 
       return retained
     })
   expect(retainedFrames).toBe(60)
-  await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
-  await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
+  await widget.getByRole('button', { name: 'Sign in' }).click()
+  await widget.getByRole('button', { name: 'Sign in' }).click()
   await expect(form).toHaveAttribute('data-identifier', 'pilot@example.test')
   await expect(form).toHaveAttribute('data-stage', 'password')
   await expect(page.locator('#passwordEntry')).toBeVisible()
   await demoBeat(page)
-  await expect(
-    widget.getByRole('button', { name: 'Sign in with Nook' }),
-  ).toBeVisible()
-  await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
+  await expect(widget.getByRole('button', { name: 'Sign in' })).toBeVisible()
+  await widget.getByRole('button', { name: 'Sign in' }).click()
   await expect(form).toHaveAttribute(
     'data-password',
     'demo-password-never-recorded',
