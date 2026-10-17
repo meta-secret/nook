@@ -262,7 +262,11 @@ function installSidePanelStub(install: SidePanelStubInstall): void {
   Object.defineProperty(globalThis, 'chrome', descriptor)
 }
 
-type SidePanelStubVisibility = 'visible' | 'hidden'
+/** The document visibility states the stub page can be put in. */
+export enum SidePanelStubVisibility {
+  Visible = 'visible',
+  Hidden = 'hidden',
+}
 
 /** A side panel page on the stubbed runtime, and the changes it follows. */
 export class SidePanelStubPage {

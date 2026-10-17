@@ -29,7 +29,11 @@ import {
 } from './side-panel-site-access'
 import type { StoredExtensionPairingGrant } from '../pairing-grants'
 import { SidePanelSenderAdmission } from './side-panel-sender'
-import { SidePanelTabTargetKind } from './side-panel-tab-target'
+import {
+  SidePanelTabTargetKind,
+  type SidePanelWebTabTarget,
+} from './side-panel-tab-target'
+import type { SidePanelWindowSelection } from '../../lib/side-panel-site'
 
 /** One admitted runtime delivery of a side-panel request. */
 export interface SidePanelSiteOperationRequest {
@@ -294,6 +298,21 @@ export class SidePanelLoginFillOperation {
         case SidePanelAuthorizationKind.Current:
           break
       }
+      // The listing and status calls above take time; the person may have
+      // switched tabs or navigated meanwhile. Deliver only to the same tab
+      // still showing the same Rust-classified origin.
+      const continuity: SidePanelTargetContinuityRequest = {
+        selection: decoded.success.payload,
+        derived: target,
+      }
+      switch (yield* this.continuity(continuity)) {
+        case SidePanelTargetContinuity.Changed:
+          return this.outcome(SidePanelLoginFillKind.TabChanged)
+        case SidePanelTargetContinuity.Unreadable:
+          return this.outcome(SidePanelLoginFillKind.FillFailed)
+        case SidePanelTargetContinuity.Same:
+          break
+      }
       const message: SidePanelPageFillMessage = {
         type: SidePanelPageFillMessageType.Fill,
         payload: {
@@ -324,6 +343,34 @@ export class SidePanelLoginFillOperation {
         delivery.success,
       )
       return this.outcome(this.replyKind(reply.kind))
+    },
+  )
+
+  /** Re-resolves the panel's window and compares it with the tab the Fill derived. */
+  private continuity = Effect.fn(
+    this.generatorContext,
+    function* (request: SidePanelTargetContinuityRequest) {
+      const current = yield* Effect.tryPromise(() =>
+        this.dependencies.tabTarget(request.selection),
+      )
+      switch (current.kind) {
+        case SidePanelTabTargetKind.Failed:
+          return SidePanelTargetContinuity.Unreadable
+        case SidePanelTabTargetKind.NonWeb:
+        case SidePanelTabTargetKind.PageUnavailable:
+          return SidePanelTargetContinuity.Changed
+        case SidePanelTabTargetKind.Web:
+          break
+      }
+      const same =
+        current.tabId === request.derived.tabId &&
+        current.origin === request.derived.origin
+      switch (same) {
+        case true:
+          return SidePanelTargetContinuity.Same
+        case false:
+          return SidePanelTargetContinuity.Changed
+      }
     },
   )
 
@@ -376,6 +423,18 @@ export class SidePanelLoginFillOperation {
         return SidePanelLoginFillKind.Locked
     }
   }
+}
+
+/** Whether the tab the Fill derived is still the active tab of the window. */
+enum SidePanelTargetContinuity {
+  Same = 'same',
+  Changed = 'changed',
+  Unreadable = 'unreadable',
+}
+
+type SidePanelTargetContinuityRequest = {
+  readonly selection: SidePanelWindowSelection
+  readonly derived: SidePanelWebTabTarget
 }
 
 type SidePanelItemPresenceRequest = {

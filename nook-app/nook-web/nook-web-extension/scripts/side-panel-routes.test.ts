@@ -32,7 +32,10 @@ import {
 import {
   RouteData,
   SidePanelRouteFixture,
+  ThrowingAfterFirstTabClassifier,
   ThrowingTabClassifier,
+  FixtureWindowKind,
+  PageReplyKind,
   type PageReply,
 } from './side-panel-route-test-support'
 
@@ -280,13 +283,19 @@ describe('side-panel This-site listing (T-2)', () => {
   test('an unusable window selector or active tab is page-unavailable', async () => {
     const scenarios: Array<(fixture: SidePanelRouteFixture) => void> = [
       (fixture) => {
-        fixture.window = 'missing'
+        fixture.window = { kind: FixtureWindowKind.Missing }
       },
       (fixture) => {
-        fixture.window = { ...RouteData.window(), type: 'popup' }
+        fixture.window = RouteData.present({
+          ...RouteData.window(),
+          type: 'popup',
+        })
       },
       (fixture) => {
-        fixture.window = { ...RouteData.window(), incognito: true }
+        fixture.window = RouteData.present({
+          ...RouteData.window(),
+          incognito: true,
+        })
       },
       (fixture) => {
         fixture.activeTabs = []
@@ -435,6 +444,8 @@ describe('side-panel Fill route (T-3)', () => {
 
     expect(outcome).toEqual({ kind: SidePanelLoginFillKind.Filled })
     expect(Object.keys(outcome)).toEqual(['kind'])
+    // Once to derive the target, once more right before the trigger is sent.
+    expect(fixture.tabsQuery).toHaveBeenCalledTimes(2)
     expect(fixture.pageDeliveries).toEqual([
       {
         tabId: 41,
@@ -563,6 +574,46 @@ describe('side-panel Fill route (T-3)', () => {
     expect(vaultApp.sessionMessages).toEqual([])
   })
 
+  test('a tab switch or navigation before delivery answers tab-changed and sends nothing', async () => {
+    const switches: chrome.tabs.Tab[][] = [
+      [RouteData.tab(42, 'https://www.example.com:8443/login')],
+      [RouteData.tab(41, 'https://accounts.other.test/login')],
+      [RouteData.tab(41, 'chrome://newtab/')],
+      [RouteData.tab(41, 'https://simple.nokey.sh/')],
+    ]
+    for (const tabs of switches) {
+      const fixture = new SidePanelRouteFixture()
+      fixture.tabSwitches = [tabs]
+      expect(await fixture.fill()).toEqual({
+        kind: SidePanelLoginFillKind.TabChanged,
+      })
+      expect(fixture.pageDeliveries).toEqual([])
+      fixture.expectNoSideEffects()
+    }
+  })
+
+  test('the same tab on the same origin still receives the trigger after a path change', async () => {
+    const fixture = new SidePanelRouteFixture()
+    fixture.tabSwitches = [
+      [RouteData.tab(41, 'https://www.example.com:8443/account/login?step=2')],
+    ]
+    expect(await fixture.fill()).toEqual({
+      kind: SidePanelLoginFillKind.Filled,
+    })
+    expect(fixture.pageDeliveries.map((delivery) => delivery.tabId)).toEqual([
+      41,
+    ])
+  })
+
+  test('an unreadable tab before delivery is a failure, not a tab change', async () => {
+    const fixture = new SidePanelRouteFixture()
+    fixture.classifier = new ThrowingAfterFirstTabClassifier()
+    expect(await fixture.fill()).toEqual({
+      kind: SidePanelLoginFillKind.FillFailed,
+    })
+    expect(fixture.pageDeliveries).toEqual([])
+  })
+
   test('a lock between the listing and delivery stops the Fill', async () => {
     const fixture = new SidePanelRouteFixture()
     fixture.revokeAfterListing = true
@@ -574,28 +625,31 @@ describe('side-panel Fill route (T-3)', () => {
 
   test('maps the page answer to a typed outcome and a missing receiver to page-unavailable', async () => {
     const cases: Array<[PageReply, SidePanelLoginFillKind]> = [
-      ['no-receiver', SidePanelLoginFillKind.PageUnavailable],
       [
-        { kind: SidePanelPageFillReplyKind.TabChanged },
+        { kind: PageReplyKind.NoReceiver },
+        SidePanelLoginFillKind.PageUnavailable,
+      ],
+      [
+        RouteData.answered({ kind: SidePanelPageFillReplyKind.TabChanged }),
         SidePanelLoginFillKind.TabChanged,
       ],
       [
-        { kind: SidePanelPageFillReplyKind.NoLoginForm },
+        RouteData.answered({ kind: SidePanelPageFillReplyKind.NoLoginForm }),
         SidePanelLoginFillKind.NoLoginForm,
       ],
       [
-        { kind: SidePanelPageFillReplyKind.Locked },
+        RouteData.answered({ kind: SidePanelPageFillReplyKind.Locked }),
         SidePanelLoginFillKind.Locked,
       ],
       [
-        { kind: SidePanelPageFillReplyKind.FillFailed },
+        RouteData.answered({ kind: SidePanelPageFillReplyKind.FillFailed }),
         SidePanelLoginFillKind.FillFailed,
       ],
       [
-        { kind: 'filled', username: 'work@example.com' },
+        RouteData.answered({ kind: 'filled', username: 'work@example.com' }),
         SidePanelLoginFillKind.FillFailed,
       ],
-      [{ ok: true }, SidePanelLoginFillKind.FillFailed],
+      [RouteData.answered({ ok: true }), SidePanelLoginFillKind.FillFailed],
     ]
     for (const [reply, kind] of cases) {
       const fixture = new SidePanelRouteFixture()

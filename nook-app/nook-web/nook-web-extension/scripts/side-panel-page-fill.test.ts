@@ -67,6 +67,12 @@ enum PageMarkup {
   GoogleIdentifier = 'google-identifier',
 }
 
+/** The button types the page fixtures use: a form submit and a plain button. */
+enum PageControlType {
+  Submit = 'submit',
+  Button = 'button',
+}
+
 /** Values the page scenarios share. */
 class PageData {
   static readonly pageOrigin = 'https://login.example.test'
@@ -199,7 +205,7 @@ class SidePanelPageFixture {
       field.type = type
       return field
     }
-    const button = (id: string, type: 'submit' | 'button') => {
+    const button = (id: string, type: PageControlType) => {
       const control = document.createElement('button')
       control.id = id
       control.type = type
@@ -209,10 +215,13 @@ class SidePanelPageFixture {
       case PageMarkup.Login:
         form.method = 'post'
         form.append(input('user', 'email'), input('pass', 'password'))
-        form.append(button('submit', 'submit'))
+        form.append(button('submit', PageControlType.Submit))
         break
       case PageMarkup.GoogleIdentifier:
-        form.append(input('identifierId', 'email'), button('next', 'button'))
+        form.append(
+          input('identifierId', 'email'),
+          button('next', PageControlType.Button),
+        )
         break
     }
     document.body.append(form)
@@ -412,8 +421,11 @@ describe('side-panel Fill into the page (T-4)', () => {
 
     const answer = await fixture.receive(PageData.trigger())
 
-    expect(answer.reply).toEqual({ kind: SidePanelPageFillReplyKind.Filled })
-    expect(Object.keys(answer.reply ?? {})).toEqual(['kind'])
+    // The reply is the typed kind alone: no credential, URL or other field.
+    expect(answer).toStrictEqual({
+      reception: SidePanelLoginFillReception.Responding,
+      reply: { kind: SidePanelPageFillReplyKind.Filled },
+    })
     expect(fixture.reveals).toEqual([
       {
         type: WebsiteLoginRevealMessageType.NookWebsiteLoginFill,

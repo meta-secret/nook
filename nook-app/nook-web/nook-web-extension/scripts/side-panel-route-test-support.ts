@@ -1,6 +1,9 @@
 import { expect, mock } from 'bun:test'
 import { ok } from 'neverthrow'
-import type { BrowserTabTarget } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import type {
+  BrowserTabTarget,
+  BrowserTabUrlObservation,
+} from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { DeviceProtectionStatus } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type { StoredExtensionPairingGrant } from '../src/background/pairing-grants'
 import type { ExtensionSessionTransportResult } from '../src/background/service-worker/session-document'
@@ -119,6 +122,14 @@ export class RouteData {
     }
   }
 
+  static present(window: chrome.windows.Window): FixtureWindow {
+    return { kind: FixtureWindowKind.Present, window }
+  }
+
+  static answered(reply: BrowserRuntimeMessageValue): PageReply {
+    return { kind: PageReplyKind.Answered, reply }
+  }
+
   static window(): chrome.windows.Window {
     return {
       id: 7,
@@ -138,8 +149,48 @@ export class ThrowingTabClassifier implements SidePanelTabClassifier {
   }
 }
 
+/** Classifies the first tab with Rust, then fails: the re-check before delivery cannot read the tab. */
+export class ThrowingAfterFirstTabClassifier implements SidePanelTabClassifier {
+  private readonly rust = new CompanionSidePanelTabClassifier()
+  private calls = 0
+
+  classify(observation: BrowserTabUrlObservation): Promise<BrowserTabTarget> {
+    this.calls += 1
+    switch (this.calls) {
+      case 1:
+        return this.rust.classify(observation)
+      default:
+        return Promise.reject(new Error('Invalid browser tab observation.'))
+    }
+  }
+}
+
 type SessionDelivery = ExtensionSessionTransportResult<ExtensionSessionResponse>
-export type PageReply = BrowserRuntimeMessageValue | 'no-receiver'
+/** What the tab answers the Fill trigger with, or that no content script received it. */
+export enum PageReplyKind {
+  Answered = 'answered',
+  NoReceiver = 'no-receiver',
+}
+
+export type PageReply =
+  | {
+      readonly kind: PageReplyKind.Answered
+      readonly reply: BrowserRuntimeMessageValue
+    }
+  | { readonly kind: PageReplyKind.NoReceiver }
+
+/** The window the panel names, or no window with that id. */
+export enum FixtureWindowKind {
+  Present = 'present',
+  Missing = 'missing',
+}
+
+export type FixtureWindow =
+  | {
+      readonly kind: FixtureWindowKind.Present
+      readonly window: chrome.windows.Window
+    }
+  | { readonly kind: FixtureWindowKind.Missing }
 
 /**
  * Shared fixture of the side-panel route suite: a service-worker host with stubbed Chrome windows, tabs and storage, a
@@ -151,6 +202,8 @@ export class SidePanelRouteFixture {
   readonly pageDeliveries: SidePanelPageDelivery[] = []
   readonly tabsQuery = mock(() => this.queryTabs())
   tabQueryFails = false
+  /** Active tabs the window shows after each query, as when the person switches tabs. */
+  tabSwitches: chrome.tabs.Tab[][] = []
   classifier: SidePanelTabClassifier = new CompanionSidePanelTabClassifier()
   readonly launcher = mock(() => Promise.resolve())
   readonly storageWrite = mock(() => Promise.resolve())
@@ -160,7 +213,7 @@ export class SidePanelRouteFixture {
       'https://user:pass@www.example.com:8443/login?token=secret#f',
     ),
   ]
-  window: chrome.windows.Window | 'missing' = RouteData.window()
+  window: FixtureWindow = RouteData.present(RouteData.window())
   grants: StoredExtensionPairingGrant[] = [
     RouteData.grant('store_personal', 'Personal'),
     RouteData.grant('store_work', 'Work'),
@@ -192,7 +245,9 @@ export class SidePanelRouteFixture {
   ])
   current = true
   revokeAfterListing = false
-  pageReply: PageReply = { kind: SidePanelPageFillReplyKind.Filled }
+  pageReply: PageReply = RouteData.answered({
+    kind: SidePanelPageFillReplyKind.Filled,
+  })
 
   install(): void {
     Object.assign(globalThis, {
@@ -233,9 +288,7 @@ export class SidePanelRouteFixture {
         ),
       sendPageMessage: async (delivery) => {
         this.pageDeliveries.push(delivery)
-        if (this.pageReply === 'no-receiver')
-          throw new Error('Could not establish connection')
-        return this.pageReply
+        return this.answer()
       },
       now: () => 1_000,
     }
@@ -270,16 +323,37 @@ export class SidePanelRouteFixture {
       case true:
         return Promise.reject(new Error('Tabs cannot be queried'))
       case false:
-        return Promise.resolve(this.activeTabs)
+        break
     }
+    const answered = this.activeTabs
+    const next = this.tabSwitches.shift()
+    switch (true) {
+      case !!next:
+        this.activeTabs = next
+        break
+      case true:
+      default:
+        break
+    }
+    return Promise.resolve(answered)
   }
 
   private getWindow(): Promise<chrome.windows.Window> {
-    switch (this.window) {
-      case 'missing':
+    switch (this.window.kind) {
+      case FixtureWindowKind.Missing:
         return Promise.reject(new Error('No window with id'))
-      default:
-        return Promise.resolve(this.window)
+      case FixtureWindowKind.Present:
+        return Promise.resolve(this.window.window)
+    }
+  }
+
+  /** Chrome rejects a tab message that no content script receives. */
+  private answer(): Promise<BrowserRuntimeMessageValue> {
+    switch (this.pageReply.kind) {
+      case PageReplyKind.NoReceiver:
+        return Promise.reject(new Error('Could not establish connection'))
+      case PageReplyKind.Answered:
+        return Promise.resolve(this.pageReply.reply)
     }
   }
 
