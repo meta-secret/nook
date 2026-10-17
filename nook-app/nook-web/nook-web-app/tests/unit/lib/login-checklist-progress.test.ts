@@ -253,8 +253,13 @@ class MountedChecklistFixture {
         title: this.title,
         description: this.description,
       },
+      progress: {
+        step: document.createElement('p'),
+        fresh: { currentStep: 1, totalSteps: 3 },
+      },
       control: this.control,
       workflow: this.workflow,
+      attemptActions: { run: () => {} },
     }
     this.progress = new LoginChecklistProgress(mount)
   }
@@ -490,8 +495,13 @@ class ChecklistLifecycleTests {
         title: this.mounted.title,
         description: this.mounted.description,
       },
+      progress: {
+        step: document.createElement('p'),
+        fresh: { currentStep: 1, totalSteps: 3 },
+      },
       control: this.mounted.control,
       workflow,
+      attemptActions: { run: () => {} },
     }
     const progress = new LoginChecklistProgress(mount)
     await progress.activity('Submitted')

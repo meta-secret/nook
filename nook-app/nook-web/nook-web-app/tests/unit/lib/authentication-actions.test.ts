@@ -55,6 +55,9 @@ vi.mock('../../../../nook-web-shared/src/extension/password-forms', () => ({
   },
   PasskeyControlLookupKind: { Absent: 'absent', Found: 'found' },
   PasswordFormQueryKind: { Scoped: 'scoped' },
+  passwordFieldDiscovery: {
+    prepareCompanionClassification: vi.fn(() => Promise.resolve()),
+  },
   passwordFormCredentialInteraction: {
     clearLoginCredentials: actionMocks.clearLoginCredentials,
     fillGeneratedPassword: actionMocks.fillGeneratedPassword,
@@ -165,6 +168,43 @@ vi.mock(
       sendLoginSaveOfferRuntimeMessage: vi.fn(),
       sendLoginSavePendingRuntimeMessage: vi.fn(),
       sendRuntimeMessageWithoutResponse: vi.fn(),
+    },
+  }),
+)
+
+// A top-level fill begins the tab's sign-in attempt; the attempt owner is
+// exercised by the extension sign-in attempt tests, not here.
+vi.mock(
+  '../../../../nook-web-extension/src/content/autofill/sign-in-attempt-session',
+  async (importOriginal) => {
+    const session =
+      await importOriginal<
+        typeof import('../../../../nook-web-extension/src/content/autofill/sign-in-attempt-session')
+      >()
+    return {
+      ...session,
+      signInAttemptSession: {
+        phase: { kind: session.SignInAttemptPhaseKind.Fresh },
+        scope: () => 'top-document',
+        resumed: () => Promise.resolve(),
+        beginDetached: () =>
+          Promise.resolve(session.SignInAttemptStartKind.Started),
+        activity: () => Promise.resolve(),
+        submitting: () => Promise.resolve(),
+        submission: () => Promise.resolve(),
+      },
+    }
+  },
+)
+
+vi.mock(
+  '../../../../nook-web-extension/src/content/autofill/sign-in-attempt-evidence',
+  async (importOriginal) => ({
+    ...(await importOriginal<
+      typeof import('../../../../nook-web-extension/src/content/autofill/sign-in-attempt-evidence')
+    >()),
+    signInAttemptEvidenceSensor: {
+      capture: () => ({ baseline: {}, snapshot: {} }),
     },
   }),
 )

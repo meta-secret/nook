@@ -110,6 +110,10 @@ const browserRuntimeMessageValueSchema: Schema.Codec<BrowserRuntimeMessageValue>
     ]),
   )
 
+/** A serialized runtime value of any admitted shape, for fields a Rust decoder checks. */
+export const BROWSER_RUNTIME_MESSAGE_VALUE: Schema.Codec<BrowserRuntimeMessageValue> =
+  browserRuntimeMessageValueSchema
+
 const browserRuntimeMessageSchemaFields: BrowserRuntimeMessageSchemaFields = {
   type: Schema.String.pipe(Schema.check(Schema.isMinLength(1))),
 }

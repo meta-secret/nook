@@ -100,10 +100,10 @@ class PilotPanelEvidence {
       height: 812,
     }
     await this.request.page.setViewportSize(viewport)
-    await expect(this.button('Sign in with Nook')).toBeVisible()
+    await expect(this.button('Sign in')).toBeVisible()
     await this.screenshot('pilot-checklist-responsive.png')
     await this.assertReady()
-    await expect(this.button('Sign in with Nook')).toBeVisible()
+    await expect(this.button('Sign in')).toBeVisible()
   }
 }
 enum PilotScenario {
@@ -149,10 +149,12 @@ class PilotScenarioPage {
           successScript: '',
         }
       case PilotScenario.Attention:
+        // The site answers the submit with a fresh rejection message.
         return {
           fieldsMarkup: this.credentialFieldsMarkup,
-          alertMarkup: '<p role="alert">Unable to sign in.</p>',
-          successScript: '',
+          alertMarkup: '',
+          successScript:
+            "const alert = document.createElement('p'); alert.setAttribute('role', 'alert'); alert.textContent = 'Unable to sign in.'; document.getElementById('login-form').append(alert);",
         }
       case PilotScenario.Waiting:
         return {
@@ -203,7 +205,7 @@ class PilotScenarioPage {
       case PilotScenario.Confirmed:
         break
     }
-    await this.evidence.button('Sign in with Nook').click()
+    await this.evidence.button('Sign in').click()
     switch (this.request.scenario) {
       case PilotScenario.Waiting:
         await expect.poll(this.pendingReply.bind(this)).toBe('Held')
@@ -386,7 +388,7 @@ class VkPasswordStepBrowserScenario {
         yield* Effect.tryPromise(() => expect(widget).toBeVisible())
         yield* Effect.tryPromise(() => expect(password).toHaveValue(''))
         const continueChoice: Parameters<Locator['getByRole']>[1] = {
-          name: 'Sign in with Nook',
+          name: 'Sign in',
         }
         yield* Effect.tryPromise(() =>
           widget.getByRole('button', continueChoice).click(),
@@ -437,7 +439,7 @@ class VkPasswordStepBrowserScenario {
 test.describe('PIN Pilot against mock auth', () => {
   test.describe.configure({ timeout: 180_000 })
 
-  test('completes plain login through Sign in with Nook', async ({
+  test('completes plain login through Sign in', async ({
     browserName,
   }, testInfo) => {
     test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
@@ -469,7 +471,7 @@ test.describe('PIN Pilot against mock auth', () => {
         widget.getByTestId('nook-auth-gate-vault-status'),
       ).toHaveAttribute('data-state', 'credential-available')
       // Single matching login fills and submits without an account chooser.
-      await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
+      await widget.getByRole('button', { name: 'Sign in' }).click()
       await expect(loginPage.getByTestId('mock-auth-success')).toHaveText(
         'Authentication complete',
         { timeout: 20_000 },
@@ -527,13 +529,12 @@ test.describe('PIN Pilot against mock auth', () => {
       await expect(loginWidget.getByText('Ready to sign in')).toBeVisible({
         timeout: 20_000,
       })
-      await loginWidget
-        .getByRole('button', { name: 'Sign in with Nook' })
-        .click()
+      await loginWidget.getByRole('button', { name: 'Sign in' }).click()
 
       await expect(loginPage).toHaveURL(/\/totp\/verify$/, { timeout: 20_000 })
       const otpWidget = loginPage.locator('#nook-auth-widget')
-      await expect(otpWidget.getByText('Fill your 2FA code')).toBeVisible({
+      // The tab's attempt presents the site's 2FA step on the authenticator Pilot.
+      await expect(otpWidget.getByText('Verification needed')).toBeVisible({
         timeout: 15_000,
       })
       const authenticatorPickerPromise = paired.context.waitForEvent('page')

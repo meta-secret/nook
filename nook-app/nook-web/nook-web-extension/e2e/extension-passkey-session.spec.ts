@@ -481,9 +481,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       const fillWidget = fillLoginPage.locator('#nook-auth-widget')
       await expect(fillWidget).toBeVisible()
       const pageCount = context.pages().length
-      await fillWidget
-        .getByRole('button', { name: 'Sign in with Nook' })
-        .click()
+      await fillWidget.getByRole('button', { name: 'Sign in' }).click()
       const inlinePicker = fillWidget.getByTestId('nook-inline-login-picker')
       await expect(inlinePicker).toBeVisible()
       const loginPicker = inlinePicker.contentFrame()
@@ -628,9 +626,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       )
       console.log('[extension e2e] widget wait complete')
       const pageCount = context.pages().length
-      await websiteWidget
-        .getByRole('button', { name: 'Sign in with Nook' })
-        .click()
+      await websiteWidget.getByRole('button', { name: 'Sign in' }).click()
       console.log('[extension e2e] Continue click complete')
       const inlinePicker = websiteWidget.getByTestId('nook-inline-login-picker')
       await expect(inlinePicker).toBeVisible()

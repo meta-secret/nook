@@ -240,7 +240,7 @@ test.describe('popular login fixture coverage', () => {
     }
   })
 
-  test('shows Pilot Sign in with Nook on every eligible shell template', async ({
+  test('shows Pilot Sign in on every eligible shell template', async ({
     browserName,
   }, testInfo) => {
     test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
@@ -255,7 +255,7 @@ test.describe('popular login fixture coverage', () => {
         await page.goto(`${mockAuth.origin}/template/${templateId}`)
         const widget = page.locator('#nook-auth-widget')
         await expect(
-          widget.getByRole('button', { name: 'Sign in with Nook' }),
+          widget.getByRole('button', { name: 'Sign in' }),
           `Pilot missing for template ${templateId}`,
         ).toBeVisible({ timeout: 20_000 })
         await expect(page.getByTestId('mock-auth-scenario')).toHaveText(
@@ -367,7 +367,7 @@ test.describe('popular login fixture coverage', () => {
         await expect(widget.getByText('Ready to sign in')).toBeVisible({
           timeout: 20_000,
         })
-        await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
+        await widget.getByRole('button', { name: 'Sign in' }).click()
         await expect(page.getByTestId('mock-auth-success')).toHaveText(
           'Authentication complete',
           { timeout: 20_000 },
@@ -442,9 +442,9 @@ test.describe('popular login fixture coverage', () => {
         const widget = page.locator('#nook-auth-widget')
         await expect(widget.getByText('Ready to sign in')).toBeVisible()
         await expect(
-          widget.getByRole('button', { name: 'Sign in with Nook' }),
+          widget.getByRole('button', { name: 'Sign in' }),
         ).toBeVisible()
-        await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
+        await widget.getByRole('button', { name: 'Sign in' }).click()
         await expect(page.getByTestId('mock-auth-success')).toHaveText(
           'Authentication complete',
           { timeout: 20_000 },
@@ -521,7 +521,7 @@ test.describe('popular login fixture coverage', () => {
 
         const widget = page.locator('#nook-auth-widget')
         await expect(widget.getByText('Ready to sign in')).toBeVisible()
-        await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
+        await widget.getByRole('button', { name: 'Sign in' }).click()
         await expect(page.getByRole('alert')).toHaveText(
           'Invalid username or password.',
           { timeout: 20_000 },
@@ -576,7 +576,7 @@ test.describe('popular login fixture coverage', () => {
       expect(inputsOwnedByForm).toBe(true)
       await successPage
         .locator('#nook-auth-widget')
-        .getByRole('button', { name: 'Sign in with Nook' })
+        .getByRole('button', { name: 'Sign in' })
         .click()
       await expect(successPage.getByTestId('mock-auth-success')).toHaveText(
         'Authentication complete',
@@ -608,7 +608,7 @@ test.describe('popular login fixture coverage', () => {
       await page.goto(`${mockAuth.origin}/template/instagram`)
       await page
         .locator('#nook-auth-widget')
-        .getByRole('button', { name: 'Sign in with Nook' })
+        .getByRole('button', { name: 'Sign in' })
         .click()
       await expect(page.getByRole('alert')).toHaveText(
         'Invalid username or password.',
@@ -650,7 +650,7 @@ test.describe('popular login fixture coverage', () => {
         await page.goto(`${mockAuth.origin}/template/${templateId}`)
         const widget = page.locator('#nook-auth-widget')
         await expect(widget.getByText('Ready to sign in')).toBeVisible()
-        await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
+        await widget.getByRole('button', { name: 'Sign in' }).click()
         await expect(page.locator('input[type="password"]')).toBeVisible()
         await expect(page.getByTestId('mock-auth-success')).toHaveCount(0)
         if (templateId === 'google') {
@@ -661,7 +661,7 @@ test.describe('popular login fixture coverage', () => {
         }
 
         await expect(widget.getByText('Ready to sign in')).toBeVisible()
-        await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
+        await widget.getByRole('button', { name: 'Sign in' }).click()
         await expect(page.getByTestId('mock-auth-success')).toHaveText(
           'Authentication complete',
           { timeout: 20_000 },
@@ -694,9 +694,9 @@ test.describe('popular login fixture coverage', () => {
       const page = await paired.context.newPage()
       await page.goto(`${mockAuth.origin}/template/google`)
       const widget = page.locator('#nook-auth-widget')
-      await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
+      await widget.getByRole('button', { name: 'Sign in' }).click()
       await expect(page.locator('input[type="password"]')).toBeVisible()
-      await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
+      await widget.getByRole('button', { name: 'Sign in' }).click()
       await expect(page.getByRole('alert')).toHaveText(
         'Invalid username or password.',
       )
@@ -744,7 +744,7 @@ test.describe('popular login fixture coverage', () => {
         const widget = page.locator('#nook-auth-widget')
         await expect(widget.getByText('Ready to sign in')).toBeVisible()
         await expect(
-          widget.getByRole('button', { name: 'Sign in with Nook' }),
+          widget.getByRole('button', { name: 'Sign in' }),
         ).toBeVisible()
 
         for (const field of firstStep.fields) {
@@ -809,7 +809,7 @@ test.describe('popular login fixture coverage', () => {
         await page.goto(`${mockAuth.origin}/template/${templateId}`)
         const widget = page.locator('#nook-auth-widget')
         await expect(widget.getByText('Ready to sign in')).toBeVisible()
-        await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
+        await widget.getByRole('button', { name: 'Sign in' }).click()
 
         if (templateId === 'phone-first') {
           await expect(page.locator('[name="phone"]')).toHaveValue(
@@ -818,9 +818,7 @@ test.describe('popular login fixture coverage', () => {
           await expect(page.locator('[name="password"]')).toBeVisible()
           await expect(page.getByTestId('mock-auth-success')).toHaveCount(0)
           await expect(widget.getByText('Ready to sign in')).toBeVisible()
-          await widget
-            .getByRole('button', { name: 'Sign in with Nook' })
-            .click()
+          await widget.getByRole('button', { name: 'Sign in' }).click()
         }
 
         await expect(page.getByTestId('mock-auth-success')).toHaveText(
@@ -840,7 +838,7 @@ test.describe('popular login fixture coverage', () => {
         passwordThenOtpWidget.getByText('Ready to sign in'),
       ).toBeVisible()
       await passwordThenOtpWidget
-        .getByRole('button', { name: 'Sign in with Nook' })
+        .getByRole('button', { name: 'Sign in' })
         .click()
       await expect(
         passwordThenOtpPage.locator('[autocomplete="one-time-code"]'),
@@ -848,8 +846,9 @@ test.describe('popular login fixture coverage', () => {
       await expect(
         passwordThenOtpPage.getByTestId('mock-auth-success'),
       ).toHaveCount(0)
+      // Pilot signed in on this tab, so the attempt presents the 2FA step.
       await expect(
-        passwordThenOtpWidget.getByText('Fill your 2FA code'),
+        passwordThenOtpWidget.getByText('Verification needed'),
       ).toBeVisible()
 
       const pickerPromise = paired.context.waitForEvent('page')
@@ -900,13 +899,11 @@ test.describe('popular login fixture coverage', () => {
         await page.goto(`${mockAuth.origin}/template/${templateId}`)
         const widget = page.locator('#nook-auth-widget')
         await expect(widget.getByText('Ready to sign in')).toBeVisible()
-        await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
+        await widget.getByRole('button', { name: 'Sign in' }).click()
         if (templateId === 'phone-first') {
           await expect(page.locator('[name="password"]')).toBeVisible()
           await expect(widget.getByText('Ready to sign in')).toBeVisible()
-          await widget
-            .getByRole('button', { name: 'Sign in with Nook' })
-            .click()
+          await widget.getByRole('button', { name: 'Sign in' }).click()
         }
         await expect(page.getByRole('alert')).toHaveText(
           'Invalid username or password.',
