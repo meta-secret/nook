@@ -1716,7 +1716,7 @@
       "fill_locked": "Nook locked before filling. Unlock it, then fill again.",
       "fill_failed": "Nook could not fill this login. Try again.",
       "site_no_filling_vault": "None of your connected vaults fills passwords yet.",
-      "site_locked": "Nook is locked, so this site's logins are hidden. Unlock Nook, then try again.",
+      "site_locked": "Nook locked while loading this site's logins. Try again.",
       "fill_item_missing": "That login is no longer available for this site."
     },
     "companion": {

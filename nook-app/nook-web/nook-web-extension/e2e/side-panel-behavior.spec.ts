@@ -140,15 +140,11 @@ test('a Fill that finds Nook locked shows the locked view with the reason', asyn
     'Nook locked before filling. Unlock it, then fill again.',
   )
   // Icon, heading, description, Unlock, then the reason.
-  expect(
-    await page
+  await expect(
+    page
       .getByTestId('side-panel-ceremony')
-      .evaluate(
-        (ceremony, reasonText) =>
-          ceremony.nextElementSibling?.textContent?.trim() === reasonText,
-        'Nook locked before filling. Unlock it, then fill again.',
-      ),
-  ).toBe(true)
+      .locator('xpath=following-sibling::*[1]'),
+  ).toHaveAttribute('data-testid', 'side-panel-lock-reason')
 })
 
 test('a locked Fill answer stays visible when the session reads unlocked', async ({
@@ -312,12 +308,7 @@ test('a PIN lives only for its try and never survives a hidden panel', async ({
   await expect(pin).toBeFocused()
   await expect(pin).toHaveAttribute('aria-invalid', 'true')
   // The message sits by the field, above the button.
-  expect(
-    await error.evaluate(
-      (element) =>
-        element.parentElement?.nextElementSibling?.getAttribute(
-          'data-testid',
-        ) === 'device-protection-pin-unlock-btn',
-    ),
-  ).toBe(true)
+  await expect(
+    error.locator('xpath=parent::*/following-sibling::*[1]'),
+  ).toHaveAttribute('data-testid', 'device-protection-pin-unlock-btn')
 })

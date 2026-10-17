@@ -40,7 +40,18 @@ export enum SidePanelStubFillDelivery {
 
 type SidePanelStubFillAnswer = { readonly kind: SidePanelLoginFillKind }
 
-type SidePanelStubListener = (...change: never[]) => void
+type SidePanelStubActivatedListener = Parameters<
+  typeof chrome.tabs.onActivated.addListener
+>[0]
+type SidePanelStubUpdatedListener = Parameters<
+  typeof chrome.tabs.onUpdated.addListener
+>[0]
+
+type SidePanelStubTabUpdate = {
+  readonly tabId: number
+  readonly change: chrome.tabs.OnUpdatedInfo
+  readonly tab: chrome.tabs.Tab
+}
 
 export type SidePanelStubState = {
   status: DeviceProtectionStatus
@@ -53,8 +64,8 @@ export type SidePanelStubState = {
   lock: SidePanelStubAnswer
   pinUnlock: SidePanelStubAnswer
   sent: string[]
-  activated: SidePanelStubListener[]
-  updated: SidePanelStubListener[]
+  activated: SidePanelStubActivatedListener[]
+  updated: SidePanelStubUpdatedListener[]
 }
 
 export type SidePanelStubScenario = {
@@ -200,10 +211,10 @@ function installSidePanelStub(install: SidePanelStubInstall): void {
         state.heldFills.push(() => callback(state.fill))
     }
   }
-  const listeners = (list: SidePanelStubListener[]) => ({
-    addListener: (listener: SidePanelStubListener) => list.push(listener),
+  const listeners = <Listener>(list: Listener[]) => ({
+    addListener: (listener: Listener) => list.push(listener),
     // Chrome ignores removing a listener it never added.
-    removeListener: (listener: SidePanelStubListener) => {
+    removeListener: (listener: Listener) => {
       const index = list.indexOf(listener)
       switch (index) {
         case -1:
@@ -257,6 +268,9 @@ type SidePanelStubVisibility = 'visible' | 'hidden'
 export class SidePanelStubPage {
   private static readonly ROUTE_PREFIX = '/__side-panel-stub/'
   private static readonly ORIGIN = 'https://side-panel.stub'
+  /** The stub's window is 1; the panel follows its active tab, 2. */
+  private static readonly WINDOW_ID = 1
+  private static readonly TAB_ID = 2
 
   constructor(private readonly page: Page) {}
 
@@ -308,21 +322,44 @@ export class SidePanelStubPage {
 
   /** Another tab of the panel's window became active. */
   async activateTab(): Promise<void> {
-    await this.page.evaluate(() => {
-      const info = { tabId: 2, windowId: 1 }
+    const info: chrome.tabs.OnActivatedInfo = {
+      tabId: SidePanelStubPage.TAB_ID,
+      windowId: SidePanelStubPage.WINDOW_ID,
+    }
+    await this.page.evaluate((activated) => {
       for (const listener of window.__nookSidePanelStub.activated)
-        Reflect.apply(listener, undefined, [info])
-    })
+        listener(activated)
+    }, info)
   }
 
   /** The active tab of the panel's window went to another address. */
   async navigateTab(): Promise<void> {
-    await this.page.evaluate(() => {
-      const change = { url: 'https://accounts.example.test/next' }
-      const tab = { id: 2, windowId: 1, active: true }
+    const url = 'https://accounts.example.test/next'
+    const tab: chrome.tabs.Tab = {
+      id: SidePanelStubPage.TAB_ID,
+      url,
+      index: 0,
+      pinned: false,
+      highlighted: false,
+      windowId: SidePanelStubPage.WINDOW_ID,
+      active: true,
+      incognito: false,
+      selected: true,
+      discarded: false,
+      autoDiscardable: true,
+      frozen: false,
+      lastAccessed: 0,
+      groupId: -1,
+    }
+    const update: SidePanelStubTabUpdate = {
+      tabId: SidePanelStubPage.TAB_ID,
+      change: { url },
+      tab,
+    }
+    await this.page.evaluate((next) => {
       for (const listener of window.__nookSidePanelStub.updated)
-        Reflect.apply(listener, undefined, [2, change, tab])
-    })
+        listener(next.tabId, next.change, next.tab)
+    }, update)
   }
 
   async setVisibility(visibility: SidePanelStubVisibility): Promise<void> {
