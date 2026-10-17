@@ -60,11 +60,27 @@ export type SidePanelVaults =
   | { readonly kind: SidePanelVaultsKind.NoVault }
   | { readonly kind: SidePanelVaultsKind.Failed }
 
+/** Why the panel shows setup. */
+export enum SidePanelSetupOrigin {
+  /** The extension has no key yet. */
+  Status = 'status',
+  /** Passkeys cannot work here, so the ceremony moved to a PIN: a status
+   * read that still says passkey keeps that step, as the Nook tab does. */
+  PinFallback = 'pin-fallback',
+}
+
+/** Whether a fresh status read keeps the view the panel shows. */
+export enum SidePanelContinuity {
+  Same = 'same',
+  Changed = 'changed',
+}
+
 export type SidePanelView =
   | {
       readonly kind: SidePanelViewKind.Setup
       /** Missing, plaintext or PIN setup; the ceremony moves between them. */
       readonly status: DeviceProtectionStatus
+      readonly origin: SidePanelSetupOrigin
     }
   | {
       readonly kind: SidePanelViewKind.PinLocked
@@ -144,9 +160,24 @@ type SidePanelUnlockedRequest = {
   readonly device: ExtensionSessionDeviceState
 }
 
+type SidePanelContinuityRequest = {
+  readonly view: SidePanelView
+  readonly status: DeviceProtectionStatus
+}
+
 type SidePanelLockedRequest = {
   readonly status: DeviceProtectionStatus
   readonly reason: SidePanelLockReasonKind
+}
+
+type SidePanelSetupContinuityRequest = {
+  readonly origin: SidePanelSetupOrigin
+  readonly next: SidePanelViewKind
+}
+
+type SidePanelKindPair = {
+  readonly shown: SidePanelViewKind
+  readonly next: SidePanelViewKind
 }
 
 /** Maps the extension's protection status to the panel's views. */
@@ -180,7 +211,11 @@ export class SidePanelViews {
     const { status, reason } = request
     switch (SidePanelViews.kind(status)) {
       case SidePanelViewKind.Setup:
-        return { kind: SidePanelViewKind.Setup, status }
+        return {
+          kind: SidePanelViewKind.Setup,
+          status,
+          origin: SidePanelSetupOrigin.Status,
+        }
       case SidePanelViewKind.PinLocked:
         return { kind: SidePanelViewKind.PinLocked, reason }
       case SidePanelViewKind.PasskeyLocked:
@@ -191,6 +226,72 @@ export class SidePanelViews {
           kind: SidePanelViewKind.Failure,
           phase: PopupInitializationPhase.DeviceProtectionStatus,
         }
+    }
+  }
+
+  /** The ceremony moved to PIN setup because passkeys cannot work here. */
+  static pinFallback(): SidePanelView {
+    return {
+      kind: SidePanelViewKind.Setup,
+      status: DeviceProtectionStatus.PinSetup,
+      origin: SidePanelSetupOrigin.PinFallback,
+    }
+  }
+
+  /** Whether a status read elsewhere asks for another view. */
+  static continuity(request: SidePanelContinuityRequest): SidePanelContinuity {
+    const { view, status } = request
+    const next = SidePanelViews.kind(status)
+    switch (view.kind) {
+      case SidePanelViewKind.Setup: {
+        const setup: SidePanelSetupContinuityRequest = {
+          origin: view.origin,
+          next,
+        }
+        return SidePanelViews.setupContinuity(setup)
+      }
+      case SidePanelViewKind.PinLocked:
+      case SidePanelViewKind.PasskeyLocked:
+      case SidePanelViewKind.Unlocked:
+      case SidePanelViewKind.Failure: {
+        const pair: SidePanelKindPair = { shown: view.kind, next }
+        return SidePanelViews.sameKind(pair)
+      }
+    }
+  }
+
+  private static setupContinuity(
+    request: SidePanelSetupContinuityRequest,
+  ): SidePanelContinuity {
+    const { origin, next } = request
+    switch (origin) {
+      case SidePanelSetupOrigin.Status: {
+        const pair: SidePanelKindPair = {
+          shown: SidePanelViewKind.Setup,
+          next,
+        }
+        return SidePanelViews.sameKind(pair)
+      }
+      case SidePanelSetupOrigin.PinFallback:
+        break
+    }
+    switch (next) {
+      case SidePanelViewKind.Setup:
+      case SidePanelViewKind.PasskeyLocked:
+        return SidePanelContinuity.Same
+      case SidePanelViewKind.PinLocked:
+      case SidePanelViewKind.Unlocked:
+      case SidePanelViewKind.Failure:
+        return SidePanelContinuity.Changed
+    }
+  }
+
+  private static sameKind(request: SidePanelKindPair): SidePanelContinuity {
+    switch (request.shown === request.next) {
+      case true:
+        return SidePanelContinuity.Same
+      case false:
+        return SidePanelContinuity.Changed
     }
   }
 

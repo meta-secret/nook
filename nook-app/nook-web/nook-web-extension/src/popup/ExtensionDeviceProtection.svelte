@@ -24,11 +24,13 @@ here once.
   } from '../lib/nook-wasm'
   import {
     DeviceProtectionActivity,
+    DeviceProtectionAttempt,
     DeviceProtectionCopy,
     DeviceProtectionFailureKind,
     DeviceProtectionFailureMap,
     DeviceProtectionFocus,
     DeviceProtectionNoticeKind,
+    DeviceProtectionNoticePlace,
     DeviceProtectionPurposeKind,
     DeviceProtectionStage,
     DeviceProtectionStageMap,
@@ -87,6 +89,7 @@ here once.
   let deviceMode = $state<DeviceMode>(DeviceMode.Standard)
   let pin = $state('')
   let pinConfirm = $state('')
+  let attempt = $state<DeviceProtectionAttempt>(DeviceProtectionAttempt.first())
 
   const stage = $derived(DeviceProtectionStageMap.from(status))
   const copyRequest = $derived<DeviceProtectionCopyRequest>({
@@ -95,7 +98,8 @@ here once.
     workflow: setupWorkflow,
   })
   const pending = $derived(activity === DeviceProtectionActivity.Pending)
-  const focus = $derived(new DeviceProtectionFocus(notice))
+  const focus = $derived(new DeviceProtectionFocus(attempt))
+  const noticePlace = $derived(DeviceProtectionStageMap.noticePlace(stage))
 
   function translatePlain(key: I18nKey): string {
     return i18n.t(extensionLocaleCatalog.plainExtensionTranslation(key))
@@ -114,7 +118,7 @@ here once.
   function pinUnlockLabel(): string {
     switch (activity) {
       case DeviceProtectionActivity.Idle:
-        return translatePlain(I18N_KEYS.DeviceProtectionPinUnlockAction)
+        return translatePlain(I18N_KEYS.ExtensionDeviceSetupUnlockAction)
       case DeviceProtectionActivity.Pending:
         return translatePlain(I18N_KEYS.LoginUnlocking)
     }
@@ -124,8 +128,27 @@ here once.
     notice = { kind: DeviceProtectionNoticeKind.Shown, key }
   }
 
+  /** Leaves an empty notice alone, so focus attachments do not re-run. */
   function clearNotice(): void {
-    notice = { kind: DeviceProtectionNoticeKind.None }
+    switch (notice.kind) {
+      case DeviceProtectionNoticeKind.None:
+        return
+      case DeviceProtectionNoticeKind.Shown:
+        notice = { kind: DeviceProtectionNoticeKind.None }
+    }
+  }
+
+  /** A PIN or passphrase lives only for the try that uses it: it is
+   * dropped as soon as that try settles, whatever its outcome. */
+  function forgetPin(): void {
+    pin = ''
+    pinConfirm = ''
+  }
+
+  /** A failed try: say why and return focus to the stage. */
+  function failed(): void {
+    forgetPin()
+    attempt = attempt.next()
   }
 
   function present(failure: DeviceProtectionFailure): void {
@@ -148,7 +171,7 @@ here once.
     }
     activity = DeviceProtectionActivity.Pending
     clearNotice()
-    const attempt: CeremonyAttempt = {
+    const ceremonyAttempt: CeremonyAttempt = {
       try: () => step.action(),
       catch: (caught) => {
         const request: DeviceProtectionFailureRequest = {
@@ -159,11 +182,12 @@ here once.
       },
     }
     const outcome = await Effect.runPromise(
-      Effect.result(Effect.tryPromise(attempt)),
+      Effect.result(Effect.tryPromise(ceremonyAttempt)),
     )
     activity = DeviceProtectionActivity.Idle
     switch (outcome._tag) {
       case 'Success': {
+        forgetPin()
         const unlock: DeviceProtectionUnlock = {
           device: outcome.success,
           followUp: step.followUp,
@@ -172,6 +196,7 @@ here once.
         return
       }
       case 'Failure':
+        failed()
         present(outcome.failure)
     }
   }
@@ -179,7 +204,7 @@ here once.
   function useExistingPasskey(): void {
     const step: CeremonyStep = {
       action: () => extensionWasmRuntime.recoverExtensionPasskey(),
-      fallbackKey: I18N_KEYS.DeviceProtectionPasskeyRecoveryNotAllowed,
+      fallbackKey: I18N_KEYS.ExtensionDeviceSetupPasskeyUseNotAllowed,
       followUp: DeviceActionFollowUp.Menu,
     }
     void run(step)
@@ -191,7 +216,7 @@ here once.
     >[0] = { passkeyLabel, deviceMode }
     const step: CeremonyStep = {
       action: () => extensionWasmRuntime.createExtensionPasskey(createArgs),
-      fallbackKey: I18N_KEYS.DeviceProtectionPasskeyCreateNotAllowed,
+      fallbackKey: I18N_KEYS.ExtensionDeviceSetupPasskeyCreateNotAllowed,
       followUp: DeviceActionFollowUp.Menu,
     }
     void run(step)
@@ -200,7 +225,7 @@ here once.
   function unlockPasskey(): void {
     const step: CeremonyStep = {
       action: () => extensionWasmRuntime.unlockExtensionPasskey(),
-      fallbackKey: I18N_KEYS.DeviceProtectionPasskeyUnlockNotAllowed,
+      fallbackKey: I18N_KEYS.ExtensionDeviceSetupPasskeyUnlockNotAllowed,
       followUp: DeviceActionFollowUp.RefreshIdentity,
     }
     void run(step)
@@ -210,6 +235,7 @@ here once.
     event.preventDefault()
     switch (pin === pinConfirm) {
       case false:
+        failed()
         show(I18N_KEYS.DeviceProtectionPinMismatch)
         return
       case true:
@@ -280,6 +306,20 @@ here once.
   }
 </script>
 
+{#snippet noticeBlock()}
+  <div id="device-protection-notice" class="device-protection-notice">
+    {#if notice.kind === DeviceProtectionNoticeKind.Shown}
+      <p
+        class="error-message"
+        role="alert"
+        data-testid="device-protection-error"
+      >
+        {translatePlain(notice.key)}
+      </p>
+    {/if}
+  </div>
+{/snippet}
+
 <h1 class="device-protection-title" data-testid="device-protection-title">
   {translatePlain(DeviceProtectionCopy.title(copyRequest))}
 </h1>
@@ -300,6 +340,7 @@ here once.
         autocomplete="new-password"
         bind:value={pin}
         readonly={pending}
+        aria-describedby="device-protection-notice"
         data-testid="device-protection-pin-input"
         {@attach focus.enter}
       />
@@ -315,12 +356,14 @@ here once.
         autocomplete="new-password"
         bind:value={pinConfirm}
         readonly={pending}
+        aria-describedby="device-protection-notice"
         data-testid="device-protection-pin-confirm"
       />
     </div>
     <p class="field-hint">
       {translatePlain(I18N_KEYS.DeviceProtectionPinSecurityNote)}
     </p>
+    {@render noticeBlock()}
     <button
       type="submit"
       aria-disabled={pending}
@@ -439,9 +482,10 @@ here once.
         aria-invalid={notice.kind === DeviceProtectionNoticeKind.Shown}
         aria-describedby="device-protection-notice"
         data-testid="device-protection-pin-unlock-input"
-        {@attach focus.retry}
+        {@attach focus.enter}
       />
     </div>
+    {@render noticeBlock()}
     <button
       type="submit"
       aria-disabled={pending || pin.length === 0}
@@ -477,10 +521,6 @@ here once.
   </button>
 {/if}
 
-<div id="device-protection-notice" class="device-protection-notice">
-  {#if notice.kind === DeviceProtectionNoticeKind.Shown}
-    <p class="error-message" role="alert" data-testid="device-protection-error">
-      {translatePlain(notice.key)}
-    </p>
-  {/if}
-</div>
+{#if noticePlace === DeviceProtectionNoticePlace.AfterControls}
+  {@render noticeBlock()}
+{/if}

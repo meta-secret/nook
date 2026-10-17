@@ -1,7 +1,7 @@
 import { Effect, type Cause } from 'effect'
 import { mount } from 'svelte'
 import type { ComponentProps, MountOptions } from 'svelte'
-import { extensionLocaleCatalog } from '../lib/i18n'
+import { extensionLocaleCatalog, type ExtensionI18n } from '../lib/i18n'
 import {
   DeviceProtectionStatus,
   type ExtensionSessionDeviceState,
@@ -19,6 +19,12 @@ import {
 import '../popup/popup.css'
 import './side-panel.css'
 
+type SidePanelMount = {
+  readonly target: HTMLElement
+  readonly i18n: ExtensionI18n
+  readonly initialView: SidePanelView
+}
+
 /** Startup: read the extension's state, then mount the panel on it. Until
  * then the page is the bare panel surface; a failed read mounts the
  * failure view, never setup. */
@@ -35,9 +41,29 @@ class SidePanelStartup {
   private async mountOn(target: HTMLElement): Promise<void> {
     const i18n = await extensionLocaleCatalog.initializeExtensionI18n()
     const initialView = await this.initialView()
+    const panel: SidePanelMount = { target, i18n, initialView }
+    // A view that throws while mounting leaves the failure view, not a
+    // blank panel, as the Nook tab does.
+    const mounted = Effect.try(() => SidePanelStartup.mount(panel)).pipe(
+      Effect.catch(() => Effect.sync(() => this.mountFailure(panel))),
+    )
+    Effect.runSync(mounted)
+  }
+
+  private mountFailure(panel: SidePanelMount): void {
+    panel.target.replaceChildren()
+    this.phase = PopupInitializationPhase.AppMount
+    const failure: SidePanelMount = {
+      ...panel,
+      initialView: this.failureView(),
+    }
+    SidePanelStartup.mount(failure)
+  }
+
+  private static mount(panel: SidePanelMount): void {
     const options: MountOptions<ComponentProps<typeof SidePanel>> = {
-      target,
-      props: { i18n, initialView },
+      target: panel.target,
+      props: { i18n: panel.i18n, initialView: panel.initialView },
     }
     mount(SidePanel, options)
   }

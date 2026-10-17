@@ -20,6 +20,7 @@ the service worker fills the active tab's form and never submits it.
     SidePanelSiteLogin,
   } from '../lib/side-panel-site'
   import {
+    ThisSiteFillActivity,
     ThisSiteFillKind,
     ThisSiteMatchCount,
     ThisSiteRowResult,
@@ -32,10 +33,13 @@ the service worker fills the active tab's form and never submits it.
     readonly login: SidePanelSiteLogin
     readonly count: ThisSiteMatchCount
     readonly fill: ThisSiteFill
+    /** A Fill on its way keeps every Fill unavailable, focus included. */
+    readonly activity: ThisSiteFillActivity
     readonly onfill: (item: SidePanelLoginItemId) => void
   }
 
-  let { i18n, login, count, fill, onfill }: ThisSiteLoginProps = $props()
+  let { i18n, login, count, fill, activity, onfill }: ThisSiteLoginProps =
+    $props()
 
   function translatePlain(key: I18nKey): string {
     return i18n.t(extensionLocaleCatalog.plainExtensionTranslation(key))
@@ -96,7 +100,7 @@ the service worker fills the active tab's form and never submits it.
     class="side-panel-fill"
     class:secondary-button={count === ThisSiteMatchCount.Several}
     aria-label={fillLabel()}
-    aria-disabled={fill.kind === ThisSiteFillKind.Pending}
+    aria-disabled={activity === ThisSiteFillActivity.Running}
     data-testid="side-panel-fill"
     onclick={() => onfill(login.itemId)}
   >

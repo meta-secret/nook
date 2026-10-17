@@ -1660,7 +1660,10 @@
       "pin_unlock_description": "Enter its PIN or passphrase.",
       "identity_key_title": "Add a key for the next identity",
       "identity_key_description": "Each identity connects through its own key, as on the Nook web app. Create one for the identity you are connecting; your other identities stay as they are.",
-      "identity_key_cancel": "Cancel"
+      "identity_key_cancel": "Cancel",
+      "passkey_use_not_allowed": "Your passkey wasn't used: the prompt was closed, timed out, or couldn't find it. Try again.",
+      "passkey_create_not_allowed": "The passkey wasn't created: the prompt was closed, timed out, or the browser refused. Try again.",
+      "passkey_unlock_not_allowed": "Unlock didn't finish: the passkey prompt was closed, timed out, or couldn't use your passkey. Try again."
     },
     "connect": {
       "title": "Use Nook on websites",
@@ -1711,7 +1714,10 @@
       "fill_no_form": "No login form on this page. Open the sign-in form, then fill again.",
       "fill_site_changed": "This tab moved to another site. Choose a login again.",
       "fill_locked": "Nook locked before filling. Unlock it, then fill again.",
-      "fill_failed": "Nook could not fill this login. Try again."
+      "fill_failed": "Nook could not fill this login. Try again.",
+      "site_no_filling_vault": "None of your connected vaults fills passwords yet.",
+      "site_locked": "Nook is locked, so this site's logins are hidden. Unlock Nook, then try again.",
+      "fill_item_missing": "That login is no longer available for this site."
     },
     "companion": {
       "step_label": "Browser companion",

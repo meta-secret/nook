@@ -304,15 +304,6 @@ html:has(.side-panel-body) {
   text-align: center;
 }
 
-/* Not set up: the value line is the heading. */
-.side-panel-gate-title.is-value {
-  max-width: 30ch;
-  font-size: 16px;
-  font-weight: 500;
-  line-height: 1.45;
-  letter-spacing: 0;
-}
-
 .side-panel-gate-line {
   max-width: 34ch;
   margin: -6px 0 0;
@@ -340,46 +331,6 @@ html:has(.side-panel-body) {
   font-size: 13px;
   line-height: 1.45;
   text-align: center;
-}
-
-/* PIN unlock: persistent label, field, error by the field, then Unlock. */
-.side-panel-pin {
-  display: grid;
-  gap: 8px;
-  width: 100%;
-  text-align: left;
-}
-
-.side-panel-pin label {
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.side-panel-pin input {
-  border-color: var(--side-panel-control-border);
-}
-
-.side-panel-pin input[aria-invalid='true'] {
-  border-color: var(--destructive-fg);
-}
-
-.side-panel-field-error {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  margin: 0;
-  color: var(--destructive-fg);
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.side-panel-field-error svg {
-  flex: none;
-  margin-top: 1px;
-}
-
-.side-panel-pin button {
-  margin-top: 4px;
 }
 
 /* The shared device-protection ceremony (ExtensionDeviceProtection.svelte)
@@ -588,7 +539,6 @@ html:has(.side-panel-body) {
   display: grid;
   justify-items: start;
   gap: 6px;
-  min-height: 56px;
   padding: 0 var(--side-panel-gutter) 16px;
 }
 
@@ -612,7 +562,6 @@ html:has(.side-panel-body) {
 
 /* Site-changed note between the heading and a reloaded list. */
 .side-panel-site-status:has(+ .side-panel-logins) {
-  min-height: 0;
   padding-bottom: 12px;
 }
 
@@ -755,8 +704,7 @@ html:has(.side-panel-body) {
 }
 
 .side-panel-login-result,
-.side-panel-status-line,
-.side-panel-field-error {
+.side-panel-status-line {
   animation: side-panel-enter 140ms ease-out;
 }
 
@@ -777,7 +725,6 @@ html:has(.side-panel-body) {
   .side-panel-spin,
   .side-panel-login-result,
   .side-panel-status-line,
-  .side-panel-field-error,
   .side-panel-ceremony .error-message {
     animation: none;
   }

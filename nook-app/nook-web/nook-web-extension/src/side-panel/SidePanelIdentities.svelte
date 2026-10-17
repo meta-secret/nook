@@ -9,15 +9,11 @@ identity continues in the Nook tab.
     I18N_KEYS,
     type I18nKey,
   } from '../../../nook-web-shared/src/generated/i18n-keys'
-  import {
-    ExtensionTranslationRequestKind,
-    type ExtensionI18n,
-    type ExtensionTranslationRequest,
-    extensionLocaleCatalog,
-  } from '../lib/i18n'
+  import { type ExtensionI18n, extensionLocaleCatalog } from '../lib/i18n'
   import type { ExtensionSessionDeviceState } from '../lib/nook-wasm'
   import type { PairedVaultGroup } from '../lib/paired-vaults'
-  import { IdentitySyncKind, type IdentitySync } from '../popup/popup-app-state'
+  import type { IdentitySync } from '../popup/popup-app-state'
+  import SidePanelIdentitySync from './SidePanelIdentitySync.svelte'
   import {
     SidePanelHandOffKind,
     SidePanelHandOffTrigger,
@@ -48,15 +44,6 @@ identity continues in the Nook tab.
     return i18n.t(extensionLocaleCatalog.plainExtensionTranslation(key))
   }
 
-  function awaitingNote(awaitingGrant: number): string {
-    const request: ExtensionTranslationRequest = {
-      kind: ExtensionTranslationRequestKind.WithReplacements,
-      key: I18N_KEYS.ExtensionCompanionIdentitySyncAwaiting,
-      replacements: { count: String(awaitingGrant) },
-    }
-    return i18n.t(request)
-  }
-
   function relation(group: PairedVaultGroup): SidePanelIdentityRelation {
     const request: Parameters<typeof SidePanelViews.identityRelation>[0] = {
       group,
@@ -79,19 +66,7 @@ identity continues in the Nook tab.
   <h2 id="side-panel-identities-heading" class="side-panel-label">
     {translatePlain(I18N_KEYS.ExtensionActionIdentities)}
   </h2>
-  {#if identitySync.kind === IdentitySyncKind.Checking}
-    <p class="side-panel-note" role="status" data-testid="side-panel-sync">
-      {translatePlain(I18N_KEYS.ExtensionCompanionIdentitySyncChecking)}
-    </p>
-  {:else if identitySync.kind === IdentitySyncKind.Checked && identitySync.awaitingGrant > 0}
-    <p class="side-panel-note" data-testid="side-panel-sync">
-      {awaitingNote(identitySync.awaitingGrant)}
-    </p>
-  {:else if identitySync.kind === IdentitySyncKind.Failed}
-    <p class="error-message" role="alert" data-testid="side-panel-sync">
-      {translatePlain(I18N_KEYS.ExtensionCompanionIdentitySyncFailed)}
-    </p>
-  {/if}
+  <SidePanelIdentitySync {i18n} {identitySync} />
   <ul class="side-panel-identity-list">
     {#each groups as group (`${group.deviceId}:${group.identityLabel}`)}
       <li

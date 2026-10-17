@@ -39,10 +39,12 @@ closes it.
   import SidePanelGate from './SidePanelGate.svelte'
   import SidePanelHeader from './SidePanelHeader.svelte'
   import SidePanelIdentities from './SidePanelIdentities.svelte'
+  import SidePanelIdentitySync from './SidePanelIdentitySync.svelte'
   import ThisSite from './ThisSite.svelte'
   import {
     SidePanelAlertKind,
     SidePanelCeremonyKind,
+    SidePanelContinuity,
     SidePanelHandOffs,
     SidePanelGateIcon,
     SidePanelHandOffKind,
@@ -194,11 +196,15 @@ closes it.
   }
 
   async function arrive(arrival: SidePanelArrival): Promise<void> {
-    switch (SidePanelViews.kind(arrival.status) === view.kind) {
-      case true:
+    const request: Parameters<typeof SidePanelViews.continuity>[0] = {
+      view,
+      status: arrival.status,
+    }
+    switch (SidePanelViews.continuity(request)) {
+      case SidePanelContinuity.Same:
         stay()
         return
-      case false:
+      case SidePanelContinuity.Changed:
         await enter(arrival)
     }
   }
@@ -329,13 +335,10 @@ closes it.
     }
   }
 
-  /** The ceremony moved to PIN setup because passkeys cannot work here. */
-  function ceremonyStatus(status: DeviceProtectionStatus): void {
-    const request: Parameters<typeof SidePanelViews.locked>[0] = {
-      status,
-      reason: SidePanelLockReasonKind.None,
-    }
-    view = SidePanelViews.locked(request)
+  /** The ceremony moved to PIN setup because passkeys cannot work here;
+   * that is the only status it asks for. */
+  function ceremonyStatus(): void {
+    view = SidePanelViews.pinFallback()
   }
 
   function unlocked(unlock: DeviceProtectionUnlock): void {
@@ -457,6 +460,8 @@ closes it.
         void refresh()
         return
       case SidePanelChangeKind.PanelHidden:
+        // A hidden panel keeps no typed PIN: the ceremony starts afresh.
+        ceremonyEntry += 1
         return
     }
   }
@@ -512,15 +517,6 @@ closes it.
     {#if ceremony.kind === SidePanelCeremonyKind.Shown}
       {#key ceremonyEntry}
         <SidePanelGate icon={ceremony.icon}>
-          {#if ceremony.reason === SidePanelLockReasonKind.FillLocked}
-            <p
-              class="side-panel-status-line"
-              role="status"
-              data-testid="side-panel-lock-reason"
-            >
-              {translatePlain(I18N_KEYS.ExtensionActionFillLocked)}
-            </p>
-          {/if}
           <div class="side-panel-ceremony" data-testid="side-panel-ceremony">
             <ExtensionDeviceProtection
               {i18n}
@@ -530,6 +526,15 @@ closes it.
               onunlocked={unlocked}
             />
           </div>
+          {#if ceremony.reason === SidePanelLockReasonKind.FillLocked}
+            <p
+              class="side-panel-status-line"
+              role="status"
+              data-testid="side-panel-lock-reason"
+            >
+              {translatePlain(I18N_KEYS.ExtensionActionFillLocked)}
+            </p>
+          {/if}
         </SidePanelGate>
       {/key}
     {:else if view.kind === SidePanelViewKind.Unlocked}
@@ -597,6 +602,7 @@ closes it.
                 {translatePlain(I18N_KEYS.ExtensionActionOpenFailed)}
               </p>
             {/if}
+            <SidePanelIdentitySync {i18n} identitySync={view.identitySync} />
           </div>
         </SidePanelGate>
       {:else}
@@ -612,6 +618,7 @@ closes it.
             >
               {translatePlain(I18N_KEYS.ExtensionActionTryAgain)}
             </button>
+            <SidePanelIdentitySync {i18n} identitySync={view.identitySync} />
           </div>
         </SidePanelGate>
       {/if}

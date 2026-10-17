@@ -6,7 +6,10 @@ import {
   DeviceProtectionCopy,
   DeviceProtectionFailureKind,
   DeviceProtectionFailureMap,
+  DeviceProtectionAttempt,
+  DeviceProtectionFocus,
   DeviceProtectionKeyKind,
+  DeviceProtectionNoticePlace,
   DeviceProtectionPhase,
   DeviceProtectionPurposeKind,
   DeviceProtectionStage,
@@ -64,6 +67,31 @@ describe('device-protection ceremony stages', () => {
         DeviceProtectionPurposeKind.IdentityKey,
       ),
     ).toBe(DeviceProtectionSetupWorkflow.Create)
+  })
+})
+
+describe('device-protection ceremony messages and focus', () => {
+  test('a PIN form shows its message by the field; passkey stages under the button', () => {
+    expect(
+      DeviceProtectionStageMap.noticePlace(DeviceProtectionStage.PinUnlock),
+    ).toBe(DeviceProtectionNoticePlace.InForm)
+    expect(
+      DeviceProtectionStageMap.noticePlace(DeviceProtectionStage.PinSetup),
+    ).toBe(DeviceProtectionNoticePlace.InForm)
+    expect(
+      DeviceProtectionStageMap.noticePlace(DeviceProtectionStage.PasskeyUnlock),
+    ).toBe(DeviceProtectionNoticePlace.AfterControls)
+    expect(
+      DeviceProtectionStageMap.noticePlace(DeviceProtectionStage.Setup),
+    ).toBe(DeviceProtectionNoticePlace.AfterControls)
+  })
+
+  test('only a failed try starts a new attempt, which re-runs the focus', () => {
+    const first = DeviceProtectionAttempt.first()
+    const retry = first.next()
+    expect(retry).not.toEqual(first)
+    expect(new DeviceProtectionFocus(retry).attempt).toBe(retry)
+    expect(retry.next()).not.toEqual(retry)
   })
 })
 
@@ -144,11 +172,11 @@ describe('device-protection ceremony failures', () => {
     const cancelled: DeviceProtectionFailureRequest = {
       reported:
         'Error: PASSKEY_CEREMONY_NOT_ALLOWED: Passkey get request did not finish.',
-      fallbackKey: I18N_KEYS.DeviceProtectionPasskeyRecoveryNotAllowed,
+      fallbackKey: I18N_KEYS.ExtensionDeviceSetupPasskeyUseNotAllowed,
     }
     expect(DeviceProtectionFailureMap.from(cancelled)).toEqual({
       kind: DeviceProtectionFailureKind.Message,
-      message: I18N_KEYS.DeviceProtectionPasskeyRecoveryNotAllowed,
+      message: I18N_KEYS.ExtensionDeviceSetupPasskeyUseNotAllowed,
     })
   })
 
@@ -156,7 +184,7 @@ describe('device-protection ceremony failures', () => {
     const unavailable: DeviceProtectionFailureRequest = {
       reported:
         'Error: PASSKEY_UNAVAILABLE: Passkeys are not available in this browser.',
-      fallbackKey: I18N_KEYS.DeviceProtectionPasskeyCreateNotAllowed,
+      fallbackKey: I18N_KEYS.ExtensionDeviceSetupPasskeyCreateNotAllowed,
     }
     expect(DeviceProtectionFailureMap.from(unavailable)).toEqual({
       kind: DeviceProtectionFailureKind.PinFallback,
@@ -165,7 +193,7 @@ describe('device-protection ceremony failures', () => {
     const noPrf: DeviceProtectionFailureRequest = {
       reported:
         'Error: PASSKEY_PRF_UNAVAILABLE: The passkey did not return the required PRF output.',
-      fallbackKey: I18N_KEYS.DeviceProtectionPasskeyCreateNotAllowed,
+      fallbackKey: I18N_KEYS.ExtensionDeviceSetupPasskeyCreateNotAllowed,
     }
     expect(DeviceProtectionFailureMap.from(noPrf)).toEqual({
       kind: DeviceProtectionFailureKind.PinFallback,

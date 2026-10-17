@@ -10,6 +10,10 @@ import { OpenSimpleVaultMessageType } from '../../nook-web-shared/src/extension/
 import type { BrowserRuntimeMessageValue } from '../src/lib/browser-runtime-message'
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
 import {
+  ExtensionSessionSenderAdmission,
+  ExtensionSessionSenderPolicy,
+} from '../src/offscreen/session-sender-policy'
+import {
   SidePanelChangeKind,
   SidePanelNookTabIntent,
   SidePanelRuntime,
@@ -66,6 +70,9 @@ class SidePanelBrowserFixture {
   currentWindow = FixtureWindowKind.Identified
 
   private readonly runtime = {
+    id: 'nook-extension',
+    getURL: (resource: string) =>
+      `chrome-extension://nook-extension/${resource}`,
     onMessage: {
       addListener: () => this.runtimeListeners.push('onMessage'),
     },
@@ -118,8 +125,14 @@ class SidePanelBrowserFixture {
   }
 
   private remove<Listener>(request: ListenerRemoval<Listener>): void {
+    // Chrome ignores removing a listener it never added.
     const index = request.list.indexOf(request.listener)
-    request.list.splice(index, 1)
+    switch (index) {
+      case -1:
+        return
+      default:
+        request.list.splice(index, 1)
+    }
   }
 
   private answer(callback: ReplyCallback): void {
@@ -308,19 +321,127 @@ describe('side panel browser runtime', () => {
   })
 })
 
-describe('side panel sources', () => {
-  test('never listen to runtime broadcasts, message tabs or inject scripts', async () => {
+/** The sources the side panel bundle runs: its own page, the shared
+ * ceremony and the clients it calls. */
+class SidePanelSources {
+  private static readonly SHARED = [
+    '../src/popup/ExtensionDeviceProtection.svelte',
+    '../src/popup/device-protection-ceremony.ts',
+    '../src/popup/popup-app-state.ts',
+    '../src/lib/side-panel-site.ts',
+    '../src/lib/paired-vaults.ts',
+    '../src/lib/i18n.ts',
+    '../src/lib/extension-runtime-retry.ts',
+    '../src/lib/nook-wasm.ts',
+  ]
+
+  /** The setup and unlock requests the panel's ceremony and startup make,
+   * with the offscreen session types each one sends. */
+  static readonly SESSION_CALLS: Readonly<
+    Record<string, readonly ExtensionSessionMessageType[]>
+  > = {
+    extensionDeviceProtectionStatus: [ExtensionSessionMessageType.Status],
+    extensionSessionDevice: [ExtensionSessionMessageType.Status],
+    recoverExtensionPasskey: [ExtensionSessionMessageType.RecoverPasskey],
+    createExtensionPasskey: [
+      ExtensionSessionMessageType.BeginPasskeySetup,
+      ExtensionSessionMessageType.FinishPasskeySetup,
+    ],
+    unlockExtensionPasskey: [
+      ExtensionSessionMessageType.UnlockOptions,
+      ExtensionSessionMessageType.UnlockPasskey,
+    ],
+    createExtensionPin: [ExtensionSessionMessageType.CreatePin],
+    unlockExtensionPin: [ExtensionSessionMessageType.UnlockPin],
+  }
+
+  async panelSources(): Promise<readonly string[]> {
     const directory = join(import.meta.dir, '../src/side-panel')
     const names = await readdir(directory)
-    const sources = await Promise.all(
+    return Promise.all(
       names.map((name) => readFile(join(directory, name), 'utf8')),
     )
-    expect(names.length).toBeGreaterThan(0)
-    for (const source of sources) {
+  }
+
+  async loadedSources(): Promise<readonly string[]> {
+    const shared = await Promise.all(
+      SidePanelSources.SHARED.map((file) =>
+        readFile(join(import.meta.dir, file), 'utf8'),
+      ),
+    )
+    return [...(await this.panelSources()), ...shared]
+  }
+
+  /** extensionWasmRuntime methods the panel and its ceremony call. */
+  async wasmRuntimeCalls(): Promise<readonly string[]> {
+    const sources = await this.panelSources()
+    const ceremony = await readFile(
+      join(import.meta.dir, '../src/popup/ExtensionDeviceProtection.svelte'),
+      'utf8',
+    )
+    const calls = [...sources, ceremony].flatMap((source) =>
+      [...source.matchAll(/extensionWasmRuntime\.(?<method>\w+)/g)].flatMap(
+        (match) => Object.values({ ...match.groups }),
+      ),
+    )
+    return [...new Set(calls)].sort()
+  }
+}
+
+describe('side panel sources', () => {
+  const sources = new SidePanelSources()
+
+  test('the panel bundle never listens to broadcasts, messages tabs, injects, stores or logs', async () => {
+    const loaded = await sources.loadedSources()
+    expect(loaded.length).toBeGreaterThan(8)
+    for (const source of loaded) {
       expect(source).not.toMatch(/\bonMessage\b/)
       expect(source).not.toContain('tabs.sendMessage')
       expect(source).not.toContain('chrome.scripting')
+      expect(source).not.toContain('chrome.storage')
+      expect(source).not.toMatch(/\bconsole\./)
       expect(source).not.toContain('window.close')
     }
+  })
+
+  test('the ceremony sends only the setup and unlock requests extension pages may send', async () => {
+    expect(await sources.wasmRuntimeCalls()).toEqual(
+      Object.keys(SidePanelSources.SESSION_CALLS).sort(),
+    )
+    // The offscreen session admits each of them from the side panel page.
+    const panelSender: chrome.runtime.MessageSender = {
+      id: 'nook-extension',
+      url: 'chrome-extension://nook-extension/side-panel/index.html',
+    }
+    const policy = new ExtensionSessionSenderPolicy(panelSender)
+    const types = Object.values(SidePanelSources.SESSION_CALLS).flat()
+    for (const type of types) {
+      expect(policy.admission(type)).toBe(
+        ExtensionSessionSenderAdmission.Admitted,
+      )
+    }
+    // Requests that list, reveal or write vault items stay refused.
+    for (const type of [
+      ExtensionSessionMessageType.RevealLogin,
+      ExtensionSessionMessageType.ListAuthenticators,
+      ExtensionSessionMessageType.PlanLoginSave,
+    ]) {
+      expect(policy.admission(type)).toBe(
+        ExtensionSessionSenderAdmission.Forbidden,
+      )
+    }
+  })
+
+  test('the service worker sets the toolbar side panel behavior at startup', async () => {
+    // service-worker.ts runs the whole worker when imported, so its startup
+    // wiring is checked from source; ToolbarSidePanelBehavior is tested above.
+    const worker = await readFile(
+      join(import.meta.dir, '../src/background/service-worker.ts'),
+      'utf8',
+    )
+    expect(worker).toContain('sidePanel: chrome.sidePanel,')
+    expect(worker).toMatch(
+      /^void Effect\.runPromise\(\s*new ToolbarSidePanelBehavior\(toolbarSidePanelRequest\)\.apply\(\),\s*\)$/m,
+    )
   })
 })

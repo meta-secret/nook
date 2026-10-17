@@ -13,13 +13,12 @@ import {
   ThisSiteBodyKind,
   ThisSiteFillFailure,
   ThisSiteFillKind,
-  ThisSiteFillOutcomeKind,
   ThisSiteHostKind,
-  ThisSiteListingOutcomeKind,
   ThisSiteMatchCount,
   ThisSiteMemory,
   ThisSiteMemoryKind,
   ThisSiteNoticeKind,
+  ThisSitePanelSignal,
   ThisSiteReload,
   ThisSiteRowResult,
   ThisSiteViews,
@@ -73,7 +72,6 @@ describe('This site listing', () => {
       items: [work, personal],
     }
     expect(ThisSiteViews.listing(listing)).toEqual({
-      kind: ThisSiteListingOutcomeKind.Show,
       view: {
         host: { kind: ThisSiteHostKind.Named, host: 'accounts.example.com' },
         body: {
@@ -82,6 +80,7 @@ describe('This site listing', () => {
           count: ThisSiteMatchCount.Several,
         },
       },
+      signal: ThisSitePanelSignal.None,
     })
   })
 
@@ -92,11 +91,11 @@ describe('This site listing', () => {
       items: [],
     }
     expect(ThisSiteViews.listing(listing)).toEqual({
-      kind: ThisSiteListingOutcomeKind.Show,
       view: {
         host: { kind: ThisSiteHostKind.Named, host: 'news.example.org' },
         body: { kind: ThisSiteBodyKind.Empty, host: 'news.example.org' },
       },
+      signal: ThisSitePanelSignal.None,
     })
   })
 
@@ -108,11 +107,11 @@ describe('This site listing', () => {
     for (const kind of refusals) {
       const listing: SidePanelSiteListing = { kind }
       expect(ThisSiteViews.listing(listing)).toEqual({
-        kind: ThisSiteListingOutcomeKind.Show,
         view: {
           host: { kind: ThisSiteHostKind.Unnamed },
           body: { kind: ThisSiteBodyKind.Failed },
         },
+        signal: ThisSitePanelSignal.None,
       })
     }
   })
@@ -121,51 +120,55 @@ describe('This site listing', () => {
     const nonWeb: SidePanelSiteListing = {
       kind: SidePanelSiteListingKind.NonWeb,
     }
-    expect(ThisSiteViews.listing(nonWeb)).toEqual({
-      kind: ThisSiteListingOutcomeKind.Show,
-      view: {
-        host: { kind: ThisSiteHostKind.NoWebsite },
-        body: { kind: ThisSiteBodyKind.NotWeb },
-      },
+    expect(ThisSiteViews.listing(nonWeb).view).toEqual({
+      host: { kind: ThisSiteHostKind.NoWebsite },
+      body: { kind: ThisSiteBodyKind.NotWeb },
     })
     const vaultApp: SidePanelSiteListing = {
       kind: SidePanelSiteListingKind.PageUnavailable,
     }
-    expect(ThisSiteViews.listing(vaultApp)).toEqual({
-      kind: ThisSiteListingOutcomeKind.Show,
-      view: {
-        host: { kind: ThisSiteHostKind.Unnamed },
-        body: { kind: ThisSiteBodyKind.Restricted },
-      },
+    expect(ThisSiteViews.listing(vaultApp).view).toEqual({
+      host: { kind: ThisSiteHostKind.Unnamed },
+      body: { kind: ThisSiteBodyKind.Restricted },
     })
   })
 
-  test('a locked or unpaired answer hands the decision to the panel', () => {
+  test('locked and unpaired answers end visibly and ask the panel to re-read', () => {
     const locked: SidePanelSiteListing = {
       kind: SidePanelSiteListingKind.Locked,
     }
     expect(ThisSiteViews.listing(locked)).toEqual({
-      kind: ThisSiteListingOutcomeKind.Locked,
+      view: {
+        host: { kind: ThisSiteHostKind.Unnamed },
+        body: { kind: ThisSiteBodyKind.Locked },
+      },
+      signal: ThisSitePanelSignal.Locked,
     })
+    // Vaults paired for passkeys only: none of them fills passwords.
     const unpaired: SidePanelSiteListing = {
       kind: SidePanelSiteListingKind.Unpaired,
     }
     expect(ThisSiteViews.listing(unpaired)).toEqual({
-      kind: ThisSiteListingOutcomeKind.Unpaired,
+      view: {
+        host: { kind: ThisSiteHostKind.Unnamed },
+        body: { kind: ThisSiteBodyKind.NoFillingVault },
+      },
+      signal: ThisSitePanelSignal.Unpaired,
     })
   })
 })
 
 describe('This site Fill', () => {
   test('a filled login says to review the page and sign in', () => {
-    const outcome = fillAnswer(SidePanelLoginFillKind.Filled)
     const filled: ThisSiteFill = {
       kind: ThisSiteFillKind.Filled,
       item: work.itemId,
     }
-    expect(outcome).toEqual({
-      kind: ThisSiteFillOutcomeKind.Result,
+    expect(fillAnswer(SidePanelLoginFillKind.Filled)).toEqual({
       fill: filled,
+      notice: ThisSiteNoticeKind.None,
+      reload: ThisSiteReload.None,
+      signal: ThisSitePanelSignal.None,
     })
     expect(ThisSiteViews.resultKey(filled)).toBe(
       I18N_KEYS.ExtensionActionFillDone,
@@ -173,16 +176,13 @@ describe('This site Fill', () => {
   })
 
   test('every failure is visible on the row, by its own reason', () => {
-    const noForm: ThisSiteFill = {
+    const noForm = fillAnswer(SidePanelLoginFillKind.NoLoginForm)
+    expect(noForm.fill).toEqual({
       kind: ThisSiteFillKind.Failed,
       item: work.itemId,
       failure: ThisSiteFillFailure.NoLoginForm,
-    }
-    expect(fillAnswer(SidePanelLoginFillKind.NoLoginForm)).toEqual({
-      kind: ThisSiteFillOutcomeKind.Result,
-      fill: noForm,
     })
-    expect(ThisSiteViews.resultKey(noForm)).toBe(
+    expect(ThisSiteViews.resultKey(noForm.fill)).toBe(
       I18N_KEYS.ExtensionActionFillNoForm,
     )
     for (const kind of [
@@ -190,36 +190,62 @@ describe('This site Fill', () => {
       SidePanelLoginFillKind.Forbidden,
       SidePanelLoginFillKind.PageUnavailable,
     ]) {
-      const failed: ThisSiteFill = {
+      const outcome = fillAnswer(kind)
+      expect(outcome.fill).toEqual({
         kind: ThisSiteFillKind.Failed,
         item: work.itemId,
         failure: ThisSiteFillFailure.Other,
-      }
-      expect(fillAnswer(kind)).toEqual({
-        kind: ThisSiteFillOutcomeKind.Result,
-        fill: failed,
       })
-      expect(ThisSiteViews.resultKey(failed)).toBe(
+      expect(outcome.reload).toBe(ThisSiteReload.None)
+      expect(ThisSiteViews.resultKey(outcome.fill)).toBe(
         I18N_KEYS.ExtensionActionFillFailed,
       )
     }
   })
 
-  test('a tab that moved on asks for the site to be listed again', () => {
+  test('a locked fill stays on the row while the panel re-reads the lock', () => {
+    const outcome = fillAnswer(SidePanelLoginFillKind.Locked)
+    expect(outcome.fill).toEqual({
+      kind: ThisSiteFillKind.Failed,
+      item: work.itemId,
+      failure: ThisSiteFillFailure.Locked,
+    })
+    expect(outcome.signal).toBe(ThisSitePanelSignal.FillLocked)
+    expect(ThisSiteViews.resultKey(outcome.fill)).toBe(
+      I18N_KEYS.ExtensionActionFillLocked,
+    )
+  })
+
+  test('a tab that moved on and a login that is gone say so and relist', () => {
     for (const kind of [
-      SidePanelLoginFillKind.ItemNotFound,
       SidePanelLoginFillKind.TabChanged,
       SidePanelLoginFillKind.NonWeb,
     ]) {
       expect(fillAnswer(kind)).toEqual({
-        kind: ThisSiteFillOutcomeKind.SiteChanged,
+        fill: { kind: ThisSiteFillKind.Idle },
+        notice: ThisSiteNoticeKind.SiteChanged,
+        reload: ThisSiteReload.List,
+        signal: ThisSitePanelSignal.None,
       })
     }
-    expect(fillAnswer(SidePanelLoginFillKind.Locked)).toEqual({
-      kind: ThisSiteFillOutcomeKind.Locked,
+    // A deleted login on the same site is not a tab that moved.
+    expect(fillAnswer(SidePanelLoginFillKind.ItemNotFound)).toEqual({
+      fill: { kind: ThisSiteFillKind.Idle },
+      notice: ThisSiteNoticeKind.ItemMissing,
+      reload: ThisSiteReload.List,
+      signal: ThisSitePanelSignal.None,
     })
+    expect(ThisSiteViews.noticeKey(ThisSiteNoticeKind.ItemMissing)).toBe(
+      I18N_KEYS.ExtensionActionFillItemMissing,
+    )
+    expect(ThisSiteViews.noticeKey(ThisSiteNoticeKind.SiteChanged)).toBe(
+      I18N_KEYS.ExtensionActionFillSiteChanged,
+    )
     expect(fillAnswer(SidePanelLoginFillKind.Unpaired)).toEqual({
-      kind: ThisSiteFillOutcomeKind.Unpaired,
+      fill: { kind: ThisSiteFillKind.Idle },
+      notice: ThisSiteNoticeKind.None,
+      reload: ThisSiteReload.List,
+      signal: ThisSitePanelSignal.Unpaired,
     })
   })
 

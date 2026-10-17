@@ -59,6 +59,8 @@ test('sets up, locks and unlocks a PIN key in place in the side panel', async ({
       'The PIN or passphrase did not unlock this browser. Check it and try again.',
     )
     await expect(pin).toHaveAttribute('aria-invalid', 'true')
+    // The PIN lives only for the try that used it.
+    await expect(pin).toHaveValue('')
     await expect(pin).toBeFocused()
 
     await pin.fill(MOCK_AUTH_DEFAULT_PIN)

@@ -15,7 +15,8 @@ import { SidePanelChangeKind } from './side-panel-runtime'
  * This site: the saved logins for the active tab of the panel's window, as
  * the service worker and Rust answer them. The panel keeps them in memory
  * only, in Rust's order, and drops them when the tab, its address, the
- * panel's visibility or the lock state changes.
+ * panel's visibility or the lock state changes. Every answer ends in
+ * something visible: logins, an empty or unavailable page, or a failure.
  */
 export enum ThisSiteHostKind {
   /** The active tab's host, as Rust displays it. */
@@ -40,8 +41,18 @@ export enum ThisSiteBodyKind {
   NotWeb = 'not-web',
   /** A Nook vault app or a page no content script reaches. */
   Restricted = 'restricted',
+  /** Paired vaults exist, but none of them fills passwords. */
+  NoFillingVault = 'no-filling-vault',
+  /** The session answered locked while the panel still showed unlocked. */
+  Locked = 'locked',
   /** @public Used from Svelte templates; Knip cannot trace enum members there. */
   Failed = 'failed',
+}
+
+/** Whether one login or several match: one match gets the primary Fill. */
+export enum ThisSiteMatchCount {
+  One = 'one',
+  Several = 'several',
 }
 
 export type ThisSiteBody =
@@ -54,6 +65,8 @@ export type ThisSiteBody =
   | { readonly kind: ThisSiteBodyKind.Empty; readonly host: string }
   | { readonly kind: ThisSiteBodyKind.NotWeb }
   | { readonly kind: ThisSiteBodyKind.Restricted }
+  | { readonly kind: ThisSiteBodyKind.NoFillingVault }
+  | { readonly kind: ThisSiteBodyKind.Locked }
   | { readonly kind: ThisSiteBodyKind.Failed }
 
 export type ThisSiteView = {
@@ -61,22 +74,21 @@ export type ThisSiteView = {
   readonly body: ThisSiteBody
 }
 
-/** What a listing answer asks of the panel. */
-export enum ThisSiteListingOutcomeKind {
-  Show = 'show',
-  /** The extension locked: the panel shows its locked view. */
+/** What This site asks of the panel besides showing its answer. */
+export enum ThisSitePanelSignal {
+  None = 'none',
+  /** The session is locked: the panel re-reads which lock it is. */
   Locked = 'locked',
-  /** No identity is paired any more: the panel re-reads its vaults. */
+  /** A Fill found the session locked: the locked view says so. */
+  FillLocked = 'fill-locked',
+  /** No paired vault fills passwords: the panel re-reads its vaults. */
   Unpaired = 'unpaired',
 }
 
-export type ThisSiteListingOutcome =
-  | {
-      readonly kind: ThisSiteListingOutcomeKind.Show
-      readonly view: ThisSiteView
-    }
-  | { readonly kind: ThisSiteListingOutcomeKind.Locked }
-  | { readonly kind: ThisSiteListingOutcomeKind.Unpaired }
+export type ThisSiteListingOutcome = {
+  readonly view: ThisSiteView
+  readonly signal: ThisSitePanelSignal
+}
 
 /** Fill shows one result at a time for the whole section. */
 export enum ThisSiteFillKind {
@@ -88,6 +100,8 @@ export enum ThisSiteFillKind {
 
 export enum ThisSiteFillFailure {
   NoLoginForm = 'no-login-form',
+  /** The session locked before the fill. */
+  Locked = 'locked',
   Other = 'other',
 }
 
@@ -103,37 +117,40 @@ export type ThisSiteFill =
       readonly failure: ThisSiteFillFailure
     }
 
-/** What a Fill answer asks of the panel. */
-export enum ThisSiteFillOutcomeKind {
-  /** Show the result on the row. */
-  Result = 'result',
-  /** The tab moved on: say so above the list and list the site again. */
-  SiteChanged = 'site-changed',
-  /** The extension locked before filling. */
-  Locked = 'locked',
-  Unpaired = 'unpaired',
+/** Whether a Fill request is still on its way: one at a time, also after
+ * the list it came from was dropped. */
+export enum ThisSiteFillActivity {
+  Idle = 'idle',
+  Running = 'running',
 }
 
-export type ThisSiteFillOutcome =
-  | {
-      readonly kind: ThisSiteFillOutcomeKind.Result
-      readonly fill: ThisSiteFill
-    }
-  | { readonly kind: ThisSiteFillOutcomeKind.SiteChanged }
-  | { readonly kind: ThisSiteFillOutcomeKind.Locked }
-  | { readonly kind: ThisSiteFillOutcomeKind.Unpaired }
+/** The note above the list after a Fill could not use the login shown. */
+export enum ThisSiteNoticeKind {
+  None = 'none',
+  /** The tab left the site the list was for. */
+  SiteChanged = 'site-changed',
+  /** The login is no longer saved for this site. */
+  ItemMissing = 'item-missing',
+}
+
+/** Whether a change asks for the active tab's logins again. */
+export enum ThisSiteReload {
+  List = 'list',
+  None = 'none',
+}
+
+export type ThisSiteFillOutcome = {
+  readonly fill: ThisSiteFill
+  readonly notice: ThisSiteNoticeKind
+  readonly reload: ThisSiteReload
+  readonly signal: ThisSitePanelSignal
+}
 
 /** Whether a row's login is the one the section's result is about. */
 export enum ThisSiteRowResult {
   None = 'none',
   /** @public Used from Svelte templates; Knip cannot trace enum members there. */
   Shown = 'shown',
-}
-
-/** Whether one login or several match: one match gets the primary Fill. */
-export enum ThisSiteMatchCount {
-  One = 'one',
-  Several = 'several',
 }
 
 type ThisSiteFillAnswerRequest = {
@@ -151,23 +168,31 @@ type ThisSiteRowRequest = {
   readonly item: SidePanelLoginItemId
 }
 
+/** Body kinds that carry nothing but their kind. */
+type ThisSiteBareBodyKind =
+  | ThisSiteBodyKind.Loading
+  | ThisSiteBodyKind.NotWeb
+  | ThisSiteBodyKind.Restricted
+  | ThisSiteBodyKind.NoFillingVault
+  | ThisSiteBodyKind.Locked
+  | ThisSiteBodyKind.Failed
+
+type ThisSiteRelistRequest = {
+  readonly notice: ThisSiteNoticeKind
+  readonly signal: ThisSitePanelSignal
+}
+
 /** Maps the service worker's This-site answers to what the panel shows. */
 export class ThisSiteViews {
   private constructor() {}
 
   static loading(): ThisSiteView {
-    return {
-      host: { kind: ThisSiteHostKind.Unnamed },
-      body: { kind: ThisSiteBodyKind.Loading },
-    }
+    return ThisSiteViews.unnamed(ThisSiteBodyKind.Loading)
   }
 
   /** The window could not be named, so no tab can be listed. */
   static failed(): ThisSiteView {
-    return {
-      host: { kind: ThisSiteHostKind.Unnamed },
-      body: { kind: ThisSiteBodyKind.Failed },
-    }
+    return ThisSiteViews.unnamed(ThisSiteBodyKind.Failed)
   }
 
   static listing(listing: SidePanelSiteListing): ThisSiteListingOutcome {
@@ -181,29 +206,32 @@ export class ThisSiteViews {
           host: { kind: ThisSiteHostKind.Named, host: listing.display_host },
           body: ThisSiteViews.matches(matches),
         }
-        return ThisSiteViews.show(ready)
+        return ThisSiteViews.shown(ready)
       }
       case SidePanelSiteListingKind.NonWeb: {
         const nonWeb: ThisSiteView = {
           host: { kind: ThisSiteHostKind.NoWebsite },
           body: { kind: ThisSiteBodyKind.NotWeb },
         }
-        return ThisSiteViews.show(nonWeb)
+        return ThisSiteViews.shown(nonWeb)
       }
-      case SidePanelSiteListingKind.PageUnavailable: {
-        const restricted: ThisSiteView = {
-          host: { kind: ThisSiteHostKind.Unnamed },
-          body: { kind: ThisSiteBodyKind.Restricted },
-        }
-        return ThisSiteViews.show(restricted)
-      }
+      case SidePanelSiteListingKind.PageUnavailable:
+        return ThisSiteViews.shown(
+          ThisSiteViews.unnamed(ThisSiteBodyKind.Restricted),
+        )
       case SidePanelSiteListingKind.Forbidden:
       case SidePanelSiteListingKind.ListFailed:
-        return ThisSiteViews.show(ThisSiteViews.failed())
+        return ThisSiteViews.shown(ThisSiteViews.failed())
       case SidePanelSiteListingKind.Locked:
-        return { kind: ThisSiteListingOutcomeKind.Locked }
+        return {
+          view: ThisSiteViews.unnamed(ThisSiteBodyKind.Locked),
+          signal: ThisSitePanelSignal.Locked,
+        }
       case SidePanelSiteListingKind.Unpaired:
-        return { kind: ThisSiteListingOutcomeKind.Unpaired }
+        return {
+          view: ThisSiteViews.unnamed(ThisSiteBodyKind.NoFillingVault),
+          signal: ThisSitePanelSignal.Unpaired,
+        }
     }
   }
 
@@ -212,7 +240,7 @@ export class ThisSiteViews {
     switch (kind) {
       case SidePanelLoginFillKind.Filled: {
         const filled: ThisSiteFill = { kind: ThisSiteFillKind.Filled, item }
-        return ThisSiteViews.result(filled)
+        return ThisSiteViews.onRow(filled)
       }
       case SidePanelLoginFillKind.NoLoginForm: {
         const noForm: ThisSiteFill = {
@@ -220,7 +248,7 @@ export class ThisSiteViews {
           item,
           failure: ThisSiteFillFailure.NoLoginForm,
         }
-        return ThisSiteViews.result(noForm)
+        return ThisSiteViews.onRow(noForm)
       }
       case SidePanelLoginFillKind.Forbidden:
       case SidePanelLoginFillKind.PageUnavailable:
@@ -230,17 +258,42 @@ export class ThisSiteViews {
           item,
           failure: ThisSiteFillFailure.Other,
         }
-        return ThisSiteViews.result(failed)
+        return ThisSiteViews.onRow(failed)
       }
-      // The login no longer belongs to the tab's site, or the tab left it.
-      case SidePanelLoginFillKind.ItemNotFound:
-      case SidePanelLoginFillKind.TabChanged:
-      case SidePanelLoginFillKind.NonWeb:
-        return { kind: ThisSiteFillOutcomeKind.SiteChanged }
       case SidePanelLoginFillKind.Locked:
-        return { kind: ThisSiteFillOutcomeKind.Locked }
-      case SidePanelLoginFillKind.Unpaired:
-        return { kind: ThisSiteFillOutcomeKind.Unpaired }
+        // The row says so even if the panel's re-read finds it unlocked.
+        return {
+          fill: {
+            kind: ThisSiteFillKind.Failed,
+            item,
+            failure: ThisSiteFillFailure.Locked,
+          },
+          notice: ThisSiteNoticeKind.None,
+          reload: ThisSiteReload.None,
+          signal: ThisSitePanelSignal.FillLocked,
+        }
+      case SidePanelLoginFillKind.ItemNotFound: {
+        const missing: ThisSiteRelistRequest = {
+          notice: ThisSiteNoticeKind.ItemMissing,
+          signal: ThisSitePanelSignal.None,
+        }
+        return ThisSiteViews.relist(missing)
+      }
+      case SidePanelLoginFillKind.TabChanged:
+      case SidePanelLoginFillKind.NonWeb: {
+        const moved: ThisSiteRelistRequest = {
+          notice: ThisSiteNoticeKind.SiteChanged,
+          signal: ThisSitePanelSignal.None,
+        }
+        return ThisSiteViews.relist(moved)
+      }
+      case SidePanelLoginFillKind.Unpaired: {
+        const unpaired: ThisSiteRelistRequest = {
+          notice: ThisSiteNoticeKind.None,
+          signal: ThisSitePanelSignal.Unpaired,
+        }
+        return ThisSiteViews.relist(unpaired)
+      }
     }
   }
 
@@ -254,6 +307,17 @@ export class ThisSiteViews {
         return I18N_KEYS.ExtensionActionFillDone
       case ThisSiteFillKind.Failed:
         return ThisSiteViews.failureKey(fill.failure)
+    }
+  }
+
+  /** The note above the list, when there is one. */
+  static noticeKey(notice: ThisSiteNoticeKind): I18nKey {
+    switch (notice) {
+      case ThisSiteNoticeKind.None:
+      case ThisSiteNoticeKind.SiteChanged:
+        return I18N_KEYS.ExtensionActionFillSiteChanged
+      case ThisSiteNoticeKind.ItemMissing:
+        return I18N_KEYS.ExtensionActionFillItemMissing
     }
   }
 
@@ -291,17 +355,38 @@ export class ThisSiteViews {
     switch (failure) {
       case ThisSiteFillFailure.NoLoginForm:
         return I18N_KEYS.ExtensionActionFillNoForm
+      case ThisSiteFillFailure.Locked:
+        return I18N_KEYS.ExtensionActionFillLocked
       case ThisSiteFillFailure.Other:
         return I18N_KEYS.ExtensionActionFillFailed
     }
   }
 
-  private static show(view: ThisSiteView): ThisSiteListingOutcome {
-    return { kind: ThisSiteListingOutcomeKind.Show, view }
+  private static unnamed(body: ThisSiteBareBodyKind): ThisSiteView {
+    return { host: { kind: ThisSiteHostKind.Unnamed }, body: { kind: body } }
   }
 
-  private static result(fill: ThisSiteFill): ThisSiteFillOutcome {
-    return { kind: ThisSiteFillOutcomeKind.Result, fill }
+  private static shown(view: ThisSiteView): ThisSiteListingOutcome {
+    return { view, signal: ThisSitePanelSignal.None }
+  }
+
+  private static onRow(fill: ThisSiteFill): ThisSiteFillOutcome {
+    return {
+      fill,
+      notice: ThisSiteNoticeKind.None,
+      reload: ThisSiteReload.None,
+      signal: ThisSitePanelSignal.None,
+    }
+  }
+
+  /** The login shown no longer fits the tab: list the site again. */
+  private static relist(request: ThisSiteRelistRequest): ThisSiteFillOutcome {
+    return {
+      fill: { kind: ThisSiteFillKind.Idle },
+      notice: request.notice,
+      reload: ThisSiteReload.List,
+      signal: request.signal,
+    }
   }
 
   private static matches(request: ThisSiteMatchesRequest): ThisSiteBody {
@@ -319,23 +404,11 @@ export class ThisSiteViews {
   }
 }
 
-/** The note above the list after a Fill found the tab on another site. */
-export enum ThisSiteNoticeKind {
-  None = 'none',
-  SiteChanged = 'site-changed',
-}
-
 /** Everything This site shows; it lives only in the panel's memory. */
 export type ThisSiteState = {
   readonly view: ThisSiteView
   readonly fill: ThisSiteFill
   readonly notice: ThisSiteNoticeKind
-}
-
-/** Whether a change asks for the active tab's logins again. */
-export enum ThisSiteReload {
-  List = 'list',
-  None = 'none',
 }
 
 /** Whether a change dropped what This site showed. */
@@ -356,9 +429,14 @@ type ThisSiteChangeRequest = {
   readonly change: SidePanelChangeKind
 }
 
+type ThisSiteDropRequest = {
+  readonly notice: ThisSiteNoticeKind
+  readonly reload: ThisSiteReload
+}
+
 /** What This site keeps, drops and re-reads when the panel's surroundings
  * change: logins never outlive the tab, its address or the panel's
- * visibility; a site-changed note outlives only the reload it caused. */
+ * visibility; a note about a Fill outlives only the reload it caused. */
 export class ThisSiteMemory {
   private constructor() {}
 
@@ -422,9 +500,4 @@ export class ThisSiteMemory {
       reload: request.reload,
     }
   }
-}
-
-type ThisSiteDropRequest = {
-  readonly notice: ThisSiteNoticeKind
-  readonly reload: ThisSiteReload
 }

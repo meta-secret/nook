@@ -39,13 +39,13 @@ panel's visibility or the lock state changes. Authenticators never appear.
   import { ThisSiteFocus } from './this-site-focus'
   import {
     ThisSiteBodyKind,
+    ThisSiteFillActivity,
     ThisSiteFillKind,
-    ThisSiteFillOutcomeKind,
     ThisSiteHostKind,
-    ThisSiteListingOutcomeKind,
     ThisSiteMemory,
     ThisSiteMemoryKind,
     ThisSiteNoticeKind,
+    ThisSitePanelSignal,
     ThisSiteReload,
     ThisSiteViews,
     type ThisSiteFill,
@@ -66,9 +66,12 @@ panel's visibility or the lock state changes. Authenticators never appear.
 
   const runtime = new SidePanelRuntime()
   const reads = new SidePanelReadSequence()
+  const fills = new SidePanelReadSequence()
   const focus = new ThisSiteFocus()
 
   let site = $state<ThisSiteState>(ThisSiteMemory.initial())
+  /** A Fill request on its way blocks the next, also after a drop. */
+  let fillActivity = $state<ThisSiteFillActivity>(ThisSiteFillActivity.Idle)
   const view = $derived(site.view)
   const fill = $derived(site.fill)
   const notice = $derived(site.notice)
@@ -114,6 +117,23 @@ panel's visibility or the lock state changes. Authenticators never appear.
     site = { ...site, notice: next }
   }
 
+  /** Tell the panel what This site learned; it re-reads its own state. */
+  function signal(next: ThisSitePanelSignal): void {
+    switch (next) {
+      case ThisSitePanelSignal.None:
+        return
+      case ThisSitePanelSignal.Locked:
+        onlocked(SidePanelLockReasonKind.None)
+        return
+      case ThisSitePanelSignal.FillLocked:
+        onlocked(SidePanelLockReasonKind.FillLocked)
+        return
+      case ThisSitePanelSignal.Unpaired:
+        onunpaired()
+        return
+    }
+  }
+
   /** List the active tab's logins again, dropping what was shown. */
   async function load(): Promise<void> {
     const read = reads.begin()
@@ -136,26 +156,15 @@ panel's visibility or the lock state changes. Authenticators never appear.
         break
     }
     const outcome = ThisSiteViews.listing(listing)
-    switch (outcome.kind) {
-      case ThisSiteListingOutcomeKind.Show:
-        await replace(outcome.view)
-        return
-      case ThisSiteListingOutcomeKind.Locked:
-        onlocked(SidePanelLockReasonKind.None)
-        return
-      case ThisSiteListingOutcomeKind.Unpaired:
-        onunpaired()
-        return
-    }
+    await replace(outcome.view)
+    signal(outcome.signal)
   }
 
   async function fillLogin(item: SidePanelLoginItemId): Promise<void> {
-    switch (fill.kind) {
-      case ThisSiteFillKind.Pending:
+    switch (fillActivity) {
+      case ThisSiteFillActivity.Running:
         return
-      case ThisSiteFillKind.Idle:
-      case ThisSiteFillKind.Filled:
-      case ThisSiteFillKind.Failed:
+      case ThisSiteFillActivity.Idle:
         break
     }
     switch (panelWindow.kind) {
@@ -165,6 +174,8 @@ panel's visibility or the lock state changes. Authenticators never appear.
       case SidePanelWindowKind.Known:
         break
     }
+    const read = fills.begin()
+    fillActivity = ThisSiteFillActivity.Running
     showNotice(ThisSiteNoticeKind.None)
     const pending: ThisSiteFill = { kind: ThisSiteFillKind.Pending, item }
     showFill(pending)
@@ -173,30 +184,29 @@ panel's visibility or the lock state changes. Authenticators never appear.
       itemId: item,
     }
     const answer = await sidePanelSite.fill(request)
+    fillActivity = ThisSiteFillActivity.Idle
+    switch (read.freshness()) {
+      // The list it came from was dropped: its answer shows nowhere.
+      case SidePanelReadFreshness.Stale:
+        return
+      case SidePanelReadFreshness.Current:
+        break
+    }
     const outcomeRequest: Parameters<typeof ThisSiteViews.fill>[0] = {
       kind: answer.kind,
       item,
     }
     const outcome = ThisSiteViews.fill(outcomeRequest)
-    const idle: ThisSiteFill = { kind: ThisSiteFillKind.Idle }
-    switch (outcome.kind) {
-      case ThisSiteFillOutcomeKind.Result:
-        showFill(outcome.fill)
-        return
-      case ThisSiteFillOutcomeKind.SiteChanged:
-        showFill(idle)
-        showNotice(ThisSiteNoticeKind.SiteChanged)
+    showFill(outcome.fill)
+    showNotice(outcome.notice)
+    switch (outcome.reload) {
+      case ThisSiteReload.List:
         void load()
-        return
-      case ThisSiteFillOutcomeKind.Locked:
-        showFill(idle)
-        onlocked(SidePanelLockReasonKind.FillLocked)
-        return
-      case ThisSiteFillOutcomeKind.Unpaired:
-        showFill(idle)
-        onunpaired()
-        return
+        break
+      case ThisSiteReload.None:
+        break
     }
+    signal(outcome.signal)
   }
 
   function fillRow(item: SidePanelLoginItemId): void {
@@ -213,6 +223,7 @@ panel's visibility or the lock state changes. Authenticators never appear.
       case ThisSiteMemoryKind.Dropped:
         // A dropped list also drops any answer still on its way.
         reads.invalidate()
+        fills.invalidate()
         site = result.state
         break
       case ThisSiteMemoryKind.Kept:
@@ -271,15 +282,16 @@ panel's visibility or the lock state changes. Authenticators never appear.
     {liveText()}
   </p>
 
-  {#if notice === ThisSiteNoticeKind.SiteChanged}
+  {#if notice !== ThisSiteNoticeKind.None}
     <div class="side-panel-site-status">
       <p
         class="side-panel-site-status-failed"
         role="alert"
-        data-testid="side-panel-site-changed"
+        data-testid="side-panel-site-note"
+        data-note={notice}
       >
         <CircleAlert size={14} aria-hidden="true" />
-        {translatePlain(I18N_KEYS.ExtensionActionFillSiteChanged)}
+        {translatePlain(ThisSiteViews.noticeKey(notice))}
       </p>
     </div>
   {/if}
@@ -299,6 +311,7 @@ panel's visibility or the lock state changes. Authenticators never appear.
           {login}
           count={view.body.count}
           {fill}
+          activity={fillActivity}
           onfill={fillRow}
         />
       {/each}
@@ -315,6 +328,25 @@ panel's visibility or the lock state changes. Authenticators never appear.
   {:else if view.body.kind === ThisSiteBodyKind.Restricted}
     <div class="side-panel-site-status">
       <p>{translatePlain(I18N_KEYS.ExtensionActionSiteRestricted)}</p>
+    </div>
+  {:else if view.body.kind === ThisSiteBodyKind.NoFillingVault}
+    <div
+      class="side-panel-site-status"
+      data-testid="side-panel-site-no-filling"
+    >
+      <p>{translatePlain(I18N_KEYS.ExtensionActionSiteNoFillingVault)}</p>
+    </div>
+  {:else if view.body.kind === ThisSiteBodyKind.Locked}
+    <div class="side-panel-site-status" data-testid="side-panel-site-locked">
+      <p>{translatePlain(I18N_KEYS.ExtensionActionSiteLocked)}</p>
+      <button
+        type="button"
+        class="side-panel-text-button"
+        data-testid="side-panel-site-retry"
+        onclick={() => void load()}
+      >
+        {translatePlain(I18N_KEYS.ExtensionActionTryAgain)}
+      </button>
     </div>
   {:else}
     <div class="side-panel-site-status">

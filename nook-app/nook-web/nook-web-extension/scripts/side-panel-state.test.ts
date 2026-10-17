@@ -21,6 +21,7 @@ import {
   SidePanelCeremonyKind,
   SidePanelChipKind,
   SidePanelChipState,
+  SidePanelContinuity,
   SidePanelGateIcon,
   SidePanelHandOffKind,
   SidePanelHandOffTrigger,
@@ -30,6 +31,7 @@ import {
   SidePanelReadFreshness,
   SidePanelReadSequence,
   SidePanelSessionControls,
+  SidePanelSetupOrigin,
   SidePanelVaultsKind,
   SidePanelViewKind,
   SidePanelViews,
@@ -130,10 +132,7 @@ describe('side panel views', () => {
   })
 
   test('setup and both locked views run the shared ceremony in place', () => {
-    const setup: SidePanelView = {
-      kind: SidePanelViewKind.Setup,
-      status: DeviceProtectionStatus.PinSetup,
-    }
+    const setup = SidePanelViews.pinFallback()
     expect(SidePanelViews.ceremony(setup)).toEqual({
       kind: SidePanelCeremonyKind.Shown,
       icon: SidePanelGateIcon.Setup,
@@ -201,6 +200,72 @@ describe('side panel views', () => {
       identitySync: { kind: IdentitySyncKind.Idle },
     }
     expect(SidePanelViews.footer(paired)).toBe(SidePanelSessionControls.Shown)
+  })
+})
+
+describe('side panel continuity', () => {
+  test('a status read elsewhere replaces the view only when its kind changes', () => {
+    const passkey: SidePanelView = {
+      kind: SidePanelViewKind.PasskeyLocked,
+      reason: SidePanelLockReasonKind.None,
+    }
+    const same: Parameters<typeof SidePanelViews.continuity>[0] = {
+      view: passkey,
+      status: DeviceProtectionStatus.Passkey,
+    }
+    expect(SidePanelViews.continuity(same)).toBe(SidePanelContinuity.Same)
+    const unlockedElsewhere: Parameters<typeof SidePanelViews.continuity>[0] = {
+      view: passkey,
+      status: DeviceProtectionStatus.Unlocked,
+    }
+    expect(SidePanelViews.continuity(unlockedElsewhere)).toBe(
+      SidePanelContinuity.Changed,
+    )
+  })
+
+  test('a PIN fallback from the passkey view survives a passkey status read', () => {
+    const fallback = SidePanelViews.pinFallback()
+    expect(fallback).toEqual({
+      kind: SidePanelViewKind.Setup,
+      status: DeviceProtectionStatus.PinSetup,
+      origin: SidePanelSetupOrigin.PinFallback,
+    })
+    for (const status of [
+      DeviceProtectionStatus.Passkey,
+      DeviceProtectionStatus.Missing,
+    ]) {
+      const request: Parameters<typeof SidePanelViews.continuity>[0] = {
+        view: fallback,
+        status,
+      }
+      expect(SidePanelViews.continuity(request)).toBe(SidePanelContinuity.Same)
+    }
+    for (const status of [
+      DeviceProtectionStatus.Pin,
+      DeviceProtectionStatus.Unlocked,
+      DeviceProtectionStatus.Error,
+    ]) {
+      const request: Parameters<typeof SidePanelViews.continuity>[0] = {
+        view: fallback,
+        status,
+      }
+      expect(SidePanelViews.continuity(request)).toBe(
+        SidePanelContinuity.Changed,
+      )
+    }
+    // Setup the extension needs because it has no key follows its status.
+    const lockedRequest: Parameters<typeof SidePanelViews.locked>[0] = {
+      status: DeviceProtectionStatus.Missing,
+      reason: SidePanelLockReasonKind.None,
+    }
+    const setup = SidePanelViews.locked(lockedRequest)
+    const passkeyRead: Parameters<typeof SidePanelViews.continuity>[0] = {
+      view: setup,
+      status: DeviceProtectionStatus.Passkey,
+    }
+    expect(SidePanelViews.continuity(passkeyRead)).toBe(
+      SidePanelContinuity.Changed,
+    )
   })
 })
 

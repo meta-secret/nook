@@ -5,6 +5,7 @@ import { demoBeat } from './pilot-demo-helpers'
 import { DeviceProtectionStatus } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { OpenCompanionLauncherMessageType } from '../../../nook-web-shared/src/extension/companion-launcher-message'
 import { OpenSimpleVaultMessageType } from '../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
+import { ExtensionRuntimeRequestType } from '../../../nook-web-extension/src/lib/extension-runtime-request-type'
 import { ExtensionSessionMessageType } from '../../../nook-web-extension/src/lib/extension-session-message-type'
 import { PairedVaultsMessageType } from '../../../nook-web-extension/src/lib/paired-vaults'
 import {
@@ -39,6 +40,7 @@ type SidePanelDemoSession = {
 // The runtime below runs inside the page, where module imports do not
 // exist: every message type and status it answers travels in with it.
 const sidePanelDemoProtocol = {
+  ensureRuntime: ExtensionRuntimeRequestType.EnsureRuntime,
   status: ExtensionSessionMessageType.Status,
   unlockPin: ExtensionSessionMessageType.UnlockPin,
   lock: ExtensionSessionMessageType.Lock,
@@ -134,6 +136,8 @@ function installSidePanelDemoRuntime(
   }
   const answer = (type: string): unknown => {
     switch (type) {
+      case protocol.ensureRuntime:
+        return { ok: true }
       case protocol.listLogins:
         return listing()
       case protocol.fillLogin:

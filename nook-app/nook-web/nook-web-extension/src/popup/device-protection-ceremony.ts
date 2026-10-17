@@ -99,6 +99,19 @@ export class DeviceProtectionStageMap {
     }
   }
 
+  static noticePlace(
+    stage: DeviceProtectionStage,
+  ): DeviceProtectionNoticePlace {
+    switch (stage) {
+      case DeviceProtectionStage.PinSetup:
+      case DeviceProtectionStage.PinUnlock:
+        return DeviceProtectionNoticePlace.InForm
+      case DeviceProtectionStage.Setup:
+      case DeviceProtectionStage.PasskeyUnlock:
+        return DeviceProtectionNoticePlace.AfterControls
+    }
+  }
+
   static keyKind(stage: DeviceProtectionStage): DeviceProtectionKeyKind {
     switch (stage) {
       case DeviceProtectionStage.PinSetup:
@@ -252,26 +265,37 @@ export type DeviceProtectionNotice =
   | { readonly kind: DeviceProtectionNoticeKind.None }
   | { readonly kind: DeviceProtectionNoticeKind.Shown; readonly key: I18nKey }
 
-/** Focus for the stage just entered, and for the PIN after a failed try:
- * a new notice re-runs the attachment, so each failure selects the PIN. */
-export class DeviceProtectionFocus {
-  constructor(private readonly notice: DeviceProtectionNotice) {}
+/** One try at a ceremony step. A failed try starts the next one, which
+ * returns focus to the stage's first control; a running try leaves focus
+ * where it is. */
+export class DeviceProtectionAttempt {
+  private constructor(private readonly ordinal: number) {}
 
-  /** The stage's first control takes focus when it appears. */
+  static first(): DeviceProtectionAttempt {
+    return new DeviceProtectionAttempt(1)
+  }
+
+  next(): DeviceProtectionAttempt {
+    return new DeviceProtectionAttempt(this.ordinal + 1)
+  }
+}
+
+/** Focus for the stage just entered and after each failed try: a new
+ * attempt re-runs the attachment, nothing else does. */
+export class DeviceProtectionFocus {
+  constructor(readonly attempt: DeviceProtectionAttempt) {}
+
+  /** The stage's first control takes focus. */
   readonly enter = (element: HTMLElement): void => {
     element.focus()
   }
+}
 
-  /** The PIN keeps focus, with its value selected after a failed try. */
-  readonly retry = (element: HTMLInputElement): void => {
-    element.focus()
-    switch (this.notice.kind) {
-      case DeviceProtectionNoticeKind.None:
-        return
-      case DeviceProtectionNoticeKind.Shown:
-        element.select()
-    }
-  }
+/** Where a stage shows its message: a PIN form shows it by its field,
+ * above the button; a passkey stage under its controls. */
+export enum DeviceProtectionNoticePlace {
+  InForm = 'in-form',
+  AfterControls = 'after-controls',
 }
 
 export type DeviceProtectionFailureRequest = {

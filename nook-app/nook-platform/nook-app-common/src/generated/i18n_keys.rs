@@ -712,6 +712,7 @@ pub const EXTENSION_ACTION_CONTINUE_IN_TAB: &str = "extension.action.continue_in
 pub const EXTENSION_ACTION_FILL: &str = "extension.action.fill";
 pub const EXTENSION_ACTION_FILL_DONE: &str = "extension.action.fill_done";
 pub const EXTENSION_ACTION_FILL_FAILED: &str = "extension.action.fill_failed";
+pub const EXTENSION_ACTION_FILL_ITEM_MISSING: &str = "extension.action.fill_item_missing";
 pub const EXTENSION_ACTION_FILL_LOCKED: &str = "extension.action.fill_locked";
 pub const EXTENSION_ACTION_FILL_LOGIN: &str = "extension.action.fill_login";
 pub const EXTENSION_ACTION_FILL_NO_FORM: &str = "extension.action.fill_no_form";
@@ -733,6 +734,8 @@ pub const EXTENSION_ACTION_SITE_EMPTY_HINT: &str = "extension.action.site_empty_
 pub const EXTENSION_ACTION_SITE_FAILED: &str = "extension.action.site_failed";
 pub const EXTENSION_ACTION_SITE_LABEL: &str = "extension.action.site_label";
 pub const EXTENSION_ACTION_SITE_LOADING: &str = "extension.action.site_loading";
+pub const EXTENSION_ACTION_SITE_LOCKED: &str = "extension.action.site_locked";
+pub const EXTENSION_ACTION_SITE_NO_FILLING_VAULT: &str = "extension.action.site_no_filling_vault";
 pub const EXTENSION_ACTION_SITE_NOT_WEB: &str = "extension.action.site_not_web";
 pub const EXTENSION_ACTION_SITE_NOT_WEB_HINT: &str = "extension.action.site_not_web_hint";
 pub const EXTENSION_ACTION_SITE_RESTRICTED: &str = "extension.action.site_restricted";
@@ -846,6 +849,12 @@ pub const EXTENSION_DEVICE_SETUP_NODE_NEXT: &str = "extension.device_setup.node_
 pub const EXTENSION_DEVICE_SETUP_NODE_PASSKEY: &str = "extension.device_setup.node_passkey";
 pub const EXTENSION_DEVICE_SETUP_NODE_PIN: &str = "extension.device_setup.node_pin";
 pub const EXTENSION_DEVICE_SETUP_OPTIONS: &str = "extension.device_setup.options";
+pub const EXTENSION_DEVICE_SETUP_PASSKEY_CREATE_NOT_ALLOWED: &str =
+    "extension.device_setup.passkey_create_not_allowed";
+pub const EXTENSION_DEVICE_SETUP_PASSKEY_UNLOCK_NOT_ALLOWED: &str =
+    "extension.device_setup.passkey_unlock_not_allowed";
+pub const EXTENSION_DEVICE_SETUP_PASSKEY_USE_NOT_ALLOWED: &str =
+    "extension.device_setup.passkey_use_not_allowed";
 pub const EXTENSION_DEVICE_SETUP_PIN_SETUP_DESCRIPTION: &str =
     "extension.device_setup.pin_setup_description";
 pub const EXTENSION_DEVICE_SETUP_PIN_SETUP_TITLE: &str = "extension.device_setup.pin_setup_title";
