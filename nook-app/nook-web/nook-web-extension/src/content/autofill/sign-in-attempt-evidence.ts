@@ -612,19 +612,16 @@ export class SignInAttemptEvidenceSensor {
   }
 
   private functionalColor(channels: RegExpMatchArray): ParsedColor {
-    const [, red, green, blue, alpha] = channels.map((channel) =>
-      String(channel),
-    )
-    switch (parseFloat(String(alpha)) === 0) {
+    switch (parseFloat(String(channels.at(4))) === 0) {
       case true:
         return { kind: ParsedColorKind.Transparent }
       case false:
         return {
           kind: ParsedColorKind.Opaque,
           color: {
-            red: this.channel(red),
-            green: this.channel(green),
-            blue: this.channel(blue),
+            red: this.channel(String(channels.at(1))),
+            green: this.channel(String(channels.at(2))),
+            blue: this.channel(String(channels.at(3))),
           },
         }
     }

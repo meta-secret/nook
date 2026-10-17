@@ -3,7 +3,6 @@ import type {
   SignInAttemptActivity,
   SignInAttemptDocumentRelation,
   SignInAttemptEvent,
-  SignInAttemptFollowUp,
   SignInAttemptLoginReference,
   SignInAttemptPresentation,
   SignInAttemptSubmitBaseline,
@@ -72,10 +71,6 @@ export enum SignInAttemptStartKind {
 export type SignInAttemptBeginRequest = {
   readonly login: SignInAttemptLoginReference
   readonly host: SignInAttemptHost
-}
-export type SignInAttemptSubmission = {
-  readonly result: FormSubmissionResult
-  readonly baseline: SignInAttemptSubmitBaseline
 }
 
 enum SignInAttemptHostBindingKind {
@@ -207,19 +202,25 @@ export class SignInAttemptSession {
     return this.advance(event)
   }
 
-  /** Reported right after the actuator submits, before the document can unload. */
-  submitted(submission: SignInAttemptSubmission): Promise<void> {
-    switch (submission.result) {
+  /**
+   * Reported with the baseline right before the actuator submits, so the
+   * report leaves before a navigating document can unload.
+   */
+  submitting(baseline: SignInAttemptSubmitBaseline): Promise<void> {
+    this.relation = 'SameDocument'
+    const activity: SignInAttemptActivity = { kind: 'Submitted', baseline }
+    return this.activity(activity)
+  }
+
+  /** A submit the actuator could not perform or observe follows the Submitted report. */
+  submission(result: FormSubmissionResult): Promise<void> {
+    switch (result) {
       case FormSubmissionResult.Rejected:
         return this.activity({ kind: 'SubmissionRejected' })
       case FormSubmissionResult.NotObserved:
         return this.activity({ kind: 'SubmissionUnobserved' })
       case FormSubmissionResult.Submitted:
-        this.relation = 'SameDocument'
-        return this.activity({
-          kind: 'Submitted',
-          baseline: submission.baseline,
-        })
+        return Promise.resolve()
     }
   }
 
@@ -400,13 +401,14 @@ export class SignInAttemptSession {
     }
   }
 
-  /** A dismissed attempt is closed: the Pilot returns to its normal fresh state. */
+  /**
+   * A concluded dismissal (checklist Ready) returns the Pilot to its fresh
+   * state; a take-over dismissal (checklist Inactive) stays visible.
+   */
   private display(presentation: SignInAttemptPresentation): void {
     switch (presentation.status) {
       case 'Dismissed':
-        this.stopWatching()
-        this.phaseState = { kind: SignInAttemptPhaseKind.Fresh }
-        this.hostRelease()
+        this.dismissed(presentation)
         return
       case 'SigningIn':
       case 'SignedIn':
@@ -415,6 +417,32 @@ export class SignInAttemptSession {
       case 'TimedOut':
         this.hostPresent()
         return
+    }
+  }
+
+  private dismissed(presentation: SignInAttemptPresentation): void {
+    this.stopWatching()
+    this.phaseState = { kind: SignInAttemptPhaseKind.Fresh }
+    switch (presentation.checklist.status) {
+      case 'Ready':
+        this.hostRelease()
+        return
+      case 'Inactive':
+      case 'Working':
+      case 'Waiting':
+      case 'Attention':
+      case 'Complete':
+        this.hostPresentation(presentation)
+        return
+    }
+  }
+
+  private hostPresentation(presentation: SignInAttemptPresentation): void {
+    switch (this.binding.kind) {
+      case SignInAttemptHostBindingKind.Detached:
+        return
+      case SignInAttemptHostBindingKind.Attached:
+        this.binding.host.present(presentation)
     }
   }
 
@@ -441,14 +469,11 @@ export class SignInAttemptSession {
   }
 
   private updateWatch(presentation: SignInAttemptPresentation): void {
-    switch (
-      presentation.pageEvidence === 'Wanted' &&
-      presentation.checklist.outcome_polling === 'Wait'
-    ) {
-      case false:
+    switch (presentation.pageEvidence) {
+      case 'NotWanted':
         this.stopWatching()
         return
-      case true:
+      case 'Wanted':
         break
     }
     switch (this.watch.kind) {
@@ -468,7 +493,7 @@ export class SignInAttemptSession {
       characterData: true,
     }
     observer.observe(browser.document.documentElement, options)
-    const timer = browser.setInterval(
+    const timer = browser.window.setInterval(
       this.reportEvidence.bind(this),
       OUTCOME_EVIDENCE_POLL_MS,
     )
@@ -481,7 +506,7 @@ export class SignInAttemptSession {
       case EvidenceWatchKind.Stopped:
         return
       case EvidenceWatchKind.Watching:
-        this.dependencies.browser.clearInterval(this.watch.timer)
+        this.dependencies.browser.window.clearInterval(this.watch.timer)
         this.watch.observer.disconnect()
         this.watch = { kind: EvidenceWatchKind.Stopped }
     }

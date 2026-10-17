@@ -85,15 +85,16 @@ describe('service-worker sign-in attempt store', () => {
 
   test('only the top-level frame of this extension and an http(s) tab is admitted', async () => {
     const fixture = await SignInAttemptRouteFixture.create()
-    const forbidden = {
+    const forbidden: SignInAttemptRuntimeResponse = {
       ok: false,
       reason: SignInAttemptFailureReason.ForbiddenSender,
     }
-    for (const sender of [
+    const senders: SignInAttemptSenderFixture[] = [
       { ...topFrame, frameId: 3 },
       { ...topFrame, extensionId: 'other-extension' },
       { ...topFrame, url: 'not a url' },
-    ]) {
+    ]
+    for (const sender of senders) {
       expect(await fixture.respond({ message: beginMessage, sender })).toEqual(
         forbidden,
       )

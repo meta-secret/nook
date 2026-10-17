@@ -163,8 +163,8 @@ export class LoginFillProgress {
   }
 
   /**
-   * Collects the presence-only baseline right before the actuator submits and
-   * hands the result to Chrome in the same task, before the page can unload.
+   * Reports Submitted with the baseline collected right before the actuator
+   * submits, in the same task and before a navigating page can unload.
    */
   submit(submit: LoginFillSubmit): FormSubmissionResult {
     switch (this.request.tracking.kind) {
@@ -174,9 +174,9 @@ export class LoginFillProgress {
       case LoginFillTrackingKind.Attempt:
         break
     }
-    const baseline = signInAttemptEvidenceSensor.baseline()
+    void signInAttemptSession.submitting(signInAttemptEvidenceSensor.baseline())
     const result = submit()
-    void signInAttemptSession.submitted({ result, baseline })
+    void signInAttemptSession.submission(result)
     return result
   }
 

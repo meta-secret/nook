@@ -8,7 +8,10 @@ import {
   type SignInAttemptStorageArea,
 } from '../src/background/service-worker/sign-in-attempt-store'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
-import type { SignInAttemptRuntimeResponse } from '../src/lib/sign-in-attempt-messages'
+import type {
+  SignInAttemptMessage,
+  SignInAttemptRuntimeResponse,
+} from '../src/lib/sign-in-attempt-messages'
 import { BrowserRuntimeMessage } from '../src/lib/browser-runtime-message'
 
 type StoredValues = Record<string, BrowserRuntimeMessageValue>
@@ -46,8 +49,11 @@ export type SignInAttemptSenderFixture = {
   readonly extensionId: string
 }
 
+export type SignInAttemptRouteMessage =
+  | SignInAttemptMessage
+  | BrowserRuntimeMessageValue
 export type SignInAttemptRouteRequest = {
-  readonly message: BrowserRuntimeMessageValue
+  readonly message: SignInAttemptRouteMessage
   readonly sender: SignInAttemptSenderFixture
 }
 

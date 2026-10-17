@@ -206,6 +206,7 @@ export class SignInAttemptRendering {
   private detailKind(element: HTMLElement): SignInAttemptDetailKind {
     switch (element.hidden) {
       case true:
+      case 'until-found':
         return SignInAttemptDetailKind.Absent
       case false:
         return SignInAttemptDetailKind.Shown

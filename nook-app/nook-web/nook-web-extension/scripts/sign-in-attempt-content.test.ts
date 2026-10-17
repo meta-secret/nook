@@ -27,7 +27,8 @@ import {
 
 await companionWasmReady
 
-type RuntimeReply = (response: BrowserRuntimeMessageValue) => void
+type ContentRuntimeReply = SignInAttemptRuntimeResponse | BrowserRuntimeMessageValue
+type RuntimeReply = (response: ContentRuntimeReply) => void
 type ContentRuntimeMessage = { readonly type: string }
 type ContentGlobals = Pick<
   Window,
@@ -107,7 +108,7 @@ class SignInAttemptContentFixture {
   private sendMessage(
     message: ContentRuntimeMessage,
     reply?: RuntimeReply,
-  ): Promise<BrowserRuntimeMessageValue> {
+  ): Promise<ContentRuntimeReply> {
     const delivery = this.deliver(message)
     void delivery.then((response) => reply?.(response))
     return delivery
@@ -115,7 +116,7 @@ class SignInAttemptContentFixture {
 
   private async deliver(
     message: ContentRuntimeMessage,
-  ): Promise<BrowserRuntimeMessageValue> {
+  ): Promise<ContentRuntimeReply> {
     switch (message.type) {
       case SignInAttemptMessageType.Session:
         return this.route.respond({
