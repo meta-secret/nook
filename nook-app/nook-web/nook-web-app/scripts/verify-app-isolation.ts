@@ -10,6 +10,7 @@ import {
   ExtensionManifestBuildKind,
   type ExtensionManifestDeployment,
 } from '../../nook-web-extension/src/manifest'
+import { SIDE_PANEL_PAGE_PATH } from '../../nook-web-extension/src/lib/side-panel-site'
 import { VAULT_WORKSPACE_OUTPUT_ALIASES } from '../../nook-web-shared/vite-config'
 
 const webRoot = resolve(import.meta.dir, '../..')
@@ -472,7 +473,7 @@ const previewManifestArgs: CreateExtensionManifestArgs = {
 const previewManifest = createManifest(previewManifestArgs)
 if (
   // The toolbar button opens the extension's side panel; it has no popup.
-  previewManifest.side_panel.default_path !== 'side-panel/index.html' ||
+  previewManifest.side_panel.default_path !== SIDE_PANEL_PAGE_PATH ||
   'default_popup' in previewManifest.action ||
   previewManifest.background.service_worker !==
     'background/service-worker.js' ||

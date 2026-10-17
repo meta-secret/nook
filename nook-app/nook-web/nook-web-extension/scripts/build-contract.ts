@@ -2,6 +2,7 @@ import {
   ExtensionReleaseChannel,
   type ExtensionChannel,
 } from './channel-identity'
+import { SIDE_PANEL_PAGE_PATH } from '../src/lib/side-panel-site'
 
 export enum ExtensionDiagnosticBuildAvailability {
   Disabled = 'disabled',
@@ -76,7 +77,6 @@ export type ExtensionPageBuildLayout = {
 /** Where each extension page is built from and emitted to. */
 export class ExtensionPageBuildPlan {
   static readonly NOOK_TAB_PAGE_PATH = 'popup/index.html'
-  static readonly SIDE_PANEL_PAGE_PATH = 'side-panel/index.html'
 
   layout(build: ExtensionPageBuild): ExtensionPageBuildLayout {
     switch (build) {
@@ -87,7 +87,9 @@ export class ExtensionPageBuildPlan {
           output: ExtensionPageOutput.Shared,
           inputs: [
             ExtensionPageBuildPlan.NOOK_TAB_PAGE_PATH,
-            ExtensionPageBuildPlan.SIDE_PANEL_PAGE_PATH,
+            // The manifest's side_panel.default_path and the service
+            // worker's side-panel sender check use this same path.
+            SIDE_PANEL_PAGE_PATH,
           ],
         }
       case ExtensionPageBuild.LoginPicker:

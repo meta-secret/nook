@@ -51,6 +51,8 @@ type SidePanelAcknowledgementFields = {
 }
 
 export enum SidePanelWindowKind {
+  /** The browser has not answered yet. */
+  Resolving = 'resolving',
   Known = 'known',
   /** The browser did not name the panel's window: nothing follows it. */
   Unknown = 'unknown',
@@ -58,6 +60,7 @@ export enum SidePanelWindowKind {
 
 /** The browser window this panel is docked in. */
 export type SidePanelWindow =
+  | { readonly kind: SidePanelWindowKind.Resolving }
   | { readonly kind: SidePanelWindowKind.Known; readonly id: number }
   | { readonly kind: SidePanelWindowKind.Unknown }
 
@@ -67,8 +70,11 @@ export enum SidePanelChangeKind {
   TabActivated = 'tab-activated',
   /** The active tab of the panel's window navigated or finished loading. */
   TabNavigated = 'tab-navigated',
-  /** The panel became visible or took focus again. */
+  /** The panel became visible again. */
   PanelShown = 'panel-shown',
+  /** The panel took focus, as a click into it does: re-read state only, so
+   * the list under the pointer stays put. */
+  PanelFocused = 'panel-focused',
   /** The panel was hidden: drop what it showed about the page. */
   PanelHidden = 'panel-hidden',
 }
@@ -165,7 +171,7 @@ class SidePanelFollower {
   }
 
   private readonly focused = (): void => {
-    this.request.onchange(SidePanelChangeKind.PanelShown)
+    this.request.onchange(SidePanelChangeKind.PanelFocused)
   }
 
   start(): SidePanelRelease {
@@ -176,6 +182,7 @@ class SidePanelFollower {
         chrome.tabs.onActivated.addListener(this.activated)
         chrome.tabs.onUpdated.addListener(this.updated)
         break
+      case SidePanelWindowKind.Resolving:
       case SidePanelWindowKind.Unknown:
         break
     }
@@ -192,6 +199,7 @@ class SidePanelFollower {
   private windowMatch(windowId: number): SidePanelWindowMatch {
     const { window: panelWindow } = this.request
     switch (panelWindow.kind) {
+      case SidePanelWindowKind.Resolving:
       case SidePanelWindowKind.Unknown:
         return SidePanelWindowMatch.Other
       case SidePanelWindowKind.Known:

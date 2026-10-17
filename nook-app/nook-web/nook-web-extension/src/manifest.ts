@@ -1,4 +1,5 @@
 import { SimpleVaultTarget } from './lib/simple-vault-target'
+import { SIDE_PANEL_PAGE_PATH } from './lib/side-panel-site'
 import {
   nook_vault_app_exclude_match_patterns,
   sentinel_vault_match_patterns,
@@ -143,7 +144,7 @@ export function createManifest(
       default_icon: iconSet,
     },
     side_panel: {
-      default_path: 'side-panel/index.html',
+      default_path: SIDE_PANEL_PAGE_PATH,
     },
     background: {
       service_worker: 'background/service-worker.js',

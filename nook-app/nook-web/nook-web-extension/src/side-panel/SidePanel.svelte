@@ -39,6 +39,7 @@ closes it.
   import SidePanelGate from './SidePanelGate.svelte'
   import SidePanelHeader from './SidePanelHeader.svelte'
   import SidePanelIdentities from './SidePanelIdentities.svelte'
+  import ThisSite from './ThisSite.svelte'
   import {
     SidePanelAlertKind,
     SidePanelCeremonyKind,
@@ -64,6 +65,12 @@ closes it.
     SidePanelWindowKind,
     type SidePanelWindow,
   } from './side-panel-runtime'
+
+  /** A status read, and why the panel may now be locked. */
+  type SidePanelArrival = {
+    readonly status: DeviceProtectionStatus
+    readonly reason: SidePanelLockReasonKind
+  }
 
   type SidePanelProps = {
     readonly i18n: ExtensionI18n
@@ -91,7 +98,7 @@ closes it.
   let alert = $state<SidePanelAlert>({ kind: SidePanelAlertKind.None })
   let handOff = $state<SidePanelHandOff>({ kind: SidePanelHandOffKind.Idle })
   let panelWindow = $state<SidePanelWindow>({
-    kind: SidePanelWindowKind.Unknown,
+    kind: SidePanelWindowKind.Resolving,
   })
   /** A new entry into the ceremony views starts the ceremony afresh. */
   let ceremonyEntry = $state(0)
@@ -151,18 +158,48 @@ closes it.
       case 'Failure':
         failed(PopupInitializationPhase.DeviceProtectionStatus)
         return
-      case 'Success':
-        await arrive(status.success)
+      case 'Success': {
+        const arrival: SidePanelArrival = {
+          status: status.success,
+          reason: SidePanelLockReasonKind.None,
+        }
+        await arrive(arrival)
+      }
     }
   }
 
-  async function arrive(status: DeviceProtectionStatus): Promise<void> {
-    switch (SidePanelViews.kind(status) === view.kind) {
+  function onSiteLocked(reason: SidePanelLockReasonKind): void {
+    void siteLocked(reason)
+  }
+
+  /** This site found the extension locked: re-read which lock it is. */
+  async function siteLocked(reason: SidePanelLockReasonKind): Promise<void> {
+    const read = statusReads.begin()
+    const status = await readStatus()
+    switch (read.freshness()) {
+      case SidePanelReadFreshness.Stale:
+        return
+      case SidePanelReadFreshness.Current:
+        break
+    }
+    switch (status._tag) {
+      case 'Failure':
+        failed(PopupInitializationPhase.DeviceProtectionStatus)
+        return
+      case 'Success': {
+        const arrival: SidePanelArrival = { status: status.success, reason }
+        await arrive(arrival)
+      }
+    }
+  }
+
+  async function arrive(arrival: SidePanelArrival): Promise<void> {
+    switch (SidePanelViews.kind(arrival.status) === view.kind) {
       case true:
         stay()
         return
       case false:
-        await enter(status)
+        await enter(arrival)
     }
   }
 
@@ -180,7 +217,8 @@ closes it.
     }
   }
 
-  async function enter(status: DeviceProtectionStatus): Promise<void> {
+  async function enter(arrival: SidePanelArrival): Promise<void> {
+    const { status, reason } = arrival
     clearMessages()
     switch (SidePanelViews.kind(status)) {
       case SidePanelViewKind.Unlocked:
@@ -194,7 +232,7 @@ closes it.
     }
     const request: Parameters<typeof SidePanelViews.locked>[0] = {
       status,
-      reason: SidePanelLockReasonKind.None,
+      reason,
     }
     view = SidePanelViews.locked(request)
     ceremonyEntry += 1
@@ -375,8 +413,13 @@ closes it.
       case 'Failure':
         failed(PopupInitializationPhase.DeviceProtectionStatus)
         return
-      case 'Success':
-        await enter(status.success)
+      case 'Success': {
+        const arrival: SidePanelArrival = {
+          status: status.success,
+          reason: SidePanelLockReasonKind.None,
+        }
+        await enter(arrival)
+      }
     }
   }
 
@@ -410,6 +453,7 @@ closes it.
       case SidePanelChangeKind.TabActivated:
       case SidePanelChangeKind.TabNavigated:
       case SidePanelChangeKind.PanelShown:
+      case SidePanelChangeKind.PanelFocused:
         void refresh()
         return
       case SidePanelChangeKind.PanelHidden:
@@ -501,6 +545,12 @@ closes it.
           </p>
         </div>
       {:else if view.vaults.kind === SidePanelVaultsKind.Paired}
+        <ThisSite
+          {i18n}
+          {panelWindow}
+          onlocked={onSiteLocked}
+          onunpaired={() => void loadVaults()}
+        />
         <SidePanelIdentities
           {i18n}
           groups={view.vaults.groups}

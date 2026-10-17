@@ -54,7 +54,11 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     path.join(extensionDir, 'manifest.json'),
     'utf8',
   )
-  expect(manifestText).toMatch(/"default_popup"\s*:\s*"popup\/panel\.html"/u)
+  // The toolbar button opens the side panel; there is no popup.
+  expect(manifestText).not.toMatch(/"default_popup"/u)
+  expect(manifestText).toMatch(
+    /"side_panel"\s*:\s*\{\s*"default_path"\s*:\s*"side-panel\/index\.html"/u,
+  )
 
   const loginServer = await startLoginServer()
   const userDataDir = testInfo.outputPath('chromium-profile')
@@ -270,7 +274,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await expect(
       widget.getByRole('button', { name: 'Sign in with Nook' }),
     ).toBeVisible()
-    // One action on the page: the vault opens from the toolbar panel.
+    // One action on the page: the vault opens from the side panel.
     await expect(
       widget.getByRole('button', { name: 'Open vault' }),
     ).toHaveCount(0)

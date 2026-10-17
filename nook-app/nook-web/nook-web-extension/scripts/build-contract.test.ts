@@ -13,6 +13,7 @@ import {
   ExtensionPageOutput,
   extensionEntrypointBuildPolicy,
 } from './build-contract'
+import { SIDE_PANEL_PAGE_PATH } from '../src/lib/side-panel-site'
 
 test('uses classic IIFE output for content scripts and module output elsewhere', () => {
   expect(
@@ -110,7 +111,7 @@ test('builds the side panel with the Nook tab and no toolbar popup page', () => 
     root: 'src',
     outDir: '',
     output: ExtensionPageOutput.Shared,
-    inputs: ['popup/index.html', 'side-panel/index.html'],
+    inputs: ['popup/index.html', SIDE_PANEL_PAGE_PATH],
   })
   expect(pages.inputs).not.toContain('popup/panel.html')
   expect(plan.layout(ExtensionPageBuild.LoginPicker)).toEqual({

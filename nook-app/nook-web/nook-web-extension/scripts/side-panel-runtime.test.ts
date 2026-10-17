@@ -235,7 +235,7 @@ describe('side panel browser runtime', () => {
       SidePanelChangeKind.TabNavigated,
       SidePanelChangeKind.PanelHidden,
       SidePanelChangeKind.PanelShown,
-      SidePanelChangeKind.PanelShown,
+      SidePanelChangeKind.PanelFocused,
     ])
     expect(fixture.runtimeListeners).toEqual([])
     expect(fixture.tabMessages).toEqual([])

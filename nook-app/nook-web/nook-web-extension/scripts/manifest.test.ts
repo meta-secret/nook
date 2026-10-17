@@ -10,6 +10,7 @@ import {
   ExtensionPermission,
   type ExtensionManifestDeployment,
 } from '../src/manifest'
+import { SIDE_PANEL_PAGE_PATH } from '../src/lib/side-panel-site'
 
 const defaultManifestArgs: CreateExtensionManifestArgs = {
   kind: ExtensionManifestBuildKind.StoreRelease,
@@ -42,7 +43,7 @@ const environments = [
   },
 ] as const
 
-const sidePanelPagePath = 'side-panel/index.html'
+const sidePanelPagePath = SIDE_PANEL_PAGE_PATH
 
 function channelManifest() {
   const manifestArgs: CreateExtensionManifestArgs = {

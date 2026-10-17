@@ -7,6 +7,11 @@ import { OpenCompanionLauncherMessageType } from '../../../nook-web-shared/src/e
 import { OpenSimpleVaultMessageType } from '../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
 import { ExtensionSessionMessageType } from '../../../nook-web-extension/src/lib/extension-session-message-type'
 import { PairedVaultsMessageType } from '../../../nook-web-extension/src/lib/paired-vaults'
+import {
+  SidePanelLoginFillKind,
+  SidePanelSiteListingKind,
+  SidePanelSiteMessageType,
+} from '../../../nook-web-extension/src/lib/side-panel-site'
 
 const demoDir = path.dirname(fileURLToPath(import.meta.url))
 const extensionDist = path.resolve(demoDir, '../../../nook-web-extension/dist')
@@ -18,9 +23,17 @@ enum SidePanelDemoVaults {
   None = 'none',
 }
 
+/** What the active tab of the panel's window shows. */
+enum SidePanelDemoSite {
+  Matches = 'matches',
+  Empty = 'empty',
+  NonWeb = 'non-web',
+}
+
 type SidePanelDemoSession = {
   readonly initialStatus: DeviceProtectionStatus
   readonly vaults: SidePanelDemoVaults
+  readonly site: SidePanelDemoSite
 }
 
 // The runtime below runs inside the page, where module imports do not
@@ -36,7 +49,15 @@ const sidePanelDemoProtocol = {
   unlocked: DeviceProtectionStatus.Unlocked,
   pinLocked: DeviceProtectionStatus.Pin,
   pairedVaultList: SidePanelDemoVaults.Paired,
-}
+  listLogins: SidePanelSiteMessageType.ListLogins,
+  fillLogin: SidePanelSiteMessageType.FillLogin,
+  ready: SidePanelSiteListingKind.Ready,
+  nonWeb: SidePanelSiteListingKind.NonWeb,
+  filled: SidePanelLoginFillKind.Filled,
+  siteMatches: SidePanelDemoSite.Matches,
+  siteEmpty: SidePanelDemoSite.Empty,
+  siteNonWeb: SidePanelDemoSite.NonWeb,
+} as const
 
 type SidePanelDemoRuntimeArgument = SidePanelDemoSession & {
   readonly protocol: typeof sidePanelDemoProtocol
@@ -81,8 +102,42 @@ function installSidePanelDemoRuntime(
       managesPasskeys: false,
     },
   ]
+  const savedLogins = [
+    {
+      itemId: { vaultStoreId: 'side-panel-demo-personal', secretId: 'login-1' },
+      username: 'alice.martin@example.com',
+      vaultLabel: 'Personal',
+    },
+    {
+      itemId: { vaultStoreId: 'side-panel-demo-family', secretId: 'login-2' },
+      username: 'alice+family@example.com',
+      vaultLabel: 'Family',
+    },
+  ]
+  const listing = (): unknown => {
+    switch (session.site) {
+      case protocol.siteMatches:
+        return {
+          kind: protocol.ready,
+          display_host: 'accounts.example.com',
+          items: savedLogins,
+        }
+      case protocol.siteEmpty:
+        return {
+          kind: protocol.ready,
+          display_host: 'news.example.org',
+          items: [],
+        }
+      case protocol.siteNonWeb:
+        return { kind: protocol.nonWeb }
+    }
+  }
   const answer = (type: string): unknown => {
     switch (type) {
+      case protocol.listLogins:
+        return listing()
+      case protocol.fillLogin:
+        return { kind: protocol.filled }
       case protocol.status:
         return { ok: true, status, device }
       case protocol.unlockPin:
@@ -171,6 +226,7 @@ test('sets up in place, starting from the passkey the person already has', async
     session: {
       initialStatus: DeviceProtectionStatus.Missing,
       vaults: SidePanelDemoVaults.None,
+      site: SidePanelDemoSite.Matches,
     },
   })
   await expect(page.getByTestId('side-panel-state')).toHaveText('Not set up')
@@ -196,6 +252,7 @@ test('unlocks a PIN in place, lists identities, and locks again', async ({
     session: {
       initialStatus: DeviceProtectionStatus.Pin,
       vaults: SidePanelDemoVaults.Paired,
+      site: SidePanelDemoSite.Matches,
     },
   })
   await expect(page.getByTestId('side-panel-state')).toHaveText('Locked')
@@ -229,6 +286,7 @@ test('unlocks with the connected passkey in place', async ({ page }) => {
     session: {
       initialStatus: DeviceProtectionStatus.Passkey,
       vaults: SidePanelDemoVaults.Paired,
+      site: SidePanelDemoSite.Matches,
     },
   })
   await expect(page.getByTestId('side-panel-state')).toHaveText('Locked')
@@ -244,6 +302,7 @@ test('leads with connecting an identity when none is connected', async ({
     session: {
       initialStatus: DeviceProtectionStatus.Unlocked,
       vaults: SidePanelDemoVaults.None,
+      site: SidePanelDemoSite.Matches,
     },
   })
   await expect(page.getByTestId('side-panel-state')).toHaveText('Unlocked')
@@ -251,5 +310,64 @@ test('leads with connecting an identity when none is connected', async ({
     'Connect an identity',
   )
   await expect(page.getByTestId('side-panel-manage')).toBeVisible()
+  await demoBeat(page)
+})
+
+test('leads with This site and fills a saved login without signing in', async ({
+  page,
+}) => {
+  await openSidePanel({
+    page,
+    session: {
+      initialStatus: DeviceProtectionStatus.Unlocked,
+      vaults: SidePanelDemoVaults.Paired,
+      site: SidePanelDemoSite.Matches,
+    },
+  })
+  await expect(page.getByTestId('side-panel-site-host')).toHaveText(
+    'accounts.example.com',
+  )
+  await expect(page.getByTestId('side-panel-login')).toHaveCount(2)
+  await demoBeat(page)
+  await page
+    .getByRole('button', {
+      name: 'Fill alice.martin@example.com from Personal',
+    })
+    .click()
+  await expect(page.getByTestId('side-panel-fill-result')).toHaveText(
+    'Filled. Review the page, then sign in.',
+  )
+  await demoBeat(page)
+})
+
+test('names the site when it has no saved logins', async ({ page }) => {
+  await openSidePanel({
+    page,
+    session: {
+      initialStatus: DeviceProtectionStatus.Unlocked,
+      vaults: SidePanelDemoVaults.Paired,
+      site: SidePanelDemoSite.Empty,
+    },
+  })
+  await expect(page.getByTestId('side-panel-site-empty')).toContainText(
+    'No saved logins for news.example.org.',
+  )
+  await expect(page.getByTestId('side-panel-fill')).toHaveCount(0)
+  await demoBeat(page)
+})
+
+test('offers no Fill in a tab without a website', async ({ page }) => {
+  await openSidePanel({
+    page,
+    session: {
+      initialStatus: DeviceProtectionStatus.Unlocked,
+      vaults: SidePanelDemoVaults.Paired,
+      site: SidePanelDemoSite.NonWeb,
+    },
+  })
+  await expect(page.getByTestId('side-panel-site-host')).toHaveText(
+    'No website in this tab',
+  )
+  await expect(page.getByTestId('side-panel-fill')).toHaveCount(0)
   await demoBeat(page)
 })
