@@ -128,8 +128,13 @@ export class LoginFillProgress {
       start: SignInAttemptStartKind.Started,
     }
     switch (selection.checklist.kind) {
-      case LoginChecklistControlKind.Unowned:
-        return LoginFillProgress.unownedTracking(untracked)
+      case LoginChecklistControlKind.Unowned: {
+        const unowned: LoginFillUnownedSelection = {
+          untracked,
+          login: selection.request.login,
+        }
+        return LoginFillProgress.unownedTracking(unowned)
+      }
       case LoginChecklistControlKind.Owned:
         break
     }
@@ -155,20 +160,25 @@ export class LoginFillProgress {
 
   /**
    * Only the approved Google username advance runs untracked at top level.
-   * A top-level fill whose control no login Pilot owns has no attempt host,
-   * so it does not fill; an iframe keeps its existing untracked path.
+   * A top-level fill whose control no login Pilot owns still begins the
+   * tab's attempt (attached by the next Pilot mount); an iframe keeps its
+   * existing untracked path.
    */
-  private static unownedTracking(
-    untracked: LoginFillTrackingStart,
-  ): LoginFillTrackingStart {
+  private static async unownedTracking(
+    selection: LoginFillUnownedSelection,
+  ): Promise<LoginFillTrackingStart> {
     switch (signInAttemptSession.scope()) {
       case SignInAttemptScope.Frame:
-        return untracked
+        return selection.untracked
       case SignInAttemptScope.TopDocument:
-        return {
-          tracking: { kind: LoginFillTrackingKind.Untracked },
-          start: SignInAttemptStartKind.Unavailable,
-        }
+        break
+    }
+    const start = await signInAttemptSession.beginDetached(selection.login)
+    switch (start) {
+      case SignInAttemptStartKind.Started:
+        return { tracking: { kind: LoginFillTrackingKind.Attempt }, start }
+      case SignInAttemptStartKind.Unavailable:
+        return { tracking: { kind: LoginFillTrackingKind.Untracked }, start }
     }
   }
 
@@ -358,6 +368,10 @@ type LoginFillAttemptActivity =
 type LoginFillTrackingSelection = {
   readonly checklist: LoginChecklistControl
   readonly request: LoginFillProgressRequest
+}
+type LoginFillUnownedSelection = {
+  readonly untracked: LoginFillTrackingStart
+  readonly login: SignInAttemptLoginReference
 }
 type LoginFillTrackingStart = {
   readonly tracking: LoginFillTracking

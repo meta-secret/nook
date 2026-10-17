@@ -26,6 +26,12 @@ import {
   type SignInAttemptRouteRequest,
   type SignInAttemptSubmitCapture,
 } from './sign-in-attempt-observation'
+import {
+  ColorProperty,
+  ParsedColorKind,
+  SignInPageColorReader,
+  type ColorProjection,
+} from './sign-in-attempt-colors'
 import { WIDGET_HOST_ID } from './workflow-ui'
 
 enum AuthContainerKind {
@@ -79,14 +85,6 @@ type LinkProjection = {
   readonly element: HTMLAnchorElement
   readonly index: SignInPageLinkIndex
 }
-type ColorProjection = {
-  readonly element: Element
-  readonly property: ColorProperty
-}
-enum ColorProperty {
-  Foreground = 'color',
-  Background = 'background-color',
-}
 enum ElementPresence {
   Rendered = 'rendered',
   Hidden = 'hidden',
@@ -95,28 +93,6 @@ enum ElementDisplay {
   Inline = 'inline',
   Block = 'block',
 }
-enum ParsedColorKind {
-  Opaque = 'opaque',
-  Transparent = 'transparent',
-  Unreadable = 'unreadable',
-}
-enum PainterKind {
-  Unprepared = 'unprepared',
-  Ready = 'ready',
-  Unavailable = 'unavailable',
-}
-type Painter =
-  | { readonly kind: PainterKind.Unprepared }
-  | {
-      readonly kind: PainterKind.Ready
-      readonly context: CanvasRenderingContext2D
-    }
-  | { readonly kind: PainterKind.Unavailable }
-type ParsedColor =
-  | { readonly kind: ParsedColorKind.Opaque; readonly color: SignInPageColor }
-  | { readonly kind: ParsedColorKind.Transparent }
-  | { readonly kind: ParsedColorKind.Unreadable }
-
 export enum SignInAttemptLinkTargetKind {
   Available = 'available',
   Unavailable = 'unavailable',
@@ -166,15 +142,14 @@ export class SignInAttemptEvidenceSensor {
   static readonly SUCCESS_MARKER_SELECTOR =
     AUTHENTICATION_SUCCESS_MARKER_SELECTOR
   static readonly ERROR_MARKER_SELECTOR = '[data-nook-auth-outcome="error"]'
-  static readonly PAINT_SETTINGS: CanvasRenderingContext2DSettings = {
-    willReadFrequently: true,
-  }
-  static readonly UNPAINTED = 'rgba(0, 0, 0, 0)'
-  private painter: Painter = { kind: PainterKind.Unprepared }
   /** CSS initial canvas colors, observed when no ancestor paints a color. */
   static readonly CANVAS: SignInPageColor = { red: 255, green: 255, blue: 255 }
 
-  constructor(private readonly browser: typeof globalThis) {}
+  private readonly colors: SignInPageColorReader
+
+  constructor(private readonly browser: typeof globalThis) {
+    this.colors = new SignInPageColorReader(browser)
+  }
 
   /**
    * Facts collected synchronously right before submission (Rust keeps only
@@ -712,7 +687,7 @@ export class SignInAttemptEvidenceSensor {
       element,
       property: ColorProperty.Foreground,
     }
-    const foreground = this.color(foregroundRequest)
+    const foreground = this.colors.color(foregroundRequest)
     switch (foreground.kind) {
       case ParsedColorKind.Transparent:
       case ParsedColorKind.Unreadable:
@@ -772,7 +747,7 @@ export class SignInAttemptEvidenceSensor {
         element: current,
         property: ColorProperty.Background,
       }
-      const parsed = this.color(request)
+      const parsed = this.colors.color(request)
       switch (parsed.kind) {
         case ParsedColorKind.Opaque:
           return parsed.color
@@ -782,122 +757,6 @@ export class SignInAttemptEvidenceSensor {
       }
     }
     return SignInAttemptEvidenceSensor.CANVAS
-  }
-
-  private color(projection: ColorProjection): ParsedColor {
-    const value = this.browser
-      .getComputedStyle(projection.element)
-      .getPropertyValue(projection.property)
-      .trim()
-      .toLowerCase()
-    const functional = value.match(
-      /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:\s*[,/]\s*([\d.]+%?))?\s*\)$/,
-    )
-    const hex = value.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/)
-    switch (true) {
-      case value === 'transparent':
-        return { kind: ParsedColorKind.Transparent }
-      case functional instanceof Array:
-        return this.functionalColor(functional)
-      case hex instanceof Array:
-        return this.hexColor(String(hex.at(1)))
-      case true:
-        break
-    }
-    return this.paintedColor(value)
-  }
-
-  /**
-   * Modern color syntaxes (oklch, lab, color(), color-mix) are normalized to
-   * sRGB by the browser itself: paint one pixel and read it back.
-   */
-  private paintedColor(value: string): ParsedColor {
-    const context = this.paintContext()
-    switch (context) {
-      case false:
-        return { kind: ParsedColorKind.Unreadable }
-      default:
-        break
-    }
-    context.clearRect(0, 0, 1, 1)
-    context.fillStyle = SignInAttemptEvidenceSensor.UNPAINTED
-    context.fillStyle = value
-    context.fillRect(0, 0, 1, 1)
-    const pixel = context.getImageData(0, 0, 1, 1).data
-    switch (pixel[3] === 0) {
-      case true:
-        return { kind: ParsedColorKind.Transparent }
-      case false:
-        return {
-          kind: ParsedColorKind.Opaque,
-          color: {
-            red: Number(pixel[0]),
-            green: Number(pixel[1]),
-            blue: Number(pixel[2]),
-          },
-        }
-    }
-  }
-
-  private paintContext(): CanvasRenderingContext2D | false {
-    switch (this.painter.kind) {
-      case PainterKind.Ready:
-        return this.painter.context
-      case PainterKind.Unavailable:
-        return false
-      case PainterKind.Unprepared:
-        break
-    }
-    const canvas = this.browser.document.createElement('canvas')
-    canvas.width = 1
-    canvas.height = 1
-    const context = canvas.getContext(
-      '2d',
-      SignInAttemptEvidenceSensor.PAINT_SETTINGS,
-    )
-    switch (true) {
-      case context instanceof Object:
-        this.painter = { kind: PainterKind.Ready, context }
-        return context
-      case true:
-        break
-    }
-    this.painter = { kind: PainterKind.Unavailable }
-    return false
-  }
-
-  private functionalColor(channels: RegExpMatchArray): ParsedColor {
-    switch (parseFloat(String(channels.at(4))) === 0) {
-      case true:
-        return { kind: ParsedColorKind.Transparent }
-      case false:
-        return {
-          kind: ParsedColorKind.Opaque,
-          color: {
-            red: this.channel(String(channels.at(1))),
-            green: this.channel(String(channels.at(2))),
-            blue: this.channel(String(channels.at(3))),
-          },
-        }
-    }
-  }
-
-  private hexColor(hex: string): ParsedColor {
-    const full = Array.from(hex)
-      .flatMap((digit) => Array<string>(6 / hex.length).fill(digit))
-      .join('')
-    return {
-      kind: ParsedColorKind.Opaque,
-      color: {
-        red: parseInt(full.slice(0, 2), 16),
-        green: parseInt(full.slice(2, 4), 16),
-        blue: parseInt(full.slice(4, 6), 16),
-      },
-    }
-  }
-
-  private channel(value: string): number {
-    return Math.max(0, Math.min(255, Math.round(parseFloat(value))))
   }
 
   /** Links inside captured messages first, then inside and near the form. */

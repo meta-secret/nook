@@ -278,6 +278,28 @@ export class SignInAttemptSession {
     }
   }
 
+  /**
+   * A top-level fill whose control no mounted login Pilot owns still begins
+   * the tab's attempt; the next Pilot that mounts on this or the following
+   * document attaches to it.
+   */
+  async beginDetached(
+    login: SignInAttemptLoginReference,
+  ): Promise<SignInAttemptStartKind> {
+    this.observation = SignInAttemptObservation.NEW_DOCUMENT
+    this.pendingReset = { kind: PendingResetKind.None }
+    this.binding = { kind: SignInAttemptHostBindingKind.Detached }
+    const delivery = await this.dependencies.transport.begin(login)
+    switch (delivery.kind) {
+      case SignInAttemptDeliveryKind.Presented:
+        this.accept(delivery)
+        return SignInAttemptStartKind.Started
+      case SignInAttemptDeliveryKind.Fresh:
+      case SignInAttemptDeliveryKind.Unavailable:
+        return SignInAttemptStartKind.Unavailable
+    }
+  }
+
   activity(activity: SignInAttemptActivity): Promise<void> {
     const event: SignInAttemptEvent = { kind: 'Activity', activity }
     return this.advance(event)
