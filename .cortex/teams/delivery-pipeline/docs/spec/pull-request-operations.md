@@ -12,8 +12,7 @@ Supply the [Delivery Pipeline policy](functional-ownership.md),
 [authorization packet](authorization-handshake.md), and
 [Nook lifecycle integration](pull-request-lifecycle.md) with the
 project and library roots. The Feature Gizmo retains functional acceptance and
-authorizes each operation. In single-agent mode, the current agent applies this
-composition directly.
+authorizes each operation.
 
 - **Prohibited:** interpret a publish-only packet as permission to merge or deploy.
 - **Preferred:** publish the assigned feature PR into `main`, return its evidence,
@@ -34,4 +33,4 @@ integration remain with their assigned owners.
 started observing checks, or repair product code from a PR mechanics assignment.
 
 **Preferred:** consume the existing run's complete terminal inventory and return
-repair needs to the feature owner. Apply CI/CD locally in single-agent mode.
+repair needs to the feature owner.

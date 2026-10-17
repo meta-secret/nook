@@ -86,7 +86,7 @@ selectors directly under the root circuit breaker.
 For feature-branch publication, PR check observation, and squash merge, Team
 Gizmo assigns PR Lifecycle under Feature Gizmo authorization. CI/CD returns run
 evidence through Team Gizmo for PR observation. Neither role decides product
-policy or readiness. Single-agent sessions perform these responsibilities locally.
+policy or readiness.
 
 - **Prohibited:** dispatch a second run solely because PR observation changed
   owners, or validate a requested selector against a local catalog.
