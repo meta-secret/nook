@@ -1,4 +1,8 @@
-import type { SignInAttemptLoginReference } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import type {
+  AuthenticationLoginChecklistActivity,
+  SignInAttemptActivity,
+  SignInAttemptLoginReference,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { AuthenticationWorkflowActivity } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   FormSubmissionResult,
@@ -82,9 +86,6 @@ export type LoginFillSubmit = () => FormSubmissionResult
 
 /** Reports one fill-and-submit to the Pilot: attempt events or the in-memory checklist. */
 export class LoginFillProgress {
-  static readonly FILLED: LoginFillAttemptActivity = { kind: 'Filled' }
-  static readonly FILL_FAILED: LoginFillAttemptActivity = { kind: 'FillFailed' }
-
   private constructor(private readonly request: LoginFillTrackingRequest) {}
 
   /** Progress before the fill path is chosen: the existing Pilot copy only. */
@@ -189,12 +190,12 @@ export class LoginFillProgress {
     }
     this.showFlight(flight)
     this.showStatus(BROWSER_MESSAGE_KEYS.WidgetFillFailed)
-    await this.report(LoginFillProgress.FILL_FAILED)
+    await this.report(LoginFillOutcome.FillFailed)
     return false
   }
 
   async filled(): Promise<void> {
-    await this.report(LoginFillProgress.FILLED)
+    await this.report(LoginFillOutcome.Filled)
   }
 
   async submitting(): Promise<void> {
@@ -242,7 +243,7 @@ export class LoginFillProgress {
   }
 
   async aborted(): Promise<void> {
-    await this.report(LoginFillProgress.FILL_FAILED)
+    await this.report(LoginFillOutcome.FillFailed)
   }
 
   private async submissionRejected(): Promise<false> {
@@ -300,16 +301,42 @@ export class LoginFillProgress {
   }
 
   /** Attempt activity goes to Rust; the in-memory checklist keeps its own vocabulary. */
-  private async report(activity: LoginFillAttemptActivity): Promise<void> {
+  private async report(outcome: LoginFillOutcome): Promise<void> {
     switch (this.request.tracking.kind) {
       case LoginFillTrackingKind.Attempt:
-        await signInAttemptSession.activity(activity)
+        await signInAttemptSession.activity(
+          LoginFillProgress.attemptActivity(outcome),
+        )
         return
       case LoginFillTrackingKind.Checklist:
-        await this.request.tracking.progress.activity(activity.kind)
+        await this.request.tracking.progress.activity(
+          LoginFillProgress.checklistActivity(outcome),
+        )
         return
       case LoginFillTrackingKind.Untracked:
         return
+    }
+  }
+
+  private static attemptActivity(
+    outcome: LoginFillOutcome,
+  ): SignInAttemptActivity {
+    switch (outcome) {
+      case LoginFillOutcome.Filled:
+        return { kind: 'Filled' }
+      case LoginFillOutcome.FillFailed:
+        return { kind: 'FillFailed' }
+    }
+  }
+
+  private static checklistActivity(
+    outcome: LoginFillOutcome,
+  ): AuthenticationLoginChecklistActivity {
+    switch (outcome) {
+      case LoginFillOutcome.Filled:
+        return 'Filled'
+      case LoginFillOutcome.FillFailed:
+        return 'FillFailed'
     }
   }
 
@@ -363,8 +390,11 @@ export class LoginFillProgress {
   }
 }
 
-type LoginFillAttemptActivity =
-  { readonly kind: 'Filled' } | { readonly kind: 'FillFailed' }
+/** Fill outcomes reported to the Rust attempt or the iframe checklist. */
+enum LoginFillOutcome {
+  Filled = 'filled',
+  FillFailed = 'fill-failed',
+}
 type LoginFillTrackingSelection = {
   readonly checklist: LoginChecklistControl
   readonly request: LoginFillProgressRequest

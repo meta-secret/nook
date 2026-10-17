@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { Window } from 'happy-dom'
 import {
   ColorProperty,
   ParsedColorKind,
@@ -32,9 +33,12 @@ type PaintingBrowserRequest = {
 }
 
 describe('sign-in page colour facts', () => {
+  // The stubbed browser never inspects the element it is asked about.
+  const browser = new Window()
+  const globals: Pick<Window, 'document'> = { document: browser.document }
+  Object.assign(globalThis, globals)
   const projection: ColorProjection = {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- the stubbed browser never inspects the element.
-    element: Object.create(null),
+    element: document.createElement('p'),
     property: ColorProperty.Foreground,
   }
 
