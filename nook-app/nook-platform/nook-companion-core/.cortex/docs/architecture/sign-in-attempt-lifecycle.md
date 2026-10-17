@@ -218,7 +218,10 @@ existing `AuthenticationWorkflowActivity` and matches the rows:
    field that was absent at submit is `ChallengeRequired(OneTimeCode)`.
 4. A current-password field that was absent at submit, with no marker and no
    fresh error-looking message, is `StepAdvanced`: an email-first step was
-   accepted and the next step starts fresh.
+   accepted and the next step starts fresh. The same holds for an identifier
+   chain: a username-only step whose `NewDocument`, on this origin or another
+   same-site origin, again shows a username-only step without a marker, a
+   fresh error-looking message (such as "No account found"), or a challenge.
 5. The explicit success marker is `SignedIn`.
 6. A page with no auth fields and no error-looking message is `SignedIn`
    once that evidence has been stable for the existing 750 ms interval
@@ -230,8 +233,8 @@ existing `AuthenticationWorkflowActivity` and matches the rows:
    follows the submitted-login save precedent, where removing fields on the
    same route stays `Waiting` unless a new authenticated affordance appears.
    A same-route spinner therefore keeps waiting and ends as `TimedOut`.
-7. The same username/password step re-presented on a new document, with no
-   error-looking message, is `Failed` with reason `Unknown` once stable for
+7. A submitted step with a current-password field re-presented on a new
+   document, with no error-looking message, is `Failed` with reason `Unknown` once stable for
    2 s. The delay leaves time for client-rendered error text.
 8. Otherwise the attempt keeps waiting. After 20 s from submit, the outcome
    budget ends it as `TimedOut`. The budget tolerates a full reload and a slow
@@ -381,7 +384,8 @@ They drive the public `begin`/`advance` API through typed fixtures and cover:
   the login workflow is shown and close as `WorkflowLeft` once it is left;
 - ancestor tokens that cannot veto a styled banner;
 - reset offers re-derived from page evidence on a reloaded failure;
-- step progression on the same and on a new document;
+- step progression on the same and on a new document, including identifier
+  chains across same-site origins;
 - unexplained re-presentation and timeout;
 - in-flight and concluded dismissal, Try again, Choose another login, and
   reset-link revalidation;

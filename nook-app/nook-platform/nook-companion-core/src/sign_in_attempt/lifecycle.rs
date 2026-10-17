@@ -679,4 +679,40 @@ mod tests {
         assert_eq!(on_beginning_origin.presentation.site_message, None);
         Ok(())
     }
+
+    #[test]
+    fn an_identifier_chain_closes_as_step_advanced_on_this_or_a_sibling_origin()
+    -> anyhow::Result<()> {
+        let identifier = SignInPageFixture {
+            fields: SignInFieldsFixture::UsernameOnly,
+            ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::NewDocument)
+        };
+        for origin in [SignInScenario::ORIGIN, SiblingObservation::SIBLING] {
+            let advanced = SiblingObservation {
+                origin,
+                at: 2_500,
+                page: identifier.clone(),
+            }
+            .deliver(
+                SignInSubmittedAttempt {
+                    baseline: SignInPageFixture {
+                        fields: SignInFieldsFixture::UsernameOnly,
+                        ..SignInPageFixture::login_form(
+                            SignInAttemptDocumentRelation::SameDocumentSameRoute,
+                        )
+                    },
+                }
+                .awaiting()?,
+            )?
+            .closed()?;
+            assert_eq!(
+                advanced.status,
+                SignInAttemptStatus::StepAdvanced,
+                "{origin}"
+            );
+            assert!(advanced.actions.is_empty(), "{origin}");
+            assert_eq!(advanced.follow_up, SignInAttemptFollowUp::None, "{origin}");
+        }
+        Ok(())
+    }
 }

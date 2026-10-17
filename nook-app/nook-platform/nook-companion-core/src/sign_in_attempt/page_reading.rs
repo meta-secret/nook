@@ -9,7 +9,9 @@
 //!    absent at submit is a one-time-code challenge.
 //! 4. Without any marker or fresh error-looking message, a current-password
 //!    field that was absent at submit means an email-first step advanced:
-//!    the attempt closes (`StepAdvanced`) and the next step starts fresh.
+//!    the attempt closes (`StepAdvanced`) and the next step starts fresh. So
+//!    does a username-only step followed, on a `NewDocument` of this or a
+//!    same-site origin, by another username-only step (an identifier chain).
 //! 5. The explicit success marker confirms sign-in.
 //! 6. No auth fields and no error-looking message confirms sign-in once that
 //!    evidence has been stable for the existing 750 ms interval, on a
@@ -17,8 +19,9 @@
 //!    document and route, removed fields alone never confirm (the
 //!    submitted-login save precedent): only the explicit success marker, or a
 //!    newly present authenticated affordance with the same 750 ms stability.
-//! 7. The same username/password step re-presented on a `NewDocument` with no
-//!    error-looking message fails with reason `Unknown` once stable for 2 s.
+//! 7. A submitted step with a current-password field re-presented on a
+//!    `NewDocument` with no error-looking message fails with reason `Unknown`
+//!    once stable for 2 s.
 //! 8. Otherwise the attempt keeps waiting until the 20 s outcome budget,
 //!    measured from submit, expires visibly as `TimedOut`.
 //!
@@ -97,7 +100,8 @@ enum SignInAttemptLeadingEvidence {
 }
 
 enum SignInAttemptStepProgression {
-    /// The submitted step had no current-password field; one is now shown.
+    /// The submitted step had no current-password field; one is now shown,
+    /// or a new document shows the next username-only identifier step.
     Advanced,
     Unchanged,
 }
@@ -210,12 +214,52 @@ impl SignInAttemptBaseline {
     }
 
     /// Step 4: an email-first step (no current-password field at submit) that
-    /// now shows a current-password field has advanced to the next step.
+    /// now shows a current-password field has advanced to the next step, and
+    /// so has a username-only step whose new document is again username-only.
     fn progression(self, facts: SignInAttemptPageFacts<'_>) -> SignInAttemptStepProgression {
+        use SignInAttemptDocumentRelation::{
+            NewDocument, SameDocumentNewRoute, SameDocumentSameRoute,
+        };
         use SignInAttemptFieldPresence::{Absent, Present};
-        match (self.fields.current_password, facts.current.current_password) {
-            (Absent, Present) => SignInAttemptStepProgression::Advanced,
-            (Absent, Absent) | (Present, Present | Absent) => {
+        match (
+            self.fields.username,
+            self.fields.current_password,
+            facts.current.username,
+            facts.current.current_password,
+            facts.page.document,
+        ) {
+            (
+                Present | Absent,
+                Absent,
+                Present | Absent,
+                Present,
+                SameDocumentSameRoute | SameDocumentNewRoute | NewDocument,
+            )
+            | (Present, Absent, Present, Absent, NewDocument) => {
+                SignInAttemptStepProgression::Advanced
+            }
+            (
+                Present | Absent,
+                Present,
+                Present | Absent,
+                Present | Absent,
+                SameDocumentSameRoute | SameDocumentNewRoute | NewDocument,
+            )
+            | (
+                Absent,
+                Absent,
+                Present | Absent,
+                Absent,
+                SameDocumentSameRoute | SameDocumentNewRoute | NewDocument,
+            )
+            | (
+                Present,
+                Absent,
+                Absent,
+                Absent,
+                SameDocumentSameRoute | SameDocumentNewRoute | NewDocument,
+            )
+            | (Present, Absent, Present, Absent, SameDocumentSameRoute | SameDocumentNewRoute) => {
                 SignInAttemptStepProgression::Unchanged
             }
         }
@@ -877,6 +921,61 @@ mod tests {
             observed: submitted,
         };
         assert_eq!(unchanged.read()?, SignInAttemptPageReading::Undecided);
+        Ok(())
+    }
+
+    #[test]
+    fn identifier_chain_on_a_new_document_advances_unless_a_message_or_password_step_explains_it()
+    -> anyhow::Result<()> {
+        let identifier = |document| SignInPageFixture {
+            fields: SignInFieldsFixture::UsernameOnly,
+            ..SignInPageFixture::login_form(document)
+        };
+        let reload = ReadingCase {
+            submitted: identifier(SignInAttemptDocumentRelation::SameDocumentSameRoute),
+            observed: identifier(SignInAttemptDocumentRelation::NewDocument),
+        };
+        assert_eq!(reload.read()?, SignInAttemptPageReading::StepAdvanced);
+        let no_account = ReadingCase {
+            submitted: identifier(SignInAttemptDocumentRelation::SameDocumentSameRoute),
+            observed: SignInPageFixture {
+                messages: vec![SignInMessageFixture::alert(
+                    "No account found with that email",
+                )],
+                ..identifier(SignInAttemptDocumentRelation::NewDocument)
+            },
+        };
+        assert_eq!(
+            no_account.read()?,
+            ReadingCase::failure(
+                SignInFailureReason::WrongCredentials,
+                "No account found with that email"
+            )?
+        );
+        for document in [
+            SignInAttemptDocumentRelation::SameDocumentSameRoute,
+            SignInAttemptDocumentRelation::SameDocumentNewRoute,
+        ] {
+            let same_document = ReadingCase {
+                submitted: identifier(SignInAttemptDocumentRelation::SameDocumentSameRoute),
+                observed: identifier(document),
+            };
+            assert_eq!(
+                same_document.read()?,
+                SignInAttemptPageReading::Undecided,
+                "{document:?}"
+            );
+        }
+        let password_step = ReadingCase {
+            submitted: SignInPageFixture::login_form(
+                SignInAttemptDocumentRelation::SameDocumentSameRoute,
+            ),
+            observed: SignInPageFixture::login_form(SignInAttemptDocumentRelation::NewDocument),
+        };
+        assert_eq!(
+            password_step.read()?,
+            SignInAttemptPageReading::Settling(SignInAttemptSettlingEvidence::StepRepresented)
+        );
         Ok(())
     }
 }

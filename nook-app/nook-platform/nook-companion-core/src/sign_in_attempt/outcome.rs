@@ -4,7 +4,7 @@
 //! failures, challenges, step progression, and the success marker conclude
 //! immediately; "signed-in looking" evidence (never a field removal on the
 //! same document and route) confirms after the existing 750 ms stability
-//! interval; an unexplained re-presentation of the same step
+//! interval; an unexplained re-presentation of a submitted password step
 //! on a new document fails `Unknown` after 2 s. Decisive evidence is evaluated
 //! before the 20 s outcome budget, measured from submit, which otherwise ends
 //! the wait visibly as `TimedOut`. A new `Submitted` activity restarts it.
@@ -27,7 +27,8 @@ use super::request::{
 };
 use super::site::{SignInAttemptOrigin, SignInAttemptSite};
 use super::stability::{
-    SignInAttemptSettledness, SignInAttemptSettlingEvidence, SignInAttemptStability,
+    SignInAttemptSettledness, SignInAttemptSettlingEvidence, SignInAttemptSettlingObservation,
+    SignInAttemptStability,
 };
 use super::submit_baseline::SignInAttemptBaseline;
 use crate::{
@@ -210,39 +211,10 @@ impl SignInAttemptOutcomeWait {
             evidence,
             observation,
         } = settlement;
-        let since = match (self.stability, evidence) {
-            (
-                SignInAttemptStability::Settling {
-                    evidence: SignedInLooking,
-                    since,
-                },
-                SignedInLooking,
-            )
-            | (
-                SignInAttemptStability::Settling {
-                    evidence: StepRepresented,
-                    since,
-                },
-                StepRepresented,
-            ) => since,
-            (
-                SignInAttemptStability::Settling {
-                    evidence: SignedInLooking,
-                    ..
-                },
-                StepRepresented,
-            )
-            | (
-                SignInAttemptStability::Settling {
-                    evidence: StepRepresented,
-                    ..
-                },
-                SignedInLooking,
-            )
-            | (SignInAttemptStability::Unsettled {}, SignedInLooking | StepRepresented) => {
-                observation.now
-            }
-        };
+        let since = self.stability.since(SignInAttemptSettlingObservation {
+            evidence,
+            now: observation.now,
+        });
         let elapsed = observation.now.elapsed_since(since);
         match (evidence.settledness(elapsed), evidence) {
             (SignInAttemptSettledness::Settled, SignedInLooking) => SignInAttemptStep::signed_in(),
