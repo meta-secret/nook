@@ -533,7 +533,8 @@ test.describe('PIN Pilot against mock auth', () => {
 
       await expect(loginPage).toHaveURL(/\/totp\/verify$/, { timeout: 20_000 })
       const otpWidget = loginPage.locator('#nook-auth-widget')
-      await expect(otpWidget.getByText('Fill your 2FA code')).toBeVisible({
+      // The tab's attempt presents the site's 2FA step on the authenticator Pilot.
+      await expect(otpWidget.getByText('Verification needed')).toBeVisible({
         timeout: 15_000,
       })
       const authenticatorPickerPromise = paired.context.waitForEvent('page')
