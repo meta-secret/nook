@@ -15,9 +15,8 @@ use super::end_state::{SignInAttemptConclusion, SignInAttemptFailure, SignInAtte
 use super::outcome::{SignInAttemptOutcomeWait, SignInAttemptSubmission};
 use super::page_evidence::SignInAttemptDocumentRelation;
 use super::presentation::{
-    SignInAttemptMessageVisibility, SignInAttemptPresentation, SignInAttemptPresentationRequest,
-    SignInAttemptRecordLifetime, SignInAttemptResetOffer, SignInAttemptScene,
-    SignInAttemptSigningIn,
+    SignInAttemptPresentation, SignInAttemptPresentationRequest, SignInAttemptRecordLifetime,
+    SignInAttemptResetOffer, SignInAttemptScene, SignInAttemptSigningIn,
 };
 use super::record::{
     SignInAttemptInstant, SignInAttemptPhase, SignInAttemptPreSubmitStep, SignInAttemptRecord,
@@ -66,6 +65,8 @@ pub enum SignInAttemptAdvance {
 pub(crate) struct SignInAttemptBinding<'a> {
     pub(crate) site: &'a SignInAttemptSite,
     pub(crate) login: &'a SignInAttemptLoginReference,
+    /// The exact origin of the page that sent this event.
+    pub(crate) sender: &'a SignInAttemptOrigin,
 }
 
 pub(crate) struct SignInAttemptEventContext<'a> {
@@ -129,8 +130,9 @@ struct SignInAttemptIdentity {
 struct SignInAttemptCompletion {
     identity: SignInAttemptIdentity,
     step: SignInAttemptStep,
-    /// The site message is shown only to the exact origin that recorded it.
-    message: SignInAttemptMessageVisibility,
+    /// The exact origin the presentation is delivered to; a site message is
+    /// shown only when it equals the message's capture origin.
+    viewer: SignInAttemptOrigin,
 }
 
 impl SignInAttemptCompletion {
@@ -138,7 +140,7 @@ impl SignInAttemptCompletion {
         let Self {
             identity,
             step,
-            message,
+            viewer,
         } = self;
         let SignInAttemptStep {
             next,
@@ -161,7 +163,7 @@ impl SignInAttemptCompletion {
                             scene,
                             lifetime: SignInAttemptRecordLifetime::Closing,
                             follow_up,
-                            message,
+                            viewer,
                         },
                     ),
                 });
@@ -186,7 +188,7 @@ impl SignInAttemptCompletion {
                 scene,
                 lifetime: SignInAttemptRecordLifetime::Retained,
                 follow_up,
-                message,
+                viewer,
             }),
         })
     }
@@ -207,12 +209,12 @@ impl SignInAttemptBeginRequest {
             .map_err(|_| SignInAttemptRequestError::SenderOriginInvalid)?;
         SignInAttemptCompletion {
             identity: SignInAttemptIdentity {
-                origin,
+                origin: origin.clone(),
                 login,
                 started_at,
             },
             step: SignInAttemptPreSubmitStep::Filling.unchanged(),
-            message: SignInAttemptMessageVisibility::Shown,
+            viewer: origin,
         }
         .transition()
     }
@@ -238,12 +240,7 @@ impl SignInAttemptAdvanceRequest {
             SignInAttemptSiteRelation::SameSite => {}
             SignInAttemptSiteRelation::OtherSite => return Ok(SignInAttemptAdvance::OtherSite),
         }
-        let message = SignInAttemptMessageVisibility::from(record.origin.relation(&sender));
-        let transition = record.apply(SignInAttemptTimedEvent {
-            now,
-            event,
-            message,
-        })?;
+        let transition = record.apply(SignInAttemptTimedEvent { now, event, sender })?;
         Ok(SignInAttemptAdvance::Advanced {
             transition: Box::new(transition),
         })
@@ -253,7 +250,7 @@ impl SignInAttemptAdvanceRequest {
 struct SignInAttemptTimedEvent {
     now: SignInAttemptInstant,
     event: SignInAttemptEvent,
-    message: SignInAttemptMessageVisibility,
+    sender: SignInAttemptOrigin,
 }
 
 impl SignInAttemptRecord {
@@ -268,15 +265,12 @@ impl SignInAttemptRecord {
             started_at,
             phase,
         } = self;
-        let SignInAttemptTimedEvent {
-            now,
-            event,
-            message,
-        } = timed;
+        let SignInAttemptTimedEvent { now, event, sender } = timed;
         let context = SignInAttemptEventContext {
             binding: SignInAttemptBinding {
                 site: origin.site(),
                 login: &login,
+                sender: &sender,
             },
             now,
             event,
@@ -295,7 +289,7 @@ impl SignInAttemptRecord {
                 started_at,
             },
             step,
-            message,
+            viewer: sender,
         }
         .transition()
     }
@@ -410,15 +404,17 @@ struct SignInAttemptPreSubmitActivity {
 
 #[cfg(test)]
 mod tests {
+    use crate::sign_in_attempt::page_evidence::SignInAttemptDocumentRelation;
     use crate::sign_in_attempt::test_fixture::{
-        SignInScenario, SignInScenarioEvent, SignInScenarioOutcome, SignInSubmittedAttempt,
+        SignInFieldsFixture, SignInMessageFixture, SignInPageFixture, SignInScenario,
+        SignInScenarioEvent, SignInScenarioOutcome, SignInSubmittedAttempt,
     };
     use crate::{
         AuthenticationLoginChecklistStatus, SignInAttemptActionKind, SignInAttemptActivity,
         SignInAttemptAdvanceRequest, SignInAttemptBeginRequest, SignInAttemptEvent,
         SignInAttemptEvidenceDemand, SignInAttemptFollowUp, SignInAttemptLoginReference,
         SignInAttemptMessageKey, SignInAttemptRequestError, SignInAttemptSenderOrigin,
-        SignInAttemptStatus, SignInAttemptStoredRecord,
+        SignInAttemptSiteMessage, SignInAttemptStatus, SignInAttemptStoredRecord,
     };
 
     #[test]
@@ -593,6 +589,94 @@ mod tests {
         }
         .advance();
         assert_eq!(result, Err(SignInAttemptRequestError::TimeInvalid));
+        Ok(())
+    }
+
+    /// Page observations sent from a chosen same-site origin.
+    struct SiblingObservation {
+        origin: &'static str,
+        at: u32,
+        page: SignInPageFixture,
+    }
+
+    impl SiblingObservation {
+        const SIBLING: &'static str = "https://app.namecheap.com";
+
+        fn deliver(self, scenario: SignInScenario) -> anyhow::Result<SignInScenarioOutcome> {
+            scenario.advance(SignInScenarioEvent {
+                at: self.at,
+                origin: self.origin,
+                event: SignInAttemptEvent::PageObserved {
+                    page: self.page.page()?,
+                },
+            })
+        }
+    }
+
+    #[test]
+    fn a_same_site_sibling_origin_can_carry_the_attempt_to_signed_in() -> anyhow::Result<()> {
+        let dashboard = SignInPageFixture {
+            fields: SignInFieldsFixture::None,
+            ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::NewDocument)
+        };
+        let resumed = SignInSubmittedAttempt::login_form()
+            .awaiting()?
+            .advance(SignInScenarioEvent {
+                at: 2_500,
+                origin: SiblingObservation::SIBLING,
+                event: SignInAttemptEvent::Resumed,
+            })?
+            .retained()?;
+        let settling = SiblingObservation {
+            origin: SiblingObservation::SIBLING,
+            at: 3_000,
+            page: dashboard.clone(),
+        }
+        .deliver(resumed)?
+        .retained()?;
+        let confirmed = SiblingObservation {
+            origin: SiblingObservation::SIBLING,
+            at: 3_800,
+            page: dashboard,
+        }
+        .deliver(settling)?
+        .closed()?;
+        assert_eq!(confirmed.status, SignInAttemptStatus::SignedIn);
+        Ok(())
+    }
+
+    #[test]
+    fn the_site_message_follows_its_capture_origin_not_the_beginning_origin() -> anyhow::Result<()>
+    {
+        let failed = SiblingObservation {
+            origin: SiblingObservation::SIBLING,
+            at: 3_000,
+            page: SignInPageFixture {
+                messages: vec![SignInMessageFixture::alert("Incorrect password")],
+                ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::NewDocument)
+            },
+        }
+        .deliver(SignInSubmittedAttempt::login_form().awaiting()?)?
+        .retained()?;
+        let expected = Some(SignInAttemptSiteMessage::try_from(
+            "Incorrect password".to_owned(),
+        )?);
+        assert_eq!(failed.presentation.site_message, expected);
+        let on_capture_origin = failed
+            .clone()
+            .advance(SignInScenarioEvent {
+                at: 4_000,
+                origin: SiblingObservation::SIBLING,
+                event: SignInAttemptEvent::Resumed,
+            })?
+            .retained()?;
+        assert_eq!(on_capture_origin.presentation.site_message, expected);
+        let on_beginning_origin = failed.resumed(4_000)?.retained()?;
+        assert_eq!(
+            on_beginning_origin.presentation.status,
+            SignInAttemptStatus::Failed
+        );
+        assert_eq!(on_beginning_origin.presentation.site_message, None);
         Ok(())
     }
 }

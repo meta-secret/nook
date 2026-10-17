@@ -19,13 +19,13 @@ use super::end_state::{
 use super::failure_reason::SignInFailureReason;
 use super::lifecycle::{SignInAttemptEventContext, SignInAttemptNext, SignInAttemptStep};
 use super::page_evidence::SignInAttemptPageEvidence;
-use super::page_reading::SignInAttemptPageReading;
+use super::page_reading::{SignInAttemptPageReading, SignInAttemptReadingRequest};
 use super::presentation::{SignInAttemptResetOffer, SignInAttemptScene, SignInAttemptSigningIn};
 use super::record::{SignInAttemptChronology, SignInAttemptInstant};
 use super::request::{
     SignInAttemptActivity, SignInAttemptEvent, SignInAttemptSubmitBaseline, SignInAttemptUserAction,
 };
-use super::site::SignInAttemptSite;
+use super::site::{SignInAttemptOrigin, SignInAttemptSite};
 use super::stability::{
     SignInAttemptSettledness, SignInAttemptSettlingEvidence, SignInAttemptStability,
 };
@@ -67,6 +67,7 @@ enum SignInAttemptBudget {
 struct SignInAttemptObservation<'a> {
     page: SignInAttemptPageEvidence,
     site: &'a SignInAttemptSite,
+    sender: &'a SignInAttemptOrigin,
     now: SignInAttemptInstant,
 }
 
@@ -123,6 +124,7 @@ impl SignInAttemptOutcomeWait {
             SignInAttemptEvent::PageObserved { page } => self.observe(SignInAttemptObservation {
                 page,
                 site: binding.site,
+                sender: binding.sender,
                 now,
             }),
             SignInAttemptEvent::Activity {
@@ -161,7 +163,10 @@ impl SignInAttemptOutcomeWait {
 
     /// Decisive evidence is evaluated before the budget is applied.
     fn observe(self, observation: SignInAttemptObservation<'_>) -> SignInAttemptStep {
-        match self.baseline.reading(&observation.page) {
+        match self.baseline.reading(SignInAttemptReadingRequest {
+            page: &observation.page,
+            sender: observation.sender,
+        }) {
             SignInAttemptPageReading::Failure { reason, message } => {
                 SignInAttemptOutcomeWait::site_rejection(SignInAttemptRejection {
                     failure: SignInAttemptFailure::SiteRejected { reason, message },

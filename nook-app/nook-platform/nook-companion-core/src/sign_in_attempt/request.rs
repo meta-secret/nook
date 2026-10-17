@@ -210,6 +210,16 @@ mod tests {
                 "{valid}"
             );
         }
+        let prefix = "store_abcdefghijk/";
+        let exactly_at_bound = format!(
+            "{prefix}{}",
+            "s".repeat(SignInAttemptLoginReference::MAX_BYTES - prefix.len())
+        );
+        assert_eq!(
+            exactly_at_bound.len(),
+            SignInAttemptLoginReference::MAX_BYTES
+        );
+        assert!(SignInAttemptLoginReference::try_from(exactly_at_bound).is_ok());
         for invalid in [
             String::new(),
             "store_abcdefghijk".to_owned(),

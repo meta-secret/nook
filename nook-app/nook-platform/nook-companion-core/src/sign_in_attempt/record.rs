@@ -7,7 +7,7 @@
 //! own text and may include what the site displays, such as an email address.
 //! It is protected by trusted-context-only storage, is never logged, is
 //! cleared when the attempt is resolved or the tab closes, and is presented
-//! only to the exact origin that recorded it.
+//! only to the exact origin of the page it was captured on.
 
 use std::cmp::Ordering;
 

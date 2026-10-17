@@ -39,6 +39,7 @@ use super::end_state::{
 use super::failure_reason::SignInFailureReason;
 use super::message_evidence::SignInAttemptErrorMessageSelection;
 use super::page_evidence::{SignInAttemptDocumentRelation, SignInAttemptPageEvidence};
+use super::site::SignInAttemptOrigin;
 use super::stability::SignInAttemptSettlingEvidence;
 use super::submit_baseline::{SignInAttemptAffordanceChange, SignInAttemptBaseline};
 
@@ -125,9 +126,17 @@ enum SignInAttemptChallengePresence {
     Clear,
 }
 
+/// One page observation and the exact origin of the page that sent it.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct SignInAttemptReadingRequest<'a> {
+    pub(crate) page: &'a SignInAttemptPageEvidence,
+    pub(crate) sender: &'a SignInAttemptOrigin,
+}
+
 #[derive(Debug, Clone, Copy)]
 struct SignInAttemptPageFacts<'a> {
     page: &'a SignInAttemptPageEvidence,
+    sender: &'a SignInAttemptOrigin,
     current: SignInAttemptAuthStep,
     relation: SignInAttemptStepRelation,
     affordance: SignInAttemptAffordanceChange,
@@ -151,10 +160,15 @@ impl SignInAttemptBaseline {
         }
     }
 
-    pub(crate) fn reading(self, page: &SignInAttemptPageEvidence) -> SignInAttemptPageReading {
+    pub(crate) fn reading(
+        self,
+        request: SignInAttemptReadingRequest<'_>,
+    ) -> SignInAttemptPageReading {
+        let SignInAttemptReadingRequest { page, sender } = request;
         let current = SignInAttemptAuthStep::from(&page.auth_fields);
         let facts = SignInAttemptPageFacts {
             page,
+            sender,
             current,
             relation: self.fields.relation(current),
             affordance: self.affordance_change(page),
@@ -225,7 +239,10 @@ impl SignInAttemptBaseline {
                 SameStep | OverlappingStep,
             ) => SignInAttemptLeadingEvidence::Failure {
                 reason,
-                message: SignInAttemptSiteMessageEvidence::Captured { text: message },
+                message: SignInAttemptSiteMessageEvidence::Captured {
+                    text: message,
+                    origin: facts.sender.clone(),
+                },
             },
             (
                 Error,
@@ -318,12 +335,13 @@ impl SignInAttemptPageFacts<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::{SignInAttemptBaseline, SignInAttemptPageReading};
+    use super::{SignInAttemptBaseline, SignInAttemptPageReading, SignInAttemptReadingRequest};
     use crate::sign_in_attempt::end_state::{
         SignInAttemptChallenge, SignInAttemptSiteMessage, SignInAttemptSiteMessageEvidence,
     };
     use crate::sign_in_attempt::failure_reason::SignInFailureReason;
     use crate::sign_in_attempt::page_evidence::SignInAttemptDocumentRelation;
+    use crate::sign_in_attempt::site::SignInAttemptOrigin;
     use crate::sign_in_attempt::stability::SignInAttemptSettlingEvidence;
     use crate::sign_in_attempt::test_fixture::{
         SignInControlsFixture, SignInFieldsFixture, SignInMarkerFixture,
@@ -342,9 +360,15 @@ mod tests {
     }
 
     impl ReadingCase {
+        const SENDER: &'static str = "https://www.namecheap.com";
+
         fn read(&self) -> anyhow::Result<SignInAttemptPageReading> {
             let baseline = SignInAttemptBaseline::from(&self.submitted.baseline()?);
-            Ok(baseline.reading(&self.observed.page()?))
+            let sender = SignInAttemptOrigin::try_from(Self::SENDER.to_owned())?;
+            Ok(baseline.reading(SignInAttemptReadingRequest {
+                page: &self.observed.page()?,
+                sender: &sender,
+            }))
         }
 
         fn failure(
@@ -355,6 +379,7 @@ mod tests {
                 reason,
                 message: SignInAttemptSiteMessageEvidence::Captured {
                     text: SignInAttemptSiteMessage::try_from(text.to_owned())?,
+                    origin: SignInAttemptOrigin::try_from(Self::SENDER.to_owned())?,
                 },
             })
         }

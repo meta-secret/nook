@@ -10,6 +10,7 @@ use super::auth_step::SignInAttemptLoginWorkflow;
 use super::failure_reason::SignInFailureReason;
 use super::page_evidence::{SignInAttemptPageEvidence, SignInPageMessageText};
 use super::request::SignInAttemptRequestError;
+use super::site::SignInAttemptOrigin;
 
 /// The one Rust-selected, bounded site message shown with a failure.
 /// Rendered by the content script with `textContent` only; never logged.
@@ -49,7 +50,12 @@ impl From<&SignInPageMessageText> for SignInAttemptSiteMessage {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", deny_unknown_fields)]
 pub(crate) enum SignInAttemptSiteMessageEvidence {
-    Captured { text: SignInAttemptSiteMessage },
+    /// The message and the exact origin of the page it was captured on; it is
+    /// presented only to that origin.
+    Captured {
+        text: SignInAttemptSiteMessage,
+        origin: SignInAttemptOrigin,
+    },
     Absent,
 }
 

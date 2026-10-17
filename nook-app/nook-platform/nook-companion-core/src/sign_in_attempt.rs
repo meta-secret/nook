@@ -13,7 +13,7 @@
 //! of a failed attempt. It is the site's own text and may include what the
 //! site displays (an email address, for example), so it lives only in
 //! trusted-context session storage, is cleared on resolution or tab close,
-//! and is presented only to the exact origin that recorded it.
+//! and is presented only to the exact origin of the page it was captured on.
 
 mod auth_step;
 mod conclusion;

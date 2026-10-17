@@ -69,8 +69,7 @@ The record is JSON that TypeScript stores and returns verbatim:
 - `schema`: the supported revision (`1`). There is one writer and no
   compatibility reader.
 - `origin`: the exact canonical origin that began the attempt, for example
-  `https://www.namecheap.com`. Its schemeful site binds the record, and only
-  this exact origin is shown the stored site message.
+  `https://www.namecheap.com`. Its schemeful site binds the record.
 - `login`: the opaque login reference `${vaultStoreId}/${secretId}`, at most
   1 KiB. It is split at the first `/`, both components must be non-blank, and
   control characters are rejected. Legacy secret labels with spaces,
@@ -99,7 +98,10 @@ Submit-time message text, tokens, colours, and control labels are classified
 once and dropped. The only page text a record ever holds is the one Rust-selected
 site message of a failure: whitespace-normalized visible text, at most 300
 characters. It is the site's own text and may contain what the site displays,
-such as an email address.
+such as an email address. It is stored with the exact origin of the page it
+was captured on (the sender of the concluding `PageObserved`). That origin can
+differ from the beginning origin, for example in an SSO flow. Only that capture
+origin is shown the message.
 
 Decoding is strict. The stored text is at most 8 KiB. Unknown fields,
 unsupported schema revisions, non-canonical origins, invalid login references,
@@ -335,7 +337,8 @@ Submit baselines use the same message bounds. Stored records are limited to
   - trusted-context-only `chrome.storage.session` storage;
   - never being logged;
   - removal when the attempt is resolved or the tab closes;
-  - exact-origin display (other same-site origins see the failure without it).
+  - display only to its exact capture origin (other same-site origins,
+    including the beginning origin when it differs, see the failure without it).
 - Nothing in the lifecycle logs; error messages are fixed text.
 - Every request is bound to its tab and the top-level frame. The sender
   origin comes from browser sender metadata, never from the message body.
