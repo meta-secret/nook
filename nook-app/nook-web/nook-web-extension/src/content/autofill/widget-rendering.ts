@@ -482,6 +482,13 @@ class AuthenticationWidgetRenderer {
               typeof LoginChecklistProgress
             >[0] = {
               surface: { body, title, description },
+              progress: {
+                step,
+                fresh: {
+                  currentStep: snapshot.currentStep,
+                  totalSteps: snapshot.totalSteps,
+                },
+              },
               control: continueButton,
               workflow,
               attemptActions: new SignInAttemptLoginActions(attemptControls),

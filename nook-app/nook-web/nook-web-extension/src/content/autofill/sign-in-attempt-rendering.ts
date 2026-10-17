@@ -5,9 +5,12 @@ import type {
 import { AuthenticationGesture } from '../../lib/auth-widget-policy'
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import type { LoginChecklistRendering } from './login-checklist-rendering'
+import { workflowUi, type StepProgressArgs } from './workflow-ui'
 
 export interface SignInAttemptSurface {
   readonly body: HTMLDivElement
+  /** The header step counter, fed Rust's attempt progress unchanged. */
+  readonly step: HTMLParagraphElement
   readonly title: HTMLHeadingElement
   readonly description: HTMLParagraphElement
   readonly continueButton: HTMLButtonElement
@@ -89,6 +92,12 @@ export class SignInAttemptRendering {
 
   render(presentation: SignInAttemptPresentation): void {
     const { surface, checklist } = this.request
+    const progress: StepProgressArgs = {
+      step: surface.step,
+      currentStep: presentation.progress.currentStep,
+      totalSteps: presentation.progress.totalSteps,
+    }
+    workflowUi.setStepProgress(progress)
     surface.title.textContent = chrome.i18n.getMessage(presentation.title_key)
     surface.description.textContent = chrome.i18n.getMessage(
       presentation.description_key,

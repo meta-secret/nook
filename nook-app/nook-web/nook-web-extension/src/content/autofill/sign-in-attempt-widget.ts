@@ -1,17 +1,14 @@
 import {
-  AuthenticationWorkflowActivity,
   AuthenticationWorkflowKind,
+  type AuthenticationDisplayProgress,
   type SignInAttemptActionOffer,
   type SignInAttemptPresentation,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import {
-  authenticationActivityProgress,
-  authentication_workflow_activity_progress,
-} from './authentication-activity-progress'
 import { LoginChecklistRendering } from './login-checklist-rendering'
 import { SignInAttemptRendering } from './sign-in-attempt-rendering'
 import {
   SignInAttemptPhaseKind,
+  type SignInAttemptPhase,
   signInAttemptSession,
   type SignInAttemptHost,
   SignInAttemptHostActionKind,
@@ -67,27 +64,26 @@ class SignInAttemptPageWidget implements SignInAttemptHost {
         break
     }
     const vaultConnection = await workflowUi.loadPilotVaultConnection()
-    switch (this.phaseKind()) {
+    // Re-read after the await: the attempt may have moved on meanwhile.
+    const phase = this.currentPhase()
+    switch (phase.kind) {
       case SignInAttemptPhaseKind.Fresh:
       case SignInAttemptPhaseKind.Unavailable:
         return SignInAttemptWidgetDisplay.NotPresented
       case SignInAttemptPhaseKind.Presented:
         break
     }
-    // The step counter comes from this scan's Rust policy batch; without it
-    // the attempt is not rendered on this page.
-    switch (authenticationActivityProgress.prepare()) {
-      case true:
-        break
-      case false:
-        return SignInAttemptWidgetDisplay.NotPresented
+    const request: SignInAttemptPageMount = {
+      vaultPresentation:
+        WidgetVaultPresentationProjection.forConnection(vaultConnection),
+      progress: phase.presentation.progress,
     }
-    this.mount(WidgetVaultPresentationProjection.forConnection(vaultConnection))
+    this.mount(request)
     return SignInAttemptWidgetDisplay.Shown
   }
 
-  private phaseKind(): SignInAttemptPhaseKind {
-    return signInAttemptSession.phase.kind
+  private currentPhase(): SignInAttemptPhase {
+    return signInAttemptSession.phase
   }
 
   /** Whether this Pilot still holds the page for a presented attempt. */
@@ -143,23 +139,17 @@ class SignInAttemptPageWidget implements SignInAttemptHost {
     }
   }
 
-  private mount(
-    vaultPresentation: ReturnType<
-      typeof WidgetVaultPresentationProjection.forConnection
-    >,
-  ): void {
+  /** The shell opens at the attempt's own Rust progress. */
+  private mount(request: SignInAttemptPageMount): void {
     workflowUi.removeWidget()
-    const progress = authentication_workflow_activity_progress(
-      AuthenticationWorkflowActivity.VerifyingLogin,
-    )
     const shellRequest: Parameters<
       typeof authenticationWidgetShell.createWidgetShell
     >[0] = {
       copy: WorkflowCopy.forKind(AuthenticationWorkflowKind.Login),
-      vaultPresentation,
+      vaultPresentation: request.vaultPresentation,
       savedLoginAction: false,
-      currentStep: progress.currentStep,
-      totalSteps: progress.totalSteps,
+      currentStep: request.progress.currentStep,
+      totalSteps: request.progress.totalSteps,
     }
     const shell = authenticationWidgetShell.createWidgetShell(shellRequest)
     const mountRequest: Parameters<
@@ -201,6 +191,13 @@ class SignInAttemptPageWidget implements SignInAttemptHost {
     workflowUi.removeWidget()
     scanState.schedule()
   }
+}
+
+type SignInAttemptPageMount = {
+  readonly vaultPresentation: ReturnType<
+    typeof WidgetVaultPresentationProjection.forConnection
+  >
+  readonly progress: AuthenticationDisplayProgress
 }
 
 type SignInAttemptRenderingSlot =

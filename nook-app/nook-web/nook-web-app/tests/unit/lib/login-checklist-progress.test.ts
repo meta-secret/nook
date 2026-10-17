@@ -253,6 +253,10 @@ class MountedChecklistFixture {
         title: this.title,
         description: this.description,
       },
+      progress: {
+        step: document.createElement('p'),
+        fresh: { currentStep: 1, totalSteps: 3 },
+      },
       control: this.control,
       workflow: this.workflow,
       attemptActions: { run: () => {} },
@@ -490,6 +494,10 @@ class ChecklistLifecycleTests {
         body: this.mounted.body,
         title: this.mounted.title,
         description: this.mounted.description,
+      },
+      progress: {
+        step: document.createElement('p'),
+        fresh: { currentStep: 1, totalSteps: 3 },
       },
       control: this.mounted.control,
       workflow,

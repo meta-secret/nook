@@ -83,6 +83,7 @@ type ContentGlobals = Pick<
 > & { window: Window }
 type PilotSurface = {
   readonly body: HTMLDivElement
+  readonly step: HTMLParagraphElement
   readonly title: HTMLHeadingElement
   readonly description: HTMLParagraphElement
   readonly control: HTMLButtonElement
@@ -276,18 +277,23 @@ class SignInAttemptContentFixture {
     const title = panel.querySelector('h2, h1')
     const description = panel.querySelector('p')
     const control = panel.querySelector('button')
+    const step = panel.querySelector('.step-label')
     if (
       !(title instanceof HTMLHeadingElement) ||
       !(description instanceof HTMLParagraphElement) ||
       !(control instanceof HTMLButtonElement)
     )
       throw new Error('expected the standalone Pilot copy')
-    return { body: panel, title, description, control }
+    if (!(step instanceof HTMLParagraphElement))
+      throw new Error('expected the standalone Pilot step counter')
+    return { body: panel, step, title, description, control }
   }
 
   /** A Pilot surface outside the page body, like the widget's shadow host. */
   surface(): PilotSurface {
     const body = document.createElement('div')
+    const step = document.createElement('p')
+    step.textContent = 'widgetPilotLabel · 1/3'
     const title = document.createElement('h1')
     title.textContent = 'Ready to sign in'
     const description = document.createElement('p')
@@ -295,14 +301,18 @@ class SignInAttemptContentFixture {
     const control = document.createElement('button')
     control.type = 'button'
     control.textContent = 'Sign in'
-    body.append(title, description, control)
+    body.append(step, title, description, control)
     document.documentElement.append(body)
-    return { body, title, description, control }
+    return { body, step, title, description, control }
   }
 
   progress(surface: PilotSurface): LoginChecklistProgress {
     const progress = new LoginChecklistProgress({
       surface,
+      progress: {
+        step: surface.step,
+        fresh: { currentStep: 1, totalSteps: 3 },
+      },
       control: surface.control,
       workflow: {
         root: document,
@@ -442,6 +452,8 @@ describe('content-script sign-in attempt client', () => {
     expect(fixture.projections).toBe(0)
     expect(surface.control.hidden).toBe(true)
     expect(surface.title.textContent).toBe('widgetSignInFailed')
+    // Rust's attempt progress drives the header counter, not the Ready mount.
+    expect(surface.step.textContent).toBe('widgetPilotLabel · 3/3')
     expect(
       PilotExpectation.text({ surface, testId: 'nook-sign-in-reason' }),
     ).toBe('widgetSignInReasonAccountLocked')

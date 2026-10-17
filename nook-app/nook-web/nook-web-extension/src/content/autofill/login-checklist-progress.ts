@@ -1,6 +1,7 @@
 import { LoginChecklistMountKind, type LoginChecklistMountState } from './state'
 import { Effect } from 'effect'
 import type {
+  AuthenticationDisplayProgress,
   AuthenticationLoginChecklistActivity,
   AuthenticationLoginChecklistObservation,
   AuthenticationLoginChecklistPresentation,
@@ -22,7 +23,11 @@ import {
   AuthenticationOutcomeReadKind,
   type AuthenticationOutcomeObservationContext,
 } from './authentication-outcome-observation'
-import { OUTCOME_EVIDENCE_POLL_MS } from './workflow-ui'
+import {
+  OUTCOME_EVIDENCE_POLL_MS,
+  workflowUi,
+  type StepProgressArgs,
+} from './workflow-ui'
 import type {
   SignInAttemptActionOffer,
   SignInAttemptLoginReference,
@@ -45,9 +50,16 @@ export interface LoginChecklistAttemptActions {
 
 type LoginChecklistMount = {
   surface: LoginChecklistSurface
+  /** The header counter and the Ready progress this mount was rendered with. */
+  progress: LoginChecklistMountProgress
   control: HTMLButtonElement
   workflow: PasswordFormObservation
   attemptActions: LoginChecklistAttemptActions
+}
+
+export type LoginChecklistMountProgress = {
+  readonly step: HTMLParagraphElement
+  readonly fresh: AuthenticationDisplayProgress
 }
 
 enum ChecklistAttemptBinding {
@@ -178,7 +190,11 @@ export class LoginChecklistProgress implements SignInAttemptHost {
     const attemptSurface: ConstructorParameters<
       typeof SignInAttemptRendering
     >[0] = {
-      surface: { ...mount.surface, continueButton: mount.control },
+      surface: {
+        ...mount.surface,
+        step: mount.progress.step,
+        continueButton: mount.control,
+      },
       checklist: this.rendering,
       choose: (offer) => void signInAttemptSession.choose(offer),
     }
@@ -239,6 +255,12 @@ export class LoginChecklistProgress implements SignInAttemptHost {
     this.attemptRendering.clear()
     this.mount.surface.title.textContent = this.freshCopy.title
     this.mount.surface.description.textContent = this.freshCopy.description
+    const progress: StepProgressArgs = {
+      step: this.mount.progress.step,
+      currentStep: this.mount.progress.fresh.currentStep,
+      totalSteps: this.mount.progress.fresh.totalSteps,
+    }
+    workflowUi.setStepProgress(progress)
     this.state = { kind: 'Activity', activity: 'Ready' }
     void this.initializeFresh()
   }
