@@ -9,7 +9,9 @@
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
-use super::page_evidence::{SignInAttemptPageEvidence, SignInPageLink, SignInPageMessages};
+use super::page_evidence::{
+    SignInAttemptPageEvidence, SignInPageControls, SignInPageLink, SignInPageMessages,
+};
 use super::record::SignInAttemptStoredRecord;
 use crate::CompanionEpochMilliseconds;
 
@@ -144,12 +146,15 @@ pub enum SignInAttemptActivity {
 
 /// Submit-time facts collected synchronously right before submit, with the
 /// same collector and bounds as `PageObserved`. Rust keeps only whether an
-/// error-looking message was present and the auth-field presence.
+/// error-looking message was present, the auth-field presence, and whether a
+/// sign-out style authenticated affordance was present (never the labels).
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields)]
 pub struct SignInAttemptSubmitBaseline {
     pub messages: SignInPageMessages,
     pub auth_fields: SignInAttemptAuthFields,
+    /// Bounded visible control labels at submit (existing login-save collector).
+    pub controls: SignInPageControls,
 }
 
 /// Visible authentication field presence (frozen contract booleans).

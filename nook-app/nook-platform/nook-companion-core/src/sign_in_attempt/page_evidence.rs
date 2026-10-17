@@ -9,6 +9,8 @@ use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
 use super::request::{SignInAttemptAuthFields, SignInAttemptRequestError};
+use crate::login_save::AuthenticatedControlEvidence;
+use crate::{LoginControlLabel, LoginObservationError};
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields)]
@@ -21,14 +23,47 @@ pub struct SignInAttemptPageEvidence {
     pub success_marker_present: bool,
     /// Existing `data-nook-auth-outcome` error adapter.
     pub error_marker_present: bool,
+    /// Bounded labels of visible controls (existing login-save collector);
+    /// Rust classifies sign-out style authenticated affordances.
+    pub controls: SignInPageControls,
     pub messages: SignInPageMessages,
     pub links: SignInPageLinks,
 }
 
+/// Visible control labels, admitted with the login-save bound (at most 64) and
+/// classified once with `LoginControlLabel::semantics`. Only the resulting
+/// authenticated-affordance presence is kept.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Tsify)]
+#[serde(try_from = "Vec<LoginControlLabel>")]
+#[tsify(type = "LoginControlLabel[]")]
+pub struct SignInPageControls {
+    affordance: AuthenticatedControlEvidence,
+}
+
+impl TryFrom<Vec<LoginControlLabel>> for SignInPageControls {
+    type Error = LoginObservationError;
+
+    fn try_from(controls: Vec<LoginControlLabel>) -> Result<Self, Self::Error> {
+        Ok(Self {
+            affordance: AuthenticatedControlEvidence::from_controls(&controls)?,
+        })
+    }
+}
+
+impl SignInPageControls {
+    pub(crate) const fn affordance(self) -> AuthenticatedControlEvidence {
+        self.affordance
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Tsify)]
 pub enum SignInAttemptDocumentRelation {
-    /// Observed by the content-script instance that performed the submit.
-    SameDocument,
+    /// Observed by the content-script instance that performed the submit,
+    /// whose `location.pathname` still equals the one captured at submit.
+    SameDocumentSameRoute,
+    /// Observed by the content-script instance that performed the submit,
+    /// after `location.pathname` changed from the one captured at submit.
+    SameDocumentNewRoute,
     /// Observed by an instance that resumed the attempt after a load.
     NewDocument,
 }
@@ -40,9 +75,16 @@ pub struct SignInPageMessage {
     pub text: SignInPageMessageText,
     pub source: SignInPageMessageSource,
     pub placement: SignInPageMessagePlacement,
+    /// Lowercase class/id tokens of the element itself.
     pub tokens: SignInPageMessageTokens,
+    /// Lowercase class/id tokens of up to two ancestors.
+    pub ancestor_tokens: SignInPageMessageTokens,
     pub foreground: SignInPageColor,
     pub background: SignInPageColor,
+    /// Same-document observations only: the element was absent at the acting
+    /// script's submit, or its visible text changed since then. Always
+    /// `false` in a submit baseline and on a `NewDocument`.
+    pub changed_since_submit: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Tsify)]
@@ -456,12 +498,12 @@ mod tests {
     }
 
     impl RawPageDocument {
-        const MESSAGE: &'static str = r#"{"text":"Error","source":"Alert","placement":"InsideAuthForm","tokens":[],"foreground":{"red":0,"green":0,"blue":0},"background":{"red":255,"green":255,"blue":255}}"#;
+        const MESSAGE: &'static str = r#"{"text":"Error","source":"Alert","placement":"InsideAuthForm","tokens":[],"ancestor_tokens":[],"foreground":{"red":0,"green":0,"blue":0},"background":{"red":255,"green":255,"blue":255},"changed_since_submit":false}"#;
         const LINK: &'static str = r#"{"index":1,"text":"Reset","href":"https://a.example/reset"}"#;
 
         fn json(&self) -> String {
             format!(
-                r#"{{"document":"NewDocument","auth_fields":{{"username_present":true,"current_password_present":true,"one_time_code_present":false}},"manual_checkpoint_present":false,"success_marker_present":false,"error_marker_present":false,"messages":[{}],"links":[{}]}}"#,
+                r#"{{"document":"NewDocument","auth_fields":{{"username_present":true,"current_password_present":true,"one_time_code_present":false}},"manual_checkpoint_present":false,"success_marker_present":false,"error_marker_present":false,"controls":["Sign in"],"messages":[{}],"links":[{}]}}"#,
                 vec![Self::MESSAGE; self.messages].join(","),
                 vec![Self::LINK; self.links].join(",")
             )

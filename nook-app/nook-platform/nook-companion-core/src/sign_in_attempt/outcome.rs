@@ -2,8 +2,9 @@
 //!
 //! The wait applies one page reading (`page_reading.rs`) at a time:
 //! failures, challenges, step progression, and the success marker conclude
-//! immediately; "signed-in looking" evidence confirms after the existing
-//! 750 ms stability interval; an unexplained re-presentation of the same step
+//! immediately; "signed-in looking" evidence (never a field removal on the
+//! same document and route) confirms after the existing 750 ms stability
+//! interval; an unexplained re-presentation of the same step
 //! on a new document fails `Unknown` after 2 s. Decisive evidence is evaluated
 //! before the 20 s outcome budget, measured from submit, which otherwise ends
 //! the wait visibly as `TimedOut`. A new `Submitted` activity restarts it.
@@ -331,8 +332,9 @@ mod tests {
         SignInPageLinkText,
     };
     use crate::sign_in_attempt::test_fixture::{
-        SignInFieldsFixture, SignInLinkFixture, SignInMarkerFixture, SignInMessageFixture,
-        SignInObservationFixture, SignInPageFixture, SignInSubmittedAttempt,
+        SignInControlsFixture, SignInFieldsFixture, SignInLinkFixture, SignInMarkerFixture,
+        SignInMessageChangeFixture, SignInMessageFixture, SignInObservationFixture,
+        SignInPageFixture, SignInSubmittedAttempt,
     };
     use crate::{
         AuthenticationLoginChecklistOutcomePolling, AuthenticationLoginChecklistStatus,
@@ -550,7 +552,9 @@ mod tests {
                     at: 1_600,
                     page: SignInPageFixture {
                         messages: vec![SignInMessageFixture::field_reference(expected.text)],
-                        ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument)
+                        ..SignInPageFixture::login_form(
+                            SignInAttemptDocumentRelation::SameDocumentSameRoute,
+                        )
                     },
                 })?
                 .retained()?;
@@ -576,7 +580,7 @@ mod tests {
             messages: vec![SignInMessageFixture::red_banner(
                 "Incorrect username or password.",
             )],
-            ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument)
+            ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocumentSameRoute)
         };
         let awaiting = SignInSubmittedAttempt {
             baseline: banner.clone(),
@@ -656,7 +660,7 @@ mod tests {
     {
         let clean = SignInPageFixture {
             fields: SignInFieldsFixture::None,
-            ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument)
+            ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocumentNewRoute)
         };
         let interrupted = SignInSubmittedAttempt::login_form()
             .awaiting()?
@@ -667,7 +671,9 @@ mod tests {
             .retained()?
             .observe(SignInObservationFixture {
                 at: 2_400,
-                page: SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument),
+                page: SignInPageFixture::login_form(
+                    SignInAttemptDocumentRelation::SameDocumentSameRoute,
+                ),
             })?
             .retained()?
             .observe(SignInObservationFixture {
@@ -725,7 +731,7 @@ mod tests {
     -> anyhow::Result<()> {
         let undecided = SignInPageFixture {
             fields: SignInFieldsFixture::PasswordOnly,
-            ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument)
+            ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocumentSameRoute)
         };
         let waiting = SignInSubmittedAttempt::login_form()
             .awaiting()?
@@ -767,15 +773,86 @@ mod tests {
     }
 
     #[test]
+    fn same_route_spinner_never_confirms_and_times_out_without_the_marker() -> anyhow::Result<()> {
+        let spinner = SignInPageFixture {
+            fields: SignInFieldsFixture::None,
+            ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocumentSameRoute)
+        };
+        let waiting = SignInSubmittedAttempt::login_form()
+            .awaiting()?
+            .observe(SignInObservationFixture {
+                at: 1_500,
+                page: spinner.clone(),
+            })?
+            .retained()?
+            .observe(SignInObservationFixture {
+                at: 15_000,
+                page: spinner.clone(),
+            })?
+            .retained()?;
+        assert_eq!(waiting.presentation.status, SignInAttemptStatus::SigningIn);
+        assert_eq!(
+            waiting.presentation.page_evidence,
+            SignInAttemptEvidenceDemand::Wanted
+        );
+        let timed_out = waiting
+            .clone()
+            .observe(SignInObservationFixture {
+                at: 21_100,
+                page: spinner.clone(),
+            })?
+            .retained()?;
+        assert_eq!(timed_out.presentation.status, SignInAttemptStatus::TimedOut);
+        let marked = waiting
+            .observe(SignInObservationFixture {
+                at: 16_000,
+                page: SignInPageFixture {
+                    marker: SignInMarkerFixture::Success,
+                    ..spinner
+                },
+            })?
+            .closed()?;
+        assert_eq!(marked.status, SignInAttemptStatus::SignedIn);
+        Ok(())
+    }
+
+    #[test]
+    fn same_document_route_change_confirms_after_the_stability_interval() -> anyhow::Result<()> {
+        let routed = SignInPageFixture {
+            fields: SignInFieldsFixture::None,
+            ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocumentNewRoute)
+        };
+        let settling = SignInSubmittedAttempt::login_form()
+            .awaiting()?
+            .observe(SignInObservationFixture {
+                at: 1_500,
+                page: routed.clone(),
+            })?
+            .retained()?;
+        assert_eq!(settling.presentation.status, SignInAttemptStatus::SigningIn);
+        let confirmed = settling
+            .observe(SignInObservationFixture {
+                at: 2_250,
+                page: routed,
+            })?
+            .closed()?;
+        assert_eq!(confirmed.status, SignInAttemptStatus::SignedIn);
+        Ok(())
+    }
+
+    #[test]
     fn email_first_progression_closes_with_step_advanced() -> anyhow::Result<()> {
         for document in [
-            SignInAttemptDocumentRelation::SameDocument,
+            SignInAttemptDocumentRelation::SameDocumentSameRoute,
+            SignInAttemptDocumentRelation::SameDocumentNewRoute,
             SignInAttemptDocumentRelation::NewDocument,
         ] {
             let advanced = SignInSubmittedAttempt {
                 baseline: SignInPageFixture {
                     fields: SignInFieldsFixture::UsernameOnly,
-                    ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument)
+                    ..SignInPageFixture::login_form(
+                        SignInAttemptDocumentRelation::SameDocumentSameRoute,
+                    )
                 },
             }
             .awaiting()?
@@ -795,6 +872,76 @@ mod tests {
             );
             assert_eq!(advanced.follow_up, SignInAttemptFollowUp::None);
         }
+        Ok(())
+    }
+
+    #[test]
+    fn same_route_new_sign_out_affordance_confirms_after_the_stability_interval()
+    -> anyhow::Result<()> {
+        let signed_out = SignInPageFixture {
+            fields: SignInFieldsFixture::None,
+            controls: SignInControlsFixture::SignOut,
+            ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocumentSameRoute)
+        };
+        let confirmed = SignInSubmittedAttempt::login_form()
+            .awaiting()?
+            .observe(SignInObservationFixture {
+                at: 1_500,
+                page: signed_out.clone(),
+            })?
+            .retained()?
+            .observe(SignInObservationFixture {
+                at: 2_300,
+                page: signed_out,
+            })?
+            .closed()?;
+        assert_eq!(confirmed.status, SignInAttemptStatus::SignedIn);
+        Ok(())
+    }
+
+    #[test]
+    fn spa_retry_with_a_changed_banner_fails_and_an_unchanged_banner_times_out()
+    -> anyhow::Result<()> {
+        let banner = SignInPageFixture {
+            messages: vec![SignInMessageFixture::red_banner(
+                "Incorrect username or password.",
+            )],
+            ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocumentSameRoute)
+        };
+        let failed = SignInSubmittedAttempt {
+            baseline: banner.clone(),
+        }
+        .awaiting()?
+        .observe(SignInObservationFixture {
+            at: 1_600,
+            page: SignInPageFixture {
+                messages: vec![SignInMessageFixture {
+                    change: SignInMessageChangeFixture::Changed,
+                    ..SignInMessageFixture::red_banner("Too many attempts. Try again later.")
+                }],
+                ..banner.clone()
+            },
+        })?
+        .retained()?;
+        assert_eq!(
+            failed.presentation.reason_key,
+            Some(SignInAttemptMessageKey::WidgetSignInReasonRateLimited)
+        );
+        let timed_out = SignInSubmittedAttempt {
+            baseline: banner.clone(),
+        }
+        .awaiting()?
+        .observe(SignInObservationFixture {
+            at: 1_600,
+            page: banner.clone(),
+        })?
+        .retained()?
+        .observe(SignInObservationFixture {
+            at: 21_200,
+            page: banner,
+        })?
+        .retained()?;
+        assert_eq!(timed_out.presentation.status, SignInAttemptStatus::TimedOut);
         Ok(())
     }
 }

@@ -6,6 +6,7 @@
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
+use super::auth_step::SignInAttemptLoginWorkflow;
 use super::failure_reason::SignInFailureReason;
 use super::lifecycle::{
     SignInAttemptBinding, SignInAttemptEventContext, SignInAttemptNext, SignInAttemptStep,
@@ -92,16 +93,26 @@ pub(crate) enum SignInAttemptConclusion {
 
 impl SignInAttemptConclusion {
     /// Applies one event to a retained end state. Only an offered user action
-    /// changes it; every other event re-presents the same end state.
+    /// changes it. Page evidence re-presents it only while the page still
+    /// shows the login workflow; otherwise the record closes as
+    /// `WorkflowLeft` without claiming an outcome. Events without page
+    /// evidence re-present it and ask for page evidence.
     pub(crate) fn advance(self, context: SignInAttemptEventContext<'_>) -> SignInAttemptStep {
         let SignInAttemptEventContext { binding, event, .. } = context;
         match event {
             SignInAttemptEvent::UserAction { action } => {
                 self.resolve(SignInAttemptResolution { action, binding })
             }
-            SignInAttemptEvent::PageObserved { page } => self.presented(
-                SignInAttemptResetOffer::from(page.links.reset_link(binding.site)),
-            ),
+            SignInAttemptEvent::PageObserved { page } => {
+                match SignInAttemptLoginWorkflow::from(&page.auth_fields) {
+                    SignInAttemptLoginWorkflow::Shown => self.presented(
+                        SignInAttemptResetOffer::from(page.links.reset_link(binding.site)),
+                    ),
+                    SignInAttemptLoginWorkflow::Left => {
+                        SignInAttemptStep::closing(SignInAttemptClosing::WORKFLOW_LEFT)
+                    }
+                }
+            }
             SignInAttemptEvent::Resumed | SignInAttemptEvent::Activity { .. } => self.unobserved(),
         }
     }
@@ -159,10 +170,13 @@ impl SignInAttemptConclusion {
                 reset: representation.reset,
                 evidence: representation.evidence,
             }),
-            Self::ChallengeRequired { challenge } => {
-                SignInAttemptScene::ChallengeRequired(*challenge)
-            }
-            Self::TimedOut => SignInAttemptScene::TimedOut,
+            Self::ChallengeRequired { challenge } => SignInAttemptScene::ChallengeRequired {
+                challenge: *challenge,
+                evidence: representation.evidence,
+            },
+            Self::TimedOut => SignInAttemptScene::TimedOut {
+                evidence: representation.evidence,
+            },
         };
         SignInAttemptStep {
             next: SignInAttemptNext::Concluded(self),
@@ -211,7 +225,10 @@ impl SignInAttemptChallenge {
         match (self, action) {
             (Self::OneTimeCode, SignInAttemptUserAction::FillAuthenticator) => {
                 SignInAttemptStep::closing(SignInAttemptClosing {
-                    scene: SignInAttemptScene::ChallengeRequired(Self::OneTimeCode),
+                    scene: SignInAttemptScene::ChallengeRequired {
+                        challenge: Self::OneTimeCode,
+                        evidence: SignInAttemptEvidenceDemand::NotWanted,
+                    },
                     follow_up: SignInAttemptFollowUp::OpenAuthenticatorPicker,
                 })
             }
@@ -270,6 +287,11 @@ impl SignInAttemptClosing {
         scene: SignInAttemptScene::Dismissed(SignInAttemptDismissal::Concluded),
         follow_up: SignInAttemptFollowUp::None,
     };
+    /// The concluded attempt's page left the login workflow: no outcome claim.
+    pub(crate) const WORKFLOW_LEFT: Self = Self {
+        scene: SignInAttemptScene::WorkflowLeft,
+        follow_up: SignInAttemptFollowUp::None,
+    };
     /// An email-first step advanced: the Pilot renders the next step fresh.
     pub(crate) const STEP_ADVANCED: Self = Self {
         scene: SignInAttemptScene::StepAdvanced,
@@ -293,15 +315,17 @@ impl From<SignInAttemptResetLink> for SignInAttemptResetOffer {
 
 #[cfg(test)]
 mod tests {
-    use crate::sign_in_attempt::page_evidence::SignInAttemptDocumentRelation;
+    use crate::sign_in_attempt::page_evidence::{
+        SignInAttemptDocumentRelation, SignInPageLinkIndex,
+    };
     use crate::sign_in_attempt::test_fixture::{
-        SignInFieldsFixture, SignInMarkerFixture, SignInMessageFixture, SignInObservationFixture,
-        SignInPageFixture, SignInScenario, SignInSubmittedAttempt,
+        SignInFieldsFixture, SignInLinkFixture, SignInMarkerFixture, SignInMessageFixture,
+        SignInObservationFixture, SignInPageFixture, SignInScenario, SignInSubmittedAttempt,
     };
     use crate::{
-        AuthenticationLoginChecklistStatus, SignInAttemptActionKind, SignInAttemptFollowUp,
-        SignInAttemptLoginReference, SignInAttemptMessageKey, SignInAttemptStatus,
-        SignInAttemptUserAction,
+        AuthenticationLoginChecklistStatus, SignInAttemptActionKind, SignInAttemptEvidenceDemand,
+        SignInAttemptFollowUp, SignInAttemptLoginReference, SignInAttemptMessageKey,
+        SignInAttemptStatus, SignInAttemptUserAction,
     };
 
     #[test]
@@ -362,7 +386,9 @@ mod tests {
                 at: 3_000,
                 page: SignInPageFixture {
                     marker: SignInMarkerFixture::ManualCheckpoint,
-                    ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument)
+                    ..SignInPageFixture::login_form(
+                        SignInAttemptDocumentRelation::SameDocumentSameRoute,
+                    )
                 },
             })?
             .retained()?;
@@ -448,7 +474,9 @@ mod tests {
                 at: 1_500,
                 page: SignInPageFixture {
                     messages: vec![SignInMessageFixture::alert("Invalid password")],
-                    ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument)
+                    ..SignInPageFixture::login_form(
+                        SignInAttemptDocumentRelation::SameDocumentSameRoute,
+                    )
                 },
             })?
             .retained()?;
@@ -468,6 +496,199 @@ mod tests {
             .act(SignInAttemptUserAction::ChooseAnotherLogin)?
             .closed()?;
         assert_eq!(picker.follow_up, SignInAttemptFollowUp::OpenLoginPicker);
+        Ok(())
+    }
+
+    /// A retained Namecheap lock failure re-presented after a reload.
+    struct ReloadedLockFailure;
+
+    impl ReloadedLockFailure {
+        fn scenario() -> anyhow::Result<SignInScenario> {
+            SignInSubmittedAttempt::login_form()
+                .awaiting()?
+                .observe(SignInObservationFixture {
+                    at: 3_000,
+                    page: SignInPageFixture {
+                        messages: vec![SignInMessageFixture::red_banner(
+                            SignInMessageFixture::NAMECHEAP_LOCK,
+                        )],
+                        ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::NewDocument)
+                    },
+                })?
+                .retained()?
+                .resumed(9_000)?
+                .retained()
+        }
+    }
+
+    #[test]
+    fn page_evidence_on_a_reloaded_failure_offers_reset_only_for_a_current_reset_link()
+    -> anyhow::Result<()> {
+        let reloaded = ReloadedLockFailure::scenario()?;
+        assert_eq!(reloaded.presentation.reset_link, None);
+        assert_eq!(
+            reloaded.presentation.page_evidence,
+            SignInAttemptEvidenceDemand::Wanted
+        );
+        let with_link = reloaded
+            .clone()
+            .observe(SignInObservationFixture {
+                at: 9_200,
+                page: SignInPageFixture {
+                    messages: vec![SignInMessageFixture::red_banner(
+                        SignInMessageFixture::NAMECHEAP_LOCK,
+                    )],
+                    links: vec![SignInLinkFixture::NAMECHEAP_RESET],
+                    ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::NewDocument)
+                },
+            })?
+            .retained()?;
+        assert_eq!(with_link.presentation.status, SignInAttemptStatus::Failed);
+        assert_eq!(
+            with_link.presentation.reason_key,
+            Some(SignInAttemptMessageKey::WidgetSignInReasonAccountLocked)
+        );
+        assert_eq!(
+            with_link.presentation.reset_link,
+            Some(SignInPageLinkIndex::from(7))
+        );
+        assert!(
+            with_link
+                .offered()
+                .contains(&SignInAttemptActionKind::ResetPassword)
+        );
+        assert_eq!(
+            with_link.presentation.page_evidence,
+            SignInAttemptEvidenceDemand::NotWanted
+        );
+        let without_link = reloaded
+            .observe(SignInObservationFixture {
+                at: 9_200,
+                page: SignInPageFixture::login_form(SignInAttemptDocumentRelation::NewDocument),
+            })?
+            .retained()?;
+        assert_eq!(
+            without_link.presentation.status,
+            SignInAttemptStatus::Failed
+        );
+        assert_eq!(without_link.presentation.reset_link, None);
+        assert!(
+            !without_link
+                .offered()
+                .contains(&SignInAttemptActionKind::ResetPassword)
+        );
+        assert_eq!(
+            without_link.presentation.page_evidence,
+            SignInAttemptEvidenceDemand::NotWanted
+        );
+        Ok(())
+    }
+
+    /// One concluded end state, re-observed after a reload.
+    struct ConcludedCase {
+        concluded: SignInScenario,
+        status: SignInAttemptStatus,
+        workflow_page: SignInPageFixture,
+    }
+
+    impl ConcludedCase {
+        fn all() -> anyhow::Result<Vec<Self>> {
+            let failed = ReloadedLockFailure::scenario()?;
+            let timed_out = SignInSubmittedAttempt::login_form()
+                .awaiting()?
+                .resumed(30_000)?
+                .retained()?;
+            let challenged = SignInSubmittedAttempt::login_form()
+                .awaiting()?
+                .observe(SignInObservationFixture {
+                    at: 3_000,
+                    page: SignInPageFixture {
+                        fields: SignInFieldsFixture::OneTimeCode,
+                        ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::NewDocument)
+                    },
+                })?
+                .retained()?
+                .resumed(9_000)?
+                .retained()?;
+            Ok(vec![
+                Self {
+                    concluded: failed,
+                    status: SignInAttemptStatus::Failed,
+                    workflow_page: SignInPageFixture::login_form(
+                        SignInAttemptDocumentRelation::NewDocument,
+                    ),
+                },
+                Self {
+                    concluded: timed_out,
+                    status: SignInAttemptStatus::TimedOut,
+                    workflow_page: SignInPageFixture::login_form(
+                        SignInAttemptDocumentRelation::NewDocument,
+                    ),
+                },
+                Self {
+                    concluded: challenged,
+                    status: SignInAttemptStatus::ChallengeRequired,
+                    workflow_page: SignInPageFixture {
+                        fields: SignInFieldsFixture::OneTimeCode,
+                        ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::NewDocument)
+                    },
+                },
+            ])
+        }
+    }
+
+    #[test]
+    fn concluded_records_ask_for_page_evidence_after_resume() -> anyhow::Result<()> {
+        for case in ConcludedCase::all()? {
+            assert_eq!(case.concluded.presentation.status, case.status);
+            assert_eq!(
+                case.concluded.presentation.page_evidence,
+                SignInAttemptEvidenceDemand::Wanted,
+                "{:?}",
+                case.status
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn concluded_records_stay_while_the_login_workflow_is_shown_and_close_once_it_is_left()
+    -> anyhow::Result<()> {
+        for case in ConcludedCase::all()? {
+            let kept = case
+                .concluded
+                .clone()
+                .observe(SignInObservationFixture {
+                    at: 9_500,
+                    page: case.workflow_page.clone(),
+                })?
+                .retained()?;
+            assert_eq!(kept.presentation.status, case.status);
+            assert_eq!(
+                kept.presentation.page_evidence,
+                SignInAttemptEvidenceDemand::NotWanted
+            );
+            let left = case
+                .concluded
+                .observe(SignInObservationFixture {
+                    at: 9_500,
+                    page: SignInPageFixture {
+                        fields: SignInFieldsFixture::None,
+                        ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::NewDocument)
+                    },
+                })?
+                .closed()?;
+            assert_eq!(
+                left.status,
+                SignInAttemptStatus::WorkflowLeft,
+                "{:?}",
+                case.status
+            );
+            assert!(left.actions.is_empty());
+            assert_eq!(left.reset_link, None);
+            assert_eq!(left.page_evidence, SignInAttemptEvidenceDemand::NotWanted);
+            assert_eq!(left.follow_up, SignInAttemptFollowUp::None);
+        }
         Ok(())
     }
 }

@@ -96,9 +96,13 @@ impl SignInPageMessageTokens {
         "notice-success",
     ];
 
-    fn signal(&self) -> SignInAttemptTokenSignal {
+    /// Error and weak stems read the element's and its ancestors' tokens; the
+    /// success/info veto reads only the element's own tokens, so a wrapper
+    /// class cannot suppress a styled error banner.
+    fn signal(&self, ancestors: &Self) -> SignInAttemptTokenSignal {
         let joined = self
             .iter()
+            .chain(ancestors.iter())
             .map(SignInPageMessageToken::text)
             .collect::<Vec<_>>()
             .join(" ");
@@ -222,7 +226,7 @@ impl SignInPageMessage {
             .source_score()
             .plus(self.color_score())
             .plus(self.text_score(reading));
-        let score = match self.tokens.signal() {
+        let score = match self.tokens.signal(&self.ancestor_tokens) {
             SignInAttemptTokenSignal::Veto => return SignInAttemptMessageAssessment::Ordinary,
             SignInAttemptTokenSignal::Error => signals.plus(SignInAttemptErrorScore::STRONG),
             SignInAttemptTokenSignal::Weak => signals.plus(SignInAttemptErrorScore::WEAK),
@@ -267,12 +271,65 @@ impl SignInAttemptErrorMessageSelection {
     }
 }
 
+/// Which messages a freshness decision admits.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SignInAttemptMessageAdmission {
+    /// Every message (a new document, or no error-looking message at submit).
+    Every,
+    /// Only messages that appeared or changed since the acting script's submit.
+    ChangedSinceSubmit,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SignInAttemptMessageChange {
+    Changed,
+    Unchanged,
+}
+
+impl SignInPageMessage {
+    #[expect(
+        clippy::match_bool,
+        reason = "the sensor contract boolean is converted immediately into a named change state"
+    )]
+    fn change(&self) -> SignInAttemptMessageChange {
+        match self.changed_since_submit {
+            true => SignInAttemptMessageChange::Changed,
+            false => SignInAttemptMessageChange::Unchanged,
+        }
+    }
+
+    fn admitted(&self, admission: SignInAttemptMessageAdmission) -> SignInAttemptMessageAssessment {
+        match (admission, self.change()) {
+            (
+                SignInAttemptMessageAdmission::Every,
+                SignInAttemptMessageChange::Changed | SignInAttemptMessageChange::Unchanged,
+            )
+            | (
+                SignInAttemptMessageAdmission::ChangedSinceSubmit,
+                SignInAttemptMessageChange::Changed,
+            ) => self.assessment(),
+            (
+                SignInAttemptMessageAdmission::ChangedSinceSubmit,
+                SignInAttemptMessageChange::Unchanged,
+            ) => SignInAttemptMessageAssessment::Ordinary,
+        }
+    }
+}
+
 impl SignInPageMessages {
     /// The highest-ranked error-looking message, whether fresh or stale.
     pub(crate) fn error_selection(&self) -> SignInAttemptErrorMessageSelection {
+        self.admitted_error_selection(SignInAttemptMessageAdmission::Every)
+    }
+
+    /// The highest-ranked error-looking message among admitted messages.
+    pub(crate) fn admitted_error_selection(
+        &self,
+        admission: SignInAttemptMessageAdmission,
+    ) -> SignInAttemptErrorMessageSelection {
         self.iter().fold(
             SignInAttemptErrorMessageSelection::NoneErrorLooking,
-            |selection, message| selection.consider(message.assessment()),
+            |selection, message| selection.consider(message.admitted(admission)),
         )
     }
 }
@@ -419,6 +476,44 @@ mod tests {
             anyhow::bail!("the Namecheap lock banner must be error-looking");
         };
         assert_eq!(selected.reason, SignInFailureReason::AccountLocked);
+        Ok(())
+    }
+
+    #[test]
+    fn only_the_elements_own_tokens_can_veto_a_styled_banner() -> anyhow::Result<()> {
+        let wrapped = SignInMessageFixture {
+            ancestor_tokens: &["panel-info", "ok"],
+            ..SignInMessageFixture::red_banner(SignInMessageFixture::NAMECHEAP_LOCK)
+        };
+        assert_eq!(
+            SelectionCase {
+                messages: vec![wrapped]
+            }
+            .selected_text()?,
+            SignInMessageFixture::NAMECHEAP_LOCK
+        );
+        let own_info = SignInMessageFixture {
+            tokens: &["notice-info"],
+            ..SignInMessageFixture::red_banner(SignInMessageFixture::NAMECHEAP_LOCK)
+        };
+        assert_eq!(
+            SelectionCase {
+                messages: vec![own_info]
+            }
+            .selected_text()?,
+            ""
+        );
+        let ancestor_error = SignInMessageFixture {
+            ancestor_tokens: &["form-group", "has-error"],
+            ..SignInMessageFixture::container("Please check your password and try again")
+        };
+        assert_eq!(
+            SelectionCase {
+                messages: vec![ancestor_error]
+            }
+            .selected_text()?,
+            "Please check your password and try again"
+        );
         Ok(())
     }
 }

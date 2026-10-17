@@ -41,10 +41,26 @@ exactly one visible end state.
   frame, and the sender origin (`URL.origin`).
 - It stores the opaque record string under
   `nook.extension.sign-in-attempt.<tabId>` in `chrome.storage.session` and
-  forwards requests to the offscreen companion runtime.
+  calls `begin_sign_in_attempt` / `advance_sign_in_attempt` itself. There is
+  no offscreen hop for this lifecycle.
 - It removes the key on `Close`, `RecordRejected`, and tab removal.
+- It processes each tab's events in order, one at a time, each against the
+  record the previous event stored.
 - Content scripts are sensors and actuators only. They collect bounded page
   facts, render presentations, and execute the selected follow-up.
+
+Ordering requirement: the acting content script delivers `Submitted { baseline }`,
+and the service worker processes it, before a submit that can navigate away.
+`Resumed`, or a `PageObserved` from a `NewDocument`, that arrives before a
+recorded submit concludes `TimedOut`. Rust never assumes that an unrecorded
+submit happened.
+
+The acting content script also reports the document relation of each
+observation. `SameDocumentSameRoute` means `location.pathname` still equals the
+pathname it captured at its own submit. `SameDocumentNewRoute` means the
+pathname changed. `NewDocument` means a resumed instance observed the page
+after a load. The pathname is an in-memory fact of that content script and is
+never stored.
 
 ## Record shape and lifetime
 
@@ -62,14 +78,17 @@ The record is JSON that TypeScript stores and returns verbatim:
     stability state.
   - `Concluded`, which is `Failed`, `ChallengeRequired`, or `TimedOut`.
 
-The submit baseline keeps only two facts:
+The submit baseline keeps only three facts:
 
 - whether an error-looking message (same rule as after submit) was visible at
   submit;
-- which auth fields (username, current password, one-time code) were present.
+- which auth fields (username, current password, one-time code) were present;
+- whether a sign-out style authenticated affordance was present. This is
+  derived from the bounded control labels with the existing login-save
+  `LoginControlLabel::semantics` / `AuthenticatedControlEvidence` rule.
 
-Submit-time message text, tokens, and colours are classified once and
-dropped. The only page text a record ever holds is the one Rust-selected
+Submit-time message text, tokens, colours, and control labels are classified
+once and dropped. The only page text a record ever holds is the one Rust-selected
 site message of a failure: whitespace-normalized visible text, at most 300
 characters.
 
@@ -96,7 +115,9 @@ needed, because the record is non-secret and never written to vault storage.
 | AwaitingOutcome | `Resumed` or another activity | keep waiting, or `TimedOut` after the budget |
 | AwaitingOutcome | a new `Submitted` | restart the wait |
 | any in-flight phase | `Dismiss` | close; take-over state |
-| Concluded | `Resumed`, `PageObserved`, activity | re-present unchanged; never expires |
+| Concluded | `Resumed`, activity | re-present unchanged and ask for page evidence; never expires |
+| Concluded | `PageObserved` with an auth field visible | re-present unchanged, with the reset offer from that page |
+| Concluded | `PageObserved` with no auth field visible | close as `WorkflowLeft`: no outcome claim, no actions |
 | Concluded | offered user action | close with its follow-up |
 
 Close, meaning the record is removed after the presentation is delivered,
@@ -104,6 +125,8 @@ applies to:
 
 - signed in;
 - step advanced;
+- workflow left. A concluded record is never self-corrected into a success:
+  once its page no longer shows a login workflow, it closes without a claim;
 - dismissed;
 - try again, choose another login, reset password;
 - the authenticator hand-off.
@@ -151,7 +174,14 @@ fresh Pilot.
 5. The explicit success marker is `SignedIn`.
 6. A page with no auth fields and no error-looking message is `SignedIn`
    once that evidence has been stable for the existing 750 ms interval
-   (`LoginSaveOutcomeObservation::STABILITY_DELAY_MS`).
+   (`LoginSaveOutcomeObservation::STABILITY_DELAY_MS`). This applies only to a
+   `NewDocument` or a `SameDocumentNewRoute` observation. On
+   `SameDocumentSameRoute`, removed fields alone never confirm sign-in; only
+   the explicit success marker does, or a sign-out style authenticated
+   affordance that was absent at submit, with the same 750 ms stability. This
+   follows the submitted-login save precedent, where removing fields on the
+   same route stays `Waiting` unless a new authenticated affordance appears.
+   A same-route spinner therefore keeps waiting and ends as `TimedOut`.
 7. The same username/password step re-presented on a new document, with no
    error-looking message, is `Failed` with reason `Unknown` once stable for
    2 s. The delay leaves time for client-rendered error text.
@@ -164,8 +194,16 @@ fresh Pilot.
 A message counts as newly present:
 
 - on a `NewDocument`, always;
-- on the `SameDocument`, only when no error-looking message was visible at
-  submit.
+- on the same document (`SameDocumentSameRoute` or `SameDocumentNewRoute`),
+  when no error-looking message was visible at submit, or when the message's
+  `changed_since_submit` is true. The acting content script sets that flag,
+  in memory only, when the element was absent at its submit or its visible
+  text changed since then. The flag is always false in a submit baseline and
+  on a `NewDocument`.
+
+Remaining limitation: when a site re-renders an identical error text into the
+same element without replacing the node, the message is not fresh. The
+attempt then ends as `TimedOut`, never as a guessed failure.
 
 ### Error-looking messages
 
@@ -182,8 +220,10 @@ reach a score of 3:
 | failure-reason vocabulary | 2 |
 | generic error vocabulary | 1 |
 
-- A success or info token vetoes a message unless an error token is also
-  present.
+- A success or info token on the element itself (`tokens`) vetoes a message
+  unless an error token is also present. Ancestor tokens (`ancestor_tokens`)
+  contribute error and weak stems but never veto, so a wrapper `info` or
+  `ok` class cannot hide a styled error banner.
 - When several messages qualify, the highest score wins. Ties go to a message
   inside the form, then to the earlier message.
 - The Namecheap lock banner qualifies: it is a plain container with no role,
@@ -222,8 +262,12 @@ sender origin must be a canonical `http(s)` origin:
 - `begin` rejects anything else as a malformed request;
 - `advance` answers `OtherSite` and leaves the record stored.
 
-`nook-core` owns the credential-matching PSL policy but depends on this crate,
-so the same pinned `psl` crate is used here.
+The binding is schemeful: `http://www.namecheap.com` and
+`https://www.namecheap.com` are different sites, so a scheme change answers
+`OtherSite`. This differs from `nook-core`'s credential matching, which
+compares registrable domains without the scheme. `nook-core` owns that PSL
+policy but depends on this crate, so the same pinned `psl` crate is used here
+under the schemeful rule.
 
 ## Bounds
 
@@ -234,7 +278,8 @@ Requests exceeding a bound fail decoding (`JsError`):
 | sender origin | 512 bytes |
 | login reference | 256 bytes |
 | messages | ≤ 6, text ≤ 300 characters |
-| message tokens | ≤ 12, each ≤ 48 characters |
+| message tokens, ancestor tokens | ≤ 12 each, each token ≤ 48 characters |
+| control labels | ≤ 64, existing login-save label bound |
 | colour channels | 0–255 |
 | links | ≤ 8, text ≤ 80 characters, href ≤ 300 characters |
 
@@ -266,6 +311,16 @@ They drive the public `begin`/`advance` API through typed fixtures and cover:
 - `Unknown` for unclear text, and stale same-document banners;
 - one-time-code and verification challenges;
 - success after navigation with stability, and the success marker;
+- a same-route spinner that never confirms, a new same-route sign-out
+  affordance that confirms, an affordance already present at submit that
+  does not count, and a same-document route change that confirms after
+  stability;
+- an SPA retry whose changed banner fails with its reason, and an unchanged
+  banner that times out;
+- concluded Failed, TimedOut, and ChallengeRequired records that stay while
+  the login workflow is shown and close as `WorkflowLeft` once it is left;
+- ancestor tokens that cannot veto a styled banner;
+- reset offers re-derived from page evidence on a reloaded failure;
 - step progression on the same and on a new document;
 - unexplained re-presentation and timeout;
 - in-flight and concluded dismissal, Try again, Choose another login, and

@@ -12,6 +12,7 @@
 //! field value, or page text is stored except the one Rust-selected, bounded
 //! site message of a failed attempt, and nothing here is logged.
 
+mod auth_step;
 mod conclusion;
 mod failure_reason;
 mod lifecycle;
@@ -32,10 +33,10 @@ pub use conclusion::SignInAttemptSiteMessage;
 pub use lifecycle::{SignInAttemptAdvance, SignInAttemptDisposition, SignInAttemptTransition};
 pub use page_evidence::{
     SignInAttemptDocumentRelation, SignInAttemptPageEvidence, SignInPageColor,
-    SignInPageColorChannel, SignInPageLink, SignInPageLinkHref, SignInPageLinkIndex,
-    SignInPageLinkText, SignInPageLinks, SignInPageMessage, SignInPageMessagePlacement,
-    SignInPageMessageSource, SignInPageMessageText, SignInPageMessageToken,
-    SignInPageMessageTokens, SignInPageMessages,
+    SignInPageColorChannel, SignInPageControls, SignInPageLink, SignInPageLinkHref,
+    SignInPageLinkIndex, SignInPageLinkText, SignInPageLinks, SignInPageMessage,
+    SignInPageMessagePlacement, SignInPageMessageSource, SignInPageMessageText,
+    SignInPageMessageToken, SignInPageMessageTokens, SignInPageMessages,
 };
 pub use presentation::{
     SignInAttemptActionKind, SignInAttemptActionOffer, SignInAttemptEvidenceDemand,

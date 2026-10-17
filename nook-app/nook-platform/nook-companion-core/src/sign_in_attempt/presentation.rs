@@ -74,6 +74,8 @@ pub enum SignInAttemptStatus {
     Dismissed,
     /// An email-first step was accepted and the site shows the next step.
     StepAdvanced,
+    /// A concluded attempt's page left the login workflow; no outcome is claimed.
+    WorkflowLeft,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Tsify)]
@@ -116,9 +118,9 @@ pub enum SignInAttemptFollowUp {
     OpenAuthenticatorPicker,
 }
 
-/// The frozen TypeScript contract fixes `reasonKey`, `siteMessage`, and
-/// `resetLink` as optional fields; Rust fills them only from the named scene
-/// states below, at this DTO edge.
+/// The TypeScript contract fixes `reason_key`, `site_message`, and
+/// `reset_link` as optional fields; Rust fills them only from named scene
+/// states (`SignInAttemptScene`), at this DTO edge.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
 pub struct SignInAttemptPresentation {
     pub status: SignInAttemptStatus,
@@ -139,11 +141,21 @@ pub(crate) enum SignInAttemptScene {
     SigningIn(SignInAttemptSigningIn),
     SignedIn,
     Failed(SignInAttemptFailedScene),
-    ChallengeRequired(SignInAttemptChallenge),
-    TimedOut,
+    /// A retained challenge; `evidence` asks whether the page still shows
+    /// the login workflow.
+    ChallengeRequired {
+        challenge: SignInAttemptChallenge,
+        evidence: SignInAttemptEvidenceDemand,
+    },
+    TimedOut {
+        evidence: SignInAttemptEvidenceDemand,
+    },
     Dismissed(SignInAttemptDismissal),
     /// The submitted email-first step was accepted; the next step starts fresh.
     StepAdvanced,
+    /// A concluded attempt's page no longer shows the login workflow: the
+    /// record closes without any outcome claim.
+    WorkflowLeft,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -241,10 +253,11 @@ impl SignInAttemptScene {
             Self::SigningIn(_) => SignInAttemptStatus::SigningIn,
             Self::SignedIn => SignInAttemptStatus::SignedIn,
             Self::Failed(_) => SignInAttemptStatus::Failed,
-            Self::ChallengeRequired(_) => SignInAttemptStatus::ChallengeRequired,
-            Self::TimedOut => SignInAttemptStatus::TimedOut,
+            Self::ChallengeRequired { .. } => SignInAttemptStatus::ChallengeRequired,
+            Self::TimedOut { .. } => SignInAttemptStatus::TimedOut,
             Self::Dismissed(_) => SignInAttemptStatus::Dismissed,
             Self::StepAdvanced => SignInAttemptStatus::StepAdvanced,
+            Self::WorkflowLeft => SignInAttemptStatus::WorkflowLeft,
         }
     }
 
@@ -253,14 +266,14 @@ impl SignInAttemptScene {
             Self::SigningIn(_) => SignInAttemptMessageKey::WidgetSignInSigningIn,
             Self::SignedIn => SignInAttemptMessageKey::WidgetSignInSignedIn,
             Self::Failed(_) => SignInAttemptMessageKey::WidgetSignInFailed,
-            Self::ChallengeRequired(_) => SignInAttemptMessageKey::WidgetSignInChallenge,
-            Self::TimedOut => SignInAttemptMessageKey::WidgetSignInTimedOut,
+            Self::ChallengeRequired { .. } => SignInAttemptMessageKey::WidgetSignInChallenge,
+            Self::TimedOut { .. } => SignInAttemptMessageKey::WidgetSignInTimedOut,
             Self::Dismissed(SignInAttemptDismissal::TakenOver) => {
                 SignInAttemptMessageKey::WidgetChecklistInactive
             }
-            Self::Dismissed(SignInAttemptDismissal::Concluded) | Self::StepAdvanced => {
-                SignInAttemptMessageKey::WidgetLoginTitle
-            }
+            Self::Dismissed(SignInAttemptDismissal::Concluded)
+            | Self::StepAdvanced
+            | Self::WorkflowLeft => SignInAttemptMessageKey::WidgetLoginTitle,
         }
     }
 
@@ -280,19 +293,21 @@ impl SignInAttemptScene {
             }
             Self::SignedIn => SignInAttemptMessageKey::WidgetSignInSignedInDescription,
             Self::Failed(scene) => scene.failure.description_key(),
-            Self::ChallengeRequired(SignInAttemptChallenge::OneTimeCode) => {
-                SignInAttemptMessageKey::WidgetSignInChallengeOneTimeCodeDescription
-            }
-            Self::ChallengeRequired(SignInAttemptChallenge::Verification) => {
-                SignInAttemptMessageKey::WidgetSignInChallengeVerificationDescription
-            }
-            Self::TimedOut => SignInAttemptMessageKey::WidgetSignInTimedOutDescription,
+            Self::ChallengeRequired {
+                challenge: SignInAttemptChallenge::OneTimeCode,
+                ..
+            } => SignInAttemptMessageKey::WidgetSignInChallengeOneTimeCodeDescription,
+            Self::ChallengeRequired {
+                challenge: SignInAttemptChallenge::Verification,
+                ..
+            } => SignInAttemptMessageKey::WidgetSignInChallengeVerificationDescription,
+            Self::TimedOut { .. } => SignInAttemptMessageKey::WidgetSignInTimedOutDescription,
             Self::Dismissed(SignInAttemptDismissal::TakenOver) => {
                 SignInAttemptMessageKey::WidgetManualDescription
             }
-            Self::Dismissed(SignInAttemptDismissal::Concluded) | Self::StepAdvanced => {
-                SignInAttemptMessageKey::WidgetLoginDescription
-            }
+            Self::Dismissed(SignInAttemptDismissal::Concluded)
+            | Self::StepAdvanced
+            | Self::WorkflowLeft => SignInAttemptMessageKey::WidgetLoginDescription,
         }
     }
 
@@ -308,10 +323,11 @@ impl SignInAttemptScene {
             })
             | Self::SigningIn(_)
             | Self::SignedIn
-            | Self::ChallengeRequired(_)
-            | Self::TimedOut
+            | Self::ChallengeRequired { .. }
+            | Self::TimedOut { .. }
             | Self::Dismissed(_)
-            | Self::StepAdvanced => None,
+            | Self::StepAdvanced
+            | Self::WorkflowLeft => None,
         }
     }
 
@@ -328,10 +344,11 @@ impl SignInAttemptScene {
             Self::Failed(_)
             | Self::SigningIn(_)
             | Self::SignedIn
-            | Self::ChallengeRequired(_)
-            | Self::TimedOut
+            | Self::ChallengeRequired { .. }
+            | Self::TimedOut { .. }
             | Self::Dismissed(_)
-            | Self::StepAdvanced => None,
+            | Self::StepAdvanced
+            | Self::WorkflowLeft => None,
         }
     }
 
@@ -345,10 +362,11 @@ impl SignInAttemptScene {
             Self::Failed(_)
             | Self::SigningIn(_)
             | Self::SignedIn
-            | Self::ChallengeRequired(_)
-            | Self::TimedOut
+            | Self::ChallengeRequired { .. }
+            | Self::TimedOut { .. }
             | Self::Dismissed(_)
-            | Self::StepAdvanced => None,
+            | Self::StepAdvanced
+            | Self::WorkflowLeft => None,
         }
     }
 
@@ -357,23 +375,19 @@ impl SignInAttemptScene {
             Self::SigningIn(SignInAttemptSigningIn::AwaitingOutcome) => {
                 SignInAttemptEvidenceDemand::Wanted
             }
-            Self::Failed(SignInAttemptFailedScene {
-                failure: SignInAttemptFailure::SiteRejected { .. },
-                evidence,
-                ..
-            }) => *evidence,
-            Self::Failed(_)
-            | Self::SigningIn(
+            Self::Failed(SignInAttemptFailedScene { evidence, .. })
+            | Self::ChallengeRequired { evidence, .. }
+            | Self::TimedOut { evidence } => *evidence,
+            Self::SigningIn(
                 SignInAttemptSigningIn::Filling
                 | SignInAttemptSigningIn::Filled
                 | SignInAttemptSigningIn::ManualSubmit
                 | SignInAttemptSigningIn::Restarting,
             )
             | Self::SignedIn
-            | Self::ChallengeRequired(_)
-            | Self::TimedOut
             | Self::Dismissed(_)
-            | Self::StepAdvanced => SignInAttemptEvidenceDemand::NotWanted,
+            | Self::StepAdvanced
+            | Self::WorkflowLeft => SignInAttemptEvidenceDemand::NotWanted,
         }
     }
 
@@ -381,19 +395,27 @@ impl SignInAttemptScene {
         match self {
             Self::SigningIn(_) => vec![SignInAttemptActionOffer::TAKE_OVER],
             Self::Failed(scene) => scene.actions(),
-            Self::ChallengeRequired(SignInAttemptChallenge::OneTimeCode) => vec![
+            Self::ChallengeRequired {
+                challenge: SignInAttemptChallenge::OneTimeCode,
+                ..
+            } => vec![
                 SignInAttemptActionOffer::FILL_AUTHENTICATOR,
                 SignInAttemptActionOffer::TAKE_OVER,
             ],
-            Self::ChallengeRequired(SignInAttemptChallenge::Verification) => vec![
+            Self::ChallengeRequired {
+                challenge: SignInAttemptChallenge::Verification,
+                ..
+            } => vec![
                 SignInAttemptActionOffer::TRY_AGAIN,
                 SignInAttemptActionOffer::TAKE_OVER,
             ],
-            Self::TimedOut => vec![
+            Self::TimedOut { .. } => vec![
                 SignInAttemptActionOffer::TRY_AGAIN,
                 SignInAttemptActionOffer::DISMISS,
             ],
-            Self::SignedIn | Self::Dismissed(_) | Self::StepAdvanced => Vec::new(),
+            Self::SignedIn | Self::Dismissed(_) | Self::StepAdvanced | Self::WorkflowLeft => {
+                Vec::new()
+            }
         }
     }
 
@@ -423,9 +445,9 @@ impl SignInAttemptScene {
             Self::Dismissed(SignInAttemptDismissal::TakenOver) => {
                 AuthenticationLoginChecklistActivity::TakenOver
             }
-            Self::Dismissed(SignInAttemptDismissal::Concluded) | Self::StepAdvanced => {
-                AuthenticationLoginChecklistActivity::Ready
-            }
+            Self::Dismissed(SignInAttemptDismissal::Concluded)
+            | Self::StepAdvanced
+            | Self::WorkflowLeft => AuthenticationLoginChecklistActivity::Ready,
             Self::SignedIn => {
                 return AuthenticationLoginChecklistState::Outcome {
                     result: AuthenticationLoginChecklistResult::Confirmed,
@@ -435,8 +457,8 @@ impl SignInAttemptScene {
                 failure: SignInAttemptFailure::SiteRejected { .. },
                 ..
             })
-            | Self::ChallengeRequired(_)
-            | Self::TimedOut => {
+            | Self::ChallengeRequired { .. }
+            | Self::TimedOut { .. } => {
                 return AuthenticationLoginChecklistState::Outcome {
                     result: AuthenticationLoginChecklistResult::Attention,
                 };

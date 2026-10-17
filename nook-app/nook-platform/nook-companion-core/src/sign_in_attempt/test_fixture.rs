@@ -6,10 +6,10 @@
 use super::lifecycle::{SignInAttemptAdvance, SignInAttemptDisposition, SignInAttemptTransition};
 use super::page_evidence::{
     SignInAttemptDocumentRelation, SignInAttemptPageEvidence, SignInPageColor,
-    SignInPageColorChannel, SignInPageLink, SignInPageLinkHref, SignInPageLinkIndex,
-    SignInPageLinkText, SignInPageLinks, SignInPageMessage, SignInPageMessagePlacement,
-    SignInPageMessageSource, SignInPageMessageText, SignInPageMessageToken,
-    SignInPageMessageTokens, SignInPageMessages,
+    SignInPageColorChannel, SignInPageControls, SignInPageLink, SignInPageLinkHref,
+    SignInPageLinkIndex, SignInPageLinkText, SignInPageLinks, SignInPageMessage,
+    SignInPageMessagePlacement, SignInPageMessageSource, SignInPageMessageText,
+    SignInPageMessageToken, SignInPageMessageTokens, SignInPageMessages,
 };
 use super::presentation::{SignInAttemptActionKind, SignInAttemptPresentation};
 use super::record::SignInAttemptStoredRecord;
@@ -18,7 +18,7 @@ use super::request::{
     SignInAttemptBeginRequest, SignInAttemptEvent, SignInAttemptLoginReference,
     SignInAttemptSenderOrigin, SignInAttemptSubmitBaseline, SignInAttemptUserAction,
 };
-use crate::CompanionEpochMilliseconds;
+use crate::{CompanionEpochMilliseconds, LoginControlLabel};
 
 /// Which credential fields a fixture page shows.
 #[derive(Debug, Clone, Copy)]
@@ -46,6 +46,32 @@ impl From<SignInFieldsFixture> for SignInAttemptAuthFields {
     }
 }
 
+/// Whether a same-document message appeared or changed since the submit.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum SignInMessageChangeFixture {
+    Unchanged,
+    Changed,
+}
+
+/// Visible control labels on a fixture page.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum SignInControlsFixture {
+    SignIn,
+    SignOut,
+}
+
+impl SignInControlsFixture {
+    fn controls(self) -> anyhow::Result<SignInPageControls> {
+        let label = match self {
+            Self::SignIn => "Sign in",
+            Self::SignOut => "Sign out",
+        };
+        Ok(SignInPageControls::try_from(vec![
+            LoginControlLabel::try_from(label.to_owned())?,
+        ])?)
+    }
+}
+
 /// One visible message block; defaults to a plain, neutral container.
 #[derive(Debug, Clone)]
 pub(crate) struct SignInMessageFixture {
@@ -53,6 +79,8 @@ pub(crate) struct SignInMessageFixture {
     pub(crate) source: SignInPageMessageSource,
     pub(crate) placement: SignInPageMessagePlacement,
     pub(crate) tokens: &'static [&'static str],
+    pub(crate) ancestor_tokens: &'static [&'static str],
+    pub(crate) change: SignInMessageChangeFixture,
     pub(crate) foreground: [u8; 3],
     pub(crate) background: [u8; 3],
 }
@@ -73,6 +101,8 @@ impl SignInMessageFixture {
             source: SignInPageMessageSource::Container,
             placement: SignInPageMessagePlacement::InsideAuthForm,
             tokens: &[],
+            ancestor_tokens: &[],
+            change: SignInMessageChangeFixture::Unchanged,
             foreground: Self::BLACK,
             background: Self::WHITE,
         }
@@ -103,19 +133,24 @@ impl SignInMessageFixture {
     }
 
     pub(crate) fn message(&self) -> anyhow::Result<SignInPageMessage> {
-        let tokens = self
-            .tokens
-            .iter()
-            .map(|token| SignInPageMessageToken::try_from((*token).to_owned()))
-            .collect::<Result<Vec<_>, _>>()?;
         Ok(SignInPageMessage {
             text: SignInPageMessageText::try_from(self.text.to_owned())?,
             source: self.source,
             placement: self.placement,
-            tokens: SignInPageMessageTokens::try_from(tokens)?,
+            tokens: Self::tokens(self.tokens)?,
+            ancestor_tokens: Self::tokens(self.ancestor_tokens)?,
             foreground: Self::color(self.foreground),
             background: Self::color(self.background),
+            changed_since_submit: matches!(self.change, SignInMessageChangeFixture::Changed),
         })
+    }
+
+    fn tokens(tokens: &[&str]) -> anyhow::Result<SignInPageMessageTokens> {
+        let tokens = tokens
+            .iter()
+            .map(|token| SignInPageMessageToken::try_from((*token).to_owned()))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(SignInPageMessageTokens::try_from(tokens)?)
     }
 
     fn color(channels: [u8; 3]) -> SignInPageColor {
@@ -169,6 +204,7 @@ pub(crate) struct SignInPageFixture {
     pub(crate) marker: SignInMarkerFixture,
     pub(crate) messages: Vec<SignInMessageFixture>,
     pub(crate) links: Vec<SignInLinkFixture>,
+    pub(crate) controls: SignInControlsFixture,
 }
 
 impl SignInPageFixture {
@@ -179,6 +215,7 @@ impl SignInPageFixture {
             marker: SignInMarkerFixture::None,
             messages: Vec::new(),
             links: Vec::new(),
+            controls: SignInControlsFixture::SignIn,
         }
     }
 
@@ -194,6 +231,7 @@ impl SignInPageFixture {
             manual_checkpoint_present: matches!(self.marker, SignInMarkerFixture::ManualCheckpoint),
             success_marker_present: matches!(self.marker, SignInMarkerFixture::Success),
             error_marker_present: matches!(self.marker, SignInMarkerFixture::Error),
+            controls: self.controls.controls()?,
             messages: self.messages()?,
             links: SignInPageLinks::try_from(links)?,
         })
@@ -204,6 +242,7 @@ impl SignInPageFixture {
         Ok(SignInAttemptSubmitBaseline {
             messages: self.messages()?,
             auth_fields: SignInAttemptAuthFields::from(self.fields),
+            controls: self.controls.controls()?,
         })
     }
 
@@ -386,7 +425,9 @@ impl SignInSubmittedAttempt {
     /// A username/password form with no message at submit.
     pub(crate) const fn login_form() -> Self {
         Self {
-            baseline: SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument),
+            baseline: SignInPageFixture::login_form(
+                SignInAttemptDocumentRelation::SameDocumentSameRoute,
+            ),
         }
     }
 
