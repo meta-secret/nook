@@ -32,10 +32,10 @@ pub use conclusion::SignInAttemptSiteMessage;
 pub use lifecycle::{SignInAttemptAdvance, SignInAttemptDisposition, SignInAttemptTransition};
 pub use page_evidence::{
     SignInAttemptDocumentRelation, SignInAttemptPageEvidence, SignInPageColor,
-    SignInPageColorChannel, SignInPageLink, SignInPageLinkHref, SignInPageLinkIndex,
-    SignInPageLinkText, SignInPageLinks, SignInPageMessage, SignInPageMessagePlacement,
-    SignInPageMessageSource, SignInPageMessageText, SignInPageMessageToken,
-    SignInPageMessageTokens, SignInPageMessages,
+    SignInPageColorChannel, SignInPageControls, SignInPageLink, SignInPageLinkHref,
+    SignInPageLinkIndex, SignInPageLinkText, SignInPageLinks, SignInPageMessage,
+    SignInPageMessagePlacement, SignInPageMessageSource, SignInPageMessageText,
+    SignInPageMessageToken, SignInPageMessageTokens, SignInPageMessages,
 };
 pub use presentation::{
     SignInAttemptActionKind, SignInAttemptActionOffer, SignInAttemptEvidenceDemand,

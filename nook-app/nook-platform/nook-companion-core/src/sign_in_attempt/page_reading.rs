@@ -12,16 +12,20 @@
 //!    the attempt closes (`StepAdvanced`) and the next step starts fresh.
 //! 5. The explicit success marker confirms sign-in.
 //! 6. No auth fields and no error-looking message confirms sign-in once that
-//!    evidence has been stable for the existing 750 ms interval.
+//!    evidence has been stable for the existing 750 ms interval, on a
+//!    `NewDocument` or after a same-document route change. On the same
+//!    document and route, removed fields alone never confirm (the
+//!    submitted-login save precedent): only the explicit success marker, or a
+//!    newly present authenticated affordance with the same 750 ms stability.
 //! 7. The same username/password step re-presented on a `NewDocument` with no
 //!    error-looking message fails with reason `Unknown` once stable for 2 s.
 //! 8. Otherwise the attempt keeps waiting until the 20 s outcome budget,
 //!    measured from submit, expires visibly as `TimedOut`.
 //!
 //! Freshness: a message counts as newly present on a `NewDocument`, and on
-//! the `SameDocument` only when no error-looking message (same rule) was
-//! visible at submit.
-
+//! the same document (either route) when no error-looking message (same rule)
+//! was visible at submit, or when the message appeared or changed since the
+//! acting script's submit (`changed_since_submit`).
 //!
 //! Decisions 6 and 7 become decisive only after their stability window,
 //! which the outcome wait (`outcome.rs`) owns together with the budget.
@@ -32,10 +36,13 @@ use super::conclusion::{
     SignInAttemptChallenge, SignInAttemptSiteMessage, SignInAttemptSiteMessageEvidence,
 };
 use super::failure_reason::SignInFailureReason;
-use super::message_evidence::SignInAttemptErrorMessageSelection;
+use super::message_evidence::{SignInAttemptErrorMessageSelection, SignInAttemptMessageAdmission};
 use super::outcome::SignInAttemptSettlingEvidence;
-use super::page_evidence::{SignInAttemptDocumentRelation, SignInAttemptPageEvidence};
+use super::page_evidence::{
+    SignInAttemptDocumentRelation, SignInAttemptPageEvidence, SignInPageControls,
+};
 use super::request::{SignInAttemptAuthFields, SignInAttemptSubmitBaseline};
+use crate::login_save::AuthenticatedControlEvidence;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) enum SignInAttemptFieldPresence {
@@ -71,6 +78,28 @@ impl From<&SignInAttemptAuthFields> for SignInAttemptAuthStep {
             username: SignInAttemptFieldPresence::from(fields.username_present),
             current_password: SignInAttemptFieldPresence::from(fields.current_password_present),
             one_time_code: SignInAttemptFieldPresence::from(fields.one_time_code_present),
+        }
+    }
+}
+
+/// Whether the current page still shows a login workflow.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SignInAttemptLoginWorkflow {
+    /// A username, current-password, or one-time-code field is visible.
+    Shown,
+    /// No authentication field is visible.
+    Left,
+}
+
+impl From<&SignInAttemptAuthFields> for SignInAttemptLoginWorkflow {
+    fn from(fields: &SignInAttemptAuthFields) -> Self {
+        use SignInAttemptFieldPresence::{Absent, Present};
+        let step = SignInAttemptAuthStep::from(fields);
+        match (step.username, step.current_password, step.one_time_code) {
+            (Absent, Absent, Absent) => Self::Left,
+            (Present, Present | Absent, Present | Absent)
+            | (Absent, Present, Present | Absent)
+            | (Absent, Absent, Present) => Self::Shown,
         }
     }
 }
@@ -134,13 +163,38 @@ impl From<SignInAttemptErrorMessageSelection> for SignInAttemptMessagePresence {
     }
 }
 
+/// Whether a sign-out style authenticated affordance was visible.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) enum SignInAttemptAffordancePresence {
+    Present,
+    Absent,
+}
+
+impl From<SignInPageControls> for SignInAttemptAffordancePresence {
+    fn from(controls: SignInPageControls) -> Self {
+        match controls.affordance() {
+            AuthenticatedControlEvidence::Present => Self::Present,
+            AuthenticatedControlEvidence::Absent => Self::Absent,
+        }
+    }
+}
+
+/// An authenticated affordance absent at submit and present now.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SignInAttemptAffordanceChange {
+    NewlyPresent,
+    NotNew,
+}
+
 /// Minimal submit-time facts retained in the record: whether an error-looking
-/// message was visible and which auth fields were present. The submit-time
-/// messages are classified once and dropped; no text, token, or colour is kept.
+/// message was visible, which auth fields were present, and whether an
+/// authenticated affordance was present. The submit-time messages are
+/// classified once and dropped; no text, token, or colour is kept.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct SignInAttemptBaseline {
     error_looking_message_at_submit: SignInAttemptMessagePresence,
+    authenticated_affordance_at_submit: SignInAttemptAffordancePresence,
     fields: SignInAttemptAuthStep,
 }
 
@@ -150,31 +204,50 @@ impl From<&SignInAttemptSubmitBaseline> for SignInAttemptBaseline {
             error_looking_message_at_submit: SignInAttemptMessagePresence::from(
                 baseline.messages.error_selection(),
             ),
+            authenticated_affordance_at_submit: SignInAttemptAffordancePresence::from(
+                baseline.controls,
+            ),
             fields: SignInAttemptAuthStep::from(&baseline.auth_fields),
         }
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SignInAttemptMessageFreshness {
-    Fresh,
-    Stale,
-}
-
 impl SignInAttemptBaseline {
-    fn freshness(self, document: SignInAttemptDocumentRelation) -> SignInAttemptMessageFreshness {
+    /// On a new document every message is fresh. On the same document a
+    /// message is fresh when no error-looking message was visible at submit,
+    /// or when it appeared or changed since the acting script's submit.
+    fn admission(self, document: SignInAttemptDocumentRelation) -> SignInAttemptMessageAdmission {
         match (document, self.error_looking_message_at_submit) {
             (
                 SignInAttemptDocumentRelation::NewDocument,
                 SignInAttemptMessagePresence::Present | SignInAttemptMessagePresence::Absent,
             )
-            | (SignInAttemptDocumentRelation::SameDocument, SignInAttemptMessagePresence::Absent) => {
-                SignInAttemptMessageFreshness::Fresh
-            }
+            | (
+                SignInAttemptDocumentRelation::SameDocumentSameRoute
+                | SignInAttemptDocumentRelation::SameDocumentNewRoute,
+                SignInAttemptMessagePresence::Absent,
+            ) => SignInAttemptMessageAdmission::Every,
             (
-                SignInAttemptDocumentRelation::SameDocument,
+                SignInAttemptDocumentRelation::SameDocumentSameRoute
+                | SignInAttemptDocumentRelation::SameDocumentNewRoute,
                 SignInAttemptMessagePresence::Present,
-            ) => SignInAttemptMessageFreshness::Stale,
+            ) => SignInAttemptMessageAdmission::ChangedSinceSubmit,
+        }
+    }
+
+    fn affordance_change(self, page: &SignInAttemptPageEvidence) -> SignInAttemptAffordanceChange {
+        match (
+            self.authenticated_affordance_at_submit,
+            SignInAttemptAffordancePresence::from(page.controls),
+        ) {
+            (SignInAttemptAffordancePresence::Absent, SignInAttemptAffordancePresence::Present) => {
+                SignInAttemptAffordanceChange::NewlyPresent
+            }
+            (SignInAttemptAffordancePresence::Absent, SignInAttemptAffordancePresence::Absent)
+            | (
+                SignInAttemptAffordancePresence::Present,
+                SignInAttemptAffordancePresence::Present | SignInAttemptAffordancePresence::Absent,
+            ) => SignInAttemptAffordanceChange::NotNew,
         }
     }
 }
@@ -267,30 +340,24 @@ struct SignInAttemptPageFacts<'a> {
     page: &'a SignInAttemptPageEvidence,
     current: SignInAttemptAuthStep,
     relation: SignInAttemptStepRelation,
+    affordance: SignInAttemptAffordanceChange,
 }
 
 impl SignInAttemptBaseline {
     fn fresh_error(self, page: &SignInAttemptPageEvidence) -> SignInAttemptFreshError {
-        match (
-            self.freshness(page.document),
-            page.messages.error_selection(),
-        ) {
-            (
-                SignInAttemptMessageFreshness::Fresh,
-                SignInAttemptErrorMessageSelection::Selected(selected),
-            ) => SignInAttemptFreshError::Fresh {
-                reason: selected.reason,
-                message: SignInAttemptSiteMessage::from(&selected.text),
-            },
-            (
-                SignInAttemptMessageFreshness::Stale,
-                SignInAttemptErrorMessageSelection::Selected(_)
-                | SignInAttemptErrorMessageSelection::NoneErrorLooking,
-            )
-            | (
-                SignInAttemptMessageFreshness::Fresh,
-                SignInAttemptErrorMessageSelection::NoneErrorLooking,
-            ) => SignInAttemptFreshError::NotFresh,
+        match page
+            .messages
+            .admitted_error_selection(self.admission(page.document))
+        {
+            SignInAttemptErrorMessageSelection::Selected(selected) => {
+                SignInAttemptFreshError::Fresh {
+                    reason: selected.reason,
+                    message: SignInAttemptSiteMessage::from(&selected.text),
+                }
+            }
+            SignInAttemptErrorMessageSelection::NoneErrorLooking => {
+                SignInAttemptFreshError::NotFresh
+            }
         }
     }
 
@@ -300,6 +367,7 @@ impl SignInAttemptBaseline {
             page,
             current,
             relation: self.fields.relation(current),
+            affordance: self.affordance_change(page),
         };
         match self.leading_evidence(facts) {
             SignInAttemptLeadingEvidence::Failure { reason, message } => {
@@ -421,7 +489,9 @@ impl SignInAttemptBaseline {
 impl SignInAttemptPageFacts<'_> {
     /// Steps 5–7: evidence that becomes decisive only once stable.
     fn settling(self) -> SignInAttemptPageReading {
-        use SignInAttemptDocumentRelation::{NewDocument, SameDocument};
+        use SignInAttemptDocumentRelation::{
+            NewDocument, SameDocumentNewRoute, SameDocumentSameRoute,
+        };
         use SignInAttemptErrorMessageSelection::{NoneErrorLooking, Selected};
         use SignInAttemptStepRelation::{NoAuthFields, OtherStep, OverlappingStep, SameStep};
         match (
@@ -429,18 +499,28 @@ impl SignInAttemptPageFacts<'_> {
             self.page.messages.error_selection(),
             self.page.document,
         ) {
-            (NoAuthFields, NoneErrorLooking, SameDocument | NewDocument) => {
+            (NoAuthFields, NoneErrorLooking, SameDocumentNewRoute | NewDocument) => {
                 SignInAttemptPageReading::Settling(SignInAttemptSettlingEvidence::SignedInLooking)
             }
             (SameStep, NoneErrorLooking, NewDocument) => {
                 SignInAttemptPageReading::Settling(SignInAttemptSettlingEvidence::StepRepresented)
             }
-            (SameStep, NoneErrorLooking, SameDocument)
-            | (OverlappingStep | OtherStep, NoneErrorLooking, SameDocument | NewDocument)
+            (NoAuthFields, NoneErrorLooking, SameDocumentSameRoute) => match self.affordance {
+                SignInAttemptAffordanceChange::NewlyPresent => SignInAttemptPageReading::Settling(
+                    SignInAttemptSettlingEvidence::SignedInLooking,
+                ),
+                SignInAttemptAffordanceChange::NotNew => SignInAttemptPageReading::Undecided,
+            },
+            (SameStep, NoneErrorLooking, SameDocumentSameRoute | SameDocumentNewRoute)
+            | (
+                OverlappingStep | OtherStep,
+                NoneErrorLooking,
+                SameDocumentSameRoute | SameDocumentNewRoute | NewDocument,
+            )
             | (
                 SameStep | OverlappingStep | OtherStep | NoAuthFields,
                 Selected(_),
-                SameDocument | NewDocument,
+                SameDocumentSameRoute | SameDocumentNewRoute | NewDocument,
             ) => SignInAttemptPageReading::Undecided,
         }
     }
@@ -456,7 +536,8 @@ mod tests {
     use crate::sign_in_attempt::outcome::SignInAttemptSettlingEvidence;
     use crate::sign_in_attempt::page_evidence::SignInAttemptDocumentRelation;
     use crate::sign_in_attempt::test_fixture::{
-        SignInFieldsFixture, SignInMarkerFixture, SignInMessageFixture, SignInPageFixture,
+        SignInControlsFixture, SignInFieldsFixture, SignInMarkerFixture,
+        SignInMessageChangeFixture, SignInMessageFixture, SignInPageFixture,
     };
 
     struct ExpectedReason {
@@ -492,7 +573,9 @@ mod tests {
     #[test]
     fn namecheap_plain_reddish_banner_after_reload_is_account_locked() -> anyhow::Result<()> {
         let case = ReadingCase {
-            submitted: SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument),
+            submitted: SignInPageFixture::login_form(
+                SignInAttemptDocumentRelation::SameDocumentSameRoute,
+            ),
             observed: SignInPageFixture {
                 messages: vec![SignInMessageFixture::red_banner(
                     SignInMessageFixture::NAMECHEAP_LOCK,
@@ -514,7 +597,9 @@ mod tests {
     fn the_same_text_without_any_error_styling_is_not_selected_as_the_site_message()
     -> anyhow::Result<()> {
         let case = ReadingCase {
-            submitted: SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument),
+            submitted: SignInPageFixture::login_form(
+                SignInAttemptDocumentRelation::SameDocumentSameRoute,
+            ),
             observed: SignInPageFixture {
                 messages: vec![SignInMessageFixture::container(
                     SignInMessageFixture::NAMECHEAP_LOCK,
@@ -537,7 +622,9 @@ mod tests {
                 messages: vec![SignInMessageFixture::container(
                     "By signing in you accept the Terms of Service",
                 )],
-                ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument)
+                ..SignInPageFixture::login_form(
+                    SignInAttemptDocumentRelation::SameDocumentSameRoute,
+                )
             },
             observed: SignInPageFixture {
                 messages: vec![
@@ -546,7 +633,9 @@ mod tests {
                     ),
                     field_error,
                 ],
-                ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument)
+                ..SignInPageFixture::login_form(
+                    SignInAttemptDocumentRelation::SameDocumentSameRoute,
+                )
             },
         };
         assert_eq!(
@@ -565,13 +654,21 @@ mod tests {
             messages: vec![SignInMessageFixture::red_banner(
                 "Incorrect username or password.",
             )],
-            ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument)
+            ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocumentSameRoute)
         };
         let case = ReadingCase {
             submitted: stale.clone(),
             observed: stale,
         };
         assert_eq!(case.read()?, SignInAttemptPageReading::Undecided);
+        let new_route = ReadingCase {
+            submitted: case.submitted.clone(),
+            observed: SignInPageFixture {
+                document: SignInAttemptDocumentRelation::SameDocumentNewRoute,
+                ..case.observed.clone()
+            },
+        };
+        assert_eq!(new_route.read()?, SignInAttemptPageReading::Undecided);
         let reloaded = ReadingCase {
             submitted: case.submitted.clone(),
             observed: SignInPageFixture {
@@ -608,11 +705,13 @@ mod tests {
             let ExpectedReason { text, reason } = expected;
             let case = ReadingCase {
                 submitted: SignInPageFixture::login_form(
-                    SignInAttemptDocumentRelation::SameDocument,
+                    SignInAttemptDocumentRelation::SameDocumentSameRoute,
                 ),
                 observed: SignInPageFixture {
                     messages: vec![SignInMessageFixture::alert(text)],
-                    ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument)
+                    ..SignInPageFixture::login_form(
+                        SignInAttemptDocumentRelation::SameDocumentSameRoute,
+                    )
                 },
             };
             assert_eq!(case.read()?, ReadingCase::failure(reason, text)?, "{text}");
@@ -623,11 +722,15 @@ mod tests {
     #[test]
     fn explicit_error_marker_fails_even_without_a_message_or_auth_fields() -> anyhow::Result<()> {
         let case = ReadingCase {
-            submitted: SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument),
+            submitted: SignInPageFixture::login_form(
+                SignInAttemptDocumentRelation::SameDocumentSameRoute,
+            ),
             observed: SignInPageFixture {
                 marker: SignInMarkerFixture::Error,
                 fields: SignInFieldsFixture::None,
-                ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument)
+                ..SignInPageFixture::login_form(
+                    SignInAttemptDocumentRelation::SameDocumentSameRoute,
+                )
             },
         };
         assert_eq!(
@@ -643,7 +746,9 @@ mod tests {
     #[test]
     fn challenges_follow_failures_and_precede_success() -> anyhow::Result<()> {
         let otp = ReadingCase {
-            submitted: SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument),
+            submitted: SignInPageFixture::login_form(
+                SignInAttemptDocumentRelation::SameDocumentSameRoute,
+            ),
             observed: SignInPageFixture {
                 fields: SignInFieldsFixture::OneTimeCode,
                 ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::NewDocument)
@@ -654,10 +759,14 @@ mod tests {
             SignInAttemptPageReading::Challenge(SignInAttemptChallenge::OneTimeCode)
         );
         let checkpoint = ReadingCase {
-            submitted: SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument),
+            submitted: SignInPageFixture::login_form(
+                SignInAttemptDocumentRelation::SameDocumentSameRoute,
+            ),
             observed: SignInPageFixture {
                 marker: SignInMarkerFixture::ManualCheckpoint,
-                ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument)
+                ..SignInPageFixture::login_form(
+                    SignInAttemptDocumentRelation::SameDocumentSameRoute,
+                )
             },
         };
         assert_eq!(
@@ -665,7 +774,9 @@ mod tests {
             SignInAttemptPageReading::Challenge(SignInAttemptChallenge::Verification)
         );
         let failure_first = ReadingCase {
-            submitted: SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument),
+            submitted: SignInPageFixture::login_form(
+                SignInAttemptDocumentRelation::SameDocumentSameRoute,
+            ),
             observed: SignInPageFixture {
                 marker: SignInMarkerFixture::ManualCheckpoint,
                 messages: vec![SignInMessageFixture::alert("Incorrect password")],
@@ -682,15 +793,21 @@ mod tests {
     #[test]
     fn success_requires_the_marker_or_a_clean_page_without_auth_fields() -> anyhow::Result<()> {
         let marked = ReadingCase {
-            submitted: SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument),
+            submitted: SignInPageFixture::login_form(
+                SignInAttemptDocumentRelation::SameDocumentSameRoute,
+            ),
             observed: SignInPageFixture {
                 marker: SignInMarkerFixture::Success,
-                ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument)
+                ..SignInPageFixture::login_form(
+                    SignInAttemptDocumentRelation::SameDocumentSameRoute,
+                )
             },
         };
         assert_eq!(marked.read()?, SignInAttemptPageReading::SignedIn);
         let clean = ReadingCase {
-            submitted: SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument),
+            submitted: SignInPageFixture::login_form(
+                SignInAttemptDocumentRelation::SameDocumentSameRoute,
+            ),
             observed: SignInPageFixture {
                 fields: SignInFieldsFixture::None,
                 ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::NewDocument)
@@ -703,12 +820,16 @@ mod tests {
         let lingering_error = ReadingCase {
             submitted: SignInPageFixture {
                 messages: vec![SignInMessageFixture::red_banner("Incorrect password")],
-                ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument)
+                ..SignInPageFixture::login_form(
+                    SignInAttemptDocumentRelation::SameDocumentSameRoute,
+                )
             },
             observed: SignInPageFixture {
                 fields: SignInFieldsFixture::None,
                 messages: vec![SignInMessageFixture::red_banner("Incorrect password")],
-                ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument)
+                ..SignInPageFixture::login_form(
+                    SignInAttemptDocumentRelation::SameDocumentSameRoute,
+                )
             },
         };
         assert_eq!(lingering_error.read()?, SignInAttemptPageReading::Undecided);
@@ -716,9 +837,70 @@ mod tests {
     }
 
     #[test]
+    fn removed_fields_on_the_same_route_never_look_signed_in() -> anyhow::Result<()> {
+        let spinner = ReadingCase {
+            submitted: SignInPageFixture::login_form(
+                SignInAttemptDocumentRelation::SameDocumentSameRoute,
+            ),
+            observed: SignInPageFixture {
+                fields: SignInFieldsFixture::None,
+                ..SignInPageFixture::login_form(
+                    SignInAttemptDocumentRelation::SameDocumentSameRoute,
+                )
+            },
+        };
+        assert_eq!(spinner.read()?, SignInAttemptPageReading::Undecided);
+        let routed = ReadingCase {
+            submitted: spinner.submitted.clone(),
+            observed: SignInPageFixture {
+                document: SignInAttemptDocumentRelation::SameDocumentNewRoute,
+                ..spinner.observed.clone()
+            },
+        };
+        assert_eq!(
+            routed.read()?,
+            SignInAttemptPageReading::Settling(SignInAttemptSettlingEvidence::SignedInLooking)
+        );
+        let marked = ReadingCase {
+            submitted: spinner.submitted.clone(),
+            observed: SignInPageFixture {
+                marker: SignInMarkerFixture::Success,
+                ..spinner.observed.clone()
+            },
+        };
+        assert_eq!(marked.read()?, SignInAttemptPageReading::SignedIn);
+        Ok(())
+    }
+
+    #[test]
+    fn fresh_in_place_errors_fail_on_either_same_document_route() -> anyhow::Result<()> {
+        for document in [
+            SignInAttemptDocumentRelation::SameDocumentSameRoute,
+            SignInAttemptDocumentRelation::SameDocumentNewRoute,
+        ] {
+            let case = ReadingCase {
+                submitted: SignInPageFixture::login_form(
+                    SignInAttemptDocumentRelation::SameDocumentSameRoute,
+                ),
+                observed: SignInPageFixture {
+                    messages: vec![SignInMessageFixture::alert("Incorrect password")],
+                    ..SignInPageFixture::login_form(document)
+                },
+            };
+            assert_eq!(
+                case.read()?,
+                ReadingCase::failure(SignInFailureReason::WrongCredentials, "Incorrect password")?,
+                "{document:?}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
     fn email_first_step_progression_advances_on_same_and_new_documents() -> anyhow::Result<()> {
         for document in [
-            SignInAttemptDocumentRelation::SameDocument,
+            SignInAttemptDocumentRelation::SameDocumentSameRoute,
+            SignInAttemptDocumentRelation::SameDocumentNewRoute,
             SignInAttemptDocumentRelation::NewDocument,
         ] {
             for observed in [
@@ -728,7 +910,9 @@ mod tests {
                 let case = ReadingCase {
                     submitted: SignInPageFixture {
                         fields: SignInFieldsFixture::UsernameOnly,
-                        ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument)
+                        ..SignInPageFixture::login_form(
+                            SignInAttemptDocumentRelation::SameDocumentSameRoute,
+                        )
                     },
                     observed: SignInPageFixture {
                         fields: observed,
@@ -750,13 +934,17 @@ mod tests {
         let unknown_account = ReadingCase {
             submitted: SignInPageFixture {
                 fields: SignInFieldsFixture::UsernameOnly,
-                ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument)
+                ..SignInPageFixture::login_form(
+                    SignInAttemptDocumentRelation::SameDocumentSameRoute,
+                )
             },
             observed: SignInPageFixture {
                 messages: vec![SignInMessageFixture::alert("We couldn't find your account")],
                 ..SignInPageFixture {
                     fields: SignInFieldsFixture::UsernameOnly,
-                    ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument)
+                    ..SignInPageFixture::login_form(
+                        SignInAttemptDocumentRelation::SameDocumentSameRoute,
+                    )
                 }
             },
         };
@@ -770,7 +958,9 @@ mod tests {
         let error_on_new_step = ReadingCase {
             submitted: SignInPageFixture {
                 fields: SignInFieldsFixture::UsernameOnly,
-                ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument)
+                ..SignInPageFixture::login_form(
+                    SignInAttemptDocumentRelation::SameDocumentSameRoute,
+                )
             },
             observed: SignInPageFixture {
                 messages: vec![SignInMessageFixture::alert("Something went wrong")],
@@ -785,7 +975,9 @@ mod tests {
             SignInAttemptPageReading::Undecided
         );
         let namecheap_same_step = ReadingCase {
-            submitted: SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument),
+            submitted: SignInPageFixture::login_form(
+                SignInAttemptDocumentRelation::SameDocumentSameRoute,
+            ),
             observed: SignInPageFixture::login_form(SignInAttemptDocumentRelation::NewDocument),
         };
         assert_eq!(
@@ -793,13 +985,83 @@ mod tests {
             SignInAttemptPageReading::Settling(SignInAttemptSettlingEvidence::StepRepresented)
         );
         let same_document_same_step = ReadingCase {
-            submitted: SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument),
-            observed: SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument),
+            submitted: SignInPageFixture::login_form(
+                SignInAttemptDocumentRelation::SameDocumentSameRoute,
+            ),
+            observed: SignInPageFixture::login_form(
+                SignInAttemptDocumentRelation::SameDocumentSameRoute,
+            ),
         };
         assert_eq!(
             same_document_same_step.read()?,
             SignInAttemptPageReading::Undecided
         );
+        Ok(())
+    }
+
+    #[test]
+    fn same_route_confirmation_needs_a_newly_present_sign_out_affordance() -> anyhow::Result<()> {
+        let signed_out = SignInPageFixture {
+            fields: SignInFieldsFixture::None,
+            controls: SignInControlsFixture::SignOut,
+            ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocumentSameRoute)
+        };
+        let new_affordance = ReadingCase {
+            submitted: SignInPageFixture::login_form(
+                SignInAttemptDocumentRelation::SameDocumentSameRoute,
+            ),
+            observed: signed_out.clone(),
+        };
+        assert_eq!(
+            new_affordance.read()?,
+            SignInAttemptPageReading::Settling(SignInAttemptSettlingEvidence::SignedInLooking)
+        );
+        let already_present = ReadingCase {
+            submitted: SignInPageFixture {
+                controls: SignInControlsFixture::SignOut,
+                ..SignInPageFixture::login_form(
+                    SignInAttemptDocumentRelation::SameDocumentSameRoute,
+                )
+            },
+            observed: signed_out,
+        };
+        assert_eq!(already_present.read()?, SignInAttemptPageReading::Undecided);
+        Ok(())
+    }
+
+    #[test]
+    fn a_changed_banner_is_fresh_on_an_spa_retry_while_an_unchanged_one_is_stale()
+    -> anyhow::Result<()> {
+        let submitted = SignInPageFixture {
+            messages: vec![SignInMessageFixture::red_banner(
+                "Incorrect username or password.",
+            )],
+            ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocumentSameRoute)
+        };
+        let changed = ReadingCase {
+            submitted: submitted.clone(),
+            observed: SignInPageFixture {
+                messages: vec![SignInMessageFixture {
+                    change: SignInMessageChangeFixture::Changed,
+                    ..SignInMessageFixture::red_banner("Your account has been locked.")
+                }],
+                ..SignInPageFixture::login_form(
+                    SignInAttemptDocumentRelation::SameDocumentSameRoute,
+                )
+            },
+        };
+        assert_eq!(
+            changed.read()?,
+            ReadingCase::failure(
+                SignInFailureReason::AccountLocked,
+                "Your account has been locked."
+            )?
+        );
+        let unchanged = ReadingCase {
+            submitted: submitted.clone(),
+            observed: submitted,
+        };
+        assert_eq!(unchanged.read()?, SignInAttemptPageReading::Undecided);
         Ok(())
     }
 }

@@ -303,7 +303,8 @@ impl SignInAttemptPreSubmitStep {
                 SignInAttemptDocumentRelation::NewDocument => {
                     SignInAttemptConclusion::TimedOut.unobserved()
                 }
-                SignInAttemptDocumentRelation::SameDocument => self.unchanged(),
+                SignInAttemptDocumentRelation::SameDocumentSameRoute
+                | SignInAttemptDocumentRelation::SameDocumentNewRoute => self.unchanged(),
             },
             SignInAttemptEvent::Activity { activity } => {
                 self.after_activity(SignInAttemptPreSubmitActivity { activity, now })
