@@ -176,16 +176,27 @@ export class LoginChecklistProgress {
   async initialize(): Promise<void> {
     const load: PilotAttemptMessage = { type: PilotAttemptMessageType.Load }
     const saved = await sendPilotAttempt(load)
+    const ready: ChecklistPresentationRequest = {
+      action: this.action,
+      observation: { kind: 'Activity', activity: 'Ready' },
+      mode: ChecklistPresentationMode.Initial,
+    }
     switch (saved.kind) {
-      case PilotAttemptLoadKind.None: {
-        const ready: ChecklistPresentationRequest = {
-          action: this.action,
-          observation: { kind: 'Activity', activity: 'Ready' },
-          mode: ChecklistPresentationMode.Initial,
-        }
+      case PilotAttemptLoadKind.None:
         return this.present(ready)
-      }
       case PilotAttemptLoadKind.Found: {
+        // Only a page that comes back showing the site's error continues the
+        // attempt; the next step of a multi-step login starts fresh.
+        if (
+          authenticationOutcomeObservation.siteErrorMessage(this.mount.workflow)
+            .length === 0
+        ) {
+          const clear: PilotAttemptMessage = {
+            type: PilotAttemptMessageType.Clear,
+          }
+          void sendPilotAttempt(clear)
+          return this.present(ready)
+        }
         this.state = saved.attempt.state
         const context: AuthenticationOutcomeObservationContext = {
           startedAt: saved.attempt.startedAt,
