@@ -36,9 +36,8 @@ async function sendPilotAttempt(
 ): Promise<PilotAttemptLoad> {
   const none: PilotAttemptLoad = { kind: PilotAttemptLoadKind.None }
   try {
-    const response: PilotAttemptLoad | undefined =
-      await chrome.runtime.sendMessage(message)
-    return response ?? none
+    const response: PilotAttemptLoad = await chrome.runtime.sendMessage(message)
+    return response || none
   } catch {
     return none
   }

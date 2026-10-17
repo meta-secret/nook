@@ -24,10 +24,15 @@ export class PilotAttempts {
   ): Promise<PilotAttemptLoad> {
     const none: PilotAttemptLoad = { kind: PilotAttemptLoadKind.None }
     const { message, sender } = request
-    const tabId = sender.tab?.id
-    const origin = sender.origin
-    if (tabId === undefined || sender.frameId !== 0 || origin === undefined)
+    if (
+      !sender.tab ||
+      typeof sender.tab.id !== 'number' ||
+      sender.frameId !== 0 ||
+      typeof sender.origin !== 'string'
+    )
       return none
+    const tabId = sender.tab.id
+    const origin = sender.origin
     const key = storageKey(tabId)
     switch (message.type) {
       case PilotAttemptMessageType.Save: {

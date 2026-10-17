@@ -744,10 +744,12 @@ mod tests {
             error_marker_present: true,
             ..AuthenticationOutcomeObservation::default()
         };
-        let failed = resumed.state.observe(AuthenticationLoginChecklistObservation::Outcome {
-            verdict: AuthenticationOutcomeVerdict::Insufficient,
-            observation: rejected_page,
-        });
+        let failed = resumed
+            .state
+            .observe(AuthenticationLoginChecklistObservation::Outcome {
+                verdict: AuthenticationOutcomeVerdict::Insufficient,
+                observation: rejected_page,
+            });
         let after_second_reload = failed
             .observe(AuthenticationLoginChecklistObservation::Retained)
             .presentation();
@@ -760,8 +762,10 @@ mod tests {
             AuthenticationLoginChecklistOutcomePolling::Stop
         );
         assert!(
-            serde_json::from_str::<AuthenticationLoginChecklistObservation>(r#"{"kind":"Retained"}"#)
-                .is_ok()
+            serde_json::from_str::<AuthenticationLoginChecklistObservation>(
+                r#"{"kind":"Retained"}"#
+            )
+            .is_ok()
         );
     }
 }

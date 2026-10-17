@@ -241,7 +241,7 @@ function visibleErrorText(element: Element): string {
   if (element.querySelector('input, select, textarea, button')) return ''
   if (element.getClientRects().length === 0) return ''
   if (getComputedStyle(element).visibility === 'hidden') return ''
-  const text = (element.textContent ?? '').replace(/\s+/g, ' ').trim()
+  const text = (element.textContent || '').replace(/\s+/g, ' ').trim()
   if (text.length < SITE_ERROR_MIN_LENGTH) return ''
   return text.slice(0, SITE_ERROR_MAX_LENGTH)
 }
