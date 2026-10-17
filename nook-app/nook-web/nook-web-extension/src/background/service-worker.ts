@@ -1,4 +1,10 @@
 import { GoogleLoginContinuationMessageCodec } from '../lib/google-login-continuation-messages'
+import {
+  PilotAttemptCodec,
+  PilotAttemptLoadKind,
+  type PilotAttemptMessage,
+} from '../lib/pilot-attempt-messages'
+import { PilotAttempts } from './service-worker/pilot-attempts'
 import { ExtensionVaultEventLogExport } from './service-worker/vault-event-log-export'
 import type { RuntimeMessageSchema } from './service-worker/schema-runtime-message-route'
 import {
@@ -294,7 +300,13 @@ const focusedLoginMessageRouteRequest: ConstructorParameters<
 const googleLoginRuntimeSchema: RuntimeMessageSchema<BrowserRuntimeMessage> = {
   decode: GoogleLoginContinuationMessageCodec.decodeEnvelope,
 }
+const pilotAttemptRuntimeSchema: RuntimeMessageSchema<PilotAttemptMessage> = {
+  decode: PilotAttemptCodec.decodeMessage,
+}
 const schemaRuntimeMessageRoutes: BackgroundRuntimeMessageRoutes = [
+  SchemaRuntimeMessageRoute.matching(pilotAttemptRuntimeSchema)
+    .respondWith(PilotAttempts.handle)
+    .onRejected(() => ({ kind: PilotAttemptLoadKind.None })),
   SidePanelSiteRoutes.listing(),
   SidePanelSiteRoutes.fill(),
   SchemaRuntimeMessageRoute.matching(googleLoginRuntimeSchema)
@@ -753,6 +765,7 @@ const backgroundRuntimeMessageListener: BackgroundRuntimeMessageListener = (
 }
 
 chrome.runtime.onMessage.addListener(backgroundRuntimeMessageListener)
+chrome.tabs.onRemoved.addListener(PilotAttempts.forgetClosedTab)
 
 type ExternalRuntimeMessageListener = Parameters<
   typeof chrome.runtime.onMessageExternal.addListener

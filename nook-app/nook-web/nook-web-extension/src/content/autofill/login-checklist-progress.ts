@@ -23,6 +23,26 @@ import {
   type AuthenticationOutcomeObservationContext,
 } from './authentication-outcome-observation'
 import { OUTCOME_EVIDENCE_POLL_MS } from './workflow-ui'
+import {
+  PilotAttemptLoadKind,
+  PilotAttemptMessageType,
+  type PilotAttemptLoad,
+  type PilotAttemptMessage,
+} from '../../lib/pilot-attempt-messages'
+
+/** The service worker keeps the attempt across the reload a submit often causes. */
+async function sendPilotAttempt(
+  message: PilotAttemptMessage,
+): Promise<PilotAttemptLoad> {
+  const none: PilotAttemptLoad = { kind: PilotAttemptLoadKind.None }
+  try {
+    const response: PilotAttemptLoad | undefined =
+      await chrome.runtime.sendMessage(message)
+    return response ?? none
+  } catch {
+    return none
+  }
+}
 
 type LoginChecklistMount = {
   surface: LoginChecklistSurface
@@ -80,11 +100,13 @@ class LoginChecklistAction {
   lifecycle = ChecklistActionLifecycle.Active
   evaluation = ChecklistEvaluation.Idle
   private resources: ChecklistWatch = { kind: ChecklistWatchKind.Stopped }
-  readonly context: AuthenticationOutcomeObservationContext = {
-    startedAt: Date.now(),
-    authPath: location.pathname,
-    sawMutation: false,
-  }
+  constructor(
+    readonly context: AuthenticationOutcomeObservationContext = {
+      startedAt: Date.now(),
+      authPath: location.pathname,
+      sawMutation: false,
+    },
+  ) {}
 
   watch(evaluate: () => void): void {
     const observer = new MutationObserver(() => {
@@ -125,6 +147,11 @@ type ChecklistPresentationDelivery = {
   presentation: AuthenticationLoginChecklistPresentation
   mode: ChecklistPresentationMode
 }
+type ChecklistPresentationRequest = {
+  action: LoginChecklistAction
+  observation: AuthenticationLoginChecklistObservation
+  mode: ChecklistPresentationMode
+}
 type ChecklistExecution = { readonly self: LoginChecklistProgress }
 
 /** Owns only mounted login presentation and the existing non-secret result observation. */
@@ -136,24 +163,51 @@ export class LoginChecklistProgress {
   }
   private action = new LoginChecklistAction()
   private lifecycle = ChecklistMountLifecycle.Mounted
+  // The last state sent to the service worker, so polling does not resend it.
+  private remembered = ''
 
   constructor(private readonly mount: LoginChecklistMount) {
     this.rendering = new LoginChecklistRendering(mount.surface)
   }
 
-  initialize(): Promise<void> {
-    const action = this.action
-    const observation: AuthenticationLoginChecklistObservation = {
-      kind: 'Activity',
-      activity: 'Ready',
+  async initialize(): Promise<void> {
+    const load: PilotAttemptMessage = { type: PilotAttemptMessageType.Load }
+    const saved = await sendPilotAttempt(load)
+    switch (saved.kind) {
+      case PilotAttemptLoadKind.None: {
+        const ready: ChecklistPresentationRequest = {
+          action: this.action,
+          observation: { kind: 'Activity', activity: 'Ready' },
+          mode: ChecklistPresentationMode.Initial,
+        }
+        return this.present(ready)
+      }
+      case PilotAttemptLoadKind.Found: {
+        this.state = saved.attempt.state
+        this.action = new LoginChecklistAction({
+          startedAt: saved.attempt.startedAt,
+          authPath: saved.attempt.authPath,
+          sawMutation: false,
+        })
+        const resumed: ChecklistPresentationRequest = {
+          action: this.action,
+          observation: { kind: 'Retained' },
+          mode: ChecklistPresentationMode.Activity,
+        }
+        return this.present(resumed)
+      }
     }
+  }
+
+  private present(request: ChecklistPresentationRequest): Promise<void> {
+    const { action, observation, mode } = request
     return Effect.runPromise(
       this.project(observation).pipe(
         Effect.map((presentation) => {
           const delivery: ChecklistPresentationDelivery = {
             action,
             presentation,
-            mode: ChecklistPresentationMode.Initial,
+            mode,
           }
           this.acceptPresentation(delivery)
         }),
@@ -272,12 +326,14 @@ export class LoginChecklistProgress {
         break
     }
     this.state = presentation.state
+    this.remember(action)
     switch (mode) {
       case ChecklistPresentationMode.Initial:
         this.rendering.render(presentation)
         break
       case ChecklistPresentationMode.Activity:
         this.rendering.renderStatus(presentation)
+        this.showSiteMessage(presentation)
         break
     }
     switch (presentation.outcome_polling) {
@@ -288,6 +344,39 @@ export class LoginChecklistProgress {
         action.watch(this.evaluate.bind(this, action))
         break
     }
+  }
+
+  /** Saves the attempt once submitted; a new attempt clears the old one. */
+  private remember(action: LoginChecklistAction): void {
+    const state = this.state
+    const remembered = JSON.stringify(state)
+    if (remembered === this.remembered) return
+    this.remembered = remembered
+    if (state.kind === 'Activity' && state.activity === 'Ready') return
+    const keep =
+      state.kind === 'Outcome' ||
+      (state.kind === 'Activity' && state.activity === 'Submitted')
+    const message: PilotAttemptMessage = keep
+      ? {
+          type: PilotAttemptMessageType.Save,
+          attempt: {
+            state,
+            authPath: action.context.authPath,
+            startedAt: action.context.startedAt,
+          },
+        }
+      : { type: PilotAttemptMessageType.Clear }
+    void sendPilotAttempt(message)
+  }
+
+  private showSiteMessage(
+    presentation: AuthenticationLoginChecklistPresentation,
+  ): void {
+    this.rendering.showSiteMessage(
+      presentation.status === 'Attention'
+        ? authenticationOutcomeObservation.siteErrorMessage(this.mount.workflow)
+        : '',
+    )
   }
 
   private project(observation: AuthenticationLoginChecklistObservation) {
@@ -390,7 +479,9 @@ export class LoginChecklistProgress {
           break
       }
       this.state = presentation.state
+      this.remember(action)
       this.rendering.renderStatus(presentation)
+      this.showSiteMessage(presentation)
       switch (presentation.outcome_polling) {
         case 'Stop':
           action.stop()

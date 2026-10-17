@@ -813,6 +813,7 @@ export const I18N_KEYS = {
   ExtensionWidgetChecklistResultDone: 'extension.widget.checklist_result_done',
   ExtensionWidgetChecklistResultPending: 'extension.widget.checklist_result_pending',
   ExtensionWidgetChecklistResultWaiting: 'extension.widget.checklist_result_waiting',
+  ExtensionWidgetChecklistSiteMessage: 'extension.widget.checklist_site_message',
   ExtensionWidgetChecklistSubmitDone: 'extension.widget.checklist_submit_done',
   ExtensionWidgetChecklistSubmitForm: 'extension.widget.checklist_submit_form',
   ExtensionWidgetChecklistSubmitManual: 'extension.widget.checklist_submit_manual',

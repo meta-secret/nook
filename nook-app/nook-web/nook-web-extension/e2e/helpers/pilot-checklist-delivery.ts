@@ -115,6 +115,7 @@ function installFilledProjectionHold(install: FilledProjectionInstall): void {
         case install.companion.ProjectAuthenticationLoginChecklist:
           switch (message.payload.observation.kind) {
             case 'Outcome':
+            case 'Retained':
               return install.disposition.Forward
             case 'Activity':
               switch (message.payload.observation.activity) {

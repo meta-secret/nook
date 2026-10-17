@@ -1013,6 +1013,7 @@ pub const EXTENSION_WIDGET_CHECKLIST_RESULT_PENDING: &str =
     "extension.widget.checklist_result_pending";
 pub const EXTENSION_WIDGET_CHECKLIST_RESULT_WAITING: &str =
     "extension.widget.checklist_result_waiting";
+pub const EXTENSION_WIDGET_CHECKLIST_SITE_MESSAGE: &str = "extension.widget.checklist_site_message";
 pub const EXTENSION_WIDGET_CHECKLIST_SUBMIT_DONE: &str = "extension.widget.checklist_submit_done";
 pub const EXTENSION_WIDGET_CHECKLIST_SUBMIT_FORM: &str = "extension.widget.checklist_submit_form";
 pub const EXTENSION_WIDGET_CHECKLIST_SUBMIT_MANUAL: &str =
