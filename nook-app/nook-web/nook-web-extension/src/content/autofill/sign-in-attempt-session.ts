@@ -367,15 +367,16 @@ export class SignInAttemptSession {
 
   private present(presentation: SignInAttemptPresentation): void {
     this.phaseState = { kind: SignInAttemptPhaseKind.Presented, presentation }
-    this.follow(presentation.followUp)
     this.updateWatch(presentation)
+    this.follow(presentation)
   }
 
   /** Rust selects the follow-up; the page side only performs it. */
-  private follow(followUp: SignInAttemptFollowUp): void {
+  private follow(presentation: SignInAttemptPresentation): void {
+    const followUp = presentation.followUp
     switch (followUp.kind) {
       case 'None':
-        this.hostPresent()
+        this.display(presentation)
         return
       case 'RestartWithSameLogin':
         this.release({
@@ -395,6 +396,24 @@ export class SignInAttemptSession {
         this.phaseState = { kind: SignInAttemptPhaseKind.Fresh }
         this.hostRelease()
         this.activateResetLink(followUp.link)
+        return
+    }
+  }
+
+  /** A dismissed attempt is closed: the Pilot returns to its normal fresh state. */
+  private display(presentation: SignInAttemptPresentation): void {
+    switch (presentation.status) {
+      case 'Dismissed':
+        this.stopWatching()
+        this.phaseState = { kind: SignInAttemptPhaseKind.Fresh }
+        this.hostRelease()
+        return
+      case 'SigningIn':
+      case 'SignedIn':
+      case 'Failed':
+      case 'ChallengeRequired':
+      case 'TimedOut':
+        this.hostPresent()
         return
     }
   }
