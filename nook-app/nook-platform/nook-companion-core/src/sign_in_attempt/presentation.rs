@@ -14,7 +14,7 @@ use super::end_state::{
 use super::failure_reason::SignInFailureReason;
 use super::page_evidence::SignInPageLinkIndex;
 use super::request::SignInAttemptLoginReference;
-use super::site::SignInAttemptOriginRelation;
+use super::site::{SignInAttemptOrigin, SignInAttemptOriginRelation};
 use crate::{
     AuthenticationDisplayProgress, AuthenticationLoginChecklistActivity,
     AuthenticationLoginChecklistPresentation, AuthenticationLoginChecklistResult,
@@ -204,25 +204,8 @@ pub(crate) struct SignInAttemptPresentationRequest {
     pub(crate) scene: SignInAttemptScene,
     pub(crate) lifetime: SignInAttemptRecordLifetime,
     pub(crate) follow_up: SignInAttemptFollowUp,
-    pub(crate) message: SignInAttemptMessageVisibility,
-}
-
-/// Whether the requesting page may see the stored site message: only the
-/// exact origin that recorded the failure does; other same-site origins see
-/// the failure without it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum SignInAttemptMessageVisibility {
-    Shown,
-    Withheld,
-}
-
-impl From<SignInAttemptOriginRelation> for SignInAttemptMessageVisibility {
-    fn from(relation: SignInAttemptOriginRelation) -> Self {
-        match relation {
-            SignInAttemptOriginRelation::SameOrigin => Self::Shown,
-            SignInAttemptOriginRelation::OtherOrigin => Self::Withheld,
-        }
-    }
+    /// The exact origin of the page the presentation is delivered to.
+    pub(crate) viewer: SignInAttemptOrigin,
 }
 
 /// The interactive part of a presentation. A closing record offers nothing:
@@ -239,12 +222,9 @@ impl From<SignInAttemptPresentationRequest> for SignInAttemptPresentation {
             scene,
             lifetime,
             follow_up,
-            message,
+            viewer,
         } = request;
-        let site_message = match message {
-            SignInAttemptMessageVisibility::Shown => scene.site_message(),
-            SignInAttemptMessageVisibility::Withheld => None,
-        };
+        let site_message = scene.site_message(&viewer);
         let SignInAttemptInteraction {
             actions,
             reset_link,
@@ -340,16 +320,21 @@ impl SignInAttemptScene {
         }
     }
 
-    fn site_message(&self) -> Option<SignInAttemptSiteMessage> {
+    /// The site message is shown only to the exact origin it was captured on;
+    /// other same-site origins see the failure without it.
+    fn site_message(&self, viewer: &SignInAttemptOrigin) -> Option<SignInAttemptSiteMessage> {
         match self {
             Self::Failed(SignInAttemptFailedScene {
                 failure:
                     SignInAttemptFailure::SiteRejected {
-                        message: SignInAttemptSiteMessageEvidence::Captured { text },
+                        message: SignInAttemptSiteMessageEvidence::Captured { text, origin },
                         ..
                     },
                 ..
-            }) => Some(text.clone()),
+            }) => match origin.relation(viewer) {
+                SignInAttemptOriginRelation::SameOrigin => Some(text.clone()),
+                SignInAttemptOriginRelation::OtherOrigin => None,
+            },
             Self::Failed(_)
             | Self::SigningIn(_)
             | Self::SignedIn
@@ -392,7 +377,8 @@ impl SignInAttemptScene {
             | Self::ChallengeRequired { evidence, .. }
             | Self::TimedOut { evidence, .. } => *evidence,
             Self::Failed(SignInAttemptFailedScene {
-                failure: SignInAttemptFailure::FillFailed | SignInAttemptFailure::SubmissionRejected,
+                failure:
+                    SignInAttemptFailure::FillFailed {} | SignInAttemptFailure::SubmissionRejected {},
                 ..
             })
             | Self::SigningIn(
@@ -453,7 +439,8 @@ impl SignInAttemptScene {
                 | SignInAttemptSigningIn::Restarting,
             )
             | Self::Failed(SignInAttemptFailedScene {
-                failure: SignInAttemptFailure::FillFailed | SignInAttemptFailure::SubmissionRejected,
+                failure:
+                    SignInAttemptFailure::FillFailed {} | SignInAttemptFailure::SubmissionRejected {},
                 ..
             }) => AuthenticationWorkflowActivity::FillingLogin,
             Self::SigningIn(SignInAttemptSigningIn::AwaitingOutcome)
@@ -486,11 +473,11 @@ impl SignInAttemptScene {
                 AuthenticationLoginChecklistActivity::Submitted
             }
             Self::Failed(SignInAttemptFailedScene {
-                failure: SignInAttemptFailure::FillFailed,
+                failure: SignInAttemptFailure::FillFailed {},
                 ..
             }) => AuthenticationLoginChecklistActivity::FillFailed,
             Self::Failed(SignInAttemptFailedScene {
-                failure: SignInAttemptFailure::SubmissionRejected,
+                failure: SignInAttemptFailure::SubmissionRejected {},
                 ..
             }) => AuthenticationLoginChecklistActivity::SubmissionRejected,
             Self::Dismissed(SignInAttemptDismissal::TakenOver) => {
@@ -567,7 +554,7 @@ impl SignInAttemptFailedScene {
                     | SignInFailureReason::Unknown,
                 ..
             } => [try_again, choose, reset, dismiss].concat(),
-            SignInAttemptFailure::FillFailed | SignInAttemptFailure::SubmissionRejected => {
+            SignInAttemptFailure::FillFailed {} | SignInAttemptFailure::SubmissionRejected {} => {
                 [try_again, choose, dismiss].concat()
             }
         }
@@ -578,8 +565,8 @@ impl SignInAttemptFailure {
     fn description_key(&self) -> SignInAttemptMessageKey {
         match self {
             Self::SiteRejected { reason, .. } => reason.message_key(),
-            Self::FillFailed => SignInAttemptMessageKey::WidgetChecklistFillFailed,
-            Self::SubmissionRejected => SignInAttemptMessageKey::WidgetChecklistSubmitRejected,
+            Self::FillFailed {} => SignInAttemptMessageKey::WidgetChecklistFillFailed,
+            Self::SubmissionRejected {} => SignInAttemptMessageKey::WidgetChecklistSubmitRejected,
         }
     }
 }
@@ -629,10 +616,10 @@ mod tests {
     use super::{
         SignInAttemptChallenge, SignInAttemptDismissal, SignInAttemptEvidenceDemand,
         SignInAttemptFailedScene, SignInAttemptFailure, SignInAttemptLoginForm,
-        SignInAttemptMessageVisibility, SignInAttemptPresentation,
-        SignInAttemptPresentationRequest, SignInAttemptRecordLifetime, SignInAttemptResetOffer,
-        SignInAttemptScene, SignInAttemptSigningIn, SignInAttemptSiteMessageEvidence,
-        SignInAttemptStatus, SignInFailureReason,
+        SignInAttemptOrigin, SignInAttemptPresentation, SignInAttemptPresentationRequest,
+        SignInAttemptRecordLifetime, SignInAttemptResetOffer, SignInAttemptScene,
+        SignInAttemptSigningIn, SignInAttemptSiteMessageEvidence, SignInAttemptStatus,
+        SignInFailureReason,
     };
     use crate::{AuthenticationWorkflowCurrentStep, SignInAttemptFollowUp};
 
@@ -650,7 +637,7 @@ mod tests {
                 scene: self.scene,
                 lifetime: SignInAttemptRecordLifetime::Retained,
                 follow_up: SignInAttemptFollowUp::None,
-                message: SignInAttemptMessageVisibility::Shown,
+                viewer: SignInAttemptOrigin::try_from("https://www.namecheap.com".to_owned())?,
             });
             assert_eq!(presentation.status, self.status);
             assert_eq!(
@@ -733,7 +720,7 @@ mod tests {
         let site_failure = SignInAttemptFailedScene {
             failure: SignInAttemptFailure::SiteRejected {
                 reason: SignInFailureReason::WrongCredentials,
-                message: SignInAttemptSiteMessageEvidence::Absent,
+                message: SignInAttemptSiteMessageEvidence::Absent {},
             },
             reset: SignInAttemptResetOffer::NotOffered,
             evidence: SignInAttemptEvidenceDemand::NotWanted,
@@ -742,12 +729,12 @@ mod tests {
         let unknown_failure = SignInAttemptFailedScene {
             failure: SignInAttemptFailure::SiteRejected {
                 reason: SignInFailureReason::Unknown,
-                message: SignInAttemptSiteMessageEvidence::Absent,
+                message: SignInAttemptSiteMessageEvidence::Absent {},
             },
             ..site_failure.clone()
         };
         let fill_failure = SignInAttemptFailedScene {
-            failure: SignInAttemptFailure::FillFailed,
+            failure: SignInAttemptFailure::FillFailed {},
             ..site_failure.clone()
         };
         for expectation in [

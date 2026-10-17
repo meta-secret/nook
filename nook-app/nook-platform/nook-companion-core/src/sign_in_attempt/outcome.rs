@@ -4,7 +4,7 @@
 //! failures, challenges, step progression, and the success marker conclude
 //! immediately; "signed-in looking" evidence (never a field removal on the
 //! same document and route) confirms after the existing 750 ms stability
-//! interval; an unexplained re-presentation of the same step
+//! interval; an unexplained re-presentation of a submitted password step
 //! on a new document fails `Unknown` after 2 s. Decisive evidence is evaluated
 //! before the 20 s outcome budget, measured from submit, which otherwise ends
 //! the wait visibly as `TimedOut`. A new `Submitted` activity restarts it.
@@ -19,15 +19,16 @@ use super::end_state::{
 use super::failure_reason::SignInFailureReason;
 use super::lifecycle::{SignInAttemptEventContext, SignInAttemptNext, SignInAttemptStep};
 use super::page_evidence::SignInAttemptPageEvidence;
-use super::page_reading::SignInAttemptPageReading;
+use super::page_reading::{SignInAttemptPageReading, SignInAttemptReadingRequest};
 use super::presentation::{SignInAttemptResetOffer, SignInAttemptScene, SignInAttemptSigningIn};
-use super::record::{SignInAttemptChronology, SignInAttemptInstant};
+use super::record::{SignInAttemptChronology, SignInAttemptInstant, SignInAttemptPreSubmitStep};
 use super::request::{
     SignInAttemptActivity, SignInAttemptEvent, SignInAttemptSubmitBaseline, SignInAttemptUserAction,
 };
-use super::site::SignInAttemptSite;
+use super::site::{SignInAttemptOrigin, SignInAttemptSite};
 use super::stability::{
-    SignInAttemptSettledness, SignInAttemptSettlingEvidence, SignInAttemptStability,
+    SignInAttemptSettledness, SignInAttemptSettlingEvidence, SignInAttemptSettlingObservation,
+    SignInAttemptStability,
 };
 use super::submit_baseline::SignInAttemptBaseline;
 use crate::{
@@ -53,7 +54,7 @@ impl From<SignInAttemptSubmission<'_>> for SignInAttemptOutcomeWait {
         Self {
             submitted_at: submission.now,
             baseline: SignInAttemptBaseline::from(submission.baseline),
-            stability: SignInAttemptStability::Unsettled,
+            stability: SignInAttemptStability::Unsettled {},
         }
     }
 }
@@ -67,6 +68,7 @@ enum SignInAttemptBudget {
 struct SignInAttemptObservation<'a> {
     page: SignInAttemptPageEvidence,
     site: &'a SignInAttemptSite,
+    sender: &'a SignInAttemptOrigin,
     now: SignInAttemptInstant,
 }
 
@@ -91,7 +93,7 @@ impl SignInAttemptOutcomeWait {
         started_at: SignInAttemptInstant,
     ) -> SignInAttemptChronology {
         let settled_after_submit = match self.stability {
-            SignInAttemptStability::Unsettled => SignInAttemptChronology::Ordered,
+            SignInAttemptStability::Unsettled {} => SignInAttemptChronology::Ordered,
             SignInAttemptStability::Settling { since, .. } => {
                 since.chronology_after(self.submitted_at)
             }
@@ -123,6 +125,7 @@ impl SignInAttemptOutcomeWait {
             SignInAttemptEvent::PageObserved { page } => self.observe(SignInAttemptObservation {
                 page,
                 site: binding.site,
+                sender: binding.sender,
                 now,
             }),
             SignInAttemptEvent::Activity {
@@ -135,23 +138,33 @@ impl SignInAttemptOutcomeWait {
                 now,
                 form: SignInAttemptLoginForm::Unobserved,
             }),
+            // Submitted is sent before the real submit, so the actuator's submit
+            // outcome arrives while the wait is still undecided.
+            SignInAttemptEvent::Activity {
+                activity: SignInAttemptActivity::SubmissionUnobserved {},
+            } => SignInAttemptPreSubmitStep::ManualSubmit.unchanged(),
+            SignInAttemptEvent::Activity {
+                activity: SignInAttemptActivity::SubmissionRejected {},
+            } => SignInAttemptConcluded {
+                conclusion: SignInAttemptConclusion::Failed {
+                    failure: SignInAttemptFailure::SubmissionRejected {},
+                },
+                form: SignInAttemptLoginForm::Shown,
+            }
+            .unobserved(),
             SignInAttemptEvent::UserAction {
-                action: SignInAttemptUserAction::Dismiss,
+                action: SignInAttemptUserAction::Dismiss {},
             } => SignInAttemptStep::closing(SignInAttemptClosing::TAKEN_OVER),
-            SignInAttemptEvent::Resumed
+            SignInAttemptEvent::Resumed {}
             | SignInAttemptEvent::Activity {
-                activity:
-                    SignInAttemptActivity::Filled
-                    | SignInAttemptActivity::FillFailed
-                    | SignInAttemptActivity::SubmissionRejected
-                    | SignInAttemptActivity::SubmissionUnobserved,
+                activity: SignInAttemptActivity::Filled {} | SignInAttemptActivity::FillFailed {},
             }
             | SignInAttemptEvent::UserAction {
                 action:
-                    SignInAttemptUserAction::TryAgain
-                    | SignInAttemptUserAction::ChooseAnotherLogin
+                    SignInAttemptUserAction::TryAgain {}
+                    | SignInAttemptUserAction::ChooseAnotherLogin {}
                     | SignInAttemptUserAction::ResetPassword { .. }
-                    | SignInAttemptUserAction::FillAuthenticator,
+                    | SignInAttemptUserAction::FillAuthenticator {},
             } => self.wait_or_expire(SignInAttemptExpiry {
                 now,
                 form: SignInAttemptLoginForm::Unobserved,
@@ -161,7 +174,10 @@ impl SignInAttemptOutcomeWait {
 
     /// Decisive evidence is evaluated before the budget is applied.
     fn observe(self, observation: SignInAttemptObservation<'_>) -> SignInAttemptStep {
-        match self.baseline.reading(&observation.page) {
+        match self.baseline.reading(SignInAttemptReadingRequest {
+            page: &observation.page,
+            sender: observation.sender,
+        }) {
             SignInAttemptPageReading::Failure { reason, message } => {
                 SignInAttemptOutcomeWait::site_rejection(SignInAttemptRejection {
                     failure: SignInAttemptFailure::SiteRejected { reason, message },
@@ -182,7 +198,7 @@ impl SignInAttemptOutcomeWait {
                 observation,
             }),
             SignInAttemptPageReading::Undecided => Self {
-                stability: SignInAttemptStability::Unsettled,
+                stability: SignInAttemptStability::Unsettled {},
                 ..self
             }
             .wait_or_expire(SignInAttemptExpiry::from(&observation)),
@@ -195,39 +211,10 @@ impl SignInAttemptOutcomeWait {
             evidence,
             observation,
         } = settlement;
-        let since = match (self.stability, evidence) {
-            (
-                SignInAttemptStability::Settling {
-                    evidence: SignedInLooking,
-                    since,
-                },
-                SignedInLooking,
-            )
-            | (
-                SignInAttemptStability::Settling {
-                    evidence: StepRepresented,
-                    since,
-                },
-                StepRepresented,
-            ) => since,
-            (
-                SignInAttemptStability::Settling {
-                    evidence: SignedInLooking,
-                    ..
-                },
-                StepRepresented,
-            )
-            | (
-                SignInAttemptStability::Settling {
-                    evidence: StepRepresented,
-                    ..
-                },
-                SignedInLooking,
-            )
-            | (SignInAttemptStability::Unsettled, SignedInLooking | StepRepresented) => {
-                observation.now
-            }
-        };
+        let since = self.stability.since(SignInAttemptSettlingObservation {
+            evidence,
+            now: observation.now,
+        });
         let elapsed = observation.now.elapsed_since(since);
         match (evidence.settledness(elapsed), evidence) {
             (SignInAttemptSettledness::Settled, SignedInLooking) => SignInAttemptStep::signed_in(),
@@ -235,7 +222,7 @@ impl SignInAttemptOutcomeWait {
                 SignInAttemptOutcomeWait::site_rejection(SignInAttemptRejection {
                     failure: SignInAttemptFailure::SiteRejected {
                         reason: SignInFailureReason::Unknown,
-                        message: SignInAttemptSiteMessageEvidence::Absent,
+                        message: SignInAttemptSiteMessageEvidence::Absent {},
                     },
                     observation,
                 })
@@ -279,7 +266,7 @@ impl SignInAttemptOutcomeWait {
     fn wait_or_expire(self, expiry: SignInAttemptExpiry) -> SignInAttemptStep {
         let SignInAttemptExpiry { now, form } = expiry;
         let timed_out = SignInAttemptConcluded {
-            conclusion: SignInAttemptConclusion::TimedOut,
+            conclusion: SignInAttemptConclusion::TimedOut {},
             form,
         };
         match (self.budget(now), form) {
@@ -334,13 +321,13 @@ mod tests {
     use crate::sign_in_attempt::test_fixture::{
         SignInControlsFixture, SignInFieldsFixture, SignInLinkFixture, SignInMarkerFixture,
         SignInMessageChangeFixture, SignInMessageFixture, SignInObservationFixture,
-        SignInPageFixture, SignInSubmittedAttempt,
+        SignInPageFixture, SignInScenario, SignInSubmittedAttempt,
     };
     use crate::{
         AuthenticationLoginChecklistOutcomePolling, AuthenticationLoginChecklistStatus,
-        SignInAttemptActionKind, SignInAttemptEvidenceDemand, SignInAttemptFollowUp,
-        SignInAttemptMessageKey, SignInAttemptSiteMessage, SignInAttemptStatus,
-        SignInAttemptUserAction,
+        SignInAttemptActionKind, SignInAttemptActivity, SignInAttemptEvidenceDemand,
+        SignInAttemptFollowUp, SignInAttemptMessageKey, SignInAttemptSiteMessage,
+        SignInAttemptStatus, SignInAttemptUserAction,
     };
 
     struct SignInReasonExpectation {
@@ -937,6 +924,55 @@ mod tests {
         })?
         .retained()?;
         assert_eq!(timed_out.presentation.status, SignInAttemptStatus::TimedOut);
+        Ok(())
+    }
+
+    #[test]
+    fn submit_outcomes_reported_after_submitted_match_the_pre_submit_scenes() -> anyhow::Result<()>
+    {
+        for activity in [
+            SignInAttemptActivity::SubmissionUnobserved {},
+            SignInAttemptActivity::SubmissionRejected {},
+        ] {
+            let before_submit = SignInScenario::begin(1_000)?
+                .activity(activity.clone())?
+                .retained()?;
+            let after_submitted = SignInSubmittedAttempt::login_form()
+                .awaiting()?
+                .activity(activity.clone())?
+                .retained()?;
+            assert_eq!(
+                after_submitted.presentation, before_submit.presentation,
+                "{activity:?}"
+            );
+            assert_eq!(
+                after_submitted.offered(),
+                before_submit.offered(),
+                "{activity:?}"
+            );
+        }
+        let manual = SignInSubmittedAttempt::login_form()
+            .awaiting()?
+            .activity(SignInAttemptActivity::SubmissionUnobserved {})?
+            .retained()?;
+        assert_eq!(manual.presentation.status, SignInAttemptStatus::SigningIn);
+        assert_eq!(
+            manual.presentation.description_key,
+            SignInAttemptMessageKey::WidgetChecklistSubmitManual
+        );
+        let rejected = SignInSubmittedAttempt::login_form()
+            .awaiting()?
+            .activity(SignInAttemptActivity::SubmissionRejected {})?
+            .retained()?;
+        assert_eq!(rejected.presentation.status, SignInAttemptStatus::Failed);
+        assert_eq!(
+            rejected.presentation.description_key,
+            SignInAttemptMessageKey::WidgetChecklistSubmitRejected
+        );
+        assert_eq!(
+            rejected.presentation.page_evidence,
+            SignInAttemptEvidenceDemand::NotWanted
+        );
         Ok(())
     }
 }

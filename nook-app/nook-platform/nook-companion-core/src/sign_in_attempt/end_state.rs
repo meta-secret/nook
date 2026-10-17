@@ -10,6 +10,7 @@ use super::auth_step::SignInAttemptLoginWorkflow;
 use super::failure_reason::SignInFailureReason;
 use super::page_evidence::{SignInAttemptPageEvidence, SignInPageMessageText};
 use super::request::SignInAttemptRequestError;
+use super::site::SignInAttemptOrigin;
 
 /// The one Rust-selected, bounded site message shown with a failure.
 /// Rendered by the content script with `textContent` only; never logged.
@@ -49,8 +50,13 @@ impl From<&SignInPageMessageText> for SignInAttemptSiteMessage {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", deny_unknown_fields)]
 pub(crate) enum SignInAttemptSiteMessageEvidence {
-    Captured { text: SignInAttemptSiteMessage },
-    Absent,
+    /// The message and the exact origin of the page it was captured on; it is
+    /// presented only to that origin.
+    Captured {
+        text: SignInAttemptSiteMessage,
+        origin: SignInAttemptOrigin,
+    },
+    Absent {},
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -62,9 +68,9 @@ pub(crate) enum SignInAttemptFailure {
         message: SignInAttemptSiteMessageEvidence,
     },
     /// Nook could not fill the selected login.
-    FillFailed,
+    FillFailed {},
     /// Nook's submit revalidation refused to submit the filled form.
-    SubmissionRejected,
+    SubmissionRejected {},
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -111,7 +117,7 @@ impl From<&SignInAttemptPageEvidence> for SignInAttemptLoginForm {
 pub(crate) enum SignInAttemptConclusion {
     Failed { failure: SignInAttemptFailure },
     ChallengeRequired { challenge: SignInAttemptChallenge },
-    TimedOut,
+    TimedOut {},
 }
 
 impl SignInAttemptConclusion {
@@ -121,13 +127,14 @@ impl SignInAttemptConclusion {
     pub(crate) const fn origin(&self) -> SignInAttemptConclusionOrigin {
         match self {
             Self::Failed {
-                failure: SignInAttemptFailure::FillFailed | SignInAttemptFailure::SubmissionRejected,
+                failure:
+                    SignInAttemptFailure::FillFailed {} | SignInAttemptFailure::SubmissionRejected {},
             } => SignInAttemptConclusionOrigin::Nook,
             Self::Failed {
                 failure: SignInAttemptFailure::SiteRejected { .. },
             }
             | Self::ChallengeRequired { .. }
-            | Self::TimedOut => SignInAttemptConclusionOrigin::Site,
+            | Self::TimedOut {} => SignInAttemptConclusionOrigin::Site,
         }
     }
 }

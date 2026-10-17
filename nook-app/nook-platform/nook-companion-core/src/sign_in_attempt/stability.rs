@@ -50,9 +50,86 @@ impl SignInAttemptSettlingEvidence {
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", deny_unknown_fields)]
 pub(crate) enum SignInAttemptStability {
-    Unsettled,
+    Unsettled {},
     Settling {
         evidence: SignInAttemptSettlingEvidence,
         since: SignInAttemptInstant,
     },
+}
+
+/// Not-yet-decisive evidence and when it was observed.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct SignInAttemptSettlingObservation {
+    pub(crate) evidence: SignInAttemptSettlingEvidence,
+    pub(crate) now: SignInAttemptInstant,
+}
+
+impl SignInAttemptStability {
+    /// When the observed evidence began to hold: continuing evidence keeps its
+    /// start, while new or different evidence restarts the window now.
+    pub(crate) fn since(self, observed: SignInAttemptSettlingObservation) -> SignInAttemptInstant {
+        use SignInAttemptSettlingEvidence::{SignedInLooking, StepRepresented};
+        let SignInAttemptSettlingObservation { evidence, now } = observed;
+        match (self, evidence) {
+            (
+                Self::Settling {
+                    evidence: SignedInLooking,
+                    since,
+                },
+                SignedInLooking,
+            )
+            | (
+                Self::Settling {
+                    evidence: StepRepresented,
+                    since,
+                },
+                StepRepresented,
+            ) => since,
+            (
+                Self::Settling {
+                    evidence: SignedInLooking,
+                    ..
+                },
+                StepRepresented,
+            )
+            | (
+                Self::Settling {
+                    evidence: StepRepresented,
+                    ..
+                },
+                SignedInLooking,
+            )
+            | (Self::Unsettled {}, SignedInLooking | StepRepresented) => now,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        SignInAttemptSettlingEvidence, SignInAttemptSettlingObservation, SignInAttemptStability,
+    };
+    use crate::sign_in_attempt::record::SignInAttemptInstant;
+
+    #[test]
+    fn continuing_evidence_keeps_its_start_and_new_evidence_restarts_now() -> anyhow::Result<()> {
+        let started = serde_json::from_str::<SignInAttemptInstant>("1000")?;
+        let now = serde_json::from_str::<SignInAttemptInstant>("1500")?;
+        let settling = SignInAttemptStability::Settling {
+            evidence: SignInAttemptSettlingEvidence::SignedInLooking,
+            since: started,
+        };
+        let continuing = SignInAttemptSettlingObservation {
+            evidence: SignInAttemptSettlingEvidence::SignedInLooking,
+            now,
+        };
+        let changed = SignInAttemptSettlingObservation {
+            evidence: SignInAttemptSettlingEvidence::StepRepresented,
+            now,
+        };
+        assert_eq!(settling.since(continuing), started);
+        assert_eq!(settling.since(changed), now);
+        assert_eq!(SignInAttemptStability::Unsettled {}.since(continuing), now);
+        Ok(())
+    }
 }
