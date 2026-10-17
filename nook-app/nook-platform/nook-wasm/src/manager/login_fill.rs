@@ -89,11 +89,109 @@ mod tests {
     use crate::NookError;
     use crate::manager::{SearchCatalogState, VaultCryptoState};
     use crate::types::NookFocusedLoginFillRequest;
+    use nook_companion_core::{BrowserTabTarget, BrowserTabUrl, BrowserTabUrlObservation};
     use nook_core::{
-        CredentialKind, FocusedLoginFillOrigin, LoginHostMatch, LoginSecret, SecretId,
-        SecretSearchCatalog, SecretType, SecretValue, StoredRecordPayload, VaultCrypto, VaultKeys,
-        WebsiteHost,
+        AuthenticatorSecret, CredentialKind, FocusedLoginFillOrigin, LoginHostMatch, LoginSecret,
+        SecretId, SecretSearchCatalog, SecretType, SecretValue, SecureNoteSecret,
+        StoredRecordPayload, TotpAlgorithm, TotpDigits, TotpPeriod, TotpSecret, VaultCrypto,
+        VaultKeys, WebsiteHost,
     };
+
+    /// Unlocked manager fixture whose catalog is reconciled from the inserted records.
+    struct LoginFillVault {
+        manager: NookVaultManager,
+        keys: VaultKeys,
+        crypto: VaultCrypto,
+    }
+
+    struct LoginFillVaultRecord {
+        id: &'static str,
+        value: SecretValue,
+    }
+
+    impl LoginFillVault {
+        fn new() -> anyhow::Result<Self> {
+            let keys = VaultKeys::generate()?;
+            let crypto = VaultCrypto::new(&keys.secrets_key)?;
+            Ok(Self {
+                manager: NookVaultManager::new(),
+                keys,
+                crypto,
+            })
+        }
+
+        /// Two logins, a secure note, and an authenticator that names `example.com`.
+        fn example_site() -> anyhow::Result<NookVaultManager> {
+            Self::new()?
+                .with_record(&LoginFillVaultRecord {
+                    id: "secret_SMypl8K0w9a",
+                    value: SecretValue::Login(LoginSecret {
+                        website_url: "https://www.example.com/login".to_owned(),
+                        username: "alice".to_owned(),
+                        password: "correct".to_owned(),
+                        notes: "fixture".to_owned(),
+                    }),
+                })?
+                .with_record(&LoginFillVaultRecord {
+                    id: "secret_SMypl8K0w9b",
+                    value: SecretValue::Login(LoginSecret {
+                        website_url: "https://other.example".to_owned(),
+                        username: "bob".to_owned(),
+                        password: "other".to_owned(),
+                        notes: "fixture".to_owned(),
+                    }),
+                })?
+                .with_record(&LoginFillVaultRecord {
+                    id: "secret_SMypl8K0w9c",
+                    value: SecretValue::SecureNote(SecureNoteSecret {
+                        title: "not a login".to_owned(),
+                        note: "fixture".to_owned(),
+                    }),
+                })?
+                // Names the requesting site in its issuer, label, and website URL.
+                .with_record(&LoginFillVaultRecord {
+                    id: "secret_SMypl8K0w9d",
+                    value: SecretValue::Authenticator(AuthenticatorSecret {
+                        issuer: "example.com".to_owned(),
+                        account: "alice@example.com".to_owned(),
+                        website_url: "https://www.example.com/login".to_owned(),
+                        secret: TotpSecret::parse("JBSWY3DPEHPK3PXP")?,
+                        algorithm: TotpAlgorithm::Sha1,
+                        digits: TotpDigits::Six,
+                        period: TotpPeriod::default(),
+                        backup_codes: vec!["A1B2-C3D4".to_owned()],
+                    }),
+                })?
+                .unlocked()
+        }
+
+        fn with_record(mut self, record: &LoginFillVaultRecord) -> anyhow::Result<Self> {
+            let ciphertext = self
+                .crypto
+                .encrypt_value(record.value.to_yaml()?.as_str())?;
+            self.manager.vault.meta.secrets.insert(
+                SecretId::parse(record.id)?,
+                (
+                    record.value.secret_type(),
+                    StoredRecordPayload::from_age_armored(ciphertext),
+                ),
+            );
+            Ok(self)
+        }
+
+        fn unlocked(self) -> anyhow::Result<NookVaultManager> {
+            let Self {
+                mut manager,
+                keys,
+                crypto,
+            } = self;
+            let mut catalog = SecretSearchCatalog::default();
+            catalog.reconcile(&manager.vault.meta.secrets, &crypto, &keys.secrets_key)?;
+            manager.vault.search_catalog = SearchCatalogState::Ready(catalog);
+            manager.vault.crypto = VaultCryptoState::Unlocked(crypto);
+            Ok(manager)
+        }
+    }
 
     struct LoginFillSiteCase {
         saved: &'static str,
@@ -347,119 +445,57 @@ mod tests {
         );
         Ok(())
     }
-}
 
-#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
-mod browser_tests {
-    use super::*;
-    use crate::manager::{SearchCatalogState, VaultCryptoState};
-    use nook_core::{
-        LoginSecret, SecretId, SecretSearchCatalog, SecretType, SecretValue, StoredRecordPayload,
-        VaultCrypto,
-    };
-    use wasm_bindgen_test::*;
-
-    wasm_bindgen_test_configure!(run_in_browser);
-
-    fn insert_secret(
-        manager: &mut NookVaultManager,
-        crypto: &VaultCrypto,
-        id: &str,
-        value: SecretValue,
-    ) -> anyhow::Result<()> {
-        let secret_type = match &value {
-            SecretValue::Login(_) => SecretType::Login,
-            SecretValue::SecureNote(_) => SecretType::SecureNote,
-            _ => anyhow::bail!("unsupported fixture"),
-        };
-        let ciphertext = crypto.encrypt_value(value.to_yaml()?.as_str())?;
-        manager.vault.meta.secrets.insert(
-            SecretId::from_vault_record(id),
-            (
-                secret_type,
-                StoredRecordPayload::from_age_armored(ciphertext),
-            ),
-        );
-        Ok(())
-    }
-
-    fn login(url: &str, username: &str, password: &str) -> SecretValue {
-        SecretValue::Login(LoginSecret {
-            website_url: url.to_owned(),
-            username: username.to_owned(),
-            password: password.to_owned(),
-            notes: "fixture".to_owned(),
-        })
-    }
-
-    #[wasm_bindgen_test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn listing_and_reveal_enforce_origin_and_secret_type() -> anyhow::Result<()> {
-        let keys = nook_core::VaultKeys::generate()?;
-        let crypto = VaultCrypto::new(&keys.secrets_key)?;
-        let mut manager = NookVaultManager::new();
-        insert_secret(
-            &mut manager,
-            &crypto,
-            "secret_SMypl8K0w9a",
-            login("https://www.example.com/login", "alice", "correct"),
-        )?;
-        insert_secret(
-            &mut manager,
-            &crypto,
-            "secret_SMypl8K0w9b",
-            login("https://other.example", "bob", "other"),
-        )?;
-        insert_secret(
-            &mut manager,
-            &crypto,
-            "secret_SMypl8K0w9c",
-            SecretValue::SecureNote(nook_core::SecureNoteSecret {
-                title: "not a login".to_owned(),
-                note: "fixture".to_owned(),
-            }),
-        )?;
-        let mut catalog = SecretSearchCatalog::default();
-        catalog.reconcile(&manager.vault.meta.secrets, &crypto, &keys.secrets_key)?;
-        manager.vault.search_catalog = SearchCatalogState::Ready(catalog);
-        manager.vault.crypto = VaultCryptoState::Unlocked(crypto);
+        let manager = LoginFillVault::example_site()?;
+        // The side panel derives the requesting origin from the tab URL in Rust.
+        let BrowserTabTarget::Web(tab) = BrowserTabUrlObservation::Observed {
+            url: BrowserTabUrl::from(
+                "https://alice:pw@example.com/account?next=/home#top".to_owned(),
+            ),
+        }
+        .classify() else {
+            anyhow::bail!("expected the synthetic page to be a website target");
+        };
+        let origin = tab.origin().as_str();
+        assert_eq!(origin, "https://example.com");
 
-        let accounts = manager.list_matching_login_accounts("https://example.com/account")?;
-        assert_eq!(accounts.len(), 1);
-        assert_eq!(accounts[0].username(), "alice");
-        assert_eq!(accounts[0].website_host(), "example.com");
+        let accounts = manager.list_matching_login_accounts(origin)?;
+        let [account] = accounts.as_slice() else {
+            anyhow::bail!("expected only the matching login account");
+        };
+        assert_eq!(account.secret_id(), "secret_SMypl8K0w9a");
+        assert_eq!(account.username(), "alice");
+        assert_eq!(account.website_host(), "example.com");
 
         let credential = manager.reveal_matching_login_for_fill(&RevealLoginRequest {
             secret_id: "secret_SMypl8K0w9a",
-            origin: "https://example.com/account",
+            origin,
         })?;
         assert_eq!(credential.username(), "alice");
         assert_eq!(credential.password(), "correct");
         let focused_username =
             manager.reveal_matching_login_for_focused_fill(NookFocusedLoginFillRequest {
                 secret_id: SecretId::parse("secret_SMypl8K0w9a")?,
-                origin: nook_core::FocusedLoginFillOrigin::try_from(
-                    "https://example.com/account".to_owned(),
-                )?,
-                credential: nook_core::CredentialKind::Username,
+                origin: FocusedLoginFillOrigin::try_from(origin.to_owned())?,
+                credential: CredentialKind::Username,
             })?;
         assert_eq!(focused_username.value(), "alice");
         let focused_password =
             manager.reveal_matching_login_for_focused_fill(NookFocusedLoginFillRequest {
                 secret_id: SecretId::parse("secret_SMypl8K0w9a")?,
-                origin: nook_core::FocusedLoginFillOrigin::try_from(
-                    "https://example.com/account".to_owned(),
-                )?,
-                credential: nook_core::CredentialKind::CurrentPassword,
+                origin: FocusedLoginFillOrigin::try_from(origin.to_owned())?,
+                credential: CredentialKind::CurrentPassword,
             })?;
         assert_eq!(focused_password.value(), "correct");
         assert!(
             manager
                 .reveal_matching_login_for_focused_fill(NookFocusedLoginFillRequest {
                     secret_id: SecretId::parse("secret_SMypl8K0w9a")?,
-                    origin: nook_core::FocusedLoginFillOrigin::try_from(
-                        "https://other.example".to_owned()
-                    )?,
-                    credential: nook_core::CredentialKind::Username,
+                    origin: FocusedLoginFillOrigin::try_from("https://other.example".to_owned())?,
+                    credential: CredentialKind::Username,
                 })
                 .is_err()
         );
@@ -471,24 +507,49 @@ mod browser_tests {
                 })
                 .is_err()
         );
-        assert!(
-            manager
-                .reveal_matching_login_for_fill(&RevealLoginRequest {
-                    secret_id: "secret_SMypl8K0w9c",
-                    origin: "https://example.com",
-                })
-                .is_err()
-        );
+        for secret_id in ["secret_SMypl8K0w9c", "secret_SMypl8K0w9d"] {
+            let rejected =
+                manager.reveal_matching_login_for_fill(&RevealLoginRequest { secret_id, origin });
+            assert!(
+                matches!(
+                    &rejected,
+                    Err(NookError::Decryption(reason))
+                        if reason == "Selected secret is not a login credential."
+                ),
+                "{secret_id}"
+            );
+            for credential in [CredentialKind::Username, CredentialKind::CurrentPassword] {
+                assert!(
+                    manager
+                        .reveal_matching_login_for_focused_fill(NookFocusedLoginFillRequest {
+                            secret_id: SecretId::parse(secret_id)?,
+                            origin: FocusedLoginFillOrigin::try_from(origin.to_owned())?,
+                            credential,
+                        })
+                        .is_err(),
+                    "{secret_id}"
+                );
+            }
+        }
         assert!(
             manager
                 .reveal_matching_login_for_fill(&RevealLoginRequest {
                     secret_id: "not-a-secret-id",
-                    origin: "https://example.com",
+                    origin,
                 })
                 .is_err()
         );
         Ok(())
     }
+}
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::*;
+    use nook_core::SecretId;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
 
     #[wasm_bindgen_test]
     fn listing_requires_unlocked_crypto() {

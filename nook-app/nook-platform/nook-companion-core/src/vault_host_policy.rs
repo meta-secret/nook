@@ -199,6 +199,31 @@ impl VaultHostObservation<'_> {
     }
 }
 
+/// Nook vault application named by an observed hostname.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum VaultAppHostname {
+    Simple,
+    Sentinel,
+    Unrelated,
+}
+
+/// Named outcome of the Simple and Sentinel hostname predicates.
+impl VaultHostObservation<'_> {
+    /// A trailing DNS root dot names the same host, as in Chrome match patterns.
+    #[must_use]
+    pub(crate) fn vault_app_hostname(&self) -> VaultAppHostname {
+        let hostname = VaultHostObservation::new(self.as_str().trim_end_matches('.'));
+        match (
+            hostname.is_simple_vault_hostname(),
+            hostname.is_sentinel_vault_hostname(),
+        ) {
+            (true, _) => VaultAppHostname::Simple,
+            (false, true) => VaultAppHostname::Sentinel,
+            (false, false) => VaultAppHostname::Unrelated,
+        }
+    }
+}
+
 /// Autofill / website-WebAuthn exclusions for Simple and Sentinel hosts.
 impl VaultHostPolicy<'_> {
     pub fn nook_vault_app_exclude_match_patterns(
@@ -304,5 +329,75 @@ mod tests {
             Err(VaultHostPolicyError::InsecureNonLocalhost)
         ));
         Ok(())
+    }
+
+    struct VaultAppHostnameCase {
+        hostname: &'static str,
+        expected: VaultAppHostname,
+    }
+
+    #[test]
+    fn vault_app_hostname_names_simple_sentinel_and_unrelated_hosts() {
+        for case in [
+            VaultAppHostnameCase {
+                hostname: "simple.nokey.sh",
+                expected: VaultAppHostname::Simple,
+            },
+            VaultAppHostnameCase {
+                hostname: "SIMPLE.DEV.NOKEY.SH",
+                expected: VaultAppHostname::Simple,
+            },
+            VaultAppHostnameCase {
+                hostname: "pr-7.nokey-simple.pages.dev",
+                expected: VaultAppHostname::Simple,
+            },
+            VaultAppHostnameCase {
+                hostname: "sentinel.nokey.sh",
+                expected: VaultAppHostname::Sentinel,
+            },
+            VaultAppHostnameCase {
+                hostname: "sentinel.dev.nokey.sh",
+                expected: VaultAppHostname::Sentinel,
+            },
+            VaultAppHostnameCase {
+                hostname: "pr-7.nokey-sentinel.pages.dev",
+                expected: VaultAppHostname::Sentinel,
+            },
+            VaultAppHostnameCase {
+                hostname: "simple.nokey.sh.",
+                expected: VaultAppHostname::Simple,
+            },
+            VaultAppHostnameCase {
+                hostname: "pr-7.nokey-simple.pages.dev..",
+                expected: VaultAppHostname::Simple,
+            },
+            VaultAppHostnameCase {
+                hostname: "sentinel.dev.nokey.sh.",
+                expected: VaultAppHostname::Sentinel,
+            },
+            VaultAppHostnameCase {
+                hostname: "example.com.",
+                expected: VaultAppHostname::Unrelated,
+            },
+            VaultAppHostnameCase {
+                hostname: "example.com",
+                expected: VaultAppHostname::Unrelated,
+            },
+            VaultAppHostnameCase {
+                hostname: "simple.nokey.sh.example.com",
+                expected: VaultAppHostname::Unrelated,
+            },
+            VaultAppHostnameCase {
+                hostname: "nokey-simple.pages.dev",
+                expected: VaultAppHostname::Unrelated,
+            },
+        ] {
+            assert_eq!(
+                VaultHostObservation::new(case.hostname).vault_app_hostname(),
+                case.expected,
+                "{}",
+                case.hostname
+            );
+        }
     }
 }
