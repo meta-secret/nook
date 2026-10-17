@@ -1,14 +1,17 @@
 # Nook Browser Extension
 
 `nook-web-extension` is Nook's browser-integration package. The toolbar icon
-opens a compact panel beside itself: Open vault, the connected identities, PIN
-unlock and lock. Passkey unlock, setup and pairing open the extension-owned
-authentication component in a normal browser tab. A locked Pilot action opens or focuses the matching Pilot auth tab
-in the initiating normal window. If another auth intent is already open, it is
-left untouched and the requested intent opens in a separate tab in that window.
-The tab creates or unlocks the extension's separately revocable identity, then
-sends the public device request directly to the configured Simple Vault
-deployment, which owns the complete vault interface. The extension contains
+opens the extension's side panel, docked at full height beside the page and
+open across tab switches. The panel sets up and unlocks the extension device in
+place with a PIN or passkey. It lists the current site's saved logins, each
+with an explicit Fill, and shows the connected identities, Open vault, and
+Lock. Connecting an identity and All connections open the extension-owned
+authentication component in a normal browser tab. A locked Pilot action opens
+or focuses the matching Pilot auth tab in the initiating normal window. If
+another auth intent is already open, it is left untouched and the requested
+intent opens in a separate tab in that window. Pairing from that tab sends the
+public device request directly to the configured Simple Vault deployment,
+which owns the complete vault interface. The extension contains
 browser-only behavior: device protection, the in-page **Nook Pilot**
 authentication HUD, minimal DOM observation/fill integration, and background
 coordination. The HUD reports the current Rust-classified authentication
@@ -37,21 +40,24 @@ or account-less Nook sessions automatically use that native fallback.
 After a passkey or PIN authorization, the extension keeps its decrypted device
 identity only in an offscreen extension document under a 15-minute renewable
 lease. Successful identity handoffs renew the lease; status, read, retry, and
-closing/reopening the authentication tab do not. Reopening the tab during a
-live lease remains unlocked. Lease expiry, explicit lock, or browser/context
-restart requires reauthentication. This preserves required prompts rather than
-reducing them. The identity is never written to browser-vendor storage.
+closing or reopening the side panel or authentication tab do not. Reopening
+either during a live lease remains unlocked. Lease expiry, explicit lock, or
+browser/context restart requires reauthentication. This preserves required
+prompts rather than reducing them. The identity is never written to browser-vendor storage.
 
 The extension first-run model is specified in
 [`nook-app/nook-web/nook-web-extension/.cortex/docs/spec/browser-extension.md`](.cortex/docs/spec/browser-extension.md).
 The extension becomes its own passkey-protected Nook device and pairs only
 through vault consent at the configured Simple Vault
 `/extension-connect` route; it does not borrow or scrape the Simple web app
-device key. There is no website-first enable screen or floating companion
-window; the toolbar panel never runs a passkey ceremony. The auth tab also displays localized return guidance
-after a Pilot unlock; the page HUD waits for a fresh Continue click and rechecks
-the current origin/workflow before it acts.
-It intentionally has no miniature vault interface. Sentinel Vault
+device key. There is no website-first enable screen, floating companion
+window, or toolbar popup. The side panel runs the device passkey and PIN
+ceremonies itself, and opening another page never closes it. The auth tab also
+displays localized return guidance after a Pilot unlock; the page HUD waits for
+a fresh Continue click and rechecks the current origin/workflow before it acts.
+It intentionally has no miniature vault interface: the side panel shows only
+non-secret login metadata for the current site, and its Fill never submits a
+form. Sentinel Vault
 is excluded by the manifest, runtime guard, pairing validation, and Rust/WASM
 capability checks.
 
