@@ -18,13 +18,14 @@ use super::conclusion::{
 use super::failure_reason::SignInFailureReason;
 use super::lifecycle::{SignInAttemptEventContext, SignInAttemptNext, SignInAttemptStep};
 use super::page_evidence::SignInAttemptPageEvidence;
-use super::page_reading::{SignInAttemptBaseline, SignInAttemptPageReading};
+use super::page_reading::SignInAttemptPageReading;
 use super::presentation::{SignInAttemptResetOffer, SignInAttemptScene, SignInAttemptSigningIn};
 use super::record::{SignInAttemptChronology, SignInAttemptInstant};
 use super::request::{
     SignInAttemptActivity, SignInAttemptEvent, SignInAttemptSubmitBaseline, SignInAttemptUserAction,
 };
 use super::site::SignInAttemptSite;
+use super::submit_baseline::SignInAttemptBaseline;
 use crate::{
     AuthenticationOutcomeElapsedMilliseconds, AuthenticationOutcomeTimeoutMilliseconds,
     LoginSaveOutcomeObservation, SignInAttemptFollowUp,

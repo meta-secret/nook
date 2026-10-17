@@ -379,10 +379,18 @@ impl SignInAttemptScene {
             Self::SigningIn(SignInAttemptSigningIn::AwaitingOutcome) => {
                 SignInAttemptEvidenceDemand::Wanted
             }
-            Self::Failed(SignInAttemptFailedScene { evidence, .. })
+            Self::Failed(SignInAttemptFailedScene {
+                failure: SignInAttemptFailure::SiteRejected { .. },
+                evidence,
+                ..
+            })
             | Self::ChallengeRequired { evidence, .. }
             | Self::TimedOut { evidence } => *evidence,
-            Self::SigningIn(
+            Self::Failed(SignInAttemptFailedScene {
+                failure: SignInAttemptFailure::FillFailed | SignInAttemptFailure::SubmissionRejected,
+                ..
+            })
+            | Self::SigningIn(
                 SignInAttemptSigningIn::Filling
                 | SignInAttemptSigningIn::Filled
                 | SignInAttemptSigningIn::ManualSubmit

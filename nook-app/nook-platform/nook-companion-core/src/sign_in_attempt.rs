@@ -25,6 +25,7 @@ mod record;
 mod request;
 mod reset_link;
 mod site;
+mod submit_baseline;
 #[cfg(test)]
 mod test_fixture;
 mod vocabulary;

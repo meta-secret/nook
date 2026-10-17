@@ -83,6 +83,15 @@ pub(crate) enum SignInAttemptChallenge {
     Verification,
 }
 
+/// Who produced a concluded end state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SignInAttemptConclusionOrigin {
+    /// Nook's own fill or submit failed before the site responded.
+    Nook,
+    /// The site's response (or its absence within the budget) concluded it.
+    Site,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", deny_unknown_fields)]
 pub(crate) enum SignInAttemptConclusion {
@@ -103,17 +112,38 @@ impl SignInAttemptConclusion {
             SignInAttemptEvent::UserAction { action } => {
                 self.resolve(SignInAttemptResolution { action, binding })
             }
-            SignInAttemptEvent::PageObserved { page } => {
-                match SignInAttemptLoginWorkflow::from(&page.auth_fields) {
-                    SignInAttemptLoginWorkflow::Shown => self.presented(
-                        SignInAttemptResetOffer::from(page.links.reset_link(binding.site)),
-                    ),
-                    SignInAttemptLoginWorkflow::Left => {
-                        SignInAttemptStep::closing(SignInAttemptClosing::WORKFLOW_LEFT)
+            SignInAttemptEvent::PageObserved { page } => match self.origin() {
+                SignInAttemptConclusionOrigin::Nook => {
+                    self.presented(SignInAttemptResetOffer::NotOffered)
+                }
+                SignInAttemptConclusionOrigin::Site => {
+                    match SignInAttemptLoginWorkflow::from(&page.auth_fields) {
+                        SignInAttemptLoginWorkflow::Shown => self.presented(
+                            SignInAttemptResetOffer::from(page.links.reset_link(binding.site)),
+                        ),
+                        SignInAttemptLoginWorkflow::Left => {
+                            SignInAttemptStep::closing(SignInAttemptClosing::WORKFLOW_LEFT)
+                        }
                     }
                 }
-            }
+            },
             SignInAttemptEvent::Resumed | SignInAttemptEvent::Activity { .. } => self.unobserved(),
+        }
+    }
+
+    /// Whether the site produced this end state. Nook's own fill and submit
+    /// failures happen before the site responds, often because the fields
+    /// are not visible, so they never close as `WorkflowLeft`.
+    const fn origin(&self) -> SignInAttemptConclusionOrigin {
+        match self {
+            Self::Failed {
+                failure: SignInAttemptFailure::FillFailed | SignInAttemptFailure::SubmissionRejected,
+            } => SignInAttemptConclusionOrigin::Nook,
+            Self::Failed {
+                failure: SignInAttemptFailure::SiteRejected { .. },
+            }
+            | Self::ChallengeRequired { .. }
+            | Self::TimedOut => SignInAttemptConclusionOrigin::Site,
         }
     }
 
@@ -323,9 +353,9 @@ mod tests {
         SignInObservationFixture, SignInPageFixture, SignInScenario, SignInSubmittedAttempt,
     };
     use crate::{
-        AuthenticationLoginChecklistStatus, SignInAttemptActionKind, SignInAttemptEvidenceDemand,
-        SignInAttemptFollowUp, SignInAttemptLoginReference, SignInAttemptMessageKey,
-        SignInAttemptStatus, SignInAttemptUserAction,
+        AuthenticationLoginChecklistStatus, SignInAttemptActionKind, SignInAttemptActivity,
+        SignInAttemptEvidenceDemand, SignInAttemptFollowUp, SignInAttemptLoginReference,
+        SignInAttemptMessageKey, SignInAttemptStatus, SignInAttemptUserAction,
     };
 
     #[test]
@@ -688,6 +718,46 @@ mod tests {
             assert_eq!(left.reset_link, None);
             assert_eq!(left.page_evidence, SignInAttemptEvidenceDemand::NotWanted);
             assert_eq!(left.follow_up, SignInAttemptFollowUp::None);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn nook_fill_and_submit_failures_never_close_as_workflow_left() -> anyhow::Result<()> {
+        for activity in [
+            SignInAttemptActivity::FillFailed,
+            SignInAttemptActivity::SubmissionRejected,
+        ] {
+            let failed = SignInScenario::begin(1_000)?
+                .activity(activity)?
+                .retained()?;
+            assert_eq!(failed.presentation.status, SignInAttemptStatus::Failed);
+            assert_eq!(
+                failed.presentation.page_evidence,
+                SignInAttemptEvidenceDemand::NotWanted
+            );
+            let observed = failed
+                .observe(SignInObservationFixture {
+                    at: 1_200,
+                    page: SignInPageFixture {
+                        fields: SignInFieldsFixture::None,
+                        ..SignInPageFixture::login_form(
+                            SignInAttemptDocumentRelation::SameDocumentSameRoute,
+                        )
+                    },
+                })?
+                .retained()?;
+            assert_eq!(observed.presentation.status, SignInAttemptStatus::Failed);
+            assert_eq!(
+                observed.presentation.page_evidence,
+                SignInAttemptEvidenceDemand::NotWanted
+            );
+            let resumed = observed.resumed(9_000)?.retained()?;
+            assert_eq!(resumed.presentation.status, SignInAttemptStatus::Failed);
+            assert_eq!(
+                resumed.presentation.page_evidence,
+                SignInAttemptEvidenceDemand::NotWanted
+            );
         }
         Ok(())
     }

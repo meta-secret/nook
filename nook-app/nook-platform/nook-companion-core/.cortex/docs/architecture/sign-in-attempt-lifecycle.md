@@ -115,9 +115,10 @@ needed, because the record is non-secret and never written to vault storage.
 | AwaitingOutcome | `Resumed` or another activity | keep waiting, or `TimedOut` after the budget |
 | AwaitingOutcome | a new `Submitted` | restart the wait |
 | any in-flight phase | `Dismiss` | close; take-over state |
-| Concluded | `Resumed`, activity | re-present unchanged and ask for page evidence; never expires |
+| Concluded | `Resumed`, activity | re-present unchanged; site outcomes ask for page evidence; never expires |
 | Concluded | `PageObserved` with an auth field visible | re-present unchanged, with the reset offer from that page |
-| Concluded | `PageObserved` with no auth field visible | close as `WorkflowLeft`: no outcome claim, no actions |
+| Concluded by the site | `PageObserved` with no auth field visible | close as `WorkflowLeft`: no outcome claim, no actions |
+| Concluded by Nook (`FillFailed`, `SubmissionRejected`) | `PageObserved` | re-present unchanged; never closes as `WorkflowLeft`, never asks for page evidence |
 | Concluded | offered user action | close with its follow-up |
 
 Close, meaning the record is removed after the presentation is delivered,
@@ -160,9 +161,10 @@ existing `AuthenticationWorkflowActivity` and matches the rows:
 
 - 1 for fresh, dismissed, step-advanced, and workflow-left states;
 - 2 for Nook's own fill and submit, including fill failures;
-- 3 once the site's response was awaited or reached. `Dismissed` with checklist status `Inactive` is the
-take-over state. `Dismissed` with checklist status `Ready` is a return to the
-fresh Pilot.
+- 3 once the site's response was awaited or reached.
+
+`Dismissed` with checklist status `Inactive` is the take-over state.
+`Dismissed` with checklist status `Ready` is a return to the fresh Pilot.
 
 ## Classification rules
 
