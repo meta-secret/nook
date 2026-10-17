@@ -54,6 +54,12 @@ enum FixtureWindowKind {
   Rejected = 'rejected',
 }
 
+/** The document visibility states the fixture can switch the panel to. */
+enum FixtureVisibility {
+  Visible = 'visible',
+  Hidden = 'hidden',
+}
+
 /** A browser host for the panel: it records what the panel registers and
  * sends, and fires tab and visibility changes on request. */
 class SidePanelBrowserFixture {
@@ -63,7 +69,7 @@ class SidePanelBrowserFixture {
   readonly activated: ActivatedListener[] = []
   readonly updated: UpdatedListener[] = []
   readonly document = Object.assign(new EventTarget(), {
-    visibilityState: 'visible',
+    visibilityState: FixtureVisibility.Visible,
   })
   readonly window = new EventTarget()
   reply = FixtureReplyKind.Acknowledged
@@ -180,7 +186,7 @@ class SidePanelBrowserFixture {
       listener(3, request.change, request.tab)
   }
 
-  fireVisibility(state: 'visible' | 'hidden'): void {
+  fireVisibility(state: FixtureVisibility): void {
     this.document.visibilityState = state
     this.document.dispatchEvent(new Event('visibilitychange'))
   }
@@ -238,8 +244,8 @@ describe('side panel browser runtime', () => {
       change: { status: 'complete' },
       tab: tabIn({ windowId: 8, active: true }),
     })
-    fixture.fireVisibility('hidden')
-    fixture.fireVisibility('visible')
+    fixture.fireVisibility(FixtureVisibility.Hidden)
+    fixture.fireVisibility(FixtureVisibility.Visible)
     fixture.window.dispatchEvent(new Event('focus'))
 
     expect(changes).toEqual([
@@ -255,7 +261,7 @@ describe('side panel browser runtime', () => {
 
     release()
     fixture.fireActivated(7)
-    fixture.fireVisibility('visible')
+    fixture.fireVisibility(FixtureVisibility.Visible)
     expect(changes).toHaveLength(6)
     expect(fixture.activated).toHaveLength(0)
     expect(fixture.updated).toHaveLength(0)
@@ -268,7 +274,7 @@ describe('side panel browser runtime', () => {
       onchange: (change) => changes.push(change),
     })
     expect(fixture.activated).toHaveLength(0)
-    fixture.fireVisibility('visible')
+    fixture.fireVisibility(FixtureVisibility.Visible)
     expect(changes).toEqual([SidePanelChangeKind.PanelShown])
     release()
   })

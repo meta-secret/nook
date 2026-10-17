@@ -15,14 +15,17 @@ export enum SidePanelTabTargetKind {
   Failed = 'failed',
 }
 
+/** A website tab: its id and the origin and host Rust derived from its URL. */
+export interface SidePanelWebTabTarget {
+  readonly kind: SidePanelTabTargetKind.Web
+  readonly tabId: number
+  readonly origin: string
+  readonly display_host: string
+}
+
 /** The active tab of the panel's window, as the worker resolved and Rust classified it. */
 export type SidePanelTabTarget =
-  | {
-      readonly kind: SidePanelTabTargetKind.Web
-      readonly tabId: number
-      readonly origin: string
-      readonly display_host: string
-    }
+  | SidePanelWebTabTarget
   | { readonly kind: SidePanelTabTargetKind.NonWeb }
   | { readonly kind: SidePanelTabTargetKind.PageUnavailable }
   | { readonly kind: SidePanelTabTargetKind.Failed }

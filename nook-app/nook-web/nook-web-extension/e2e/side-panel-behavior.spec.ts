@@ -12,6 +12,7 @@ import {
   SidePanelStubFillDelivery,
   SidePanelStubPage,
   SidePanelStubVaults,
+  SidePanelStubVisibility,
   type SidePanelStubScenario,
 } from './helpers/side-panel-stub-runtime'
 
@@ -293,8 +294,8 @@ test('a PIN lives only for its try and never survives a hidden panel', async ({
   await expect(pin).toBeFocused()
 
   await pin.fill('123456')
-  await panel.setVisibility('hidden')
-  await panel.setVisibility('visible')
+  await panel.setVisibility(SidePanelStubVisibility.Hidden)
+  await panel.setVisibility(SidePanelStubVisibility.Visible)
   await expect(pin).toHaveValue('')
 
   await panel.update({ pinUnlock: SidePanelStubAnswer.Refuse })
