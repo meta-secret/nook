@@ -3,6 +3,7 @@ import {
   PilotAttemptCodec,
   PilotAttemptLoadKind,
   PilotAttemptMessageType,
+  type PilotAttempt,
   type PilotAttemptLoad,
   type PilotAttemptMessage,
 } from '../../lib/pilot-attempt-messages'
@@ -10,6 +11,11 @@ import type { SchemaRuntimeMessageOperationRequest } from './schema-runtime-mess
 
 /** Long enough to cover a submit's reload or redirect, short enough not to resurface later. */
 const PILOT_ATTEMPT_MAX_AGE_MS = 2 * 60_000
+
+type StoredPilotAttempt = {
+  readonly origin: string
+  readonly attempt: PilotAttempt
+}
 
 function storageKey(tabId: number): string {
   return `pilotAttempt:${tabId}`
@@ -36,8 +42,9 @@ export class PilotAttempts {
     const key = storageKey(tabId)
     switch (message.type) {
       case PilotAttemptMessageType.Save: {
-        const stored = { origin, attempt: message.attempt }
-        await chrome.storage.session.set({ [key]: stored })
+        const stored: StoredPilotAttempt = { origin, attempt: message.attempt }
+        const items: Record<string, StoredPilotAttempt> = { [key]: stored }
+        await chrome.storage.session.set(items)
         return none
       }
       case PilotAttemptMessageType.Clear:

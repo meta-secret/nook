@@ -99,13 +99,17 @@ class LoginChecklistAction {
   lifecycle = ChecklistActionLifecycle.Active
   evaluation = ChecklistEvaluation.Idle
   private resources: ChecklistWatch = { kind: ChecklistWatchKind.Stopped }
-  constructor(
-    readonly context: AuthenticationOutcomeObservationContext = {
+  constructor(readonly context: AuthenticationOutcomeObservationContext) {}
+
+  /** An action that starts now on the current page. */
+  static fresh(): LoginChecklistAction {
+    const context: AuthenticationOutcomeObservationContext = {
       startedAt: Date.now(),
       authPath: location.pathname,
       sawMutation: false,
-    },
-  ) {}
+    }
+    return new LoginChecklistAction(context)
+  }
 
   watch(evaluate: () => void): void {
     const observer = new MutationObserver(() => {
@@ -160,7 +164,7 @@ export class LoginChecklistProgress {
     kind: 'Activity',
     activity: 'Ready',
   }
-  private action = new LoginChecklistAction()
+  private action = LoginChecklistAction.fresh()
   private lifecycle = ChecklistMountLifecycle.Mounted
   // The last state sent to the service worker, so polling does not resend it.
   private remembered = ''
@@ -183,11 +187,12 @@ export class LoginChecklistProgress {
       }
       case PilotAttemptLoadKind.Found: {
         this.state = saved.attempt.state
-        this.action = new LoginChecklistAction({
+        const context: AuthenticationOutcomeObservationContext = {
           startedAt: saved.attempt.startedAt,
           authPath: saved.attempt.authPath,
           sawMutation: false,
-        })
+        }
+        this.action = new LoginChecklistAction(context)
         const resumed: ChecklistPresentationRequest = {
           action: this.action,
           observation: { kind: 'Retained' },
@@ -226,7 +231,7 @@ export class LoginChecklistProgress {
         break
     }
     this.action.cancel()
-    const action = new LoginChecklistAction()
+    const action = LoginChecklistAction.fresh()
     this.action = action
     const observation: AuthenticationLoginChecklistObservation = {
       kind: 'Activity',
