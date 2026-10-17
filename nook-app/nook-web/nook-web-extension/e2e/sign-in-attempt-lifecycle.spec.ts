@@ -40,7 +40,6 @@ interface SignInAttemptBrowserRun {
 class NamecheapLoginFixture {
   static readonly ORIGIN = 'https://www.namecheap.com'
   static readonly LOGIN_URL = `${NamecheapLoginFixture.ORIGIN}/myaccount/login/`
-  static readonly DASHBOARD_URL = `${NamecheapLoginFixture.ORIGIN}/dashboard/`
   static readonly USERNAME = 'pilot-user'
   static readonly PASSWORD = 'pilot-password-1'
   static readonly LOCK_MESSAGE =
@@ -107,26 +106,26 @@ class NamecheapLoginFixture {
     return route.fulfill(this.document(this.login()))
   }
 
+  /**
+   * The POST answer is the next document itself. A fulfilled redirect would
+   * leave its follow-up request unrouted, reaching the live site.
+   */
   private async answerSubmission(route: Route): Promise<void> {
     this.submissions += 1
-    const redirect: NamecheapRouteFulfillment = {
-      status: 303,
-      headers: { location: this.redirectTarget() },
-    }
-    return route.fulfill(redirect)
+    return route.fulfill(this.document(this.submissionAnswer()))
   }
 
-  private redirectTarget(): string {
+  private submissionAnswer(): string {
     switch (this.verdict) {
       case NamecheapLoginVerdict.Accepted:
         this.banner = NamecheapLoginBanner.None
-        return NamecheapLoginFixture.DASHBOARD_URL
+        return this.dashboard()
       case NamecheapLoginVerdict.WrongPassword:
         this.banner = NamecheapLoginBanner.WrongPassword
-        return NamecheapLoginFixture.LOGIN_URL
+        return this.login()
       case NamecheapLoginVerdict.AccountLocked:
         this.banner = NamecheapLoginBanner.AccountLocked
-        return NamecheapLoginFixture.LOGIN_URL
+        return this.login()
     }
   }
 
@@ -274,7 +273,7 @@ class SignInAttemptLifecycleScenario {
 
   private async accountLocked(page: Page): Promise<void> {
     this.fixture.verdict = NamecheapLoginVerdict.AccountLocked
-    await page.reload()
+    await page.goto(NamecheapLoginFixture.LOGIN_URL)
     await this.signIn(page)
     const widget = this.widget(page)
     await expect(widget.getByText('Sign-in failed')).toBeVisible({
@@ -295,7 +294,7 @@ class SignInAttemptLifecycleScenario {
     await this.screenshot(locked)
 
     // The failed attempt is retained across a further reload, not reset to Ready.
-    await page.reload()
+    await page.goto(NamecheapLoginFixture.LOGIN_URL)
     await expect(widget.getByText('Sign-in failed')).toBeVisible({
       timeout: 20_000,
     })
@@ -312,7 +311,7 @@ class SignInAttemptLifecycleScenario {
     const dismiss: PilotButtonRequest = { page, name: 'Dismiss' }
     await this.button(dismiss).click()
     await expect(widget.getByText('Sign-in failed')).toHaveCount(0)
-    await page.reload()
+    await page.goto(NamecheapLoginFixture.LOGIN_URL)
     await expect(widget.getByText('Ready to sign in')).toBeVisible({
       timeout: 20_000,
     })
@@ -321,7 +320,7 @@ class SignInAttemptLifecycleScenario {
   private async signedIn(page: Page): Promise<void> {
     this.fixture.verdict = NamecheapLoginVerdict.Accepted
     await this.signIn(page)
-    await expect(page).toHaveURL(NamecheapLoginFixture.DASHBOARD_URL, {
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({
       timeout: 20_000,
     })
     const widget = this.widget(page)
