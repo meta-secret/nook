@@ -454,10 +454,10 @@ class AuthenticationWidgetRenderer {
     switch (challenge.kind) {
       case SignInAttemptChallengeKind.Presented:
         title.textContent = chrome.i18n.getMessage(
-          challenge.presentation.titleKey,
+          challenge.presentation.title_key,
         )
         description.textContent = chrome.i18n.getMessage(
-          challenge.presentation.descriptionKey,
+          challenge.presentation.description_key,
         )
         break
       case SignInAttemptChallengeKind.Absent:
@@ -468,20 +468,23 @@ class AuthenticationWidgetRenderer {
       case AuthenticationWorkflowKind.Login:
         switch (snapshot.action) {
           case AuthenticationWorkflowAction.ContinueWithNook: {
+            const attemptControls: ConstructorParameters<
+              typeof SignInAttemptLoginActions
+            >[0] = {
+              workflow,
+              approval: currentApproval,
+              step,
+              title,
+              description,
+              continueButton,
+            }
             const mount: ConstructorParameters<
               typeof LoginChecklistProgress
             >[0] = {
               surface: { body, title, description },
               control: continueButton,
               workflow,
-              attemptActions: new SignInAttemptLoginActions({
-                workflow,
-                approval: currentApproval,
-                step,
-                title,
-                description,
-                continueButton,
-              }),
+              attemptActions: new SignInAttemptLoginActions(attemptControls),
             }
             const checklist = new LoginChecklistProgress(mount)
             this.ui.widgetState.loginChecklist = {

@@ -131,33 +131,40 @@ export class SignInAttemptEvidenceSensor {
 
   constructor(private readonly browser: typeof globalThis) {}
 
-  /** Presence-only facts collected synchronously right before submission. */
+  /** Facts collected synchronously right before submission; Rust keeps only their presence. */
   baseline(): SignInAttemptSubmitBaseline {
     return {
-      errorMessagePresent: this.collect().candidates.length > 0,
-      authFields: this.authFields(),
+      messages: this.projectMessages(this.collect()),
+      auth_fields: this.authFields(),
     }
+  }
+
+  /** Refreshes the existing field classification, then collects the page facts. */
+  async observe(
+    document: SignInAttemptDocumentRelation,
+  ): Promise<SignInAttemptPageEvidence> {
+    await passwordFieldDiscovery.prepareCompanionClassification(
+      this.browser.document,
+    )
+    return this.page(document)
   }
 
   page(document: SignInAttemptDocumentRelation): SignInAttemptPageEvidence {
     const evidence = this.collect()
     return {
       document,
-      authFields: this.authFields(),
-      manualCheckpointPresent: passwordFieldDiscovery.pageHasManualCheckpoint(
+      auth_fields: this.authFields(),
+      manual_checkpoint_present: passwordFieldDiscovery.pageHasManualCheckpoint(
         this.browser.document,
       ),
-      successMarkerPresent: this.markerPresent(
+      success_marker_present: this.markerPresent(
         SignInAttemptEvidenceSensor.SUCCESS_MARKER_SELECTOR,
       ),
-      errorMarkerPresent: this.markerPresent(
+      error_marker_present: this.markerPresent(
         SignInAttemptEvidenceSensor.ERROR_MARKER_SELECTOR,
       ),
       messages: this.projectMessages(evidence),
-      links: this.anchors(evidence).map((element, index) => {
-        const projection: LinkProjection = { element, index }
-        return this.projectLink(projection)
-      }),
+      links: this.links(evidence),
     }
   }
 
@@ -175,6 +182,8 @@ export class SignInAttemptEvidenceSensor {
           element,
         }
       }
+      case true:
+        break
     }
     return { kind: SignInAttemptLinkTargetKind.Unavailable }
   }
@@ -198,16 +207,16 @@ export class SignInAttemptEvidenceSensor {
   private authFields(): SignInAttemptAuthFields {
     const forms = passwordFormInteraction.summarizeAuthenticationWorkflowForms()
     return {
-      usernamePresent: forms.some(
+      username_present: forms.some(
         (form) => form.summary.usernameFieldCount > 0,
       ),
-      currentPasswordPresent: forms.some(
+      current_password_present: forms.some(
         (form) =>
           form.summary.currentPasswordFieldCount +
             form.summary.genericPasswordFieldCount >
           0,
       ),
-      oneTimeCodePresent: forms.some(
+      one_time_code_present: forms.some(
         (form) => form.summary.oneTimeCodeFieldCount > 0,
       ),
     }
@@ -232,6 +241,8 @@ export class SignInAttemptEvidenceSensor {
           scope: this.nearScope(container),
         }
       }
+      case true:
+        break
     }
     return { kind: AuthContainerKind.Absent }
   }
@@ -245,6 +256,8 @@ export class SignInAttemptEvidenceSensor {
         boundary !== document.body &&
         boundary !== document.documentElement:
         return boundary
+      case true:
+        break
     }
     return this.commonFieldAncestor()
   }
@@ -270,6 +283,8 @@ export class SignInAttemptEvidenceSensor {
     switch (true) {
       case holder instanceof this.browser.Element:
         return holder
+      case true:
+        break
     }
     return document.body
   }
@@ -283,6 +298,8 @@ export class SignInAttemptEvidenceSensor {
     switch (true) {
       case scope instanceof this.browser.Element:
         return scope
+      case true:
+        break
     }
     return container
   }
@@ -293,6 +310,8 @@ export class SignInAttemptEvidenceSensor {
     switch (true) {
       case parent instanceof this.browser.Element:
         return [element, ...this.ancestors(parent)]
+      case true:
+        break
     }
     return [element]
   }
@@ -342,12 +361,13 @@ export class SignInAttemptEvidenceSensor {
   }
 
   private alertSource(element: Element): SignInPageMessageSource {
-    switch (element.getAttribute('role')) {
-      case 'alert':
-      case 'status':
+    const role = this.attributeText(element.getAttribute('role'))
+    switch (role === 'alert' || role === 'status') {
+      case true:
         return 'Alert'
+      case false:
+        return 'LiveRegion'
     }
-    return 'LiveRegion'
   }
 
   private fieldReferenceCandidates(
@@ -382,9 +402,11 @@ export class SignInAttemptEvidenceSensor {
   }
 
   private attributeText(attribute: ElementAttribute): string {
-    switch (typeof attribute) {
-      case 'string':
+    switch (true) {
+      case typeof attribute === 'string':
         return attribute
+      case true:
+        break
     }
     return ''
   }
@@ -394,6 +416,8 @@ export class SignInAttemptEvidenceSensor {
     switch (true) {
       case element instanceof this.browser.Element:
         return [element]
+      case true:
+        break
     }
     return []
   }
@@ -467,6 +491,8 @@ export class SignInAttemptEvidenceSensor {
     switch (true) {
       case element instanceof this.browser.HTMLElement:
         return this.normalize(element.innerText)
+      case true:
+        break
     }
     return this.normalize(String(element.textContent))
   }
@@ -607,6 +633,8 @@ export class SignInAttemptEvidenceSensor {
         return this.functionalColor(functional)
       case hex instanceof Array:
         return this.hexColor(String(hex.at(1)))
+      case true:
+        break
     }
     return { kind: ParsedColorKind.Unreadable }
   }
@@ -669,6 +697,9 @@ export class SignInAttemptEvidenceSensor {
           this.presence(element) === ElementPresence.Rendered &&
           this.href(element).length > 0:
           anchors.push(element)
+          break
+        case true:
+          break
       }
     }
     return anchors
@@ -681,6 +712,8 @@ export class SignInAttemptEvidenceSensor {
       case url instanceof URL &&
         (url.protocol === 'https:' || url.protocol === 'http:'):
         return this.boundedHref(`${url.origin}${url.pathname}`)
+      case true:
+        break
     }
     return ''
   }
@@ -692,6 +725,18 @@ export class SignInAttemptEvidenceSensor {
       case false:
         return ''
     }
+  }
+
+  /** Each link's handle is its position in document-order collection. */
+  private links(evidence: CollectedEvidence): SignInPageLink[] {
+    const anchors = this.anchors(evidence)
+    return anchors.map((element) => {
+      const projection: LinkProjection = {
+        element,
+        index: anchors.indexOf(element),
+      }
+      return this.projectLink(projection)
+    })
   }
 
   private projectLink(projection: LinkProjection): SignInPageLink {

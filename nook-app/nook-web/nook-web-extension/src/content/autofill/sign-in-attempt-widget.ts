@@ -11,6 +11,7 @@ import {
   SignInAttemptPhaseKind,
   signInAttemptSession,
   type SignInAttemptHost,
+  SignInAttemptHostActionKind,
   type SignInAttemptHostAction,
 } from './sign-in-attempt-session'
 import {
@@ -112,8 +113,14 @@ class SignInAttemptPageWidget implements SignInAttemptHost {
     this.remove()
   }
 
-  run(_action: SignInAttemptHostAction): void {
-    scanState.schedule()
+  /** Follow-ups need a form Pilot: the rescan mounts it where the page has one. */
+  run(action: SignInAttemptHostAction): void {
+    switch (action.kind) {
+      case SignInAttemptHostActionKind.RestartWithSameLogin:
+      case SignInAttemptHostActionKind.OpenLoginPicker:
+      case SignInAttemptHostActionKind.OpenAuthenticatorPicker:
+        scanState.schedule()
+    }
   }
 
   disable(offer: SignInAttemptActionOffer): void {

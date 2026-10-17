@@ -12,7 +12,10 @@ import type {
   SignInAttemptMessage,
   SignInAttemptRuntimeResponse,
 } from '../src/lib/sign-in-attempt-messages'
-import { BrowserRuntimeMessage } from '../src/lib/browser-runtime-message'
+import {
+  BrowserRuntimeMessage,
+  BrowserRuntimeMessageAdmissionKind,
+} from '../src/lib/browser-runtime-message'
 
 type StoredValues = Record<string, BrowserRuntimeMessageValue>
 
@@ -50,8 +53,7 @@ export type SignInAttemptSenderFixture = {
 }
 
 export type SignInAttemptRouteMessage =
-  | SignInAttemptMessage
-  | BrowserRuntimeMessageValue
+  SignInAttemptMessage | BrowserRuntimeMessageValue
 export type SignInAttemptRouteRequest = {
   readonly message: SignInAttemptRouteMessage
   readonly sender: SignInAttemptSenderFixture
@@ -96,12 +98,14 @@ export class SignInAttemptRouteFixture {
     )
   }
 
-  respond(request: SignInAttemptRouteRequest): Promise<SignInAttemptRuntimeResponse> {
+  respond(
+    request: SignInAttemptRouteRequest,
+  ): Promise<SignInAttemptRuntimeResponse> {
     const admission = BrowserRuntimeMessage.from(request.message)
     switch (admission.kind) {
-      case 'rejected':
+      case BrowserRuntimeMessageAdmissionKind.Rejected:
         throw new Error('sign-in attempt fixture message must be admitted')
-      case 'accepted':
+      case BrowserRuntimeMessageAdmissionKind.Accepted:
         break
     }
     const tab: chrome.tabs.Tab = {

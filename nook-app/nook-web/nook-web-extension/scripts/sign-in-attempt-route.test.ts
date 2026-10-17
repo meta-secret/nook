@@ -23,11 +23,17 @@ const topFrame: SignInAttemptSenderFixture = {
 }
 const beginMessage: BrowserRuntimeMessageValue = {
   type: SignInAttemptMessageType.Session,
-  payload: { operation: SignInAttemptOperation.Begin, login: 'store_a/secret_b' },
+  payload: {
+    operation: SignInAttemptOperation.Begin,
+    login: 'store_a/secret_b',
+  },
 }
 const resumeMessage: BrowserRuntimeMessageValue = {
   type: SignInAttemptMessageType.Session,
-  payload: { operation: SignInAttemptOperation.Advance, event: { kind: 'Resumed' } },
+  payload: {
+    operation: SignInAttemptOperation.Advance,
+    event: { kind: 'Resumed' },
+  },
 }
 const dismissMessage: BrowserRuntimeMessageValue = {
   type: SignInAttemptMessageType.Session,
@@ -70,7 +76,9 @@ describe('service-worker sign-in attempt store', () => {
       message: resumeMessage,
       sender: topFrame,
     })
-    expect(RouteExpectation.presented(resumed)).toBe('SigningIn')
+    // A reload before Nook reported its submit leaves the outcome unconfirmed.
+    expect(RouteExpectation.presented(resumed)).toBe('TimedOut')
+    expect(typeof fixture.storage.values[fixture.storage.key(7)]).toBe('string')
 
     const otherTab: SignInAttemptSenderFixture = { ...topFrame, tab: 8 }
     const fresh = await fixture.respond({
@@ -117,7 +125,10 @@ describe('service-worker sign-in attempt store', () => {
       ...topFrame,
       url: 'https://attacker.example/login',
     }
-    const resumed = await fixture.respond({ message: resumeMessage, sender: other })
+    const resumed = await fixture.respond({
+      message: resumeMessage,
+      sender: other,
+    })
     expect(resumed).toEqual({
       ok: true,
       attempt: { kind: SignInAttemptViewKind.None },
@@ -168,7 +179,10 @@ describe('service-worker sign-in attempt store', () => {
       type: SignInAttemptMessageType.Session,
       payload: { operation: SignInAttemptOperation.Begin, login: 'has spaces' },
     }
-    const response = await fixture.respond({ message: malformed, sender: topFrame })
+    const response = await fixture.respond({
+      message: malformed,
+      sender: topFrame,
+    })
     expect(response).toEqual({
       ok: false,
       reason: SignInAttemptFailureReason.Unavailable,

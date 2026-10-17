@@ -1,4 +1,4 @@
-import { Effect, Schema, Semaphore } from 'effect'
+import { Data, Effect, Schema, Semaphore } from 'effect'
 import type { SignInAttemptStoredRecord } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { BrowserRuntimeMessageValue } from '../../lib/browser-runtime-message'
 
@@ -21,10 +21,18 @@ export enum SignInAttemptStorageOperation {
   Remove = 'remove',
 }
 
-export class SignInAttemptStorageFailure extends Schema.TaggedError<SignInAttemptStorageFailure>()(
+type SignInAttemptStorageFailureFields = {
+  readonly operation: SignInAttemptStorageOperation
+}
+
+export class SignInAttemptStorageFailure extends Data.TaggedError(
   'SignInAttemptStorageFailure',
-  { operation: Schema.Enum(SignInAttemptStorageOperation) },
-) {}
+)<SignInAttemptStorageFailureFields> {}
+
+type SignInAttemptStorageCall<Value> = {
+  readonly try: () => Promise<Value>
+  readonly catch: () => SignInAttemptStorageFailure
+}
 
 type SignInAttemptStoredValues = Readonly<
   Record<string, BrowserRuntimeMessageValue>
@@ -62,13 +70,11 @@ export class SignInAttemptTabRecords {
 
   load(tab: SignInAttemptTabId) {
     const key = this.key(tab)
-    return Effect.tryPromise({
+    const call: SignInAttemptStorageCall<SignInAttemptStoredValues> = {
       try: () => this.storage.get(key),
-      catch: () =>
-        new SignInAttemptStorageFailure({
-          operation: SignInAttemptStorageOperation.Load,
-        }),
-    }).pipe(
+      catch: () => this.failure(SignInAttemptStorageOperation.Load),
+    }
+    return Effect.tryPromise(call).pipe(
       Effect.map((values) => {
         const entry: SignInAttemptStoredEntry = { key, values }
         return this.decodeStored(entry)
@@ -80,24 +86,27 @@ export class SignInAttemptTabRecords {
     const values: SignInAttemptStoredValues = {
       [this.key(retention.tab)]: retention.record,
     }
-    return Effect.tryPromise({
+    const call: SignInAttemptStorageCall<void> = {
       try: () => this.storage.set(values),
-      catch: () =>
-        new SignInAttemptStorageFailure({
-          operation: SignInAttemptStorageOperation.Retain,
-        }),
-    })
+      catch: () => this.failure(SignInAttemptStorageOperation.Retain),
+    }
+    return Effect.tryPromise(call)
   }
 
   remove(tab: SignInAttemptTabId) {
     const key = this.key(tab)
-    return Effect.tryPromise({
+    const call: SignInAttemptStorageCall<void> = {
       try: () => this.storage.remove(key),
-      catch: () =>
-        new SignInAttemptStorageFailure({
-          operation: SignInAttemptStorageOperation.Remove,
-        }),
-    })
+      catch: () => this.failure(SignInAttemptStorageOperation.Remove),
+    }
+    return Effect.tryPromise(call)
+  }
+
+  private failure(
+    operation: SignInAttemptStorageOperation,
+  ): SignInAttemptStorageFailure {
+    const fields: SignInAttemptStorageFailureFields = { operation }
+    return new SignInAttemptStorageFailure(fields)
   }
 
   private key(tab: SignInAttemptTabId): string {

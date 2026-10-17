@@ -119,6 +119,8 @@ export class SignInAttemptLoginActions implements LoginChecklistAttemptActions {
         }
         return this.fillMatching(ready)
       }
+      case true:
+        break
     }
     this.status(BROWSER_MESSAGE_KEYS.WidgetFillFailed)
   }
@@ -147,6 +149,8 @@ export class SignInAttemptLoginActions implements LoginChecklistAttemptActions {
         await loginCredentialFillAction.fillAndSubmitAccount(request)
         return
       }
+      case true:
+        break
     }
     this.status(BROWSER_MESSAGE_KEYS.WidgetNoMatch)
   }

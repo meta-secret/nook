@@ -1,4 +1,4 @@
-import { Effect, Schema } from 'effect'
+import { Data, Effect, Schema } from 'effect'
 import {
   advance_sign_in_attempt,
   begin_sign_in_attempt,
@@ -7,6 +7,7 @@ import {
   type SignInAttemptBeginRequest,
   type SignInAttemptEvent,
   type SignInAttemptLoginReference,
+  type SignInAttemptSenderOrigin,
   type SignInAttemptTransition,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { BrowserRuntimeMessage } from '../../lib/browser-runtime-message'
@@ -20,7 +21,7 @@ import {
   type SignInAttemptView,
 } from '../../lib/sign-in-attempt-messages'
 import type { SchemaRuntimeMessageOperationRequest } from './schema-runtime-message-route'
-import { extensionPairingIdentity } from './pairing-identity'
+import type { extensionPairingIdentity } from './pairing-identity'
 import {
   SignInAttemptTabRecords,
   StoredSignInAttemptKind,
@@ -37,7 +38,7 @@ type SignInAttemptSenderAdmission = Parameters<
 /** Chrome sender facts the attempt is bound to; never taken from the message body. */
 type SignInAttemptBinding = {
   readonly tab: SignInAttemptTabId
-  readonly senderOrigin: string
+  readonly sender_origin: SignInAttemptSenderOrigin
 }
 type SignInAttemptBegin = {
   readonly binding: SignInAttemptBinding
@@ -51,11 +52,33 @@ type SignInAttemptTransitionApplication = {
   readonly tab: SignInAttemptTabId
   readonly transition: SignInAttemptTransition
 }
+type SignInAttemptAdvanceOutcome = {
+  readonly tab: SignInAttemptTabId
+  readonly advance: SignInAttemptAdvance
+}
+type SignInAttemptSenderFacts = {
+  readonly sender: chrome.runtime.MessageSender
+  readonly tab: SignInAttemptTabId
+  readonly origin: SignInAttemptSenderOrigin
+}
+type SignInAttemptRejectionFields = {
+  readonly reason: SignInAttemptFailureReason
+}
+type SignInAttemptEnvelopeFields = {
+  readonly type: Schema.Literal<SignInAttemptMessageType.Session>
+}
+type SignInAttemptSenderTabFields = {
+  readonly id: typeof SignInAttemptTabRecords.TAB_ID
+}
+type SignInAttemptSenderFields = {
+  readonly frameId: Schema.Literal<0>
+  readonly tab: Schema.Struct<SignInAttemptSenderTabFields>
+  readonly url: typeof Schema.String
+}
 
-export class SignInAttemptRejection extends Schema.TaggedError<SignInAttemptRejection>()(
+export class SignInAttemptRejection extends Data.TaggedError(
   'SignInAttemptRejection',
-  { reason: Schema.Enum(SignInAttemptFailureReason) },
-) {}
+)<SignInAttemptRejectionFields> {}
 
 export type SignInAttemptRouteDependencies = {
   readonly records: SignInAttemptTabRecords
@@ -66,20 +89,20 @@ export type SignInAttemptRouteDependencies = {
   readonly now: () => number
 }
 
+type SignInAttemptExchangeRequest = {
+  readonly request: SignInAttemptOperationRequest
+  readonly dependencies: SignInAttemptRouteDependencies
+}
+
 /**
- * Service-worker control plane for one tab's sign-in attempt: binds the
+ * Service-worker control plane for one tab's sign-in attempt: binds every
  * request to the Chrome sender, stores Rust's opaque record verbatim, and
  * applies Rust's disposition. Every lifecycle decision is Rust's.
  */
 export class SignInAttemptRoute {
-  static readonly ENVELOPE = Schema.Struct({
+  static readonly ENVELOPE_FIELDS: SignInAttemptEnvelopeFields = {
     type: Schema.Literal(SignInAttemptMessageType.Session),
-  })
-  static readonly SENDER = Schema.Struct({
-    frameId: Schema.Literal(0),
-    tab: Schema.Struct({ id: SignInAttemptTabRecords.TAB_ID }),
-    url: Schema.String,
-  })
+  }
   static readonly failed: SignInAttemptRuntimeResponse = {
     ok: false,
     reason: SignInAttemptFailureReason.Unavailable,
@@ -87,21 +110,21 @@ export class SignInAttemptRoute {
 
   constructor(private readonly dependencies: SignInAttemptRouteDependencies) {}
 
-  /** Matches only the envelope type; the operation decodes the full request. */
+  /** Matches only the envelope type; the exchange decodes the full request. */
   static decodeEnvelope(message: BrowserRuntimeMessage) {
-    return Schema.decodeUnknownEffect(SignInAttemptRoute.ENVELOPE)(
-      message,
-    ).pipe(Effect.as(message))
+    return Schema.decodeUnknownEffect(
+      Schema.Struct(SignInAttemptRoute.ENVELOPE_FIELDS),
+    )(message).pipe(Effect.as(message))
   }
 
   respond(
     request: SignInAttemptOperationRequest,
   ): Promise<SignInAttemptRuntimeResponse> {
-    return Effect.runPromise(
-      this.run(request).pipe(
-        Effect.catch((failure) => Effect.succeed(this.rejected(failure))),
-      ),
-    )
+    const exchange: SignInAttemptExchangeRequest = {
+      request,
+      dependencies: this.dependencies,
+    }
+    return Effect.runPromise(new SignInAttemptExchange(exchange).response())
   }
 
   /** `chrome.tabs.onRemoved`: the attempt never outlives its tab. */
@@ -122,6 +145,48 @@ export class SignInAttemptRoute {
         .pipe(Effect.catch(() => Effect.void)),
     )
   }
+}
+
+/** One content-script request: decode, bind to the sender, then one Rust transition. */
+class SignInAttemptExchange {
+  static readonly SENDER_TAB_FIELDS: SignInAttemptSenderTabFields = {
+    id: SignInAttemptTabRecords.TAB_ID,
+  }
+  static readonly SENDER_FIELDS: SignInAttemptSenderFields = {
+    frameId: Schema.Literal(0),
+    tab: Schema.Struct(SignInAttemptExchange.SENDER_TAB_FIELDS),
+    url: Schema.String,
+  }
+
+  constructor(private readonly exchange: SignInAttemptExchangeRequest) {}
+
+  response() {
+    return this.run().pipe(
+      Effect.catch((failure) => Effect.succeed(this.rejected(failure))),
+    )
+  }
+
+  private readonly run = Effect.fnUntraced(function* (
+    this: SignInAttemptExchange,
+  ) {
+    const { request, dependencies } = this.exchange
+    const message = yield* SignInAttemptMessageCodec.decode(request.message)
+    const binding = yield* this.bind(request.sender)
+    yield* Effect.promise(() => dependencies.companionReady)
+    const payload = message.payload
+    switch (payload.operation) {
+      case SignInAttemptOperation.Begin: {
+        const begin: SignInAttemptBegin = { binding, login: payload.login }
+        const view = yield* dependencies.records.serialized(this.begin(begin))
+        return this.delivered(view)
+      }
+      case SignInAttemptOperation.Advance: {
+        const step: SignInAttemptAdvanceStep = { binding, event: payload.event }
+        const view = yield* dependencies.records.serialized(this.advance(step))
+        return this.delivered(view)
+      }
+    }
+  })
 
   private rejected(
     failure: SignInAttemptRejection | Error,
@@ -129,91 +194,71 @@ export class SignInAttemptRoute {
     switch (true) {
       case failure instanceof SignInAttemptRejection:
         return { ok: false, reason: failure.reason }
+      case true:
+        break
     }
     return SignInAttemptRoute.failed
   }
-
-  private readonly run = Effect.fnUntraced(function* (
-    this: SignInAttemptRoute,
-    request: SignInAttemptOperationRequest,
-  ) {
-    const message = yield* SignInAttemptMessageCodec.decode(request.message)
-    const binding = yield* this.bind(request.sender)
-    yield* Effect.promise(() => this.dependencies.companionReady)
-    const payload = message.payload
-    switch (payload.operation) {
-      case SignInAttemptOperation.Begin: {
-        const begin: SignInAttemptBegin = { binding, login: payload.login }
-        const view = yield* this.dependencies.records.serialized(
-          this.begin(begin),
-        )
-        return this.delivered(view)
-      }
-      case SignInAttemptOperation.Advance: {
-        const step: SignInAttemptAdvanceStep = { binding, event: payload.event }
-        const view = yield* this.dependencies.records.serialized(
-          this.advance(step),
-        )
-        return this.delivered(view)
-      }
-    }
-  })
 
   private delivered(attempt: SignInAttemptView): SignInAttemptRuntimeResponse {
     return { ok: true, attempt }
   }
 
+  private forbidden(): SignInAttemptRejection {
+    const fields: SignInAttemptRejectionFields = {
+      reason: SignInAttemptFailureReason.ForbiddenSender,
+    }
+    return new SignInAttemptRejection(fields)
+  }
+
   /** Top-level frame of a tab, with the origin derived from the Chrome sender. */
   private bind(sender: chrome.runtime.MessageSender) {
-    const forbidden = new SignInAttemptRejection({
-      reason: SignInAttemptFailureReason.ForbiddenSender,
-    })
-    return Schema.decodeUnknownEffect(SignInAttemptRoute.SENDER)(sender).pipe(
-      Effect.mapError(() => forbidden),
+    return Schema.decodeUnknownEffect(
+      Schema.Struct(SignInAttemptExchange.SENDER_FIELDS),
+    )(sender).pipe(
+      Effect.mapError(() => this.forbidden()),
       Effect.flatMap((decoded) => {
         const url = URL.parse(decoded.url)
         switch (true) {
           case url instanceof URL: {
-            const origin: SignInAttemptSenderOrigin = {
+            const facts: SignInAttemptSenderFacts = {
               sender,
               tab: decoded.tab.id,
               origin: url.origin,
             }
-            return this.authorize(origin)
+            return this.authorize(facts)
           }
+          case true:
+            break
         }
-        return Effect.fail(forbidden)
+        return Effect.fail(this.forbidden())
       }),
     )
   }
 
   /** The existing authorized-website-sender check: this extension, a tab, matching origin. */
-  private authorize(origin: SignInAttemptSenderOrigin) {
+  private authorize(facts: SignInAttemptSenderFacts) {
     const admission: SignInAttemptSenderAdmission = {
-      sender: origin.sender,
-      origin: origin.origin,
+      sender: facts.sender,
+      origin: facts.origin,
     }
     const binding: SignInAttemptBinding = {
-      tab: origin.tab,
-      senderOrigin: origin.origin,
+      tab: facts.tab,
+      sender_origin: facts.origin,
     }
-    switch (this.dependencies.authorizesSender(admission)) {
+    switch (this.exchange.dependencies.authorizesSender(admission)) {
       case true:
         return Effect.succeed(binding)
       case false:
-        return Effect.fail(
-          new SignInAttemptRejection({
-            reason: SignInAttemptFailureReason.ForbiddenSender,
-          }),
-        )
+        return Effect.fail(this.forbidden())
     }
   }
 
   private begin(begin: SignInAttemptBegin) {
     const request: SignInAttemptBeginRequest = {
-      senderOrigin: begin.binding.senderOrigin,
+      sender_origin: begin.binding.sender_origin,
       login: begin.login,
-      now: this.dependencies.now(),
+      now: this.exchange.dependencies.now(),
     }
     return Effect.try(() => begin_sign_in_attempt(request)).pipe(
       Effect.flatMap((transition) => {
@@ -227,7 +272,7 @@ export class SignInAttemptRoute {
   }
 
   private advance(step: SignInAttemptAdvanceStep) {
-    const records = this.dependencies.records
+    const records = this.exchange.dependencies.records
     return records.load(step.binding.tab).pipe(
       Effect.flatMap((stored) => {
         switch (stored.kind) {
@@ -238,8 +283,8 @@ export class SignInAttemptRoute {
           case StoredSignInAttemptKind.Stored: {
             const request: SignInAttemptAdvanceRequest = {
               record: stored.record,
-              senderOrigin: step.binding.senderOrigin,
-              now: this.dependencies.now(),
+              sender_origin: step.binding.sender_origin,
+              now: this.exchange.dependencies.now(),
               event: step.event,
             }
             return Effect.try(() => advance_sign_in_attempt(request)).pipe(
@@ -258,6 +303,7 @@ export class SignInAttemptRoute {
   }
 
   private applyAdvance(outcome: SignInAttemptAdvanceOutcome) {
+    const records = this.exchange.dependencies.records
     switch (outcome.advance.kind) {
       case 'Advanced': {
         const application: SignInAttemptTransitionApplication = {
@@ -267,9 +313,7 @@ export class SignInAttemptRoute {
         return this.apply(application)
       }
       case 'RecordRejected':
-        return this.dependencies.records
-          .remove(outcome.tab)
-          .pipe(Effect.as(this.none()))
+        return records.remove(outcome.tab).pipe(Effect.as(this.none()))
       case 'OtherSite':
         return Effect.succeed(this.none())
     }
@@ -277,7 +321,7 @@ export class SignInAttemptRoute {
 
   /** Retain stores the new opaque record; Close removes it after this delivery. */
   private apply(application: SignInAttemptTransitionApplication) {
-    const records = this.dependencies.records
+    const records = this.exchange.dependencies.records
     const disposition = application.transition.disposition
     const presented: SignInAttemptView = {
       kind: SignInAttemptViewKind.Presented,
@@ -299,14 +343,4 @@ export class SignInAttemptRoute {
   private none(): SignInAttemptView {
     return { kind: SignInAttemptViewKind.None }
   }
-}
-
-type SignInAttemptSenderOrigin = {
-  readonly sender: chrome.runtime.MessageSender
-  readonly tab: SignInAttemptTabId
-  readonly origin: string
-}
-type SignInAttemptAdvanceOutcome = {
-  readonly tab: SignInAttemptTabId
-  readonly advance: SignInAttemptAdvance
 }

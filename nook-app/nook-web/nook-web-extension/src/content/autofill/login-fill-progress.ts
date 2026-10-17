@@ -1,6 +1,9 @@
 import type { SignInAttemptLoginReference } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { AuthenticationWorkflowActivity } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import { FormSubmissionResult } from '../../../../nook-web-shared/src/extension/password-forms'
+import {
+  FormSubmissionResult,
+  passwordFieldDiscovery,
+} from '../../../../nook-web-shared/src/extension/password-forms'
 import {
   BROWSER_MESSAGE_KEYS,
   type BrowserMessageKey,
@@ -79,6 +82,9 @@ export type LoginFillSubmit = () => FormSubmissionResult
 
 /** Reports one fill-and-submit to the Pilot: attempt events or the in-memory checklist. */
 export class LoginFillProgress {
+  static readonly FILLED: LoginFillAttemptActivity = { kind: 'Filled' }
+  static readonly FILL_FAILED: LoginFillAttemptActivity = { kind: 'FillFailed' }
+
   private constructor(private readonly request: LoginFillTrackingRequest) {}
 
   /** Sign in (or a picker choice) begins one attempt for a top-level Pilot mount. */
@@ -90,11 +96,13 @@ export class LoginFillProgress {
       control: request.controls.continueButton,
     }
     const checklist = loginChecklistForControl(checklistRequest)
-    const tracking = await LoginFillProgress.tracking({ checklist, request })
-    const progress = new LoginFillProgress({
+    const selection: LoginFillTrackingSelection = { checklist, request }
+    const tracking = await LoginFillProgress.tracking(selection)
+    const trackingRequest: LoginFillTrackingRequest = {
       controls: request.controls,
       tracking: tracking.tracking,
-    })
+    }
+    const progress = new LoginFillProgress(trackingRequest)
     switch (tracking.start) {
       case SignInAttemptStartKind.Started:
         return { kind: LoginFillStartKind.Started, progress }
@@ -143,12 +151,12 @@ export class LoginFillProgress {
     }
     this.showFlight(flight)
     this.showStatus(BROWSER_MESSAGE_KEYS.WidgetFillFailed)
-    await this.report({ kind: 'FillFailed' })
+    await this.report(LoginFillProgress.FILL_FAILED)
     return false
   }
 
   async filled(): Promise<void> {
-    await this.report({ kind: 'Filled' })
+    await this.report(LoginFillProgress.FILLED)
   }
 
   async submitting(): Promise<void> {
@@ -157,6 +165,9 @@ export class LoginFillProgress {
         await this.request.tracking.progress.activity('Submitting')
         return
       case LoginFillTrackingKind.Attempt:
+        // The synchronous submit baseline reads the refreshed field classification.
+        await passwordFieldDiscovery.prepareCompanionClassification(document)
+        return
       case LoginFillTrackingKind.Untracked:
         return
     }
@@ -193,7 +204,7 @@ export class LoginFillProgress {
   }
 
   async aborted(): Promise<void> {
-    await this.report({ kind: 'FillFailed' })
+    await this.report(LoginFillProgress.FILL_FAILED)
   }
 
   private async submissionRejected(): Promise<false> {

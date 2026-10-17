@@ -115,6 +115,18 @@ export type SignInAttemptSessionDependencies = {
  * DOM action. It holds no state of record and decides nothing about the page.
  */
 export class SignInAttemptSession {
+  static readonly SUBMISSION_REJECTED: SignInAttemptActivity = {
+    kind: 'SubmissionRejected',
+  }
+  static readonly SUBMISSION_UNOBSERVED: SignInAttemptActivity = {
+    kind: 'SubmissionUnobserved',
+  }
+  static readonly OPEN_LOGIN_PICKER: SignInAttemptHostAction = {
+    kind: SignInAttemptHostActionKind.OpenLoginPicker,
+  }
+  static readonly OPEN_AUTHENTICATOR_PICKER: SignInAttemptHostAction = {
+    kind: SignInAttemptHostActionKind.OpenAuthenticatorPicker,
+  }
   private phaseState: SignInAttemptPhase = {
     kind: SignInAttemptPhaseKind.Fresh,
   }
@@ -216,9 +228,9 @@ export class SignInAttemptSession {
   submission(result: FormSubmissionResult): Promise<void> {
     switch (result) {
       case FormSubmissionResult.Rejected:
-        return this.activity({ kind: 'SubmissionRejected' })
+        return this.activity(SignInAttemptSession.SUBMISSION_REJECTED)
       case FormSubmissionResult.NotObserved:
-        return this.activity({ kind: 'SubmissionUnobserved' })
+        return this.activity(SignInAttemptSession.SUBMISSION_UNOBSERVED)
       case FormSubmissionResult.Submitted:
         return Promise.resolve()
     }
@@ -261,6 +273,7 @@ export class SignInAttemptSession {
       case 'Failed':
       case 'TimedOut':
       case 'Dismissed':
+      case 'StepAdvanced':
         return { kind: SignInAttemptChallengeKind.Absent }
     }
   }
@@ -325,13 +338,17 @@ export class SignInAttemptSession {
       case SignInAttemptPhaseKind.Presented:
         break
     }
-    const index = this.phaseState.presentation.resetLink
-    switch (typeof index) {
-      case 'number':
+    const index = this.phaseState.presentation.reset_link
+    switch (true) {
+      case typeof index === 'number':
+        return this.resetLinkAction(index)
+      case true:
         break
-      default:
-        return { kind: SignInAttemptChoiceKind.Unavailable }
     }
+    return { kind: SignInAttemptChoiceKind.Unavailable }
+  }
+
+  private resetLinkAction(index: number): SignInAttemptChoiceResult {
     const target = this.dependencies.sensor.link(index)
     switch (target.kind) {
       case SignInAttemptLinkTargetKind.Unavailable:
@@ -374,24 +391,24 @@ export class SignInAttemptSession {
 
   /** Rust selects the follow-up; the page side only performs it. */
   private follow(presentation: SignInAttemptPresentation): void {
-    const followUp = presentation.followUp
+    const followUp = presentation.follow_up
     switch (followUp.kind) {
       case 'None':
         this.display(presentation)
         return
-      case 'RestartWithSameLogin':
-        this.release({
+      case 'RestartWithSameLogin': {
+        const restart: SignInAttemptHostAction = {
           kind: SignInAttemptHostActionKind.RestartWithSameLogin,
           login: followUp.login,
-        })
+        }
+        this.release(restart)
         return
+      }
       case 'OpenLoginPicker':
-        this.release({ kind: SignInAttemptHostActionKind.OpenLoginPicker })
+        this.release(SignInAttemptSession.OPEN_LOGIN_PICKER)
         return
       case 'OpenAuthenticatorPicker':
-        this.release({
-          kind: SignInAttemptHostActionKind.OpenAuthenticatorPicker,
-        })
+        this.release(SignInAttemptSession.OPEN_AUTHENTICATOR_PICKER)
         return
       case 'ActivateResetLink':
         this.phaseState = { kind: SignInAttemptPhaseKind.Fresh }
@@ -402,12 +419,14 @@ export class SignInAttemptSession {
   }
 
   /**
-   * A concluded dismissal (checklist Ready) returns the Pilot to its fresh
-   * state; a take-over dismissal (checklist Inactive) stays visible.
+   * A concluded dismissal or an advanced username step (checklist Ready)
+   * returns the Pilot to its fresh state; a take-over dismissal (checklist
+   * Inactive) stays visible.
    */
   private display(presentation: SignInAttemptPresentation): void {
     switch (presentation.status) {
       case 'Dismissed':
+      case 'StepAdvanced':
         this.dismissed(presentation)
         return
       case 'SigningIn':
@@ -469,7 +488,7 @@ export class SignInAttemptSession {
   }
 
   private updateWatch(presentation: SignInAttemptPresentation): void {
-    switch (presentation.pageEvidence) {
+    switch (presentation.page_evidence) {
       case 'NotWanted':
         this.stopWatching()
         return
@@ -521,13 +540,16 @@ export class SignInAttemptSession {
         break
     }
     this.report = EvidenceReport.Sending
-    const event: SignInAttemptEvent = {
-      kind: 'PageObserved',
-      page: this.dependencies.sensor.page(this.relation),
-    }
-    void this.advance(event).finally(() => {
+    void this.observe().finally(() => {
       this.report = EvidenceReport.Idle
     })
+  }
+
+  /** A page that cannot be observed now is observed again on the next tick. */
+  private async observe(): Promise<void> {
+    const page = await this.dependencies.sensor.observe(this.relation)
+    const event: SignInAttemptEvent = { kind: 'PageObserved', page }
+    await this.advance(event)
   }
 
   private hostPresent(): void {

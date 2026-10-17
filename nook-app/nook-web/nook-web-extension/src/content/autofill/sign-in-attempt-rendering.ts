@@ -89,9 +89,9 @@ export class SignInAttemptRendering {
 
   render(presentation: SignInAttemptPresentation): void {
     const { surface, checklist } = this.request
-    surface.title.textContent = chrome.i18n.getMessage(presentation.titleKey)
+    surface.title.textContent = chrome.i18n.getMessage(presentation.title_key)
     surface.description.textContent = chrome.i18n.getMessage(
-      presentation.descriptionKey,
+      presentation.description_key,
     )
     this.detail.dataset.status = String(presentation.status)
     this.renderReason(presentation)
@@ -122,13 +122,16 @@ export class SignInAttemptRendering {
     switch (true) {
       case button instanceof HTMLButtonElement:
         button.disabled = true
+        break
+      case true:
+        break
     }
   }
 
   private renderReason(presentation: SignInAttemptPresentation): void {
-    const reason = presentation.reasonKey
-    switch (typeof reason) {
-      case 'string': {
+    const reason = presentation.reason_key
+    switch (true) {
+      case typeof reason === 'string': {
         const update: SignInAttemptDetailCopy = {
           element: this.reason,
           copy: chrome.i18n.getMessage(reason),
@@ -136,21 +139,22 @@ export class SignInAttemptRendering {
         this.show(update)
         return
       }
+      case true:
+        this.hide(this.reason)
     }
-    this.hide(this.reason)
   }
 
   private renderSiteMessage(presentation: SignInAttemptPresentation): void {
-    const message = presentation.siteMessage
-    switch (typeof message) {
-      case 'string': {
+    const message = presentation.site_message
+    switch (true) {
+      case typeof message === 'string':
         this.siteMessageText.textContent = message
         this.siteMessage.hidden = false
         return
-      }
+      case true:
+        this.siteMessageText.textContent = ''
+        this.siteMessage.hidden = true
     }
-    this.siteMessageText.textContent = ''
-    this.siteMessage.hidden = true
   }
 
   private show(update: SignInAttemptDetailCopy): void {
@@ -165,8 +169,11 @@ export class SignInAttemptRendering {
 
   private renderActions(offers: readonly SignInAttemptActionOffer[]): void {
     this.actions.replaceChildren(
-      ...offers.map((offer, index) => {
-        const position: SignInAttemptActionPosition = { offer, index }
+      ...offers.map((offer) => {
+        const position: SignInAttemptActionPosition = {
+          offer,
+          index: offers.indexOf(offer),
+        }
         return this.actionButton(position)
       }),
     )
@@ -180,7 +187,7 @@ export class SignInAttemptRendering {
     button.type = 'button'
     button.className = this.actionClass(position)
     button.dataset.action = String(position.offer.action)
-    button.textContent = chrome.i18n.getMessage(position.offer.labelKey)
+    button.textContent = chrome.i18n.getMessage(position.offer.label_key)
     button.addEventListener('click', (event) => {
       switch (new AuthenticationGesture(event).trusted && !button.disabled) {
         case true:
