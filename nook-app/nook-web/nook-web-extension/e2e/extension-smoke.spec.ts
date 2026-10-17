@@ -313,15 +313,31 @@ test('sets up the extension device first and sends its public keys to Simple Vau
       widget.getByRole('button', { name: 'Sign in with Nook' }),
     ).toBeVisible()
 
-    const toolbarPanel = await context.newPage()
-    await toolbarPanel.goto(
-      `chrome-extension://${extensionId}/popup/panel.html`,
+    // The toolbar button opens the side panel; here its page runs in a tab.
+    // Before setup it runs the shared ceremony, with Open vault in its header.
+    const sidePanel = await context.newPage()
+    await sidePanel.goto(
+      `chrome-extension://${extensionId}/side-panel/index.html`,
     )
+    await expect(sidePanel.getByTestId('side-panel-state')).toHaveText(
+      'Not set up',
+    )
+    await expect(
+      sidePanel.getByTestId('device-protection-use-existing-choice'),
+    ).toHaveText('Use my passkey')
+    await expect(
+      sidePanel.getByTestId('device-protection-create-new-choice'),
+    ).toBeVisible()
+    await expect(sidePanel.getByTestId('side-panel-lock')).toHaveCount(0)
+    await expect(sidePanel.getByTestId('side-panel-manage')).toHaveCount(0)
     const openedVault = context.waitForEvent('page')
-    await toolbarPanel.getByTestId('action-panel-open-vault').click()
+    await sidePanel.getByTestId('side-panel-open-vault').click()
     await expect(await openedVault).toHaveURL(
       simple_vault_url(simpleVaultBaseUrl, 'vault'),
     )
+    // Opening a page never closes the panel.
+    expect(sidePanel.isClosed()).toBe(false)
+    await expect(sidePanel.getByTestId('side-panel-alert')).toHaveCount(0)
 
     const signupPage = await context.newPage()
     await signupPage.goto(`${loginServer.origin}/signup`)
