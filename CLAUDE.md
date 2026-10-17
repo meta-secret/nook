@@ -33,3 +33,5 @@ meta-cortex: instructions
 ---
 
 Read and follow [.meta-cortex/AGENTS.md](.meta-cortex/AGENTS.md).
+
+---
