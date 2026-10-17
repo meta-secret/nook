@@ -6,8 +6,8 @@ import { DeviceProtectionStatus } from '../../../nook-web-shared/src/vault-app/l
 import { ExtensionRuntimeRequestType } from '../../src/lib/extension-runtime-request-type'
 import { ExtensionSessionMessageType } from '../../src/lib/extension-session-message-type'
 import { PairedVaultsMessageType } from '../../src/lib/paired-vaults'
+import { SIDE_PANEL_PAGE_PATH } from '../../src/lib/side-panel-page-path'
 import {
-  SIDE_PANEL_PAGE_PATH,
   SidePanelSiteMessageType,
   type SidePanelLoginFillKind,
   type SidePanelSiteListing,

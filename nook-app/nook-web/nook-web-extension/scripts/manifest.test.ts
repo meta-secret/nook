@@ -10,7 +10,7 @@ import {
   ExtensionPermission,
   type ExtensionManifestDeployment,
 } from '../src/manifest'
-import { SIDE_PANEL_PAGE_PATH } from '../src/lib/side-panel-site'
+import { SIDE_PANEL_PAGE_PATH } from '../src/lib/side-panel-page-path'
 
 const defaultManifestArgs: CreateExtensionManifestArgs = {
   kind: ExtensionManifestBuildKind.StoreRelease,

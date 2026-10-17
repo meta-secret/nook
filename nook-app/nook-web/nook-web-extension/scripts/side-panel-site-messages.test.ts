@@ -5,8 +5,8 @@ import {
   BrowserRuntimeMessageAdmissionKind,
   type BrowserRuntimeMessageValue,
 } from '../src/lib/browser-runtime-message'
+import { SIDE_PANEL_PAGE_PATH } from '../src/lib/side-panel-page-path'
 import {
-  SIDE_PANEL_PAGE_PATH,
   SidePanelLoginFillKind,
   sidePanelSite,
   type SidePanelSiteClient,

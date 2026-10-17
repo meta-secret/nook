@@ -13,7 +13,7 @@ import {
   ExtensionPageOutput,
   extensionEntrypointBuildPolicy,
 } from './build-contract'
-import { SIDE_PANEL_PAGE_PATH } from '../src/lib/side-panel-site'
+import { SIDE_PANEL_PAGE_PATH } from '../src/lib/side-panel-page-path'
 
 test('uses classic IIFE output for content scripts and module output elsewhere', () => {
   expect(

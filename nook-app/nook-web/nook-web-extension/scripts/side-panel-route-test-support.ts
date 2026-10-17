@@ -29,10 +29,8 @@ import {
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
 import type { WebsiteLoginAccountOption } from '../src/lib/login-fill-messages'
 import { SidePanelPageFillReplyKind } from '../src/lib/side-panel-page-fill'
-import {
-  SIDE_PANEL_PAGE_PATH,
-  SidePanelSiteMessageType,
-} from '../src/lib/side-panel-site'
+import { SIDE_PANEL_PAGE_PATH } from '../src/lib/side-panel-page-path'
+import { SidePanelSiteMessageType } from '../src/lib/side-panel-site'
 import type { ExtensionSessionResponse } from '../src/offscreen/session'
 import type { ExtensionSessionTransportRequest } from '../src/offscreen/session-request-adapter'
 

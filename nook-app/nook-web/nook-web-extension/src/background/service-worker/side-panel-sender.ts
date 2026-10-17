@@ -1,4 +1,4 @@
-import { SIDE_PANEL_PAGE_PATH } from '../../lib/side-panel-site'
+import { SIDE_PANEL_PAGE_PATH } from '../../lib/side-panel-page-path'
 
 export enum SidePanelSenderAdmission {
   Admitted = 'admitted',

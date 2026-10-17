@@ -20,7 +20,7 @@ import {
   SessionOperationFailure,
   SessionOperationFailureKind,
 } from '../src/lib/session-operation-queue'
-import { SIDE_PANEL_PAGE_PATH } from '../src/lib/side-panel-site'
+import { SIDE_PANEL_PAGE_PATH } from '../src/lib/side-panel-page-path'
 
 type RuntimeListener = Parameters<
   typeof chrome.runtime.onMessage.addListener

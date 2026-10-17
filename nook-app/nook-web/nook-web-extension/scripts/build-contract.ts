@@ -2,7 +2,7 @@ import {
   ExtensionReleaseChannel,
   type ExtensionChannel,
 } from './channel-identity'
-import { SIDE_PANEL_PAGE_PATH } from '../src/lib/side-panel-site'
+import { SIDE_PANEL_PAGE_PATH } from '../src/lib/side-panel-page-path'
 
 export enum ExtensionDiagnosticBuildAvailability {
   Disabled = 'disabled',
