@@ -106,6 +106,10 @@ enum EvidenceReport {
   Idle = 'idle',
   Sending = 'sending',
 }
+enum AuthenticatorYield {
+  Available = 'available',
+  Used = 'used',
+}
 enum PendingResetKind {
   None = 'none',
   Chosen = 'chosen',
@@ -164,6 +168,8 @@ export class SignInAttemptSession {
   private watch: EvidenceWatch = { kind: EvidenceWatchKind.Stopped }
   private report = EvidenceReport.Idle
   private pendingReset: PendingReset = { kind: PendingResetKind.None }
+  /** Whether a login Pilot already handed this attempt's 2FA step to the authenticator Pilot. */
+  private authenticatorYield = AuthenticatorYield.Available
   private resumption: Promise<void> = Promise.resolve()
 
   constructor(
@@ -265,6 +271,7 @@ export class SignInAttemptSession {
   ): Promise<SignInAttemptStartKind> {
     this.observation = SignInAttemptObservation.NEW_DOCUMENT
     this.pendingReset = { kind: PendingResetKind.None }
+    this.authenticatorYield = AuthenticatorYield.Available
     this.binding = {
       kind: SignInAttemptHostBindingKind.Attached,
       host: request.host,
@@ -290,6 +297,7 @@ export class SignInAttemptSession {
   ): Promise<SignInAttemptStartKind> {
     this.observation = SignInAttemptObservation.NEW_DOCUMENT
     this.pendingReset = { kind: PendingResetKind.None }
+    this.authenticatorYield = AuthenticatorYield.Available
     this.binding = { kind: SignInAttemptHostBindingKind.Detached }
     const delivery = await this.dependencies.transport.begin(login)
     switch (delivery.kind) {
@@ -352,6 +360,27 @@ export class SignInAttemptSession {
       action: { kind: 'Dismiss' },
     }
     return this.dependencies.transport.advance(event).then(() => {})
+  }
+
+  /**
+   * A 2FA challenge whose Fill 2FA code needs the one-time-code field is
+   * presented by the authenticator Pilot, which owns that field's binding,
+   * its Rust approval and the picker request. A login Pilot still mounted on
+   * the same page yields to it once per attempt; if the scan mounts a login
+   * Pilot again, that Pilot presents the challenge itself.
+   */
+  yieldsToAuthenticator(presentation: SignInAttemptPresentation): boolean {
+    switch (
+      this.authenticatorYield === AuthenticatorYield.Available &&
+      presentation.status === 'ChallengeRequired' &&
+      presentation.actions.some((offer) => offer.action === 'FillAuthenticator')
+    ) {
+      case true:
+        this.authenticatorYield = AuthenticatorYield.Used
+        return true
+      case false:
+        return false
+    }
   }
 
   /** The 2FA Pilot shows the attempt's Verification needed copy while it is presented. */

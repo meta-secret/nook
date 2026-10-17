@@ -199,6 +199,40 @@ describe('sign-in attempt follow-ups', () => {
     )
   })
 
+  test('a login Pilot yields a 2FA challenge to the authenticator Pilot once per attempt', async () => {
+    const challenge: SignInAttemptPageEvidence = {
+      ...EvidenceFixture.page({
+        message: '',
+        authFields: false,
+        success: false,
+        resetLink: false,
+      }),
+      auth_fields: {
+        username_present: false,
+        current_password_present: false,
+        one_time_code_present: true,
+      },
+    }
+    await fixture.observedAfterSubmit(challenge)
+    fixture.oneTimeCodeDocument()
+    await signInAttemptSession.resume()
+    expect(signInAttemptSession.challenge().kind).toBe(
+      SignInAttemptChallengeKind.Presented,
+    )
+    // The first login Pilot hands the page over and does not render the challenge.
+    const yielded = fixture.surface()
+    await fixture.progress(yielded).initialize()
+    expect(yielded.title.textContent).toBe('Ready to sign in')
+    expect(PilotExpectation.actions(yielded)).toEqual([])
+    // A login Pilot mounted again presents it itself: no loop, nothing hidden.
+    const presenting = fixture.surface()
+    await fixture.progress(presenting).initialize()
+    expect(presenting.title.textContent).toBe('widgetSignInChallenge')
+    expect(PilotExpectation.actions(presenting)).toContain(
+      'widgetFillAuthenticator',
+    )
+  })
+
   test('the standalone Pilot keeps a visible refusal when a follow-up needs a login form', async () => {
     await fixture.observedAfterSubmit(
       EvidenceFixture.page({

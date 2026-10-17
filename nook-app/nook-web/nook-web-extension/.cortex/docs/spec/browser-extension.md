@@ -514,13 +514,12 @@ login workflow:
   visibly instead of disappearing.
 - **Verification needed**: a 2FA field hands off to the existing
   authenticator picker (**Fill 2FA code**); a CAPTCHA or manual checkpoint
-  shows take-over guidance. When **Fill 2FA code** is chosen on the
-  login Pilot of a same-page 2FA step, that Pilot owns no one-time-code
-  field binding, so the choice is carried once to the authenticator Pilot
-  the next scan mounts. It only opens the authenticator picker (the code is
-  filled after the person picks an authenticator), is bound to the same
-  document, origin and frame, lapses after five seconds, and is cleared by
-  any other user action or navigation.
+  shows take-over guidance. On a same-page 2FA step the
+  authenticator Pilot, which owns the one-time-code field binding, presents
+  the challenge: a login Pilot still mounted yields the page to it once per
+  attempt, so its own **Fill 2FA code** opens the picker with one click. A
+  login Pilot mounted again presents the challenge itself; nothing is
+  carried between Pilots.
 - **Sign-in not confirmed**: no decisive response within the Rust-owned
   outcome budget, with **Try again** and **Dismiss**.
 - **Dismissed**: the user ended the attempt; an in-flight attempt shows the

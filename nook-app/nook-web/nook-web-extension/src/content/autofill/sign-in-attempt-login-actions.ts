@@ -6,7 +6,6 @@ import {
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import { WebsiteLoginOptionsMessageType } from '../../lib/login-fill-messages'
 import { authenticationActivityProgress } from './authentication-activity-progress'
-import { authenticatorHandOff } from './authenticator-hand-off'
 import { authenticationWorkflowUi } from './authentication-workflow-ui-state'
 import { loginCredentialFillAction } from './login-credential-fill-action'
 import type { LoginChecklistAttemptActions } from './login-checklist-progress'
@@ -68,8 +67,6 @@ export class SignInAttemptLoginActions implements LoginChecklistAttemptActions {
         void loginPasskeyInteraction.openLoginPicker(this.controls)
         return
       case SignInAttemptHostActionKind.OpenAuthenticatorPicker:
-        // The authenticator Pilot the rescan mounts runs Fill 2FA code once.
-        authenticatorHandOff.request()
         scanState.schedule()
         return
     }

@@ -1,4 +1,8 @@
-import { LoginChecklistMountKind, type LoginChecklistMountState } from './state'
+import {
+  LoginChecklistMountKind,
+  scanState,
+  type LoginChecklistMountState,
+} from './state'
 import { Effect } from 'effect'
 import type {
   AuthenticationDisplayProgress,
@@ -239,9 +243,24 @@ export class LoginChecklistProgress implements SignInAttemptHost {
       case ChecklistOwnership.Current:
         break
     }
+    switch (signInAttemptSession.yieldsToAuthenticator(presentation)) {
+      case true:
+        this.yieldToAuthenticator()
+        return
+      case false:
+        break
+    }
     this.attempt = ChecklistAttemptBinding.Bound
     this.action.stop()
     this.attemptRendering.render(presentation)
+  }
+
+  /** The authenticator Pilot the rescan mounts presents the 2FA step. */
+  private yieldToAuthenticator(): void {
+    signInAttemptSession.detach(this)
+    this.action.stop()
+    workflowUi.removeWidget()
+    scanState.schedule()
   }
 
   release(): void {
