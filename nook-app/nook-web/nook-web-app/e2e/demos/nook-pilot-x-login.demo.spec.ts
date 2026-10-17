@@ -40,8 +40,8 @@ test('continue through the X identifier-only login form', async ({ page }) => {
   await expect(page.getByTestId('x-continue')).not.toHaveAttribute('role')
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
 
-  await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
-  await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
+  await widget.getByRole('button', { name: 'Sign in' }).click()
+  await widget.getByRole('button', { name: 'Sign in' }).click()
 
   await expect(form.locator('[name="username_or_email"]')).toHaveValue(
     'pilot@example.test',

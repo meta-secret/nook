@@ -156,20 +156,39 @@ class AuthenticationOutcomeObservation {
   ): AuthenticationOutcomeObservationView {
     const observation = this.collectOutcomeObservation(request.context)
     const scope = this.workflowErrorScope(request.workflow)
-    const selector =
-      '[data-nook-auth-outcome="error"], [role="alert"], .error[role="alert"]'
     switch (scope.kind) {
       case WorkflowErrorScopeKind.Excluded:
         observation.errorMarkerPresent = false
         break
       case WorkflowErrorScopeKind.Attached:
-        observation.errorMarkerPresent = Boolean(
-          scope.boundary.querySelector(selector) ||
-          scope.boundary.matches(selector),
-        )
+        observation.errorMarkerPresent =
+          Boolean(
+            scope.boundary.querySelector(EXPLICIT_ERROR_SELECTOR) ||
+            scope.boundary.matches(EXPLICIT_ERROR_SELECTOR),
+          ) || this.siteErrorMessage(request.workflow).length > 0
         break
     }
     return observation
+  }
+
+  /** The visible error text the site shows around the login form, or ''.
+   * Sites often style the banner without role="alert" (Namecheap's lock
+   * notice is a plain div), so error-named containers count too. */
+  siteErrorMessage(workflow: PasswordFormObservation): string {
+    const scope = this.workflowErrorScope(workflow)
+    switch (scope.kind) {
+      case WorkflowErrorScopeKind.Excluded:
+        return ''
+      case WorkflowErrorScopeKind.Attached:
+        break
+    }
+    for (const element of scope.boundary.querySelectorAll(
+      SITE_ERROR_SELECTOR,
+    )) {
+      const text = visibleErrorText(element)
+      if (text.length > 0) return text
+    }
+    return ''
   }
 
   private workflowErrorScope(
@@ -202,6 +221,29 @@ class AuthenticationOutcomeObservation {
   private excludedWorkflowErrorScope(): WorkflowErrorScope {
     return { kind: WorkflowErrorScopeKind.Excluded }
   }
+}
+
+const EXPLICIT_ERROR_SELECTOR =
+  '[data-nook-auth-outcome="error"], [role="alert"]'
+const SITE_ERROR_SELECTOR = [
+  EXPLICIT_ERROR_SELECTOR,
+  '[aria-live="assertive"]',
+  '[class*="error" i]',
+  '[class*="alert" i]',
+  '[class*="danger" i]',
+  '[id*="error" i]',
+].join(', ')
+const SITE_ERROR_MIN_LENGTH = 4
+const SITE_ERROR_MAX_LENGTH = 400
+
+/** Text of a shown message element; a wrapper around form fields is not a message. */
+function visibleErrorText(element: Element): string {
+  if (element.querySelector('input, select, textarea, button')) return ''
+  if (element.getClientRects().length === 0) return ''
+  if (getComputedStyle(element).visibility === 'hidden') return ''
+  const text = (element.textContent || '').replace(/\s+/g, ' ').trim()
+  if (text.length < SITE_ERROR_MIN_LENGTH) return ''
+  return text.slice(0, SITE_ERROR_MAX_LENGTH)
 }
 
 export const authenticationOutcomeObservation =

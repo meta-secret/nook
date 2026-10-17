@@ -13,6 +13,11 @@ import {
 } from '../lib/session-operation-queue'
 import { ExtensionSessionMessageType } from '../lib/extension-session-message-type'
 import {
+  ExtensionSessionSenderAdmission,
+  ExtensionSessionSenderKind,
+  ExtensionSessionSenderPolicy,
+} from './session-sender-policy'
+import {
   BrowserRuntimeMessage,
   BrowserRuntimeMessageAdmissionKind,
   type BrowserRuntimeMessageValue,
@@ -580,10 +585,9 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
       ) {
         return false
       }
+      const senderPolicy = new ExtensionSessionSenderPolicy(sender)
       const serviceWorkerSender =
-        !sender.tab &&
-        (!sender.url ||
-          sender.url === chrome.runtime.getURL('background/service-worker.js'))
+        senderPolicy.kind() === ExtensionSessionSenderKind.ServiceWorker
       if (isCompanionWasmSessionMessageType(message.type)) {
         // Content-script requests are admitted and forwarded by the service
         // worker. The offscreen document receives the same runtime broadcast,
@@ -691,15 +695,9 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
           }
           const request = parsed.request
           const type = request.type
-          const serviceWorkerOnly =
-            type === ExtensionSessionMessageType.SealIdentityHandoff ||
-            type === ExtensionSessionMessageType.JoinIdentity ||
-            type === ExtensionSessionMessageType.ConnectIdentityVault ||
-            type === ExtensionSessionMessageType.RefreshIdentityVaults ||
-            type === ExtensionSessionMessageType.CancelPasskey ||
-            type === ExtensionSessionMessageType.ExportVaultEventLog
           if (
-            (serviceWorkerOnly && !serviceWorkerSender) ||
+            senderPolicy.admission(type) ===
+              ExtensionSessionSenderAdmission.Forbidden ||
             (!type.startsWith('nook:extension-session-') &&
               type !== ExtensionSessionMessageType.ExportVaultEventLog)
           ) {

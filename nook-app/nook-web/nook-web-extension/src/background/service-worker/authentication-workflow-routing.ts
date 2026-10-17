@@ -72,6 +72,8 @@ export type AuthenticationWorkflowRoutingResponse = {
   loginMatches: WebsiteLoginMatchAvailability
   selectedFacts: AuthenticationWorkflowSelectedFactsWire
   pilotCapability?: AuthenticationPilotPresentationCapability
+  /** Rust's saved-login decision for the matched snapshot. */
+  savedLoginCapability?: AuthenticationSavedLoginCapability
   factsBindingToken?: AuthenticationObservationBindingToken
   savedLoginActionAvailable?: boolean
 }
@@ -194,6 +196,7 @@ export async function authenticationWorkflowMessageResponse({
         loginMatches,
         selectedFacts: { state: 'selected', facts: selectedFacts },
         pilotCapability: pilotPresentationCapability(result.snapshot),
+        savedLoginCapability: capability,
         factsBindingToken: bindFacts({ observations: [selectedFacts] }),
         savedLoginActionAvailable: savedLoginAvailable({
           action: result.snapshot.action,

@@ -81,7 +81,7 @@ for (const interaction of interactions) {
     await demoBeat(page)
 
     const continueOptions: Parameters<Locator['getByRole']>[1] = {
-      name: 'Sign in with Nook',
+      name: 'Sign in',
     }
     await widget.getByRole('button', continueOptions).click()
     // The shared demo runtime models the origin-matched chooser's selected account.

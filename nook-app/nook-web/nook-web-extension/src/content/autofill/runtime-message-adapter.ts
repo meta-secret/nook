@@ -15,7 +15,10 @@ import {
 import type { GeneratePasswordRequest } from '../../../../nook-web-shared/src/extension/runtime-messages'
 
 import { type AuthenticationWorkflowSnapshotMessage } from '../../lib/auth-workflow-messages'
-import type { AuthenticationPilotPresentationCapability } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import type {
+  AuthenticationPilotPresentationCapability,
+  AuthenticationSavedLoginCapability,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 import type {
   AuthenticatorPickerCancelMessage,
@@ -111,6 +114,8 @@ export type AuthenticationWorkflowSnapshotRuntimeResponse = {
   loginMatches: AuthenticationWorkflowRoutingResponse['loginMatches']
   selectedFacts: AuthenticationWorkflowSelectedFacts
   pilotCapability: AuthenticationPilotPresentationCapability
+  /** Rust's saved-login decision for the matched snapshot; unavailable otherwise. */
+  savedLoginCapability: AuthenticationSavedLoginCapability
   factsBindingToken: string | false
   savedLoginActionAvailable: boolean
 }
@@ -170,6 +175,22 @@ export type DecodedRuntimeMessageArgs<Response> = {
 /** Owns this browser host’s resources and interaction lifecycle. */
 class AuthenticationRuntimeTransport {
   constructor(private readonly browser: typeof globalThis) {}
+
+  /** Reads Rust's saved-login decision from the worker; anything else is unavailable. */
+  private savedLoginCapability(
+    response: RuntimeMessageResponse,
+  ): AuthenticationSavedLoginCapability {
+    switch (true) {
+      case !!response &&
+        typeof response === 'object' &&
+        'savedLoginCapability' in response &&
+        response.savedLoginCapability === 'fill-saved-login':
+        return 'fill-saved-login'
+      case true:
+      default:
+        return 'unavailable'
+    }
+  }
 
   private sendRuntimeMessage(
     message: ExtensionRuntimeRequest,
@@ -419,6 +440,7 @@ class AuthenticationRuntimeTransport {
         'savedLoginActionAvailable' in rawResponse &&
         rawResponse.savedLoginActionAvailable === true,
       )
+      const savedLoginCapability = this.savedLoginCapability(rawResponse)
       const runtimeResponse =
         decoded.response as unknown as AuthenticationWorkflowRoutingResponse
       const { workflow: verdict, loginMatches, selectedFacts } = runtimeResponse
@@ -429,6 +451,7 @@ class AuthenticationRuntimeTransport {
           loginMatches,
           selectedFacts,
           pilotCapability,
+          savedLoginCapability,
           factsBindingToken,
           savedLoginActionAvailable,
         },

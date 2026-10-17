@@ -5,15 +5,17 @@
 Status: Implemented direction for #234, #235, #237, #239, #244, #441, and #461.
 
 `nook-web-extension` is the browser integration for Simple Vault. It does not
-duplicate the vault application UI. On first run, clicking the extension opens
-the standard device-protection widget in an extension-owned authentication tab.
-The toolbar and locked Pilot action use the same extension authentication
-component in the initiating normal window. A launcher reuses only a tab whose
-intent matches the requested action; it leaves an open tab with another intent
-untouched and opens the requested intent in a separate tab in that window.
-After the extension device exists, the tab sends its public keys directly to the
-configured Simple Vault deployment, which remains the only surface for creating,
-importing, unlocking, browsing, editing, recovering, and administering vaults.
+duplicate the vault application UI. Clicking the toolbar icon opens the
+extension's side panel, on first run and on every later launch. Device setup
+and unlock happen in that panel. The extension-owned authentication tab remains
+for the locked Pilot action and for pairing, in the initiating normal window.
+Both surfaces use the same device-protection component. A launcher reuses only
+a tab whose intent matches the requested action. It leaves an open tab with
+another intent untouched and opens the requested intent in a separate tab in
+that window. When the user connects an identity, the authentication tab sends
+the extension's public keys directly to the configured Simple Vault deployment.
+That deployment remains the only surface for creating, importing, unlocking,
+browsing, editing, recovering, and administering vaults.
 
 The extension owns browser-only responsibilities:
 
@@ -48,15 +50,19 @@ application capability checks enforce the vault-type boundary.
 
 - **`simple.nokey.sh`**
   - **Responsibility:** Complete vault UI, unlock, consent, device management, recovery, and settings
-- **Extension toolbar panel**
-  - **Responsibility:** The compact panel beside the toolbar icon: Open vault
-    first, the connected identities, PIN unlock and lock. It hands passkey
-    unlock, setup and identity connection to the authentication tab, because a
-    passkey prompt closes a toolbar panel.
+- **Extension side panel**
+  - **Responsibility:** The panel the toolbar icon opens, docked at full height
+    beside the page. It stays open across tab switches in its window. Each
+    state has at most one primary action, such as Use my passkey, Unlock,
+    Connect an identity, or the Fill of a single listed login. PIN and passkey
+    setup and unlock run in place. The panel also offers Open vault, Lock, and
+    the connected identities with their vaults.
 - **Authentication tab and Pilot lock entry**
   - **Responsibility:** Open or focus the shared extension-owned authentication
-    tab; create or unlock the extension device there and show localized return
-    guidance for Pilot
+    tab for the locked Pilot action, identity connection, and All connections.
+    It creates or unlocks the extension device with the device-protection
+    component it shares with the side panel. It shows localized return guidance
+    for Pilot and starts pairing.
 - **Extension background/WASM runtime**
   - **Responsibility:** Local device key, selected identity, encrypted state, sync, domain matching, and fill authorization
 - **In-page auth gate**
@@ -85,24 +91,30 @@ to the `nook-companion-core` classifier through `nook-companion-wasm`.
 Square media or QR labels alone do not enable the action.
 QR decoding begins only after the trusted action click.
 
-"No vault UI in the extension" means no second vault-management UI. The shared
-authentication tab contains the standard one-time device-protection widget
-because WebAuthn needs an extension-owned document and a user gesture. A bounded
-extension-owned authenticator picker may show searchable non-secret 2FA
-metadata for one explicit fill choice; it cannot create, reveal, edit, delete,
-recover, or administer vault items.
+"No vault UI in the extension" means no second vault-management UI. The side
+panel and the shared authentication tab contain the standard device-protection
+component because WebAuthn needs an extension-owned document and a user
+gesture. The side panel also shows non-secret login metadata (username and
+vault label) for the current site, with a Fill action for each login. It is not
+a vault browser: it cannot search other sites, reveal a password, or create,
+edit, delete, recover, or administer vault items. A bounded extension-owned
+authenticator picker may show searchable non-secret 2FA metadata for one
+explicit fill choice. It cannot create, reveal, edit, delete, recover, or
+administer vault items.
 
 ## First Run And Approval
 
-1. The user clicks the extension toolbar button and sees the standard
-   extension-owned device-protection widget in the shared authentication tab.
+1. The user clicks the extension toolbar button. The side panel opens on the
+   standard device-protection ceremony, "Connect your passkey", in place.
 2. One user action creates or recovers the separate extension device and
    protects its private key using WebAuthn PRF through Rust/WASM. Existing
    protected devices ask only for their passkey or PIN unlock.
-3. When the user explicitly chooses Connect / pair, the extension opens the
-   configured Simple Vault `/extension-connect` route with its runtime id and
-   public device request. There is no website-first enable screen, floating
-   companion window, or competing toolbar popup.
+3. When the user explicitly chooses Connect / pair in the authentication tab,
+   the extension opens the configured Simple Vault `/extension-connect` route.
+   The route receives the extension's runtime id and public device request.
+   The side panel's Connect an identity action opens that tab for pairing.
+   There is no website-first enable screen, floating companion window, or
+   toolbar popup.
 4. The user creates, imports, or unlocks the full Simple vault on the website.
    When creating a vault from this route, the unlocked extension sends its age
    identity and matching event-signing seed in a one-time, nonce-bound age
@@ -156,23 +168,65 @@ private identity.
 
 ## Toolbar Behavior
 
-- The toolbar icon opens a compact panel beside itself
-  (`popup/panel.html`). It leads with Open vault, lists the connected
-  identities and their vaults, unlocks a PIN-protected key in place, and locks.
-  Passkey unlock, first setup, connecting an identity and All connections open
-  the authentication tab, since a passkey prompt would close the panel.
-- The Pilot lock entry and the panel's hand-offs use the same extension-owned
-  authentication component per initiating normal window. The service worker
-  focuses an existing tab only when its intent matches the requested action; it
-  leaves a different-intent auth tab untouched and opens the requested intent
-  in another tab in the source window. It does not focus an auth tab in another
-  normal window.
+- The toolbar icon opens the extension's side panel, `side-panel/index.html`,
+  which is the manifest's `side_panel.default_path`. At startup the service
+  worker calls `chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })`.
+  - The manifest has no `action.default_popup`, so the side panel is the only
+    toolbar surface.
+  - A rejected `setPanelBehavior` call stays observable as a constant warning.
+    No popup replaces the panel.
+- The panel docks at full height beside the page and stays open while the user
+  switches tabs in its window. Opening Simple Vault, the authentication tab, or
+  any other page never closes it.
+- The header carries the Nook mark, the brand label, a state chip, Open vault
+  as a secondary link, and Lock while the device is unlocked.
+- Each panel state has at most one primary action:
+  - **Not set up:** the shared device-protection ceremony runs in place under
+    the title "Connect your passkey". Its primary action, "Use my passkey",
+    authenticates with an existing passkey. The explicit "No passkey yet?
+    Create one" action creates a new passkey instead. A cancelled prompt never
+    establishes credential absence. When passkeys cannot protect this browser,
+    the ceremony offers PIN setup.
+  - **PIN locked:** a PIN field and Unlock.
+  - **Passkey locked:** Unlock with passkey, run in place.
+  - **Unlocked with a paired vault:** This site leads. A compact block of the
+    connected identities and their vaults follows, with Connect another
+    identity. The footer offers All connections.
+  - **Unlocked with no paired vault:** Connect an identity.
+  - **Failure:** a device-status error or an initialization failure shows a
+    failure view, never the setup ceremony. A paired-vault load failure shows
+    its own failure view rather than the no-vault state.
+- Connect an identity, Connect another identity, and All connections open the
+  authentication tab through the existing launcher intents. Use this identity
+  and Make default remain in that tab.
+- The panel follows device state that changes elsewhere, such as an unlock in
+  the authentication tab or by Pilot, or a lease expiry. It re-queries status
+  on focus, visibility, and tab events rather than listening for runtime
+  broadcasts.
+- This site names the active tab's display host and lists that site's saved
+  logins, each with its username, vault label, and an explicit Fill.
+  - It follows tab activation and URL changes in the panel's window.
+  - An empty list names the site.
+  - One matching login gets the primary Fill. Several matching logins each get
+    a secondary Fill.
+  - A tab without a website shows "No website in this tab". A Nook vault app
+    shows "Nook can't fill on this page". Neither shows a Fill button.
+  - Authenticator items are never listed there.
+  - The [side-panel This site and Fill route](#side-panel-this-site-and-fill-route)
+    requirement governs the listing and Fill.
+- The Pilot lock entry and the side panel's connection actions use the same
+  extension-owned authentication tab per initiating normal window. The service
+  worker focuses an existing tab only when its intent matches the requested
+  action. It leaves a different-intent auth tab untouched and opens the
+  requested intent in another tab in the source window. It does not focus an
+  auth tab in another normal window.
 - Existing companion popup windows created by older versions are not closed or
   focused automatically, preserving any in-progress passkey ceremony; the next
   launch opens or focuses the authentication tab in the current normal window.
-- Before approval, the tab shows device setup or device unlock. Completing
-  that action lands on a companion home that explains the protected browser
-  identity, its vault connection, and the actions available next.
+- Before approval, the authentication tab shows device setup or device
+  unlock. Completing that action lands on a companion home that explains the
+  protected browser identity, its vault connection, and the actions available
+  next.
 - After a grant and usable encrypted event-log projection are persisted, unlock
   or a ready session shows the same companion home. Closing and reopening the
   tab during the live session lease leaves the companion ready for site
@@ -202,7 +256,8 @@ private identity.
   menu.
 - The companion tab can start pairing another vault while a grant already
   exists.
-- Never put vault browsing or management in the launcher.
+- Never put vault browsing or management in the launcher or the side
+  panel.
 - Management actions originating from the widget open the corresponding Simple
   Vault route rather than recreating that interface in the extension.
 - Authentication-tab controls use the same neutral primary tokens as nook-web dark
@@ -259,6 +314,257 @@ and Sentinel Nook host (production, development, and PR previews), not only the
 build's configured Simple origin, so a mismatched channel never shows the
 in-page auth gate on vault apps. The Simple Vault bridge content script remains
 bound to the configured Simple origin only.
+
+### Side-panel This site and Fill route
+
+Accepted requirement: the extension side panel lists the active tab's saved
+logins under This site and fills one only after an explicit Fill. The panel
+sends only an opaque item identity and a window selector. The service worker
+derives the tab and origin itself. Rust classifies the page and re-matches the
+item. The top-frame content script reveals the login through the existing
+sender-bound path and fills it. Fill never submits, and no plaintext reaches
+the panel.
+
+#### Panel sender and payload
+
+- The service worker admits a This site or Fill request only from the
+  side-panel document. That sender carries this extension's id and the exact
+  side-panel page URL and, like any document, a `documentId`, but no `tab`
+  or `frameId`.
+- Every other sender receives `forbidden`:
+  - content scripts and the login-picker frame;
+  - the authentication tab and the offscreen document;
+  - other extensions and side-panel path variants;
+  - the side-panel page opened in a normal tab.
+- A listing request carries only `windowId`. A Fill request carries only
+  `windowId` and the opaque `itemId` (`vaultStoreId`, `secretId`).
+  - Strict decoding rejects unknown fields and bounds every string.
+  - An undecodable request receives `forbidden`.
+  - No request carries an origin, URL, host, tab id, frame id, or username.
+- The side-panel page is not web-accessible. The manifest adds only the
+  `sidePanel` permission.
+
+- **Prohibited:** accept a panel-supplied origin or tab id, or admit the panel
+  through a check that any same-extension page passes.
+- **Required:** admit only the side-panel sender shape with a strictly decoded
+  payload. Answer every other sender or payload with `forbidden`.
+
+#### Active-tab target
+
+Chrome does not identify a side panel's window to the service worker, so the
+panel supplies `windowId` from its own window. That value selects a window and
+grants no authority. Both routes resolve the target the same way, and Fill
+resolves it again at Fill time.
+
+1. The service worker reads the selected window itself. The window must exist,
+   be a normal window, and match the extension's incognito context.
+   - Otherwise the route returns `page-unavailable`.
+2. It queries that window's active tab and requires exactly one tab with an
+   integer id.
+   - Otherwise the route returns `page-unavailable`.
+3. It reads the tab URL itself and passes it unchanged to Rust/WASM.
+   TypeScript never parses or classifies the URL, and nothing stores or logs
+   it.
+4. Rust classifies the URL as a website, a non-web page, or a Nook vault app.
+   - **Website:** only an `http:` or `https:` URL with a host. Its origin
+     follows URL origin semantics.
+   - **Display host:** lowercase, without userinfo, port, path, query, or
+     fragment. It keeps `www` and punycode, so a lookalike internationalized
+     name cannot display as the name of another site.
+   - **Non-web page:** `chrome:`, `chrome-extension:`, `about:` including
+     `about:blank`, `data:`, `file:`, `view-source:`, `javascript:`, `blob:`,
+     `ftp:`, and `wss:` pages. An empty, malformed, or missing URL is non-web
+     too. The route returns `non-web`, and the panel says that the tab has no
+     website.
+   - **Nook vault app:** Simple and Sentinel production, development, and PR
+     preview hosts, including their trailing-dot forms. The route returns
+     `page-unavailable`, and the panel says that Nook cannot fill on this
+     page. A lookalike such as `simple.nokey.sh.example.com` stays a website.
+   - Neither non-website result calls the vault session or lists logins.
+5. If the tab query or the classification fails, the listing returns
+   `list-failed` and Fill returns `fill-failed`. Such a failure is never shown
+   as a page state.
+
+- **Prohibited:** report a failed tab query as a tab without a website, or
+  format the display host from the tab URL in TypeScript.
+- **Required:** return `list-failed` or `fill-failed` for that failure. Show
+  only the display host that Rust derived from the active tab.
+
+#### This site listing
+
+1. The service worker admits the sender and decodes the payload.
+2. It resolves the [active-tab target](#active-tab-target). Only a website
+   continues.
+3. The authorization generation must be current, with no lock cleanup
+   pending.
+   - Otherwise the route returns `locked`.
+4. A password-filling grant must exist.
+   - Otherwise the route returns `unpaired`.
+5. A session status probe must report an unlocked session.
+   - A locked session returns `locked`.
+   - A failed probe returns `list-failed`.
+6. The fail-closed Rust login listing for the derived origin supplies the
+   rows under [general login website matching](#general-login-website-matching).
+   - It lists Login items only. Authenticators are never requested, merged, or
+     guessed from an issuer, label, or host.
+   - A failed or malformed grant answer returns `list-failed`, never an empty
+     list.
+7. The service worker checks the generation again after the listing.
+   - A stale generation returns `locked`.
+
+The listing obeys these rules:
+
+- The reply holds the Rust display host and, for each login, its opaque item
+  id, username, and vault label. The service worker adds the vault label from
+  the grant and drops the saved website URL and host that the session listing
+  returned.
+- The reply carries no password, saved website URL or host, tab URL,
+  authorization generation, or device key.
+- The route never opens the authentication tab.
+- The panel keeps the listing in component memory. It clears the listing on
+  lock or session-state change, on tab activation or URL change in its window,
+  and when the panel hides or unloads.
+- The panel never reads, logs, or stores the tab URL or origin.
+- One matching login gets the primary Fill. Several matching logins each get
+  a secondary Fill.
+- The listing outcomes form a closed set. The panel renders every outcome with
+  English and Russian catalog text:
+  - **Ready:** `ready` with its logins. The empty state naming the site
+    appears only for a ready listing with no logins.
+  - **Request or page:** `forbidden`, `non-web`, and `page-unavailable`.
+  - **Session and grants:** `unpaired` and `locked`.
+  - **Failure:** `list-failed`.
+
+- **Prohibited:** show "no saved logins" after a grant transport fails, list an
+  authenticator whose issuer names the site, or show an unlocked list after a
+  lock cleanup started.
+- **Required:** return `list-failed` for that failure and list only
+  Rust-matched Login items. Return `locked` while the generation is stale or a
+  cleanup is pending.
+
+#### Fill
+
+The service worker checks the request first:
+
+1. It admits the sender and decodes the payload, as for the listing.
+2. It resolves the [active-tab target](#active-tab-target) again. Nothing
+   about the target is reused from the listing.
+3. The authorization generation must be current, with no lock cleanup
+   pending.
+   - Otherwise it returns `locked`.
+4. It checks the password-filling grants.
+   - With no password-filling grant, it returns `unpaired`.
+   - When no grant covers the item's vault, it returns `item-not-found`.
+5. A session status probe must report an unlocked session.
+   - A locked session returns `locked` without opening the authentication
+     tab.
+   - A failed probe returns `fill-failed`.
+6. It runs a fresh fail-closed listing for the item's vault and the derived
+   origin.
+   - A failed listing returns `fill-failed`.
+   - If the exact item is absent, it returns `item-not-found` and sends
+     nothing to the tab.
+7. It checks the generation again.
+   - A stale generation returns `locked`.
+8. It messages only the tab's top frame. The message carries the derived
+   origin, the item's opaque identity, and the current generation, and no
+   credential.
+   - If no content script answers, it returns `page-unavailable`.
+   - A content-script reply that it cannot decode returns `fill-failed`.
+
+The top-frame content script then fills:
+
+1. It accepts the trigger only as a runtime message from this extension. A
+   page `postMessage`, DOM event, or page-world bridge never triggers a fill,
+   and subframes ignore the trigger.
+   - An undecodable trigger returns `fill-failed`.
+   - If its own origin differs from the derived origin, it returns
+     `tab-changed` and requests no reveal.
+   - While a Pilot fill is interacting or actuating, it returns `fill-failed`.
+2. Rust's fill-saved-login capability must allow the document's workflow. Only
+   a Login workflow qualifies, including a username-only step.
+   - Otherwise it returns `no-login-form` and requests no reveal. Signup,
+     password-change, one-time-code, and manual-checkpoint workflows return
+     `no-login-form`.
+   - If the workflow cannot be discovered, it returns `fill-failed`.
+3. It revalidates the workflow, then reveals through the existing
+   sender-bound `nook:website-login-fill` path. Rust re-matches the item
+   against the content script's own origin.
+   - If that revalidation fails, it returns `no-login-form`.
+   - A lock that the reveal observes returns `locked`.
+   - Any other reveal failure returns `fill-failed` and leaves the fields
+     untouched.
+4. It confirms the Fill is still approved and revalidates the workflow again
+   before writing.
+   - A session change withdraws the Fill, which returns `fill-failed`.
+   - An empty revealed username returns `fill-failed`.
+   - A Pilot fill that started meanwhile returns `fill-failed`.
+   - If revalidation fails after a partial fill, it clears the filled fields
+     and returns `fill-failed`.
+5. It writes the values only into the revalidated login fields and returns
+   `filled`.
+
+The route enforces these limits:
+
+- Fill never submits a form, activates Next or another advance control, or
+  starts a continuation. On Google's identifier step it fills the username
+  only, unlike the
+  [selected Google username advance](#google-two-step-login).
+- Plaintext lives only in the content script's locals for that one fill.
+  Replies to the service worker and to the panel carry only the outcome.
+- The panel never calls `chrome.tabs.sendMessage` or `chrome.scripting`.
+  The extension has no `scripting` permission.
+- The route writes no browser storage, IndexedDB record, pending request, or
+  vault event. A later manual submit follows the existing login-save path.
+- The route never retries, reports silent success, or falls back to Pilot or
+  the authentication tab.
+- Neither route logs on success. An unexpected failure logs at most a constant
+  message and its outcome kind, never a username, URL, item identity, or
+  listing content.
+- The Fill outcomes form a closed set. The panel renders every outcome with
+  English and Russian catalog text:
+  - **Success:** `filled`.
+  - **Request or page:** `forbidden`, `non-web`, `page-unavailable`, and
+    `tab-changed`.
+  - **Session and grants:** `locked`, `unpaired`, and `item-not-found`.
+  - **Form or fill:** `no-login-form` and `fill-failed`.
+
+- **Prohibited:** reuse the listing's origin after the user switched tabs,
+  submit the form after Fill, or return the username to the panel.
+- **Required:** derive the origin again at Fill and require the item in a fresh
+  listing. Return `tab-changed` when the page's origin changed before delivery.
+  Fill only the revalidated fields, then reply `filled` alone.
+
+#### Session gate and panel isolation
+
+- The offscreen session refuses every request from a content script or any
+  other sender outside the extension. Content scripts never reach it directly.
+- Only the service worker may send a request that does any of these:
+  - reveals a login, or lists or uses authenticators or passkeys;
+  - writes, imports, exports, or pairs vault data, or joins or refreshes an
+    identity;
+  - stages a login save or seals identity material;
+  - resets the session, migrates providers, or classifies grant authority.
+- The remaining session requests are accepted from the service worker or an
+  extension page. They cover device status, setup, recovery, unlock, and lock.
+  They also cover identity connection and activation, the vault summary, and
+  login listing.
+  - The session login listing returns each login's secret id, username, and
+    saved website URL and host, never a password. The service worker and
+    extension pages may request it.
+- The panel registers no `chrome.runtime.onMessage` listener, because runtime
+  broadcasts can carry plaintext.
+- The panel's outgoing messages form a closed set. The set holds the two
+  side-panel requests, lock, open vault, open tab, and paired-vault queries. It
+  also holds the status, setup, and unlock requests of the shared
+  device-protection component.
+  - None of them lists logins, reveals a credential, or returns a vault secret.
+
+- **Prohibited:** the side panel reveals a login through the offscreen session,
+  or lists logins there instead of through the service worker.
+- **Required:** the offscreen gate refuses the reveal from any extension page.
+  The panel's closed message set has no session listing request, so the panel
+  lists logins only through the service worker's This site request.
 
 ## Nook Pilot Authentication Control Plane
 
@@ -696,8 +1002,8 @@ The gate must:
   page in status/Continue mode.
   After unlock, show localized return guidance and require a fresh Continue click
   with existing origin/workflow revalidation before any page interaction;
-- keep the panel to that one action: Open vault lives in the toolbar panel,
-  and the close button is how the person takes over the page;
+- keep the Pilot panel to that one action: Open vault lives in the extension
+  side panel, and the close button is how the person takes over the page;
 - never request a vault password, recovery secret, or provider credential;
 - never silently fill or submit;
 - when more than one login matches the page origin, open an extension-owned
@@ -738,11 +1044,12 @@ migration and introduces no compatibility or recovery path.
 
 An injected DOM widget is not a trusted place for primary authentication because
 the host page can imitate it. Passkey authorization stays browser-native or in
-an extension-controlled top-level window. Pilot may propose Create/Use passkey
-from Rust policy after an unlocked vault match or a page passkey-control hint;
-approval only starts the site's WebAuthn ceremony so the existing consent
-chooser remains the user-presence gate. Silent create/assert and automatic
-submit stay out of scope. See
+an extension-owned document outside the page, such as the side panel or the
+authentication tab. Pilot may propose Create/Use passkey from Rust policy after
+an unlocked vault match or a page passkey-control hint. Approval only starts
+the WebAuthn ceremony of the site, so the existing consent chooser remains the
+user-presence gate. Silent create/assert and automatic submit stay out of
+scope. See
 [passkey-manager.md](../architecture/passkey-manager.md).
 
 ## Device-Key And Storage Boundary
@@ -751,11 +1058,11 @@ submit stay out of scope. See
 
 Each stored pairing grant carries `identityLabel`, the name of the identity
 the vault belongs to, taken from the web app's identity snapshot at approval.
-It is display-only: it groups vaults in the companion home and carries no
-authority. The field is additive and decoded with a serde default, so grants
-stored before it existed read back with an empty label and need no migration;
-re-pairing the vault records the label. Approvals from a web app that predates
-the field are admitted with an empty label.
+It is display-only and carries no authority: it groups vaults in the companion
+home and the side panel. The field is additive and decoded with a serde
+default, so grants stored before it existed read back with an empty label and
+need no migration. Re-pairing the vault records the label. Approvals from a
+web app that predates the field are admitted with an empty label.
 
 ### Identity membership
 
@@ -767,9 +1074,10 @@ phone or computer is.
   local identity to the invited identity, signs the join, and pairs the
   identity's other vaults through the same import as the approved vault. An
   identity with no cloud sync provider pairs only the approved vault.
-- **Later vaults:** After each unlock in the popup, the extension unions the
-  unlocked identity's log with every sync provider that replicates it and
-  pairs each vault the identity grants it and it holds no grant for. Rust
+- **Later vaults:** Each unlock in the side panel or the authentication tab
+  refreshes the unlocked identity. The extension unions the identity's log
+  with every sync provider that replicates it. It then pairs each vault the
+  identity grants it and it holds no grant for. Rust
   plans the vaults (`IdentityVaultPairingPlan`); vaults the identity has not
   granted it yet are reported, not skipped. A failed refresh or vault shows an
   error and pairs nothing further.
@@ -786,8 +1094,9 @@ phone or computer is.
   key that already belongs to another identity, and an identity another local
   key already holds, instead of merging identities.
 - **Switching:** One identity is unlocked at a time. Grants keep their key's app
-  id, so the popup groups vaults by key and offers Use this identity for the
-  others, which selects that identity and locks the current one.
+  id, so the authentication tab groups vaults by key and offers Use this
+  identity for the others, which selects that identity and locks the current
+  one. The side panel shows the same groups without per-identity actions.
 
 - **Installation key:** Create an extension-specific Nook device key instead of
   reusing or scraping the `simple.nokey.sh` browser private key.
@@ -879,15 +1188,16 @@ When both devices exist, unlock selection is deterministic:
      Unlocked or Locked for that vault.
    - A locked website app key must not block re-adopting that unlocked
      companion identity.
-2. if the extension is locked, the user may unlock it from the shared extension
-   authentication tab and retry; the website must not attempt an extension-origin
-   WebAuthn ceremony;
+2. if the extension is locked, the user may unlock it from the side panel or
+   the shared extension authentication tab and retry. The website must not
+   attempt an extension-origin WebAuthn ceremony.
 3. if the extension is locked, unavailable, revoked, or cannot unlock, offer
    the website's protected device as the fallback when one exists;
 4. if no independent website device or recovery method exists, explain that the
    extension is required rather than showing an unrelated new-passkey setup.
 
-The launcher does not become a vault browser. Website passkey prompts may list
+Neither the launcher nor the side panel becomes a vault browser. This site
+lists only the current site's logins. Website passkey prompts may list
 the approved vaults and matching RP accounts returned by Rust/WASM because that
 selection is scoped to one active browser ceremony.
 
@@ -921,15 +1231,16 @@ re-sealed for the extension device before leaving the approving vault session.
 
 ## Revocation And Failure
 
-- Closing the authentication tab does not lock or unpair the extension. The
-  decrypted offscreen identity uses a 15-minute renewable lease: successful
-  identity handoffs renew it, while status/read/retry operations and tab
-  close/reopen do not. Reopening during a live lease remains unlocked. Lease
-  expiry, explicit lock, and browser/context restart keep reauthentication
-  required; this flow does not reduce any policy-required prompt.
+- Closing the side panel or the authentication tab does not lock or unpair the
+  extension. The decrypted offscreen identity uses a 15-minute renewable lease.
+  Successful identity handoffs renew it. Status, read, and retry operations do
+  not, and neither does closing or reopening the panel or tab. Reopening during
+  a live lease remains unlocked. Lease expiry, explicit lock, and
+  browser/context restart keep reauthentication required; this flow does not
+  reduce any policy-required prompt.
 - Closing the vault approval route leaves the extension paired or unpaired
-  according to its persisted grant state; the authentication tab reflects that
-  state when reopened.
+  according to its persisted grant state. The side panel and the authentication
+  tab reflect that state on their next status query.
 - A denied or malformed request adds no device and transfers no vault state.
 - Pairing grant import must not persist quarantined/unauthorized event bytes.
   A rejected import (`event-log-access-not-granted`) rolls back that vault's
@@ -949,6 +1260,9 @@ re-sealed for the extension device before leaving the approving vault session.
 
 - This direction replaces the vault popup with extension-owned device setup,
   keeps vault approval in Simple Vault, and establishes the in-page widget.
+- The side panel replaces the toolbar action popup on one path. It brings
+  in-place device setup and unlock, This site, and the service-worker Fill
+  route.
 - The encrypted event-log import and live website-to-extension projection are
   implemented. Extension unlock/query, sealed provider use, and independent
   background provider sync remain the next runtime slice.

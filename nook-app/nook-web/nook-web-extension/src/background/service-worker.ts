@@ -1,4 +1,10 @@
 import { GoogleLoginContinuationMessageCodec } from '../lib/google-login-continuation-messages'
+import {
+  PilotAttemptCodec,
+  PilotAttemptLoadKind,
+  type PilotAttemptMessage,
+} from '../lib/pilot-attempt-messages'
+import { PilotAttempts } from './service-worker/pilot-attempts'
 import { ExtensionVaultEventLogExport } from './service-worker/vault-event-log-export'
 import type { RuntimeMessageSchema } from './service-worker/schema-runtime-message-route'
 import {
@@ -8,6 +14,7 @@ import {
 import { FocusedLoginMessageRoute } from './service-worker/focused-login-message-route'
 import { GoogleLoginContinuationRoute } from './service-worker/google-login-continuation-route'
 import { loginPickerOperations } from './service-worker/login-picker-operations'
+import { SidePanelSiteRoutes } from './service-worker/side-panel-site-routes'
 /* eslint-disable nook-typed-api/no-raw-object-arguments, @typescript-eslint/no-unsafe-type-assertion -- Chrome runtime messages are narrowed at this external transport boundary. */
 import {
   GeneratePasswordRequestType,
@@ -141,6 +148,10 @@ import {
   type BackgroundRuntimeMessageRoutes,
 } from './service-worker/schema-runtime-message-route'
 import { backgroundVaultRuntime } from './vault-runtime'
+import {
+  ToolbarSidePanelBehavior,
+  type ToolbarSidePanelRequest,
+} from './service-worker/side-panel-behavior'
 import { Effect, Result } from 'effect'
 import {
   isCompanionWasmSessionMessageType,
@@ -214,6 +225,15 @@ const extensionLifecycleRoutingDependencies: Parameters<
     ),
 }
 
+// The toolbar button opens the Nook side panel; the manifest has no popup.
+const toolbarSidePanelRequest: ToolbarSidePanelRequest = {
+  sidePanel: chrome.sidePanel,
+  reporter: console,
+}
+void Effect.runPromise(
+  new ToolbarSidePanelBehavior(toolbarSidePanelRequest).apply(),
+)
+
 void Effect.runPromise(
   Effect.result(
     recoverInterruptedAuthorizationCleanup(
@@ -280,7 +300,15 @@ const focusedLoginMessageRouteRequest: ConstructorParameters<
 const googleLoginRuntimeSchema: RuntimeMessageSchema<BrowserRuntimeMessage> = {
   decode: GoogleLoginContinuationMessageCodec.decodeEnvelope,
 }
+const pilotAttemptRuntimeSchema: RuntimeMessageSchema<PilotAttemptMessage> = {
+  decode: PilotAttemptCodec.decodeMessage,
+}
 const schemaRuntimeMessageRoutes: BackgroundRuntimeMessageRoutes = [
+  SchemaRuntimeMessageRoute.matching(pilotAttemptRuntimeSchema)
+    .respondWith(PilotAttempts.handle)
+    .onRejected(() => ({ kind: PilotAttemptLoadKind.None })),
+  SidePanelSiteRoutes.listing(),
+  SidePanelSiteRoutes.fill(),
   SchemaRuntimeMessageRoute.matching(googleLoginRuntimeSchema)
     .respondWith((request) => {
       const operation: ConstructorParameters<
@@ -737,6 +765,7 @@ const backgroundRuntimeMessageListener: BackgroundRuntimeMessageListener = (
 }
 
 chrome.runtime.onMessage.addListener(backgroundRuntimeMessageListener)
+chrome.tabs.onRemoved.addListener(PilotAttempts.forgetClosedTab)
 
 type ExternalRuntimeMessageListener = Parameters<
   typeof chrome.runtime.onMessageExternal.addListener

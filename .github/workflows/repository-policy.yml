@@ -29,7 +29,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: ai-ai-ai-ai-ai-ai-ai/meta-cortex
-          ref: 525acba4047a59a5fe1e7c5308a4806dff7c1e8c
+          ref: 2e88d51d535bb56e25fc6e545c3ed14306019833
           path: .meta-cortex-source
           fetch-depth: 1
           persist-credentials: false

@@ -9,7 +9,7 @@ For CI execution and assigned pipeline repairs, apply the
 and its CI/CD Operations skill with [Nook SRE context](functional-ownership.md).
 Team Gizmo supplies
 the project root, library root, assigned workspace, source branch, authorized
-operation, and existing run evidence. Single-agent sessions apply this locally.
+operation, and existing run evidence.
 
 Use [remote execution](../../workflows/remote-execution.md) for Nook's hosted
 validation boundary. PR publication and merge remain with the PR agent under

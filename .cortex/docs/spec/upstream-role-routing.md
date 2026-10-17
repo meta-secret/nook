@@ -9,8 +9,7 @@ in several Nook scopes without creating another role identity.
 - Select roles from the installed Meta-Cortex team catalogs.
 - Supply the relevant Nook ownership specification and module context.
 - Keep functional ownership separate from language expertise.
-- Use one upstream Team Gizmo per feature in multi-agent mode.
-- Apply the same role instructions locally in single-agent mode.
+- Use one upstream Team Gizmo per feature.
 
 **Prohibited:** launch a Nook Auth2 developer or a second security coordinator.
 

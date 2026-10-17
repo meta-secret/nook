@@ -1,15 +1,4 @@
 <script lang="ts">
-  type RunDeviceActionArgs = {
-    action: () => Promise<ExtensionSessionDeviceWire>
-    fallbackKey?: I18nKey
-    followUp?: DeviceActionFollowUp
-  }
-
-  type ErrorMessageArgs = {
-    caught: Error
-    fallbackKey: I18nKey
-  }
-
   import {
     I18N_KEYS,
     type I18nKey,
@@ -20,7 +9,6 @@
     Check,
     Fingerprint,
     FolderKey,
-    KeyRound,
     Plus,
     Puzzle,
   } from '@lucide/svelte'
@@ -33,7 +21,6 @@
   } from '../lib/i18n'
   import { OpenCompanionLauncherIntent } from '../../../nook-web-shared/src/extension/companion-launcher-message'
   import {
-    DeviceMode,
     DeviceProtectionStatus,
     ExtensionSessionDeviceStateKind,
     type NookIdentityConnectionStart,
@@ -51,7 +38,16 @@
     IdentitySyncKind,
     type IdentitySync,
   } from './popup-app-state'
-  import { DeviceProtectionSetupWorkflow } from '../../../nook-web-shared/src/vault-app/lib/components/device-protection-gate-state'
+  import ExtensionDeviceProtection from './ExtensionDeviceProtection.svelte'
+  import {
+    DeviceProtectionKeyKind,
+    DeviceProtectionPhase,
+    DeviceProtectionPurposeKind,
+    DeviceProtectionStageMap,
+    IdentityKeyCancelOutcome,
+    type DeviceProtectionPurpose,
+    type DeviceProtectionUnlock,
+  } from './device-protection-ceremony'
   import {
     PairedVaultsLoadKind,
     pairedVaultGroups,
@@ -83,11 +79,6 @@
   let status = $state<DeviceProtectionStatus>(initialProtectionStatus())
   let busy = $state(false)
   let error = $state('')
-  let passkeyLabel = $state('')
-  let deviceMode = $state<DeviceMode>(DeviceMode.Standard)
-  let setupWorkflow = $state(DeviceProtectionSetupWorkflow.Authenticate)
-  let pin = $state('')
-  let pinConfirm = $state('')
   let pairingCandidate = $state<PairingCandidate>({
     kind: PairingCandidateKind.NotSelected,
   })
@@ -97,16 +88,16 @@
   /** Item counts per paired vault, filled in as each summary arrives. */
   let counts = $state<Record<string, CompanionSecretCount>>({})
   /** Connecting another identity: its own key (passkey or PIN) comes first. */
-  let identityKeyStaged = $state(false)
+  let purpose = $state<DeviceProtectionPurpose>({
+    kind: DeviceProtectionPurposeKind.ExtensionKey,
+  })
   let identitySync = $state<IdentitySync>({ kind: IdentitySyncKind.Idle })
 
-  const needsSetup = $derived(
-    status === DeviceProtectionStatus.Missing ||
-      status === DeviceProtectionStatus.Plaintext,
-  )
   const showToolbarMenu = $derived(
-    status === DeviceProtectionStatus.Unlocked && !identityKeyStaged,
+    status === DeviceProtectionStatus.Unlocked &&
+      purpose.kind === DeviceProtectionPurposeKind.ExtensionKey,
   )
+  const stage = $derived(DeviceProtectionStageMap.from(status))
   /** The app key of the unlocked identity. */
   const activeDeviceId = $derived(
     pairingCandidate.kind === PairingCandidateKind.Selected
@@ -114,35 +105,28 @@
       : '',
   )
   /** The extension's key is a PIN rather than a passkey. */
-  const usesPin = $derived(
-    status === DeviceProtectionStatus.Pin ||
-      status === DeviceProtectionStatus.PinSetup,
-  )
+  const keyKind = $derived(DeviceProtectionStageMap.keyKind(stage))
   /** First use: the key is being set up; vaults connect in step 2. */
-  const inSetup = $derived(
-    needsSetup || status === DeviceProtectionStatus.PinSetup,
-  )
-  const setupTitleKey = $derived.by((): I18nKey => {
-    if (status === DeviceProtectionStatus.PinSetup)
-      return I18N_KEYS.ExtensionDeviceSetupPinSetupTitle
-    if (identityKeyStaged) return I18N_KEYS.ExtensionDeviceSetupIdentityKeyTitle
-    if (!needsSetup) return I18N_KEYS.ExtensionDeviceSetupUnlockTitle
-    return setupWorkflow === DeviceProtectionSetupWorkflow.Authenticate
-      ? I18N_KEYS.ExtensionDeviceSetupSetupTitle
-      : I18N_KEYS.ExtensionDeviceSetupCreateTitle
-  })
-  const setupDescriptionKey = $derived.by((): I18nKey => {
-    if (identityKeyStaged)
-      return I18N_KEYS.ExtensionDeviceSetupIdentityKeyDescription
-    if (status === DeviceProtectionStatus.PinSetup)
-      return I18N_KEYS.ExtensionDeviceSetupPinSetupDescription
-    if (status === DeviceProtectionStatus.Pin)
-      return I18N_KEYS.ExtensionDeviceSetupPinUnlockDescription
-    if (!needsSetup) return I18N_KEYS.ExtensionDeviceSetupUnlockDescription
-    return setupWorkflow === DeviceProtectionSetupWorkflow.Authenticate
-      ? I18N_KEYS.ExtensionDeviceSetupSetupDescription
-      : I18N_KEYS.ExtensionDeviceSetupCreateDescription
-  })
+  const phase = $derived(DeviceProtectionStageMap.phase(stage))
+
+  /** The chain's accessible summary for the key being set up or used. */
+  function chainSummaryKey(): I18nKey {
+    switch (keyKind) {
+      case DeviceProtectionKeyKind.Pin:
+        return I18N_KEYS.ExtensionDeviceSetupChainPin
+      case DeviceProtectionKeyKind.Passkey:
+        return I18N_KEYS.ExtensionDeviceSetupChainPasskey
+    }
+  }
+
+  function chainKeyLabel(): I18nKey {
+    switch (keyKind) {
+      case DeviceProtectionKeyKind.Pin:
+        return I18N_KEYS.ExtensionDeviceSetupNodePin
+      case DeviceProtectionKeyKind.Passkey:
+        return I18N_KEYS.ExtensionDeviceSetupNodePasskey
+    }
+  }
 
   const groups = $derived(
     vaults.kind === PairedVaultsLoadKind.Ready
@@ -217,21 +201,6 @@
       'ok' in response &&
       response.ok === true,
     )
-  }
-
-  function errorMessage(args: ErrorMessageArgs): string {
-    const { caught, fallbackKey } = args
-    if (!(caught instanceof Error)) return translatePlain(fallbackKey)
-    if (caught.message.includes('PASSKEY_CEREMONY_NOT_ALLOWED')) {
-      return translatePlain(fallbackKey)
-    }
-    if (
-      caught.message.includes('EXTENSION_SESSION_REQUEST_EXPIRED') ||
-      caught.message.includes('EXTENSION_SESSION_LOCKED')
-    ) {
-      return translatePlain(I18N_KEYS.ExtensionSetupSessionBusyRetry)
-    }
-    return translatePlain(fallbackKey)
   }
 
   function openSimpleVault(): void {
@@ -318,24 +287,23 @@
       return
     }
     busy = false
-    identityKeyStaged = true
-    setupWorkflow = DeviceProtectionSetupWorkflow.Create
+    purpose = {
+      kind: DeviceProtectionPurposeKind.IdentityKey,
+      cancel: cancelIdentityKey,
+    }
     status = DeviceProtectionStatus.Missing
   }
 
-  async function cancelIdentityKey(): Promise<void> {
-    busy = true
-    error = ''
+  /** The person did not set up the next identity's key: drop it. */
+  async function cancelIdentityKey(): Promise<IdentityKeyCancelOutcome> {
     try {
       await extensionWasmRuntime.cancelIdentityConnection()
     } catch {
-      busy = false
-      error = translatePlain(I18N_KEYS.ExtensionCompanionConnectIdentityFailed)
-      return
+      return IdentityKeyCancelOutcome.Failed
     }
-    busy = false
-    identityKeyStaged = false
+    purpose = { kind: DeviceProtectionPurposeKind.ExtensionKey }
     status = DeviceProtectionStatus.Unlocked
+    return IdentityKeyCancelOutcome.Cancelled
   }
 
   /** Switch to another identity of this extension; it unlocks with its key. */
@@ -367,102 +335,30 @@
     enterToolbarMenu(activeSessionDevice.device)
   })
 
-  async function runDeviceAction(args: RunDeviceActionArgs): Promise<void> {
-    const {
-      action,
-      fallbackKey = I18N_KEYS.ExtensionSetupPasskeySetupFailed,
-      followUp = DeviceActionFollowUp.Menu,
-    } = args
-    busy = true
-    error = ''
-    try {
-      const device = await action()
-      enterToolbarMenu(device)
-      if (identityKeyStaged) {
-        // The new identity's key exists: connect it to that identity.
-        identityKeyStaged = false
+  /** The ceremony set up or unlocked a key: show the vaults, or connect
+   * the key just made for the next identity. */
+  function deviceUnlocked(unlock: DeviceProtectionUnlock): void {
+    const { device, followUp } = unlock
+    enterToolbarMenu(device)
+    switch (purpose.kind) {
+      case DeviceProtectionPurposeKind.IdentityKey:
+        purpose = { kind: DeviceProtectionPurposeKind.ExtensionKey }
         beginPairing(device)
         return
-      }
-      if (followUp === DeviceActionFollowUp.RefreshIdentity)
+      case DeviceProtectionPurposeKind.ExtensionKey:
+        break
+    }
+    switch (followUp) {
+      case DeviceActionFollowUp.RefreshIdentity:
         void refreshIdentity(device)
-    } catch (caught) {
-      busy = false
-      const failure = caught instanceof Error ? caught : new Error()
-      if (
-        failure.message.includes('PASSKEY_UNAVAILABLE') ||
-        failure.message.includes('PASSKEY_PRF_UNAVAILABLE')
-      ) {
-        status = DeviceProtectionStatus.PinSetup
-        error = translatePlain(
-          failure.message.includes('PASSKEY_UNAVAILABLE')
-            ? I18N_KEYS.DeviceProtectionPasskeyUnavailablePinFallbackReady
-            : I18N_KEYS.DeviceProtectionPinFallbackReady,
-        )
         return
-      }
-      const errorArgs: Parameters<typeof errorMessage>[0] = {
-        caught: failure,
-        fallbackKey,
-      }
-      error = errorMessage(errorArgs)
+      case DeviceActionFollowUp.Menu:
+        return
     }
   }
 
-  function createPasskey(): void {
-    const args: Parameters<typeof runDeviceAction>[0] = {
-      action: () => {
-        const createArgs: Parameters<
-          typeof extensionWasmRuntime.createExtensionPasskey
-        >[0] = {
-          passkeyLabel,
-          deviceMode,
-        }
-        return extensionWasmRuntime.createExtensionPasskey(createArgs)
-      },
-      fallbackKey: I18N_KEYS.DeviceProtectionPasskeyCreateNotAllowed,
-    }
-    void runDeviceAction(args)
-  }
-
-  function useExistingPasskey(): void {
-    const args: Parameters<typeof runDeviceAction>[0] = {
-      action:
-        extensionWasmRuntime.recoverExtensionPasskey.bind(extensionWasmRuntime),
-      fallbackKey: I18N_KEYS.DeviceProtectionPasskeyRecoveryNotAllowed,
-    }
-    void runDeviceAction(args)
-  }
-
-  function unlockPasskey(): void {
-    const args: Parameters<typeof runDeviceAction>[0] = {
-      action:
-        extensionWasmRuntime.unlockExtensionPasskey.bind(extensionWasmRuntime),
-      fallbackKey: I18N_KEYS.DeviceProtectionPasskeyUnlockNotAllowed,
-      followUp: DeviceActionFollowUp.RefreshIdentity,
-    }
-    void runDeviceAction(args)
-  }
-
-  function createPin(): void {
-    if (pin !== pinConfirm) {
-      error = translatePlain(I18N_KEYS.DeviceProtectionPinMismatch)
-      return
-    }
-    const args: Parameters<typeof runDeviceAction>[0] = {
-      action: () => extensionWasmRuntime.createExtensionPin(pin),
-      fallbackKey: I18N_KEYS.DeviceProtectionPinSetupFailed,
-    }
-    void runDeviceAction(args)
-  }
-
-  function unlockPin(): void {
-    const args: Parameters<typeof runDeviceAction>[0] = {
-      action: () => extensionWasmRuntime.unlockExtensionPin(pin),
-      fallbackKey: I18N_KEYS.DeviceProtectionPinUnlockFailed,
-      followUp: DeviceActionFollowUp.RefreshIdentity,
-    }
-    void runDeviceAction(args)
+  function changeStatus(next: DeviceProtectionStatus): void {
+    status = next
   }
 </script>
 
@@ -650,7 +546,7 @@
   </main>
 {:else}
   <main class="device-setup" data-testid="extension-device-setup">
-    {#if inSetup}
+    {#if phase === DeviceProtectionPhase.Setup}
       <p class="step-label">
         {translatePlain(I18N_KEYS.ExtensionDeviceSetupStepLabel)}
       </p>
@@ -660,28 +556,20 @@
     <div
       class="connect-chain"
       role="img"
-      aria-label={translatePlain(
-        usesPin
-          ? I18N_KEYS.ExtensionDeviceSetupChainPin
-          : I18N_KEYS.ExtensionDeviceSetupChainPasskey,
-      )}
+      aria-label={translatePlain(chainSummaryKey())}
       data-testid="device-setup-chain"
-      data-key={usesPin ? 'pin' : 'passkey'}
+      data-key={keyKind}
     >
       <div class="chain-node is-on" aria-hidden="true">
         <span class="chain-icon">
-          {#if usesPin}
+          {#if keyKind === DeviceProtectionKeyKind.Pin}
             <Asterisk size={18} />
           {:else}
             <Fingerprint size={18} />
           {/if}
         </span>
         <span class="chain-label">
-          {translatePlain(
-            usesPin
-              ? I18N_KEYS.ExtensionDeviceSetupNodePin
-              : I18N_KEYS.ExtensionDeviceSetupNodePasskey,
-          )}
+          {translatePlain(chainKeyLabel())}
         </span>
       </div>
       <span class="chain-link is-on" aria-hidden="true"></span>
@@ -697,216 +585,19 @@
         <span class="chain-label">
           {translatePlain(I18N_KEYS.ExtensionDeviceSetupNodeIdentity)}
         </span>
-        {#if inSetup}
+        {#if phase === DeviceProtectionPhase.Setup}
           <span class="chain-tag">
             {translatePlain(I18N_KEYS.ExtensionDeviceSetupNodeNext)}
           </span>
         {/if}
       </div>
     </div>
-    <h1>{translatePlain(setupTitleKey)}</h1>
-    <p class="description">{translatePlain(setupDescriptionKey)}</p>
-
-    {#if status === DeviceProtectionStatus.PinSetup}
-      <div class="field-group">
-        <label for="device-protection-pin">
-          {translatePlain(I18N_KEYS.DeviceProtectionPinLabel)}
-        </label>
-        <input
-          id="device-protection-pin"
-          type="password"
-          inputmode="numeric"
-          autocomplete="new-password"
-          bind:value={pin}
-          disabled={busy}
-          data-testid="device-protection-pin-input"
-        />
-      </div>
-      <div class="field-group">
-        <label for="device-protection-pin-confirm">
-          {translatePlain(I18N_KEYS.DeviceProtectionPinConfirmLabel)}
-        </label>
-        <input
-          id="device-protection-pin-confirm"
-          type="password"
-          inputmode="numeric"
-          autocomplete="new-password"
-          bind:value={pinConfirm}
-          disabled={busy}
-          data-testid="device-protection-pin-confirm"
-        />
-      </div>
-      <p class="field-hint">
-        {translatePlain(I18N_KEYS.DeviceProtectionPinSecurityNote)}
-      </p>
-      <button
-        type="button"
-        disabled={busy}
-        data-testid="device-protection-pin-setup-btn"
-        onclick={createPin}
-      >
-        {busy
-          ? translatePlain(I18N_KEYS.DeviceProtectionAuthorizing)
-          : translatePlain(I18N_KEYS.DeviceProtectionPinSetupAction)}
-      </button>
-    {:else if needsSetup && setupWorkflow === DeviceProtectionSetupWorkflow.Authenticate}
-      <button
-        type="button"
-        disabled={busy}
-        data-testid="device-protection-use-existing-choice"
-        onclick={useExistingPasskey}
-      >
-        <Fingerprint size={16} aria-hidden="true" />
-        {busy
-          ? translatePlain(I18N_KEYS.DeviceProtectionAuthorizing)
-          : translatePlain(I18N_KEYS.ExtensionDeviceSetupUsePasskey)}
-      </button>
-      <p class="alternative-line">
-        {translatePlain(I18N_KEYS.ExtensionDeviceSetupNoPasskey)}
-        <button
-          type="button"
-          class="link-button"
-          disabled={busy}
-          data-testid="device-protection-create-new-choice"
-          onclick={() => {
-            setupWorkflow = DeviceProtectionSetupWorkflow.Create
-            error = ''
-          }}
-        >
-          {translatePlain(I18N_KEYS.ExtensionDeviceSetupCreateOne)}
-        </button>
-      </p>
-    {:else if needsSetup}
-      <button
-        type="button"
-        disabled={busy}
-        data-testid="device-protection-setup-btn"
-        onclick={createPasskey}
-      >
-        <KeyRound size={16} aria-hidden="true" />
-        {busy
-          ? translatePlain(I18N_KEYS.DeviceProtectionAuthorizing)
-          : translatePlain(I18N_KEYS.ExtensionDeviceSetupCreateAction)}
-      </button>
-      <details class="setup-options">
-        <summary
-          >{translatePlain(I18N_KEYS.ExtensionDeviceSetupOptions)}</summary
-        >
-        <div class="field-group">
-          <label for="device-protection-mode">
-            {translatePlain(I18N_KEYS.DeviceProtectionModeGroupLabel)}
-          </label>
-          <select
-            id="device-protection-mode"
-            bind:value={deviceMode}
-            disabled={busy}
-            data-testid="device-mode-select"
-          >
-            <option value={DeviceMode.Standard}>
-              {translatePlain(I18N_KEYS.DeviceProtectionModeStandardTitle)}
-            </option>
-            <option value={DeviceMode.AntiHacker}>
-              {translatePlain(I18N_KEYS.DeviceProtectionModeAntiHackerTitle)}
-            </option>
-          </select>
-          <p class="field-hint">
-            {translatePlain(
-              deviceMode === DeviceMode.Standard
-                ? I18N_KEYS.DeviceProtectionModeStandardDescription
-                : I18N_KEYS.DeviceProtectionModeAntiHackerDescription,
-            )}
-          </p>
-        </div>
-        <div class="field-group">
-          <label for="device-protection-label">
-            {translatePlain(I18N_KEYS.DeviceProtectionPasskeyLabel)}
-          </label>
-          <input
-            id="device-protection-label"
-            type="text"
-            autocomplete="off"
-            placeholder={translatePlain(
-              I18N_KEYS.DeviceProtectionPasskeyLabelPlaceholder,
-            )}
-            bind:value={passkeyLabel}
-            disabled={busy}
-            data-testid="device-protection-label-input"
-          />
-        </div>
-      </details>
-      {#if !identityKeyStaged}
-        <p class="alternative-line">
-          {translatePlain(I18N_KEYS.ExtensionDeviceSetupHavePasskey)}
-          <button
-            type="button"
-            class="link-button"
-            disabled={busy}
-            data-testid="device-protection-use-existing-choice"
-            onclick={useExistingPasskey}
-          >
-            {translatePlain(I18N_KEYS.ExtensionDeviceSetupUseExisting)}
-          </button>
-        </p>
-      {/if}
-    {:else if status === DeviceProtectionStatus.Pin}
-      <div class="field-group">
-        <label for="device-protection-pin">
-          {translatePlain(I18N_KEYS.DeviceProtectionPinLabel)}
-        </label>
-        <input
-          id="device-protection-pin"
-          type="password"
-          inputmode="numeric"
-          autocomplete="current-password"
-          bind:value={pin}
-          disabled={busy}
-          data-testid="device-protection-pin-unlock-input"
-        />
-      </div>
-      <button
-        type="button"
-        disabled={busy}
-        data-testid="device-protection-pin-unlock-btn"
-        onclick={unlockPin}
-      >
-        {busy
-          ? translatePlain(I18N_KEYS.DeviceProtectionAuthorizing)
-          : translatePlain(I18N_KEYS.DeviceProtectionPinUnlockAction)}
-      </button>
-    {:else}
-      <button
-        type="button"
-        disabled={busy}
-        data-testid="device-protection-unlock-btn"
-        onclick={unlockPasskey}
-      >
-        <Fingerprint size={16} aria-hidden="true" />
-        {busy
-          ? translatePlain(I18N_KEYS.DeviceProtectionAuthorizing)
-          : translatePlain(I18N_KEYS.ExtensionDeviceSetupUnlockAction)}
-      </button>
-    {/if}
-
-    {#if identityKeyStaged}
-      <button
-        type="button"
-        class="secondary-button"
-        disabled={busy}
-        data-testid="identity-key-cancel"
-        onclick={() => void cancelIdentityKey()}
-      >
-        {translatePlain(I18N_KEYS.ExtensionDeviceSetupIdentityKeyCancel)}
-      </button>
-    {/if}
-
-    {#if error}
-      <p
-        class="error-message"
-        role="alert"
-        data-testid="device-protection-error"
-      >
-        {error}
-      </p>
-    {/if}
+    <ExtensionDeviceProtection
+      {i18n}
+      {status}
+      {purpose}
+      onstatus={changeStatus}
+      onunlocked={deviceUnlocked}
+    />
   </main>
 {/if}

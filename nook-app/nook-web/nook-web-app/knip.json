@@ -40,7 +40,7 @@
     "../nook-web-extension/src/offscreen/session.ts",
     "../nook-web-extension/src/login-picker/main.ts",
     "../nook-web-extension/src/popup/main.ts",
-    "../nook-web-extension/src/popup/panel.ts"
+    "../nook-web-extension/src/side-panel/main.ts"
   ],
   "project": [
     "src/main.ts",

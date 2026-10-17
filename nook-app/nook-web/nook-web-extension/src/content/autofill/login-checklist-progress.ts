@@ -23,6 +23,25 @@ import {
   type AuthenticationOutcomeObservationContext,
 } from './authentication-outcome-observation'
 import { OUTCOME_EVIDENCE_POLL_MS } from './workflow-ui'
+import {
+  PilotAttemptLoadKind,
+  PilotAttemptMessageType,
+  type PilotAttemptLoad,
+  type PilotAttemptMessage,
+} from '../../lib/pilot-attempt-messages'
+
+/** The service worker keeps the attempt across the reload a submit often causes. */
+async function sendPilotAttempt(
+  message: PilotAttemptMessage,
+): Promise<PilotAttemptLoad> {
+  const none: PilotAttemptLoad = { kind: PilotAttemptLoadKind.None }
+  try {
+    const response: PilotAttemptLoad = await chrome.runtime.sendMessage(message)
+    return response || none
+  } catch {
+    return none
+  }
+}
 
 type LoginChecklistMount = {
   surface: LoginChecklistSurface
@@ -80,10 +99,16 @@ class LoginChecklistAction {
   lifecycle = ChecklistActionLifecycle.Active
   evaluation = ChecklistEvaluation.Idle
   private resources: ChecklistWatch = { kind: ChecklistWatchKind.Stopped }
-  readonly context: AuthenticationOutcomeObservationContext = {
-    startedAt: Date.now(),
-    authPath: location.pathname,
-    sawMutation: false,
+  constructor(readonly context: AuthenticationOutcomeObservationContext) {}
+
+  /** An action that starts now on the current page. */
+  static fresh(): LoginChecklistAction {
+    const context: AuthenticationOutcomeObservationContext = {
+      startedAt: Date.now(),
+      authPath: location.pathname,
+      sawMutation: false,
+    }
+    return new LoginChecklistAction(context)
   }
 
   watch(evaluate: () => void): void {
@@ -125,6 +150,11 @@ type ChecklistPresentationDelivery = {
   presentation: AuthenticationLoginChecklistPresentation
   mode: ChecklistPresentationMode
 }
+type ChecklistPresentationRequest = {
+  action: LoginChecklistAction
+  observation: AuthenticationLoginChecklistObservation
+  mode: ChecklistPresentationMode
+}
 type ChecklistExecution = { readonly self: LoginChecklistProgress }
 
 /** Owns only mounted login presentation and the existing non-secret result observation. */
@@ -134,26 +164,65 @@ export class LoginChecklistProgress {
     kind: 'Activity',
     activity: 'Ready',
   }
-  private action = new LoginChecklistAction()
+  private action = LoginChecklistAction.fresh()
   private lifecycle = ChecklistMountLifecycle.Mounted
+  // The last state sent to the service worker, so polling does not resend it.
+  private remembered = ''
 
   constructor(private readonly mount: LoginChecklistMount) {
     this.rendering = new LoginChecklistRendering(mount.surface)
   }
 
-  initialize(): Promise<void> {
-    const action = this.action
-    const observation: AuthenticationLoginChecklistObservation = {
-      kind: 'Activity',
-      activity: 'Ready',
+  async initialize(): Promise<void> {
+    const load: PilotAttemptMessage = { type: PilotAttemptMessageType.Load }
+    const saved = await sendPilotAttempt(load)
+    const ready: ChecklistPresentationRequest = {
+      action: this.action,
+      observation: { kind: 'Activity', activity: 'Ready' },
+      mode: ChecklistPresentationMode.Initial,
     }
+    switch (saved.kind) {
+      case PilotAttemptLoadKind.None:
+        return this.present(ready)
+      case PilotAttemptLoadKind.Found: {
+        // Only a page that comes back showing the site's error continues the
+        // attempt; the next step of a multi-step login starts fresh.
+        if (
+          authenticationOutcomeObservation.siteErrorMessage(this.mount.workflow)
+            .length === 0
+        ) {
+          const clear: PilotAttemptMessage = {
+            type: PilotAttemptMessageType.Clear,
+          }
+          void sendPilotAttempt(clear)
+          return this.present(ready)
+        }
+        this.state = saved.attempt.state
+        const context: AuthenticationOutcomeObservationContext = {
+          startedAt: saved.attempt.startedAt,
+          authPath: saved.attempt.authPath,
+          sawMutation: false,
+        }
+        this.action = new LoginChecklistAction(context)
+        const resumed: ChecklistPresentationRequest = {
+          action: this.action,
+          observation: { kind: 'Retained' },
+          mode: ChecklistPresentationMode.Activity,
+        }
+        return this.present(resumed)
+      }
+    }
+  }
+
+  private present(request: ChecklistPresentationRequest): Promise<void> {
+    const { action, observation, mode } = request
     return Effect.runPromise(
       this.project(observation).pipe(
         Effect.map((presentation) => {
           const delivery: ChecklistPresentationDelivery = {
             action,
             presentation,
-            mode: ChecklistPresentationMode.Initial,
+            mode,
           }
           this.acceptPresentation(delivery)
         }),
@@ -173,7 +242,7 @@ export class LoginChecklistProgress {
         break
     }
     this.action.cancel()
-    const action = new LoginChecklistAction()
+    const action = LoginChecklistAction.fresh()
     this.action = action
     const observation: AuthenticationLoginChecklistObservation = {
       kind: 'Activity',
@@ -272,12 +341,14 @@ export class LoginChecklistProgress {
         break
     }
     this.state = presentation.state
+    this.remember(action)
     switch (mode) {
       case ChecklistPresentationMode.Initial:
         this.rendering.render(presentation)
         break
       case ChecklistPresentationMode.Activity:
         this.rendering.renderStatus(presentation)
+        this.showSiteMessage(presentation)
         break
     }
     switch (presentation.outcome_polling) {
@@ -288,6 +359,39 @@ export class LoginChecklistProgress {
         action.watch(this.evaluate.bind(this, action))
         break
     }
+  }
+
+  /** Saves the attempt once submitted; a new attempt clears the old one. */
+  private remember(action: LoginChecklistAction): void {
+    const state = this.state
+    const remembered = JSON.stringify(state)
+    if (remembered === this.remembered) return
+    this.remembered = remembered
+    if (state.kind === 'Activity' && state.activity === 'Ready') return
+    const keep =
+      state.kind === 'Outcome' ||
+      (state.kind === 'Activity' && state.activity === 'Submitted')
+    const message: PilotAttemptMessage = keep
+      ? {
+          type: PilotAttemptMessageType.Save,
+          attempt: {
+            state,
+            authPath: action.context.authPath,
+            startedAt: action.context.startedAt,
+          },
+        }
+      : { type: PilotAttemptMessageType.Clear }
+    void sendPilotAttempt(message)
+  }
+
+  private showSiteMessage(
+    presentation: AuthenticationLoginChecklistPresentation,
+  ): void {
+    this.rendering.showSiteMessage(
+      presentation.status === 'Attention'
+        ? authenticationOutcomeObservation.siteErrorMessage(this.mount.workflow)
+        : '',
+    )
   }
 
   private project(observation: AuthenticationLoginChecklistObservation) {
@@ -390,7 +494,9 @@ export class LoginChecklistProgress {
           break
       }
       this.state = presentation.state
+      this.remember(action)
       this.rendering.renderStatus(presentation)
+      this.showSiteMessage(presentation)
       switch (presentation.outcome_polling) {
         case 'Stop':
           action.stop()

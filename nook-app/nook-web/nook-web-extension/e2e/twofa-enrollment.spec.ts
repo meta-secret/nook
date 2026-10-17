@@ -348,7 +348,9 @@ test.describe('Browser 2FA enrollment', () => {
         page.getByRole('img', { name: 'Featured artwork' }),
       ).toBeVisible()
       await expect(
-        page.getByRole('button', { name: 'Sign in', exact: true }),
+        page
+          .locator('main')
+          .getByRole('button', { name: 'Sign in', exact: true }),
       ).toBeVisible()
       await page.waitForLoadState('networkidle')
       await expect(page.locator('#nook-auth-widget')).toHaveCount(0)
@@ -358,7 +360,9 @@ test.describe('Browser 2FA enrollment', () => {
           .getByRole('button', { name: 'Add 2FA from this page' }),
       ).toHaveCount(0)
       await expect(
-        page.getByRole('button', { name: 'Sign in', exact: true }),
+        page
+          .locator('main')
+          .getByRole('button', { name: 'Sign in', exact: true }),
       ).toHaveText('Sign in')
     } finally {
       await paired.context.close()
@@ -393,7 +397,9 @@ test.describe('Browser 2FA enrollment', () => {
         page.getByRole('img', { name: 'Featured artwork' }),
       ).toBeVisible()
       await expect(
-        page.getByRole('button', { name: 'Sign in', exact: true }),
+        page
+          .locator('main')
+          .getByRole('button', { name: 'Sign in', exact: true }),
       ).toBeVisible()
       await expect(page.locator('#nook-auth-widget')).toBeVisible({
         timeout: 15_000,
@@ -404,7 +410,9 @@ test.describe('Browser 2FA enrollment', () => {
           .getByRole('button', { name: 'Add 2FA from this page' }),
       ).toHaveCount(0)
       await expect(
-        page.getByRole('button', { name: 'Sign in', exact: true }),
+        page
+          .locator('main')
+          .getByRole('button', { name: 'Sign in', exact: true }),
       ).toHaveText('Sign in')
     } finally {
       await paired.context.close()

@@ -21,6 +21,7 @@ export const BROWSER_MESSAGE_KEYS = {
   WidgetChecklistWorking: 'widgetChecklistWorking',
   WidgetChecklistWaiting: 'widgetChecklistWaiting',
   WidgetChecklistAttention: 'widgetChecklistAttention',
+  WidgetChecklistSiteMessage: 'widgetChecklistSiteMessage',
   WidgetChecklistComplete: 'widgetChecklistComplete',
   WidgetChecklistInactive: 'widgetChecklistInactive',
   WidgetChecklistLabel: 'widgetChecklistLabel',

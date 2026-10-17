@@ -30,6 +30,8 @@ type ChecklistCopyUpdate = { element: HTMLElement; copy: string }
 /** Renders the ordered Rust projection without interpreting authentication evidence. */
 export class LoginChecklistRendering {
   private readonly list: HTMLOListElement
+  private readonly siteMessage: HTMLParagraphElement
+  private readonly siteMessageText: HTMLSpanElement
   private renderedRows: ChecklistRowsCache = {
     kind: ChecklistRowsCacheKind.Empty,
   }
@@ -43,6 +45,18 @@ export class LoginChecklistRendering {
       chrome.i18n.getMessage(BROWSER_MESSAGE_KEYS.WidgetChecklistLabel),
     )
     surface.description.after(this.list)
+    this.siteMessage = document.createElement('p')
+    this.siteMessage.className = 'pilot-site-message'
+    this.siteMessage.setAttribute('data-testid', 'nook-auth-site-message')
+    this.siteMessage.hidden = true
+    const label = document.createElement('span')
+    label.className = 'pilot-site-message-label'
+    label.textContent = chrome.i18n.getMessage(
+      BROWSER_MESSAGE_KEYS.WidgetChecklistSiteMessage,
+    )
+    this.siteMessageText = document.createElement('span')
+    this.siteMessage.append(label, this.siteMessageText)
+    this.list.before(this.siteMessage)
     surface.description.setAttribute('role', 'status')
     surface.description.setAttribute('aria-live', 'polite')
     surface.description.setAttribute('aria-atomic', 'true')
@@ -139,7 +153,15 @@ export class LoginChecklistRendering {
     }
   }
 
+  /** The site's own error text after a failed sign-in, shown as plain text; empty hides it. */
+  showSiteMessage(text: string): void {
+    if (this.siteMessageText.textContent === text) return
+    this.siteMessage.hidden = text.length === 0
+    this.siteMessageText.textContent = text
+  }
+
   unavailable(): void {
+    this.showSiteMessage('')
     this.renderedRows = { kind: ChecklistRowsCacheKind.Empty }
     this.list.replaceChildren()
     this.list.hidden = true

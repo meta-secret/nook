@@ -474,6 +474,7 @@ class FocusedInteractionFixture {
         loginMatches: { kind: 'ready', count: savedLogins.length },
         selectedFacts: { state: 'selected', facts },
         pilotCapability: 'propose-action',
+        savedLoginCapability: 'fill-saved-login',
         factsBindingToken: 'fixture-binding',
         savedLoginActionAvailable: true,
       },

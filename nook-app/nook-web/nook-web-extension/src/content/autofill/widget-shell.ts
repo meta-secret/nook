@@ -232,6 +232,8 @@ const WIDGET_PANEL_STYLES = `
     }
     /* The three steps as a stepper: square marks joined by a rail; the
      * current one lit, finished ones green. */
+    .pilot-site-message { margin:0; padding:9px 11px; border-left:2px solid var(--nk-warning); background:var(--nk-bg); color:var(--nk-fg); font-size:13px; line-height:1.45; overflow-wrap:anywhere; }
+    .pilot-site-message-label { display:block; margin-bottom:3px; color:var(--nk-muted); font-family:var(--nk-mono); font-size:10.5px; letter-spacing:0.12em; text-transform:uppercase; }
     .pilot-checklist { list-style:none; margin:0; padding:2px 0; display:grid; gap:0; min-width:0; }
     .pilot-checklist-step { position:relative; display:flex; gap:11px; align-items:flex-start; min-width:0; padding-bottom:12px; color:var(--nk-muted); font-size:13px; line-height:1.35; }
     .pilot-checklist-step:last-child { padding-bottom:0; }
