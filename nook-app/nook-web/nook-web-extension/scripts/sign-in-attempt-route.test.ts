@@ -188,6 +188,7 @@ describe('service-worker sign-in attempt store', () => {
       'Resumed',
       { kind: 'PageObserved', page: { document: 'NewDocument' } },
       { kind: 'UserAction', action: { kind: 'Delete' } },
+      { kind: 'Resumed', extra: true },
     ]
     for (const event of events) {
       const message: BrowserRuntimeMessageValue = {
