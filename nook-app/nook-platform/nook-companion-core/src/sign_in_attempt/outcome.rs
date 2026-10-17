@@ -4,18 +4,23 @@
 //!
 //! 1. The explicit error marker (alone or with a success marker) is a failure.
 //! 2. A fresh error-looking message while the submitted step's username or
-//!    password field is still present is a failure. A message is fresh on a
-//!    `NewDocument`, or on the `SameDocument` only when the submit-time
-//!    baseline had no message candidate.
+//!    password field is still present is a failure.
 //! 3. A manual checkpoint is a verification challenge; a one-time-code field
 //!    absent at submit is a one-time-code challenge.
-//! 4. The explicit success marker confirms sign-in.
-//! 5. No auth fields and no error-looking message confirms sign-in once that
+//! 4. Without any marker or fresh error-looking message, a current-password
+//!    field that was absent at submit means an email-first step advanced:
+//!    the attempt closes (`StepAdvanced`) and the next step starts fresh.
+//! 5. The explicit success marker confirms sign-in.
+//! 6. No auth fields and no error-looking message confirms sign-in once that
 //!    evidence has been stable for the existing 750 ms interval.
-//! 6. The same username/password step re-presented on a `NewDocument` with no
+//! 7. The same username/password step re-presented on a `NewDocument` with no
 //!    error-looking message fails with reason `Unknown` once stable for 2 s.
-//! 7. Otherwise the attempt keeps waiting until the 20 s outcome budget,
+//! 8. Otherwise the attempt keeps waiting until the 20 s outcome budget,
 //!    measured from submit, expires visibly as `TimedOut`.
+//!
+//! Freshness: a message counts as newly present on a `NewDocument`, and on
+//! the `SameDocument` only when no error-looking message (same rule) was
+//! visible at submit.
 
 use serde::{Deserialize, Serialize};
 
@@ -120,37 +125,38 @@ impl SignInAttemptAuthStep {
     }
 }
 
+/// Whether an error-looking message (same rule as after submit) was visible.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) enum SignInAttemptMessagePresence {
     Present,
     Absent,
 }
 
-impl From<bool> for SignInAttemptMessagePresence {
-    #[expect(
-        clippy::match_bool,
-        reason = "the frozen sensor contract boolean is converted immediately into named presence"
-    )]
-    fn from(present: bool) -> Self {
-        match present {
-            true => Self::Present,
-            false => Self::Absent,
+impl From<SignInAttemptErrorMessageSelection> for SignInAttemptMessagePresence {
+    fn from(selection: SignInAttemptErrorMessageSelection) -> Self {
+        match selection {
+            SignInAttemptErrorMessageSelection::Selected(_) => Self::Present,
+            SignInAttemptErrorMessageSelection::NoneErrorLooking => Self::Absent,
         }
     }
 }
 
-/// Minimal submit-time facts retained in the record; never page text.
+/// Minimal submit-time facts retained in the record: whether an error-looking
+/// message was visible and which auth fields were present. The submit-time
+/// messages are classified once and dropped; no text, token, or colour is kept.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct SignInAttemptBaseline {
-    messages: SignInAttemptMessagePresence,
+    error_looking_message_at_submit: SignInAttemptMessagePresence,
     fields: SignInAttemptAuthStep,
 }
 
 impl From<&SignInAttemptSubmitBaseline> for SignInAttemptBaseline {
     fn from(baseline: &SignInAttemptSubmitBaseline) -> Self {
         Self {
-            messages: SignInAttemptMessagePresence::from(baseline.error_message_present),
+            error_looking_message_at_submit: SignInAttemptMessagePresence::from(
+                baseline.messages.error_selection(),
+            ),
             fields: SignInAttemptAuthStep::from(&baseline.auth_fields),
         }
     }
@@ -164,8 +170,11 @@ enum SignInAttemptMessageFreshness {
 
 impl SignInAttemptBaseline {
     fn freshness(self, document: SignInAttemptDocumentRelation) -> SignInAttemptMessageFreshness {
-        match (document, self.messages) {
-            (SignInAttemptDocumentRelation::NewDocument, _)
+        match (document, self.error_looking_message_at_submit) {
+            (
+                SignInAttemptDocumentRelation::NewDocument,
+                SignInAttemptMessagePresence::Present | SignInAttemptMessagePresence::Absent,
+            )
             | (SignInAttemptDocumentRelation::SameDocument, SignInAttemptMessagePresence::Absent) => {
                 SignInAttemptMessageFreshness::Fresh
             }
@@ -262,6 +271,7 @@ enum SignInAttemptPageReading {
         message: SignInAttemptSiteMessageEvidence,
     },
     Challenge(SignInAttemptChallenge),
+    StepAdvanced,
     SignedIn,
     Settling(SignInAttemptSettlingEvidence),
     Undecided,
@@ -306,7 +316,11 @@ impl SignInAttemptOutcomeWait {
             (SignInAttemptChronology::Ordered, SignInAttemptChronology::Ordered) => {
                 SignInAttemptChronology::Ordered
             }
-            (SignInAttemptChronology::Reversed, _) | (_, SignInAttemptChronology::Reversed) => {
+            (
+                SignInAttemptChronology::Reversed,
+                SignInAttemptChronology::Ordered | SignInAttemptChronology::Reversed,
+            )
+            | (SignInAttemptChronology::Ordered, SignInAttemptChronology::Reversed) => {
                 SignInAttemptChronology::Reversed
             }
         }
@@ -364,6 +378,9 @@ impl SignInAttemptOutcomeWait {
             SignInAttemptPageReading::Challenge(challenge) => {
                 SignInAttemptConclusion::ChallengeRequired { challenge }
                     .presented(SignInAttemptResetOffer::NotOffered)
+            }
+            SignInAttemptPageReading::StepAdvanced => {
+                SignInAttemptStep::closing(SignInAttemptClosing::STEP_ADVANCED)
             }
             SignInAttemptPageReading::SignedIn => SignInAttemptStep::signed_in(),
             SignInAttemptPageReading::Settling(evidence) => self.settle(SignInAttemptSettlement {
@@ -505,6 +522,55 @@ impl From<&SignInAttemptPageEvidence> for SignInAttemptOutcomeMarker {
     }
 }
 
+/// The failure decision of steps 1–2, or which marker remains for later steps.
+enum SignInAttemptLeadingEvidence {
+    Failure {
+        reason: SignInFailureReason,
+        message: SignInAttemptSiteMessageEvidence,
+    },
+    SuccessMarker,
+    /// No marker, but a fresh error-looking message outside the submitted step.
+    NoMarkerWithFreshError,
+    NoMarker,
+}
+
+enum SignInAttemptStepProgression {
+    /// The submitted step had no current-password field; one is now shown.
+    Advanced,
+    Unchanged,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SignInAttemptCheckpointPresence {
+    Present,
+    Absent,
+}
+
+impl From<bool> for SignInAttemptCheckpointPresence {
+    #[expect(
+        clippy::match_bool,
+        reason = "the frozen sensor contract boolean is converted immediately into named presence"
+    )]
+    fn from(present: bool) -> Self {
+        match present {
+            true => Self::Present,
+            false => Self::Absent,
+        }
+    }
+}
+
+enum SignInAttemptChallengePresence {
+    Challenged(SignInAttemptChallenge),
+    Clear,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct SignInAttemptPageFacts<'a> {
+    page: &'a SignInAttemptPageEvidence,
+    current: SignInAttemptAuthStep,
+    relation: SignInAttemptStepRelation,
+}
+
 impl SignInAttemptBaseline {
     fn fresh_error(self, page: &SignInAttemptPageEvidence) -> SignInAttemptFreshError {
         match (
@@ -518,7 +584,11 @@ impl SignInAttemptBaseline {
                 reason: selected.reason,
                 message: SignInAttemptSiteMessage::from(&selected.text),
             },
-            (SignInAttemptMessageFreshness::Stale, _)
+            (
+                SignInAttemptMessageFreshness::Stale,
+                SignInAttemptErrorMessageSelection::Selected(_)
+                | SignInAttemptErrorMessageSelection::NoneErrorLooking,
+            )
             | (
                 SignInAttemptMessageFreshness::Fresh,
                 SignInAttemptErrorMessageSelection::NoneErrorLooking,
@@ -528,94 +598,152 @@ impl SignInAttemptBaseline {
 
     fn reading(self, page: &SignInAttemptPageEvidence) -> SignInAttemptPageReading {
         let current = SignInAttemptAuthStep::from(&page.auth_fields);
-        let relation = self.fields.relation(current);
-        let marker = SignInAttemptOutcomeMarker::from(page);
-        let failure = match (marker, self.fresh_error(page), relation) {
-            (
-                SignInAttemptOutcomeMarker::Error,
-                SignInAttemptFreshError::Fresh { reason, message },
-                _,
-            )
-            | (
-                SignInAttemptOutcomeMarker::Success | SignInAttemptOutcomeMarker::Absent,
-                SignInAttemptFreshError::Fresh { reason, message },
-                SignInAttemptStepRelation::SameStep | SignInAttemptStepRelation::OverlappingStep,
-            ) => SignInAttemptPageReading::Failure {
-                reason,
-                message: SignInAttemptSiteMessageEvidence::Captured { text: message },
+        let facts = SignInAttemptPageFacts {
+            page,
+            current,
+            relation: self.fields.relation(current),
+        };
+        match self.leading_evidence(facts) {
+            SignInAttemptLeadingEvidence::Failure { reason, message } => {
+                SignInAttemptPageReading::Failure { reason, message }
+            }
+            SignInAttemptLeadingEvidence::SuccessMarker => match self.challenge(facts) {
+                SignInAttemptChallengePresence::Challenged(challenge) => {
+                    SignInAttemptPageReading::Challenge(challenge)
+                }
+                SignInAttemptChallengePresence::Clear => SignInAttemptPageReading::SignedIn,
             },
-            (SignInAttemptOutcomeMarker::Error, SignInAttemptFreshError::NotFresh, _) => {
-                SignInAttemptPageReading::Failure {
-                    reason: SignInFailureReason::Unknown,
-                    message: SignInAttemptSiteMessageEvidence::Absent,
+            SignInAttemptLeadingEvidence::NoMarkerWithFreshError => match self.challenge(facts) {
+                SignInAttemptChallengePresence::Challenged(challenge) => {
+                    SignInAttemptPageReading::Challenge(challenge)
+                }
+                SignInAttemptChallengePresence::Clear => facts.settling(),
+            },
+            SignInAttemptLeadingEvidence::NoMarker => {
+                match (self.challenge(facts), self.progression(facts)) {
+                    (
+                        SignInAttemptChallengePresence::Challenged(challenge),
+                        SignInAttemptStepProgression::Advanced
+                        | SignInAttemptStepProgression::Unchanged,
+                    ) => SignInAttemptPageReading::Challenge(challenge),
+                    (
+                        SignInAttemptChallengePresence::Clear,
+                        SignInAttemptStepProgression::Advanced,
+                    ) => SignInAttemptPageReading::StepAdvanced,
+                    (
+                        SignInAttemptChallengePresence::Clear,
+                        SignInAttemptStepProgression::Unchanged,
+                    ) => facts.settling(),
                 }
             }
-            (
-                SignInAttemptOutcomeMarker::Success | SignInAttemptOutcomeMarker::Absent,
-                SignInAttemptFreshError::Fresh { .. } | SignInAttemptFreshError::NotFresh,
-                _,
-            ) => SignInAttemptPageReading::Undecided,
-        };
-        match failure {
-            SignInAttemptPageReading::Undecided => {
-                self.non_failure_reading(SignInAttemptNonFailure {
-                    page,
-                    current,
-                    relation,
-                    marker,
-                })
-            }
-            decided @ (SignInAttemptPageReading::Failure { .. }
-            | SignInAttemptPageReading::Challenge(_)
-            | SignInAttemptPageReading::SignedIn
-            | SignInAttemptPageReading::Settling(_)) => decided,
         }
     }
 
-    fn non_failure_reading(self, facts: SignInAttemptNonFailure<'_>) -> SignInAttemptPageReading {
+    /// Step 4: an email-first step (no current-password field at submit) that
+    /// now shows a current-password field has advanced to the next step.
+    fn progression(self, facts: SignInAttemptPageFacts<'_>) -> SignInAttemptStepProgression {
         use SignInAttemptFieldPresence::{Absent, Present};
-        let SignInAttemptNonFailure {
-            page,
-            current,
-            relation,
-            marker,
-        } = facts;
-        let checkpoint = SignInAttemptFieldPresence::from(page.manual_checkpoint_present);
-        match (checkpoint, current.one_time_code, self.fields.one_time_code) {
-            (Present, _, _) => {
-                return SignInAttemptPageReading::Challenge(SignInAttemptChallenge::Verification);
+        match (self.fields.current_password, facts.current.current_password) {
+            (Absent, Present) => SignInAttemptStepProgression::Advanced,
+            (Absent, Absent) | (Present, Present | Absent) => {
+                SignInAttemptStepProgression::Unchanged
             }
-            (Absent, Present, Absent) => {
-                return SignInAttemptPageReading::Challenge(SignInAttemptChallenge::OneTimeCode);
-            }
-            (Absent, Present, Present) | (Absent, Absent, Present | Absent) => {}
         }
-        let any_error = page.messages.error_selection();
-        match (marker, relation, any_error, page.document) {
-            (SignInAttemptOutcomeMarker::Success, _, _, _) => SignInAttemptPageReading::SignedIn,
+    }
+
+    /// Steps 1–2: the error marker, or a fresh error-looking message while the
+    /// submitted step's username or password field is still present.
+    fn leading_evidence(self, facts: SignInAttemptPageFacts<'_>) -> SignInAttemptLeadingEvidence {
+        use SignInAttemptOutcomeMarker::{Absent, Error, Success};
+        use SignInAttemptStepRelation::{NoAuthFields, OtherStep, OverlappingStep, SameStep};
+        let marker = SignInAttemptOutcomeMarker::from(facts.page);
+        match (marker, self.fresh_error(facts.page), facts.relation) {
             (
-                SignInAttemptOutcomeMarker::Absent | SignInAttemptOutcomeMarker::Error,
-                SignInAttemptStepRelation::NoAuthFields,
-                SignInAttemptErrorMessageSelection::NoneErrorLooking,
-                _,
-            ) => SignInAttemptPageReading::Settling(SignInAttemptSettlingEvidence::SignedInLooking),
+                Error,
+                SignInAttemptFreshError::Fresh { reason, message },
+                SameStep | OverlappingStep | OtherStep | NoAuthFields,
+            )
+            | (
+                Success | Absent,
+                SignInAttemptFreshError::Fresh { reason, message },
+                SameStep | OverlappingStep,
+            ) => SignInAttemptLeadingEvidence::Failure {
+                reason,
+                message: SignInAttemptSiteMessageEvidence::Captured { text: message },
+            },
             (
-                SignInAttemptOutcomeMarker::Absent | SignInAttemptOutcomeMarker::Error,
-                SignInAttemptStepRelation::SameStep,
-                SignInAttemptErrorMessageSelection::NoneErrorLooking,
-                SignInAttemptDocumentRelation::NewDocument,
-            ) => SignInAttemptPageReading::Settling(SignInAttemptSettlingEvidence::StepRepresented),
-            (SignInAttemptOutcomeMarker::Absent | SignInAttemptOutcomeMarker::Error, _, _, _) => {
-                SignInAttemptPageReading::Undecided
+                Error,
+                SignInAttemptFreshError::NotFresh,
+                SameStep | OverlappingStep | OtherStep | NoAuthFields,
+            ) => SignInAttemptLeadingEvidence::Failure {
+                reason: SignInFailureReason::Unknown,
+                message: SignInAttemptSiteMessageEvidence::Absent,
+            },
+            (Success, SignInAttemptFreshError::Fresh { .. }, OtherStep | NoAuthFields)
+            | (
+                Success,
+                SignInAttemptFreshError::NotFresh,
+                SameStep | OverlappingStep | OtherStep | NoAuthFields,
+            ) => SignInAttemptLeadingEvidence::SuccessMarker,
+            (Absent, SignInAttemptFreshError::Fresh { .. }, OtherStep | NoAuthFields) => {
+                SignInAttemptLeadingEvidence::NoMarkerWithFreshError
+            }
+            (
+                Absent,
+                SignInAttemptFreshError::NotFresh,
+                SameStep | OverlappingStep | OtherStep | NoAuthFields,
+            ) => SignInAttemptLeadingEvidence::NoMarker,
+        }
+    }
+
+    /// Step 3: a manual checkpoint, or a one-time-code field absent at submit.
+    fn challenge(self, facts: SignInAttemptPageFacts<'_>) -> SignInAttemptChallengePresence {
+        use SignInAttemptFieldPresence::{Absent, Present};
+        let checkpoint =
+            SignInAttemptCheckpointPresence::from(facts.page.manual_checkpoint_present);
+        match (
+            checkpoint,
+            facts.current.one_time_code,
+            self.fields.one_time_code,
+        ) {
+            (SignInAttemptCheckpointPresence::Present, Present | Absent, Present | Absent) => {
+                SignInAttemptChallengePresence::Challenged(SignInAttemptChallenge::Verification)
+            }
+            (SignInAttemptCheckpointPresence::Absent, Present, Absent) => {
+                SignInAttemptChallengePresence::Challenged(SignInAttemptChallenge::OneTimeCode)
+            }
+            (SignInAttemptCheckpointPresence::Absent, Present, Present)
+            | (SignInAttemptCheckpointPresence::Absent, Absent, Present | Absent) => {
+                SignInAttemptChallengePresence::Clear
             }
         }
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-struct SignInAttemptNonFailure<'a> {
-    page: &'a SignInAttemptPageEvidence,
-    current: SignInAttemptAuthStep,
-    relation: SignInAttemptStepRelation,
-    marker: SignInAttemptOutcomeMarker,
+impl SignInAttemptPageFacts<'_> {
+    /// Steps 5–7: evidence that becomes decisive only once stable.
+    fn settling(self) -> SignInAttemptPageReading {
+        use SignInAttemptDocumentRelation::{NewDocument, SameDocument};
+        use SignInAttemptErrorMessageSelection::{NoneErrorLooking, Selected};
+        use SignInAttemptStepRelation::{NoAuthFields, OtherStep, OverlappingStep, SameStep};
+        match (
+            self.relation,
+            self.page.messages.error_selection(),
+            self.page.document,
+        ) {
+            (NoAuthFields, NoneErrorLooking, SameDocument | NewDocument) => {
+                SignInAttemptPageReading::Settling(SignInAttemptSettlingEvidence::SignedInLooking)
+            }
+            (SameStep, NoneErrorLooking, NewDocument) => {
+                SignInAttemptPageReading::Settling(SignInAttemptSettlingEvidence::StepRepresented)
+            }
+            (SameStep, NoneErrorLooking, SameDocument)
+            | (OverlappingStep | OtherStep, NoneErrorLooking, SameDocument | NewDocument)
+            | (
+                SameStep | OverlappingStep | OtherStep | NoAuthFields,
+                Selected(_),
+                SameDocument | NewDocument,
+            ) => SignInAttemptPageReading::Undecided,
+        }
+    }
 }

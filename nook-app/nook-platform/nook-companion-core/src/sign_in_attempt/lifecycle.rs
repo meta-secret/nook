@@ -30,7 +30,6 @@ use super::site::{SignInAttemptSite, SignInAttemptSiteRelation};
 use crate::SignInAttemptFollowUp;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
-#[serde(rename_all = "camelCase")]
 pub struct SignInAttemptTransition {
     pub disposition: SignInAttemptDisposition,
     pub presentation: SignInAttemptPresentation,

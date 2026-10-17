@@ -122,21 +122,29 @@ impl From<&SignInAttemptNormalizedText> for SignInFailureReasonReading {
         let limited = SignInFailureReason::RATE_LIMITED.find_in(text);
         let challenge = SignInFailureReason::CHALLENGE_REQUIRED.find_in(text);
         let wrong = SignInFailureReason::WRONG_CREDENTIALS.find_in(text);
+        // Exactly one consequence wins over credential wording; two conflict.
         let reason = match (locked, limited, challenge, wrong) {
-            (Matched, Unmatched, Unmatched, _) => SignInFailureReason::AccountLocked,
-            (Unmatched, Matched, Unmatched, _) => SignInFailureReason::RateLimited,
-            (Unmatched, Unmatched, Matched, _) => SignInFailureReason::ChallengeRequired,
+            (Matched, Unmatched, Unmatched, Matched | Unmatched) => {
+                SignInFailureReason::AccountLocked
+            }
+            (Unmatched, Matched, Unmatched, Matched | Unmatched) => {
+                SignInFailureReason::RateLimited
+            }
+            (Unmatched, Unmatched, Matched, Matched | Unmatched) => {
+                SignInFailureReason::ChallengeRequired
+            }
             (Unmatched, Unmatched, Unmatched, Matched) => SignInFailureReason::WrongCredentials,
             (Unmatched, Unmatched, Unmatched, Unmatched)
-            | (Matched, Matched, _, _)
-            | (Matched, Unmatched, Matched, _)
-            | (Unmatched, Matched, Matched, _) => SignInFailureReason::Unknown,
+            | (Matched, Matched, Matched | Unmatched, Matched | Unmatched)
+            | (Matched, Unmatched, Matched, Matched | Unmatched)
+            | (Unmatched, Matched, Matched, Matched | Unmatched) => SignInFailureReason::Unknown,
         };
         let vocabulary = match (locked, limited, challenge, wrong) {
             (Unmatched, Unmatched, Unmatched, Unmatched) => Unmatched,
-            (Matched, _, _, _) | (_, Matched, _, _) | (_, _, Matched, _) | (_, _, _, Matched) => {
-                Matched
-            }
+            (Matched, Matched | Unmatched, Matched | Unmatched, Matched | Unmatched)
+            | (Unmatched, Matched, Matched | Unmatched, Matched | Unmatched)
+            | (Unmatched, Unmatched, Matched, Matched | Unmatched)
+            | (Unmatched, Unmatched, Unmatched, Matched) => Matched,
         };
         Self { reason, vocabulary }
     }

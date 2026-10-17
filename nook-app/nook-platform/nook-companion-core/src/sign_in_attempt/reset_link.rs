@@ -52,7 +52,11 @@ impl SignInPageLink {
             Self::TEXT_TERMS.find_in(&text),
             Self::PATH_TERMS.find_in(&path),
         ) {
-            (SignInAttemptTermMatch::Matched, _) | (_, SignInAttemptTermMatch::Matched) => {
+            (
+                SignInAttemptTermMatch::Matched,
+                SignInAttemptTermMatch::Matched | SignInAttemptTermMatch::Unmatched,
+            )
+            | (SignInAttemptTermMatch::Unmatched, SignInAttemptTermMatch::Matched) => {
                 SignInAttemptResetLink::Reset(self.index)
             }
             (SignInAttemptTermMatch::Unmatched, SignInAttemptTermMatch::Unmatched) => {

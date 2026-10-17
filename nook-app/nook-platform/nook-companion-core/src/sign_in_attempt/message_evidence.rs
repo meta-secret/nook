@@ -109,10 +109,16 @@ impl SignInPageMessageTokens {
             Self::WEAK_STEMS.find_in(&text),
             veto,
         ) {
-            (SignInAttemptTermMatch::Matched, _, _) => SignInAttemptTokenSignal::Error,
-            (SignInAttemptTermMatch::Unmatched, _, SignInAttemptTermMatch::Matched) => {
-                SignInAttemptTokenSignal::Veto
-            }
+            (
+                SignInAttemptTermMatch::Matched,
+                SignInAttemptTermMatch::Matched | SignInAttemptTermMatch::Unmatched,
+                SignInAttemptTermMatch::Matched | SignInAttemptTermMatch::Unmatched,
+            ) => SignInAttemptTokenSignal::Error,
+            (
+                SignInAttemptTermMatch::Unmatched,
+                SignInAttemptTermMatch::Matched | SignInAttemptTermMatch::Unmatched,
+                SignInAttemptTermMatch::Matched,
+            ) => SignInAttemptTokenSignal::Veto,
             (
                 SignInAttemptTermMatch::Unmatched,
                 SignInAttemptTermMatch::Matched,
@@ -180,7 +186,11 @@ impl SignInPageMessage {
 
     fn color_score(&self) -> SignInAttemptErrorScore {
         match (self.foreground.tone(), self.background.tone()) {
-            (SignInPageColorTone::Reddish, _) | (_, SignInPageColorTone::Reddish) => {
+            (
+                SignInPageColorTone::Reddish,
+                SignInPageColorTone::Reddish | SignInPageColorTone::Neutral,
+            )
+            | (SignInPageColorTone::Neutral, SignInPageColorTone::Reddish) => {
                 SignInAttemptErrorScore::STRONG
             }
             (SignInPageColorTone::Neutral, SignInPageColorTone::Neutral) => {
@@ -192,7 +202,10 @@ impl SignInPageMessage {
     fn text_score(&self, reading: SignInFailureReasonReading) -> SignInAttemptErrorScore {
         let text = SignInAttemptNormalizedText::from(self.text.text());
         match (reading.vocabulary, Self::GENERIC_ERROR_TERMS.find_in(&text)) {
-            (SignInAttemptTermMatch::Matched, _) => SignInAttemptErrorScore::STRONG,
+            (
+                SignInAttemptTermMatch::Matched,
+                SignInAttemptTermMatch::Matched | SignInAttemptTermMatch::Unmatched,
+            ) => SignInAttemptErrorScore::STRONG,
             (SignInAttemptTermMatch::Unmatched, SignInAttemptTermMatch::Matched) => {
                 SignInAttemptErrorScore::WEAK
             }
