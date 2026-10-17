@@ -370,3 +370,194 @@ struct SignInAttemptPreSubmitActivity {
     activity: SignInAttemptActivity,
     now: SignInAttemptInstant,
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::sign_in_attempt::test_fixture::{
+        SignInScenario, SignInScenarioEvent, SignInScenarioOutcome, SignInSubmittedAttempt,
+    };
+    use crate::{
+        AuthenticationLoginChecklistStatus, SignInAttemptActionKind, SignInAttemptActivity,
+        SignInAttemptAdvanceRequest, SignInAttemptBeginRequest, SignInAttemptEvent,
+        SignInAttemptEvidenceDemand, SignInAttemptFollowUp, SignInAttemptLoginReference,
+        SignInAttemptMessageKey, SignInAttemptRequestError, SignInAttemptSenderOrigin,
+        SignInAttemptStatus, SignInAttemptStoredRecord,
+    };
+
+    #[test]
+    fn begin_binds_the_site_and_presents_nooks_own_fill_step() -> anyhow::Result<()> {
+        let scenario = SignInScenario::begin(1_000)?;
+        let presentation = &scenario.presentation;
+        assert_eq!(presentation.status, SignInAttemptStatus::SigningIn);
+        assert_eq!(
+            presentation.title_key,
+            SignInAttemptMessageKey::WidgetSignInSigningIn
+        );
+        assert_eq!(
+            presentation.description_key,
+            SignInAttemptMessageKey::WidgetChecklistFillWorking
+        );
+        assert_eq!(presentation.reason_key, None);
+        assert_eq!(
+            presentation.page_evidence,
+            SignInAttemptEvidenceDemand::NotWanted
+        );
+        assert_eq!(presentation.follow_up, SignInAttemptFollowUp::None);
+        assert_eq!(scenario.offered(), vec![SignInAttemptActionKind::Dismiss]);
+        assert_eq!(
+            presentation.actions.first().map(|offer| offer.label_key),
+            Some(SignInAttemptMessageKey::WidgetTakeOver)
+        );
+        assert_eq!(
+            presentation.checklist.status,
+            AuthenticationLoginChecklistStatus::Working
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn begin_rejects_a_sender_that_is_not_a_canonical_http_origin() -> anyhow::Result<()> {
+        for origin in [
+            "file:///tmp/login.html",
+            "chrome-extension://abc",
+            "https://www.namecheap.com/login",
+        ] {
+            let result = SignInAttemptBeginRequest {
+                sender_origin: SignInAttemptSenderOrigin::try_from(origin.to_owned())?,
+                login: SignInAttemptLoginReference::try_from(SignInScenario::LOGIN.to_owned())?,
+                now: SignInScenario::instant(1_000)?,
+            }
+            .begin();
+            assert_eq!(
+                result,
+                Err(SignInAttemptRequestError::SenderOriginInvalid),
+                "{origin}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn nook_fill_failures_conclude_without_a_site_reason() -> anyhow::Result<()> {
+        let fill_failed = SignInScenario::begin(1_000)?
+            .activity(SignInAttemptActivity::FillFailed)?
+            .retained()?;
+        assert_eq!(fill_failed.presentation.status, SignInAttemptStatus::Failed);
+        assert_eq!(fill_failed.presentation.reason_key, None);
+        assert_eq!(
+            fill_failed.presentation.description_key,
+            SignInAttemptMessageKey::WidgetChecklistFillFailed
+        );
+        assert_eq!(
+            fill_failed.offered(),
+            vec![
+                SignInAttemptActionKind::TryAgain,
+                SignInAttemptActionKind::ChooseAnotherLogin,
+                SignInAttemptActionKind::Dismiss,
+            ]
+        );
+        let rejected = SignInScenario::begin(1_000)?
+            .activity(SignInAttemptActivity::SubmissionRejected)?
+            .retained()?;
+        assert_eq!(
+            rejected.presentation.description_key,
+            SignInAttemptMessageKey::WidgetChecklistSubmitRejected
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn manual_submission_waits_for_the_users_submit_and_reload_before_submit_times_out()
+    -> anyhow::Result<()> {
+        let manual = SignInScenario::begin(1_000)?
+            .activity(SignInAttemptActivity::SubmissionUnobserved)?
+            .retained()?;
+        assert_eq!(
+            manual.presentation.description_key,
+            SignInAttemptMessageKey::WidgetChecklistSubmitManual
+        );
+        let awaiting = manual.submitted(&SignInSubmittedAttempt::login_form().baseline)?;
+        assert_eq!(
+            awaiting.presentation.description_key,
+            SignInAttemptMessageKey::WidgetSignInSigningInDescription
+        );
+        let lost = SignInScenario::begin(1_000)?
+            .activity(SignInAttemptActivity::Filled)?
+            .retained()?
+            .resumed(1_500)?
+            .retained()?;
+        assert_eq!(lost.presentation.status, SignInAttemptStatus::TimedOut);
+        Ok(())
+    }
+
+    #[test]
+    fn sender_binding_answers_other_site_and_keeps_same_site_subdomains() -> anyhow::Result<()> {
+        let awaiting = SignInSubmittedAttempt::login_form().awaiting()?;
+        for origin in [
+            "https://evil.example",
+            "http://www.namecheap.com",
+            "file://",
+        ] {
+            let outcome = awaiting.clone().advance(SignInScenarioEvent {
+                at: 2_000,
+                origin,
+                event: SignInAttemptEvent::Resumed,
+            })?;
+            assert!(
+                matches!(outcome, SignInScenarioOutcome::OtherSite),
+                "{origin}"
+            );
+        }
+        let subdomain = awaiting.advance(SignInScenarioEvent {
+            at: 2_000,
+            origin: "https://ap.www.namecheap.com",
+            event: SignInAttemptEvent::Resumed,
+        })?;
+        assert!(matches!(subdomain, SignInScenarioOutcome::Retained(_)));
+        Ok(())
+    }
+
+    #[test]
+    fn undecodable_records_are_rejected_without_a_request_error() -> anyhow::Result<()> {
+        let valid = SignInSubmittedAttempt::login_form().awaiting()?.record;
+        let unknown_field = valid.text().replacen('{', r#"{"username":"alice","#, 1);
+        let over_bound = format!(
+            "{}{}",
+            valid.text(),
+            " ".repeat(SignInAttemptStoredRecord::MAX_BYTES)
+        );
+        for stored in [
+            "",
+            "not json",
+            "{}",
+            unknown_field.as_str(),
+            over_bound.as_str(),
+        ] {
+            let outcome = SignInScenario {
+                record: serde_json::from_str::<SignInAttemptStoredRecord>(&serde_json::to_string(
+                    stored,
+                )?)?,
+                presentation: SignInScenario::begin(1_000)?.presentation,
+            }
+            .resumed(2_000)?;
+            assert!(
+                matches!(outcome, SignInScenarioOutcome::RecordRejected),
+                "{stored}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn an_invalid_clock_reading_is_a_request_error() -> anyhow::Result<()> {
+        let result = SignInAttemptAdvanceRequest {
+            record: SignInScenario::begin(1_000)?.record,
+            sender_origin: SignInAttemptSenderOrigin::try_from(SignInScenario::ORIGIN.to_owned())?,
+            now: serde_json::from_str("0")?,
+            event: SignInAttemptEvent::Resumed,
+        }
+        .advance();
+        assert_eq!(result, Err(SignInAttemptRequestError::TimeInvalid));
+        Ok(())
+    }
+}

@@ -18,11 +18,14 @@ mod lifecycle;
 mod message_evidence;
 mod outcome;
 mod page_evidence;
+mod page_reading;
 mod presentation;
 mod record;
 mod request;
 mod reset_link;
 mod site;
+#[cfg(test)]
+mod test_fixture;
 mod vocabulary;
 
 pub use conclusion::SignInAttemptSiteMessage;

@@ -1,190 +1,33 @@
 //! Post-submit outcome classification, stability, and the outcome budget.
 //!
-//! Decisions, in order, for each page observation after submit:
-//!
-//! 1. The explicit error marker (alone or with a success marker) is a failure.
-//! 2. A fresh error-looking message while the submitted step's username or
-//!    password field is still present is a failure.
-//! 3. A manual checkpoint is a verification challenge; a one-time-code field
-//!    absent at submit is a one-time-code challenge.
-//! 4. Without any marker or fresh error-looking message, a current-password
-//!    field that was absent at submit means an email-first step advanced:
-//!    the attempt closes (`StepAdvanced`) and the next step starts fresh.
-//! 5. The explicit success marker confirms sign-in.
-//! 6. No auth fields and no error-looking message confirms sign-in once that
-//!    evidence has been stable for the existing 750 ms interval.
-//! 7. The same username/password step re-presented on a `NewDocument` with no
-//!    error-looking message fails with reason `Unknown` once stable for 2 s.
-//! 8. Otherwise the attempt keeps waiting until the 20 s outcome budget,
-//!    measured from submit, expires visibly as `TimedOut`.
-//!
-//! Freshness: a message counts as newly present on a `NewDocument`, and on
-//! the `SameDocument` only when no error-looking message (same rule) was
-//! visible at submit.
+//! The wait applies one page reading (`page_reading.rs`) at a time:
+//! failures, challenges, step progression, and the success marker conclude
+//! immediately; "signed-in looking" evidence confirms after the existing
+//! 750 ms stability interval; an unexplained re-presentation of the same step
+//! on a new document fails `Unknown` after 2 s. Decisive evidence is evaluated
+//! before the 20 s outcome budget, measured from submit, which otherwise ends
+//! the wait visibly as `TimedOut`. A new `Submitted` activity restarts it.
 
 use serde::{Deserialize, Serialize};
 
 use super::conclusion::{
-    SignInAttemptChallenge, SignInAttemptClosing, SignInAttemptConclusion, SignInAttemptFailure,
-    SignInAttemptSiteMessage, SignInAttemptSiteMessageEvidence,
+    SignInAttemptClosing, SignInAttemptConclusion, SignInAttemptFailure,
+    SignInAttemptSiteMessageEvidence,
 };
 use super::failure_reason::SignInFailureReason;
 use super::lifecycle::{SignInAttemptEventContext, SignInAttemptNext, SignInAttemptStep};
-use super::message_evidence::SignInAttemptErrorMessageSelection;
-use super::page_evidence::{SignInAttemptDocumentRelation, SignInAttemptPageEvidence};
+use super::page_evidence::SignInAttemptPageEvidence;
+use super::page_reading::{SignInAttemptBaseline, SignInAttemptPageReading};
 use super::presentation::{SignInAttemptResetOffer, SignInAttemptScene, SignInAttemptSigningIn};
 use super::record::{SignInAttemptChronology, SignInAttemptInstant};
 use super::request::{
-    SignInAttemptActivity, SignInAttemptAuthFields, SignInAttemptEvent,
-    SignInAttemptSubmitBaseline, SignInAttemptUserAction,
+    SignInAttemptActivity, SignInAttemptEvent, SignInAttemptSubmitBaseline, SignInAttemptUserAction,
 };
 use super::site::SignInAttemptSite;
 use crate::{
     AuthenticationOutcomeElapsedMilliseconds, AuthenticationOutcomeTimeoutMilliseconds,
     LoginSaveOutcomeObservation, SignInAttemptFollowUp,
 };
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) enum SignInAttemptFieldPresence {
-    Present,
-    Absent,
-}
-
-impl From<bool> for SignInAttemptFieldPresence {
-    #[expect(
-        clippy::match_bool,
-        reason = "the frozen sensor contract boolean is converted immediately into named presence"
-    )]
-    fn from(present: bool) -> Self {
-        match present {
-            true => Self::Present,
-            false => Self::Absent,
-        }
-    }
-}
-
-/// Which credential fields of one login step are visible.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct SignInAttemptAuthStep {
-    username: SignInAttemptFieldPresence,
-    current_password: SignInAttemptFieldPresence,
-    one_time_code: SignInAttemptFieldPresence,
-}
-
-impl From<&SignInAttemptAuthFields> for SignInAttemptAuthStep {
-    fn from(fields: &SignInAttemptAuthFields) -> Self {
-        Self {
-            username: SignInAttemptFieldPresence::from(fields.username_present),
-            current_password: SignInAttemptFieldPresence::from(fields.current_password_present),
-            one_time_code: SignInAttemptFieldPresence::from(fields.one_time_code_present),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SignInAttemptStepRelation {
-    /// Same username/password presence as the submitted step.
-    SameStep,
-    /// A username or password field of the submitted step is still visible.
-    OverlappingStep,
-    /// A different authentication step (for example a new code field).
-    OtherStep,
-    /// No authentication field is visible.
-    NoAuthFields,
-}
-
-impl SignInAttemptAuthStep {
-    fn relation(self, current: Self) -> SignInAttemptStepRelation {
-        use SignInAttemptFieldPresence::{Absent, Present};
-        let fields = (
-            current.username,
-            current.current_password,
-            current.one_time_code,
-        );
-        if let (Absent, Absent, Absent) = fields {
-            return SignInAttemptStepRelation::NoAuthFields;
-        }
-        match (
-            self.username,
-            current.username,
-            self.current_password,
-            current.current_password,
-        ) {
-            (Present, Present, Present, Present)
-            | (Present, Present, Absent, Absent)
-            | (Absent, Absent, Present, Present) => SignInAttemptStepRelation::SameStep,
-            (Present, Present, Present | Absent, Present | Absent)
-            | (Present | Absent, Present | Absent, Present, Present) => {
-                SignInAttemptStepRelation::OverlappingStep
-            }
-            (Present | Absent, Present | Absent, Present | Absent, Present | Absent) => {
-                SignInAttemptStepRelation::OtherStep
-            }
-        }
-    }
-}
-
-/// Whether an error-looking message (same rule as after submit) was visible.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) enum SignInAttemptMessagePresence {
-    Present,
-    Absent,
-}
-
-impl From<SignInAttemptErrorMessageSelection> for SignInAttemptMessagePresence {
-    fn from(selection: SignInAttemptErrorMessageSelection) -> Self {
-        match selection {
-            SignInAttemptErrorMessageSelection::Selected(_) => Self::Present,
-            SignInAttemptErrorMessageSelection::NoneErrorLooking => Self::Absent,
-        }
-    }
-}
-
-/// Minimal submit-time facts retained in the record: whether an error-looking
-/// message was visible and which auth fields were present. The submit-time
-/// messages are classified once and dropped; no text, token, or colour is kept.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct SignInAttemptBaseline {
-    error_looking_message_at_submit: SignInAttemptMessagePresence,
-    fields: SignInAttemptAuthStep,
-}
-
-impl From<&SignInAttemptSubmitBaseline> for SignInAttemptBaseline {
-    fn from(baseline: &SignInAttemptSubmitBaseline) -> Self {
-        Self {
-            error_looking_message_at_submit: SignInAttemptMessagePresence::from(
-                baseline.messages.error_selection(),
-            ),
-            fields: SignInAttemptAuthStep::from(&baseline.auth_fields),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SignInAttemptMessageFreshness {
-    Fresh,
-    Stale,
-}
-
-impl SignInAttemptBaseline {
-    fn freshness(self, document: SignInAttemptDocumentRelation) -> SignInAttemptMessageFreshness {
-        match (document, self.error_looking_message_at_submit) {
-            (
-                SignInAttemptDocumentRelation::NewDocument,
-                SignInAttemptMessagePresence::Present | SignInAttemptMessagePresence::Absent,
-            )
-            | (SignInAttemptDocumentRelation::SameDocument, SignInAttemptMessagePresence::Absent) => {
-                SignInAttemptMessageFreshness::Fresh
-            }
-            (
-                SignInAttemptDocumentRelation::SameDocument,
-                SignInAttemptMessagePresence::Present,
-            ) => SignInAttemptMessageFreshness::Stale,
-        }
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) enum SignInAttemptSettlingEvidence {
@@ -261,20 +104,6 @@ impl From<SignInAttemptSubmission<'_>> for SignInAttemptOutcomeWait {
 enum SignInAttemptBudget {
     Remaining,
     Exhausted,
-}
-
-/// What one page observation says about the submitted login.
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum SignInAttemptPageReading {
-    Failure {
-        reason: SignInFailureReason,
-        message: SignInAttemptSiteMessageEvidence,
-    },
-    Challenge(SignInAttemptChallenge),
-    StepAdvanced,
-    SignedIn,
-    Settling(SignInAttemptSettlingEvidence),
-    Undecided,
 }
 
 struct SignInAttemptObservation<'a> {
@@ -495,255 +324,477 @@ struct SignInAttemptRejection<'a> {
     observation: SignInAttemptObservation<'a>,
 }
 
-/// A fresh error-looking message, or none usable for a failure decision.
-enum SignInAttemptFreshError {
-    Fresh {
-        reason: SignInFailureReason,
-        message: SignInAttemptSiteMessage,
-    },
-    NotFresh,
-}
+#[cfg(test)]
+mod tests {
+    use crate::sign_in_attempt::page_evidence::{
+        SignInAttemptDocumentRelation, SignInPageLink, SignInPageLinkHref, SignInPageLinkIndex,
+        SignInPageLinkText,
+    };
+    use crate::sign_in_attempt::test_fixture::{
+        SignInFieldsFixture, SignInLinkFixture, SignInMarkerFixture, SignInMessageFixture,
+        SignInObservationFixture, SignInPageFixture, SignInSubmittedAttempt,
+    };
+    use crate::{
+        AuthenticationLoginChecklistOutcomePolling, AuthenticationLoginChecklistStatus,
+        SignInAttemptActionKind, SignInAttemptEvidenceDemand, SignInAttemptFollowUp,
+        SignInAttemptMessageKey, SignInAttemptSiteMessage, SignInAttemptStatus,
+        SignInAttemptUserAction,
+    };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SignInAttemptOutcomeMarker {
-    Error,
-    Success,
-    Absent,
-}
-
-impl From<&SignInAttemptPageEvidence> for SignInAttemptOutcomeMarker {
-    /// The error marker dominates: success with error is never a sign-in.
-    fn from(page: &SignInAttemptPageEvidence) -> Self {
-        match (page.error_marker_present, page.success_marker_present) {
-            (true, true | false) => Self::Error,
-            (false, true) => Self::Success,
-            (false, false) => Self::Absent,
-        }
-    }
-}
-
-/// The failure decision of steps 1–2, or which marker remains for later steps.
-enum SignInAttemptLeadingEvidence {
-    Failure {
-        reason: SignInFailureReason,
-        message: SignInAttemptSiteMessageEvidence,
-    },
-    SuccessMarker,
-    /// No marker, but a fresh error-looking message outside the submitted step.
-    NoMarkerWithFreshError,
-    NoMarker,
-}
-
-enum SignInAttemptStepProgression {
-    /// The submitted step had no current-password field; one is now shown.
-    Advanced,
-    Unchanged,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SignInAttemptCheckpointPresence {
-    Present,
-    Absent,
-}
-
-impl From<bool> for SignInAttemptCheckpointPresence {
-    #[expect(
-        clippy::match_bool,
-        reason = "the frozen sensor contract boolean is converted immediately into named presence"
-    )]
-    fn from(present: bool) -> Self {
-        match present {
-            true => Self::Present,
-            false => Self::Absent,
-        }
-    }
-}
-
-enum SignInAttemptChallengePresence {
-    Challenged(SignInAttemptChallenge),
-    Clear,
-}
-
-#[derive(Debug, Clone, Copy)]
-struct SignInAttemptPageFacts<'a> {
-    page: &'a SignInAttemptPageEvidence,
-    current: SignInAttemptAuthStep,
-    relation: SignInAttemptStepRelation,
-}
-
-impl SignInAttemptBaseline {
-    fn fresh_error(self, page: &SignInAttemptPageEvidence) -> SignInAttemptFreshError {
-        match (
-            self.freshness(page.document),
-            page.messages.error_selection(),
-        ) {
-            (
-                SignInAttemptMessageFreshness::Fresh,
-                SignInAttemptErrorMessageSelection::Selected(selected),
-            ) => SignInAttemptFreshError::Fresh {
-                reason: selected.reason,
-                message: SignInAttemptSiteMessage::from(&selected.text),
-            },
-            (
-                SignInAttemptMessageFreshness::Stale,
-                SignInAttemptErrorMessageSelection::Selected(_)
-                | SignInAttemptErrorMessageSelection::NoneErrorLooking,
-            )
-            | (
-                SignInAttemptMessageFreshness::Fresh,
-                SignInAttemptErrorMessageSelection::NoneErrorLooking,
-            ) => SignInAttemptFreshError::NotFresh,
-        }
+    struct SignInReasonExpectation {
+        text: &'static str,
+        key: SignInAttemptMessageKey,
     }
 
-    fn reading(self, page: &SignInAttemptPageEvidence) -> SignInAttemptPageReading {
-        let current = SignInAttemptAuthStep::from(&page.auth_fields);
-        let facts = SignInAttemptPageFacts {
-            page,
-            current,
-            relation: self.fields.relation(current),
+    #[test]
+    fn failed_after_reload_shows_the_reason_and_survives_further_reloads() -> anyhow::Result<()> {
+        let awaiting = SignInSubmittedAttempt::login_form().awaiting()?;
+        assert_eq!(
+            awaiting.presentation.page_evidence,
+            SignInAttemptEvidenceDemand::Wanted
+        );
+        assert_eq!(
+            awaiting.presentation.checklist.outcome_polling,
+            AuthenticationLoginChecklistOutcomePolling::Wait
+        );
+        let resumed = awaiting.resumed(3_000)?.retained()?;
+        assert_eq!(resumed.presentation.status, SignInAttemptStatus::SigningIn);
+        assert_eq!(
+            resumed.presentation.description_key,
+            SignInAttemptMessageKey::WidgetSignInSigningInDescription
+        );
+        let failed = resumed
+            .observe(SignInObservationFixture {
+                at: 3_200,
+                page: SignInPageFixture {
+                    messages: vec![SignInMessageFixture::alert(
+                        "Incorrect username or password.",
+                    )],
+                    ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::NewDocument)
+                },
+            })?
+            .retained()?;
+        let presentation = failed.presentation.clone();
+        assert_eq!(presentation.status, SignInAttemptStatus::Failed);
+        assert_eq!(
+            presentation.title_key,
+            SignInAttemptMessageKey::WidgetSignInFailed
+        );
+        assert_eq!(
+            presentation.description_key,
+            SignInAttemptMessageKey::WidgetSignInFailedDescription
+        );
+        assert_eq!(
+            presentation.reason_key,
+            Some(SignInAttemptMessageKey::WidgetSignInReasonWrongCredentials)
+        );
+        assert_eq!(
+            presentation.site_message,
+            Some(SignInAttemptSiteMessage::try_from(
+                "Incorrect username or password.".to_owned()
+            )?)
+        );
+        assert_eq!(
+            presentation.checklist.status,
+            AuthenticationLoginChecklistStatus::Attention
+        );
+        assert_eq!(
+            failed.offered(),
+            vec![
+                SignInAttemptActionKind::TryAgain,
+                SignInAttemptActionKind::ChooseAnotherLogin,
+                SignInAttemptActionKind::Dismiss,
+            ]
+        );
+        let reloaded_much_later = failed.resumed(600_000)?.retained()?;
+        assert_eq!(
+            reloaded_much_later.presentation.status,
+            SignInAttemptStatus::Failed
+        );
+        assert_eq!(
+            reloaded_much_later.presentation.reason_key,
+            presentation.reason_key
+        );
+        assert_eq!(
+            reloaded_much_later.presentation.site_message,
+            presentation.site_message
+        );
+        assert_eq!(reloaded_much_later.presentation.reset_link, None);
+        assert_eq!(
+            reloaded_much_later.presentation.page_evidence,
+            SignInAttemptEvidenceDemand::Wanted
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn namecheap_lock_banner_is_account_locked_and_offers_the_pages_reset_link()
+    -> anyhow::Result<()> {
+        let failed = SignInSubmittedAttempt::login_form()
+            .awaiting()?
+            .observe(SignInObservationFixture {
+                at: 4_000,
+                page: SignInPageFixture {
+                    messages: vec![SignInMessageFixture::red_banner(
+                        SignInMessageFixture::NAMECHEAP_LOCK,
+                    )],
+                    links: vec![SignInLinkFixture::NAMECHEAP_RESET],
+                    ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::NewDocument)
+                },
+            })?
+            .retained()?;
+        assert_eq!(
+            failed.presentation.reason_key,
+            Some(SignInAttemptMessageKey::WidgetSignInReasonAccountLocked)
+        );
+        assert_eq!(
+            failed.presentation.site_message,
+            Some(SignInAttemptSiteMessage::try_from(
+                SignInMessageFixture::NAMECHEAP_LOCK.to_owned()
+            )?)
+        );
+        assert_eq!(
+            failed.presentation.reset_link,
+            Some(SignInPageLinkIndex::from(7))
+        );
+        assert_eq!(
+            failed.presentation.page_evidence,
+            SignInAttemptEvidenceDemand::NotWanted
+        );
+        assert!(
+            failed
+                .offered()
+                .contains(&SignInAttemptActionKind::ResetPassword)
+        );
+
+        let cross_site = SignInPageLink {
+            index: SignInPageLinkIndex::from(7),
+            text: SignInPageLinkText::try_from("Password Reset".to_owned())?,
+            href: SignInPageLinkHref::try_from("https://evil.example/forgotpassword/".to_owned())?,
         };
-        match self.leading_evidence(facts) {
-            SignInAttemptLeadingEvidence::Failure { reason, message } => {
-                SignInAttemptPageReading::Failure { reason, message }
+        let refused = failed
+            .clone()
+            .act(SignInAttemptUserAction::ResetPassword { link: cross_site })?
+            .retained()?;
+        assert_eq!(refused.presentation.status, SignInAttemptStatus::Failed);
+        assert_eq!(refused.presentation.reset_link, None);
+        assert_eq!(
+            refused.presentation.page_evidence,
+            SignInAttemptEvidenceDemand::Wanted
+        );
+
+        let fresh_link = SignInPageLink {
+            index: SignInPageLinkIndex::from(7),
+            text: SignInPageLinkText::try_from("Password Reset".to_owned())?,
+            href: SignInPageLinkHref::try_from(
+                "https://www.namecheap.com/myaccount/forgotpassword/".to_owned(),
+            )?,
+        };
+        let reset = failed
+            .act(SignInAttemptUserAction::ResetPassword { link: fresh_link })?
+            .closed()?;
+        assert_eq!(
+            reset.follow_up,
+            SignInAttemptFollowUp::ActivateResetLink {
+                link: SignInPageLinkIndex::from(7)
             }
-            SignInAttemptLeadingEvidence::SuccessMarker => match self.challenge(facts) {
-                SignInAttemptChallengePresence::Challenged(challenge) => {
-                    SignInAttemptPageReading::Challenge(challenge)
-                }
-                SignInAttemptChallengePresence::Clear => SignInAttemptPageReading::SignedIn,
-            },
-            SignInAttemptLeadingEvidence::NoMarkerWithFreshError => match self.challenge(facts) {
-                SignInAttemptChallengePresence::Challenged(challenge) => {
-                    SignInAttemptPageReading::Challenge(challenge)
-                }
-                SignInAttemptChallengePresence::Clear => facts.settling(),
-            },
-            SignInAttemptLeadingEvidence::NoMarker => {
-                match (self.challenge(facts), self.progression(facts)) {
-                    (
-                        SignInAttemptChallengePresence::Challenged(challenge),
-                        SignInAttemptStepProgression::Advanced
-                        | SignInAttemptStepProgression::Unchanged,
-                    ) => SignInAttemptPageReading::Challenge(challenge),
-                    (
-                        SignInAttemptChallengePresence::Clear,
-                        SignInAttemptStepProgression::Advanced,
-                    ) => SignInAttemptPageReading::StepAdvanced,
-                    (
-                        SignInAttemptChallengePresence::Clear,
-                        SignInAttemptStepProgression::Unchanged,
-                    ) => facts.settling(),
-                }
-            }
-        }
+        );
+        assert_eq!(reset.status, SignInAttemptStatus::Dismissed);
+        assert!(reset.actions.is_empty());
+        Ok(())
     }
 
-    /// Step 4: an email-first step (no current-password field at submit) that
-    /// now shows a current-password field has advanced to the next step.
-    fn progression(self, facts: SignInAttemptPageFacts<'_>) -> SignInAttemptStepProgression {
-        use SignInAttemptFieldPresence::{Absent, Present};
-        match (self.fields.current_password, facts.current.current_password) {
-            (Absent, Present) => SignInAttemptStepProgression::Advanced,
-            (Absent, Absent) | (Present, Present | Absent) => {
-                SignInAttemptStepProgression::Unchanged
-            }
-        }
+    #[test]
+    fn lock_banner_without_a_reset_link_offers_no_reset() -> anyhow::Result<()> {
+        let failed = SignInSubmittedAttempt::login_form()
+            .awaiting()?
+            .observe(SignInObservationFixture {
+                at: 4_000,
+                page: SignInPageFixture {
+                    messages: vec![SignInMessageFixture::red_banner(
+                        SignInMessageFixture::NAMECHEAP_LOCK,
+                    )],
+                    ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::NewDocument)
+                },
+            })?
+            .retained()?;
+        assert_eq!(failed.presentation.reset_link, None);
+        assert!(
+            !failed
+                .offered()
+                .contains(&SignInAttemptActionKind::ResetPassword)
+        );
+        Ok(())
     }
 
-    /// Steps 1–2: the error marker, or a fresh error-looking message while the
-    /// submitted step's username or password field is still present.
-    fn leading_evidence(self, facts: SignInAttemptPageFacts<'_>) -> SignInAttemptLeadingEvidence {
-        use SignInAttemptOutcomeMarker::{Absent, Error, Success};
-        use SignInAttemptStepRelation::{NoAuthFields, OtherStep, OverlappingStep, SameStep};
-        let marker = SignInAttemptOutcomeMarker::from(facts.page);
-        match (marker, self.fresh_error(facts.page), facts.relation) {
-            (
-                Error,
-                SignInAttemptFreshError::Fresh { reason, message },
-                SameStep | OverlappingStep | OtherStep | NoAuthFields,
-            )
-            | (
-                Success | Absent,
-                SignInAttemptFreshError::Fresh { reason, message },
-                SameStep | OverlappingStep,
-            ) => SignInAttemptLeadingEvidence::Failure {
-                reason,
-                message: SignInAttemptSiteMessageEvidence::Captured { text: message },
+    #[test]
+    fn in_place_wrong_password_and_rate_limit_are_classified_on_the_same_document()
+    -> anyhow::Result<()> {
+        for expected in [
+            SignInReasonExpectation {
+                text: "The password you entered is incorrect.",
+                key: SignInAttemptMessageKey::WidgetSignInReasonWrongCredentials,
             },
-            (
-                Error,
-                SignInAttemptFreshError::NotFresh,
-                SameStep | OverlappingStep | OtherStep | NoAuthFields,
-            ) => SignInAttemptLeadingEvidence::Failure {
-                reason: SignInFailureReason::Unknown,
-                message: SignInAttemptSiteMessageEvidence::Absent,
+            SignInReasonExpectation {
+                text: "Too many attempts. Try again in 15 minutes.",
+                key: SignInAttemptMessageKey::WidgetSignInReasonRateLimited,
             },
-            (Success, SignInAttemptFreshError::Fresh { .. }, OtherStep | NoAuthFields)
-            | (
-                Success,
-                SignInAttemptFreshError::NotFresh,
-                SameStep | OverlappingStep | OtherStep | NoAuthFields,
-            ) => SignInAttemptLeadingEvidence::SuccessMarker,
-            (Absent, SignInAttemptFreshError::Fresh { .. }, OtherStep | NoAuthFields) => {
-                SignInAttemptLeadingEvidence::NoMarkerWithFreshError
-            }
-            (
-                Absent,
-                SignInAttemptFreshError::NotFresh,
-                SameStep | OverlappingStep | OtherStep | NoAuthFields,
-            ) => SignInAttemptLeadingEvidence::NoMarker,
+            SignInReasonExpectation {
+                text: "Oops! Something went wrong.",
+                key: SignInAttemptMessageKey::WidgetSignInReasonUnknown,
+            },
+        ] {
+            let failed = SignInSubmittedAttempt::login_form()
+                .awaiting()?
+                .observe(SignInObservationFixture {
+                    at: 1_600,
+                    page: SignInPageFixture {
+                        messages: vec![SignInMessageFixture::field_reference(expected.text)],
+                        ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument)
+                    },
+                })?
+                .retained()?;
+            assert_eq!(
+                failed.presentation.reason_key,
+                Some(expected.key),
+                "{}",
+                expected.text
+            );
+            assert_eq!(
+                failed.presentation.site_message,
+                Some(SignInAttemptSiteMessage::try_from(
+                    expected.text.to_owned()
+                )?)
+            );
         }
+        Ok(())
     }
 
-    /// Step 3: a manual checkpoint, or a one-time-code field absent at submit.
-    fn challenge(self, facts: SignInAttemptPageFacts<'_>) -> SignInAttemptChallengePresence {
-        use SignInAttemptFieldPresence::{Absent, Present};
-        let checkpoint =
-            SignInAttemptCheckpointPresence::from(facts.page.manual_checkpoint_present);
-        match (
-            checkpoint,
-            facts.current.one_time_code,
-            self.fields.one_time_code,
-        ) {
-            (SignInAttemptCheckpointPresence::Present, Present | Absent, Present | Absent) => {
-                SignInAttemptChallengePresence::Challenged(SignInAttemptChallenge::Verification)
-            }
-            (SignInAttemptCheckpointPresence::Absent, Present, Absent) => {
-                SignInAttemptChallengePresence::Challenged(SignInAttemptChallenge::OneTimeCode)
-            }
-            (SignInAttemptCheckpointPresence::Absent, Present, Present)
-            | (SignInAttemptCheckpointPresence::Absent, Absent, Present | Absent) => {
-                SignInAttemptChallengePresence::Clear
-            }
+    #[test]
+    fn stale_same_document_banner_keeps_waiting_and_is_not_stored() -> anyhow::Result<()> {
+        let banner = SignInPageFixture {
+            messages: vec![SignInMessageFixture::red_banner(
+                "Incorrect username or password.",
+            )],
+            ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument)
+        };
+        let awaiting = SignInSubmittedAttempt {
+            baseline: banner.clone(),
         }
+        .awaiting()?;
+        assert!(!awaiting.record.text().contains("Incorrect"));
+        let still_waiting = awaiting
+            .observe(SignInObservationFixture {
+                at: 2_000,
+                page: banner,
+            })?
+            .retained()?;
+        assert_eq!(
+            still_waiting.presentation.status,
+            SignInAttemptStatus::SigningIn
+        );
+        assert_eq!(
+            still_waiting.presentation.page_evidence,
+            SignInAttemptEvidenceDemand::Wanted
+        );
+        Ok(())
     }
-}
 
-impl SignInAttemptPageFacts<'_> {
-    /// Steps 5–7: evidence that becomes decisive only once stable.
-    fn settling(self) -> SignInAttemptPageReading {
-        use SignInAttemptDocumentRelation::{NewDocument, SameDocument};
-        use SignInAttemptErrorMessageSelection::{NoneErrorLooking, Selected};
-        use SignInAttemptStepRelation::{NoAuthFields, OtherStep, OverlappingStep, SameStep};
-        match (
-            self.relation,
-            self.page.messages.error_selection(),
-            self.page.document,
-        ) {
-            (NoAuthFields, NoneErrorLooking, SameDocument | NewDocument) => {
-                SignInAttemptPageReading::Settling(SignInAttemptSettlingEvidence::SignedInLooking)
+    #[test]
+    fn success_after_navigation_confirms_after_the_stability_interval_and_closes()
+    -> anyhow::Result<()> {
+        let dashboard = SignInPageFixture {
+            fields: SignInFieldsFixture::None,
+            ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::NewDocument)
+        };
+        let settling = SignInSubmittedAttempt::login_form()
+            .awaiting()?
+            .observe(SignInObservationFixture {
+                at: 3_000,
+                page: dashboard.clone(),
+            })?
+            .retained()?;
+        assert_eq!(settling.presentation.status, SignInAttemptStatus::SigningIn);
+        let still_settling = settling
+            .observe(SignInObservationFixture {
+                at: 3_500,
+                page: dashboard.clone(),
+            })?
+            .retained()?;
+        assert_eq!(
+            still_settling.presentation.status,
+            SignInAttemptStatus::SigningIn
+        );
+        let confirmed = still_settling
+            .observe(SignInObservationFixture {
+                at: 3_750,
+                page: dashboard,
+            })?
+            .closed()?;
+        assert_eq!(confirmed.status, SignInAttemptStatus::SignedIn);
+        assert_eq!(
+            confirmed.title_key,
+            SignInAttemptMessageKey::WidgetSignInSignedIn
+        );
+        assert_eq!(
+            confirmed.description_key,
+            SignInAttemptMessageKey::WidgetSignInSignedInDescription
+        );
+        assert_eq!(
+            confirmed.checklist.status,
+            AuthenticationLoginChecklistStatus::Complete
+        );
+        assert_eq!(
+            confirmed.page_evidence,
+            SignInAttemptEvidenceDemand::NotWanted
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn interrupted_stability_restarts_and_the_success_marker_confirms_at_once() -> anyhow::Result<()>
+    {
+        let clean = SignInPageFixture {
+            fields: SignInFieldsFixture::None,
+            ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument)
+        };
+        let interrupted = SignInSubmittedAttempt::login_form()
+            .awaiting()?
+            .observe(SignInObservationFixture {
+                at: 2_000,
+                page: clean.clone(),
+            })?
+            .retained()?
+            .observe(SignInObservationFixture {
+                at: 2_400,
+                page: SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument),
+            })?
+            .retained()?
+            .observe(SignInObservationFixture {
+                at: 2_900,
+                page: clean.clone(),
+            })?
+            .retained()?;
+        assert_eq!(
+            interrupted.presentation.status,
+            SignInAttemptStatus::SigningIn
+        );
+        let marked = SignInSubmittedAttempt::login_form()
+            .awaiting()?
+            .observe(SignInObservationFixture {
+                at: 1_200,
+                page: SignInPageFixture {
+                    marker: SignInMarkerFixture::Success,
+                    ..clean
+                },
+            })?
+            .closed()?;
+        assert_eq!(marked.status, SignInAttemptStatus::SignedIn);
+        Ok(())
+    }
+
+    #[test]
+    fn unexplained_re_presentation_on_a_new_document_fails_unknown_after_two_seconds()
+    -> anyhow::Result<()> {
+        let same_step = SignInPageFixture::login_form(SignInAttemptDocumentRelation::NewDocument);
+        let settling = SignInSubmittedAttempt::login_form()
+            .awaiting()?
+            .observe(SignInObservationFixture {
+                at: 3_000,
+                page: same_step.clone(),
+            })?
+            .retained()?;
+        assert_eq!(settling.presentation.status, SignInAttemptStatus::SigningIn);
+        let failed = settling
+            .observe(SignInObservationFixture {
+                at: 5_000,
+                page: same_step,
+            })?
+            .retained()?;
+        assert_eq!(failed.presentation.status, SignInAttemptStatus::Failed);
+        assert_eq!(
+            failed.presentation.reason_key,
+            Some(SignInAttemptMessageKey::WidgetSignInReasonUnknown)
+        );
+        assert_eq!(failed.presentation.site_message, None);
+        Ok(())
+    }
+
+    #[test]
+    fn no_decisive_evidence_within_the_budget_times_out_visibly_and_is_retained()
+    -> anyhow::Result<()> {
+        let undecided = SignInPageFixture {
+            fields: SignInFieldsFixture::PasswordOnly,
+            ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument)
+        };
+        let waiting = SignInSubmittedAttempt::login_form()
+            .awaiting()?
+            .observe(SignInObservationFixture {
+                at: 21_000,
+                page: undecided.clone(),
+            })?
+            .retained()?;
+        assert_eq!(waiting.presentation.status, SignInAttemptStatus::SigningIn);
+        let timed_out = waiting
+            .observe(SignInObservationFixture {
+                at: 21_100,
+                page: undecided,
+            })?
+            .retained()?;
+        assert_eq!(timed_out.presentation.status, SignInAttemptStatus::TimedOut);
+        assert_eq!(
+            timed_out.presentation.title_key,
+            SignInAttemptMessageKey::WidgetSignInTimedOut
+        );
+        assert_eq!(
+            timed_out.offered(),
+            vec![
+                SignInAttemptActionKind::TryAgain,
+                SignInAttemptActionKind::Dismiss
+            ]
+        );
+        let reloaded = timed_out.resumed(90_000)?.retained()?;
+        assert_eq!(reloaded.presentation.status, SignInAttemptStatus::TimedOut);
+        let resumed_late = SignInSubmittedAttempt::login_form()
+            .awaiting()?
+            .resumed(30_000)?
+            .retained()?;
+        assert_eq!(
+            resumed_late.presentation.status,
+            SignInAttemptStatus::TimedOut
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn email_first_progression_closes_with_step_advanced() -> anyhow::Result<()> {
+        for document in [
+            SignInAttemptDocumentRelation::SameDocument,
+            SignInAttemptDocumentRelation::NewDocument,
+        ] {
+            let advanced = SignInSubmittedAttempt {
+                baseline: SignInPageFixture {
+                    fields: SignInFieldsFixture::UsernameOnly,
+                    ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument)
+                },
             }
-            (SameStep, NoneErrorLooking, NewDocument) => {
-                SignInAttemptPageReading::Settling(SignInAttemptSettlingEvidence::StepRepresented)
-            }
-            (SameStep, NoneErrorLooking, SameDocument)
-            | (OverlappingStep | OtherStep, NoneErrorLooking, SameDocument | NewDocument)
-            | (
-                SameStep | OverlappingStep | OtherStep | NoAuthFields,
-                Selected(_),
-                SameDocument | NewDocument,
-            ) => SignInAttemptPageReading::Undecided,
+            .awaiting()?
+            .observe(SignInObservationFixture {
+                at: 2_000,
+                page: SignInPageFixture {
+                    fields: SignInFieldsFixture::PasswordOnly,
+                    ..SignInPageFixture::login_form(document)
+                },
+            })?
+            .closed()?;
+            assert_eq!(advanced.status, SignInAttemptStatus::StepAdvanced);
+            assert!(advanced.actions.is_empty());
+            assert_eq!(
+                advanced.page_evidence,
+                SignInAttemptEvidenceDemand::NotWanted
+            );
+            assert_eq!(advanced.follow_up, SignInAttemptFollowUp::None);
         }
+        Ok(())
     }
 }
