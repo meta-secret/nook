@@ -708,24 +708,42 @@ pub const ERRORS_WHOLE_VAULT_CONFLICT_RESOLUTION_RETIRED: &str =
     "errors.whole_vault_conflict_resolution_retired";
 pub const EXTENSION_ACTION_CONNECT_ANOTHER: &str = "extension.action.connect_another";
 pub const EXTENSION_ACTION_CONNECT_IDENTITY: &str = "extension.action.connect_identity";
+pub const EXTENSION_ACTION_CONTINUE_IN_TAB: &str = "extension.action.continue_in_tab";
+pub const EXTENSION_ACTION_FILL: &str = "extension.action.fill";
+pub const EXTENSION_ACTION_FILL_DONE: &str = "extension.action.fill_done";
+pub const EXTENSION_ACTION_FILL_FAILED: &str = "extension.action.fill_failed";
+pub const EXTENSION_ACTION_FILL_ITEM_MISSING: &str = "extension.action.fill_item_missing";
+pub const EXTENSION_ACTION_FILL_LOCKED: &str = "extension.action.fill_locked";
+pub const EXTENSION_ACTION_FILL_LOGIN: &str = "extension.action.fill_login";
+pub const EXTENSION_ACTION_FILL_NO_FORM: &str = "extension.action.fill_no_form";
+pub const EXTENSION_ACTION_FILL_PENDING: &str = "extension.action.fill_pending";
+pub const EXTENSION_ACTION_FILL_SITE_CHANGED: &str = "extension.action.fill_site_changed";
 pub const EXTENSION_ACTION_IDENTITIES: &str = "extension.action.identities";
+pub const EXTENSION_ACTION_IDENTITIES_FAILED: &str = "extension.action.identities_failed";
 pub const EXTENSION_ACTION_LOCK: &str = "extension.action.lock";
 pub const EXTENSION_ACTION_LOCK_FAILED: &str = "extension.action.lock_failed";
 pub const EXTENSION_ACTION_MANAGE: &str = "extension.action.manage";
-pub const EXTENSION_ACTION_NO_IDENTITY: &str = "extension.action.no_identity";
+pub const EXTENSION_ACTION_NO_IDENTITY_LINE: &str = "extension.action.no_identity_line";
 pub const EXTENSION_ACTION_OPEN_FAILED: &str = "extension.action.open_failed";
 pub const EXTENSION_ACTION_OPEN_VAULT: &str = "extension.action.open_vault";
-pub const EXTENSION_ACTION_OPEN_VAULT_HINT: &str = "extension.action.open_vault_hint";
+pub const EXTENSION_ACTION_OPENS_NEW_TAB: &str = "extension.action.opens_new_tab";
 pub const EXTENSION_ACTION_OTHER_IDENTITY: &str = "extension.action.other_identity";
-pub const EXTENSION_ACTION_PIN_LABEL: &str = "extension.action.pin_label";
-pub const EXTENSION_ACTION_SET_UP: &str = "extension.action.set_up";
-pub const EXTENSION_ACTION_SET_UP_HINT: &str = "extension.action.set_up_hint";
+pub const EXTENSION_ACTION_REOPEN_HINT: &str = "extension.action.reopen_hint";
+pub const EXTENSION_ACTION_SITE_EMPTY: &str = "extension.action.site_empty";
+pub const EXTENSION_ACTION_SITE_EMPTY_HINT: &str = "extension.action.site_empty_hint";
+pub const EXTENSION_ACTION_SITE_FAILED: &str = "extension.action.site_failed";
+pub const EXTENSION_ACTION_SITE_LABEL: &str = "extension.action.site_label";
+pub const EXTENSION_ACTION_SITE_LOADING: &str = "extension.action.site_loading";
+pub const EXTENSION_ACTION_SITE_LOCKED: &str = "extension.action.site_locked";
+pub const EXTENSION_ACTION_SITE_NO_FILLING_VAULT: &str = "extension.action.site_no_filling_vault";
+pub const EXTENSION_ACTION_SITE_NOT_WEB: &str = "extension.action.site_not_web";
+pub const EXTENSION_ACTION_SITE_NOT_WEB_HINT: &str = "extension.action.site_not_web_hint";
+pub const EXTENSION_ACTION_SITE_RESTRICTED: &str = "extension.action.site_restricted";
+pub const EXTENSION_ACTION_START_FAILED: &str = "extension.action.start_failed";
 pub const EXTENSION_ACTION_STATE_LOCKED: &str = "extension.action.state_locked";
 pub const EXTENSION_ACTION_STATE_SETUP: &str = "extension.action.state_setup";
 pub const EXTENSION_ACTION_STATE_UNLOCKED: &str = "extension.action.state_unlocked";
-pub const EXTENSION_ACTION_UNLOCK: &str = "extension.action.unlock";
-pub const EXTENSION_ACTION_UNLOCK_FAILED: &str = "extension.action.unlock_failed";
-pub const EXTENSION_ACTION_UNLOCK_PASSKEY_HINT: &str = "extension.action.unlock_passkey_hint";
+pub const EXTENSION_ACTION_TRY_AGAIN: &str = "extension.action.try_again";
 pub const EXTENSION_AUTHENTICATOR_PICKER_DESCRIPTION: &str =
     "extension.authenticator_picker.description";
 pub const EXTENSION_AUTHENTICATOR_PICKER_DESTINATION: &str =
@@ -831,6 +849,12 @@ pub const EXTENSION_DEVICE_SETUP_NODE_NEXT: &str = "extension.device_setup.node_
 pub const EXTENSION_DEVICE_SETUP_NODE_PASSKEY: &str = "extension.device_setup.node_passkey";
 pub const EXTENSION_DEVICE_SETUP_NODE_PIN: &str = "extension.device_setup.node_pin";
 pub const EXTENSION_DEVICE_SETUP_OPTIONS: &str = "extension.device_setup.options";
+pub const EXTENSION_DEVICE_SETUP_PASSKEY_CREATE_NOT_ALLOWED: &str =
+    "extension.device_setup.passkey_create_not_allowed";
+pub const EXTENSION_DEVICE_SETUP_PASSKEY_UNLOCK_NOT_ALLOWED: &str =
+    "extension.device_setup.passkey_unlock_not_allowed";
+pub const EXTENSION_DEVICE_SETUP_PASSKEY_USE_NOT_ALLOWED: &str =
+    "extension.device_setup.passkey_use_not_allowed";
 pub const EXTENSION_DEVICE_SETUP_PIN_SETUP_DESCRIPTION: &str =
     "extension.device_setup.pin_setup_description";
 pub const EXTENSION_DEVICE_SETUP_PIN_SETUP_TITLE: &str = "extension.device_setup.pin_setup_title";

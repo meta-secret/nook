@@ -1,0 +1,739 @@
+/* The Nook side panel: Chrome docks it full height at the browser edge,
+ * 320-600px wide. It is the vault app's shell column in miniature: a
+ * header band, the scrolling page and a status footer, divided by
+ * hairlines. Lists and bands stay square; the only frame is the window.
+ * Tokens and base element styles (button, .secondary-button, input,
+ * label, .error-message) come from popup.css. */
+
+html:has(.side-panel-body) {
+  background: var(--card);
+  scroll-padding-block: 64px 56px;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklch, var(--muted-foreground) 40%, transparent)
+    transparent;
+}
+
+.side-panel-body {
+  min-height: 100dvh;
+  background: var(--card);
+}
+
+.side-panel-body #app {
+  display: block;
+  min-height: 100dvh;
+  padding: 0;
+}
+
+.side-panel {
+  --side-panel-gutter: 16px;
+  --side-panel-control-border: color-mix(
+    in oklab,
+    var(--muted-foreground) 60%,
+    transparent
+  );
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 100dvh;
+  background: var(--card);
+  color: var(--foreground);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+@media (min-width: 440px) {
+  .side-panel {
+    --side-panel-gutter: 20px;
+  }
+}
+
+/* ---- Header band ------------------------------------------------------ */
+
+.side-panel-band {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  min-height: 56px;
+  padding: 10px var(--side-panel-gutter);
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
+}
+
+.side-panel-brand {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.side-panel-mark {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+.side-panel-brand-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.side-panel-brand-name {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+/* Status is a monospace tag with a square dot, never a coloured pill. */
+.side-panel-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.side-panel-state::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  background: currentColor;
+}
+
+.side-panel-state[data-state='unlocked'] {
+  color: var(--success);
+}
+
+.side-panel-state[data-state='setup']::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+
+.side-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+/* ---- Shared controls --------------------------------------------------- */
+
+.side-panel button {
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+.side-panel .side-panel-text-button {
+  position: relative;
+  min-height: 36px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.side-panel .side-panel-text-button:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.side-panel .side-panel-text-button:active:not(:disabled) {
+  background: var(--secondary);
+}
+
+.side-panel .side-panel-icon-button {
+  position: relative;
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted-foreground);
+}
+
+.side-panel .side-panel-icon-button:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+/* Open vault: a text link from 380px; below that an icon button beside
+ * Lock, so the band stays one row in every language. */
+.side-panel-open-vault-icon {
+  display: none;
+}
+
+@media (max-width: 379.98px) {
+  .side-panel .side-panel-open-vault {
+    justify-content: center;
+    width: 36px;
+    min-width: 36px;
+    padding: 0;
+    border: 1px solid var(--border);
+  }
+
+  .side-panel .side-panel-actions .side-panel-open-vault::after {
+    inset: -4px;
+  }
+
+  .side-panel-open-vault-icon {
+    display: block;
+  }
+
+  .side-panel-open-vault-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .side-panel-open-vault-arrow {
+    display: none;
+  }
+}
+
+/* 36px controls keep a 44px hit area. */
+.side-panel-text-button::after,
+.side-panel-icon-button::after,
+.side-panel-fill::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+}
+
+.side-panel .side-panel-text-button::after {
+  inset: -4px 0;
+}
+
+.side-panel button:active:not(:disabled, [aria-disabled='true']) {
+  transform: translateY(0.5px);
+}
+
+.side-panel :focus-visible {
+  outline: 2px solid var(--foreground);
+  outline-offset: 2px;
+}
+
+.side-panel [aria-disabled='true'] {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.side-panel [aria-busy='true'] {
+  cursor: progress;
+}
+
+.side-panel button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* ---- Page --------------------------------------------------------------- */
+
+.side-panel-page {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.side-panel-alert.error-message {
+  margin: 12px var(--side-panel-gutter) 0;
+}
+
+/* Setup, locked, no identity and failure: one centred column. */
+.side-panel-gate {
+  display: grid;
+  flex: 1;
+  align-content: center;
+  justify-items: center;
+  gap: 16px;
+  width: 100%;
+  max-width: calc(360px + 2 * var(--side-panel-gutter));
+  margin: 0 auto;
+  padding: 32px var(--side-panel-gutter) 48px;
+  text-align: center;
+}
+
+.side-panel-gate-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--border);
+  color: var(--muted-foreground);
+}
+
+.side-panel-gate-icon[data-tone='failure'] {
+  border-color: var(--destructive-border);
+  color: var(--destructive-fg);
+}
+
+.side-panel-gate-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  text-align: center;
+}
+
+.side-panel-gate-line {
+  max-width: 34ch;
+  margin: -6px 0 0;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.side-panel-gate-actions {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  margin-top: 4px;
+  text-align: left;
+}
+
+.side-panel-gate-actions > button {
+  width: 100%;
+  white-space: nowrap;
+}
+
+.side-panel-status-line {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+/* The shared device-protection ceremony (ExtensionDeviceProtection.svelte)
+ * inside a gate: its heading and line take the gate's type, its controls
+ * the column's width. The Nook tab frames the same ceremony its own way. */
+.side-panel-ceremony {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  width: 100%;
+}
+
+.side-panel-ceremony .device-protection-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  text-align: center;
+}
+
+.side-panel-ceremony .description {
+  max-width: 34ch;
+  margin: -6px 0 0;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.side-panel-ceremony > button,
+.side-panel-ceremony .device-protection-form,
+.side-panel-ceremony .setup-options,
+.side-panel-ceremony .error-message {
+  width: 100%;
+  text-align: left;
+}
+
+.side-panel-ceremony > button {
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.side-panel-ceremony .device-protection-form {
+  gap: 10px;
+}
+
+.side-panel-ceremony .device-protection-form label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.side-panel-ceremony .device-protection-form input {
+  border-color: var(--side-panel-control-border);
+}
+
+.side-panel-ceremony .device-protection-form input[aria-invalid='true'] {
+  border-color: var(--destructive-fg);
+}
+
+.side-panel-ceremony .device-protection-form button {
+  width: 100%;
+  margin-top: 4px;
+  white-space: nowrap;
+}
+
+.side-panel-ceremony .alternative-line {
+  max-width: 34ch;
+}
+
+.side-panel-ceremony .error-message {
+  animation: side-panel-enter 140ms ease-out;
+}
+
+/* ---- This site and identities ------------------------------------------ */
+
+.side-panel-section {
+  display: grid;
+  min-width: 0;
+}
+
+.side-panel-section + .side-panel-section {
+  border-top: 1px solid var(--border);
+}
+
+.side-panel-label {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.side-panel-site-heading {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 16px var(--side-panel-gutter) 12px;
+  font: inherit;
+  text-align: left;
+}
+
+/* The fill destination: never truncated, it wraps. */
+.side-panel-site-host {
+  color: var(--foreground);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.005em;
+  overflow-wrap: anywhere;
+}
+
+.side-panel-site-host.is-absent {
+  color: var(--muted-foreground);
+  font-weight: 500;
+}
+
+.side-panel-logins {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--border);
+  list-style: none;
+}
+
+.side-panel-login {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 12px;
+  min-height: 56px;
+  padding: 10px var(--side-panel-gutter);
+  border-bottom: 1px solid var(--border);
+}
+
+.side-panel-login:last-child {
+  border-bottom: 0;
+}
+
+.side-panel-login-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.side-panel-login-name,
+.side-panel-login-vault {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.side-panel-login-name {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.side-panel-login-vault {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.side-panel .side-panel-fill {
+  position: relative;
+  min-width: 64px;
+  min-height: 36px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.side-panel-login-result {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.side-panel-login-result svg,
+.side-panel-site-status svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+.side-panel-login-result[data-result='pending'] {
+  color: var(--muted-foreground);
+}
+
+.side-panel-login-result[data-result='filled'] {
+  color: var(--success);
+}
+
+.side-panel-login-result[data-result='failed'] {
+  color: var(--destructive-fg);
+}
+
+.side-panel-site-status {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  padding: 0 var(--side-panel-gutter) 16px;
+}
+
+.side-panel-site-status p {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.side-panel-site-status .side-panel-site-status-lead {
+  color: var(--foreground);
+}
+
+.side-panel-site-status .side-panel-site-status-failed {
+  color: var(--destructive-fg);
+}
+
+/* Site-changed note between the heading and a reloaded list. */
+.side-panel-site-status:has(+ .side-panel-logins) {
+  padding-bottom: 12px;
+}
+
+.side-panel-site-status .side-panel-text-button {
+  margin-left: -8px;
+}
+
+.side-panel-identities {
+  display: grid;
+  gap: 10px;
+  padding: 20px var(--side-panel-gutter) 16px;
+}
+
+.side-panel-identity-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.side-panel-identity {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.side-panel-identity:first-child {
+  border-top: 1px solid var(--border);
+}
+
+.side-panel-identity-name {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.side-panel-identity.is-other .side-panel-identity-name,
+.side-panel-identity.is-other .side-panel-vault {
+  color: var(--muted-foreground);
+}
+
+.side-panel-tag {
+  align-self: center;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  line-height: 1.4;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.side-panel-vaults {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  gap: 2px 12px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.4;
+  list-style: none;
+}
+
+.side-panel-vault {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.side-panel-vault.is-default {
+  color: var(--foreground);
+}
+
+.side-panel-vault.is-default::before {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin: 0 6px 1px 0;
+  background: var(--success);
+}
+
+.side-panel-note {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.side-panel-identities > .side-panel-text-button {
+  justify-self: start;
+  margin-left: -8px;
+}
+
+/* ---- Footer ------------------------------------------------------------- */
+
+.side-panel-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 6px var(--side-panel-gutter);
+  border-top: 1px solid var(--border);
+  background: var(--card);
+}
+
+.side-panel-footer .side-panel-text-button {
+  margin-left: -8px;
+}
+
+/* ---- Utilities and motion ---------------------------------------------- */
+
+.side-panel-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.side-panel-spin {
+  animation: side-panel-spin 800ms linear infinite;
+}
+
+.side-panel-login-result,
+.side-panel-status-line {
+  animation: side-panel-enter 140ms ease-out;
+}
+
+@keyframes side-panel-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@keyframes side-panel-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .side-panel-spin,
+  .side-panel-login-result,
+  .side-panel-status-line,
+  .side-panel-ceremony .error-message {
+    animation: none;
+  }
+
+  .side-panel button {
+    transition: none;
+  }
+
+  .side-panel button:active:not(:disabled, [aria-disabled='true']) {
+    transform: none;
+  }
+}

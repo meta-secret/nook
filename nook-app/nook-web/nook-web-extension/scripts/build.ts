@@ -21,6 +21,9 @@ import { extensionChannelIdentity } from './channel-identity'
 import {
   ExtensionDiagnosticBuildAvailability,
   ExtensionDiagnosticBuildPolicy,
+  ExtensionPageBuild,
+  ExtensionPageBuildPlan,
+  ExtensionPageOutput,
   extensionEntrypointBuildPolicy,
 } from './build-contract'
 
@@ -214,39 +217,30 @@ async function copyStaticFile(source: string, destination: string) {
   await copyFile(source, outputPath)
 }
 
-enum SveltePage {
-  Popup = 'popup',
-  LoginPicker = 'login-picker',
-}
+const extensionPageBuildPlan = new ExtensionPageBuildPlan()
 
-/** HTML entries per page build. The toolbar panel shares the popup build,
- * so both pages share one copy of each WASM binary in the package. */
-const sveltePageInputs: Record<SveltePage, readonly string[]> = {
-  [SveltePage.Popup]: ['index.html', 'panel.html'],
-  [SveltePage.LoginPicker]: ['index.html'],
-}
-
-async function buildSveltePage(page: SveltePage) {
+async function buildSveltePage(page: ExtensionPageBuild) {
   const { build: viteBuild } = await extensionBuildDependencyLoader.importVite()
   const { svelte, vitePreprocess } =
     await extensionBuildDependencyLoader.importSvelte()
+  const layout = extensionPageBuildPlan.layout(page)
+  const root = join(projectRoot, layout.root)
 
   await viteBuild({
-    root: join(projectRoot, `src/${page}`),
+    root,
     configFile: false,
     base: './',
     publicDir: false,
     plugins: [svelte({ preprocess: vitePreprocess({ script: true }) })],
     define: simpleVaultDefine,
     build: {
-      outDir: join(distDir, page),
-      emptyOutDir: true,
+      outDir: join(distDir, layout.outDir),
+      // Vite takes a flag: only a build that owns its directory empties it.
+      emptyOutDir: layout.output === ExtensionPageOutput.Owned,
       minify: false,
       sourcemap: true,
       rollupOptions: {
-        input: sveltePageInputs[page].map((html) =>
-          join(projectRoot, `src/${page}/${html}`),
-        ),
+        input: layout.inputs.map((html) => join(root, html)),
       },
     },
     resolve: {
@@ -274,8 +268,8 @@ await Promise.all([
 ])
 
 await Promise.all([
-  buildSveltePage(SveltePage.Popup),
-  buildSveltePage(SveltePage.LoginPicker),
+  buildSveltePage(ExtensionPageBuild.Pages),
+  buildSveltePage(ExtensionPageBuild.LoginPicker),
   buildChromeLocales({ appCommonLocalesRoot, distDir }),
 ])
 

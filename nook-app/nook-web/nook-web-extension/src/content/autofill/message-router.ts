@@ -27,6 +27,11 @@ import {
 } from './login-passkey-actions'
 import { loginSaveInteraction } from './login-save'
 import {
+  SidePanelLoginFillReception,
+  sidePanelLoginFill,
+  type SidePanelLoginFillDelivery,
+} from './side-panel-login-fill'
+import {
   PendingPickerTakeKind,
   pickerState,
   scanState,
@@ -62,6 +67,17 @@ export const routeAutofillMessage: AutofillMessageListener = (
 ) => {
   if (!runtimeMessage || typeof runtimeMessage !== 'object') return false
   const message = runtimeMessage
+  const sidePanelFill: SidePanelLoginFillDelivery = {
+    message,
+    sender,
+    sendResponse,
+  }
+  switch (sidePanelLoginFill.receive(sidePanelFill)) {
+    case SidePanelLoginFillReception.Responding:
+      return true
+    case SidePanelLoginFillReception.Ignored:
+      break
+  }
   const verification = Schema.decodeUnknownResult(LoginPickerPageVerification)(
     message,
   )
@@ -82,6 +98,7 @@ export const routeAutofillMessage: AutofillMessageListener = (
   ) {
     scanState.sequence += 1
     widgetState.busy = false
+    sidePanelLoginFill.withdraw()
     void clearAuthenticationSurface()
       .then(() => {
         scanState.schedule()
