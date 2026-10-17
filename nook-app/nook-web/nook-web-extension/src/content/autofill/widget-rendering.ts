@@ -1,4 +1,5 @@
 import { LoginChecklistMountKind } from './state'
+import { authenticatorHandOff } from './authenticator-hand-off'
 import type { AuthenticationAuthenticatorSetupSnapshot } from '../../lib/page-qr-capture'
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import { LoginChecklistProgress } from './login-checklist-progress'
@@ -462,6 +463,23 @@ class AuthenticationWidgetRenderer {
         break
       case SignInAttemptChallengeKind.Absent:
         break
+    }
+    // Fill 2FA code chosen on this document's login Pilot runs here once.
+    if (
+      snapshot.action === AuthenticationWorkflowAction.FillTotp &&
+      authenticatorHandOff.take()
+    ) {
+      const handOff: Parameters<
+        typeof authenticatorInteraction.continueWithAuthenticator
+      >[0] = {
+        workflow,
+        step,
+        title,
+        description,
+        continueButton,
+        approval: currentApproval,
+      }
+      void authenticatorInteraction.continueWithAuthenticator(handOff)
     }
 
     switch (snapshot.kind) {
