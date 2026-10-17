@@ -849,9 +849,7 @@ test('revalidate contextual email-first facts through Nook Pilot', async ({
   const widget = page.locator('#nook-auth-widget')
   await expect(widget.getByText('Nook Pilot · 1/3')).toBeVisible()
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
-  await expect(
-    widget.getByRole('button', { name: 'Sign in' }),
-  ).toBeVisible()
+  await expect(widget.getByRole('button', { name: 'Sign in' })).toBeVisible()
   await expect(page.locator('[name="email"]')).toBeVisible()
   await demoBeat(page)
 
@@ -968,9 +966,7 @@ test('detect a Facebook-like login under an aria-hidden consent layer', async ({
   const widget = page.locator('#nook-auth-widget')
   await expect(widget.getByText('Nook Pilot · 1/3')).toBeVisible()
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
-  await expect(
-    widget.getByRole('button', { name: 'Sign in' }),
-  ).toBeVisible()
+  await expect(widget.getByRole('button', { name: 'Sign in' })).toBeVisible()
   await expect(page.locator('[name="email"]')).toBeVisible()
   await expect(page.locator('[name="pass"]')).toBeVisible()
   await expect(page.getByTestId('companion-login-detection')).toHaveText(

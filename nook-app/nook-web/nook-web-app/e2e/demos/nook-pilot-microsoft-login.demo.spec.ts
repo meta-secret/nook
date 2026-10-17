@@ -100,9 +100,7 @@ test('retain Microsoft identifier login during adornment writes, then fill both 
   await expect(form).toHaveAttribute('data-stage', 'password')
   await expect(page.locator('#passwordEntry')).toBeVisible()
   await demoBeat(page)
-  await expect(
-    widget.getByRole('button', { name: 'Sign in' }),
-  ).toBeVisible()
+  await expect(widget.getByRole('button', { name: 'Sign in' })).toBeVisible()
   await widget.getByRole('button', { name: 'Sign in' }).click()
   await expect(form).toHaveAttribute(
     'data-password',

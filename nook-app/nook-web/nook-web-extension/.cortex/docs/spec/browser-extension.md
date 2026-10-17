@@ -522,7 +522,7 @@ username advance keeps its own continuation and is not a tracked attempt.
 `nook-companion-core` owns the record, transitions, reason and
 error-message classification, reset-link classification and revalidation,
 timeout and expiry, offered actions, message keys and the presentation; see
-the [sign-in attempt lifecycle architecture](../../../../../nook-platform/nook-companion-core/.cortex/docs/architecture/index.md).
+the [sign-in attempt lifecycle architecture](../../../../../nook-platform/nook-companion-core/.cortex/docs/architecture/sign-in-attempt-lifecycle.md).
 When failure is established but its reason is not clearly classified, Pilot
 shows **Sign-in failed** with the unknown reason; it never guesses a
 category. **Try again** is an explicit user action that closes the old attempt
