@@ -137,8 +137,11 @@ describe('sign-in attempt follow-ups', () => {
     await signInAttemptSession.choose(PilotExpectation.offer('ResetPassword'))
     expect(originalClicks.count).toBe(0)
     expect(replacementClicks.count).toBe(0)
-    // Nothing is clicked or reported: the Pilot stays as it is.
-    expect(surface.title.textContent).toBe('widgetSignInFailed')
+    // Nothing is clicked; the closed attempt says so and returns to fresh.
+    await PilotExpectation.eventually(
+      () => surface.description.textContent === 'widgetSignInActionUnavailable',
+    )
+    expect(surface.title.textContent).toBe('Ready to sign in')
   })
 
   test('Try again restarts the same login through the Pilot fill path', async () => {

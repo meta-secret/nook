@@ -514,7 +514,13 @@ login workflow:
   visibly instead of disappearing.
 - **Verification needed**: a 2FA field hands off to the existing
   authenticator picker (**Fill 2FA code**); a CAPTCHA or manual checkpoint
-  shows take-over guidance.
+  shows take-over guidance. When **Fill 2FA code** is chosen on the
+  login Pilot of a same-page 2FA step, that Pilot owns no one-time-code
+  field binding, so the choice is carried once to the authenticator Pilot
+  the next scan mounts. It only opens the authenticator picker (the code is
+  filled after the person picks an authenticator), is bound to the same
+  document, origin and frame, lapses after five seconds, and is cleared by
+  any other user action or navigation.
 - **Sign-in not confirmed**: no decisive response within the Rust-owned
   outcome budget, with **Try again** and **Dismiss**.
 - **Dismissed**: the user ended the attempt; an in-flight attempt shows the
@@ -583,7 +589,8 @@ where a login form exists, otherwise no sign-in Pilot at all.
   and visible, sends its fresh facts to Rust for reclassification, and only
   then activates that same element, while its fresh facts still match what
   Rust revalidated. If the element was replaced or changed meanwhile,
-  nothing is clicked and the Pilot stays as it is.
+  nothing is clicked; Pilot says the action could not run and returns to
+  its fresh state.
 - The site message is rendered with `textContent` only.
 
 - Single-page-app limitation: when a site re-renders an identical message
@@ -615,6 +622,10 @@ where a login form exists, otherwise no sign-in Pilot at all.
   than assumed harmless: it lives only in trusted extension contexts, is
   never logged, is cleared when the attempt is resolved or the tab closes,
   and is shown only on the exact origin that recorded it.
+- The login item identity is the reference `${vaultStoreId}/${secretId}`.
+  The secret id may be a human label or a URL, so it is treated as opaque:
+  Rust bounds it at 1,024 bytes and rejects control characters and blank
+  components, it is never logged, and it is cleared with the record.
 - Lifetime: Rust closes the record on **Signed in** (after the presentation is
   delivered), **Dismiss**, **Try again**, **Choose another login**, **Reset
   password** and **Fill 2FA code**; the service worker removes it on that

@@ -2,36 +2,88 @@ enum AuthenticatorHandOffKind {
   None = 'none',
   Requested = 'requested',
 }
+type AuthenticatorHandOffRequest = {
+  readonly at: number
+  readonly document: Document
+  readonly origin: string
+  readonly topFrame: boolean
+}
 type AuthenticatorHandOffState =
   | { readonly kind: AuthenticatorHandOffKind.None }
-  | { readonly kind: AuthenticatorHandOffKind.Requested; readonly at: number }
+  | {
+      readonly kind: AuthenticatorHandOffKind.Requested
+      readonly request: AuthenticatorHandOffRequest
+    }
 
 /**
- * The person chose Fill 2FA code on the login Pilot of a sign-in attempt.
- * The login Pilot has no one-time-code controls, so the choice is carried to
- * the authenticator Pilot the next scan mounts on this document, which then
- * runs its own Fill 2FA code path once. The request lapses quickly so it can
- * never act on a later, unrelated 2FA step.
+ * Fill 2FA code chosen on a sign-in attempt's login Pilot. That Pilot owns
+ * no one-time-code field binding: the field, its Rust workflow approval and
+ * the picker request belong to the authenticator Pilot the next scan mounts
+ * for the 2FA step. So the choice is carried to that Pilot, which only OPENS
+ * the existing authenticator picker; the code is filled only after the
+ * person explicitly picks an authenticator there.
+ *
+ * The carry is single use, bound to this document, origin and frame, lapses
+ * after five seconds, and is cleared by any other user action or navigation.
  */
 class AuthenticatorHandOff {
   static readonly LIFETIME_MS = 5_000
+  static readonly CLEARING_EVENTS = [
+    'pointerdown',
+    'keydown',
+    'submit',
+    'pagehide',
+  ] as const
   private state: AuthenticatorHandOffState = {
     kind: AuthenticatorHandOffKind.None,
   }
-
-  request(): void {
-    this.state = { kind: AuthenticatorHandOffKind.Requested, at: Date.now() }
+  private readonly clear = (): void => {
+    this.reset()
   }
 
-  /** Consumes a fresh request; a lapsed or absent one is not acted on. */
+  request(): void {
+    this.reset()
+    this.state = {
+      kind: AuthenticatorHandOffKind.Requested,
+      request: this.facts(),
+    }
+    for (const type of AuthenticatorHandOff.CLEARING_EVENTS) {
+      window.addEventListener(type, this.clear, true)
+    }
+  }
+
+  /** Consumes the request if it is fresh and still for this document. */
   take(): boolean {
     const state = this.state
-    this.state = { kind: AuthenticatorHandOffKind.None }
+    this.reset()
     switch (state.kind) {
       case AuthenticatorHandOffKind.None:
         return false
       case AuthenticatorHandOffKind.Requested:
-        return Date.now() - state.at <= AuthenticatorHandOff.LIFETIME_MS
+        break
+    }
+    const now = this.facts()
+    return (
+      now.at - state.request.at <= AuthenticatorHandOff.LIFETIME_MS &&
+      now.document === state.request.document &&
+      now.origin === state.request.origin &&
+      now.topFrame === state.request.topFrame
+    )
+  }
+
+  private reset(): void {
+    this.state = { kind: AuthenticatorHandOffKind.None }
+    for (const type of AuthenticatorHandOff.CLEARING_EVENTS) {
+      window.removeEventListener(type, this.clear, true)
+    }
+  }
+
+  private facts(): AuthenticatorHandOffRequest {
+    return {
+      at: Date.now(),
+      document,
+      origin: location.origin,
+      topFrame: window === window.top,
     }
   }
 }

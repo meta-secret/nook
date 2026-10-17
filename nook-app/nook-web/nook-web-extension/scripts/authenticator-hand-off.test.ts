@@ -1,7 +1,21 @@
-import { afterEach, describe, expect, spyOn, test } from 'bun:test'
+import { afterEach, beforeAll, describe, expect, spyOn, test } from 'bun:test'
+import { Window } from 'happy-dom'
 import { authenticatorHandOff } from '../src/content/autofill/authenticator-hand-off'
 
+type HandOffGlobals = Pick<Window, 'document' | 'location'> & {
+  window: Window
+}
+
 describe('authenticator hand-off from the login Pilot', () => {
+  const browser = new Window({ url: 'https://www.namecheap.com/twofa/' })
+  beforeAll(() => {
+    const globals: HandOffGlobals = {
+      window: browser,
+      document: browser.document,
+      location: browser.location,
+    }
+    Object.assign(globalThis, globals)
+  })
   afterEach(() => {
     authenticatorHandOff.take()
   })
@@ -13,6 +27,12 @@ describe('authenticator hand-off from the login Pilot', () => {
   })
 
   test('nothing is taken without a choice', () => {
+    expect(authenticatorHandOff.take()).toBe(false)
+  })
+
+  test('any other user action clears the choice', () => {
+    authenticatorHandOff.request()
+    browser.dispatchEvent(new browser.KeyboardEvent('keydown'))
     expect(authenticatorHandOff.take()).toBe(false)
   })
 

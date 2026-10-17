@@ -33,6 +33,7 @@ import type {
   SignInAttemptLoginReference,
   SignInAttemptPresentation,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import { SignInAttemptRendering } from './sign-in-attempt-rendering'
 import {
   SignInAttemptPhaseKind,
@@ -273,6 +274,15 @@ export class LoginChecklistProgress implements SignInAttemptHost {
   unavailable(): void {
     this.attemptRendering.clear()
     this.rendering.unavailable()
+  }
+
+  /** The fresh Pilot returns with a visible note that the choice could not run. */
+  refuse(): void {
+    void this.releaseToFresh().then(() => {
+      this.mount.surface.description.textContent = workflowUi.translatedMessage(
+        BROWSER_MESSAGE_KEYS.WidgetSignInActionUnavailable,
+      )
+    })
   }
 
   /** Follow-ups run from the fresh Pilot through its live form controls. */

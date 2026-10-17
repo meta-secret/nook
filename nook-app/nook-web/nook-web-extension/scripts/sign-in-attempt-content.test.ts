@@ -268,7 +268,17 @@ describe('sign-in attempt evidence sensor', () => {
       !(password instanceof HTMLInputElement)
     )
       throw new Error('expected the login fields')
-    for (const field of [username, password]) {
+    // A distinctive value in an input right next to the message, and one
+    // inside a live region with message text.
+    const near = document.createElement('input')
+    near.name = 'otp-hint'
+    const live = document.createElement('div')
+    live.setAttribute('aria-live', 'polite')
+    live.textContent = 'Check the code we sent you.'
+    const inLive = document.createElement('input')
+    live.append(inLive)
+    document.querySelector('.login-notice')?.after(near, live)
+    for (const field of [username, password, near, inLive]) {
       field.value = secret
       field.setAttribute('value', secret)
     }
@@ -286,8 +296,9 @@ describe('sign-in attempt evidence sensor', () => {
     // The sensor did read this form and its banner.
     expect(page.auth_fields.current_password_present).toBe(true)
     expect(page.messages.length).toBeGreaterThan(0)
-    expect(JSON.stringify(page)).not.toContain(secret)
-    expect(JSON.stringify(capture.baseline)).not.toContain(secret)
+    const collected = JSON.stringify([page, capture.baseline])
+    expect(collected).toContain('Your account has been locked')
+    expect(collected).not.toContain(secret)
   })
 
   test('an aria-live wrapper around the form is not a message; its alert is', async () => {

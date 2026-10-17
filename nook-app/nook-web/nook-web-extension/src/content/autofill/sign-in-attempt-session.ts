@@ -66,6 +66,8 @@ export interface SignInAttemptHost {
   unavailable(): void
   /** Performs a follow-up; the host leaves the attempt presentation itself. */
   run(action: SignInAttemptHostAction): void
+  /** A chosen action could not run on this page: say so, then show the fresh state. */
+  refuse(): void
   disable(offer: SignInAttemptActionOffer): void
 }
 
@@ -592,11 +594,13 @@ export class SignInAttemptSession {
     this.pendingReset = { kind: PendingResetKind.None }
     switch (pending.kind) {
       case PendingResetKind.None:
+        this.hostRefuse()
         return
       case PendingResetKind.Chosen:
         break
     }
-    // On any mismatch nothing is clicked or reported: the Pilot stays as it is.
+    // On any mismatch nothing is clicked; Rust already closed the record, so
+    // the Pilot says the action could not run and returns to its fresh state.
     switch (
       pending.target.link.index === index &&
       this.dependencies.sensor.confirm(pending.target)
@@ -606,7 +610,16 @@ export class SignInAttemptSession {
         pending.target.element.click()
         return
       case false:
+        this.hostRefuse()
+    }
+  }
+
+  private hostRefuse(): void {
+    switch (this.binding.kind) {
+      case SignInAttemptHostBindingKind.Detached:
         return
+      case SignInAttemptHostBindingKind.Attached:
+        this.binding.host.refuse()
     }
   }
 
@@ -663,11 +676,15 @@ export class SignInAttemptSession {
         break
     }
     this.report = EvidenceReport.Sending
-    // A report that fails is retried on the next mutation or tick.
     const idle = () => {
       this.report = EvidenceReport.Idle
     }
-    void this.observe().then(idle, idle)
+    // A report that cannot be made leaves the attempt owner unreachable here.
+    const failed = () => {
+      idle()
+      this.accept(SignInAttemptSession.UNAVAILABLE)
+    }
+    void this.observe().then(idle, failed)
   }
 
   /** A page that cannot be observed now is observed again on the next tick. */
