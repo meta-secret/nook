@@ -41,8 +41,8 @@ test('recognize and fill a local login inside a page-wide form with named metada
   await expect(page.locator('.loginForm [name="LoginPassword"]')).toHaveValue(
     '',
   )
-  await widget.getByRole('button', { name: 'Continue with Nook' }).click()
-  await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+  await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
+  await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
 
   await expect(page.locator('.loginForm [name="LoginUserName"]')).toHaveValue(
     'pilot@example.test',

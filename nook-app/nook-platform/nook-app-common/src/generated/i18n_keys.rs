@@ -706,6 +706,26 @@ pub const ERRORS_VAULT_UNLOCK_METADATA_UNAVAILABLE: &str =
     "errors.vault_unlock_metadata_unavailable";
 pub const ERRORS_WHOLE_VAULT_CONFLICT_RESOLUTION_RETIRED: &str =
     "errors.whole_vault_conflict_resolution_retired";
+pub const EXTENSION_ACTION_CONNECT_ANOTHER: &str = "extension.action.connect_another";
+pub const EXTENSION_ACTION_CONNECT_IDENTITY: &str = "extension.action.connect_identity";
+pub const EXTENSION_ACTION_IDENTITIES: &str = "extension.action.identities";
+pub const EXTENSION_ACTION_LOCK: &str = "extension.action.lock";
+pub const EXTENSION_ACTION_LOCK_FAILED: &str = "extension.action.lock_failed";
+pub const EXTENSION_ACTION_MANAGE: &str = "extension.action.manage";
+pub const EXTENSION_ACTION_NO_IDENTITY: &str = "extension.action.no_identity";
+pub const EXTENSION_ACTION_OPEN_FAILED: &str = "extension.action.open_failed";
+pub const EXTENSION_ACTION_OPEN_VAULT: &str = "extension.action.open_vault";
+pub const EXTENSION_ACTION_OPEN_VAULT_HINT: &str = "extension.action.open_vault_hint";
+pub const EXTENSION_ACTION_OTHER_IDENTITY: &str = "extension.action.other_identity";
+pub const EXTENSION_ACTION_PIN_LABEL: &str = "extension.action.pin_label";
+pub const EXTENSION_ACTION_SET_UP: &str = "extension.action.set_up";
+pub const EXTENSION_ACTION_SET_UP_HINT: &str = "extension.action.set_up_hint";
+pub const EXTENSION_ACTION_STATE_LOCKED: &str = "extension.action.state_locked";
+pub const EXTENSION_ACTION_STATE_SETUP: &str = "extension.action.state_setup";
+pub const EXTENSION_ACTION_STATE_UNLOCKED: &str = "extension.action.state_unlocked";
+pub const EXTENSION_ACTION_UNLOCK: &str = "extension.action.unlock";
+pub const EXTENSION_ACTION_UNLOCK_FAILED: &str = "extension.action.unlock_failed";
+pub const EXTENSION_ACTION_UNLOCK_PASSKEY_HINT: &str = "extension.action.unlock_passkey_hint";
 pub const EXTENSION_AUTHENTICATOR_PICKER_DESCRIPTION: &str =
     "extension.authenticator_picker.description";
 pub const EXTENSION_AUTHENTICATOR_PICKER_DESTINATION: &str =
@@ -724,10 +744,18 @@ pub const EXTENSION_AUTHENTICATOR_PICKER_STEP_LABEL: &str =
     "extension.authenticator_picker.step_label";
 pub const EXTENSION_AUTHENTICATOR_PICKER_TITLE: &str = "extension.authenticator_picker.title";
 pub const EXTENSION_COMPANION_CONNECT_ANOTHER: &str = "extension.companion.connect_another";
+pub const EXTENSION_COMPANION_CONNECT_IDENTITY_FAILED: &str =
+    "extension.companion.connect_identity_failed";
 pub const EXTENSION_COMPANION_CONNECT_VAULT: &str = "extension.companion.connect_vault";
 pub const EXTENSION_COMPANION_DEFAULT_VAULT: &str = "extension.companion.default_vault";
 pub const EXTENSION_COMPANION_DEFAULT_VAULT_HINT: &str = "extension.companion.default_vault_hint";
 pub const EXTENSION_COMPANION_FILLS_PASSWORDS: &str = "extension.companion.fills_passwords";
+pub const EXTENSION_COMPANION_IDENTITY_SYNC_AWAITING: &str =
+    "extension.companion.identity_sync_awaiting";
+pub const EXTENSION_COMPANION_IDENTITY_SYNC_CHECKING: &str =
+    "extension.companion.identity_sync_checking";
+pub const EXTENSION_COMPANION_IDENTITY_SYNC_FAILED: &str =
+    "extension.companion.identity_sync_failed";
 pub const EXTENSION_COMPANION_ITEM_COUNT: &str = "extension.companion.item_count";
 pub const EXTENSION_COMPANION_MAKE_DEFAULT: &str = "extension.companion.make_default";
 pub const EXTENSION_COMPANION_MAKE_DEFAULT_FAILED: &str = "extension.companion.make_default_failed";
@@ -740,6 +768,8 @@ pub const EXTENSION_COMPANION_PILOT_RETURN_GUIDANCE: &str =
     "extension.companion.pilot_return_guidance";
 pub const EXTENSION_COMPANION_STEP_LABEL: &str = "extension.companion.step_label";
 pub const EXTENSION_COMPANION_UNLOCKED: &str = "extension.companion.unlocked";
+pub const EXTENSION_COMPANION_USE_IDENTITY: &str = "extension.companion.use_identity";
+pub const EXTENSION_COMPANION_USE_IDENTITY_FAILED: &str = "extension.companion.use_identity_failed";
 pub const EXTENSION_COMPANION_VAULTS_HINT: &str = "extension.companion.vaults_hint";
 pub const EXTENSION_COMPANION_VAULTS_TITLE: &str = "extension.companion.vaults_title";
 pub const EXTENSION_CONNECT_CONTINUE: &str = "extension.connect.continue";
@@ -788,6 +818,12 @@ pub const EXTENSION_DEVICE_SETUP_CREATE_DESCRIPTION: &str =
 pub const EXTENSION_DEVICE_SETUP_CREATE_ONE: &str = "extension.device_setup.create_one";
 pub const EXTENSION_DEVICE_SETUP_CREATE_TITLE: &str = "extension.device_setup.create_title";
 pub const EXTENSION_DEVICE_SETUP_HAVE_PASSKEY: &str = "extension.device_setup.have_passkey";
+pub const EXTENSION_DEVICE_SETUP_IDENTITY_KEY_CANCEL: &str =
+    "extension.device_setup.identity_key_cancel";
+pub const EXTENSION_DEVICE_SETUP_IDENTITY_KEY_DESCRIPTION: &str =
+    "extension.device_setup.identity_key_description";
+pub const EXTENSION_DEVICE_SETUP_IDENTITY_KEY_TITLE: &str =
+    "extension.device_setup.identity_key_title";
 pub const EXTENSION_DEVICE_SETUP_NO_PASSKEY: &str = "extension.device_setup.no_passkey";
 pub const EXTENSION_DEVICE_SETUP_NODE_EXTENSION: &str = "extension.device_setup.node_extension";
 pub const EXTENSION_DEVICE_SETUP_NODE_IDENTITY: &str = "extension.device_setup.node_identity";
@@ -853,6 +889,7 @@ pub const EXTENSION_REQUEST_BODY: &str = "extension.request.body";
 pub const EXTENSION_REQUEST_EYEBROW: &str = "extension.request.eyebrow";
 pub const EXTENSION_REQUEST_NO_VAULTS: &str = "extension.request.no_vaults";
 pub const EXTENSION_REQUEST_TITLE: &str = "extension.request.title";
+pub const EXTENSION_REQUEST_UNLOCK_IDENTITY: &str = "extension.request.unlock_identity";
 pub const EXTENSION_REQUEST_VAULT_ACTION: &str = "extension.request.vault_action";
 pub const EXTENSION_REQUEST_VAULTS: &str = "extension.request.vaults";
 pub const EXTENSION_SETUP_BROWSER_ACCESS_DESCRIPTION: &str =

@@ -55,8 +55,10 @@ export type ExtensionLifecycleRoutingDependencies = {
   handlePairingStateQuery: typeof PairingStateQuery.handlePairingStateQuery
   handlePairedVaultsQuery: typeof PairedVaults.handlePairedVaultsQuery
   handleDefaultVaultSelect: typeof PairedVaults.handleDefaultVaultSelect
+  handleIdentityVaultsRefresh: typeof PairedVaults.handleIdentityVaultsRefresh
   decodePairedVaultsQueryMessage: typeof PairedVaultsMessages.pairedVaultsMessages.decodeQuery
   decodeDefaultVaultSelectMessage: typeof PairedVaultsMessages.pairedVaultsMessages.decodeSelectDefault
+  decodeIdentityVaultsRefreshMessage: typeof PairedVaultsMessages.pairedVaultsMessages.decodeRefreshIdentity
   decodePairingApprovedMessage: typeof RuntimeMessages.ExtensionPairingApprovedMessage.decode
   importLocalEventLogUpdate: typeof PairingImport.importLocalEventLogUpdate
   importPairingAfterCompanionReady: typeof PairingImport.importPairingAfterCompanionReady
@@ -464,8 +466,10 @@ export function routeExtensionLifecycleMessage({
     handlePairingStateQuery,
     handlePairedVaultsQuery,
     handleDefaultVaultSelect,
+    handleIdentityVaultsRefresh,
     decodePairedVaultsQueryMessage,
     decodeDefaultVaultSelectMessage,
+    decodeIdentityVaultsRefreshMessage,
     decodePairingApprovedMessage,
     importLocalEventLogUpdate,
     importPairingAfterCompanionReady,
@@ -520,6 +524,19 @@ export function routeExtensionLifecycleMessage({
       vaultStoreId: defaultVaultSelect.value.vaultStoreId,
     }
     return handleDefaultVaultSelect(selectContext)
+  }
+
+  const identityVaultsRefresh = runConcreteDecoder(
+    decodeIdentityVaultsRefreshMessage,
+    message,
+  )
+  if (identityVaultsRefresh.kind === ConcreteDecoderResultKind.Decoded) {
+    const refreshContext: Parameters<typeof handleIdentityVaultsRefresh>[0] = {
+      sender,
+      sendResponse,
+      deviceId: identityVaultsRefresh.value.deviceId,
+    }
+    return handleIdentityVaultsRefresh(refreshContext)
   }
 
   const sessionEnsure = runConcreteDecoder(

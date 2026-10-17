@@ -130,7 +130,7 @@ class FocusedGooglePopupScenario {
       )
       yield* Effect.tryPromise(() => expect(username).toHaveValue(''))
       const continueChoice: FocusedPopupButtonChoice = {
-        name: 'Continue with Nook',
+        name: 'Sign in with Nook',
       }
       yield* Effect.tryPromise(() =>
         widget.getByRole('button', continueChoice).click(),
@@ -214,7 +214,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       ).toHaveText('Matching saved logins: 2')
       await expect(
         widget.getByText(
-          'Multiple saved logins match this site. Continue shows the choices here. Nook fills and submits only after you choose one.',
+          'Multiple saved logins match this site. Sign in with Nook shows the choices here. Nook fills and submits only after you choose one.',
         ),
       ).toBeVisible()
       await expect(widget.getByText('Mock auth chooser vault')).toHaveCount(0)
@@ -228,7 +228,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
           throw new Error('Login selection must stay in the inline panel')
         }
       })
-      await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+      await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
       await expect(widget.getByText('alice@nook.test')).toHaveCount(0)
       await expect(widget.getByText('bob@nook.test')).toHaveCount(0)
       const iframe = widget.getByTestId('nook-inline-login-picker')

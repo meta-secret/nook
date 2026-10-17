@@ -48,14 +48,19 @@ application capability checks enforce the vault-type boundary.
 
 - **`simple.nokey.sh`**
   - **Responsibility:** Complete vault UI, unlock, consent, device management, recovery, and settings
-- **Extension toolbar action and Pilot lock entry**
+- **Extension toolbar panel**
+  - **Responsibility:** The compact panel beside the toolbar icon: Open vault
+    first, the connected identities, PIN unlock and lock. It hands passkey
+    unlock, setup and identity connection to the authentication tab, because a
+    passkey prompt closes a toolbar panel.
+- **Authentication tab and Pilot lock entry**
   - **Responsibility:** Open or focus the shared extension-owned authentication
     tab; create or unlock the extension device there and show localized return
     guidance for Pilot
 - **Extension background/WASM runtime**
   - **Responsibility:** Local device key, selected identity, encrypted state, sync, domain matching, and fill authorization
 - **In-page auth gate**
-  - **Responsibility:** Universal Continue with Nook gate plus optional open/unlock/select/fill/save actions
+  - **Responsibility:** Universal Sign in with Nook gate plus optional unlock/select/fill/save actions
 - **Content script**
   - **Responsibility:** DOM detection and the minimum selected fill payload; never vault search, crypto, or provider credentials
 
@@ -151,7 +156,12 @@ private identity.
 
 ## Toolbar Behavior
 
-- The toolbar action and Pilot lock entry use the same extension-owned
+- The toolbar icon opens a compact panel beside itself
+  (`popup/panel.html`). It leads with Open vault, lists the connected
+  identities and their vaults, unlocks a PIN-protected key in place, and locks.
+  Passkey unlock, first setup, connecting an identity and All connections open
+  the authentication tab, since a passkey prompt would close the panel.
+- The Pilot lock entry and the panel's hand-offs use the same extension-owned
   authentication component per initiating normal window. The service worker
   focuses an existing tab only when its intent matches the requested action; it
   leaves a different-intent auth tab untouched and opens the requested intent
@@ -178,9 +188,12 @@ private identity.
 - One paired vault is the default: new logins are saved there and it leads
   every list. Make default on another row rewrites only the setup record
   (`select_default_vault` in the companion core); grants are untouched.
-- Connect another vault starts pairing (it is the primary action while no
+- Connect another identity starts pairing (it is the primary action while no
   vault is paired, or when the tab was opened to pair); Open Nook opens the
-  web app.
+  web app. When the unlocked key already belongs to a replicated identity, the
+  next identity first gets its own key (see Identity membership).
+- A group whose key is not the unlocked one offers Use this identity: the
+  extension selects that identity and asks for its own unlock.
 - The tab starts the Simple Vault approval route only after an explicit
   Connect / pair action (or Open Simple Vault).
 - The Simple Vault header vault menu lists every local vault in the viewport.
@@ -668,13 +681,14 @@ The gate must:
 
 - be visibly Nook-owned and keyboard accessible;
 - be draggable so the user can move it away from site chrome;
-- support collapsing to a compact Nook mark and expanding again;
+- support collapsing to a compact chip (the Nook mark beside the step count,
+  nothing overlapping it) and expanding again;
 - preserve current/total progress in the compact state and accessible label;
 - support dismissal without blocking the host page;
 - show the requesting hostname, Rust-classified workflow, current step, and
   manual takeover without exposing a username, password, TOTP code, setup key,
   recovery code, or provider credential;
-- offer a primary Continue with Nook action that lists matching logins for the
+- offer one primary Sign in with Nook action that lists matching logins for the
   page origin. Reveal one credential after explicit choice and fill a detected
   form. Require explicit submission approval except for the
   [selected Google username advance](#google-two-step-login).
@@ -682,7 +696,8 @@ The gate must:
   page in status/Continue mode.
   After unlock, show localized return guidance and require a fresh Continue click
   with existing origin/workflow revalidation before any page interaction;
-- keep Open vault as an optional secondary action;
+- keep the panel to that one action: Open vault lives in the toolbar panel,
+  and the close button is how the person takes over the page;
 - never request a vault password, recovery secret, or provider credential;
 - never silently fill or submit;
 - when more than one login matches the page origin, open an extension-owned
@@ -741,6 +756,38 @@ authority. The field is additive and decoded with a serde default, so grants
 stored before it existed read back with an empty label and need no migration;
 re-pairing the vault records the label. Approvals from a web app that predates
 the field are admitted with an empty label.
+
+### Identity membership
+
+The extension is a member device of each identity it connects, the way a new
+phone or computer is.
+
+- **Join:** An approval carries an identity invite whose passphrase is sealed
+  to the extension's app key. The offscreen session opens it, binds the key's
+  local identity to the invited identity, signs the join, and pairs the
+  identity's other vaults through the same import as the approved vault. An
+  identity with no cloud sync provider pairs only the approved vault.
+- **Later vaults:** After each unlock in the popup, the extension unions the
+  unlocked identity's log with every sync provider that replicates it and
+  pairs each vault the identity grants it and it holds no grant for. Rust
+  plans the vaults (`IdentityVaultPairingPlan`); vaults the identity has not
+  granted it yet are reported, not skipped. A failed refresh or vault shows an
+  error and pairs nothing further.
+  - The refresh reply names provider ids only. The identity's provider stays
+    saved in the session, so no credential travels to the service worker.
+- **One key per identity:** The identity directory binds one app key to one
+  local identity, as on the web app. Rust decides which key connects the next
+  identity (`IdentityDirectory::connection_key`):
+  - a key whose identity has no replicated log keeps connecting vaults itself,
+    including vaults paired one by one;
+  - a key of a replicated identity stages a new local identity, whose passkey
+    or PIN setup creates the key the next approval is sealed to.
+- **Binding:** `IdentityDirectory::invitation_binding` refuses an invite for a
+  key that already belongs to another identity, and an identity another local
+  key already holds, instead of merging identities.
+- **Switching:** One identity is unlocked at a time. Grants keep their key's app
+  id, so the popup groups vaults by key and offers Use this identity for the
+  others, which selects that identity and locks the current one.
 
 - **Installation key:** Create an extension-specific Nook device key instead of
   reusing or scraping the `simple.nokey.sh` browser private key.

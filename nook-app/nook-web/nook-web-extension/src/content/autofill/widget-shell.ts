@@ -3,10 +3,6 @@ import {
   BROWSER_MESSAGE_KEYS,
   type BrowserMessageKey,
 } from '../../lib/browser-message-keys'
-import {
-  OpenSimpleVaultMessageType,
-  type OpenSimpleVaultMessage,
-} from '../../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
 
 import {
   type EnrollmentFlowHost,
@@ -99,7 +95,7 @@ const WIDGET_PANEL_STYLES = `
     .panel.is-collapsed {
       width: auto;
       gap: 0;
-      padding: 0 4px 4px 0;
+      padding: 0;
       overflow: visible;
       background: transparent;
       clip-path: none;
@@ -260,39 +256,47 @@ const WIDGET_PANEL_STYLES = `
       min-height: 44px;
       margin: 0 auto;
     }
+    /* Folded, Pilot is one keytag-cut chip: the mark and the step count
+     * side by side, nothing overlapping or spilling outside it. */
     .collapsed-launch {
       appearance: none;
       position: relative;
-      display: grid;
-      place-items: center;
-      width: 52px;
-      height: 52px;
-      padding: 0;
-      border: 1px solid var(--nk-border);
-      background: var(--nk-card);
+      isolation: isolate;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      height: 40px;
+      padding: 0 14px 0 9px;
+      border: 0;
+      background: var(--nk-border);
+      color: var(--nk-fg);
       cursor: grab;
       touch-action: none;
+      clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
     }
-    .collapsed-launch:hover {
+    .collapsed-launch::before {
+      content: '';
+      position: absolute;
+      inset: 1px;
+      z-index: -1;
+      background: var(--nk-card);
+      clip-path: polygon(0 0, calc(100% - 10px + 0.41px) 0, 100% calc(10px - 0.41px), 100% 100%, 0 100%);
+    }
+    .collapsed-launch:hover::before {
       background: var(--nk-raised);
     }
     .collapsed-mark {
       display: block;
-      width: 34px;
-      height: 34px;
+      flex: none;
+      width: 22px;
+      height: 22px;
       object-fit: contain;
       pointer-events: none;
     }
     .collapsed-progress {
-      position: absolute;
-      right: -5px;
-      bottom: -5px;
-      min-width: 22px;
-      padding: 3px 5px;
-      border: 1px solid var(--nk-border);
-      background: var(--nk-primary);
-      color: var(--nk-primary-fg);
-      font: 600 10px/1 var(--nk-mono);
+      color: var(--nk-muted);
+      font: 600 11px/1 var(--nk-mono);
+      letter-spacing: 0.06em;
       pointer-events: none;
     }
     .account-list {
@@ -358,7 +362,6 @@ type BuildEnrollmentFlowHostArgs = {
   title: HTMLHeadingElement
   description: HTMLParagraphElement
   continueButton: HTMLButtonElement
-  openVaultButton: HTMLButtonElement
 }
 
 interface WidgetShell {
@@ -370,7 +373,6 @@ interface WidgetShell {
   title: HTMLHeadingElement
   description: HTMLParagraphElement
   continueButton: HTMLButtonElement
-  openVaultButton: HTMLButtonElement
   collapseButton: HTMLButtonElement
   collapsedLaunch: HTMLButtonElement
 }
@@ -431,7 +433,6 @@ class AuthenticationWidgetShell {
     title,
     description,
     continueButton,
-    openVaultButton,
   }: BuildEnrollmentFlowHostArgs): EnrollmentFlowHost {
     return {
       authenticatorSetupSnapshot,
@@ -440,7 +441,6 @@ class AuthenticationWidgetShell {
       title,
       description,
       continueButton,
-      openVaultButton,
       setBusy: (value: boolean) => {
         this.ui.widgetState.busy = value
       },
@@ -583,6 +583,9 @@ class AuthenticationWidgetShell {
       'aria-label',
       workflowUi.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetDismiss),
     )
+    dismissButton.title = workflowUi.translatedMessage(
+      BROWSER_MESSAGE_KEYS.WidgetDismiss,
+    )
     dismissButton.addEventListener('click', () => {
       authenticatorInteraction.cancelPendingAuthenticatorPickerRequest()
       loginPasskeyInteraction.cancelPendingLoginPickerRequest()
@@ -633,28 +636,13 @@ class AuthenticationWidgetShell {
     continueButton.type = 'button'
     continueButton.className = 'primary-button'
 
-    const openVaultButton = document.createElement('button')
-    openVaultButton.type = 'button'
-    openVaultButton.className = 'secondary-button'
-    openVaultButton.setAttribute(
-      'aria-label',
-      workflowUi.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetOpenVault),
-    )
-    openVaultButton.textContent = workflowUi.translatedMessage(
-      BROWSER_MESSAGE_KEYS.WidgetOpenVault,
-    )
-    openVaultButton.addEventListener('click', () => {
-      const message: OpenSimpleVaultMessage = {
-        type: OpenSimpleVaultMessageType.NookOpenSimpleVault,
-      }
-      void chrome.runtime.sendMessage(message)
-    })
-
     const siteRow = document.createElement('div')
     siteRow.className = 'site-row'
     siteRow.append(site, vaultStatus)
 
-    body.append(siteRow, title, description, continueButton, openVaultButton)
+    // One action: the vault opens from the Nook toolbar button, and the
+    // close button hands the page back to the person.
+    body.append(siteRow, title, description, continueButton)
 
     const collapsedLaunch = document.createElement('button')
     collapsedLaunch.type = 'button'
@@ -671,7 +659,7 @@ class AuthenticationWidgetShell {
 
     const nookTypedArgs0_3: Parameters<typeof this.createWidgetMark>[0] = {
       className: 'collapsed-mark',
-      size: 40,
+      size: 22,
     }
     const collapsedMark = this.createWidgetMark(nookTypedArgs0_3)
     const collapsedProgress = document.createElement('span')
@@ -688,7 +676,6 @@ class AuthenticationWidgetShell {
       title,
       description,
       continueButton,
-      openVaultButton,
       collapseButton,
       collapsedLaunch,
     }

@@ -1,0 +1,405 @@
+//! Which local app key joins an invited identity.
+//!
+//! The directory binds one app key to one local identity. A local identity
+//! that has no vaults, no other members and no replicated log yet is still
+//! fresh: it can take the invited identity's id. Once its identity is
+//! replicated, joining a second identity needs a second app key, as a second
+//! identity on the web app has its own key. A key that only holds vaults
+//! paired one by one, with no identity log, keeps pairing vaults that way.
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+
+use super::{AppKeyIdentityMembership, IdentityDirectory};
+use crate::errors::{MultiDeviceError, MultiDeviceResult};
+use crate::{AppKey, IdentityId, IdentityRecord};
+
+/// Whether the local identity already has a replicated control log.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LocalIdentityLog {
+    Empty,
+    Replicated,
+}
+
+/// An app key and the identity an invite asks it to join.
+pub struct IdentityInvitationBindingRequest<'a> {
+    pub app_key: &'a AppKey,
+    pub invited: &'a IdentityId,
+    /// The control log of the app key's current local identity.
+    pub local_log: LocalIdentityLog,
+}
+
+/// What joining the invited identity does to the local directory.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum IdentityInvitationBinding {
+    /// The app key's local identity already is the invited identity.
+    AlreadyBound,
+    /// The app key's fresh local identity takes the invited identity's id.
+    Adopt { local_identity_id: IdentityId },
+}
+
+/// Which app key connects this installation to one more identity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IdentityConnectionKey {
+    /// The app key belongs to no replicated identity yet; it connects the
+    /// next vault or identity itself.
+    CurrentAppKey,
+    /// The app key belongs to a replicated identity; the next identity needs
+    /// its own app key.
+    NewAppKey,
+}
+
+/// An app key and its local identity's log, to choose the connection key.
+pub struct IdentityConnectionKeyRequest<'a> {
+    pub app_key: &'a AppKey,
+    pub local_log: LocalIdentityLog,
+}
+
+impl IdentityRecord {
+    /// Nothing ties this local identity to an identity yet.
+    fn is_fresh_local_identity(&self, local_log: LocalIdentityLog) -> bool {
+        local_log == LocalIdentityLog::Empty
+            && self.vault_deks.is_empty()
+            && self.members.len() == 1
+    }
+}
+
+impl IdentityDirectory {
+    fn local_identity_for_app_key(&self, app_key: &AppKey) -> MultiDeviceResult<&IdentityRecord> {
+        let AppKeyIdentityMembership::Enrolled(identity_id) = self.identity_for_app_key(app_key)?
+        else {
+            return Err(MultiDeviceError::IdentityEnrollmentRequired);
+        };
+        self.identities
+            .iter()
+            .find(|record| record.identity_id == identity_id)
+            .ok_or_else(|| MultiDeviceError::IdentityNotFound {
+                identity_id: identity_id.to_string(),
+            })
+    }
+
+    /// Decide how an app key joins the identity an invite names. The app key
+    /// must already have a local identity; another identity it belongs to, or
+    /// an invited identity another local app key already holds, refuses the
+    /// join instead of merging identities.
+    pub fn invitation_binding(
+        &self,
+        request: &IdentityInvitationBindingRequest<'_>,
+    ) -> MultiDeviceResult<IdentityInvitationBinding> {
+        let local = self.local_identity_for_app_key(request.app_key)?;
+        if &local.identity_id == request.invited {
+            return Ok(IdentityInvitationBinding::AlreadyBound);
+        }
+        if self
+            .identities
+            .iter()
+            .any(|record| &record.identity_id == request.invited)
+        {
+            return Err(MultiDeviceError::ReplicatedIdentityAlreadyLocal {
+                identity_id: request.invited.to_string(),
+            });
+        }
+        if !local.is_fresh_local_identity(request.local_log) {
+            return Err(MultiDeviceError::AppKeyBelongsToAnotherIdentity {
+                identity_id: local.identity_id.to_string(),
+            });
+        }
+        Ok(IdentityInvitationBinding::Adopt {
+            local_identity_id: local.identity_id.clone(),
+        })
+    }
+
+    /// Choose the app key that connects this installation to one more
+    /// identity. An app key with no local identity yet joins with its first.
+    pub fn connection_key(
+        &self,
+        request: &IdentityConnectionKeyRequest<'_>,
+    ) -> MultiDeviceResult<IdentityConnectionKey> {
+        if self.identity_for_app_key(request.app_key)? == AppKeyIdentityMembership::Unenrolled {
+            return Ok(IdentityConnectionKey::CurrentAppKey);
+        }
+        Ok(match request.local_log {
+            LocalIdentityLog::Empty => IdentityConnectionKey::CurrentAppKey,
+            LocalIdentityLog::Replicated => IdentityConnectionKey::NewAppKey,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        DeviceSigningPublicKey, IdentityCreation, IdentityMember, MemberLabelState,
+        ReplicatedIdentityMembership, ReplicatedVaultGrant, StoreId, VaultKeys,
+    };
+
+    /// A browser with one local identity per app key it protects.
+    struct Installation {
+        directory: IdentityDirectory,
+    }
+
+    impl Installation {
+        fn new() -> Self {
+            Self {
+                directory: IdentityDirectory::empty(),
+            }
+        }
+
+        fn protect(mut self, app_key: &AppKey) -> anyhow::Result<(Self, IdentityId)> {
+            let created = self.directory.create_identity(IdentityCreation {
+                label: "Extension",
+                app_key,
+                member_label: MemberLabelState::Unnamed,
+            })?;
+            self.directory = created.directory;
+            Ok((self, created.identity_id))
+        }
+
+        /// The identity log made the app key a member with a vault grant.
+        fn join_with_vault(
+            mut self,
+            app_key: &AppKey,
+            identity_id: &IdentityId,
+        ) -> anyhow::Result<Self> {
+            let other = AppKey::generate()?;
+            let keys = VaultKeys::generate()?;
+            let grant = ReplicatedVaultGrant {
+                store_id: StoreId::generate()?,
+                secrets_envelope: app_key
+                    .public_key()
+                    .seal_bytes(keys.secrets_key.as_str().as_bytes())?,
+                members_envelope: app_key
+                    .public_key()
+                    .seal_bytes(keys.members_key.as_str().as_bytes())?,
+            };
+            self.directory =
+                self.directory
+                    .apply_replicated_membership(&ReplicatedIdentityMembership {
+                        identity_id,
+                        app_key,
+                        members: vec![Self::member(app_key), Self::member(&other)],
+                        revoked: Vec::new(),
+                        own_grants: vec![grant],
+                        removed_vaults: Vec::new(),
+                    })?;
+            Ok(self)
+        }
+
+        fn member(app_key: &AppKey) -> IdentityMember {
+            IdentityMember {
+                app_id: app_key.app_id().clone(),
+                auth_id: app_key.auth_id(),
+                public_key: app_key.public_key(),
+                signing_public_key: DeviceSigningPublicKey::Unavailable,
+                label: MemberLabelState::Unnamed,
+            }
+        }
+    }
+
+    fn binding(
+        directory: &IdentityDirectory,
+        app_key: &AppKey,
+        invited: &IdentityId,
+        local_log: LocalIdentityLog,
+    ) -> MultiDeviceResult<IdentityInvitationBinding> {
+        directory.invitation_binding(&IdentityInvitationBindingRequest {
+            app_key,
+            invited,
+            local_log,
+        })
+    }
+
+    fn connection(
+        directory: &IdentityDirectory,
+        app_key: &AppKey,
+        local_log: LocalIdentityLog,
+    ) -> MultiDeviceResult<IdentityConnectionKey> {
+        directory.connection_key(&IdentityConnectionKeyRequest { app_key, local_log })
+    }
+
+    #[test]
+    fn a_fresh_key_adopts_the_first_invited_identity() -> anyhow::Result<()> {
+        let key = AppKey::generate()?;
+        let (installation, local) = Installation::new().protect(&key)?;
+        let invited = IdentityId::generate()?;
+
+        assert_eq!(
+            connection(&installation.directory, &key, LocalIdentityLog::Empty)?,
+            IdentityConnectionKey::CurrentAppKey
+        );
+        assert_eq!(
+            binding(
+                &installation.directory,
+                &key,
+                &invited,
+                LocalIdentityLog::Empty
+            )?,
+            IdentityInvitationBinding::Adopt {
+                local_identity_id: local
+            }
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn a_member_key_joining_its_own_identity_again_is_already_bound() -> anyhow::Result<()> {
+        let key = AppKey::generate()?;
+        let (installation, local) = Installation::new().protect(&key)?;
+        let installation = installation.join_with_vault(&key, &local)?;
+
+        assert_eq!(
+            binding(
+                &installation.directory,
+                &key,
+                &local,
+                LocalIdentityLog::Replicated
+            )?,
+            IdentityInvitationBinding::AlreadyBound
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn a_key_of_one_identity_needs_a_new_key_for_the_next() -> anyhow::Result<()> {
+        let key = AppKey::generate()?;
+        let (installation, first) = Installation::new().protect(&key)?;
+        let installation = installation.join_with_vault(&key, &first)?;
+        let second = IdentityId::generate()?;
+
+        assert_eq!(
+            connection(&installation.directory, &key, LocalIdentityLog::Replicated)?,
+            IdentityConnectionKey::NewAppKey
+        );
+        let refused = binding(
+            &installation.directory,
+            &key,
+            &second,
+            LocalIdentityLog::Replicated,
+        );
+        assert!(matches!(
+            refused,
+            Err(MultiDeviceError::AppKeyBelongsToAnotherIdentity { identity_id }) if identity_id == first.to_string()
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn a_key_with_vaults_paired_one_by_one_keeps_pairing_them() -> anyhow::Result<()> {
+        let key = AppKey::generate()?;
+        let (installation, local) = Installation::new().protect(&key)?;
+        let installation = installation.join_with_vault(&key, &local)?;
+
+        assert_eq!(
+            connection(&installation.directory, &key, LocalIdentityLog::Empty)?,
+            IdentityConnectionKey::CurrentAppKey
+        );
+        // Its vaults belong to an identity already, so it cannot become
+        // another identity's member.
+        assert!(matches!(
+            binding(
+                &installation.directory,
+                &key,
+                &IdentityId::generate()?,
+                LocalIdentityLog::Empty
+            ),
+            Err(MultiDeviceError::AppKeyBelongsToAnotherIdentity { .. })
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn a_replicated_log_alone_ties_a_key_to_its_identity() -> anyhow::Result<()> {
+        let key = AppKey::generate()?;
+        let (installation, _) = Installation::new().protect(&key)?;
+
+        assert_eq!(
+            connection(&installation.directory, &key, LocalIdentityLog::Replicated)?,
+            IdentityConnectionKey::NewAppKey
+        );
+        assert!(matches!(
+            binding(
+                &installation.directory,
+                &key,
+                &IdentityId::generate()?,
+                LocalIdentityLog::Replicated
+            ),
+            Err(MultiDeviceError::AppKeyBelongsToAnotherIdentity { .. })
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn a_second_key_joins_a_second_identity_beside_the_first() -> anyhow::Result<()> {
+        let first_key = AppKey::generate()?;
+        let (installation, first) = Installation::new().protect(&first_key)?;
+        let installation = installation.join_with_vault(&first_key, &first)?;
+        let second_key = AppKey::generate()?;
+        let (installation, second_local) = installation.protect(&second_key)?;
+        let second = IdentityId::generate()?;
+
+        assert_eq!(
+            connection(
+                &installation.directory,
+                &second_key,
+                LocalIdentityLog::Empty
+            )?,
+            IdentityConnectionKey::CurrentAppKey
+        );
+        assert_eq!(
+            binding(
+                &installation.directory,
+                &second_key,
+                &second,
+                LocalIdentityLog::Empty
+            )?,
+            IdentityInvitationBinding::Adopt {
+                local_identity_id: second_local
+            }
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn an_identity_another_local_key_holds_is_not_joined_twice() -> anyhow::Result<()> {
+        let first_key = AppKey::generate()?;
+        let (installation, first) = Installation::new().protect(&first_key)?;
+        let installation = installation.join_with_vault(&first_key, &first)?;
+        let second_key = AppKey::generate()?;
+        let (installation, _) = installation.protect(&second_key)?;
+
+        let refused = binding(
+            &installation.directory,
+            &second_key,
+            &first,
+            LocalIdentityLog::Empty,
+        );
+        assert!(matches!(
+            refused,
+            Err(MultiDeviceError::ReplicatedIdentityAlreadyLocal { identity_id }) if identity_id == first.to_string()
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn a_key_without_a_local_identity_cannot_bind_an_invite() -> anyhow::Result<()> {
+        let key = AppKey::generate()?;
+        let directory = IdentityDirectory::empty();
+
+        assert_eq!(
+            connection(&directory, &key, LocalIdentityLog::Empty)?,
+            IdentityConnectionKey::CurrentAppKey
+        );
+        assert!(matches!(
+            binding(
+                &directory,
+                &key,
+                &IdentityId::generate()?,
+                LocalIdentityLog::Empty
+            ),
+            Err(MultiDeviceError::IdentityEnrollmentRequired)
+        ));
+        Ok(())
+    }
+}

@@ -100,10 +100,10 @@ class PilotPanelEvidence {
       height: 812,
     }
     await this.request.page.setViewportSize(viewport)
-    await expect(this.button('Continue with Nook')).toBeVisible()
+    await expect(this.button('Sign in with Nook')).toBeVisible()
     await this.screenshot('pilot-checklist-responsive.png')
     await this.assertReady()
-    await expect(this.button('Continue with Nook')).toBeVisible()
+    await expect(this.button('Sign in with Nook')).toBeVisible()
   }
 }
 enum PilotScenario {
@@ -203,7 +203,7 @@ class PilotScenarioPage {
       case PilotScenario.Confirmed:
         break
     }
-    await this.evidence.button('Continue with Nook').click()
+    await this.evidence.button('Sign in with Nook').click()
     switch (this.request.scenario) {
       case PilotScenario.Waiting:
         await expect.poll(this.pendingReply.bind(this)).toBe('Held')
@@ -226,15 +226,16 @@ class PilotScenarioPage {
     }
     await this.assertOutcome(checklist)
     await expect(widget.getByText('Ready to sign in')).toHaveCount(0)
-    await expect(this.evidence.button('Take over')).toBeVisible()
+    // Closing Pilot is how the person takes the page back.
+    await expect(this.evidence.button('Dismiss Nook')).toBeVisible()
     await expect(widget).not.toContainText('alice@nook.test')
     await expect(widget).not.toContainText('extension-fill-password')
     await this.evidence.screenshot(
       `pilot-checklist-${this.request.scenario}.png`,
     )
     await this.assertOutcome(checklist)
-    await expect(this.evidence.button('Take over')).toBeVisible()
-    await this.evidence.button('Take over').click()
+    await expect(this.evidence.button('Dismiss Nook')).toBeVisible()
+    await this.evidence.button('Dismiss Nook').click()
     await expect(widget).toHaveCount(0)
   }
   private async assertOutcome(checklist: Locator): Promise<void> {
@@ -385,7 +386,7 @@ class VkPasswordStepBrowserScenario {
         yield* Effect.tryPromise(() => expect(widget).toBeVisible())
         yield* Effect.tryPromise(() => expect(password).toHaveValue(''))
         const continueChoice: Parameters<Locator['getByRole']>[1] = {
-          name: 'Continue with Nook',
+          name: 'Sign in with Nook',
         }
         yield* Effect.tryPromise(() =>
           widget.getByRole('button', continueChoice).click(),
@@ -436,7 +437,7 @@ class VkPasswordStepBrowserScenario {
 test.describe('PIN Pilot against mock auth', () => {
   test.describe.configure({ timeout: 180_000 })
 
-  test('completes plain login through Continue with Nook', async ({
+  test('completes plain login through Sign in with Nook', async ({
     browserName,
   }, testInfo) => {
     test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
@@ -468,7 +469,7 @@ test.describe('PIN Pilot against mock auth', () => {
         widget.getByTestId('nook-auth-gate-vault-status'),
       ).toHaveAttribute('data-state', 'credential-available')
       // Single matching login fills and submits without an account chooser.
-      await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+      await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
       await expect(loginPage.getByTestId('mock-auth-success')).toHaveText(
         'Authentication complete',
         { timeout: 20_000 },
@@ -527,7 +528,7 @@ test.describe('PIN Pilot against mock auth', () => {
         timeout: 20_000,
       })
       await loginWidget
-        .getByRole('button', { name: 'Continue with Nook' })
+        .getByRole('button', { name: 'Sign in with Nook' })
         .click()
 
       await expect(loginPage).toHaveURL(/\/totp\/verify$/, { timeout: 20_000 })

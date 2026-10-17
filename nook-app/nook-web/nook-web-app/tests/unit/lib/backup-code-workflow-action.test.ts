@@ -99,7 +99,6 @@ describe('backup-code workflow action', () => {
     const description = document.createElement('p')
     const step = document.createElement('p')
     const continueButton = document.createElement('button')
-    const openVaultButton = document.createElement('button')
     document.body.append(panel)
     const sendDecodedRuntimeMessage: EnrollmentFlowHost['sendDecodedRuntimeMessage'] =
       async <Response>(): Promise<RuntimeMessageDelivery<Response>> => ({
@@ -113,7 +112,6 @@ describe('backup-code workflow action', () => {
       translatedMessage: (key) => key,
       step,
       continueButton,
-      openVaultButton,
       isBusy: () => busy,
       setBusy: (value: boolean) => {
         busy = value
@@ -144,13 +142,7 @@ describe('backup-code workflow action', () => {
       translatedMessageWithSubstitution:
         vi.fn<EnrollmentFlowHost['translatedMessageWithSubstitution']>(),
     }
-    document.body.append(
-      title,
-      description,
-      step,
-      continueButton,
-      openVaultButton,
-    )
+    document.body.append(title, description, step, continueButton)
     return host
   }
   test('starts extraction only inside a fresh Rust-approved action', async () => {

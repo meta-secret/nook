@@ -168,7 +168,7 @@ test('keeps extension routing and local session behavior app-specific', async ({
   await expect(page.getByTestId('extension-request-title')).toContainText(
     'Nook Extension',
   )
-  await request.getByTestId('extension-request-vault').first().click()
+  await request.getByTestId('extension-request-unlock').click()
   await expect(page.getByTestId('extension-connect-consent')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })

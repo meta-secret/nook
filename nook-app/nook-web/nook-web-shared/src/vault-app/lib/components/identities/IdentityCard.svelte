@@ -658,9 +658,12 @@ panel sits inside the card, which then spans the full row.
         {vault}
         row={vaultOpenRow}
         identityName={card.label}
-        unlockLabel={card.keyKind === IdentityKeyKind.Pin
-          ? vault.t(I18N_KEYS.WorkspaceVaultPanelUnlockPin)
-          : vault.t(I18N_KEYS.WorkspaceVaultPanelUnlockPasskey)}
+        unlockLabel={live
+          ? vault.t(I18N_KEYS.WorkspaceVaultPanelOpen)
+          : card.keyKind === IdentityKeyKind.Pin
+            ? vault.t(I18N_KEYS.WorkspaceVaultPanelUnlockPin)
+            : vault.t(I18N_KEYS.WorkspaceVaultPanelUnlockPasskey)}
+        identityOpen={live}
         {busy}
         passphraseOffered={!live && Boolean(onSelectVault)}
         {...passwordFallback && vaultOpenRow.storeId === selectedStoreId

@@ -1,8 +1,13 @@
 //! Portable identity collection and active-identity selection policy.
 mod enrollment;
+mod invitation;
 mod recovery;
 mod replication;
 pub use crate::MemberLabelState;
+pub use invitation::{
+    IdentityConnectionKey, IdentityConnectionKeyRequest, IdentityInvitationBinding,
+    IdentityInvitationBindingRequest, LocalIdentityLog,
+};
 pub use recovery::RecoveryRetirement;
 pub use replication::{
     ReplicatedIdentityAdoption, ReplicatedIdentityMembership, ReplicatedVaultGrant,

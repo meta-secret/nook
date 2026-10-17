@@ -167,8 +167,7 @@ vi.mock(
         const body = document.createElement('div')
         const continueButton = document.createElement('button')
         continueButton.dataset.primary = 'true'
-        const openVaultButton = document.createElement('button')
-        body.append(continueButton, openVaultButton)
+        body.append(continueButton)
         host.append(body)
         return {
           host,
@@ -177,7 +176,6 @@ vi.mock(
           title: document.createElement('h1'),
           description: document.createElement('p'),
           continueButton,
-          openVaultButton,
         }
       },
       mountWidgetShell: ({ shell }: MountTestWidgetShellArgs) =>

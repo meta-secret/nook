@@ -219,6 +219,13 @@ enum SveltePage {
   LoginPicker = 'login-picker',
 }
 
+/** HTML entries per page build. The toolbar panel shares the popup build,
+ * so both pages share one copy of each WASM binary in the package. */
+const sveltePageInputs: Record<SveltePage, readonly string[]> = {
+  [SveltePage.Popup]: ['index.html', 'panel.html'],
+  [SveltePage.LoginPicker]: ['index.html'],
+}
+
 async function buildSveltePage(page: SveltePage) {
   const { build: viteBuild } = await extensionBuildDependencyLoader.importVite()
   const { svelte, vitePreprocess } =
@@ -237,7 +244,9 @@ async function buildSveltePage(page: SveltePage) {
       minify: false,
       sourcemap: true,
       rollupOptions: {
-        input: join(projectRoot, `src/${page}/index.html`),
+        input: sveltePageInputs[page].map((html) =>
+          join(projectRoot, `src/${page}/${html}`),
+        ),
       },
     },
     resolve: {

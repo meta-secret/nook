@@ -3,6 +3,7 @@
 mod login_picker;
 mod login_save;
 pub use login_save::*;
+mod identity_membership;
 mod queue;
 mod request;
 mod vault_event_log;

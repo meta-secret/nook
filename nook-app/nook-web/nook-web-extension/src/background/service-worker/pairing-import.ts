@@ -33,6 +33,10 @@ import {
 import { backgroundVaultRuntime } from '../vault-runtime'
 import { extensionPairingIdentity } from './pairing-identity'
 import { PairingIdentityConnection } from './pairing-identity-connection'
+import type {
+  PairedVaultImportRequest,
+  PairingIdentityImportResult,
+} from './identity-vault-pairing'
 import { extensionSessionLifecycle } from './session-lifecycle'
 
 export enum PairingIngressFailure {
@@ -157,6 +161,8 @@ type ImportDecodedApprovedPairingArgs = {
   message: ExtensionPairingApprovedMessage
   sessionEventLogRecords: ExtensionPairingApprovedMessage['eventLogRecords']
   providers: StorageProvider[]
+  /** Sync providers the vault replicates through, recorded on its grant. */
+  syncProviderCount: number
   selection: PairingImportSelection
 }
 
@@ -179,7 +185,7 @@ async function importDecodedApprovedPairing(
     identityLabel: ((v) => (v ? v : ''))(message.payload.identityLabel),
     approvedAt: message.payload.approvedAt,
     scopes: message.payload.scopes,
-    syncProviderCount: providers.length,
+    syncProviderCount: args.syncProviderCount,
   }
   try {
     const nookTypedArgs0_0: Parameters<
@@ -336,6 +342,23 @@ async function importDecodedApprovedPairing(
   }
 }
 
+/** Import one more vault of the extension's identity beside the paired
+ * ones; the vault the extension fills from stays as it is. */
+export function importIdentityVault({
+  message,
+  providers,
+  syncProviderCount,
+}: PairedVaultImportRequest): Promise<PairingIdentityImportResult> {
+  const vaultArgs: ImportDecodedApprovedPairingArgs = {
+    message,
+    sessionEventLogRecords: message.eventLogRecords,
+    providers,
+    syncProviderCount,
+    selection: PairingImportSelection.Keep,
+  }
+  return importDecodedApprovedPairing(vaultArgs)
+}
+
 type PairingCredentialImportLifecycleArgs = {
   readonly message: ExtensionPairingApprovedMessage
   readonly sessionEventLogRecords: ExtensionPairingApprovedMessage['eventLogRecords']
@@ -375,6 +398,7 @@ export class PairingCredentialImportLifecycle {
           message: this.message,
           sessionEventLogRecords: this.sessionEventLogRecords,
           providers: stagedProviders,
+          syncProviderCount: stagedProviders.length,
           selection: PairingImportSelection.Select,
         }
         const approved = await importDecodedApprovedPairing(args)
@@ -384,16 +408,8 @@ export class PairingCredentialImportLifecycle {
         >[0] = {
           message: this.message,
           providers: identityProviders,
-          importVault: ({ message, providers }) => {
-            const vaultArgs: ImportDecodedApprovedPairingArgs = {
-              message,
-              sessionEventLogRecords: message.eventLogRecords,
-              providers,
-              // The vault the person approved from stays the default.
-              selection: PairingImportSelection.Keep,
-            }
-            return importDecodedApprovedPairing(vaultArgs)
-          },
+          // The vault the person approved from stays the default.
+          importVault: importIdentityVault,
           sendSessionMessage: (...request) =>
             extensionPairingIdentity.sendSessionMessage(...request),
         }

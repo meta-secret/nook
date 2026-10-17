@@ -226,6 +226,8 @@ export class DeviceProtectionActions {
       }
     }
     state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked;
+    // The identity is open again, so an idle expiry no longer applies.
+    state.sessionExpiredByIdle = false;
     return storageOk(AuthorizedDeviceInitializationOutcome.Initialized);
   }
 

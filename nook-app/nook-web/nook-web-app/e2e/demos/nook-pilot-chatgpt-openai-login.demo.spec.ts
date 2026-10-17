@@ -28,13 +28,13 @@ test('continue from ChatGPT GET to OpenAI POST authentication', async ({
   const widget = page.locator('#nook-auth-widget')
   await expect(page.getByTestId('auth-step')).toHaveText('ChatGPT · GET')
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
-  await widget.getByRole('button', { name: 'Continue with Nook' }).click()
-  await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+  await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
+  await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
 
   await expect(page.getByTestId('auth-step')).toHaveText('OpenAI · POST')
   await expect(page.locator('input[type="password"]')).toHaveCount(0)
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
-  await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+  await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
   await expect(page.getByRole('status')).toHaveText(
     'OpenAI authentication complete',
   )

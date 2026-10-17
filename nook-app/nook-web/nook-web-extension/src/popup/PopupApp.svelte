@@ -2,6 +2,7 @@
   type RunDeviceActionArgs = {
     action: () => Promise<ExtensionSessionDeviceWire>
     fallbackKey?: I18nKey
+    followUp?: DeviceActionFollowUp
   }
 
   type ErrorMessageArgs = {
@@ -35,6 +36,7 @@
     DeviceMode,
     DeviceProtectionStatus,
     ExtensionSessionDeviceStateKind,
+    type NookIdentityConnectionStart,
     type ExtensionSessionDeviceWire,
     type ExtensionSessionDeviceState,
     type CompanionVaultSummaryArgs,
@@ -45,6 +47,9 @@
     type PairingCandidate,
     CompanionSecretCountKind,
     type CompanionSecretCount,
+    DeviceActionFollowUp,
+    IdentitySyncKind,
+    type IdentitySync,
   } from './popup-app-state'
   import { DeviceProtectionSetupWorkflow } from '../../../nook-web-shared/src/vault-app/lib/components/device-protection-gate-state'
   import {
@@ -91,12 +96,23 @@
   })
   /** Item counts per paired vault, filled in as each summary arrives. */
   let counts = $state<Record<string, CompanionSecretCount>>({})
+  /** Connecting another identity: its own key (passkey or PIN) comes first. */
+  let identityKeyStaged = $state(false)
+  let identitySync = $state<IdentitySync>({ kind: IdentitySyncKind.Idle })
 
   const needsSetup = $derived(
     status === DeviceProtectionStatus.Missing ||
       status === DeviceProtectionStatus.Plaintext,
   )
-  const showToolbarMenu = $derived(status === DeviceProtectionStatus.Unlocked)
+  const showToolbarMenu = $derived(
+    status === DeviceProtectionStatus.Unlocked && !identityKeyStaged,
+  )
+  /** The app key of the unlocked identity. */
+  const activeDeviceId = $derived(
+    pairingCandidate.kind === PairingCandidateKind.Selected
+      ? pairingCandidate.device.deviceId
+      : '',
+  )
   /** The extension's key is a PIN rather than a passkey. */
   const usesPin = $derived(
     status === DeviceProtectionStatus.Pin ||
@@ -109,12 +125,15 @@
   const setupTitleKey = $derived.by((): I18nKey => {
     if (status === DeviceProtectionStatus.PinSetup)
       return I18N_KEYS.ExtensionDeviceSetupPinSetupTitle
+    if (identityKeyStaged) return I18N_KEYS.ExtensionDeviceSetupIdentityKeyTitle
     if (!needsSetup) return I18N_KEYS.ExtensionDeviceSetupUnlockTitle
     return setupWorkflow === DeviceProtectionSetupWorkflow.Authenticate
       ? I18N_KEYS.ExtensionDeviceSetupSetupTitle
       : I18N_KEYS.ExtensionDeviceSetupCreateTitle
   })
   const setupDescriptionKey = $derived.by((): I18nKey => {
+    if (identityKeyStaged)
+      return I18N_KEYS.ExtensionDeviceSetupIdentityKeyDescription
     if (status === DeviceProtectionStatus.PinSetup)
       return I18N_KEYS.ExtensionDeviceSetupPinSetupDescription
     if (status === DeviceProtectionStatus.Pin)
@@ -249,6 +268,91 @@
     })
   }
 
+  /** The extension just unlocked: pair the vaults its identity gained since
+   * it joined. A refresh that fails says so. */
+  async function refreshIdentity(
+    device: ExtensionSessionDeviceWire,
+  ): Promise<void> {
+    identitySync = { kind: IdentitySyncKind.Checking }
+    const refreshed = await pairedVaultsClient.refreshIdentity(device.deviceId)
+    if (!refreshed.ok) {
+      identitySync = { kind: IdentitySyncKind.Idle }
+      error = translatePlain(I18N_KEYS.ExtensionCompanionIdentitySyncFailed)
+      return
+    }
+    identitySync = {
+      kind: IdentitySyncKind.Checked,
+      awaitingGrant: refreshed.awaitingGrant,
+    }
+    if (refreshed.paired > 0) await loadVaults(device)
+  }
+
+  function awaitingGrantNote(awaitingGrant: number): string {
+    const request: ExtensionTranslationRequest = {
+      kind: ExtensionTranslationRequestKind.WithReplacements,
+      key: I18N_KEYS.ExtensionCompanionIdentitySyncAwaiting,
+      replacements: { count: String(awaitingGrant) },
+    }
+    return i18n.t(request)
+  }
+
+  /** Rust decides whether this key connects the next identity or a new key
+   * is set up for it first, as each identity on the web app has its own. */
+  async function connectIdentity(
+    device: ExtensionSessionDeviceWire,
+  ): Promise<void> {
+    busy = true
+    error = ''
+    let start: NookIdentityConnectionStart
+    try {
+      start = await extensionWasmRuntime.beginIdentityConnection(
+        translatePlain(I18N_KEYS.ExtensionSetupProfileTitle),
+      )
+    } catch {
+      busy = false
+      error = translatePlain(I18N_KEYS.ExtensionCompanionConnectIdentityFailed)
+      return
+    }
+    if (start === 'current-key') {
+      beginPairing(device)
+      return
+    }
+    busy = false
+    identityKeyStaged = true
+    setupWorkflow = DeviceProtectionSetupWorkflow.Create
+    status = DeviceProtectionStatus.Missing
+  }
+
+  async function cancelIdentityKey(): Promise<void> {
+    busy = true
+    error = ''
+    try {
+      await extensionWasmRuntime.cancelIdentityConnection()
+    } catch {
+      busy = false
+      error = translatePlain(I18N_KEYS.ExtensionCompanionConnectIdentityFailed)
+      return
+    }
+    busy = false
+    identityKeyStaged = false
+    status = DeviceProtectionStatus.Unlocked
+  }
+
+  /** Switch to another identity of this extension; it unlocks with its key. */
+  async function useIdentity(deviceId: string): Promise<void> {
+    busy = true
+    error = ''
+    try {
+      await extensionWasmRuntime.activateIdentity(deviceId)
+      status = await extensionWasmRuntime.extensionDeviceProtectionStatus()
+    } catch {
+      error = translatePlain(I18N_KEYS.ExtensionCompanionUseIdentityFailed)
+    } finally {
+      busy = false
+    }
+    identitySync = { kind: IdentitySyncKind.Idle }
+  }
+
   function enterToolbarMenu(device: ExtensionSessionDeviceWire): void {
     pairingCandidate = { kind: PairingCandidateKind.Selected, device }
     status = DeviceProtectionStatus.Unlocked
@@ -264,13 +368,24 @@
   })
 
   async function runDeviceAction(args: RunDeviceActionArgs): Promise<void> {
-    const { action, fallbackKey = I18N_KEYS.ExtensionSetupPasskeySetupFailed } =
-      args
+    const {
+      action,
+      fallbackKey = I18N_KEYS.ExtensionSetupPasskeySetupFailed,
+      followUp = DeviceActionFollowUp.Menu,
+    } = args
     busy = true
     error = ''
     try {
       const device = await action()
       enterToolbarMenu(device)
+      if (identityKeyStaged) {
+        // The new identity's key exists: connect it to that identity.
+        identityKeyStaged = false
+        beginPairing(device)
+        return
+      }
+      if (followUp === DeviceActionFollowUp.RefreshIdentity)
+        void refreshIdentity(device)
     } catch (caught) {
       busy = false
       const failure = caught instanceof Error ? caught : new Error()
@@ -324,6 +439,7 @@
       action:
         extensionWasmRuntime.unlockExtensionPasskey.bind(extensionWasmRuntime),
       fallbackKey: I18N_KEYS.DeviceProtectionPasskeyUnlockNotAllowed,
+      followUp: DeviceActionFollowUp.RefreshIdentity,
     }
     void runDeviceAction(args)
   }
@@ -344,6 +460,7 @@
     const args: Parameters<typeof runDeviceAction>[0] = {
       action: () => extensionWasmRuntime.unlockExtensionPin(pin),
       fallbackKey: I18N_KEYS.DeviceProtectionPinUnlockFailed,
+      followUp: DeviceActionFollowUp.RefreshIdentity,
     }
     void runDeviceAction(args)
   }
@@ -372,6 +489,15 @@
           {translatePlain(I18N_KEYS.ExtensionCompanionPilotReturnGuidance)}
         </p>
       {/if}
+      {#if identitySync.kind === IdentitySyncKind.Checking}
+        <p class="companion-description" data-testid="identity-sync-status">
+          {translatePlain(I18N_KEYS.ExtensionCompanionIdentitySyncChecking)}
+        </p>
+      {:else if identitySync.kind === IdentitySyncKind.Checked && identitySync.awaitingGrant > 0}
+        <p class="companion-description" data-testid="identity-sync-status">
+          {awaitingGrantNote(identitySync.awaitingGrant)}
+        </p>
+      {/if}
     </header>
 
     {#if vaults.kind === PairedVaultsLoadKind.Ready && vaults.vaults.length > 0}
@@ -388,12 +514,25 @@
             {translatePlain(I18N_KEYS.ExtensionCompanionVaultsHint)}
           </p>
         </div>
-        {#each groups as group (group.identityLabel)}
+        {#each groups as group (`${group.deviceId}:${group.identityLabel}`)}
           <div class="vault-group" data-testid="companion-vault-group">
-            <p class="vault-group-label">
-              {group.identityLabel ||
-                translatePlain(I18N_KEYS.ExtensionCompanionOtherVaults)}
-            </p>
+            <div class="vault-group-heading">
+              <p class="vault-group-label">
+                {group.identityLabel ||
+                  translatePlain(I18N_KEYS.ExtensionCompanionOtherVaults)}
+              </p>
+              {#if activeDeviceId && group.deviceId !== activeDeviceId}
+                <button
+                  type="button"
+                  class="menu-secondary-action"
+                  disabled={busy}
+                  data-testid="companion-use-identity"
+                  onclick={() => void useIdentity(group.deviceId)}
+                >
+                  {translatePlain(I18N_KEYS.ExtensionCompanionUseIdentity)}
+                </button>
+              {/if}
+            </div>
             <ul class="vault-list">
               {#each group.vaults as vault (vault.vaultStoreId)}
                 <li
@@ -484,7 +623,7 @@
         data-testid="connect-simple-vault-btn"
         onclick={() => {
           if (pairingCandidate.kind === PairingCandidateKind.Selected)
-            beginPairing(pairingCandidate.device)
+            void connectIdentity(pairingCandidate.device)
         }}
       >
         <Plus size={14} aria-hidden="true" />
@@ -695,18 +834,20 @@
           />
         </div>
       </details>
-      <p class="alternative-line">
-        {translatePlain(I18N_KEYS.ExtensionDeviceSetupHavePasskey)}
-        <button
-          type="button"
-          class="link-button"
-          disabled={busy}
-          data-testid="device-protection-use-existing-choice"
-          onclick={useExistingPasskey}
-        >
-          {translatePlain(I18N_KEYS.ExtensionDeviceSetupUseExisting)}
-        </button>
-      </p>
+      {#if !identityKeyStaged}
+        <p class="alternative-line">
+          {translatePlain(I18N_KEYS.ExtensionDeviceSetupHavePasskey)}
+          <button
+            type="button"
+            class="link-button"
+            disabled={busy}
+            data-testid="device-protection-use-existing-choice"
+            onclick={useExistingPasskey}
+          >
+            {translatePlain(I18N_KEYS.ExtensionDeviceSetupUseExisting)}
+          </button>
+        </p>
+      {/if}
     {:else if status === DeviceProtectionStatus.Pin}
       <div class="field-group">
         <label for="device-protection-pin">
@@ -743,6 +884,18 @@
         {busy
           ? translatePlain(I18N_KEYS.DeviceProtectionAuthorizing)
           : translatePlain(I18N_KEYS.ExtensionDeviceSetupUnlockAction)}
+      </button>
+    {/if}
+
+    {#if identityKeyStaged}
+      <button
+        type="button"
+        class="secondary-button"
+        disabled={busy}
+        data-testid="identity-key-cancel"
+        onclick={() => void cancelIdentityKey()}
+      >
+        {translatePlain(I18N_KEYS.ExtensionDeviceSetupIdentityKeyCancel)}
       </button>
     {/if}
 

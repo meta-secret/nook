@@ -206,6 +206,15 @@ body {
   white-space: nowrap;
 }
 
+/* An identity's name, and "Use this identity" when another one is unlocked. */
+.vault-group-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
 .vault-list {
   display: grid;
   gap: 4px;

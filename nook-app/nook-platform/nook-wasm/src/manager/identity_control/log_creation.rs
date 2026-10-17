@@ -3,7 +3,8 @@
 
 use nook_core::{
     IdentityControlLog, IdentityControlState, IdentityEvent, IdentityEventSigning,
-    IdentityGenesisRequest, IdentityId,
+    IdentityGenesisRequest, IdentityId, IdentityInvitationBinding,
+    IdentityInvitationBindingRequest, LocalIdentityLog,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -24,6 +25,20 @@ pub enum NookIdentityLogEnsureOutcome {
 }
 
 impl NookVaultManager {
+    /// Whether the app key's local identity already has a control log.
+    pub(in crate::manager) async fn local_identity_log(
+        app_key: &nook_core::AppKey,
+    ) -> Result<LocalIdentityLog, NookError> {
+        let local = Self::current_identity_id(app_key).await?;
+        Ok(
+            if NookDatabase::load_identity_log(&local).await?.is_empty() {
+                LocalIdentityLog::Empty
+            } else {
+                LocalIdentityLog::Replicated
+            },
+        )
+    }
+
     /// Sign the founder genesis for an identity that has no log yet. Vaults
     /// join the log as they are opened here; other apps join by request.
     async fn create_identity_log(&mut self, identity_id: &IdentityId) -> Result<(), NookError> {
@@ -75,7 +90,8 @@ impl NookVaultManager {
     }
 
     /// Bind a freshly protected local identity to the identity an enrollment
-    /// code invites it into. The local identity must not own vaults yet.
+    /// code invites it into. A local identity that already belongs to an
+    /// identity refuses: another identity joins with its own app key.
     #[wasm_bindgen]
     pub async fn bind_local_identity_to_invitation(
         &mut self,
@@ -83,28 +99,20 @@ impl NookVaultManager {
     ) -> Result<(), JsError> {
         let invited = IdentityId::parse(&identity_id)?;
         let app_key = self.unlocked_app_key()?;
-        let local = Self::current_identity_id(&app_key).await?;
-        if local == invited {
+        let local_log = Self::local_identity_log(&app_key).await?;
+        let binding = NookDatabase::load_identity_directory()
+            .await?
+            .invitation_binding(&IdentityInvitationBindingRequest {
+                app_key: &app_key,
+                invited: &invited,
+                local_log,
+            })
+            .map_err(NookDatabase::map_domain_error)?;
+        let IdentityInvitationBinding::Adopt { local_identity_id } = binding else {
             return Ok(());
-        }
-        let directory = NookDatabase::load_identity_directory().await?;
-        let record = directory
-            .identities()
-            .iter()
-            .find(|record| record.identity_id == local)
-            .ok_or_else(|| JsError::new("The current identity is missing."))?;
-        if !record.vault_deks.is_empty() || record.members.len() != 1 {
-            return Err(JsError::new(
-                "Join with a new identity: this identity already has vaults or apps.",
-            ));
-        }
-        if !NookDatabase::load_identity_log(&local).await?.is_empty() {
-            return Err(JsError::new(
-                "Join with a new identity: this identity is already replicated.",
-            ));
-        }
+        };
         NookDatabase::rebind_local_identity(KeyringDbRebindLocalIdentity {
-            local_identity_id: &local,
+            local_identity_id: &local_identity_id,
             replicated_identity_id: &invited,
         })
         .await?;

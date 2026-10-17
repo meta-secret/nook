@@ -149,6 +149,7 @@ describe('paired vaults', () => {
       vaultStoreId: `store_${vaultName}`,
       vaultName,
       identityLabel,
+      deviceId: 'device',
       isDefault: false,
       fillsPasswords: true,
       managesPasskeys: false,
@@ -169,6 +170,36 @@ describe('paired vaults', () => {
       ['Acme', ['Work', 'Clients']],
       ['Me', ['Personal']],
       ['', ['Old']],
+    ])
+  })
+
+  test('keeps each identity under the extension key it joined with', () => {
+    const summary = (
+      vaultName: string,
+      deviceId: string,
+    ): PairedVaultSummary => ({
+      vaultStoreId: `store_${vaultName}`,
+      vaultName,
+      identityLabel: 'Family',
+      deviceId,
+      isDefault: false,
+      fillsPasswords: true,
+      managesPasskeys: false,
+    })
+
+    const groups = pairedVaultGroups([
+      summary('Home', 'device-first'),
+      summary('Parents', 'device-second'),
+      summary('Kids', 'device-first'),
+    ]).map((group) => [
+      group.deviceId,
+      group.vaults.map((vault) => vault.vaultName),
+    ])
+
+    // Two identities may share a name; their keys tell them apart.
+    expect(groups).toEqual([
+      ['device-first', ['Home', 'Kids']],
+      ['device-second', ['Parents']],
     ])
   })
 

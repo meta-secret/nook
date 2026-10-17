@@ -6,6 +6,7 @@
 //! the resulting membership and this installation's DEK grants in the local
 //! identity directory.
 
+mod connection;
 mod invite;
 mod log_creation;
 mod membership;
@@ -277,6 +278,17 @@ impl NookVaultManager {
             .to_rust()
             .map_err(|_| JsError::new(INVALID_TYPED_INPUT))?
             .providers;
+        let snapshot = self.current_identity_snapshot(&providers).await?;
+        Tsify::into_ts(&snapshot).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
+    }
+}
+
+impl NookVaultManager {
+    /// Project the current identity's log for this installation.
+    pub(in crate::manager) async fn current_identity_snapshot(
+        &self,
+        providers: &[nook_core::StorageProviderData],
+    ) -> Result<IdentityControlSnapshot, NookError> {
         let app_key = self.unlocked_app_key()?;
         let identity_id = Self::current_identity_id(&app_key).await?;
         let log = NookDatabase::load_identity_log(&identity_id).await?;
@@ -287,17 +299,16 @@ impl NookVaultManager {
             .find(|record| record.identity_id == identity_id)
             .map(|record| record.label.clone())
             .unwrap_or_default();
-        let snapshot = if log.is_empty() {
+        Ok(if log.is_empty() {
             IdentityControlSnapshot::not_replicated(&identity_id, &identity_label)
         } else {
             IdentityControlSnapshot::project(&IdentityControlSnapshotRequest {
                 state: &IdentityControlState::project(&log)?,
                 identity_label: &identity_label,
                 current_app_id: app_key.app_id(),
-                providers: &providers,
+                providers,
             })
-        };
-        Tsify::into_ts(&snapshot).map_err(|_| JsError::new(UNENCODABLE_TYPED_OUTPUT))
+        })
     }
 }
 

@@ -322,7 +322,7 @@ test("show an extension's connection request beside the locked identity", async 
   )
   await demoBeat(page)
 
-  await request.getByTestId('extension-request-vault').first().click()
+  await request.getByTestId('extension-request-unlock').click()
   await expect(page.getByTestId('extension-connect-consent')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })

@@ -43,8 +43,8 @@ const environments = [
 ] as const
 
 describe('extension origin isolation', () => {
-  test('opens the toolbar through the service worker instead of a competing popup', () => {
-    expect('default_popup' in defaultManifest().action).toBe(false)
+  test('opens the compact toolbar panel beside the icon', () => {
+    expect(defaultManifest().action.default_popup).toBe('popup/panel.html')
   })
 
   for (const environment of environments) {
