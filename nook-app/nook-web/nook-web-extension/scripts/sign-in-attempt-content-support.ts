@@ -209,6 +209,11 @@ export class SignInAttemptContentFixture {
     return this.route.respond({ message, sender: this.sender })
   }
 
+  /** Message types the offscreen companion WASM handler answers. */
+  static readonly COMPANION_TYPES: ReadonlySet<string> = new Set<string>(
+    Object.values(CompanionWasmSessionMessageType),
+  )
+
   static readonly UNAVAILABLE: SignInAttemptRuntimeResponse = {
     ok: false,
     reason: SignInAttemptFailureReason.Unavailable,
@@ -218,14 +223,13 @@ export class SignInAttemptContentFixture {
     message: CompanionWasmRuntimeMessage,
   ): Promise<ContentRuntimeReply> {
     // Pairing and vault-state requests have no offscreen WASM handler here.
-    const result: ChecklistProjectionResult | undefined =
-      await handleCompanionWasmMessage(message)
-    switch (result) {
-      case undefined:
+    switch (SignInAttemptContentFixture.COMPANION_TYPES.has(message.type)) {
+      case false:
         return { ok: false }
-      default:
+      case true:
         break
     }
+    const result = await handleCompanionWasmMessage(message)
     return result.match(
       (value) => ({ ok: true, result: value }),
       () => ({ ok: false }),
