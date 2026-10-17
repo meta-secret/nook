@@ -149,10 +149,12 @@ class PilotScenarioPage {
           successScript: '',
         }
       case PilotScenario.Attention:
+        // The site answers the submit with a fresh rejection message.
         return {
           fieldsMarkup: this.credentialFieldsMarkup,
-          alertMarkup: '<p role="alert">Unable to sign in.</p>',
-          successScript: '',
+          alertMarkup: '',
+          successScript:
+            "const alert = document.createElement('p'); alert.setAttribute('role', 'alert'); alert.textContent = 'Unable to sign in.'; document.getElementById('login-form').append(alert);",
         }
       case PilotScenario.Waiting:
         return {

@@ -515,6 +515,10 @@ state, also after a reload or a same-site navigation:
   existing **You are in control** state and a concluded one returns to the
   normal Ready Pilot.
 
+When an email-first username step advances to a password step, Rust closes
+the attempt and Pilot starts fresh for the new step. The selected Google
+username advance keeps its own continuation and is not a tracked attempt.
+
 `nook-companion-core` owns the record, transitions, reason and
 error-message classification, reset-link classification and revalidation,
 timeout and expiry, offered actions, message keys and the presentation; see
@@ -535,8 +539,10 @@ revalidation. There is no automatic retry, replay or reconciliation.
 #### Evidence and ownership
 
 - Content scripts are sensors and actuators. Right before Nook submits, they
-  collect presence-only baseline facts (whether any message candidate is
-  present and which authentication fields exist). While Rust asks for
+  report Submitted with a baseline collected by the same bounded collector:
+  the visible message candidates and the authentication-field presence. Rust
+  keeps only whether an error-looking message was present and which fields
+  existed. While Rust asks for
   evidence, they report bounded raw facts: authentication-field presence, the
   existing manual-checkpoint result and outcome markers, up to six visible
   message blocks inside or near the authentication form (alert and live
