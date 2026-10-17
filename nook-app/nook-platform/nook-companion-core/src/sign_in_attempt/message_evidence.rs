@@ -276,3 +276,149 @@ impl SignInPageMessages {
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::SignInAttemptErrorMessageSelection;
+    use crate::sign_in_attempt::failure_reason::SignInFailureReason;
+    use crate::sign_in_attempt::page_evidence::{
+        SignInPageMessagePlacement, SignInPageMessageSource, SignInPageMessages,
+    };
+    use crate::sign_in_attempt::test_fixture::SignInMessageFixture;
+
+    /// Selects the error-looking message among fixture messages.
+    struct SelectionCase {
+        messages: Vec<SignInMessageFixture>,
+    }
+
+    impl SelectionCase {
+        fn selected_text(&self) -> anyhow::Result<String> {
+            let messages = self
+                .messages
+                .iter()
+                .map(SignInMessageFixture::message)
+                .collect::<anyhow::Result<Vec<_>>>()?;
+            match SignInPageMessages::try_from(messages)?.error_selection() {
+                SignInAttemptErrorMessageSelection::Selected(selected) => {
+                    Ok(selected.text.text().to_owned())
+                }
+                SignInAttemptErrorMessageSelection::NoneErrorLooking => Ok(String::new()),
+            }
+        }
+    }
+
+    #[test]
+    fn no_single_weak_signal_makes_a_message_an_error() -> anyhow::Result<()> {
+        for message in [
+            SignInMessageFixture::alert("Loading…"),
+            SignInMessageFixture::red_banner("Welcome to Namecheap"),
+            SignInMessageFixture::container("Incorrect format? See the help center"),
+            SignInMessageFixture::field_reference("Use your email address"),
+            SignInMessageFixture {
+                source: SignInPageMessageSource::LiveRegion,
+                ..SignInMessageFixture::container("Error")
+            },
+            SignInMessageFixture {
+                tokens: &["alert", "alert-success"],
+                ..SignInMessageFixture::alert("You could not be signed out, please try again")
+            },
+            SignInMessageFixture {
+                tokens: &["notice-info"],
+                background: SignInMessageFixture::TINT_RED,
+                ..SignInMessageFixture::container("Sign-in failed")
+            },
+        ] {
+            assert_eq!(
+                SelectionCase {
+                    messages: vec![message.clone()]
+                }
+                .selected_text()?,
+                "",
+                "{message:?}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn combined_signals_select_error_looking_messages() -> anyhow::Result<()> {
+        for message in [
+            SignInMessageFixture::red_banner(SignInMessageFixture::NAMECHEAP_LOCK),
+            SignInMessageFixture::alert("Incorrect username or password."),
+            SignInMessageFixture {
+                tokens: &["form-error"],
+                ..SignInMessageFixture::container("Something went wrong")
+            },
+            SignInMessageFixture {
+                tokens: &["has-error", "help-block"],
+                ..SignInMessageFixture::container("Please check your password and try again")
+            },
+            SignInMessageFixture {
+                background: SignInMessageFixture::TINT_RED,
+                ..SignInMessageFixture::container("Не удалось войти")
+            },
+            SignInMessageFixture {
+                tokens: &["alert", "alert-danger"],
+                ..SignInMessageFixture::container("Your session expired, please try again")
+            },
+        ] {
+            assert_eq!(
+                SelectionCase {
+                    messages: vec![message.clone()]
+                }
+                .selected_text()?,
+                message.text,
+                "{message:?}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn selection_prefers_stronger_evidence_then_the_form_then_page_order() -> anyhow::Result<()> {
+        let near = SignInMessageFixture {
+            placement: SignInPageMessagePlacement::NearAuthForm,
+            ..SignInMessageFixture::alert("Invalid password")
+        };
+        let inside = SignInMessageFixture::alert("Invalid email");
+        let stronger = SignInMessageFixture {
+            tokens: &["error"],
+            ..SignInMessageFixture::red_banner("Account locked")
+        };
+        assert_eq!(
+            SelectionCase {
+                messages: vec![near.clone(), inside.clone()]
+            }
+            .selected_text()?,
+            "Invalid email"
+        );
+        assert_eq!(
+            SelectionCase {
+                messages: vec![inside.clone(), stronger.clone()]
+            }
+            .selected_text()?,
+            "Account locked"
+        );
+        assert_eq!(
+            SelectionCase {
+                messages: vec![inside, SignInMessageFixture::alert("Wrong password")]
+            }
+            .selected_text()?,
+            "Invalid email"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn the_selected_message_carries_its_reason_reading() -> anyhow::Result<()> {
+        let messages = SignInPageMessages::try_from(vec![
+            SignInMessageFixture::red_banner(SignInMessageFixture::NAMECHEAP_LOCK).message()?,
+        ])?;
+        let SignInAttemptErrorMessageSelection::Selected(selected) = messages.error_selection()
+        else {
+            anyhow::bail!("the Namecheap lock banner must be error-looking");
+        };
+        assert_eq!(selected.reason, SignInFailureReason::AccountLocked);
+        Ok(())
+    }
+}

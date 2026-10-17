@@ -290,3 +290,184 @@ impl From<SignInAttemptResetLink> for SignInAttemptResetOffer {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::sign_in_attempt::page_evidence::SignInAttemptDocumentRelation;
+    use crate::sign_in_attempt::test_fixture::{
+        SignInFieldsFixture, SignInMarkerFixture, SignInMessageFixture, SignInObservationFixture,
+        SignInPageFixture, SignInScenario, SignInSubmittedAttempt,
+    };
+    use crate::{
+        AuthenticationLoginChecklistStatus, SignInAttemptActionKind, SignInAttemptFollowUp,
+        SignInAttemptLoginReference, SignInAttemptMessageKey, SignInAttemptStatus,
+        SignInAttemptUserAction,
+    };
+
+    #[test]
+    fn one_time_code_challenge_hands_off_to_the_authenticator_picker() -> anyhow::Result<()> {
+        let challenged = SignInSubmittedAttempt::login_form()
+            .awaiting()?
+            .observe(SignInObservationFixture {
+                at: 3_000,
+                page: SignInPageFixture {
+                    fields: SignInFieldsFixture::OneTimeCode,
+                    ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::NewDocument)
+                },
+            })?
+            .retained()?;
+        assert_eq!(
+            challenged.presentation.status,
+            SignInAttemptStatus::ChallengeRequired
+        );
+        assert_eq!(
+            challenged.presentation.title_key,
+            SignInAttemptMessageKey::WidgetSignInChallenge
+        );
+        assert_eq!(
+            challenged.presentation.description_key,
+            SignInAttemptMessageKey::WidgetSignInChallengeOneTimeCodeDescription
+        );
+        assert_eq!(
+            challenged.offered(),
+            vec![
+                SignInAttemptActionKind::FillAuthenticator,
+                SignInAttemptActionKind::Dismiss
+            ]
+        );
+        let unoffered = challenged
+            .clone()
+            .act(SignInAttemptUserAction::TryAgain)?
+            .retained()?;
+        assert_eq!(
+            unoffered.presentation.status,
+            SignInAttemptStatus::ChallengeRequired
+        );
+        let handed_off = challenged
+            .act(SignInAttemptUserAction::FillAuthenticator)?
+            .closed()?;
+        assert_eq!(
+            handed_off.follow_up,
+            SignInAttemptFollowUp::OpenAuthenticatorPicker
+        );
+        assert!(handed_off.actions.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn verification_checkpoint_offers_take_over_and_try_again() -> anyhow::Result<()> {
+        let challenged = SignInSubmittedAttempt::login_form()
+            .awaiting()?
+            .observe(SignInObservationFixture {
+                at: 3_000,
+                page: SignInPageFixture {
+                    marker: SignInMarkerFixture::ManualCheckpoint,
+                    ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument)
+                },
+            })?
+            .retained()?;
+        assert_eq!(
+            challenged.presentation.description_key,
+            SignInAttemptMessageKey::WidgetSignInChallengeVerificationDescription
+        );
+        assert_eq!(
+            challenged.offered(),
+            vec![
+                SignInAttemptActionKind::TryAgain,
+                SignInAttemptActionKind::Dismiss
+            ]
+        );
+        let taken_over = challenged
+            .clone()
+            .act(SignInAttemptUserAction::Dismiss)?
+            .closed()?;
+        assert_eq!(taken_over.status, SignInAttemptStatus::Dismissed);
+        assert_eq!(
+            taken_over.checklist.status,
+            AuthenticationLoginChecklistStatus::Inactive
+        );
+        let restarted = challenged
+            .act(SignInAttemptUserAction::TryAgain)?
+            .closed()?;
+        assert_eq!(
+            restarted.follow_up,
+            SignInAttemptFollowUp::RestartWithSameLogin {
+                login: SignInAttemptLoginReference::try_from(SignInScenario::LOGIN.to_owned())?,
+            }
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn dismiss_takes_over_in_flight_and_returns_to_fresh_after_a_conclusion() -> anyhow::Result<()>
+    {
+        let taken_over = SignInScenario::begin(1_000)?
+            .act(SignInAttemptUserAction::Dismiss)?
+            .closed()?;
+        assert_eq!(taken_over.status, SignInAttemptStatus::Dismissed);
+        assert_eq!(
+            taken_over.title_key,
+            SignInAttemptMessageKey::WidgetChecklistInactive
+        );
+        assert_eq!(
+            taken_over.checklist.status,
+            AuthenticationLoginChecklistStatus::Inactive
+        );
+        let awaiting_taken_over = SignInSubmittedAttempt::login_form()
+            .awaiting()?
+            .act(SignInAttemptUserAction::Dismiss)?
+            .closed()?;
+        assert_eq!(
+            awaiting_taken_over.checklist.status,
+            AuthenticationLoginChecklistStatus::Inactive
+        );
+        let concluded = SignInSubmittedAttempt::login_form()
+            .awaiting()?
+            .resumed(30_000)?
+            .retained()?
+            .act(SignInAttemptUserAction::Dismiss)?
+            .closed()?;
+        assert_eq!(concluded.status, SignInAttemptStatus::Dismissed);
+        assert_eq!(
+            concluded.title_key,
+            SignInAttemptMessageKey::WidgetLoginTitle
+        );
+        assert_eq!(
+            concluded.checklist.status,
+            AuthenticationLoginChecklistStatus::Ready
+        );
+        assert_eq!(concluded.follow_up, SignInAttemptFollowUp::None);
+        Ok(())
+    }
+
+    #[test]
+    fn try_again_and_choose_another_login_close_with_their_follow_up() -> anyhow::Result<()> {
+        let failed = SignInSubmittedAttempt::login_form()
+            .awaiting()?
+            .observe(SignInObservationFixture {
+                at: 1_500,
+                page: SignInPageFixture {
+                    messages: vec![SignInMessageFixture::alert("Invalid password")],
+                    ..SignInPageFixture::login_form(SignInAttemptDocumentRelation::SameDocument)
+                },
+            })?
+            .retained()?;
+        let restarted = failed
+            .clone()
+            .act(SignInAttemptUserAction::TryAgain)?
+            .closed()?;
+        assert_eq!(restarted.status, SignInAttemptStatus::SigningIn);
+        assert_eq!(
+            restarted.follow_up,
+            SignInAttemptFollowUp::RestartWithSameLogin {
+                login: SignInAttemptLoginReference::try_from(SignInScenario::LOGIN.to_owned())?,
+            }
+        );
+        assert!(restarted.actions.is_empty());
+        let picker = failed
+            .act(SignInAttemptUserAction::ChooseAnotherLogin)?
+            .closed()?;
+        assert_eq!(picker.follow_up, SignInAttemptFollowUp::OpenLoginPicker);
+        Ok(())
+    }
+}

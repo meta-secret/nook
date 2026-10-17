@@ -146,6 +146,13 @@ impl SignInAttemptStoredRecord {
     /// Bound on the stored JSON text; a larger value is rejected unread.
     pub(crate) const MAX_BYTES: usize = 8_192;
 
+    /// The stored JSON text, for tests that inspect what is persisted.
+    #[cfg(test)]
+    pub(crate) fn text(&self) -> &str {
+        let Self(stored) = self;
+        stored
+    }
+
     pub(crate) fn decode(&self) -> Result<SignInAttemptRecord, SignInAttemptRecordError> {
         let Self(stored) = self;
         match stored.len() {
