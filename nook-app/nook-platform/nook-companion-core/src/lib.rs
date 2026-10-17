@@ -300,3 +300,6 @@ pub use authenticator_session_response::*;
 pub use authentication_workflow::{
     ApprovedAuthenticationWorkflowDecision, ApprovedAuthenticationWorkflowRevalidation,
 };
+
+mod sign_in_attempt;
+pub use sign_in_attempt::*;
