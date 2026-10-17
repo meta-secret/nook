@@ -43,7 +43,6 @@ type SignInAttemptDetailCopy = {
 export class SignInAttemptRendering {
   static readonly STYLES = `
     .sign-in-attempt-detail { display: grid; gap: 10px; margin: -4px 0 0; }
-    .sign-in-attempt-reason { margin: 0; color: var(--nk-fg); font-size: 13px; font-weight: 600; line-height: 1.45; }
     .sign-in-site-message { margin: 0; padding: 9px 11px; border: 1px solid var(--nk-border); border-left: 3px solid var(--nk-warning); background: var(--nk-bg); display: grid; gap: 4px; }
     .sign-in-site-message-label { margin: 0; color: var(--nk-muted); font-family: var(--nk-mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; }
     .sign-in-site-message-text { margin: 0; color: var(--nk-fg); font-size: 12.5px; line-height: 1.45; overflow-wrap: anywhere; }
@@ -55,7 +54,6 @@ export class SignInAttemptRendering {
     .sign-in-attempt-actions .text-button { margin: 0 auto; }
   `
   private readonly detail: HTMLDivElement
-  private readonly reason: HTMLParagraphElement
   private readonly siteMessage: HTMLDivElement
   private readonly siteMessageText: HTMLParagraphElement
   private readonly actions: HTMLDivElement
@@ -69,12 +67,9 @@ export class SignInAttemptRendering {
     this.detail = document.createElement('div')
     this.detail.className = 'sign-in-attempt-detail'
     this.detail.setAttribute('data-testid', 'nook-sign-in-attempt')
-    // The reason and the site's message are announced like the description.
+    // The site's message is announced like the description, which carries the reason.
     this.detail.setAttribute('role', 'status')
     this.detail.setAttribute('aria-live', 'polite')
-    this.reason = document.createElement('p')
-    this.reason.className = 'sign-in-attempt-reason'
-    this.reason.setAttribute('data-testid', 'nook-sign-in-reason')
     this.siteMessage = document.createElement('div')
     this.siteMessage.className = 'sign-in-site-message'
     const label = document.createElement('p')
@@ -89,7 +84,7 @@ export class SignInAttemptRendering {
       'nook-sign-in-site-message',
     )
     this.siteMessage.append(label, this.siteMessageText)
-    this.detail.append(style, this.reason, this.siteMessage)
+    this.detail.append(style, this.siteMessage)
     this.actions = document.createElement('div')
     this.actions.className = 'sign-in-attempt-actions'
     this.actions.setAttribute('data-testid', 'nook-sign-in-actions')
@@ -118,13 +113,11 @@ export class SignInAttemptRendering {
     }
     this.write(description)
     this.detail.dataset.status = String(presentation.status)
-    this.renderReason(presentation)
     this.renderSiteMessage(presentation)
     checklist.render(presentation.checklist)
     this.renderActions(presentation.actions)
-    this.detail.hidden = ![this.reason, this.siteMessage]
-      .map((element) => this.detailKind(element))
-      .includes(SignInAttemptDetailKind.Shown)
+    this.detail.hidden =
+      this.detailKind(this.siteMessage) === SignInAttemptDetailKind.Absent
     surface.continueButton.hidden = true
   }
 
@@ -167,22 +160,6 @@ export class SignInAttemptRendering {
     }
   }
 
-  private renderReason(presentation: SignInAttemptPresentation): void {
-    const reason = presentation.reason_key
-    switch (true) {
-      case typeof reason === 'string': {
-        const update: SignInAttemptDetailCopy = {
-          element: this.reason,
-          copy: chrome.i18n.getMessage(reason),
-        }
-        this.show(update)
-        return
-      }
-      case true:
-        this.hide(this.reason)
-    }
-  }
-
   private renderSiteMessage(presentation: SignInAttemptPresentation): void {
     const message = presentation.site_message
     switch (true) {
@@ -201,11 +178,6 @@ export class SignInAttemptRendering {
     }
   }
 
-  private show(update: SignInAttemptDetailCopy): void {
-    this.write(update)
-    update.element.hidden = false
-  }
-
   /** Writes only changed copy, so identical presentations cause no DOM churn. */
   private write(update: SignInAttemptDetailCopy): void {
     switch (update.element.textContent === update.copy) {
@@ -214,11 +186,6 @@ export class SignInAttemptRendering {
       case false:
         update.element.textContent = update.copy
     }
-  }
-
-  private hide(element: HTMLElement): void {
-    element.textContent = ''
-    element.hidden = true
   }
 
   /** Rebuilds buttons only when the offers change, so focus and clicks survive. */

@@ -73,11 +73,21 @@ describe('companion sign-in attempt generated-package ABI', () => {
     expect(advance_sign_in_attempt(otherSite).kind).toBe('OtherSite')
   })
 
+  test('accepts a legacy secret label with spaces, non-ASCII and a slash', () => {
+    const fixture = new SignInAttemptAbiFixture()
+    const request: SignInAttemptBeginRequest = {
+      sender_origin: fixture.origin,
+      login: 'store_a/Mein Konto/Ärger',
+      now: fixture.now,
+    }
+    expect(begin_sign_in_attempt(request).disposition.kind).toBe('Retain')
+  })
+
   test('throws for a malformed request DTO', () => {
     const fixture = new SignInAttemptAbiFixture()
     const request: SignInAttemptBeginRequest = {
       sender_origin: fixture.origin,
-      login: 'has spaces',
+      login: 'store_a/',
       now: fixture.now,
     }
     expect(() => begin_sign_in_attempt(request)).toThrow()

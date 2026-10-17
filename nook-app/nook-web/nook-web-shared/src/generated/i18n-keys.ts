@@ -881,7 +881,6 @@ export const I18N_KEYS = {
   ExtensionWidgetSignInChooseAnotherLogin: 'extension.widget.sign_in_choose_another_login',
   ExtensionWidgetSignInDismiss: 'extension.widget.sign_in_dismiss',
   ExtensionWidgetSignInFailed: 'extension.widget.sign_in_failed',
-  ExtensionWidgetSignInFailedDescription: 'extension.widget.sign_in_failed_description',
   ExtensionWidgetSignInReasonAccountLocked: 'extension.widget.sign_in_reason_account_locked',
   ExtensionWidgetSignInReasonChallengeRequired: 'extension.widget.sign_in_reason_challenge_required',
   ExtensionWidgetSignInReasonRateLimited: 'extension.widget.sign_in_reason_rate_limited',

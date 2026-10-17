@@ -253,7 +253,7 @@ describe('service-worker sign-in attempt store', () => {
     const fixture = await SignInAttemptRouteFixture.create()
     const malformed: BrowserRuntimeMessageValue = {
       type: SignInAttemptMessageType.Session,
-      payload: { operation: SignInAttemptOperation.Begin, login: 'has spaces' },
+      payload: { operation: SignInAttemptOperation.Begin, login: 'store_a/' },
     }
     const response = await fixture.respond({
       message: malformed,

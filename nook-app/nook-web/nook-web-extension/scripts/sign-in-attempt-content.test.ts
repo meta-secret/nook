@@ -56,9 +56,9 @@ describe('content-script sign-in attempt client', () => {
     expect(surface.title.textContent).toBe('widgetSignInFailed')
     // Rust's attempt progress drives the header counter, not the Ready mount.
     expect(surface.step.textContent).toBe('widgetPilotLabel · 3/3')
-    expect(
-      PilotExpectation.text({ surface, testId: 'nook-sign-in-reason' }),
-    ).toBe('widgetSignInReasonAccountLocked')
+    expect(surface.description.textContent).toBe(
+      'widgetSignInReasonAccountLocked',
+    )
     const message = surface.body.querySelector(
       '[data-testid="nook-sign-in-site-message"]',
     )
@@ -100,9 +100,9 @@ describe('content-script sign-in attempt client', () => {
     const surface = fixture.surface()
     fixture.rendering(surface).render(failed)
     expect(surface.title.textContent).toBe('widgetSignInFailed')
-    expect(
-      PilotExpectation.text({ surface, testId: 'nook-sign-in-reason' }),
-    ).toBe('widgetSignInReasonWrongCredentials')
+    expect(surface.description.textContent).toBe(
+      'widgetSignInReasonWrongCredentials',
+    )
     expect(
       PilotExpectation.text({ surface, testId: 'nook-sign-in-site-message' }),
     ).toBe('The username or password you entered is incorrect.')

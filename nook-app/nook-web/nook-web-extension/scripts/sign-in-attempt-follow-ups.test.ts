@@ -225,6 +225,46 @@ describe('sign-in attempt follow-ups', () => {
   })
 })
 
+describe('sign-in attempt site binding', () => {
+  let fixture: SignInAttemptContentFixture
+  beforeEach(async () => {
+    fixture = await SignInAttemptContentFixture.create()
+  })
+  afterEach(() => {
+    fixture.dispose()
+  })
+
+  test('another origin of the same site gets the reason and actions but not the site message', async () => {
+    await fixture.observedAfterSubmit(
+      EvidenceFixture.page({
+        message: lockText,
+        authFields: true,
+        success: false,
+        resetLink: false,
+      }),
+    )
+    // Rust decides this from the sender origin; TypeScript only renders it.
+    fixture.sender = {
+      ...fixture.sender,
+      url: 'https://namecheap.com/myaccount/login/',
+    }
+    fixture.loginDocument()
+    await signInAttemptSession.resume()
+    const surface = fixture.surface()
+    await fixture.progress(surface).initialize()
+    expect(surface.title.textContent).toBe('widgetSignInFailed')
+    expect(surface.description.textContent).toBe(
+      'widgetSignInReasonAccountLocked',
+    )
+    expect(PilotExpectation.actions(surface)).toContain('widgetSignInTryAgain')
+    const message = surface.body.querySelector(
+      '[data-testid="nook-sign-in-site-message"]',
+    )
+    expect(message?.textContent).toBe('')
+    expect(surface.body.textContent).not.toContain('locked for 24 hours')
+  })
+})
+
 describe('sign-in attempt rendering states', () => {
   let fixture: SignInAttemptContentFixture
   beforeEach(async () => {

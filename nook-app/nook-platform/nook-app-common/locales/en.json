@@ -1892,7 +1892,6 @@
       "sign_in_signed_in": "Signed in",
       "sign_in_signed_in_description": "The site accepted the sign-in.",
       "sign_in_failed": "Sign-in failed",
-      "sign_in_failed_description": "The site did not accept this sign-in.",
       "sign_in_reason_wrong_credentials": "The site says the username or password is wrong.",
       "sign_in_reason_account_locked": "The site has locked this account.",
       "sign_in_reason_rate_limited": "The site is limiting sign-in attempts. Wait before trying again.",

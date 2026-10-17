@@ -11,7 +11,6 @@ export type SignInAttemptWidgetCatalog = {
   sign_in_signed_in: string
   sign_in_signed_in_description: string
   sign_in_failed: string
-  sign_in_failed_description: string
   sign_in_reason_wrong_credentials: string
   sign_in_reason_account_locked: string
   sign_in_reason_rate_limited: string
@@ -63,7 +62,6 @@ export class SignInAttemptChromeMessages {
     widgetSignInSignedIn: 'sign_in_signed_in',
     widgetSignInSignedInDescription: 'sign_in_signed_in_description',
     widgetSignInFailed: 'sign_in_failed',
-    widgetSignInFailedDescription: 'sign_in_failed_description',
     widgetSignInReasonWrongCredentials: 'sign_in_reason_wrong_credentials',
     widgetSignInReasonAccountLocked: 'sign_in_reason_account_locked',
     widgetSignInReasonRateLimited: 'sign_in_reason_rate_limited',

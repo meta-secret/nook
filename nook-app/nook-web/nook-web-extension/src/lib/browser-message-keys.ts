@@ -31,7 +31,6 @@ export const BROWSER_MESSAGE_KEYS = {
   WidgetSignInSignedIn: 'widgetSignInSignedIn',
   WidgetSignInSignedInDescription: 'widgetSignInSignedInDescription',
   WidgetSignInFailed: 'widgetSignInFailed',
-  WidgetSignInFailedDescription: 'widgetSignInFailedDescription',
   WidgetSignInReasonWrongCredentials: 'widgetSignInReasonWrongCredentials',
   WidgetSignInReasonAccountLocked: 'widgetSignInReasonAccountLocked',
   WidgetSignInReasonRateLimited: 'widgetSignInReasonRateLimited',

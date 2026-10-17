@@ -113,7 +113,7 @@ export const lockText =
 export class SignInAttemptContentFixture {
   projections = 0
   /** The top-level frame every fixture request is sent from. */
-  readonly sender: SignInAttemptSenderFixture = topFrame
+  sender: SignInAttemptSenderFixture = topFrame
   /** Follow-ups the mounted login Pilot was asked to run. */
   readonly runs: SignInAttemptHostAction[] = []
   /** Runs as a sign-in request reaches the service worker, before Rust answers. */
@@ -206,7 +206,7 @@ export class SignInAttemptContentFixture {
       case false:
         break
     }
-    return this.route.respond({ message, sender: topFrame })
+    return this.route.respond({ message, sender: this.sender })
   }
 
   static readonly UNAVAILABLE: SignInAttemptRuntimeResponse = {
@@ -237,7 +237,7 @@ export class SignInAttemptContentFixture {
       type: SignInAttemptMessageType.Session,
       payload: { operation: SignInAttemptOperation.Advance, event },
     }
-    return this.route.respond({ message, sender: topFrame })
+    return this.route.respond({ message, sender: this.sender })
   }
 
   /** Drives the real route through Begin, fill and submit, then one observed page. */

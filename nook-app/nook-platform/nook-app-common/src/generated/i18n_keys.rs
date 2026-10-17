@@ -1099,8 +1099,6 @@ pub const EXTENSION_WIDGET_SIGN_IN_CHOOSE_ANOTHER_LOGIN: &str =
     "extension.widget.sign_in_choose_another_login";
 pub const EXTENSION_WIDGET_SIGN_IN_DISMISS: &str = "extension.widget.sign_in_dismiss";
 pub const EXTENSION_WIDGET_SIGN_IN_FAILED: &str = "extension.widget.sign_in_failed";
-pub const EXTENSION_WIDGET_SIGN_IN_FAILED_DESCRIPTION: &str =
-    "extension.widget.sign_in_failed_description";
 pub const EXTENSION_WIDGET_SIGN_IN_REASON_ACCOUNT_LOCKED: &str =
     "extension.widget.sign_in_reason_account_locked";
 pub const EXTENSION_WIDGET_SIGN_IN_REASON_CHALLENGE_REQUIRED: &str =

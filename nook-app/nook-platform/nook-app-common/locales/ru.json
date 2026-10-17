@@ -1899,7 +1899,6 @@
       "sign_in_signed_in": "Вход выполнен",
       "sign_in_signed_in_description": "Сайт принял вход.",
       "sign_in_failed": "Не удалось войти",
-      "sign_in_failed_description": "Сайт не принял этот вход.",
       "sign_in_reason_wrong_credentials": "Сайт сообщает, что имя пользователя или пароль неверны.",
       "sign_in_reason_account_locked": "Сайт заблокировал эту учётную запись.",
       "sign_in_reason_rate_limited": "Сайт ограничивает попытки входа. Подождите, прежде чем пробовать снова.",

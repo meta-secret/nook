@@ -504,9 +504,14 @@ login workflow:
 - **Signed in**: the site accepted the sign-in.
 - **Sign-in failed**: a localized reason category (wrong username or
   password, account locked, rate limited, verification required, or unknown),
-  the site's own visible message, and the actions **Try again**, **Choose
-  another login**, **Reset password** (only when the page offers a password
-  reset link) and **Dismiss**.
+  the site's own visible message (shown only on the exact origin that
+  recorded it), and the actions **Try again** and **Choose another login**
+  (only while the page shows a login field), **Reset password** (only when
+  the page offers a password reset link) and **Dismiss**. Rust orders the
+  actions by reason, for example **Reset password** first for a locked
+  account; the first is the primary button and **Dismiss** is a quiet text
+  button. When a chosen action cannot run on the page, Pilot says so
+  visibly instead of disappearing.
 - **Verification needed**: a 2FA field hands off to the existing
   authenticator picker (**Fill 2FA code**); a CAPTCHA or manual checkpoint
   shows take-over guidance.
@@ -576,7 +581,9 @@ where a login form exists, otherwise no sign-in Pilot at all.
   baseline (also across a reload), and whether a link resets a password.
 - **Reset password** revalidates that the page's own link is still connected
   and visible, sends its fresh facts to Rust for reclassification, and only
-  then activates that link.
+  then activates that same element, while its fresh facts still match what
+  Rust revalidated. If the element was replaced or changed meanwhile,
+  nothing is clicked and the Pilot stays as it is.
 - The site message is rendered with `textContent` only.
 
 - Single-page-app limitation: when a site re-renders an identical message
