@@ -74,6 +74,13 @@ class NamecheapLoginFixture {
     })
   }
 
+  /** Resolves once Nook's submit reached the page and the site deferred it. */
+  async submitted(page: Page): Promise<void> {
+    await page.waitForFunction(
+      () => Reflect.get(window, '__nookFixtureSubmit') instanceof Function,
+    )
+  }
+
   release(page: Page): Promise<void> {
     return page.evaluate(() => {
       const submit: unknown = Reflect.get(window, '__nookFixtureSubmit')
@@ -245,6 +252,7 @@ class SignInAttemptLifecycleScenario {
     this.fixture.verdict = NamecheapLoginVerdict.WrongPassword
     await this.fixture.hold(page)
     await this.signIn(page)
+    await this.fixture.submitted(page)
     const widget = this.widget(page)
     await expect(widget.getByText('Signing in…')).toBeVisible({
       timeout: 20_000,
