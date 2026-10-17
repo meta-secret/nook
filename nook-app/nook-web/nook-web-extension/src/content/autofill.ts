@@ -83,6 +83,11 @@ import { authenticationWidgetRenderer } from './autofill/widget-rendering'
 import { authenticationWidgetPosition } from './autofill/widget-position'
 import { workflowUi } from './autofill/workflow-ui'
 import { authenticatorEnrollmentInteraction } from './enrollment-flow'
+import { signInAttemptSession } from './autofill/sign-in-attempt-session'
+import {
+  SignInAttemptWidgetDisplay,
+  signInAttemptPageWidget,
+} from './autofill/sign-in-attempt-widget'
 
 enum AuthenticationScanOutcome {
   Inconclusive = 'inconclusive',
@@ -145,6 +150,12 @@ export class AuthenticationScanRenderLifecycle {
       case WidgetCredentialActuation.FocusedSelection:
         return AuthenticationScanOutcome.Suppressed
       case WidgetCredentialActuation.Idle:
+        break
+    }
+    switch (signInAttemptPageWidget.displayed()) {
+      case SignInAttemptWidgetDisplay.Shown:
+        return AuthenticationScanOutcome.Rendered
+      case SignInAttemptWidgetDisplay.NotPresented:
         break
     }
     if (widgetState.dismissed) {
@@ -485,6 +496,26 @@ export class AuthenticationScanRenderLifecycle {
       Effect.gen(generatorContext, function* () {
         const outcome = yield* Effect.promise(() => this.performScanAndRender())
         switch (outcome) {
+          case AuthenticationScanOutcome.Inconclusive:
+          case AuthenticationScanOutcome.Removed:
+            break
+          case AuthenticationScanOutcome.Rendered:
+          case AuthenticationScanOutcome.Stale:
+          case AuthenticationScanOutcome.Suppressed:
+          case AuthenticationScanOutcome.Watching:
+            return
+        }
+        // A tab's attempt stays visible where no login form Pilot claimed the page.
+        const attempt = yield* Effect.promise(() =>
+          signInAttemptPageWidget.show(),
+        )
+        switch (attempt) {
+          case SignInAttemptWidgetDisplay.Shown:
+            return
+          case SignInAttemptWidgetDisplay.NotPresented:
+            break
+        }
+        switch (outcome) {
           case AuthenticationScanOutcome.Inconclusive: {
             const sequence = scanState.sequence
             const rendered = yield* Effect.promise(() =>
@@ -506,10 +537,6 @@ export class AuthenticationScanRenderLifecycle {
             break
           }
           case AuthenticationScanOutcome.Removed:
-          case AuthenticationScanOutcome.Rendered:
-          case AuthenticationScanOutcome.Stale:
-          case AuthenticationScanOutcome.Suppressed:
-          case AuthenticationScanOutcome.Watching:
             break
         }
       }),
@@ -757,6 +784,7 @@ void runAfterCompanionWasmReady({
       loginSaveInteraction.discardSubmissionCapture()
       return
     }
+    await signInAttemptSession.resume()
     void authenticationScanRenderLifecycle.scanAndRender()
     loginSaveInteraction.rememberSubmissionPasswordFields()
     loginSaveInteraction.enableSubmissionCapture()

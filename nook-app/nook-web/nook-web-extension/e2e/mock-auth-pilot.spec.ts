@@ -527,9 +527,7 @@ test.describe('PIN Pilot against mock auth', () => {
       await expect(loginWidget.getByText('Ready to sign in')).toBeVisible({
         timeout: 20_000,
       })
-      await loginWidget
-        .getByRole('button', { name: 'Sign in' })
-        .click()
+      await loginWidget.getByRole('button', { name: 'Sign in' }).click()
 
       await expect(loginPage).toHaveURL(/\/totp\/verify$/, { timeout: 20_000 })
       const otpWidget = loginPage.locator('#nook-auth-widget')

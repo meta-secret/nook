@@ -98,9 +98,9 @@ class MicrosoftLiveIdentifierProof {
       timeout: 30_000,
     })
     const widget = page.locator('#nook-auth-widget')
-    await expect(
-      widget.getByRole('button', { name: 'Sign in' }),
-    ).toBeVisible({ timeout: 30_000 })
+    await expect(widget.getByRole('button', { name: 'Sign in' })).toBeVisible({
+      timeout: 30_000,
+    })
     await expect(widget.getByTestId('nook-auth-gate')).toBeInViewport()
     await expect(widget.getByTestId('nook-auth-gate')).toHaveCSS('opacity', '1')
     await expect(page.locator('#usernameEntry')).toHaveValue('')

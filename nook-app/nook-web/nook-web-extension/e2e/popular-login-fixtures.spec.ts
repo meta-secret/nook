@@ -818,9 +818,7 @@ test.describe('popular login fixture coverage', () => {
           await expect(page.locator('[name="password"]')).toBeVisible()
           await expect(page.getByTestId('mock-auth-success')).toHaveCount(0)
           await expect(widget.getByText('Ready to sign in')).toBeVisible()
-          await widget
-            .getByRole('button', { name: 'Sign in' })
-            .click()
+          await widget.getByRole('button', { name: 'Sign in' }).click()
         }
 
         await expect(page.getByTestId('mock-auth-success')).toHaveText(
@@ -904,9 +902,7 @@ test.describe('popular login fixture coverage', () => {
         if (templateId === 'phone-first') {
           await expect(page.locator('[name="password"]')).toBeVisible()
           await expect(widget.getByText('Ready to sign in')).toBeVisible()
-          await widget
-            .getByRole('button', { name: 'Sign in' })
-            .click()
+          await widget.getByRole('button', { name: 'Sign in' }).click()
         }
         await expect(page.getByRole('alert')).toHaveText(
           'Invalid username or password.',

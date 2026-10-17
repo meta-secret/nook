@@ -267,9 +267,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
       'data-state',
       'vault-not-connected',
     )
-    await expect(
-      widget.getByRole('button', { name: 'Sign in' }),
-    ).toBeVisible()
+    await expect(widget.getByRole('button', { name: 'Sign in' })).toBeVisible()
     // One action on the page: the vault opens from the toolbar panel.
     await expect(
       widget.getByRole('button', { name: 'Open vault' }),
@@ -297,9 +295,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await expect(widget.getByText('Ready to sign in')).toBeVisible()
 
     await widget.getByRole('button', { name: 'Collapse Nook' }).click()
-    await expect(
-      widget.getByRole('button', { name: 'Sign in' }),
-    ).toBeHidden()
+    await expect(widget.getByRole('button', { name: 'Sign in' })).toBeHidden()
     await expect(
       widget
         .getByTestId('nook-auth-gate-expand')
@@ -309,9 +305,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
       widget.getByRole('button', { name: /Expand Nook: Nook Pilot · 1\/3/ }),
     ).toBeVisible()
     await widget.getByTestId('nook-auth-gate-expand').click()
-    await expect(
-      widget.getByRole('button', { name: 'Sign in' }),
-    ).toBeVisible()
+    await expect(widget.getByRole('button', { name: 'Sign in' })).toBeVisible()
 
     const toolbarPanel = await context.newPage()
     await toolbarPanel.goto(

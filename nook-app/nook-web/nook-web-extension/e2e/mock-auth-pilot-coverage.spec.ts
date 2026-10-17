@@ -52,9 +52,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await expect(
         loginWidget.getByTestId('nook-auth-gate-vault-status'),
       ).toHaveAttribute('data-state', 'no-matching-credential')
-      await loginWidget
-        .getByRole('button', { name: 'Sign in' })
-        .click()
+      await loginWidget.getByRole('button', { name: 'Sign in' }).click()
       await expect(
         loginWidget.getByText(
           'No saved login matches this site yet. Add one in your vault from the Nook toolbar button.',

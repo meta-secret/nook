@@ -60,7 +60,7 @@ application capability checks enforce the vault-type boundary.
 - **Extension background/WASM runtime**
   - **Responsibility:** Local device key, selected identity, encrypted state, sync, domain matching, and fill authorization
 - **In-page auth gate**
-  - **Responsibility:** Universal Sign in with Nook gate plus optional unlock/select/fill/save actions
+  - **Responsibility:** Universal Sign in gate plus optional unlock/select/fill/save actions
 - **Content script**
   - **Responsibility:** DOM detection and the minimum selected fill payload; never vault search, crypto, or provider credentials
 
@@ -492,6 +492,109 @@ The existing signup and 2FA outcome requirements remain unchanged.
   Reject an old request shape and require a fresh current-runtime interaction;
   durable vault storage needs no migration.
 
+### Sign-in attempt lifecycle
+
+Accepted requirement: Nook Pilot controls the sign-in it performs. Clicking
+**Sign in** (or choosing a login when several match) begins one sign-in
+attempt for the tab. After that, Pilot never falls back to its initial Ready
+state on its own; it shows **Signing in…** and then exactly one visible end
+state, also after a reload or a same-site navigation:
+
+- **Signed in**: the site accepted the sign-in.
+- **Sign-in failed**: a localized reason category (wrong username or
+  password, account locked, rate limited, verification required, or unknown),
+  the site's own visible message, and the actions **Try again**, **Choose
+  another login**, **Reset password** (only when the page offers a password
+  reset link) and **Dismiss**.
+- **Verification needed**: a 2FA field hands off to the existing
+  authenticator picker (**Fill 2FA code**); a CAPTCHA or manual checkpoint
+  shows take-over guidance.
+- **Sign-in not confirmed**: no decisive response within the Rust-owned
+  outcome budget, with **Try again** and **Dismiss**.
+- **Dismissed**: the user ended the attempt; an in-flight attempt shows the
+  existing **You are in control** state and a concluded one returns to the
+  normal Ready Pilot.
+
+`nook-companion-core` owns the record, transitions, reason and
+error-message classification, reset-link classification and revalidation,
+timeout and expiry, offered actions, message keys and the presentation; see
+the [sign-in attempt lifecycle architecture](../../../../../nook-platform/nook-companion-core/.cortex/docs/architecture/index.md).
+When failure is established but its reason is not clearly classified, Pilot
+shows **Sign-in failed** with the unknown reason; it never guesses a
+category. **Try again** is an explicit user action that closes the old attempt
+and begins a new one with the same login through the existing fill path and
+revalidation. There is no automatic retry, replay or reconciliation.
+
+- **Prohibited:** return to Ready after the site rejects the password, label
+  an unclassified rejection as a wrong password, or re-submit the login
+  without a new explicit click.
+- **Required:** show **Sign-in failed** with the classified reason (or the
+  unknown reason) and the site's message until the user chooses an action or
+  closes the tab; **Try again** starts one new attempt.
+
+#### Evidence and ownership
+
+- Content scripts are sensors and actuators. Right before Nook submits, they
+  collect presence-only baseline facts (whether any message candidate is
+  present and which authentication fields exist). While Rust asks for
+  evidence, they report bounded raw facts: authentication-field presence, the
+  existing manual-checkpoint result and outcome markers, up to six visible
+  message blocks inside or near the authentication form (alert and live
+  regions, field error references, and plain styled blocks with no role or
+  `aria-live`) with their text, class and id tokens, colors and placement,
+  and up to eight visible links without query or fragment.
+- They never read input values and never classify page text. Rust decides
+  whether a block is an error, its reason, its freshness against the
+  baseline (also across a reload), and whether a link resets a password.
+- **Reset password** revalidates that the page's own link is still connected
+  and visible, sends its fresh facts to Rust for reclassification, and only
+  then activates that link.
+- The site message is rendered with `textContent` only.
+
+- **Prohibited:** decide in TypeScript that a red banner means a locked
+  account, keep page text in the content script after rendering, or click a
+  reset link Rust has not revalidated.
+- **Required:** send the raw facts, render the Rust presentation, and
+  activate a reset link only after both DOM and Rust revalidation.
+
+#### Ephemeral attempt record
+
+- The service worker keeps one opaque Rust-owned record string per tab in
+  `chrome.storage.session` under `nook.extension.sign-in-attempt.<tabId>` and
+  returns it to Rust verbatim. The record holds the non-secret lifecycle
+  state: the site binding, the opaque login item identity, the
+  submit-time baseline facts, timestamps, the concluded state, and at most
+  one bounded site message selected by Rust. It never holds a credential,
+  field value, username, or other page text.
+- Lifetime: Rust closes the record on **Signed in** (after the presentation is
+  delivered), **Dismiss**, **Try again**, **Choose another login**, **Reset
+  password** and **Fill 2FA code**; the service worker removes it on that
+  close, when Rust rejects a record that fails strict decode (Pilot starts
+  fresh), and on `chrome.tabs.onRemoved`. A concluded failed, verification or
+  not-confirmed record is retained across reloads until the user resolves it.
+  Expiry and the outcome timeout are Rust decisions that yield the visible
+  **Sign-in not confirmed** state, not a silent removal. A browser restart
+  clears `chrome.storage.session`.
+- Trust boundary: every request is bound to `sender.tab.id`, the top-level
+  frame (`sender.frameId === 0`) and the origin derived from the Chrome sender
+  through the existing authorized-website-sender check, never from the
+  message body. Rust admits the record only for the same site (registrable
+  domain; exact host when none); a record for another site stays stored and
+  the page shows the normal fresh Pilot. Iframe logins keep their existing
+  in-memory checklist. Session storage keeps its `TRUSTED_CONTEXTS` access
+  level; content scripts never read it. Nothing logs the record, the site
+  message, or collected page text.
+- No durable vault schema or storage migration is required: the record is
+  ephemeral session state, and a record that fails Rust's strict decode is
+  removed instead of being read through a compatibility path.
+
+- **Prohibited:** read the attempt from a content script, accept a sender
+  origin from the message body, keep the record after the tab closes, or add
+  a reader for an older record shape.
+- **Required:** bind every operation to the sender tab, top frame and
+  sender-derived origin; remove the record on Rust close, strict-decode
+  rejection or tab removal; start a fresh Pilot after a rejected record.
+
 ### Focused credential opportunities
 
 Accepted slice: retain general URL, page-context, and detected-form recognition.
@@ -688,8 +791,9 @@ The gate must:
 - show the requesting hostname, Rust-classified workflow, current step, and
   manual takeover without exposing a username, password, TOTP code, setup key,
   recovery code, or provider credential;
-- offer one primary Sign in with Nook action that lists matching logins for the
-  page origin. Reveal one credential after explicit choice and fill a detected
+- offer one primary **Sign in** action (ru: **Войти**) that lists matching
+  logins for the page origin. Nook is the product name in the HUD frame, not
+  part of the action label. Reveal one credential after explicit choice and fill a detected
   form. Require explicit submission approval except for the
   [selected Google username advance](#google-two-step-login).
   When locked, open the shared extension authentication tab and keep the host

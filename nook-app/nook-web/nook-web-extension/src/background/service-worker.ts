@@ -8,6 +8,11 @@ import {
 import { FocusedLoginMessageRoute } from './service-worker/focused-login-message-route'
 import { GoogleLoginContinuationRoute } from './service-worker/google-login-continuation-route'
 import { loginPickerOperations } from './service-worker/login-picker-operations'
+import {
+  SignInAttemptRoute,
+  type SignInAttemptRouteDependencies,
+} from './service-worker/sign-in-attempt-route'
+import { SignInAttemptTabRecords } from './service-worker/sign-in-attempt-store'
 /* eslint-disable nook-typed-api/no-raw-object-arguments, @typescript-eslint/no-unsafe-type-assertion -- Chrome runtime messages are narrowed at this external transport boundary. */
 import {
   GeneratePasswordRequestType,
@@ -280,7 +285,26 @@ const focusedLoginMessageRouteRequest: ConstructorParameters<
 const googleLoginRuntimeSchema: RuntimeMessageSchema<BrowserRuntimeMessage> = {
   decode: GoogleLoginContinuationMessageCodec.decodeEnvelope,
 }
+const signInAttemptRouteDependencies: SignInAttemptRouteDependencies = {
+  records: new SignInAttemptTabRecords(chrome.storage.session),
+  authorizesSender: extensionPairingIdentity.isAuthorizedWebsiteSender.bind(
+    extensionPairingIdentity,
+  ),
+  companionReady: companionWasmReady,
+  now: Date.now,
+}
+const signInAttemptRoute = new SignInAttemptRoute(
+  signInAttemptRouteDependencies,
+)
+chrome.tabs.onRemoved.addListener((tabId) => {
+  void signInAttemptRoute.forgetTab(tabId)
+})
+const signInAttemptRuntimeSchema: RuntimeMessageSchema<BrowserRuntimeMessage> =
+  { decode: SignInAttemptRoute.decodeEnvelope }
 const schemaRuntimeMessageRoutes: BackgroundRuntimeMessageRoutes = [
+  SchemaRuntimeMessageRoute.matching(signInAttemptRuntimeSchema)
+    .respondWith(signInAttemptRoute.respond.bind(signInAttemptRoute))
+    .onRejected(() => SignInAttemptRoute.failed),
   SchemaRuntimeMessageRoute.matching(googleLoginRuntimeSchema)
     .respondWith((request) => {
       const operation: ConstructorParameters<

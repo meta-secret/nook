@@ -95,11 +95,13 @@ export class SignInAttemptChromeMessages {
       catalogKey: 'sign_in_challenge',
     },
     {
-      chromeKey: BROWSER_MESSAGE_KEYS.WidgetSignInChallengeOneTimeCodeDescription,
+      chromeKey:
+        BROWSER_MESSAGE_KEYS.WidgetSignInChallengeOneTimeCodeDescription,
       catalogKey: 'sign_in_challenge_one_time_code_description',
     },
     {
-      chromeKey: BROWSER_MESSAGE_KEYS.WidgetSignInChallengeVerificationDescription,
+      chromeKey:
+        BROWSER_MESSAGE_KEYS.WidgetSignInChallengeVerificationDescription,
       catalogKey: 'sign_in_challenge_verification_description',
     },
     {

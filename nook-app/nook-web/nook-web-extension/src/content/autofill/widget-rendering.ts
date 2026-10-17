@@ -2,6 +2,11 @@ import { LoginChecklistMountKind } from './state'
 import type { AuthenticationAuthenticatorSetupSnapshot } from '../../lib/page-qr-capture'
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import { LoginChecklistProgress } from './login-checklist-progress'
+import { SignInAttemptLoginActions } from './sign-in-attempt-login-actions'
+import {
+  SignInAttemptChallengeKind,
+  signInAttemptSession,
+} from './sign-in-attempt-session'
 
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 
@@ -293,11 +298,13 @@ class AuthenticationWidgetRenderer {
       if (!canContinueWithNook) {
         authenticatorInteraction.cancelPendingAuthenticatorPickerRequest()
         loginPasskeyInteraction.cancelPendingLoginPickerRequest()
+        void signInAttemptSession.close()
         this.ui.widgetState.dismissed = true
         workflowUi.removeWidget()
         return
       }
       if (snapshot.action === AuthenticationWorkflowAction.FillTotp) {
+        void signInAttemptSession.handOffToAuthenticator()
         const nookTypedArgs0_4: Parameters<
           typeof authenticatorInteraction.continueWithAuthenticator
         >[0] = {
@@ -443,6 +450,19 @@ class AuthenticationWidgetRenderer {
       workflowRoot: nookTypedArgs0_1,
     }
     authenticationWidgetShell.mountWidgetShell(nookTypedArgs0_8)
+    const challenge = signInAttemptSession.challenge()
+    switch (challenge.kind) {
+      case SignInAttemptChallengeKind.Presented:
+        title.textContent = chrome.i18n.getMessage(
+          challenge.presentation.titleKey,
+        )
+        description.textContent = chrome.i18n.getMessage(
+          challenge.presentation.descriptionKey,
+        )
+        break
+      case SignInAttemptChallengeKind.Absent:
+        break
+    }
 
     switch (snapshot.kind) {
       case AuthenticationWorkflowKind.Login:
@@ -454,6 +474,14 @@ class AuthenticationWidgetRenderer {
               surface: { body, title, description },
               control: continueButton,
               workflow,
+              attemptActions: new SignInAttemptLoginActions({
+                workflow,
+                approval: currentApproval,
+                step,
+                title,
+                description,
+                continueButton,
+              }),
             }
             const checklist = new LoginChecklistProgress(mount)
             this.ui.widgetState.loginChecklist = {

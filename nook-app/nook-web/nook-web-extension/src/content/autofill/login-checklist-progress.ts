@@ -23,11 +23,40 @@ import {
   type AuthenticationOutcomeObservationContext,
 } from './authentication-outcome-observation'
 import { OUTCOME_EVIDENCE_POLL_MS } from './workflow-ui'
+import type {
+  SignInAttemptActionOffer,
+  SignInAttemptLoginReference,
+  SignInAttemptPresentation,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { SignInAttemptRendering } from './sign-in-attempt-rendering'
+import {
+  SignInAttemptPhaseKind,
+  signInAttemptSession,
+  type SignInAttemptHost,
+  type SignInAttemptHostAction,
+  type SignInAttemptStartKind,
+} from './sign-in-attempt-session'
+import { SignInAttemptScope } from './sign-in-attempt-transport'
+
+/** Follow-ups a sign-in attempt runs with this mount's live form controls. */
+export interface LoginChecklistAttemptActions {
+  run(action: SignInAttemptHostAction): void
+}
 
 type LoginChecklistMount = {
   surface: LoginChecklistSurface
   control: HTMLButtonElement
   workflow: PasswordFormObservation
+  attemptActions: LoginChecklistAttemptActions
+}
+
+enum ChecklistAttemptBinding {
+  Unbound = 'unbound',
+  Bound = 'bound',
+}
+type ChecklistFreshCopy = {
+  readonly title: string
+  readonly description: string
 }
 
 enum ChecklistActionLifecycle {
@@ -128,8 +157,11 @@ type ChecklistPresentationDelivery = {
 type ChecklistExecution = { readonly self: LoginChecklistProgress }
 
 /** Owns only mounted login presentation and the existing non-secret result observation. */
-export class LoginChecklistProgress {
+export class LoginChecklistProgress implements SignInAttemptHost {
   private readonly rendering: LoginChecklistRendering
+  private readonly attemptRendering: SignInAttemptRendering
+  private readonly freshCopy: ChecklistFreshCopy
+  private attempt = ChecklistAttemptBinding.Unbound
   private state: AuthenticationLoginChecklistState = {
     kind: 'Activity',
     activity: 'Ready',
@@ -139,9 +171,92 @@ export class LoginChecklistProgress {
 
   constructor(private readonly mount: LoginChecklistMount) {
     this.rendering = new LoginChecklistRendering(mount.surface)
+    this.freshCopy = {
+      title: String(mount.surface.title.textContent),
+      description: String(mount.surface.description.textContent),
+    }
+    const attemptSurface: ConstructorParameters<
+      typeof SignInAttemptRendering
+    >[0] = {
+      surface: { ...mount.surface, continueButton: mount.control },
+      checklist: this.rendering,
+      choose: (offer) => void signInAttemptSession.choose(offer),
+    }
+    this.attemptRendering = new SignInAttemptRendering(attemptSurface)
   }
 
+  /** A top-level mount shows this tab's attempt instead of starting at Ready. */
   initialize(): Promise<void> {
+    switch (signInAttemptSession.scope()) {
+      case SignInAttemptScope.Frame:
+        return this.initializeFresh()
+      case SignInAttemptScope.TopDocument:
+        break
+    }
+    switch (signInAttemptSession.phase.kind) {
+      case SignInAttemptPhaseKind.Presented:
+      case SignInAttemptPhaseKind.Unavailable:
+        signInAttemptSession.attach(this)
+        return Promise.resolve()
+      case SignInAttemptPhaseKind.Fresh:
+        return this.initializeFresh()
+    }
+  }
+
+  beginAttempt(
+    login: SignInAttemptLoginReference,
+  ): Promise<SignInAttemptStartKind> {
+    const request: Parameters<typeof signInAttemptSession.begin>[0] = {
+      login,
+      host: this,
+    }
+    return signInAttemptSession.begin(request)
+  }
+
+  present(presentation: SignInAttemptPresentation): void {
+    switch (this.ownership(this.action)) {
+      case ChecklistOwnership.Replaced:
+      case ChecklistOwnership.Disposed:
+        signInAttemptSession.detach(this)
+        return
+      case ChecklistOwnership.Current:
+        break
+    }
+    this.attempt = ChecklistAttemptBinding.Bound
+    this.action.stop()
+    this.attemptRendering.render(presentation)
+  }
+
+  release(): void {
+    switch (this.attempt) {
+      case ChecklistAttemptBinding.Unbound:
+        return
+      case ChecklistAttemptBinding.Bound:
+        break
+    }
+    this.attempt = ChecklistAttemptBinding.Unbound
+    signInAttemptSession.detach(this)
+    this.attemptRendering.clear()
+    this.mount.surface.title.textContent = this.freshCopy.title
+    this.mount.surface.description.textContent = this.freshCopy.description
+    this.state = { kind: 'Activity', activity: 'Ready' }
+    void this.initializeFresh()
+  }
+
+  unavailable(): void {
+    this.attemptRendering.clear()
+    this.rendering.unavailable()
+  }
+
+  run(action: SignInAttemptHostAction): void {
+    this.mount.attemptActions.run(action)
+  }
+
+  disable(offer: SignInAttemptActionOffer): void {
+    this.attemptRendering.disable(offer)
+  }
+
+  private initializeFresh(): Promise<void> {
     const action = this.action
     const observation: AuthenticationLoginChecklistObservation = {
       kind: 'Activity',
@@ -163,6 +278,12 @@ export class LoginChecklistProgress {
   }
 
   activity(activity: AuthenticationLoginChecklistActivity): Promise<void> {
+    switch (this.attempt) {
+      case ChecklistAttemptBinding.Bound:
+        return Promise.resolve()
+      case ChecklistAttemptBinding.Unbound:
+        break
+    }
     switch (this.ownership(this.action)) {
       case ChecklistOwnership.Replaced:
         return Promise.resolve()
@@ -204,6 +325,7 @@ export class LoginChecklistProgress {
     }
     this.lifecycle = ChecklistMountLifecycle.Disposed
     this.action.cancel()
+    signInAttemptSession.detach(this)
   }
 
   controlOwnership(control: HTMLButtonElement): ChecklistOwnership {
