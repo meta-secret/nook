@@ -25,10 +25,6 @@ enum NamecheapLoginBanner {
   WrongPassword = 'wrong-password',
   AccountLocked = 'account-locked',
 }
-enum NamecheapSubmissionGate {
-  Open = 'open',
-  Held = 'held',
-}
 type NamecheapRouteFulfillment = Parameters<Route['fulfill']>[0]
 type PilotScreenshotOptions = Parameters<Locator['screenshot']>[0]
 type PilotButtonOptions = Parameters<Locator['getByRole']>[1]
@@ -55,17 +51,40 @@ class NamecheapLoginFixture {
 
   verdict = NamecheapLoginVerdict.WrongPassword
   private banner = NamecheapLoginBanner.None
-  private gate = NamecheapSubmissionGate.Open
-  private releaseSubmission: () => void = () => {}
   submissions = 0
 
-  hold(): void {
-    this.gate = NamecheapSubmissionGate.Held
+  /**
+   * Holds the site's native submit in the page (as a script-driven login
+   * would), so the Pilot can be observed while the site has not answered.
+   * A navigation in flight would block Playwright from reading the Pilot.
+   */
+  hold(page: Page): Promise<void> {
+    return page.evaluate(() => {
+      const form = document.querySelector('form')
+      form?.addEventListener(
+        'submit',
+        (event) => {
+          event.preventDefault()
+          Reflect.set(window, '__nookFixtureSubmit', () =>
+            HTMLFormElement.prototype.submit.call(form),
+          )
+        },
+        { once: true },
+      )
+    })
   }
 
-  release(): void {
-    this.gate = NamecheapSubmissionGate.Open
-    this.releaseSubmission()
+  release(page: Page): Promise<void> {
+    return page.evaluate(() => {
+      const submit: unknown = Reflect.get(window, '__nookFixtureSubmit')
+      switch (typeof submit === 'function') {
+        case true:
+          Reflect.apply(submit, window, [])
+          return
+        case false:
+          throw new Error('the fixture submit was not held')
+      }
+    })
   }
 
   async fulfill(route: Route): Promise<void> {
@@ -84,15 +103,6 @@ class NamecheapLoginFixture {
   private async answerSubmission(route: Route): Promise<void> {
     this.submissions += 1
     this.recordSubmission(route.request())
-    switch (this.gate) {
-      case NamecheapSubmissionGate.Held:
-        await new Promise<void>((resolve) => {
-          this.releaseSubmission = resolve
-        })
-        break
-      case NamecheapSubmissionGate.Open:
-        break
-    }
     const redirect: NamecheapRouteFulfillment = {
       status: 303,
       headers: { location: this.redirectTarget() },
@@ -232,7 +242,7 @@ class SignInAttemptLifecycleScenario {
 
   private async wrongPassword(page: Page): Promise<void> {
     this.fixture.verdict = NamecheapLoginVerdict.WrongPassword
-    this.fixture.hold()
+    await this.fixture.hold(page)
     await this.signIn(page)
     const widget = this.widget(page)
     await expect(widget.getByText('Signing in…')).toBeVisible({
@@ -240,7 +250,7 @@ class SignInAttemptLifecycleScenario {
     })
     const signingIn: PilotScreenshotRequest = { page, name: 'signing-in.png' }
     await this.screenshot(signingIn)
-    this.fixture.release()
+    await this.fixture.release(page)
     await expect(widget.getByText('Sign-in failed')).toBeVisible({
       timeout: 20_000,
     })
