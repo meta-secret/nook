@@ -5,10 +5,6 @@ import {
 } from '../../../../nook-web-shared/src/extension/password-form-submission-controls'
 import { AuthenticationInputSurface } from '../../../../nook-web-shared/src/extension/authentication-input-surface'
 import {
-  AuthenticationControlLabels,
-  type AuthenticationControlLabelRequest,
-} from './authentication-control-labels'
-import {
   passwordFieldDiscovery,
   passwordFormCredentialInteraction,
   PasswordFormQueryKind,
@@ -453,11 +449,26 @@ export class LoginSubmissionDomSnapshot extends AuthenticationInputSurface {
   }
 
   controlLabels(root: ParentNode): string[] {
-    const request: AuthenticationControlLabelRequest = {
-      root,
-      rendered: this.isRenderedElement.bind(this),
-    }
-    return AuthenticationControlLabels.collect(request)
+    return Array.from(
+      root.querySelectorAll<HTMLElement>(
+        'button, a[href], [role="button"], input[type="button"], input[type="submit"]',
+      ),
+    )
+      .filter(
+        (control) =>
+          !control.closest('#nook-auth-widget') &&
+          this.isRenderedElement(control),
+      )
+      .slice(0, 64)
+      .map((control) =>
+        [
+          control.textContent,
+          control.getAttribute('aria-label'),
+          control.getAttribute('title'),
+        ]
+          .join(' ')
+          .slice(0, 256),
+      )
   }
 }
 

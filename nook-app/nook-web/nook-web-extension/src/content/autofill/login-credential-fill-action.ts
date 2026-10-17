@@ -1,18 +1,27 @@
 import {
+  loginChecklistForControl,
+  LoginChecklistControlKind,
+} from './login-checklist-progress'
+import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
+import {
   FormSubmissionResult,
   PasswordFormQueryKind,
   passwordFormCredentialInteraction,
   passwordFormInteraction,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 import { WebsiteLoginRevealMessageType } from '../../lib/login-fill-messages'
-import { AuthenticationWorkflowAction } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
+import {
+  AuthenticationWorkflowAction,
+  AuthenticationWorkflowActivity,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { authentication_workflow_activity_progress } from './authentication-activity-progress'
 import {
   WidgetControlDisposition,
   widgetState,
   scanState,
   WidgetCredentialActuation,
 } from './state'
+import { authenticationWorkflowUi } from './authentication-workflow-ui-state'
 import { workflowUi } from './workflow-ui'
 import {
   LoginFillDeliveryKind,
@@ -27,13 +36,6 @@ import {
 } from './workflow-revalidation'
 import type { FillAndSubmitAccountArgs } from './login-passkey-action-types'
 import { GoogleLoginStartDisposition } from './google-login-continuation'
-import {
-  LoginFillProgress,
-  LoginFillStartKind,
-  type LoginFillControls,
-  type LoginFillProgressRequest,
-} from './login-fill-progress'
-import { SignInAttemptLogin } from './sign-in-attempt-login'
 
 /** Owns the credential reveal, fill, and form submission lifecycle. */
 export class LoginCredentialFillAction {
@@ -45,18 +47,53 @@ export class LoginCredentialFillAction {
     description,
     continueButton,
   }: FillAndSubmitAccountArgs): Promise<boolean> {
-    const controls: LoginFillControls = {
-      step,
-      title,
-      description,
-      continueButton,
+    const checklistRequest: Parameters<typeof loginChecklistForControl>[0] = {
+      mount: widgetState.loginChecklist,
+      control: continueButton,
     }
-    // Google's selected username advance runs its own continuation; only the
-    // fill-and-submit path below is a tracked sign-in attempt.
-    const preflight = LoginFillProgress.untracked(controls)
+    const checklist = loginChecklistForControl(checklistRequest)
+    switch (checklist.kind) {
+      case LoginChecklistControlKind.Owned:
+        await checklist.progress.activity('Filling')
+        break
+      case LoginChecklistControlKind.Unowned:
+        break
+    }
     const approvalIsActive = () =>
       widgetState.controlDisposition(continueButton) ===
       WidgetControlDisposition.Active
+    const showFillFailure = async () => {
+      const flightProgressRequest1: Parameters<
+        typeof workflowUi.setFlightProgress
+      >[0] = {
+        step,
+        title,
+        ...authentication_workflow_activity_progress(
+          AuthenticationWorkflowActivity.ReadyLogin,
+        ),
+        titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
+      }
+      workflowUi.setFlightProgress(flightProgressRequest1)
+      const authenticationStatusRequest1: Parameters<
+        typeof authenticationWorkflowUi.setStatus
+      >[0] = {
+        description,
+        continueButton,
+        text: workflowUi.translatedMessage(
+          BROWSER_MESSAGE_KEYS.WidgetFillFailed,
+        ),
+        enableContinue: true,
+      }
+      authenticationWorkflowUi.setStatus(authenticationStatusRequest1)
+      switch (checklist.kind) {
+        case LoginChecklistControlKind.Owned:
+          await checklist.progress.activity('FillFailed')
+          break
+        case LoginChecklistControlKind.Unowned:
+          break
+      }
+      return false
+    }
     let releasedObservationBinding: AuthenticationObservationBinding = {
       kind: AuthenticationObservationBindingKind.Unbound,
     }
@@ -81,7 +118,7 @@ export class LoginCredentialFillAction {
     if (
       releaseOutcome.kind !== RevalidatedAuthenticationActionOutcomeKind.Acted
     ) {
-      return preflight.fillFailed()
+      return showFillFailure()
     }
     const googleRequest: Parameters<
       typeof widgetState.googleLoginContinuation.start
@@ -103,20 +140,8 @@ export class LoginCredentialFillAction {
         scanState.schedule()
         return true
       case GoogleLoginStartDisposition.Rejected:
-        return preflight.fillFailed()
+        return showFillFailure()
       case GoogleLoginStartDisposition.OtherPage:
-        break
-    }
-    const progressRequest: LoginFillProgressRequest = {
-      controls,
-      login: SignInAttemptLogin.reference(account),
-    }
-    const start = await LoginFillProgress.start(progressRequest)
-    const progress = start.progress
-    switch (start.kind) {
-      case LoginFillStartKind.Unavailable:
-        return progress.fillFailed()
-      case LoginFillStartKind.Started:
         break
     }
     const loginFillMessage1: Parameters<
@@ -133,7 +158,7 @@ export class LoginCredentialFillAction {
     const delivery =
       await loginFillRuntimeTransport.sendLoginFillMessage(loginFillMessage1)
     if (delivery.kind === LoginFillDeliveryKind.Unavailable) {
-      return progress.fillFailed()
+      return showFillFailure()
     }
     const { response } = delivery
     if (!approvalIsActive()) {
@@ -146,7 +171,7 @@ export class LoginCredentialFillAction {
       !response.username ||
       typeof response.password !== 'string'
     ) {
-      return progress.fillFailed()
+      return showFillFailure()
     }
 
     const credentials = {
@@ -205,11 +230,17 @@ export class LoginCredentialFillAction {
       ) {
         if (filledRequest)
           passwordFormCredentialInteraction.clearLoginCredentials(filledRequest)
-        return progress.fillFailed()
+        return showFillFailure()
       }
       const approvedFillRequest = filledRequest
       if (!approvedFillRequest) return false
-      await progress.filled()
+      switch (checklist.kind) {
+        case LoginChecklistControlKind.Owned:
+          await checklist.progress.activity('Filled')
+          break
+        case LoginChecklistControlKind.Unowned:
+          break
+      }
 
       // Page frameworks may apply input-event state updates in their own
       // microtask. Cross the browser task boundary before rebuilding the
@@ -224,7 +255,13 @@ export class LoginCredentialFillAction {
       await passwordFormInteraction.prepareCompanionWorkflowPolicies(
         companionPoliciesRequest,
       )
-      await progress.submitting()
+      switch (checklist.kind) {
+        case LoginChecklistControlKind.Owned:
+          await checklist.progress.activity('Submitting')
+          break
+        case LoginChecklistControlKind.Unowned:
+          break
+      }
       const submissionRevalidationRequest: ConstructorParameters<
         typeof RevalidatedAuthenticationAction
       >[0] = {
@@ -263,8 +300,8 @@ export class LoginCredentialFillAction {
                 ? approvedAdvanceControl.observations
                 : [],
           }
-          submission.result = progress.submit(() =>
-            passwordFormInteraction.submitLoginForm(loginSubmissionRequest1),
+          submission.result = passwordFormInteraction.submitLoginForm(
+            loginSubmissionRequest1,
           )
           return { kind: RevalidatedAuthenticationActResultKind.Acted }
         },
@@ -289,11 +326,97 @@ export class LoginCredentialFillAction {
         passwordFormCredentialInteraction.clearLoginCredentials(
           approvedFillRequest,
         )
-        return progress.fillFailed()
+        return showFillFailure()
       }
-      return await progress.submission(submission.result)
+      if (submission.result === FormSubmissionResult.Rejected) {
+        const flightProgressRequest2: Parameters<
+          typeof workflowUi.setFlightProgress
+        >[0] = {
+          step,
+          title,
+          ...authentication_workflow_activity_progress(
+            AuthenticationWorkflowActivity.FillingLogin,
+          ),
+          titleKey: BROWSER_MESSAGE_KEYS.WidgetFillingTitle,
+        }
+        workflowUi.setFlightProgress(flightProgressRequest2)
+        const authenticationStatusRequest2: Parameters<
+          typeof authenticationWorkflowUi.setStatus
+        >[0] = {
+          description,
+          continueButton,
+          text: workflowUi.translatedMessage(
+            BROWSER_MESSAGE_KEYS.WidgetFillFailed,
+          ),
+          enableContinue: true,
+        }
+        authenticationWorkflowUi.setStatus(authenticationStatusRequest2)
+        continueButton.hidden = false
+        switch (checklist.kind) {
+          case LoginChecklistControlKind.Owned:
+            await checklist.progress.activity('SubmissionRejected')
+            break
+          case LoginChecklistControlKind.Unowned:
+            break
+        }
+        return false
+      }
+      if (submission.result === FormSubmissionResult.NotObserved) {
+        const flightProgressRequest3: Parameters<
+          typeof workflowUi.setFlightProgress
+        >[0] = {
+          step,
+          title,
+          ...authentication_workflow_activity_progress(
+            AuthenticationWorkflowActivity.FillingLogin,
+          ),
+          titleKey: BROWSER_MESSAGE_KEYS.WidgetFillingTitle,
+        }
+        workflowUi.setFlightProgress(flightProgressRequest3)
+        description.textContent = workflowUi.translatedMessage(
+          BROWSER_MESSAGE_KEYS.WidgetFilledManual,
+        )
+        continueButton.hidden = true
+        switch (checklist.kind) {
+          case LoginChecklistControlKind.Owned:
+            await checklist.progress.activity('SubmissionUnobserved')
+            break
+          case LoginChecklistControlKind.Unowned:
+            break
+        }
+        return true
+      }
+      const flightProgressRequest4: Parameters<
+        typeof workflowUi.setFlightProgress
+      >[0] = {
+        step,
+        title,
+        ...authentication_workflow_activity_progress(
+          AuthenticationWorkflowActivity.VerifyingLogin,
+        ),
+        titleKey: BROWSER_MESSAGE_KEYS.WidgetVerifyingTitle,
+      }
+      workflowUi.setFlightProgress(flightProgressRequest4)
+      description.textContent = workflowUi.translatedMessage(
+        BROWSER_MESSAGE_KEYS.WidgetSubmitted,
+      )
+      continueButton.hidden = true
+      switch (checklist.kind) {
+        case LoginChecklistControlKind.Owned:
+          await checklist.progress.activity('Submitted')
+          break
+        case LoginChecklistControlKind.Unowned:
+          break
+      }
+      return true
     } catch (error) {
-      await progress.aborted()
+      switch (checklist.kind) {
+        case LoginChecklistControlKind.Owned:
+          await checklist.progress.activity('FillFailed')
+          break
+        case LoginChecklistControlKind.Unowned:
+          break
+      }
       throw error
     } finally {
       widgetState.credentialActuation = WidgetCredentialActuation.Idle

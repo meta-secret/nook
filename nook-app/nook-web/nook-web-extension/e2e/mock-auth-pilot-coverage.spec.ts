@@ -43,7 +43,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       ).toHaveText('Matching saved logins: 0')
       await expect(
         loginWidget.getByText(
-          'No saved login matches this site. Sign in checks again; if none is found, sign in manually or add one in Nook.',
+          'No saved login matches this site. Sign in with Nook checks again; if none is found, sign in manually or add one in Nook.',
         ),
       ).toBeVisible()
       await expect(loginWidget.getByText('Mock auth empty vault')).toHaveCount(
@@ -52,7 +52,9 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await expect(
         loginWidget.getByTestId('nook-auth-gate-vault-status'),
       ).toHaveAttribute('data-state', 'no-matching-credential')
-      await loginWidget.getByRole('button', { name: 'Sign in' }).click()
+      await loginWidget
+        .getByRole('button', { name: 'Sign in with Nook' })
+        .click()
       await expect(
         loginWidget.getByText(
           'No saved login matches this site yet. Add one in your vault from the Nook toolbar button.',
@@ -166,7 +168,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
 
       const widget = page.locator('#nook-auth-widget')
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
-      await widget.getByRole('button', { name: 'Sign in' }).click()
+      await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
       await expect(page).toHaveURL(/\/v3\/signin\/challenge\/pwd$/)
       await expect(page.getByTestId('google-auth-step')).toHaveText('password')
       await expect(page.getByTestId('google-selected-account')).toHaveText(
@@ -183,7 +185,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       )
 
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
-      await widget.getByRole('button', { name: 'Sign in' }).click()
+      await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
       await expect(page.getByTestId('mock-auth-success')).toHaveText(
         'Authentication complete',
         { timeout: 20_000 },
@@ -228,7 +230,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
 
       const widget = page.locator('#nook-auth-widget')
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
-      await widget.getByRole('button', { name: 'Sign in' }).click()
+      await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
       await expect(page).toHaveURL(`${openAi.origin}/log-in-or-create-account`)
 
       await expect(page.getByTestId('mock-auth-scenario')).toHaveText(
@@ -277,7 +279,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await expect(page.locator('input[type="password"]')).toHaveCount(0)
 
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
-      await widget.getByRole('button', { name: 'Sign in' }).click()
+      await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
       await expect(page.getByTestId('mock-auth-success')).toHaveText(
         'Authentication complete',
         { timeout: 20_000 },
@@ -382,7 +384,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
 
       const widget = page.locator('#nook-auth-widget')
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
-      await widget.getByRole('button', { name: 'Sign in' }).click()
+      await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
       await expect(page.getByTestId('mock-auth-success')).toHaveText(
         'Authentication complete',
         { timeout: 20_000 },
@@ -486,7 +488,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
 
       const widget = page.locator('#nook-auth-widget')
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
-      await widget.getByRole('button', { name: 'Sign in' }).click()
+      await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
       await expect(page.getByTestId('mock-auth-success')).toHaveText(
         'Authentication complete',
         { timeout: 20_000 },
@@ -572,7 +574,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
 
       const widget = page.locator('#nook-auth-widget')
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
-      await widget.getByRole('button', { name: 'Sign in' }).click()
+      await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
       await expect(page.getByTestId('mock-auth-success')).toHaveText(
         'Authentication complete',
         { timeout: 20_000 },
@@ -647,7 +649,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
 
       const widget = authorizationFrame.locator('#nook-auth-widget')
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
-      await widget.getByRole('button', { name: 'Sign in' }).click()
+      await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
       await expect(
         authorizationFrame.getByTestId('apple-auth-step'),
       ).toHaveText('password')
@@ -662,7 +664,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
         }),
       ).toBeEnabled()
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
-      await widget.getByRole('button', { name: 'Sign in' }).click()
+      await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
       await expect(
         authorizationFrame.getByTestId('mock-auth-success'),
       ).toHaveText('Authentication complete', { timeout: 20_000 })
@@ -713,7 +715,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await expect(
         widget.getByTestId('nook-auth-gate-vault-status'),
       ).toHaveAttribute('data-state', 'credential-available')
-      await widget.getByRole('button', { name: 'Sign in' }).click()
+      await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
       await expect(loginPage.getByRole('alert')).toHaveText(
         'Invalid username or password.',
         { timeout: 20_000 },
@@ -806,10 +808,10 @@ async function expectPilotPlainSuccess(
   )
   await expect(
     widget.getByText(
-      'One saved login matches this site. Nothing is filled or submitted until you click Sign in; that click fills and submits it.',
+      'One saved login matches this site. Nothing is filled or submitted until you click Sign in with Nook; that click fills and submits it.',
     ),
   ).toBeVisible()
-  await widget.getByRole('button', { name: 'Sign in' }).click()
+  await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
   await expect(page.getByTestId('mock-auth-success')).toHaveText(
     'Authentication complete',
     { timeout: 20_000 },
@@ -832,7 +834,7 @@ async function expectPilotNamecheapShellSuccess({
   await expect(widget).toHaveCount(0)
   await page.locator('#header-sign-in').click()
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
-  await widget.getByRole('button', { name: 'Sign in' }).click()
+  await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
   await expect(page.getByTestId('mock-auth-success')).toHaveText(
     'Authentication complete',
     { timeout: 20_000 },

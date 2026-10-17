@@ -132,10 +132,8 @@ pub struct LoginSaveOutcomeObservation {
     pub current_controls: Vec<LoginControlLabel>,
 }
 
-/// Whether bounded control labels include a sign-out style authenticated
-/// affordance. Shared with the sign-in attempt lifecycle.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum AuthenticatedControlEvidence {
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum AuthenticatedControlEvidence {
     Present,
     Absent,
 }
@@ -147,9 +145,7 @@ struct LoginAuthenticatedControls {
 }
 
 impl AuthenticatedControlEvidence {
-    pub(crate) fn from_controls(
-        controls: &[LoginControlLabel],
-    ) -> Result<Self, LoginObservationError> {
+    fn from_controls(controls: &[LoginControlLabel]) -> Result<Self, LoginObservationError> {
         if let 65.. = controls.len() {
             return Err(LoginObservationError::TooManyControls);
         }

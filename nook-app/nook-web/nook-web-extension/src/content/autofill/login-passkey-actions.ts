@@ -92,7 +92,7 @@ class LoginPasskeyInteraction {
     return loginCredentialFillAction.fillAndSubmitAccount(request)
   }
 
-  async openLoginPicker({
+  private async openLoginPicker({
     workflow,
     approval,
     step,

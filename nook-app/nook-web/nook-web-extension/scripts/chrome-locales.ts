@@ -1,9 +1,5 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import {
-  SignInAttemptChromeMessages,
-  type SignInAttemptWidgetCatalog,
-} from './chrome-sign-in-attempt-messages'
 
 type ExtensionChromeLocaleBuildRequest = {
   appCommonLocalesRoot: string
@@ -36,8 +32,6 @@ type NookLocaleCatalogShape = {
       checklist_result_waiting: string
       checklist_result_done: string
       checklist_result_attention: string
-      checklist_result_failed: string
-      checklist_result_challenge: string
       checklist_ready: string
       checklist_working: string
       checklist_waiting: string
@@ -156,7 +150,7 @@ type NookLocaleCatalogShape = {
       backup_choose_authenticator: string
       backup_mode_replace: string
       backup_mode_merge: string
-    } & SignInAttemptWidgetCatalog
+    }
     passkey: {
       save_title: string
       use_title: string
@@ -266,11 +260,7 @@ export async function buildChromeLocales({
         locale,
       }
       const catalog = extensionLocaleCatalogAdmission.admit(admissionArgs)
-      const signInAttemptMessages = new SignInAttemptChromeMessages((key) =>
-        catalog.extension.widget.message(key, locale),
-      ).messages()
       const messages = {
-        ...signInAttemptMessages,
         widgetChecklistFillLogin: {
           message: catalog.extension.widget.message(
             'checklist_fill_login',
@@ -370,18 +360,6 @@ export async function buildChromeLocales({
         widgetChecklistResultAttention: {
           message: catalog.extension.widget.message(
             'checklist_result_attention',
-            locale,
-          ),
-        },
-        widgetChecklistResultFailed: {
-          message: catalog.extension.widget.message(
-            'checklist_result_failed',
-            locale,
-          ),
-        },
-        widgetChecklistResultChallenge: {
-          message: catalog.extension.widget.message(
-            'checklist_result_challenge',
             locale,
           ),
         },

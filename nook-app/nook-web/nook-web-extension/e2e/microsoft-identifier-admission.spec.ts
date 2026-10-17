@@ -139,7 +139,7 @@ for (const locked of [false, true]) {
           widget.getByTestId('nook-auth-gate-vault-status'),
         ).toHaveAttribute('data-state', 'vault-locked')
       const popupPromise = context.waitForEvent('page')
-      await widget.getByRole('button', { name: 'Sign in' }).click()
+      await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
       const popup = await popupPromise
       expect(
         await worker.evaluate(() => {

@@ -86,12 +86,6 @@ type ProgressLabelArgs = {
   totalSteps: number
 }
 
-export type StepProgressArgs = {
-  readonly step: HTMLParagraphElement
-  readonly currentStep: number
-  readonly totalSteps: number
-}
-
 type SetFlightProgressArgs = {
   step: HTMLParagraphElement
   title: HTMLHeadingElement
@@ -124,18 +118,12 @@ class WorkflowUi {
     totalSteps,
     titleKey,
   }: SetFlightProgressArgs): void {
-    const progress: StepProgressArgs = { step, currentStep, totalSteps }
-    this.setStepProgress(progress)
-    title.textContent = this.translatedMessage(titleKey)
-  }
-
-  /** The header step counter and the folded chip's badge. */
-  setStepProgress({ step, currentStep, totalSteps }: StepProgressArgs): void {
     const nookTypedArgs0_0: Parameters<typeof this.progressLabel>[0] = {
       currentStep,
       totalSteps,
     }
     step.textContent = this.progressLabel(nookTypedArgs0_0)
+    title.textContent = this.translatedMessage(titleKey)
     const root = step.getRootNode()
     if (root instanceof ShadowRoot) {
       const compactProgressArgs: ConstructorParameters<

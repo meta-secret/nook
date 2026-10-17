@@ -40,7 +40,7 @@ type FilledProjectionInstall = {
   disposition: typeof PilotReplyDisposition
 }
 
-/** Runs in the real service worker and holds only its actual login reveal reply. */
+/** Runs in the real service worker and holds only its actual post-clear Filled reply. */
 function installFilledProjectionHold(install: FilledProjectionInstall): void {
   type ReplyCompletion =
     | {
@@ -112,10 +112,26 @@ function installFilledProjectionHold(install: FilledProjectionInstall): void {
           break
       }
       switch (message.type) {
-        // The sign-in attempt stays in its fill step while the vault reveal is held.
-        case install.session.RevealLogin:
-          return install.disposition.Hold
         case install.companion.ProjectAuthenticationLoginChecklist:
+          switch (message.payload.observation.kind) {
+            case 'Outcome':
+              return install.disposition.Forward
+            case 'Activity':
+              switch (message.payload.observation.activity) {
+                case 'Filled':
+                  return install.disposition.Hold
+                case 'Ready':
+                case 'Filling':
+                case 'Submitting':
+                case 'Submitted':
+                case 'SubmissionRejected':
+                case 'SubmissionUnobserved':
+                case 'FillFailed':
+                case 'TakenOver':
+                  return install.disposition.Forward
+              }
+          }
+          break
         case install.google.Session:
         case install.session.Status:
         case install.session.UnlockPin:
@@ -168,6 +184,7 @@ function installFilledProjectionHold(install: FilledProjectionInstall): void {
         case install.session.UpdateVault:
         case install.session.ListPasskeys:
         case install.session.ListLogins:
+        case install.session.RevealLogin:
         case install.session.RevealFocusedLogin:
         case install.session.ListAuthenticators:
         case install.session.AuthenticatorCode:

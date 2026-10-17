@@ -1008,11 +1008,7 @@ pub const EXTENSION_WIDGET_CHECKLIST_LABEL: &str = "extension.widget.checklist_l
 pub const EXTENSION_WIDGET_CHECKLIST_READY: &str = "extension.widget.checklist_ready";
 pub const EXTENSION_WIDGET_CHECKLIST_RESULT_ATTENTION: &str =
     "extension.widget.checklist_result_attention";
-pub const EXTENSION_WIDGET_CHECKLIST_RESULT_CHALLENGE: &str =
-    "extension.widget.checklist_result_challenge";
 pub const EXTENSION_WIDGET_CHECKLIST_RESULT_DONE: &str = "extension.widget.checklist_result_done";
-pub const EXTENSION_WIDGET_CHECKLIST_RESULT_FAILED: &str =
-    "extension.widget.checklist_result_failed";
 pub const EXTENSION_WIDGET_CHECKLIST_RESULT_PENDING: &str =
     "extension.widget.checklist_result_pending";
 pub const EXTENSION_WIDGET_CHECKLIST_RESULT_WAITING: &str =
@@ -1112,39 +1108,6 @@ pub const EXTENSION_WIDGET_SAVE_LOGIN_SAVED_TITLE: &str = "extension.widget.save
 pub const EXTENSION_WIDGET_SAVE_LOGIN_TITLE: &str = "extension.widget.save_login_title";
 pub const EXTENSION_WIDGET_SAVED_AUTHENTICATOR: &str = "extension.widget.saved_authenticator";
 pub const EXTENSION_WIDGET_SAVED_LOGIN: &str = "extension.widget.saved_login";
-pub const EXTENSION_WIDGET_SIGN_IN_ACTION_UNAVAILABLE: &str =
-    "extension.widget.sign_in_action_unavailable";
-pub const EXTENSION_WIDGET_SIGN_IN_CHALLENGE: &str = "extension.widget.sign_in_challenge";
-pub const EXTENSION_WIDGET_SIGN_IN_CHALLENGE_ONE_TIME_CODE_DESCRIPTION: &str =
-    "extension.widget.sign_in_challenge_one_time_code_description";
-pub const EXTENSION_WIDGET_SIGN_IN_CHALLENGE_VERIFICATION_DESCRIPTION: &str =
-    "extension.widget.sign_in_challenge_verification_description";
-pub const EXTENSION_WIDGET_SIGN_IN_CHOOSE_ANOTHER_LOGIN: &str =
-    "extension.widget.sign_in_choose_another_login";
-pub const EXTENSION_WIDGET_SIGN_IN_DISMISS: &str = "extension.widget.sign_in_dismiss";
-pub const EXTENSION_WIDGET_SIGN_IN_FAILED: &str = "extension.widget.sign_in_failed";
-pub const EXTENSION_WIDGET_SIGN_IN_REASON_ACCOUNT_LOCKED: &str =
-    "extension.widget.sign_in_reason_account_locked";
-pub const EXTENSION_WIDGET_SIGN_IN_REASON_CHALLENGE_REQUIRED: &str =
-    "extension.widget.sign_in_reason_challenge_required";
-pub const EXTENSION_WIDGET_SIGN_IN_REASON_RATE_LIMITED: &str =
-    "extension.widget.sign_in_reason_rate_limited";
-pub const EXTENSION_WIDGET_SIGN_IN_REASON_UNKNOWN: &str = "extension.widget.sign_in_reason_unknown";
-pub const EXTENSION_WIDGET_SIGN_IN_REASON_WRONG_CREDENTIALS: &str =
-    "extension.widget.sign_in_reason_wrong_credentials";
-pub const EXTENSION_WIDGET_SIGN_IN_RESET_PASSWORD: &str = "extension.widget.sign_in_reset_password";
-pub const EXTENSION_WIDGET_SIGN_IN_SIGNED_IN: &str = "extension.widget.sign_in_signed_in";
-pub const EXTENSION_WIDGET_SIGN_IN_SIGNED_IN_DESCRIPTION: &str =
-    "extension.widget.sign_in_signed_in_description";
-pub const EXTENSION_WIDGET_SIGN_IN_SIGNING_IN: &str = "extension.widget.sign_in_signing_in";
-pub const EXTENSION_WIDGET_SIGN_IN_SIGNING_IN_DESCRIPTION: &str =
-    "extension.widget.sign_in_signing_in_description";
-pub const EXTENSION_WIDGET_SIGN_IN_SITE_MESSAGE_LABEL: &str =
-    "extension.widget.sign_in_site_message_label";
-pub const EXTENSION_WIDGET_SIGN_IN_TIMED_OUT: &str = "extension.widget.sign_in_timed_out";
-pub const EXTENSION_WIDGET_SIGN_IN_TIMED_OUT_DESCRIPTION: &str =
-    "extension.widget.sign_in_timed_out_description";
-pub const EXTENSION_WIDGET_SIGN_IN_TRY_AGAIN: &str = "extension.widget.sign_in_try_again";
 pub const EXTENSION_WIDGET_SIGNUP_DESCRIPTION: &str = "extension.widget.signup_description";
 pub const EXTENSION_WIDGET_SIGNUP_TITLE: &str = "extension.widget.signup_title";
 pub const EXTENSION_WIDGET_SUBMITTED: &str = "extension.widget.submitted";

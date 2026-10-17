@@ -51,8 +51,8 @@ test('fill Tesla identifier and advance to its password surface', async ({
   ).toBeVisible()
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
 
-  await widget.getByRole('button', { name: 'Sign in' }).click()
-  await widget.getByRole('button', { name: 'Sign in' }).click()
+  await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
+  await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
 
   await expect(email).toHaveValue('pilot@example.test')
   await expect(next).toBeEnabled()

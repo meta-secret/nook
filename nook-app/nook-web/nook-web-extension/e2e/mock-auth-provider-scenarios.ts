@@ -148,7 +148,7 @@ export class MockAuthProviderScenarios {
         await expect(
           widget.getByRole('button', { name: /passkey/i }),
         ).toHaveCount(0)
-        await widget.getByRole('button', { name: 'Sign in' }).click()
+        await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
         await expect(page.getByTestId('mock-auth-success')).toHaveText(
           'Authentication complete',
           { timeout: 20_000 },
@@ -283,7 +283,7 @@ export class MockAuthProviderScenarios {
 
         const widget = page.locator('#nook-auth-widget')
         await expect(widget.getByText('Ready to sign in')).toBeVisible()
-        await widget.getByRole('button', { name: 'Sign in' }).click()
+        await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
         await expect(page.getByTestId('mock-auth-success')).toHaveText(
           'Authentication complete',
           { timeout: 20_000 },
@@ -414,7 +414,7 @@ export class MockAuthProviderScenarios {
 
         const widget = page.locator('#nook-auth-widget')
         await expect(widget.getByText('Ready to sign in')).toBeVisible()
-        await widget.getByRole('button', { name: 'Sign in' }).click()
+        await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
         await expect(page.getByTestId('mock-auth-success')).toHaveText(
           'Authentication complete',
           { timeout: 20_000 },
@@ -560,7 +560,7 @@ export class MockAuthProviderScenarios {
 
         const widget = page.locator('#nook-auth-widget')
         await expect(widget.getByText('Ready to sign in')).toBeVisible()
-        await widget.getByRole('button', { name: 'Sign in' }).click()
+        await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
         await expect(page.getByTestId('mock-auth-success')).toHaveText(
           'Authentication complete',
           { timeout: 20_000 },
@@ -700,7 +700,7 @@ export class MockAuthProviderScenarios {
 
         const widget = page.locator('#nook-auth-widget')
         await expect(widget.getByText('Ready to sign in')).toBeVisible()
-        await widget.getByRole('button', { name: 'Sign in' }).click()
+        await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
         await expect(page.getByTestId('mock-auth-scenario')).toHaveText(
           'tesla-password-second',
         )
@@ -723,7 +723,7 @@ export class MockAuthProviderScenarios {
         await expect(widget.getByText('Ready to sign in')).toBeVisible({
           timeout: 20_000,
         })
-        await widget.getByRole('button', { name: 'Sign in' }).click()
+        await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
         await expect(page.getByTestId('mock-auth-success')).toHaveText(
           'Authentication complete',
           { timeout: 20_000 },
@@ -851,7 +851,7 @@ export class MockAuthProviderScenarios {
 
         const widget = page.locator('#nook-auth-widget')
         await expect(widget.getByText('Ready to sign in')).toBeVisible()
-        await widget.getByRole('button', { name: 'Sign in' }).click()
+        await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
         await expect(identity).toHaveValue('alice@nook.test')
         await expect(page.getByTestId('mock-auth-success')).toHaveText(
           'Authentication complete',

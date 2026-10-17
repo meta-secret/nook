@@ -35,7 +35,6 @@ import {
 } from './widget-presentation-state'
 
 import { WIDGET_HOST_ID, workflowUi } from './workflow-ui'
-import { signInAttemptSession } from './sign-in-attempt-session'
 
 /* The Pilot speaks the vault app's visual language: a keytag frame with a
  * cut top-right corner, monospace labels, square marks, and green for what
@@ -590,7 +589,6 @@ class AuthenticationWidgetShell {
     dismissButton.addEventListener('click', () => {
       authenticatorInteraction.cancelPendingAuthenticatorPickerRequest()
       loginPasskeyInteraction.cancelPendingLoginPickerRequest()
-      void signInAttemptSession.close()
       this.ui.widgetState.dismissed = true
       workflowUi.removeWidget()
     })

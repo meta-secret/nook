@@ -1971,7 +1971,6 @@ dependencies = [
  "nook-event-log",
  "percent-encoding",
  "proptest",
- "psl",
  "serde",
  "serde_json",
  "thiserror 2.0.20",

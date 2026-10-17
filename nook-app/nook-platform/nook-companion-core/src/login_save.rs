@@ -14,7 +14,6 @@ pub use context::{
     LoginSaveContextError, LoginSaveFrameId, LoginSaveScopeMatch, LoginSaveSenderContext,
     LoginSaveTabId, LoginSubmissionPageUrl,
 };
-pub(crate) use outcome::AuthenticatedControlEvidence;
 pub use outcome::{
     LoginAuthFieldPresence, LoginControlLabel, LoginManualCheckpoint, LoginObservationError,
     LoginSaveEligibility, LoginSaveOutcomeDecision, LoginSaveOutcomeObservation,

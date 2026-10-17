@@ -43,10 +43,6 @@ type AuthenticationOutcomeRead =
     }
   | { kind: AuthenticationOutcomeReadKind.Unavailable }
 
-/** Explicit page markers a site or fixture uses to state a successful sign-in. */
-export const AUTHENTICATION_SUCCESS_MARKER_SELECTOR =
-  '[data-nook-auth-outcome="success"], [data-testid="mock-auth-success"]'
-
 export type AuthenticationOutcomeObservationContext = {
   startedAt: number
   authPath: string
@@ -61,7 +57,9 @@ class AuthenticationOutcomeObservation {
     sawMutation,
   }: AuthenticationOutcomeObservationContext): AuthenticationOutcomeObservationView {
     const successMarkerPresent = Boolean(
-      document.querySelector(AUTHENTICATION_SUCCESS_MARKER_SELECTOR),
+      document.querySelector(
+        '[data-nook-auth-outcome="success"], [data-testid="mock-auth-success"]',
+      ),
     )
     const errorMarkerPresent = Boolean(
       document.querySelector(
