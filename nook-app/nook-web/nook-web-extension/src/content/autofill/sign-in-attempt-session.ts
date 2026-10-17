@@ -150,7 +150,12 @@ export class SignInAttemptSession {
     return this.dependencies.transport.scope()
   }
 
-  /** Pilot mount on any top-level page: pick up this tab's attempt, if any. */
+  /**
+   * Pilot mount on any top-level page: pick up this tab's attempt, if any.
+   * When Rust wants this page's evidence, the first observation is reported
+   * before anything renders, so the page shows Rust's verdict on this page
+   * and never the resumed record's earlier presentation.
+   */
   async resume(): Promise<void> {
     switch (this.scope()) {
       case SignInAttemptScope.Frame:
@@ -159,7 +164,29 @@ export class SignInAttemptSession {
         break
     }
     const event: SignInAttemptEvent = { kind: 'Resumed' }
-    this.accept(await this.dependencies.transport.advance(event))
+    const resumed = await this.dependencies.transport.advance(event)
+    this.accept(await this.observedOnResume(resumed))
+  }
+
+  private async observedOnResume(
+    resumed: SignInAttemptDelivery,
+  ): Promise<SignInAttemptDelivery> {
+    switch (resumed.kind) {
+      case SignInAttemptDeliveryKind.Fresh:
+      case SignInAttemptDeliveryKind.Unavailable:
+        return resumed
+      case SignInAttemptDeliveryKind.Presented:
+        break
+    }
+    switch (resumed.presentation.page_evidence) {
+      case 'NotWanted':
+        return resumed
+      case 'Wanted':
+        break
+    }
+    const page = await this.dependencies.sensor.observe(this.relation)
+    const observed: SignInAttemptEvent = { kind: 'PageObserved', page }
+    return this.dependencies.transport.advance(observed)
   }
 
   attach(host: SignInAttemptHost): void {

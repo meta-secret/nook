@@ -19,6 +19,10 @@ import {
 } from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-transport'
 import { authenticationOutcomeObservation } from './authentication-outcome-observation'
 import { AuthenticationInputSurface } from '../../../../nook-web-shared/src/extension/authentication-input-surface'
+import {
+  AuthenticationControlLabels,
+  type AuthenticationControlLabelRequest,
+} from './authentication-control-labels'
 import type { CompanionWasmRuntimeDelivery } from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-transport'
 
 export enum LoginSaveNavigationMode {
@@ -375,24 +379,10 @@ export class LoginSaveOutcomeSensor extends AuthenticationInputSurface {
   }
 
   controls(): string[] {
-    return Array.from(
-      document.querySelectorAll<HTMLElement>(
-        'button, a[href], [role="button"], input[type="button"], input[type="submit"]',
-      ),
-    )
-      .filter(
-        (control) =>
-          !control.closest('#nook-auth-widget') && this.rendered(control),
-      )
-      .slice(0, 64)
-      .map((control) =>
-        [
-          control.textContent,
-          control.getAttribute('aria-label'),
-          control.getAttribute('title'),
-        ]
-          .join(' ')
-          .slice(0, 256),
-      )
+    const request: AuthenticationControlLabelRequest = {
+      root: document,
+      rendered: this.rendered.bind(this),
+    }
+    return AuthenticationControlLabels.collect(request)
   }
 }
