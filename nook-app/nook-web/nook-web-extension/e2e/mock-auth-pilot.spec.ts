@@ -226,15 +226,16 @@ class PilotScenarioPage {
     }
     await this.assertOutcome(checklist)
     await expect(widget.getByText('Ready to sign in')).toHaveCount(0)
-    await expect(this.evidence.button('Take over')).toBeVisible()
+    // Closing Pilot is how the person takes the page back.
+    await expect(this.evidence.button('Dismiss Nook')).toBeVisible()
     await expect(widget).not.toContainText('alice@nook.test')
     await expect(widget).not.toContainText('extension-fill-password')
     await this.evidence.screenshot(
       `pilot-checklist-${this.request.scenario}.png`,
     )
     await this.assertOutcome(checklist)
-    await expect(this.evidence.button('Take over')).toBeVisible()
-    await this.evidence.button('Take over').click()
+    await expect(this.evidence.button('Dismiss Nook')).toBeVisible()
+    await this.evidence.button('Dismiss Nook').click()
     await expect(widget).toHaveCount(0)
   }
   private async assertOutcome(checklist: Locator): Promise<void> {
