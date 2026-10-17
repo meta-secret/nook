@@ -77,13 +77,14 @@ class NamecheapLoginFixture {
   release(page: Page): Promise<void> {
     return page.evaluate(() => {
       const submit: unknown = Reflect.get(window, '__nookFixtureSubmit')
-      switch (typeof submit === 'function') {
-        case true:
+      switch (true) {
+        case submit instanceof Function:
           Reflect.apply(submit, window, [])
           return
-        case false:
-          throw new Error('the fixture submit was not held')
+        case true:
+          break
       }
+      throw new Error('the fixture submit was not held')
     })
   }
 
