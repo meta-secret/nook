@@ -255,6 +255,7 @@ class MountedChecklistFixture {
       },
       control: this.control,
       workflow: this.workflow,
+      attemptActions: { run: () => {} },
     }
     this.progress = new LoginChecklistProgress(mount)
   }
@@ -492,6 +493,7 @@ class ChecklistLifecycleTests {
       },
       control: this.mounted.control,
       workflow,
+      attemptActions: { run: () => {} },
     }
     const progress = new LoginChecklistProgress(mount)
     await progress.activity('Submitted')
