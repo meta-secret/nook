@@ -1,8 +1,6 @@
 import type {
   SignInAttemptAuthFields,
-  SignInAttemptDocumentRelation,
   SignInAttemptPageEvidence,
-  SignInAttemptSubmitBaseline,
   SignInPageColor,
   SignInPageLink,
   SignInPageLinkIndex,
@@ -16,6 +14,17 @@ import {
   type PasswordFormObservation,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 import { authenticationSurfaceObservation } from './authentication-surface-observation'
+import {
+  AuthenticationControlLabels,
+  type AuthenticationControlLabelRequest,
+} from './authentication-control-labels'
+import {
+  SignInAttemptObservation,
+  type SignInAttemptMessageChangeRequest,
+  type SignInAttemptObservationContext,
+  type SignInAttemptRouteRequest,
+  type SignInAttemptSubmitCapture,
+} from './sign-in-attempt-observation'
 import { WIDGET_HOST_ID } from './workflow-ui'
 
 enum AuthContainerKind {
@@ -55,6 +64,15 @@ type PresentEvidence = {
 type MessageProjection = {
   readonly candidate: MessageCandidate
   readonly container: Element
+  readonly context: SignInAttemptObservationContext
+}
+type MessageEvidenceRequest = {
+  readonly evidence: CollectedEvidence
+  readonly context: SignInAttemptObservationContext
+}
+type PresentMessageEvidenceRequest = {
+  readonly evidence: PresentEvidence
+  readonly context: SignInAttemptObservationContext
 }
 type LinkProjection = {
   readonly element: HTMLAnchorElement
@@ -134,22 +152,40 @@ export class SignInAttemptEvidenceSensor {
 
   constructor(private readonly browser: typeof globalThis) {}
 
-  /** Facts collected synchronously right before submission; Rust keeps only their presence. */
-  baseline(): SignInAttemptSubmitBaseline {
+  /**
+   * Facts collected synchronously right before submission (Rust keeps only
+   * their presence), plus the in-memory snapshot this document compares its
+   * later same-document observations against.
+   */
+  capture(): SignInAttemptSubmitCapture {
+    const evidence = this.collect()
+    const messages = new WeakMap<Element, string>()
+    for (const candidate of evidence.candidates) {
+      messages.set(candidate.element, this.visibleText(candidate.element))
+    }
+    const request: MessageEvidenceRequest = {
+      evidence,
+      context: SignInAttemptObservation.NEW_DOCUMENT,
+    }
     return {
-      messages: this.projectMessages(this.collect()),
-      auth_fields: this.authFields(),
+      baseline: {
+        messages: this.projectMessages(request),
+        auth_fields: this.authFields(),
+        controls: this.controls(),
+      },
+      snapshot: { pathname: this.browser.location.pathname, messages },
     }
   }
 
-  /** Refreshes the existing field classification, then collects the page facts. */
+  /** The fill path's hints for the Rust policy batch prepared before a submit. */
   static readonly POLICY_HINTS: SignInAttemptPolicyHints = {
     authenticatorSetupHint: 'absent',
     backupCodesHint: false,
   }
 
+  /** Refreshes the existing field classification, then collects the page facts. */
   async observe(
-    document: SignInAttemptDocumentRelation,
+    context: SignInAttemptObservationContext,
   ): Promise<SignInAttemptPageEvidence> {
     await passwordFieldDiscovery.prepareCompanionClassification(
       this.browser.document,
@@ -160,13 +196,18 @@ export class SignInAttemptEvidenceSensor {
     await passwordFormInteraction.prepareCompanionWorkflowPolicies(
       SignInAttemptEvidenceSensor.POLICY_HINTS,
     )
-    return this.page(document)
+    return this.page(context)
   }
 
-  page(document: SignInAttemptDocumentRelation): SignInAttemptPageEvidence {
+  page(context: SignInAttemptObservationContext): SignInAttemptPageEvidence {
     const evidence = this.collect()
+    const route: SignInAttemptRouteRequest = {
+      context,
+      pathname: this.browser.location.pathname,
+    }
+    const messages: MessageEvidenceRequest = { evidence, context }
     return {
-      document,
+      document: SignInAttemptObservation.relation(route),
       auth_fields: this.authFields(),
       manual_checkpoint_present: passwordFieldDiscovery.pageHasManualCheckpoint(
         this.browser.document,
@@ -177,9 +218,20 @@ export class SignInAttemptEvidenceSensor {
       error_marker_present: this.markerPresent(
         SignInAttemptEvidenceSensor.ERROR_MARKER_SELECTOR,
       ),
-      messages: this.projectMessages(evidence),
+      controls: this.controls(),
+      messages: this.projectMessages(messages),
       links: this.links(evidence),
     }
+  }
+
+  /** Raw labels through the shared login-save collector; Rust classifies them. */
+  private controls(): string[] {
+    const request: AuthenticationControlLabelRequest = {
+      root: this.browser.document,
+      rendered: (control) =>
+        this.presence(control) === ElementPresence.Rendered,
+    }
+    return AuthenticationControlLabels.collect(request)
   }
 
   /** Re-collects links in document order and revalidates the requested handle. */
@@ -534,14 +586,20 @@ export class SignInAttemptEvidenceSensor {
     }
   }
 
-  private projectMessages(evidence: CollectedEvidence): SignInPageMessage[] {
+  private projectMessages(
+    request: MessageEvidenceRequest,
+  ): SignInPageMessage[] {
+    const evidence = request.evidence
     switch (evidence.container.kind) {
       case AuthContainerKind.Absent:
         return []
       case AuthContainerKind.Present: {
-        const present: PresentEvidence = {
-          container: evidence.container,
-          candidates: evidence.candidates,
+        const present: PresentMessageEvidenceRequest = {
+          evidence: {
+            container: evidence.container,
+            candidates: evidence.candidates,
+          },
+          context: request.context,
         }
         return this.projectPresentMessages(present)
       }
@@ -549,12 +607,13 @@ export class SignInAttemptEvidenceSensor {
   }
 
   private projectPresentMessages(
-    evidence: PresentEvidence,
+    request: PresentMessageEvidenceRequest,
   ): SignInPageMessage[] {
-    return evidence.candidates.flatMap((candidate) => {
+    return request.evidence.candidates.flatMap((candidate) => {
       const projection: MessageProjection = {
         candidate,
-        container: evidence.container.container,
+        container: request.evidence.container.container,
+        context: request.context,
       }
       return this.projectMessage(projection)
     })
@@ -575,16 +634,26 @@ export class SignInAttemptEvidenceSensor {
       case ParsedColorKind.Opaque:
         break
     }
+    const visible = this.visibleText(element)
+    const change: SignInAttemptMessageChangeRequest = {
+      context: projection.context,
+      element,
+      text: visible,
+    }
     const message: SignInPageMessage = {
-      text: this.visibleText(element).slice(
-        0,
-        SignInAttemptEvidenceSensor.MAX_MESSAGE_TEXT,
-      ),
+      text: visible.slice(0, SignInAttemptEvidenceSensor.MAX_MESSAGE_TEXT),
       source,
       placement: this.placement(projection),
-      tokens: this.tokens(element),
+      tokens: this.tokens([element]),
+      ancestor_tokens: this.tokens(
+        this.ancestors(element).slice(
+          1,
+          SignInAttemptEvidenceSensor.TOKEN_ANCESTOR_LEVELS + 1,
+        ),
+      ),
       foreground: foreground.color,
       background: this.background(element),
+      changed_since_submit: SignInAttemptObservation.changed(change),
     }
     return [message]
   }
@@ -598,10 +667,9 @@ export class SignInAttemptEvidenceSensor {
     }
   }
 
-  /** Lowercase class and id tokens of the element and up to two ancestors. */
-  private tokens(element: Element): string[] {
-    const tokens = this.ancestors(element)
-      .slice(0, SignInAttemptEvidenceSensor.TOKEN_ANCESTOR_LEVELS + 1)
+  /** Lowercase class and id tokens of the given elements, bounded. */
+  private tokens(elements: SensorElements): string[] {
+    const tokens = elements
       .flatMap((current) => [...Array.from(current.classList), current.id])
       .map((token) => token.trim().toLowerCase())
       .filter((token) => token.length > 0)

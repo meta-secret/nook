@@ -1878,6 +1878,8 @@
       "checklist_result_waiting": "Waiting for the site’s response",
       "checklist_result_done": "The site confirmed sign-in",
       "checklist_result_attention": "Sign-in could not be confirmed. Check the page.",
+      "checklist_result_failed": "The site did not accept the sign-in",
+      "checklist_result_challenge": "The site asks for another step",
       "checklist_ready": "Ready when you are",
       "checklist_working": "Working",
       "checklist_waiting": "Waiting",

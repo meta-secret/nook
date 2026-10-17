@@ -36,6 +36,8 @@ type NookLocaleCatalogShape = {
       checklist_result_waiting: string
       checklist_result_done: string
       checklist_result_attention: string
+      checklist_result_failed: string
+      checklist_result_challenge: string
       checklist_ready: string
       checklist_working: string
       checklist_waiting: string
@@ -368,6 +370,18 @@ export async function buildChromeLocales({
         widgetChecklistResultAttention: {
           message: catalog.extension.widget.message(
             'checklist_result_attention',
+            locale,
+          ),
+        },
+        widgetChecklistResultFailed: {
+          message: catalog.extension.widget.message(
+            'checklist_result_failed',
+            locale,
+          ),
+        },
+        widgetChecklistResultChallenge: {
+          message: catalog.extension.widget.message(
+            'checklist_result_challenge',
             locale,
           ),
         },

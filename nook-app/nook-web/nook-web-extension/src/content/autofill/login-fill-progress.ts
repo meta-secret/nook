@@ -194,7 +194,7 @@ export class LoginFillProgress {
       case LoginFillTrackingKind.Attempt:
         break
     }
-    void signInAttemptSession.submitting(signInAttemptEvidenceSensor.baseline())
+    void signInAttemptSession.submitting(signInAttemptEvidenceSensor.capture())
     const result = submit()
     void signInAttemptSession.submission(result)
     return result

@@ -1,11 +1,9 @@
 import type {
   SignInAttemptActionOffer,
   SignInAttemptActivity,
-  SignInAttemptDocumentRelation,
   SignInAttemptEvent,
   SignInAttemptLoginReference,
   SignInAttemptPresentation,
-  SignInAttemptSubmitBaseline,
   SignInAttemptUserAction,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { FormSubmissionResult } from '../../../../nook-web-shared/src/extension/password-forms'
@@ -21,6 +19,12 @@ import {
   type SignInAttemptDelivery,
   type SignInAttemptTransport,
 } from './sign-in-attempt-transport'
+import {
+  SignInAttemptObservation,
+  SignInAttemptObservationKind,
+  type SignInAttemptObservationContext,
+  type SignInAttemptSubmitCapture,
+} from './sign-in-attempt-observation'
 import { OUTCOME_EVIDENCE_POLL_MS } from './workflow-ui'
 
 export enum SignInAttemptPhaseKind {
@@ -133,8 +137,9 @@ export class SignInAttemptSession {
   private binding: SignInAttemptHostBinding = {
     kind: SignInAttemptHostBindingKind.Detached,
   }
-  /** NewDocument until this document's own actuator reports the submit. */
-  private relation: SignInAttemptDocumentRelation = 'NewDocument'
+  /** A new document until this document's own actuator reports the submit. */
+  private observation: SignInAttemptObservationContext =
+    SignInAttemptObservation.NEW_DOCUMENT
   private watch: EvidenceWatch = { kind: EvidenceWatchKind.Stopped }
   private report = EvidenceReport.Idle
 
@@ -184,7 +189,7 @@ export class SignInAttemptSession {
       case 'Wanted':
         break
     }
-    const page = await this.dependencies.sensor.observe(this.relation)
+    const page = await this.dependencies.sensor.observe(this.observation)
     const observed: SignInAttemptEvent = { kind: 'PageObserved', page }
     return this.dependencies.transport.advance(observed)
   }
@@ -220,7 +225,7 @@ export class SignInAttemptSession {
   async begin(
     request: SignInAttemptBeginRequest,
   ): Promise<SignInAttemptStartKind> {
-    this.relation = 'NewDocument'
+    this.observation = SignInAttemptObservation.NEW_DOCUMENT
     this.binding = {
       kind: SignInAttemptHostBindingKind.Attached,
       host: request.host,
@@ -245,9 +250,15 @@ export class SignInAttemptSession {
    * Reported with the baseline right before the actuator submits, so the
    * report leaves before a navigating document can unload.
    */
-  submitting(baseline: SignInAttemptSubmitBaseline): Promise<void> {
-    this.relation = 'SameDocument'
-    const activity: SignInAttemptActivity = { kind: 'Submitted', baseline }
+  submitting(capture: SignInAttemptSubmitCapture): Promise<void> {
+    this.observation = {
+      kind: SignInAttemptObservationKind.SameDocument,
+      snapshot: capture.snapshot,
+    }
+    const activity: SignInAttemptActivity = {
+      kind: 'Submitted',
+      baseline: capture.baseline,
+    }
     return this.activity(activity)
   }
 
@@ -301,6 +312,7 @@ export class SignInAttemptSession {
       case 'TimedOut':
       case 'Dismissed':
       case 'StepAdvanced':
+      case 'WorkflowLeft':
         return { kind: SignInAttemptChallengeKind.Absent }
     }
   }
@@ -448,13 +460,19 @@ export class SignInAttemptSession {
   /**
    * A concluded dismissal or an advanced username step (checklist Ready)
    * returns the Pilot to its fresh state; a take-over dismissal (checklist
-   * Inactive) stays visible.
+   * Inactive) stays visible. A left login workflow claims no outcome: the
+   * fresh Pilot where the page has a login form, otherwise nothing.
    */
   private display(presentation: SignInAttemptPresentation): void {
     switch (presentation.status) {
       case 'Dismissed':
       case 'StepAdvanced':
         this.dismissed(presentation)
+        return
+      case 'WorkflowLeft':
+        this.stopWatching()
+        this.phaseState = { kind: SignInAttemptPhaseKind.Fresh }
+        this.hostRelease()
         return
       case 'SigningIn':
       case 'SignedIn':
@@ -574,7 +592,7 @@ export class SignInAttemptSession {
 
   /** A page that cannot be observed now is observed again on the next tick. */
   private async observe(): Promise<void> {
-    const page = await this.dependencies.sensor.observe(this.relation)
+    const page = await this.dependencies.sensor.observe(this.observation)
     const event: SignInAttemptEvent = { kind: 'PageObserved', page }
     await this.advance(event)
   }

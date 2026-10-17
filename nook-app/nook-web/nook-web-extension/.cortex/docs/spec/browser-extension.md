@@ -498,7 +498,8 @@ Accepted requirement: Nook Pilot controls the sign-in it performs. Clicking
 **Sign in** (or choosing a login when several match) begins one sign-in
 attempt for the tab. After that, Pilot never falls back to its initial Ready
 state on its own; it shows **Signing in…** and then exactly one visible end
-state, also after a reload or a same-site navigation:
+state, also after a reload or a same-site navigation that still shows the
+login workflow:
 
 - **Signed in**: the site accepted the sign-in.
 - **Sign-in failed**: a localized reason category (wrong username or
@@ -529,12 +530,22 @@ category. **Try again** is an explicit user action that closes the old attempt
 and begins a new one with the same login through the existing fill path and
 revalidation. There is no automatic retry, replay or reconciliation.
 
+A concluded attempt is re-presented only while the login workflow is shown.
+On resume, when Rust asks for page evidence, Pilot first reports what the
+page shows and renders Rust's answer, never the resumed record's earlier
+presentation. When the page no longer shows the login workflow (for example
+after the user signed in by hand), Rust closes the attempt as
+`WorkflowLeft` and Pilot makes no outcome claim: the normal fresh Pilot
+where a login form exists, otherwise no sign-in Pilot at all.
+
 - **Prohibited:** return to Ready after the site rejects the password, label
-  an unclassified rejection as a wrong password, or re-submit the login
-  without a new explicit click.
+  an unclassified rejection as a wrong password, re-submit the login without
+  a new explicit click, or flash a resumed **Sign-in failed** on a page that
+  no longer shows the login workflow.
 - **Required:** show **Sign-in failed** with the classified reason (or the
-  unknown reason) and the site's message until the user chooses an action or
-  closes the tab; **Try again** starts one new attempt.
+  unknown reason) and the site's message while the login workflow is shown,
+  until the user chooses an action or closes the tab; **Try again** starts
+  one new attempt.
 
 #### Evidence and ownership
 
@@ -547,8 +558,19 @@ revalidation. There is no automatic retry, replay or reconciliation.
   existing manual-checkpoint result and outcome markers, up to six visible
   message blocks inside or near the authentication form (alert and live
   regions, field error references, and plain styled blocks with no role or
-  `aria-live`) with their text, class and id tokens, colors and placement,
-  and up to eight visible links without query or fragment.
+  `aria-live`) with their text, their own class and id tokens and those of
+  up to two ancestors (reported separately), colors and placement, up to
+  eight visible links without query or fragment, and up to 64 raw control
+  labels collected by the shared login-save control-label collector (Rust
+  classifies an authenticated affordance such as a sign-out control). The
+  baseline carries the same control labels.
+- After its own submit, the acting content script keeps in memory only the
+  submit-time path and each reported message element's visible text. For
+  later observations in the same document it reports whether the route
+  changed (`SameDocumentSameRoute` or `SameDocumentNewRoute`) and, per
+  message, whether it is new or its text changed since the submit. The path
+  and texts are never sent, stored or logged; the baseline and every
+  observation of a new document report no change.
 - They never read input values and never classify page text. Rust decides
   whether a block is an error, its reason, its freshness against the
   baseline (also across a reload), and whether a link resets a password.
@@ -557,9 +579,19 @@ revalidation. There is no automatic retry, replay or reconciliation.
   then activates that link.
 - The site message is rendered with `textContent` only.
 
+- Single-page-app limitation: when a site re-renders an identical message
+  into the same element without replacing the node after a second
+  rejection, the message is reported unchanged since the submit and is not
+  new evidence. The attempt
+  then ends as **Sign-in not confirmed** after the outcome budget, not as
+  **Sign-in failed**. On the same route, fields disappearing (for example
+  behind a spinner) is not success either: only the success marker or a
+  newly present authenticated affordance confirms there.
+
 - **Prohibited:** decide in TypeScript that a red banner means a locked
-  account, keep page text in the content script after rendering, or click a
-  reset link Rust has not revalidated.
+  account or that a control means the user is signed in, keep page text in
+  the content script after rendering, or click a reset link Rust has not
+  revalidated.
 - **Required:** send the raw facts, render the Rust presentation, and
   activate a reset link only after both DOM and Rust revalidation.
 
@@ -577,7 +609,8 @@ revalidation. There is no automatic retry, replay or reconciliation.
   password** and **Fill 2FA code**; the service worker removes it on that
   close, when Rust rejects a record that fails strict decode (Pilot starts
   fresh), and on `chrome.tabs.onRemoved`. A concluded failed, verification or
-  not-confirmed record is retained across reloads until the user resolves it.
+  not-confirmed record is retained across reloads until the user resolves it
+  or a page without the login workflow closes it (`WorkflowLeft`).
   Expiry and the outcome timeout are Rust decisions that yield the visible
   **Sign-in not confirmed** state, not a silent removal. A browser restart
   clears `chrome.storage.session`.

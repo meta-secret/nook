@@ -35,6 +35,11 @@ import {
   SignInAttemptWidgetDisplay,
   signInAttemptPageWidget,
 } from '../src/content/autofill/sign-in-attempt-widget'
+import {
+  SignInAttemptObservation,
+  SignInAttemptObservationKind,
+  type SignInAttemptObservationContext,
+} from '../src/content/autofill/sign-in-attempt-observation'
 import { workflowUi } from '../src/content/autofill/workflow-ui'
 import {
   SignInAttemptRouteFixture,
@@ -235,6 +240,7 @@ class SignInAttemptContentFixture {
             current_password_present: true,
             one_time_code_present: false,
           },
+          controls: ['Sign in  '],
         },
       },
     })
@@ -255,7 +261,8 @@ class SignInAttemptContentFixture {
   /** A signed-in site page with no login form, reached outside the Pilot. */
   dashboardDocument(): void {
     document.body.innerHTML = `<main><h1>Dashboard</h1>
-      <p>Welcome back. Your domains are listed below.</p></main>`
+      <p>Welcome back. Your domains are listed below.</p>
+      <button type="button">Sign out</button></main>`
   }
 
   /** The standalone Pilot's panel inside its shadow host. */
@@ -318,6 +325,13 @@ class SignInAttemptContentFixture {
   }
 }
 
+/** The fill path's policy hints, prepared before a synchronous capture. */
+class SignInAttemptEvidenceFixtureHints {
+  static readonly HINTS: Parameters<
+    typeof passwordFormInteraction.prepareCompanionWorkflowPolicies
+  >[0] = { authenticatorSetupHint: 'absent', backupCodesHint: false }
+}
+
 class EvidenceFixture {
   static page(request: EvidenceRequest): SignInAttemptPageEvidence {
     const messages: SignInAttemptPageEvidence['messages'] = [
@@ -325,9 +339,11 @@ class EvidenceFixture {
         text: request.message,
         source: 'Container',
         placement: 'NearAuthForm',
-        tokens: ['login-notice', 'login-card'],
+        tokens: ['login-notice'],
+        ancestor_tokens: ['login-card'],
         foreground: { red: 179, green: 0, blue: 27 },
         background: { red: 251, green: 232, blue: 236 },
+        changed_since_submit: false,
       },
     ]
     const links: SignInAttemptPageEvidence['links'] = [
@@ -347,6 +363,7 @@ class EvidenceFixture {
       manual_checkpoint_present: false,
       success_marker_present: request.success,
       error_marker_present: false,
+      controls: ['Sign in  '],
       messages: messages.filter((message) => message.text.length > 0),
       links: links.filter(() => request.resetLink),
     }
@@ -384,37 +401,6 @@ class PilotExpectation {
       request.surface.body.querySelector(`[data-testid="${request.testId}"]`)
         ?.textContent,
     )
-  }
-
-  static current(): SignInAttemptPresentation | false {
-    const phase = signInAttemptSession.phase
-    switch (phase.kind) {
-      case SignInAttemptPhaseKind.Presented:
-        return phase.presentation
-      case SignInAttemptPhaseKind.Fresh:
-      case SignInAttemptPhaseKind.Unavailable:
-        return false
-    }
-  }
-
-  static evidenceDemand(): string {
-    const presentation = PilotExpectation.current()
-    switch (presentation) {
-      case false:
-        return 'none'
-      default:
-        return presentation.page_evidence
-    }
-  }
-
-  static status(): string {
-    const presentation = PilotExpectation.current()
-    switch (presentation) {
-      case false:
-        return 'none'
-      default:
-        return presentation.status
-    }
   }
 
   /** Waits for the session's evidence report to re-render the Pilot. */
@@ -543,56 +529,32 @@ describe('standalone sign-in attempt Pilot', () => {
     fixture.dispose()
   })
 
-  test('a concluded failure resumed on a page without a login form stays Sign-in failed', async () => {
-    await fixture.observedAfterSubmit(
-      EvidenceFixture.page({
-        message: lockText,
-        authFields: true,
-        success: false,
-        resetLink: true,
-      }),
+  test('a concluded failure resumed on a page without a login form closes and shows nothing', async () => {
+    const failed = PilotExpectation.presentation(
+      await fixture.observedAfterSubmit(
+        EvidenceFixture.page({
+          message: lockText,
+          authFields: true,
+          success: false,
+          resetLink: true,
+        }),
+      ),
     )
+    expect(failed.status).toBe('Failed')
     fixture.dashboardDocument()
     await signInAttemptSession.resume()
-    expect(signInAttemptSession.phase.kind).toBe(
-      SignInAttemptPhaseKind.Presented,
-    )
-    // The scan prepares this document's Rust policy batch before the page Pilot.
-    const policies: Parameters<
-      typeof passwordFormInteraction.prepareCompanionWorkflowPolicies
-    >[0] = { authenticatorSetupHint: 'absent', backupCodesHint: false }
-    await passwordFormInteraction.prepareCompanionWorkflowPolicies(policies)
 
-    expect(await signInAttemptPageWidget.show()).toBe(
-      SignInAttemptWidgetDisplay.Shown,
-    )
-    const surface = fixture.pageWidget()
-    expect(surface.body.textContent).toContain('widgetSignInFailed')
-    expect(
-      PilotExpectation.text({ surface, testId: 'nook-sign-in-reason' }),
-    ).toBe('widgetSignInReasonAccountLocked')
-    expect(
-      PilotExpectation.text({ surface, testId: 'nook-sign-in-site-message' }),
-    ).toBe(lockText)
-    expect(PilotExpectation.actions(surface)).toEqual([
-      'widgetSignInTryAgain',
-      'widgetSignInChooseAnotherLogin',
-      'widgetSignInDismiss',
-    ])
-    // Resumed asks for page evidence; this page's report keeps the concluded
-    // failure (current contract; amendment E2 closes it on such a page).
-    await PilotExpectation.eventually(
-      () => PilotExpectation.evidenceDemand() === 'NotWanted',
-    )
-    expect(PilotExpectation.status()).toBe('Failed')
-    expect(document.getElementById('nook-auth-widget')).toBeInstanceOf(
-      HTMLElement,
-    )
-    expect(PilotExpectation.actions(surface)).not.toContain(
-      'widgetSignInResetPassword',
-    )
+    // The page's first evidence report left the login workflow: Rust closed
+    // the record as WorkflowLeft before anything rendered.
+    expect(signInAttemptSession.phase.kind).toBe(SignInAttemptPhaseKind.Fresh)
     expect(fixture.route.storage.key(7) in fixture.route.storage.values).toBe(
-      true,
+      false,
+    )
+    expect(await signInAttemptPageWidget.show()).toBe(
+      SignInAttemptWidgetDisplay.NotPresented,
+    )
+    expect(document.getElementById('nook-auth-widget')).not.toBeInstanceOf(
+      HTMLElement,
     )
   })
 })
@@ -607,12 +569,17 @@ describe('sign-in attempt evidence sensor', () => {
     fixture.loginDocument()
     const { signInAttemptEvidenceSensor } =
       await import('../src/content/autofill/sign-in-attempt-evidence')
-    const page = await signInAttemptEvidenceSensor.observe('NewDocument')
+    const page = await signInAttemptEvidenceSensor.observe(
+      SignInAttemptObservation.NEW_DOCUMENT,
+    )
+    expect(page.document).toBe('NewDocument')
     expect(page.auth_fields.current_password_present).toBe(true)
     const [banner] = page.messages
     expect(banner?.source).toBe('Container')
     expect(banner?.text).toContain('Your account has been locked for 24 hours')
-    expect(banner?.tokens).toContain('login-notice')
+    expect(banner?.tokens).toEqual(['login-notice'])
+    expect(banner?.ancestor_tokens).toEqual(['login-card'])
+    expect(banner?.changed_since_submit).toBe(false)
     expect(banner?.foreground).toEqual({ red: 179, green: 0, blue: 27 })
     expect(banner?.background).toEqual({ red: 251, green: 232, blue: 236 })
     expect(page.links.at(0)).toEqual({
@@ -620,10 +587,61 @@ describe('sign-in attempt evidence sensor', () => {
       text: 'Password Reset',
       href: 'https://www.namecheap.com/myaccount/login/password-reset/',
     })
-    const baseline = signInAttemptEvidenceSensor.baseline()
+    const baseline = signInAttemptEvidenceSensor.capture().baseline
     expect(baseline.messages.map((message) => message.text)).toEqual(
       page.messages.map((message) => message.text),
     )
+    expect(baseline.controls).toEqual(page.controls)
+    expect(page.controls.some((label) => label.includes('Sign in'))).toBe(true)
+  })
+
+  test('same-document observations report the route and which messages changed since the submit', async () => {
+    fixture.loginDocument()
+    const { signInAttemptEvidenceSensor } =
+      await import('../src/content/autofill/sign-in-attempt-evidence')
+    await passwordFormInteraction.prepareCompanionWorkflowPolicies(
+      SignInAttemptEvidenceFixtureHints.HINTS,
+    )
+    const capture = signInAttemptEvidenceSensor.capture()
+    expect(
+      capture.baseline.messages.every(
+        (message) => !message.changed_since_submit,
+      ),
+    ).toBe(true)
+    const context: SignInAttemptObservationContext = {
+      kind: SignInAttemptObservationKind.SameDocument,
+      snapshot: capture.snapshot,
+    }
+
+    const unchanged = await signInAttemptEvidenceSensor.observe(context)
+    expect(unchanged.document).toBe('SameDocumentSameRoute')
+    expect(unchanged.messages.at(0)?.changed_since_submit).toBe(false)
+
+    const notice = document.querySelector('.login-notice')
+    switch (true) {
+      case notice instanceof HTMLElement:
+        notice.textContent = 'Too many attempts. Try again in 10 minutes.'
+        break
+      case true:
+        throw new Error('expected the notice')
+    }
+    const changed = await signInAttemptEvidenceSensor.observe(context)
+    expect(changed.messages.at(0)?.changed_since_submit).toBe(true)
+
+    window.history.pushState({}, '', '/myaccount/login/verify/')
+    const moved = await signInAttemptEvidenceSensor.observe(context)
+    expect(moved.document).toBe('SameDocumentNewRoute')
+  })
+
+  test('reports a sign-out control as a raw label, never as a decision', async () => {
+    fixture.dashboardDocument()
+    const { signInAttemptEvidenceSensor } =
+      await import('../src/content/autofill/sign-in-attempt-evidence')
+    const page = await signInAttemptEvidenceSensor.observe(
+      SignInAttemptObservation.NEW_DOCUMENT,
+    )
+    expect(page.controls.some((label) => label.includes('Sign out'))).toBe(true)
+    expect(page.auth_fields.current_password_present).toBe(false)
   })
 
   test('never reports input values', async () => {
@@ -638,7 +656,13 @@ describe('sign-in attempt evidence sensor', () => {
     }
     const { signInAttemptEvidenceSensor } =
       await import('../src/content/autofill/sign-in-attempt-evidence')
-    const page = await signInAttemptEvidenceSensor.observe('SameDocument')
+    const capture = signInAttemptEvidenceSensor.capture()
+    const context: SignInAttemptObservationContext = {
+      kind: SignInAttemptObservationKind.SameDocument,
+      snapshot: capture.snapshot,
+    }
+    const page = await signInAttemptEvidenceSensor.observe(context)
     expect(JSON.stringify(page)).not.toContain('typed-secret-value')
+    expect(JSON.stringify(capture.baseline)).not.toContain('typed-secret-value')
   })
 })

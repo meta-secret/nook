@@ -984,7 +984,11 @@ pub const EXTENSION_WIDGET_CHECKLIST_LABEL: &str = "extension.widget.checklist_l
 pub const EXTENSION_WIDGET_CHECKLIST_READY: &str = "extension.widget.checklist_ready";
 pub const EXTENSION_WIDGET_CHECKLIST_RESULT_ATTENTION: &str =
     "extension.widget.checklist_result_attention";
+pub const EXTENSION_WIDGET_CHECKLIST_RESULT_CHALLENGE: &str =
+    "extension.widget.checklist_result_challenge";
 pub const EXTENSION_WIDGET_CHECKLIST_RESULT_DONE: &str = "extension.widget.checklist_result_done";
+pub const EXTENSION_WIDGET_CHECKLIST_RESULT_FAILED: &str =
+    "extension.widget.checklist_result_failed";
 pub const EXTENSION_WIDGET_CHECKLIST_RESULT_PENDING: &str =
     "extension.widget.checklist_result_pending";
 pub const EXTENSION_WIDGET_CHECKLIST_RESULT_WAITING: &str =

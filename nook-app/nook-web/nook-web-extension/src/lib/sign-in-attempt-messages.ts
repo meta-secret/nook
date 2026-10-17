@@ -108,9 +108,12 @@ export class SignInAttemptMessageCodec {
     ]),
     placement: Schema.Literals(['InsideAuthForm', 'NearAuthForm']),
     tokens: Schema.mutable(Schema.Array(Schema.String)),
+    ancestor_tokens: Schema.mutable(Schema.Array(Schema.String)),
     foreground: SignInAttemptMessageCodec.color,
     background: SignInAttemptMessageCodec.color,
+    changed_since_submit: Schema.Boolean,
   }
+  private static readonly controls = Schema.mutable(Schema.Array(Schema.String))
   private static readonly messages = Schema.mutable(
     Schema.Array(Schema.Struct(SignInAttemptMessageCodec.messageFields)),
   )
@@ -127,13 +130,19 @@ export class SignInAttemptMessageCodec {
     {
       messages: SignInAttemptMessageCodec.messages,
       auth_fields: SignInAttemptMessageCodec.authFields,
+      controls: SignInAttemptMessageCodec.controls,
     }
   private static readonly pageFields: CodecFields<SignInAttemptPageEvidence> = {
-    document: Schema.Literals(['SameDocument', 'NewDocument']),
+    document: Schema.Literals([
+      'SameDocumentSameRoute',
+      'SameDocumentNewRoute',
+      'NewDocument',
+    ]),
     auth_fields: SignInAttemptMessageCodec.authFields,
     manual_checkpoint_present: Schema.Boolean,
     success_marker_present: Schema.Boolean,
     error_marker_present: Schema.Boolean,
+    controls: SignInAttemptMessageCodec.controls,
     messages: SignInAttemptMessageCodec.messages,
     links: Schema.mutable(Schema.Array(SignInAttemptMessageCodec.link)),
   }

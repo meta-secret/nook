@@ -1885,6 +1885,8 @@
       "checklist_result_waiting": "Ожидаем ответа сайта",
       "checklist_result_done": "Сайт подтвердил вход",
       "checklist_result_attention": "Не удалось подтвердить вход. Проверьте страницу.",
+      "checklist_result_failed": "Сайт не принял вход",
+      "checklist_result_challenge": "Сайт запрашивает ещё один шаг",
       "checklist_ready": "Готово к началу",
       "checklist_working": "Выполняется",
       "checklist_waiting": "Ожидание",
