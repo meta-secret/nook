@@ -63,6 +63,23 @@ impl CompanionEpochMilliseconds {
         }
         Ok(())
     }
+
+    /// Whole milliseconds from `earlier` to this instant, saturating at zero
+    /// for a clock that moved backwards and at the elapsed-time domain bound.
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "the difference is clamped to the non-negative u32 elapsed range before conversion"
+    )]
+    pub(crate) fn elapsed_since(
+        self,
+        earlier: Self,
+    ) -> crate::AuthenticationOutcomeElapsedMilliseconds {
+        let Self(now) = self;
+        let Self(start) = earlier;
+        let elapsed = (now - start).clamp(0.0, f64::from(u32::MAX));
+        crate::AuthenticationOutcomeElapsedMilliseconds::from(elapsed as u32)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
