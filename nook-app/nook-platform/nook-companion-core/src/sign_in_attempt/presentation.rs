@@ -15,8 +15,9 @@ use super::failure_reason::SignInFailureReason;
 use super::page_evidence::SignInPageLinkIndex;
 use super::request::SignInAttemptLoginReference;
 use crate::{
-    AuthenticationLoginChecklistActivity, AuthenticationLoginChecklistPresentation,
-    AuthenticationLoginChecklistResult, AuthenticationLoginChecklistState,
+    AuthenticationDisplayProgress, AuthenticationLoginChecklistActivity,
+    AuthenticationLoginChecklistPresentation, AuthenticationLoginChecklistResult,
+    AuthenticationLoginChecklistState, AuthenticationWorkflowActivity,
 };
 
 /// Chrome i18n message names selected by Rust. Chrome i18n is the fixed
@@ -129,6 +130,8 @@ pub struct SignInAttemptPresentation {
     pub reason_key: Option<SignInAttemptMessageKey>,
     pub site_message: Option<SignInAttemptSiteMessage>,
     pub checklist: AuthenticationLoginChecklistPresentation,
+    /// The Pilot header step counter, consistent with the checklist rows.
+    pub progress: AuthenticationDisplayProgress,
     pub actions: Vec<SignInAttemptActionOffer>,
     pub reset_link: Option<SignInPageLinkIndex>,
     pub page_evidence: SignInAttemptEvidenceDemand,
@@ -239,6 +242,7 @@ impl From<SignInAttemptPresentationRequest> for SignInAttemptPresentation {
             reason_key: scene.reason_key(),
             site_message: scene.site_message(),
             checklist: scene.checklist_state().presentation(),
+            progress: scene.activity().progress(),
             actions,
             reset_link,
             page_evidence,
@@ -419,6 +423,35 @@ impl SignInAttemptScene {
         }
     }
 
+    /// The existing Pilot flight activity whose step counter matches the
+    /// checklist rows: fresh states count 1, Nook's own fill and submit 2,
+    /// and every state that reached the site's response 3.
+    fn activity(&self) -> AuthenticationWorkflowActivity {
+        match self {
+            Self::SigningIn(
+                SignInAttemptSigningIn::Filling
+                | SignInAttemptSigningIn::Filled
+                | SignInAttemptSigningIn::ManualSubmit
+                | SignInAttemptSigningIn::Restarting,
+            )
+            | Self::Failed(SignInAttemptFailedScene {
+                failure: SignInAttemptFailure::FillFailed | SignInAttemptFailure::SubmissionRejected,
+                ..
+            }) => AuthenticationWorkflowActivity::FillingLogin,
+            Self::SigningIn(SignInAttemptSigningIn::AwaitingOutcome)
+            | Self::SignedIn
+            | Self::Failed(SignInAttemptFailedScene {
+                failure: SignInAttemptFailure::SiteRejected { .. },
+                ..
+            })
+            | Self::ChallengeRequired { .. }
+            | Self::TimedOut { .. } => AuthenticationWorkflowActivity::VerifyingLogin,
+            Self::Dismissed(_) | Self::StepAdvanced | Self::WorkflowLeft => {
+                AuthenticationWorkflowActivity::ReadyLogin
+            }
+        }
+    }
+
     /// The existing checklist projection of this scene.
     fn checklist_state(&self) -> AuthenticationLoginChecklistState {
         let activity = match self {
@@ -456,9 +489,17 @@ impl SignInAttemptScene {
             Self::Failed(SignInAttemptFailedScene {
                 failure: SignInAttemptFailure::SiteRejected { .. },
                 ..
-            })
-            | Self::ChallengeRequired { .. }
-            | Self::TimedOut { .. } => {
+            }) => {
+                return AuthenticationLoginChecklistState::Outcome {
+                    result: AuthenticationLoginChecklistResult::Failed,
+                };
+            }
+            Self::ChallengeRequired { .. } => {
+                return AuthenticationLoginChecklistState::Outcome {
+                    result: AuthenticationLoginChecklistResult::ChallengeRequired,
+                };
+            }
+            Self::TimedOut { .. } => {
                 return AuthenticationLoginChecklistState::Outcome {
                     result: AuthenticationLoginChecklistResult::Attention,
                 };
@@ -541,4 +582,170 @@ impl SignInAttemptActionOffer {
         action: SignInAttemptActionKind::Dismiss,
         label_key: SignInAttemptMessageKey::WidgetTakeOver,
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        SignInAttemptChallenge, SignInAttemptDismissal, SignInAttemptEvidenceDemand,
+        SignInAttemptFailedScene, SignInAttemptFailure, SignInAttemptPresentation,
+        SignInAttemptPresentationRequest, SignInAttemptRecordLifetime, SignInAttemptResetOffer,
+        SignInAttemptScene, SignInAttemptSigningIn, SignInAttemptSiteMessageEvidence,
+        SignInAttemptStatus, SignInFailureReason,
+    };
+    use crate::{AuthenticationWorkflowCurrentStep, SignInAttemptFollowUp};
+
+    /// Expected header step and `Check result` row copy for one scene.
+    struct SceneExpectation {
+        scene: SignInAttemptScene,
+        status: SignInAttemptStatus,
+        step: u8,
+        result_detail: &'static str,
+    }
+
+    impl SceneExpectation {
+        fn assert_presentation(self) -> anyhow::Result<()> {
+            let presentation = SignInAttemptPresentation::from(SignInAttemptPresentationRequest {
+                scene: self.scene,
+                lifetime: SignInAttemptRecordLifetime::Retained,
+                follow_up: SignInAttemptFollowUp::None,
+            });
+            assert_eq!(presentation.status, self.status);
+            assert_eq!(
+                presentation.progress.current_step,
+                AuthenticationWorkflowCurrentStep::from(self.step),
+                "{:?}",
+                self.status
+            );
+            let [_, _, result] = presentation.checklist.rows;
+            assert_eq!(
+                serde_json::to_string(&result.detail_key)?,
+                serde_json::to_string(self.result_detail)?,
+                "{:?}",
+                self.status
+            );
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn in_flight_and_fresh_statuses_have_a_consistent_step_counter_and_result_row()
+    -> anyhow::Result<()> {
+        for expectation in [
+            SceneExpectation {
+                scene: SignInAttemptScene::SigningIn(SignInAttemptSigningIn::Filling),
+                status: SignInAttemptStatus::SigningIn,
+                step: 2,
+                result_detail: "widgetChecklistResultPending",
+            },
+            SceneExpectation {
+                scene: SignInAttemptScene::SigningIn(SignInAttemptSigningIn::ManualSubmit),
+                status: SignInAttemptStatus::SigningIn,
+                step: 2,
+                result_detail: "widgetChecklistResultPending",
+            },
+            SceneExpectation {
+                scene: SignInAttemptScene::SigningIn(SignInAttemptSigningIn::AwaitingOutcome),
+                status: SignInAttemptStatus::SigningIn,
+                step: 3,
+                result_detail: "widgetChecklistResultWaiting",
+            },
+            SceneExpectation {
+                scene: SignInAttemptScene::SignedIn,
+                status: SignInAttemptStatus::SignedIn,
+                step: 3,
+                result_detail: "widgetChecklistResultDone",
+            },
+            SceneExpectation {
+                scene: SignInAttemptScene::Dismissed(SignInAttemptDismissal::TakenOver),
+                status: SignInAttemptStatus::Dismissed,
+                step: 1,
+                result_detail: "widgetChecklistResultPending",
+            },
+            SceneExpectation {
+                scene: SignInAttemptScene::Dismissed(SignInAttemptDismissal::Concluded),
+                status: SignInAttemptStatus::Dismissed,
+                step: 1,
+                result_detail: "widgetChecklistResultPending",
+            },
+            SceneExpectation {
+                scene: SignInAttemptScene::StepAdvanced,
+                status: SignInAttemptStatus::StepAdvanced,
+                step: 1,
+                result_detail: "widgetChecklistResultPending",
+            },
+            SceneExpectation {
+                scene: SignInAttemptScene::WorkflowLeft,
+                status: SignInAttemptStatus::WorkflowLeft,
+                step: 1,
+                result_detail: "widgetChecklistResultPending",
+            },
+        ] {
+            expectation.assert_presentation()?;
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn concluded_statuses_have_a_consistent_step_counter_and_result_row() -> anyhow::Result<()> {
+        let site_failure = SignInAttemptFailedScene {
+            failure: SignInAttemptFailure::SiteRejected {
+                reason: SignInFailureReason::WrongCredentials,
+                message: SignInAttemptSiteMessageEvidence::Absent,
+            },
+            reset: SignInAttemptResetOffer::NotOffered,
+            evidence: SignInAttemptEvidenceDemand::NotWanted,
+        };
+        let unknown_failure = SignInAttemptFailedScene {
+            failure: SignInAttemptFailure::SiteRejected {
+                reason: SignInFailureReason::Unknown,
+                message: SignInAttemptSiteMessageEvidence::Absent,
+            },
+            ..site_failure.clone()
+        };
+        let fill_failure = SignInAttemptFailedScene {
+            failure: SignInAttemptFailure::FillFailed,
+            ..site_failure.clone()
+        };
+        for expectation in [
+            SceneExpectation {
+                scene: SignInAttemptScene::Failed(site_failure),
+                status: SignInAttemptStatus::Failed,
+                step: 3,
+                result_detail: "widgetChecklistResultFailed",
+            },
+            SceneExpectation {
+                scene: SignInAttemptScene::Failed(unknown_failure),
+                status: SignInAttemptStatus::Failed,
+                step: 3,
+                result_detail: "widgetChecklistResultFailed",
+            },
+            SceneExpectation {
+                scene: SignInAttemptScene::Failed(fill_failure),
+                status: SignInAttemptStatus::Failed,
+                step: 2,
+                result_detail: "widgetChecklistResultPending",
+            },
+            SceneExpectation {
+                scene: SignInAttemptScene::ChallengeRequired {
+                    challenge: SignInAttemptChallenge::OneTimeCode,
+                    evidence: SignInAttemptEvidenceDemand::NotWanted,
+                },
+                status: SignInAttemptStatus::ChallengeRequired,
+                step: 3,
+                result_detail: "widgetChecklistResultChallenge",
+            },
+            SceneExpectation {
+                scene: SignInAttemptScene::TimedOut {
+                    evidence: SignInAttemptEvidenceDemand::NotWanted,
+                },
+                status: SignInAttemptStatus::TimedOut,
+                step: 3,
+                result_detail: "widgetChecklistResultAttention",
+            },
+        ] {
+            expectation.assert_presentation()?;
+        }
+        Ok(())
+    }
 }

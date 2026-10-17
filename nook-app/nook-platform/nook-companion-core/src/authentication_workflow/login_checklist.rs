@@ -55,6 +55,10 @@ pub enum AuthenticationLoginChecklistResult {
     Waiting,
     Confirmed,
     Attention,
+    /// The site rejected the submitted login (sign-in attempt lifecycle).
+    Failed,
+    /// The site asked for an extra verification step (sign-in attempt lifecycle).
+    ChallengeRequired,
 }
 
 struct LoginChecklistOutcomeEvidence {
@@ -152,7 +156,9 @@ impl AuthenticationLoginChecklistState {
             Self::Outcome { result: retained } => match retained {
                 AuthenticationLoginChecklistResult::Waiting => Self::Outcome { result },
                 AuthenticationLoginChecklistResult::Confirmed
-                | AuthenticationLoginChecklistResult::Attention => self,
+                | AuthenticationLoginChecklistResult::Attention
+                | AuthenticationLoginChecklistResult::Failed
+                | AuthenticationLoginChecklistResult::ChallengeRequired => self,
             },
             Self::Activity {
                 activity:
@@ -194,7 +200,9 @@ impl AuthenticationLoginChecklistState {
                     AuthenticationLoginChecklistOutcomePolling::Wait
                 }
                 AuthenticationLoginChecklistResult::Confirmed
-                | AuthenticationLoginChecklistResult::Attention => {
+                | AuthenticationLoginChecklistResult::Attention
+                | AuthenticationLoginChecklistResult::Failed
+                | AuthenticationLoginChecklistResult::ChallengeRequired => {
                     AuthenticationLoginChecklistOutcomePolling::Stop
                 }
             },
@@ -234,7 +242,9 @@ impl AuthenticationLoginChecklistState {
                 AuthenticationLoginChecklistResult::Confirmed => {
                     AuthenticationLoginChecklistStatus::Complete
                 }
-                AuthenticationLoginChecklistResult::Attention => {
+                AuthenticationLoginChecklistResult::Attention
+                | AuthenticationLoginChecklistResult::Failed
+                | AuthenticationLoginChecklistResult::ChallengeRequired => {
                     AuthenticationLoginChecklistStatus::Attention
                 }
             },
@@ -397,6 +407,8 @@ impl AuthenticationLoginChecklistResult {
             Self::Waiting => "widgetChecklistResultWaiting",
             Self::Confirmed => "widgetChecklistResultDone",
             Self::Attention => "widgetChecklistResultAttention",
+            Self::Failed => "widgetChecklistResultFailed",
+            Self::ChallengeRequired => "widgetChecklistResultChallenge",
         };
         AuthenticationLoginChecklistMessageKey(browser_key.to_owned())
     }
@@ -412,7 +424,9 @@ impl AuthenticationLoginChecklistResult {
             AuthenticationLoginChecklistStep::CheckResult => match self {
                 Self::Waiting => AuthenticationLoginChecklistRowState::Current,
                 Self::Confirmed => AuthenticationLoginChecklistRowState::Done,
-                Self::Attention => AuthenticationLoginChecklistRowState::Attention,
+                Self::Attention | Self::Failed | Self::ChallengeRequired => {
+                    AuthenticationLoginChecklistRowState::Attention
+                }
             },
         }
     }

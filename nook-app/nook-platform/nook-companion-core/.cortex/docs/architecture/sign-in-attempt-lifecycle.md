@@ -152,7 +152,15 @@ A user action that is not offered re-presents the current state. Nothing is
 retried automatically.
 
 The presentation reuses the existing `AuthenticationLoginChecklistState`
-projection for its rows. `Dismissed` with checklist status `Inactive` is the
+projection for its rows. A site rejection uses the checklist result `Failed`
+(row detail `widgetChecklistResultFailed`). A challenge uses
+`ChallengeRequired` (`widgetChecklistResultChallenge`). A timeout keeps the
+generic `Attention` copy. The header counter `progress` comes from the
+existing `AuthenticationWorkflowActivity` and matches the rows:
+
+- 1 for fresh, dismissed, step-advanced, and workflow-left states;
+- 2 for Nook's own fill and submit, including fill failures;
+- 3 once the site's response was awaited or reached. `Dismissed` with checklist status `Inactive` is the
 take-over state. `Dismissed` with checklist status `Ready` is a return to the
 fresh Pilot.
 
