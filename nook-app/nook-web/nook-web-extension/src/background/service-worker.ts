@@ -8,6 +8,7 @@ import {
 import { FocusedLoginMessageRoute } from './service-worker/focused-login-message-route'
 import { GoogleLoginContinuationRoute } from './service-worker/google-login-continuation-route'
 import { loginPickerOperations } from './service-worker/login-picker-operations'
+import { SidePanelSiteRoutes } from './service-worker/side-panel-site-routes'
 /* eslint-disable nook-typed-api/no-raw-object-arguments, @typescript-eslint/no-unsafe-type-assertion -- Chrome runtime messages are narrowed at this external transport boundary. */
 import {
   GeneratePasswordRequestType,
@@ -281,6 +282,8 @@ const googleLoginRuntimeSchema: RuntimeMessageSchema<BrowserRuntimeMessage> = {
   decode: GoogleLoginContinuationMessageCodec.decodeEnvelope,
 }
 const schemaRuntimeMessageRoutes: BackgroundRuntimeMessageRoutes = [
+  SidePanelSiteRoutes.listing(),
+  SidePanelSiteRoutes.fill(),
   SchemaRuntimeMessageRoute.matching(googleLoginRuntimeSchema)
     .respondWith((request) => {
       const operation: ConstructorParameters<
