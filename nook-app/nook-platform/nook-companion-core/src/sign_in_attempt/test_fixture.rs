@@ -280,7 +280,7 @@ pub(crate) enum SignInScenarioOutcome {
 
 impl SignInScenario {
     pub(crate) const ORIGIN: &'static str = "https://www.namecheap.com";
-    pub(crate) const LOGIN: &'static str = "store_demo:secret_demo";
+    pub(crate) const LOGIN: &'static str = "store_abcdefghijk/secret_SMypl8K0w9a";
 
     pub(crate) fn instant(at: u32) -> anyhow::Result<CompanionEpochMilliseconds> {
         Ok(serde_json::from_str::<CompanionEpochMilliseconds>(

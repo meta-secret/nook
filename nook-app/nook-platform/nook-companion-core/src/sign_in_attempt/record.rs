@@ -2,18 +2,22 @@
 //!
 //! The service worker keeps exactly one record per tab in
 //! `chrome.storage.session` and never parses it. The record holds no
-//! credential, username, field value, or page text other than the one
-//! Rust-selected, bounded site message of a failed attempt.
+//! credential or field value Nook collected. Its only page text is the one
+//! Rust-selected, bounded site message of a failed attempt; that is the site's
+//! own text and may include what the site displays, such as an email address.
+//! It is protected by trusted-context-only storage, is never logged, is
+//! cleared when the attempt is resolved or the tab closes, and is presented
+//! only to the exact origin that recorded it.
 
 use std::cmp::Ordering;
 
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
-use super::conclusion::SignInAttemptConclusion;
+use super::end_state::{SignInAttemptConclusion, SignInAttemptLoginForm};
 use super::outcome::SignInAttemptOutcomeWait;
 use super::request::{SignInAttemptLoginReference, SignInAttemptRequestError};
-use super::site::SignInAttemptSite;
+use super::site::SignInAttemptOrigin;
 use crate::{AuthenticationOutcomeElapsedMilliseconds, CompanionEpochMilliseconds};
 
 /// Opaque JSON text of the Rust-owned record. TypeScript stores and returns it
@@ -127,16 +131,24 @@ pub(crate) enum SignInAttemptPreSubmitStep {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", deny_unknown_fields)]
 pub(crate) enum SignInAttemptPhase {
-    BeforeSubmit { step: SignInAttemptPreSubmitStep },
-    AwaitingOutcome { wait: SignInAttemptOutcomeWait },
-    Concluded { conclusion: SignInAttemptConclusion },
+    BeforeSubmit {
+        step: SignInAttemptPreSubmitStep,
+    },
+    AwaitingOutcome {
+        wait: SignInAttemptOutcomeWait,
+    },
+    Concluded {
+        conclusion: SignInAttemptConclusion,
+        form: SignInAttemptLoginForm,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct SignInAttemptRecord {
     pub(crate) schema: SignInAttemptRecordSchema,
-    pub(crate) site: SignInAttemptSite,
+    /// The exact origin that began the attempt; its site binds the record.
+    pub(crate) origin: SignInAttemptOrigin,
     pub(crate) login: SignInAttemptLoginReference,
     pub(crate) started_at: SignInAttemptInstant,
     pub(crate) phase: SignInAttemptPhase,
@@ -194,7 +206,7 @@ mod tests {
     struct RawStoredRecord(&'static str);
 
     impl RawStoredRecord {
-        const VALID: &'static str = r#"{"schema":1,"site":"https://namecheap.com","login":"store_a:secret_b","started_at":1000,"phase":{"kind":"BeforeSubmit","step":"Filling"}}"#;
+        const VALID: &'static str = r#"{"schema":1,"origin":"https://www.namecheap.com","login":"store_a/secret_b","started_at":1000,"phase":{"kind":"BeforeSubmit","step":"Filling"}}"#;
 
         fn decode(&self) -> Result<(), SignInAttemptRecordError> {
             let Self(raw) = self;
@@ -214,21 +226,21 @@ mod tests {
         for raw in [
             "not json",
             // Unknown field (a username must never be smuggled into the record).
-            r#"{"schema":1,"site":"https://namecheap.com","login":"store_a:secret_b","started_at":1000,"phase":{"kind":"BeforeSubmit","step":"Filling"},"username":"alice"}"#,
+            r#"{"schema":1,"origin":"https://www.namecheap.com","login":"store_a/secret_b","started_at":1000,"phase":{"kind":"BeforeSubmit","step":"Filling"},"username":"alice"}"#,
             // Unsupported schema revision.
-            r#"{"schema":2,"site":"https://namecheap.com","login":"store_a:secret_b","started_at":1000,"phase":{"kind":"BeforeSubmit","step":"Filling"}}"#,
-            // Non-canonical site.
-            r#"{"schema":1,"site":"https://www.namecheap.com","login":"store_a:secret_b","started_at":1000,"phase":{"kind":"BeforeSubmit","step":"Filling"}}"#,
+            r#"{"schema":2,"origin":"https://www.namecheap.com","login":"store_a/secret_b","started_at":1000,"phase":{"kind":"BeforeSubmit","step":"Filling"}}"#,
+            // Non-canonical origin.
+            r#"{"schema":1,"origin":"https://www.namecheap.com/","login":"store_a/secret_b","started_at":1000,"phase":{"kind":"BeforeSubmit","step":"Filling"}}"#,
             // Invalid login reference.
-            r#"{"schema":1,"site":"https://namecheap.com","login":"has space","started_at":1000,"phase":{"kind":"BeforeSubmit","step":"Filling"}}"#,
+            r#"{"schema":1,"origin":"https://www.namecheap.com","login":"has space","started_at":1000,"phase":{"kind":"BeforeSubmit","step":"Filling"}}"#,
             // Invalid instant.
-            r#"{"schema":1,"site":"https://namecheap.com","login":"store_a:secret_b","started_at":-5,"phase":{"kind":"BeforeSubmit","step":"Filling"}}"#,
+            r#"{"schema":1,"origin":"https://www.namecheap.com","login":"store_a/secret_b","started_at":-5,"phase":{"kind":"BeforeSubmit","step":"Filling"}}"#,
             // Unknown field inside the phase.
-            r#"{"schema":1,"site":"https://namecheap.com","login":"store_a:secret_b","started_at":1000,"phase":{"kind":"BeforeSubmit","step":"Filling","extra":true}}"#,
+            r#"{"schema":1,"origin":"https://www.namecheap.com","login":"store_a/secret_b","started_at":1000,"phase":{"kind":"BeforeSubmit","step":"Filling","extra":true}}"#,
             // Unknown phase.
-            r#"{"schema":1,"site":"https://namecheap.com","login":"store_a:secret_b","started_at":1000,"phase":{"kind":"Signing"}}"#,
+            r#"{"schema":1,"origin":"https://www.namecheap.com","login":"store_a/secret_b","started_at":1000,"phase":{"kind":"Signing"}}"#,
             // Missing required field.
-            r#"{"schema":1,"site":"https://namecheap.com","started_at":1000,"phase":{"kind":"BeforeSubmit","step":"Filling"}}"#,
+            r#"{"schema":1,"origin":"https://www.namecheap.com","started_at":1000,"phase":{"kind":"BeforeSubmit","step":"Filling"}}"#,
         ] {
             assert_eq!(
                 RawStoredRecord(raw).decode(),

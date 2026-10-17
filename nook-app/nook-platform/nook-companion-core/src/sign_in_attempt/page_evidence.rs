@@ -353,12 +353,13 @@ impl TryFrom<Vec<SignInPageLink>> for SignInPageLinks {
 
 #[cfg(test)]
 mod tests {
+    use super::SignInPageControls;
     use super::{
         SignInPageColor, SignInPageColorChannel, SignInPageColorTone, SignInPageLinkHref,
         SignInPageLinkText, SignInPageLinks, SignInPageMessageText, SignInPageMessageToken,
         SignInPageMessageTokens, SignInPageMessages,
     };
-    use crate::SignInAttemptPageEvidence;
+    use crate::{LoginControlLabel, SignInAttemptPageEvidence};
 
     struct ColorCase {
         red: u8,
@@ -537,5 +538,27 @@ mod tests {
         .json()
         .replace(r#""red":0"#, r#""red":256"#);
         assert!(serde_json::from_str::<SignInAttemptPageEvidence>(&over_bound_channel).is_err());
+    }
+
+    #[test]
+    fn more_than_sixty_four_control_labels_reject_the_request() -> anyhow::Result<()> {
+        let labels = |count: usize| {
+            (0..count)
+                .map(|_| LoginControlLabel::try_from("Sign out".to_owned()))
+                .collect::<Result<Vec<_>, _>>()
+        };
+        assert!(SignInPageControls::try_from(labels(64)?).is_ok());
+        assert!(SignInPageControls::try_from(labels(65)?).is_err());
+        let over_bound = RawPageDocument {
+            messages: 0,
+            links: 0,
+        }
+        .json()
+        .replace(
+            r#""controls":["Sign in"]"#,
+            &format!(r#""controls":[{}]"#, vec![r#""Sign in""#; 65].join(",")),
+        );
+        assert!(serde_json::from_str::<SignInAttemptPageEvidence>(&over_bound).is_err());
+        Ok(())
     }
 }

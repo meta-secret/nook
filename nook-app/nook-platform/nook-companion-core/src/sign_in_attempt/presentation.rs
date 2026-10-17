@@ -7,13 +7,14 @@
 use serde::Serialize;
 use tsify::Tsify;
 
-use super::conclusion::{
-    SignInAttemptChallenge, SignInAttemptFailure, SignInAttemptSiteMessage,
+use super::end_state::{
+    SignInAttemptChallenge, SignInAttemptFailure, SignInAttemptLoginForm, SignInAttemptSiteMessage,
     SignInAttemptSiteMessageEvidence,
 };
 use super::failure_reason::SignInFailureReason;
 use super::page_evidence::SignInPageLinkIndex;
 use super::request::SignInAttemptLoginReference;
+use super::site::SignInAttemptOriginRelation;
 use crate::{
     AuthenticationDisplayProgress, AuthenticationLoginChecklistActivity,
     AuthenticationLoginChecklistPresentation, AuthenticationLoginChecklistResult,
@@ -31,7 +32,6 @@ pub enum SignInAttemptMessageKey {
     WidgetSignInSignedIn,
     WidgetSignInSignedInDescription,
     WidgetSignInFailed,
-    WidgetSignInFailedDescription,
     WidgetSignInReasonWrongCredentials,
     WidgetSignInReasonAccountLocked,
     WidgetSignInReasonRateLimited,
@@ -119,15 +119,14 @@ pub enum SignInAttemptFollowUp {
     OpenAuthenticatorPicker,
 }
 
-/// The TypeScript contract fixes `reason_key`, `site_message`, and
-/// `reset_link` as optional fields; Rust fills them only from named scene
-/// states (`SignInAttemptScene`), at this DTO edge.
+/// The TypeScript contract fixes `site_message` and `reset_link` as optional
+/// fields; Rust fills them only from named scene states (`SignInAttemptScene`),
+/// at this DTO edge. A site failure's reason is its `description_key`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
 pub struct SignInAttemptPresentation {
     pub status: SignInAttemptStatus,
     pub title_key: SignInAttemptMessageKey,
     pub description_key: SignInAttemptMessageKey,
-    pub reason_key: Option<SignInAttemptMessageKey>,
     pub site_message: Option<SignInAttemptSiteMessage>,
     pub checklist: AuthenticationLoginChecklistPresentation,
     /// The Pilot header step counter, consistent with the checklist rows.
@@ -149,9 +148,11 @@ pub(crate) enum SignInAttemptScene {
     ChallengeRequired {
         challenge: SignInAttemptChallenge,
         evidence: SignInAttemptEvidenceDemand,
+        form: SignInAttemptLoginForm,
     },
     TimedOut {
         evidence: SignInAttemptEvidenceDemand,
+        form: SignInAttemptLoginForm,
     },
     Dismissed(SignInAttemptDismissal),
     /// The submitted email-first step was accepted; the next step starts fresh.
@@ -176,6 +177,7 @@ pub(crate) struct SignInAttemptFailedScene {
     pub(crate) failure: SignInAttemptFailure,
     pub(crate) reset: SignInAttemptResetOffer,
     pub(crate) evidence: SignInAttemptEvidenceDemand,
+    pub(crate) form: SignInAttemptLoginForm,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -202,6 +204,25 @@ pub(crate) struct SignInAttemptPresentationRequest {
     pub(crate) scene: SignInAttemptScene,
     pub(crate) lifetime: SignInAttemptRecordLifetime,
     pub(crate) follow_up: SignInAttemptFollowUp,
+    pub(crate) message: SignInAttemptMessageVisibility,
+}
+
+/// Whether the requesting page may see the stored site message: only the
+/// exact origin that recorded the failure does; other same-site origins see
+/// the failure without it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SignInAttemptMessageVisibility {
+    Shown,
+    Withheld,
+}
+
+impl From<SignInAttemptOriginRelation> for SignInAttemptMessageVisibility {
+    fn from(relation: SignInAttemptOriginRelation) -> Self {
+        match relation {
+            SignInAttemptOriginRelation::SameOrigin => Self::Shown,
+            SignInAttemptOriginRelation::OtherOrigin => Self::Withheld,
+        }
+    }
 }
 
 /// The interactive part of a presentation. A closing record offers nothing:
@@ -218,7 +239,12 @@ impl From<SignInAttemptPresentationRequest> for SignInAttemptPresentation {
             scene,
             lifetime,
             follow_up,
+            message,
         } = request;
+        let site_message = match message {
+            SignInAttemptMessageVisibility::Shown => scene.site_message(),
+            SignInAttemptMessageVisibility::Withheld => None,
+        };
         let SignInAttemptInteraction {
             actions,
             reset_link,
@@ -239,8 +265,7 @@ impl From<SignInAttemptPresentationRequest> for SignInAttemptPresentation {
             status: scene.status(),
             title_key: scene.title_key(),
             description_key: scene.description_key(),
-            reason_key: scene.reason_key(),
-            site_message: scene.site_message(),
+            site_message,
             checklist: scene.checklist_state().presentation(),
             progress: scene.activity().progress(),
             actions,
@@ -315,26 +340,6 @@ impl SignInAttemptScene {
         }
     }
 
-    fn reason_key(&self) -> Option<SignInAttemptMessageKey> {
-        match self {
-            Self::Failed(SignInAttemptFailedScene {
-                failure: SignInAttemptFailure::SiteRejected { reason, .. },
-                ..
-            }) => Some(reason.message_key()),
-            Self::Failed(SignInAttemptFailedScene {
-                failure: SignInAttemptFailure::FillFailed | SignInAttemptFailure::SubmissionRejected,
-                ..
-            })
-            | Self::SigningIn(_)
-            | Self::SignedIn
-            | Self::ChallengeRequired { .. }
-            | Self::TimedOut { .. }
-            | Self::Dismissed(_)
-            | Self::StepAdvanced
-            | Self::WorkflowLeft => None,
-        }
-    }
-
     fn site_message(&self) -> Option<SignInAttemptSiteMessage> {
         match self {
             Self::Failed(SignInAttemptFailedScene {
@@ -379,10 +384,18 @@ impl SignInAttemptScene {
             Self::SigningIn(SignInAttemptSigningIn::AwaitingOutcome) => {
                 SignInAttemptEvidenceDemand::Wanted
             }
-            Self::Failed(SignInAttemptFailedScene { evidence, .. })
+            Self::Failed(SignInAttemptFailedScene {
+                failure: SignInAttemptFailure::SiteRejected { .. },
+                evidence,
+                ..
+            })
             | Self::ChallengeRequired { evidence, .. }
-            | Self::TimedOut { evidence } => *evidence,
-            Self::SigningIn(
+            | Self::TimedOut { evidence, .. } => *evidence,
+            Self::Failed(SignInAttemptFailedScene {
+                failure: SignInAttemptFailure::FillFailed | SignInAttemptFailure::SubmissionRejected,
+                ..
+            })
+            | Self::SigningIn(
                 SignInAttemptSigningIn::Filling
                 | SignInAttemptSigningIn::Filled
                 | SignInAttemptSigningIn::ManualSubmit
@@ -401,22 +414,27 @@ impl SignInAttemptScene {
             Self::Failed(scene) => scene.actions(),
             Self::ChallengeRequired {
                 challenge: SignInAttemptChallenge::OneTimeCode,
+                form,
                 ..
-            } => vec![
-                SignInAttemptActionOffer::FILL_AUTHENTICATOR,
-                SignInAttemptActionOffer::TAKE_OVER,
-            ],
+            } => [
+                form.offer(SignInAttemptActionOffer::FILL_AUTHENTICATOR),
+                vec![SignInAttemptActionOffer::TAKE_OVER],
+            ]
+            .concat(),
             Self::ChallengeRequired {
                 challenge: SignInAttemptChallenge::Verification,
+                form,
                 ..
-            } => vec![
-                SignInAttemptActionOffer::TRY_AGAIN,
-                SignInAttemptActionOffer::TAKE_OVER,
-            ],
-            Self::TimedOut { .. } => vec![
-                SignInAttemptActionOffer::TRY_AGAIN,
-                SignInAttemptActionOffer::DISMISS,
-            ],
+            } => [
+                form.offer(SignInAttemptActionOffer::TRY_AGAIN),
+                vec![SignInAttemptActionOffer::TAKE_OVER],
+            ]
+            .concat(),
+            Self::TimedOut { form, .. } => [
+                form.offer(SignInAttemptActionOffer::TRY_AGAIN),
+                vec![SignInAttemptActionOffer::DISMISS],
+            ]
+            .concat(),
             Self::SignedIn | Self::Dismissed(_) | Self::StepAdvanced | Self::WorkflowLeft => {
                 Vec::new()
             }
@@ -509,35 +527,57 @@ impl SignInAttemptScene {
     }
 }
 
+impl SignInAttemptLoginForm {
+    /// Actions that act on the login form are offered only while it is shown.
+    fn offer(self, action: SignInAttemptActionOffer) -> Vec<SignInAttemptActionOffer> {
+        match self {
+            Self::Shown => vec![action],
+            Self::Gone | Self::Unobserved => Vec::new(),
+        }
+    }
+}
+
 impl SignInAttemptFailedScene {
-    /// Reset password is offered only for a site rejection whose current page
-    /// shows a revalidated same-site reset link.
+    /// Actions in the order the reason calls for; the first is the primary
+    /// button. Reset password is offered only for a site rejection whose
+    /// current page shows a revalidated same-site reset link.
     fn actions(&self) -> Vec<SignInAttemptActionOffer> {
-        let reset = match (&self.failure, self.reset) {
-            (SignInAttemptFailure::SiteRejected { .. }, SignInAttemptResetOffer::Offered(_)) => {
-                vec![SignInAttemptActionOffer::RESET_PASSWORD]
-            }
-            (SignInAttemptFailure::SiteRejected { .. }, SignInAttemptResetOffer::NotOffered)
-            | (
-                SignInAttemptFailure::FillFailed | SignInAttemptFailure::SubmissionRejected,
-                SignInAttemptResetOffer::Offered(_) | SignInAttemptResetOffer::NotOffered,
-            ) => Vec::new(),
+        let try_again = self.form.offer(SignInAttemptActionOffer::TRY_AGAIN);
+        let choose = self
+            .form
+            .offer(SignInAttemptActionOffer::CHOOSE_ANOTHER_LOGIN);
+        let reset = match self.reset {
+            SignInAttemptResetOffer::Offered(_) => vec![SignInAttemptActionOffer::RESET_PASSWORD],
+            SignInAttemptResetOffer::NotOffered => Vec::new(),
         };
-        [
-            SignInAttemptActionOffer::TRY_AGAIN,
-            SignInAttemptActionOffer::CHOOSE_ANOTHER_LOGIN,
-        ]
-        .into_iter()
-        .chain(reset)
-        .chain([SignInAttemptActionOffer::DISMISS])
-        .collect()
+        let dismiss = vec![SignInAttemptActionOffer::DISMISS];
+        match &self.failure {
+            SignInAttemptFailure::SiteRejected {
+                reason: SignInFailureReason::AccountLocked,
+                ..
+            } => [reset, choose, try_again, dismiss].concat(),
+            SignInAttemptFailure::SiteRejected {
+                reason: SignInFailureReason::RateLimited,
+                ..
+            } => [dismiss, choose, reset, try_again].concat(),
+            SignInAttemptFailure::SiteRejected {
+                reason:
+                    SignInFailureReason::WrongCredentials
+                    | SignInFailureReason::ChallengeRequired
+                    | SignInFailureReason::Unknown,
+                ..
+            } => [try_again, choose, reset, dismiss].concat(),
+            SignInAttemptFailure::FillFailed | SignInAttemptFailure::SubmissionRejected => {
+                [try_again, choose, dismiss].concat()
+            }
+        }
     }
 }
 
 impl SignInAttemptFailure {
     fn description_key(&self) -> SignInAttemptMessageKey {
         match self {
-            Self::SiteRejected { .. } => SignInAttemptMessageKey::WidgetSignInFailedDescription,
+            Self::SiteRejected { reason, .. } => reason.message_key(),
             Self::FillFailed => SignInAttemptMessageKey::WidgetChecklistFillFailed,
             Self::SubmissionRejected => SignInAttemptMessageKey::WidgetChecklistSubmitRejected,
         }
@@ -588,7 +628,8 @@ impl SignInAttemptActionOffer {
 mod tests {
     use super::{
         SignInAttemptChallenge, SignInAttemptDismissal, SignInAttemptEvidenceDemand,
-        SignInAttemptFailedScene, SignInAttemptFailure, SignInAttemptPresentation,
+        SignInAttemptFailedScene, SignInAttemptFailure, SignInAttemptLoginForm,
+        SignInAttemptMessageVisibility, SignInAttemptPresentation,
         SignInAttemptPresentationRequest, SignInAttemptRecordLifetime, SignInAttemptResetOffer,
         SignInAttemptScene, SignInAttemptSigningIn, SignInAttemptSiteMessageEvidence,
         SignInAttemptStatus, SignInFailureReason,
@@ -609,6 +650,7 @@ mod tests {
                 scene: self.scene,
                 lifetime: SignInAttemptRecordLifetime::Retained,
                 follow_up: SignInAttemptFollowUp::None,
+                message: SignInAttemptMessageVisibility::Shown,
             });
             assert_eq!(presentation.status, self.status);
             assert_eq!(
@@ -695,6 +737,7 @@ mod tests {
             },
             reset: SignInAttemptResetOffer::NotOffered,
             evidence: SignInAttemptEvidenceDemand::NotWanted,
+            form: SignInAttemptLoginForm::Shown,
         };
         let unknown_failure = SignInAttemptFailedScene {
             failure: SignInAttemptFailure::SiteRejected {
@@ -730,6 +773,7 @@ mod tests {
                 scene: SignInAttemptScene::ChallengeRequired {
                     challenge: SignInAttemptChallenge::OneTimeCode,
                     evidence: SignInAttemptEvidenceDemand::NotWanted,
+                    form: SignInAttemptLoginForm::Shown,
                 },
                 status: SignInAttemptStatus::ChallengeRequired,
                 step: 3,
@@ -738,6 +782,7 @@ mod tests {
             SceneExpectation {
                 scene: SignInAttemptScene::TimedOut {
                     evidence: SignInAttemptEvidenceDemand::NotWanted,
+                    form: SignInAttemptLoginForm::Shown,
                 },
                 status: SignInAttemptStatus::TimedOut,
                 step: 3,
