@@ -10,7 +10,10 @@ import type {
   SignInAttemptPageEvidence,
   SignInAttemptPresentation,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import { PasswordFormScopeKind } from '../../nook-web-shared/src/extension/password-forms'
+import {
+  PasswordFormScopeKind,
+  passwordFormInteraction,
+} from '../../nook-web-shared/src/extension/password-forms'
 import { emptyPasswordFormSummary } from '../../nook-web-shared/src/extension/password-form-summary-state'
 import type { BrowserRuntimeMessageValue } from '../src/lib/browser-runtime-message'
 import {
@@ -28,6 +31,11 @@ import {
   SignInAttemptPhaseKind,
   signInAttemptSession,
 } from '../src/content/autofill/sign-in-attempt-session'
+import {
+  SignInAttemptWidgetDisplay,
+  signInAttemptPageWidget,
+} from '../src/content/autofill/sign-in-attempt-widget'
+import { workflowUi } from '../src/content/autofill/workflow-ui'
 import {
   SignInAttemptRouteFixture,
   type SignInAttemptSenderFixture,
@@ -56,6 +64,9 @@ type ContentGlobals = Pick<
   | 'Element'
   | 'HTMLElement'
   | 'HTMLAnchorElement'
+  | 'HTMLDivElement'
+  | 'HTMLHeadingElement'
+  | 'HTMLParagraphElement'
   | 'HTMLButtonElement'
   | 'HTMLInputElement'
   | 'HTMLFormElement'
@@ -63,6 +74,7 @@ type ContentGlobals = Pick<
   | 'NodeFilter'
   | 'ShadowRoot'
   | 'getComputedStyle'
+  | 'requestAnimationFrame'
 > & { window: Window }
 type PilotSurface = {
   readonly body: HTMLDivElement
@@ -113,6 +125,7 @@ class SignInAttemptContentFixture {
 
   dispose(): void {
     for (const progress of this.mounted) progress.cancel()
+    workflowUi.removeWidget()
   }
 
   private install(): void {
@@ -124,6 +137,9 @@ class SignInAttemptContentFixture {
       Element: browser.Element,
       HTMLElement: browser.HTMLElement,
       HTMLAnchorElement: browser.HTMLAnchorElement,
+      HTMLDivElement: browser.HTMLDivElement,
+      HTMLHeadingElement: browser.HTMLHeadingElement,
+      HTMLParagraphElement: browser.HTMLParagraphElement,
       HTMLButtonElement: browser.HTMLButtonElement,
       HTMLInputElement: browser.HTMLInputElement,
       HTMLFormElement: browser.HTMLFormElement,
@@ -131,6 +147,7 @@ class SignInAttemptContentFixture {
       NodeFilter: browser.NodeFilter,
       ShadowRoot: browser.ShadowRoot,
       getComputedStyle: browser.getComputedStyle.bind(browser),
+      requestAnimationFrame: browser.requestAnimationFrame.bind(browser),
     }
     Object.assign(globalThis, globals)
     Object.assign(globalThis.chrome, {
@@ -139,6 +156,7 @@ class SignInAttemptContentFixture {
     Object.assign(globalThis.chrome.runtime, {
       lastError: false,
       sendMessage: this.sendMessage.bind(this),
+      getURL: (path: string) => `chrome-extension://nook-extension/${path}`,
     })
   }
 
@@ -170,7 +188,15 @@ class SignInAttemptContentFixture {
   private async companion(
     message: CompanionWasmRuntimeMessage,
   ): Promise<ContentRuntimeReply> {
-    const result = await handleCompanionWasmMessage(message)
+    // Pairing and vault-state requests have no offscreen WASM handler here.
+    const result: ChecklistProjectionResult | undefined =
+      await handleCompanionWasmMessage(message)
+    switch (result) {
+      case undefined:
+        return { ok: false }
+      default:
+        break
+    }
     return result.match(
       (value) => ({ ok: true, result: value }),
       () => ({ ok: false }),
@@ -224,6 +250,32 @@ class SignInAttemptContentFixture {
         <input name="LoginPassword" type="password" autocomplete="current-password">
         <button type="submit">Sign in</button>
       </form></section></main>`
+  }
+
+  /** A signed-in site page with no login form, reached outside the Pilot. */
+  dashboardDocument(): void {
+    document.body.innerHTML = `<main><h1>Dashboard</h1>
+      <p>Welcome back. Your domains are listed below.</p></main>`
+  }
+
+  /** The standalone Pilot's panel inside its shadow host. */
+  pageWidget(): PilotSurface {
+    const host = document.getElementById('nook-auth-widget')
+    const panel = host?.shadowRoot?.querySelector(
+      '[data-testid="nook-auth-gate"]',
+    )
+    if (!(panel instanceof HTMLDivElement))
+      throw new Error('expected the standalone sign-in Pilot')
+    const title = panel.querySelector('h2, h1')
+    const description = panel.querySelector('p')
+    const control = panel.querySelector('button')
+    if (
+      !(title instanceof HTMLHeadingElement) ||
+      !(description instanceof HTMLParagraphElement) ||
+      !(control instanceof HTMLButtonElement)
+    )
+      throw new Error('expected the standalone Pilot copy')
+    return { body: panel, title, description, control }
   }
 
   /** A Pilot surface outside the page body, like the widget's shadow host. */
@@ -332,6 +384,37 @@ class PilotExpectation {
       request.surface.body.querySelector(`[data-testid="${request.testId}"]`)
         ?.textContent,
     )
+  }
+
+  static current(): SignInAttemptPresentation | false {
+    const phase = signInAttemptSession.phase
+    switch (phase.kind) {
+      case SignInAttemptPhaseKind.Presented:
+        return phase.presentation
+      case SignInAttemptPhaseKind.Fresh:
+      case SignInAttemptPhaseKind.Unavailable:
+        return false
+    }
+  }
+
+  static evidenceDemand(): string {
+    const presentation = PilotExpectation.current()
+    switch (presentation) {
+      case false:
+        return 'none'
+      default:
+        return presentation.page_evidence
+    }
+  }
+
+  static status(): string {
+    const presentation = PilotExpectation.current()
+    switch (presentation) {
+      case false:
+        return 'none'
+      default:
+        return presentation.status
+    }
   }
 
   /** Waits for the session's evidence report to re-render the Pilot. */
@@ -448,6 +531,69 @@ describe('content-script sign-in attempt client', () => {
     expect(surface.title.textContent).toBe('widgetSignInSignedIn')
     expect(surface.control.hidden).toBe(true)
     expect(PilotExpectation.actions(surface)).toEqual([])
+  })
+})
+
+describe('standalone sign-in attempt Pilot', () => {
+  let fixture: SignInAttemptContentFixture
+  beforeEach(async () => {
+    fixture = await SignInAttemptContentFixture.create()
+  })
+  afterEach(() => {
+    fixture.dispose()
+  })
+
+  test('a concluded failure resumed on a page without a login form stays Sign-in failed', async () => {
+    await fixture.observedAfterSubmit(
+      EvidenceFixture.page({
+        message: lockText,
+        authFields: true,
+        success: false,
+        resetLink: true,
+      }),
+    )
+    fixture.dashboardDocument()
+    await signInAttemptSession.resume()
+    expect(signInAttemptSession.phase.kind).toBe(
+      SignInAttemptPhaseKind.Presented,
+    )
+    // The scan prepares this document's Rust policy batch before the page Pilot.
+    const policies: Parameters<
+      typeof passwordFormInteraction.prepareCompanionWorkflowPolicies
+    >[0] = { authenticatorSetupHint: 'absent', backupCodesHint: false }
+    await passwordFormInteraction.prepareCompanionWorkflowPolicies(policies)
+
+    expect(await signInAttemptPageWidget.show()).toBe(
+      SignInAttemptWidgetDisplay.Shown,
+    )
+    const surface = fixture.pageWidget()
+    expect(surface.body.textContent).toContain('widgetSignInFailed')
+    expect(
+      PilotExpectation.text({ surface, testId: 'nook-sign-in-reason' }),
+    ).toBe('widgetSignInReasonAccountLocked')
+    expect(
+      PilotExpectation.text({ surface, testId: 'nook-sign-in-site-message' }),
+    ).toBe(lockText)
+    expect(PilotExpectation.actions(surface)).toEqual([
+      'widgetSignInTryAgain',
+      'widgetSignInChooseAnotherLogin',
+      'widgetSignInDismiss',
+    ])
+    // Resumed asks for page evidence; this page's report keeps the concluded
+    // failure (current contract; amendment E2 closes it on such a page).
+    await PilotExpectation.eventually(
+      () => PilotExpectation.evidenceDemand() === 'NotWanted',
+    )
+    expect(PilotExpectation.status()).toBe('Failed')
+    expect(document.getElementById('nook-auth-widget')).toBeInstanceOf(
+      HTMLElement,
+    )
+    expect(PilotExpectation.actions(surface)).not.toContain(
+      'widgetSignInResetPassword',
+    )
+    expect(fixture.route.storage.key(7) in fixture.route.storage.values).toBe(
+      true,
+    )
   })
 })
 

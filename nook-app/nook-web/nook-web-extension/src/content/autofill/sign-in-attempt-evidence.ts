@@ -38,6 +38,9 @@ type MessageCandidate = {
   readonly source: SignInPageMessageSource
 }
 type MessageCandidates = MessageCandidate[]
+type SignInAttemptPolicyHints = Parameters<
+  typeof passwordFormInteraction.prepareCompanionWorkflowPolicies
+>[0]
 type AnchorCandidates = HTMLAnchorElement[]
 type SensorElements = Element[]
 type ElementAttribute = ReturnType<Element['getAttribute']>
@@ -140,11 +143,22 @@ export class SignInAttemptEvidenceSensor {
   }
 
   /** Refreshes the existing field classification, then collects the page facts. */
+  static readonly POLICY_HINTS: SignInAttemptPolicyHints = {
+    authenticatorSetupHint: 'absent',
+    backupCodesHint: false,
+  }
+
   async observe(
     document: SignInAttemptDocumentRelation,
   ): Promise<SignInAttemptPageEvidence> {
     await passwordFieldDiscovery.prepareCompanionClassification(
       this.browser.document,
+    )
+    // Form admissibility is cached per Rust policy batch; a batch prepared for
+    // an earlier DOM would hide the re-rendered form's fields, so refresh it
+    // for this DOM exactly as the fill path does before its submit.
+    await passwordFormInteraction.prepareCompanionWorkflowPolicies(
+      SignInAttemptEvidenceSensor.POLICY_HINTS,
     )
     return this.page(document)
   }

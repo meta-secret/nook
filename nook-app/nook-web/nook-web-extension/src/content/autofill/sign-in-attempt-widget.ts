@@ -4,7 +4,10 @@ import {
   type SignInAttemptActionOffer,
   type SignInAttemptPresentation,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import { authentication_workflow_activity_progress } from './authentication-activity-progress'
+import {
+  authenticationActivityProgress,
+  authentication_workflow_activity_progress,
+} from './authentication-activity-progress'
 import { LoginChecklistRendering } from './login-checklist-rendering'
 import { SignInAttemptRendering } from './sign-in-attempt-rendering'
 import {
@@ -70,6 +73,14 @@ class SignInAttemptPageWidget implements SignInAttemptHost {
         return SignInAttemptWidgetDisplay.NotPresented
       case SignInAttemptPhaseKind.Presented:
         break
+    }
+    // The step counter comes from this scan's Rust policy batch; without it
+    // the attempt is not rendered on this page.
+    switch (authenticationActivityProgress.prepare()) {
+      case true:
+        break
+      case false:
+        return SignInAttemptWidgetDisplay.NotPresented
     }
     this.mount(WidgetVaultPresentationProjection.forConnection(vaultConnection))
     return SignInAttemptWidgetDisplay.Shown
