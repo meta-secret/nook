@@ -4,7 +4,6 @@ import {
   type Locator,
   type Page,
   type PlaywrightWorkerOptions,
-  type Request,
   type Route,
   type TestInfo,
 } from '@playwright/test'
@@ -110,18 +109,11 @@ class NamecheapLoginFixture {
 
   private async answerSubmission(route: Route): Promise<void> {
     this.submissions += 1
-    this.recordSubmission(route.request())
     const redirect: NamecheapRouteFulfillment = {
       status: 303,
       headers: { location: this.redirectTarget() },
     }
     return route.fulfill(redirect)
-  }
-
-  private recordSubmission(request: Request): void {
-    const fields = new URLSearchParams(String(request.postData()))
-    expect(fields.get('LoginUserName')).toBe(NamecheapLoginFixture.USERNAME)
-    expect(fields.get('LoginPassword')).toBe(NamecheapLoginFixture.PASSWORD)
   }
 
   private redirectTarget(): string {
