@@ -52,6 +52,7 @@ mod google_two_step_login;
 mod grant_authority;
 mod page_form_policy;
 mod response_decoding;
+mod site_secret_listing;
 mod vault_host_policy;
 
 pub use account_picker_authorization::*;
@@ -69,6 +70,7 @@ pub use google_two_step_login::*;
 pub use grant_authority::*;
 pub use page_form_policy::*;
 pub use response_decoding::*;
+pub use site_secret_listing::*;
 pub use vault_host_policy::*;
 
 #[wasm_bindgen]
