@@ -1,14 +1,13 @@
 //! Typed WASM bindings for portable page-field and password-form policy.
 
-use nook_companion_core::PageInputType;
-use nook_companion_core::{
-    OneTimeCodeEntryEvidence, OneTimeCodeEntrySignals, PageSecondFactorRoute,
-};
+use nook_companion_core::{PageInputType, PageSecondFactorRoute};
+mod input_field_observation;
 mod observation_priority;
-mod one_time_code_entry;
 mod passkey_control;
 
-pub use one_time_code_entry::second_factor_route;
+pub use input_field_observation::{
+    NookPageInputFieldObservation, looks_like_one_time_code_field, looks_like_username_field,
+};
 
 pub use observation_priority::{
     authentication_form_observation_priority, authentication_page_observation_facts_priority,
@@ -26,56 +25,6 @@ use nook_companion_core::AuthenticationControlText;
 use nook_companion_core::AuthenticationRouteActuation;
 use nook_companion_core::AuthenticationRouteEvidence;
 use wasm_bindgen::prelude::wasm_bindgen;
-
-#[wasm_bindgen]
-#[derive(Clone, Debug)]
-pub struct NookPageInputFieldObservation {
-    inner: nook_companion_core::PageInputFieldObservation,
-}
-
-impl NookPageInputFieldObservation {
-    pub(crate) const fn as_core(&self) -> &nook_companion_core::PageInputFieldObservation {
-        &self.inner
-    }
-}
-
-/// Migration decision: producers and the offscreen consumer ship the entry-signal arguments
-/// atomically; mixed-version calls are unsupported and fail closed (no defaults or compat branch).
-#[wasm_bindgen]
-impl NookPageInputFieldObservation {
-    #[wasm_bindgen(constructor)]
-    #[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
-    #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(raw_numeric_public_api, reason = "FFI boundary: converts the DOM maxLength (-1 when absent) into PageInputMaxLength"))]
-    pub fn new(
-        input_type: nook_companion_core::PageInputType,
-        disabled: bool,
-        read_only: bool,
-        autocomplete_tokens: Vec<String>,
-        identity_text: String,
-        login_context: bool,
-        second_factor_route: PageSecondFactorRoute,
-        input_mode: String,
-        max_length: i32,
-        pattern: String,
-    ) -> Self {
-        Self {
-            inner: nook_companion_core::PageInputFieldObservation {
-                input_type,
-                disabled,
-                read_only,
-                autocomplete_tokens,
-                identity_text,
-                login_context: login_context.into(),
-                one_time_code_entry: OneTimeCodeEntryEvidence::Observed(OneTimeCodeEntrySignals {
-                    second_factor_route,
-                    input_mode: input_mode.as_str().into(),
-                    max_length: max_length.into(),
-                    pattern: pattern.as_str().into(),
-                }),
-            },
-        }
-    }
-}
 
 #[wasm_bindgen]
 #[must_use]
@@ -118,14 +67,8 @@ impl NookLoginContextObservation {
 
 #[wasm_bindgen]
 #[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn looks_like_username_field(field: &NookPageInputFieldObservation) -> bool {
-    field.inner.looks_like_username_field()
-}
-
-#[wasm_bindgen]
-#[must_use]
-#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn looks_like_one_time_code_field(field: &NookPageInputFieldObservation) -> bool {
-    field.inner.looks_like_one_time_code_field()
+#[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(unowned_function, reason = "FFI boundary: wasm-bindgen export"))] pub fn second_factor_route(observation: &NookLoginContextObservation) -> PageSecondFactorRoute {
+    observation.inner.second_factor_route()
 }
 
 #[wasm_bindgen]

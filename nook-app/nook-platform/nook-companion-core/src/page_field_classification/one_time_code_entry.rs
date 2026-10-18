@@ -5,10 +5,9 @@
 
 use super::control_text::AuthenticationIdentityPhraseEvidence;
 use super::form_identity::{AuthenticationRouteDecision, AuthenticationRouteIdentity};
-use super::input_role::{AuthenticationInputRole, OneTimeCode, Unrelated};
+use super::input_role::{AuthenticationInputRole, CredentialAutocomplete, OneTimeCode, Unrelated};
 use super::{
-    AuthenticationControlText, AutocompleteTokenQuery, LoginContextObservation,
-    PageInputFieldObservation, PageInputType,
+    AuthenticationControlText, LoginContextObservation, PageInputFieldObservation, PageInputType,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -173,13 +172,6 @@ enum CodeEntryShape {
     Unshaped,
 }
 
-/// Whether autocomplete declares the field an account password.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum CredentialAutocomplete {
-    Password,
-    Undeclared,
-}
-
 impl OneTimeCodeEntrySignals {
     /// Identity words that admit a code-shaped input without second-factor route evidence.
     const CODE_IDENTITY_WORDS: &[&str] = &["code", "passcode"];
@@ -229,21 +221,6 @@ impl OneTimeCodeEntrySignals {
 }
 
 impl PageInputFieldObservation {
-    pub(super) fn credential_autocomplete(&self) -> CredentialAutocomplete {
-        let tokens = &self.autocomplete_tokens;
-        match ["current-password", "new-password"]
-            .into_iter()
-            .find(|expected| {
-                PageInputFieldObservation::has_autocomplete_token(AutocompleteTokenQuery {
-                    tokens,
-                    expected,
-                })
-            }) {
-            Some(_) => CredentialAutocomplete::Password,
-            None => CredentialAutocomplete::Undeclared,
-        }
-    }
-
     /// Classify a field without one-time-code words from route and entry-shape evidence.
     pub(super) fn one_time_code_entry_role(&self, identity: &str) -> AuthenticationInputRole {
         use CodeEntryShape::{CodeShaped, Unshaped};

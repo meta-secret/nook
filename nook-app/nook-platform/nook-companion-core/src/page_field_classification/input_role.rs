@@ -1,4 +1,3 @@
-use super::one_time_code_entry::CredentialAutocomplete;
 use super::{AutocompleteTokenQuery, PageInputFieldObservation, PageInputType};
 use crate::AuthenticationControlText;
 
@@ -20,6 +19,30 @@ pub(crate) enum AuthenticationInputRole {
     OneTimeCode(OneTimeCode),
     NonAuthentication(NonAuthentication),
     Unrelated(Unrelated),
+}
+
+/// Whether autocomplete declares the field an account password.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum CredentialAutocomplete {
+    Password,
+    Undeclared,
+}
+
+impl PageInputFieldObservation {
+    pub(super) fn credential_autocomplete(&self) -> CredentialAutocomplete {
+        let tokens = &self.autocomplete_tokens;
+        match ["current-password", "new-password"]
+            .into_iter()
+            .find(|expected| {
+                PageInputFieldObservation::has_autocomplete_token(AutocompleteTokenQuery {
+                    tokens,
+                    expected,
+                })
+            }) {
+            Some(_) => CredentialAutocomplete::Password,
+            None => CredentialAutocomplete::Undeclared,
+        }
+    }
 }
 
 impl PageInputFieldObservation {
