@@ -132,7 +132,7 @@ impl CheckedPasskeyAssertion<'_> {
         let authenticator_data = AssertionAuthenticatorData {
             rp_id: &credential.rp_id,
             count: u32::from(next_count),
-            user_verified: request.user_verification_required,
+            user_verified: request.user_verification.verifies_user(),
         }
         .encode();
         let mut signed_bytes = authenticator_data.clone();
@@ -183,6 +183,7 @@ mod tests {
     use super::super::encoding::CoseKeyBytes;
     use super::super::{
         CheckedPasskeyRegistration, PasskeyCredentialDescriptor, PasskeyRegistrationRequest,
+        PasskeyUserVerification,
     };
     use super::*;
     use p256::ecdsa::{VerifyingKey, signature::Verifier};
@@ -196,7 +197,7 @@ mod tests {
                 challenge: Engine::encode(&URL_SAFE_NO_PAD, [9_u8; 32]),
                 rp_id: "example.com".to_owned(),
                 allow_credentials: Vec::new(),
-                user_verification_required: true,
+                user_verification: PasskeyUserVerification::Required,
             }
         }
     }
@@ -303,7 +304,7 @@ mod tests {
             allow_credentials: vec![PasskeyCredentialDescriptor {
                 id: registration.credential.credential_id.clone(),
             }],
-            user_verification_required: true,
+            user_verification: PasskeyUserVerification::Required,
         };
         let assertion = request
             .prepare(slice::from_ref(&registration.credential))
@@ -346,7 +347,7 @@ mod tests {
             allow_credentials: vec![PasskeyCredentialDescriptor {
                 id: newer.credential_id.clone(),
             }],
-            user_verification_required: true,
+            user_verification: PasskeyUserVerification::Required,
         };
 
         let assertion = request
@@ -380,7 +381,7 @@ mod tests {
             allow_credentials: vec![PasskeyCredentialDescriptor {
                 id: "not-base64url=".to_owned(),
             }],
-            user_verification_required: true,
+            user_verification: PasskeyUserVerification::Required,
         };
         assert_eq!(
             assertion_request
@@ -402,6 +403,34 @@ mod tests {
                 .and_then(CheckedPasskeyAssertion::sign),
             Err(PasskeyAuthenticatorError::SignatureCounterExhausted)
         );
+        Ok(())
+    }
+
+    /// Sites that prefer verification, or say nothing, get a verified
+    /// assertion, as accounts like Google require for passkey sign-in.
+    #[test]
+    fn preferred_and_absent_verification_report_a_verified_user() -> anyhow::Result<()> {
+        let absent: PasskeyAssertionRequest = serde_json::from_str(
+            r#"{"origin":"https://login.example.com","challenge":"CQkJCQkJCQkJCQkJCQkJCQ","rpId":"example.com"}"#,
+        )?;
+        assert_eq!(absent.user_verification, PasskeyUserVerification::Preferred);
+        let credential = PasskeyRegistrationRequest::fixture()
+            .prepare(&[])
+            .and_then(CheckedPasskeyRegistration::generate)?
+            .credential;
+        for (verification, flags) in [
+            (PasskeyUserVerification::Required, 0x1d_u8),
+            (PasskeyUserVerification::Preferred, 0x1d),
+            (PasskeyUserVerification::Discouraged, 0x19),
+        ] {
+            let mut request = PasskeyAssertionRequest::fixture();
+            request.user_verification = verification;
+            let assertion = request
+                .prepare(slice::from_ref(&credential))
+                .and_then(CheckedPasskeyAssertion::sign)?;
+            let auth_data = Engine::decode(&URL_SAFE_NO_PAD, &assertion.authenticator_data)?;
+            assert_eq!(auth_data.get(32), Some(&flags), "{verification:?}");
+        }
         Ok(())
     }
 }

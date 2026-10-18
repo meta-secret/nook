@@ -24,7 +24,7 @@ const requestJson = JSON.stringify({
   origin: 'https://login.example.com',
   rpId: 'example.com',
   challenge: 'challenge',
-  userVerificationRequired: false,
+  userVerification: 'discouraged',
   allowCredentials: [],
 })
 
@@ -171,7 +171,7 @@ describe('website passkey runtime messages', () => {
       origin: 'https://login.example.com',
       rpId: 'example.com',
       challenge: 'challenge',
-      userVerificationRequired: false,
+      userVerification: 'discouraged',
       allowCredentials: [{ id: 'credential_test' }],
     })
 

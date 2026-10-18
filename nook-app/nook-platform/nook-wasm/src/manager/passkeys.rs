@@ -154,7 +154,7 @@ mod tests {
                 "algorithms": [-257, -7],
                 "excludeCredentials": [],
                 "residentKeyRequired": true,
-                "userVerificationRequired": true
+                "userVerification": "required"
             }))?;
         let registration = request
             .prepare(&[])
@@ -259,13 +259,13 @@ mod browser_tests {
 
         assert!(
             manager
-                .register_website_passkey(&super::decode_website_passkey_registration_request(r#"{"origin":"https://example.com","challenge":"challenge","relyingParty":{"id":"example.com","name":"Example"},"user":{"id":"user","name":"User","displayName":"User"},"algorithms":[-7],"residentKeyRequired":true,"userVerificationRequired":true}"#)?, &inactive)
+                .register_website_passkey(&super::decode_website_passkey_registration_request(r#"{"origin":"https://example.com","challenge":"challenge","relyingParty":{"id":"example.com","name":"Example"},"user":{"id":"user","name":"User","displayName":"User"},"algorithms":[-7],"residentKeyRequired":true,"userVerification":"required"}"#)?, &inactive)
                 .await
                 .is_err()
         );
         assert!(
             manager
-                .assert_website_passkey(&super::decode_website_passkey_assertion_request(r#"{"origin":"https://example.com","challenge":"challenge","rpId":"example.com","userVerificationRequired":true}"#)?, &inactive)
+                .assert_website_passkey(&super::decode_website_passkey_assertion_request(r#"{"origin":"https://example.com","challenge":"challenge","rpId":"example.com","userVerification":"required"}"#)?, &inactive)
                 .await
                 .is_err()
         );

@@ -30,7 +30,7 @@ type SerializedCreationOptions = {
   algorithms: number[]
   excludeCredentials: SerializedCredentialDescriptor[]
   residentKeyRequired: boolean
-  userVerificationRequired: boolean
+  userVerification?: UserVerificationRequirement
 }
 
 type SerializedAssertionOptions = {
@@ -38,7 +38,7 @@ type SerializedAssertionOptions = {
   challenge: string
   rpId: string
   allowCredentials: SerializedCredentialDescriptor[]
-  userVerificationRequired: boolean
+  userVerification?: UserVerificationRequirement
 }
 
 type NookPublicCredentialJSON = {
@@ -124,8 +124,9 @@ function serializeCreation(
     ),
     residentKeyRequired:
       options.authenticatorSelection?.residentKey !== 'discouraged',
-    userVerificationRequired:
-      options.authenticatorSelection?.userVerification === 'required',
+    ...(options.authenticatorSelection?.userVerification
+      ? { userVerification: options.authenticatorSelection.userVerification }
+      : {}),
   }
 }
 
@@ -141,7 +142,9 @@ function serializeAssertion(
         id: base64url(credential.id),
       }),
     ),
-    userVerificationRequired: options.userVerification === 'required',
+    ...(options.userVerification
+      ? { userVerification: options.userVerification }
+      : {}),
   }
 }
 

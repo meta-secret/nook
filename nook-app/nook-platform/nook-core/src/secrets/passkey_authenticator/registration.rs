@@ -168,7 +168,7 @@ impl CheckedPasskeyRegistration<'_> {
             rp_id: &credential.rp_id,
             credential_id: &credential_id,
             cose_key: &cose_key,
-            user_verified: request.user_verification_required,
+            user_verified: request.user_verification.verifies_user(),
         }
         .encode()?;
         credential_id.zeroize();
@@ -186,7 +186,9 @@ impl CheckedPasskeyRegistration<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::{Deserialize, PasskeyCredentialDescriptor, Value, de};
+    use super::super::{
+        Deserialize, PasskeyCredentialDescriptor, PasskeyUserVerification, Value, de,
+    };
     use super::*;
     use std::ptr;
 
@@ -264,7 +266,7 @@ mod tests {
         let mut request = PasskeyRegistrationRequest::fixture();
         request.origin = "https://LOGIN.example.com/".to_owned();
         request.relying_party.id = "EXAMPLE.com".to_owned();
-        request.user_verification_required = false;
+        request.user_verification = PasskeyUserVerification::Discouraged;
         let before = request.clone();
         let existing = Vec::new();
         let checked = request.prepare(&existing)?;

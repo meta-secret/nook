@@ -139,7 +139,7 @@ describe('website passkey options', () => {
               origin: 'https://example.test',
               rpId: 'example.test',
               challenge: 'challenge',
-              userVerificationRequired: false,
+              userVerification: 'discouraged',
               allowCredentials: [],
             },
           },

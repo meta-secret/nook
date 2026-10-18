@@ -46,8 +46,11 @@ explicit fallback action. Conditional mediation is left to the browser.
   - Sign `authenticatorData || SHA-256(clientDataJSON)` with the stored P-256
     private key.
   - Use the user-presence flag for the explicit extension consent action.
-  - Set user verification only when the website requested verification and the
-    extension vault has a passkey/PIN-authorized unlocked session.
+  - Set user verification when the website requires or prefers it. `preferred`
+    is the `WebAuthn` default, and accounts such as Google reject passkey
+    sign-in without it. Only `discouraged` leaves the flag clear. Extension
+    sessions unlock only with a passkey or PIN, so an unlocked session vouches
+    for the user. Rust owns this decision.
   - Expire that session after 15 minutes. A locked session falls back to the
     browser.
 - **Commit ordering and provider failure:**

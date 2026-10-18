@@ -69,7 +69,7 @@ fn passkey() -> anyhow::Result<SecretValue> {
         algorithms: vec![-7],
         exclude_credentials: Vec::new(),
         resident_key_required: true,
-        user_verification_required: true,
+        user_verification: nook_core::PasskeyUserVerification::Required,
     };
     let mut passkey = request
         .prepare(&[])
