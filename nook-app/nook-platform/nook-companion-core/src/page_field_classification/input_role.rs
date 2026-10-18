@@ -77,7 +77,7 @@ impl PageInputFieldObservation {
             return AuthenticationInputRole::Username(Username);
         }
 
-        AuthenticationInputRole::Unrelated(Unrelated)
+        field.one_time_code_entry_role(&identity)
     }
 }
 
@@ -85,7 +85,7 @@ impl PageInputFieldObservation {
 mod tests {
     use super::super::{
         AuthenticationUsernameEvidence, MAX_AUTHENTICATION_CONTROL_TEXT_BYTES,
-        PageInputFieldObservation, PageInputType,
+        OneTimeCodeEntryEvidence, PageInputFieldObservation, PageInputType,
     };
 
     impl PageInputFieldObservation {
@@ -97,6 +97,7 @@ mod tests {
                 autocomplete_tokens: vec!["tel-national".to_owned()],
                 identity_text: "tel-national Phone number or email".to_owned(),
                 login_context: true.into(),
+                one_time_code_entry: OneTimeCodeEntryEvidence::Unobserved,
             }
         }
     }

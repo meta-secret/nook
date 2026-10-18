@@ -20,8 +20,13 @@ pub use control_text::AuthenticationControlText;
 mod destination_identity;
 mod form_identity;
 mod input_role;
+mod one_time_code_entry;
 mod one_time_code_progression;
 mod passkey;
+pub use one_time_code_entry::{
+    OneTimeCodeEntryEvidence, OneTimeCodeEntrySignals, PageInputCharacterLimit, PageInputMaxLength,
+    PageInputMode, PageInputPattern, PageSecondFactorRoute,
+};
 
 pub(crate) use input_role::AuthenticationInputRole;
 
@@ -96,6 +101,7 @@ pub struct PageInputFieldObservation {
     pub autocomplete_tokens: Vec<String>,
     pub identity_text: String,
     pub login_context: PageLoginContext,
+    pub one_time_code_entry: OneTimeCodeEntryEvidence,
 }
 
 /// Browser-collected login-surface identity text without DOM handles.
@@ -717,6 +723,11 @@ impl PageInputFieldObservation {
             "verification code",
             "authenticator",
             "authenticator code",
+            "twofa",
+            "two step",
+            "2 step",
+            "2 sv",
+            "passcode",
         ])
     }
 }
@@ -736,6 +747,11 @@ impl PageInputFieldObservation {
             "zip",
             "search",
             "coupon",
+            "gift",
+            "referral",
+            "invite",
+            "discount",
+            "voucher",
         ])
     }
 }
@@ -760,6 +776,7 @@ mod tests {
                 .collect(),
             identity_text: identity.to_owned(),
             login_context: login_context.into(),
+            one_time_code_entry: OneTimeCodeEntryEvidence::Unobserved,
         }
     }
 

@@ -4,6 +4,7 @@ use crate::{NookAuthenticationPageObservation, NookAuthenticationPageObservation
 use nook_companion_core::{
     AuthenticationAdvanceControlObservation, BrowserOAuthLocation, BrowserOAuthLocationEvidence,
 };
+use nook_companion_core::{OneTimeCodeEntryEvidence, OneTimeCodeEntrySignals};
 use nook_companion_core::{SentinelVaultMatch, VaultAppBaseSelection};
 use nook_core::AuthenticationControlText;
 use nook_core::AuthenticationPageObservation;
@@ -32,10 +33,14 @@ pub struct NookPageInputFieldObservation {
     inner: nook_core::PageInputFieldObservation,
 }
 
+/// Mirrors the `nook-companion-wasm` constructor; producers and consumers ship atomically and
+/// mixed-version calls are unsupported (no defaults or compatibility branch).
 #[wasm_bindgen]
 impl NookPageInputFieldObservation {
     #[wasm_bindgen(constructor)]
     #[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
+    #[allow(clippy::fn_params_excessive_bools)]
+    #[rustfmt::skip] #[cfg_attr(dylint_lib = "nook_domain_api", expect(raw_numeric_public_api, reason = "FFI boundary: converts the DOM maxLength (-1 when absent) into PageInputMaxLength"))]
     pub fn new(
         input_type: nook_core::PageInputType,
         disabled: bool,
@@ -43,6 +48,10 @@ impl NookPageInputFieldObservation {
         autocomplete_tokens: Vec<String>,
         identity_text: String,
         login_context: bool,
+        second_factor_route: bool,
+        input_mode: String,
+        max_length: i32,
+        pattern: String,
     ) -> Self {
         Self {
             inner: nook_core::PageInputFieldObservation {
@@ -52,6 +61,12 @@ impl NookPageInputFieldObservation {
                 autocomplete_tokens,
                 identity_text,
                 login_context: login_context.into(),
+                one_time_code_entry: OneTimeCodeEntryEvidence::Observed(OneTimeCodeEntrySignals {
+                    second_factor_route: second_factor_route.into(),
+                    input_mode: input_mode.as_str().into(),
+                    max_length: max_length.into(),
+                    pattern: pattern.as_str().into(),
+                }),
             },
         }
     }
@@ -399,6 +414,10 @@ mod tests {
             Vec::new(),
             "Enter OTP Code".to_owned(),
             false,
+            false,
+            String::new(),
+            -1,
+            String::new(),
         );
         assert!(looks_like_one_time_code_field(&otp));
 
@@ -409,6 +428,10 @@ mod tests {
             Vec::new(),
             "loginfmt".to_owned(),
             false,
+            false,
+            String::new(),
+            -1,
+            String::new(),
         );
         assert!(looks_like_username_field(&username));
         assert!(looks_like_login_advance_control_label("signin"));
@@ -448,6 +471,10 @@ mod browser_tests {
                 vec!["username".into()],
                 "Email address".into(),
                 true,
+                false,
+                String::new(),
+                -1,
+                String::new(),
             ),
             NookPageInputFieldObservation::new(
                 PageInputType::Text,
@@ -456,6 +483,10 @@ mod browser_tests {
                 vec!["one-time-code".into()],
                 "verification code".into(),
                 false,
+                false,
+                String::new(),
+                -1,
+                String::new(),
             ),
             NookPageInputFieldObservation::new(
                 PageInputType::Password,
@@ -464,6 +495,10 @@ mod browser_tests {
                 Vec::new(),
                 String::new(),
                 false,
+                false,
+                String::new(),
+                -1,
+                String::new(),
             ),
         ] {
             let _ = looks_like_username_field(&field);

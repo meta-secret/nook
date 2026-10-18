@@ -220,7 +220,9 @@ pub use page_field_classification::{
 pub use page_field_classification::{
     CanonicalControlDestination, ControlDestinationEvidence, InvalidControlDestination,
     LoginContextObservation, MAX_AUTHENTICATION_CONTROL_TEXT_BYTES,
-    MAX_AUTHENTICATION_DESTINATION_TEXT_BYTES, PageInputFieldObservation, PageInputType,
+    MAX_AUTHENTICATION_DESTINATION_TEXT_BYTES, OneTimeCodeEntryEvidence, OneTimeCodeEntrySignals,
+    PageInputCharacterLimit, PageInputFieldObservation, PageInputMaxLength, PageInputMode,
+    PageInputPattern, PageInputType, PageSecondFactorRoute,
 };
 pub use vault_host_policy::{DEFAULT_SIMPLE_VAULT_URL, VaultHostPolicyError};
 pub use website_login_options_response::{

@@ -521,6 +521,10 @@ mod tests {
             vec!["current-password".to_owned()],
             "password".to_owned(),
             false,
+            false,
+            String::new(),
+            -1,
+            String::new(),
         );
         assert_eq!(
             classify_companion_focused_credential_field(&field).opportunity(),
@@ -602,6 +606,10 @@ mod tests {
             vec!["current-password".to_owned()],
             "password".to_owned(),
             true,
+            false,
+            String::new(),
+            -1,
+            String::new(),
         );
 
         let classification = classify_companion_credential_fill_field(&field_index, &page_field);
@@ -637,6 +645,10 @@ mod tests {
             Vec::new(),
             "search".to_owned(),
             false,
+            false,
+            String::new(),
+            -1,
+            String::new(),
         );
 
         let classification = classify_companion_credential_fill_field(&field_index, &page_field);
