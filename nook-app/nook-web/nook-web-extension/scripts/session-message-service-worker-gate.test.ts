@@ -192,6 +192,8 @@ const expectedAudiences: Readonly<
     ExtensionSessionRequestAudience.ExtensionPages,
   [ExtensionSessionMessageType.RevealLogin]:
     ExtensionSessionRequestAudience.ServiceWorker,
+  [ExtensionSessionMessageType.ListSiteSecrets]:
+    ExtensionSessionRequestAudience.ServiceWorker,
   [ExtensionSessionMessageType.RevealFocusedLogin]:
     ExtensionSessionRequestAudience.ServiceWorker,
   [ExtensionSessionMessageType.ListAuthenticators]:
@@ -294,6 +296,14 @@ class SessionRequests {
   static workerOnly(): readonly ExtensionSessionRequest[] {
     return [
       SessionRequests.revealLogin(),
+      {
+        type: ExtensionSessionMessageType.ListSiteSecrets,
+        payload: {
+          ...SessionSenders.grantIdentity,
+          origin: 'https://example.com',
+          queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+        },
+      },
       {
         type: ExtensionSessionMessageType.ListAuthenticators,
         payload: {

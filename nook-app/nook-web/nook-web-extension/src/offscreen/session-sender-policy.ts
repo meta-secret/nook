@@ -82,6 +82,9 @@ export class ExtensionSessionSenderPolicy {
     // The extension smoke e2e still lists logins from the Nook tab.
     [ExtensionSessionMessageType.ListLogins]:
       ExtensionSessionRequestAudience.ExtensionPages,
+    // Lists authenticators and passkeys too, so only the service worker may ask.
+    [ExtensionSessionMessageType.ListSiteSecrets]:
+      ExtensionSessionRequestAudience.ServiceWorker,
     [ExtensionSessionMessageType.RevealLogin]:
       ExtensionSessionRequestAudience.ServiceWorker,
     [ExtensionSessionMessageType.RevealFocusedLogin]:

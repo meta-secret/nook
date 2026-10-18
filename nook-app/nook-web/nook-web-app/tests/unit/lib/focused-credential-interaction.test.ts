@@ -193,6 +193,7 @@ class FocusedInteractionFixture {
       case CompanionWasmSessionMessageType.DecodeContentRuntimeResponse:
       case CompanionWasmSessionMessageType.EvaluateAuthenticationPolicies:
       case CompanionWasmSessionMessageType.RevalidateApprovedAuthenticationWorkflow:
+      case CompanionWasmSessionMessageType.SitePageNeed:
         return { kind: RuntimeMessageDeliveryKind.Unavailable }
     }
   }

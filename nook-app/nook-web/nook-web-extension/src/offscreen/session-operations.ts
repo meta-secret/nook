@@ -144,6 +144,12 @@ type WebsiteLoginAccountListResponse = {
     readonly websiteHost: string
   }>
 }
+type WebsiteSiteSecretListResponse = {
+  readonly ok: true
+  readonly matches: Awaited<
+    ReturnType<NookVaultManager['list_website_site_secrets']>
+  >
+}
 type WebsiteLoginRevealResponse = {
   readonly ok: true
   readonly username: string
@@ -637,6 +643,30 @@ export async function handleSessionMessage({
         } finally {
           accounts.forEach((account) => account.free())
         }
+      }
+      case ExtensionSessionMessageType.ListSiteSecrets: {
+        const payload = message.payload
+        const grant = extensionVaultGrant(payload)
+        if (typeof payload.origin !== 'string') {
+          return err(
+            new SessionOperationFailure(
+              SessionOperationFailureKind.InvalidRequest,
+            ),
+          )
+        }
+        const activeManager = await getManager()
+        const siteSecretsVault: Parameters<typeof openPasskeyVault>[0] = {
+          activeManager,
+          grant,
+        }
+        const siteSecretsAdmission = await openPasskeyVault(siteSecretsVault)
+        if (siteSecretsAdmission.isErr()) return err(siteSecretsAdmission.error)
+        // Rust matched every site-bound kind and projected display fields only.
+        const matches = await activeManager.list_website_site_secrets(
+          payload.origin,
+        )
+        const response: WebsiteSiteSecretListResponse = { ok: true, matches }
+        return ok(response)
       }
       case ExtensionSessionMessageType.RevealFocusedLogin: {
         const request: ConstructorParameters<

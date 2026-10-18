@@ -1,3 +1,12 @@
+import type { AuthenticationWorkflowMatch } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  CompanionWasmSessionMessageType,
+  type CompanionWasmRuntimeMessage,
+} from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-messages'
+import {
+  CompanionWasmRuntimeDeliveryKind,
+  sendCompanionWasmRuntimeMessage,
+} from '../../../../nook-web-shared/src/extension/companion-wasm-runtime-transport'
 import type { BrowserRuntimeMessageValue } from '../../lib/browser-runtime-message'
 import {
   SidePanelPageNeedMessages,
@@ -14,6 +23,59 @@ import {
   type SidePanelPageWorkflow,
   type SidePanelPageWorkflowSource,
 } from './side-panel-page-workflow'
+
+/** Asks Rust for the page need of a classified workflow match. */
+export interface SidePanelPageNeedSource {
+  pageNeed(workflowMatch: AuthenticationWorkflowMatch): Promise<SidePanelPageNeedReply>
+}
+
+/**
+ * The content script reaches the companion WASM through the extension
+ * runtime, as for every other companion decision, so Rust's site_page_need
+ * runs in the offscreen document.
+ */
+export class CompanionSidePanelPageNeed implements SidePanelPageNeedSource {
+  private readonly unavailable: SidePanelPageNeedReply = {
+    kind: SidePanelPageNeedReplyKind.Unavailable,
+  }
+
+  async pageNeed(
+    workflowMatch: AuthenticationWorkflowMatch,
+  ): Promise<SidePanelPageNeedReply> {
+    const message: CompanionWasmRuntimeMessage = {
+      type: CompanionWasmSessionMessageType.SitePageNeed,
+      payload: { workflowMatch },
+      origin: location.origin,
+    }
+    const delivery = await sendCompanionWasmRuntimeMessage(globalThis, message)
+    switch (delivery.kind) {
+      case CompanionWasmRuntimeDeliveryKind.Unavailable:
+        return this.unavailable
+      case CompanionWasmRuntimeDeliveryKind.Delivered:
+        break
+    }
+    const response = delivery.response
+    switch (
+      typeof response === 'object' &&
+      !!response &&
+      'sitePageNeed' in response
+    ) {
+      case true:
+        return {
+          kind: SidePanelPageNeedReplyKind.Needed,
+          need: response.sitePageNeed,
+        }
+      case false:
+        return this.unavailable
+    }
+  }
+}
+
+/** The page discovery and the Rust page-need decision a query reads. */
+export interface SidePanelPageNeedCollaborators {
+  readonly pages: SidePanelPageWorkflowSource
+  readonly needs: SidePanelPageNeedSource
+}
 
 export enum SidePanelPageNeedReception {
   Ignored = 'ignored',
@@ -37,11 +99,11 @@ enum SidePanelPageNeedQueryAdmission {
 /**
  * Answers the worker's page-need query in the top document: it classifies
  * the document's forms with Rust when the query arrives and replies with the
- * workflow kind Rust selected. Nothing is cached between queries, and the
+ * page need Rust derives from that workflow. Nothing is cached between queries, and the
  * reply carries no field, value or URL.
  */
 export class SidePanelPageNeedReceiver {
-  constructor(private readonly pages: SidePanelPageWorkflowSource) {}
+  constructor(private readonly collaborators: SidePanelPageNeedCollaborators) {}
 
   receive(delivery: SidePanelPageNeedDelivery): SidePanelPageNeedReception {
     switch (this.admission(delivery)) {
@@ -65,24 +127,33 @@ export class SidePanelPageNeedReceiver {
       case true:
         break
     }
-    void this.pages
+    void this.collaborators.pages
       .pageWorkflow()
-      .then((page) => delivery.sendResponse(this.reply(page)))
+      .then((page) => this.reply(page))
+      .then(delivery.sendResponse)
       .catch(() => answer.send(SidePanelPageNeedReplyKind.Unavailable))
     return SidePanelPageNeedReception.Responding
   }
 
-  private reply(page: SidePanelPageWorkflow): SidePanelPageNeedReply {
+  private reply(page: SidePanelPageWorkflow): Promise<SidePanelPageNeedReply> {
     switch (page.kind) {
-      case SidePanelPageWorkflowKind.Selected:
-        return {
-          kind: SidePanelPageNeedReplyKind.Classified,
-          workflow: page.snapshot.kind,
+      case SidePanelPageWorkflowKind.Selected: {
+        const matched: AuthenticationWorkflowMatch = {
+          kind: 'matched',
+          snapshot: page.snapshot,
         }
-      case SidePanelPageWorkflowKind.None:
-        return { kind: SidePanelPageNeedReplyKind.Unrecognized }
-      case SidePanelPageWorkflowKind.Unavailable:
-        return { kind: SidePanelPageNeedReplyKind.Unavailable }
+        return this.collaborators.needs.pageNeed(matched)
+      }
+      case SidePanelPageWorkflowKind.None: {
+        const noMatch: AuthenticationWorkflowMatch = { kind: 'no-match' }
+        return this.collaborators.needs.pageNeed(noMatch)
+      }
+      case SidePanelPageWorkflowKind.Unavailable: {
+        const unavailable: SidePanelPageNeedReply = {
+          kind: SidePanelPageNeedReplyKind.Unavailable,
+        }
+        return Promise.resolve(unavailable)
+      }
     }
   }
 
@@ -106,7 +177,7 @@ export class SidePanelPageNeedReceiver {
 
 type SidePanelBarePageNeedReplyKind = Exclude<
   SidePanelPageNeedReplyKind,
-  SidePanelPageNeedReplyKind.Classified
+  SidePanelPageNeedReplyKind.Needed
 >
 
 /** Answers one admitted query that ends before any classification. */
@@ -121,6 +192,11 @@ class SidePanelPageNeedAnswer {
 }
 
 /** The content script's single page-need receiver. */
+const sidePanelPageNeedCollaborators: SidePanelPageNeedCollaborators = {
+  pages: new SidePanelPageWorkflowDiscovery(),
+  needs: new CompanionSidePanelPageNeed(),
+}
+
 export const sidePanelPageNeed = new SidePanelPageNeedReceiver(
-  new SidePanelPageWorkflowDiscovery(),
+  sidePanelPageNeedCollaborators,
 )

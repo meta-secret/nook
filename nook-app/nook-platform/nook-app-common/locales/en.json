@@ -1718,8 +1718,6 @@
       "site_no_filling_vault": "None of your connected vaults fills passwords yet.",
       "site_locked": "Nook locked while loading this site's logins. Try again.",
       "fill_item_missing": "That login is no longer available for this site.",
-      "fill_code": "Fill code",
-      "fill_code_for": "Fill the code for {account} from {vault}",
       "fill_code_done": "Code filled. Review the page, then continue.",
       "fill_no_code_field": "No 2FA code field on this page. Open the code step, then fill again.",
       "fill_code_failed": "Nook could not fill this code. Try again.",

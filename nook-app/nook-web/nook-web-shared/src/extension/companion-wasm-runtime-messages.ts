@@ -50,6 +50,7 @@ import type {
   LoginSaveOutcomeObservation,
   LoginSaveOutcomeDecision,
   PageSecondFactorRoute,
+  SitePageNeed,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 
 export enum CompanionWasmSessionMessageType {
@@ -80,6 +81,7 @@ export enum CompanionWasmSessionMessageType {
   DecodeContentRuntimeResponse = "nook:extension-session-decode-content-runtime-response",
   EvaluateAuthenticationPolicies = "nook:extension-session-evaluate-authentication-policies",
   RevalidateApprovedAuthenticationWorkflow = "nook:extension-session-revalidate-approved-authentication-workflow",
+  SitePageNeed = "nook:extension-session-site-page-need",
 }
 
 export enum CompanionWasmLabelKind {
@@ -294,6 +296,10 @@ export type CompanionWasmSessionMessage =
       };
     }
   | {
+      readonly type: CompanionWasmSessionMessageType.SitePageNeed;
+      readonly payload: { readonly workflowMatch: AuthenticationWorkflowMatch };
+    }
+  | {
       readonly type: CompanionWasmSessionMessageType.DecodeAuthenticationWorkflowRuntimeResponse;
       readonly payload: { readonly response: unknown };
     }
@@ -403,6 +409,7 @@ export type CompanionWasmSessionResponse =
   | {
       readonly revalidationDecision: ApprovedAuthenticationWorkflowDecision;
     }
+  | { readonly sitePageNeed: SitePageNeed }
   | {
       readonly transportability: readonly boolean[];
       readonly advanceControls: readonly boolean[];

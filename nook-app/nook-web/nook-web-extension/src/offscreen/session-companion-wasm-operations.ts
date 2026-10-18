@@ -34,6 +34,7 @@ import {
   decode_authenticator_options_response,
   NookPageInputFieldObservation,
   AuthenticationWorkflowActivity,
+  site_page_need,
   authentication_page_observation_facts_match_binding,
   authentication_page_observation_facts_priority,
   authentication_page_observation_facts_is_admissible,
@@ -334,6 +335,9 @@ export async function handleCompanionWasmMessage(
             live: message.payload.live,
           }),
         })
+      case CompanionWasmSessionMessageType.SitePageNeed:
+        // Rust maps the classified workflow to what This site lists.
+        return ok({ sitePageNeed: site_page_need(message.payload.workflowMatch) })
       case CompanionWasmSessionMessageType.LooksLikeLoginAdvanceControlLabel:
         return ok(looks_like_login_advance_control_label(message.payload.label))
       case CompanionWasmSessionMessageType.LooksLikeManualCheckpointLabel:

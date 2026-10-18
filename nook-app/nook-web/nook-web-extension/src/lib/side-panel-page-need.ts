@@ -1,12 +1,12 @@
 import { Schema } from 'effect'
 import type * as SchemaAST from 'effect/SchemaAST'
-import { AuthenticationWorkflowKind } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { SitePageNeed } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { BrowserRuntimeMessageValue } from './browser-runtime-message'
 
 /**
  * The service worker asks the active tab's top document, once per This-site
- * listing, which authentication workflow Rust classifies there. Rust then
- * decides from that kind which saved items the page needs.
+ * listing, what the page needs: Rust maps the workflow it classifies there to
+ * a page need, and that need filters the listing.
  */
 export enum SidePanelPageNeedMessageType {
   Query = 'nook:side-panel-page-need',
@@ -22,12 +22,10 @@ export interface SidePanelPageNeedMessage {
   readonly payload: SidePanelPageNeedPayload
 }
 
-/** The content script's answer: the classified workflow kind, or why there is none. */
+/** The content script's answer: Rust's page need, or why there is none. */
 export enum SidePanelPageNeedReplyKind {
-  /** Rust selected a workflow; its kind is the page need. */
-  Classified = 'classified',
-  /** No authentication form that Rust selected. */
-  Unrecognized = 'unrecognized',
+  /** Rust mapped the classified page to this need. */
+  Needed = 'needed',
   /** The document is no longer on the derived origin. */
   TabChanged = 'tab-changed',
   /** The classification could not complete. */
@@ -36,12 +34,11 @@ export enum SidePanelPageNeedReplyKind {
 
 export type SidePanelPageNeedReply =
   | {
-      readonly kind: SidePanelPageNeedReplyKind.Classified
-      readonly workflow: AuthenticationWorkflowKind
+      readonly kind: SidePanelPageNeedReplyKind.Needed
+      readonly need: SitePageNeed
     }
   | {
       readonly kind:
-        | SidePanelPageNeedReplyKind.Unrecognized
         | SidePanelPageNeedReplyKind.TabChanged
         | SidePanelPageNeedReplyKind.Unavailable
     }
@@ -57,13 +54,13 @@ type SidePanelPageNeedMessageFields = {
 type SidePanelPageNeedTypeFields = {
   readonly type: Schema.Codec<SidePanelPageNeedMessageType.Query>
 }
-type SidePanelPageNeedClassifiedFields = {
-  readonly kind: Schema.Codec<SidePanelPageNeedReplyKind.Classified>
-  readonly workflow: Schema.Codec<AuthenticationWorkflowKind>
+type SidePanelPageNeedNeededFields = {
+  readonly kind: Schema.Codec<SidePanelPageNeedReplyKind.Needed>
+  readonly need: Schema.Codec<SitePageNeed>
 }
 type SidePanelPageNeedBareReplyKind = Exclude<
   SidePanelPageNeedReplyKind,
-  SidePanelPageNeedReplyKind.Classified
+  SidePanelPageNeedReplyKind.Needed
 >
 type SidePanelPageNeedBareReplyFields = {
   readonly kind: Schema.Codec<SidePanelPageNeedBareReplyKind>
@@ -91,21 +88,19 @@ export class SidePanelPageNeedMessages {
   private static readonly typeFields: SidePanelPageNeedTypeFields = {
     type: Schema.Literal(SidePanelPageNeedMessageType.Query),
   }
-  private static readonly classifiedFields: SidePanelPageNeedClassifiedFields =
-    {
-      kind: Schema.Literal(SidePanelPageNeedReplyKind.Classified),
-      workflow: Schema.Enum(AuthenticationWorkflowKind),
-    }
+  private static readonly neededFields: SidePanelPageNeedNeededFields = {
+    kind: Schema.Literal(SidePanelPageNeedReplyKind.Needed),
+    need: Schema.Enum(SitePageNeed),
+  }
   private static readonly bareReplyFields: SidePanelPageNeedBareReplyFields = {
     kind: Schema.Literals([
-      SidePanelPageNeedReplyKind.Unrecognized,
       SidePanelPageNeedReplyKind.TabChanged,
       SidePanelPageNeedReplyKind.Unavailable,
     ]),
   }
   private static readonly reply: Schema.Codec<SidePanelPageNeedReply> =
     Schema.Union([
-      Schema.Struct(SidePanelPageNeedMessages.classifiedFields),
+      Schema.Struct(SidePanelPageNeedMessages.neededFields),
       Schema.Struct(SidePanelPageNeedMessages.bareReplyFields),
     ])
 
