@@ -720,7 +720,7 @@ void test("reads telemetry recursively without relying on nonportable Dirent pat
   }
 });
 
-void test("one PR job avoids telemetry and registry handoffs", () => {
+void test("PR browser fanout preserves read-only cache boundaries", () => {
   const workflow = fs.readFileSync(".github/workflows/pr.yml", "utf8");
   const arcRunnerDockerfile = fs.readFileSync(
     "infra/k0s/images/arc-runner/Dockerfile",
@@ -742,7 +742,28 @@ void test("one PR job avoids telemetry and registry handoffs", () => {
     "infra/k0s/manifests/arc/container-hook.yaml",
     "utf8",
   );
-  assert.equal(workflow.match(/^[ ]{4}runs-on:/gm)?.length, 1);
+  assert.equal(workflow.match(/^[ ]{4}runs-on:/gm)?.length, 3);
+  const prepare = workflow.split("\n  browser:\n")[0];
+  assert.equal(
+    prepare.match(/uses: \.\/\.github\/actions\/nook-docker-setup/g)?.length,
+    1,
+  );
+  assert.equal(
+    workflow.match(/uses: \.\/\.github\/actions\/nook-docker-setup/g)?.length,
+    1,
+  );
+  assert.equal(prepare.match(/uses: docker\/setup-buildx-action@/g)?.length, 1);
+  assert.equal(workflow.match(/uses: docker\/setup-buildx-action@/g)?.length, 1);
+  assert.match(prepare, /cache-write: "false"/);
+  assert.match(prepare, /main-cache-only: "true"/);
+  assert.equal(
+    workflow.match(/uses: actions\/download-artifact@v8/g)?.length,
+    2,
+  );
+  assert.equal(
+    workflow.match(/name: \$\{\{ needs\.prepare\.outputs\.browser_artifact \}\}/g)?.length,
+    2,
+  );
   const rootWorkflow = fs.readFileSync(".github/workflows/ci.yml", "utf8");
   assert.match(
     rootWorkflow,
@@ -769,7 +790,7 @@ void test("one PR job avoids telemetry and registry handoffs", () => {
   assert.match(workflow, /preinstalled-tooling: "true"/);
   assert.doesNotMatch(
     workflow,
-    /type=registry|actions\/download-artifact|needs\.rust/,
+    /type=registry|needs\.rust/,
   );
   for (const credential of [
     "NOOK_SCCACHE_ACCESS_KEY",
