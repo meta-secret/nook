@@ -22,7 +22,7 @@ tasks:
     desc: Stage the pinned Meta-Cortex library checkout for repository policy.
     dir: "{{.ROOT_DIR}}"
     cmds:
-      - test "$(git -C .meta-cortex-source rev-parse HEAD)" = 525acba4047a59a5fe1e7c5308a4806dff7c1e8c
+      - test "$(git -C .meta-cortex-source rev-parse HEAD)" = 2e88d51d535bb56e25fc6e545c3ed14306019833
       - mkdir .meta-cortex
       - cp -R .meta-cortex-source/cortex/. .meta-cortex/
       - cp .meta-cortex-source/LICENSE .meta-cortex/LICENSE

@@ -39,6 +39,16 @@ export type ExtensionTranslationRequest =
         | typeof I18N_KEYS.ExtensionCompanionIdentitySyncAwaiting
       replacements: { count: string }
     }
+  | {
+      kind: ExtensionTranslationRequestKind.WithReplacements
+      key: typeof I18N_KEYS.ExtensionActionSiteEmpty
+      replacements: { host: string }
+    }
+  | {
+      kind: ExtensionTranslationRequestKind.WithReplacements
+      key: typeof I18N_KEYS.ExtensionActionFillLogin
+      replacements: { login: string; vault: string }
+    }
 
 export type ExtensionI18n = {
   locale: NookAppLocale

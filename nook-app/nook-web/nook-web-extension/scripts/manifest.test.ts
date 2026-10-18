@@ -10,6 +10,7 @@ import {
   ExtensionPermission,
   type ExtensionManifestDeployment,
 } from '../src/manifest'
+import { SIDE_PANEL_PAGE_PATH } from '../src/lib/side-panel-page-path'
 
 const defaultManifestArgs: CreateExtensionManifestArgs = {
   kind: ExtensionManifestBuildKind.StoreRelease,
@@ -42,11 +43,60 @@ const environments = [
   },
 ] as const
 
-describe('extension origin isolation', () => {
-  test('opens the compact toolbar panel beside the icon', () => {
-    expect(defaultManifest().action.default_popup).toBe('popup/panel.html')
+const sidePanelPagePath = SIDE_PANEL_PAGE_PATH
+
+function channelManifest() {
+  const manifestArgs: CreateExtensionManifestArgs = {
+    kind: ExtensionManifestBuildKind.Channel,
+    version: '1.0.0',
+    simpleVaultBaseUrl: 'https://pr-408.nokey-simple.pages.dev/',
+    deployment: testDeployment,
+  }
+  return createManifest(manifestArgs)
+}
+
+describe('toolbar side panel', () => {
+  test('the toolbar button opens the side panel and declares no popup', () => {
+    for (const manifest of [defaultManifest(), channelManifest()]) {
+      expect(Object.keys(manifest.action)).toEqual([
+        'default_title',
+        'default_icon',
+      ])
+      expect('default_popup' in manifest.action).toBe(false)
+      expect(manifest.side_panel).toEqual({ default_path: sidePanelPagePath })
+    }
   })
 
+  test('adds only the side panel permission', () => {
+    for (const manifest of [defaultManifest(), channelManifest()]) {
+      expect(manifest.permissions).toEqual([
+        ExtensionPermission.ActiveTab,
+        ExtensionPermission.Offscreen,
+        ExtensionPermission.Storage,
+        ExtensionPermission.SidePanel,
+      ])
+      expect(manifest.host_permissions).toEqual(['<all_urls>'])
+    }
+  })
+
+  test('keeps the extension page policy and keeps the panel off the web', () => {
+    for (const manifest of [defaultManifest(), channelManifest()]) {
+      expect(manifest.content_security_policy).toEqual({
+        extension_pages:
+          "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'",
+      })
+      const exposed = manifest.web_accessible_resources.flatMap(
+        ({ resources }) => resources,
+      )
+      expect(exposed).not.toContain(sidePanelPagePath)
+      expect(
+        exposed.some((resource) => resource.startsWith('side-panel/')),
+      ).toBe(false)
+    }
+  })
+})
+
+describe('extension origin isolation', () => {
   for (const environment of environments) {
     test(`connects only to ${environment.simple}`, () => {
       const manifestArgs: CreateExtensionManifestArgs = {

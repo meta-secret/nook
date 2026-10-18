@@ -64,7 +64,7 @@ test.describe('PIN Pilot session lifecycle', () => {
       ).toHaveAttribute('aria-live', 'polite')
       await expect(
         widget.getByText(
-          'Unlock Nook in the Nook tab, return to the site, then select Sign in with Nook again.',
+          'Unlock Nook in the Nook tab, return to the site, then select Sign in again.',
         ),
       ).toBeVisible()
 
@@ -79,7 +79,7 @@ test.describe('PIN Pilot session lifecycle', () => {
         `chrome-extension://${paired.extensionId}/popup/index.html`,
       )
       const pilotAuthTabPromise = paired.context.waitForEvent('page')
-      await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
+      await widget.getByRole('button', { name: 'Sign in' }).click()
       const authTab = await pilotAuthTabPromise
       await expect(authTab).toHaveURL(
         `chrome-extension://${paired.extensionId}/popup/index.html?intent=pilot-auth`,
@@ -98,15 +98,13 @@ test.describe('PIN Pilot session lifecycle', () => {
       await ensurePinProtectedPopup(authTab)
       await expect(authTab.getByTestId('extension-toolbar-menu')).toBeVisible()
       await expect(
-        authTab.getByText(
-          'Return to the site and select Sign in with Nook again to retry.',
-        ),
+        authTab.getByText('Return to the site and select Sign in to retry.'),
       ).toBeVisible()
       await expect(loginPage.getByTestId('mock-auth-success')).toHaveCount(0)
       await expect(loginPage.locator('input[name="username"]')).toHaveValue('')
       await expect(loginPage.locator('input[name="password"]')).toHaveValue('')
 
-      await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
+      await widget.getByRole('button', { name: 'Sign in' }).click()
       await expect(loginPage.getByTestId('mock-auth-success')).toHaveText(
         'Authentication complete',
         { timeout: 20_000 },

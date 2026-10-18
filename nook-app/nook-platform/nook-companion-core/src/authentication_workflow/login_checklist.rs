@@ -42,6 +42,8 @@ pub enum AuthenticationLoginChecklistObservation {
         verdict: AuthenticationOutcomeVerdict,
         observation: AuthenticationOutcomeObservation,
     },
+    /// A page reload re-shows the state kept from before the reload.
+    Retained,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Tsify)]
@@ -131,6 +133,7 @@ impl AuthenticationLoginChecklistState {
             AuthenticationLoginChecklistObservation::Activity { activity } => {
                 Self::Activity { activity }
             }
+            AuthenticationLoginChecklistObservation::Retained => self,
             AuthenticationLoginChecklistObservation::Outcome {
                 verdict,
                 observation,
@@ -720,5 +723,49 @@ mod tests {
             .is_err()
         );
         Ok(())
+    }
+
+    #[test]
+    fn a_reload_keeps_a_submitted_attempt_waiting_and_a_failed_one_failed() {
+        let submitted = AuthenticationLoginChecklistState::Activity {
+            activity: AuthenticationLoginChecklistActivity::Submitted,
+        };
+        let resumed = submitted
+            .observe(AuthenticationLoginChecklistObservation::Retained)
+            .presentation();
+        assert_eq!(resumed.state, submitted);
+        assert_eq!(
+            resumed.outcome_polling,
+            AuthenticationLoginChecklistOutcomePolling::Wait
+        );
+
+        let rejected_page = AuthenticationOutcomeObservation {
+            auth_fields_present: true,
+            error_marker_present: true,
+            ..AuthenticationOutcomeObservation::default()
+        };
+        let failed = resumed
+            .state
+            .observe(AuthenticationLoginChecklistObservation::Outcome {
+                verdict: AuthenticationOutcomeVerdict::Insufficient,
+                observation: rejected_page,
+            });
+        let after_second_reload = failed
+            .observe(AuthenticationLoginChecklistObservation::Retained)
+            .presentation();
+        assert_eq!(
+            after_second_reload.status,
+            AuthenticationLoginChecklistStatus::Attention
+        );
+        assert_eq!(
+            after_second_reload.outcome_polling,
+            AuthenticationLoginChecklistOutcomePolling::Stop
+        );
+        assert!(
+            serde_json::from_str::<AuthenticationLoginChecklistObservation>(
+                r#"{"kind":"Retained"}"#
+            )
+            .is_ok()
+        );
     }
 }

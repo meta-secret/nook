@@ -10,8 +10,8 @@ succeeds, read the [root index](index.md).
 Load the [upstream entry point](../.meta-cortex/AGENTS.md) with those project
 constraints. Explicit user instructions determine task scope and stopping point.
 
-Resolve the session's development mode through the upstream
-[workflow](../.meta-cortex/AGENTS.md#development-mode) before planning, editing,
+Resolve the session's delivery choice through the upstream
+[workflow](../.meta-cortex/AGENTS.md#development-delivery) before planning, editing,
 or launching agents. Nook's delivery contract supplies the project-specific
 stages and constraints below.
 
@@ -24,7 +24,7 @@ per-assignment model and reasoning-effort selection. Its
 `../.meta-cortex/meta-cortex.toml` owns the host concurrency ceiling; Nook `.cortex`
 adds no static role settings.
 
-For each multi-agent Nook assignment, include:
+For each Nook assignment, include:
 
 - the Nook project root and shared Meta-Cortex library root;
 - selected base and feature branches;
@@ -142,7 +142,7 @@ Route live-agent GitHub PR operations, including read-only queries and wrapper
 calls, through upstream PR agent behavior with Nook's pull-request operations specification.
 Route workflow dispatch, reruns, logs, and pipeline repairs through upstream
 CI/CD with Nook's SRE context. Both require Prime's authorization and Team
-Gizmo's assignment in multi-agent mode.
+Gizmo's assignment.
 Repository-owned CI retains its existing execution contracts.
 Use the [operation handshake](teams/delivery-pipeline/docs/spec/authorization-handshake.md).
 An explicit user-directed direct task follows the integration contract instead.

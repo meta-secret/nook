@@ -31,8 +31,8 @@ test('complete Apple identifier-first authentication beside its passkey alternat
   ).toBeEnabled()
   await expect(page.locator('#continue')).toBeDisabled()
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
-  await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
-  await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
+  await widget.getByRole('button', { name: 'Sign in' }).click()
+  await widget.getByRole('button', { name: 'Sign in' }).click()
 
   await expect(page.locator('#step')).toHaveText('password')
   await expect(page.locator('#account_name_text_field')).toHaveValue(
@@ -43,7 +43,7 @@ test('complete Apple identifier-first authentication beside its passkey alternat
     page.getByRole('button', { name: 'Sign in with Passkey' }),
   ).toBeEnabled()
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
-  await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
+  await widget.getByRole('button', { name: 'Sign in' }).click()
 
   await expect(page.locator('#password_text_field')).toHaveValue(
     'demo-password-never-recorded',

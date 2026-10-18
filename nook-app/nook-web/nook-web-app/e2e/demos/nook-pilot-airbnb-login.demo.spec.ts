@@ -72,8 +72,8 @@ test('fill and continue through the Airbnb mixed identity surface', async ({
   await expect(page.locator('[role="dialog"]')).toHaveCount(0)
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
 
-  await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
-  await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
+  await widget.getByRole('button', { name: 'Sign in' }).click()
+  await widget.getByRole('button', { name: 'Sign in' }).click()
 
   const status = page.getByRole('status')
   await expect(identity).toHaveValue('pilot@example.test')

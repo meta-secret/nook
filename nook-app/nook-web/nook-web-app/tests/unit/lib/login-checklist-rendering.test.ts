@@ -86,7 +86,14 @@ describe('real Rust checklist DOM projection', () => {
       'SubmitForm',
       'CheckResult',
     ])
-    expect(list?.previousElementSibling).toBe(fixture.surface.description)
+    const siteMessage = list?.previousElementSibling
+    expect(siteMessage?.getAttribute('data-testid')).toBe(
+      'nook-auth-site-message',
+    )
+    expect(siteMessage?.hasAttribute('hidden')).toBe(true)
+    expect(siteMessage?.previousElementSibling).toBe(
+      fixture.surface.description,
+    )
     expect(list?.nextElementSibling?.tagName).toBe('BUTTON')
     expect(fixture.surface.description.getAttribute('aria-live')).toBe('polite')
     expect(fixture.surface.description.getAttribute('aria-atomic')).toBe('true')
@@ -203,5 +210,29 @@ describe('real Rust checklist DOM projection', () => {
     expect(fixture.surface.description.textContent).toBe(
       'widgetChecklistInactive',
     )
+  })
+
+  test('a failed attempt kept across a reload shows the failure and the site message', () => {
+    const fixture = new ChecklistDomFixture()
+    const failed: AuthenticationLoginChecklistProjection = {
+      state: { kind: 'Outcome', result: 'Attention' },
+      observation: { kind: 'Retained' },
+    }
+    const presentation = project_authentication_login_checklist(failed)
+    expect(presentation.outcome_polling).toBe('Stop')
+    fixture.rendering.renderStatus(presentation)
+    fixture.rendering.showSiteMessage('Your account has been locked.')
+    expect(fixture.surface.description.textContent).toBe(
+      'widgetChecklistAttention',
+    )
+    const siteMessage = fixture.surface.body.querySelector<HTMLElement>(
+      '[data-testid="nook-auth-site-message"]',
+    )
+    expect(siteMessage?.hidden).toBe(false)
+    expect(siteMessage?.textContent).toBe(
+      'widgetChecklistSiteMessageYour account has been locked.',
+    )
+    fixture.rendering.showSiteMessage('')
+    expect(siteMessage?.hidden).toBe(true)
   })
 })

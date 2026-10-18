@@ -58,8 +58,8 @@ test('fill and activate the form-less LinkedIn login surface', async ({
   await expect(duplicate).toBeHidden()
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
 
-  await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
-  await widget.getByRole('button', { name: 'Sign in with Nook' }).click()
+  await widget.getByRole('button', { name: 'Sign in' }).click()
+  await widget.getByRole('button', { name: 'Sign in' }).click()
 
   await expect(username).toHaveValue('pilot@example.test')
   await expect(password).toHaveValue('demo-password-never-recorded')
