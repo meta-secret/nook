@@ -4,6 +4,7 @@ import {
   OperationalContractFailureKind,
   type OperationalContractFailure,
 } from "./operational-contract";
+import { ArcSeparationContract } from "./arc-separation-contract";
 import { ArcWorkerRestoreContract } from "./arc-worker-restore-contract";
 import { DockerfileFrontendContract } from "./dockerfile-frontend-contract";
 
@@ -260,7 +261,7 @@ class ArcManifestContract {
     if (admittedContract4.isErr()) return err(admittedContract4.error);
     const admittedContract5 = containerRunners.requireAll([
       "runnerScaleSetName: nook-k0s-container",
-      "maxRunners: 20",
+      "maxRunners: 16",
       "type: kubernetes-novolume",
       "automountServiceAccountToken: true",
       "ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER",
@@ -748,6 +749,8 @@ class ArcManifestContract {
       "inputs.dispatch_nonce || 'default'",
     );
     if (admittedContract53.isErr()) return err(admittedContract53.error);
+    const separation = await new ArcSeparationContract(root).assert();
+    if (separation.isErr()) return err(separation.error);
     const worker = await new ArcWorkerRestoreContract(root).assert();
     if (worker.isErr()) return err(worker.error);
     const frontend = await new DockerfileFrontendContract(root).assert();

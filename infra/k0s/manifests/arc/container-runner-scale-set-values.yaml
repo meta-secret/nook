@@ -3,7 +3,7 @@ githubConfigSecret: nook-arc-github
 
 runnerScaleSetName: nook-k0s-container
 minRunners: 0
-maxRunners: 20
+maxRunners: 16
 
 # Container jobs become ordinary pods through runner-container-hooks. The
 # lifecycle-hook variant needs neither a Docker daemon nor shared RWX storage.
@@ -48,6 +48,7 @@ template:
   spec:
     nodeSelector:
       nook.nokey.sh/arc-build: "true"
+      nook.nokey.sh/arc-workload: build
     # The novolume container hook creates and watches the per-job pod through
     # the chart-owned, namespace-scoped service account.
     automountServiceAccountToken: true

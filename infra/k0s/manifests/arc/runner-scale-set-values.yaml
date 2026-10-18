@@ -44,6 +44,7 @@ template:
   spec:
     nodeSelector:
       nook.nokey.sh/arc-build: "true"
+      nook.nokey.sh/arc-workload: build
     affinity:
       nodeAffinity:
         preferredDuringSchedulingIgnoredDuringExecution:

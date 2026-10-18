@@ -1,0 +1,160 @@
+version: "3"
+
+# Explicit maintenance steps. Nothing here restarts the controller, touches
+# BuildKit/PVs, deletes a job, or automatically resumes a failed rollout.
+tasks:
+  arc:separation:drain:
+    desc: Stop new ARC assignments while existing jobs finish naturally.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        kubeconfig="$(mktemp)"
+        trap 'rm -f "$kubeconfig"' EXIT
+        chmod 0600 "$kubeconfig"
+        sudo -n k0s kubeconfig admin > "$kubeconfig"
+        export KUBECONFIG="$kubeconfig"
+        # ARC's documented queue-drain mode. Keep every other Helm value.
+        pools=(nook-k0s nook-k0s-container nook-k0s-hive)
+        browser="$(sudo -n k0s kubectl get autoscalingrunnerset nook-k0s-browser \
+          --namespace arc-runners --ignore-not-found -o name)"
+        test -z "$browser" || pools+=(nook-k0s-browser)
+        for pool in "${pools[@]}"; do
+          helm upgrade "$pool" "{{.ARC_RUNNER_CHART}}" \
+            --version "{{.ARC_CHART_VERSION}}" --namespace arc-runners \
+            --reuse-values --set minRunners=0 --set maxRunners=0 \
+            --wait --timeout 10m
+        done
+        echo "ARC admission is draining. Existing jobs finish normally; apply fails while any old runner remains."
+        REMOTE
+
+  arc:separation:idle:
+    internal: true
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        for pool in nook-k0s nook-k0s-container nook-k0s-hive; do
+          kubectl get autoscalingrunnerset "$pool" --namespace arc-runners -o json |
+            jq -e '.spec.minRunners == 0 and .spec.maxRunners == 0' >/dev/null
+        done
+        kubectl get autoscalingrunnersets --namespace arc-runners -o json |
+          jq -e 'all(.items[]; .spec.minRunners == 0 and .spec.maxRunners == 0)' >/dev/null
+        kubectl get autoscalinglisteners --namespace arc-systems -o json |
+          jq -e '[.items[] | select(.spec.autoscalingRunnerSetNamespace == "arc-runners")] |
+            length >= 3 and all(.[]; (.spec.minRunners // 0) == 0 and (.spec.maxRunners // 0) == 0)' >/dev/null
+        # Include old pending and terminating objects, not merely currently
+        # running Pods. Do not delete them: ARC owns natural drain completion.
+        kubectl get ephemeralrunnersets --namespace arc-runners -o json |
+          jq -e 'all(.items[]; (.spec.replicas // 0) == 0 and (.status.currentReplicas // 0) == 0)' >/dev/null
+        kubectl get ephemeralrunners --namespace arc-runners -o json |
+          jq -e '.items | length == 0' >/dev/null
+        remaining="$(kubectl get pods --namespace arc-runners -o json | jq '[.items[] | select(
+          .metadata.labels["actions.github.com/scale-set-name"] != null or
+          .metadata.labels["nook.nokey.sh/role"] == "arc-job-container" or
+          .metadata.labels["nook.nokey.sh/role"] == "arc-browser-job"
+        )] | length')"
+        if test "$remaining" != 0; then
+          echo "ARC still has $remaining runner/job Pods, including pending or terminating Pods; let them drain before applying." >&2
+          exit 1
+        fi
+        REMOTE
+
+  arc:separation:apply:
+    desc: Apply only drained ARC placement, hooks and scale sets; keep admission stopped.
+    cmds:
+      - task: arc:separation:idle
+      - task: k0s:sync
+      - task: arc:render:check
+      - task: arc:placement:labels
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        kubeconfig="$(mktemp)"
+        trap 'rm -f "$kubeconfig"' EXIT
+        chmod 0600 "$kubeconfig"
+        sudo -n k0s kubeconfig admin > "$kubeconfig"
+        export KUBECONFIG="$kubeconfig"
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        kubectl apply -f "$remote_dir/infra/k0s/manifests/arc/container-hook.yaml"
+        kubectl apply -f "$remote_dir/infra/k0s/manifests/arc/browser-hook.yaml"
+        for pair in nook-k0s:runner nook-k0s-container:container-runner nook-k0s-browser:browser-runner; do
+          pool="${pair%%:*}"
+          values="${pair#*:}"
+          helm upgrade --install "$pool" "{{.ARC_RUNNER_CHART}}" \
+            --version "{{.ARC_CHART_VERSION}}" --namespace arc-runners \
+            --values "$remote_dir/infra/k0s/manifests/arc/$values-scale-set-values.yaml" \
+            --set minRunners=0 --set maxRunners=0 --wait --timeout 10m
+        done
+        REMOTE
+      - task: arc:placement:hive
+      - echo "Placement applied with admission stopped. Resume only after old runner templates have disappeared."
+
+  arc:separation:resume:
+    desc: Verify drained current templates, then restore the 35/16/4/10 ARC ceilings.
+    cmds:
+      - task: arc:separation:idle
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        kubeconfig="$(mktemp)"
+        trap 'rm -f "$kubeconfig"' EXIT
+        chmod 0600 "$kubeconfig"
+        sudo -n k0s kubeconfig admin > "$kubeconfig"
+        export KUBECONFIG="$kubeconfig"
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        # A stale zero-replica runner set could still admit old pending work.
+        # Require every retained template to carry build placement before any
+        # ceiling is restored; fail once and leave admission stopped otherwise.
+        kubectl get ephemeralrunnersets --namespace arc-runners -o json |
+          jq -e '.items | length >= 4 and all(.[];
+            .spec.ephemeralRunnerSpec.spec.nodeSelector["nook.nokey.sh/arc-workload"] == "build")' >/dev/null
+        for pool in nook-k0s nook-k0s-container nook-k0s-browser nook-k0s-hive; do
+          kubectl get autoscalingrunnerset "$pool" --namespace arc-runners -o json |
+            jq -e '.spec.template.spec.nodeSelector["nook.nokey.sh/arc-workload"] == "build"' >/dev/null
+        done
+        for pair in nook-k0s:35 nook-k0s-container:16 nook-k0s-browser:4 nook-k0s-hive:10; do
+          helm upgrade "${pair%%:*}" "{{.ARC_RUNNER_CHART}}" \
+            --version "{{.ARC_CHART_VERSION}}" --namespace arc-runners \
+            --reuse-values --set minRunners=0 --set "maxRunners=${pair#*:}" \
+            --wait --timeout 10m
+        done
+        REMOTE
+      - task: arc:separation:status
+
+  arc:separation:status:
+    desc: Verify separated placement, ceilings and registered listeners without dispatching jobs.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        test "$(kubectl get nodes -l nook.nokey.sh/arc-workload=browser -o jsonpath='{.items[*].metadata.name}')" = nook-rise-s-2
+        test "$(kubectl get nodes -l nook.nokey.sh/arc-workload=build -o json |
+          jq -r '.items[].metadata.name' | sort)" = $'bynull-servo\nnook-rise-s-1\novh-us'
+        for pair in nook-k0s:35 nook-k0s-container:16 nook-k0s-browser:4 nook-k0s-hive:10; do
+          pool="${pair%%:*}"
+          ceiling="${pair#*:}"
+          kubectl get autoscalingrunnerset "$pool" --namespace arc-runners -o json |
+            jq -e --argjson ceiling "$ceiling" '.spec.maxRunners == $ceiling and
+              .spec.template.spec.nodeSelector["nook.nokey.sh/arc-workload"] == "build"' >/dev/null
+          kubectl get autoscalinglisteners --namespace arc-systems -o json |
+            jq -e --arg pool "$pool" --argjson ceiling "$ceiling" '[.items[] | select(
+              .spec.autoscalingRunnerSetNamespace == "arc-runners" and .spec.autoscalingRunnerSetName == $pool
+            )] | length == 1 and all(.[]; .spec.runnerScaleSetId > 0 and .spec.maxRunners == $ceiling)' >/dev/null
+          kubectl wait pod --namespace arc-systems \
+            -l "actions.github.com/scale-set-name=$pool" --for=condition=Ready --timeout=2m
+        done
+        echo "ARC separated pools registered at ceilings 35/16/4/10. Real job placement and timings require hosted execution."
+        REMOTE
+
+  arc:separation:activate:
+    desc: Route known browser consumers after the new pool is registered.
+    cmds:
+      - task: arc:separation:status
+      - gh variable set NOOK_BROWSER_RUNS_ON --repo meta-secret/nook --body nook-k0s-browser

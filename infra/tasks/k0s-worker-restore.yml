@@ -44,7 +44,8 @@ tasks:
               --field-selector "spec.nodeName=$node" \
               -o json | jq '[.items[] | select(
                 (.metadata.labels["actions.github.com/scale-set-name"] != null or
-                 .metadata.labels["nook.nokey.sh/role"] == "arc-job-container") and
+                 .metadata.labels["nook.nokey.sh/role"] == "arc-job-container" or
+                 .metadata.labels["nook.nokey.sh/role"] == "arc-browser-job") and
                 .metadata.deletionTimestamp == null and
                 (.status.phase == "Pending" or .status.phase == "Running")
               )] | length')"
@@ -160,7 +161,8 @@ tasks:
             --field-selector "spec.nodeName=$node" \
             -o json | jq '[.items[] | select(
               (.metadata.labels["actions.github.com/scale-set-name"] != null or
-               .metadata.labels["nook.nokey.sh/role"] == "arc-job-container") and
+               .metadata.labels["nook.nokey.sh/role"] == "arc-job-container" or
+                 .metadata.labels["nook.nokey.sh/role"] == "arc-browser-job") and
               (.status.phase == "Pending" or .status.phase == "Running")
             )] | length')"
           if test "$active_workloads" = 0; then

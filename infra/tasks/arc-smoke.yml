@@ -15,6 +15,7 @@ tasks:
     cmds:
       - gh variable set NOOK_RUNS_ON --repo meta-secret/nook --body "{{.ARC_RUNNER_LABEL}}"
       - gh variable delete NOOK_CONTAINER_RUNS_ON --repo meta-secret/nook >/dev/null 2>&1 || true
+      - gh variable set NOOK_BROWSER_RUNS_ON --repo meta-secret/nook --body nook-k0s-browser
       - gh variable delete NOOK_CACHE_RUNS_ON --repo meta-secret/nook >/dev/null 2>&1 || true
       - echo "Trusted workflows now target {{.ARC_RUNNER_LABEL}}"
 
@@ -26,6 +27,7 @@ tasks:
     cmds:
       - gh variable set NOOK_RUNS_ON --repo meta-secret/nook --body ubuntu-latest
       - gh variable set NOOK_CONTAINER_RUNS_ON --repo meta-secret/nook --body ubuntu-latest
+      - gh variable set NOOK_BROWSER_RUNS_ON --repo meta-secret/nook --body ubuntu-latest
       - gh variable delete NOOK_CACHE_RUNS_ON --repo meta-secret/nook >/dev/null 2>&1 || true
       - echo "Trusted workflows now target ubuntu-latest"
 
