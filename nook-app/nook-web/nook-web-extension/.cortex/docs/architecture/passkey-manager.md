@@ -42,6 +42,11 @@ Nook card. Conditional mediation is left to the browser.
     `http://localhost`.
   - Mark credentials discoverable and backup-eligible because their encrypted
     key material is designed to replicate through Nook.
+  - Report Nook's own authenticator GUID (AAGUID),
+    `7cd62a4c-b484-4f37-a4e2-3ac3b0c33c9e`, in the attested credential data.
+    An all-zero AAGUID leaves a site to guess the provider from the browser,
+    so Google labelled Nook passkeys "iCloud Keychain". A site names the
+    provider once the public passkey-provider list includes this AAGUID.
 - **Assertion construction and session flags:**
   - Hash the RP ID into authenticator data.
   - Sign `authenticatorData || SHA-256(clientDataJSON)` with the stored P-256
