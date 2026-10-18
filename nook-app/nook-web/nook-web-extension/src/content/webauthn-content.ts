@@ -1,8 +1,4 @@
 import { Schema } from 'effect'
-import {
-  BROWSER_MESSAGE_KEYS,
-  type BrowserMessageKey,
-} from '../lib/browser-message-keys'
 import { authenticationSubmissionBridge } from '../../../nook-web-shared/src/extension/authentication-direct-submit-bridge'
 export {}
 
@@ -31,10 +27,17 @@ import {
   ConcreteDecoderResultKind,
   runConcreteDecoder,
 } from '../lib/concrete-decoder'
+import {
+  PasskeyPrompt,
+  PasskeyPromptChoiceKind,
+  type PasskeyOption,
+} from './passkey-prompt'
 
 const REQUEST_SOURCE = 'nook-passkey-page-v1'
 const RESPONSE_SOURCE = 'nook-passkey-extension-v1'
-const prompts = new Map<string, HTMLElement>()
+const prompts = new Map<string, PasskeyPrompt>()
+/** A finished card still showing Saved or a failure; the next request replaces it. */
+let settledPrompt: PasskeyPrompt | undefined
 
 enum PageRequestType {
   Request = 'request',
@@ -49,6 +52,7 @@ type PageRequest = {
   requestJson: string
   relyingPartyName?: string
   rpId?: string
+  userName?: string
   expiresAt: number
 }
 
@@ -73,36 +77,10 @@ type PageRequestBodyDecode =
       requestJson: string
       relyingPartyName: PageRequestBodyStringField
       rpId: PageRequestBodyStringField
+      userName: PageRequestBodyStringField
     }
 
-type PasskeyOption = {
-  vaultStoreId: string
-  vaultName: string
-  account?: {
-    credentialId: string
-    userName: string
-    userDisplayName: string
-  }
-}
 type PasskeyAccount = NonNullable<PasskeyOption['account']>
-
-enum PasskeyOptionChoiceKind {
-  BrowserFallback = 'browser-fallback',
-  Selected = 'selected',
-}
-
-type PasskeyOptionChoice =
-  | { kind: PasskeyOptionChoiceKind.BrowserFallback }
-  | { kind: PasskeyOptionChoiceKind.Selected; option: PasskeyOption }
-
-type BrowserMessageTranslationRequest = {
-  key: BrowserMessageKey
-  fallback: string
-}
-
-function t({ key, fallback }: BrowserMessageTranslationRequest): string {
-  return chrome.i18n.getMessage(key) || fallback
-}
 
 type WebAuthnPageResponseDelivery = {
   requestId: string
@@ -188,97 +166,8 @@ function validOptions(value: unknown): PasskeyOption[] {
 }
 
 function removePrompt(requestId: string): void {
-  prompts.get(requestId)?.remove()
+  prompts.get(requestId)?.close()
   prompts.delete(requestId)
-}
-
-type ChooseOptionArgs = {
-  request: PageRequest
-  options: PasskeyOption[]
-}
-
-function chooseOption({
-  request,
-  options,
-}: ChooseOptionArgs): Promise<PasskeyOptionChoice> {
-  return new Promise((resolve) => {
-    const host = document.createElement('aside')
-    host.setAttribute('aria-label', 'Nook passkey')
-    const nookTypedArgs0_1: Parameters<typeof host.attachShadow>[0] = {
-      mode: 'closed',
-    }
-    const shadow = host.attachShadow(nookTypedArgs0_1)
-    const panel = document.createElement('section')
-    panel.setAttribute('role', 'dialog')
-    panel.setAttribute('aria-modal', 'true')
-    const heading = document.createElement('h2')
-    const nookTypedArgs0_0: Parameters<typeof t>[0] = {
-      key:
-        request.ceremony === WebsitePasskeyCeremony.Create
-          ? BROWSER_MESSAGE_KEYS.PasskeySaveTitle
-          : BROWSER_MESSAGE_KEYS.PasskeyUseTitle,
-      fallback:
-        request.ceremony === WebsitePasskeyCeremony.Create
-          ? 'Save a passkey with Nook?'
-          : 'Use a Nook passkey?',
-    }
-    heading.textContent = t(nookTypedArgs0_0)
-    const detail = document.createElement('p')
-    const rp =
-      request.ceremony === WebsitePasskeyCeremony.Create
-        ? request.relyingPartyName
-        : request.rpId
-    detail.textContent = typeof rp === 'string' ? rp : location.hostname
-    const choices = document.createElement('div')
-    for (const option of options) {
-      const button = document.createElement('button')
-      button.type = 'button'
-      const account = option.account
-      button.textContent = account
-        ? `${account.userDisplayName || account.userName} · ${option.vaultName}`
-        : option.vaultName
-      button.addEventListener('click', () => {
-        removePrompt(request.requestId)
-        const nookTypedArgs0_2: Parameters<typeof resolve>[0] = {
-          kind: PasskeyOptionChoiceKind.Selected,
-          option,
-        }
-        resolve(nookTypedArgs0_2)
-      })
-      choices.append(button)
-    }
-    const fallback = document.createElement('button')
-    fallback.type = 'button'
-    fallback.className = 'fallback'
-    const browserFallbackArgs: Parameters<typeof t>[0] = {
-      key: BROWSER_MESSAGE_KEYS.PasskeyUseBrowser,
-      fallback: 'Use browser or security key',
-    }
-    fallback.textContent = t(browserFallbackArgs)
-    fallback.addEventListener('click', () => {
-      removePrompt(request.requestId)
-      const nookTypedArgs0_3: Parameters<typeof resolve>[0] = {
-        kind: PasskeyOptionChoiceKind.BrowserFallback,
-      }
-      resolve(nookTypedArgs0_3)
-    })
-    const style = document.createElement('style')
-    style.textContent = `
-      :host { all: initial; position: fixed; inset: 0; z-index: 2147483647; display: grid; place-items: center; background: rgba(10, 18, 13, .45); }
-      section { box-sizing: border-box; width: min(420px, calc(100vw - 32px)); border: 1px solid #bdcbbf; border-radius: 16px; background: #f8faf8; box-shadow: 0 24px 70px rgba(10, 18, 13, .28); color: #17201a; font-family: Inter, ui-sans-serif, system-ui, sans-serif; padding: 22px; }
-      h2 { font-size: 20px; line-height: 1.25; margin: 0; }
-      p { color: #58645b; font-size: 14px; margin: 8px 0 18px; overflow-wrap: anywhere; }
-      div { display: grid; gap: 9px; }
-      button { appearance: none; border: 1px solid #b7c8bb; border-radius: 10px; background: #fff; color: #17201a; cursor: pointer; font: 600 14px/1.3 Inter, ui-sans-serif, system-ui, sans-serif; padding: 12px 14px; text-align: left; }
-      button:hover, button:focus-visible { border-color: #356f49; outline: 2px solid #b8d7c1; outline-offset: 1px; }
-      .fallback { background: transparent; border-color: transparent; color: #356f49; margin-top: 8px; text-align: center; width: 100%; }
-    `
-    panel.append(heading, detail, choices, fallback)
-    shadow.append(style, panel)
-    document.documentElement.append(host)
-    prompts.set(request.requestId, host)
-    choices.querySelector('button')?.focus()
-  })
 }
 
 async function handleRequest(request: PageRequest): Promise<void> {
@@ -318,20 +207,38 @@ async function handleRequest(request: PageRequest): Promise<void> {
     respond(nookTypedArgs0_2)
     return
   }
-  const nookTypedArgs0_3: Parameters<typeof chooseOption>[0] = {
-    request,
+  settledPrompt?.close()
+  settledPrompt = undefined
+  const site = request.rpId ?? location.hostname
+  const promptRequest: Parameters<typeof PasskeyPrompt.open>[0] = {
+    ceremony: request.ceremony,
+    site,
+    siteName:
+      request.ceremony === WebsitePasskeyCeremony.Create &&
+      request.relyingPartyName
+        ? request.relyingPartyName
+        : site,
+    ...(request.userName ? { userName: request.userName } : {}),
     options,
   }
-  const choice = await chooseOption(nookTypedArgs0_3)
-  if (choice.kind === PasskeyOptionChoiceKind.BrowserFallback) {
-    const nookTypedArgs0_4: Parameters<typeof respond>[0] = {
-      requestId: request.requestId,
-      action: PageResponseAction.Fallback,
-    }
-    respond(nookTypedArgs0_4)
+  const prompt = PasskeyPrompt.open(promptRequest)
+  prompts.set(request.requestId, prompt)
+  const choice = await prompt.choice
+  if (choice.kind !== PasskeyPromptChoiceKind.Selected) {
+    removePrompt(request.requestId)
+    const declined: Parameters<typeof respond>[0] =
+      choice.kind === PasskeyPromptChoiceKind.BrowserFallback
+        ? { requestId: request.requestId, action: PageResponseAction.Fallback }
+        : {
+            requestId: request.requestId,
+            action: PageResponseAction.Error,
+            value: 'NotAllowedError',
+          }
+    respond(declined)
     return
   }
   const { option: selected } = choice
+  prompt.showWorking()
   const nookTypedArgs0_5: WebsitePasskeyPerformMessage = {
     type: WebsitePasskeyPerformMessageType.NookWebsitePasskeyPerform,
     payload: {
@@ -349,6 +256,7 @@ async function handleRequest(request: PageRequest): Promise<void> {
     await new WebAuthnRuntimeTransport<WebsitePasskeyPerformResponse>(
       nookTypedArgs0_5,
     ).send()
+  prompts.delete(request.requestId)
   if (result?.ok === true) {
     const nookTypedArgs0_5: Parameters<typeof respond>[0] = {
       requestId: request.requestId,
@@ -356,6 +264,12 @@ async function handleRequest(request: PageRequest): Promise<void> {
       value: result,
     }
     respond(nookTypedArgs0_5)
+    if (request.ceremony === WebsitePasskeyCeremony.Create) {
+      prompt.showSaved(selected.vaultName)
+      settledPrompt = prompt
+    } else {
+      prompt.close()
+    }
   } else {
     const nookTypedArgs0_6: Parameters<typeof respond>[0] = {
       requestId: request.requestId,
@@ -363,6 +277,8 @@ async function handleRequest(request: PageRequest): Promise<void> {
       value: 'NotAllowedError',
     }
     respond(nookTypedArgs0_6)
+    prompt.showFailed()
+    settledPrompt = prompt
   }
 }
 
@@ -381,37 +297,41 @@ class WebAuthnPageIngress {
     if (!requestJson || requestJson.length > 65_536) {
       return { kind: PageRequestBodyDecodeKind.Rejected }
     }
-    let relyingPartyName: PageRequestBodyStringField = {
-      kind: PageRequestBodyStringFieldKind.Absent,
-    }
-    let rpId: PageRequestBodyStringField = {
-      kind: PageRequestBodyStringFieldKind.Absent,
-    }
-    if ('relyingParty' in value) {
-      const relyingParty = value.relyingParty
-      if (
-        relyingParty &&
-        typeof relyingParty === 'object' &&
-        'name' in relyingParty &&
-        typeof relyingParty.name === 'string'
-      ) {
-        relyingPartyName = {
-          kind: PageRequestBodyStringFieldKind.Present,
-          value: relyingParty.name,
-        }
-      }
-    }
-    if ('rpId' in value && typeof value.rpId === 'string') {
-      rpId = {
-        kind: PageRequestBodyStringFieldKind.Present,
-        value: value.rpId,
-      }
-    }
+    const party = WebAuthnPageIngress.displayStrings(
+      'relyingParty' in value ? value.relyingParty : undefined,
+    )
+    const account = WebAuthnPageIngress.displayStrings(
+      'user' in value ? value.user : undefined,
+    )
+    const requestRpId = WebAuthnPageIngress.displayStrings(value)('rpId')
+    const accountName = account('name')
     return {
       kind: PageRequestBodyDecodeKind.Decoded,
       requestJson,
-      relyingPartyName,
-      rpId,
+      relyingPartyName: party('name'),
+      rpId:
+        requestRpId.kind === PageRequestBodyStringFieldKind.Present
+          ? requestRpId
+          : party('id'),
+      userName:
+        accountName.kind === PageRequestBodyStringFieldKind.Present
+          ? accountName
+          : account('displayName'),
+    }
+  }
+
+  /** Reads non-empty strings the card may display; Rust validates the request. */
+  private static displayStrings(
+    container: unknown,
+  ): (key: string) => PageRequestBodyStringField {
+    return (key) => {
+      const field: unknown =
+        container && typeof container === 'object' && key in container
+          ? Reflect.get(container, key)
+          : undefined
+      return typeof field === 'string' && field
+        ? { kind: PageRequestBodyStringFieldKind.Present, value: field }
+        : { kind: PageRequestBodyStringFieldKind.Absent }
     }
   }
 
@@ -469,6 +389,9 @@ class WebAuthnPageIngress {
         : {}),
       ...(requestBody.rpId.kind === PageRequestBodyStringFieldKind.Present
         ? { rpId: requestBody.rpId.value }
+        : {}),
+      ...(requestBody.userName.kind === PageRequestBodyStringFieldKind.Present
+        ? { userName: requestBody.userName.value }
         : {}),
       expiresAt: message.expiresAt,
     }

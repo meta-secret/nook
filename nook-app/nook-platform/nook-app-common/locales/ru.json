@@ -1916,8 +1916,21 @@
       "checklist_label": "Шаги входа"
     },
     "passkey": {
-      "save_title": "Сохранить passkey в Nook?",
-      "use_title": "Использовать passkey из Nook?",
+      "prompt_label": "Passkey Nook",
+      "label": "Passkey",
+      "close": "Закрыть",
+      "save_title": "Сохранить passkey для $1?",
+      "use_title": "Войти на $1 с passkey",
+      "account_label": "Аккаунт",
+      "save_to_label": "Сохранить в",
+      "choose_account": "Выберите аккаунт",
+      "save_action": "Сохранить passkey",
+      "saving": "Сохраняем passkey…",
+      "signing_in": "Выполняем вход…",
+      "saved_title": "Passkey сохранён",
+      "saved_detail": "Сохранён в $1. Nook предложит его при следующем входе.",
+      "save_failed": "Nook не удалось сохранить этот passkey. Попробуйте ещё раз на сайте.",
+      "use_failed": "Nook не удалось войти с этим passkey. Попробуйте ещё раз на сайте.",
       "use_browser": "Использовать браузер или ключ безопасности"
     },
     "consent": {

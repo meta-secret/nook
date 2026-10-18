@@ -65,9 +65,9 @@ import type { LoginSubmissionDomSnapshot } from './login-submission-dom-sensor'
 import {
   OUTCOME_EVIDENCE_POLL_MS,
   OUTCOME_EVIDENCE_TIMEOUT_MS,
-  WIDGET_HOST_ID,
   workflowUi,
 } from './workflow-ui'
+import { WIDGET_HOST_ID } from '../in-page-surface'
 
 type StageSaveOfferRequest = {
   credentials: LoginCredentials

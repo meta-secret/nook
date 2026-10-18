@@ -104,6 +104,25 @@ explicit fallback action. Conditional mediation is left to the browser.
 - **Locked session advertises vault matches:** Locked or unavailable sessions never expose metadata.
 - **Pilot auto-submits or silently creates:** No permanent site autopilot grant.
 
+## Consent card
+
+The isolated content script shows one Nook-owned card per ceremony at the
+Pilot's top-right anchor, in the shared in-page keytag style. The card does not
+dim or block the page. The Pilot hides while the card is open because they
+share that corner.
+
+- **Registration:** the title names the site. The card shows the account the
+  site is registering and a vault choice with the first approved vault
+  preselected. **Save passkey** is the consent.
+- **Assertion:** one row per matching account with its vault. Choosing a row is
+  the consent.
+- **Progress and result:** after consent the card shows Saving or Signing in.
+  A saved passkey shows its vault for three seconds. A failure stays until the
+  user closes it. The website still receives only `NotAllowedError`.
+- **Decline:** Close or Escape returns `NotAllowedError`, like cancelling the
+  browser dialog. **Use browser or security key** hands the request to the
+  browser.
+
 ## Pilot proposals
 
 Nook Pilot may propose **Use passkey** when an unlocked vault has confident RP

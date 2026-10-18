@@ -153,8 +153,21 @@ type NookLocaleCatalogShape = {
       backup_mode_merge: string
     }
     passkey: {
+      prompt_label: string
+      label: string
+      close: string
       save_title: string
       use_title: string
+      account_label: string
+      save_to_label: string
+      choose_account: string
+      save_action: string
+      saving: string
+      signing_in: string
+      saved_title: string
+      saved_detail: string
+      save_failed: string
+      use_failed: string
       use_browser: string
     }
   }
@@ -898,11 +911,50 @@ export async function buildChromeLocales({
             locale,
           ),
         },
+        passkeyPromptLabel: {
+          message: catalog.extension.passkey.message('prompt_label', locale),
+        },
+        passkeyLabel: {
+          message: catalog.extension.passkey.message('label', locale),
+        },
+        passkeyClose: {
+          message: catalog.extension.passkey.message('close', locale),
+        },
         passkeySaveTitle: {
           message: catalog.extension.passkey.message('save_title', locale),
         },
         passkeyUseTitle: {
           message: catalog.extension.passkey.message('use_title', locale),
+        },
+        passkeyAccountLabel: {
+          message: catalog.extension.passkey.message('account_label', locale),
+        },
+        passkeySaveToLabel: {
+          message: catalog.extension.passkey.message('save_to_label', locale),
+        },
+        passkeyChooseAccount: {
+          message: catalog.extension.passkey.message('choose_account', locale),
+        },
+        passkeySaveAction: {
+          message: catalog.extension.passkey.message('save_action', locale),
+        },
+        passkeySaving: {
+          message: catalog.extension.passkey.message('saving', locale),
+        },
+        passkeySigningIn: {
+          message: catalog.extension.passkey.message('signing_in', locale),
+        },
+        passkeySavedTitle: {
+          message: catalog.extension.passkey.message('saved_title', locale),
+        },
+        passkeySavedDetail: {
+          message: catalog.extension.passkey.message('saved_detail', locale),
+        },
+        passkeySaveFailed: {
+          message: catalog.extension.passkey.message('save_failed', locale),
+        },
+        passkeyUseFailed: {
+          message: catalog.extension.passkey.message('use_failed', locale),
         },
         passkeyUseBrowser: {
           message: catalog.extension.passkey.message('use_browser', locale),

@@ -24,7 +24,7 @@ beforeAll(async () => {
 
 afterEach(() => {
   document.body.replaceChildren()
-  document.querySelector('aside[aria-label="Nook passkey"]')?.remove()
+  document.querySelector('aside[aria-label="passkeyPromptLabel"]')?.remove()
   Reflect.deleteProperty(globalThis, 'chrome')
   vi.restoreAllMocks()
 })
@@ -38,8 +38,9 @@ describe('WebAuthn content transport', () => {
     const delivered: WebsitePasskeyOptionsMessage[] = []
     Object.assign(globalThis, {
       chrome: {
-        i18n: { getMessage: () => '' },
+        i18n: { getMessage: (key: string) => key },
         runtime: {
+          getURL: (path: string) => path,
           sendMessage: (
             message: WebsitePasskeyOptionsMessage,
             callback: (response: WebsitePasskeyOptionsResponse) => void,
@@ -87,7 +88,7 @@ describe('WebAuthn content transport', () => {
       },
     })
     expect(
-      document.querySelector('aside[aria-label="Nook passkey"]'),
+      document.querySelector('aside[aria-label="passkeyPromptLabel"]'),
     ).toBeTruthy()
   })
 
@@ -138,7 +139,72 @@ describe('WebAuthn content transport', () => {
       ),
     )
     expect(
-      document.querySelector('aside[aria-label="Nook passkey"]'),
+      document.querySelector('aside[aria-label="passkeyPromptLabel"]'),
+    ).toBeFalsy()
+  })
+
+  test('tells the page the user declined when the prompt is closed', async () => {
+    Object.assign(globalThis, {
+      chrome: {
+        i18n: { getMessage: (key: string) => key },
+        runtime: {
+          getURL: (path: string) => path,
+          sendMessage: (
+            _message: WebsitePasskeyOptionsMessage,
+            callback: (response: WebsitePasskeyOptionsResponse) => void,
+          ) => {
+            callback({
+              ok: true,
+              status: WebsitePasskeyOptionsStatus.Ready,
+              options: [{ vaultStoreId: 'vault', vaultName: 'Private vault' }],
+            })
+          },
+        },
+      },
+    })
+    const postMessage = vi.spyOn(window, 'postMessage')
+
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        source: window,
+        origin: location.origin,
+        data: {
+          source: 'nook-passkey-page-v1',
+          type: 'request',
+          requestId: 'request-00000003',
+          ceremony: WebsitePasskeyCeremony.Create,
+          request: {
+            relyingParty: { id: 'example.test', name: 'Example' },
+            user: { name: 'alice@example.com', displayName: 'Alice' },
+          },
+          expiresAt: Date.now() + 10_000,
+        },
+      }),
+    )
+    await vi.waitFor(() =>
+      expect(
+        document.querySelector('aside[aria-label="passkeyPromptLabel"]'),
+      ).toBeTruthy(),
+    )
+    document
+      .querySelector('aside[aria-label="passkeyPromptLabel"]')
+      ?.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+      )
+
+    await vi.waitFor(() =>
+      expect(postMessage).toHaveBeenCalledWith(
+        {
+          source: 'nook-passkey-extension-v1',
+          requestId: 'request-00000003',
+          action: PageResponseAction.Error,
+          reason: 'NotAllowedError',
+        },
+        location.origin,
+      ),
+    )
+    expect(
+      document.querySelector('aside[aria-label="passkeyPromptLabel"]'),
     ).toBeFalsy()
   })
 })
