@@ -417,8 +417,9 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && !wasm.contains("preflight-cache-publish")
             && !wasm.contains("cache-selection:")
             && wasm_verify < wasm_node
-            && wasm_node < wasm_publish_id
-            && wasm_publish_id < wasm_publish
+            && wasm_publish_id < web_verify
+            && web_verify < wasm_node
+            && wasm_node < wasm_publish
             && wasm_verification_to_publish.contains("GHA_CACHE_WRITE_ENABLED: \"\"")
             && wasm.contains("cache_publication_outcome: ${{ steps.prepare_web.outputs.cache_publication_outcome }}")
             && wasm_publish_step.contains("shell: bash")
