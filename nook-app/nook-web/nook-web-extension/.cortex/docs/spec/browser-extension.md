@@ -453,7 +453,8 @@ The listing obeys these rules:
 - The reply carries no password, TOTP seed or code, key, passkey private data,
   saved website URL, tab URL, authorization generation, or device key.
 - The panel derives a section's other-identity tag from the section's vault
-  store id and the paired-vault groups it already holds.
+  store id and the paired-vault groups it already holds. A section is current
+  only when the group that holds its vault has the unlocked key.
 - The route never opens the authentication tab.
 - The panel keeps the listing in component memory. It clears the listing on
   lock or session-state change, on tab activation or URL change in its window,
